@@ -165,3 +165,92 @@ export function shouldWriteInventorySnapshot(latestExisting, now, timeZone) {
   if (!latestExisting) return true;
   return !isSameLocalDay(latestExisting.synced_at, now.toISOString(), timeZone);
 }
+
+// --- Orders / order lines / refunds / refund lines (Phase 1C) ---
+//
+// V1 scope: business transaction data only. No customer name, email, phone,
+// or address field is ever read from these nodes, even though Shopify's
+// Order object exposes them - they are simply not part of the GraphQL
+// selection in src/shopify/queries.js, and none of the functions below
+// accept or forward anything customer-identifying.
+
+const sumMoney = (amounts) => amounts.reduce((total, a) => total + Number(a), 0);
+
+/**
+ * @param {{id: string, createdAt: string, currencyCode: string, taxesIncluded: boolean, displayFinancialStatus: string, retailLocation: {id: string} | null}} node
+ * @param {string} merchantId
+ * @param {string | null} locationId local location uuid, or null if this
+ *   order has no retailLocation (e.g. an online order) or its location
+ *   hasn't been synced by the catalog sync yet.
+ */
+export function normalizeOrder(node, merchantId, locationId) {
+  return {
+    merchant_id: merchantId,
+    location_id: locationId,
+    source_system: 'shopify',
+    source_id: node.id,
+    ordered_at: node.createdAt,
+    currency: node.currencyCode,
+    status: node.displayFinancialStatus,
+    taxes_included: node.taxesIncluded,
+  };
+}
+
+/**
+ * @param {object} lineItemNode a LineItem from ORDERS_PAGE_QUERY
+ * @param {string} orderId local order uuid
+ * @param {string | null} variantId local variant uuid, or null when the
+ *   variant no longer exists in the catalog (deleted product) or the line
+ *   is a custom item with no catalog variant at all - the order line must
+ *   survive either way, using title_snapshot/sku_snapshot.
+ */
+export function normalizeOrderLine(lineItemNode, orderId, variantId) {
+  const taxAmount = sumMoney(lineItemNode.taxLines.map((t) => t.priceSet.shopMoney.amount));
+  return {
+    order_id: orderId,
+    variant_id: variantId,
+    source_system: 'shopify',
+    source_id: lineItemNode.id,
+    title_snapshot: lineItemNode.title,
+    sku_snapshot: lineItemNode.sku ?? null,
+    quantity: lineItemNode.quantity,
+    unit_price: Number(lineItemNode.originalUnitPriceSet.shopMoney.amount),
+    discount_amount: Number(lineItemNode.totalDiscountSet.shopMoney.amount),
+    tax_amount: taxAmount,
+  };
+}
+
+/**
+ * @param {{id: string, createdAt: string, totalRefundedSet: {shopMoney: {amount: string}}}} refundNode
+ * @param {string} orderId local order uuid
+ */
+export function normalizeRefund(refundNode, orderId) {
+  return {
+    order_id: orderId,
+    source_system: 'shopify',
+    source_id: refundNode.id,
+    amount: Number(refundNode.totalRefundedSet.shopMoney.amount),
+    refunded_at: refundNode.createdAt,
+    reason: null, // Shopify's refund note field is free text written by staff and may contain
+    // customer-identifying context; V1 doesn't need it, so it's never read (see queries.js).
+  };
+}
+
+/**
+ * @param {object} refundLineItemNode a RefundLineItem from ORDERS_PAGE_QUERY
+ * @param {string} refundId local refund uuid
+ * @param {string} orderLineId local order_line uuid - must already exist
+ *   (the order line is synced before its order's refunds).
+ * @param {string} currency the parent order's currency (RefundLineItem
+ *   itself carries no currency field of its own).
+ */
+export function normalizeRefundLine(refundLineItemNode, refundId, orderLineId, currency) {
+  return {
+    refund_id: refundId,
+    order_line_id: orderLineId,
+    quantity: refundLineItemNode.quantity,
+    amount: Number(refundLineItemNode.subtotalSet.shopMoney.amount),
+    tax_amount: Number(refundLineItemNode.totalTaxSet.shopMoney.amount),
+    currency,
+  };
+}

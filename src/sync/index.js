@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-// Entry point: `node src/sync/index.js <catalog|inventory|cost|all>`
+// Entry point: `node src/sync/index.js <catalog|inventory|cost|orders|all>`
 // No Claude/MCP dependency - reads config from env vars only. See
 // .env.example and docs/security/shopify-auth.md before running for real.
 
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
+import { SHOP_QUERY } from '../shopify/queries.js';
 import { syncCatalog } from './catalog.js';
 import { syncInventory } from './inventory.js';
 import { syncProductCosts } from './cost.js';
+import { syncOrders } from './orders.js';
+
+const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
 
 async function main() {
   const mode = process.argv[2];
-  if (!['catalog', 'inventory', 'cost', 'all'].includes(mode)) {
-    console.error('Usage: node src/sync/index.js <catalog|inventory|cost|all>');
+  if (!MODES.includes(mode)) {
+    console.error(`Usage: node src/sync/index.js <${MODES.join('|')}>`);
     process.exit(1);
   }
 
@@ -26,11 +30,11 @@ async function main() {
     if (summary.errors.length > 0) process.exitCode = 1;
   }
 
-  if (mode === 'inventory' || mode === 'cost' || mode === 'all') {
-    // inventory/cost need the local merchant id - re-derive it deterministically
-    // from the same Shopify identity catalog sync used, rather than assuming
-    // catalog just ran in this process.
-    const { shop } = await shopify.graphql((await import('../shopify/queries.js')).SHOP_QUERY);
+  if (mode !== 'catalog') {
+    // inventory/cost/orders need the local merchant id - re-derive it
+    // deterministically from the same Shopify identity catalog sync used,
+    // rather than assuming catalog just ran in this process.
+    const { shop } = await shopify.graphql(SHOP_QUERY);
     const [merchant] = await supabase.select('merchants', {
       select: 'id',
       source_system: 'eq.shopify',
@@ -56,6 +60,12 @@ async function main() {
   if (mode === 'cost' || mode === 'all') {
     const summary = await syncProductCosts({ shopify, supabase }, { merchantId });
     console.log('cost sync summary:', JSON.stringify(summary, null, 2));
+    if (summary.errors.length > 0) process.exitCode = 1;
+  }
+
+  if (mode === 'orders' || mode === 'all') {
+    const summary = await syncOrders({ shopify, supabase }, { merchantId });
+    console.log('orders sync summary:', JSON.stringify(summary, null, 2));
     if (summary.errors.length > 0) process.exitCode = 1;
   }
 }

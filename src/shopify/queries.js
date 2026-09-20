@@ -51,6 +51,97 @@ export const PRODUCTS_PAGE_QUERY = /* GraphQL */ `
   }
 `;
 
+// Orders + order lines + refunds + refund lines fetched together per order
+// page. `query` is a Shopify search-string variable (e.g.
+// "created_at:>=2026-07-22") - the caller supplies the 60-day window filter;
+// this module never assumes it can see older orders (Order object caps
+// access at 60 days without read_all_orders, which this project does not
+// request - see docs/architecture/orders-refunds-sync.md).
+//
+// Deliberately NOT fetched: any customer/name/email/phone/address field -
+// V1 stores business transaction data only, never customer PII.
+export const ORDERS_PAGE_QUERY = /* GraphQL */ `
+  query ($cursor: String, $searchQuery: String) {
+    orders(first: 25, after: $cursor, sortKey: CREATED_AT, query: $searchQuery) {
+      edges {
+        node {
+          id
+          createdAt
+          currencyCode
+          taxesIncluded
+          displayFinancialStatus
+          retailLocation {
+            id
+          }
+          lineItems(first: 50) {
+            edges {
+              node {
+                id
+                title
+                sku
+                quantity
+                variant {
+                  id
+                }
+                originalUnitPriceSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+                totalDiscountSet {
+                  shopMoney {
+                    amount
+                  }
+                }
+                taxLines {
+                  priceSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                }
+              }
+            }
+          }
+          refunds {
+            id
+            createdAt
+            totalRefundedSet {
+              shopMoney {
+                amount
+              }
+            }
+            refundLineItems(first: 50) {
+              edges {
+                node {
+                  quantity
+                  subtotalSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                  totalTaxSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                  lineItem {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
 // Inventory + cost are fetched together per variant page: they come from the
 // same InventoryItem, so one page fetch serves both the inventory sync and
 // the cost sync.
