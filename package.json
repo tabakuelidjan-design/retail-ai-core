@@ -9,6 +9,7 @@
     "sync:catalog": "node src/sync/index.js catalog",
     "sync:inventory": "node src/sync/index.js inventory",
     "sync:cost": "node src/sync/index.js cost",
+    "sync:orders": "node src/sync/index.js orders",
     "sync:all": "node src/sync/index.js all"
   },
   "engines": {
