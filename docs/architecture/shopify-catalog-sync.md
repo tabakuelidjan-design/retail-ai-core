@@ -18,11 +18,30 @@ Shopify Admin GraphQL API, read-only. No product/inventory/metafield/order/confi
 - Every synced table is keyed by `(merchant_id, source_system, source_id)` (or `(merchant_id, source_system, source_id)` for `variants` per the multi-merchant-safety fix) and upserted via `insert ... on conflict (...) do update set ...` — re-running with the same Shopify data updates in place, never duplicates.
 - `merchant_id` is resolved once per run via `select id from merchants where name = 'HABB' limit 1`.
 
-## Known issue found by the idempotency test (must fix before Phase 1B)
+## Merchant identity fix (`phase1_merchant_identity` migration)
 
-`merchants` has **no unique constraint on `name`** (or any natural key). `insert into merchants (...) on conflict do nothing` has no constraint to target, so it silently does nothing to prevent duplicates — it just inserts a new row every time. Discovered when the second sync run created 2 extra orphan `HABB` merchant rows (cleaned up manually this session — the 2 duplicates had zero FK references and were deleted).
+The idempotency test found a real bug: `merchants` had no unique constraint on `name` (or any natural key), so `on conflict do nothing` had nothing to target and silently inserted a new row on every run — 2 orphan duplicate `HABB` rows were created and deleted manually.
 
-**Fix needed (not yet applied — requires its own migration/approval):** add `unique (name)` to `merchants`, or better, a `merchant_key` slug column with a unique constraint, since a display `name` isn't guaranteed stable long-term. Until fixed, any real automated re-run of this sync is at risk of creating duplicate merchant rows.
+**Rejected fix:** `unique(name)` — a display name is not a technical identity; two different future merchants could share a name, and this one merchant's own name could change.
+
+**Applied fix:** a separate, additive migration (`supabase/migrations/20260920132500_phase1_merchant_identity.sql`) adds:
+- `source_system` (e.g. `'shopify'`)
+- `source_id` — the Shopify **Shop GID** (`gid://shopify/Shop/98815246684`), fetched read-only via `shop { id }`. This is what the sync now upserts on: `on conflict (source_system, source_id) do update ...`.
+- `source_domain` (e.g. `zmb5jr-wf.myshopify.com`) — **informational only**, not part of identity or uniqueness. A domain can change (custom domain setup, platform migration) independently of the merchant itself, so keying on it would be as fragile as keying on `name`. It exists purely so a human reading the table doesn't have to decode a GID to recognize which store a row is.
+- `unique (source_system, source_id)` constraint.
+
+`name` remains a plain display field — never unique, never used for sync identity.
+
+Verified before migration: exactly 1 `HABB` merchant row existed. After migration: still exactly 1 row, now carrying the real identity. The catalog sync's merchant upsert was updated to key on `(source_system, source_id)`, never `name`.
+
+## Idempotency test — post-fix (2 full runs)
+
+| | merchants | locations | products | variants |
+|---|---|---|---|---|
+| Run 1 | 1 | 1 | 175 | 339 |
+| Run 2 | 1 | 1 | 175 | 339 |
+
+0 new rows of any kind on the second run. No diagnosis needed — clean pass.
 
 ## Data-quality observations (reported only — nothing written to `data_quality_flags` yet, per Phase 1A scope)
 
