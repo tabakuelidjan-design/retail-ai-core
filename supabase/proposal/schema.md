@@ -2,57 +2,78 @@
 
 This is a design proposal only. No migration has been written to `supabase/migrations/` and nothing has been applied to any project, including the dev project `retail-ai-core-dev`. Per the safe-deployment discipline, this must be reviewed and explicitly approved before any migration file is created from it.
 
-## Status
+## Status (this revision)
 
-- ✅ Scope cut to **Phase 1 required tables only** — the "keep empty for later" tables (`metric_definitions`, `metric_values`, `decisions`, `decision_evidence`, `decision_outcomes`) are **not** in this migration. They stay documented below as a deferred design, created only when the metrics/decision engine work is actually approved.
-- ✅ `product_costs.source` reworked — the real Shopify inspection (below) showed `unitCost` is itself a Shopify-provided number, which the old 3-value enum didn't account for.
-- ✅ Added a cost trust/validation status, separate from `source` — knowing *where* a cost came from and *whether it's been validated* are two different questions.
-- ✅ Real HABB Shopify structure inspected read-only (Admin GraphQL API, no write calls) — see mapping matrix below.
-- ⏳ SQL shown for review — **not applied**.
+- ✅ **Multi-merchant safety on `variants`** — added `merchant_id`, uniqueness is now `(merchant_id, source_system, source_id)`. An external ID is never assumed globally unique across future merchants/platforms.
+- ✅ **Historical order lines** — `order_lines.variant_id` is now nullable, with `source_id` (the Shopify `LineItem` GID), `title_snapshot`, and nullable `sku_snapshot` added, so a line survives even if its variant/product is later deleted, or represents a custom item.
+- ✅ **Refund attribution at line level** — new `refund_lines` table, justified by real HABB refund payloads (below): refunds can be traced to the specific line item, quantity, and amount refunded, not just an order-level total.
+- ✅ **Tax representation** — real inspection confirmed HABB prices are tax-inclusive (`taxesIncluded: true`, 21% BE TVA). Added `orders.taxes_included` and `order_lines.tax_amount` (the real captured tax, never a guessed rate) so "Net sales HT" can be computed later without inventing VAT.
+- ⏳ SQL shown for review — **not applied**. No migration run, no sync started.
 
-## What was inspected (read-only, real HABB store)
+## Inspection results (read-only, real HABB store)
 
-Via the Shopify MCP connector (`get-shop-info`, `search_products`, `list-orders`, `graphql_schema`, and one read-only `graphql_query`):
+### Line items — which identifiers are actually available
 
-- Store: `habb.be`, Basic plan, currency EUR, Belgium.
-- 3 sample products, e.g. "Casque Bluetooth Remax RB-300HB" (2 variants), "Câble tressé USB-C 30W/65W" (4 variants).
-- **`sku` is `null` on every observed variant.** HABB does not populate SKUs in Shopify today.
-- **`barcode` is populated, but with what looks like a fragment of the internal variant ID** (e.g. variant `57206416703836` → barcode `16703836`), not a real manufacturer barcode. This looks like Shopify's own auto-fill, not real data — flagged as a candidate `data_quality_flags` case once the sync exists (a `suspicious_barcode`-type check), not something to silently trust.
-- **`InventoryItem.unitCost` is real and populated** — e.g. `10.06 EUR` on the Remax headphones variant. So Shopify itself already carries a per-variant cost for at least some products. This changes `product_costs.source` (below): a cost row can legitimately originate from Shopify itself, not just from a manual entry or a vertical module computation.
-- Orders: 70 total, recent ones fully `PAID`/`FULFILLED`, e.g. `#1070` (34.90 EUR, 1 line item).
-- `Location` has no equivalent identifier stored anywhere in the original schema draft's `locations` table — fixed below (`source_system`/`source_id` added, matching how `products`/`orders` already do it).
+Queried real orders (`#1069`, `#1065`) via the Admin GraphQL API:
 
-## Phase 1 required tables (this migration)
+- `LineItem.id` (GID) — **always present**. This is the stable external reference for `order_lines.source_id`.
+- `LineItem.title` — **always present** (non-nullable in the schema), captured at order time — this backs `title_snapshot`.
+- `LineItem.sku` — **inconsistent**: `null` on the Remax accessory lines checked earlier, but **populated** (`"GEN-022"`) on a real refunded line ("Puzzle Photo 300 Pièces"). Confirms `sku_snapshot` must be nullable — some HABB products do carry a SKU, others don't.
+- `LineItem.variant` — present when the variant still exists; this is exactly the reference that can go missing for historical/deleted variants, which is why `order_lines.variant_id` must be nullable rather than assumed always resolvable.
 
-Per the earlier classification, these are the tables the read-only Shopify sync cannot function without:
+### Refunds — real payload structure
 
-`merchants`, `locations`, `products`, `variants`, `inventory_snapshots`, `orders`, `order_lines`, `refunds`, `product_costs`, `data_quality_flags`.
+Found 3 real refunded HABB orders (`#1065`, `#1004`, `#1003`). Example (`#1065`, refund note "Commande annulée"):
 
-### `product_costs` — reworked
+```
+Refund.totalRefundedSet = 26.99 EUR
+  refundLineItems:
+    - quantity: 1
+      priceSet: 19.99 EUR
+      subtotalSet: 19.99 EUR
+      totalTaxSet: 3.47 EUR
+      lineItem: { id, sku: "GEN-022", title: "Puzzle Photo 300 Pièces", variant: { id } }
+```
 
-Two previously-conflated ideas are now separate columns:
+`RefundLineItem` carries exactly what's needed to compute net revenue/margin per product from a refund, not just per order: `quantity`, `priceSet` (refunded price), `subtotalSet`, `totalTaxSet`, and a direct `lineItem` reference. **This justifies creating `refund_lines`** — without it, a refund could only ever be netted against the whole order, never against the specific product/variant it affects.
 
-- **`source`** — *where the number came from*: `'shopify_unit_cost'` (read from `InventoryItem.unitCost`, confirmed to exist in real HABB data), `'manual_entry'` (typed in by a human), `'vendor_invoice'` (from a supplier document/import), `'vertical_module_computed'` (e.g. a future UV-production-cost module deriving a cost — HABB-specific, lives behind that module, never hardcoded here).
-- **`validation_status`** — *how much to trust the number*, independent of where it came from: `'unverified'` (default — e.g. freshly pulled from Shopify but no one has confirmed it reflects real landed cost), `'verified'` (a human has checked it against an actual invoice/reality), `'estimated'` (a deliberate approximation, never silently treated as exact), `'stale'` (was verified once, but past its `effective_from` freshness window — see `data-quality-rules`).
+Note: `RefundLineItem.id` is a **nullable** field in Shopify's schema (unlike almost every other `id` in the API) — it cannot be relied on as a guaranteed external key. `refund_lines` uniqueness is therefore scoped to `(refund_id, order_line_id)`, not to a Shopify-provided refund-line ID.
 
-This matters concretely for HABB: `unitCost = 10.06` exists in Shopify, but nothing confirms yet whether it's accurate or leftover/placeholder data — same suspicion as the barcode fragment above. Pulling it in as `source = 'shopify_unit_cost'`, `validation_status = 'unverified'` lets the data-quality layer treat it as real-but-unconfirmed, rather than either blindly trusting it or discarding it.
+### Tax / TVA — real structure
 
-### `locations` — fixed
+Queried `Order.taxesIncluded` and `LineItem.taxLines` on a real order (`#1069`):
 
-Added `source_system` + `source_id` (matching `products`/`orders`) so a Shopify `Location` can actually be joined to a local row — the original draft had no way to do this.
+```
+Order.taxesIncluded = true
+LineItem "Coque personnalisée – Samsung Galaxy S23+":
+  originalUnitPriceSet = 25.00 EUR
+  taxLines: [{ title: "BE TVA", rate: 0.21, priceSet: 4.34 EUR }]
+```
 
-## Static review (this revision)
+**Confirmed: HABB's Shopify prices are TTC (tax-inclusive).** `order_lines.unit_price` must be documented as TTC, not HT — computing "Net sales HT" later means *subtracting* the real captured `tax_amount`, never applying a guessed 21% to a price that might already exclude tax for a different merchant/vertical. The real tax amount (`4.34 EUR`), not the rate, is what gets stored — the rate can vary by product/region and inferring HT from a hardcoded rate would violate "never invent missing data."
 
-Checked against 8 explicit rules before sign-off:
+## Phase 1 required tables (this migration) — 11 tables
 
-1. `sku` nullable, never a logical/primary key — ✅ already the case (nullable, no unique constraint on it alone).
-2. `barcode` nullable, never a reliable identifier — ✅ satisfied by not storing it at all in Phase 1 (see mapping matrix); if it's ever added later, it must stay nullable and never carry a unique constraint.
-3. Shopify `source_id` is the stable external reference — ✅ every synced table carries `source_system` + `source_id`, unique together.
-4. Locations joinable via `source_system + source_id` — ✅ (`unique (merchant_id, source_system, source_id)` on `locations`).
-5. `product_costs.validation_status = 'estimated'` never presented as a certain margin — addressed with a `comment on column` in the SQL itself, and this is also the rule already stated in the `retail-metrics` Skill (a margin computed from a non-`'verified'` cost cannot be shown as exact — enforcement lives in the future metrics engine, since `metric_values` isn't part of Phase 1).
-6. Missing cost = `UNCLASSIFIED` — ✅ structural: `product_costs` simply has no row for that variant; nothing defaults it to zero/average.
-7. Refunds cleanly attached to an order — ✅ `refunds.order_id` is `not null references orders(id)`.
-8. No unnecessary customer PII — ✅ no customer table, no PII column anywhere in Phase 1.
+`merchants`, `locations`, `products`, `variants`, `inventory_snapshots`, `orders`, `order_lines`, `refunds`, `refund_lines`, `product_costs`, `data_quality_flags`.
+
+(`refund_lines` is new this revision, justified by the real refund payload above — 10 → 11 tables.)
+
+## Static review — original 8 rules, still holding
+
+1. `sku` nullable, never a logical/primary key — ✅ (now also true for `sku_snapshot` on `order_lines`).
+2. `barcode` nullable, never a reliable identifier — ✅ still not stored in Phase 1.
+3. Shopify `source_id` is the stable external reference — ✅, and now also on `order_lines` and `refunds`.
+4. Locations joinable via `source_system + source_id` — ✅.
+5. `validation_status = 'estimated'` never presented as a certain margin — ✅ (`comment on column`, unchanged).
+6. Missing cost = `UNCLASSIFIED` — ✅ unchanged.
+7. Refunds cleanly attached to an order — ✅, and now also refund **lines** cleanly attached to the specific order line via `refund_lines.order_line_id`.
+8. No unnecessary customer PII — ✅ unchanged.
+
+## New rules checked this revision
+
+9. **Multi-merchant safety** — no external ID (`source_id`) is trusted as globally unique on its own anywhere in the schema. It is always scoped: `variants` by `(merchant_id, source_system, source_id)`; `order_lines`/`refunds` by their parent `order_id` (which itself is merchant-scoped) — scoping through the parent avoids duplicating `merchant_id` on every child table while keeping the same guarantee.
+10. **Historical order lines survive catalog changes** — `order_lines.variant_id` is nullable; `title_snapshot`/`sku_snapshot` preserve what was actually sold regardless of what happens to the catalog later.
+11. **Tax amounts are captured, never inferred** — `order_lines.tax_amount` stores the real value from Shopify's `taxLines`; no VAT rate is hardcoded anywhere in the schema.
 
 ## Final SQL (Phase 1 only — draft, NOT applied)
 
@@ -89,12 +110,13 @@ create table products (
 create table variants (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id),
+  merchant_id uuid not null references merchants(id),
   sku text,
   title text,
   attributes jsonb not null default '{}'::jsonb,
   source_system text not null,
   source_id text not null,
-  unique (source_system, source_id)
+  unique (merchant_id, source_system, source_id)
 );
 
 create table inventory_snapshots (
@@ -114,24 +136,45 @@ create table orders (
   ordered_at timestamptz not null,
   currency text not null,
   status text not null,
+  taxes_included boolean not null,
   unique (merchant_id, source_system, source_id)
 );
 
 create table order_lines (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders(id),
-  variant_id uuid not null references variants(id),
+  variant_id uuid references variants(id),
+  source_system text not null,
+  source_id text not null,
+  title_snapshot text not null,
+  sku_snapshot text,
   quantity integer not null,
   unit_price numeric(12,2) not null,
-  discount_amount numeric(12,2) not null default 0
+  discount_amount numeric(12,2) not null default 0,
+  tax_amount numeric(12,2) not null default 0,
+  unique (order_id, source_system, source_id)
 );
 
 create table refunds (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders(id),
+  source_system text not null,
+  source_id text not null,
   amount numeric(12,2) not null,
   refunded_at timestamptz not null,
-  reason text
+  reason text,
+  unique (order_id, source_system, source_id)
+);
+
+create table refund_lines (
+  id uuid primary key default gen_random_uuid(),
+  refund_id uuid not null references refunds(id),
+  order_line_id uuid not null references order_lines(id),
+  quantity integer not null,
+  amount numeric(12,2) not null,
+  tax_amount numeric(12,2) not null default 0,
+  currency text not null,
+  unique (refund_id, order_line_id)
 );
 
 create table product_costs (
@@ -159,13 +202,25 @@ create table data_quality_flags (
 );
 
 comment on column variants.sku is
-  'Nullable by design. Not a join key and never unique-constrained — confirmed null on every observed HABB variant. Identity for sync/joins is source_system + source_id.';
+  'Nullable by design. Not a join key and never unique-constrained — confirmed null on some HABB variants and populated on others (e.g. SKU "GEN-022" on a Puzzle product). Identity for sync/joins is merchant_id + source_system + source_id.';
+
+comment on column order_lines.variant_id is
+  'Nullable: a historical order line must survive even if its variant/product is later deleted, or if the line represents a custom item with no catalog variant. Use title_snapshot/sku_snapshot to know what was actually sold when variant_id is null.';
+
+comment on column order_lines.unit_price is
+  'Captured exactly as Shopify recorded it at order time. Whether this is tax-inclusive (TTC) or exclusive (HT) is given by the parent orders.taxes_included — for HABB, confirmed true (TTC). Never assume HT without checking that flag.';
+
+comment on column order_lines.tax_amount is
+  'The real tax amount captured from Shopify taxLines for this line, never a rate applied after the fact. Used to derive Net sales HT without inventing a VAT rate.';
 
 comment on column product_costs.validation_status is
   'Trust level for unit_cost, independent of source. estimated must never be displayed or computed as a certain margin — any metric built on an estimated or unverified cost must carry that same caveat forward, not present a clean number.';
 
 comment on column refunds.order_id is
   'Not null and FK-enforced: a refund can only exist attached to a real order row. A refund with no matching source order is a data-quality violation to catch during sync, not a valid row to insert.';
+
+comment on column refund_lines.order_line_id is
+  'Links a refund to the specific order line it affects, enabling net revenue/margin per product/variant — not just per order. Shopify RefundLineItem.id is itself nullable and cannot be used as the external key, so uniqueness here is scoped to (refund_id, order_line_id) instead.';
 
 alter table merchants enable row level security;
 alter table locations enable row level security;
@@ -175,6 +230,7 @@ alter table inventory_snapshots enable row level security;
 alter table orders enable row level security;
 alter table order_lines enable row level security;
 alter table refunds enable row level security;
+alter table refund_lines enable row level security;
 alter table product_costs enable row level security;
 alter table data_quality_flags enable row level security;
 ```
@@ -190,25 +246,31 @@ Based on the real read-only inspection above, not assumptions.
 | `Product.id` | `products.source_id` (+ `source_system='shopify'`) | Available |
 | `Product.title` | `products.title` | Available |
 | `Product.handle` | `products.handle` | Available |
-| `Product.vendor`, `Product.productType` | — | **Missing** (not modeled in Phase 1 — no column; would need a schema change if needed later) |
+| `Product.vendor`, `Product.productType` | — | **Missing** (not modeled in Phase 1) |
 | `ProductVariant.id` | `variants.source_id` | Available |
-| `ProductVariant.sku` | `variants.sku` | Available as a column, but **empty in practice** — confirmed `null` on every HABB variant checked. `data_quality_flags` will need to tolerate SKU-less catalogs, not assume SKU is a usable join key for this merchant. |
-| `ProductVariant.barcode` | — | **Missing** (not modeled) — and what exists looks auto-generated, not a real barcode; not worth ingesting as-is. |
-| `ProductVariant.price` (current catalog price) | — | **Missing** — only the historical transaction price is modeled (`order_lines.unit_price`), not current catalog price. Acceptable for Phase 1 (margin is computed on what was actually sold), but note: no live "current price" table exists yet. |
-| `InventoryItem.unitCost` | `product_costs.unit_cost` (`source='shopify_unit_cost'`) | **Available and confirmed populated** for at least some HABB variants (e.g. 10.06 EUR) — but `validation_status` starts `'unverified'`, see above. |
+| `ProductVariant.sku` | `variants.sku` / `order_lines.sku_snapshot` | Available as a column, **inconsistent in practice** — null on some HABB variants, populated on others. Never a required join key. |
+| `ProductVariant.barcode` | — | **Missing** (not modeled) — looks auto-generated, not a real barcode. |
+| `ProductVariant.price` (current catalog price) | — | **Missing** — only the historical transaction price is modeled (`order_lines.unit_price`). |
+| `LineItem.id` | `order_lines.source_id` | Available — always present, confirmed on real orders. |
+| `LineItem.title` | `order_lines.title_snapshot` | Available — always present at order time. |
+| `LineItem.taxLines` | `order_lines.tax_amount` | Available — real captured amount, confirmed (e.g. 4.34 EUR at 21% BE TVA). |
+| `Order.taxesIncluded` | `orders.taxes_included` | **Available and confirmed `true` for HABB** — prices are TTC. |
+| `InventoryItem.unitCost` | `product_costs.unit_cost` (`source='shopify_unit_cost'`) | Available and confirmed populated (e.g. 10.06 EUR) — `validation_status` starts `'unverified'`. |
 | `InventoryItem.tracked` | — | **Missing** (not modeled) |
-| `Location.id` | `locations.source_id` | Available (schema fixed to store it) |
+| `Location.id` | `locations.source_id` | Available |
 | `Location.name` | `locations.name` | Available |
 | `InventoryLevel` (location × item quantity) | `inventory_snapshots.quantity` + `location_id` | Available |
 | `Order.id` | `orders.source_id` | Available |
-| `Order.name` (e.g. `#1070`) | — | **Missing** (not modeled) — human-readable order number isn't stored; only the GID is. Low priority, easy to add later if needed for support/debugging. |
+| `Order.name` (e.g. `#1070`) | — | **Missing** (not modeled) |
 | `Order.createdAt` | `orders.ordered_at` | Available |
 | `Order.currencyCode` | `orders.currency` | Available |
 | `Order.financialStatus` | `orders.status` | Available |
-| `Order.fulfillmentStatus` | — | **Missing** (not modeled — not needed for revenue/margin/refund metrics) |
-| `Order.customer` (any field) | — | **Missing by design** — no customer table in Phase 1, and per `CLAUDE.md`, no raw PII is sent to an LLM regardless. |
-| `LineItem.variant`, `.quantity`, `.price`/`.discountedTotal` | `order_lines.variant_id/quantity/unit_price/discount_amount` | Available |
-| `Refund` (amount, timing, note) | `refunds.amount/refunded_at/reason` | Available — actual amount requires summing refund line items/transactions during sync (an ETL detail, not a schema gap). |
+| `Order.fulfillmentStatus` | — | **Missing** (not needed for revenue/margin/refund metrics) |
+| `Order.customer` (any field) | — | **Missing by design** — no PII in Phase 1. |
+| `Refund.id` | `refunds.source_id` | Available |
+| `Refund.totalRefundedSet` | `refunds.amount` | Available |
+| `RefundLineItem.id` | — | **Not usable as a key** — nullable in Shopify's own schema; `refund_lines` uniqueness uses `(refund_id, order_line_id)` instead. |
+| `RefundLineItem.quantity`, `.priceSet`, `.subtotalSet`, `.totalTaxSet`, `.lineItem` | `refund_lines.quantity/amount/tax_amount` + `order_line_id` | **Available and confirmed** on a real refunded HABB order. |
 
 ## Explicitly deferred (not in this migration)
 
