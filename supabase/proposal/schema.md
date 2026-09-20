@@ -1,92 +1,50 @@
-# Supabase Schema Proposal (Phase 0 — NOT APPLIED)
+# Supabase Schema Proposal — Phase 1 scope (NOT APPLIED)
 
-This is a design proposal only. No migration has been written or applied. Per the safe-deployment discipline, this must be reviewed and explicitly approved before any `supabase/migrations/*.sql` is created from it.
-
-## Design goals
-
-- IDs and relationships are **not** intrinsically limited to a single merchant (HABB) — every business entity is scoped by `merchant_id` from day one.
-- No multi-tenant billing/subscription architecture yet (explicitly out of scope for Phase 0).
-- No over-engineering: this is the minimal entity set needed to eventually support data → data quality → metrics → decisions → outcomes, not a full ERP model.
-- RLS-ready: every table scoped by `merchant_id` so a future RLS policy can restrict rows per merchant/tenant.
-
-## Proposed entities
-
-### `merchants`
-Root tenant entity. `id`, `name`, `vertical` (e.g. `general_retail`, `production_customization`), `created_at`.
-
-### `locations`
-Physical or logical location per merchant (store, warehouse, "online"). `id`, `merchant_id`, `name`, `type`.
-
-### `products`
-`id`, `merchant_id`, `title`, `handle`/external reference, `source_system` (e.g. `shopify`), `source_id`.
-
-### `variants`
-`id`, `product_id`, `sku`, `title`, attributes (JSON), `source_id`.
-
-### `inventory_snapshots`
-Point-in-time stock reads. `id`, `variant_id`, `location_id`, `quantity`, `synced_at`. Append-only — never overwritten, so stock-coverage/dead-stock metrics can look at history, and "stale synchronization" data-quality checks can compare `synced_at` against now.
-
-### `orders`
-`id`, `merchant_id`, `location_id` (nullable — online orders may have none), `source_id`, `ordered_at`, `currency`, `status`.
-
-### `order_lines`
-`id`, `order_id`, `variant_id`, `quantity`, `unit_price`, `discount_amount`.
-
-### `refunds`
-`id`, `order_id` (must reference an existing order — a refund without one is a data-quality violation, not a valid row), `amount`, `refunded_at`, `reason` (nullable).
-
-### `product_costs`
-`id`, `variant_id`, `merchant_id`, `unit_cost`, `currency`, `effective_from`, `source` (`manual` | `import` | vertical-module-computed). Absence of a row for a variant is what produces `UNCLASSIFIED` COGS — this table is intentionally allowed to be incomplete; the system must handle that gracefully rather than assuming completeness.
-
-### `metric_definitions`
-`id`, `key` (e.g. `contribution_margin_v0`), `version`, `description`, `formula_reference` (pointer to the versioned SQL/code that computes it, not the formula duplicated as a string). Mirrors the `retail-metrics` Skill — the Skill is the human-readable definition, this table is what the app looks up to know which version is currently in use.
-
-### `metric_values`
-`id`, `merchant_id`, `metric_definition_id`, `period_start`, `period_end`, `value` (nullable), `status` (`ok` | `unclassified`), `computed_at`. `value` is null and `status = 'unclassified'` when inputs were incomplete — never a substituted number.
-
-### `decisions`
-`id`, `merchant_id`, `type`, `proposed_at`, `decided_at` (nullable until a human acts), `decided_by`, `outcome` (`approved` | `rejected` | `modified`), `notes`.
-
-### `decision_evidence`
-`id`, `decision_id`, `metric_value_id` (nullable), `data_quality_flag_id` (nullable), `note` — links a decision to the specific metrics/data-quality state that informed it, so it's auditable later.
-
-### `decision_outcomes`
-(renamed from `future_outcomes` — "future" ages badly once a decision's outcome has already been observed; this name stays accurate at any point in time.)
-`id`, `decision_id`, `observed_at`, `outcome_metric_value_id` (nullable), `summary` — closes the loop by recording what actually happened after a decision, for later comparison against what was predicted/expected. This table only ever *stores* an observation; no scoring/comparison logic lives here or anywhere yet — that's the Outcome Engine, explicitly out of scope until approved.
-
-### `data_quality_flags`
-Stores only the **results** of the deterministic checks defined in the `data-quality-rules` Skill — no business logic lives in this table, it is a record of "check X fired on entity Y at time Z", nothing more.
-- `id`
-- `merchant_id` — which merchant's data the flag belongs to
-- `entity_type` — the kind of record the check ran against (`product`, `variant`, `order`, `refund`, `inventory_snapshot`, …)
-- `entity_id` — the specific record's id (loosely typed / not a FK, since `entity_type` varies)
-- `rule_code` — which check fired, matching a key from the `data-quality-rules` Skill (e.g. `missing_cogs`, `negative_stock`) — never a free-text description
-- `severity` — e.g. `info` | `warning` | `critical`; the mapping from rule to default severity is config, not hardcoded per-row
-- `status` — `open` | `resolved` | `ignored`; ignoring a flag is a human decision that should itself be traceable (later, an `decision_evidence` row can point at an ignored flag)
-- `detected_at` — when the check first flagged this entity in this state
-- `resolved_at` — nullable; when it stopped firing / was resolved
-- `details` — JSON blob holding whatever evidence the check produced (e.g. the missing field, the expected vs. actual value) — evidence only, never a computed business number
-
-`decision_evidence.data_quality_flag_id` references this table.
-
-## Explicitly deferred
-
-- Multi-tenant billing/subscription tables.
-- Anything vertical-specific (e.g. UV-printing cost breakdown) — that lives in merchant config (`config/merchants/<merchant>/`) and/or a vertical module's own tables, added later behind its own review, not bolted onto the generic schema now.
-- RLS policies themselves (the schema is designed to make them possible; writing and applying them is a separate, reviewed step, tracked below).
-- The Outcome Engine (any logic that scores/compares `decision_outcomes` against what was predicted) — `decision_outcomes` only stores observations for now.
+This is a design proposal only. No migration has been written to `supabase/migrations/` and nothing has been applied to any project, including the dev project `retail-ai-core-dev`. Per the safe-deployment discipline, this must be reviewed and explicitly approved before any migration file is created from it.
 
 ## Status
 
-- ✅ `data_quality_flags` gap resolved (see above).
-- ✅ `future_outcomes` renamed to `decision_outcomes`.
-- ✅ Development Supabase project created (`retail-ai-core-dev`, region `eu-west-1`) — no tables yet, no migration applied.
-- ⏳ Full SQL migration drafted below, shown for review — **not applied**.
+- ✅ Scope cut to **Phase 1 required tables only** — the "keep empty for later" tables (`metric_definitions`, `metric_values`, `decisions`, `decision_evidence`, `decision_outcomes`) are **not** in this migration. They stay documented below as a deferred design, created only when the metrics/decision engine work is actually approved.
+- ✅ `product_costs.source` reworked — the real Shopify inspection (below) showed `unitCost` is itself a Shopify-provided number, which the old 3-value enum didn't account for.
+- ✅ Added a cost trust/validation status, separate from `source` — knowing *where* a cost came from and *whether it's been validated* are two different questions.
+- ✅ Real HABB Shopify structure inspected read-only (Admin GraphQL API, no write calls) — see mapping matrix below.
+- ⏳ SQL shown for review — **not applied**.
 
-## Final SQL (draft — for review only, NOT applied to any project)
+## What was inspected (read-only, real HABB store)
+
+Via the Shopify MCP connector (`get-shop-info`, `search_products`, `list-orders`, `graphql_schema`, and one read-only `graphql_query`):
+
+- Store: `habb.be`, Basic plan, currency EUR, Belgium.
+- 3 sample products, e.g. "Casque Bluetooth Remax RB-300HB" (2 variants), "Câble tressé USB-C 30W/65W" (4 variants).
+- **`sku` is `null` on every observed variant.** HABB does not populate SKUs in Shopify today.
+- **`barcode` is populated, but with what looks like a fragment of the internal variant ID** (e.g. variant `57206416703836` → barcode `16703836`), not a real manufacturer barcode. This looks like Shopify's own auto-fill, not real data — flagged as a candidate `data_quality_flags` case once the sync exists (a `suspicious_barcode`-type check), not something to silently trust.
+- **`InventoryItem.unitCost` is real and populated** — e.g. `10.06 EUR` on the Remax headphones variant. So Shopify itself already carries a per-variant cost for at least some products. This changes `product_costs.source` (below): a cost row can legitimately originate from Shopify itself, not just from a manual entry or a vertical module computation.
+- Orders: 70 total, recent ones fully `PAID`/`FULFILLED`, e.g. `#1070` (34.90 EUR, 1 line item).
+- `Location` has no equivalent identifier stored anywhere in the original schema draft's `locations` table — fixed below (`source_system`/`source_id` added, matching how `products`/`orders` already do it).
+
+## Phase 1 required tables (this migration)
+
+Per the earlier classification, these are the tables the read-only Shopify sync cannot function without:
+
+`merchants`, `locations`, `products`, `variants`, `inventory_snapshots`, `orders`, `order_lines`, `refunds`, `product_costs`, `data_quality_flags`.
+
+### `product_costs` — reworked
+
+Two previously-conflated ideas are now separate columns:
+
+- **`source`** — *where the number came from*: `'shopify_unit_cost'` (read from `InventoryItem.unitCost`, confirmed to exist in real HABB data), `'manual_entry'` (typed in by a human), `'vendor_invoice'` (from a supplier document/import), `'vertical_module_computed'` (e.g. a future UV-production-cost module deriving a cost — HABB-specific, lives behind that module, never hardcoded here).
+- **`validation_status`** — *how much to trust the number*, independent of where it came from: `'unverified'` (default — e.g. freshly pulled from Shopify but no one has confirmed it reflects real landed cost), `'verified'` (a human has checked it against an actual invoice/reality), `'estimated'` (a deliberate approximation, never silently treated as exact), `'stale'` (was verified once, but past its `effective_from` freshness window — see `data-quality-rules`).
+
+This matters concretely for HABB: `unitCost = 10.06` exists in Shopify, but nothing confirms yet whether it's accurate or leftover/placeholder data — same suspicion as the barcode fragment above. Pulling it in as `source = 'shopify_unit_cost'`, `validation_status = 'unverified'` lets the data-quality layer treat it as real-but-unconfirmed, rather than either blindly trusting it or discarding it.
+
+### `locations` — fixed
+
+Added `source_system` + `source_id` (matching `products`/`orders`) so a Shopify `Location` can actually be joined to a local row — the original draft had no way to do this.
+
+## Final SQL (Phase 1 only — draft, NOT applied)
 
 ```sql
--- 0001_initial_schema.sql (PROPOSAL — DO NOT APPLY WITHOUT EXPLICIT APPROVAL)
+-- 0001_phase1_schema.sql (PROPOSAL — DO NOT APPLY WITHOUT EXPLICIT APPROVAL)
 
 create table merchants (
   id uuid primary key default gen_random_uuid(),
@@ -99,7 +57,10 @@ create table locations (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null references merchants(id),
   name text not null,
-  type text not null
+  type text not null,
+  source_system text not null,
+  source_id text not null,
+  unique (merchant_id, source_system, source_id)
 );
 
 create table products (
@@ -118,7 +79,9 @@ create table variants (
   sku text,
   title text,
   attributes jsonb not null default '{}'::jsonb,
-  source_id text
+  source_system text not null,
+  source_id text not null,
+  unique (source_system, source_id)
 );
 
 create table inventory_snapshots (
@@ -133,11 +96,12 @@ create table orders (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null references merchants(id),
   location_id uuid references locations(id),
+  source_system text not null,
   source_id text not null,
   ordered_at timestamptz not null,
   currency text not null,
   status text not null,
-  unique (merchant_id, source_id)
+  unique (merchant_id, source_system, source_id)
 );
 
 create table order_lines (
@@ -164,27 +128,8 @@ create table product_costs (
   unit_cost numeric(12,2) not null,
   currency text not null,
   effective_from timestamptz not null default now(),
-  source text not null check (source in ('manual', 'import', 'vertical_module'))
-);
-
-create table metric_definitions (
-  id uuid primary key default gen_random_uuid(),
-  key text not null,
-  version integer not null,
-  description text not null,
-  formula_reference text not null,
-  unique (key, version)
-);
-
-create table metric_values (
-  id uuid primary key default gen_random_uuid(),
-  merchant_id uuid not null references merchants(id),
-  metric_definition_id uuid not null references metric_definitions(id),
-  period_start date not null,
-  period_end date not null,
-  value numeric(14,2),
-  status text not null check (status in ('ok', 'unclassified')),
-  computed_at timestamptz not null default now()
+  source text not null check (source in ('shopify_unit_cost', 'manual_entry', 'vendor_invoice', 'vertical_module_computed')),
+  validation_status text not null default 'unverified' check (validation_status in ('unverified', 'verified', 'estimated', 'stale'))
 );
 
 create table data_quality_flags (
@@ -200,35 +145,6 @@ create table data_quality_flags (
   details jsonb not null default '{}'::jsonb
 );
 
-create table decisions (
-  id uuid primary key default gen_random_uuid(),
-  merchant_id uuid not null references merchants(id),
-  type text not null,
-  proposed_at timestamptz not null default now(),
-  decided_at timestamptz,
-  decided_by text,
-  outcome text check (outcome in ('approved', 'rejected', 'modified')),
-  notes text
-);
-
-create table decision_evidence (
-  id uuid primary key default gen_random_uuid(),
-  decision_id uuid not null references decisions(id),
-  metric_value_id uuid references metric_values(id),
-  data_quality_flag_id uuid references data_quality_flags(id),
-  note text
-);
-
-create table decision_outcomes (
-  id uuid primary key default gen_random_uuid(),
-  decision_id uuid not null references decisions(id),
-  observed_at timestamptz not null default now(),
-  outcome_metric_value_id uuid references metric_values(id),
-  summary text
-);
-
--- RLS is enabled on every table now; policies themselves are a separate,
--- reviewed step (tracked in docs/security/baseline.md) — not written yet.
 alter table merchants enable row level security;
 alter table locations enable row level security;
 alter table products enable row level security;
@@ -238,18 +154,51 @@ alter table orders enable row level security;
 alter table order_lines enable row level security;
 alter table refunds enable row level security;
 alter table product_costs enable row level security;
-alter table metric_definitions enable row level security;
-alter table metric_values enable row level security;
 alter table data_quality_flags enable row level security;
-alter table decisions enable row level security;
-alter table decision_evidence enable row level security;
-alter table decision_outcomes enable row level security;
 ```
 
-RLS is turned **on** for every table (so no table is accidentally left open), but no policies are defined yet — with RLS on and zero policies, every table is fully locked down (no row readable/writable) until policies are written and reviewed as its own step.
+RLS is turned **on** for every table with zero policies defined yet, so every table is fully locked down until policies are written and reviewed as a separate step.
+
+## Mapping matrix: Shopify field → local DB field → available/missing
+
+Based on the real read-only inspection above, not assumptions.
+
+| Shopify field | Local DB field | Status |
+|---|---|---|
+| `Product.id` | `products.source_id` (+ `source_system='shopify'`) | Available |
+| `Product.title` | `products.title` | Available |
+| `Product.handle` | `products.handle` | Available |
+| `Product.vendor`, `Product.productType` | — | **Missing** (not modeled in Phase 1 — no column; would need a schema change if needed later) |
+| `ProductVariant.id` | `variants.source_id` | Available |
+| `ProductVariant.sku` | `variants.sku` | Available as a column, but **empty in practice** — confirmed `null` on every HABB variant checked. `data_quality_flags` will need to tolerate SKU-less catalogs, not assume SKU is a usable join key for this merchant. |
+| `ProductVariant.barcode` | — | **Missing** (not modeled) — and what exists looks auto-generated, not a real barcode; not worth ingesting as-is. |
+| `ProductVariant.price` (current catalog price) | — | **Missing** — only the historical transaction price is modeled (`order_lines.unit_price`), not current catalog price. Acceptable for Phase 1 (margin is computed on what was actually sold), but note: no live "current price" table exists yet. |
+| `InventoryItem.unitCost` | `product_costs.unit_cost` (`source='shopify_unit_cost'`) | **Available and confirmed populated** for at least some HABB variants (e.g. 10.06 EUR) — but `validation_status` starts `'unverified'`, see above. |
+| `InventoryItem.tracked` | — | **Missing** (not modeled) |
+| `Location.id` | `locations.source_id` | Available (schema fixed to store it) |
+| `Location.name` | `locations.name` | Available |
+| `InventoryLevel` (location × item quantity) | `inventory_snapshots.quantity` + `location_id` | Available |
+| `Order.id` | `orders.source_id` | Available |
+| `Order.name` (e.g. `#1070`) | — | **Missing** (not modeled) — human-readable order number isn't stored; only the GID is. Low priority, easy to add later if needed for support/debugging. |
+| `Order.createdAt` | `orders.ordered_at` | Available |
+| `Order.currencyCode` | `orders.currency` | Available |
+| `Order.financialStatus` | `orders.status` | Available |
+| `Order.fulfillmentStatus` | — | **Missing** (not modeled — not needed for revenue/margin/refund metrics) |
+| `Order.customer` (any field) | — | **Missing by design** — no customer table in Phase 1, and per `CLAUDE.md`, no raw PII is sent to an LLM regardless. |
+| `LineItem.variant`, `.quantity`, `.price`/`.discountedTotal` | `order_lines.variant_id/quantity/unit_price/discount_amount` | Available |
+| `Refund` (amount, timing, note) | `refunds.amount/refunded_at/reason` | Available — actual amount requires summing refund line items/transactions during sync (an ETL detail, not a schema gap). |
+
+## Explicitly deferred (not in this migration)
+
+Kept as a design reference only — no table created until the metrics/decision engine is itself approved:
+
+- **`metric_definitions`**, **`metric_values`** — versioned metric definitions and computed values; depends on a metrics engine that doesn't exist yet.
+- **`decisions`**, **`decision_evidence`** — depends on a decision engine that doesn't exist yet.
+- **`decision_outcomes`** (renamed from `future_outcomes`) — depends on decisions existing first; the Outcome Engine itself stays out of scope regardless of when this table is created.
 
 ## Next step (needs explicit approval before proceeding)
 
-1. Review the SQL above (schema shape, naming, anything missing).
-2. Once approved, save it as `supabase/migrations/0001_initial_schema.sql` and apply it to the **dev** project (`retail-ai-core-dev`) only, via `apply_migration`.
+1. Review the Phase 1 SQL above.
+2. Once approved, save it as `supabase/migrations/0001_phase1_schema.sql` and apply it to the **dev** project (`retail-ai-core-dev`) only.
 3. Write and review RLS policies as a separate follow-up step before any application code reads/writes these tables.
+4. The deferred tables get their own review + migration when the metrics/decision engine work is explicitly approved — not bundled into Phase 1.
