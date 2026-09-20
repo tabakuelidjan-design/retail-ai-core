@@ -41,6 +41,19 @@ This matters concretely for HABB: `unitCost = 10.06` exists in Shopify, but noth
 
 Added `source_system` + `source_id` (matching `products`/`orders`) so a Shopify `Location` can actually be joined to a local row — the original draft had no way to do this.
 
+## Static review (this revision)
+
+Checked against 8 explicit rules before sign-off:
+
+1. `sku` nullable, never a logical/primary key — ✅ already the case (nullable, no unique constraint on it alone).
+2. `barcode` nullable, never a reliable identifier — ✅ satisfied by not storing it at all in Phase 1 (see mapping matrix); if it's ever added later, it must stay nullable and never carry a unique constraint.
+3. Shopify `source_id` is the stable external reference — ✅ every synced table carries `source_system` + `source_id`, unique together.
+4. Locations joinable via `source_system + source_id` — ✅ (`unique (merchant_id, source_system, source_id)` on `locations`).
+5. `product_costs.validation_status = 'estimated'` never presented as a certain margin — addressed with a `comment on column` in the SQL itself, and this is also the rule already stated in the `retail-metrics` Skill (a margin computed from a non-`'verified'` cost cannot be shown as exact — enforcement lives in the future metrics engine, since `metric_values` isn't part of Phase 1).
+6. Missing cost = `UNCLASSIFIED` — ✅ structural: `product_costs` simply has no row for that variant; nothing defaults it to zero/average.
+7. Refunds cleanly attached to an order — ✅ `refunds.order_id` is `not null references orders(id)`.
+8. No unnecessary customer PII — ✅ no customer table, no PII column anywhere in Phase 1.
+
 ## Final SQL (Phase 1 only — draft, NOT applied)
 
 ```sql
@@ -144,6 +157,15 @@ create table data_quality_flags (
   resolved_at timestamptz,
   details jsonb not null default '{}'::jsonb
 );
+
+comment on column variants.sku is
+  'Nullable by design. Not a join key and never unique-constrained — confirmed null on every observed HABB variant. Identity for sync/joins is source_system + source_id.';
+
+comment on column product_costs.validation_status is
+  'Trust level for unit_cost, independent of source. estimated must never be displayed or computed as a certain margin — any metric built on an estimated or unverified cost must carry that same caveat forward, not present a clean number.';
+
+comment on column refunds.order_id is
+  'Not null and FK-enforced: a refund can only exist attached to a real order row. A refund with no matching source order is a data-quality violation to catch during sync, not a valid row to insert.';
 
 alter table merchants enable row level security;
 alter table locations enable row level security;
