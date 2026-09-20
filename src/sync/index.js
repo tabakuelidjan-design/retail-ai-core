@@ -44,7 +44,11 @@ async function main() {
   }
 
   if (mode === 'inventory' || mode === 'all') {
-    const summary = await syncInventory({ shopify, supabase }, { merchantId });
+    // Merchant-local timezone for the one-snapshot-per-day rule. This is
+    // merchant config, not architecture - HABB's value goes in .env, never
+    // hardcoded here. Defaults to UTC for any merchant that hasn't set one.
+    const timeZone = process.env.MERCHANT_TIMEZONE || 'UTC';
+    const summary = await syncInventory({ shopify, supabase }, { merchantId, timeZone });
     console.log('inventory sync summary:', JSON.stringify(summary, null, 2));
     if (summary.errors.length > 0) process.exitCode = 1;
   }

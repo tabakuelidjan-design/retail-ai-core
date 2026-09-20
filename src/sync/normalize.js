@@ -68,6 +68,17 @@ export function normalizeInventorySnapshot(variantId, locationId, quantity, sync
 }
 
 /**
+ * The value a future `observed_local_date` column (proposed, NOT yet
+ * applied - see docs/architecture/inventory-cost-sync.md) would store, so a
+ * DB-level UNIQUE(variant_id, location_id, observed_local_date) constraint
+ * could enforce the one-per-merchant-local-day rule deterministically
+ * instead of relying only on this application's pre-insert check.
+ */
+export function computeObservedLocalDate(syncedAt, timeZone) {
+  return localCalendarDate(syncedAt.toISOString(), timeZone);
+}
+
+/**
  * Extracts the "available" quantity for a given location from an
  * InventoryItem's inventoryLevels connection, or null if that location isn't
  * tracked for this item.
@@ -120,27 +131,37 @@ export function costHasChanged(latestExisting, candidate) {
 }
 
 /**
- * V1 inventory cadence: at most one snapshot per (variant, location) per UTC
- * calendar day. Lets stockout-day math tell apart "unchanged", "sync didn't
- * run", and "real movement" - see docs/architecture/inventory-cost-sync.md.
+ * V1 inventory cadence: at most one snapshot per (variant, location) per
+ * MERCHANT-LOCAL calendar day (not UTC) - a merchant's "business day" is
+ * what stockout-day math actually needs to reason about. Lets that future
+ * math tell apart "unchanged", "sync didn't run", and "real movement" - see
+ * docs/architecture/inventory-cost-sync.md.
+ *
+ * The timezone is a parameter, never hardcoded: this is generic-core code,
+ * and HABB's 'Europe/Brussels' is merchant configuration, not architecture.
+ *
  * @param {string} isoDate e.g. the synced_at of an existing snapshot
  * @param {Date} now
+ * @param {string} timeZone an IANA zone name, e.g. 'Europe/Brussels'
+ * @returns {string} the local calendar date as YYYY-MM-DD
  */
-export function isSameUtcDay(isoDate, now) {
-  const a = new Date(isoDate);
-  return (
-    a.getUTCFullYear() === now.getUTCFullYear() &&
-    a.getUTCMonth() === now.getUTCMonth() &&
-    a.getUTCDate() === now.getUTCDate()
-  );
+export function localCalendarDate(isoDate, timeZone) {
+  // en-CA formats as YYYY-MM-DD, which is exactly the comparable/storable form.
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(isoDate));
+}
+
+export function isSameLocalDay(isoDateA, isoDateB, timeZone) {
+  return localCalendarDate(isoDateA, timeZone) === localCalendarDate(isoDateB, timeZone);
 }
 
 /**
  * @param {{synced_at: string} | null} latestExisting most recent snapshot for this (variant, location)
  * @param {Date} now
+ * @param {string} timeZone merchant-local IANA zone name
  * @returns {boolean} true if a new snapshot should be written
  */
-export function shouldWriteInventorySnapshot(latestExisting, now) {
+export function shouldWriteInventorySnapshot(latestExisting, now, timeZone) {
   if (!latestExisting) return true;
-  return !isSameUtcDay(latestExisting.synced_at, now);
+  return !isSameLocalDay(latestExisting.synced_at, now.toISOString(), timeZone);
 }

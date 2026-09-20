@@ -1,5 +1,7 @@
-// Inventory sync: at most one snapshot per (variant, location) per UTC
-// calendar day. A manual retry within the same day is a no-op, not a new
+// Inventory sync: at most one snapshot per (variant, location) per
+// merchant-local calendar day (timezone is a parameter - HABB's
+// 'Europe/Brussels' is merchant config, never hardcoded in this generic
+// module). A manual retry within the same local day is a no-op, not a new
 // row - this is what lets future stockout-day math tell "unchanged" apart
 // from "sync didn't run" and "real movement" (see
 // docs/architecture/inventory-cost-sync.md).
@@ -10,10 +12,11 @@ import { extractAvailableQuantity, normalizeInventorySnapshot, shouldWriteInvent
 /**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
- * @param {{merchantId: string, now?: Date}} opts
+ * @param {{merchantId: string, now?: Date, timeZone?: string}} opts
  */
 export async function syncInventory({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
+  const timeZone = opts.timeZone ?? 'UTC';
   const summary = { variantsChecked: 0, snapshotsWritten: 0, snapshotsSkippedSameDay: 0, errors: [] };
 
   // Local lookup tables: source_id -> local id, for variants and locations
@@ -64,7 +67,7 @@ export async function syncInventory({ shopify, supabase }, opts) {
           limit: '1',
         });
 
-        if (!shouldWriteInventorySnapshot(latest ?? null, now)) {
+        if (!shouldWriteInventorySnapshot(latest ?? null, now, timeZone)) {
           summary.snapshotsSkippedSameDay += 1;
           continue;
         }

@@ -51,18 +51,33 @@ test('no prior cost row always counts as changed (first insert)', () => {
   assert.equal(costHasChanged(null, candidate), true);
 });
 
-test('inventory snapshot: no prior snapshot -> should write', () => {
-  assert.equal(shouldWriteInventorySnapshot(null, new Date('2026-01-02T10:00:00Z')), true);
+test('inventory snapshot: no prior snapshot -> should write (UTC)', () => {
+  assert.equal(shouldWriteInventorySnapshot(null, new Date('2026-01-02T10:00:00Z'), 'UTC'), true);
 });
 
 test('inventory snapshot: same UTC day retry -> should NOT write again', () => {
   const latest = { synced_at: '2026-01-02T03:00:00Z' };
   const retryLaterSameDay = new Date('2026-01-02T23:00:00Z');
-  assert.equal(shouldWriteInventorySnapshot(latest, retryLaterSameDay), false);
+  assert.equal(shouldWriteInventorySnapshot(latest, retryLaterSameDay, 'UTC'), false);
 });
 
 test('inventory snapshot: next UTC day -> should write', () => {
   const latest = { synced_at: '2026-01-02T23:59:00Z' };
   const nextDay = new Date('2026-01-03T00:01:00Z');
-  assert.equal(shouldWriteInventorySnapshot(latest, nextDay), true);
+  assert.equal(shouldWriteInventorySnapshot(latest, nextDay, 'UTC'), true);
+});
+
+test('inventory snapshot: Europe/Brussels local day differs from UTC day (winter, UTC+1)', () => {
+  // 23:30 UTC on Jan 1 is already 00:30 CET on Jan 2 in Brussels.
+  const latest = { synced_at: '2026-01-01T23:30:00Z' };
+  const stillJan1InUtcButJan2InBrussels = new Date('2026-01-01T23:45:00Z');
+  // Same instant-ish, both map to the same Brussels local day (Jan 2) since
+  // both are past 23:00 UTC - so this should NOT write again in Brussels.
+  assert.equal(shouldWriteInventorySnapshot(latest, stillJan1InUtcButJan2InBrussels, 'Europe/Brussels'), false);
+
+  // But a snapshot taken at 22:00 UTC Jan 1 (still Jan 1 in Brussels, 23:00 CET)
+  // followed by a check at 23:30 UTC Jan 1 (00:30 CET Jan 2) IS a new Brussels day.
+  const earlierSameUtcDay = { synced_at: '2026-01-01T22:00:00Z' };
+  const crossesBrusselsMidnight = new Date('2026-01-01T23:30:00Z');
+  assert.equal(shouldWriteInventorySnapshot(earlierSameUtcDay, crossesBrusselsMidnight, 'Europe/Brussels'), true);
 });

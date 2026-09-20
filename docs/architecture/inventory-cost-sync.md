@@ -66,6 +66,25 @@ Per variant, `InventoryItem.unitCost` was read read-only via the Shopify Admin G
 - `inventory_snapshots` row count: 680 (339 + 339 — two full runs, each strictly additive, exactly as designed)
 - `product_costs` row count: 294 (unchanged between runs — confirms no duplication)
 
+## 6a. Revision: merchant-local day, not UTC (runtime auth test round)
+
+The application-level check now uses the **merchant's local calendar day** (`MERCHANT_TIMEZONE`, e.g. `Europe/Brussels` for HABB) instead of the UTC day used during the manual Phase 1B testing above. A retry late in the UTC day that has already crossed into the next Brussels day now correctly writes a new snapshot, and vice versa — see `src/sync/normalize.js` (`localCalendarDate`, `isSameLocalDay`, `shouldWriteInventorySnapshot`) and its tests.
+
+**Proposed DB-level hardening (NOT applied — requires its own approval and migration):**
+
+```sql
+-- 0003_inventory_snapshot_local_day (PROPOSAL — DO NOT APPLY WITHOUT APPROVAL)
+alter table inventory_snapshots add column observed_local_date date;
+update inventory_snapshots set observed_local_date = (synced_at at time zone 'utc')::date; -- best-effort backfill for existing rows (see caveat below)
+alter table inventory_snapshots alter column observed_local_date set not null;
+alter table inventory_snapshots add constraint inventory_snapshots_variant_location_day_uq
+  unique (variant_id, location_id, observed_local_date);
+```
+
+Why this is only proposed, not applied: the application-level check (`shouldWriteInventorySnapshot`) already prevents same-day duplicates in normal operation, but a DB-level constraint is what makes it *deterministic regardless of application bugs* — a stated goal of this task. It's deferred because:
+1. The existing 680 rows from manual Phase 1B testing were stamped with UTC-day semantics, not Brussels-day — the backfill above is an approximation for those specific historical rows, not a precise reconstruction. That's an acceptable, disclosed limitation for test-phase data, but should be flagged if it ever matters for a real report.
+2. Adding a `NOT NULL` + `UNIQUE` constraint to a live-ish table needs review of what happens to the app's insert path (it must now always set `observed_local_date`) before it's safe to apply — a one-line oversight there would turn every insert into a runtime error, not a silent skip.
+
 ## 6. Double-run test result
 
 | Run | inventory_snapshots (total) | product_costs (total) | New product_costs rows this run |
