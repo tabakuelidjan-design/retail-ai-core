@@ -509,9 +509,9 @@ test('malformed ids are rejected before touching the store', withApp({}, async (
 test('free text is stored as data, control characters are stripped, and the UI builds no HTML from it', withApp({}, async (a) => {
   const c = await a.authed();
   const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
-  const d = await create(c, invoiceBody({ customer: { ...CUSTOMER_BODY, name: `${evil} ` }, notes: `${evil}[31m`, lines: [{ description: `${evil}`, quantity: '1', unitPrice: '1.00', vatRate: '21' }] }));
+  const d = await create(c, invoiceBody({ customer: { ...CUSTOMER_BODY, name: `${evil}\x07\x00` }, notes: `${evil}\x1b[31m`, lines: [{ description: `${evil}\x08`, quantity: '1', unitPrice: '1.00', vatRate: '21' }] }));
   assert.equal(d.doc.customer.name, evil);
-  assert.ok(!/[ --]/.test(JSON.stringify(d.doc)));
+  assert.ok(!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(JSON.stringify(d.doc)));
   const pdf = await c.get(`/api/documents/${d.id}/pdf`);
   assert.equal(pdf.status, 200);
   const ui = readFileSync(new URL('../src/finance/ui/app.js', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');

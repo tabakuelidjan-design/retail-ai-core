@@ -11,6 +11,11 @@ import { DEFAULT_SETTINGS, validateSettings } from '../settings.js';
 import { createFinanceApp } from './app.js';
 
 const MERCHANT = 'demo-merchant';
+const DEMO_COMPANIES = [
+  { name: 'Atelier Exemple SRL', digits: '0000000196', enterprise: '0000.000.196', vies: true, address: { street: 'Rue des Tests 5', postalCode: '5000', city: 'Namur', countryCode: 'BE' } },
+  { name: 'Boutique Exemple SA', digits: '0000000097', enterprise: '0000.000.097', vies: true, address: { street: 'Place Demo 1', postalCode: '4000', city: 'Liege', countryCode: 'BE' } },
+  { name: 'Exemple Sans TVA ASBL', digits: '0000000295', enterprise: '0000.000.295', vies: false, address: null },
+];
 const PORT = Number(process.env.FINANCE_DEMO_PORT || 4311);
 export const DEMO_TOKEN = 'demo-token-demo-token-demo-token';
 
@@ -39,7 +44,9 @@ export async function startDemo(port = PORT) {
     clock: { now: () => new Date().toISOString(), today: () => '2026-09-21' },
     retailHistory: async () => ({ completeFrom: '2026-05-11', storeCreatedOn: '2026-05-11', lastSyncedAt: '2026-10-05T00:00:00.000Z' }),
     settings: { load: async () => structuredClone(settings), save: async (s) => { settings = structuredClone(s); }, saveLogo: async () => null },
-    lookupProviders: () => [{ name: 'demo', async lookup(q) { return q.vatNumber ? { status: 'FOUND', source: 'demo', company: { name: 'DEMO CLIENT SA', vatNumber: 'BE0000000196', enterpriseNumber: '0000.000.196', address: { street: 'AVENUE DEMO 2', postalCode: '5000', city: 'NAMUR', countryCode: 'BE' }, source: 'vies' } } : { status: 'MANUAL_ENTRY_REQUIRED', company: null }; } }],
+    // Synthetic providers so the search can be tried without any network: three made-up companies, one of them not VAT-registered.
+    lookupProviders: () => [{ name: 'demo-vat', async lookup(q) { const d = String(q.vatNumber ?? '').replace(/\D/g, '').slice(-10); const hit = DEMO_COMPANIES.find((c) => c.digits === d && c.vies); return hit ? { status: 'FOUND', source: 'vies', company: { name: hit.name, vatNumber: `BE${hit.digits}`, enterpriseNumber: hit.enterprise, address: hit.address, source: 'vies' } } : { status: q.vatNumber ? 'NOT_FOUND' : 'MANUAL_ENTRY_REQUIRED', company: null }; } }],
+    companySearchProvider: () => ({ name: 'demo-name', label: 'Demo directory (synthetic)', async search({ query }) { const t = query.toLowerCase(); return { status: 'OK', results: DEMO_COMPANIES.filter((c) => c.name.toLowerCase().includes(t)).map((c) => ({ name: c.name, enterpriseNumber: c.digits, status: 'Registered on Peppol since 2025-06-02' })) }; } }),
   });
   const server = http.createServer(app.handler);
   await new Promise((r) => server.listen(port, '127.0.0.1', r));

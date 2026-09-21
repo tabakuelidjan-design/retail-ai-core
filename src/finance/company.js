@@ -46,7 +46,7 @@ export function createViesProvider({ fetchImpl = fetch, endpoint = 'https://ec.e
       if (!n.ok) return { status: 'INVALID_NUMBER', reason: n.reason, source: 'vies', company: null }; // never sent to VIES
       let res;
       try {
-        res = await fetchImpl(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ countryCode: 'BE', vatNumber: n.digits }) });
+        res = await fetchImpl(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ countryCode: 'BE', vatNumber: n.digits }), signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
       } catch (e) { return { status: 'UNAVAILABLE', reason: `NETWORK: ${e.message}`, source: 'vies', company: null }; }
       if (!res.ok) return { status: 'UNAVAILABLE', reason: `HTTP_${res.status}`, source: 'vies', company: null };
       const j = await res.json();

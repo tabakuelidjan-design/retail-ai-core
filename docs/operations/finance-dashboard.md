@@ -61,6 +61,14 @@ What becomes available: complete order, refund and line history (including the V
 
 The dashboard prepares and validates the structured invoice (UBL, Peppol BIS Billing 3.0) and lets you download it. **Nothing is transmitted.** Sending needs a Peppol Access Point provider, which is not selected. Belgian B2B invoices between VAT-registered businesses must be sent as structured e-invoices (since 1 January 2026), so a PDF alone is not enough for those customers until a provider is connected.
 
-## Company lookup
+## Company search (one search field)
 
-Enter a Belgian VAT/enterprise number and click **Look up**: the free, official EU VIES service returns the registered name and address, which prefill the form (check them). Manual entry always works and is the fallback if the service is unavailable. Invalid numbers are never sent. The Belgian KBO public search is not used: automated queries are prohibited. The provider is replaceable without touching invoice logic.
+Everywhere you pick a customer (**Companies -> Add a company**, **New invoice**, **New quote**) there is one field at the top: *Search company name or VAT / enterprise number*, with a **Search** button. Results appear directly under it and selecting one fills the form. Every field stays editable, the **source of the data is always shown**, and typing by hand always works.
+
+- **A VAT / enterprise number** (any usual writing: `BE 0123.456.789`, `0123456789`, ...): normalised and checked offline (Belgian checksum). Invalid numbers are refused and never sent anywhere. A valid number is looked up on the free official **EU VIES** service; exactly one result fills name, VAT number, enterprise number, street, postal code, city and country.
+- **A company name**: your saved companies come first, then the **name-search provider**. Today that is the free public **OpenPeppol Directory**: it finds Belgian companies *registered on Peppol* (name + enterprise number), then VIES adds the address and city so each result shows enough to choose safely (name, numbers, city, status, source). A company that is not on Peppol will not appear: search by its VAT number instead, or type it by hand. One result fills the form directly; several give you a list.
+- **Nothing found / service down / search switched off**: a clear message, and manual entry stays available. The BCE/KBO Public Search website is **not** scraped (automated queries are prohibited).
+- **Data you edit after a fill** is saved as "entered by hand", not as "official".
+- **Settings** has two switches: *VAT / enterprise number lookup* (VIES or manual) and *Company name search* (OpenPeppol Directory or off).
+
+The name-search provider is a replaceable boundary (`CompanySearchProvider` in `src/finance/company-search.js`). A fuller source (a licensed KBO data service, or a locally imported KBO Open Data copy) can replace it without touching the form or the invoice logic. VIES stays the source for VAT-number validation and addresses.

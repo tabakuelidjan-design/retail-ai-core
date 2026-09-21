@@ -106,3 +106,7 @@ Finance data is more sensitive than retail data: merchant config, `.env` and `re
 ## Still open
 
 Peppol Access Point provider and adapter; official Schematron validation; `read_all_orders` for complete closed-period history; supplier-invoice intake; bank reconciliation; reminders; a second-person approval step if the business ever needs one.
+
+## Company search (third pass)
+
+`src/finance/company-search.js`: one pipeline over replaceable providers. Number input -> offline Belgian validation -> VIES (auto-fill on exactly one result). Name input -> saved companies, then a `CompanySearchProvider` (`peppol_directory`: OpenPeppol Directory public search, Belgian participants, de-duplicated per enterprise number, French > Dutch > English name preference) -> each hit is enriched through VIES (city, address, VAT confirmation) -> selection resolves via `POST /api/companies/resolve`. `toFormFields` is the single mapping that fills the form. Statuses: `FOUND`, `OK`, `NO_RESULT`, `INVALID_NUMBER`, `PROVIDER_UNAVAILABLE`, `SEARCH_NOT_CONFIGURED`, `QUERY_TOO_SHORT`; every one leaves manual entry available. Only these two provider files may touch the network (asserted by a test), calls have an 8 s timeout, and a test asserts the KBO public search is never referenced.

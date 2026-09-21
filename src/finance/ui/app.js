@@ -142,6 +142,54 @@ async function viewList(kind, query) {
   } catch (e) { fail(e, box); }
 }
 
+// ---------- one company search, shared by "Add company", New invoice and New quote ----------
+const SRC_TEXT = { vies: 'EU VIES (official VAT service)', peppol_directory: 'OpenPeppol Directory', directory: 'your company directory' };
+/** Copy exactly the fields the server returned into a form model. Nothing is computed or guessed here. */
+function fillFromResult(m, r) {
+  const f = r.form || {};
+  Object.assign(m, { name: f.name || '', vatNumber: f.vatNumber || '', enterpriseNumber: f.enterpriseNumber || '', street: f.street || '', postalCode: f.postalCode || '', city: f.city || '', countryCode: f.countryCode || 'BE' });
+  m.companyId = r.source === 'directory' ? r.id : null;
+  m.csource = r.source; m.cverified = !!r.vatVerified; m.dirty = false;
+}
+function sourceText(m) {
+  if (!m.csource || m.csource === 'manual') return 'Source: entered by hand.';
+  return `Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
+}
+function companySearchBox({ onPick }) {
+  const input = h('input', { class: 'bigsearch', placeholder: 'Search company name or VAT / enterprise number', autocomplete: 'off' });
+  const msg = h('div'); const list = h('div');
+  let seq = 0;
+  const say = (kind, text, extra) => { clear(msg); if (text) msg.appendChild(h('div', { class: `banner ${kind} small`, style: 'margin:10px 0 0' }, text, extra || null)); };
+  async function choose(r) {
+    try {
+      let result = r;
+      if (r.needsResolve) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
+      else say('ok', `Filled in from: ${r.sourceLabel}. Check the fields below: you can still correct them.`);
+      clear(list); onPick(result);
+    } catch (e) { fail(e); }
+  }
+  async function run() {
+    const mine = ++seq; clear(list);
+    if (!input.value.trim()) return say('warn', 'Type a company name, or a VAT / enterprise number.');
+    say('info', 'Searching...');
+    try {
+      const r = await api('POST', '/api/companies/search', { query: input.value });
+      if (mine !== seq) return;
+      const good = r.status === 'FOUND' || r.status === 'OK';
+      const partial = r.partial ? h('div', { style: 'margin-top:6px' }, h('button', { type: 'button', on: { click: () => { clear(list); onPick(r.partial); say('warn', 'Number kept. Complete the other fields by hand.'); } } }, 'Use this number and complete by hand')) : null;
+      say(good ? (r.autoFill ? 'ok' : 'info') : 'warn', r.message, partial);
+      if (r.autoFill) return choose(r.autoFill);
+      r.results.forEach((x) => list.appendChild(h('button', { type: 'button', class: 'result', on: { click: () => choose(x) } },
+        h('div', { class: 'rname' }, x.name),
+        h('div', { class: 'small muted' }, [x.enterpriseNumber, x.vatNumber, x.city, x.status].filter(Boolean).join('  |  ')),
+        h('div', { class: 'small' }, h('span', { class: 'badge' }, x.sourceLabel), x.needsResolve ? h('span', { class: 'hint' }, '  select it to fill in what is available (the address may be missing)') : null))));
+    } catch (e) { fail(e, msg); }
+  }
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); run(); } });
+  const node = h('div', { class: 'csearch' }, h('label', { style: 'font-weight:600;color:var(--ink)' }, 'Find the company'), h('div', { class: 'searchrow' }, input, h('button', { type: 'button', class: 'primary', on: { click: run } }, 'Search')), msg, list, h('div', { class: 'hint' }, 'Type a name or a VAT / enterprise number. Or skip this and fill the fields by hand.'));
+  return { node, input };
+}
+
 // ---------- document form (new / edit) ----------
 async function viewForm(kind, editId) {
   const isQuote = kind === 'quote';
@@ -152,7 +200,7 @@ async function viewForm(kind, editId) {
   if (editId) { try { doc = await api('GET', `/api/documents/${editId}`); } catch (e) { return fail(e, main); } }
   const D = doc ? doc.doc : null;
   const model = {
-    companyId: D && D.customer.companyId || null, name: D ? D.customer.name : '', vatNumber: D ? (D.customer.vatNumber || D.customer.enterpriseNumber || '') : '',
+    companyId: D && D.customer.companyId || null, name: D ? D.customer.name : '', vatNumber: D ? (D.customer.vatNumber || '') : '', enterpriseNumber: D ? (D.customer.enterpriseNumber || '') : '', csource: D && D.customer.companyId ? 'directory' : 'manual', cverified: false, dirty: false,
     street: D ? D.customer.address.street : '', postalCode: D ? D.customer.address.postalCode : '', city: D ? D.customer.address.city : '', countryCode: D ? D.customer.address.countryCode : 'BE', email: D ? (D.customer.email || '') : '',
     issueDate: D ? D.issueDate : new Date().toISOString().slice(0, 10), dueDate: D ? (D.dueDate || '') : '', paymentTermsDays: D ? (D.paymentTermsDays ?? '') : s.defaults.paymentTermsDays, paymentTerms: D ? (D.paymentTerms || '') : (s.defaults.paymentTerms || ''),
     validUntil: D ? (D.validUntil || '') : '', currency: D ? D.currency : s.defaults.currency, language: D ? D.language : s.defaults.language, notes: D ? (D.notes || '') : '',
@@ -165,7 +213,7 @@ async function viewForm(kind, editId) {
   let calcTimer = null; let calcSeq = 0; let lastCalc = null;
 
   const payload = () => ({
-    type: kind, customer: { companyId: model.companyId || undefined, kind: 'business', name: model.name, vatNumber: model.vatNumber, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined },
+    type: kind, customer: { companyId: model.companyId || undefined, kind: 'business', name: model.name, vatNumber: model.vatNumber || undefined, enterpriseNumber: model.enterpriseNumber || undefined, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined },
     issueDate: model.issueDate, dueDate: model.dueDate || undefined, paymentTermsDays: model.paymentTermsDays === '' ? undefined : Number(model.paymentTermsDays), paymentTerms: model.paymentTerms, validUntil: isQuote ? (model.validUntil || undefined) : undefined,
     currency: model.currency, language: model.language, notes: model.notes, vat: { regime: model.regime, confirmed: model.confirmed, mention: model.mention },
     revenueBasis: isQuote ? undefined : model.basis, sourceOrderId: model.basis === 'linked_source_order' ? model.sourceOrderId : undefined, acknowledgedNotDuplicate: model.ack,
@@ -217,21 +265,20 @@ async function viewForm(kind, editId) {
     renderLineTotals();
   }
 
-  // customer
-  const companyPick = h('input', { placeholder: 'Search your company directory...', on: { input: async (ev) => { const q = ev.target.value; if (q.length < 2) return clear(pickList); try { const r = await api('GET', `/api/companies?q=${encodeURIComponent(q)}`); clear(pickList); r.rows.slice(0, 6).forEach((c) => pickList.appendChild(h('div', null, h('a', { href: '#', on: { click: (e2) => { e2.preventDefault(); Object.assign(model, { companyId: c.id, name: c.name, vatNumber: c.vatNumber || c.enterpriseNumber || '', street: c.address.street || '', postalCode: c.address.postalCode || '', city: c.address.city || '', countryCode: c.address.countryCode || 'BE', email: c.email || '' }); clear(pickList); renderCustomer(); scheduleCalc(); } } }, `${c.name} - ${c.vatNumber || c.enterpriseNumber || 'no number'}`)))); } catch (e) { /* ignore */ } } } });
-  const pickList = h('div', { class: 'small', style: 'margin-top:4px' });
+  // customer: one search first, results directly under it, then the editable fields and where the data came from
   const custBox = h('div');
-  const lookupMsg = h('div', { class: 'hint' });
+  const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
+  const renderSource = () => { clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(model))); };
+  const search = companySearchBox({ onPick: (r) => { fillFromResult(model, r); renderCustomer(); scheduleCalc(); } });
   function renderCustomer() {
     clear(custBox);
-    mount(custBox, model.companyId ? h('div', { class: 'banner info small' }, 'Company from your directory. ', h('a', { href: '#', on: { click: (e) => { e.preventDefault(); model.companyId = null; renderCustomer(); } } }, 'Detach and edit manually')) : null);
+    mount(custBox, model.companyId ? h('div', { class: 'banner info small' }, 'Company from your directory. ', h('a', { href: '#', on: { click: (e) => { e.preventDefault(); model.companyId = null; model.csource = 'manual'; renderCustomer(); } } }, 'Detach and edit manually')) : null);
     const ro = !!model.companyId;
-    const inp = (key, ph) => h('input', { value: model[key] ?? '', placeholder: ph || '', disabled: ro, on: { input: bind(model, key) } });
-    const vatIn = h('input', { value: model.vatNumber, placeholder: 'BE0123.456.789', disabled: ro, on: { input: bind(model, 'vatNumber') } });
-    custBox.appendChild(h('div', { class: 'row r2' }, field('Company name', inp('name')), field('VAT / enterprise number', h('div', { style: 'display:flex;gap:6px' }, vatIn, h('button', { disabled: ro, on: { click: async (e) => { e.preventDefault(); clear(lookupMsg); try { const r = await api('POST', '/api/companies/lookup', { vatNumber: model.vatNumber || undefined, name: model.name || undefined }); if (r.status === 'FOUND') { Object.assign(model, { name: r.company.name, vatNumber: r.company.vatNumber, street: r.company.address.street || '', postalCode: r.company.address.postalCode || '', city: r.company.address.city || '', countryCode: r.company.address.countryCode || 'BE' }); renderCustomer(); toast('Official data found and filled in. Please check it.', 'ok'); } else lookupMsg.appendChild(h('span', { class: 'err' }, `${human(r.reason || r.status)}. ${r.message}`)); } catch (er) { fail(er); } } } }, 'Look up')), 'Look up uses the free EU VIES service and only runs when you click. You can always type the details yourself.')));
-    custBox.appendChild(lookupMsg);
-    custBox.appendChild(h('div', { class: 'row r4' }, field('Street and number', inp('street')), field('Postal code', inp('postalCode')), field('City', inp('city')), field('Country', inp('countryCode', 'BE'))));
-    custBox.appendChild(field('Email (optional)', inp('email', 'accounts@company.example'), 'Stored only if you enter it. Not needed for the invoice.'));
+    const inp = (key, ph, identity) => h('input', { value: model[key] ?? '', placeholder: ph || '', disabled: ro, on: { input: (e) => { model[key] = e.target.value; if (identity) { model.dirty = true; renderSource(); } } } });
+    custBox.appendChild(h('div', { class: 'row r3' }, field('Company name', inp('name', '', true)), field('VAT number', inp('vatNumber', 'BE0123456789', true)), field('Enterprise number', inp('enterpriseNumber', '0123.456.789', true))));
+    custBox.appendChild(h('div', { class: 'row r4' }, field('Street and number', inp('street', '', true)), field('Postal code', inp('postalCode', '', true)), field('City', inp('city', '', true)), field('Country', inp('countryCode', 'BE', true))));
+    renderSource(); custBox.appendChild(sourceLine);
+    custBox.appendChild(field('Email (optional)', h('input', { value: model.email ?? '', placeholder: 'accounts@company.example', on: { input: (e) => { model.email = e.target.value; } } }), 'Stored only if you enter it. Not needed for the invoice.'));
     if (!model.companyId) custBox.appendChild(h('label', { style: 'color:inherit' }, h('input', { type: 'checkbox', checked: model.saveCompany, on: { change: (e) => { model.saveCompany = e.target.checked; } } }), 'Save this company to my directory'));
   }
 
@@ -273,8 +320,9 @@ async function viewForm(kind, editId) {
     clear(errBox);
     try {
       const body = payload();
-      if (!model.companyId && model.saveCompany && model.name && model.vatNumber) {
-        try { const c = await api('POST', '/api/companies', { kind: 'business', name: model.name, vatNumber: model.vatNumber, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined, source: 'manual' }); body.customer.companyId = c.id; model.companyId = c.id; } catch (e) { if (e.code !== 'COMPANY_ALREADY_EXISTS' && e.status !== 422) throw e; }
+      if (!model.companyId && model.saveCompany && model.name && (model.vatNumber || model.enterpriseNumber)) {
+        const src = model.dirty || !model.csource ? 'manual' : model.csource; // edited data is no longer "as returned by" the provider
+        try { const c = await api('POST', '/api/companies', { kind: 'business', name: model.name, vatNumber: model.vatNumber || undefined, enterpriseNumber: model.enterpriseNumber || undefined, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined, source: src }); body.customer.companyId = c.id; model.companyId = c.id; } catch (e) { if (e.code !== 'COMPANY_ALREADY_EXISTS' && e.status !== 422) throw e; }
       }
       const saved = editId ? await api('PUT', `/api/documents/${editId}`, body) : await api('POST', '/api/documents', body);
       if (thenSubmit && !isQuote) { try { await api('POST', `/api/documents/${saved.id}/submit`, {}); toast('Submitted for approval', 'ok'); } catch (e) { toast('Saved as draft. Fix the listed items to submit.', 'bad'); } }
@@ -285,7 +333,7 @@ async function viewForm(kind, editId) {
 
   const form = h('div', { class: 'grid formgrid' },
     h('div', { class: 'grid' },
-      h('div', { class: 'card' }, h('h2', null, 'Customer'), field('Company', companyPick), pickList, custBox),
+      h('div', { class: 'card' }, h('h2', null, 'Customer'), search.node, h('div', { style: 'margin-top:14px' }, custBox)),
       h('div', { class: 'card' }, h('h2', null, 'Dates and terms'), h('div', { class: 'row r4' }, field('Issue date', h('input', { type: 'date', value: model.issueDate, on: { input: bind(model, 'issueDate') } })), isQuote ? field('Valid until', h('input', { type: 'date', value: model.validUntil, on: { input: bind(model, 'validUntil') } })) : field('Due date', dueField, 'Leave empty to use the payment terms'), field('Payment terms (days)', h('input', { value: String(model.paymentTermsDays), inputmode: 'numeric', on: { input: bind(model, 'paymentTermsDays') } })), field('Currency', h('input', { value: model.currency, on: { input: bind(model, 'currency') } }))), h('div', { class: 'row r2' }, field(isQuote ? 'Commercial terms' : 'Payment terms text', h('input', { value: model.paymentTerms, on: { input: bind(model, 'paymentTerms') } })), field('Document language', h('select', { on: { change: bind(model, 'language') } }, [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: model.language === v }, l)))))),
       isQuote ? null : h('div', { class: 'card' }, h('h2', null, 'Revenue basis'), basisBox),
       h('div', { class: 'card' }, h('h2', null, 'VAT treatment'), vatBox),
@@ -381,12 +429,28 @@ async function viewCompanies() {
   main.appendChild(h('div', { class: 'field' }, q)); main.appendChild(box); load();
 }
 function companyModal(existing) {
-  const m = existing ? { name: existing.name, vat: existing.vatNumber || existing.enterpriseNumber || '', street: existing.address.street || '', postalCode: existing.address.postalCode || '', city: existing.address.city || '', countryCode: existing.address.countryCode || 'BE', email: existing.email || '', source: existing.source || 'manual' } : { name: '', vat: '', street: '', postalCode: '', city: '', countryCode: 'BE', email: '', source: 'manual' };
-  const err = h('div'); const msg = h('div', { class: 'hint' }); const fields = {};
-  const inp = (k, label, ph) => { fields[k] = h('input', { value: m[k], placeholder: ph || '', on: { input: (e) => { m[k] = e.target.value; } } }); return h('div', { class: 'field' }, h('label', null, label), fields[k]); };
-  const lookup = async () => { clear(msg); try { const r = await api('POST', '/api/companies/lookup', { vatNumber: m.vat || undefined, name: m.name || undefined }); if (r.status === 'FOUND') { Object.assign(m, { name: r.company.name, vat: r.company.vatNumber, street: r.company.address.street || '', postalCode: r.company.address.postalCode || '', city: r.company.address.city || '', countryCode: r.company.address.countryCode || 'BE', source: 'vies' }); Object.keys(fields).forEach((k) => { fields[k].value = m[k]; }); msg.appendChild(h('span', { class: 'ok' }, 'Official data found and filled in. Check it, then save.')); } else msg.appendChild(h('span', { class: 'err' }, `${human(r.reason || r.status)}. ${r.message}`)); } catch (e) { fail(e); } };
-  modal(existing ? 'Edit company' : 'Add a company', h('div', null, err, inp('name', 'Company name'), h('div', { class: 'field' }, h('label', null, 'VAT / enterprise number'), h('div', { style: 'display:flex;gap:6px' }, (fields.vat = h('input', { value: m.vat, placeholder: 'BE0123.456.789', on: { input: (e) => { m.vat = e.target.value; } } })), h('button', { on: { click: lookup } }, 'Look up')), msg, h('div', { class: 'hint' }, 'Free EU VIES lookup runs only when you click. Manual entry always works.')), h('div', { class: 'row r2' }, inp('street', 'Street and number'), inp('postalCode', 'Postal code')), h('div', { class: 'row r2' }, inp('city', 'City'), inp('countryCode', 'Country (2 letters)')), inp('email', 'Email (optional)')),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try { const body = { kind: 'business', name: m.name, vatNumber: m.vat, address: { street: m.street, postalCode: m.postalCode, city: m.city, countryCode: m.countryCode }, email: m.email || undefined, source: m.source }; const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body); close(); toast('Company saved', 'ok'); location.hash = `#/companies/${r.id}`; if (existing) route(); } catch (e) { fail(e, err); } } } }, 'Save'), h('button', { on: { click: close } }, 'Cancel')]);
+  const m = existing
+    ? { name: existing.name, vatNumber: existing.vatNumber || '', enterpriseNumber: existing.enterpriseNumber || '', street: existing.address.street || '', postalCode: existing.address.postalCode || '', city: existing.address.city || '', countryCode: existing.address.countryCode || 'BE', email: existing.email || '', csource: existing.source || 'manual', cverified: false, dirty: false, companyId: null }
+    : { name: '', vatNumber: '', enterpriseNumber: '', street: '', postalCode: '', city: '', countryCode: 'BE', email: '', csource: 'manual', cverified: false, dirty: false, companyId: null };
+  const err = h('div'); const box = h('div'); const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
+  let bk = null;
+  const draw = () => {
+    clear(box);
+    const inp = (k, label, ph, identity) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: m[k] || '', placeholder: ph || '', on: { input: (e) => { m[k] = e.target.value; if (identity) { m.dirty = true; clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); } } } }));
+    box.appendChild(h('div', { class: 'row r2' }, inp('name', 'Company name', '', true), inp('vatNumber', 'VAT number', 'BE0123456789', true)));
+    box.appendChild(h('div', { class: 'row r2' }, inp('enterpriseNumber', 'Enterprise number', '0123.456.789', true), inp('street', 'Street and number', '', true)));
+    box.appendChild(h('div', { class: 'row r3' }, inp('postalCode', 'Postal code', '', true), inp('city', 'City', '', true), inp('countryCode', 'Country (2 letters)', 'BE', true)));
+    clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); box.appendChild(sourceLine);
+    box.appendChild(inp('email', 'Email (optional)', 'accounts@company.example', false));
+  };
+  const search = existing ? null : companySearchBox({ onPick: (r) => { if (r.source === 'directory') { toast('This company is already in your directory', 'ok'); if (bk) bk.remove(); location.hash = `#/companies/${r.id}`; return; } fillFromResult(m, r); draw(); } });
+  draw();
+  bk = modal(existing ? 'Edit company' : 'Add a company', h('div', null, err, search ? search.node : null, h('div', { style: 'margin-top:14px' }, box)),
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try {
+      const src = m.dirty || !m.csource ? 'manual' : m.csource;
+      const body = { kind: 'business', name: m.name, vatNumber: m.vatNumber || undefined, enterpriseNumber: m.enterpriseNumber || undefined, address: { street: m.street, postalCode: m.postalCode, city: m.city, countryCode: m.countryCode }, email: m.email || undefined, source: src };
+      const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body); close(); toast('Company saved', 'ok'); location.hash = `#/companies/${r.id}`; if (existing) route(); } catch (e) { fail(e, err); } } } }, 'Save'), h('button', { on: { click: close } }, 'Cancel')]);
+  if (search) search.input.focus();
 }
 async function viewCompany(id) {
   const main = layout('#/companies'); const box = h('div'); main.appendChild(box);
@@ -450,10 +514,10 @@ async function viewSettings() {
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'VAT and payment'), inp(st, 'rates', 'Allowed VAT rates (%)', { ph: '21, 12, 6, 0', hint: 'The rates you may choose on domestic invoices. You decide these; nothing is assumed.' }), h('div', { class: 'row r3' }, inp(s.defaults, 'paymentTermsDays', 'Default payment terms (days)'), inp(s.defaults, 'currency', 'Currency'), sel(s.defaults, 'language', 'Default language', [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']])), inp(s.defaults, 'paymentTerms', 'Payment terms text'), inp(s.branding, 'paymentInstructions', 'Extra payment instructions'), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'checkbox', checked: s.branding.structuredCommunication, on: { change: (e) => { s.branding.structuredCommunication = e.target.checked; } } }), 'Print a Belgian structured communication (+++xxx/xxxx/xxxxx+++)')));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Numbering'), h('div', { class: 'row r4' }, inp(s.numbering.invoice, 'prefix', 'Invoice prefix'), inp(s.numbering.credit_note, 'prefix', 'Credit note prefix'), inp(s.numbering.quote, 'prefix', 'Quote prefix'), inp(s.numbering.invoice, 'pad', 'Digits')), inp(s.numbering, 'format', 'Format', { hint: 'Use {prefix}, {year} and {seq}, e.g. {prefix}-{year}-{seq} gives INV-2026-0001. Numbers are assigned when a document is issued and never skip.' })));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, `Logo (PNG or JPEG, max 400 KB)${s.branding.hasLogo ? ' - a logo is set' : ''}`), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
-  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'Company lookup provider', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
+  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'provider', 'Company name search', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
   main.appendChild(h('div', { class: 'actions', style: 'margin-top:16px' }, h('button', { class: 'primary', on: { click: async () => { try {
     const num = (v) => (v === '' || v === null ? undefined : Number(v));
-    const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider } };
+    const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider }, companySearch: { provider: s.companySearch.provider } };
     const r2 = await api('PUT', '/api/settings', body); state.settings = r2.settings; state.missing = r2.missing; applyAccent(); toast('Settings saved', 'ok'); viewSettings(); } catch (e) { fail(e, err); window.scrollTo(0, 0); } } } }, 'Save settings')));
 }
 
