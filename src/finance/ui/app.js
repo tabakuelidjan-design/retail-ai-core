@@ -143,17 +143,18 @@ async function viewList(kind, query) {
 }
 
 // ---------- one company search, shared by "Add company", New invoice and New quote ----------
-const SRC_TEXT = { vies: 'EU VIES (official VAT service)', peppol_directory: 'OpenPeppol Directory', directory: 'your company directory' };
+const SRC_TEXT = { cbeapi: 'Belgian company register (KBO/BCE)', vies: 'EU VIES (official VAT service)', peppol_directory: 'OpenPeppol Directory', directory: 'your company directory' };
 /** Copy exactly the fields the server returned into a form model. Nothing is computed or guessed here. */
 function fillFromResult(m, r) {
   const f = r.form || {};
   Object.assign(m, { name: f.name || '', vatNumber: f.vatNumber || '', enterpriseNumber: f.enterpriseNumber || '', street: f.street || '', postalCode: f.postalCode || '', city: f.city || '', countryCode: f.countryCode || 'BE' });
   m.companyId = r.source === 'directory' ? r.id : null;
   m.csource = r.source; m.cverified = !!r.vatVerified; m.dirty = false;
+  m.personal = !!r.personalData; if (m.personal) m.saveCompany = false; // a sole trader is only saved when the merchant explicitly chooses to
 }
 function sourceText(m) {
   if (!m.csource || m.csource === 'manual') return 'Source: entered by hand.';
-  return `Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
+  return `${m.personal ? 'SOLE TRADER / PERSONAL DATA. ' : ''}Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
 }
 function companySearchBox({ onPick }) {
   const input = h('input', { class: 'bigsearch', placeholder: 'Search company name or VAT / enterprise number', autocomplete: 'off' });
@@ -163,7 +164,7 @@ function companySearchBox({ onPick }) {
   async function choose(r) {
     try {
       let result = r;
-      if (r.needsResolve) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
+      if (r.needsResolve || r.needsVatCheck) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
       else say('ok', `Filled in from: ${r.sourceLabel}. Check the fields below: you can still correct them.`);
       clear(list); onPick(result);
     } catch (e) { fail(e); }
@@ -182,7 +183,7 @@ function companySearchBox({ onPick }) {
       r.results.forEach((x) => list.appendChild(h('button', { type: 'button', class: 'result', on: { click: () => choose(x) } },
         h('div', { class: 'rname' }, x.name),
         h('div', { class: 'small muted' }, [x.enterpriseNumber, x.vatNumber, x.city, x.status].filter(Boolean).join('  |  ')),
-        h('div', { class: 'small' }, h('span', { class: 'badge' }, x.sourceLabel), x.needsResolve ? h('span', { class: 'hint' }, '  select it to fill in what is available (the address may be missing)') : null))));
+        h('div', { class: 'small' }, x.personalData ? h('span', { class: 'badge warn' }, x.personalDataLabel) : null, h('span', { class: 'badge' }, x.sourceLabel), x.needsResolve ? h('span', { class: 'hint' }, '  select it to fill in what is available (the address may be missing)') : null))));
     } catch (e) { fail(e, msg); }
   }
   input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); run(); } });
@@ -514,10 +515,10 @@ async function viewSettings() {
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'VAT and payment'), inp(st, 'rates', 'Allowed VAT rates (%)', { ph: '21, 12, 6, 0', hint: 'The rates you may choose on domestic invoices. You decide these; nothing is assumed.' }), h('div', { class: 'row r3' }, inp(s.defaults, 'paymentTermsDays', 'Default payment terms (days)'), inp(s.defaults, 'currency', 'Currency'), sel(s.defaults, 'language', 'Default language', [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']])), inp(s.defaults, 'paymentTerms', 'Payment terms text'), inp(s.branding, 'paymentInstructions', 'Extra payment instructions'), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'checkbox', checked: s.branding.structuredCommunication, on: { change: (e) => { s.branding.structuredCommunication = e.target.checked; } } }), 'Print a Belgian structured communication (+++xxx/xxxx/xxxxx+++)')));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Numbering'), h('div', { class: 'row r4' }, inp(s.numbering.invoice, 'prefix', 'Invoice prefix'), inp(s.numbering.credit_note, 'prefix', 'Credit note prefix'), inp(s.numbering.quote, 'prefix', 'Quote prefix'), inp(s.numbering.invoice, 'pad', 'Digits')), inp(s.numbering, 'format', 'Format', { hint: 'Use {prefix}, {year} and {seq}, e.g. {prefix}-{year}-{seq} gives INV-2026-0001. Numbers are assigned when a document is issued and never skip.' })));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, `Logo (PNG or JPEG, max 400 KB)${s.branding.hasLogo ? ' - a logo is set' : ''}`), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
-  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'provider', 'Company name search', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
+  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'registry', 'Belgian company register (primary)', [['cbeapi', 'CBEAPI: official KBO/BCE data (needs CBEAPI_KEY)'], ['none', 'Off']]), sel(s.companySearch, 'provider', 'Secondary name search (if the register finds nothing)', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
   main.appendChild(h('div', { class: 'actions', style: 'margin-top:16px' }, h('button', { class: 'primary', on: { click: async () => { try {
     const num = (v) => (v === '' || v === null ? undefined : Number(v));
-    const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider }, companySearch: { provider: s.companySearch.provider } };
+    const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider }, companySearch: { registry: s.companySearch.registry, provider: s.companySearch.provider } };
     const r2 = await api('PUT', '/api/settings', body); state.settings = r2.settings; state.missing = r2.missing; applyAccent(); toast('Settings saved', 'ok'); viewSettings(); } catch (e) { fail(e, err); window.scrollTo(0, 0); } } } }, 'Save settings')));
 }
 

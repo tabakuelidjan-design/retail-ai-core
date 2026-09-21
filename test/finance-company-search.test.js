@@ -265,7 +265,7 @@ test('NO SCRAPING: the BCE/KBO public search is not referenced anywhere in the s
   for (const f of src) assert.ok(!/kbopub|economie\.fgov\.be\/.*(search|zoek)|kbo-bce-public/i.test(readFileSync(f, 'utf8')), f);
   const providers = readFileSync(new URL('../src/finance/company-search.js', import.meta.url), 'utf8') + readFileSync(new URL('../src/finance/company.js', import.meta.url), 'utf8');
   const urls = [...providers.matchAll(/https?:\/\/[A-Za-z0-9./_-]+/g)].map((m) => new URL(m[0]).host);
-  assert.deepEqual([...new Set(urls)].sort(), ['directory.peppol.eu', 'ec.europa.eu']);
+  assert.deepEqual([...new Set(urls)].sort(), ['cbeapi.be', 'directory.peppol.eu', 'ec.europa.eu']);
 });
 
 // ---------- UI: one shared component, exact labels ----------

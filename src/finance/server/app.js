@@ -14,7 +14,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { readFile } from 'node:fs/promises';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
-import { NoSearchProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
+import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
@@ -375,14 +375,14 @@ export function createFinanceApp(deps) {
   const companyBody = (body) => {
     const errors = [];
     const c = cleanCompany(body, errors, 'company');
-    if (body?.source && ['manual', 'vies'].includes(body.source)) c.source = body.source;
+    if (body?.source && ['manual', 'vies', 'cbeapi'].includes(body.source)) c.source = body.source;
     if (errors.length) fields(errors);
     return c;
   };
   on('POST', '/api/companies', async (ctx) => {
     const { svc } = await servicesFor();
     const c = companyBody(ctx.body);
-    const saved = await svc.saveCompany({ ...c, source: c.source ?? 'manual', verifiedAt: c.source === 'vies' ? clock.now() : null }, actor);
+    const saved = await svc.saveCompany({ ...c, source: c.source ?? 'manual', verifiedAt: c.source === 'vies' || c.source === 'cbeapi' ? clock.now() : null }, actor);
     json(ctx.res, 201, saved);
   });
   on('PUT', `/api/companies/${P}`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, await svc.updateCompany(idParam(ctx.m[1]), companyBody(ctx.body), actor)); });
@@ -423,12 +423,13 @@ export function createFinanceApp(deps) {
       const digits = t.replace(/\D/g, '');
       return (await svc.listCompanies()).filter((c) => c.name.toLowerCase().includes(t) || (digits.length >= 9 && `${c.vatNumber ?? ''}${c.enterpriseNumber ?? ''}`.replace(/\D/g, '').includes(digits)));
     };
-    return createCompanySearch({ numberLookup: createCompanyLookup(vies), nameProvider, directorySearch });
+    const registry = deps.companyRegistry ? deps.companyRegistry(settings) : settings.companySearch.registry === 'cbeapi' ? createCbeApiProvider({ apiKey: process.env.CBEAPI_KEY }) : NoRegistry;
+    return createCompanySearch({ numberLookup: createCompanyLookup(vies), nameProvider, registry, directorySearch });
   };
   on('POST', '/api/companies/search', async (ctx) => {
     const { svc, settings } = await servicesFor();
     const query = sanitizeText(ctx.body?.query, 80) ?? '';
-    json(ctx.res, 200, { ...(await searchFor(settings, svc).search(query)), providers: { numberLookup: settings.companyLookup.provider, nameSearch: settings.companySearch.provider } });
+    json(ctx.res, 200, { ...(await searchFor(settings, svc).search(query)), providers: { numberLookup: settings.companyLookup.provider, nameSearch: settings.companySearch.provider, registry: settings.companySearch.registry } });
   });
   on('POST', '/api/companies/resolve', async (ctx) => {
     const { svc, settings } = await servicesFor();
