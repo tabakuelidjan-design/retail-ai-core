@@ -15,9 +15,9 @@ function h(tag, attrs, ...kids) {
     else if (k === 'on') for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
     else if (k === 'style') { for (const decl of String(v).split(';')) { const i = decl.indexOf(':'); if (i > 0) el.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim()); } } // CSSOM, not an inline style attribute: allowed by the strict CSP
     else if (k === 'value' || k === 'checked' || k === 'disabled' || k === 'selected') el[k] = v;
-    else el.setAttribute(k, v === true ? '' : String(v));
+    else el.setAttribute(k, v === true ? '' : (k === 'placeholder' || k === 'title' || k === 'aria-label' || k === 'alt' ? tr(String(v)) : String(v)));
   }
-  const add = (c) => { if (c === null || c === undefined || c === false) return; if (Array.isArray(c)) c.forEach(add); else el.appendChild(c instanceof Node ? c : document.createTextNode(String(c))); };
+  const add = (c) => { if (c === null || c === undefined || c === false) return; if (Array.isArray(c)) c.forEach(add); else el.appendChild(c instanceof Node ? c : document.createTextNode(typeof c === 'string' ? tr(c) : String(c))); };
   kids.forEach(add);
   return el;
 }
@@ -39,7 +39,7 @@ const TXT = {
   PAYMENT_INSTRUCTIONS_MISSING: 'Add your IBAN in Settings (or payment terms on the invoice)', DUE_DATE_MISSING_OR_INVALID: 'Set a due date', LINKED_BASIS_WITHOUT_SOURCE_ORDER: 'Select the shop/POS order to link',
   SOURCE_ORDER_NOT_FOUND_IN_RETAIL_CORE: 'The linked order was not found', CREDIT_REASON_MISSING: 'Give a reason for the credit note',
 };
-const human = (code) => { const c = String(code).split(' ')[0].split('(')[0]; if (TXT[c]) return TXT[c]; if (/^LINE_\d+_/.test(c)) return `Line ${c.split('_')[1]}: ${c.split('_').slice(2).join(' ').toLowerCase()}`; if (/^CUSTOMER_ADDRESS_/.test(c)) return `Customer address: ${c.replace('CUSTOMER_ADDRESS_', '').replace('_MISSING', '').toLowerCase()} is missing`; if (/^POSSIBLE_DUPLICATE/.test(c)) return 'This looks like a shop sale that is not linked. Link it, or confirm it is a separate sale.'; return c.replace(/_/g, ' ').toLowerCase().replace(/^./, (x) => x.toUpperCase()); };
+const human = (code) => { const c = String(code).split(' ')[0].split('(')[0]; if (TXT[c]) return TXT[c]; if (/^LINE_\d+_/.test(c)) return tt('Line {0}: {1}', c.split('_')[1], (TXT[c.split('_').slice(2).join('_')] ? tr(TXT[c.split('_').slice(2).join('_')]) : c.split('_').slice(2).join(' ').toLowerCase())); if (/^CUSTOMER_ADDRESS_/.test(c)) return tt('Customer address: {0} is missing', tr(c.replace('CUSTOMER_ADDRESS_', '').replace('_MISSING', '').toLowerCase().replace('_', ''))); if (/^POSSIBLE_DUPLICATE/.test(c)) return 'This looks like a shop sale that is not linked. Link it, or confirm it is a separate sale.'; return c.replace(/_/g, ' ').toLowerCase().replace(/^./, (x) => x.toUpperCase()); };
 const STATUS = { DRAFT: 'Draft', READY_FOR_APPROVAL: 'Ready for approval', ISSUED: 'Issued', SENT: 'Sent', PARTIALLY_PAID: 'Partially paid', PAID: 'Paid', OVERDUE: 'Overdue', CREDITED: 'Credited', CANCELLED: 'Cancelled', ACCEPTED: 'Accepted', REJECTED: 'Rejected', CONVERTED: 'Converted' };
 const badge = (s) => h('span', { class: `badge ${s}` }, STATUS[s] || s);
 const TYPE = { invoice: 'Invoice', quote: 'Quote', credit_note: 'Credit note' };
@@ -96,14 +96,18 @@ function avatar(name, size) {
 }
 /** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
-const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, `${-n} day${n === -1 ? '' : 's'} late`) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, `Due in ${n} day${n === 1 ? '' : 's'}`) : h('span', { class: 'chip mute' }, `Due in ${n} days`); };
+const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
 const NAV = [['#/', 'Overview', 'home'], ['#/invoices', 'Invoices', 'doc'], ['#/quotes', 'Quotes', 'quote'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/pack', 'Accountant pack', 'book'], ['#/settings', 'Settings', 'gear']];
+function langSwitch() {
+  return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
+}
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const side = h('nav', { class: 'side' },
     h('div', { class: 'brand' }, h('span', { class: 'mark' }, seller.trim().charAt(0).toUpperCase() || 'F'), h('span', { class: 'bname' }, seller)),
     h('a', { class: 'side-cta', href: '#/new/invoice' }, svgIcon('plus', 16), h('span', null, 'New invoice')),
+    langSwitch(),
     h('div', { class: 'navlist' }, NAV.map(([href, label, ic]) => h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, svgIcon(ic, 18), h('span', null, label)))),
     h('div', { class: 'foot' }, h('span', { class: 'foot-chip' }, 'Peppol: not configured'), h('span', { class: 'foot-chip' }, 'Nothing is sent externally'), h('button', { class: 'quiet', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, 'Log out')));
   const main = h('main', { class: 'main' }, content);
@@ -119,7 +123,7 @@ function renderLogin() {
   const msg = h('div');
   const go = async () => { try { const r = await api('POST', '/api/login', { token: inp.value }); state.csrf = r.csrf; inp.value = ''; await loadSettings(); route(); } catch (e) { fail(e, msg); } };
   inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
-  show(h('div', { class: 'login card' }, h('h1', null, 'Finance'), h('p', { class: 'muted' }, 'Enter the access token stored in your .env file (FINANCE_DASHBOARD_TOKEN).'), h('div', { class: 'field' }, inp), msg, h('button', { class: 'primary', on: { click: go } }, 'Log in')));
+  show(h('div', { class: 'login card' }, h('div', { style: 'display:flex;justify-content:flex-end' }, langSwitch()), h('h1', null, 'Finance'), h('p', { class: 'muted' }, 'Enter the access token stored in your .env file (FINANCE_DASHBOARD_TOKEN).'), h('div', { class: 'field' }, inp), msg, h('button', { class: 'primary', on: { click: go } }, 'Log in')));
   inp.focus();
 }
 
@@ -127,7 +131,7 @@ function renderLogin() {
 async function viewOverview() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const today = new Date().toLocaleDateString(I18N.tag(), { weekday: 'long', day: 'numeric', month: 'long' });
   const main = layout('#/', h('div', { class: 'hero' },
     h('div', null, h('div', { class: 'eyebrow' }, today), h('h1', null, greet), h('div', { class: 'muted' }, 'Here is what needs your attention.')),
     h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#/new/invoice' }, svgIcon('plus', 16), 'New invoice'), h('a', { class: 'btn', href: '#/new/quote' }, 'New quote'))));
@@ -138,16 +142,16 @@ async function viewOverview() {
     clear(box);
     const cur = o.currency;
     const acard = (tone, icon, n, label, sub, href) => h('a', { class: `acard ${tone}`, href }, h('span', { class: 'aicon' }, svgIcon(icon, 18)), h('span', { class: 'abody' }, h('span', { class: 'an' }, n), h('span', { class: 'al' }, label), sub ? h('span', { class: 'as' }, sub) : null), h('span', { class: 'ago' }, svgIcon('arrow', 16)));
-    mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), `${o.settingsMissing.length} setting(s) missing. `, h('a', { href: '#/settings' }, 'Open settings')) : null);
+    mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), tt('{0} setting(s) missing.', o.settingsMissing.length) + ' ', h('a', { href: '#/settings' }, 'Open settings')) : null);
     box.appendChild(h('div', { class: 'grid cards' },
       acard(o.counts.awaitingApproval ? 'warn' : 'calm', 'check', o.counts.awaitingApproval, 'Awaiting your approval', o.counts.awaitingApproval ? 'Review and issue' : 'Nothing to approve', '#/invoices?status=READY_FOR_APPROVAL'),
-      acard(o.counts.overdue ? 'bad' : 'calm', 'alert', o.counts.overdue, 'Overdue invoices', o.counts.overdue ? `${o.amounts.overdue} ${cur} to collect` : 'Nothing is late', '#/receivables'),
-      acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', `${o.counts.quotesAwaitingResponse} quote(s) awaiting response`, '#/quotes?status=ACCEPTED'),
-      acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', `${o.amounts.outstanding} ${cur} outstanding`, '#/receivables')));
+      acard(o.counts.overdue ? 'bad' : 'calm', 'alert', o.counts.overdue, 'Overdue invoices', o.counts.overdue ? tt('{0} {1} to collect', o.amounts.overdue, cur) : 'Nothing is late', '#/receivables'),
+      acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', tt('{0} quote(s) awaiting response', o.counts.quotesAwaitingResponse), '#/quotes?status=ACCEPTED'),
+      acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', tt('{0} {1} outstanding', o.amounts.outstanding, cur), '#/receivables')));
 
     // money at a glance: outstanding, overdue, paid this month
     const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
-    box.appendChild(h('div', { class: 'card kpirow' }, kpi('Outstanding', o.amounts.outstanding, `${o.counts.unpaid} unpaid invoice(s)`), kpi('Overdue', o.amounts.overdue, `${o.counts.overdue} invoice(s)`, o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, `${o.amounts.paidThisMonthCount} payment(s)`, 'ok')));
+    box.appendChild(h('div', { class: 'card kpirow' }, kpi('Outstanding', o.amounts.outstanding, tt('{0} unpaid invoice(s)', o.counts.unpaid)), kpi('Overdue', o.amounts.overdue, tt('{0} invoice(s)', o.counts.overdue), o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, tt('{0} payment(s)', o.amounts.paidThisMonthCount), 'ok')));
 
     // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
     const KEYS = [['not_due', 'Not yet due', 's0'], ['0_7', '0-7 days', 's1'], ['8_30', '8-30 days', 's2'], ['31_60', '31-60 days', 's3'], ['60_plus', '60+ days', 's4']];
@@ -156,12 +160,12 @@ async function viewOverview() {
     if (!totalC) ageCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
     else {
       ageCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${l}: ${o.aging[k].amount} ${cur}` }))));
-      ageCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, `${o.aging[k].count} inv.`)))));
+      ageCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, tt('{0} inv.', o.aging[k].count))))));
     }
     box.appendChild(ageCard);
 
     const row = (r, right) => h('a', { class: 'listrow', href: `#/doc/${r.id || ''}` }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number || TYPE[r.type] || '')), right);
-    const overdue = o.attention.overdue.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number)), h('span', { class: 'lr' }, h('strong', null, r.remaining), h('span', { class: 'chip bad' }, `${r.daysOverdue} days late`))));
+    const overdue = o.attention.overdue.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number)), h('span', { class: 'lr' }, h('strong', null, r.remaining), h('span', { class: 'chip bad' }, tt('{0} days late', r.daysOverdue)))));
     const waiting = [
       ...o.attention.awaitingApproval.map((r) => row(r, h('span', { class: 'lr' }, h('strong', null, r.gross), h('span', { class: 'chip warn' }, 'To approve')))),
       ...o.attention.quotes.map((r) => row(r, h('span', { class: 'lr' }, h('span', { class: 'chip mute' }, `${STATUS[r.status]}${r.expired ? ' - expired' : ''}`)))),
@@ -172,7 +176,7 @@ async function viewOverview() {
 
     const packCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Accountant pack - last closed quarter'), h('div', { class: 'muted' }, 'Checking...'));
     box.appendChild(packCard);
-    api('GET', '/api/overview/pack').then((p) => { clear(packCard); packCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Accountant pack - last closed quarter'), h('a', { href: '#/pack', class: 'small' }, 'Open the pack'))); if (p.status !== 'OK') return packCard.appendChild(h('div', { class: 'muted' }, 'Retail data is not available.')); packCard.appendChild(h('div', { class: 'actions' }, h('span', { class: 'chip mute' }, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness}` }, p.completeness), h('span', { class: `badge ${p.reconciliation}` }, p.reconciliation), p.anomalies ? h('span', { class: 'badge PARTIAL' }, `${p.anomalies} anomaly(ies)`) : null)); if (p.reasons.length) packCard.appendChild(h('ul', { class: 'plain small muted', style: 'margin-top:8px' }, p.reasons.map((r) => h('li', null, human(r))))); }).catch(() => { clear(packCard); packCard.appendChild(h('div', { class: 'muted' }, 'Pack status unavailable.')); });
+    api('GET', '/api/overview/pack').then((p) => { clear(packCard); packCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Accountant pack - last closed quarter'), h('a', { href: '#/pack', class: 'small' }, 'Open the pack'))); if (p.status !== 'OK') return packCard.appendChild(h('div', { class: 'muted' }, 'Retail data is not available.')); packCard.appendChild(h('div', { class: 'actions' }, h('span', { class: 'chip mute' }, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness}` }, p.completeness), h('span', { class: `badge ${p.reconciliation}` }, p.reconciliation), p.anomalies ? h('span', { class: 'badge PARTIAL' }, tt('{0} anomaly(ies)', p.anomalies)) : null)); if (p.reasons.length) packCard.appendChild(h('ul', { class: 'plain small muted', style: 'margin-top:8px' }, p.reasons.map((r) => h('li', null, human(r))))); }).catch(() => { clear(packCard); packCard.appendChild(h('div', { class: 'muted' }, 'Pack status unavailable.')); });
   } catch (e) { fail(e, box); }
 }
 
@@ -209,8 +213,8 @@ async function viewList(kind, query) {
     shown.forEach((r) => box.appendChild(h('a', { class: 'docrow', href: `#/doc/${r.id}` },
       avatar(r.customer),
       h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.customer || '-'), h('span', { class: 'ds' }, [r.number || 'not numbered yet', TYPE[r.type], r.issueDate].filter(Boolean).join('  ·  '))),
-      h('span', { class: 'damt' }, h('strong', null, money2(r)), !isQuote && r.type === 'invoice' && r.remaining ? h('span', { class: 'ds' }, `${r.remaining} still due`) : null),
-      h('span', { class: 'dstat' }, badge(r.effectiveStatus), isQuote ? (r.validUntil ? h('span', { class: 'chip mute' }, `Valid until ${r.validUntil}`) : null) : (r.type === 'invoice' ? dueChip(r.dueDate, r.remainingCents) : null)),
+      h('span', { class: 'damt' }, h('strong', null, money2(r)), !isQuote && r.type === 'invoice' && r.remaining ? h('span', { class: 'ds' }, tt('{0} still due', r.remaining)) : null),
+      h('span', { class: 'dstat' }, badge(r.effectiveStatus), isQuote ? (r.validUntil ? h('span', { class: 'chip mute' }, tt('Valid until {0}', r.validUntil)) : null) : (r.type === 'invoice' ? dueChip(r.dueDate, r.remainingCents) : null)),
       h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
   }
   search.addEventListener('input', () => { text = search.value; draw(); });
@@ -233,8 +237,11 @@ function fillFromResult(m, r) {
   m.personal = !!r.personalData; if (m.personal) m.saveCompany = false; // a sole trader is only saved when the merchant explicitly chooses to
 }
 function sourceText(m) {
-  if (!m.csource || m.csource === 'manual') return 'Source: entered by hand.';
-  return `${m.personal ? 'SOLE TRADER / PERSONAL DATA. ' : ''}Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : m.vatState === 'NOT_REGISTERED' ? ' - no active VAT registration found (VAT number left empty)' : m.vatState === 'UNCHECKED' ? ' - VAT could not be checked (VAT number left empty)' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
+  if (!m.csource || m.csource === 'manual') return tt('Source: entered by hand.');
+  const parts = [tt('Source: {0}', tr(SRC_TEXT[m.csource] || m.csource))];
+  if (m.cverified) parts.push(tt('VAT number confirmed')); else if (m.vatState === 'NOT_REGISTERED') parts.push(tt('no active VAT registration found (VAT number left empty)')); else if (m.vatState === 'UNCHECKED') parts.push(tt('VAT could not be checked (VAT number left empty)'));
+  if (m.dirty) parts.push(tt('then edited by you'));
+  return `${m.personal ? `${tt('SOLE TRADER / PERSONAL DATA')}. ` : ''}${parts.join(' - ')}.`;
 }
 function companySearchBox({ onPick }) {
   const input = h('input', { class: 'bigsearch', placeholder: 'Search company name or VAT / enterprise number', autocomplete: 'off' });
@@ -246,7 +253,7 @@ function companySearchBox({ onPick }) {
       let result = r;
       if (r.needsResolve || r.needsVatCheck) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
       else if (serverMsg) say(r.personalData || (r.vatState && r.vatState !== 'ACTIVE') || /Register status/.test(serverMsg) ? 'warn' : 'ok', serverMsg + ' Check the fields below: you can still correct them.');
-      else say('ok', `Filled in from: ${r.sourceLabel}. Check the fields below: you can still correct them.`);
+      else say('ok', tt('Filled in from: {0}. Check the fields below: you can still correct them.', tr(r.sourceLabel)));
       clear(list); onPick(result);
     } catch (e) { fail(e); }
   }
@@ -278,8 +285,8 @@ const money = (cur, v) => (v == null || v === '' ? '' : `${CUR_SYM[cur] || `${cu
 function stockChip(st) {
   if (!st || st.state === 'unknown') return h('span', { class: 'chip mute' }, 'Stock n/a');
   if (st.state === 'out') return h('span', { class: 'chip bad' }, 'Out of stock');
-  if (st.state === 'low') return h('span', { class: 'chip warn' }, `Low: ${st.qty}`);
-  return h('span', { class: 'chip ok' }, `${st.qty} in stock`);
+  if (st.state === 'low') return h('span', { class: 'chip warn' }, tt('Low: {0}', st.qty));
+  return h('span', { class: 'chip ok' }, tt('{0} in stock', st.qty));
 }
 function thumb(url, name) {
   const t = h('span', { class: 'thumb' }, h('i', null, (name || '?').trim().charAt(0).toUpperCase()));
@@ -291,7 +298,7 @@ function productSearchBox({ onPick, onClose, currency }) {
   const msg = h('div', { class: 'acmsg' }); const list = h('div', { class: 'aclist' });
   let seq = 0; let active = -1; let timer = null;
   const setActive = (n) => { active = n; [...list.children].forEach((c, i) => c.classList.toggle('active', i === n)); const el = list.children[n]; if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); };
-  const say = (t) => { clear(msg); if (t) msg.appendChild(document.createTextNode(t)); };
+  const say = (txt) => { clear(msg); if (txt) msg.appendChild(document.createTextNode(tr(txt))); };
   function skeleton() { clear(list); for (let i = 0; i < 3; i += 1) list.appendChild(h('div', { class: 'opt sk' }, h('span', { class: 'thumb' }), h('span', { class: 'skl' }))); }
   async function run() {
     const mine = ++seq; const q = input.value.trim();
@@ -302,12 +309,12 @@ function productSearchBox({ onPick, onClose, currency }) {
       if (mine !== seq) return;
       clear(list); active = -1;
       if (!r.rows.length) return say('No product found in the catalogue. Use "+ Add custom line" for a service or a special item.');
-      say(`${r.rows.length} match${r.rows.length > 1 ? 'es' : ''}`);
+      say(tt(r.rows.length > 1 ? '{0} matches' : '{0} match', r.rows.length));
       r.rows.forEach((x, i) => list.appendChild(h('button', { type: 'button', class: 'opt', on: { click: () => pick(x), mousemove: () => { if (active !== i) setActive(i); } } },
         thumb(x.imageUrl, x.productTitle),
         h('span', { class: 'optmain' },
           h('span', { class: 'optname' }, x.productTitle, x.variantTitle ? h('span', { class: 'optvar' }, ` · ${x.variantTitle}`) : null),
-          h('span', { class: 'optsku' }, x.sku ? `SKU ${x.sku}` : 'No SKU', x.archived ? h('span', { class: 'chip mute' }, x.status.toLowerCase()) : null)),
+          h('span', { class: 'optsku' }, x.sku ? tt('SKU {0}', x.sku) : 'No SKU', x.archived ? h('span', { class: 'chip mute' }, x.status.toLowerCase()) : null)),
         h('span', { class: 'optright' }, stockChip(x.stock),
           h('span', { class: 'optprice' }, x.price ? money(currency, x.price.amount) : '-', x.price ? h('small', null, x.price.taxesIncluded ? ' incl. VAT' : ' excl. VAT') : null)))));
       setActive(0);
@@ -375,7 +382,7 @@ async function viewForm(kind, editId) {
     refreshSteps(); barTotal.textContent = `${t.payable} ${model.currency}`; totalsBox.classList.remove('flash'); void totalsBox.offsetWidth; totalsBox.classList.add('flash');
     const row = (l, v, cls) => h('div', { class: `t ${cls || ''}` }, h('span', null, l), h('span', null, `${v} ${model.currency}`));
     totalsBox.appendChild(row('Subtotal excl. VAT', t.net)); if (t.discountCents > 0) totalsBox.appendChild(row('of which discounts', t.discount));
-    t.vatBreakdown.forEach((g) => totalsBox.appendChild(row(`VAT ${g.vatRateBp / 100}% on ${g.taxable}`, g.vatAmount)));
+    t.vatBreakdown.forEach((g) => totalsBox.appendChild(row(tt('VAT {0}% on {1}', g.vatRateBp / 100, g.taxable), g.vatAmount)));
     totalsBox.appendChild(row('Total VAT', t.vat));
     if (t.roundingCents) { totalsBox.appendChild(row('Total incl. VAT', t.gross)); totalsBox.appendChild(row('Rounding adjustment', t.rounding, 'muted')); totalsBox.appendChild(row(isQuote ? 'Amount to pay' : 'Amount due', t.payable, 'big')); totalsBox.appendChild(h('div', { class: 'hint' }, 'Explicit rounding (EN 16931) so the catalogue price stays exactly as published.')); }
     else { totalsBox.appendChild(row('Total incl. VAT', t.gross, 'big')); if (!isQuote) totalsBox.appendChild(row('Amount due', t.gross)); }
@@ -426,7 +433,7 @@ async function viewForm(kind, editId) {
       const exceeds = !!(l._stock && l._stock.qty != null && Number(l.quantity) > l._stock.qty);
       const sub = h('div', { class: 'lsub' },
         l.sku ? h('span', { class: 'mono sku' }, l.sku) : null,
-        isGross && cat && cat.incl ? h('span', { class: 'subtle' }, `Catalogue ${money(cur, cat.incl)} incl. VAT`, cat.check ? ` → ${money(cur, cat.check.net)} excl. VAT` : '') : (cat && !isGross && !overridden ? h('span', { class: 'subtle' }, 'Catalogue price excl. VAT') : null),
+        isGross && cat && cat.incl ? h('span', { class: 'subtle' }, tt('Catalogue {0} incl. VAT', money(cur, cat.incl)), cat.check ? ' ' + tt('→ {0} excl. VAT', money(cur, cat.check.net)) : '') : (cat && !isGross && !overridden ? h('span', { class: 'subtle' }, 'Catalogue price excl. VAT') : null),
         isGross ? h('span', { class: 'chip ok' }, 'Catalogue price kept') : null,
         overridden ? h('span', { class: 'chip warn' }, 'Price override (excl. VAT)') : null,
         exceeds ? h('span', { class: 'chip warn' }, 'More than in stock') : null,
@@ -496,7 +503,7 @@ async function viewForm(kind, editId) {
     const opt = (val, title, desc) => h('div', { class: `basis ${model.basis === val ? 'sel' : ''}`, on: { click: () => { model.basis = val; if (val === 'standalone_b2b') { model.sourceOrderId = null; model.sourceLabel = null; } renderBasis(); } } }, h('label', { style: 'color:var(--ink);font-weight:600;cursor:pointer' }, h('input', { type: 'radio', name: 'basis', checked: model.basis === val }), title), h('div', { class: 'small muted' }, desc));
     basisBox.appendChild(h('div', { class: 'row r2' }, opt('standalone_b2b', 'New B2B sale (outside the shop)', 'This is ADDITIVE revenue: it is counted on top of your shop and POS sales.'), opt('linked_source_order', 'Invoice for an existing shop / POS order', 'This invoice does NOT create additional revenue: the sale is already counted from the shop. Each order can have one active invoice.')));
     if (model.basis === 'linked_source_order') {
-      basisBox.appendChild(h('div', { style: 'margin-top:12px' }, model.sourceOrderId ? h('div', { class: 'banner ok small' }, `Linked to order ${model.sourceLabel || model.sourceOrderId}. No additional revenue will be counted.`) : h('div', { class: 'banner warn small' }, 'Choose the order below.'), h('button', { on: { click: (e) => { e.preventDefault(); openPicker(); } } }, model.sourceOrderId ? 'Change order' : 'Find the order')));
+      basisBox.appendChild(h('div', { style: 'margin-top:12px' }, model.sourceOrderId ? h('div', { class: 'banner ok small' }, tt('Linked to order {0}. No additional revenue will be counted.', model.sourceLabel || model.sourceOrderId)) : h('div', { class: 'banner warn small' }, 'Choose the order below.'), h('button', { on: { click: (e) => { e.preventDefault(); openPicker(); } } }, model.sourceOrderId ? 'Change order' : 'Find the order')));
     } else basisBox.appendChild(h('label', { style: 'margin-top:10px;color:inherit' }, h('input', { type: 'checkbox', checked: model.ack, on: { change: (e) => { model.ack = e.target.checked; } } }), 'Only if the system warns that this looks like a shop sale: confirm it is a separate sale.'));
   }
   function openPicker() {
@@ -506,7 +513,7 @@ async function viewForm(kind, editId) {
       try {
         const qs = new URLSearchParams(); if (q.value) qs.set('q', q.value); if (from.value) qs.set('from', from.value); if (to.value) qs.set('to', to.value); if (min.value) qs.set('min', min.value); if (max.value) qs.set('max', max.value);
         const r = await api('GET', `/api/orders?${qs}`); clear(out);
-        out.appendChild(r.rows.length ? h('table', null, h('tr', null, ['Order', 'Date', 'Channel', 'Items', 'Total', ''].map((x, i) => h('th', { class: i === 4 ? 'num' : '' }, x))), r.rows.map((o) => h('tr', { class: `picker-row ${o.invoiced ? 'disabled' : ''}` }, h('td', null, `#${o.ref}`), h('td', { class: 'nowrap' }, o.date), h('td', null, o.channel), h('td', { class: 'small' }, o.items.join(', '), o.moreItems ? ` +${o.moreItems}` : ''), h('td', { class: 'num nowrap' }, `${o.total} ${model.currency}`, o.refunded ? h('div', { class: 'small muted' }, `refunded ${o.refunded}`) : null), h('td', null, o.invoiced ? h('span', { class: 'badge PARTIAL' }, `Invoiced ${o.invoiced.number || ''}`) : h('button', { class: 'primary', on: { click: () => { model.sourceOrderId = o.sourceOrderId; model.sourceLabel = `#${o.ref} (${o.date}, ${o.total})`; bk.remove(); renderBasis(); } } }, 'Select'))))) : h('div', { class: 'muted' }, 'No matching orders.'));
+        out.appendChild(r.rows.length ? h('table', null, h('tr', null, ['Order', 'Date', 'Channel', 'Items', 'Total', ''].map((x, i) => h('th', { class: i === 4 ? 'num' : '' }, x))), r.rows.map((o) => h('tr', { class: `picker-row ${o.invoiced ? 'disabled' : ''}` }, h('td', null, `#${o.ref}`), h('td', { class: 'nowrap' }, o.date), h('td', null, o.channel), h('td', { class: 'small' }, o.items.join(', '), o.moreItems ? ` +${o.moreItems}` : ''), h('td', { class: 'num nowrap' }, `${o.total} ${model.currency}`, o.refunded ? h('div', { class: 'small muted' }, tt('refunded {0}', o.refunded)) : null), h('td', null, o.invoiced ? h('span', { class: 'badge PARTIAL' }, tt('Invoiced {0}', o.invoiced.number || '')) : h('button', { class: 'primary', on: { click: () => { model.sourceOrderId = o.sourceOrderId; model.sourceLabel = `#${o.ref} (${o.date}, ${o.total})`; bk.remove(); renderBasis(); } } }, 'Select'))))) : h('div', { class: 'muted' }, 'No matching orders.'));
       } catch (e) { fail(e, out); }
     };
     [q, from, to, min, max].forEach((i) => i.addEventListener('input', () => { clearTimeout(run.t); run.t = setTimeout(run, 250); })); run();
@@ -555,7 +562,7 @@ async function viewForm(kind, editId) {
   const form = h('div', { class: 'grid formgrid' },
     h('div', { class: 'grid' },
       h('div', { class: 'card' }, stepHead(1, 'Customer', customerDone), search.node, h('div', { style: 'margin-top:14px' }, custBox)),
-      discCard('Dates and terms', `Issue ${model.issueDate || 'today'} · ${model.paymentTermsDays === '' ? 'no terms' : `${model.paymentTermsDays} days`}`, h('div', { class: 'row r4' }, field('Issue date', h('input', { type: 'date', value: model.issueDate, on: { input: bind(model, 'issueDate') } })), isQuote ? field('Valid until', h('input', { type: 'date', value: model.validUntil, on: { input: bind(model, 'validUntil') } })) : field('Due date', dueField, 'Leave empty to use the payment terms'), field('Payment terms (days)', h('input', { value: String(model.paymentTermsDays), inputmode: 'numeric', on: { input: bind(model, 'paymentTermsDays') } })), field('Currency', h('input', { value: model.currency, on: { input: bind(model, 'currency') } }))), h('div', { class: 'row r2' }, field(isQuote ? 'Commercial terms' : 'Payment terms text', h('input', { value: model.paymentTerms, on: { input: bind(model, 'paymentTerms') } })), field('Document language', h('select', { on: { change: bind(model, 'language') } }, [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: model.language === v }, l)))))),
+      discCard('Dates and terms', tt('Issue {0} · {1}', model.issueDate || tt('today'), model.paymentTermsDays === '' ? tt('no terms') : tt('{0} days', model.paymentTermsDays)), h('div', { class: 'row r4' }, field('Issue date', h('input', { type: 'date', value: model.issueDate, on: { input: bind(model, 'issueDate') } })), isQuote ? field('Valid until', h('input', { type: 'date', value: model.validUntil, on: { input: bind(model, 'validUntil') } })) : field('Due date', dueField, 'Leave empty to use the payment terms'), field('Payment terms (days)', h('input', { value: String(model.paymentTermsDays), inputmode: 'numeric', on: { input: bind(model, 'paymentTermsDays') } })), field('Currency', h('input', { value: model.currency, on: { input: bind(model, 'currency') } }))), h('div', { class: 'row r2' }, field(isQuote ? 'Commercial terms' : 'Payment terms text', h('input', { value: model.paymentTerms, on: { input: bind(model, 'paymentTerms') } })), field('Document language', h('select', { on: { change: bind(model, 'language') } }, [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: model.language === v }, l)))))),
       isQuote ? null : h('div', { class: 'card' }, stepHead(2, 'Revenue basis', basisDone), basisBox),
       h('div', { class: 'card' }, stepHead(nVat, 'VAT treatment', vatDone), vatBox),
       h('div', { class: 'card lines-card' },
@@ -592,7 +599,7 @@ async function viewDoc(id) {
     h('div', { class: 'actions' },
       has('edit') ? h('a', { class: 'btn', href: `#/doc/${id}/edit` }, 'Edit draft') : null,
       has('submit') ? h('button', { class: 'primary', on: { click: call('submit', {}, 'Submitted for approval') } }, 'Submit for approval') : null,
-      has('send_quote') ? h('button', { class: 'primary', on: { click: () => confirmModal('Send quote', `This numbers the quote (${d.nextNumber || ''}) and locks it. Send the PDF to your customer yourself; the system sends nothing.`, 'Number and lock', call('send-quote', {}, 'Quote numbered')) } }, 'Mark as sent') : null,
+      has('send_quote') ? h('button', { class: 'primary', on: { click: () => confirmModal('Send quote', tt('This numbers the quote ({0}) and locks it. Send the PDF to your customer yourself; the system sends nothing.', d.nextNumber || ''), 'Number and lock', call('send-quote', {}, 'Quote numbered')) } }, 'Mark as sent') : null,
       has('accept') ? h('button', { class: 'ok', on: { click: call('accept', {}, 'Quote accepted') } }, 'Accepted') : null,
       has('reject_quote') ? h('button', { class: 'danger', on: { click: call('reject-quote', {}, 'Quote rejected') } }, 'Rejected') : null,
       has('convert') ? h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${id}/convert`, { revenueBasis: 'standalone_b2b' }); toast('Invoice draft created from the quote', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e); } } } }, 'Convert to invoice') : null,
@@ -608,8 +615,8 @@ async function viewDoc(id) {
   const curIdx = Math.max(0, FLOW.findIndex(([v]) => v === flowKey));
   if (d.type !== 'credit_note') box.appendChild(h('ol', { class: 'stepper' }, FLOW.map(([v, l], i) => h('li', { class: i < curIdx || (i === curIdx && v === 'PAID') ? 'done' : i === curIdx ? 'current' : '' }, h('span', { class: 'sdot' }, i < curIdx || (i === curIdx && v === 'PAID') ? svgIcon('check', 12) : String(i + 1)), h('span', null, l)))));
   if (d.status === 'READY_FOR_APPROVAL') {
-    box.appendChild(h('div', { class: 'banner info' }, h('strong', null, 'Review before you approve. '), `Approving issues the document, assigns its number (${d.nextNumber || 'next in sequence'}) and freezes it. Afterwards it can only be corrected with a credit note. Nothing is sent to your customer.`, h('div', { class: 'actions', style: 'margin-top:10px' },
-      h('button', { class: 'ok', on: { click: () => confirmModal('Approve and issue', `Issue this ${TYPE[d.type].toLowerCase()} now? It will receive the next number and cannot be edited afterwards.`, 'APPROVE', call('approve', {}, 'Issued')) } }, 'APPROVE'),
+    box.appendChild(h('div', { class: 'banner info' }, h('strong', null, 'Review before you approve. '), tt('Approving issues the document, assigns its number ({0}) and freezes it. Afterwards it can only be corrected with a credit note. Nothing is sent to your customer.', d.nextNumber || tt('next in sequence')), h('div', { class: 'actions', style: 'margin-top:10px' },
+      h('button', { class: 'ok', on: { click: () => confirmModal('Approve and issue', tt('Issue this {0} now? It will receive the next number and cannot be edited afterwards.', tr(TYPE[d.type]).toLowerCase()), 'APPROVE', call('approve', {}, 'Issued')) } }, 'APPROVE'),
       h('button', { on: { click: call('modify', {}, 'Returned to draft') } }, 'MODIFY'),
       h('button', { class: 'danger', on: { click: () => confirmModal('Reject', 'The draft will be cancelled. No number is used.', 'REJECT', call('reject', {}, 'Rejected')) } }, 'REJECT'))));
   }
@@ -622,15 +629,15 @@ async function viewDoc(id) {
   box.appendChild(h('div', { class: 'grid two' },
     h('div', { class: 'card' }, h('h2', null, 'Seller'), kv([['Name', s.name], ['Address', addr(s.address || {})], ['VAT', s.vatNumber], ['IBAN', s.iban]])),
     h('div', { class: 'card' }, h('h2', null, 'Customer'), kv([['Name', c.name], ['Address', addr(c.address || {})], ['VAT / no.', c.vatNumber || c.enterpriseNumber], ['Email', c.email]]))));
-  box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Number', d.number || `(assigned on approval: ${d.nextNumber || 'next'})`], ['Issue date', d.issueDate], [isQ ? 'Valid until' : 'Due date', isQ ? d.validUntil : d.dueDate], ['Payment terms', d.doc.paymentTerms], ['VAT treatment', REGIME[d.doc.vat.regime]], ['Legal mention', d.doc.vat.mention], ['Language', d.doc.language], ['Notes', d.doc.notes],
-    d.related ? ['Related', h('a', { href: `#/doc/${d.related.id}` }, `${TYPE[d.related.type]} ${d.related.number || ''}`)] : null, d.convertedInvoice ? ['Converted to', h('a', { href: `#/doc/${d.convertedInvoice.id}` }, `Invoice ${d.convertedInvoice.number || '(draft)'}`)] : null,
+  box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Number', d.number || tt('(assigned on approval: {0})', d.nextNumber || tt('next'))], ['Issue date', d.issueDate], [isQ ? 'Valid until' : 'Due date', isQ ? d.validUntil : d.dueDate], ['Payment terms', d.doc.paymentTerms], ['VAT treatment', REGIME[d.doc.vat.regime]], ['Legal mention', d.doc.vat.mention], ['Language', d.doc.language], ['Notes', d.doc.notes],
+    d.related ? ['Related', h('a', { href: `#/doc/${d.related.id}` }, `${TYPE[d.related.type]} ${d.related.number || ''}`)] : null, d.convertedInvoice ? ['Converted to', h('a', { href: `#/doc/${d.convertedInvoice.id}` }, tt('Invoice {0}', d.convertedInvoice.number || tt('(draft)')))] : null,
     d.sourceOrder ? ['Shop/POS order', `#${d.sourceOrder.ref} - ${d.sourceOrder.date} - ${d.sourceOrder.channel} - ${d.sourceOrder.total} ${cur}`] : null])));
   const t = d.totals;
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),
-    h('div', { class: 'card' }, h('h2', null, 'Totals'), h('div', { class: 'kv', style: 'grid-template-columns:1fr auto' }, [['Subtotal excl. VAT', t.net], ...t.vatBreakdown.map((g) => [`VAT ${g.vatRateBp / 100}% on ${g.taxable}`, g.vatAmount]), ['Total VAT', t.vat], ['Total incl. VAT', t.gross], !isQ && d.settlementView ? ['Paid', d.settlementView.paid] : null, !isQ && d.settlementView && d.settlement.creditedCents ? ['Credited', d.settlementView.credited] : null, !isQ && d.settlementView ? ['Amount due', d.settlementView.remaining] : null].filter(Boolean).map(([k, v]) => [h('div', null, k), h('div', { class: 'right' }, `${v} ${cur}`)])))));
+    h('div', { class: 'card' }, h('h2', null, 'Totals'), h('div', { class: 'kv', style: 'grid-template-columns:1fr auto' }, [['Subtotal excl. VAT', t.net], ...t.vatBreakdown.map((g) => [tt('VAT {0}% on {1}', g.vatRateBp / 100, g.taxable), g.vatAmount]), ['Total VAT', t.vat], ['Total incl. VAT', t.gross], !isQ && d.settlementView ? ['Paid', d.settlementView.paid] : null, !isQ && d.settlementView && d.settlement.creditedCents ? ['Credited', d.settlementView.credited] : null, !isQ && d.settlementView ? ['Amount due', d.settlementView.remaining] : null].filter(Boolean).map(([k, v]) => [h('div', null, k), h('div', { class: 'right' }, `${v} ${cur}`)])))));
   if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference'].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''))))));
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
-  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, `PDF preview${d.doc.lockedAt ? '' : ' (draft watermark)'}`), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
+  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
   box.appendChild(pdfWrap);
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Audit trail'), h('table', null, h('tr', null, ['When', 'Action', 'Status', 'By'].map((x) => h('th', null, x))), d.events.map((e) => h('tr', null, h('td', { class: 'nowrap small' }, String(e.at).replace('T', ' ').slice(0, 19)), h('td', null, human(e.action)), h('td', null, `${e.fromStatus ? STATUS[e.fromStatus] || e.fromStatus : ''} ${e.toStatus ? `-> ${STATUS[e.toStatus] || e.toStatus}` : ''}`), h('td', { class: 'small' }, e.actor ? `${e.actor.type}` : ''))))));
   box.appendChild(h('div', { class: 'small muted', style: 'margin-top:12px' }, 'Peppol: NOT CONFIGURED. Structured invoices can be prepared, but nothing is transmitted until a provider is selected.'));
@@ -639,7 +646,7 @@ function confirmModal(title, text, label, onYes) { modal(title, h('p', null, tex
 function paymentModal(d, reload) {
   const amt = h('input', { inputmode: 'decimal', placeholder: d.remaining }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
   const method = h('select', null, [['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['other', 'Other']].map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const note = h('input', { placeholder: 'Note (optional)' }); const err = h('div');
-  modal('Add a payment', h('div', null, h('p', { class: 'muted' }, `Still due: ${d.remaining} ${d.currency}`), err, h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref)), h('div', { class: 'field' }, h('label', null, 'Note'), note)),
+  modal('Add a payment', h('div', null, h('p', { class: 'muted' }, tt('Still due: {0} {1}', d.remaining, d.currency)), err, h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref)), h('div', { class: 'field' }, h('label', null, 'Note'), note)),
     (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/payments`, { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, note: note.value || undefined }); close(); toast('Payment recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record payment'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 function creditModal(d) {
@@ -688,8 +695,8 @@ async function viewCompany(id) {
   const main = layout('#/companies'); const box = h('div'); main.appendChild(box);
   try {
     const r = await api('GET', `/api/companies/${id}`); const c = r.company; const cur = state.settings.defaults.currency; const m2 = (x) => (x / 100).toFixed(2);
-    box.appendChild(h('div', { class: 'topbar' }, h('div', null, h('h1', null, c.name), h('div', { class: 'muted' }, `${c.vatNumber || c.enterpriseNumber || 'no number'} - source: ${c.source}`)), h('div', { class: 'actions' }, h('button', { on: { click: () => companyModal(c) } }, 'Edit'))));
-    box.appendChild(h('div', { class: 'grid cards' }, h('div', { class: 'card stat' }, h('div', { class: 'n' }, `${m2(r.outstandingCents)}`), h('div', { class: 'l' }, `Outstanding (${cur})`)), h('div', { class: `card stat ${r.overdueCents ? 'bad' : ''}` }, h('div', { class: 'n' }, `${m2(r.overdueCents)}`), h('div', { class: 'l' }, 'Overdue')), h('div', { class: 'card stat ok' }, h('div', { class: 'n' }, `${m2(r.payments.totalPaidCents)}`), h('div', { class: 'l' }, `Paid so far (${r.payments.count} payment(s)${r.payments.lastPaidOn ? `, last ${r.payments.lastPaidOn}` : ''})`))));
+    box.appendChild(h('div', { class: 'topbar' }, h('div', null, h('h1', null, c.name), h('div', { class: 'muted' }, tt('{0} - source: {1}', c.vatNumber || c.enterpriseNumber || tt('no number'), c.source))), h('div', { class: 'actions' }, h('button', { on: { click: () => companyModal(c) } }, 'Edit'))));
+    box.appendChild(h('div', { class: 'grid cards' }, h('div', { class: 'card stat' }, h('div', { class: 'n' }, `${m2(r.outstandingCents)}`), h('div', { class: 'l' }, tt('Outstanding ({0})', cur))), h('div', { class: `card stat ${r.overdueCents ? 'bad' : ''}` }, h('div', { class: 'n' }, `${m2(r.overdueCents)}`), h('div', { class: 'l' }, 'Overdue')), h('div', { class: 'card stat ok' }, h('div', { class: 'n' }, `${m2(r.payments.totalPaidCents)}`), h('div', { class: 'l' }, tt('Paid so far ({0} payment(s){1})', r.payments.count, r.payments.lastPaidOn ? tt(', last {0}', r.payments.lastPaidOn) : '')))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Address', [c.address.street, `${c.address.postalCode || ''} ${c.address.city || ''}`.trim(), c.address.countryCode].filter(Boolean).join(', ')], ['Email', c.email], ['Peppol ID', c.peppolId], ['Credit scoring', 'Not implemented (no solvency provider)']])));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Documents'), r.documents.length ? h('table', null, h('tr', null, ['Number', 'Type', 'Date', 'Total', 'Status'].map((x) => h('th', null, x))), r.documents.map((d) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/doc/${d.id}`; } } }, h('td', null, d.number || '(draft)'), h('td', null, TYPE[d.type]), h('td', null, d.issueDate), h('td', null, `${d.gross} ${d.currency}`), h('td', null, badge(d.effectiveStatus))))) : h('div', { class: 'muted' }, 'No documents yet.')));
   } catch (e) { fail(e, box); }
@@ -700,7 +707,7 @@ async function viewReceivables() {
   const main = layout('#/receivables', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Payments and receivables'), h('div', { class: 'muted small' }, 'No reminders are sent automatically.')))); const box = h('div'); main.appendChild(box);
   try {
     const r = await api('GET', '/api/receivables'); const cur = state.settings.defaults.currency;
-    box.appendChild(h('div', { class: 'grid cards' }, [['Unpaid', r.unpaid.count, r.unpaid.outstanding, ''], ['Due soon', r.due_soon.count, r.due_soon.outstanding, 'warn'], ['Overdue', r.overdue.count, r.overdue.outstanding, r.overdue.count ? 'bad' : '']].map(([l, n, a, cls]) => h('div', { class: `card stat ${cls}` }, h('div', { class: 'n' }, `${a}`), h('div', { class: 'l' }, `${l}: ${n} invoice(s) (${cur})`)))));
+    box.appendChild(h('div', { class: 'grid cards' }, [['Unpaid', r.unpaid.count, r.unpaid.outstanding, ''], ['Due soon', r.due_soon.count, r.due_soon.outstanding, 'warn'], ['Overdue', r.overdue.count, r.overdue.outstanding, r.overdue.count ? 'bad' : '']].map(([l, n, a, cls]) => h('div', { class: `card stat ${cls}` }, h('div', { class: 'n' }, `${a}`), h('div', { class: 'l' }, tt('{0}: {1} invoice(s) ({2})', tr(l), n, cur))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Ageing (days past due)'), h('table', null, h('tr', null, ['Not yet due', '0-7', '8-30', '31-60', '60+'].map((x) => h('th', { class: 'num' }, x))), h('tr', null, ['not_due', '0_7', '8_30', '31_60', '60_plus'].map((k) => h('td', { class: 'num' }, `${r.aging[k].outstanding} (${r.aging[k].count})`))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Open invoices'), r.invoices.length ? h('table', null, h('tr', null, ['Invoice', 'Customer', 'Due', 'Days late', 'Total', 'Still due', 'Status'].map((x, i) => h('th', { class: i >= 3 && i < 6 ? 'num' : '' }, x))), r.invoices.map((i) => h('tr', null, h('td', null, i.number), h('td', null, i.customer), h('td', null, i.dueDate), h('td', { class: 'num' }, i.daysOverdue > 0 ? String(i.daysOverdue) : ''), h('td', { class: 'num' }, i.gross), h('td', { class: 'num' }, i.remaining), h('td', null, badge(i.effectiveStatus))))) : h('div', { class: 'muted' }, 'No open invoices.'), h('p', { class: 'small muted' }, 'Open an invoice from the Invoices page to register a payment.')));
   } catch (e) { fail(e, box); }
@@ -717,17 +724,17 @@ async function viewPack() {
     clear(out); out.appendChild(h('div', { class: 'muted', style: 'margin:12px' }, 'Generating...'));
     try {
       const r = await api('POST', '/api/pack', { from: from.value, to: to.value }); const p = r.pack; const cur = p.currency; const e2 = (c) => (c / 100).toFixed(2); clear(out);
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('strong', null, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness.status}` }, p.completeness.status), h('span', { class: `badge ${p.reconciliation.status}` }, `Reconciliation: ${p.reconciliation.status}`), h('span', { class: 'muted small' }, `generated ${p.generated_at}`)), p.completeness.reasons.length ? h('ul', { class: 'plain small', style: 'margin-top:8px' }, p.completeness.reasons.map((x) => h('li', null, human(x)))) : h('div', { class: 'small muted' }, 'All source data for this period is present.'), h('div', { class: 'small muted', style: 'margin-top:6px' }, `Sources: ${p.source_systems.map((s) => s.system).join(', ')}`)));
+      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('strong', null, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness.status}` }, p.completeness.status), h('span', { class: `badge ${p.reconciliation.status}` }, tt('Reconciliation: {0}', tr(p.reconciliation.status))), h('span', { class: 'muted small' }, tt('generated {0}', p.generated_at))), p.completeness.reasons.length ? h('ul', { class: 'plain small', style: 'margin-top:8px' }, p.completeness.reasons.map((x) => h('li', null, human(x)))) : h('div', { class: 'small muted' }, 'All source data for this period is present.'), h('div', { class: 'small muted', style: 'margin-top:6px' }, tt('Sources: {0}', p.source_systems.map((s) => s.system).join(', ')))));
       const row = (l, v, b) => h('tr', null, h('td', null, b ? h('strong', null, l) : l), h('td', { class: 'num' }, b ? h('strong', null, v) : v));
       out.appendChild(h('div', { class: 'grid two', style: 'margin-top:16px' },
         h('div', { class: 'card' }, h('h2', null, 'Shop and POS (retail)'), h('table', null, row('Gross sales', `${p.retail.gross_sales.toFixed(2)} ${cur}`), row('Discounts', p.retail.discounts.toFixed(2)), row('Refunds', p.retail.refunds.toFixed(2)), row('Net sales incl. VAT', p.retail.net_sales.toFixed(2)), row('VAT', p.retail.vat.toFixed(2)), row('Net sales excl. VAT', p.retail.net_sales_ex_vat.toFixed(2), true), row('POS excl. VAT', p.retail.by_channel.pos.net_sales_ex_vat.toFixed(2)), row('Online excl. VAT', p.retail.by_channel.online.net_sales_ex_vat.toFixed(2)))),
         h('div', { class: 'card' }, h('h2', null, 'Invoices and credit notes'), h('table', null, row('Standalone B2B invoices', String(p.b2b.standalone_invoices)), row('Standalone credit notes', String(p.b2b.standalone_credit_notes)), row('B2B net excl. VAT', e2(p.b2b.net_ex_vat_cents), true), row('B2B VAT', e2(p.b2b.vat_cents)), row('Linked invoices (not added)', `${p.b2b_linked.documents} / ${e2(p.b2b_linked.gross_documented_cents)}`), row('Credit notes issued', `${p.credit_notes.issued} / ${e2(p.credit_notes.gross_cents)}`)))));
       out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Totals (retail + standalone B2B)'), h('table', null, row('Sales excl. VAT', `${e2(p.totals.sales_ex_vat_cents)} ${cur}`, true), row('VAT collected', e2(p.totals.vat_collected_cents)), row('Sales incl. VAT', e2(p.totals.sales_incl_vat_cents), true))));
       const v = p.vat_summary;
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('h2', null, 'VAT by rate'), h('span', { class: `badge ${v.status}` }, v.status)), h('table', null, h('tr', null, ['Rate', 'Taxable base', 'VAT'].map((x, i) => h('th', { class: i ? 'num' : '' }, x))), v.combined_by_rate.map((g) => h('tr', null, h('td', null, `${g.vatRateBp / 100}%`), h('td', { class: 'num' }, e2(g.taxableCents)), h('td', { class: 'num' }, e2(g.vatCents))))), v.retail_unclassified ? h('div', { class: 'banner warn small', style: 'margin-top:10px' }, `Unavailable: ${v.retail_unclassified.lines} retail line(s) have no captured VAT rate (base ${e2(v.retail_unclassified.taxableCents)}, VAT ${e2(v.retail_unclassified.vatCents)}). They are not spread across rates.`) : null, v.b2b.by_treatment.filter((x) => x.exemptOrReverseCharge).map((x) => h('div', { class: 'small' }, `B2B ${REGIME[x.regime] || x.regime}: base ${e2(x.taxableCents)} (no VAT)`))));
+      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('h2', null, 'VAT by rate'), h('span', { class: `badge ${v.status}` }, v.status)), h('table', null, h('tr', null, ['Rate', 'Taxable base', 'VAT'].map((x, i) => h('th', { class: i ? 'num' : '' }, x))), v.combined_by_rate.map((g) => h('tr', null, h('td', null, `${g.vatRateBp / 100}%`), h('td', { class: 'num' }, e2(g.taxableCents)), h('td', { class: 'num' }, e2(g.vatCents))))), v.retail_unclassified ? h('div', { class: 'banner warn small', style: 'margin-top:10px' }, tt('Unavailable: {0} retail line(s) have no captured VAT rate (base {1}, VAT {2}). They are not spread across rates.', v.retail_unclassified.lines, e2(v.retail_unclassified.taxableCents), e2(v.retail_unclassified.vatCents))) : null, v.b2b.by_treatment.filter((x) => x.exemptOrReverseCharge).map((x) => h('div', { class: 'small' }, tt('B2B {0}: base {1} (no VAT)', tr(REGIME[x.regime] || x.regime), e2(x.taxableCents))))));
       const ps = p.payment_status_of_period_invoices;
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payment status of B2B invoices in the period'), h('table', null, Object.entries(ps).map(([k, x]) => row(k.replace('_', ' '), `${x.count} invoice(s) - ${e2(x.cents)}`)))));
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, `Anomalies (${p.anomalies.length})`), p.anomalies.length ? h('ul', { class: 'plain' }, p.anomalies.map((a) => h('li', null, `[${a.severity}] ${human(a.code)} - ${a.detail}`))) : h('div', { class: 'muted' }, 'None detected.')));
+      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payment status of B2B invoices in the period'), h('table', null, Object.entries(ps).map(([k, x]) => row(k.replace('_', ' '), tt('{0} invoice(s) - {1}', x.count, e2(x.cents)))))));
+      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, tt('Anomalies ({0})', p.anomalies.length)), p.anomalies.length ? h('ul', { class: 'plain' }, p.anomalies.map((a) => h('li', null, `[${a.severity}] ${human(a.code)} - ${a.detail}`))) : h('div', { class: 'muted' }, 'None detected.')));
       out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Downloads'), h('div', { class: 'actions' }, r.downloads.map((d) => h('a', { class: 'btn', href: d.url }, d.name.replace(/^accountant-pack_[\d-]+_[\d-]+/, '').replace(/^_/, '') || 'pack.json')))));
     } catch (e) { fail(e, out); }
   }
@@ -745,7 +752,7 @@ async function viewSettings() {
   main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Your company (seller)'), h('div', { class: 'row r2' }, inp(s.seller, 'name', 'Legal name'), inp(s.seller, 'email', 'Finance email')), h('div', { class: 'row r2' }, inp(s.seller, 'vatNumber', 'VAT number', { ph: 'BE0123456789' }), inp(s.seller, 'enterpriseNumber', 'Enterprise number', { ph: '0123.456.789' })), h('div', { class: 'row r2' }, inp(s.seller.address, 'street', 'Street and number'), inp(s.seller.address, 'postalCode', 'Postal code')), h('div', { class: 'row r2' }, inp(s.seller.address, 'city', 'City'), inp(s.seller.address, 'countryCode', 'Country (2 letters)')), h('div', { class: 'row r2' }, inp(s.seller, 'iban', 'IBAN'), inp(s.seller, 'bic', 'BIC (optional)'))));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'VAT and payment'), inp(st, 'rates', 'Allowed VAT rates (%)', { ph: '21, 12, 6, 0', hint: 'The rates you may choose on domestic invoices. You decide these; nothing is assumed.' }), h('div', { class: 'row r3' }, inp(s.defaults, 'paymentTermsDays', 'Default payment terms (days)'), inp(s.defaults, 'currency', 'Currency'), sel(s.defaults, 'language', 'Default language', [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']])), inp(s.defaults, 'paymentTerms', 'Payment terms text'), inp(s.branding, 'paymentInstructions', 'Extra payment instructions'), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'checkbox', checked: s.branding.structuredCommunication, on: { change: (e) => { s.branding.structuredCommunication = e.target.checked; } } }), 'Print a Belgian structured communication (+++xxx/xxxx/xxxxx+++)')));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Numbering'), h('div', { class: 'row r4' }, inp(s.numbering.invoice, 'prefix', 'Invoice prefix'), inp(s.numbering.credit_note, 'prefix', 'Credit note prefix'), inp(s.numbering.quote, 'prefix', 'Quote prefix'), inp(s.numbering.invoice, 'pad', 'Digits')), inp(s.numbering, 'format', 'Format', { hint: 'Use {prefix}, {year} and {seq}, e.g. {prefix}-{year}-{seq} gives INV-2026-0001. Numbers are assigned when a document is issued and never skip.' })));
-  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, `Logo (PNG or JPEG, max 400 KB)${s.branding.hasLogo ? ' - a logo is set' : ''}`), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
+  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, tt('Logo (PNG or JPEG, max 400 KB)') + (s.branding.hasLogo ? ' - ' + tt('a logo is set') : '')), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'registry', 'Belgian company register (primary)', [['cbeapi', 'CBEAPI: official KBO/BCE data (needs CBEAPI_KEY)'], ['none', 'Off']]), sel(s.companySearch, 'provider', 'Secondary name search (if the register finds nothing)', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
   main.appendChild(h('div', { class: 'actions', style: 'margin-top:16px' }, h('button', { class: 'primary', on: { click: async () => { try {
     const num = (v) => (v === '' || v === null ? undefined : Number(v));

@@ -261,3 +261,10 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 @container (max-width: 560px) {
   .lrow { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; margin: 10px 0; padding: 12px; box-shadow: var(--shadow-sm); }
 }
+
+/* UI language switch */
+.langswitch { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(255,255,255,.12); align-self: flex-start; margin: 0 0 10px; }
+.langswitch button { border: 0; background: transparent; color: rgba(255,255,255,.75); padding: 4px 9px; font-size: 12px; font-weight: 650; border-radius: 7px; }
+.langswitch button.on { background: #fff; color: #0f2a52; } .langswitch button:hover { box-shadow: none; color: #fff; } .langswitch button.on:hover { color: #0f2a52; }
+.login .langswitch { background: #eef1f6; margin: 0; } .login .langswitch button { color: #51607a; } .login .langswitch button.on { background: #0f2a52; color: #fff; }
+@media (max-width: 900px) { .langswitch { margin: 0; } }
