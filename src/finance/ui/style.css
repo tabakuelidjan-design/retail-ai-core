@@ -65,3 +65,7 @@ iframe.pdf { width: 100%; height: 720px; border: 1px solid var(--line); border-r
   .shell { grid-template-columns: 1fr; } .side { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 10px; } .side .brand { width: 100%; padding-bottom: 4px; } .side .foot { display: none; }
   .main { padding: 16px; } .two, .three, .r2, .r3, .r4 { grid-template-columns: 1fr; } table { display: block; overflow-x: auto; } .totals { position: static; }
 }
+
+.searchrow { display: flex; gap: 8px; margin-top: 4px; } .bigsearch { font-size: 16px; padding: 12px 14px; }
+.result { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; white-space: normal; }
+.result:hover, .result:focus { border-color: var(--accent); background: #faf8f4; } .rname { font-weight: 600; }

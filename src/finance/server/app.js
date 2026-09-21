@@ -13,7 +13,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { buildAccountantPack } from '../accountant-pack.js';
-import { createCompanyLookup, createViesProvider, ManualProvider } from '../company.js';
+import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
+import { NoSearchProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
@@ -411,6 +412,29 @@ export function createFinanceApp(deps) {
     const r = await createCompanyLookup(providers).lookup(q);
     const fallback = r.status !== 'FOUND';
     json(ctx.res, 200, { status: r.status, source: r.source ?? null, reason: r.reason ?? null, company: r.company ? { name: r.company.name, kind: 'business', vatNumber: r.company.vatNumber, enterpriseNumber: r.company.enterpriseNumber, address: r.company.address, source: r.company.source } : null, manualEntryAvailable: true, message: fallback ? 'No official data was returned. You can enter the company manually.' : 'Official data found: check it, then save.', provider: settings.companyLookup.provider });
+  });
+
+  // ---------- one company search (directory + VIES + name-search provider) ----------
+  const searchFor = (settings, svc) => {
+    const vies = deps.lookupProviders ? deps.lookupProviders(settings) : settings.companyLookup.provider === 'vies' ? [createViesProvider(), ManualProvider] : [ManualProvider];
+    const nameProvider = deps.companySearchProvider ? deps.companySearchProvider(settings) : settings.companySearch.provider === 'peppol_directory' ? createPeppolDirectoryProvider() : NoSearchProvider;
+    const directorySearch = async (q) => {
+      const t = String(q).toLowerCase();
+      const digits = t.replace(/\D/g, '');
+      return (await svc.listCompanies()).filter((c) => c.name.toLowerCase().includes(t) || (digits.length >= 9 && `${c.vatNumber ?? ''}${c.enterpriseNumber ?? ''}`.replace(/\D/g, '').includes(digits)));
+    };
+    return createCompanySearch({ numberLookup: createCompanyLookup(vies), nameProvider, directorySearch });
+  };
+  on('POST', '/api/companies/search', async (ctx) => {
+    const { svc, settings } = await servicesFor();
+    const query = sanitizeText(ctx.body?.query, 80) ?? '';
+    json(ctx.res, 200, { ...(await searchFor(settings, svc).search(query)), providers: { numberLookup: settings.companyLookup.provider, nameSearch: settings.companySearch.provider } });
+  });
+  on('POST', '/api/companies/resolve', async (ctx) => {
+    const { svc, settings } = await servicesFor();
+    const n = normalizeBelgianNumber(sanitizeText(ctx.body?.enterpriseNumber, 30));
+    if (!n.ok) fields([{ field: 'enterpriseNumber', code: `BELGIAN_NUMBER_${n.reason}` }]);
+    json(ctx.res, 200, await searchFor(settings, svc).resolve({ enterpriseNumber: n.digits, name: sanitizeText(ctx.body?.name, 120), status: sanitizeText(ctx.body?.status, 80) }));
   });
 
   // ---------- orders (linking) ----------

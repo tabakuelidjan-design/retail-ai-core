@@ -306,7 +306,7 @@ const read = (f) => readFileSync(new URL(f, finDir), 'utf8');
 
 test('ISOLATION: only company.js may touch the network; credit-risk is imported by nothing; no provider names in the core', () => {
   const code = (f) => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.deepEqual(finFiles.filter((f) => /\bfetch\(|fetchImpl\(/.test(code(f))).sort(), ['company.js']);
+  assert.deepEqual(finFiles.filter((f) => /\bfetch\(|fetchImpl\(/.test(code(f))).sort(), ['company-search.js', 'company.js']); // the two provider adapters, nothing else
   for (const f of finFiles.filter((x) => x !== 'credit-risk.js')) assert.ok(!/credit-risk/.test(read(f)), `${f} must not import the credit-risk placeholder`);
   for (const f of ['document.js', 'service.js', 'vat.js', 'money.js', 'numbering.js', 'linking.js', 'receivables.js', 'accountant-pack.js']) assert.ok(!/companyweb|creditsafe|billit|peppol\.js|shopify/i.test(read(f).replace(/\/\/.*$/gm, '')), `${f} is provider-neutral`);
 });

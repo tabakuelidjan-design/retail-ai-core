@@ -17,7 +17,8 @@ export const DEFAULT_SETTINGS = {
   defaults: { currency: 'EUR', language: 'fr', paymentTermsDays: 30, paymentTerms: null },
   numbering: { invoice: { prefix: 'INV', pad: 4 }, credit_note: { prefix: 'CN', pad: 4 }, quote: { prefix: 'QT', pad: 4 }, format: '{prefix}-{year}-{seq}' },
   branding: { logoPath: null, footer: null, accent: '#183247', structuredCommunication: true, paymentInstructions: null },
-  companyLookup: { provider: 'vies' },
+  companyLookup: { provider: 'vies' }, // VAT-number lookup: 'vies' | 'manual'
+  companySearch: { provider: 'peppol_directory' }, // company-name search: 'peppol_directory' | 'none'
   peppol: { defaultBuyerReference: 'document_number' },
   linking: { dupWindowDays: 3, toleranceCents: 1 },
   dashboard: { dueSoonDays: 7 },
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS = {
 
 const LANGS = ['fr', 'nl', 'en'];
 const PROVIDERS = ['manual', 'vies'];
+const SEARCH_PROVIDERS = ['peppol_directory', 'none'];
 const PLACEHOLDERS = ['{prefix}', '{year}', '{seq}'];
 
 /** Remove control characters, collapse nothing else, cap the length. Free text is also escaped at render time and by the PDF library. */
@@ -118,6 +120,7 @@ export function validateSettings(input, current = DEFAULT_SETTINGS) {
     // logoPath is set ONLY by the logo upload endpoint, never accepted from the client (no arbitrary file reads).
   }
   if (src.companyLookup && 'provider' in src.companyLookup) { out.companyLookup.provider = src.companyLookup.provider; if (!PROVIDERS.includes(src.companyLookup.provider)) err('companyLookup.provider', 'PROVIDER_INVALID'); }
+  if (src.companySearch && 'provider' in src.companySearch) { out.companySearch.provider = src.companySearch.provider; if (!SEARCH_PROVIDERS.includes(src.companySearch.provider)) err('companySearch.provider', 'PROVIDER_INVALID'); }
   if (src.peppol && 'defaultBuyerReference' in src.peppol) out.peppol.defaultBuyerReference = sanitizeText(src.peppol.defaultBuyerReference, 60);
   if (src.dashboard && 'dueSoonDays' in src.dashboard) { out.dashboard.dueSoonDays = src.dashboard.dueSoonDays; if (!Number.isInteger(src.dashboard.dueSoonDays) || src.dashboard.dueSoonDays < 1 || src.dashboard.dueSoonDays > 60) err('dashboard.dueSoonDays', 'DAYS_INVALID'); }
   return { settings: out, errors };
