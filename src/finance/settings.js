@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
   accountant: { name: '', email: '', preferredFormat: 'zip', software: '', packageName: '' }, // merchant-local: never generic repo data
   stock: { mode: 'off', locationId: null }, // stock synchronisation of standalone B2B sales: 'off' | 'dry_run' | 'live'
   companySearch: { registry: 'cbeapi', provider: 'peppol_directory' }, // registry (primary): 'cbeapi' | 'none'; provider (secondary name search): 'peppol_directory' | 'none'
-  peppol: { defaultBuyerReference: 'document_number' },
+  peppol: { defaultBuyerReference: 'document_number', topology: { receiverAccessPoint: 'unknown', mode: 'undecided', confirmedWith: '', confirmedOn: '', note: '' } },
   linking: { dupWindowDays: 3, toleranceCents: 1 },
   dashboard: { dueSoonDays: 7 },
 };
@@ -145,6 +145,13 @@ export function validateSettings(input, current = DEFAULT_SETTINGS) {
   if (src.companySearch && 'registry' in src.companySearch) { out.companySearch.registry = src.companySearch.registry; if (!REGISTRY_PROVIDERS.includes(src.companySearch.registry)) err('companySearch.registry', 'PROVIDER_INVALID'); }
   if (src.companySearch && 'provider' in src.companySearch) { out.companySearch.provider = src.companySearch.provider; if (!SEARCH_PROVIDERS.includes(src.companySearch.provider)) err('companySearch.provider', 'PROVIDER_INVALID'); }
   if (src.peppol && 'defaultBuyerReference' in src.peppol) out.peppol.defaultBuyerReference = sanitizeText(src.peppol.defaultBuyerReference, 60);
+  if (src.peppol && src.peppol.topology && typeof src.peppol.topology === 'object') {
+    const t = src.peppol.topology;
+    if ('receiverAccessPoint' in t) { out.peppol.topology.receiverAccessPoint = t.receiverAccessPoint; if (!['unknown', 'codabox', 'other'].includes(t.receiverAccessPoint)) err('peppol.topology.receiverAccessPoint', 'VALUE_INVALID'); }
+    if ('mode' in t) { out.peppol.topology.mode = t.mode; if (!['undecided', 'send_only', 'receive_existing', 'integrated'].includes(t.mode)) err('peppol.topology.mode', 'VALUE_INVALID'); }
+    for (const k of ['confirmedWith', 'note']) if (k in t) out.peppol.topology[k] = sanitizeText(t[k], 200) ?? '';
+    if ('confirmedOn' in t) { const d = sanitizeText(t.confirmedOn, 10) ?? ''; out.peppol.topology.confirmedOn = d; if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) err('peppol.topology.confirmedOn', 'DATE_INVALID'); }
+  }
   if (src.dashboard && 'dueSoonDays' in src.dashboard) { out.dashboard.dueSoonDays = src.dashboard.dueSoonDays; if (!Number.isInteger(src.dashboard.dueSoonDays) || src.dashboard.dueSoonDays < 1 || src.dashboard.dueSoonDays > 60) err('dashboard.dueSoonDays', 'DAYS_INVALID'); }
   return { settings: out, errors };
 }
