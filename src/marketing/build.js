@@ -9,6 +9,7 @@ import { adsProvenance, paidReadiness, summarizeAds } from './paid.js';
 import { detectMarketingIssues } from './quality.js';
 import { NOT_CAUSAL } from './provenance.js';
 import { summarizeSearch } from './search.js';
+import { buildSearchVisibility } from './search-visibility.js';
 import { assessTraffic, buildLandingTrafficFacts, buildTrafficFacts } from './traffic.js';
 
 const isOnline = (c) => c.channel !== 'pos' && c.channel !== 'other_channel';
@@ -81,11 +82,17 @@ export function buildMarketingFacts({ ledger, data, traffic, ads, search, now, t
 
   // ---- search ----
   let searchBlock = { status: 'ABSENT', reason: 'No search-visibility data supplied.' };
-  if (search) { searchBlock = summarizeSearch(search.search, cfg); gates.search_branded_split = searchBlock.branded_split_gate; }
+  if (search) {
+    searchBlock = summarizeSearch(search.search, cfg);
+    gates.search_branded_split = searchBlock.branded_split_gate;
+    const sessionNonTargetShare = trafficBlock?.market?.non_target_share ?? trafficBlock?.gate?.market?.non_target_share ?? null;
+    searchBlock.visibility = buildSearchVisibility(search.search, cfg, { products: data.products, sessionNonTargetShare });
+    gates.search_visibility = searchBlock.visibility.gates.query_facts;
+  }
   else gates.search_branded_split = { status: 'GATED', reasons: ['NO_SEARCH_FACTS'] };
 
   const windowOrderIds = new Set(windowFacts(ledger, avail).orders.map((o) => o.id));
-  const issues = detectMarketingIssues({ classified, windowOrderIds, traffic: trafficCtx, ads: adsCtx, search: search ? { search: search.search, issues: search.issues } : null, cfg });
+  const issues = detectMarketingIssues({ classified, windowOrderIds, traffic: trafficCtx, ads: adsCtx, search: search ? { search: search.search, issues: search.issues } : null, cfg, visibility: searchBlock.visibility ?? null });
 
   const cov = channelsByWindow.available_window.attribution_coverage;
   return {

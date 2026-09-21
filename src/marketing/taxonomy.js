@@ -58,15 +58,31 @@ export function classifyOrder(order, touches, cfg) {
   return out('unknown', 'no_rule_matched', 'unavailable');
 }
 
+/** A rule matches a lower-cased, trimmed query. Rules are explicit merchant data: { type: 'contains' | 'equals' | 'starts_with', value }. */
+export function matchesRule(query, rule) {
+  const q = lc(query);
+  const v = lc(rule?.value);
+  if (!q || !v) return false;
+  if (rule.type === 'equals') return q === v;
+  if (rule.type === 'starts_with') return q.startsWith(v);
+  return q.includes(v);
+}
+
 /** Only an explicit merchant rule can call a search query branded; without rules everything is 'unclassified'. */
 export function classifyQuery(query, brandRules) {
   if (!brandRules || brandRules.length === 0) return 'unclassified';
-  const q = lc(query);
-  if (!q) return 'unclassified';
-  const hit = brandRules.some((r) => {
-    const v = lc(r.value);
-    if (!v) return false;
-    return r.type === 'equals' ? q === v : r.type === 'starts_with' ? q.startsWith(v) : q.includes(v);
-  });
-  return hit ? 'branded' : 'non_branded';
+  return brandRules.some((r) => matchesRule(query, r)) ? 'branded' : 'non_branded';
+}
+
+/**
+ * Intent exists only through explicit rules (no model, no guessing). A query can match several intents;
+ * `intent` is the first match in the configured precedence order, or 'unclassified' when no rule matches
+ * (or none are configured - then `configured` is false and the intent split is gated).
+ */
+export function classifyIntent(query, searchCfg) {
+  const rules = searchCfg.intentRules ?? {};
+  const configured = Object.values(rules).some((r) => Array.isArray(r) && r.length > 0);
+  const intents = Object.keys(rules).filter((k) => (rules[k] ?? []).some((r) => matchesRule(query, r)));
+  const intent = (searchCfg.intentPrecedence ?? Object.keys(rules)).find((k) => intents.includes(k)) ?? 'unclassified';
+  return { intents, intent, configured };
 }

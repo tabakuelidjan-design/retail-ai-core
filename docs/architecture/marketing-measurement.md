@@ -63,7 +63,7 @@ When gated the value is `null` with the reasons; nothing is estimated.
 
 `traffic` `{ source_system, method: api|manual_export, scope: online_store|all_channels, window{start,end exclusive}, dimensions[{dimension: channel|landing_page|country, complete, rows[{key, sessions, completed_checkout_sessions?}]}] }`
 `ads` `{ source_system, platform, account_ref?, currency, window, rows[{date?, campaign_id, campaign_name?, ad_group_id?, search_term?, impressions, clicks, cost, conversions?, conversion_value?}] }`
-`search` `{ source_system, window, rows[{query, page?, impressions, clicks, position, country?, device?}] }`
+`search` (v1, still accepted) `{ source_system, window, rows[{query, page?, impressions, clicks, position, country?, device?}] }`; **v2** below.
 Files go in `data/local/marketing/` (gitignored). A `complete: false` dimension means absence is **not** evidence of zero.
 
 ## What future connectors would add
@@ -75,3 +75,19 @@ Files go in `data/local/marketing/` (gitignored). A `complete: false` dimension 
 ## Not built
 
 Recommendations, connectors, first-party tracking, multi-touch or modelled attribution, incrementality, external trend data, dashboards.
+
+## Phase 2D.2 — Search visibility
+
+Facts only (no recommendations, no content generation, no bidding). Built by `src/marketing/search-visibility.js` from the `search` import; surfaced under `search.visibility` in the marketing report.
+
+**v2 import contract** `{ source_system, method, window{start,end exclusive}, filters{search_type, country, device, ...}, reported_totals{clicks, impressions}, query_rows[], query_rows_complete, query_rows_omitted{count,clicks,impressions}, query_page_rows[{query,page,...}], page_rows[], page_rows_complete, page_rows_omitted, country_rows[], device_rows[] }`. `filters` is what the source was pulled with and is copied into every fact's provenance (`FILTERS_NOT_STATED` if absent). Query-page rows are pulled per page and are **not additive** with the query table.
+
+**Facts:** coverage (reported totals vs what the query/page tables contain; anonymised share); query facts (CTR recomputed, impression-weighted position, class, intent); page facts (paths normalised, query-string/locale variants merged, product mapped by handle; per-page query counts are `PARTIAL`, or `UNAVAILABLE` if no query-page rows); query-page pairs; geography (target-market share of clicks, alongside the store-session non-target share); devices; concentration (top-1 / top-N share, HHI).
+
+**Classification is explicit rules only.** `marketing.brandRules` (branded / non-branded) and `marketing.search.intentRules` (`local`, `product`, `informational`, resolved by `intentPrecedence`). No rules = `unclassified` and the split gate is `GATED`. Brand share is over classified query rows only; anonymised queries cannot be classified, so it is also given as a share of all site clicks with a `not_classifiable` part.
+
+**Opportunity signals** (rule-based facts; each carries the thresholds that fired and `recommendation: null`): `HIGH_IMPRESSIONS_LOW_CTR`, `POSITION_BAND_MEANINGFUL_IMPRESSIONS`, `PRODUCT_PAGE_VISIBLE_WEAK_CTR`, `NON_BRAND_QUERY_WITH_CLICKS`. Brand-sensitive signals are gated when no brand rules exist. Thresholds live in `marketing.search.opportunity`.
+
+**Data-quality rules:** `MKT_SEARCH_QUERY_COVERAGE_LOW` (most clicks come from anonymised queries), `MKT_SEARCH_GEOGRAPHY_DISAGREES_WITH_SESSIONS` (search and store sessions disagree on the non-target share).
+
+**Phase 3 contract** (`src/marketing/phase3-contract.js`): `phase3Inputs(facts)` returns conversion traffic **only** when `gates.traffic_conversion` is OPEN; otherwise `GATED` with reasons and no numbers. Search facts are consumable only as observations with provenance; they are never a conversion input.

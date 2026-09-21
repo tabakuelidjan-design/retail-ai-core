@@ -4,6 +4,7 @@
 export const MARKETING_RULE_CODES = [
   'MKT_UNATTRIBUTED_ONLINE_ORDERS', 'MKT_MISSING_UTM', 'MKT_SOURCE_MISMATCH', 'MKT_TRAFFIC_WINDOW_INCOMPATIBLE',
   'MKT_TRAFFIC_MARKET_MISMATCH', 'MKT_DUPLICATE_CAMPAIGN_ID', 'MKT_MISSING_SPEND', 'MKT_PARTIAL_CONNECTOR_COVERAGE',
+  'MKT_SEARCH_QUERY_COVERAGE_LOW', 'MKT_SEARCH_GEOGRAPHY_DISAGREES_WITH_SESSIONS',
 ];
 
 const issue = (rule_code, severity, summary, evidence) => ({ rule_code, severity, summary, evidence });
@@ -13,7 +14,7 @@ const round4 = (x) => Math.round(x * 10000) / 10000;
 /**
  * @param {object} p { classified: Map, windowOrderIds: Set, traffic: {traffic,issues,gate,crossCheck}|null, ads: {ads,issues}|null, search: {search,issues}|null, cfg }
  */
-export function detectMarketingIssues({ classified, windowOrderIds, traffic, ads, search, cfg }) {
+export function detectMarketingIssues({ classified, windowOrderIds, traffic, ads, search, cfg, visibility = null }) {
   const out = [];
   const m = cfg.marketing;
   const inWin = [...classified.entries()].filter(([id]) => windowOrderIds.has(id)).map(([, c]) => c);
@@ -77,6 +78,19 @@ export function detectMarketingIssues({ classified, windowOrderIds, traffic, ads
 
   const paidOrders = online.filter((c) => c.classification.channel.startsWith('paid_')).length;
   if (paidOrders > 0 && !ads) out.push(issue('MKT_MISSING_SPEND', 'warning', `${paidOrders} orders are attributed to paid channels but no ad spend data exists.`, { paid_attributed_orders: paidOrders }));
+
+  if (visibility) {
+    const a = visibility.coverage.anonymised_queries;
+    if (a && a.share_of_clicks > 1 - cfg.marketing.search.minQueryCoverage) {
+      out.push(issue('MKT_SEARCH_QUERY_COVERAGE_LOW', 'warning', `${Math.round(a.share_of_clicks * 100)}% of search clicks come from queries the source does not list (anonymised): query-level facts describe the minority.`, { anonymised_share_of_clicks: a.share_of_clicks, anonymised_share_of_impressions: a.share_of_impressions, min_query_coverage: cfg.marketing.search.minQueryCoverage }));
+    } else if (!a) {
+      out.push(issue('MKT_SEARCH_QUERY_COVERAGE_LOW', 'info', 'Query-table coverage of the site totals cannot be computed (no reported totals or no omitted-tail summary).', { reported_totals: visibility.coverage.reported_totals !== null }));
+    }
+    const g = visibility.geography;
+    if (g.search_non_target_share_of_clicks !== null && g.session_non_target_share !== null && Math.abs(g.session_non_target_share - g.search_non_target_share_of_clicks) > cfg.marketing.search.maxTargetMarketGap) {
+      out.push(issue('MKT_SEARCH_GEOGRAPHY_DISAGREES_WITH_SESSIONS', 'warning', 'Search clicks are mostly from target markets while store sessions are not (or vice versa): session traffic includes visits search does not explain.', { search_non_target_share_of_clicks: g.search_non_target_share_of_clicks, session_non_target_share: g.session_non_target_share, max_gap: cfg.marketing.search.maxTargetMarketGap }));
+    }
+  }
 
   const absent = [!traffic && 'traffic', !ads && 'ads', !search && 'search'].filter(Boolean);
   if (absent.length) {
