@@ -19,6 +19,9 @@ import { createStockService } from '../stock.js';
 import { settlement as settlementOf } from '../document.js';
 import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js';
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
+import { buildActions } from '../actions.js';
+import { connectorStatus } from '../connectors.js';
+import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors } from '../inbox.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
@@ -26,7 +29,6 @@ import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanV
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
-import { prepareTransmission } from '../peppol.js';
 import { buildReceivables } from '../receivables.js';
 import { loadDocsForReports, packFileBuffers } from '../reports.js';
 import { createFinanceService } from '../service.js';
@@ -171,7 +173,7 @@ export function createFinanceApp(deps) {
       sourceOrder: source, actions: actionsFor(doc, v.settlement ?? null, credited),
       nextNumber: !doc.lockedAt && doc.status !== 'CANCELLED' ? await svc.peekNextNumber(doc.type, doc.issueDate ?? today).catch(() => null) : null,
       revenueNote: doc.revenueBasis === 'linked_source_order' ? 'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.' : doc.revenueBasis === 'standalone_b2b' ? 'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.' : null,
-      peppol: { status: 'NOT_CONFIGURED', transmitted: false, note: 'No Peppol provider is configured. Nothing is sent externally.' },
+      peppol: { ...(peppolStateOf(events) ?? { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SENT', 'DELIVERED'].includes(peppolStateOf(events)?.status), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
       sellerReady: missingForInvoicing(settings).length === 0,
     };
   }
@@ -473,6 +475,71 @@ export function createFinanceApp(deps) {
     const r = await picker().select(id, { allowedRatesBp: settings.vat.allowedRatesBp });
     if (!r.found) throw new HttpError(404, 'PRODUCT_NOT_FOUND');
     json(ctx.res, 200, r);
+  });
+
+  // ---------- Finance Action Center: what to do next, from facts the workspace already holds ----------
+  on('GET', '/api/actions', async (ctx) => {
+    const { svc, settings, stock } = await servicesFor();
+    const docs = await loadDocsForReports(store, merchantId);
+    const today = clock.today();
+    const rec = buildReceivables(docs, { today, dueSoonDays: settings.dashboard.dueSoonDays });
+    const drafts = docs.filter(({ doc }) => ['DRAFT', 'READY_FOR_APPROVAL'].includes(doc.status) && doc.type !== 'quote').slice(0, 40);
+    let draftsMissingVat = 0;
+    for (const { doc } of drafts) { const r = await svc.readiness(doc).catch(() => null); if (r && r.errors.some((e) => /VAT/.test(String(e)))) draftsMissingVat += 1; }
+    let pack = null;
+    if (retail) {
+      try {
+        const y = Number(today.slice(0, 4)); const q = Math.floor((Number(today.slice(5, 7)) - 1) / 3); const py = q === 0 ? y - 1 : y; const pq = q === 0 ? 3 : q - 1;
+        const p = await computePack(`${py}-${String(pq * 3 + 1).padStart(2, '0')}-01`, new Date(Date.UTC(py, pq * 3 + 3, 0)).toISOString().slice(0, 10));
+        pack = { status: 'OK', period: p.period, completeness: p.completeness.status, reconciliation: p.reconciliation.status, anomalies: p.anomalies.length, orders: p.retail.orders };
+      } catch { pack = null; }
+    }
+    const actions = buildActions({
+      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: await inboxFor().counts(), stock: await stock.status().catch(() => null),
+      draftsMissingVat, awaitingApproval: docs.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL' && doc.type !== 'quote').length, quotesToConvert: docs.filter(({ doc }) => doc.type === 'quote' && doc.status === 'ACCEPTED').length,
+      pack, settingsMissing: missingForInvoicing(settings).length,
+    });
+    json(ctx.res, 200, { asOf: today, currency: settings.defaults.currency, actions: actions.map((a) => ({ ...a, amount: a.cents != null ? money(a.cents, settings.defaults.language) : null })) });
+  });
+
+  on('GET', '/api/connectors', async (ctx) => json(ctx.res, 200, { connectors: connectorStatus({ accountingExport: deps.accountingExport, bankReconciliation: deps.bankReconciliation, customerPortal: deps.customerPortal, mail: mailer(), accessPoint: accessPoint(), inbox: INBOX_ADAPTERS }) }));
+
+  // ---------- Peppol: provider-neutral states and topology. Nothing is transmitted without a configured Access Point AND the merchant's approval. ----------
+  const accessPoint = () => deps.accessPoint ?? NullAccessPointAdapter;
+  const apConfigured = () => accessPoint().name !== 'none';
+  const peppolStateOf = (events) => { const last = [...events].reverse().find((e) => /^PEPPOL_/.test(e.action)); return last ? { status: last.action.replace('PEPPOL_', ''), at: last.at, providerMessageId: last.detail?.providerMessageId ?? null, detail: last.detail?.detail ?? null } : null; };
+  on('GET', '/api/peppol/status', async (ctx) => {
+    const settings = await settingsIo.load();
+    json(ctx.res, 200, {
+      outgoing: { configured: apConfigured(), adapter: accessPoint().name }, incoming: { configured: false, note: 'RECEIVING_DEPENDS_ON_CONFIRMED_TOPOLOGY' }, states: PEPPOL_STATUSES, topology: settings.peppol.topology,
+      questions: ['WHO_OWNS_THE_RECEIVING_REGISTRATION', 'IS_CODABOX_VOILA_THE_RECEIVER', 'DOES_IT_EXPOSE_AN_EXPORT_OR_API', 'SEND_ONLY_OR_INTEGRATE_EXISTING'],
+      warning: 'DO_NOT_REGISTER_A_SECOND_RECEIVING_ACCESS_POINT_BEFORE_THE_TOPOLOGY_IS_CONFIRMED', decided: settings.peppol.topology.mode !== 'undecided',
+    });
+  });
+  const peppolDoc = async (ctx) => { const { svc, settings } = await servicesFor(); const doc = await svc.get(idParam(ctx.m[1])); return { svc, settings, doc }; };
+  on('POST', `/api/documents/${P}/peppol/send`, async (ctx) => {
+    const { svc, settings, doc } = await peppolDoc(ctx);
+    if (ctx.body?.approve !== true) throw new HttpError(422, 'APPROVAL_REQUIRED');
+    if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
+    if (settings.peppol.topology.mode === 'undecided') throw new HttpError(409, 'PEPPOL_TOPOLOGY_NOT_CONFIRMED');
+    if (!doc.lockedAt || !['invoice', 'credit_note'].includes(doc.type)) throw new HttpError(409, 'ONLY_ISSUED_INVOICES_AND_CREDIT_NOTES_CAN_BE_SENT');
+    const events = await svc.events(doc.id);
+    if (peppolStateOf(events) && ['SENT', 'DELIVERED'].includes(peppolStateOf(events).status)) throw new HttpError(409, 'ALREADY_SENT_VIA_PEPPOL');
+    const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await svc.get(doc.relatedDocumentId).catch(() => null))?.number : null;
+    const prepared = prepareTransmission(doc, { originalNumber: original, defaultBuyerReference: settings.peppol.defaultBuyerReference });
+    if (prepared.status !== 'PREPARED') throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: prepared.errors, transmitted: false });
+    await audit({ at: clock.now(), action: 'PEPPOL_SEND_APPROVED', detail: { documentId: doc.id, number: doc.number } });
+    let r; try { r = await accessPoint().submit({ payloadXml: prepared.payloadXml, sender: prepared.sender, receiver: prepared.receiver, documentNumber: doc.number }); } catch (e) { await store.appendEvent({ ...transmissionEvent(doc.id, merchantId, { status: 'FAILED', at: clock.now(), detail: String(e.message).slice(0, 120) }) }); throw new HttpError(502, 'PEPPOL_SEND_FAILED'); }
+    await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: 'SENT', at: clock.now(), providerMessageId: r.providerMessageId ?? null }));
+    json(ctx.res, 200, { status: 'SENT', providerMessageId: r.providerMessageId ?? null });
+  });
+  on('POST', `/api/documents/${P}/peppol/refresh`, async (ctx) => {
+    const { svc, doc } = await peppolDoc(ctx);
+    if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
+    const cur = peppolStateOf(await svc.events(doc.id)); if (!cur?.providerMessageId) throw new HttpError(409, 'NOTHING_SENT_YET');
+    const s = await accessPoint().fetchStatus(cur.providerMessageId);
+    if (PEPPOL_STATUSES.includes(s.status) && s.status !== cur.status) await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: s.status, at: s.at ?? clock.now(), providerMessageId: cur.providerMessageId, detail: s.detail ?? null }));
+    json(ctx.res, 200, { status: s.status });
   });
 
   // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------
