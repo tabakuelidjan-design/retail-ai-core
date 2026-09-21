@@ -1,0 +1,76 @@
+// In-memory finance store: the reference implementation of the store interface, used by tests. It enforces the same
+// rules the database triggers enforce (locked documents cannot change commercially, audit events and payments are
+// append-only, one active invoice per source order, gapless per-year numbering), so tests exercise real invariants.
+
+import { randomUUID } from 'node:crypto';
+import { FinanceError } from './document.js';
+
+const clone = (o) => structuredClone(o);
+
+export function createMemoryStore() {
+  const docs = new Map();
+  const events = [];
+  const payments = [];
+  const seqs = new Map();
+  const companies = new Map();
+  const supplierInvoices = [];
+
+  return {
+    newId: () => randomUUID(),
+
+    async getDocument(id) { const d = docs.get(id); return d ? clone(d) : null; },
+
+    /** Insert or update with optimistic concurrency and the immutability rules of a locked document. */
+    async saveDocument(doc, expectedVersion = null) {
+      const prev = docs.get(doc.id);
+      if (!prev) {
+        if (doc.type === 'invoice' && doc.sourceOrderId && doc.status !== 'CANCELLED' && [...docs.values()].some((d) => d.type === 'invoice' && d.sourceOrderId === doc.sourceOrderId && d.status !== 'CANCELLED')) throw new FinanceError('SOURCE_ORDER_ALREADY_INVOICED', doc.sourceOrderId);
+        if (doc.number && [...docs.values()].some((d) => d.merchantId === doc.merchantId && d.type === doc.type && d.number === doc.number)) throw new FinanceError('DUPLICATE_DOCUMENT_NUMBER', doc.number);
+        docs.set(doc.id, clone(doc));
+        return clone(doc);
+      }
+      if (expectedVersion !== null && prev.version !== expectedVersion) throw new FinanceError('CONCURRENT_MODIFICATION', `expected v${expectedVersion}, found v${prev.version}`);
+      if (prev.lockedAt) {
+        if (doc.lockedAt !== prev.lockedAt || doc.snapshotHash !== prev.snapshotHash || doc.number !== prev.number) throw new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE');
+        for (const k of ['totals', 'lines', 'customer', 'seller', 'vat', 'issueDate', 'dueDate', 'currency', 'sourceOrderId', 'revenueBasis', 'relatedDocumentId']) if (JSON.stringify(doc[k]) !== JSON.stringify(prev[k])) throw new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', k);
+      } else if (doc.number && [...docs.values()].some((d) => d.id !== doc.id && d.merchantId === doc.merchantId && d.type === doc.type && d.number === doc.number)) throw new FinanceError('DUPLICATE_DOCUMENT_NUMBER', doc.number);
+      docs.set(doc.id, clone(doc));
+      return clone(doc);
+    },
+
+    async deleteDocument(id) {
+      const d = docs.get(id);
+      if (d?.lockedAt || d?.number) throw new FinanceError('ISSUED_DOCUMENTS_CANNOT_BE_DELETED');
+      docs.delete(id);
+    },
+
+    async listDocuments(f = {}) {
+      return [...docs.values()].filter((d) => (!f.merchantId || d.merchantId === f.merchantId) && (!f.type || d.type === f.type) && (!f.status || d.status === f.status)
+        && (f.sourceOrderId === undefined || d.sourceOrderId === f.sourceOrderId) && (f.relatedDocumentId === undefined || d.relatedDocumentId === f.relatedDocumentId)).map(clone);
+    },
+
+    async appendEvent(e) { events.push(Object.freeze({ id: randomUUID(), ...clone(e) })); },
+    async listEvents(documentId) { return events.filter((e) => e.documentId === documentId).map(clone); },
+
+    async addPayment(p) { payments.push(Object.freeze({ id: randomUUID(), ...clone(p) })); return clone(payments.at(-1)); },
+    async listPayments(documentId) { return payments.filter((p) => p.documentId === documentId).map(clone); },
+    async listPaymentsForMerchant(merchantId) { return payments.filter((p) => p.merchantId === merchantId).map(clone); },
+
+    async allocateNumber(merchantId, type, year) {
+      const k = `${merchantId}|${type}|${year}`;
+      const next = (seqs.get(k) ?? 0) + 1;
+      seqs.set(k, next);
+      return next;
+    },
+
+    async saveCompany(c) { const row = { id: c.id ?? randomUUID(), ...clone(c) }; companies.set(row.id, row); return clone(row); },
+    async getCompany(id) { const c = companies.get(id); return c ? clone(c) : null; },
+    async findCompany(merchantId, { vatNumber, enterpriseNumber }) {
+      const c = [...companies.values()].find((x) => x.merchantId === merchantId && ((vatNumber && x.vatNumber === vatNumber) || (enterpriseNumber && x.enterpriseNumber === enterpriseNumber)));
+      return c ? clone(c) : null;
+    },
+    async saveSupplierInvoice(s) { const row = { id: randomUUID(), ...clone(s) }; supplierInvoices.push(row); return clone(row); },
+    async listSupplierInvoices(merchantId) { return supplierInvoices.filter((s) => s.merchantId === merchantId).map(clone); },
+    _debug: { docs, events, payments },
+  };
+}
