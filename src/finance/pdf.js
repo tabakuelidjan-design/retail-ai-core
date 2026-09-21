@@ -11,7 +11,7 @@ const L = {
   fr: { quote: 'DEVIS', invoice: 'FACTURE', credit_note: 'NOTE DE CRÉDIT', draft: 'BROUILLON', number: 'N°', date: 'Date', due: 'Échéance', valid: 'Valable jusqu’au', customer: 'Client', vat: 'TVA', company: 'N° d’entreprise',
     desc: 'Description', qty: 'Qté', unit: 'Prix unit.', disc: 'Remise', rate: 'TVA', net: 'Montant HT', totals: 'Totaux', totalNet: 'Total HT', totalVat: 'Total TVA', totalGross: 'Total TTC', paymentDue: 'À payer',
     pay: 'Paiement', iban: 'IBAN', bic: 'BIC', ref: 'Communication', terms: 'Conditions de paiement', notes: 'Remarques', original: 'Facture d’origine', reason: 'Motif', breakdown: 'Détail TVA', taxable: 'Base', page: 'Page' },
-  nl: { quote: 'OFFERTE', invoice: 'FACTUUR', credit_note: 'CREDITNOTA', draft: 'ONTWERP', number: 'Nr.', date: 'Datum', due: 'Vervaldatum', valid: 'Geldig tot', customer: 'Klant', vat: 'BTW', company: 'Ondernemingsnr.',
+  nl: { quote: 'OFFERTE', invoice: 'FACTUUR', credit_note: 'CREDITNOTA', draft: 'CONCEPT', number: 'Nr.', date: 'Datum', due: 'Vervaldatum', valid: 'Geldig tot', customer: 'Klant', vat: 'BTW', company: 'Ondernemingsnr.',
     desc: 'Omschrijving', qty: 'Aantal', unit: 'Eenh.prijs', disc: 'Korting', rate: 'BTW', net: 'Bedrag excl.', totals: 'Totalen', totalNet: 'Totaal excl. BTW', totalVat: 'Totaal BTW', totalGross: 'Totaal incl. BTW', paymentDue: 'Te betalen',
     pay: 'Betaling', iban: 'IBAN', bic: 'BIC', ref: 'Mededeling', terms: 'Betalingsvoorwaarden', notes: 'Opmerkingen', original: 'Oorspronkelijke factuur', reason: 'Reden', breakdown: 'BTW-detail', taxable: 'Basis', page: 'Pagina' },
   en: { quote: 'QUOTE', invoice: 'INVOICE', credit_note: 'CREDIT NOTE', draft: 'DRAFT', number: 'No.', date: 'Date', due: 'Due date', valid: 'Valid until', customer: 'Customer', vat: 'VAT', company: 'Company no.',
@@ -39,7 +39,7 @@ export const money = (cents, lang = 'fr') => {
   return `${grouped}${lang === 'en' ? '.' : ','}${d}`;
 };
 /** Unit price shown with at least 2 and at most 4 decimals, exactly as entered (never rounded on the page). */
-const unitPrice = (micro, lang) => { const [i, d] = fromScaled(micro, 4).split('.'); const dec = d.replace(/0+$/, '').padEnd(2, '0'); return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'en' ? ',' : ' ')}${lang === 'en' ? '.' : ','}${dec}`; };
+export const unitPrice = (micro, lang) => { const [i, d] = fromScaled(micro, 4).split('.'); const dec = d.replace(/0+$/, '').padEnd(2, '0'); return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'en' ? ',' : ' ')}${lang === 'en' ? '.' : ','}${dec}`; };
 const pct = (bp, lang) => `${fromScaled(bp, 2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1').replace('.', lang === 'en' ? '.' : ',')}%`;
 
 function collect(doc) {
@@ -162,7 +162,12 @@ export async function renderPackSummaryPdf(pack, { branding = {}, merchantName =
   pdf.font('Helvetica-Bold').fontSize(10).fillColor(accent).text('VAT of standalone B2B documents', 50, y + 8); y = pdf.y + 4;
   pdf.font('Helvetica').fontSize(9).fillColor('#111111');
   for (const g of pack.vat_by_rate_b2b) { pdf.text(`${g.vatRateBp / 100}%   base ${formatCents(g.taxableCents)}   VAT ${formatCents(g.vatCents)}`, 50, y); y += 12; }
-  pdf.text(`Retail VAT by rate: ${pack.retail.vat_by_rate}`, 50, y + 2); y = pdf.y + 8;
+  pdf.font('Helvetica-Bold').fontSize(10).fillColor(accent).text(`Retail VAT by rate (${pack.retail.vat_by_rate.status})`, 50, y + 6); y = pdf.y + 4;
+  pdf.font('Helvetica').fontSize(9).fillColor('#111111');
+  for (const g of pack.retail.vat_by_rate.by_rate) { pdf.text(`${g.vatRateBp / 100}%   base ${formatCents(g.taxableCents)}   VAT ${formatCents(g.vatCents)}`, 50, y); y += 12; }
+  if (pack.retail.vat_by_rate.unavailable) { pdf.fillColor('#aa5500').text(`Unavailable: ${pack.retail.vat_by_rate.unavailable.lines} line(s), base ${formatCents(pack.retail.vat_by_rate.unavailable.taxableCents)}, VAT ${formatCents(pack.retail.vat_by_rate.unavailable.vatCents)}`, 50, y); y = pdf.y + 4; pdf.fillColor('#111111'); }
+  for (const t of pack.vat_summary.b2b.by_treatment.filter((x) => x.exemptOrReverseCharge)) { pdf.text(`B2B ${t.regime}: base ${formatCents(t.taxableCents)} (VAT ${formatCents(t.vatCents)})`, 50, y); y += 12; }
+  y = pdf.y + 8;
   pdf.font('Helvetica-Bold').fontSize(10).fillColor(accent).text('Payment status of B2B invoices issued in the period', 50, y); y = pdf.y + 4;
   pdf.font('Helvetica').fontSize(9).fillColor('#111111');
   for (const [k, v] of Object.entries(pack.payment_status_of_period_invoices)) { pdf.text(`${k}: ${v.count} invoice(s), ${formatCents(v.cents)}`, 50, y); y += 12; }

@@ -25,6 +25,7 @@ import { loadDocsForReports, writePackFiles } from './reports.js';
 import { createFinanceService } from './service.js';
 import { createSupabaseFinanceStore } from './supabase-store.js';
 import { formatCents } from './money.js';
+import { readCoverage } from '../sync/history.js';
 
 const CONFIG_PATH = 'data/local/finance/merchant.json';
 const OUT_DIR = 'reports/finance';
@@ -183,7 +184,7 @@ async function main() {
     const period = { start: flag('from'), end: flag('to') };
     const { data, ledger } = await ctx.loadRetail(period.start);
     const docs = await loadDocsForReports(store, ctx.merchant.id);
-    const pack = buildAccountantPack({ ledger, rawOrders: data.orders, docs, period, timeZone: ctx.timeZone, now: new Date(), config: { ...ctx.retailConfig, finance: { linking: local.linking } }, today: new Date().toISOString().slice(0, 10) });
+    const pack = buildAccountantPack({ ledger, rawOrders: data.orders, docs, period, timeZone: ctx.timeZone, now: new Date(), config: { ...ctx.retailConfig, finance: { linking: local.linking } }, today: new Date().toISOString().slice(0, 10), retailHistory: await readCoverage() });
     const files = await writePackFiles(pack, OUT_DIR, { delimiter: typeof flag('delimiter') === 'string' ? flag('delimiter') : ',', branding: local.branding ?? {}, merchantName: local.seller?.name ?? '' });
     return out({ completeness: pack.completeness, reconciliation: pack.reconciliation, totals: Object.fromEntries(Object.entries(pack.totals).map(([k, v]) => [k, formatCents(v)])), anomalies: pack.anomalies.length, files: files.map((f) => join(OUT_DIR, f)) });
   }

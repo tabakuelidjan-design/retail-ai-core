@@ -11,6 +11,15 @@ export const SHOP_QUERY = /* GraphQL */ `
   }
 `;
 
+// The day the store was created: history before it is legitimately empty, so it bounds what a complete period needs.
+export const SHOP_CREATED_QUERY = /* GraphQL */ `
+  query {
+    shop {
+      createdAt
+    }
+  }
+`;
+
 export const LOCATIONS_QUERY = /* GraphQL */ `
   query {
     locations(first: 50) {
@@ -127,6 +136,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                   }
                 }
                 taxLines {
+                  rate
                   priceSet {
                     shopMoney {
                       amount

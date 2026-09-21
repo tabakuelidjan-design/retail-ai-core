@@ -41,6 +41,7 @@ export function createViesProvider({ fetchImpl = fetch, endpoint = 'https://ec.e
   return {
     name: 'vies',
     async lookup({ vatNumber, enterpriseNumber }) {
+      if (!vatNumber && !enterpriseNumber) return { status: 'MANUAL_ENTRY_REQUIRED', reason: 'VIES_CANNOT_SEARCH_BY_NAME', source: 'vies', company: null };
       const n = normalizeBelgianNumber(vatNumber ?? enterpriseNumber);
       if (!n.ok) return { status: 'INVALID_NUMBER', reason: n.reason, source: 'vies', company: null }; // never sent to VIES
       let res;

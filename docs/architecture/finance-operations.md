@@ -1,6 +1,6 @@
 # Finance Operations Agent — V1
 
-A merchant-generic, **optional** module on top of Retail Core. It handles the operational finance workflow around sales — *company → quote → invoice → payment status → accountant export* — and is **not** an accounting system. Isolated in `src/finance/`; Retail Core financial logic is untouched (the one shared-code change is two additive methods on the Supabase client, `rpc` and `delete`).
+A merchant-generic, **optional** module on top of Retail Core. It handles the operational finance workflow around sales — *company → quote → invoice → payment status → accountant export* — and is **not** an accounting system. Isolated in `src/finance/`. Retail Core financial logic is untouched; the only shared-code changes are additive: two Supabase client methods (`rpc`, `delete`), capture of the source VAT rate per order line (query field, normaliser, loader select, one extra ledger field that no formula uses), and an optional `--since` window plus a coverage marker for the orders sync.
 
 Run: `npm run finance -- help`. Merchant configuration lives in `data/local/finance/merchant.json` (gitignored); `finance init-config` writes a template of nulls, `finance config-check` lists what is missing.
 
@@ -26,7 +26,7 @@ All tables have RLS enabled (service role only). A snapshot **SHA-256** of the c
 
 ## Numbering
 
-Allocated **only at issue** (invoice, credit note) or **at send** (quote), after validation succeeds, so drafts and rejected drafts consume nothing. Format is configurable (`{prefix}-{year}-{seq}` → `INV-2026-0001`), one sequence per merchant, type and issue year. The pack detects gaps and duplicates. *Known limit:* allocation and the save are two calls; a crash between them could burn a number, which the pack would then report as a gap (never silently).
+Allocated **only at issue** (invoice, credit note) or **at send** (quote), inside the same database transaction that issues the document (see "Hardening" below), so drafts and rejected drafts consume nothing and a failure can never burn a number. Format is configurable (`{prefix}-{year}-{seq}` -> `INV-2026-0001`), one sequence per merchant, type and issue year. The pack still detects gaps and duplicates as an independent check.
 
 ## Lifecycles
 
@@ -49,7 +49,7 @@ Safeguards: basis is mandatory; a linked source order must exist in Retail Core;
 
 ## Accountant pack
 
-`finance pack --from YYYY-MM-DD --to YYYY-MM-DD` (any range). Retail (Phase 2A verbatim): gross sales, discounts, refunds, net sales, VAT, net excl. VAT, POS vs online. Finance: standalone B2B invoices and credit notes (net, VAT by rate, gross), linked invoices listed but excluded, payment status of period invoices, receivables aging, quotes count (not revenue). Combined totals = retail + standalone B2B. States period, source systems, generation time, **completeness** (`PARTIAL` when retail history starts after the period start or the period is not closed), unresolved anomalies (unissued documents, numbering gaps, integrity mismatches, other-currency documents, duplicates) and reconciliation status. Outputs: CSV set (configurable delimiter, formula-injection safe, UTF-8 BOM), PDF summary, JSON. **XLSX is not built** (CSV opens in Excel); retail **VAT by rate is unavailable** (Retail Core stores VAT per line, not the rate).
+`finance pack --from YYYY-MM-DD --to YYYY-MM-DD` (any range). Retail (Phase 2A verbatim): gross sales, discounts, refunds, net sales, VAT, net excl. VAT, POS vs online. Finance: standalone B2B invoices and credit notes (net, VAT by rate, gross), linked invoices listed but excluded, payment status of period invoices, receivables aging, quotes count (not revenue). Combined totals = retail + standalone B2B. States period, source systems, generation time, **completeness** (`PARTIAL` when retail history starts after the period start or the period is not closed), unresolved anomalies (unissued documents, numbering gaps, integrity mismatches, other-currency documents, duplicates) and reconciliation status. Outputs: CSV set (configurable delimiter, formula-injection safe, UTF-8 BOM), PDF summary, JSON and XLSX. Retail VAT by rate is reported where the source rate was captured (see Hardening).
 
 ## Receivables
 
@@ -66,7 +66,7 @@ Provider interface (`createCompanyLookup`), replaceable without touching invoice
 | KBO/BCE official web service | Paid (per-request pricing). Not used; a possible future provider. |
 | KBO Open Data | Free monthly CSV, registration required, attribution to FPS Economy. Possible future provider for name search against a local import. |
 
-Default provider is `manual`. The Belgian mod-97 checksum is validated offline, and an invalid number is never sent to VIES.
+New settings default to `vies` with manual entry as the fallback (VIES is contacted only when the merchant clicks Look up). The Belgian mod-97 checksum is validated offline, and an invalid number is never sent to VIES.
 
 ## Peppol / structured e-invoicing
 
@@ -87,3 +87,22 @@ Finance data is more sensitive than retail data: merchant config, `.env` and `re
 3. **Peppol Access Point provider** for sending B2B e-invoices (needed to comply for Belgian B2B customers).
 4. **Shopify `read_all_orders`** if complete history before the 60-day window is needed for closed-period accountant packs (previously declined).
 5. Whether to enable the free VIES lookup (`companyLookup.provider: "vies"`).
+
+
+## Hardening and dashboard (second pass)
+
+**Atomic issuance.** `fin_issue_document()` (migration `20260922090000`) locks the document row, allocates the number, formats it, freezes the document, computes the SHA-256 fingerprint and writes the audit event in one transaction. The application sends the canonical snapshot with a unique number placeholder; the database substitutes the number and hashes, so the stored hash equals the application's hash for the final document. A stale version or an already-issued document is refused. Tested: success, rollback (a failure after allocation leaves the counter unchanged), crash simulation (36 attempts with injected failures give a gapless series), concurrency (memory store) and **20 parallel calls on the real database** (unique, consecutive 1..20, 20 audit events).
+
+**VAT by rate.** Retail Core now stores the VAT rate the source reported for each order line (`order_lines.tax_rate_bp`, additive; no Phase 2A formula changed; the ledger only carries the field). The pack groups retail base and VAT by that rate (refunds reduce the rate they were charged at); lines without a captured rate (older syncs, or several taxes on one line) are reported as **unavailable** and never spread across rates, which makes the breakdown and the pack `PARTIAL`. Standalone B2B is shown by rate and by treatment (domestic, intra-EU exempt, reverse charge, export, small-business), with exempt/reverse-charge bases and legal mentions. Re-syncing populates the rate for orders in the sync window; the `read_all_orders` backfill populates older ones.
+
+**History readiness.** `planOrdersSync` refuses orders older than 60 days unless the live token carries `read_all_orders`. `sync orders --full-history` (or `--since`) backfills with the identical order fields. A coverage marker records the verified reach of the history and the last sync time; the pack treats a period as fully covered only if the marker reaches its start (or the store did not exist), and the last sync is after the period end.
+
+**Dashboard** (`src/finance/server/`, `src/finance/ui/`). Framework-free Node HTTP app plus a vanilla-JS page (no build step, no innerHTML). The API cleans every input (`input.js`, whitelisted keys, strict number formats, control characters stripped), resolves company identity from the directory, scopes every lookup to the merchant, and runs every lifecycle action through the finance service as a merchant actor. Live totals are requested from `/api/calc`, which uses the same engine as saving (tested for zero drift). Security: loopback, token login + lockout, HttpOnly/SameSite=Strict cookie, CSRF token, Host/Origin checks, 1.2 MB body limit, strict CSP. Settings are validated (IBAN and Belgian number checksums, numbering format, VAT rates, logo checked by content) and saved atomically with a `.bak`; secrets are never part of settings.
+
+**Exports.** The pack produces CSV (incl. `vat_by_rate`), a PDF summary, JSON and a multi-sheet **XLSX** (dependency-free writer, verified to open in a standard spreadsheet library; text is stored as strings so cell contents cannot execute as formulas).
+
+**Peppol** is unchanged: UBL generation, local structural validation and the adapter boundary. Nothing is transmitted and no provider is selected.
+
+## Still open
+
+Peppol Access Point provider and adapter; official Schematron validation; `read_all_orders` for complete closed-period history; supplier-invoice intake; bank reconciliation; reminders; a second-person approval step if the business ever needs one.

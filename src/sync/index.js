@@ -11,6 +11,8 @@ import { syncInventory } from './inventory.js';
 import { syncProductCosts } from './cost.js';
 import { syncOrders } from './orders.js';
 import { loadCustomerKeySecret } from '../customers/pseudonym.js';
+import { SHOP_CREATED_QUERY } from '../shopify/queries.js';
+import { getGrantedScopes, nextCoverage, planOrdersSync, readCoverage, writeCoverage } from './history.js';
 
 const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
 
@@ -65,9 +67,21 @@ async function main() {
   }
 
   if (mode === 'orders' || mode === 'all') {
-    const summary = await syncOrders({ shopify, supabase }, { merchantId, customerKeySecret: loadCustomerKeySecret() });
+    // --since YYYY-MM-DD, or --full-history (= since the store was created): needs the read_all_orders scope on the live token.
+    const args = process.argv.slice(3);
+    const sinceIdx = args.indexOf('--since');
+    let since = sinceIdx > -1 ? args[sinceIdx + 1] : null;
+    let storeCreatedOn = null;
+    if (args.includes('--full-history') || since) {
+      storeCreatedOn = (await shopify.graphql(SHOP_CREATED_QUERY)).shop.createdAt.slice(0, 10);
+      if (args.includes('--full-history')) since = storeCreatedOn;
+    }
+    const plan = planOrdersSync({ since, grantedScopes: since ? await getGrantedScopes(loadShopifyConfigFromEnv()) : [] });
+    if (!plan.ok) { console.error(JSON.stringify(plan)); process.exit(1); }
+    const summary = await syncOrders({ shopify, supabase }, { merchantId, customerKeySecret: loadCustomerKeySecret(), since });
     console.log('orders sync summary:', JSON.stringify(summary, null, 2));
     if (summary.errors.length > 0) process.exitCode = 1;
+    else await writeCoverage(nextCoverage(await readCoverage(), { plan, now: new Date(), storeCreatedOn }));
   }
 }
 

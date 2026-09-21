@@ -2,7 +2,7 @@
 // NEW document and an audit event, never mutates its input, and a locked (issued / sent) document is deep-frozen.
 // All amounts are integers (see money.js). No language model calculates or judges anything here.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fromScaled, lineGrossCents, percentOfCents, toCents, toPriceMicro, toQtyMilli, percentToBp } from './money.js';
 import { validateVat, vatBreakdown, VAT_REGIMES } from './vat.js';
 
@@ -106,7 +106,11 @@ export function snapshotOf(doc) {
   s.totals = doc.totals ? { netCents: doc.totals.netCents, vatCents: doc.totals.vatCents, grossCents: doc.totals.grossCents, vatBreakdown: doc.totals.vatBreakdown } : null;
   return canon(s);
 }
-export const hashSnapshot = (doc) => createHash('sha256').update(JSON.stringify(snapshotOf(doc))).digest('hex');
+/** The exact string that is hashed. The database hashes the same string (with the number substituted) inside the issue transaction. */
+export const canonicalSnapshot = (doc) => JSON.stringify(snapshotOf(doc));
+export const hashSnapshot = (doc) => createHash('sha256').update(canonicalSnapshot(doc)).digest('hex');
+/** A unique stand-in for the document number while the number is being allocated atomically by the store. */
+export const makeNumberPlaceholder = () => `__FIN_NUMBER_${randomUUID()}__`;
 export function verifyIntegrity(doc) { return doc.lockedAt ? { ok: hashSnapshot(doc) === doc.snapshotHash } : { ok: true, note: 'not locked' }; }
 
 /** Edit a draft. Locked documents can never be edited: use a credit note (invoice) or a new revision (quote). */

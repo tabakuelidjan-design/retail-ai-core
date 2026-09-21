@@ -57,7 +57,7 @@ export function buildLedger(data, { config, currency } = {}) {
       orderLineId: l.id, orderId: l.order_id, orderedAt: order.orderedAt, taxesIncluded: order.taxesIncluded,
       variantId: l.variant_id ?? null, productId: variant?.product_id ?? null,
       title: l.title_snapshot, sku: l.sku_snapshot ?? variant?.sku ?? null,
-      qty, gross, discount, tax,
+      qty, gross, discount, tax, taxRateBp: l.tax_rate_bp ?? null, // VAT rate as reported by the source (finance VAT-by-rate); not used by any metric formula
       exTaxBeforeRefund: order.taxesIncluded ? gross - discount - tax : gross - discount,
       cost,
     };

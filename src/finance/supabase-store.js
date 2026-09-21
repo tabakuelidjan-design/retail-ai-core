@@ -33,6 +33,8 @@ export function translateDbError(err) {
   const m = String(err?.message ?? err);
   if (m.includes('fin_documents_number_uq')) return new FinanceError('DUPLICATE_DOCUMENT_NUMBER');
   if (m.includes('fin_documents_one_invoice_per_order_uq')) return new FinanceError('SOURCE_ORDER_ALREADY_INVOICED');
+  if (m.includes('FIN_CONCURRENT_MODIFICATION')) return new FinanceError('CONCURRENT_MODIFICATION', 'document changed or was already issued');
+  if (m.includes('FIN_NOT_FOUND')) return new FinanceError('DOCUMENT_NOT_FOUND');
   if (m.includes('is immutable') || m.includes('cannot be deleted')) return new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', 'refused by the database');
   if (m.includes('append-only')) return new FinanceError('APPEND_ONLY_TABLE', 'refused by the database');
   return err;
@@ -92,6 +94,20 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference }));
     },
 
+    /** ATOMIC issue through the fin_issue_document() RPC: number allocation, lock, hash and audit event in one DB transaction. */
+    async issueDocument({ docId, expectedVersion, newStatus, numbering, year, canonical, placeholder, lockedAt, event }) {
+      const row = await guard(() => supabase.rpc('fin_issue_document', {
+        p_merchant: merchantId, p_doc_id: docId, p_expected_version: expectedVersion, p_new_status: newStatus,
+        p_prefix: numbering.prefix, p_pad: numbering.pad, p_format: numbering.format, p_year: year,
+        p_canonical: canonical, p_placeholder: placeholder, p_locked_at: lockedAt, p_event: event,
+      }));
+      return rowToDoc(row);
+    },
+    async peekNextNumber(_merchantId, type, year) {
+      const r = (await supabase.select('fin_number_sequences', { select: 'last_number', merchant_id: eq(merchantId), doc_type: eq(type), year: eq(year) }))[0];
+      return (r ? Number(r.last_number) : 0) + 1;
+    },
+
     async allocateNumber(_merchantId, type, year) { return Number(await supabase.rpc('fin_next_number', { p_merchant: merchantId, p_type: type, p_year: year })); },
 
     async saveCompany(c) {
@@ -99,6 +115,13 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
         street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null, source: c.source ?? 'manual', verified_at: c.verifiedAt ?? null };
       const [r] = await guard(() => supabase.insert('fin_companies', [row]));
       return companyFromRow(r);
+    },
+    async listCompanies() { return (await supabase.selectAll('fin_companies', { select: '*', merchant_id: eq(merchantId) })).map(companyFromRow); },
+    async updateCompany(id, c) {
+      const row = { kind: c.kind ?? 'business', name: c.name, enterprise_number: c.enterpriseNumber ?? null, vat_number: c.vatNumber ?? null, legal_form: c.legalForm ?? null,
+        street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null };
+      const rows = await guard(() => supabase.update('fin_companies', { id: eq(id), merchant_id: eq(merchantId) }, row));
+      return rows?.[0] ? companyFromRow(rows[0]) : null;
     },
     async getCompany(id) { const r = (await supabase.select('fin_companies', { select: '*', id: eq(id), merchant_id: eq(merchantId) }))[0]; return r ? companyFromRow(r) : null; },
     async findCompany(_m, { vatNumber, enterpriseNumber }) {

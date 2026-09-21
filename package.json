@@ -22,7 +22,10 @@
     "buying:calibrate": "node --env-file=.env src/buying/calibrate.js",
     "marketing:report": "node --env-file=.env src/marketing/index.js",
     "customers:report": "node --env-file=.env src/customers/index.js",
-    "finance": "node --env-file=.env src/finance/cli.js"
+    "finance": "node --env-file=.env src/finance/cli.js",
+    "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
+    "finance:demo": "node src/finance/server/demo.js",
+    "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history"
   },
   "engines": {
     "node": ">=20"
