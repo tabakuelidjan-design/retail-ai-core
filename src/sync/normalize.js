@@ -33,8 +33,25 @@ export function normalizeProduct(node, merchantId) {
     merchant_id: merchantId,
     title: node.title,
     handle: node.handle,
+    // Empty productType stays null = UNCLASSIFIED; it is never guessed from the title.
+    product_type: node.productType?.trim() ? node.productType.trim() : null,
+    source_created_at: node.createdAt ?? null,
+    source_status: node.status ?? null,
     source_system: 'shopify',
     source_id: node.id,
+  };
+}
+
+/** Collection membership; identity is the source collection id, never the title. */
+export function normalizeProductCollection(collectionNode, productId, merchantId, syncedAt) {
+  return {
+    merchant_id: merchantId,
+    product_id: productId,
+    source_system: 'shopify',
+    source_id: collectionNode.id,
+    title: collectionNode.title,
+    is_current: true,
+    synced_at: syncedAt.toISOString(),
   };
 }
 

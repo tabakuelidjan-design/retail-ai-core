@@ -50,13 +50,14 @@ export function createFakeSupabase() {
 
       for (const [key, value] of Object.entries(params)) {
         if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
-        const match = /^(eq|gte|lte|in)\.(.*)$/.exec(value);
+        const match = /^(eq|gte|lte|lt|in)\.(.*)$/.exec(value);
         if (!match) continue;
         const [, op, arg] = match;
         const norm = (v) => (v instanceof Date ? v.toISOString() : String(v));
         if (op === 'eq') rows = rows.filter((r) => String(r[key]) === arg);
         if (op === 'gte') rows = rows.filter((r) => norm(r[key]) >= arg);
         if (op === 'lte') rows = rows.filter((r) => norm(r[key]) <= arg);
+        if (op === 'lt') rows = rows.filter((r) => norm(r[key]) < arg);
         if (op === 'in') {
           const set = new Set(arg.replace(/^\(|\)$/g, '').split(','));
           rows = rows.filter((r) => set.has(String(r[key])));

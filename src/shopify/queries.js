@@ -32,6 +32,20 @@ export const PRODUCTS_PAGE_QUERY = /* GraphQL */ `
           id
           title
           handle
+          productType
+          createdAt
+          status
+          collections(first: 25) {
+            edges {
+              node {
+                id
+                title
+              }
+            }
+            pageInfo {
+              hasNextPage
+            }
+          }
           variants(first: 50) {
             edges {
               node {

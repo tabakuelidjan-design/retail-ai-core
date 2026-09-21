@@ -16,7 +16,7 @@ function salesCostStatus(lines) {
   return weakestStatus(known.map((l) => l.cost.status));
 }
 
-function stockValue(ledger, variantIds, now) {
+export function stockValue(ledger, variantIds, now) {
   let units = 0;
   let value = 0;
   let unitsWithoutCost = 0;

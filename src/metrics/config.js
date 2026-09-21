@@ -4,6 +4,7 @@
 // here. Changing a formula changes METRICS_VERSION; changing a threshold does not.
 
 export const METRICS_VERSION = '2A.1';
+export const DEMAND_VERSION = '2B.1';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
@@ -20,6 +21,23 @@ export const DEFAULT_CONFIG = {
   candidate: { minUnits: 2, minMarginPct: 0.4, minStock: 3, maxRefundRate: 0.1, highConfidenceUnits: 4 },
   cashRisk: { highStockMinUnits: 10, lowVelocityMaxUnits: 2, lowMarginPct: 0.15 },
   quality: { staleInventoryHours: 36 },
+  // Demand & inventory facts (Phase 2B). Thresholds are configuration; the
+  // classification rules themselves are versioned in DEMAND_VERSION.
+  demand: {
+    weeks: 8,
+    minObservableWeeks: 4, // fewer observable weeks => INSUFFICIENT_HISTORY, never a confident label
+    spikeShare: 0.6, spikeMinUnits: 4, // one week holds >= 60% of >= 4 units => ONE_OFF_SPIKE
+    consistentMinActiveWeeks: 3, consistentMinActiveShare: 0.5,
+    trend: { minObservableWeeks: 6, minUnits: 4, changeRatio: 0.5, minUnitDelta: 2 },
+    cover: { minUnits: 3, lowWeeks: 4, slowWeeks: 26 },
+    reorder: { minOrders: 3 }, // repeat-purchase evidence needed before reorder facts count as SUFFICIENT
+    historyVerifiedDays: 90, // shorter history keeps sales facts PARTIAL
+    roundQuantity: { minUnits: 100, multipleOf: 50 }, // descriptive marker of possibly uncounted stock
+    minPeersForBenchmark: 3,
+  },
+  // unitCostIsAllInVariableCost: a merchant sets true only when unit cost already includes every variable
+  // cost (e.g. a pure resale merchant, or a production cost module). Until then margin stays gated.
+  gates: { minVerifiedCostCoverage: 0.8, maxStockSnapshotAgeHours: 36, unitCostIsAllInVariableCost: false },
   // Missing-cost triage: stock at or above this many units counts as meaningful inventory.
   triage: { minMeaningfulStock: 1, largestStockPositions: 15 },
 };

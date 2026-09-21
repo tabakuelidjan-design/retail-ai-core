@@ -51,6 +51,23 @@ export function buildWindows(now, timeZone, { availableDays = 60 } = {}) {
   };
 }
 
+/**
+ * `weeks` consecutive 7-local-day buckets ending at today's local midnight,
+ * oldest first (index 0 .. weeks-1). DST-safe: each boundary is a local midnight.
+ */
+export function buildWeekBuckets(now, timeZone, weeks = 8) {
+  const today = localDateString(now, timeZone);
+  const buckets = [];
+  for (let i = weeks; i >= 1; i -= 1) {
+    const startStr = addDays(today, -7 * i);
+    buckets.push({
+      index: weeks - i, localStart: startStr,
+      start: localMidnight(startStr, timeZone), end: localMidnight(addDays(today, -7 * (i - 1)), timeZone),
+    });
+  }
+  return buckets;
+}
+
 export function inWindow(instant, window) {
   const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
   return t >= window.start.getTime() && t < window.end.getTime();

@@ -13,6 +13,7 @@ import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { validateAgainstShopify } from '../metrics/validate.js';
 import { buildWindows, inWindow } from '../metrics/windows.js';
+import { buildDemandFacts } from '../demand/build.js';
 import { fetchPaymentTransactions, summarizePaymentFees } from '../analysis/payment-fees.js';
 import { buildCostTriage, buildLargestStockPositions, buildProfitUncertainty } from '../analysis/triage.js';
 import { detectQualityFlags } from '../quality/rules.js';
@@ -20,7 +21,7 @@ import { syncQualityFlags } from '../quality/flags.js';
 import { buildReport } from './build.js';
 import { renderMarkdown } from './render.js';
 
-const MODES = ['report', 'flags', 'validate', 'triage', 'all'];
+const MODES = ['report', 'flags', 'validate', 'triage', 'demand', 'all'];
 
 async function main() {
   const mode = process.argv[2];
@@ -54,6 +55,18 @@ async function main() {
     extras.validation = await validateAgainstShopify({ shopify, ledger, windows });
     console.table(extras.validation);
     if (extras.validation.some((v) => !v.ok)) process.exitCode = 2;
+  }
+
+  if (mode === 'demand') {
+    // Provenance must be real: reconcile sales with the source before labelling them.
+    const validation = await validateAgainstShopify({ shopify, ledger, windows });
+    const salesReconciled = validation.every((v) => v.ok);
+    const facts = buildDemandFacts({ ledger, data, now, timeZone, config, salesReconciled });
+    facts.input_status.sales_reconciliation = { checked_at: now.toISOString(), comparisons: validation.length, all_match: salesReconciled };
+    await mkdir('reports', { recursive: true });
+    const stamp = now.toISOString().slice(0, 10);
+    await writeFile(`reports/demand-facts-${stamp}.json`, JSON.stringify(facts, null, 2));
+    console.log(`demand facts written to reports/demand-facts-${stamp}.json (sales reconciled: ${salesReconciled})`);
   }
 
   if (mode === 'triage') {
