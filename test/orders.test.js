@@ -80,7 +80,7 @@ test('nullable variant_id: a deleted/custom item line still gets stored, with va
   assert.equal(customLine.sku_snapshot, 'OLD-SKU-001');
 });
 
-test('discounts: totalDiscountSet is captured as discount_amount', async () => {
+test('discounts: summed discountAllocations are captured as discount_amount (LineItem.totalDiscountSet is 0 for manual POS discounts)', async () => {
   const supabase = createFakeSupabase();
   await seedCatalog(supabase);
 

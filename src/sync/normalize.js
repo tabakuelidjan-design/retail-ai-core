@@ -215,7 +215,7 @@ export function normalizeOrderLine(lineItemNode, orderId, variantId) {
     sku_snapshot: lineItemNode.sku ?? null,
     quantity: lineItemNode.quantity,
     unit_price: Number(lineItemNode.originalUnitPriceSet.shopMoney.amount),
-    discount_amount: Number(lineItemNode.totalDiscountSet.shopMoney.amount),
+    discount_amount: sumMoney(lineItemNode.discountAllocations.map((d) => d.allocatedAmountSet.shopMoney.amount)),
     tax_amount: taxAmount,
   };
 }

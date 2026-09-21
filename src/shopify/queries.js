@@ -88,9 +88,11 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                     amount
                   }
                 }
-                totalDiscountSet {
-                  shopMoney {
-                    amount
+                discountAllocations {
+                  allocatedAmountSet {
+                    shopMoney {
+                      amount
+                    }
                   }
                 }
                 taxLines {
