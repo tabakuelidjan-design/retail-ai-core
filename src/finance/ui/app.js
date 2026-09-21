@@ -149,22 +149,23 @@ function fillFromResult(m, r) {
   const f = r.form || {};
   Object.assign(m, { name: f.name || '', vatNumber: f.vatNumber || '', enterpriseNumber: f.enterpriseNumber || '', street: f.street || '', postalCode: f.postalCode || '', city: f.city || '', countryCode: f.countryCode || 'BE' });
   m.companyId = r.source === 'directory' ? r.id : null;
-  m.csource = r.source; m.cverified = !!r.vatVerified; m.dirty = false;
+  m.csource = r.source; m.cverified = !!r.vatVerified; m.vatState = r.vatState || null; m.dirty = false;
   m.personal = !!r.personalData; if (m.personal) m.saveCompany = false; // a sole trader is only saved when the merchant explicitly chooses to
 }
 function sourceText(m) {
   if (!m.csource || m.csource === 'manual') return 'Source: entered by hand.';
-  return `${m.personal ? 'SOLE TRADER / PERSONAL DATA. ' : ''}Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
+  return `${m.personal ? 'SOLE TRADER / PERSONAL DATA. ' : ''}Source: ${SRC_TEXT[m.csource] || m.csource}${m.cverified ? ' - VAT number confirmed' : m.vatState === 'NOT_REGISTERED' ? ' - no active VAT registration found (VAT number left empty)' : m.vatState === 'UNCHECKED' ? ' - VAT could not be checked (VAT number left empty)' : ''}${m.dirty ? ' - then edited by you' : ''}.`;
 }
 function companySearchBox({ onPick }) {
   const input = h('input', { class: 'bigsearch', placeholder: 'Search company name or VAT / enterprise number', autocomplete: 'off' });
   const msg = h('div'); const list = h('div');
   let seq = 0;
   const say = (kind, text, extra) => { clear(msg); if (text) msg.appendChild(h('div', { class: `banner ${kind} small`, style: 'margin:10px 0 0' }, text, extra || null)); };
-  async function choose(r) {
+  async function choose(r, serverMsg) {
     try {
       let result = r;
       if (r.needsResolve || r.needsVatCheck) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
+      else if (serverMsg) say(r.personalData || (r.vatState && r.vatState !== 'ACTIVE') || /Register status/.test(serverMsg) ? 'warn' : 'ok', serverMsg + ' Check the fields below: you can still correct them.');
       else say('ok', `Filled in from: ${r.sourceLabel}. Check the fields below: you can still correct them.`);
       clear(list); onPick(result);
     } catch (e) { fail(e); }
@@ -179,7 +180,7 @@ function companySearchBox({ onPick }) {
       const good = r.status === 'FOUND' || r.status === 'OK';
       const partial = r.partial ? h('div', { style: 'margin-top:6px' }, h('button', { type: 'button', on: { click: () => { clear(list); onPick(r.partial); say('warn', 'Number kept. Complete the other fields by hand.'); } } }, 'Use this number and complete by hand')) : null;
       say(good ? (r.autoFill ? 'ok' : 'info') : 'warn', r.message, partial);
-      if (r.autoFill) return choose(r.autoFill);
+      if (r.autoFill) return choose(r.autoFill, r.message);
       r.results.forEach((x) => list.appendChild(h('button', { type: 'button', class: 'result', on: { click: () => choose(x) } },
         h('div', { class: 'rname' }, x.name),
         h('div', { class: 'small muted' }, [x.enterpriseNumber, x.vatNumber, x.city, x.status].filter(Boolean).join('  |  ')),
