@@ -135,33 +135,26 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       return r ? companyFromRow(r) : null;
     },
     async saveSupplierInvoice(s) {
-      const [r] = await guard(() => supabase.insert('fin_supplier_invoices', [{ merchant_id: merchantId, supplier_name: s.supplierName, supplier_vat_number: s.supplierVatNumber, invoice_number: s.invoiceNumber, issue_date: s.issueDate, due_date: s.dueDate, net_cents: s.netCents, vat_cents: s.vatCents, gross_cents: s.grossCents, currency: s.currency, payment_status: s.paymentStatus, source: s.source, attachment_ref: s.attachmentRef }]));
-      return r;
+      const [r] = await guard(() => supabase.insert('fin_supplier_invoices', [supplierToRow(s)]));
+      return supplierFromRow(r);
     },
-    // ---- stock movement ledger (append-only; a database trigger allows only the status fields to change) ----
-    async insertStockMovement(row) {
-      try { const [r] = await supabase.insert('fin_stock_movements', [stockToRow(row)]); return { created: true, row: stockFromRow(r) }; } catch (e) {
-        if (!/23505|duplicate key|unique/i.test(String(e.message))) throw translateDbError(e); // the same movement already exists: idempotent, never overwrite the ledger
-        const [ex] = await supabase.select('fin_stock_movements', { select: '*', merchant_id: eq(merchantId), idempotency_key: eq(row.idempotencyKey) });
-        return { created: false, row: stockFromRow(ex) };
-      }
+    async getSupplierInvoice(id) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? supplierFromRow(r) : null; },
+    async findSupplierInvoiceBySha(_m, sha) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', sha256: eq(sha), merchant_id: eq(merchantId) }); return r ? supplierFromRow(r) : null; },
+    async updateSupplierInvoice(id, patch, expectedStatus) {
+      const body = supplierToRow(patch, true);
+      if ('status' in patch) body.payment_status = patch.status === 'PAID' ? 'paid' : 'unpaid';
+      const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
+      return r && r.length ? supplierFromRow(r[0]) : null;
     },
-    async getStockMovement(id) { const [r] = await supabase.select('fin_stock_movements', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? stockFromRow(r) : null; },
-    async updateStockMovement(id, patch, expectedStatus) {
-      const body = {};
-      if ('status' in patch) body.status = patch.status; if ('error' in patch) body.error = patch.error; if ('shopifyAdjustmentId' in patch) body.shopify_adjustment_id = patch.shopifyAdjustmentId;
-      if ('appliedAt' in patch) body.applied_at = patch.appliedAt; if ('locationId' in patch) body.location_id = patch.locationId; if ('locationSourceId' in patch) body.location_source_id = patch.locationSourceId;
-      const r = await guard(() => supabase.update('fin_stock_movements', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
-      return r && r.length ? stockFromRow(r[0]) : null;
-    },
-    async listStockMovements(f = {}) {
-      const p = { select: '*', merchant_id: eq(merchantId) }; if (f.documentId) p.document_id = eq(f.documentId); if (f.status) p.status = eq(f.status);
-      return (await supabase.selectAll('fin_stock_movements', p)).map(stockFromRow);
-    },
-    async listSupplierInvoices() { return supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) }); },
+    async listSupplierInvoices() { return (await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow); },
   };
 }
 
+const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'supplier_vat_number', invoiceNumber: 'invoice_number', issueDate: 'issue_date', dueDate: 'due_date', netCents: 'net_cents', vatCents: 'vat_cents', grossCents: 'gross_cents', currency: 'currency',
+  source: 'source', status: 'status', paymentReference: 'payment_reference', fileName: 'file_name', contentType: 'content_type', sizeBytes: 'size_bytes', sha256: 'sha256', attachmentRef: 'attachment_ref', receivedAt: 'received_at', fromAddress: 'from_address',
+  subject: 'subject', extraction: 'extraction', validatedAt: 'validated_at', paidAt: 'paid_at', paidAmountCents: 'paid_amount_cents', paidReference: 'paid_reference', rejectedReason: 'rejected_reason' };
+function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
+const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
 const stockToRow = (m) => ({ merchant_id: m.merchantId, document_id: m.documentId, document_number: m.documentNumber, document_type: m.documentType, line_position: m.linePosition, kind: m.kind, variant_id: m.variantId, variant_source_id: m.variantSourceId, sku: m.sku, location_id: m.locationId, location_source_id: m.locationSourceId, quantity: m.quantity, delta: m.delta, status: m.status, error: m.error, idempotency_key: m.idempotencyKey });
 const stockFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, documentId: r.document_id, documentNumber: r.document_number, documentType: r.document_type, linePosition: r.line_position, kind: r.kind, variantId: r.variant_id, variantSourceId: r.variant_source_id, sku: r.sku, locationId: r.location_id, locationSourceId: r.location_source_id, quantity: r.quantity, delta: r.delta, status: r.status, error: r.error, idempotencyKey: r.idempotency_key, shopifyAdjustmentId: r.shopify_adjustment_id, createdAt: r.created_at, appliedAt: r.applied_at });
 const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,

@@ -111,7 +111,19 @@ export function createMemoryStore() {
       const c = [...companies.values()].find((x) => x.merchantId === merchantId && ((vatNumber && x.vatNumber === vatNumber) || (enterpriseNumber && x.enterpriseNumber === enterpriseNumber)));
       return c ? clone(c) : null;
     },
-    async saveSupplierInvoice(s) { const row = { id: randomUUID(), ...clone(s) }; supplierInvoices.push(row); return clone(row); },
+    async saveSupplierInvoice(s) {
+      if (s.sha256 && supplierInvoices.some((x) => x.merchantId === s.merchantId && x.sha256 === s.sha256)) throw new FinanceError('DUPLICATE_ATTACHMENT');
+      const row = { id: randomUUID(), status: 'TO_REVIEW', ...clone(s) }; supplierInvoices.push(row); return clone(row);
+    },
+    async getSupplierInvoice(id) { const r = supplierInvoices.find((x) => x.id === id); return r ? clone(r) : null; },
+    async findSupplierInvoiceBySha(merchantId, sha) { const r = supplierInvoices.find((x) => x.merchantId === merchantId && x.sha256 === sha); return r ? clone(r) : null; },
+    /** Compare-and-set on the status: a concurrent change makes this return null. Only workflow / extracted fields may change; the attachment identity never does. */
+    async updateSupplierInvoice(id, patch, expectedStatus) {
+      const r = supplierInvoices.find((x) => x.id === id);
+      if (!r || r.status !== expectedStatus) return null;
+      for (const k of Object.keys(patch)) if (['id', 'merchantId', 'sha256', 'attachmentRef', 'source', 'receivedAt', 'fileName', 'contentType', 'sizeBytes'].includes(k)) throw new FinanceError('INBOX_ITEM_IS_IMMUTABLE', k);
+      Object.assign(r, patch); r.paymentStatus = r.status === 'PAID' ? 'paid' : 'unpaid'; return clone(r);
+    },
     async listSupplierInvoices(merchantId) { return supplierInvoices.filter((s) => s.merchantId === merchantId).map(clone); },
     _debug: { docs, events, payments, seqs, hooks },
   };

@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS = {
   numbering: { invoice: { prefix: 'INV', pad: 4 }, credit_note: { prefix: 'CN', pad: 4 }, quote: { prefix: 'QT', pad: 4 }, format: '{prefix}-{year}-{seq}' },
   branding: { logoPath: null, footer: null, accent: '#183247', structuredCommunication: true, paymentInstructions: null },
   companyLookup: { provider: 'vies' }, // VAT-number lookup: 'vies' | 'manual'
+  inbox: { financeAddress: '', allowedSenders: [] }, // merchant-local: the DEDICATED finance address and optional sender allow-list
+  accountant: { name: '', email: '', preferredFormat: 'zip', software: '', packageName: '' }, // merchant-local: never generic repo data
   stock: { mode: 'off', locationId: null }, // stock synchronisation of standalone B2B sales: 'off' | 'dry_run' | 'live'
   companySearch: { registry: 'cbeapi', provider: 'peppol_directory' }, // registry (primary): 'cbeapi' | 'none'; provider (secondary name search): 'peppol_directory' | 'none'
   peppol: { defaultBuyerReference: 'document_number' },
@@ -122,6 +124,20 @@ export function validateSettings(input, current = DEFAULT_SETTINGS) {
     // logoPath is set ONLY by the logo upload endpoint, never accepted from the client (no arbitrary file reads).
   }
   if (src.companyLookup && 'provider' in src.companyLookup) { out.companyLookup.provider = src.companyLookup.provider; if (!PROVIDERS.includes(src.companyLookup.provider)) err('companyLookup.provider', 'PROVIDER_INVALID'); }
+  if (src.inbox && typeof src.inbox === 'object') {
+    const okMail = (e) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(e);
+    if ('financeAddress' in src.inbox) { const e = sanitizeText(src.inbox.financeAddress, 200) ?? ''; out.inbox.financeAddress = e; if (e && !okMail(e)) err('inbox.financeAddress', 'EMAIL_INVALID'); }
+    if ('allowedSenders' in src.inbox) {
+      const list = Array.isArray(src.inbox.allowedSenders) ? src.inbox.allowedSenders.map((x) => sanitizeText(x, 200) ?? '').filter(Boolean).slice(0, 20) : [];
+      out.inbox.allowedSenders = list; if (list.some((e) => !okMail(e))) err('inbox.allowedSenders', 'EMAIL_INVALID');
+    }
+  }
+  if (src.accountant && typeof src.accountant === 'object') {
+    const acc = src.accountant;
+    for (const k of ['name', 'software', 'packageName']) if (k in acc) out.accountant[k] = sanitizeText(acc[k], 120) ?? '';
+    if ('email' in acc) { const e = sanitizeText(acc.email, 200) ?? ''; out.accountant.email = e; if (e && !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(e)) err('accountant.email', 'EMAIL_INVALID'); }
+    if ('preferredFormat' in acc) { out.accountant.preferredFormat = acc.preferredFormat; if (!['zip', 'xlsx', 'csv', 'pdf'].includes(acc.preferredFormat)) err('accountant.preferredFormat', 'FORMAT_INVALID'); }
+  }
   if (src.stock && typeof src.stock === 'object') {
     if ('mode' in src.stock) { out.stock.mode = src.stock.mode; if (!['off', 'dry_run', 'live'].includes(src.stock.mode)) err('stock.mode', 'MODE_INVALID'); }
     if ('locationId' in src.stock) { out.stock.locationId = src.stock.locationId === '' ? null : src.stock.locationId; if (out.stock.locationId !== null && !/^[A-Za-z0-9_-]{8,64}$/.test(String(out.stock.locationId))) err('stock.locationId', 'LOCATION_INVALID'); }
