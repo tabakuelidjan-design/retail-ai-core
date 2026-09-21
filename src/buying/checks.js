@@ -56,6 +56,15 @@ export function inputsComplete({ candidate, cfg, econ, exploratory }) {
   if (candidate.peer_sets.length === 0 && !cfg.allowExploratoryTests) add('peer_sets', 'At least one merchant-chosen peer set (product ids, collection ids or a product_type), or enable exploratory tests.');
   const budgetKey = exploratory ? 'exploratoryBudget' : 'testBudget';
   for (const key of [budgetKey, 'minUnitMarginPct', 'paymentCostPct']) if (cfg[key] == null) add(`config.${key}`, `Merchant policy buying.${key} is not set.`);
+  // A null policy value must never be compared as if it were 0: every threshold a required check uses is checked here.
+  const needs = (id) => cfg.requiredChecks.includes(id);
+  const policy = [];
+  if (needs('sell_through') || needs('peer_exposure')) policy.push(['maxSellThroughWeeks', cfg.maxSellThroughWeeks]);
+  if (needs('peer_exposure') && candidate.peer_sets.length > 0) {
+    policy.push(['exposure.noSaleShare', cfg.exposure.noSaleShare], ['exposure.coverWeeks', cfg.exposure.coverWeeks],
+      ['stockTrust.blockedShare', cfg.stockTrust.blockedShare], ['stockTrust.trustedShare', cfg.stockTrust.trustedShare]);
+  }
+  for (const [key, value] of policy) if (value == null) add(`config.${key}`, `Merchant policy buying.${key} is not set.`);
   return missing.length ? res('inputs_complete', 'INCOMPLETE', 'Required inputs are missing.', { needs: missing })
     : res('inputs_complete', 'PASS', 'All required inputs and policies are present.');
 }
@@ -152,6 +161,7 @@ export function sellThrough({ candidate, cfg, peers, exploratory }) {
   const usable = peers.filter((p) => p.quality === 'USABLE');
   if (q.status !== 'OK' || usable.length === 0) return res('sell_through', 'INCOMPLETE', 'Needs an MOQ and a usable peer benchmark.', { needs: [need('moq_and_benchmark', 'MOQ and a peer set with a usable benchmark.')] });
   const horizon = cfg.maxSellThroughWeeks;
+  if (horizon == null) return res('sell_through', 'INCOMPLETE', 'The sell-through horizon policy is not set.', { needs: [need('config.maxSellThroughWeeks', 'Merchant policy buying.maxSellThroughWeeks is not set.')] });
   const perSet = usable.map((p) => {
     const m = p.velocity.median;
     const weeks = (v) => (v > 0 ? round2(q.nominal / v) : null);
@@ -171,11 +181,19 @@ export function sellThrough({ candidate, cfg, peers, exploratory }) {
 }
 
 export function peerExposure({ candidate, cfg, peers }) {
+  const policyKeys = [['exposure.noSaleShare', cfg.exposure.noSaleShare], ['exposure.coverWeeks', cfg.exposure.coverWeeks], ['maxSellThroughWeeks', cfg.maxSellThroughWeeks]];
+  const unset = policyKeys.filter(([, v]) => v == null).map(([k]) => k);
+  if (peers.some((p) => p.peers_total > 0) && unset.length) {
+    return res('peer_exposure', 'INCOMPLETE', 'Exposure policy is not set.', { needs: unset.map((k) => need(`config.${k}`, `Merchant policy buying.${k} is not set.`)) });
+  }
   const q = quantityOf(candidate, cfg.estimateTolerancePct);
   const relevant = peers.filter((p) => p.peers_total > 0);
   const perSet = relevant.map((p) => {
     const t = p.stock_trust;
     const x = p.exposure;
+    if (t.trust === 'POLICY_MISSING') {
+      return res('peer_exposure', 'INCOMPLETE', 'The stock-trust thresholds are not set, so peer stock cannot be classified.', { evidence: { set: p.label }, needs: [need('config.stockTrust.thresholds', 'Merchant policy buying.stockTrust.blockedShare and trustedShare.')] });
+    }
     const moqWeeks = q.status === 'OK' && p.velocity.median > 0 ? round2(q.moq_total / p.velocity.median) : null;
     const evidence = {
       set: p.label, stock_trust: t.trust, verified_share: t.verified_share, unverified_share: t.unverified_share, unreliable_share: t.unreliable_share,
@@ -221,7 +239,7 @@ export function capabilityFit({ candidate }) {
 }
 
 export function leadTime({ candidate, cfg }) {
-  if (cfg.maxLeadTimeDays == null) return res('lead_time', 'NOT_APPLICABLE', 'No maximum lead time is configured.');
+  if (cfg.maxLeadTimeDays == null) return res('lead_time', 'NOT_APPLICABLE', 'No maximum lead time is configured, so lead time is not being checked.', { conditional_on: ['LEAD_TIME_LIMIT_NOT_CONFIGURED'] });
   const lt = candidate.lead_time_days;
   if (!lt) return res('lead_time', 'INCOMPLETE', 'Lead time is missing.', { needs: [need('lead_time_days', 'Supplier lead time in days.')] });
   const b = band(lt, cfg.estimateTolerancePct);

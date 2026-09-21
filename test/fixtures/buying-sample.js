@@ -9,7 +9,7 @@ export const SNAPSHOT = '2026-09-21T06:00:00Z';
 /** A catalog product fact. */
 export function peer({ id, type = null, collections = [], observable = 8, units = 0, velocity = null, price = null, stock = 0, cls = 'NO_SALE_IN_WINDOW', status = 'ACTIVE' }) {
   return {
-    kind: 'product', product_key: id, matched: true, title: `Peer ${id}`, product_type: type, category: type ?? 'UNCLASSIFIED',
+    kind: 'product', product_key: id, shopify_product_id: `gid://shopify/Product/${id}`, matched: true, title: `Peer ${id}`, product_type: type, category: type ?? 'UNCLASSIFIED',
     source_status: status, collections: collections.map((c) => ({ source_id: c, title: c })), observable_weeks: observable,
     demand: { units_8w: units, velocity_8w: velocity, avg_net_unit_price_ex_tax: price },
     inventory: { stock_units: stock, inventory_class: cls },

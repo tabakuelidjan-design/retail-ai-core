@@ -381,3 +381,103 @@ test('integration: evaluates against facts produced by the real Phase 2B builder
   assert.ok(r.facts.peer_sets[0].stock_trust.total_units > 0);
   assert.equal(r.blocked_conclusions.find((b) => b.id === 'capital_exposure_value').status, 'BLOCKED');
 });
+
+// ---------- Null policy safety (a placeholder template must never decide anything) ----------
+
+const fromFile = async (path) => {
+  const { readFile } = await import('node:fs/promises');
+  return mergeConfig(JSON.parse(await readFile(path, 'utf8')));
+};
+
+test('the all-null policy template yields NEED MORE DATA listing every unset decision - never AVOID or TEST', async () => {
+  const cfg = await fromFile('docs/examples/buying-policy.example.json');
+  const r = run(candidate(), { config: cfg });
+  assert.equal(r.verdict, VERDICTS.MORE_DATA);
+  const codes = check(r, 'inputs_complete').needs.map((n) => n.code).sort();
+  assert.deepEqual(codes, [
+    'config.exposure.coverWeeks', 'config.exposure.noSaleShare', 'config.maxSellThroughWeeks', 'config.minUnitMarginPct', 'config.paymentCostPct',
+    'config.stockTrust.blockedShare', 'config.stockTrust.trustedShare', 'config.testBudget',
+  ]);
+  assert.ok(!r.reason_codes.some((c) => c.endsWith('FAIL_ROBUST')));
+  assert.equal(check(r, 'lead_time').status, 'NOT_APPLICABLE');
+  assert.ok(r.caveats.includes('LEAD_TIME_LIMIT_NOT_CONFIGURED'));
+});
+
+test('unset thresholds are never compared as 0: horizon, exposure and stock-trust thresholds produce INCOMPLETE, not a verdict', () => {
+  const hi = healthyPeerFacts({ noSaleUnits: 375, otherStock: 105 });
+  const raw = candidate({ unit_price: { value: 12, basis: 'QUOTED' }, moq: { value: 50, basis: 'QUOTED' }, expected_retail_price: { value: 32, tax_basis: 'excl', basis: 'DECIDED' } });
+  const base = { testBudget: 1000 };
+  const noHorizon = run(raw, { facts: hi, config: policy({ ...base, maxSellThroughWeeks: null }) });
+  assert.equal(check(noHorizon, 'sell_through').status, 'INCOMPLETE');
+  assert.equal(check(noHorizon, 'peer_exposure').status, 'INCOMPLETE');
+  const noExposure = run(raw, { facts: hi, config: policy({ ...base, exposure: { noSaleShare: null } }) });
+  assert.equal(check(noExposure, 'peer_exposure').status, 'INCOMPLETE');
+  const noTrust = run(raw, { facts: hi, config: policy({ ...base, stockTrust: { blockedShare: null } }), prepared: verifiedPrepared(hi) });
+  assert.equal(check(noTrust, 'peer_exposure').status, 'INCOMPLETE'); // not BLOCKED, not TRUSTED
+  assert.notEqual(noTrust.verdict, VERDICTS.AVOID);
+});
+
+test('unverifiedMaySupportPass left null is the strict reading (no pass on unverified stock)', () => {
+  const r = run(candidate(), { config: policy({ stockTrust: { unverifiedMaySupportPass: null } }) });
+  assert.equal(check(r, 'peer_exposure').status, 'INCOMPLETE');
+});
+
+// ---------- Policy sensitivity tool ----------
+
+test('policy sensitivity: varies one setting at a time around the operator baseline, shows verdict changes, skips unset settings', async () => {
+  const { runSensitivity, renderSensitivity } = await import('../src/buying/calibrate.js');
+  const raw = candidate({ expected_retail_price: { value: 10, tax_basis: 'excl', basis: 'DECIDED' } }); // margin 47.5%
+  const basePolicy = { buying: { testBudget: 500, minUnitMarginPct: 0.5, paymentCostPct: 0.025, maxSellThroughWeeks: 12, exposure: { noSaleShare: 0.6, coverWeeks: 26 }, stockTrust: { blockedShare: 0.2, trustedShare: 0.8, unverifiedMaySupportPass: true } } };
+  const out = runSensitivity({ rawCandidate: raw, policy: basePolicy, demandFacts: healthyPeerFacts(), preparedVerification: new Map(), now: NOW });
+  assert.equal(out.baseline.verdict, VERDICTS.AVOID); // 47.5% < 50%
+  const margin = out.rows.filter((r) => r.setting === 'minUnitMarginPct');
+  assert.deepEqual(margin.map((r) => r.value), [0.4, 0.5, 0.6]);
+  assert.deepEqual(margin.map((r) => r.verdict), [VERDICTS.TEST, VERDICTS.AVOID, VERDICTS.AVOID]); // a looser hurdle admits it
+  assert.equal(margin.find((r) => r.value === 0.5).is_baseline, true);
+  const budget = out.rows.filter((r) => r.setting === 'testBudget').map((r) => r.value);
+  assert.deepEqual(budget, [250, 500, 1000]);
+  assert.ok(out.skipped.some((s) => s.setting === 'maxLeadTimeDays' && /unset/.test(s.reason))); // never invents a baseline
+  assert.ok(out.skipped.some((s) => s.setting === 'allowExploratoryTests'));
+  assert.match(renderSensitivity('c', out), /not recommendations/);
+  // The input policy object is not mutated by the sweeps.
+  assert.equal(basePolicy.buying.minUnitMarginPct, 0.5);
+});
+
+test('an unfilled count-sheet row is not a count: it is ignored, never treated as zero stock', () => {
+  const ledger = buildLedger(makeDemandData(), { config: DEMAND_CONFIG });
+  const prepared = prepareStockVerification([
+    { variant_id: 'v1', counted_units: null, counted_at: null }, { variant_id: 'v2', counted_units: 5, counted_at: null },
+    { variant_id: 'v3', counted_units: 0, counted_at: '2026-09-20T12:00:00Z' },
+  ], ledger);
+  assert.deepEqual([...prepared.keys()], ['v3']); // a real count of 0 is kept; blanks are not
+});
+
+test('unknown stays unknown: a template with null values is valid and reports exactly what is missing', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const template = JSON.parse(await readFile('data/local/habb/candidate.template.json', 'utf8').catch(() => '{"candidate_id":"T","unit_price":{"value":null,"basis":"QUOTED"},"moq":{"value":null,"basis":"QUOTED","per":"per_order"},"lead_time_days":{"value":null,"basis":"QUOTED"},"landed_cost":{"freight_per_unit":{"value":null,"basis":"ESTIMATED"},"duties_per_unit":{"value":null,"basis":"ESTIMATED"},"other_per_unit":null,"not_applicable":[]},"expected_retail_price":{"value":null,"tax_basis":"incl","basis":"ASSUMPTION"},"peer_sets":[]}'));
+  const r = run(template, { config: policy() });
+  assert.notEqual(r.reason_codes[0], 'INVALID_CANDIDATE_FILE');
+  assert.equal(r.verdict, VERDICTS.MORE_DATA);
+  const codes = check(r, 'inputs_complete').needs.map((n) => n.code);
+  for (const c of ['unit_price', 'moq', 'expected_retail_price', 'peer_sets']) assert.ok(codes.includes(c), c);
+  // A genuinely malformed number is still rejected.
+  assert.equal(evaluateCandidate({ rawCandidate: { candidate_id: 'x', unit_price: { value: -3 } }, demandFacts: healthyPeerFacts(), config: policy(), now: NOW }).reason_codes[0], 'INVALID_CANDIDATE_FILE');
+});
+
+test('reference peers are named by Shopify product id (gid or the numeric admin id); internal database keys are never accepted', () => {
+  const facts = mkFacts({
+    products: [
+      { ...peer({ id: 'a', units: 4, velocity: 0.5, price: 10, stock: 5, cls: 'ACTIVE_COVER' }), shopify_product_id: 'gid://shopify/Product/111' },
+      { ...peer({ id: 'b', units: 4, velocity: 0.7, price: 12, stock: 5, cls: 'ACTIVE_COVER' }), shopify_product_id: 'gid://shopify/Product/222' },
+      { ...peer({ id: 'c', units: 4, velocity: 0.9, price: 14, stock: 5, cls: 'ACTIVE_COVER' }), shopify_product_id: 'gid://shopify/Product/333' },
+    ],
+    variants: [],
+  });
+  const set = (ids) => run(candidate({ peer_sets: [{ reference_product_ids: ids }] }), { facts }).facts.peer_sets[0];
+  const mixed = set(['gid://shopify/Product/111', '222', '333']);
+  assert.equal(mixed.peers_total, 3); // gid and numeric ids both resolve
+  assert.equal(mixed.quality, 'USABLE');
+  const internal = set(['a', 'b']); // internal product_key values are not identities here
+  assert.equal(internal.peers_total, 0);
+  assert.deepEqual(internal.unresolved_ids, ['a', 'b']);
+});

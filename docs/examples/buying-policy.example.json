@@ -1,13 +1,16 @@
 {
+  "_README": "Merchant buying policy. Every null is a decision the merchant must make: a null makes the dependent check INCOMPLETE, it is never treated as 0 and never defaulted. Copy to data/local/buying-policy.json (gitignored) and fill in.",
   "buying": {
     "testBudget": null,
+    "exploratoryBudget": null,
+    "allowExploratoryTests": false,
     "minUnitMarginPct": null,
     "paymentCostPct": null,
     "taxRateAssumption": null,
-    "maxSellThroughWeeks": 12,
+    "maxSellThroughWeeks": null,
     "maxLeadTimeDays": null,
-    "allowExploratoryTests": false,
-    "exploratoryBudget": null
+    "exposure": { "noSaleShare": null, "coverWeeks": null },
+    "stockTrust": { "blockedShare": null, "trustedShare": null, "unverifiedMaySupportPass": null }
   },
   "gates": { "unitCostIsAllInVariableCost": false }
 }

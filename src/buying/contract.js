@@ -15,10 +15,18 @@ const CAPABILITY_VALUES = ['yes', 'no', 'unknown'];
 
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
+/** Shopify ids are canonical. A plain number (as seen in the admin URL) is expanded to its gid. */
+export function normalizeShopifyId(kind, id) {
+  const s = String(id).trim();
+  if (!/^\d+$/.test(s)) return s;
+  return kind === 'collection_ids' ? `gid://shopify/Collection/${s}` : `gid://shopify/Product/${s}`;
+}
+
 /** Accepts `12` or `{ value: 12, basis: 'QUOTED' }`; returns { value, basis } or null when absent. */
 function valued(raw, name, defaultBasis, errors, { min = 0, allowZero = false } = {}) {
   if (raw === undefined || raw === null) return null;
   const obj = typeof raw === 'object' ? raw : { value: raw };
+  if (obj.value === undefined || obj.value === null) return null; // { "value": null } = unknown, which is allowed
   if (!isNum(obj.value) || obj.value < min || (!allowZero && obj.value === 0)) {
     errors.push(`${name}: must be a ${allowZero ? 'non-negative' : 'positive'} number`);
     return null;
@@ -62,7 +70,7 @@ export function normalizeCandidate(raw, { merchantCurrency }) {
 
   const rr = raw.expected_retail_price;
   let retail = null;
-  if (rr !== undefined && rr !== null) {
+  if (rr !== undefined && rr !== null && !(typeof rr === 'object' && (rr.value === undefined || rr.value === null))) {
     const obj = typeof rr === 'object' ? rr : { value: rr };
     if (!isNum(obj.value) || obj.value <= 0) errors.push('expected_retail_price.value: must be a positive number');
     else {
@@ -89,7 +97,7 @@ export function normalizeCandidate(raw, { merchantCurrency }) {
     if (key === 'product_type') {
       if (typeof value !== 'string' || value.trim() === '' || value === 'UNCLASSIFIED') { errors.push(`peer_sets[${i}].product_type: a real product_type value (UNCLASSIFIED is not a category)`); continue; }
     } else if (!okList) { errors.push(`peer_sets[${i}].${key}: non-empty array of Shopify ids`); continue; }
-    peerSets.push({ label: set.label ?? `${key}#${i + 1}`, kind: key, ids: key === 'product_type' ? [value] : value });
+    peerSets.push({ label: set.label ?? `${key}#${i + 1}`, kind: key, ids: key === 'product_type' ? [value] : value.map((v) => normalizeShopifyId(key, v)) });
   }
 
   const caps = {};

@@ -244,7 +244,7 @@ export function buildEntityFacts(ctx, { products, collections, salesReconciled }
       partialUnits: ctx.partialUnitsByProduct.get(key) ?? 0,
     });
     productFacts.push({
-      kind: 'product', product_key: key, matched: Boolean(row),
+      kind: 'product', product_key: key, shopify_product_id: row?.source_id ?? null, matched: Boolean(row),
       title: row?.title ?? lines[0]?.title ?? 'Unmatched historical item',
       product_type: row?.product_type ?? null,
       category: row?.product_type ?? 'UNCLASSIFIED',
@@ -264,7 +264,7 @@ export function buildEntityFacts(ctx, { products, collections, salesReconciled }
     const parent = ledger.productById.get(v.product_id);
     const createdAt = parent?.source_created_at ? new Date(parent.source_created_at) : null;
     variantFacts.push({
-      kind: 'variant', variant_id: v.id, product_key: v.product_id, variant_title: v.title ?? null, product_title: parent?.title ?? null,
+      kind: 'variant', variant_id: v.id, shopify_variant_id: v.source_id ?? null, product_key: v.product_id, variant_title: v.title ?? null, product_title: parent?.title ?? null,
       category: parent?.product_type ?? 'UNCLASSIFIED',
       ...demandBlock(ctx, {
         lines, refunds: ctx.refundsByVariant.get(v.id) ?? [], variantIds: [v.id], createdAt,

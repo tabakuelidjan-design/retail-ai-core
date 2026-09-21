@@ -10,6 +10,7 @@ Internal codename for a generic retail AI system. HABB is the pilot merchant, ex
 - [`docs/security/`](docs/security/) — security baseline and current status.
 - [`docs/data-quality/`](docs/data-quality/) — data quality check catalogue.
 - [`docs/metrics/definitions.md`](docs/metrics/definitions.md) — versioned metric definitions (formula, sources, refund/discount/tax/missing-cost treatment).
+- [`docs/operations/`](docs/operations/) — buying policy calibration worksheet and the buying rehearsal workflow.
 - [`docs/principles/`](docs/principles/) — generic decision principles (governance for future recommendations; never alter calculations).
 - [`.claude/skills/`](.claude/skills/) — `retail-metrics`, `data-quality-rules`, `safe-deployment`.
 - [`config/merchants/`](config/merchants/) — merchant-specific configuration (data, not code).

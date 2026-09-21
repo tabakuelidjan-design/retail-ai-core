@@ -13,6 +13,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function prepareStockVerification(records, ledger) {
   const out = new Map();
   for (const r of records ?? []) {
+    if (r.counted_units == null || r.counted_at == null) continue; // an unfilled count-sheet row is not a count
     const at = new Date(r.counted_at);
     const soldSince = ledger.lineFacts
       .filter((l) => l.variantId === r.variant_id && l.orderedAt > at)
@@ -64,6 +65,7 @@ export function peerStockTrust(variants, verifications, cfg) {
   const share = (x) => (total > 0 ? Math.round((x / total) * 10000) / 10000 : 0);
   let trust = 'UNVERIFIED';
   if (total === 0) trust = 'NO_STOCK';
+  else if (cfg.blockedShare == null || cfg.trustedShare == null) trust = 'POLICY_MISSING'; // never compare against an unset threshold
   else if (share(unreliable) >= cfg.blockedShare) trust = 'BLOCKED';
   else if (share(verified) >= cfg.trustedShare) trust = 'TRUSTED';
   return {

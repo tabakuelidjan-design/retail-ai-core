@@ -52,7 +52,7 @@ export function evaluateCandidate({ rawCandidate, demandFacts, config, preparedV
   const L = econ.landed;
   const capitalCheck = checks.find((c) => c.id === 'test_capital');
   const caveats = [...new Set([
-    ...checks.filter((c) => c.status === 'PASS').flatMap((c) => c.conditional_on),
+    ...checks.filter((c) => c.status === 'PASS' || c.status === 'NOT_APPLICABLE').flatMap((c) => c.conditional_on),
     ...(demandFacts.window.history_days < config.demand.historyVerifiedDays ? [`SHORT_HISTORY_${demandFacts.window.history_days}_DAYS`] : []),
     'SEASONALITY_NOT_ASSESSED',
   ])];

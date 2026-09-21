@@ -12,8 +12,9 @@ const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
 function pick(facts, set) {
   const catalog = facts.products.filter((p) => p.matched);
   if (set.kind === 'reference_product_ids') {
-    const found = catalog.filter((p) => set.ids.includes(p.product_key));
-    return { products: found, unresolved: set.ids.filter((id) => !found.some((p) => p.product_key === id)) };
+    // Shopify product id is canonical; internal database keys are never accepted here.
+    const found = catalog.filter((p) => set.ids.includes(p.shopify_product_id));
+    return { products: found, unresolved: set.ids.filter((id) => !found.some((p) => p.shopify_product_id === id)) };
   }
   if (set.kind === 'collection_ids') {
     const found = catalog.filter((p) => p.collections.some((c) => set.ids.includes(c.source_id)));
