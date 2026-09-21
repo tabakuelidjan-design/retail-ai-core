@@ -21,9 +21,13 @@
     "buying:peer-sets": "node --env-file=.env src/buying/peer-sets.js",
     "buying:calibrate": "node --env-file=.env src/buying/calibrate.js",
     "marketing:report": "node --env-file=.env src/marketing/index.js",
-    "customers:report": "node --env-file=.env src/customers/index.js"
+    "customers:report": "node --env-file=.env src/customers/index.js",
+    "finance": "node --env-file=.env src/finance/cli.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pdfkit": "^0.20.2"
   }
 }

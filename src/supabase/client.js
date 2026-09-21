@@ -81,6 +81,17 @@ export function createSupabaseClient(config) {
       });
     },
 
+    /** Call a Postgres function (RPC), e.g. rpc('fin_next_number', { p_merchant, p_type, p_year }). */
+    async rpc(fn, args) {
+      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
+    },
+
+    /** DELETE rows matching raw PostgREST filters. Database triggers may refuse (e.g. locked finance documents). */
+    async delete(table, filters) {
+      const qs = new URLSearchParams(filters).toString();
+      return request(`/${table}?${qs}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    },
+
     /** Select rows with raw PostgREST query params, e.g. { select: 'id,unit_cost', variant_id: 'eq.<uuid>' }. */
     async select(table, params) {
       const qs = new URLSearchParams(params).toString();
