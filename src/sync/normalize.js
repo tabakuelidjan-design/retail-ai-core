@@ -193,6 +193,7 @@ export function normalizeOrder(node, merchantId, locationId) {
     currency: node.currencyCode,
     status: node.displayFinancialStatus,
     taxes_included: node.taxesIncluded,
+    is_test: node.test === true,
   };
 }
 

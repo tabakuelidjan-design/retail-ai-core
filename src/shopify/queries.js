@@ -67,6 +67,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
         node {
           id
           createdAt
+          test
           currencyCode
           taxesIncluded
           displayFinancialStatus
@@ -178,6 +179,30 @@ export const VARIANT_INVENTORY_COST_PAGE_QUERY = /* GraphQL */ `
         hasNextPage
         endCursor
       }
+    }
+  }
+`;
+
+// Order-level money totals as Shopify itself computes them, used only to
+// validate the engine's line-level numbers. Read-only, read_orders scope, no PII fields.
+export const ORDER_TOTALS_PAGE_QUERY = /* GraphQL */ `
+  query ($cursor: String, $searchQuery: String) {
+    orders(first: 50, after: $cursor, sortKey: CREATED_AT, query: $searchQuery) {
+      edges {
+        node {
+          id
+          createdAt
+          test
+          displayFinancialStatus
+          subtotalPriceSet { shopMoney { amount } }
+          currentSubtotalPriceSet { shopMoney { amount } }
+          totalDiscountsSet { shopMoney { amount } }
+          totalTaxSet { shopMoney { amount } }
+          totalRefundedSet { shopMoney { amount } }
+          shippingLine { taxLines { priceSet { shopMoney { amount } } } }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;

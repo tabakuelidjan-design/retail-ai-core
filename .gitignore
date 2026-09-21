@@ -6,3 +6,6 @@ node_modules/
 *.log
 supabase/.temp/
 .claude/settings.local.json
+
+# Generated reports contain real merchant figures - never commit
+reports/

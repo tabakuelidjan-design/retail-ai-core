@@ -10,6 +10,7 @@ export const FAKE_ORDER_1 = {
   id: 'gid://shopify/Order/1',
   createdAt: '2026-08-01T10:00:00Z',
   currencyCode: 'EUR',
+  test: false,
   taxesIncluded: true,
   displayFinancialStatus: 'PAID',
   retailLocation: { id: 'gid://shopify/Location/1' },
@@ -50,6 +51,7 @@ export const FAKE_ORDER_2_BASE = {
   id: 'gid://shopify/Order/2',
   createdAt: '2026-08-05T14:00:00Z',
   currencyCode: 'EUR',
+  test: false,
   taxesIncluded: true,
   displayFinancialStatus: 'PAID',
   retailLocation: null, // online order
