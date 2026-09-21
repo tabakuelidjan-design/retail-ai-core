@@ -3,7 +3,9 @@
 // append-only, one active invoice per source order, gapless per-year numbering), so tests exercise real invariants.
 
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
+import { formatNumber } from './numbering.js';
 
 const clone = (o) => structuredClone(o);
 
@@ -14,6 +16,7 @@ export function createMemoryStore() {
   const seqs = new Map();
   const companies = new Map();
   const supplierInvoices = [];
+  const hooks = { beforeCommit: null }; // failure injection for crash tests: throw to simulate a crash inside the transaction
 
   return {
     newId: () => randomUUID(),
@@ -56,6 +59,26 @@ export function createMemoryStore() {
     async listPayments(documentId) { return payments.filter((p) => p.documentId === documentId).map(clone); },
     async listPaymentsForMerchant(merchantId) { return payments.filter((p) => p.merchantId === merchantId).map(clone); },
 
+    /**
+     * ATOMIC issue: allocate the number, lock the document, hash it and append the audit event as ONE unit. Anything that throws
+     * before the commit point (including the injected beforeCommit hook) leaves sequence, document and events untouched.
+     */
+    async issueDocument({ merchantId, docId, expectedVersion, newStatus, numbering, year, canonical, placeholder, lockedAt, event }) {
+      const prev = docs.get(docId);
+      if (!prev || prev.merchantId !== merchantId) throw new FinanceError('DOCUMENT_NOT_FOUND', docId);
+      if (prev.lockedAt || prev.number || prev.version !== expectedVersion) throw new FinanceError('CONCURRENT_MODIFICATION');
+      const k = `${merchantId}|${prev.type}|${year}`;
+      const seq = (seqs.get(k) ?? 0) + 1; // tentative: NOT stored yet
+      const number = formatNumber({ [prev.type]: { prefix: numbering.prefix, pad: numbering.pad }, format: numbering.format }, prev.type, year, seq);
+      if ([...docs.values()].some((d) => d.merchantId === merchantId && d.type === prev.type && d.number === number)) throw new FinanceError('DUPLICATE_DOCUMENT_NUMBER', number);
+      const finalDoc = { ...clone(prev), number, status: newStatus, lockedAt, version: prev.version + 1, snapshotHash: createHash('sha256').update(canonical.split(placeholder).join(number)).digest('hex') };
+      const ev = { id: randomUUID(), merchantId, documentId: docId, at: lockedAt, actor: event.actor, action: event.action, fromStatus: prev.status, toStatus: newStatus, detail: JSON.parse(JSON.stringify(event.detail ?? {}).split(placeholder).join(number)) };
+      if (hooks.beforeCommit) hooks.beforeCommit({ number, seq }); // a crash here must change nothing
+      seqs.set(k, seq); docs.set(docId, finalDoc); events.push(Object.freeze(ev)); // commit point
+      return clone(finalDoc);
+    },
+    async peekNextNumber(merchantId, type, year) { return (seqs.get(`${merchantId}|${type}|${year}`) ?? 0) + 1; },
+
     async allocateNumber(merchantId, type, year) {
       const k = `${merchantId}|${type}|${year}`;
       const next = (seqs.get(k) ?? 0) + 1;
@@ -63,6 +86,8 @@ export function createMemoryStore() {
       return next;
     },
 
+    async listCompanies(merchantId) { return [...companies.values()].filter((c) => c.merchantId === merchantId).map(clone); },
+    async updateCompany(id, patch) { const c = companies.get(id); if (!c) return null; const row = { ...c, ...clone(patch), id, merchantId: c.merchantId }; companies.set(id, row); return clone(row); },
     async saveCompany(c) { const row = { id: c.id ?? randomUUID(), ...clone(c) }; companies.set(row.id, row); return clone(row); },
     async getCompany(id) { const c = companies.get(id); return c ? clone(c) : null; },
     async findCompany(merchantId, { vatNumber, enterpriseNumber }) {
@@ -71,6 +96,6 @@ export function createMemoryStore() {
     },
     async saveSupplierInvoice(s) { const row = { id: randomUUID(), ...clone(s) }; supplierInvoices.push(row); return clone(row); },
     async listSupplierInvoices(merchantId) { return supplierInvoices.filter((s) => s.merchantId === merchantId).map(clone); },
-    _debug: { docs, events, payments },
+    _debug: { docs, events, payments, seqs, hooks },
   };
 }

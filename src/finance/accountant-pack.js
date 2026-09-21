@@ -5,6 +5,7 @@
 
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { addDays as addLocalDays, localDateString, localMidnight } from '../metrics/windows.js';
+import { historyCoversPeriod } from '../sync/history.js';
 import { findNumberingGaps } from './numbering.js';
 import { verifyIntegrity, settlement } from './document.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
@@ -20,7 +21,7 @@ const sum = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
  * @param {{ledger: object, rawOrders: object[], docs: Array<{doc: object, payments: object[], creditNotes: object[]}>, period: {start: string, end: string},
  *   timeZone: string, now: Date, config: object, today: string, sources?: object}} p
  */
-export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone, now, config, today, dueSoonDays = 7 }) {
+export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone, now, config, today, dueSoonDays = 7, retailHistory = null }) {
   const anomalies = [];
   const flag = (code, severity, detail) => anomalies.push({ code, severity, detail });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(period.start) || !/^\d{4}-\d{2}-\d{2}$/.test(period.end) || period.end < period.start) throw new Error('period must be { start, end } as YYYY-MM-DD with end >= start');
@@ -37,7 +38,22 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
     const a = part(c);
     return [c, { orders: facts.orders.filter((o) => cls(o.id) === c).length, gross_sales: a.gross_sales, discounts: a.discounts, refunds: a.refunds, net_sales: a.net_sales, vat: a.tax, net_sales_ex_vat: a.net_sales_ex_tax }];
   }));
-  const retail = { orders: facts.orders.length, currency: ledger.currency, gross_sales: total.gross_sales, discounts: total.discounts, refunds: total.refunds, net_sales: total.net_sales, vat: total.tax, net_sales_ex_vat: total.net_sales_ex_tax, by_channel: byChannel, vat_by_rate: 'UNAVAILABLE (Retail Core stores VAT per line, not the rate)' };
+  // ---- retail VAT by rate: only from rates the source REPORTED per line (taxRateBp); anything else is explicitly unavailable ----
+  const lineById = new Map(ledger.lineFacts.map((l) => [l.orderLineId, l]));
+  const rateRows = new Map();
+  const bucket = (bp) => { const k = bp === null || bp === undefined ? 'unknown' : bp; if (!rateRows.has(k)) rateRows.set(k, { rateBp: k === 'unknown' ? null : k, taxable: 0, vat: 0, lines: 0 }); return rateRows.get(k); };
+  for (const l of facts.lines) { const b = bucket(l.taxRateBp); b.taxable += l.exTaxBeforeRefund; b.vat += l.tax; b.lines += 1; }
+  for (const r of facts.refunds) { const b = bucket(lineById.get(r.orderLineId)?.taxRateBp); b.taxable -= r.exTax; b.vat -= r.tax; }
+  const knownRates = [...rateRows.values()].filter((b) => b.rateBp !== null).sort((a, b) => a.rateBp - b.rateBp).map((b) => ({ vatRateBp: b.rateBp, taxableCents: toCents(b.taxable), vatCents: toCents(b.vat), lines: b.lines }));
+  const unknownRate = rateRows.get('unknown');
+  const retailVatByRate = {
+    status: unknownRate && (unknownRate.lines > 0 || Math.abs(unknownRate.taxable) > 0.004 || Math.abs(unknownRate.vat) > 0.004) ? 'PARTIAL' : knownRates.length || !facts.lines.length ? 'COMPLETE' : 'PARTIAL',
+    by_rate: knownRates,
+    unavailable: unknownRate ? { lines: unknownRate.lines, taxableCents: toCents(unknownRate.taxable), vatCents: toCents(unknownRate.vat), reason: 'THE_SOURCE_RATE_WAS_NOT_CAPTURED_FOR_THESE_LINES (synced before rate capture, or compound taxes); re-sync to populate' } : null,
+    reconciles_with_total_vat: Math.abs(sum([...rateRows.values()], (b) => b.vat) - total.tax) < 0.005,
+    basis: 'VAT rate as reported by the source per order line; base = line amount excl. tax minus refunded excl. tax',
+  };
+  const retail = { orders: facts.orders.length, currency: ledger.currency, gross_sales: total.gross_sales, discounts: total.discounts, refunds: total.refunds, net_sales: total.net_sales, vat: total.tax, net_sales_ex_vat: total.net_sales_ex_tax, by_channel: byChannel, vat_by_rate: retailVatByRate };
 
   // ---- finance documents in the period ----
   const issued = docs.filter(({ doc }) => doc.type !== 'quote' && ISSUED.includes(doc.status) && inPeriod(doc.issueDate, period));
@@ -55,15 +71,46 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   };
   const rates = new Map();
   for (const { doc } of standalone) for (const g of doc.totals.vatBreakdown) { const r = rates.get(g.vatRateBp) ?? { vatRateBp: g.vatRateBp, taxableCents: 0, vatCents: 0 }; r.taxableCents += sign(doc) * g.taxableCents; r.vatCents += sign(doc) * g.vatCents; rates.set(g.vatRateBp, r); }
+  const treatment = new Map();
+  for (const { doc } of standalone) {
+    const t = treatment.get(doc.vat.regime) ?? { regime: doc.vat.regime, taxableCents: 0, vatCents: 0, documents: 0, legalMentions: new Set() };
+    t.taxableCents += sign(doc) * doc.totals.netCents; t.vatCents += sign(doc) * doc.totals.vatCents; t.documents += 1;
+    if (doc.vat.mention) t.legalMentions.add(doc.vat.mention);
+    treatment.set(doc.vat.regime, t);
+  }
+  const b2bByTreatment = [...treatment.values()].map((t) => ({ regime: t.regime, taxableCents: t.taxableCents, vatCents: t.vatCents, documents: t.documents, legalMentions: [...t.legalMentions], exemptOrReverseCharge: t.regime !== 'domestic' }));
   const linkedBlock = {
     documents: linked.length, additive_to_revenue: false,
     gross_documented_cents: sum(linked, ({ doc }) => sign(doc) * doc.totals.grossCents),
     note: 'Documents an existing shop/POS sale already counted in the retail figures; excluded from totals to prevent double counting.',
   };
+  const creditNoteDocs = sameCurrency.filter(({ doc }) => doc.type === 'credit_note');
+  const creditNotesBlock = {
+    issued: creditNoteDocs.length,
+    gross_cents: sum(creditNoteDocs, ({ doc }) => doc.totals.grossCents),
+    standalone_gross_cents: sum(creditNoteDocs.filter(({ doc }) => doc.revenueBasis === 'standalone_b2b'), ({ doc }) => doc.totals.grossCents),
+    linked_gross_cents: sum(creditNoteDocs.filter(({ doc }) => doc.revenueBasis === 'linked_source_order'), ({ doc }) => doc.totals.grossCents),
+    note: 'Standalone credit notes reduce B2B sales; credit notes on invoices linked to a shop/POS sale are documentation (the shop refund carries the effect).',
+  };
   const totals = {
     sales_ex_vat_cents: toCents(retail.net_sales_ex_vat) + b2b.net_ex_vat_cents,
     vat_collected_cents: toCents(retail.vat) + b2b.vat_cents,
     sales_incl_vat_cents: toCents(retail.net_sales) + b2b.gross_incl_vat_cents,
+  };
+
+  // combined VAT by rate: retail known rates + standalone B2B rates. Retail lines without a reported rate stay separate and make it PARTIAL.
+  const combined = new Map();
+  const add = (bp, taxable, vat) => { const c = combined.get(bp) ?? { vatRateBp: bp, taxableCents: 0, vatCents: 0 }; c.taxableCents += taxable; c.vatCents += vat; combined.set(bp, c); };
+  for (const g of knownRates) add(g.vatRateBp, g.taxableCents, g.vatCents);
+  for (const g of rates.values()) add(g.vatRateBp, g.taxableCents, g.vatCents);
+  const vatSummary = {
+    status: retailVatByRate.status,
+    retail: retailVatByRate,
+    b2b: { by_rate: [...rates.values()].sort((a, b) => a.vatRateBp - b.vatRateBp), by_treatment: b2bByTreatment, exempt_or_reverse_charge_base_cents: sum(b2bByTreatment.filter((t) => t.exemptOrReverseCharge), (t) => t.taxableCents) },
+    combined_by_rate: [...combined.values()].sort((a, b) => a.vatRateBp - b.vatRateBp),
+    retail_unclassified: retailVatByRate.unavailable,
+    total_vat_cents: totals.vat_collected_cents,
+    note: 'Combined rows contain only amounts with a known rate. Retail lines whose rate was not captured are listed separately and are NOT distributed across rates.',
   };
 
   // ---- payment status of B2B invoices issued in the period ----
@@ -101,17 +148,19 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   // ---- completeness ----
   const reasons = [];
   const firstOrder = ledger.orders.length ? new Date(Math.min(...ledger.orders.map((o) => o.orderedAt))) : null;
-  if (!firstOrder) reasons.push('NO_RETAIL_ORDERS_LOADED');
+  if (!firstOrder && !historyCoversPeriod(retailHistory, period.start)) reasons.push('NO_RETAIL_ORDERS_LOADED');
   else {
     // Compare LOCAL DATES: history that starts mid-day on the period's first day fully covers that day's start of the period.
     const firstDate = localDateString(firstOrder, timeZone);
-    if (firstDate > period.start) reasons.push(`RETAIL_HISTORY_STARTS_${firstDate}_AFTER_PERIOD_START`);
+    if (firstDate > period.start && !historyCoversPeriod(retailHistory, period.start)) reasons.push(`RETAIL_HISTORY_STARTS_${firstDate}_AFTER_PERIOD_START`);
   }
   if (period.end >= today) reasons.push('PERIOD_NOT_CLOSED');
+  if (retailHistory?.lastSyncedAt && retailHistory.lastSyncedAt < window.end.toISOString()) reasons.push('RETAIL_LAST_SYNC_BEFORE_PERIOD_END');
   if (ledger.excluded.test) reasons.push(`${ledger.excluded.test}_TEST_ORDERS_EXCLUDED`);
   if (ledger.excluded.otherCurrency) reasons.push(`${ledger.excluded.otherCurrency}_ORDERS_IN_OTHER_CURRENCY_EXCLUDED`);
+  if (retailVatByRate.status === 'PARTIAL') reasons.push(`RETAIL_VAT_RATE_UNAVAILABLE_FOR_${retailVatByRate.unavailable?.lines ?? 0}_LINES`);
   const critical = anomalies.filter((a) => a.severity === 'critical').length;
-  const blockingGaps = reasons.filter((r) => r.startsWith('RETAIL_HISTORY') || r === 'PERIOD_NOT_CLOSED' || r === 'NO_RETAIL_ORDERS_LOADED');
+  const blockingGaps = reasons.filter((r) => r.startsWith('RETAIL_HISTORY') || r === 'RETAIL_LAST_SYNC_BEFORE_PERIOD_END' || r.startsWith('RETAIL_VAT_RATE') || r === 'PERIOD_NOT_CLOSED' || r === 'NO_RETAIL_ORDERS_LOADED');
 
   return {
     kind: 'accountant_pack', version: 'FIN-1',
@@ -122,7 +171,7 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
     ],
     definitions: 'Retail figures use the Phase 2A definitions unchanged (gross, discounts, refunds, net, tax); finance documents use integer cents with per-rate VAT rounding.',
     completeness: { status: blockingGaps.length || critical ? 'PARTIAL' : 'COMPLETE', reasons, unresolved_anomalies: anomalies.length, critical_anomalies: critical },
-    retail, b2b, b2b_linked: linkedBlock, vat_by_rate_b2b: [...rates.values()].sort((a, b) => a.vatRateBp - b.vatRateBp), totals,
+    retail, b2b, b2b_linked: linkedBlock, credit_notes: creditNotesBlock, vat_summary: vatSummary, vat_by_rate_b2b: [...rates.values()].sort((a, b) => a.vatRateBp - b.vatRateBp), totals,
     payment_status_of_period_invoices: pay, receivables,
     reconciliation: {
       status: suspected || critical ? 'REVIEW_REQUIRED' : 'CLEAN',

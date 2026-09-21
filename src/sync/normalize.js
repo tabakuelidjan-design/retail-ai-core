@@ -223,6 +223,17 @@ export function normalizeOrder(node, merchantId, locationId, { customerKeySecret
 }
 
 /**
+ * The VAT rate the source reported for a line, in basis points. No tax lines = the source reported no tax = 0.
+ * Several tax lines on one line (compound or multiple taxes) cannot be expressed as one rate = null (unavailable, never guessed).
+ * A source that does not supply a rate on the tax line also yields null.
+ */
+export function lineTaxRateBp(taxLines) {
+  if (!Array.isArray(taxLines) || taxLines.length === 0) return 0;
+  if (taxLines.length > 1) return null; // several taxes on one line cannot be expressed as one VAT rate
+  return typeof taxLines[0].rate === 'number' ? Math.round(taxLines[0].rate * 10000) : null;
+}
+
+/**
  * @param {object} lineItemNode a LineItem from ORDERS_PAGE_QUERY
  * @param {string} orderId local order uuid
  * @param {string | null} variantId local variant uuid, or null when the
@@ -245,6 +256,7 @@ export function normalizeOrderLine(lineItemNode, orderId, variantId, merchantId)
     unit_price: Number(lineItemNode.originalUnitPriceSet.shopMoney.amount),
     discount_amount: sumMoney(lineItemNode.discountAllocations.map((d) => d.allocatedAmountSet.shopMoney.amount)),
     tax_amount: taxAmount,
+    tax_rate_bp: lineTaxRateBp(lineItemNode.taxLines),
   };
 }
 

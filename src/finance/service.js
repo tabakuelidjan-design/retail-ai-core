@@ -3,7 +3,7 @@
 // merchant action and is refused for a non-merchant actor. Nothing here contacts an external system.
 
 import {
-  FinanceError, acceptQuote, deepFreeze, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
+  FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
   markSent, rejectQuote, sendQuote, settledStatus, settlement, submitForApproval, updateDraft, validateForIssue, verifyIntegrity,
 } from './document.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
@@ -19,9 +19,11 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
   const vatConfig = config.vat ?? { allowedRatesBp: [] };
   const numbering = { ...DEFAULT_NUMBERING, ...(config.numbering ?? {}) };
   const ctx = { vatConfig };
+  const numberingFor = (type) => ({ prefix: numbering[type].prefix, pad: numbering[type].pad, format: numbering.format });
 
   const seal = (d) => (d?.lockedAt ? deepFreeze(d) : d);
-  const must = async (id) => { const d = await store.getDocument(id); if (!d) throw new FinanceError('DOCUMENT_NOT_FOUND', id); return seal(d); };
+  // Tenant isolation: a document of another merchant is indistinguishable from a missing one (no enumeration).
+  const must = async (id) => { const d = await store.getDocument(id); if (!d || d.merchantId !== config.merchantId) throw new FinanceError('DOCUMENT_NOT_FOUND', id); return seal(d); };
   const persist = async (doc, prev, event) => {
     const saved = await store.saveDocument(doc, prev ? prev.version : null);
     if (event) await store.appendEvent({ ...event, documentId: doc.id, at: now() });
@@ -72,22 +74,21 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       return persist(doc, prev, event);
     },
 
-    /** The merchant's decision. APPROVE validates, THEN allocates the number, then issues: a failed check never burns a number. */
+    /**
+     * The merchant decision. APPROVE validates, then issues ATOMICALLY: number allocation, freezing, hash and audit event are one
+     * store transaction, so a failure or crash at any point leaves no burnt number and no half-issued document.
+     */
     async decide(id, decision, actor, note) {
       const prev = await must(id);
       if (actor?.type !== 'merchant') throw new FinanceError('APPROVAL_REQUIRES_A_MERCHANT_ACTOR');
-      let number;
-      if (decision === 'APPROVE') {
-        const r = await readiness(prev);
-        if (!r.ready) throw new FinanceError('NOT_READY_TO_ISSUE', r.errors.join(', '));
-        const fresh = await must(id);
-        if (fresh.version !== prev.version) throw new FinanceError('CONCURRENT_MODIFICATION');
-        const year = Number(prev.issueDate.slice(0, 4));
-        number = formatNumber(numbering, prev.type, year, await store.allocateNumber(config.merchantId, prev.type, year));
-      }
-      const { doc, event } = decide(prev, { decision, actor, number, at: now(), note, ctx });
-      const saved = await persist(doc, prev, event);
-      if (doc.type === 'credit_note' && decision === 'APPROVE' && doc.relatedDocumentId) await this.resettle(doc.relatedDocumentId, actor);
+      if (decision !== 'APPROVE') { const { doc, event } = decide(prev, { decision, actor, at: now(), note, ctx }); return persist(doc, prev, event); }
+      const r = await readiness(prev);
+      if (!r.ready) throw new FinanceError('NOT_READY_TO_ISSUE', r.errors.join(', '));
+      const at = now();
+      const placeholder = makeNumberPlaceholder();
+      const { doc: template, event } = decide(prev, { decision, actor, number: placeholder, at, note, ctx });
+      const saved = seal(await store.issueDocument({ merchantId: config.merchantId, docId: id, expectedVersion: prev.version, newStatus: 'ISSUED', numbering: numberingFor(prev.type), year: Number(prev.issueDate.slice(0, 4)), canonical: canonicalSnapshot(template), placeholder, lockedAt: at, event: { actor, action: event.action, detail: event.detail } }));
+      if (saved.type === 'credit_note' && saved.relatedDocumentId) await this.resettle(saved.relatedDocumentId, actor);
       return saved;
     },
 
@@ -100,10 +101,10 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       if (actor?.type !== 'merchant') throw new FinanceError('SENDING_REQUIRES_A_MERCHANT_ACTOR');
       const errors = validateForIssue(prev, ctx);
       if (errors.length) throw new FinanceError('QUOTE_NOT_READY', errors.join(', '));
-      const year = Number(prev.issueDate.slice(0, 4));
-      const number = formatNumber(numbering, 'quote', year, await store.allocateNumber(config.merchantId, 'quote', year));
-      const { doc, event } = sendQuote(prev, { actor, number, at: now(), ctx });
-      return persist(doc, prev, event);
+      const at = now();
+      const placeholder = makeNumberPlaceholder();
+      const { doc: template, event } = sendQuote(prev, { actor, number: placeholder, at, ctx });
+      return seal(await store.issueDocument({ merchantId: config.merchantId, docId: id, expectedVersion: prev.version, newStatus: 'SENT', numbering: numberingFor('quote'), year: Number(prev.issueDate.slice(0, 4)), canonical: canonicalSnapshot(template), placeholder, lockedAt: at, event: { actor, action: event.action, detail: event.detail } }));
     },
     async acceptQuote(id, actor) { const prev = await must(id); const { doc, event } = acceptQuote(prev, { actor, at: now() }); return persist(doc, prev, event); },
     async rejectQuote(id, actor) { const prev = await must(id); const { doc, event } = rejectQuote(prev, { actor, at: now() }); return persist(doc, prev, event); },
@@ -153,7 +154,28 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       const s = settlement(doc, await store.listPayments(id), await relatedCreditNotes(doc));
       return { doc, settlement: s, effectiveStatus: effectiveStatus(doc, s, today()), integrity: verifyIntegrity(doc) };
     },
-    events: (id) => store.listEvents(id),
+    // ---- company directory (merchant-scoped) ----
+    listCompanies: () => store.listCompanies(config.merchantId),
+    getCompany: async (id) => { const c = await store.getCompany(id); if (!c || c.merchantId !== config.merchantId) throw new FinanceError('COMPANY_NOT_FOUND', id); return c; },
+    async saveCompany(company, actor) {
+      if (company.vatNumber || company.enterpriseNumber) {
+        const dup = await store.findCompany(config.merchantId, { vatNumber: company.vatNumber, enterpriseNumber: company.enterpriseNumber });
+        if (dup) throw new FinanceError('COMPANY_ALREADY_EXISTS', dup.id);
+      }
+      const saved = await store.saveCompany({ ...company, merchantId: config.merchantId });
+      await store.appendEvent({ documentId: null, merchantId: config.merchantId, actor, action: 'COMPANY_CREATED', fromStatus: null, toStatus: null, detail: { companyId: saved.id, source: saved.source ?? 'manual' }, at: now() });
+      return saved;
+    },
+    async updateCompany(id, company, actor) {
+      const cur = await this.getCompany(id);
+      const dup = (company.vatNumber || company.enterpriseNumber) ? await store.findCompany(config.merchantId, { vatNumber: company.vatNumber, enterpriseNumber: company.enterpriseNumber }) : null;
+      if (dup && dup.id !== id) throw new FinanceError('COMPANY_ALREADY_EXISTS', dup.id);
+      const saved = await store.updateCompany(id, { ...cur, ...company });
+      await store.appendEvent({ documentId: null, merchantId: config.merchantId, actor, action: 'COMPANY_UPDATED', fromStatus: null, toStatus: null, detail: { companyId: id }, at: now() });
+      return saved;
+    },
+    events: async (id) => { await must(id); return store.listEvents(id); },
+    peekNextNumber: async (type, issueDate) => { const y = Number(issueDate.slice(0, 4)); return formatNumber(numbering, type, y, await store.peekNextNumber(config.merchantId, type, y)); },
     get: must,
     ctx,
   };
