@@ -17,7 +17,7 @@
 // upgrade path is a persisted watermark on updated_at with a safety overlap
 // - not implemented now, to avoid over-engineering for 45 rows.
 
-import { ORDERS_PAGE_QUERY } from '../shopify/queries.js';
+import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY } from '../shopify/queries.js';
 import { normalizeOrderAttribution } from '../marketing/adapters/shopify.js';
 import { normalizeOrder, normalizeOrderLine, normalizeRefund, normalizeRefundLine } from './normalize.js';
 
@@ -32,7 +32,7 @@ export function sixtyDayWindowQuery(now = new Date()) {
 /**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
- * @param {{merchantId: string, now?: Date}} opts
+ * @param {{merchantId: string, now?: Date, customerKeySecret?: string|null}} opts  customerKeySecret: when set, orders carry a keyed hash of the customer id
  */
 export async function syncOrders({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
@@ -64,7 +64,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
   while (hasNextPage) {
     let page;
     try {
-      page = await shopify.graphql(ORDERS_PAGE_QUERY, { cursor, searchQuery });
+      page = await shopify.graphql(opts.customerKeySecret ? ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY : ORDERS_PAGE_QUERY, { cursor, searchQuery });
     } catch (err) {
       summary.errors.push(`fetch: ${err.message}`);
       break;
@@ -79,7 +79,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
         : null;
       if (!locationId) summary.ordersWithoutLocation += 1;
 
-      const orderRow = normalizeOrder(orderNode, opts.merchantId, locationId);
+      const orderRow = normalizeOrder(orderNode, opts.merchantId, locationId, { customerKeySecret: opts.customerKeySecret });
       const [order] = await supabase.upsert('orders', [orderRow], {
         onConflict: 'merchant_id,source_system,source_id',
       });

@@ -3,6 +3,7 @@
 // Shopify or Supabase connection.
 
 import { normalizeOrderChannel } from '../marketing/adapters/shopify.js';
+import { pseudonymizeCustomerId } from '../customers/pseudonym.js';
 
 /** @param {{id: string, name: string, myshopifyDomain: string}} shop */
 export function normalizeMerchant(shop) {
@@ -202,7 +203,7 @@ const sumMoney = (amounts) => amounts.reduce((total, a) => total + Number(a), 0)
  *   order has no retailLocation (e.g. an online order) or its location
  *   hasn't been synced by the catalog sync yet.
  */
-export function normalizeOrder(node, merchantId, locationId) {
+export function normalizeOrder(node, merchantId, locationId, { customerKeySecret = null } = {}) {
   return {
     merchant_id: merchantId,
     location_id: locationId,
@@ -214,6 +215,8 @@ export function normalizeOrder(node, merchantId, locationId) {
     taxes_included: node.taxesIncluded,
     is_test: node.test === true,
     ...normalizeOrderChannel(node),
+    // Only present when customer keys are enabled: a keyed hash of the customer id (never the id itself).
+    ...(customerKeySecret ? { customer_key: pseudonymizeCustomerId(node.customer?.id, customerKeySecret) } : {}),
   };
 }
 

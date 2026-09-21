@@ -7,6 +7,7 @@ export const METRICS_VERSION = '2A.1';
 export const DEMAND_VERSION = '2B.1';
 export const BUYING_VERSION = '2C.1';
 export const MARKETING_VERSION = '2D.2';
+export const CUSTOMERS_VERSION = '2E.1';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
@@ -80,6 +81,15 @@ export const DEFAULT_CONFIG = {
       concentrationTopN: 5,
       maxTargetMarketGap: 0.3, // search vs sessions non-target share may differ by this much before a mismatch is reported
     },
+  },
+  // Customer behaviour facts (Phase 2E). Order-level only: no customer identity is stored or read.
+  customers: {
+    minOrdersPerGroup: 30, // each group compared (new vs returning) needs this many orders before a comparison is safe for Phase 3
+    shortHistoryDays: 90, // an order history shorter than this is flagged SHORT_HISTORY
+    basket: { minOrders: 30, minPairSupport: 3, maxPairs: 20 }, // co-purchase pairs are listed only above both thresholds
+    minCustomers: 30, // customer-level averages, repeat rate and concentration need this many identified customers
+    minIntervals: 10, // time-between-purchases needs this many observed gaps
+    concentration: { topN: 5, riskTop1Share: 0.2, riskTopNShare: 0.5 }, // shares above these are flagged (only once the sample gate is open)
   },
   // Buying Intelligence Lite (Phase 2C). Money thresholds are merchant policy and are NOT defaulted:
   // a null value makes the dependent check INCOMPLETE instead of inventing a number.
