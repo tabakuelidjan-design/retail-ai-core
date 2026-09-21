@@ -14,11 +14,12 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { readFile } from 'node:fs/promises';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
+import { createCatalogPicker } from '../catalog.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
-import { formatCents } from '../money.js';
+import { formatCents, fromScaled } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
 import { prepareTransmission } from '../peppol.js';
 import { buildReceivables } from '../receivables.js';
@@ -56,7 +57,7 @@ export function createFinanceApp(deps) {
 
   // ---------- plumbing ----------
   const headers = (extra = {}) => ({
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.shopify.com; frame-src 'self'; object-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...extra,
   });
   const send = (res, status, body, extra = {}) => { res.writeHead(status, headers(extra)); res.end(body); };
@@ -94,10 +95,11 @@ export function createFinanceApp(deps) {
     if (!doc.totals) return null;
     const t = doc.totals;
     return {
-      netCents: t.netCents, vatCents: t.vatCents, grossCents: t.grossCents, discountCents: t.discountCents,
+      netCents: t.netCents, vatCents: t.vatCents, grossCents: t.grossCents, discountCents: t.discountCents, roundingCents: t.roundingCents ?? 0, payableCents: t.grossCents + (t.roundingCents ?? 0),
+      rounding: disp(t.roundingCents ?? 0, doc), payable: disp(t.grossCents + (t.roundingCents ?? 0), doc),
       net: disp(t.netCents, doc), vat: disp(t.vatCents, doc), gross: disp(t.grossCents, doc), discount: disp(t.discountCents, doc),
       vatBreakdown: t.vatBreakdown.map((g) => ({ ...g, taxable: disp(g.taxableCents, doc), vatAmount: disp(g.vatCents, doc) })),
-      lines: t.lines.map((l) => ({ position: l.position, netCents: l.netCents, grossCents: l.grossCents, discountCents: l.discountCents, net: disp(l.netCents, doc), unitPrice: unitPriceText(l.priceMicro, doc.language), quantity: qtyText(l.qtyMilli), discount: l.discountBp ? `${pctText(l.discountBp)}%` : l.discountCents ? disp(l.discountCents, doc) : '', vatRate: `${pctText(l.vatRateBp)}%` })),
+      lines: t.lines.map((l) => ({ position: l.position, netCents: l.netCents, grossCents: l.grossCents, discountCents: l.discountCents, net: disp(l.netCents, doc), priceOrigin: l.priceOrigin ?? 'NET_MANUAL', unitPriceRaw: fromScaled(l.priceMicro, 4), unitPrice: unitPriceText(l.priceMicro, doc.language), quantity: qtyText(l.qtyMilli), discount: l.discountBp ? `${pctText(l.discountBp)}%` : l.discountCents ? disp(l.discountCents, doc) : '', vatRate: `${pctText(l.vatRateBp)}%` })),
     };
   }
   function actionsFor(doc, s, credited) {
@@ -113,14 +115,14 @@ export function createFinanceApp(deps) {
     if (doc.status === 'READY_FOR_APPROVAL') a.push('approve', 'modify', 'reject');
     if (['ISSUED'].includes(doc.status)) a.push('mark_sent');
     if (doc.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(doc.status) && s && s.remainingCents > 0) a.push('add_payment');
-    if (doc.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'PAID'].includes(doc.status) && s && credited < doc.totals.grossCents) a.push('credit_note');
+    if (doc.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'PAID'].includes(doc.status) && s && credited < doc.totals.grossCents + (doc.totals.roundingCents ?? 0)) a.push('credit_note');
     if (doc.lockedAt) a.push('ubl');
     return [...a, ...pdf];
   }
   const rowOf = (doc, s, today) => ({
     id: doc.id, type: doc.type, number: doc.number, status: doc.status, effectiveStatus: s ? effectiveStatus(doc, s, today) : doc.status,
     customer: doc.customer?.name ?? null, issueDate: doc.issueDate, dueDate: doc.dueDate, validUntil: doc.validUntil, currency: doc.currency, language: doc.language,
-    grossCents: doc.totals?.grossCents ?? null, gross: doc.totals ? disp(doc.totals.grossCents, doc) : null, remainingCents: s ? s.remainingCents : null, remaining: s ? disp(s.remainingCents, doc) : null,
+    grossCents: doc.totals?.grossCents ?? null, gross: doc.totals ? disp(doc.totals.grossCents + (doc.totals.roundingCents ?? 0), doc) : null, remainingCents: s ? s.remainingCents : null, remaining: s ? disp(s.remainingCents, doc) : null,
     revenueBasis: doc.revenueBasis, sourceOrderId: doc.sourceOrderId, relatedDocumentId: doc.relatedDocumentId, quoteExpired: doc.type === 'quote' && doc.status === 'SENT' && !!doc.validUntil && today > doc.validUntil,
   });
 
@@ -436,6 +438,22 @@ export function createFinanceApp(deps) {
     const n = normalizeBelgianNumber(sanitizeText(ctx.body?.enterpriseNumber, 30));
     if (!n.ok) fields([{ field: 'enterpriseNumber', code: `BELGIAN_NUMBER_${n.reason}` }]);
     json(ctx.res, 200, await searchFor(settings, svc).resolve({ enterpriseNumber: n.digits, name: sanitizeText(ctx.body?.name, 120), status: sanitizeText(ctx.body?.status, 80) }));
+  });
+
+  // ---------- product catalogue picker (Retail Core is read; nothing is stored or written here) ----------
+  const picker = () => { if (!retail?.searchCatalog) throw new HttpError(503, 'RETAIL_UNAVAILABLE'); return createCatalogPicker({ retail, priceSource: deps.priceSource ?? null }); };
+  on('GET', '/api/catalog/search', async (ctx) => {
+    const q = sanitizeText(ctx.url.searchParams.get('q'), 80) ?? '';
+    if (q.length < 2) return json(ctx.res, 200, { rows: [], message: 'Type at least 2 characters: a product name, variant or SKU.' });
+    json(ctx.res, 200, { rows: await picker().search(q) });
+  });
+  on('POST', '/api/catalog/select', async (ctx) => {
+    const { settings } = await servicesFor();
+    const id = sanitizeText(ctx.body?.variantId, 64);
+    if (!id) fields([{ field: 'variantId', code: 'REQUIRED' }]);
+    const r = await picker().select(id, { allowedRatesBp: settings.vat.allowedRatesBp });
+    if (!r.found) throw new HttpError(404, 'PRODUCT_NOT_FOUND');
+    json(ctx.res, 200, r);
   });
 
   // ---------- orders (linking) ----------

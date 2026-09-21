@@ -9,13 +9,13 @@ import { summaryLines } from './accountant-pack.js';
 
 const L = {
   fr: { quote: 'DEVIS', invoice: 'FACTURE', credit_note: 'NOTE DE CRÉDIT', draft: 'BROUILLON', number: 'N°', date: 'Date', due: 'Échéance', valid: 'Valable jusqu’au', customer: 'Client', vat: 'TVA', company: 'N° d’entreprise',
-    desc: 'Description', qty: 'Qté', unit: 'Prix unit.', disc: 'Remise', rate: 'TVA', net: 'Montant HT', totals: 'Totaux', totalNet: 'Total HT', totalVat: 'Total TVA', totalGross: 'Total TTC', paymentDue: 'À payer',
+    desc: 'Description', qty: 'Qté', unit: 'Prix unit.', disc: 'Remise', rate: 'TVA', net: 'Montant HT', totals: 'Totaux', totalNet: 'Total HT', totalVat: 'Total TVA', totalGross: 'Total TTC', rounding: 'Arrondi', paymentDue: 'À payer',
     pay: 'Paiement', iban: 'IBAN', bic: 'BIC', ref: 'Communication', terms: 'Conditions de paiement', notes: 'Remarques', original: 'Facture d’origine', reason: 'Motif', breakdown: 'Détail TVA', taxable: 'Base', page: 'Page' },
   nl: { quote: 'OFFERTE', invoice: 'FACTUUR', credit_note: 'CREDITNOTA', draft: 'CONCEPT', number: 'Nr.', date: 'Datum', due: 'Vervaldatum', valid: 'Geldig tot', customer: 'Klant', vat: 'BTW', company: 'Ondernemingsnr.',
-    desc: 'Omschrijving', qty: 'Aantal', unit: 'Eenh.prijs', disc: 'Korting', rate: 'BTW', net: 'Bedrag excl.', totals: 'Totalen', totalNet: 'Totaal excl. BTW', totalVat: 'Totaal BTW', totalGross: 'Totaal incl. BTW', paymentDue: 'Te betalen',
+    desc: 'Omschrijving', qty: 'Aantal', unit: 'Eenh.prijs', disc: 'Korting', rate: 'BTW', net: 'Bedrag excl.', totals: 'Totalen', totalNet: 'Totaal excl. BTW', totalVat: 'Totaal BTW', totalGross: 'Totaal incl. BTW', rounding: 'Afronding', paymentDue: 'Te betalen',
     pay: 'Betaling', iban: 'IBAN', bic: 'BIC', ref: 'Mededeling', terms: 'Betalingsvoorwaarden', notes: 'Opmerkingen', original: 'Oorspronkelijke factuur', reason: 'Reden', breakdown: 'BTW-detail', taxable: 'Basis', page: 'Pagina' },
   en: { quote: 'QUOTE', invoice: 'INVOICE', credit_note: 'CREDIT NOTE', draft: 'DRAFT', number: 'No.', date: 'Date', due: 'Due date', valid: 'Valid until', customer: 'Customer', vat: 'VAT', company: 'Company no.',
-    desc: 'Description', qty: 'Qty', unit: 'Unit price', disc: 'Discount', rate: 'VAT', net: 'Net amount', totals: 'Totals', totalNet: 'Total excl. VAT', totalVat: 'Total VAT', totalGross: 'Total incl. VAT', paymentDue: 'Amount due',
+    desc: 'Description', qty: 'Qty', unit: 'Unit price', disc: 'Discount', rate: 'VAT', net: 'Net amount', totals: 'Totals', totalNet: 'Total excl. VAT', totalVat: 'Total VAT', totalGross: 'Total incl. VAT', rounding: 'Rounding', paymentDue: 'Amount due',
     pay: 'Payment', iban: 'IBAN', bic: 'BIC', ref: 'Reference', terms: 'Payment terms', notes: 'Notes', original: 'Original invoice', reason: 'Reason', breakdown: 'VAT breakdown', taxable: 'Taxable', page: 'Page' },
 };
 
@@ -119,8 +119,9 @@ export async function renderDocumentPdf(doc, { settlement = null, originalNumber
   for (const g of doc.totals.vatBreakdown) { pdf.text(`${pct(g.vatRateBp, lang)}  ${t.taxable} ${money(g.taxableCents, lang)}  ${t.vat} ${money(g.vatCents, lang)}`, 50, by); by += 11; }
   let ty = y;
   const row = (label, value, bold) => { pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 10 : 9).fillColor('#111111'); pdf.text(label, 340, ty, { width: 110 }); pdf.text(`${value} ${doc.currency}`, 445, ty, { width: 100, align: 'right' }); ty += bold ? 16 : 13; };
-  row(t.totalNet, money(doc.totals.netCents, lang)); row(t.totalVat, money(doc.totals.vatCents, lang)); row(t.totalGross, money(doc.totals.grossCents, lang), true);
-  if (settlement && doc.type === 'invoice') row(t.paymentDue, money(settlement.remainingCents, lang), true);
+  row(t.totalNet, money(doc.totals.netCents, lang)); row(t.totalVat, money(doc.totals.vatCents, lang)); row(t.totalGross, money(doc.totals.grossCents, lang), !doc.totals.roundingCents);
+  if (doc.totals.roundingCents) { row(t.rounding, money(doc.totals.roundingCents, lang)); row(t.paymentDue, money(doc.totals.grossCents + doc.totals.roundingCents, lang), true); }
+  else if (settlement && doc.type === 'invoice') row(t.paymentDue, money(settlement.remainingCents, lang), true);
   y = Math.max(by, ty) + 14;
 
   if (doc.vat.mention) { pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor('#111111').text(doc.vat.mention, 50, y, { width: 495 }); y = pdf.y + 8; }

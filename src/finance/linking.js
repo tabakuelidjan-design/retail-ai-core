@@ -37,7 +37,7 @@ export function checkLinkage(doc, { orderTotals, invoices, dupWindowDays = 3, to
     else if (!t) { errors.push('SOURCE_ORDER_NOT_FOUND_IN_RETAIL_CORE'); checks.source_order_verified = 'failed'; }
     else {
       checks.source_order_verified = 'ok';
-      if (doc.type === 'invoice' && Math.abs(t.grossCents - doc.totals.grossCents) > toleranceCents) warnings.push(`LINKED_AMOUNT_DIFFERS_FROM_SOURCE_ORDER (invoice ${doc.totals.grossCents}, order ${t.grossCents} cents)`);
+      if (doc.type === 'invoice' && Math.abs(t.grossCents - (doc.totals.grossCents + (doc.totals.roundingCents ?? 0))) > toleranceCents) warnings.push(`LINKED_AMOUNT_DIFFERS_FROM_SOURCE_ORDER (invoice ${(doc.totals.grossCents + (doc.totals.roundingCents ?? 0))}, order ${t.grossCents} cents)`);
     }
     if (doc.type === 'invoice') {
       const other = invoices.filter((i) => i.type === 'invoice' && i.id !== doc.id && i.sourceOrderId === doc.sourceOrderId && i.status !== 'CANCELLED');
@@ -51,7 +51,7 @@ export function checkLinkage(doc, { orderTotals, invoices, dupWindowDays = 3, to
       checks.duplicate_scan = 'ok';
       const linked = new Set(invoices.filter((i) => i.type === 'invoice' && i.sourceOrderId && i.status !== 'CANCELLED').map((i) => i.sourceOrderId));
       const at = Date.parse(`${doc.issueDate}T00:00:00Z`);
-      const suspects = [...orderTotals.values()].filter((t) => !linked.has(t.orderId) && Math.abs(t.grossCents - doc.totals.grossCents) <= toleranceCents && Math.abs(t.at - at) <= dupWindowDays * DAY);
+      const suspects = [...orderTotals.values()].filter((t) => !linked.has(t.orderId) && Math.abs(t.grossCents - (doc.totals.grossCents + (doc.totals.roundingCents ?? 0))) <= toleranceCents && Math.abs(t.at - at) <= dupWindowDays * DAY);
       if (suspects.length) {
         checks.duplicate_scan = 'suspected';
         if (!doc.acknowledgedNotDuplicate) errors.push(`POSSIBLE_DUPLICATE_OF_SHOP_SALE (${suspects.length} unlinked order(s) with the same total within ${dupWindowDays} days): link it, or acknowledge it is a separate sale`);

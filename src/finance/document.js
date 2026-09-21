@@ -3,7 +3,7 @@
 // All amounts are integers (see money.js). No language model calculates or judges anything here.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { fromScaled, lineGrossCents, percentOfCents, toCents, toPriceMicro, toQtyMilli, percentToBp } from './money.js';
+import { BP, divRound, fromScaled, lineGrossCents, percentOfCents, toCents, toPriceMicro, toQtyMilli, percentToBp } from './money.js';
 import { validateVat, vatBreakdown, VAT_REGIMES } from './vat.js';
 
 export const DOC_TYPES = ['quote', 'invoice', 'credit_note'];
@@ -25,6 +25,8 @@ const canon = (v) => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'objec
 export function deepFreeze(o) { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) deepFreeze(v); } return o; }
 const clone = (o) => structuredClone(o);
 
+export const PRICE_ORIGINS = ['NET_MANUAL', 'GROSS_CATALOGUE'];
+
 // ---------- lines and totals ----------
 /**
  * Normalise a human line { description, quantity, unitPrice, discountPercent?, discountAmount?, vatRate } (decimal strings or
@@ -43,14 +45,36 @@ export function normalizeLine(input, position) {
   if (discountCents === null || discountCents < 0) errors.push(`LINE_${position}_DISCOUNT_AMOUNT_INVALID`);
   if (discountBp > 0 && discountCents > 0) errors.push(`LINE_${position}_DISCOUNT_PERCENT_AND_AMOUNT_BOTH_SET`);
   const vatRateBp = input.vatRate == null ? null : percentToBp(input.vatRate);
+  // PRICE_ORIGIN says which amount is authoritative: NET_MANUAL = the ex-VAT unit price the merchant typed; GROSS_CATALOGUE = the
+  // consumer price including VAT from the catalogue (the ex-VAT price is then only derived, at full precision, never rounded early).
+  if (input.priceOrigin != null && !PRICE_ORIGINS.includes(input.priceOrigin)) errors.push(`LINE_${position}_PRICE_ORIGIN_INVALID`);
+  const gross = input.priceOrigin === 'GROSS_CATALOGUE';
+  let grossFields = {};
+  if (gross) {
+    const grossUnitMicro = toPriceMicro(input.grossUnitPrice);
+    const grossVatRateBp = input.grossVatRate == null ? vatRateBp : percentToBp(input.grossVatRate);
+    if (grossUnitMicro === null || grossUnitMicro < 0) errors.push(`LINE_${position}_GROSS_PRICE_INVALID`);
+    if (grossVatRateBp === null) errors.push(`LINE_${position}_GROSS_VAT_RATE_MISSING`);
+    grossFields = { priceOrigin: 'GROSS_CATALOGUE', grossUnitMicro, grossVatRateBp };
+  }
+  const derivedNetMicro = gross && grossFields.grossUnitMicro !== null && grossFields.grossVatRateBp !== null
+    ? Number(divRound(BigInt(grossFields.grossUnitMicro) * BP, BP + BigInt(grossFields.grossVatRateBp))) : null;
   return {
-    line: { position, description: String(input.description ?? '').trim(), qtyMilli, priceMicro, discountBp: discountBp ?? 0, discountCents: discountCents ?? 0, vatRateBp, unit: input.unit ?? null, sku: input.sku ?? null },
-    errors,
+    line: { position, description: String(input.description ?? '').trim(), qtyMilli, priceMicro: gross ? derivedNetMicro : priceMicro, ...grossFields, discountBp: discountBp ?? 0, discountCents: discountCents ?? 0, vatRateBp, unit: input.unit ?? null, sku: input.sku ?? null, ...(input.catalog ? { catalog: clone(input.catalog) } : {}) },
+    errors: gross ? errors.filter((x) => x !== `LINE_${position}_UNIT_PRICE_INVALID`) : errors,
   };
 }
 
 /** Compute one line's amounts. Discount is taken off the rounded line gross; net can never be negative. */
 export function computeLine(l) {
+  if (l.priceOrigin === 'GROSS_CATALOGUE') {
+    // one single rounding, from the exact value: net = qty x gross unit price x (1 - discount) / (1 + VAT rate of the catalogue price)
+    const q = BigInt(l.qtyMilli); const G = BigInt(l.grossUnitMicro); const den = 100000n * (BP + BigInt(l.grossVatRateBp));
+    const before = Number(divRound(q * G * BP, den));
+    const net = l.discountBp > 0 ? Number(divRound(q * G * (BP - BigInt(l.discountBp)), den)) : before - l.discountCents;
+    if (net < 0) throw new FinanceError('DISCOUNT_EXCEEDS_LINE_AMOUNT', `line ${l.position}`);
+    return { grossCents: before, discountCents: before - net, netCents: net };
+  }
   const gross = lineGrossCents(l.qtyMilli, l.priceMicro);
   const discount = l.discountBp > 0 ? percentOfCents(gross, l.discountBp) : l.discountCents;
   if (discount > gross) throw new FinanceError('DISCOUNT_EXCEEDS_LINE_AMOUNT', `line ${l.position}`);
@@ -60,15 +84,54 @@ export function computeLine(l) {
 /** Deterministic totals: lines -> per-rate VAT (rounded once per rate group) -> document totals. */
 export function computeTotals(lines) {
   const computed = lines.map((l) => ({ ...l, ...computeLine(l) }));
+  const targets = allocateCatalogueGroups(lines, computed);
   const breakdown = vatBreakdown(computed.map((l) => ({ netCents: l.netCents, vatRateBp: l.vatRateBp })));
   const netCents = computed.reduce((a, l) => a + l.netCents, 0);
   const vatCents = breakdown.reduce((a, g) => a + g.vatCents, 0);
+  // Explicit payable rounding (EN 16931 BT-114): only where every line of a VAT rate is a catalogue price incl. VAT, so that the
+  // consumer price stays exactly what the catalogue says. EN 16931 fixes the taxable base (rounded line nets) and the VAT
+  // (base x rate, rounded), so an unreachable tax-inclusive amount can only be met by this separate, visible adjustment.
+  let roundingCents = 0;
+  for (const g of breakdown) { const t = targets.get(g.vatRateBp); if (t !== undefined) roundingCents += t - (g.taxableCents + g.vatCents); }
   return {
     lines: computed, vatBreakdown: breakdown,
     grossBeforeDiscountCents: computed.reduce((a, l) => a + l.grossCents, 0),
     discountCents: computed.reduce((a, l) => a + l.discountCents, 0),
-    netCents, vatCents, grossCents: netCents + vatCents,
+    netCents, vatCents, grossCents: netCents + vatCents, roundingCents, payableCents: netCents + vatCents + roundingCents,
   };
+}
+
+/** Amount to pay on a document: tax-inclusive total (BT-112) plus the explicit rounding amount (BT-114), if any. Old documents have none. */
+export const payableOf = (totals) => totals.grossCents + (totals.roundingCents ?? 0);
+
+const isCatalogueAuthoritative = (l) => l.priceOrigin === 'GROSS_CATALOGUE' && l.grossVatRateBp === l.vatRateBp && !(l.discountBp === 0 && l.discountCents > 0);
+/**
+ * For each VAT rate whose lines are ALL catalogue prices incl. VAT: round once at the group (the exact net base), then spread the cents
+ * over the lines (largest remainder, ties by position) so the line nets add up to that base. Returns the authoritative tax-inclusive
+ * amount per such rate. Mutates the computed lines' netCents / discount / gross-before-discount.
+ */
+function allocateCatalogueGroups(inputs, computed) {
+  const byRate = new Map();
+  computed.forEach((l, i) => (byRate.get(l.vatRateBp) ?? byRate.set(l.vatRateBp, []).get(l.vatRateBp)).push(i));
+  const targets = new Map();
+  for (const [rate, idx] of byRate) {
+    if (!idx.every((i) => isCatalogueAuthoritative(inputs[i]))) continue;
+    const den = 100000n * (BP + BigInt(rate));
+    const N = idx.map((i) => BigInt(inputs[i].qtyMilli) * BigInt(inputs[i].grossUnitMicro) * (BP - BigInt(inputs[i].discountBp)));
+    const sumN = N.reduce((a, n) => a + n, 0n);
+    const floors = N.map((n) => n / den);
+    const rems = N.map((n, k) => n - floors[k] * den);
+    let extra = Number(divRound(sumN, den) - floors.reduce((a, f) => a + f, 0n));
+    const order = idx.map((_, k) => k).sort((a, b) => (rems[b] > rems[a] ? 1 : rems[b] < rems[a] ? -1 : a - b));
+    const bonus = new Map(order.map((k, rank) => [k, rank < extra ? 1 : 0]));
+    idx.forEach((i, k) => {
+      const net = Number(floors[k]) + bonus.get(k);
+      const disc = Number(divRound(BigInt(inputs[i].qtyMilli) * BigInt(inputs[i].grossUnitMicro) * BigInt(inputs[i].discountBp), den));
+      computed[i].netCents = net; computed[i].discountCents = disc; computed[i].grossCents = net + disc;
+    });
+    targets.set(rate, Number(divRound(sumN, 100000n * BP)));
+  }
+  return targets;
 }
 
 // ---------- creation ----------
@@ -103,7 +166,7 @@ const COMMERCIAL = ['type', 'number', 'currency', 'language', 'issueDate', 'dueD
 /** The canonical commercial content that is hashed at lock time. Lifecycle fields (status, payments) are excluded on purpose. */
 export function snapshotOf(doc) {
   const s = Object.fromEntries(COMMERCIAL.map((k) => [k, doc[k] ?? null]));
-  s.totals = doc.totals ? { netCents: doc.totals.netCents, vatCents: doc.totals.vatCents, grossCents: doc.totals.grossCents, vatBreakdown: doc.totals.vatBreakdown } : null;
+  s.totals = doc.totals ? { netCents: doc.totals.netCents, vatCents: doc.totals.vatCents, grossCents: doc.totals.grossCents, ...(doc.totals.roundingCents ? { roundingCents: doc.totals.roundingCents } : {}), vatBreakdown: doc.totals.vatBreakdown } : null;
   return canon(s);
 }
 /** The exact string that is hashed. The database hashes the same string (with the number substituted) inside the issue transaction. */
@@ -124,7 +187,8 @@ export function updateDraft(doc, patch) {
 const lineToInput = (l) => ({
   description: l.description, quantity: fromScaled(l.qtyMilli, 3), unitPrice: fromScaled(l.priceMicro, 4),
   discountPercent: l.discountBp ? fromScaled(l.discountBp, 2) : undefined, discountAmount: l.discountCents ? fromScaled(l.discountCents, 2) : undefined,
-  vatRate: fromScaled(l.vatRateBp, 2), unit: l.unit, sku: l.sku,
+  vatRate: fromScaled(l.vatRateBp, 2), unit: l.unit, sku: l.sku, catalog: l.catalog,
+  ...(l.priceOrigin === 'GROSS_CATALOGUE' ? { priceOrigin: 'GROSS_CATALOGUE', grossUnitPrice: fromScaled(l.grossUnitMicro, 4), grossVatRate: fromScaled(l.grossVatRateBp, 2) } : {}),
 });
 
 // ---------- issuance validation ----------
@@ -240,14 +304,14 @@ export function convertQuoteToInvoice(quote, { invoiceId, actor, at, issueDate, 
     issueDate: issueDate ?? null, relatedDocumentId: quote.id, revenueBasis, sourceOrderId,
   });
   if (errors.length) throw new FinanceError('CONVERSION_FAILED', errors.join(', '));
-  if (JSON.stringify(invoice.totals.vatBreakdown) !== JSON.stringify(quote.totals.vatBreakdown) || invoice.totals.grossCents !== quote.totals.grossCents) throw new FinanceError('CONVERSION_TOTALS_DIFFER_FROM_QUOTE');
+  if (JSON.stringify(invoice.totals.vatBreakdown) !== JSON.stringify(quote.totals.vatBreakdown) || payableOf(invoice.totals) !== payableOf(quote.totals)) throw new FinanceError('CONVERSION_TOTALS_DIFFER_FROM_QUOTE');
   const converted = deepFreeze({ ...clone(quote), status: 'CONVERTED', convertedInvoiceId: invoiceId, version: quote.version + 1 });
   return { invoice, quote: converted, event: ev(quote, 'CONVERT_TO_INVOICE', quote.status, 'CONVERTED', actor, { invoiceId, at }) };
 }
 
 // ---------- credit notes ----------
 /** Credited gross of an invoice from its ISSUED/SENT credit notes. */
-export const creditedCents = (creditNotes) => creditNotes.filter((c) => ['ISSUED', 'SENT'].includes(c.status)).reduce((a, c) => a + c.totals.grossCents, 0);
+export const creditedCents = (creditNotes) => creditNotes.filter((c) => ['ISSUED', 'SENT'].includes(c.status)).reduce((a, c) => a + payableOf(c.totals), 0);
 
 /**
  * Draft a credit note against an issued invoice. `lines` omitted = full credit. The total credited (including earlier
@@ -263,8 +327,8 @@ export function creditNoteFromInvoice(invoice, { creditNoteId, reason, lines, ex
     revenueBasis: invoice.revenueBasis, sourceOrderId: invoice.sourceOrderId, notes: invoice.notes,
   });
   if (errors.length) throw new FinanceError('CREDIT_NOTE_INVALID', errors.join(', '));
-  const remaining = invoice.totals.grossCents - creditedCents(existingCreditNotes);
-  if (doc.totals.grossCents > remaining) throw new FinanceError('CREDIT_EXCEEDS_INVOICE', `credit ${doc.totals.grossCents} > creditable ${remaining} (cents)`);
+  const remaining = payableOf(invoice.totals) - creditedCents(existingCreditNotes);
+  if (payableOf(doc.totals) > remaining) throw new FinanceError('CREDIT_EXCEEDS_INVOICE', `credit ${payableOf(doc.totals)} > creditable ${remaining} (cents)`);
   return { doc, event: ev(doc, 'CREATE_CREDIT_NOTE', null, 'DRAFT', actor, { invoiceId: invoice.id, at }) };
 }
 
@@ -273,8 +337,9 @@ export function creditNoteFromInvoice(invoice, { creditNoteId, reason, lines, ex
 export function settlement(invoice, payments, creditNotes = []) {
   const credited = creditedCents(creditNotes);
   const paid = payments.reduce((a, p) => a + p.amountCents, 0);
-  const payable = Math.max(0, invoice.totals.grossCents - credited);
-  return { grossCents: invoice.totals.grossCents, creditedCents: credited, payableCents: payable, paidCents: paid, remainingCents: Math.max(0, payable - paid), overpaidCents: Math.max(0, paid - payable) };
+  const due = payableOf(invoice.totals); // tax-inclusive total + explicit rounding amount
+  const payable = Math.max(0, due - credited);
+  return { grossCents: due, creditedCents: credited, payableCents: payable, paidCents: paid, remainingCents: Math.max(0, payable - paid), overpaidCents: Math.max(0, paid - payable) };
 }
 
 /** Lifecycle status implied by settlement (never OVERDUE: that is derived, see effectiveStatus). */
