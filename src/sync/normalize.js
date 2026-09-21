@@ -2,6 +2,8 @@
 // purpose - this is the part unit tests exercise directly, without a live
 // Shopify or Supabase connection.
 
+import { normalizeOrderChannel } from '../marketing/adapters/shopify.js';
+
 /** @param {{id: string, name: string, myshopifyDomain: string}} shop */
 export function normalizeMerchant(shop) {
   return {
@@ -211,6 +213,7 @@ export function normalizeOrder(node, merchantId, locationId) {
     status: node.displayFinancialStatus,
     taxes_included: node.taxesIncluded,
     is_test: node.test === true,
+    ...normalizeOrderChannel(node),
   };
 }
 

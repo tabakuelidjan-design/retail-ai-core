@@ -1,0 +1,14 @@
+{
+  "source_system": "search_console_example",
+  "method": "manual_export",
+  "window": { "start": "2026-08-01", "end": "2026-09-01" },
+  "filters": { "search_type": "web", "country": null, "device": null },
+  "reported_totals": { "clicks": 100, "impressions": 5000 },
+  "query_rows": [{ "query": "example brand", "clicks": 30, "impressions": 100, "position": 1.2 }],
+  "query_rows_complete": false,
+  "query_rows_omitted": { "count": 50, "clicks": 5, "impressions": 200 },
+  "page_rows": [{ "page": "/products/example", "clicks": 1, "impressions": 300, "position": 9 }],
+  "query_page_rows": [{ "query": "example brand", "page": "/", "clicks": 30, "impressions": 100, "position": 1.2 }],
+  "country_rows": [{ "country": "Example", "clicks": 60, "impressions": 400 }],
+  "device_rows": [{ "device": "mobile", "clicks": 50, "impressions": 500, "position": 6 }]
+}

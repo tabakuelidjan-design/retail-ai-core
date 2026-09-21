@@ -85,6 +85,21 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
           currencyCode
           taxesIncluded
           displayFinancialStatus
+          sourceName
+          channelInformation {
+            channelDefinition {
+              handle
+              channelName
+              subChannelName
+            }
+          }
+          customerJourneySummary {
+            ready
+            customerOrderIndex
+            daysToConversion
+            firstVisit { ...VisitFields }
+            lastVisit { ...VisitFields }
+          }
           retailLocation {
             id
           }
@@ -155,6 +170,22 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
         hasNextPage
         endCursor
       }
+    }
+  }
+
+  fragment VisitFields on CustomerVisit {
+    occurredAt
+    source
+    sourceType
+    sourceDescription
+    referrerUrl
+    landingPage
+    utmParameters {
+      source
+      medium
+      campaign
+      content
+      term
     }
   }
 `;

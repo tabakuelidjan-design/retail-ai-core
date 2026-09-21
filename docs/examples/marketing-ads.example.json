@@ -1,0 +1,11 @@
+{
+  "source_system": "example_ads_export",
+  "platform": "example_platform",
+  "account_ref": "opaque-reference",
+  "currency": "EUR",
+  "window": { "start": "2026-09-01", "end": "2026-09-08" },
+  "retrieved_at": "2026-09-08T08:00:00Z",
+  "rows": [
+    { "date": "2026-09-01", "campaign_id": "111", "campaign_name": "brand-search", "impressions": 500, "clicks": 40, "cost": 12.5, "conversions": 2, "conversion_value": 60 }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "source_system": "example_analytics",
+  "method": "manual_export",
+  "scope": "online_store",
+  "window": { "start": "2026-09-01", "end": "2026-09-15" },
+  "retrieved_at": "2026-09-15T08:00:00Z",
+  "dimensions": [
+    { "dimension": "channel", "complete": true, "rows": [
+      { "key": "direct/", "sessions": 600, "completed_checkout_sessions": 2 },
+      { "key": "search/google", "sessions": 300, "completed_checkout_sessions": 2 } ] },
+    { "dimension": "country", "complete": true, "rows": [ { "key": "Belgium", "sessions": 800 }, { "key": "France", "sessions": 100 } ] },
+    { "dimension": "landing_page", "complete": false, "rows": [ { "key": "/", "sessions": 700 }, { "key": "/products/example", "sessions": 40 } ] }
+  ]
+}

@@ -18,6 +18,7 @@
 // - not implemented now, to avoid over-engineering for 45 rows.
 
 import { ORDERS_PAGE_QUERY } from '../shopify/queries.js';
+import { normalizeOrderAttribution } from '../marketing/adapters/shopify.js';
 import { normalizeOrder, normalizeOrderLine, normalizeRefund, normalizeRefundLine } from './normalize.js';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -36,7 +37,7 @@ export function sixtyDayWindowQuery(now = new Date()) {
 export async function syncOrders({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
   const summary = {
-    ordersFetched: 0, ordersUpserted: 0,
+    ordersFetched: 0, ordersUpserted: 0, attributionRowsFetched: 0, attributionRowsUpserted: 0,
     orderLinesFetched: 0, orderLinesUpserted: 0,
     refundsFetched: 0, refundsUpserted: 0,
     refundLinesFetched: 0, refundLinesUpserted: 0,
@@ -82,6 +83,14 @@ export async function syncOrders({ shopify, supabase }, opts) {
       const [order] = await supabase.upsert('orders', [orderRow], {
         onConflict: 'merchant_id,source_system,source_id',
       });
+
+      // Marketing attribution: 0-2 visit rows (host/path only, no customer identity). Idempotent per (order, touch).
+      const attributionRows = normalizeOrderAttribution(orderNode, order.id, opts.merchantId);
+      summary.attributionRowsFetched += attributionRows.length;
+      if (attributionRows.length > 0) {
+        await supabase.upsert('order_attribution', attributionRows, { onConflict: 'order_id,source_system,touch' });
+        summary.attributionRowsUpserted += attributionRows.length;
+      }
 
       const lineItemNodes = orderNode.lineItems.edges.map((e) => e.node);
       const orderLineIdBySourceId = new Map();

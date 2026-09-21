@@ -182,3 +182,38 @@ test('test orders are stored with is_test true so metrics can exclude them; real
   assert.equal(flags['gid://shopify/Order/1'], false);
   assert.equal(flags['gid://shopify/Order/999'], true);
 });
+
+test('marketing attribution: channel columns and visit rows are stored; only host/path survive; no customer identity', async () => {
+  const { FAKE_ONLINE_ORDER_WITH_JOURNEY } = await import('./fixtures/shopify-orders-sample.js');
+  const supabase = createFakeSupabase();
+  await seedCatalog(supabase);
+  const summary = await syncOrders({ shopify: fakeShopify([FAKE_ORDER_1, FAKE_ONLINE_ORDER_WITH_JOURNEY]), supabase }, { merchantId: MERCHANT_ID });
+  assert.equal(summary.errors.length, 0);
+  assert.equal(summary.attributionRowsUpserted, 2);
+
+  const online = supabase._tables.get('orders').find((o) => o.source_id === 'gid://shopify/Order/50');
+  assert.equal(online.channel_handle, 'web');
+  assert.equal(online.customer_order_index, 2);
+  assert.equal(online.days_to_conversion, 3.5);
+  const plain = supabase._tables.get('orders').find((o) => o.source_id === 'gid://shopify/Order/1');
+  assert.equal(plain.channel_handle, null); // nothing recorded: stays null, never guessed
+
+  const rows = supabase._tables.get('order_attribution');
+  const first = rows.find((r) => r.touch === 'first_visit');
+  const last = rows.find((r) => r.touch === 'last_visit');
+  assert.equal(first.referrer_host, 'www.google.com'); // path and search words dropped
+  assert.equal(first.landing_path, '/collections/things'); // query (email, click id) dropped
+  assert.equal(last.landing_path, '/en/products/fixture-widget'); // fragment dropped
+  assert.equal(last.utm_medium, 'email');
+  const dump = JSON.stringify(rows);
+  assert.ok(!/example\.com|gclid|private|someone|@/i.test(dump), 'no query strings, click ids or personal data may be stored');
+});
+
+test('attribution sync is idempotent: rerunning does not duplicate visit rows', async () => {
+  const { FAKE_ONLINE_ORDER_WITH_JOURNEY } = await import('./fixtures/shopify-orders-sample.js');
+  const supabase = createFakeSupabase();
+  await seedCatalog(supabase);
+  await syncOrders({ shopify: fakeShopify([FAKE_ONLINE_ORDER_WITH_JOURNEY]), supabase }, { merchantId: MERCHANT_ID });
+  await syncOrders({ shopify: fakeShopify([FAKE_ONLINE_ORDER_WITH_JOURNEY]), supabase }, { merchantId: MERCHANT_ID });
+  assert.equal(supabase._tables.get('order_attribution').length, 2);
+});

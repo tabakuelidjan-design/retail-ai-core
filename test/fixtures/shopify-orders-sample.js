@@ -86,6 +86,21 @@ export const FAKE_ORDER_2_BASE = {
   refunds: [],
 };
 
+// Online order with recorded visits (synthetic). The landing URL deliberately carries a query string and the
+// referrer a path/query: the adapter must keep only host/path.
+export const FAKE_ONLINE_ORDER_WITH_JOURNEY = {
+  ...FAKE_ORDER_1,
+  id: 'gid://shopify/Order/50',
+  retailLocation: null,
+  sourceName: 'web',
+  channelInformation: { channelDefinition: { handle: 'web', channelName: 'Online Store', subChannelName: 'Online Store' } },
+  customerJourneySummary: {
+    ready: true, customerOrderIndex: 2, daysToConversion: 3.5,
+    firstVisit: { occurredAt: '2026-07-30T09:00:00Z', source: 'Google', sourceType: 'SEO', sourceDescription: null, referrerUrl: 'https://www.google.com/search?q=private+words', landingPage: 'https://shop.example/collections/things?email=someone%40example.com&gclid=ABC', utmParameters: { source: null, medium: null, campaign: null, content: null, term: null } },
+    lastVisit: { occurredAt: '2026-08-01T09:00:00Z', source: 'newsletter', sourceType: null, sourceDescription: null, referrerUrl: null, landingPage: 'https://shop.example/en/products/fixture-widget#reviews', utmParameters: { source: 'newsletter', medium: 'email', campaign: 'launch-1', content: null, term: null } },
+  },
+};
+
 export function orderWithPartialLineRefund() {
   const order = JSON.parse(JSON.stringify(FAKE_ORDER_2_BASE));
   order.refunds = [

@@ -1,0 +1,9 @@
+{
+  "marketing": {
+    "ownHosts": ["shop.example"],
+    "targetMarkets": ["Belgium", "France"],
+    "brandRules": [ { "type": "contains", "value": "example brand" } ],
+    "minAttributedOrdersForPaidMetrics": 30,
+    "maxNonTargetSessionShare": 0.3
+  }
+}

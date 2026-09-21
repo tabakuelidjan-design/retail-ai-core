@@ -6,6 +6,7 @@
 export const METRICS_VERSION = '2A.1';
 export const DEMAND_VERSION = '2B.1';
 export const BUYING_VERSION = '2C.1';
+export const MARKETING_VERSION = '2D.2';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
@@ -35,6 +36,50 @@ export const DEFAULT_CONFIG = {
     historyVerifiedDays: 90, // shorter history keeps sales facts PARTIAL
     roundQuantity: { minUnits: 100, multipleOf: 50 }, // descriptive marker of possibly uncounted stock
     minPeersForBenchmark: 3,
+  },
+  // Marketing measurement (Phase 2D). Everything merchant-specific is data here, never code: own domains,
+  // target markets and brand terms default to EMPTY and are then reported as unknown, not guessed.
+  marketing: {
+    ownHosts: [], // the merchant's own domains: a referrer from one of them is internal navigation, not a source
+    targetMarkets: [], // countries the merchant sells to; empty = traffic geography cannot be judged
+    brandRules: [], // explicit only: [{ type: 'contains' | 'equals' | 'starts_with', value: '...' }]
+    onlineChannelHandles: ['web', 'online_store'],
+    posChannelHandles: ['pos'],
+    taxonomy: {
+      mediumMap: {
+        cpc: 'paid_search', ppc: 'paid_search', paidsearch: 'paid_search', 'paid-search': 'paid_search', sem: 'paid_search',
+        paid_social: 'paid_social', paidsocial: 'paid_social', 'paid-social': 'paid_social', cpm: 'paid_social',
+        display: 'paid_display', banner: 'paid_display', email: 'email', newsletter: 'email', affiliate: 'affiliate',
+        referral: 'referral', organic: 'organic_search', social: 'organic_social', 'social-media': 'organic_social',
+      },
+      sourceTypeMap: { SEO: 'organic_search', EMAIL: 'email', SOCIAL: 'organic_social', DIRECT: 'direct' },
+      searchHosts: ['google.', 'bing.', 'duckduckgo.', 'ecosia.', 'yahoo.', 'yandex.', 'qwant.', 'baidu.', 'startpage.'],
+      socialHosts: ['facebook.', 'instagram.', 'tiktok.', 'pinterest.', 'youtube.', 'linkedin.', 'twitter.', 't.co', 'x.com', 'reddit.'],
+      aiAssistantHosts: ['chatgpt.', 'openai.', 'perplexity.', 'claude.ai', 'gemini.', 'copilot.'],
+    },
+    minAttributedOrdersForPaidMetrics: 30,
+    minSpendCoverage: 0.95, // share of window days that must have spend rows before spend-based metrics open
+    minCampaignLinkage: 0.8, // share of paid-attributed orders whose campaign matches an ad campaign
+    minSessionsForConversion: 100,
+    minSessionsForLandingSignal: 10, // a landing page needs this many sessions before "traffic but no sales" is reported
+    maxNonTargetSessionShare: 0.3, // above this, sessions are not a valid denominator for the merchant's orders
+    windowToleranceDays: 1, // traffic/ads windows may differ from the order window by this many days
+    maxUnattributedOnlineShare: 0.2, // above this, channel attribution is too incomplete for spend-based metrics
+    // Search visibility (Phase 2D.2). Classification exists ONLY through explicit rules; with none configured every
+    // query is 'unclassified'. Thresholds are configuration for rule-based facts, not recommendations.
+    search: {
+      intentRules: { local: [], product: [], informational: [] }, // [{ type: 'contains'|'equals'|'starts_with', value }]
+      intentPrecedence: ['local', 'product', 'informational'],
+      opportunity: {
+        minImpressions: 40, lowCtr: 0.02, // HIGH_IMPRESSIONS_LOW_CTR
+        positionBand: { from: 4, to: 15 }, minImpressionsPositionBand: 20, // POSITION_BAND_MEANINGFUL_IMPRESSIONS
+        minPageImpressions: 40, // PRODUCT_PAGE_VISIBLE_WEAK_CTR
+        excludeBranded: true, // branded queries are not treated as discovery opportunities (only when brand rules exist)
+      },
+      minQueryCoverage: 0.5, // below this share of reported clicks, query-level facts carry a coverage caveat
+      concentrationTopN: 5,
+      maxTargetMarketGap: 0.3, // search vs sessions non-target share may differ by this much before a mismatch is reported
+    },
   },
   // Buying Intelligence Lite (Phase 2C). Money thresholds are merchant policy and are NOT defaulted:
   // a null value makes the dependent check INCOMPLETE instead of inventing a number.
@@ -67,6 +112,12 @@ export function mergeConfig(overrides = {}) {
   const out = structuredClone(DEFAULT_CONFIG);
   for (const [k, v] of Object.entries(overrides)) {
     out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...out[k], ...v } : v;
+  }
+  // marketing.search is nested one level deeper: a merchant override of some keys must keep the other defaults.
+  const s = overrides.marketing?.search;
+  if (s && typeof s === 'object') {
+    const d = DEFAULT_CONFIG.marketing.search;
+    out.marketing.search = { ...structuredClone(d), ...s, opportunity: { ...d.opportunity, ...(s.opportunity ?? {}) }, intentRules: { ...d.intentRules, ...(s.intentRules ?? {}) } };
   }
   return out;
 }
