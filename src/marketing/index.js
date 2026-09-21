@@ -19,6 +19,8 @@ import { buildMarketingFacts } from './build.js';
 import { normalizeAds } from './paid.js';
 import { MARKETING_RULE_CODES, toQualityFlags } from './quality.js';
 import { normalizeSearch } from './search.js';
+import { compareOrders, validationRange } from './adapters/shopify-validation.js';
+import { readCoverage } from '../sync/history.js';
 import { normalizeTraffic } from './traffic.js';
 
 const DEFAULTS = { policy: 'data/local/marketing-policy.json', traffic: 'data/local/marketing/traffic.json', ads: 'data/local/marketing/ads.json', search: 'data/local/marketing/search.json' };
@@ -45,34 +47,24 @@ async function optionalImport(path, normalize, label) {
 const CHECK_QUERY = `query ($cursor: String, $q: String) { orders(first: 50, after: $cursor, sortKey: CREATED_AT, query: $q) { edges { node { id test sourceName
   channelInformation { channelDefinition { handle } } customerJourneySummary { lastVisit { source utmParameters { source medium campaign } } } } } pageInfo { hasNextPage endCursor } } }`;
 
-async function validateAgainstShopify(shopify, supabase, merchantId, since) {
+async function validateAgainstShopify(shopify, supabase, merchantId, range) {
   const nodes = [];
   let cursor = null;
   for (;;) {
-    const page = await shopify.graphql(CHECK_QUERY, { cursor, q: `created_at:>=${since.toISOString().slice(0, 10)}` });
+    const page = await shopify.graphql(CHECK_QUERY, { cursor, q: `created_at:>=${range.since}` });
     nodes.push(...page.orders.edges.map((e) => e.node));
     if (!page.orders.pageInfo.hasNextPage) break;
     cursor = page.orders.pageInfo.endCursor;
   }
-  const live = nodes.filter((n) => !n.test);
-  const stored = await supabase.selectAll('orders', { select: 'id,source_id,is_test,channel_handle', merchant_id: `eq.${merchantId}` });
+  const stored = await supabase.selectAll('orders', { select: 'id,source_id,is_test,ordered_at,channel_handle', merchant_id: `eq.${merchantId}` });
   // Fixed 2026-09-22: previously fetched EVERY merchant's order_attribution rows (no merchant_id filter at
   // all) and relied only on the join below to land on the right ones - safe only by accident (order_id is a
   // globally unique UUID). Was a CRITICAL tenant-isolation finding from the RLS/merchant-isolation review.
+  // Combined here with the separate date-range fix (see shopify-validation.js): both bugs lived in this same
+  // function and neither fix alone was complete - the live/stored comparison must be both merchant-scoped
+  // AND range-matched.
   const attribution = await supabase.selectAll('order_attribution', { select: 'order_id,touch,source,utm_source', touch: 'eq.last_visit', merchant_id: `eq.${merchantId}` });
-  const byOrder = new Map(stored.map((o) => [o.source_id, o]));
-  const attrByOrderId = new Map(attribution.map((a) => [a.order_id, a]));
-  let channelMismatch = 0;
-  let visitMismatch = 0;
-  for (const n of live) {
-    const s = byOrder.get(n.id);
-    if (!s) continue;
-    if ((n.channelInformation?.channelDefinition?.handle ?? null) !== s.channel_handle) channelMismatch += 1;
-    const liveSource = n.customerJourneySummary?.lastVisit?.source ?? null;
-    const storedSource = attrByOrderId.get(s.id)?.source ?? null;
-    if (liveSource !== storedSource) visitMismatch += 1;
-  }
-  return { shopify_orders: live.length, stored_orders: stored.filter((o) => !o.is_test).length, channel_mismatches: channelMismatch, last_visit_source_mismatches: visitMismatch, ok: live.length === stored.filter((o) => !o.is_test).length && channelMismatch === 0 && visitMismatch === 0 };
+  return compareOrders({ live: nodes, stored, attribution, range });
 }
 
 async function main() {
@@ -98,7 +90,7 @@ async function main() {
 
   const facts = buildMarketingFacts({ ledger, data, traffic, ads, search, now, timeZone, config, merchantId: merchant.id });
   if (opts.validate) {
-    facts.validation = await validateAgainstShopify(shopify, supabase, merchant.id, windows.available_window.start);
+    facts.validation = await validateAgainstShopify(shopify, supabase, merchant.id, validationRange({ availableStart: windows.available_window.start, coverage: await readCoverage() }));
     console.log('validation:', JSON.stringify(facts.validation));
     if (!facts.validation.ok) process.exitCode = 2;
   }
