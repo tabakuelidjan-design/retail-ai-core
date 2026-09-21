@@ -72,11 +72,40 @@ function modal(title, body, buttons) {
 }
 
 // ---------- layout ----------
-const NAV = [['#/', 'Overview'], ['#/invoices', 'Invoices'], ['#/quotes', 'Quotes'], ['#/companies', 'Companies'], ['#/receivables', 'Payments'], ['#/pack', 'Accountant pack'], ['#/settings', 'Settings']];
+// ---------- icons and small visual helpers (SVG built with the DOM API, never from strings of markup) ----------
+const ICON_PATHS = {
+  home: 'M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z', doc: 'M6 2h8l5 5v15H6z M14 2v6h5 M9 13h7 M9 17h7', quote: 'M4 5h16v11H9l-5 4z',
+  building: 'M4 21V4h10v17 M14 9h6v12 M8 8h2 M8 12h2 M8 16h2 M2 21h20', coins: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  book: 'M4 4h11a3 3 0 013 3v13H7a3 3 0 01-3-3z M4 17a3 3 0 013-3h11', gear: 'M12 15a3 3 0 100-6 3 3 0 000 6z M4 12h2 M18 12h2 M12 4v2 M12 18v2 M6.3 6.3l1.4 1.4 M16.3 16.3l1.4 1.4 M6.3 17.7l1.4-1.4 M16.3 7.7l1.4-1.4',
+  plus: 'M12 5v14 M5 12h14', search: 'M11 4a7 7 0 100 14 7 7 0 000-14z M21 21l-4.3-4.3', chevron: 'M9 6l6 6-6 6', alert: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
+  clock: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2', check: 'M5 12l5 5 10-11', arrow: 'M5 12h14 M13 6l6 6-6 6', edit: 'M4 20h4L19 9l-4-4L4 16z',
+};
+function svgIcon(name, size) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const s = document.createElementNS(NS, 'svg');
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: String(size || 18), height: String(size || 18), fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, v);
+  const p = document.createElementNS(NS, 'path'); p.setAttribute('d', ICON_PATHS[name] || ICON_PATHS.doc); s.appendChild(p);
+  return s;
+}
+const AV_TONES = ['t1', 't2', 't3', 't4', 't5'];
+function avatar(name, size) {
+  const t = String(name || '?').trim(); const parts = t.split(/\s+/);
+  const ini = `${(parts[0] || '?')[0]}${(parts[1] || '')[0] || ''}`.toUpperCase();
+  let hs = 0; for (const ch of t) hs = (hs * 31 + ch.charCodeAt(0)) >>> 0;
+  return h('span', { class: `avatar ${AV_TONES[hs % AV_TONES.length]} ${size || ''}` }, ini);
+}
+/** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
+function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
+const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, `${-n} day${n === -1 ? '' : 's'} late`) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, `Due in ${n} day${n === 1 ? '' : 's'}`) : h('span', { class: 'chip mute' }, `Due in ${n} days`); };
+
+const NAV = [['#/', 'Overview', 'home'], ['#/invoices', 'Invoices', 'doc'], ['#/quotes', 'Quotes', 'quote'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/pack', 'Accountant pack', 'book'], ['#/settings', 'Settings', 'gear']];
 function layout(active, ...content) {
-  const side = h('nav', { class: 'side' }, h('div', { class: 'brand' }, (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance'),
-    NAV.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '' }, label)),
-    h('div', { class: 'foot' }, h('div', null, 'Peppol: NOT CONFIGURED'), h('div', null, 'Nothing is sent externally.'), h('button', { style: 'margin-top:10px', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, 'Log out')));
+  const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
+  const side = h('nav', { class: 'side' },
+    h('div', { class: 'brand' }, h('span', { class: 'mark' }, seller.trim().charAt(0).toUpperCase() || 'F'), h('span', { class: 'bname' }, seller)),
+    h('a', { class: 'side-cta', href: '#/new/invoice' }, svgIcon('plus', 16), h('span', null, 'New invoice')),
+    h('div', { class: 'navlist' }, NAV.map(([href, label, ic]) => h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, svgIcon(ic, 18), h('span', null, label)))),
+    h('div', { class: 'foot' }, h('span', { class: 'foot-chip' }, 'Peppol: not configured'), h('span', { class: 'foot-chip' }, 'Nothing is sent externally'), h('button', { class: 'quiet', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, 'Log out')));
   const main = h('main', { class: 'main' }, content);
   show(h('div', { class: 'shell' }, side, main));
   return main;
@@ -96,30 +125,54 @@ function renderLogin() {
 
 // ---------- overview ----------
 async function viewOverview() {
-  const main = layout('#/', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Overview'), h('div', { class: 'muted small' }, 'What needs your attention')), h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#/new/invoice' }, 'New invoice'), h('a', { class: 'btn', href: '#/new/quote' }, 'New quote'))));
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const main = layout('#/', h('div', { class: 'hero' },
+    h('div', null, h('div', { class: 'eyebrow' }, today), h('h1', null, greet), h('div', { class: 'muted' }, 'Here is what needs your attention.')),
+    h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#/new/invoice' }, svgIcon('plus', 16), 'New invoice'), h('a', { class: 'btn', href: '#/new/quote' }, 'New quote'))));
   const box = h('div'); main.appendChild(box);
+  box.appendChild(h('div', { class: 'grid cards' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
   try {
     const o = await api('GET', '/api/overview');
-    const stat = (n, l, cls, href) => h('a', { href, style: 'text-decoration:none;color:inherit' }, h('div', { class: `card stat ${cls || ''}` }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l)));
+    clear(box);
+    const cur = o.currency;
+    const acard = (tone, icon, n, label, sub, href) => h('a', { class: `acard ${tone}`, href }, h('span', { class: 'aicon' }, svgIcon(icon, 18)), h('span', { class: 'abody' }, h('span', { class: 'an' }, n), h('span', { class: 'al' }, label), sub ? h('span', { class: 'as' }, sub) : null), h('span', { class: 'ago' }, svgIcon('arrow', 16)));
     mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), `${o.settingsMissing.length} setting(s) missing. `, h('a', { href: '#/settings' }, 'Open settings')) : null);
     box.appendChild(h('div', { class: 'grid cards' },
-      stat(o.counts.unpaid, `Unpaid invoices (${o.amounts.outstanding} ${o.currency})`, '', '#/receivables'),
-      stat(o.counts.overdue, `Overdue (${o.amounts.overdue} ${o.currency})`, o.counts.overdue ? 'bad' : '', '#/receivables'),
-      stat(`${o.amounts.paidThisMonth}`, `Paid this month (${o.amounts.paidThisMonthCount} payment(s))`, 'ok', '#/receivables'),
-      stat(o.counts.awaitingApproval, 'Awaiting your approval', o.counts.awaitingApproval ? 'warn' : '', '#/invoices?status=READY_FOR_APPROVAL'),
-      stat(o.counts.quotesAwaitingResponse, 'Quotes awaiting response', '', '#/quotes?status=SENT'),
-      stat(o.counts.quotesToConvert, 'Accepted quotes to convert', o.counts.quotesToConvert ? 'warn' : '', '#/quotes?status=ACCEPTED')));
-    const overdueRows = o.attention.overdue.map((r) => h('tr', null, h('td', null, r.number), h('td', null, r.customer), h('td', { class: 'num' }, `${r.daysOverdue} days`), h('td', { class: 'num' }, r.remaining)));
+      acard(o.counts.awaitingApproval ? 'warn' : 'calm', 'check', o.counts.awaitingApproval, 'Awaiting your approval', o.counts.awaitingApproval ? 'Review and issue' : 'Nothing to approve', '#/invoices?status=READY_FOR_APPROVAL'),
+      acard(o.counts.overdue ? 'bad' : 'calm', 'alert', o.counts.overdue, 'Overdue invoices', o.counts.overdue ? `${o.amounts.overdue} ${cur} to collect` : 'Nothing is late', '#/receivables'),
+      acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', `${o.counts.quotesAwaitingResponse} quote(s) awaiting response`, '#/quotes?status=ACCEPTED'),
+      acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', `${o.amounts.outstanding} ${cur} outstanding`, '#/receivables')));
+
+    // money at a glance: outstanding, overdue, paid this month
+    const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
+    box.appendChild(h('div', { class: 'card kpirow' }, kpi('Outstanding', o.amounts.outstanding, `${o.counts.unpaid} unpaid invoice(s)`), kpi('Overdue', o.amounts.overdue, `${o.counts.overdue} invoice(s)`, o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, `${o.amounts.paidThisMonthCount} payment(s)`, 'ok')));
+
+    // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
+    const KEYS = [['not_due', 'Not yet due', 's0'], ['0_7', '0-7 days', 's1'], ['8_30', '8-30 days', 's2'], ['31_60', '31-60 days', 's3'], ['60_plus', '60+ days', 's4']];
+    const totalC = KEYS.reduce((a, [k]) => a + (o.aging[k].cents || 0), 0);
+    const ageCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Ageing of unpaid invoices'), h('a', { href: '#/receivables', class: 'small' }, 'Open payments')));
+    if (!totalC) ageCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
+    else {
+      ageCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${l}: ${o.aging[k].amount} ${cur}` }))));
+      ageCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, `${o.aging[k].count} inv.`)))));
+    }
+    box.appendChild(ageCard);
+
+    const row = (r, right) => h('a', { class: 'listrow', href: `#/doc/${r.id || ''}` }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number || TYPE[r.type] || '')), right);
+    const overdue = o.attention.overdue.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number)), h('span', { class: 'lr' }, h('strong', null, r.remaining), h('span', { class: 'chip bad' }, `${r.daysOverdue} days late`))));
+    const waiting = [
+      ...o.attention.awaitingApproval.map((r) => row(r, h('span', { class: 'lr' }, h('strong', null, r.gross), h('span', { class: 'chip warn' }, 'To approve')))),
+      ...o.attention.quotes.map((r) => row(r, h('span', { class: 'lr' }, h('span', { class: 'chip mute' }, `${STATUS[r.status]}${r.expired ? ' - expired' : ''}`)))),
+    ];
     box.appendChild(h('div', { class: 'grid two', style: 'margin-top:16px' },
-      h('div', { class: 'card' }, h('h2', null, 'Overdue invoices'), overdueRows.length ? h('table', null, h('tr', null, h('th', null, 'Invoice'), h('th', null, 'Customer'), h('th', { class: 'num' }, 'Late'), h('th', { class: 'num' }, 'Due')), overdueRows) : h('div', { class: 'muted' }, 'Nothing overdue.')),
-      h('div', { class: 'card' }, h('h2', null, 'Waiting for you'),
-        o.attention.awaitingApproval.length ? h('div', null, h('h3', null, 'To approve'), o.attention.awaitingApproval.map((r) => h('div', null, h('a', { href: `#/doc/${r.id}` }, `${TYPE[r.type]} - ${r.customer} - ${r.gross}`)))) : null,
-        o.attention.quotes.length ? h('div', { style: 'margin-top:8px' }, h('h3', null, 'Quotes'), o.attention.quotes.map((r) => h('div', null, h('a', { href: `#/doc/${r.id}` }, `${r.number || 'Quote'} - ${r.customer} - ${STATUS[r.status]}${r.expired ? ' (expired)' : ''}`)))) : null,
-        !o.attention.awaitingApproval.length && !o.attention.quotes.length ? h('div', { class: 'muted' }, 'Nothing is waiting.') : null)));
-    box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Ageing of unpaid invoices'), h('table', null, h('tr', null, ['Not yet due', '0-7 days', '8-30 days', '31-60 days', '60+ days'].map((x) => h('th', { class: 'num' }, x))), h('tr', null, ['not_due', '0_7', '8_30', '31_60', '60_plus'].map((k) => h('td', { class: 'num' }, `${o.aging[k].amount} (${o.aging[k].count})`))))));
+      h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Overdue invoices')), overdue.length ? h('div', { class: 'list' }, overdue) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'Nothing overdue'), h('div', { class: 'muted small' }, 'Every invoice is on time.')))),
+      h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Waiting for you')), waiting.length ? h('div', { class: 'list' }, waiting) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'Nothing is waiting'), h('div', { class: 'muted small' }, 'Drafts and quotes will show up here.'))))));
+
     const packCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Accountant pack - last closed quarter'), h('div', { class: 'muted' }, 'Checking...'));
     box.appendChild(packCard);
-    api('GET', '/api/overview/pack').then((p) => { clear(packCard); packCard.appendChild(h('h2', null, 'Accountant pack - last closed quarter')); if (p.status !== 'OK') return packCard.appendChild(h('div', { class: 'muted' }, 'Retail data is not available.')); packCard.appendChild(h('div', { class: 'actions' }, h('span', null, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness}` }, p.completeness), h('span', { class: `badge ${p.reconciliation}` }, p.reconciliation), p.anomalies ? h('span', { class: 'badge PARTIAL' }, `${p.anomalies} anomaly(ies)`) : null, h('a', { href: '#/pack' }, 'Open the pack'))); if (p.reasons.length) packCard.appendChild(h('ul', { class: 'plain small muted' }, p.reasons.map((r) => h('li', null, human(r))))); }).catch(() => { clear(packCard); packCard.appendChild(h('div', { class: 'muted' }, 'Pack status unavailable.')); });
+    api('GET', '/api/overview/pack').then((p) => { clear(packCard); packCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Accountant pack - last closed quarter'), h('a', { href: '#/pack', class: 'small' }, 'Open the pack'))); if (p.status !== 'OK') return packCard.appendChild(h('div', { class: 'muted' }, 'Retail data is not available.')); packCard.appendChild(h('div', { class: 'actions' }, h('span', { class: 'chip mute' }, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness}` }, p.completeness), h('span', { class: `badge ${p.reconciliation}` }, p.reconciliation), p.anomalies ? h('span', { class: 'badge PARTIAL' }, `${p.anomalies} anomaly(ies)`) : null)); if (p.reasons.length) packCard.appendChild(h('ul', { class: 'plain small muted', style: 'margin-top:8px' }, p.reasons.map((r) => h('li', null, human(r))))); }).catch(() => { clear(packCard); packCard.appendChild(h('div', { class: 'muted' }, 'Pack status unavailable.')); });
   } catch (e) { fail(e, box); }
 }
 
@@ -128,17 +181,44 @@ const INV_FILTERS = [['', 'All'], ['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Re
 const QUOTE_FILTERS = [['', 'All'], ['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['REJECTED', 'Rejected'], ['CONVERTED', 'Converted']];
 async function viewList(kind, query) {
   const isQuote = kind === 'quote';
-  const status = query.get('status') || '';
-  const main = layout(isQuote ? '#/quotes' : '#/invoices', h('div', { class: 'topbar' }, h('div', null, h('h1', null, isQuote ? 'Quotes' : 'Invoices')), h('a', { class: 'btn primary', href: `#/new/${kind}` }, isQuote ? 'New quote' : 'New invoice')));
-  const base = isQuote ? '#/quotes' : '#/invoices';
-  main.appendChild(h('div', { class: 'pills' }, (isQuote ? QUOTE_FILTERS : INV_FILTERS).map(([v, l]) => h('a', { class: `pill ${status === v ? 'active' : ''}`, href: v ? `${base}?status=${v}` : base, style: 'text-decoration:none' }, l))));
-  const box = h('div', { class: 'card' }); main.appendChild(box);
+  let status = query.get('status') || '';
+  let text = '';
+  const filters = isQuote ? QUOTE_FILTERS : INV_FILTERS;
+  const main = layout(isQuote ? '#/quotes' : '#/invoices', h('div', { class: 'hero' }, h('div', null, h('h1', null, isQuote ? 'Quotes' : 'Invoices'), h('div', { class: 'muted' }, isQuote ? 'Proposals for your customers.' : 'Everything you have issued or are preparing.')), h('a', { class: 'btn primary', href: `#/new/${kind}` }, svgIcon('plus', 16), isQuote ? 'New quote' : 'New invoice')));
+  const search = h('input', { class: 'listsearch', placeholder: isQuote ? 'Search quotes by customer or number' : 'Search invoices by customer or number', autocomplete: 'off' });
+  const pills = h('div', { class: 'pills' });
+  const box = h('div', { class: 'card listcard' });
+  main.appendChild(h('div', { class: 'toolbar' }, h('div', { class: 'searchbox' }, svgIcon('search', 16), search), pills));
+  main.appendChild(box);
+  box.appendChild(h('div', null, [1, 2, 3, 4].map(() => h('div', { class: 'docrow sk' }, h('span', { class: 'avatar' }), h('span', { class: 'skl', style: 'height:14px;flex:1' })))));
+  let rows = [];
+  const money2 = (r) => (r.gross ? `${r.gross} ${r.currency}` : '');
+  function draw() {
+    const q = text.trim().toLowerCase();
+    const counts = new Map(); rows.forEach((r) => counts.set(r.effectiveStatus, (counts.get(r.effectiveStatus) || 0) + 1));
+    clear(pills);
+    filters.forEach(([v, l]) => { const n = v ? (counts.get(v) || 0) : rows.length; if (v && !n && status !== v) return; pills.appendChild(h('button', { type: 'button', class: `pill ${status === v ? 'active' : ''}`, on: { click: () => { status = v; draw(); } } }, l, h('span', { class: 'pc' }, String(n)))); });
+    const shown = rows.filter((r) => (!status || r.effectiveStatus === status) && (!q || `${r.number || ''} ${r.customer || ''}`.toLowerCase().includes(q)));
+    clear(box);
+    if (!shown.length) {
+      box.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon(isQuote ? 'quote' : 'doc', 26)),
+        h('div', null, h('strong', null, rows.length ? 'No match' : (isQuote ? 'No quotes yet' : 'No invoices yet')), h('div', { class: 'muted small' }, rows.length ? 'Try another word or status.' : 'Create your first one in a minute.')),
+        rows.length ? null : h('a', { class: 'btn primary', href: `#/new/${kind}` }, isQuote ? 'New quote' : 'New invoice')));
+      return;
+    }
+    shown.forEach((r) => box.appendChild(h('a', { class: 'docrow', href: `#/doc/${r.id}` },
+      avatar(r.customer),
+      h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.customer || '-'), h('span', { class: 'ds' }, [r.number || 'not numbered yet', TYPE[r.type], r.issueDate].filter(Boolean).join('  ·  '))),
+      h('span', { class: 'damt' }, h('strong', null, money2(r)), !isQuote && r.type === 'invoice' && r.remaining ? h('span', { class: 'ds' }, `${r.remaining} still due`) : null),
+      h('span', { class: 'dstat' }, badge(r.effectiveStatus), isQuote ? (r.validUntil ? h('span', { class: 'chip mute' }, `Valid until ${r.validUntil}`) : null) : (r.type === 'invoice' ? dueChip(r.dueDate, r.remainingCents) : null)),
+      h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
+  }
+  search.addEventListener('input', () => { text = search.value; draw(); });
   try {
     const types = isQuote ? ['quote'] : ['invoice', 'credit_note'];
-    const lists = await Promise.all(types.map((t) => api('GET', `/api/documents?type=${t}${status ? `&status=${status}` : ''}`)));
-    const rows = lists.flatMap((l) => l.rows).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate)));
-    box.appendChild(rows.length ? h('table', null, h('tr', null, ['Number', 'Type', 'Customer', 'Date', isQuote ? 'Valid until' : 'Due', 'Total', isQuote ? '' : 'Still due', 'Status'].map((x, i) => h('th', { class: i === 5 || i === 6 ? 'num' : '' }, x))),
-      rows.map((r) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/doc/${r.id}`; } } }, h('td', null, r.number || h('span', { class: 'muted' }, 'not numbered yet')), h('td', null, TYPE[r.type]), h('td', null, r.customer), h('td', { class: 'nowrap' }, r.issueDate), h('td', { class: 'nowrap' }, (isQuote ? r.validUntil : r.dueDate) || ''), h('td', { class: 'num' }, r.gross ? `${r.gross} ${r.currency}` : ''), h('td', { class: 'num' }, r.remaining && r.type === 'invoice' ? r.remaining : ''), h('td', null, badge(r.effectiveStatus))))) : h('div', { class: 'muted' }, 'Nothing here yet.'));
+    const lists = await Promise.all(types.map((t) => api('GET', `/api/documents?type=${t}`)));
+    rows = lists.flatMap((l) => l.rows).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate)));
+    draw();
   } catch (e) { fail(e, box); }
 }
 
@@ -192,6 +272,62 @@ function companySearchBox({ onPick }) {
   return { node, input };
 }
 
+// ---------- one product search (rich autocomplete), shared by invoice and quote lines; Retail Core is only read ----------
+const CUR_SYM = { EUR: '€', USD: '$', GBP: '£' };
+const money = (cur, v) => (v == null || v === '' ? '' : `${CUR_SYM[cur] || `${cur} `}${v}`);
+function stockChip(st) {
+  if (!st || st.state === 'unknown') return h('span', { class: 'chip mute' }, 'Stock n/a');
+  if (st.state === 'out') return h('span', { class: 'chip bad' }, 'Out of stock');
+  if (st.state === 'low') return h('span', { class: 'chip warn' }, `Low: ${st.qty}`);
+  return h('span', { class: 'chip ok' }, `${st.qty} in stock`);
+}
+function thumb(url, name) {
+  const t = h('span', { class: 'thumb' }, h('i', null, (name || '?').trim().charAt(0).toUpperCase()));
+  if (url) { const img = h('img', { src: url, alt: '', loading: 'lazy' }); img.addEventListener('error', () => img.remove()); t.appendChild(img); }
+  return t;
+}
+function productSearchBox({ onPick, onClose, currency }) {
+  const input = h('input', { class: 'acinput', placeholder: 'Search product name, variant or SKU', autocomplete: 'off' });
+  const msg = h('div', { class: 'acmsg' }); const list = h('div', { class: 'aclist' });
+  let seq = 0; let active = -1; let timer = null;
+  const setActive = (n) => { active = n; [...list.children].forEach((c, i) => c.classList.toggle('active', i === n)); const el = list.children[n]; if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); };
+  const say = (t) => { clear(msg); if (t) msg.appendChild(document.createTextNode(t)); };
+  function skeleton() { clear(list); for (let i = 0; i < 3; i += 1) list.appendChild(h('div', { class: 'opt sk' }, h('span', { class: 'thumb' }), h('span', { class: 'skl' }))); }
+  async function run() {
+    const mine = ++seq; const q = input.value.trim();
+    if (q.length < 2) { clear(list); return say('Type at least 2 characters: a product name, variant or SKU.'); }
+    say(''); skeleton();
+    try {
+      const r = await api('GET', `/api/catalog/search?q=${encodeURIComponent(q)}`);
+      if (mine !== seq) return;
+      clear(list); active = -1;
+      if (!r.rows.length) return say('No product found in the catalogue. Use "+ Add custom line" for a service or a special item.');
+      say(`${r.rows.length} match${r.rows.length > 1 ? 'es' : ''}`);
+      r.rows.forEach((x, i) => list.appendChild(h('button', { type: 'button', class: 'opt', on: { click: () => pick(x), mousemove: () => { if (active !== i) setActive(i); } } },
+        thumb(x.imageUrl, x.productTitle),
+        h('span', { class: 'optmain' },
+          h('span', { class: 'optname' }, x.productTitle, x.variantTitle ? h('span', { class: 'optvar' }, ` · ${x.variantTitle}`) : null),
+          h('span', { class: 'optsku' }, x.sku ? `SKU ${x.sku}` : 'No SKU', x.archived ? h('span', { class: 'chip mute' }, x.status.toLowerCase()) : null)),
+        h('span', { class: 'optright' }, stockChip(x.stock),
+          h('span', { class: 'optprice' }, x.price ? money(currency, x.price.amount) : '-', x.price ? h('small', null, x.price.taxesIncluded ? ' incl. VAT' : ' excl. VAT') : null)))));
+      setActive(0);
+    } catch (e) { clear(list); say(e && e.message ? e.message : 'Search failed.'); }
+  }
+  async function pick(x) {
+    try { const r = await api('POST', '/api/catalog/select', { variantId: x.variantId }); onPick(r); } catch (e) { fail(e, msg); }
+  }
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 180); });
+  input.addEventListener('keydown', (ev) => {
+    const n = list.children.length;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); if (n) setActive((active + 1) % n); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); if (n) setActive((active - 1 + n) % n); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); if (list.children[active]) list.children[active].click(); else run(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); if (onClose) onClose(); }
+  });
+  const node = h('div', { class: 'ac' }, h('div', { class: 'acbar' }, input, h('button', { type: 'button', class: 'acclose', 'aria-label': 'Close', on: { click: () => onClose && onClose() } }, 'x')), msg, list);
+  return { node, input };
+}
+
 // ---------- document form (new / edit) ----------
 async function viewForm(kind, editId) {
   const isQuote = kind === 'quote';
@@ -207,11 +343,11 @@ async function viewForm(kind, editId) {
     issueDate: D ? D.issueDate : new Date().toISOString().slice(0, 10), dueDate: D ? (D.dueDate || '') : '', paymentTermsDays: D ? (D.paymentTermsDays ?? '') : s.defaults.paymentTermsDays, paymentTerms: D ? (D.paymentTerms || '') : (s.defaults.paymentTerms || ''),
     validUntil: D ? (D.validUntil || '') : '', currency: D ? D.currency : s.defaults.currency, language: D ? D.language : s.defaults.language, notes: D ? (D.notes || '') : '',
     regime: D ? D.vat.regime : 'domestic', confirmed: D ? D.vat.confirmed : false, mention: D ? (D.vat.mention || '') : '',
-    basis: D ? D.revenueBasis : (isQuote ? null : 'standalone_b2b'), sourceOrderId: D ? D.sourceOrderId : null, sourceLabel: null, ack: D ? !!D.acknowledgedNotDuplicate : false, saveCompany: true,
-    lines: D ? D.lines.map((l) => ({ description: l.description, quantity: String(l.qtyMilli / 1000), unit: l.unit || '', unitPrice: String(l.priceMicro / 10000), discountKind: l.discountBp ? 'percent' : 'amount', discount: l.discountBp ? String(l.discountBp / 100) : l.discountCents ? String(l.discountCents / 100) : '', vatRate: String(l.vatRateBp / 100) })) : [{ description: '', quantity: '1', unit: '', unitPrice: '', discountKind: 'percent', discount: '', vatRate: s.vat.allowedRatesBp.length ? String(s.vat.allowedRatesBp[0] / 100) : '' }],
+    _collapsed: !!D, basis: D ? D.revenueBasis : (isQuote ? null : 'standalone_b2b'), sourceOrderId: D ? D.sourceOrderId : null, sourceLabel: null, ack: D ? !!D.acknowledgedNotDuplicate : false, saveCompany: true,
+    lines: D ? D.lines.map((l) => ({ description: l.description, sku: l.sku || '', catalog: l.catalog || null, priceOrigin: l.priceOrigin || 'NET_MANUAL', grossUnitPrice: l.grossUnitMicro != null ? String(l.grossUnitMicro / 10000) : '', grossVatRate: l.grossVatRateBp != null ? String(l.grossVatRateBp / 100) : '', quantity: String(l.qtyMilli / 1000), unit: l.unit || '', sku: l.sku || '', catalog: l.catalog || null, unitPrice: String(l.priceMicro / 10000), discountKind: l.discountBp ? 'percent' : 'amount', discount: l.discountBp ? String(l.discountBp / 100) : l.discountCents ? String(l.discountCents / 100) : '', vatRate: String(l.vatRateBp / 100) })) : [{ description: '', sku: '', catalog: null, priceOrigin: 'NET_MANUAL', quantity: '1', unit: '', unitPrice: '', discountKind: 'percent', discount: '', vatRate: s.vat.allowedRatesBp.length ? String(s.vat.allowedRatesBp[0] / 100) : '' }],
   };
   const totalsBox = h('div', { class: 'card totals' });
-  const linesBody = h('tbody');
+  const linesBody = h('div', { class: 'lrows' });
   let calcTimer = null; let calcSeq = 0; let lastCalc = null;
 
   const payload = () => ({
@@ -219,7 +355,7 @@ async function viewForm(kind, editId) {
     issueDate: model.issueDate, dueDate: model.dueDate || undefined, paymentTermsDays: model.paymentTermsDays === '' ? undefined : Number(model.paymentTermsDays), paymentTerms: model.paymentTerms, validUntil: isQuote ? (model.validUntil || undefined) : undefined,
     currency: model.currency, language: model.language, notes: model.notes, vat: { regime: model.regime, confirmed: model.confirmed, mention: model.mention },
     revenueBasis: isQuote ? undefined : model.basis, sourceOrderId: model.basis === 'linked_source_order' ? model.sourceOrderId : undefined, acknowledgedNotDuplicate: model.ack,
-    lines: model.lines.map((l) => ({ description: l.description, quantity: l.quantity, unit: l.unit || undefined, unitPrice: l.unitPrice, vatRate: model.regime === 'domestic' ? l.vatRate : '0', discountPercent: l.discountKind === 'percent' && l.discount ? l.discount : undefined, discountAmount: l.discountKind === 'amount' && l.discount ? l.discount : undefined })),
+    lines: model.lines.map((l) => ({ description: l.description, sku: l.sku || undefined, catalog: l.catalog || undefined, quantity: l.quantity, unit: l.unit || undefined, ...(l.priceOrigin === 'GROSS_CATALOGUE' ? { priceOrigin: 'GROSS_CATALOGUE', grossUnitPrice: l.grossUnitPrice, grossVatRate: l.grossVatRate || undefined } : { unitPrice: l.unitPrice }), vatRate: model.regime === 'domestic' ? l.vatRate : '0', discountPercent: l.discountKind === 'percent' && l.discount ? l.discount : undefined, discountAmount: l.discountKind === 'amount' && l.discount ? l.discount : undefined })),
   });
 
   function scheduleCalc() { clearTimeout(calcTimer); calcTimer = setTimeout(runCalc, 250); }
@@ -231,39 +367,93 @@ async function viewForm(kind, editId) {
       if (seq !== calcSeq) return; lastCalc = r; renderTotals(); renderLineTotals();
     } catch (e) { /* the next edit retries */ }
   }
+  const barTotal = h('strong', null, '-');
   function renderTotals() {
-    clear(totalsBox); totalsBox.appendChild(h('h2', null, 'Totals'));
+    clear(totalsBox); totalsBox.appendChild(h('h2', null, 'Live summary'));
     const t = lastCalc && lastCalc.totals;
     if (!t) { totalsBox.appendChild(h('div', { class: 'muted small' }, lastCalc && lastCalc.errors && lastCalc.errors.length ? 'Complete the lines to see totals.' : 'Add lines to see totals.')); return; }
+    refreshSteps(); barTotal.textContent = `${t.payable} ${model.currency}`; totalsBox.classList.remove('flash'); void totalsBox.offsetWidth; totalsBox.classList.add('flash');
     const row = (l, v, cls) => h('div', { class: `t ${cls || ''}` }, h('span', null, l), h('span', null, `${v} ${model.currency}`));
     totalsBox.appendChild(row('Subtotal excl. VAT', t.net)); if (t.discountCents > 0) totalsBox.appendChild(row('of which discounts', t.discount));
     t.vatBreakdown.forEach((g) => totalsBox.appendChild(row(`VAT ${g.vatRateBp / 100}% on ${g.taxable}`, g.vatAmount)));
-    totalsBox.appendChild(row('Total VAT', t.vat)); totalsBox.appendChild(row('Total incl. VAT', t.gross, 'big')); if (!isQuote) totalsBox.appendChild(row('Amount due', t.gross));
+    totalsBox.appendChild(row('Total VAT', t.vat));
+    if (t.roundingCents) { totalsBox.appendChild(row('Total incl. VAT', t.gross)); totalsBox.appendChild(row('Rounding adjustment', t.rounding, 'muted')); totalsBox.appendChild(row(isQuote ? 'Amount to pay' : 'Amount due', t.payable, 'big')); totalsBox.appendChild(h('div', { class: 'hint' }, 'Explicit rounding (EN 16931) so the catalogue price stays exactly as published.')); }
+    else { totalsBox.appendChild(row('Total incl. VAT', t.gross, 'big')); if (!isQuote) totalsBox.appendChild(row('Amount due', t.gross)); }
     if (lastCalc.hints && lastCalc.hints.length) totalsBox.appendChild(h('div', { class: 'banner warn small', style: 'margin-top:10px' }, lastCalc.hints.map((x) => h('div', null, human(x)))));
     totalsBox.appendChild(h('div', { class: 'hint' }, 'Calculated by the finance engine, not by this page.'));
   }
-  function renderLineTotals() { const t = lastCalc && lastCalc.totals; linesBody.querySelectorAll('[data-lt]').forEach((c) => { const i = Number(c.getAttribute('data-lt')); c.textContent = t && t.lines[i] ? `${t.lines[i].net}` : ''; }); }
+  function renderLineTotals() { const t = lastCalc && lastCalc.totals; if (t) model.lines.forEach((l, i) => { const tl = t.lines[i]; const inp = linesBody.querySelector(`[data-price="${i}"]`); if (tl && inp && l.priceOrigin === 'GROSS_CATALOGUE' && tl.unitPriceRaw) { l.unitPrice = tl.unitPriceRaw; if (document.activeElement !== inp) inp.value = tl.unitPriceRaw; } }); linesBody.querySelectorAll('[data-lt]').forEach((c) => { const i = Number(c.getAttribute('data-lt')); c.textContent = t && t.lines[i] ? `${t.lines[i].net}` : ''; }); }
 
   const bind = (obj, key, extra) => (ev) => { obj[key] = ev.target.type === 'checkbox' ? ev.target.checked : ev.target.value; if (extra) extra(); scheduleCalc(); };
   const field = (label, input, hint) => h('div', { class: 'field' }, h('label', null, label), input, hint ? h('div', { class: 'hint' }, hint) : null);
   const text = (key, ph, type) => h('input', { type: type || 'text', value: model[key] ?? '', placeholder: ph || '', on: { input: bind(model, key) } });
 
+  // ---- invoice / quote lines: compact rows, one shared product autocomplete, custom lines always available ----
+  const blankLine = () => ({ description: '', sku: '', catalog: null, priceOrigin: 'NET_MANUAL', quantity: '1', unit: '', unitPrice: '', discountKind: 'percent', discount: '', vatRate: model.lines[0] ? model.lines[0].vatRate : '' });
+  const normDec = (x) => String(x ?? '').trim().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  let picker = null; // { line: the line being changed, or null when adding, box }
+  const addAnchor = h('div', { class: 'add-anchor' });
+  function closePicker() { picker = null; renderLines(); }
+  function fillLine(l, r) {
+    const pl = r.line;
+    l.description = pl.description; l.sku = pl.sku || ''; l.catalog = pl.catalog; l.unit = pl.unit || '';
+    l.unitPrice = pl.unitPrice; l.vatRate = model.regime === 'domestic' ? pl.vatRate : l.vatRate;
+    l.priceOrigin = pl.priceOrigin || 'NET_MANUAL'; l.grossUnitPrice = pl.grossUnitPrice || ''; l.grossVatRate = pl.grossVatRate || '';
+    l._pendingGross = pl.priceOrigin !== 'GROSS_CATALOGUE' && r.catalogue && r.catalogue.priceInclVat ? r.catalogue.priceInclVat : null;
+    l._notes = r.notes || []; l._stock = r.stock; l._img = r.imageUrl;
+    l._overridden = false; l._cat = r.catalogue ? { incl: r.catalogue.priceInclVat, ex: r.catalogue.priceExclVat, check: r.catalogue.check } : null;
+  }
+  function openProductPicker(line) {
+    const box = productSearchBox({ currency: model.currency, onClose: closePicker, onPick: (r) => {
+      let target = line;
+      if (!target) { const only = model.lines.length === 1 && !model.lines[0].description && !model.lines[0].unitPrice && !model.lines[0].catalog; target = only ? model.lines[0] : blankLine(); if (!only) model.lines.push(target); }
+      fillLine(target, r); picker = null; renderLines(); scheduleCalc();
+    } });
+    picker = { line, box }; renderLines(); setTimeout(() => box.input.focus(), 0);
+  }
   function renderLines() {
-    clear(linesBody);
+    clear(linesBody); clear(addAnchor);
     const rates = s.vat.allowedRatesBp.length ? s.vat.allowedRatesBp : [2100, 600, 0];
+    const cur = model.currency; const domestic = model.regime === 'domestic';
     model.lines.forEach((l, i) => {
-      const rateSel = h('select', { on: { change: bind(l, 'vatRate') }, disabled: model.regime !== 'domestic' }, rates.map((bp) => h('option', { value: String(bp / 100), selected: String(bp / 100) === String(l.vatRate) }, `${bp / 100}%`)));
-      if (model.regime !== 'domestic') rateSel.appendChild(h('option', { value: '0', selected: true }, '0%'));
-      linesBody.appendChild(h('tr', null,
-        h('td', { style: 'min-width:170px' }, h('input', { value: l.description, placeholder: 'Description', on: { input: bind(l, 'description') } })),
-        h('td', { style: 'width:72px' }, h('input', { value: l.quantity, inputmode: 'decimal', on: { input: bind(l, 'quantity') } })),
-        h('td', { style: 'width:72px' }, h('input', { value: l.unit, placeholder: 'unit', on: { input: bind(l, 'unit') } })),
-        h('td', { style: 'width:100px' }, h('input', { value: l.unitPrice, inputmode: 'decimal', placeholder: '0.00', on: { input: bind(l, 'unitPrice') } })),
-        h('td', { style: 'width:132px' }, h('div', { style: 'display:flex;gap:4px' }, h('input', { value: l.discount, inputmode: 'decimal', placeholder: '0', on: { input: bind(l, 'discount') } }), h('select', { style: 'width:70px', on: { change: bind(l, 'discountKind') } }, h('option', { value: 'percent', selected: l.discountKind === 'percent' }, '%'), h('option', { value: 'amount', selected: l.discountKind === 'amount' }, model.currency)))),
-        h('td', { style: 'width:88px' }, rateSel),
-        h('td', { class: 'num nowrap', 'data-lt': String(i) }, ''),
-        h('td', null, model.lines.length > 1 ? h('button', { class: 'danger', on: { click: () => { model.lines.splice(i, 1); renderLines(); scheduleCalc(); } } }, 'x') : null)));
+      const rateSel = h('select', { disabled: !domestic, on: { change: (e) => { l.vatRate = e.target.value; if (l._pendingGross && l.catalog && l.vatRate !== '' && !l._overridden) { l.priceOrigin = 'GROSS_CATALOGUE'; l.grossUnitPrice = l._pendingGross; l.grossVatRate = l.vatRate; l._notes = []; l._cat = { incl: l._pendingGross, ex: null, check: null }; } renderLines(); scheduleCalc(); } } },
+        l.vatRate === '' && domestic ? h('option', { value: '', selected: true }, 'VAT ?') : null,
+        rates.map((bp) => h('option', { value: String(bp / 100), selected: String(bp / 100) === String(l.vatRate) }, `${bp / 100}%`)));
+      if (!domestic) rateSel.appendChild(h('option', { value: '0', selected: true }, '0%'));
+      const cat = l._cat;
+      const isGross = l.priceOrigin === 'GROSS_CATALOGUE';
+      const overridden = !!(l.catalog && l._overridden && l.priceOrigin === 'NET_MANUAL');
+      const exceeds = !!(l._stock && l._stock.qty != null && Number(l.quantity) > l._stock.qty);
+      const sub = h('div', { class: 'lsub' },
+        l.sku ? h('span', { class: 'mono sku' }, l.sku) : null,
+        isGross && cat && cat.incl ? h('span', { class: 'subtle' }, `Catalogue ${money(cur, cat.incl)} incl. VAT`, cat.check ? ` → ${money(cur, cat.check.net)} excl. VAT` : '') : (cat && !isGross && !overridden ? h('span', { class: 'subtle' }, 'Catalogue price excl. VAT') : null),
+        isGross ? h('span', { class: 'chip ok' }, 'Catalogue price kept') : null,
+        overridden ? h('span', { class: 'chip warn' }, 'Price override (excl. VAT)') : null,
+        exceeds ? h('span', { class: 'chip warn' }, 'More than in stock') : null,
+        l.catalog && l.vatRate === '' && domestic ? h('span', { class: 'chip warn' }, 'Confirm VAT rate') : null);
+      const acts = h('div', { class: 'lacts' },
+        h('button', { type: 'button', class: 'linkbtn', on: { click: () => (picker && picker.line === l ? closePicker() : openProductPicker(l)) } }, l.catalog ? 'Change product' : 'Search product'),
+        overridden && cat && cat.incl ? h('button', { type: 'button', class: 'linkbtn', on: { click: () => { l.priceOrigin = 'GROSS_CATALOGUE'; l.unitPrice = cat.ex || l.unitPrice; l._overridden = false; renderLines(); scheduleCalc(); } } }, 'Use catalogue price') : null,
+        l.catalog ? h('button', { type: 'button', class: 'linkbtn', on: { click: () => { l.catalog = null; l.priceOrigin = 'NET_MANUAL'; l._overridden = false; l.sku = ''; l._cat = null; l._stock = null; l._img = null; l._notes = []; renderLines(); scheduleCalc(); } } }, 'Make custom') : null,
+        model.lines.length > 1 ? h('button', { type: 'button', class: 'linkbtn danger', on: { click: () => { model.lines.splice(i, 1); if (picker && picker.line === l) picker = null; renderLines(); scheduleCalc(); } } }, 'Remove line') : null);
+      const cell = (label, node, cls) => h('div', { class: `lc ${cls || ''}`, 'data-label': label }, node);
+      const row = h('div', { class: `lrow ${l.catalog ? 'cat' : 'cust'}` },
+        h('div', { class: 'lc lprod' }, thumb(l._img, l.description || (l.catalog ? '' : 'C')),
+          h('div', { class: 'lmain' },
+            h('input', { class: 'ghost', value: l.description, placeholder: l.catalog ? 'Description' : 'Custom line: describe the service or item', on: { input: bind(l, 'description') } }),
+            l.catalog ? sub : h('div', { class: 'lsub' }, h('span', { class: 'chip mute' }, 'Custom line')),
+            l._notes && l._notes.length ? h('div', { class: 'lnote' }, l._notes.join(' ')) : null, acts)),
+        cell('Stock', l.catalog ? stockChip(l._stock) : h('span', { class: 'subtle' }, '-'), 'lstock'),
+        cell('Qty', h('input', { value: l.quantity, inputmode: 'decimal', on: { input: (e) => { l.quantity = e.target.value; scheduleCalc(); }, change: () => renderLines() } })),
+        cell('Unit price excl. VAT', h('input', { 'data-price': String(i), value: l.unitPrice, inputmode: 'decimal', placeholder: '0.00', on: { input: (e) => { l.unitPrice = e.target.value; if (l.priceOrigin === 'GROSS_CATALOGUE') { l.priceOrigin = 'NET_MANUAL'; l._overridden = true; } scheduleCalc(); }, change: () => renderLines() } })),
+        cell('Discount', h('div', { class: 'disc' }, h('input', { value: l.discount, inputmode: 'decimal', placeholder: '0', on: { input: bind(l, 'discount') } }), h('select', { on: { change: bind(l, 'discountKind') } }, h('option', { value: 'percent', selected: l.discountKind === 'percent' }, '%'), h('option', { value: 'amount', selected: l.discountKind === 'amount' }, cur)))),
+        cell('VAT', rateSel),
+        cell('Line total excl. VAT', h('div', { class: 'ltotal', 'data-lt': String(i) }, ''), 'ltot'));
+      const wrap = h('div', { class: 'lwrap' }, row);
+      if (picker && picker.line === l) wrap.appendChild(picker.box.node);
+      linesBody.appendChild(wrap);
     });
+    if (picker && picker.line === null) addAnchor.appendChild(picker.box.node);
     renderLineTotals();
   }
 
@@ -271,17 +461,30 @@ async function viewForm(kind, editId) {
   const custBox = h('div');
   const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
   const renderSource = () => { clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(model))); };
-  const search = companySearchBox({ onPick: (r) => { fillFromResult(model, r); renderCustomer(); scheduleCalc(); } });
+  const search = companySearchBox({ onPick: (r) => { fillFromResult(model, r); model._collapsed = true; renderCustomer(); scheduleCalc(); } });
   function renderCustomer() {
     clear(custBox);
+    search.node.style.display = model._collapsed && customerDone() ? 'none' : '';
+    if (model._collapsed && customerDone()) {
+      renderSource();
+      const addr = [model.street, `${model.postalCode || ''} ${model.city || ''}`.trim(), model.countryCode].filter(Boolean).join(', ');
+      custBox.appendChild(h('div', { class: 'custchip' }, avatar(model.name, 'lg'),
+        h('div', { class: 'cmain' }, h('div', { class: 'cname' }, model.name, model.personal ? h('span', { class: 'chip warn' }, 'SOLE TRADER / PERSONAL DATA') : null),
+          h('div', { class: 'csub' }, [model.vatNumber || model.enterpriseNumber, addr].filter(Boolean).join('  ·  ')), h('div', { class: 'csrc' }, sourceLine)),
+        h('div', { class: 'cact' }, h('button', { type: 'button', class: 'linkbtn', on: { click: () => { model._collapsed = false; renderCustomer(); } } }, 'Edit details'),
+          h('button', { type: 'button', class: 'linkbtn', on: { click: () => { model._collapsed = false; renderCustomer(); setTimeout(() => search.input.focus(), 0); } } }, 'Change customer'))));
+      refreshSteps(); return;
+    }
     mount(custBox, model.companyId ? h('div', { class: 'banner info small' }, 'Company from your directory. ', h('a', { href: '#', on: { click: (e) => { e.preventDefault(); model.companyId = null; model.csource = 'manual'; renderCustomer(); } } }, 'Detach and edit manually')) : null);
     const ro = !!model.companyId;
-    const inp = (key, ph, identity) => h('input', { value: model[key] ?? '', placeholder: ph || '', disabled: ro, on: { input: (e) => { model[key] = e.target.value; if (identity) { model.dirty = true; renderSource(); } } } });
+    const inp = (key, ph, identity) => h('input', { value: model[key] ?? '', placeholder: ph || '', disabled: ro, on: { input: (e) => { model[key] = e.target.value; if (identity) { model.dirty = true; renderSource(); } refreshSteps(); } } });
     custBox.appendChild(h('div', { class: 'row r3' }, field('Company name', inp('name', '', true)), field('VAT number', inp('vatNumber', 'BE0123456789', true)), field('Enterprise number', inp('enterpriseNumber', '0123.456.789', true))));
     custBox.appendChild(h('div', { class: 'row r4' }, field('Street and number', inp('street', '', true)), field('Postal code', inp('postalCode', '', true)), field('City', inp('city', '', true)), field('Country', inp('countryCode', 'BE', true))));
     renderSource(); custBox.appendChild(sourceLine);
     custBox.appendChild(field('Email (optional)', h('input', { value: model.email ?? '', placeholder: 'accounts@company.example', on: { input: (e) => { model.email = e.target.value; } } }), 'Stored only if you enter it. Not needed for the invoice.'));
     if (!model.companyId) custBox.appendChild(h('label', { style: 'color:inherit' }, h('input', { type: 'checkbox', checked: model.saveCompany, on: { change: (e) => { model.saveCompany = e.target.checked; } } }), 'Save this company to my directory'));
+    if (customerDone()) custBox.appendChild(h('div', { style: 'margin-top:10px' }, h('button', { type: 'button', class: 'primary', on: { click: () => { model._collapsed = true; renderCustomer(); } } }, 'Done')));
+    refreshSteps();
   }
 
   // revenue basis + order picker
@@ -333,16 +536,39 @@ async function viewForm(kind, editId) {
     } catch (e) { fail(e, errBox); window.scrollTo(0, 0); }
   };
 
+  // progress: numbered sections tick off as they are completed; the checklist shows what is still missing before saving
+  const steps = [];
+  const customerDone = () => !!(model.name && (model.vatNumber || model.enterpriseNumber) && model.street && model.postalCode && model.city);
+  const linesDone = () => !!(lastCalc && lastCalc.ok);
+  const vatDone = () => model.confirmed === true;
+  const basisDone = () => isQuote || (!!model.basis && (model.basis !== 'linked_source_order' || !!model.sourceOrderId));
+  const stepHead = (n, title, isDone) => { const c = h('span', { class: 'stepn' }, String(n)); const el = h('div', { class: 'stephead' }, c, h('h2', null, title)); steps.push({ c, el, n, isDone }); return el; };
+  const checkBox = h('div', { class: 'card checklist' });
+  function renderChecklist() {
+    clear(checkBox); checkBox.appendChild(h('h3', null, 'Before you save'));
+    [['Customer identified', customerDone()], ['Lines with prices', linesDone()], ['VAT treatment confirmed', vatDone()], ...(isQuote ? [] : [['Revenue basis chosen', basisDone()]])]
+      .forEach(([l, d]) => checkBox.appendChild(h('div', { class: `ck ${d ? 'done' : ''}` }, h('span', { class: 'ckdot' }, d ? svgIcon('check', 12) : null), l)));
+  }
+  function refreshSteps() { steps.forEach((st) => { const d = st.isDone(); st.el.classList.toggle('done', d); clear(st.c); if (d) st.c.appendChild(svgIcon('check', 14)); else st.c.appendChild(document.createTextNode(String(st.n))); }); renderChecklist(); }
+  const discCard = (title, hint, ...body) => h('details', { class: 'card disclosure' }, h('summary', null, h('span', { class: 'dtitle' }, title), h('span', { class: 'dhint' }, hint), svgIcon('chevron', 16)), h('div', { class: 'dbody' }, body));
+  const nVat = isQuote ? 2 : 3;
   const form = h('div', { class: 'grid formgrid' },
     h('div', { class: 'grid' },
-      h('div', { class: 'card' }, h('h2', null, 'Customer'), search.node, h('div', { style: 'margin-top:14px' }, custBox)),
-      h('div', { class: 'card' }, h('h2', null, 'Dates and terms'), h('div', { class: 'row r4' }, field('Issue date', h('input', { type: 'date', value: model.issueDate, on: { input: bind(model, 'issueDate') } })), isQuote ? field('Valid until', h('input', { type: 'date', value: model.validUntil, on: { input: bind(model, 'validUntil') } })) : field('Due date', dueField, 'Leave empty to use the payment terms'), field('Payment terms (days)', h('input', { value: String(model.paymentTermsDays), inputmode: 'numeric', on: { input: bind(model, 'paymentTermsDays') } })), field('Currency', h('input', { value: model.currency, on: { input: bind(model, 'currency') } }))), h('div', { class: 'row r2' }, field(isQuote ? 'Commercial terms' : 'Payment terms text', h('input', { value: model.paymentTerms, on: { input: bind(model, 'paymentTerms') } })), field('Document language', h('select', { on: { change: bind(model, 'language') } }, [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: model.language === v }, l)))))),
-      isQuote ? null : h('div', { class: 'card' }, h('h2', null, 'Revenue basis'), basisBox),
-      h('div', { class: 'card' }, h('h2', null, 'VAT treatment'), vatBox),
-      h('div', { class: 'card' }, h('h2', null, 'Lines'), h('div', { class: 'scrollx' }, h('table', { class: 'lines' }, h('thead', null, h('tr', null, ['Description', 'Qty', 'Unit', 'Unit price', 'Discount', 'VAT', 'Line total', ''].map((x, i) => h('th', { class: i === 6 ? 'num' : '' }, x)))), linesBody)), h('button', { style: 'margin-top:10px', on: { click: (e) => { e.preventDefault(); model.lines.push({ description: '', quantity: '1', unit: '', unitPrice: '', discountKind: 'percent', discount: '', vatRate: model.lines[0] ? model.lines[0].vatRate : '' }); renderLines(); } } }, 'Add a line')),
-      h('div', { class: 'card' }, field('Notes (printed on the document)', h('textarea', { rows: 3, on: { input: bind(model, 'notes') } }, model.notes)))),
-    h('div', null, totalsBox, h('div', { class: 'actions', style: 'margin-top:12px' }, h('button', { on: { click: () => save(false) } }, 'Save draft'), isQuote ? null : h('button', { class: 'primary', on: { click: () => save(true) } }, 'Save and review'))));
+      h('div', { class: 'card' }, stepHead(1, 'Customer', customerDone), search.node, h('div', { style: 'margin-top:14px' }, custBox)),
+      discCard('Dates and terms', `Issue ${model.issueDate || 'today'} · ${model.paymentTermsDays === '' ? 'no terms' : `${model.paymentTermsDays} days`}`, h('div', { class: 'row r4' }, field('Issue date', h('input', { type: 'date', value: model.issueDate, on: { input: bind(model, 'issueDate') } })), isQuote ? field('Valid until', h('input', { type: 'date', value: model.validUntil, on: { input: bind(model, 'validUntil') } })) : field('Due date', dueField, 'Leave empty to use the payment terms'), field('Payment terms (days)', h('input', { value: String(model.paymentTermsDays), inputmode: 'numeric', on: { input: bind(model, 'paymentTermsDays') } })), field('Currency', h('input', { value: model.currency, on: { input: bind(model, 'currency') } }))), h('div', { class: 'row r2' }, field(isQuote ? 'Commercial terms' : 'Payment terms text', h('input', { value: model.paymentTerms, on: { input: bind(model, 'paymentTerms') } })), field('Document language', h('select', { on: { change: bind(model, 'language') } }, [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']].map(([v, l]) => h('option', { value: v, selected: model.language === v }, l)))))),
+      isQuote ? null : h('div', { class: 'card' }, stepHead(2, 'Revenue basis', basisDone), basisBox),
+      h('div', { class: 'card' }, stepHead(nVat, 'VAT treatment', vatDone), vatBox),
+      h('div', { class: 'card lines-card' },
+        h('div', { class: 'cardhead' }, stepHead(nVat + 1, 'Lines', linesDone), h('span', { class: 'muted small' }, 'Products come from your catalogue, prices from the shop')),
+        h('div', { class: 'lhead' }, ['Product', 'Stock', 'Qty', 'Unit price excl. VAT', 'Discount', 'VAT', 'Line total excl. VAT'].map((x, k) => h('div', { class: k === 6 ? 'right' : '' }, x))),
+        linesBody, addAnchor,
+        h('div', { class: 'actions', style: 'margin-top:12px' },
+          h('button', { class: 'ghostbtn', on: { click: (e) => { e.preventDefault(); if (picker && picker.line === null) closePicker(); else openProductPicker(null); } } }, '+ Add product'),
+          h('button', { class: 'ghostbtn', on: { click: (e) => { e.preventDefault(); model.lines.push(blankLine()); renderLines(); } } }, '+ Add custom line'))),
+      discCard('Notes', 'Printed on the document', field('Notes (printed on the document)', h('textarea', { rows: 3, on: { input: bind(model, 'notes') } }, model.notes)))),
+    h('div', { class: 'stickycol' }, totalsBox, checkBox, h('div', { class: 'actions', style: 'margin-top:12px' }, h('button', { on: { click: () => save(false) } }, 'Save draft'), isQuote ? null : h('button', { class: 'primary', on: { click: () => save(true) } }, 'Save and review'))));
   main.appendChild(errBox); main.appendChild(form);
+  main.appendChild(h('div', { class: 'stickybar' }, h('div', null, h('div', { class: 'small muted' }, 'Total incl. VAT'), barTotal), h('div', { class: 'actions' }, h('button', { on: { click: () => save(false) } }, 'Save draft'), isQuote ? null : h('button', { class: 'primary', on: { click: () => save(true) } }, 'Save and review'))));
   renderCustomer(); renderBasis(); renderVat(); renderLines(); renderTotals(); runCalc();
 }
 
@@ -377,6 +603,10 @@ async function viewDoc(id) {
       h('a', { class: 'btn', href: `/api/documents/${id}/pdf?download=1` }, 'Download PDF'),
       has('ubl') ? h('a', { class: 'btn', href: `/api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
   box.appendChild(top);
+  const FLOW = isQ ? [['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['CONVERTED', 'Converted']] : [['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Ready'], ['ISSUED', 'Issued'], ['SENT', 'Sent'], ['PAID', 'Paid']];
+  const flowKey = { OVERDUE: 'SENT', PARTIALLY_PAID: 'SENT', CREDITED: 'PAID', REJECTED: 'DRAFT', CANCELLED: 'DRAFT' }[d.effectiveStatus] || d.effectiveStatus;
+  const curIdx = Math.max(0, FLOW.findIndex(([v]) => v === flowKey));
+  if (d.type !== 'credit_note') box.appendChild(h('ol', { class: 'stepper' }, FLOW.map(([v, l], i) => h('li', { class: i < curIdx || (i === curIdx && v === 'PAID') ? 'done' : i === curIdx ? 'current' : '' }, h('span', { class: 'sdot' }, i < curIdx || (i === curIdx && v === 'PAID') ? svgIcon('check', 12) : String(i + 1)), h('span', null, l)))));
   if (d.status === 'READY_FOR_APPROVAL') {
     box.appendChild(h('div', { class: 'banner info' }, h('strong', null, 'Review before you approve. '), `Approving issues the document, assigns its number (${d.nextNumber || 'next in sequence'}) and freezes it. Afterwards it can only be corrected with a credit note. Nothing is sent to your customer.`, h('div', { class: 'actions', style: 'margin-top:10px' },
       h('button', { class: 'ok', on: { click: () => confirmModal('Approve and issue', `Issue this ${TYPE[d.type].toLowerCase()} now? It will receive the next number and cannot be edited afterwards.`, 'APPROVE', call('approve', {}, 'Issued')) } }, 'APPROVE'),

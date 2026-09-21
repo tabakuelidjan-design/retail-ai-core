@@ -10,6 +10,7 @@ import http from 'node:http';
 import { join } from 'node:path';
 import { createRuntime } from '../runtime.js';
 import { LOGO_DIR, SETTINGS_PATH, loadSettings, saveSettings } from '../settings.js';
+import { createShopifyPriceSource } from '../catalog.js';
 import { createFinanceApp } from './app.js';
 
 const PORT = Number(process.env.FINANCE_PORT || 4310);
@@ -33,7 +34,7 @@ async function main() {
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
-    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: rt.retailHistory,
+    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: rt.retailHistory,
     settings: {
       load: () => loadSettings(),
       save: (s) => saveSettings(s),

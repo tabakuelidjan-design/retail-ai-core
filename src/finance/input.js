@@ -57,6 +57,16 @@ export function cleanCompany(c, errors, prefix = 'customer', { identityFromDirec
   return out;
 }
 
+/** Traceability reference to the Retail Core product/variant a line was picked from. Copied data only; never looked up again. */
+export function cleanCatalogRef(c) {
+  if (!plain(c) || c.source !== 'retail_core') return null;
+  const id = (v) => { const t = sanitizeText(v, 64); return t && /^[A-Za-z0-9_-]{8,64}$/.test(t) ? t : null; };
+  const out = { source: 'retail_core', productId: id(c.productId), variantId: id(c.variantId), productTitle: sanitizeText(c.productTitle, 200), variantTitle: sanitizeText(c.variantTitle, 200), sku: sanitizeText(c.sku, 80) };
+  if (!out.productId || !out.variantId) return null;
+  if (plain(c.priceSnapshot)) { const amount = sanitizeText(c.priceSnapshot.amount, 20); if (amount && /^\d+(\.\d{1,4})?$/.test(amount)) out.priceSnapshot = { amount, taxesIncluded: c.priceSnapshot.taxesIncluded === true, at: sanitizeText(c.priceSnapshot.at, 40) }; }
+  return out;
+}
+
 /** Validate the line editor rows. Returns the cleaned lines, or null (with errors recorded) when the array itself is unusable. */
 export function cleanLines(rawLines, errors) {
   const e = (field, code) => errors.push({ field, code });
@@ -65,10 +75,17 @@ export function cleanLines(rawLines, errors) {
   return rawLines.map((l, i) => {
     const p = `lines[${i}]`;
     if (!plain(l)) { e(p, 'LINE_INVALID'); return {}; }
-    const line = { description: sanitizeText(l.description, 500), unit: sanitizeText(l.unit, 20) };
+    const line = { description: sanitizeText(l.description, 500), unit: sanitizeText(l.unit, 20), sku: sanitizeText(l.sku, 80), catalog: cleanCatalogRef(l.catalog) };
     if (!line.description) e(`${p}.description`, 'REQUIRED');
     line.quantity = decimal(l.quantity, QTY); if (line.quantity === null) e(`${p}.quantity`, 'QUANTITY_INVALID');
-    line.unitPrice = decimal(l.unitPrice, PRICE); if (line.unitPrice === null) e(`${p}.unitPrice`, 'UNIT_PRICE_INVALID');
+    if (l.priceOrigin === 'GROSS_CATALOGUE') {
+      // the catalogue price incl. VAT is authoritative; the ex-VAT price is derived by the finance engine
+      line.priceOrigin = 'GROSS_CATALOGUE';
+      line.grossUnitPrice = decimal(l.grossUnitPrice, PRICE); if (line.grossUnitPrice === null) e(`${p}.grossUnitPrice`, 'GROSS_PRICE_INVALID');
+      if (l.grossVatRate != null && l.grossVatRate !== '') { line.grossVatRate = decimal(l.grossVatRate, PERCENT); if (line.grossVatRate === null) e(`${p}.grossVatRate`, 'VAT_RATE_INVALID'); }
+    } else {
+      line.unitPrice = decimal(l.unitPrice, PRICE); if (line.unitPrice === null) e(`${p}.unitPrice`, 'UNIT_PRICE_INVALID');
+    }
     line.vatRate = decimal(l.vatRate, PERCENT); if (line.vatRate === null) e(`${p}.vatRate`, 'VAT_RATE_INVALID');
     if (l.discountPercent != null && l.discountPercent !== '') { line.discountPercent = decimal(l.discountPercent, PERCENT); if (line.discountPercent === null) e(`${p}.discountPercent`, 'DISCOUNT_INVALID'); }
     if (l.discountAmount != null && l.discountAmount !== '') { line.discountAmount = decimal(l.discountAmount, MONEY); if (line.discountAmount === null) e(`${p}.discountAmount`, 'DISCOUNT_INVALID'); }

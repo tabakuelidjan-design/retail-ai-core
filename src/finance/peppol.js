@@ -8,9 +8,9 @@
 // validation and it TRANSMITS NOTHING. Sending is done by an AccessPointAdapter supplied later; provider-specific code
 // must live in that adapter, never in the finance core. We do not operate a Peppol Access Point.
 
-import { computeTotals } from './document.js';
+import { computeTotals, payableOf } from './document.js';
 import { normalizeBelgianNumber } from './company.js';
-import { formatCents, fromScaled } from './money.js';
+import { divRound, formatCents, fromScaled } from './money.js';
 import { vatCategoryCode } from './vat.js';
 
 export const CUSTOMIZATION_ID = 'urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0';
@@ -19,6 +19,15 @@ export const PEPPOL_STATUSES = ['PREPARED', 'SENT', 'DELIVERED', 'REJECTED', 'FA
 
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const amt = (cents) => formatCents(cents);
+/**
+ * PriceAmount has no decimal restriction in Peppol BIS 3.0. A catalogue price incl. VAT is turned into the effective ex-VAT unit price
+ * (before discount) at full precision, so that quantity x price rounds to the line net amount exactly (rule R120), never a 4-decimal shortcut.
+ */
+const ublUnitPrice = (l) => {
+  if (l.priceOrigin !== 'GROSS_CATALOGUE') return fromScaled(l.priceMicro, 4);
+  const v = Number(divRound(BigInt(l.grossCents) * 10n * 100000000n, BigInt(l.qtyMilli)));
+  return fromScaled(v, 8).replace(/(\.\d{2}\d*?)0+$/, '$1');
+};
 const pct = (bp) => fromScaled(bp, 2);
 
 /** { scheme, id } for a party, or null. Belgian parties derive 0208 from the enterprise/VAT number; others need an explicit peppolId "scheme:id". */
@@ -48,7 +57,7 @@ export function validatePeppolReadiness(doc, { originalNumber = null, defaultBuy
   if (nonStandard && !doc.vat.mention) e.push('VAT_EXEMPTION_REASON_REQUIRED');
   try {
     const re = computeTotals(doc.lines);
-    if (re.grossCents !== doc.totals.grossCents || re.vatCents !== doc.totals.vatCents || re.netCents !== doc.totals.netCents) e.push('TOTALS_DO_NOT_MATCH_RECOMPUTATION');
+    if (re.grossCents !== doc.totals.grossCents || re.vatCents !== doc.totals.vatCents || re.netCents !== doc.totals.netCents || (re.roundingCents ?? 0) !== (doc.totals.roundingCents ?? 0)) e.push('TOTALS_DO_NOT_MATCH_RECOMPUTATION');
   } catch { e.push('TOTALS_NOT_COMPUTABLE'); }
   return [...new Set(e)];
 }
@@ -83,7 +92,7 @@ export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = n
     return `<cac:${lineTag}><cbc:ID>${l.position}</cbc:ID><cbc:${qtyTag} unitCode="${unitCode}">${fromScaled(l.qtyMilli, 3)}</cbc:${qtyTag}><cbc:LineExtensionAmount currencyID="${cur}">${amt(l.netCents)}</cbc:LineExtensionAmount>`
       + (l.discountCents > 0 ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:Amount currencyID="${cur}">${amt(l.discountCents)}</cbc:Amount><cbc:BaseAmount currencyID="${cur}">${amt(l.grossCents)}</cbc:BaseAmount></cac:AllowanceCharge>` : '')
       + `<cac:Item><cbc:Name>${esc(l.description)}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${c.code}</cbc:ID><cbc:Percent>${c.percent}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>`
-      + `<cac:Price><cbc:PriceAmount currencyID="${cur}">${fromScaled(l.priceMicro, 4)}</cbc:PriceAmount></cac:Price></cac:${lineTag}>`;
+      + `<cac:Price><cbc:PriceAmount currencyID="${cur}">${ublUnitPrice(l)}</cbc:PriceAmount></cac:Price></cac:${lineTag}>`;
   }).join('\n  ');
   const subtotals = doc.totals.vatBreakdown.map((g) => `<cac:TaxSubtotal><cbc:TaxableAmount currencyID="${cur}">${amt(g.taxableCents)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="${cur}">${amt(g.vatCents)}</cbc:TaxAmount>${cat(taxCat(doc.vat.regime, g.vatRateBp), doc.vat.mention)}</cac:TaxSubtotal>`).join('');
   const buyerRef = doc.customer.buyerReference ?? (defaultBuyerReference === 'document_number' ? doc.number : defaultBuyerReference);
@@ -104,7 +113,7 @@ export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = n
   <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>${cn ? `<cbc:PaymentDueDate>${doc.dueDate}</cbc:PaymentDueDate>` : ''}<cac:PayeeFinancialAccount><cbc:ID>${esc(String(doc.seller.iban).replace(/\s/g, ''))}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
   ${doc.paymentTerms ? `<cac:PaymentTerms><cbc:Note>${esc(doc.paymentTerms)}</cbc:Note></cac:PaymentTerms>` : ''}
   <cac:TaxTotal><cbc:TaxAmount currencyID="${cur}">${amt(doc.totals.vatCents)}</cbc:TaxAmount>${subtotals}</cac:TaxTotal>
-  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="${cur}">${amt(doc.totals.grossCents)}</cbc:TaxInclusiveAmount><cbc:PayableAmount currencyID="${cur}">${amt(doc.totals.grossCents)}</cbc:PayableAmount></cac:LegalMonetaryTotal>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="${cur}">${amt(doc.totals.grossCents)}</cbc:TaxInclusiveAmount>${doc.totals.roundingCents ? `<cbc:PayableRoundingAmount currencyID="${cur}">${amt(doc.totals.roundingCents)}</cbc:PayableRoundingAmount>` : ''}<cbc:PayableAmount currencyID="${cur}">${amt(payableOf(doc.totals))}</cbc:PayableAmount></cac:LegalMonetaryTotal>
   ${lines}
 </${root}>
 `;
