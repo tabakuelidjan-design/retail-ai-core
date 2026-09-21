@@ -1,7 +1,7 @@
 // What Phase 3 may consume from customer facts: only blocks whose provenance says safe_for_phase3.
 // Everything else is returned as GATED with the reasons and no numbers.
 
-const BLOCKS = ['new_vs_returning', 'repeat_behaviour', 'customer_value', 'customer_concentration', 'basket'];
+const BLOCKS = ['new_vs_returning', 'new_vs_returning_customers', 'repeat_behaviour', 'customer_value', 'customer_concentration', 'basket'];
 
 export function phase3CustomerInputs(facts) {
   const out = {};

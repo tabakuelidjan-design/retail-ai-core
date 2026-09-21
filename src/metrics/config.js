@@ -87,6 +87,9 @@ export const DEFAULT_CONFIG = {
     minOrdersPerGroup: 30, // each group compared (new vs returning) needs this many orders before a comparison is safe for Phase 3
     shortHistoryDays: 90, // an order history shorter than this is flagged SHORT_HISTORY
     basket: { minOrders: 30, minPairSupport: 3, maxPairs: 20 }, // co-purchase pairs are listed only above both thresholds
+    minCustomers: 30, // customer-level averages, repeat rate and concentration need this many identified customers
+    minIntervals: 10, // time-between-purchases needs this many observed gaps
+    concentration: { topN: 5, riskTop1Share: 0.2, riskTopNShare: 0.5 }, // shares above these are flagged (only once the sample gate is open)
   },
   // Buying Intelligence Lite (Phase 2C). Money thresholds are merchant policy and are NOT defaulted:
   // a null value makes the dependent check INCOMPLETE instead of inventing a number.

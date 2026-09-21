@@ -10,6 +10,7 @@ import { syncCatalog } from './catalog.js';
 import { syncInventory } from './inventory.js';
 import { syncProductCosts } from './cost.js';
 import { syncOrders } from './orders.js';
+import { loadCustomerKeySecret } from '../customers/pseudonym.js';
 
 const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
 
@@ -64,7 +65,7 @@ async function main() {
   }
 
   if (mode === 'orders' || mode === 'all') {
-    const summary = await syncOrders({ shopify, supabase }, { merchantId });
+    const summary = await syncOrders({ shopify, supabase }, { merchantId, customerKeySecret: loadCustomerKeySecret() });
     console.log('orders sync summary:', JSON.stringify(summary, null, 2));
     if (summary.errors.length > 0) process.exitCode = 1;
   }

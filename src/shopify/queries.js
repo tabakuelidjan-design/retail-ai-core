@@ -72,8 +72,9 @@ export const PRODUCTS_PAGE_QUERY = /* GraphQL */ `
 // access at 60 days without read_all_orders, which this project does not
 // request - see docs/architecture/orders-refunds-sync.md).
 //
-// Deliberately NOT fetched: any customer/name/email/phone/address field -
-// V1 stores business transaction data only, never customer PII.
+// Deliberately NOT fetched: any customer name/email/phone/address field.
+// The only customer field ever requested is the opaque id, in the opt-in variant below, and it is
+// pseudonymized (keyed hash) before it is stored - see src/customers/pseudonym.js.
 export const ORDERS_PAGE_QUERY = /* GraphQL */ `
   query ($cursor: String, $searchQuery: String) {
     orders(first: 25, after: $cursor, sortKey: CREATED_AT, query: $searchQuery) {
@@ -275,3 +276,7 @@ export const PAYMENT_TRANSACTIONS_PAGE_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+// Opt-in variant: identical selection plus the customer's opaque id (needs the read_customers scope).
+// Used only when a local hash secret is configured; the id is hashed in normalizeOrder and never stored.
+export const ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY = ORDERS_PAGE_QUERY.replace(/(\n\s*sourceName\n)/, '$1          customer { id }\n');
