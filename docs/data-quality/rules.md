@@ -16,3 +16,7 @@ Canonical source of truth for the *definitions* is the `data-quality-rules` Skil
 | Unmatched historical variant        | ✅      | ✅ `UNMATCHED_HISTORICAL_VARIANT` | Sold line with no catalog variant. |
 
 Implemented in Phase 2A (`src/quality/`), persisted idempotently to `data_quality_flags` by `npm run quality:flags`. ❌ = not implemented, ◐ = partly. Do not add rows without first updating the Skill definition.
+
+## Marketing measurement (Phase 2D.1)
+
+Merchant-level flags, one per rule, persisted with `npm run marketing:report -- --write-flags`: `MKT_UNATTRIBUTED_ONLINE_ORDERS`, `MKT_MISSING_UTM`, `MKT_SOURCE_MISMATCH`, `MKT_TRAFFIC_WINDOW_INCOMPATIBLE`, `MKT_TRAFFIC_MARKET_MISMATCH`, `MKT_DUPLICATE_CAMPAIGN_ID`, `MKT_MISSING_SPEND`, `MKT_PARTIAL_CONNECTOR_COVERAGE`. Definitions: `docs/architecture/marketing-measurement.md`.

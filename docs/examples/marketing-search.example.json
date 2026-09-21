@@ -1,0 +1,7 @@
+{
+  "source_system": "example_search_export",
+  "window": { "start": "2026-09-01", "end": "2026-09-08" },
+  "rows": [
+    { "query": "example query", "page": "https://shop.example/products/example", "impressions": 200, "clicks": 8, "position": 6.4, "country": "BEL", "device": "MOBILE" }
+  ]
+}
