@@ -13,6 +13,7 @@
     "sync:all": "node src/sync/index.js all",
     "metrics:report": "node src/report/index.js report",
     "metrics:validate": "node src/report/index.js validate",
+    "metrics:triage": "node src/report/index.js triage",
     "quality:flags": "node src/report/index.js flags",
     "metrics:all": "node src/report/index.js all"
   },

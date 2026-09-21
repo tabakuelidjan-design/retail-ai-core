@@ -3,6 +3,7 @@
 // fire on conditions that affect a metric or a decision - harmless conditions
 // (a never-sold, out-of-stock variant without cost) produce no flag.
 
+import { missingCostPriority } from '../analysis/triage.js';
 import { COST_STATUS, resolveUnitCost } from '../metrics/costs.js';
 
 export const RULE_CODES = [
@@ -36,8 +37,10 @@ export function detectQualityFlags(data, ledger, { merchantId, now, config }) {
     if (sold === 0 && stock <= 0) continue;
     const cost = resolveUnitCost(ledger.costsByVariant.get(v.id), now, ledger.currency);
     if (cost.status !== COST_STATUS.MISSING) continue;
-    flags.push(flag('MISSING_COST', 'variant', v.id, sold > 0 ? 'warning' : 'info', {
-      sku: v.sku ?? null, reason: cost.reason, units_sold_in_history: sold, stock_units: stock,
+    // P0 = sold in the order window (warning); P1 = unsold but stocked (info). P2 is not flagged: no impact.
+    const priority = missingCostPriority({ unitsSold: sold, stockUnits: stock }, config);
+    flags.push(flag('MISSING_COST', 'variant', v.id, priority === 'P0' ? 'warning' : 'info', {
+      priority, sku: v.sku ?? null, reason: cost.reason, units_sold_in_history: sold, stock_units: stock,
     }));
   }
 

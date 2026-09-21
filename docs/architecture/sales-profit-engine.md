@@ -29,6 +29,18 @@ Rules in `quality/rules.js` (`MISSING_COST`, `DUPLICATE_SKU_OBSERVATION`, `SUSPI
 1. **Discount mapping (Phase 1C bug, fixed).** `LineItem.totalDiscountSet` is 0 for manual POS discounts; `discountAllocations` carries the real amount and equals Shopify's order-level `totalDiscounts`. The sync now sums `discountAllocations`.
 2. **Test orders (schema, additive).** Shopify Analytics excludes test orders; the sync stored one as revenue. Migration `20260921090000_orders_is_test.sql` adds `orders.is_test`; the sync fills it from `Order.test`; every metric excludes it. No data deleted.
 
+## Phase 2A.1 — economic data triage
+
+Engine status (validated against Shopify) is separate from economic-data status (inputs may be incomplete).
+
+- `src/analysis/triage.js`: missing-cost priority groups (P0 sold in window, P1 unsold but stocked, P2 neither), revenue split by cost trust (verified / unverified / estimated / missing), production-cost exposure (reported as an upper bound because the affected subset is not identifiable from synced data), and largest stock positions for physical-count verification.
+- `src/analysis/payment-fees.js`: read-only measure of which gateways expose processor fees. Not used in any metric.
+- `MISSING_COST` flags carry `priority`; an open flag whose severity/evidence changes is updated in place.
+- SKU audit: no sync, join, cost history, inventory mapping or metric uses SKU as identity. The one unsafe use (grouping unmatched historical lines by SKU) was removed; such lines are grouped by title for display only. `DUPLICATE_SKU_OBSERVATION` is an observation, not a key.
+- Cost model design note: `cost-model.md`.
+
+Run `npm run metrics:triage` (writes `reports/triage-<date>.json`, gitignored).
+
 ## Known limits (deliberate)
 
 - Payment fees not included in CM v0 (see `definitions.md`).

@@ -12,13 +12,15 @@ import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { validateAgainstShopify } from '../metrics/validate.js';
-import { buildWindows } from '../metrics/windows.js';
+import { buildWindows, inWindow } from '../metrics/windows.js';
+import { fetchPaymentTransactions, summarizePaymentFees } from '../analysis/payment-fees.js';
+import { buildCostTriage, buildLargestStockPositions, buildProfitUncertainty } from '../analysis/triage.js';
 import { detectQualityFlags } from '../quality/rules.js';
 import { syncQualityFlags } from '../quality/flags.js';
 import { buildReport } from './build.js';
 import { renderMarkdown } from './render.js';
 
-const MODES = ['report', 'flags', 'validate', 'all'];
+const MODES = ['report', 'flags', 'validate', 'triage', 'all'];
 
 async function main() {
   const mode = process.argv[2];
@@ -52,6 +54,22 @@ async function main() {
     extras.validation = await validateAgainstShopify({ shopify, ledger, windows });
     console.table(extras.validation);
     if (extras.validation.some((v) => !v.ok)) process.exitCode = 2;
+  }
+
+  if (mode === 'triage') {
+    const w = windows.available_window;
+    const transactions = (await fetchPaymentTransactions(shopify, w.start)).filter((o) => inWindow(o.createdAt, w));
+    const triage = {
+      generated_at: now.toISOString(),
+      cost_triage: buildCostTriage(ledger, w, now),
+      profit_uncertainty: buildProfitUncertainty(ledger, w),
+      largest_stock_positions: buildLargestStockPositions(ledger, now, config),
+      payment_fees: summarizePaymentFees(transactions),
+    };
+    await mkdir('reports', { recursive: true });
+    const stamp = now.toISOString().slice(0, 10);
+    await writeFile(`reports/triage-${stamp}.json`, JSON.stringify(triage, null, 2));
+    console.log(`triage written to reports/triage-${stamp}.json`);
   }
 
   if (mode === 'report' || mode === 'all') {

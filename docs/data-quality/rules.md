@@ -4,7 +4,7 @@ Canonical source of truth for the *definitions* is the `data-quality-rules` Skil
 
 | Check                              | Defined | Implemented | Notes |
 |-------------------------------------|:-------:|:-----------:|-------|
-| Missing COGS                        | ✅      | ✅ `MISSING_COST` | Only variants that sold or hold stock. Metrics resolve to `UNCLASSIFIED`, never estimated. |
+| Missing COGS                        | ✅      | ✅ `MISSING_COST` | Only variants that sold or hold stock; `details.priority` P0 (sold, warning) / P1 (stocked, info). Metrics resolve to `UNCLASSIFIED`, never estimated. |
 | Duplicate SKU                       | ✅      | ✅ `DUPLICATE_SKU_OBSERVATION` | One flag per shared SKU. |
 | Negative stock                      | ✅      | ❌          | |
 | Suspicious price                    | ✅      | ◐ `SUSPICIOUS_FINANCIAL_VALUE` | Structural checks only (negative/zero price, discount > gross, non-positive cost). Statistical outlier thresholds still to do (merchant config). |

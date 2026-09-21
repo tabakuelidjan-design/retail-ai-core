@@ -46,8 +46,15 @@ function stockValue(ledger, variantIds, now) {
   };
 }
 
+// A line with no catalog variant has no canonical identity. It is grouped by
+// its title snapshot for display only. SKU is never an identity: it is nullable
+// and shared across different products in real data.
+function unmatchedKey(fact) {
+  return `unmatched:${fact.title}`;
+}
+
 function productKeyOf(fact) {
-  return fact.productId ?? `unmatched:${fact.sku ?? fact.title}`;
+  return fact.productId ?? unmatchedKey(fact);
 }
 
 /** One row per catalog product (including products with no sales) plus one row per unmatched historical item sold. */
@@ -108,9 +115,9 @@ function unmatchedKeyForRefund(ledger, refundFact) {
 export function buildVariantPerformance(ledger, window) {
   const { lines, refunds } = windowFacts(ledger, window);
   const byVariant = new Map();
-  for (const l of lines) push(byVariant, l.variantId ?? `unmatched:${l.sku ?? l.title}`, { l });
+  for (const l of lines) push(byVariant, l.variantId ?? unmatchedKey(l), { l });
   const refundsByVariant = new Map();
-  for (const r of refunds) push(refundsByVariant, r.variantId ?? 'unmatched', r);
+  for (const r of refunds) push(refundsByVariant, r.variantId ?? unmatchedKeyForRefund(ledger, r), r);
   return [...byVariant.entries()].map(([key, items]) => {
     const vLines = items.map((i) => i.l);
     const variant = ledger.variantById.get(key);

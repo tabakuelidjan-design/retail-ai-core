@@ -206,3 +206,27 @@ export const ORDER_TOTALS_PAGE_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+// Payment gateway + processor fees per order, used only to measure fee visibility
+// (src/analysis/payment-fees.js). Read-only, read_orders scope, no customer fields.
+export const PAYMENT_TRANSACTIONS_PAGE_QUERY = /* GraphQL */ `
+  query ($cursor: String, $searchQuery: String) {
+    orders(first: 25, after: $cursor, sortKey: CREATED_AT, query: $searchQuery) {
+      edges {
+        node {
+          id
+          createdAt
+          test
+          transactions(first: 10) {
+            gateway
+            kind
+            status
+            amountSet { shopMoney { amount } }
+            fees { amount { amount } type }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;

@@ -7,6 +7,10 @@ import { RULE_CODES } from './rules.js';
 
 const keyOf = (f) => `${f.rule_code}|${f.entity_type}|${f.entity_id}`;
 
+// jsonb does not preserve key order, so compare evidence with sorted keys.
+const stable = (v) => JSON.stringify(v, (_, x) => (x && typeof x === 'object' && !Array.isArray(x)
+  ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
+
 export async function syncQualityFlags({ supabase }, { merchantId, detected, now, evaluatedRules = RULE_CODES }) {
   const existing = await supabase.selectAll('data_quality_flags', { merchant_id: `eq.${merchantId}` });
   const blocking = new Map();
@@ -16,11 +20,18 @@ export async function syncQualityFlags({ supabase }, { merchantId, detected, now
 
   const detectedKeys = new Set(detected.map(keyOf));
   const toCreate = detected.filter((f) => !blocking.has(keyOf(f)));
-  const summary = { created: 0, alreadyOpen: 0, keptIgnored: 0, resolved: 0, byRule: {} };
+  const summary = { created: 0, alreadyOpen: 0, updated: 0, keptIgnored: 0, resolved: 0, byRule: {} };
 
   for (const f of detected) {
     const row = blocking.get(keyOf(f));
-    if (row?.status === 'open') summary.alreadyOpen += 1;
+    if (row?.status === 'open') {
+      summary.alreadyOpen += 1;
+      // Same condition, refreshed evidence or severity: update in place, never duplicate.
+      if (row.severity !== f.severity || stable(row.details) !== stable(f.details)) {
+        await supabase.update('data_quality_flags', { id: `eq.${row.id}` }, { severity: f.severity, details: f.details });
+        summary.updated += 1;
+      }
+    }
     if (row?.status === 'ignored') summary.keptIgnored += 1;
   }
 

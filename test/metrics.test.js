@@ -243,3 +243,29 @@ test('test orders are excluded from every sales metric and counted as excluded',
   assert.equal(ledger.excluded.test, 1);
   assert.equal(row(buildProductPerformance(ledger, FULL_WINDOW, NOW), 'p3').units_sold, 0);
 });
+
+test('SKU is never an identity: variants sharing a SKU keep separate sales, cost, stock and cost history', () => {
+  const data = makeData();
+  data.variants.find((v) => v.id === 'v2').sku = 'W-1'; // same SKU as v1, different product
+  data.variants.find((v) => v.id === 'v3').sku = 'W-1';
+  const rows = productRows(data);
+  assert.equal(row(rows, 'p1').net_sales_ex_tax, 120.66);
+  assert.equal(row(rows, 'p1').cogs, 30); // v1 cost 10, not v2's 4
+  assert.equal(row(rows, 'p2').cogs, 4);
+  assert.equal(row(rows, 'p3').cost_status, 'MISSING'); // no cost borrowed from the variants sharing its SKU
+  assert.equal(row(rows, 'p1').stock_units, 5);
+  assert.equal(row(rows, 'p2').stock_units, 20);
+  assert.equal(row(rows, 'p3').stock_units, 3);
+});
+
+test('unmatched historical lines are never grouped by SKU', () => {
+  const data = makeData();
+  data.orderLines.push(
+    { id: 'u1', order_id: 'o2', variant_id: null, title_snapshot: 'Retired item A', sku_snapshot: 'SHARED', quantity: 1, unit_price: 5, discount_amount: 0, tax_amount: 0 },
+    { id: 'u2', order_id: 'o2', variant_id: null, title_snapshot: 'Retired item B', sku_snapshot: 'SHARED', quantity: 2, unit_price: 5, discount_amount: 0, tax_amount: 0 },
+  );
+  const unmatched = productRows(data).filter((r) => !r.matched);
+  assert.equal(unmatched.length, 2);
+  assert.deepEqual(unmatched.map((r) => r.units_sold).sort(), [1, 2]);
+  assert.ok(unmatched.every((r) => r.cost_status === 'MISSING'));
+});

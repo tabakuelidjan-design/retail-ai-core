@@ -20,6 +20,8 @@ export const DEFAULT_CONFIG = {
   candidate: { minUnits: 2, minMarginPct: 0.4, minStock: 3, maxRefundRate: 0.1, highConfidenceUnits: 4 },
   cashRisk: { highStockMinUnits: 10, lowVelocityMaxUnits: 2, lowMarginPct: 0.15 },
   quality: { staleInventoryHours: 36 },
+  // Missing-cost triage: stock at or above this many units counts as meaningful inventory.
+  triage: { minMeaningfulStock: 1, largestStockPositions: 15 },
 };
 
 export function mergeConfig(overrides = {}) {
