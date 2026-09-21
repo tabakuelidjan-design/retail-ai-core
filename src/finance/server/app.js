@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
+import { createStockService } from '../stock.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
@@ -80,8 +81,18 @@ export function createFinanceApp(deps) {
     const settings = await settingsIo.load();
     const config = configFromSettings(settings, merchantId);
     const ledgerProvider = async () => (retail ? (await retail.ledgerData()).ledger : null);
-    return { settings, svc: createFinanceService({ store, config, clock: { now: clock.now, today: clock.today }, ledgerProvider }) };
+    const stock = stockFor(settings);
+    const hooks = {
+      restockDecisionNeeded: (doc, inv) => stock.restockDecisionNeeded(doc, inv),
+      afterIssue: async (doc) => {
+        const inv = doc.type === 'credit_note' && doc.relatedDocumentId ? await store.getDocument(doc.relatedDocumentId) : null;
+        await stock.record(doc, { invoice: inv });
+        if (settings.stock?.mode === 'live') await stock.applyPending();
+      },
+    };
+    return { settings, stock, svc: createFinanceService({ store, config, clock: { now: clock.now, today: clock.today }, ledgerProvider, hooks }) };
   }
+  const stockFor = (settings) => createStockService({ store, merchantId, retail, applier: deps.stockApplier ?? null, getSettings: async () => settings, now: clock.now, audit });
 
   const fields = (errors) => { throw new HttpError(422, 'INPUT_INVALID', { fields: errors }); };
   const idParam = (v) => { if (!ID.test(v ?? '')) throw new HttpError(400, 'BAD_ID'); return v; };
@@ -141,11 +152,15 @@ export function createFinanceApp(deps) {
     const payments = doc.type === 'invoice' ? await store.listPayments(doc.id) : [];
     const readiness = !doc.lockedAt ? await svc.readiness(doc) : null;
     const events = await svc.events(id);
+    const stockMovements = ['invoice', 'credit_note'].includes(doc.type) && doc.lockedAt ? await store.listStockMovements({ merchantId, documentId: doc.id }) : [];
+    const stockInvoice = doc.type === 'invoice' ? doc : null;
+    const soldMovements = stockInvoice ? stockMovements : (doc.relatedDocumentId ? await store.listStockMovements({ merchantId, documentId: doc.relatedDocumentId }) : []);
     const related = doc.relatedDocumentId ? all.find((d) => d.id === doc.relatedDocumentId) : null;
     const source = doc.sourceOrderId && retail ? await retail.getOrder(doc.sourceOrderId, await invoicedMap()).catch(() => null) : null;
     return {
       ...rowOf(doc, v.settlement ?? null, today), doc, totals: totalsView(doc), settlement: v.settlement ?? null, integrity: v.integrity,
       settlementView: v.settlement ? { gross: disp(v.settlement.grossCents, doc), credited: disp(v.settlement.creditedCents, doc), paid: disp(v.settlement.paidCents, doc), remaining: disp(v.settlement.remainingCents, doc) } : null,
+      stockMovements, hadStockMovements: soldMovements.some((m) => m.kind === 'SALE_DECREMENT' && m.status !== 'SKIPPED'),
       readiness, events, payments: payments.map((p) => ({ ...p, amount: disp(p.amountCents, doc) })), creditNotes: creditNotes.map((c) => rowOf(c, null, today)),
       related: related ? { id: related.id, type: related.type, number: related.number } : null,
       convertedInvoice: doc.convertedInvoiceId ? (() => { const i = all.find((d) => d.id === doc.convertedInvoiceId); return i ? { id: i.id, number: i.number, status: i.status } : null; })() : null,
@@ -334,7 +349,7 @@ export function createFinanceApp(deps) {
     if (errors.length) fields(errors);
     const reason = sanitizeText(body.reason, 300);
     if (!reason) fields([{ field: 'reason', code: 'REQUIRED' }]);
-    const cn = await svc.createCreditNote(id, { reason, lines }, actor);
+    const cn = await svc.createCreditNote(id, { reason, lines, restock: typeof body.restock === 'boolean' ? body.restock : undefined }, actor);
     return { open: cn.id };
   });
 
@@ -454,6 +469,25 @@ export function createFinanceApp(deps) {
     const r = await picker().select(id, { allowedRatesBp: settings.vat.allowedRatesBp });
     if (!r.found) throw new HttpError(404, 'PRODUCT_NOT_FOUND');
     json(ctx.res, 200, r);
+  });
+
+  // ---------- stock synchronisation (Shopify stays the source of truth; Finance keeps an append-only movement ledger) ----------
+  on('GET', '/api/stock/status', async (ctx) => { const { stock } = await servicesFor(); json(ctx.res, 200, await stock.status()); });
+  on('GET', '/api/stock/movements', async (ctx) => {
+    const { stock } = await servicesFor();
+    const documentId = ctx.url.searchParams.get('documentId');
+    json(ctx.res, 200, { rows: await stock.list(documentId && ID.test(documentId) ? { documentId } : {}) });
+  });
+  on('POST', '/api/stock/apply', async (ctx) => { const { stock } = await servicesFor(); json(ctx.res, 200, await stock.applyPending()); });
+  on('POST', '/api/stock/reconcile', async (ctx) => {
+    const { stock } = await servicesFor();
+    const docs = (await store.listDocuments({ merchantId })).filter((d) => d.lockedAt && (d.type === 'invoice' || d.type === 'credit_note'));
+    json(ctx.res, 200, await stock.reconcile(docs, (id) => store.getDocument(id)));
+  });
+  on('POST', `/api/stock/movements/${P}/retry`, async (ctx) => {
+    const { stock } = await servicesFor();
+    const applied = typeof ctx.body?.appliedInShopify === 'boolean' ? ctx.body.appliedInShopify : null;
+    json(ctx.res, 200, await stock.retry(idParam(ctx.m[1]), { appliedInShopify: applied }));
   });
 
   // ---------- orders (linking) ----------

@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
 
-const BODY_KEYS = ['language', 'validUntil', 'paymentTermsDays', 'paymentTerms', 'notes', 'customer', 'seller', 'lines', 'vat', 'acknowledgedNotDuplicate', 'creditReason', 'totals'];
+const BODY_KEYS = ['language', 'validUntil', 'paymentTermsDays', 'paymentTerms', 'notes', 'customer', 'seller', 'lines', 'vat', 'acknowledgedNotDuplicate', 'creditReason', 'totals', 'stockReturn'];
 
 export function docToRow(doc) {
   return {
@@ -24,7 +24,7 @@ export function rowToDoc(r) {
     customer: b.customer ?? {}, seller: b.seller ?? null, lines: b.lines ?? [], vat: b.vat ?? { regime: null, confirmed: false, mention: null },
     revenueBasis: r.revenue_basis, sourceOrderId: r.source_order_id, acknowledgedNotDuplicate: b.acknowledgedNotDuplicate === true,
     relatedDocumentId: r.related_document_id, creditReason: b.creditReason ?? null, convertedInvoiceId: r.converted_invoice_id,
-    lockedAt: r.locked_at, snapshotHash: r.snapshot_hash, totals: b.totals ?? null, version: r.version,
+    lockedAt: r.locked_at, snapshotHash: r.snapshot_hash, totals: b.totals ?? null, version: r.version, stockReturn: b.stockReturn ?? null,
   };
 }
 
@@ -138,9 +138,31 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const [r] = await guard(() => supabase.insert('fin_supplier_invoices', [{ merchant_id: merchantId, supplier_name: s.supplierName, supplier_vat_number: s.supplierVatNumber, invoice_number: s.invoiceNumber, issue_date: s.issueDate, due_date: s.dueDate, net_cents: s.netCents, vat_cents: s.vatCents, gross_cents: s.grossCents, currency: s.currency, payment_status: s.paymentStatus, source: s.source, attachment_ref: s.attachmentRef }]));
       return r;
     },
+    // ---- stock movement ledger (append-only; a database trigger allows only the status fields to change) ----
+    async insertStockMovement(row) {
+      try { const [r] = await supabase.insert('fin_stock_movements', [stockToRow(row)]); return { created: true, row: stockFromRow(r) }; } catch (e) {
+        if (!/23505|duplicate key|unique/i.test(String(e.message))) throw translateDbError(e); // the same movement already exists: idempotent, never overwrite the ledger
+        const [ex] = await supabase.select('fin_stock_movements', { select: '*', merchant_id: eq(merchantId), idempotency_key: eq(row.idempotencyKey) });
+        return { created: false, row: stockFromRow(ex) };
+      }
+    },
+    async getStockMovement(id) { const [r] = await supabase.select('fin_stock_movements', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? stockFromRow(r) : null; },
+    async updateStockMovement(id, patch, expectedStatus) {
+      const body = {};
+      if ('status' in patch) body.status = patch.status; if ('error' in patch) body.error = patch.error; if ('shopifyAdjustmentId' in patch) body.shopify_adjustment_id = patch.shopifyAdjustmentId;
+      if ('appliedAt' in patch) body.applied_at = patch.appliedAt; if ('locationId' in patch) body.location_id = patch.locationId; if ('locationSourceId' in patch) body.location_source_id = patch.locationSourceId;
+      const r = await guard(() => supabase.update('fin_stock_movements', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
+      return r && r.length ? stockFromRow(r[0]) : null;
+    },
+    async listStockMovements(f = {}) {
+      const p = { select: '*', merchant_id: eq(merchantId) }; if (f.documentId) p.document_id = eq(f.documentId); if (f.status) p.status = eq(f.status);
+      return (await supabase.selectAll('fin_stock_movements', p)).map(stockFromRow);
+    },
     async listSupplierInvoices() { return supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) }); },
   };
 }
 
+const stockToRow = (m) => ({ merchant_id: m.merchantId, document_id: m.documentId, document_number: m.documentNumber, document_type: m.documentType, line_position: m.linePosition, kind: m.kind, variant_id: m.variantId, variant_source_id: m.variantSourceId, sku: m.sku, location_id: m.locationId, location_source_id: m.locationSourceId, quantity: m.quantity, delta: m.delta, status: m.status, error: m.error, idempotency_key: m.idempotencyKey });
+const stockFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, documentId: r.document_id, documentNumber: r.document_number, documentType: r.document_type, linePosition: r.line_position, kind: r.kind, variantId: r.variant_id, variantSourceId: r.variant_source_id, sku: r.sku, locationId: r.location_id, locationSourceId: r.location_source_id, quantity: r.quantity, delta: r.delta, status: r.status, error: r.error, idempotencyKey: r.idempotency_key, shopifyAdjustmentId: r.shopify_adjustment_id, createdAt: r.created_at, appliedAt: r.applied_at });
 const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,
   address: { street: r.street, postalCode: r.postal_code, city: r.city, countryCode: r.country_code }, email: r.contact_email, peppolId: r.peppol_id, source: r.source, verifiedAt: r.verified_at });
