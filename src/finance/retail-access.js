@@ -104,6 +104,9 @@ export function createRetailAccess({ loadRetail, listOrderRefs = async () => new
       return scored.slice(0, Math.min(limit, 50)).map((x) => x.r);
     },
 
+    /** Stock locations (read-only): where a movement is booked. */
+    async listLocations() { const { data } = await get(); return (data.locations ?? []).map((l) => ({ id: l.id, name: l.name, type: l.type, source_id: l.source_id })); },
+
     async getCatalogVariant(variantId) {
       const { data } = await get();
       return catalogRows(data, variantId)[0] ?? null;

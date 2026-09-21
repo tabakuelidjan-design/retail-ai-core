@@ -13,7 +13,7 @@ import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
  * @param {{store: object, config: object, clock?: {now: () => string, today: () => string}, ledgerProvider?: () => Promise<object|null>}} deps
  * config: { merchantId, seller, numbering?, vat: { allowedRatesBp[] }, defaults?: { currency, language, paymentTermsDays, paymentTerms }, linking?: { dupWindowDays, toleranceCents } }
  */
-export function createFinanceService({ store, config, clock, ledgerProvider = async () => null }) {
+export function createFinanceService({ store, config, clock, ledgerProvider = async () => null, hooks = {} }) {
   const now = clock?.now ?? (() => new Date().toISOString());
   const today = clock?.today ?? (() => new Date().toISOString().slice(0, 10));
   const vatConfig = config.vat ?? { allowedRatesBp: [] };
@@ -41,6 +41,8 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
   async function readiness(doc) {
     const errors = validateForIssue(doc, ctx);
     const l = await linkage(doc);
+    // a credit note against a stock-decremented invoice needs an explicit decision: are the goods returned to sellable stock?
+    if (doc.type === 'credit_note' && hooks.restockDecisionNeeded && doc.relatedDocumentId) { const inv = await store.getDocument(doc.relatedDocumentId); if (inv && await hooks.restockDecisionNeeded(doc, inv)) errors.push('STOCK_RESTOCK_DECISION_REQUIRED'); }
     return { ready: errors.length === 0 && l.errors.length === 0, errors: [...errors, ...l.errors], warnings: l.warnings, checks: l.checks };
   }
 
@@ -89,6 +91,8 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       const { doc: template, event } = decide(prev, { decision, actor, number: placeholder, at, note, ctx });
       const saved = seal(await store.issueDocument({ merchantId: config.merchantId, docId: id, expectedVersion: prev.version, newStatus: 'ISSUED', numbering: numberingFor(prev.type), year: Number(prev.issueDate.slice(0, 4)), canonical: canonicalSnapshot(template), placeholder, lockedAt: at, event: { actor, action: event.action, detail: event.detail } }));
       if (saved.type === 'credit_note' && saved.relatedDocumentId) await this.resettle(saved.relatedDocumentId, actor);
+      // stock: recorded once per document line (idempotent); a failure never undoes an issued document, it is audited and can be reconciled
+      if (hooks.afterIssue) { try { await hooks.afterIssue(saved); } catch (e) { await store.appendEvent({ documentId: saved.id, merchantId: config.merchantId, actor, action: 'STOCK_HOOK_FAILED', fromStatus: saved.status, toStatus: saved.status, detail: { error: String(e.code ?? e.message).slice(0, 120) }, at: now() }); } }
       return saved;
     },
 
@@ -118,11 +122,11 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     },
 
     // ---- credit notes ----
-    async createCreditNote(invoiceId, { reason, lines }, actor) {
+    async createCreditNote(invoiceId, { reason, lines, restock }, actor) {
       const invoice = await must(invoiceId);
       const existing = await relatedCreditNotes(invoice);
       const { doc, event } = creditNoteFromInvoice(invoice, { creditNoteId: store.newId(), reason, lines, existingCreditNotes: existing, actor, at: now() });
-      const withDates = { ...doc, issueDate: today(), dueDate: today() };
+      const withDates = { ...doc, issueDate: today(), dueDate: today(), stockReturn: typeof restock === 'boolean' ? { restock, decidedAt: now() } : null };
       return persist(withDates, null, event);
     },
 

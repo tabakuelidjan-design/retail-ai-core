@@ -152,7 +152,7 @@ export function createDraft(p) {
     customer: clone(p.customer ?? {}), seller: p.seller ? clone(p.seller) : null, lines,
     vat: { regime: p.vat?.regime ?? null, confirmed: p.vat?.confirmed === true, mention: p.vat?.mention ?? null },
     revenueBasis: p.revenueBasis ?? null, sourceOrderId: p.sourceOrderId ?? null, acknowledgedNotDuplicate: p.acknowledgedNotDuplicate === true,
-    relatedDocumentId: p.relatedDocumentId ?? null, creditReason: p.creditReason ?? null, convertedInvoiceId: null,
+    relatedDocumentId: p.relatedDocumentId ?? null, creditReason: p.creditReason ?? null, stockReturn: p.stockReturn ?? null, convertedInvoiceId: null,
     lockedAt: null, snapshotHash: null, totals: null, version: 1,
   };
   if (doc.paymentTermsDays != null && !doc.dueDate && doc.issueDate && isDate(doc.issueDate)) doc.dueDate = addDays(doc.issueDate, doc.paymentTermsDays);

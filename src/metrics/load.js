@@ -21,12 +21,13 @@ async function selectByIds(supabase, table, column, ids, select) {
 
 export async function loadDataset(supabase, merchantId, { since }) {
   const eq = { merchant_id: `eq.${merchantId}` };
-  const [products, variants, orders, costs, collections] = await Promise.all([
+  const [products, variants, orders, costs, collections, locations] = await Promise.all([
     supabase.selectAll('products', { select: 'id,title,handle,product_type,source_created_at,source_status,source_id', ...eq }),
     supabase.selectAll('variants', { select: 'id,product_id,sku,title,source_id', ...eq }),
     supabase.selectAll('orders', { select: 'id,customer_key,ordered_at,status,currency,taxes_included,location_id,is_test,source_name,channel_handle,channel_name,sub_channel_name,customer_order_index,journey_ready,days_to_conversion', ...eq, ordered_at: `gte.${since.toISOString()}` }),
     supabase.selectAll('product_costs', { select: 'variant_id,unit_cost,currency,effective_from,source,validation_status', ...eq }),
     supabase.selectAll('product_collections', { select: 'product_id,source_id,title,is_current', ...eq, is_current: 'eq.true' }),
+    supabase.selectAll('locations', { select: 'id,name,type,source_id', ...eq }),
   ]);
 
   const orderIds = orders.map((o) => o.id);
@@ -47,5 +48,5 @@ export async function loadDataset(supabase, merchantId, { since }) {
       .filter((s) => variantIds.has(s.variant_id));
   }
 
-  return { products, variants, orders, orderLines, refunds, refundLines, costs, snapshots, collections, orderAttribution };
+  return { products, variants, orders, orderLines, refunds, refundLines, costs, snapshots, collections, orderAttribution, locations };
 }

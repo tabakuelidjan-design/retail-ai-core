@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   numbering: { invoice: { prefix: 'INV', pad: 4 }, credit_note: { prefix: 'CN', pad: 4 }, quote: { prefix: 'QT', pad: 4 }, format: '{prefix}-{year}-{seq}' },
   branding: { logoPath: null, footer: null, accent: '#183247', structuredCommunication: true, paymentInstructions: null },
   companyLookup: { provider: 'vies' }, // VAT-number lookup: 'vies' | 'manual'
+  stock: { mode: 'off', locationId: null }, // stock synchronisation of standalone B2B sales: 'off' | 'dry_run' | 'live'
   companySearch: { registry: 'cbeapi', provider: 'peppol_directory' }, // registry (primary): 'cbeapi' | 'none'; provider (secondary name search): 'peppol_directory' | 'none'
   peppol: { defaultBuyerReference: 'document_number' },
   linking: { dupWindowDays: 3, toleranceCents: 1 },
@@ -121,6 +122,10 @@ export function validateSettings(input, current = DEFAULT_SETTINGS) {
     // logoPath is set ONLY by the logo upload endpoint, never accepted from the client (no arbitrary file reads).
   }
   if (src.companyLookup && 'provider' in src.companyLookup) { out.companyLookup.provider = src.companyLookup.provider; if (!PROVIDERS.includes(src.companyLookup.provider)) err('companyLookup.provider', 'PROVIDER_INVALID'); }
+  if (src.stock && typeof src.stock === 'object') {
+    if ('mode' in src.stock) { out.stock.mode = src.stock.mode; if (!['off', 'dry_run', 'live'].includes(src.stock.mode)) err('stock.mode', 'MODE_INVALID'); }
+    if ('locationId' in src.stock) { out.stock.locationId = src.stock.locationId === '' ? null : src.stock.locationId; if (out.stock.locationId !== null && !/^[A-Za-z0-9_-]{8,64}$/.test(String(out.stock.locationId))) err('stock.locationId', 'LOCATION_INVALID'); }
+  }
   if (src.companySearch && 'registry' in src.companySearch) { out.companySearch.registry = src.companySearch.registry; if (!REGISTRY_PROVIDERS.includes(src.companySearch.registry)) err('companySearch.registry', 'PROVIDER_INVALID'); }
   if (src.companySearch && 'provider' in src.companySearch) { out.companySearch.provider = src.companySearch.provider; if (!SEARCH_PROVIDERS.includes(src.companySearch.provider)) err('companySearch.provider', 'PROVIDER_INVALID'); }
   if (src.peppol && 'defaultBuyerReference' in src.peppol) out.peppol.defaultBuyerReference = sanitizeText(src.peppol.defaultBuyerReference, 60);

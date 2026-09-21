@@ -2,6 +2,7 @@
 // rules the database triggers enforce (locked documents cannot change commercially, audit events and payments are
 // append-only, one active invoice per source order, gapless per-year numbering), so tests exercise real invariants.
 
+import { TRANSITIONS as STOCK_TRANSITIONS } from './stock.js';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
@@ -16,6 +17,7 @@ export function createMemoryStore() {
   const seqs = new Map();
   const companies = new Map();
   const supplierInvoices = [];
+  const stockMovements = [];
   const hooks = { beforeCommit: null }; // failure injection for crash tests: throw to simulate a crash inside the transaction
 
   return {
@@ -57,6 +59,21 @@ export function createMemoryStore() {
 
     async addPayment(p) { payments.push(Object.freeze({ id: randomUUID(), ...clone(p) })); return clone(payments.at(-1)); },
     async listPayments(documentId) { return payments.filter((p) => p.documentId === documentId).map(clone); },
+    // ---- stock movement ledger: append-only; only the status fields may change, through allowed transitions ----
+    async insertStockMovement(row) {
+      const dup = stockMovements.find((m) => m.merchantId === row.merchantId && m.idempotencyKey === row.idempotencyKey);
+      if (dup) return { created: false, row: clone(dup) };
+      const m = { id: randomUUID(), ...clone(row) }; stockMovements.push(m); return { created: true, row: clone(m) };
+    },
+    async getStockMovement(id) { const m = stockMovements.find((x) => x.id === id); return m ? clone(m) : null; },
+    async updateStockMovement(id, patch, expectedStatus) {
+      const m = stockMovements.find((x) => x.id === id);
+      if (!m || m.status !== expectedStatus) return null;
+      if (patch.status && !(STOCK_TRANSITIONS[m.status] ?? []).includes(patch.status)) throw new FinanceError('INVALID_TRANSITION', `${m.status} -> ${patch.status}`);
+      for (const k of Object.keys(patch)) if (!['status', 'error', 'shopifyAdjustmentId', 'appliedAt', 'locationId', 'locationSourceId'].includes(k)) throw new FinanceError('STOCK_MOVEMENT_IS_IMMUTABLE', k);
+      Object.assign(m, patch); return clone(m);
+    },
+    async listStockMovements(f = {}) { return stockMovements.filter((m) => (!f.merchantId || m.merchantId === f.merchantId) && (!f.documentId || m.documentId === f.documentId) && (!f.status || m.status === f.status)).map(clone); },
     async listPaymentsForMerchant(merchantId) { return payments.filter((p) => p.merchantId === merchantId).map(clone); },
 
     /**
