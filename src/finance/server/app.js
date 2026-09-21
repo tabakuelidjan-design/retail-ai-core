@@ -16,11 +16,15 @@ import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
 import { createStockService } from '../stock.js';
+import { settlement as settlementOf } from '../document.js';
+import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js';
+import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
+import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors } from '../inbox.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
-import { formatCents, fromScaled } from '../money.js';
+import { formatCents, fromScaled, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
 import { prepareTransmission } from '../peppol.js';
 import { buildReceivables } from '../receivables.js';
@@ -35,8 +39,8 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
-const NOT_FOUND_CODES = ['DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID'];
+const NOT_FOUND_CODES = ['DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -471,6 +475,114 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, r);
   });
 
+  // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------
+  const attachmentStore = deps.attachmentStore ?? createMemoryAttachmentStore();
+  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit });
+  const itemView = (raw) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
+    id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
+    netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
+    fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
+    net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
+    errors: validationErrors(raw),
+  }; };
+  const AMOUNTS = ['netCents', 'vatCents', 'grossCents'];
+  const inboxInput = (b) => {
+    const out = {}; const errors = [];
+    for (const k of ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'paymentReference']) if (k in (b ?? {})) out[k] = sanitizeText(b[k], 120);
+    for (const k of ['issueDate', 'dueDate']) if (k in (b ?? {})) { if (b[k] === '' || b[k] == null) out[k] = null; else if (isDate(b[k])) out[k] = b[k]; else errors.push({ field: k, code: 'DATE_INVALID' }); }
+    if ('currency' in (b ?? {})) { const c = sanitizeText(b.currency, 3)?.toUpperCase(); if (!c || /^[A-Z]{3}$/.test(c)) out.currency = c ?? null; else errors.push({ field: 'currency', code: 'CURRENCY_INVALID' }); }
+    for (const k of ['net', 'vat', 'gross']) if (k in (b ?? {})) { if (b[k] === '' || b[k] == null) out[`${k}Cents`] = null; else { const c = toCents(String(b[k])); if (Number.isInteger(c) && c >= 0) out[`${k}Cents`] = c; else errors.push({ field: k, code: 'AMOUNT_INVALID' }); } }
+    return { out, errors };
+  };
+  on('GET', '/api/inbox/status', async (ctx) => {
+    const settings = await settingsIo.load(); const inbox = inboxFor();
+    json(ctx.res, 200, { counts: await inbox.counts(), adapters: INBOX_ADAPTERS.map((a) => (a.name === 'email' ? { ...a, financeAddressSet: !!settings.inbox.financeAddress } : a)), statuses: INBOX_STATUSES, extractor: (deps.documentExtractor ?? defaultExtractor).label });
+  });
+  on('GET', '/api/inbox', async (ctx) => {
+    const st = ctx.url.searchParams.get('scope');
+    const f = st === 'purchases' ? { statuses: ['VALIDATED', 'TO_PAY', 'PAID'] } : st === 'inbox' ? { statuses: ['RECEIVED', 'TO_REVIEW', 'REJECTED'] } : {};
+    const status = ctx.url.searchParams.get('status'); if (status && INBOX_STATUSES.includes(status)) f.status = status;
+    json(ctx.res, 200, { rows: (await inboxFor().list(f)).map(itemView) });
+  });
+  // Upload as JSON (base64): sniffed, size-limited, stored privately, extracted, then left TO_REVIEW for a person. Same file twice = same record.
+  on('POST', '/api/inbox/upload', async (ctx) => {
+    const name = sanitizeText(ctx.body?.fileName, 120); const b64 = typeof ctx.body?.dataBase64 === 'string' ? ctx.body.dataBase64 : '';
+    if (!name || !b64) fields([{ field: 'file', code: 'REQUIRED' }]);
+    const r = await inboxFor().ingest({ source: 'upload', fileName: name, data: Buffer.from(b64, 'base64') });
+    json(ctx.res, r.duplicate ? 200 : 201, { duplicate: r.duplicate, item: itemView(r.item) });
+  }, { bodyLimit: 9_000_000 });
+  on('POST', '/api/inbox/manual', async (ctx) => { const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors); json(ctx.res, 201, itemView(await inboxFor().createManual(out, actor))); });
+  on('GET', `/api/inbox/${P}`, async (ctx) => json(ctx.res, 200, itemView(await inboxFor().get(idParam(ctx.m[1])))));
+  on('PUT', `/api/inbox/${P}`, async (ctx) => { const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors); json(ctx.res, 200, itemView(await inboxFor().update(idParam(ctx.m[1]), out, actor))); });
+  on('GET', `/api/inbox/${P}/file`, async (ctx) => {
+    const f = await inboxFor().file(idParam(ctx.m[1]));
+    send(ctx.res, 200, f.data, { 'Content-Type': f.contentType, 'Content-Disposition': `inline; filename="${String(f.fileName).replace(/"/g, '')}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  });
+  const inboxAct = (path, fn) => on('POST', `/api/inbox/${P}/${path}`, async (ctx) => json(ctx.res, 200, itemView(await fn(inboxFor(), idParam(ctx.m[1]), ctx.body ?? {}))));
+  inboxAct('validate', (i, id) => i.validate(id, actor));
+  inboxAct('to-pay', (i, id) => i.markToPay(id, actor));
+  inboxAct('reopen', (i, id) => i.reopen(id, actor));
+  inboxAct('reject', (i, id, b) => i.reject(id, sanitizeText(b.reason, 300), actor));
+  inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100) }, actor); });
+
+  // ---------- accountant closing package: prepare -> preview -> merchant APPROVES -> send (or .eml fallback). Nothing is sent silently. ----------
+  const packages = new Map(); // in memory only: the package is never written to disk; it expires
+  const mailer = () => deps.mailAdapter ?? NoMailAdapter;
+  const prune = () => { for (const [k, v] of packages) if (v.expires < Date.now()) packages.delete(k); };
+  const inRange = (d, a, b) => typeof d === 'string' && d.slice(0, 10) >= a && d.slice(0, 10) <= b;
+  on('POST', '/api/accountant/prepare', async (ctx) => {
+    prune();
+    let period; try { period = resolvePeriod(ctx.body ?? {}); } catch { fields([{ field: 'period', code: 'PERIOD_INVALID' }]); }
+    const settings = await settingsIo.load();
+    const pack = await computePack(period.start, period.end);
+    const { data } = await retail.ledgerData(period.start);
+    const all = await loadDocsForReports(store, merchantId);
+    const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
+    const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
+      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+    const refunds = (data.refunds ?? []).filter((r) => inRange(r.refunded_at, period.start, period.end)).map((r) => ({ date: String(r.refunded_at).slice(0, 10), amount: String(r.amount), orderRef: null }));
+    const supplierInvoices = ((await store.listSupplierInvoices?.()) ?? []).filter((s) => inRange(s.issue_date ?? s.issueDate, period.start, period.end)).map((s) => ({ supplierName: s.supplier_name ?? s.supplierName, supplierVatNumber: s.supplier_vat_number ?? s.supplierVatNumber, invoiceNumber: s.invoice_number ?? s.invoiceNumber, issueDate: s.issue_date ?? s.issueDate, dueDate: s.due_date ?? s.dueDate, netCents: Number(s.net_cents ?? s.netCents), vatCents: Number(s.vat_cents ?? s.vatCents), grossCents: Number(s.gross_cents ?? s.grossCents), status: s.status ?? s.payment_status ?? s.paymentStatus, source: s.source, attachmentRef: s.attachment_ref ?? s.attachmentRef }));
+    const acc = settings.accountant;
+    const built = await buildAccountantPackage({ pack, period, docs, refunds, supplierInvoices, merchantName: settings.seller.name ?? '', filePrefix: 'Comptabilite', namePrefix: acc.packageName || undefined, branding: settings.branding, generatedAt: clock.now() });
+    const msg = accountantMessage({ merchantName: settings.seller.name ?? '', accountantName: acc.name, periodLabel: period.label, zipName: built.fileName, completeness: built.completeness });
+    const id = randomUUID();
+    const preview = {
+      id, period, fileName: built.fileName, size: built.zip.length, sha256: built.sha256, completeness: built.completeness, counts: built.counts, files: built.files,
+      recipient: { name: acc.name, email: acc.email, configured: !!acc.email }, subject: msg.subject, body: msg.text,
+      attachments: [{ name: built.fileName, size: built.zip.length, sha256: built.sha256 }],
+      canSendDirectly: mailer().canSend && !!acc.email, sendChannel: mailer().label, requiresApproval: true, sent: false,
+      warnings: [...(!acc.email ? ['ACCOUNTANT_EMAIL_MISSING'] : []), ...(built.completeness !== 'COMPLETE' ? ['PACK_INCOMPLETE'] : []), ...(!mailer().canSend ? ['DIRECT_SEND_NOT_CONFIGURED'] : [])],
+    };
+    packages.set(id, { preview, zip: built.zip, message: msg, from: settings.seller.email ?? '', expires: Date.now() + 30 * 60_000, approvedAt: null, sentAt: null });
+    await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_PREPARED', detail: { period: period.label, files: built.files.length, sha256: built.sha256, recipientConfigured: !!acc.email } });
+    json(ctx.res, 200, { ...preview, downloadUrl: `/api/accountant/package/${id}/download`, emlUrl: `/api/accountant/package/${id}/eml` });
+  });
+  const pkgOf = (ctx) => { prune(); const p = packages.get(idParam(ctx.m[1])); if (!p) throw new HttpError(404, 'PACKAGE_NOT_FOUND'); return p; };
+  on('GET', `/api/accountant/package/${P}/download`, async (ctx) => { const p = pkgOf(ctx); send(ctx.res, 200, p.zip, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${p.preview.fileName}"` }); });
+  on('GET', `/api/accountant/package/${P}/eml`, async (ctx) => {
+    const p = pkgOf(ctx); const settings = await settingsIo.load();
+    const eml = buildEml({ from: p.from, to: settings.accountant.email, subject: p.message.subject, text: p.message.text, attachments: [{ name: p.preview.fileName, contentType: 'application/zip', data: p.zip }] });
+    await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_EML_EXPORTED', detail: { period: p.preview.period.label, sha256: p.preview.sha256 } });
+    send(ctx.res, 200, eml, { 'Content-Type': 'message/rfc822', 'Content-Disposition': `attachment; filename="${p.preview.fileName.replace(/\.zip$/, '')}.eml"` });
+  });
+  // The merchant's APPROVE: the request must name the exact recipient shown in the preview, so a changed recipient can never ride on an old approval.
+  on('POST', `/api/accountant/package/${P}/send`, async (ctx) => {
+    const p = pkgOf(ctx); const settings = await settingsIo.load();
+    if (ctx.body?.approve !== true) throw new HttpError(422, 'APPROVAL_REQUIRED');
+    if (p.sentAt) throw new HttpError(409, 'ALREADY_SENT');
+    const to = settings.accountant.email;
+    if (!to) throw new HttpError(422, 'ACCOUNTANT_EMAIL_MISSING');
+    if (ctx.body?.recipient !== to || to !== p.preview.recipient.email) throw new HttpError(409, 'RECIPIENT_CHANGED_SINCE_PREVIEW');
+    if (!mailer().canSend) throw new HttpError(409, 'DIRECT_SEND_NOT_CONFIGURED', { eml: `/api/accountant/package/${ctx.m[1]}/eml` });
+    p.approvedAt = clock.now();
+    await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_APPROVED', detail: { period: p.preview.period.label, sha256: p.preview.sha256 } });
+    let r;
+    try { r = await mailer().send({ from: p.from, to, subject: p.message.subject, text: p.message.text, attachments: [{ name: p.preview.fileName, contentType: 'application/zip', data: p.zip }] }); } catch (e) { await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_SEND_FAILED', detail: { error: String(e.code ?? e.message).slice(0, 80) } }); throw new HttpError(502, 'SEND_FAILED'); }
+    p.sentAt = clock.now(); p.preview.sent = true;
+    await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_SENT', detail: { period: p.preview.period.label, sha256: p.preview.sha256, messageId: r.messageId ?? null } });
+    json(ctx.res, 200, { status: 'SENT', messageId: r.messageId ?? null, sentAt: p.sentAt });
+  });
+
   // ---------- stock synchronisation (Shopify stays the source of truth; Finance keeps an append-only movement ledger) ----------
   on('GET', '/api/stock/status', async (ctx) => { const { stock } = await servicesFor(); json(ctx.res, 200, await stock.status()); });
   on('GET', '/api/stock/movements', async (ctx) => {
@@ -589,7 +701,7 @@ export function createFinanceApp(deps) {
         if (!route.r.public && req.headers['x-csrf-token'] !== session.csrf) throw new HttpError(403, 'CSRF_TOKEN_INVALID');
         if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) throw new HttpError(415, 'JSON_REQUIRED');
       }
-      const body = mutating ? await readBody(req) : undefined;
+      const body = mutating ? await readBody(req, route.r.bodyLimit) : undefined;
       await route.r.fn({ req, res, url, m: route.m, body, session });
     } catch (e) { errorResponse(res, e); }
   }
