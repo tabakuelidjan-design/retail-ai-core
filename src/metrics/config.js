@@ -5,6 +5,7 @@
 
 export const METRICS_VERSION = '2A.1';
 export const DEMAND_VERSION = '2B.1';
+export const BUYING_VERSION = '2C.1';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
@@ -34,6 +35,22 @@ export const DEFAULT_CONFIG = {
     historyVerifiedDays: 90, // shorter history keeps sales facts PARTIAL
     roundQuantity: { minUnits: 100, multipleOf: 50 }, // descriptive marker of possibly uncounted stock
     minPeersForBenchmark: 3,
+  },
+  // Buying Intelligence Lite (Phase 2C). Money thresholds are merchant policy and are NOT defaulted:
+  // a null value makes the dependent check INCOMPLETE instead of inventing a number.
+  buying: {
+    requiredChecks: ['inputs_complete', 'unit_margin', 'test_capital', 'peer_benchmark', 'sell_through', 'peer_exposure', 'capability_fit', 'lead_time'],
+    testBudget: null, // max capital at risk for a test, in merchant currency
+    minUnitMarginPct: null, // hurdle for unit margin ex tax after payment cost
+    paymentCostPct: null, // processor cost as a share of retail ex tax (0 is a valid explicit value)
+    taxRateAssumption: null, // used only to convert a tax-inclusive expected retail price
+    maxSellThroughWeeks: 12,
+    maxLeadTimeDays: null, // lead-time check is not applicable until the merchant sets a limit
+    estimateTolerancePct: 0.25, // band applied to ESTIMATED / ASSUMPTION inputs when testing whether a conclusion could flip
+    allowExploratoryTests: false, // off by default; a merchant enables it explicitly
+    exploratoryBudget: null,
+    exposure: { noSaleShare: 0.6, coverWeeks: 26 },
+    stockTrust: { blockedShare: 0.2, trustedShare: 0.8, verificationMaxAgeDays: 45, unverifiedMaySupportPass: true },
   },
   // unitCostIsAllInVariableCost: a merchant sets true only when unit cost already includes every variable
   // cost (e.g. a pure resale merchant, or a production cost module). Until then margin stays gated.

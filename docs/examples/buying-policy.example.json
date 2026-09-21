@@ -1,0 +1,13 @@
+{
+  "buying": {
+    "testBudget": null,
+    "minUnitMarginPct": null,
+    "paymentCostPct": null,
+    "taxRateAssumption": null,
+    "maxSellThroughWeeks": 12,
+    "maxLeadTimeDays": null,
+    "allowExploratoryTests": false,
+    "exploratoryBudget": null
+  },
+  "gates": { "unitCostIsAllInVariableCost": false }
+}

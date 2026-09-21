@@ -9,3 +9,6 @@ supabase/.temp/
 
 # Generated reports contain real merchant figures - never commit
 reports/
+
+# Local merchant inputs (buying policy, physical stock counts) - real merchant data, never commit
+data/local/
