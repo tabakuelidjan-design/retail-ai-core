@@ -60,6 +60,27 @@ export function createSupabaseClient(config) {
       });
     },
 
+    /** Paged select: PostgREST caps a response at 1000 rows, so read every page. Needs a stable order. */
+    async selectAll(table, params, pageSize = 1000) {
+      const rows = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const qs = new URLSearchParams({ order: 'id.asc', ...params, limit: String(pageSize), offset: String(offset) }).toString();
+        const page = await request(`/${table}?${qs}`, { method: 'GET' });
+        rows.push(...page);
+        if (page.length < pageSize) return rows;
+      }
+    },
+
+    /** PATCH rows matching raw PostgREST filters, e.g. { id: 'eq.<uuid>' }. */
+    async update(table, filters, patch) {
+      const qs = new URLSearchParams(filters).toString();
+      return request(`/${table}?${qs}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify(patch),
+      });
+    },
+
     /** Select rows with raw PostgREST query params, e.g. { select: 'id,unit_cost', variant_id: 'eq.<uuid>' }. */
     async select(table, params) {
       const qs = new URLSearchParams(params).toString();

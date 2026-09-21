@@ -80,7 +80,7 @@ test('nullable variant_id: a deleted/custom item line still gets stored, with va
   assert.equal(customLine.sku_snapshot, 'OLD-SKU-001');
 });
 
-test('discounts: totalDiscountSet is captured as discount_amount', async () => {
+test('discounts: summed discountAllocations are captured as discount_amount (LineItem.totalDiscountSet is 0 for manual POS discounts)', async () => {
   const supabase = createFakeSupabase();
   await seedCatalog(supabase);
 
@@ -169,4 +169,16 @@ test('no PII stored: order and line rows contain no customer-identifying fields'
       }
     }
   }
+});
+
+test('test orders are stored with is_test true so metrics can exclude them; real orders are false', async () => {
+  const supabase = createFakeSupabase();
+  await seedCatalog(supabase);
+  const testOrder = { ...JSON.parse(JSON.stringify(FAKE_ORDER_1)), id: 'gid://shopify/Order/999', test: true };
+
+  await syncOrders({ shopify: fakeShopify([FAKE_ORDER_1, testOrder]), supabase }, { merchantId: MERCHANT_ID });
+
+  const flags = Object.fromEntries(supabase._tables.get('orders').map((o) => [o.source_id, o.is_test]));
+  assert.equal(flags['gid://shopify/Order/1'], false);
+  assert.equal(flags['gid://shopify/Order/999'], true);
 });

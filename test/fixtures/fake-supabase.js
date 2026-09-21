@@ -49,15 +49,26 @@ export function createFakeSupabase() {
       let rows = t.slice();
 
       for (const [key, value] of Object.entries(params)) {
-        if (key === 'select' || key === 'order' || key === 'limit') continue;
-        const match = /^eq\.(.*)$/.exec(value);
-        if (match) rows = rows.filter((r) => String(r[key]) === match[1]);
+        if (['select', 'order', 'limit', 'offset'].includes(key)) continue;
+        const match = /^(eq|gte|lte|lt|in)\.(.*)$/.exec(value);
+        if (!match) continue;
+        const [, op, arg] = match;
+        const norm = (v) => (v instanceof Date ? v.toISOString() : String(v));
+        if (op === 'eq') rows = rows.filter((r) => String(r[key]) === arg);
+        if (op === 'gte') rows = rows.filter((r) => norm(r[key]) >= arg);
+        if (op === 'lte') rows = rows.filter((r) => norm(r[key]) <= arg);
+        if (op === 'lt') rows = rows.filter((r) => norm(r[key]) < arg);
+        if (op === 'in') {
+          const set = new Set(arg.replace(/^\(|\)$/g, '').split(','));
+          rows = rows.filter((r) => set.has(String(r[key])));
+        }
       }
 
       if (params.order) {
         const [col, dir] = params.order.split('.');
-        rows.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (dir === 'desc' ? -1 : 1));
+        rows.sort((a, b) => (a[col] > b[col] ? 1 : a[col] < b[col] ? -1 : 0) * (dir === 'desc' ? -1 : 1));
       }
+      if (params.offset) rows = rows.slice(Number(params.offset));
       if (params.limit) rows = rows.slice(0, Number(params.limit));
 
       if (params.select) {
@@ -65,6 +76,17 @@ export function createFakeSupabase() {
         rows = rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c]])));
       }
       return rows;
+    },
+
+    async selectAll(table, params) {
+      return this.select(table, { ...params, limit: undefined, offset: undefined });
+    },
+
+    async update(table, filters, patch) {
+      const matches = await this.select(table, filters);
+      const t = getTable(table);
+      for (const m of matches) Object.assign(t.find((r) => r.id === m.id), patch);
+      return matches;
     },
   };
 }

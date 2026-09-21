@@ -1,0 +1,24 @@
+{
+  "candidate_id": "example-item-001",
+  "name": "Synthetic example item",
+  "supplier_item_ref": "free text, never a key",
+  "currency": "EUR",
+  "unit_price": { "value": 4.0, "basis": "QUOTED" },
+  "moq": { "value": 12, "basis": "QUOTED", "per": "per_order" },
+  "variants_planned": 1,
+  "test_quantity": 12,
+  "lead_time_days": { "value": 30, "basis": "QUOTED" },
+  "landed_cost": {
+    "freight_per_unit": { "value": 0.6, "basis": "ESTIMATED" },
+    "duties_per_unit": { "value": 0.4, "basis": "ESTIMATED" },
+    "not_applicable": []
+  },
+  "expected_retail_price": { "value": 18.0, "tax_basis": "excl", "basis": "ASSUMPTION" },
+  "required_capabilities": ["customization"],
+  "supplier_capabilities": { "customization": "unknown" },
+  "sample_available": { "value": true },
+  "peer_sets": [
+    { "label": "similar existing items", "reference_product_ids": ["gid://shopify/Product/0000000000"] },
+    { "label": "same collection", "collection_ids": ["gid://shopify/Collection/0000000000"] }
+  ]
+}

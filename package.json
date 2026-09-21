@@ -3,14 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Generic retail AI core - runtime sync foundation (Phase 1B).",
+  "description": "Generic retail AI core - runtime sync + deterministic sales/profit engine (Phase 2A).",
   "scripts": {
     "test": "node --test test/*.test.js",
     "sync:catalog": "node src/sync/index.js catalog",
     "sync:inventory": "node src/sync/index.js inventory",
     "sync:cost": "node src/sync/index.js cost",
     "sync:orders": "node src/sync/index.js orders",
-    "sync:all": "node src/sync/index.js all"
+    "sync:all": "node src/sync/index.js all",
+    "metrics:report": "node src/report/index.js report",
+    "metrics:validate": "node src/report/index.js validate",
+    "metrics:demand": "node src/report/index.js demand",
+    "metrics:triage": "node src/report/index.js triage",
+    "quality:flags": "node src/report/index.js flags",
+    "metrics:all": "node src/report/index.js all",
+    "buying:evaluate": "node --env-file=.env src/buying/index.js",
+    "buying:peer-sets": "node --env-file=.env src/buying/peer-sets.js",
+    "buying:calibrate": "node --env-file=.env src/buying/calibrate.js"
   },
   "engines": {
     "node": ">=20"

@@ -16,6 +16,16 @@ export const FAKE_PRODUCT_A = {
   id: 'gid://shopify/Product/1',
   title: 'Fixture Widget',
   handle: 'fixture-widget',
+  productType: 'Widgets',
+  createdAt: '2026-05-01T09:00:00Z',
+  status: 'ACTIVE',
+  collections: {
+    edges: [
+      { node: { id: 'gid://shopify/Collection/1', title: 'Fixture Featured' } },
+      { node: { id: 'gid://shopify/Collection/2', title: 'Fixture Seasonal' } },
+    ],
+    pageInfo: { hasNextPage: false },
+  },
   variants: {
     edges: [
       { node: { id: 'gid://shopify/ProductVariant/1', title: 'Red', sku: null } },
@@ -30,6 +40,10 @@ export const FAKE_PRODUCT_B = {
   id: 'gid://shopify/Product/2',
   title: 'Fixture Gadget',
   handle: 'fixture-gadget',
+  productType: '', // empty type = UNCLASSIFIED
+  createdAt: '2026-09-10T09:00:00Z',
+  status: 'ACTIVE',
+  collections: { edges: [{ node: { id: 'gid://shopify/Collection/1', title: 'Fixture Featured' } }], pageInfo: { hasNextPage: false } },
   variants: {
     edges: [{ node: { id: 'gid://shopify/ProductVariant/3', title: 'Default Title', sku: 'DUP-001' } }],
   },
@@ -39,6 +53,10 @@ export const FAKE_PRODUCT_C = {
   id: 'gid://shopify/Product/3',
   title: 'Fixture Gizmo',
   handle: 'fixture-gizmo',
+  productType: 'Gizmos',
+  createdAt: '2026-06-01T09:00:00Z',
+  status: 'DRAFT',
+  collections: { edges: [], pageInfo: { hasNextPage: false } },
   variants: {
     edges: [{ node: { id: 'gid://shopify/ProductVariant/4', title: 'Default Title', sku: 'DUP-001' } }],
   },

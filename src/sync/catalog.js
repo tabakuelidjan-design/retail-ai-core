@@ -3,14 +3,18 @@
 // (merchant_id, source_system, source_id) per table - never on name or sku.
 
 import { SHOP_QUERY, LOCATIONS_QUERY, PRODUCTS_PAGE_QUERY } from '../shopify/queries.js';
-import { normalizeMerchant, normalizeLocation, normalizeProduct, normalizeVariant } from './normalize.js';
+import {
+  normalizeMerchant, normalizeLocation, normalizeProduct, normalizeProductCollection, normalizeVariant,
+} from './normalize.js';
 
 /**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
  */
-export async function syncCatalog({ shopify, supabase }) {
+export async function syncCatalog({ shopify, supabase }, opts = {}) {
+  const startedAt = opts.now ?? new Date();
   const summary = {
+    collectionMembershipsUpserted: 0, collectionMembershipsRetired: 0,
     locationsFetched: 0, locationsUpserted: 0,
     productsFetched: 0, productsUpserted: 0,
     variantsFetched: 0, variantsUpserted: 0,
@@ -74,11 +78,42 @@ export async function syncCatalog({ shopify, supabase }) {
         summary.variantsUpserted += upsertedVariants.length;
       }
 
+      const membershipRows = [];
+      for (const productNode of productNodes) {
+        if (productNode.collections.pageInfo.hasNextPage) {
+          summary.errors.push(`collections truncated for ${productNode.id}: more than 25 memberships`);
+        }
+        for (const edge of productNode.collections.edges) {
+          membershipRows.push(normalizeProductCollection(edge.node, productIdBySourceId.get(productNode.id), merchantId, startedAt));
+        }
+      }
+      if (membershipRows.length > 0) {
+        const upsertedMemberships = await supabase.upsert('product_collections', membershipRows, {
+          onConflict: 'product_id,source_system,source_id',
+        });
+        summary.collectionMembershipsUpserted += upsertedMemberships.length;
+      }
+
       hasNextPage = products.pageInfo.hasNextPage;
       cursor = products.pageInfo.endCursor;
     }
   } catch (err) {
     summary.errors.push(`products/variants: ${err.message}`);
+  }
+
+  // A complete, error-free pass saw every current membership at `startedAt`; any
+  // older row was removed in the source. Retire it (kept for history, never deleted).
+  if (summary.errors.length === 0) {
+    try {
+      const retired = await supabase.update(
+        'product_collections',
+        { merchant_id: `eq.${merchantId}`, synced_at: `lt.${startedAt.toISOString()}`, is_current: 'eq.true' },
+        { is_current: false },
+      );
+      summary.collectionMembershipsRetired = retired?.length ?? 0;
+    } catch (err) {
+      summary.errors.push(`collections retire: ${err.message}`);
+    }
   }
 
   return summary;
