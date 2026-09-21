@@ -481,3 +481,57 @@ test('reference peers are named by Shopify product id (gid or the numeric admin 
   assert.equal(internal.peers_total, 0);
   assert.deepEqual(internal.unresolved_ids, ['a', 'b']);
 });
+
+// ---------- Provisional policy and decided-price requirement ----------
+
+test('a provisional policy value can never support a rejection: it is withheld and named for confirmation', () => {
+  const raw = lowMargin('DECIDED'); // margin far below the hurdle, decided price, all-quoted costs
+  assert.equal(run(raw).verdict, VERDICTS.AVOID);
+  const r = run(raw, { config: policy({ provisional: ['minUnitMarginPct'] }) });
+  const m = check(r, 'unit_margin');
+  assert.equal(m.status, 'FAIL_CONDITIONAL');
+  assert.ok(m.conditional_on.includes('PROVISIONAL_POLICY:minUnitMarginPct'));
+  assert.ok(m.needs.some((n) => n.code === 'confirm_policy_minUnitMarginPct'));
+  assert.equal(r.verdict, VERDICTS.MORE_DATA);
+  assert.ok(r.caveats.includes('PROVISIONAL_POLICY:minUnitMarginPct'));
+});
+
+test('provisional values still allow a pass, but the result carries them as caveats; non-provisional values still reject', () => {
+  const ok = run(candidate(), { config: policy({ provisional: ['minUnitMarginPct', 'paymentCostPct'] }) });
+  assert.equal(ok.verdict, VERDICTS.TEST);
+  assert.ok(ok.caveats.includes('PROVISIONAL_POLICY:minUnitMarginPct') && ok.caveats.includes('PROVISIONAL_POLICY:paymentCostPct'));
+  // The lead-time limit is not provisional here, so a quoted breach still rejects.
+  const late = run(candidate({ lead_time_days: { value: 90, basis: 'QUOTED' } }), { config: policy({ provisional: ['minUnitMarginPct'] }) });
+  assert.equal(late.verdict, VERDICTS.AVOID);
+});
+
+test('provisional exposure thresholds withhold a stock-based rejection even on trusted stock', () => {
+  const facts = healthyPeerFacts({ noSaleUnits: 375, otherStock: 105 });
+  const raw = candidate({ unit_price: { value: 12, basis: 'QUOTED' }, moq: { value: 50, basis: 'QUOTED' }, expected_retail_price: { value: 32, tax_basis: 'excl', basis: 'DECIDED' } });
+  const base = { testBudget: 1000 };
+  assert.equal(run(raw, { facts, config: policy(base), prepared: verifiedPrepared(facts) }).verdict, VERDICTS.AVOID);
+  const r = run(raw, { facts, config: policy({ ...base, provisional: ['exposure.noSaleShare'] }), prepared: verifiedPrepared(facts) });
+  assert.equal(check(r, 'peer_exposure').status, 'FAIL_CONDITIONAL');
+  assert.equal(r.verdict, VERDICTS.MORE_DATA);
+});
+
+test('requireDecidedRetailPrice: an assumed price makes the inputs incomplete; a decided price passes', () => {
+  const cfg = policy({ requireDecidedRetailPrice: true });
+  const assumed = run(candidate({ expected_retail_price: { value: 18, tax_basis: 'excl', basis: 'ASSUMPTION' } }), { config: cfg });
+  assert.equal(check(assumed, 'inputs_complete').status, 'INCOMPLETE');
+  assert.ok(check(assumed, 'inputs_complete').needs.some((n) => n.code === 'expected_retail_price.basis'));
+  assert.equal(assumed.verdict, VERDICTS.MORE_DATA);
+  assert.equal(run(candidate(), { config: cfg }).verdict, VERDICTS.TEST); // candidate() price is DECIDED
+  assert.equal(run(candidate({ expected_retail_price: { value: 18, tax_basis: 'excl', basis: 'ASSUMPTION' } })).verdict, VERDICTS.TEST); // option is off by default
+});
+
+test('a confirmed tax rate (QUOTED) is trusted for a rejection; a merely assumed rate is not', () => {
+  const inclusive = (rate) => candidate({
+    unit_price: { value: 10, basis: 'QUOTED' }, landed_cost: { freight_per_unit: { value: 1, basis: 'QUOTED' }, duties_per_unit: { value: 1, basis: 'QUOTED' } },
+    expected_retail_price: { value: 18.15, tax_basis: 'incl', basis: 'DECIDED', tax_rate: rate }, // 15.00 ex tax at 21%
+  });
+  const confirmed = run(inclusive({ value: 0.21, basis: 'QUOTED' }));
+  assert.equal(check(confirmed, 'unit_margin').evidence.retail_ex_tax, 15);
+  assert.equal(check(confirmed, 'unit_margin').status, 'FAIL_ROBUST');
+  assert.equal(check(run(inclusive({ value: 0.21, basis: 'ASSUMPTION' })), 'unit_margin').status, 'FAIL_CONDITIONAL');
+});

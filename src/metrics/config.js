@@ -48,6 +48,10 @@ export const DEFAULT_CONFIG = {
     maxLeadTimeDays: null, // lead-time check is not applicable until the merchant sets a limit
     estimateTolerancePct: 0.25, // band applied to ESTIMATED / ASSUMPTION inputs when testing whether a conclusion could flip
     allowExploratoryTests: false, // off by default; a merchant enables it explicitly
+    requireDecidedRetailPrice: false, // true: an ASSUMPTION retail price makes the inputs INCOMPLETE
+    // Policy keys the merchant has marked as temporary (e.g. 'minUnitMarginPct'). A rejection that rests on a
+    // provisional value is withheld (NEED MORE DATA) and the value is named as needing confirmation.
+    provisional: [],
     exploratoryBudget: null,
     exposure: { noSaleShare: 0.6, coverWeeks: 26 },
     stockTrust: { blockedShare: 0.2, trustedShare: 0.8, verificationMaxAgeDays: 45, unverifiedMaySupportPass: true },

@@ -22,6 +22,11 @@ Policy file: `data/local/buying-policy.json` (gitignored). Template: `docs/examp
 | `gates.unitCostIsAllInVariableCost` | Set `true` only when the unit cost already includes every variable cost. Until then margin-based conclusions on *existing* products stay gated. | — | Margins that omit production/packaging look real. | Whether a production-cost module or configuration exists for the category. |
 | `estimateTolerancePct` (core default 0.25) | How far an ESTIMATED input may be off when testing whether a conclusion could flip. | A rejection needs almost certainty. | Estimates are trusted too much: more rejections on soft numbers. | How good your past supplier estimates have been vs final quotes. |
 
+## Two policy options
+
+- `requireDecidedRetailPrice` (default `false`): when `true`, an expected retail price whose basis is not `DECIDED` makes the inputs `INCOMPLETE`. Use it when the merchant wants every candidate priced before it is judged.
+- `provisional` (default `[]`): a list of policy keys the merchant has marked temporary, e.g. `["minUnitMarginPct", "paymentCostPct"]`. A check that would reject (`FAIL_ROBUST`) on a provisional value is downgraded to `FAIL_CONDITIONAL` (`NEED MORE DATA`) and names the value to confirm; passes carry `PROVISIONAL_POLICY:<key>` as a caveat. A rejection must never rest on a placeholder.
+
 ## Reading a sensitivity run
 
 - Settings that never flip a verdict for your typical candidates do not need fine tuning.

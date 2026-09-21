@@ -21,6 +21,31 @@ import { reconcileVerification } from './inventory-trust.js';
 import { resolvePeerSet } from './peers.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Which policy values each check decides on. A rejection resting on a value the merchant marked provisional is
+// not trustworthy enough to reject on: it is withheld and the value is named for confirmation.
+function policyKeysFor(checkId, exploratory) {
+  return {
+    unit_margin: ['minUnitMarginPct', 'paymentCostPct'],
+    test_capital: [exploratory ? 'exploratoryBudget' : 'testBudget'],
+    sell_through: ['maxSellThroughWeeks'],
+    peer_exposure: ['exposure.noSaleShare', 'exposure.coverWeeks', 'maxSellThroughWeeks', 'stockTrust.blockedShare', 'stockTrust.trustedShare'],
+    lead_time: ['maxLeadTimeDays'],
+  }[checkId] ?? [];
+}
+
+function applyProvisionalPolicy(checks, cfg, exploratory) {
+  for (const c of checks) {
+    const keys = policyKeysFor(c.id, exploratory).filter((k) => cfg.provisional.includes(k));
+    if (keys.length === 0) continue;
+    c.conditional_on = [...new Set([...c.conditional_on, ...keys.map((k) => `PROVISIONAL_POLICY:${k}`)])];
+    if (c.status === 'FAIL_ROBUST') {
+      c.status = 'FAIL_CONDITIONAL';
+      c.summary += ' A rejection is withheld because it rests on a provisional policy value.';
+      c.needs = [...c.needs, { code: `confirm_policy_${keys[0]}`, text: `Confirm the policy value(s) marked provisional: ${keys.join(', ')}.` }];
+    }
+  }
+}
 export const VERDICTS = { TEST: 'TEST CANDIDATE', MORE_DATA: 'NEED MORE DATA', AVOID: 'AVOID FOR NOW' };
 
 export function evaluateCandidate({ rawCandidate, demandFacts, config, preparedVerification = new Map(), now }) {
@@ -38,6 +63,7 @@ export function evaluateCandidate({ rawCandidate, demandFacts, config, preparedV
 
   const checks = [inputsComplete(ctx), unitMargin(ctx), testCapital(ctx), peerBenchmark(ctx), sellThrough(ctx), peerExposure(ctx), capabilityFit(ctx), leadTime(ctx)]
     .map((c) => ({ ...c, required: cfg.requiredChecks.includes(c.id) }));
+  applyProvisionalPolicy(checks, cfg, exploratory);
   const required = checks.filter((c) => c.required);
 
   const robust = required.filter((c) => c.status === 'FAIL_ROBUST' && AVOID_ELIGIBLE.includes(c.id));
@@ -55,6 +81,7 @@ export function evaluateCandidate({ rawCandidate, demandFacts, config, preparedV
     ...checks.filter((c) => c.status === 'PASS' || c.status === 'NOT_APPLICABLE').flatMap((c) => c.conditional_on),
     ...(demandFacts.window.history_days < config.demand.historyVerifiedDays ? [`SHORT_HISTORY_${demandFacts.window.history_days}_DAYS`] : []),
     'SEASONALITY_NOT_ASSESSED',
+    ...cfg.provisional.map((k) => `PROVISIONAL_POLICY:${k}`),
   ])];
 
   const blocked = [

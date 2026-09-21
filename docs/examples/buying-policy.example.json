@@ -4,6 +4,8 @@
     "testBudget": null,
     "exploratoryBudget": null,
     "allowExploratoryTests": false,
+    "requireDecidedRetailPrice": false,
+    "provisional": [],
     "minUnitMarginPct": null,
     "paymentCostPct": null,
     "taxRateAssumption": null,

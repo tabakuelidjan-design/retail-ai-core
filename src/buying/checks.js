@@ -54,6 +54,9 @@ export function inputsComplete({ candidate, cfg, econ, exploratory }) {
   else if (econ.retail.status === 'TAX_RATE_MISSING') add('expected_retail_price.tax_rate', 'Tax rate to convert a tax-inclusive price (or set buying.taxRateAssumption).');
   if (econ.landed.status === 'FX_MISSING') add('fx_rate_assumption', 'FX rate assumption: the candidate currency differs from the merchant currency.');
   if (candidate.peer_sets.length === 0 && !cfg.allowExploratoryTests) add('peer_sets', 'At least one merchant-chosen peer set (product ids, collection ids or a product_type), or enable exploratory tests.');
+  if (cfg.requireDecidedRetailPrice && candidate.retail && candidate.retail.basis !== 'DECIDED') {
+    add('expected_retail_price.basis', 'Policy requires the expected retail price to be DECIDED (fixed by the merchant). Set its basis to DECIDED once the price is fixed.');
+  }
   const budgetKey = exploratory ? 'exploratoryBudget' : 'testBudget';
   for (const key of [budgetKey, 'minUnitMarginPct', 'paymentCostPct']) if (cfg[key] == null) add(`config.${key}`, `Merchant policy buying.${key} is not set.`);
   // A null policy value must never be compared as if it were 0: every threshold a required check uses is checked here.
