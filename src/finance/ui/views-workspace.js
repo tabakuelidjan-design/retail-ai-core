@@ -270,3 +270,74 @@ function peppolCard(d, reload) {
     h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted, on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol Access Point. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast('Sent via Peppol', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
       p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
 }
+
+// ---------- Bank & Treasury (strictly READ ONLY: balances and transactions only, never a payment or transfer) ----------
+const BANK_STATUS_TEXT = { NOT_CONNECTED: 'Not connected', ACTIVE: 'Connected', EXPIRED: 'Consent expired', REVOKED: 'Disconnected' };
+function treasuryCard(t) {
+  const card = h('div', { class: 'card treasury' }, h('div', { class: 'cardhead' }, h('h2', null, 'Treasury'), h('span', { class: 'muted small' }, 'Short-term liquidity, not accounting cash flow')));
+  const box = (label, value, tone) => h('div', { class: `tbox ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kbig' }, value == null ? '—' : value));
+  card.appendChild(h('div', { class: 'tgrid' },
+    box(tt('Bank'), t.display.bank), box(tt('Cash'), t.display.cash), box(tt('Total liquidity'), t.display.liquid, 'accent'),
+    box(tt('Receivables due in {0} days', t.horizonDays), t.display.incoming, 'ok'), box(tt('To pay in {0} days', t.horizonDays), t.display.outgoing, 'bad'), box(tt('Projection'), t.display.projection, 'accent')));
+  if (t.warnings.length) card.appendChild(h('div', { class: 'banner warn small' }, t.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
+  if (t.assumed.overdueReceivablesCents) card.appendChild(h('div', { class: 'hint' }, tt('{0} of overdue receivables is NOT included in the projection above (assumed, not expected).', fmtMoney(t.assumed.overdueReceivablesCents, t.currency))));
+  card.appendChild(h('div', { class: 'hint' }, tt('Observed = bank balance / confirmed cash count. Expected = invoices and supplier invoices due. Assumed = excluded from the projection.')));
+  return card;
+}
+function suggestionRow(s, currency, reload) {
+  const STATUS_TONE = { EXACT: 'ok', PROBABLE: 'ok', PARTIAL: 'warn', OVERPAYMENT: 'warn', AMBIGUOUS: 'warn', NO_MATCH: 'mute' };
+  const STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PARTIAL: 'Partial payment', OVERPAYMENT: 'Overpayment', AMBIGUOUS: 'Several candidates', NO_MATCH: 'No match' };
+  const t = s.transaction;
+  const row = h('div', { class: 'txrow' },
+    h('div', { class: 'txmain' }, h('span', { class: `chip ${t.amountCents >= 0 ? 'ok' : 'mute'}` }, t.amountCents >= 0 ? tt('IN') : tt('OUT')),
+      h('span', { class: 'dt' }, t.counterpartyName || tt('Unknown')), h('span', { class: 'ds' }, [t.date, t.reference].filter(Boolean).join('  ·  '))),
+    h('div', { class: 'txamt' }, h('strong', null, fmtMoney(t.amountCents, t.currency))),
+    h('div', null, h('span', { class: `chip ${STATUS_TONE[s.status] || 'mute'}` }, tt(STATUS_TEXT[s.status] || s.status))),
+    h('div', { class: 'txacts' }));
+  const acts = row.lastChild;
+  const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast('Reconciled', 'ok'); reload(); } catch (e) { fail(e); } };
+  if (s.candidates.length) {
+    if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Confirm')));
+    else acts.appendChild(h('select', { on: { change: (e) => { if (e.target.value) confirmWith(t.amountCents >= 0 ? { documentId: e.target.value } : { itemId: e.target.value }); } } },
+      h('option', { value: '' }, tt('Choose...')), s.candidates.map((c) => h('option', { value: t.amountCents >= 0 ? c.documentId : c.itemId }, `${c.number || c.invoiceNumber} — ${c.customer || c.supplierName}`))));
+  }
+  acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
+  return row;
+}
+async function viewBank() {
+  const main = layout('#/bank', h('div', { class: 'hero' }, h('div', null, h('h1', null, 'Bank & Treasury'), h('div', { class: 'muted' }, 'Read-only: balances and transactions, never a payment or a transfer.'))));
+  const box = h('div'); main.appendChild(box);
+  async function draw() {
+    clear(box);
+    let st, treasury; try { st = await api('GET', '/api/bank/status'); treasury = await api('GET', '/api/treasury'); } catch (e) { return fail(e, box); }
+    box.appendChild(treasuryCard(treasury));
+    const connCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
+    connCard.appendChild(h('div', { class: 'banner info small' }, tt('Read-only access only. This connection can never initiate a payment, a transfer or change a beneficiary.')));
+    if (st.state === 'ACTIVE') {
+      connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, String(st.grantedAt).slice(0, 10))));
+      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' },
+        h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
+        h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
+    } else {
+      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', disabled: !st.adapter.configured, on: { click: async () => { try { const r = await api('POST', '/api/bank/connect', {}); toast(tt('Provider: {0}', st.adapter.name), 'ok'); console.log(r.authorizationUrl); } catch (e) { fail(e); } } } }, tt('Connect a bank')),
+        !st.adapter.configured ? h('span', { class: 'muted small' }, tt('No bank provider is configured yet.')) : null));
+      const csv = h('textarea', { rows: 4, placeholder: tt('Paste your bank statement CSV export here') });
+      connCard.appendChild(h('div', { class: 'field', style: 'margin-top:10px' }, h('label', null, tt('Or import a CSV statement (no bank connection needed)')), csv,
+        h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/bank/import-csv', { csv: csv.value }); toast(tt('{0} transaction(s) imported', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Import CSV'))));
+    }
+    box.appendChild(connCard);
+    const cashCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
+    const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
+    cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
+      h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
+    box.appendChild(cashCard);
+    // Shown regardless of a live bank connection: a CSV import needs no connection at all, and its transactions still need reconciling.
+    const sugCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Transactions to reconcile'));
+    try {
+      const sug = (await api('GET', '/api/bank/suggestions')).rows;
+      sugCard.appendChild(sug.length ? h('div', { class: 'txlist' }, sug.map((s) => suggestionRow(s, treasury.currency, draw))) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing to reconcile')))));
+    } catch (e) { fail(e, sugCard); }
+    box.appendChild(sugCard);
+  }
+  draw();
+}

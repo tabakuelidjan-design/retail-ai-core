@@ -313,3 +313,17 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
   .atext { flex-basis: 100%; order: 2; }
   .acta { order: 3; flex-basis: 100%; justify-content: flex-end; margin-top: 2px; }
 }
+
+/* Bank & Treasury */
+.treasury { border-color: #cfd8ea; }
+.tgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0; }
+.tbox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fff; }
+.tbox.accent { background: #f8faff; border-color: #cfd8ea; } .tbox.ok .kbig { color: var(--ok); } .tbox.bad .kbig { color: var(--bad); }
+.txlist { display: flex; flex-direction: column; gap: 8px; }
+.txrow { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(90px, 1fr) minmax(120px, 1fr) minmax(140px, 1.4fr); gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.txmain { display: flex; flex-direction: column; gap: 2px; } .txmain .dt { font-weight: 600; } .txmain .ds { font-size: 12px; color: var(--muted); }
+.txamt { font-variant-numeric: tabular-nums; text-align: right; } .txacts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .tgrid { grid-template-columns: repeat(2, 1fr); }
+  .txrow { grid-template-columns: 1fr 1fr; } .txmain { grid-column: 1 / -1; } .txacts { grid-column: 1 / -1; justify-content: flex-start; }
+}
