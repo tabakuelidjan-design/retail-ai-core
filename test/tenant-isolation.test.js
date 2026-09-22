@@ -181,7 +181,7 @@ test('adversarial: forging merchant_id on write is rejected by scoped filters, n
 
 test('analytics: analyzeDimension for merchant A never aggregates merchant B\'s sales', async () => {
   const { supabase, merchantA, merchantB } = await seedTwoMerchants(createFakeSupabase());
-  const testNow = new Date();
+  const testNow = new Date(Date.now() + 1000); // strictly after any just-inserted timestamp - window.end is exclusive (see windows.js)
   const window = buildWindows(testNow, 'UTC', { availableDays: 2 }).available_window;
 
   const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
@@ -202,7 +202,7 @@ test('analytics: analyzeDimension for merchant A never aggregates merchant B\'s 
 
 test('analytics: a channel/collection dimension for merchant A never surfaces merchant B\'s collection', async () => {
   const { supabase, merchantA } = await seedTwoMerchants(createFakeSupabase());
-  const testNow = new Date();
+  const testNow = new Date(Date.now() + 1000); // strictly after any just-inserted timestamp - window.end is exclusive (see windows.js)
   const window = buildWindows(testNow, 'UTC', { availableDays: 2 }).available_window;
   const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
   const ledgerA = buildLedger(dataA, { config: CONFIG });
@@ -237,7 +237,7 @@ test('Wizard: buildSetupReport for merchant A only reports merchant A\'s facts (
   await build(merchantA, 'A', { withCost: true, withSku: true });
   await build(merchantB, 'B', { withCost: false, withSku: false });
 
-  const testNow = new Date();
+  const testNow = new Date(Date.now() + 1000); // strictly after any just-inserted timestamp - window.end is exclusive (see windows.js)
   const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
   const ledgerA = buildLedger(dataA, { config: CONFIG });
   const reportA = buildSetupReport({ ledger: ledgerA, data: dataA, enrichment: null, company: null, now: testNow, config: CONFIG });
