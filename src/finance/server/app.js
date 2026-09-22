@@ -20,6 +20,8 @@ import { settlement as settlementOf } from '../document.js';
 import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js';
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
 import { buildActions } from '../actions.js';
+import { createBankService } from '../bank-service.js';
+import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors } from '../inbox.js';
@@ -36,13 +38,13 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
-const NOT_FOUND_CODES = ['DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
+const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -80,7 +82,8 @@ export function createFinanceApp(deps) {
     req.on('error', reject);
   });
   const cookies = (req) => Object.fromEntries((req.headers.cookie ?? '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, v.join('=')]));
-  const sessionOf = (req) => { const s = sessions.get(cookies(req).fin_sid); if (!s) return null; if (s.expires < Date.now()) { sessions.delete(cookies(req).fin_sid); return null; } return s; };
+  const COOKIE = deps.cookieName ?? 'fin_sid'; // a second instance (the demo) uses its own cookie name so it never signs the real dashboard out
+  const sessionOf = (req) => { const s = sessions.get(cookies(req)[COOKIE]); if (!s) return null; if (s.expires < Date.now()) { sessions.delete(cookies(req)[COOKIE]); return null; } return s; };
   const actor = MERCHANT_ACTOR;
 
   async function servicesFor() {
@@ -89,8 +92,9 @@ export function createFinanceApp(deps) {
     const ledgerProvider = async () => (retail ? (await retail.ledgerData()).ledger : null);
     const stock = stockFor(settings);
     const hooks = {
-      restockDecisionNeeded: (doc, inv) => stock.restockDecisionNeeded(doc, inv),
+      restockDecisionNeeded: (doc, inv) => (settings.stock?.mode === 'off' ? false : stock.restockDecisionNeeded(doc, inv)),
       afterIssue: async (doc) => {
+        if (!settings.stock || settings.stock.mode === 'off') return; // stock sync is off: no ledger writes (enabling it later reconciles already issued documents)
         const inv = doc.type === 'credit_note' && doc.relatedDocumentId ? await store.getDocument(doc.relatedDocumentId) : null;
         await stock.record(doc, { invoice: inv });
         if (settings.stock?.mode === 'live') await stock.applyPending();
@@ -158,9 +162,10 @@ export function createFinanceApp(deps) {
     const payments = doc.type === 'invoice' ? await store.listPayments(doc.id) : [];
     const readiness = !doc.lockedAt ? await svc.readiness(doc) : null;
     const events = await svc.events(id);
-    const stockMovements = ['invoice', 'credit_note'].includes(doc.type) && doc.lockedAt ? await store.listStockMovements({ merchantId, documentId: doc.id }) : [];
+    const safeMoves = async (documentId) => { try { return await store.listStockMovements({ merchantId, documentId }); } catch { return []; } }; // the ledger may not exist yet
+    const stockMovements = ['invoice', 'credit_note'].includes(doc.type) && doc.lockedAt ? await safeMoves(doc.id) : [];
     const stockInvoice = doc.type === 'invoice' ? doc : null;
-    const soldMovements = stockInvoice ? stockMovements : (doc.relatedDocumentId ? await store.listStockMovements({ merchantId, documentId: doc.relatedDocumentId }) : []);
+    const soldMovements = stockInvoice ? stockMovements : (doc.relatedDocumentId ? await safeMoves(doc.relatedDocumentId) : []);
     const related = doc.relatedDocumentId ? all.find((d) => d.id === doc.relatedDocumentId) : null;
     const source = doc.sourceOrderId && retail ? await retail.getOrder(doc.sourceOrderId, await invoicedMap()).catch(() => null) : null;
     return {
@@ -255,7 +260,7 @@ export function createFinanceApp(deps) {
     const s = { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS };
     sessions.set(sid, s);
     await audit({ at: clock.now(), action: 'LOGIN' });
-    json(ctx.res, 200, { ok: true, csrf: s.csrf }, { 'Set-Cookie': `fin_sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}` });
+    json(ctx.res, 200, { ok: true, csrf: s.csrf }, { 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}` });
   }, { public: true });
 
   on('GET', '/api/session', async (ctx) => {
@@ -263,7 +268,7 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf } : { authenticated: false });
   }, { public: true });
 
-  on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req).fin_sid); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': 'fin_sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' }); });
+  on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` }); });
 
   on('GET', '/api/overview', async (ctx) => { const { svc, settings } = await servicesFor(); json(ctx.res, 200, await overview(svc, settings)); });
 
@@ -477,6 +482,36 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, r);
   });
 
+  // ---------- Bank & Treasury: READ ONLY. No route here can move money; the bank token never leaves the vault. ----------
+  const bankAdapter = () => deps.bankAdapter ?? NoBankAdapter;
+  const bankFor = async () => {
+    const { svc } = await servicesFor();
+    const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
+    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
+      finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, c.payment, a); } } });
+  };
+  const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
+  on('GET', '/api/bank/status', async (ctx) => json(ctx.res, 200, await (await bankFor()).status()));
+  on('GET', '/api/bank/transactions', async (ctx) => { const st = ctx.url.searchParams.get('status'); json(ctx.res, 200, { rows: (await (await bankFor()).transactions(['NEW', 'MATCHED', 'IGNORED'].includes(st) ? { status: st } : {})).map(txView) }); });
+  on('GET', '/api/bank/suggestions', async (ctx) => json(ctx.res, 200, { rows: (await (await bankFor()).suggestions()).map((s) => ({ ...s, transaction: txView(s.transaction) })) }));
+  on('POST', '/api/bank/sync', async (ctx) => json(ctx.res, 200, await (await bankFor()).sync({})));
+  on('POST', '/api/bank/import-csv', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).importCsv(text)); }, { bodyLimit: 4_000_000 });
+  on('POST', `/api/bank/transactions/${P}/confirm`, async (ctx) => {
+    const b = ctx.body ?? {}; const cents = b.amount === undefined || b.amount === '' ? undefined : toCents(String(b.amount));
+    json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined }, actor));
+  });
+  on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => json(ctx.res, 200, txView(await (await bankFor()).ignore(idParam(ctx.m[1]), actor))));
+  on('POST', '/api/bank/connect', async (ctx) => json(ctx.res, 200, await (await bankFor()).beginConsent(`http://${ctx.req.headers.host}/#/bank`, actor)));
+  on('POST', '/api/bank/consent', async (ctx) => json(ctx.res, 200, await (await bankFor()).completeConsent({ code: sanitizeText(ctx.body?.code, 500), state: sanitizeText(ctx.body?.state, 200) }, actor)));
+  on('POST', '/api/bank/disconnect', async (ctx) => json(ctx.res, 200, await (await bankFor()).disconnect(actor)));
+  on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
+  on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
+  on('GET', '/api/treasury', async (ctx) => {
+    const { settings } = await servicesFor(); const t = await (await bankFor()).treasury({ currency: settings.defaults.currency });
+    const m = (c) => (c == null ? null : money(c, settings.defaults.language));
+    json(ctx.res, 200, { ...t, display: { bank: m(t.observed.bankCents), cash: m(t.observed.cashCents), liquid: m(t.observed.liquidCents), incoming: m(t.expected.incomingCents), outgoing: m(t.expected.outgoingCents), overdue: m(t.assumed.overdueReceivablesCents), projection: m(t.projection.cents) } });
+  });
+
   // ---------- Finance Action Center: what to do next, from facts the workspace already holds ----------
   on('GET', '/api/actions', async (ctx) => {
     const { svc, settings, stock } = await servicesFor();
@@ -495,7 +530,7 @@ export function createFinanceApp(deps) {
       } catch { pack = null; }
     }
     const actions = buildActions({
-      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: await inboxFor().counts(), stock: await stock.status().catch(() => null),
+      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: await inboxFor().counts().catch(() => ({ toReview: 0, TO_PAY: 0, toPayCents: 0 })), stock: await stock.status().catch(() => null),
       draftsMissingVat, awaitingApproval: docs.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL' && doc.type !== 'quote').length, quotesToConvert: docs.filter(({ doc }) => doc.type === 'quote' && doc.status === 'ACCEPTED').length,
       pack, settingsMissing: missingForInvoicing(settings).length,
     });

@@ -93,11 +93,12 @@ test('two runs at the same time cannot both adjust the same movement (compare-an
 });
 
 test('modes: off does nothing, dry_run reports what WOULD happen without writing, live writes', async () => {
-  for (const [mode, adjusts, status] of [['off', 0, 'PENDING'], ['dry_run', 0, 'PENDING'], ['live', 1, 'APPLIED']]) {
+  for (const [mode, adjusts, status] of [['off', 0, undefined], ['dry_run', 0, 'PENDING'], ['live', 1, 'APPLIED']]) {
     const h = await harness({ mode }); try {
       const id = await h.issue({ lines: [cat('var-stock-grand', '2')] });
       if (mode !== 'live') { const r = (await h.c.post('/api/stock/apply', {})).data; assert.equal(r.mode, mode); if (mode === 'dry_run') assert.deepEqual(r.results.map((x) => [x.outcome, x.delta]), [['WOULD_ADJUST', -2]]); }
-      assert.equal(h.applier.calls.adjust.length, adjusts, mode); assert.equal((await h.movements(id))[0].status, status, mode);
+      assert.equal(h.applier.calls.adjust.length, adjusts, mode); assert.equal((await h.movements(id))[0]?.status, status, mode);
+      if (mode === 'off') { const st = h.a.getSettings(); st.stock.mode = 'dry_run'; h.a.setSettings(st); assert.equal((await h.c.post('/api/stock/reconcile', {})).data.created, 1, 'enabling later catches up on issued documents'); assert.equal((await h.movements(id))[0].status, 'PENDING'); }
     } finally { await h.close(); }
   }
 });

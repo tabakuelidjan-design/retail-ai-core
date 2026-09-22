@@ -17,7 +17,9 @@
   const missing = new Set();
 
   const fmt = (s, args) => s.replace(/\{(\d+)\}/g, (m, i) => (args[i] === undefined || args[i] === null ? '' : String(args[i])));
-  const looksTranslatable = (s) => /[A-Za-z]{3,}/.test(s) && /^[A-Z(+\-"]/.test(s);
+  const looksTranslatable = (s) => /[A-Za-z]{3,}/.test(s) && /^[A-Z(+\-"]/.test(s) && !/^[A-Z0-9 _-]+$/.test(s);
+  const knownTranslations = {};
+  const isTranslation = (core) => { const d = dict()[lang]; if (!d) return false; if (!knownTranslations[lang]) knownTranslations[lang] = new Set(Object.values(d.messages)); return knownTranslations[lang].has(core); };
 
   function lookup(key) {
     if (lang === 'en') return key;
@@ -48,7 +50,7 @@
       const parts = sentences.map((s) => { const e = lookup(s); if (e !== undefined) { hit = true; return e; } if (d && d.patterns) for (const [re, out] of d.patterns) { const r = re.exec(s); if (r) { hit = true; return fmt(out, r.slice(1)); } } return s; });
       if (hit) return m[1] + parts.join(' ') + m[3];
     }
-    if (looksTranslatable(core)) missing.add(core);
+    if (looksTranslatable(core) && !isTranslation(core)) missing.add(core);
     return text;
   }
   function setLang(l) { if (!LANGS.includes(l)) return; lang = l; try { window.localStorage.setItem('finance.lang', l); } catch (e) { /* ignore */ } document.documentElement.setAttribute('lang', l); }

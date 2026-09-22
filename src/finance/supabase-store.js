@@ -146,6 +146,33 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
       return r && r.length ? supplierFromRow(r[0]) : null;
     },
+    // ---- Bank & Treasury (read only) ----
+    async saveBankConnection(c) {
+      const row = { merchant_id: merchantId, provider: c.provider, token_ciphertext: c.tokenCipher, token_fingerprint: c.tokenFingerprint, scopes: c.scopes, account_ids: c.accountIds ?? [], granted_at: c.grantedAt, expires_at: c.expiresAt, revoked_at: null, last_used_at: null };
+      await guard(() => supabase.delete('fin_bank_connections', { merchant_id: eq(merchantId) })); const [r] = await guard(() => supabase.insert('fin_bank_connections', [row])); return bankConnFromRow(r);
+    },
+    async getBankConnection() { const [r] = await supabase.select('fin_bank_connections', { select: '*', merchant_id: eq(merchantId) }); return r ? bankConnFromRow(r) : null; },
+    async touchBankConnection(_m, at) { await supabase.update('fin_bank_connections', { merchant_id: eq(merchantId) }, { last_used_at: at }); },
+    async revokeBankConnection(_m, at) { await supabase.update('fin_bank_connections', { merchant_id: eq(merchantId) }, { revoked_at: at, token_ciphertext: '' }); },
+    async insertBankTransaction(t) {
+      try { const [r] = await supabase.insert('fin_bank_transactions', [bankTxToRow(t)]); return { created: true, row: bankTxFromRow(r) }; } catch (e) {
+        if (!/23505|duplicate key|unique/i.test(String(e.message))) throw translateDbError(e);
+        const [ex] = await supabase.select('fin_bank_transactions', { select: '*', merchant_id: eq(merchantId), account_id: eq(t.accountId), provider_tx_id: eq(t.providerTxId) }); return { created: false, row: bankTxFromRow(ex) };
+      }
+    },
+    async getBankTransaction(id) { const [r] = await supabase.select('fin_bank_transactions', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? bankTxFromRow(r) : null; },
+    async updateBankTransaction(id, patch, expectedStatus) {
+      const map = { status: 'status', matchedKind: 'matched_kind', matchedDocumentId: 'matched_document_id', matchedPaymentId: 'matched_payment_id', matchedAmountCents: 'matched_amount_cents', matchedAt: 'matched_at' };
+      const body = {}; for (const [k, v] of Object.entries(patch)) body[map[k]] = v;
+      const r = await guard(() => supabase.update('fin_bank_transactions', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body)); return r && r.length ? bankTxFromRow(r[0]) : null;
+    },
+    async listBankTransactions(f = {}) { const p = { select: '*', merchant_id: eq(merchantId) }; if (f.status) p.status = eq(f.status); return (await supabase.selectAll('fin_bank_transactions', p)).map(bankTxFromRow); },
+    async upsertBankBalance(b) { await supabase.upsert('fin_bank_balances', [{ merchant_id: merchantId, account_id: b.accountId, iban: b.iban, balance_cents: b.balanceCents, currency: b.currency, as_of: b.asOf }], { onConflict: 'merchant_id,account_id' }); },
+    async listBankBalances() { return (await supabase.selectAll('fin_bank_balances', { select: '*', merchant_id: eq(merchantId) })).map((r) => ({ merchantId, accountId: r.account_id, iban: r.iban, balanceCents: Number(r.balance_cents), currency: r.currency, asOf: r.as_of })); },
+    async insertCashCount(c) { const [r] = await guard(() => supabase.insert('fin_cash_counts', [{ merchant_id: merchantId, amount_cents: c.amountCents, counted_on: c.countedOn, note: c.note }])); return { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at }; },
+    async latestCashCount() { const [r] = await supabase.select('fin_cash_counts', { select: '*', merchant_id: eq(merchantId), order: 'counted_on.desc,created_at.desc', limit: '1' }); return r ? { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at } : null; },
+    async insertCashMovement(m) { const [r] = await guard(() => supabase.insert('fin_cash_movements', [{ merchant_id: merchantId, kind: m.kind, amount_cents: m.amountCents, date: m.date, note: m.note }])); return { id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at }; },
+    async listCashMovements() { return (await supabase.selectAll('fin_cash_movements', { select: '*', merchant_id: eq(merchantId) })).map((r) => ({ id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at })); },
     async listSupplierInvoices() { return (await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow); },
   };
 }
@@ -155,6 +182,9 @@ const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'suppli
   subject: 'subject', extraction: 'extraction', validatedAt: 'validated_at', paidAt: 'paid_at', paidAmountCents: 'paid_amount_cents', paidReference: 'paid_reference', rejectedReason: 'rejected_reason' };
 function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
 const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
+const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });
+const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId, provider_tx_id: t.providerTxId, date: t.date, amount_cents: t.amountCents, currency: t.currency, counterparty_name: t.counterpartyName, reference: t.reference, structured_reference: t.structuredReference, source: t.source, status: t.status });
+const bankTxFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, accountId: r.account_id, providerTxId: r.provider_tx_id, date: r.date, amountCents: Number(r.amount_cents), currency: r.currency, counterpartyName: r.counterparty_name, reference: r.reference, structuredReference: r.structured_reference, source: r.source, status: r.status, matchedKind: r.matched_kind, matchedDocumentId: r.matched_document_id, matchedPaymentId: r.matched_payment_id, matchedAmountCents: r.matched_amount_cents == null ? null : Number(r.matched_amount_cents), matchedAt: r.matched_at, importedAt: r.imported_at });
 const stockToRow = (m) => ({ merchant_id: m.merchantId, document_id: m.documentId, document_number: m.documentNumber, document_type: m.documentType, line_position: m.linePosition, kind: m.kind, variant_id: m.variantId, variant_source_id: m.variantSourceId, sku: m.sku, location_id: m.locationId, location_source_id: m.locationSourceId, quantity: m.quantity, delta: m.delta, status: m.status, error: m.error, idempotency_key: m.idempotencyKey });
 const stockFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, documentId: r.document_id, documentNumber: r.document_number, documentType: r.document_type, linePosition: r.line_position, kind: r.kind, variantId: r.variant_id, variantSourceId: r.variant_source_id, sku: r.sku, locationId: r.location_id, locationSourceId: r.location_source_id, quantity: r.quantity, delta: r.delta, status: r.status, error: r.error, idempotencyKey: r.idempotency_key, shopifyAdjustmentId: r.shopify_adjustment_id, createdAt: r.created_at, appliedAt: r.applied_at });
 const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,
