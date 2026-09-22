@@ -19,13 +19,17 @@ function loadI18n(stored) {
 }
 
 // Strings in app.js that look like text but are not merchant-facing (keys, CSS, headers, keyboard names, file names, debug).
-const NOT_UI = new Set(['Content-Type', 'X-CSRF-Token', 'UI error:', 'currentColor', '--accent', 'Enter', 'ArrowDown', 'ArrowUp', 'Escape', 'image/png,image/jpeg', 'pack.json', '60_plus', 'accounts@company.example', 'INV-2026-0001', '_MISSING']);
-const isNotUi = (s) => NOT_UI.has(s) || /^[a-z-]+:[^\s]/.test(s) || /^[a-z]+[A-Za-z0-9]*$/.test(s) || /^[a-z-]+ \{\}$/.test(s) || /[:;]\s?[\w{}.-]+;?$/.test(s) && /^(margin|flex|grid|--)/.test(s) || /^\[data-/.test(s) || /^(banner|toast|badge|pill|acard|kpi|seg|dot|avatar|navitem|lrow|basis|picker-row|card stat) /.test(s) || /^\{\}/.test(s) && !/[A-Za-z]{4,}\s/.test(s.replace(/\{\}/g, ''));
+const NOT_UI = new Set(['Content-Type', 'X-CSRF-Token', 'UI error:', 'currentColor', '--accent', 'Enter', 'ArrowDown', 'ArrowUp', 'Escape', 'image/png,image/jpeg', 'pack.json', '60_plus', 'accounts@company.example', 'INV-2026-0001', '_MISSING', '_blank', 'YYYY-MM-DD']);
+const isNotUi = (s) => NOT_UI.has(s) || /^(chip|dot2) /.test(s) || /^[\w.+-]+@[\w.-]+$/.test(s) || /^[a-z-]+:[^\s]/.test(s) || /^[a-z]+[A-Za-z0-9]*$/.test(s) || /^[a-z-]+ \{\}$/.test(s) || /[:;]\s?[\w{}.-]+;?$/.test(s) && /^(margin|flex|grid|--)/.test(s) || /^\[data-/.test(s) || /^(banner|toast|badge|pill|acard|kpi|seg|dot|avatar|navitem|lrow|basis|picker-row|card stat) /.test(s) || /^\{\}/.test(s) && !/[A-Za-z]{4,}\s/.test(s.replace(/\{\}/g, ''));
 
 test('COVERAGE: every merchant-facing message of the dashboard exists in French AND Dutch', () => {
   const lang = loadLang();
-  const src = read('app.js');
+  const src = `${read('app.js')}
+${read('views-workspace.js')}`;
   const messages = [...extractStrings(src)].map((s) => s.trim()).filter(looksLikeMessage).filter((s) => !isNotUi(s));
+  // every literal handed to tt() / tr() must be translated whatever its shape (short, lowercase or upper-case labels included)
+  for (const m of src.matchAll(/\b(?:tt|tr)\('((?:[^'\\]|\\.)*)'/g)) messages.push(m[1].replace(/\\'/g, "'"));
+  for (const k of ['VAT']) messages.push(k);
   const dynamic = messages.map((s) => s.replace(/\{\}/g, '{0}'));
   const missing = { fr: [], nl: [] };
   for (const m of new Set(dynamic)) for (const l of ['fr', 'nl']) if (!(m in lang[l].messages) && !lang[l].patterns.some(([re]) => re.test(m))) missing[l].push(m);
@@ -73,8 +77,8 @@ test('UI language is separate from the document language: the language switch ne
 });
 test('scripts are served and loaded in the right order', () => {
   const html = read('index.html');
-  const order = ['/lang-fr.js', '/lang-nl.js', '/i18n.js', '/app.js'].map((s) => html.indexOf(s));
+  const order = ['/lang-fr.js', '/lang-nl.js', '/i18n.js', '/app.js', '/views-workspace.js'].map((s) => html.indexOf(s));
   assert.ok(order.every((n) => n > 0) && [...order].sort((x, y) => x - y).join() === order.join());
   const server = readFileSync(new URL('../src/finance/server/app.js', import.meta.url), 'utf8');
-  for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js']) assert.ok(server.includes(`'${f}'`), f);
+  for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js', '/views-workspace.js']) assert.ok(server.includes(`'${f}'`), f);
 });

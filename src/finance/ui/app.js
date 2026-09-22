@@ -78,7 +78,7 @@ const ICON_PATHS = {
   building: 'M4 21V4h10v17 M14 9h6v12 M8 8h2 M8 12h2 M8 16h2 M2 21h20', coins: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
   book: 'M4 4h11a3 3 0 013 3v13H7a3 3 0 01-3-3z M4 17a3 3 0 013-3h11', gear: 'M12 15a3 3 0 100-6 3 3 0 000 6z M4 12h2 M18 12h2 M12 4v2 M12 18v2 M6.3 6.3l1.4 1.4 M16.3 16.3l1.4 1.4 M6.3 17.7l1.4-1.4 M16.3 7.7l1.4-1.4',
   plus: 'M12 5v14 M5 12h14', search: 'M11 4a7 7 0 100 14 7 7 0 000-14z M21 21l-4.3-4.3', chevron: 'M9 6l6 6-6 6', alert: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
-  clock: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2', check: 'M5 12l5 5 10-11', arrow: 'M5 12h14 M13 6l6 6-6 6', edit: 'M4 20h4L19 9l-4-4L4 16z',
+  clock: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2', inbox: 'M3 13l3-8h12l3 8v6H3z M3 13h5l1 3h6l1-3h5', cart: 'M3 4h2l2 11h11l2-8H7 M9 20h.01 M17 20h.01', check: 'M5 12l5 5 10-11', arrow: 'M5 12h14 M13 6l6 6-6 6', edit: 'M4 20h4L19 9l-4-4L4 16z',
 };
 function svgIcon(name, size) {
   const NS = 'http://www.w3.org/2000/svg';
@@ -98,7 +98,7 @@ function avatar(name, size) {
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
-const NAV = [['#/', 'Overview', 'home'], ['#/invoices', 'Invoices', 'doc'], ['#/quotes', 'Quotes', 'quote'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/pack', 'Accountant pack', 'book'], ['#/settings', 'Settings', 'gear']];
+const NAV = [['#/', 'Overview', 'home'], ['@', 'Selling'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['@', 'Buying'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['@', 'Accountant'], ['#/pack', 'Accountant pack', 'book'], ['@', ''], ['#/settings', 'Settings', 'gear']];
 function langSwitch() {
   return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
 }
@@ -108,7 +108,7 @@ function layout(active, ...content) {
     h('div', { class: 'brand' }, h('span', { class: 'mark' }, seller.trim().charAt(0).toUpperCase() || 'F'), h('span', { class: 'bname' }, seller)),
     h('a', { class: 'side-cta', href: '#/new/invoice' }, svgIcon('plus', 16), h('span', null, 'New invoice')),
     langSwitch(),
-    h('div', { class: 'navlist' }, NAV.map(([href, label, ic]) => h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, svgIcon(ic, 18), h('span', null, label)))),
+    h('div', { class: 'navlist' }, NAV.map(([href, label, ic]) => (href === '@' ? (label ? h('div', { class: 'navgroup' }, label) : h('div', { class: 'navsep' })) : h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, svgIcon(ic, 18), h('span', null, label))))),
     h('div', { class: 'foot' }, h('span', { class: 'foot-chip' }, 'Peppol: not configured'), h('span', { class: 'foot-chip' }, 'Nothing is sent externally'), h('button', { class: 'quiet', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, 'Log out')));
   const main = h('main', { class: 'main' }, content);
   show(h('div', { class: 'shell' }, side, main));
@@ -143,14 +143,15 @@ async function viewOverview() {
     const cur = o.currency;
     const acard = (tone, icon, n, label, sub, href) => h('a', { class: `acard ${tone}`, href }, h('span', { class: 'aicon' }, svgIcon(icon, 18)), h('span', { class: 'abody' }, h('span', { class: 'an' }, n), h('span', { class: 'al' }, label), sub ? h('span', { class: 'as' }, sub) : null), h('span', { class: 'ago' }, svgIcon('arrow', 16)));
     mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), tt('{0} setting(s) missing.', o.settingsMissing.length) + ' ', h('a', { href: '#/settings' }, 'Open settings')) : null);
-    box.appendChild(h('div', { class: 'grid cards' },
+    { const ac = await api('GET', '/api/actions').catch(() => ({ actions: [] })); box.appendChild(actionCenterCard(ac.actions, ac.currency)); }
+    box.appendChild(h('div', { class: 'grid cards', style: 'margin-top:16px' },
       acard(o.counts.awaitingApproval ? 'warn' : 'calm', 'check', o.counts.awaitingApproval, 'Awaiting your approval', o.counts.awaitingApproval ? 'Review and issue' : 'Nothing to approve', '#/invoices?status=READY_FOR_APPROVAL'),
       acard(o.counts.overdue ? 'bad' : 'calm', 'alert', o.counts.overdue, 'Overdue invoices', o.counts.overdue ? tt('{0} {1} to collect', o.amounts.overdue, cur) : 'Nothing is late', '#/receivables'),
       acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', tt('{0} quote(s) awaiting response', o.counts.quotesAwaitingResponse), '#/quotes?status=ACCEPTED'),
       acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', tt('{0} {1} outstanding', o.amounts.outstanding, cur), '#/receivables')));
 
     // money at a glance: outstanding, overdue, paid this month
-    const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
+    const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kbig' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
     box.appendChild(h('div', { class: 'card kpirow' }, kpi('Outstanding', o.amounts.outstanding, tt('{0} unpaid invoice(s)', o.counts.unpaid)), kpi('Overdue', o.amounts.overdue, tt('{0} invoice(s)', o.counts.overdue), o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, tt('{0} payment(s)', o.amounts.paidThisMonthCount), 'ok')));
 
     // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
@@ -159,7 +160,7 @@ async function viewOverview() {
     const ageCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Ageing of unpaid invoices'), h('a', { href: '#/receivables', class: 'small' }, 'Open payments')));
     if (!totalC) ageCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
     else {
-      ageCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${l}: ${o.aging[k].amount} ${cur}` }))));
+      ageCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${tr(l)}: ${o.aging[k].amount} ${cur}` }))));
       ageCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, tt('{0} inv.', o.aging[k].count))))));
     }
     box.appendChild(ageCard);
@@ -639,6 +640,7 @@ async function viewDoc(id) {
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
   const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
   box.appendChild(pdfWrap);
+  mount(box, stockMovementsCard(d)); mount(box, peppolCard(d, reload));
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Audit trail'), h('table', null, h('tr', null, ['When', 'Action', 'Status', 'By'].map((x) => h('th', null, x))), d.events.map((e) => h('tr', null, h('td', { class: 'nowrap small' }, String(e.at).replace('T', ' ').slice(0, 19)), h('td', null, human(e.action)), h('td', null, `${e.fromStatus ? STATUS[e.fromStatus] || e.fromStatus : ''} ${e.toStatus ? `-> ${STATUS[e.toStatus] || e.toStatus}` : ''}`), h('td', { class: 'small' }, e.actor ? `${e.actor.type}` : ''))))));
   box.appendChild(h('div', { class: 'small muted', style: 'margin-top:12px' }, 'Peppol: NOT CONFIGURED. Structured invoices can be prepared, but nothing is transmitted until a provider is selected.'));
 }
@@ -653,10 +655,12 @@ function creditModal(d) {
   const reason = h('input', { placeholder: 'Reason (required)' }); const err = h('div'); const full = h('input', { type: 'checkbox', checked: true });
   const rows = d.doc.lines.map((l) => ({ description: l.description, quantity: String(l.qtyMilli / 1000), unitPrice: String(l.priceMicro / 10000), vatRate: String(l.vatRateBp / 100), discountPercent: l.discountBp ? String(l.discountBp / 100) : undefined }));
   const editor = h('div');
+  let restock = null;
+  const restockBox = d.hadStockMovements ? h('div', { class: 'banner info', style: 'margin-top:10px' }, h('strong', null, tt('Stock')), h('div', { class: 'small' }, tt('This invoice took products out of stock. Are the goods returned to sellable stock?')), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'radio', name: 'restock', on: { change: () => { restock = true; } } }), tt('Yes, put them back into stock')), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'radio', name: 'restock', on: { change: () => { restock = false; } } }), tt('No, do not change the stock'))) : null;
   const draw = () => { clear(editor); if (full.checked) return; rows.forEach((r, i) => editor.appendChild(h('div', { class: 'row r4', style: 'margin-bottom:6px' }, h('input', { value: r.description, on: { input: (e) => { r.description = e.target.value; } } }), h('input', { value: r.quantity, on: { input: (e) => { r.quantity = e.target.value; } } }), h('input', { value: r.unitPrice, on: { input: (e) => { r.unitPrice = e.target.value; } } }), h('button', { on: { click: () => { rows.splice(i, 1); draw(); } } }, 'Remove')))); };
   full.addEventListener('change', draw);
-  modal('Create a credit note', h('div', null, h('p', { class: 'muted' }, 'A credit note corrects an issued invoice. The invoice itself is never changed.'), err, h('div', { class: 'field' }, h('label', null, 'Reason'), reason), h('label', { style: 'color:var(--ink)' }, full, 'Credit the whole invoice'), editor),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${d.id}/credit-note`, { reason: reason.value, lines: full.checked ? undefined : rows }); close(); toast('Credit note draft created', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e, err); } } } }, 'Create draft'), h('button', { on: { click: close } }, 'Cancel')]);
+  modal('Create a credit note', h('div', null, h('p', { class: 'muted' }, 'A credit note corrects an issued invoice. The invoice itself is never changed.'), err, h('div', { class: 'field' }, h('label', null, 'Reason'), reason), h('label', { style: 'color:var(--ink)' }, full, 'Credit the whole invoice'), editor, restockBox),
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${d.id}/credit-note`, { reason: reason.value, lines: full.checked ? undefined : rows, restock: restock === null ? undefined : restock }); close(); toast('Credit note draft created', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e, err); } } } }, 'Create draft'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 
 // ---------- companies ----------
@@ -720,6 +724,7 @@ async function viewPack() {
   const out = h('div');
   const main = layout('#/pack', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Accountant pack'), h('div', { class: 'muted small' }, 'Shop/POS sales come from the validated retail figures; only standalone B2B invoices are added.'))),
     h('div', { class: 'card' }, h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, 'From'), from), h('div', { class: 'field' }, h('label', null, 'To'), to), h('div', { class: 'field' }, h('button', { class: 'primary', on: { click: gen } }, 'Generate pack')))), out);
+  main.insertBefore(accountantWorkspace(), main.children[1] || null);
   async function gen() {
     clear(out); out.appendChild(h('div', { class: 'muted', style: 'margin:12px' }, 'Generating...'));
     try {
@@ -754,6 +759,7 @@ async function viewSettings() {
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Numbering'), h('div', { class: 'row r4' }, inp(s.numbering.invoice, 'prefix', 'Invoice prefix'), inp(s.numbering.credit_note, 'prefix', 'Credit note prefix'), inp(s.numbering.quote, 'prefix', 'Quote prefix'), inp(s.numbering.invoice, 'pad', 'Digits')), inp(s.numbering, 'format', 'Format', { hint: 'Use {prefix}, {year} and {seq}, e.g. {prefix}-{year}-{seq} gives INV-2026-0001. Numbers are assigned when a document is issued and never skip.' })));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, tt('Logo (PNG or JPEG, max 400 KB)') + (s.branding.hasLogo ? ' - ' + tt('a logo is set') : '')), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'registry', 'Belgian company register (primary)', [['cbeapi', 'CBEAPI: official KBO/BCE data (needs CBEAPI_KEY)'], ['none', 'Off']]), sel(s.companySearch, 'provider', 'Secondary name search (if the register finds nothing)', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
+  main.appendChild(await workspaceSettingsCards());
   main.appendChild(h('div', { class: 'actions', style: 'margin-top:16px' }, h('button', { class: 'primary', on: { click: async () => { try {
     const num = (v) => (v === '' || v === null ? undefined : Number(v));
     const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider }, companySearch: { registry: s.companySearch.registry, provider: s.companySearch.provider } };
@@ -774,9 +780,12 @@ async function route() {
     if (parts[0] === 'companies') return parts[1] ? await viewCompany(parts[1]) : await viewCompanies();
     if (parts[0] === 'receivables') return await viewReceivables();
     if (parts[0] === 'pack') return await viewPack();
+    if (parts[0] === 'inbox') return await viewInbox();
+    if (parts[0] === 'purchases') return await viewPurchases();
     if (parts[0] === 'settings') return await viewSettings();
     location.hash = '#/';
   } catch (e) { if (!(e instanceof ApiError && e.status === 401)) fail(e); }
 }
 window.addEventListener('hashchange', route);
-route();
+// start once every script (app, workspace views, i18n dictionaries) has loaded
+if (document.readyState === 'complete') route(); else window.addEventListener('load', route);

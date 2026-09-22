@@ -18,6 +18,7 @@ export function createMemoryStore() {
   const companies = new Map();
   const supplierInvoices = [];
   const stockMovements = [];
+  const bankConnections = new Map(); const bankTx = []; const bankBalances = new Map(); const cashCounts = []; const cashMovements = [];
   const hooks = { beforeCommit: null }; // failure injection for crash tests: throw to simulate a crash inside the transaction
 
   return {
@@ -59,6 +60,30 @@ export function createMemoryStore() {
 
     async addPayment(p) { payments.push(Object.freeze({ id: randomUUID(), ...clone(p) })); return clone(payments.at(-1)); },
     async listPayments(documentId) { return payments.filter((p) => p.documentId === documentId).map(clone); },
+    // ---- Bank & Treasury (read only). The encrypted token is stored here and is never part of any view. ----
+    async saveBankConnection(row) { bankConnections.set(row.merchantId, clone(row)); return clone(row); },
+    async getBankConnection(merchantId) { const c = bankConnections.get(merchantId); return c ? clone(c) : null; },
+    async touchBankConnection(merchantId, at) { const c = bankConnections.get(merchantId); if (c) c.lastUsedAt = at; },
+    async revokeBankConnection(merchantId, at) { const c = bankConnections.get(merchantId); if (c) { c.revokedAt = at; c.tokenCipher = null; } },
+    async insertBankTransaction(row) {
+      const dup = bankTx.find((t) => t.merchantId === row.merchantId && t.accountId === row.accountId && t.providerTxId === row.providerTxId);
+      if (dup) return { created: false, row: clone(dup) };
+      const t = { id: randomUUID(), ...clone(row) }; bankTx.push(t); return { created: true, row: clone(t) };
+    },
+    async getBankTransaction(id) { const t = bankTx.find((x) => x.id === id); return t ? clone(t) : null; },
+    async updateBankTransaction(id, patch, expectedStatus) {
+      const t = bankTx.find((x) => x.id === id); if (!t || t.status !== expectedStatus) return null;
+      for (const k of Object.keys(patch)) if (!['status', 'matchedKind', 'matchedDocumentId', 'matchedPaymentId', 'matchedAmountCents', 'matchedAt'].includes(k)) throw new FinanceError('BANK_TRANSACTION_IS_IMMUTABLE', k);
+      Object.assign(t, patch); return clone(t);
+    },
+    async listBankTransactions(f = {}) { return bankTx.filter((t) => (!f.merchantId || t.merchantId === f.merchantId) && (!f.status || t.status === f.status)).map(clone); },
+    async upsertBankBalance(row) { bankBalances.set(`${row.merchantId}|${row.accountId}`, clone(row)); },
+    async listBankBalances(merchantId) { return [...bankBalances.values()].filter((b) => b.merchantId === merchantId).map(clone); },
+    async insertCashCount(row) { const r = { id: randomUUID(), ...clone(row) }; cashCounts.push(r); return clone(r); },
+    async latestCashCount(merchantId) { const l = cashCounts.filter((c) => c.merchantId === merchantId).sort((a, b) => String(b.countedOn).localeCompare(String(a.countedOn)) || String(b.createdAt).localeCompare(String(a.createdAt)))[0]; return l ? clone(l) : null; },
+    async insertCashMovement(row) { const r = { id: randomUUID(), ...clone(row) }; cashMovements.push(r); return clone(r); },
+    async listCashMovements(merchantId) { return cashMovements.filter((m) => m.merchantId === merchantId).map(clone); },
+
     // ---- stock movement ledger: append-only; only the status fields may change, through allowed transitions ----
     async insertStockMovement(row) {
       const dup = stockMovements.find((m) => m.merchantId === row.merchantId && m.idempotencyKey === row.idempotencyKey);

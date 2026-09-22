@@ -9,6 +9,10 @@ import { createMemoryStore } from '../memory-store.js';
 import { createRetailAccess } from '../retail-access.js';
 import { DEFAULT_SETTINGS, validateSettings } from '../settings.js';
 import { createFinanceApp } from './app.js';
+import { createFinanceService } from '../service.js';
+import { configFromSettings } from '../settings.js';
+import { createInboxService, createMemoryAttachmentStore } from '../inbox.js';
+import { randomBytes } from 'node:crypto';
 
 const MERCHANT = 'demo-merchant';
 const DEMO_COMPANIES = [
@@ -37,7 +41,34 @@ function demoData() {
   const orders = [mk('ord-1001', 3, 'pos'), mk('ord-1002', 6, 'web'), mk('ord-1003', 9, 'pos'), mk('ord-1004', 14, 'web'), mk('ord-1005', 18, 'pos')];
   const line = (id, o, v, q, price, tax) => ({ id, order_id: o, variant_id: v, title_snapshot: v === 'var-demo-case-a' ? 'Demo case (personalised)' : 'Demo bottle', sku_snapshot: 'S', quantity: q, unit_price: price, discount_amount: 0, tax_amount: tax, tax_rate_bp: 2100 });
   const orderLines = [line('l1', 'ord-1001', 'var-demo-case-a', 1, 25, 4.34), line('l2', 'ord-1002', 'var-demo-bottle', 2, 30, 10.41), line('l3', 'ord-1003', 'var-demo-case-a', 2, 25, 8.68), line('l4', 'ord-1004', 'var-demo-bottle', 1, 30, 5.21), line('l5', 'ord-1005', 'var-demo-case-a', 1, 25, 4.34)];
-  return { products, variants, orders, orderLines, orderAttribution: [], refunds: [], refundLines: [], costs: [], snapshots: [{ variant_id: 'var-demo-case-a', location_id: 'loc-1', quantity: 12, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-case-a', location_id: 'loc-2', quantity: 3, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-case-b', location_id: 'loc-1', quantity: 2, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-bottle', location_id: 'loc-1', quantity: 0, synced_at: '2026-09-20T08:00:00Z' }], collections: [] };
+  return { locations: [{ id: 'loc-1', name: 'Demo shop', type: 'physical', source_id: 'demo://location/1' }], products, variants, orders, orderLines, orderAttribution: [], refunds: [], refundLines: [], costs: [], snapshots: [{ variant_id: 'var-demo-case-a', location_id: 'loc-1', quantity: 12, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-case-a', location_id: 'loc-2', quantity: 3, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-case-b', location_id: 'loc-1', quantity: 2, synced_at: '2026-09-20T08:00:00Z' }, { variant_id: 'var-demo-bottle', location_id: 'loc-1', quantity: 0, synced_at: '2026-09-20T08:00:00Z' }], collections: [] };
+}
+
+/** A few synthetic documents so every screen has something to show. Nothing real. */
+async function seedDemo({ store, attachmentStore, settings, cfg }) {
+  const merchant = { type: 'merchant', id: 'demo' };
+  const clock = { now: () => '2026-09-21T09:00:00.000Z', today: () => '2026-09-21' };
+  const svc = createFinanceService({ store, config: configFromSettings(settings, MERCHANT), clock });
+  const cust = (name, digits, city) => ({ kind: 'business', name, vatNumber: `BE${digits}`, address: { street: 'Rue des Tests 5', postalCode: '5000', city, countryCode: 'BE' } });
+  const line = (description, qty, price, over = {}) => ({ description, quantity: String(qty), unitPrice: price, vatRate: '21', ...over });
+  const mk = async (type, customer, lines, over = {}) => svc.create({ type, customer, lines, vat: { regime: 'domestic', confirmed: true }, revenueBasis: type === 'invoice' ? 'standalone_b2b' : undefined, ...over }, merchant);
+  const issue = async (d) => { await svc.submit(d.id, merchant); return svc.decide(d.id, 'APPROVE', merchant); };
+  const a = await issue(await mk('invoice', cust('Atelier Exemple SRL', '0000000196', 'Namur'), [line('Coques personnalisées', 12, '20.6612', { priceOrigin: 'GROSS_CATALOGUE', grossUnitPrice: '25.00', grossVatRate: '21', unitPrice: undefined, catalog: { source: 'retail_core', productId: 'prod-demo-case', variantId: 'var-demo-case-a', productTitle: 'Demo case (personalised)', variantTitle: 'Model A', sku: 'CASE-A' } }), line('Design', 3, '75.00')], { issueDate: '2026-08-12', dueDate: '2026-09-11' }));
+  await svc.recordPayment(a.id, { amountCents: 10000, paidOn: '2026-09-02', method: 'bank_transfer' }, merchant).catch(() => {});
+  await issue(await mk('invoice', cust('Boutique Exemple SA', '0000000097', 'Liège'), [line('Support de stand', 2, '140.00'), line('Livraison', 1, '18.00')], { issueDate: '2026-09-15', dueDate: '2026-10-15' }));
+  await mk('invoice', cust('Exemple Sans TVA ASBL', '0000000295', 'Mons'), [line('Affiches', 20, '3.50')], { issueDate: '2026-09-20' });
+  const q = await mk('quote', cust('Atelier Exemple SRL', '0000000196', 'Namur'), [line('Coffret cadeaux', 30, '48.00')], { issueDate: '2026-09-18' });
+  await svc.sendQuote(q.id, merchant);
+  // finance inbox / purchases
+  const inbox = createInboxService({ store, attachments: attachmentStore, merchantId: MERCHANT, now: clock.now });
+  const ubl = (id, net, vat) => Buffer.from(`<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>${id}</cbc:ID><cbc:IssueDate>2026-09-10</cbc:IssueDate><cbc:DueDate>2026-10-10</cbc:DueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AccountingSupplierParty><cac:Party><cac:PartyTaxScheme><cbc:CompanyID>BE0000000097</cbc:CompanyID></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>Fournisseur Exemple SRL</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">${vat}</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">${net}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">${(Number(net) + Number(vat)).toFixed(2)}</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal></Invoice>`);
+  const one = (await inbox.ingest({ fileName: 'facture-F-2026-0042.xml', data: ubl('F-2026-0042', '250.00', '52.50'), source: 'peppol' })).item;
+  await inbox.ingest({ fileName: 'scan-fournisseur.pdf', data: Buffer.from('%PDF-1.4\n% synthetic demo scan\n%%EOF\n') });
+  const two = (await inbox.ingest({ fileName: 'facture-F-2026-0043.xml', data: ubl('F-2026-0043', '80.00', '16.80'), source: 'email' })).item;
+  await inbox.validate(two.id, merchant); await inbox.markToPay(two.id, merchant);
+  const three = (await inbox.ingest({ fileName: 'facture-F-2026-0041.xml', data: ubl('F-2026-0041', '100.00', '21.00'), source: 'upload' })).item;
+  await inbox.validate(three.id, merchant); await inbox.markToPay(three.id, merchant); await inbox.pay(three.id, { paidOn: '2026-09-19', amountCents: 12100, reference: 'Virement demo' }, merchant);
+  void one;
 }
 
 export async function startDemo(port = PORT) {
@@ -48,9 +79,15 @@ export async function startDemo(port = PORT) {
   let settings = validateSettings({
     seller: { name: 'Demo Seller SRL', vatNumber: 'BE0000000097', enterpriseNumber: '0000.000.097', iban: 'BE68 5390 0754 7034', email: 'billing@demo-seller.example', address: { street: 'Rue de la Demo 1', postalCode: '5000', city: 'Namur', countryCode: 'BE' } },
     vat: { allowedRatesPercent: ['21', '12', '6', '0'] }, defaults: { language: 'fr', paymentTermsDays: 30, paymentTerms: 'Payable within 30 days by bank transfer' },
+    accountant: { name: 'Comptable Exemple', email: 'comptable@cabinet.example', preferredFormat: 'zip', software: 'Logiciel Exemple', packageName: 'DEMO' },
+    stock: { mode: 'live', locationId: null }, inbox: { financeAddress: 'finance@demo-seller.example', allowedSenders: ['invoices@fournisseur.example'] },
   }, DEFAULT_SETTINGS).settings;
+  const store = createMemoryStore();
+  const attachmentStore = createMemoryAttachmentStore();
+  const stockCalls = [];
   const app = createFinanceApp({
-    merchantId: MERCHANT, store: createMemoryStore(), token: DEMO_TOKEN, retail, retailConfig: cfg, timeZone: 'UTC',
+    merchantId: MERCHANT, store, attachmentStore, token: DEMO_TOKEN, cookieName: 'fin_demo_sid',
+    stockApplier: { async hasScope() { return true; }, async lookup(id) { return { inventoryItemId: `item-${id}`, tracked: true }; }, async adjust(a) { stockCalls.push(a); return { ok: true, adjustmentId: `demo://adjustment/${stockCalls.length}` }; } }, retail, retailConfig: cfg, timeZone: 'UTC',
     clock: { now: () => new Date().toISOString(), today: () => '2026-09-21' },
     retailHistory: async () => ({ completeFrom: '2026-05-11', storeCreatedOn: '2026-05-11', lastSyncedAt: '2026-10-05T00:00:00.000Z' }),
     settings: { load: async () => structuredClone(settings), save: async (s) => { settings = structuredClone(s); }, saveLogo: async () => null },
@@ -62,7 +99,18 @@ export async function startDemo(port = PORT) {
       async search({ query }) { const t = query.toLowerCase(); return { status: 'OK', companies: DEMO_COMPANIES.filter((c) => c.name.toLowerCase().includes(t)).map((c) => ({ name: c.name, enterpriseNumber: c.enterprise, digits: c.digits, status: 'Active', active: true, legalForm: null, personalData: false, address: c.address ?? { street: 'Rue Exemple 9', postalCode: '7000', city: 'Mons', countryCode: 'BE' } })) }; } }),
     companySearchProvider: () => ({ name: 'demo-name', label: 'Demo directory (synthetic)', async search({ query }) { const t = query.toLowerCase(); return { status: 'OK', results: DEMO_COMPANIES.filter((c) => c.name.toLowerCase().includes(t)).map((c) => ({ name: c.name, enterpriseNumber: c.digits, status: 'Registered on Peppol since 2025-06-02' })) }; } }),
   });
-  const server = http.createServer(app.handler);
+  await seedDemo({ store, attachmentStore, settings, cfg });
+  // DEMO ONLY (synthetic data, loopback): the demo signs the browser in itself so it can be looked at without typing the demo token.
+  const handler = (req, res) => {
+    // A stale cookie from a previous run of this demo (in-memory sessions are wiped on restart) must not be mistaken for "already signed in".
+    const existing = /fin_demo_sid=([0-9a-f]+)/.exec(req.headers.cookie ?? '')?.[1];
+    if (req.method === 'GET' && req.url === '/' && (!existing || !app.sessions.has(existing))) {
+      const sid = randomBytes(24).toString('hex'); app.sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + 8 * 3600_000 });
+      const orig = res.writeHead.bind(res); res.writeHead = (status, hdrs = {}) => orig(status, { ...hdrs, 'Set-Cookie': `fin_demo_sid=${sid}; HttpOnly; SameSite=Strict; Path=/` });
+    }
+    return app.handler(req, res);
+  };
+  const server = http.createServer(handler);
   await new Promise((r) => server.listen(port, '127.0.0.1', r));
   return { server, app, port };
 }
