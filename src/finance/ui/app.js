@@ -152,9 +152,11 @@ async function viewOverview() {
       acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', tt('{0} quote(s) awaiting response', o.counts.quotesAwaitingResponse), '#/quotes?status=ACCEPTED'),
       acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', tt('{0} {1} outstanding', o.amounts.outstanding, cur), '#/receivables')));
 
-    // money at a glance: outstanding, overdue, paid this month
+    // Money at a glance: outstanding, overdue, paid this month. Kept - "Paid this month" is not shown anywhere
+    // else on the dashboard - but given a quieter treatment (.kpirow.quiet) since Outstanding/Overdue duplicate
+    // figures the Action Center and the acard grid above already lead with; the Action Center stays the focal point.
     const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kbig' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
-    box.appendChild(h('div', { class: 'card kpirow' }, kpi('Outstanding', o.amounts.outstanding, tt('{0} unpaid invoice(s)', o.counts.unpaid)), kpi('Overdue', o.amounts.overdue, tt('{0} invoice(s)', o.counts.overdue), o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, tt('{0} payment(s)', o.amounts.paidThisMonthCount), 'ok')));
+    box.appendChild(h('div', { class: 'card kpirow quiet' }, kpi('Outstanding', o.amounts.outstanding, tt('{0} unpaid invoice(s)', o.counts.unpaid)), kpi('Overdue', o.amounts.overdue, tt('{0} invoice(s)', o.counts.overdue), o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, tt('{0} payment(s)', o.amounts.paidThisMonthCount), 'ok')));
 
     // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
     const KEYS = [['not_due', 'Not yet due', 's0'], ['0_7', '0-7 days', 's1'], ['8_30', '8-30 days', 's2'], ['31_60', '31-60 days', 's3'], ['60_plus', '60+ days', 's4']];
@@ -557,7 +559,7 @@ async function viewForm(kind, editId) {
   const stepHead = (n, title, isDone) => { const c = h('span', { class: 'stepn' }, String(n)); const el = h('div', { class: 'stephead' }, c, h('h2', null, title)); steps.push({ c, el, n, isDone }); return el; };
   const checkBox = h('div', { class: 'card checklist' });
   function renderChecklist() {
-    clear(checkBox); checkBox.appendChild(h('h3', null, 'Before you save'));
+    clear(checkBox); checkBox.appendChild(h('h3', { class: 'eyebrow' }, 'Before you save'));
     [['Customer identified', customerDone()], ['Lines with prices', linesDone()], ['VAT treatment confirmed', vatDone()], ...(isQuote ? [] : [['Revenue basis chosen', basisDone()]])]
       .forEach(([l, d]) => checkBox.appendChild(h('div', { class: `ck ${d ? 'done' : ''}` }, h('span', { class: 'ckdot' }, d ? svgIcon('check', 12) : null), l)));
   }
@@ -604,7 +606,7 @@ async function viewDoc(id) {
   // composed here with tt('{0} {1}', ...) rather than a template literal, because a literal fuses them into one
   // string ("Invoice INV-2026-0001") that can never exact-match a dictionary key - this was the root cause of
   // the document title staying in English regardless of the selected language.
-  const top = h('div', { class: 'topbar' }, h('div', null, h('h1', null, tt('{0} {1}', tr(TYPE[d.type]), d.number || tt('(draft)'))), h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: 'badge' }, d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
+  const top = h('div', { class: 'topbar' }, h('div', null, h('h1', null, tt('{0} {1}', tr(TYPE[d.type]), d.number || tt('(draft)'))), h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: `tag ${d.revenueBasis === 'linked_source_order' ? 'linked' : 'standalone'}` }, h('span', { class: 'dot-i' }), d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
     h('div', { class: 'actions' },
       has('edit') ? h('a', { class: 'btn', href: `#/doc/${id}/edit` }, 'Edit draft') : null,
       has('submit') ? h('button', { class: 'primary', on: { click: call('submit', {}, 'Submitted for approval') } }, 'Submit for approval') : null,
@@ -638,17 +640,49 @@ async function viewDoc(id) {
   if (!d.integrity.ok) box.appendChild(h('div', { class: 'banner bad' }, 'INTEGRITY WARNING: the stored fingerprint does not match this document. Do not use it and contact support.'));
   const s = d.doc.seller || {}; const c = d.doc.customer;
   const addr = (a) => [a.street, `${a.postalCode || ''} ${a.city || ''}`.trim(), a.countryCode].filter(Boolean).join(', ');
+  // Seller/Customer are reference/context information, not decision-critical figures - deliberately given less
+  // visual weight (via .meta-block) than the financial data below, per the card-hierarchy brief.
   box.appendChild(h('div', { class: 'grid two' },
-    h('div', { class: 'card' }, h('h2', null, 'Seller'), kv([['Name', s.name], ['Address', addr(s.address || {})], ['VAT', s.vatNumber], ['IBAN', s.iban]])),
-    h('div', { class: 'card' }, h('h2', null, 'Customer'), kv([['Name', c.name], ['Address', addr(c.address || {})], ['VAT / no.', c.vatNumber || c.enterpriseNumber], ['Email', c.email]]))));
+    h('div', { class: 'card' }, h('h3', { class: 'eyebrow' }, 'Seller'), h('div', { class: 'meta-block' }, kv([['Name', s.name], ['Address', addr(s.address || {})], ['VAT', s.vatNumber], ['IBAN', s.iban]]))),
+    h('div', { class: 'card' }, h('h3', { class: 'eyebrow' }, 'Customer'), h('div', { class: 'meta-block' }, kv([['Name', c.name], ['Address', addr(c.address || {})], ['VAT / no.', c.vatNumber || c.enterpriseNumber], ['Email', c.email]])))));
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Number', d.number || tt('(assigned on approval: {0})', d.nextNumber || tt('next'))], ['Issue date', d.issueDate], [isQ ? 'Valid until' : 'Due date', isQ ? d.validUntil : d.dueDate], ['Payment terms', d.doc.paymentTerms], ['VAT treatment', REGIME[d.doc.vat.regime]], ['Legal mention', d.doc.vat.mention], ['Language', d.doc.language], ['Notes', d.doc.notes],
     // Same fix as the document title above: TYPE[...] and the number must be translated/composed separately,
     // never fused into one template-literal string that can't exact-match a dictionary key.
     d.related ? ['Related', h('a', { href: `#/doc/${d.related.id}` }, tt('{0} {1}', tr(TYPE[d.related.type]), d.related.number || ''))] : null, d.convertedInvoice ? ['Converted to', h('a', { href: `#/doc/${d.convertedInvoice.id}` }, tt('Invoice {0}', d.convertedInvoice.number || tt('(draft)')))] : null,
     d.sourceOrder ? ['Shop/POS order', `#${d.sourceOrder.ref} - ${d.sourceOrder.date} - ${d.sourceOrder.channel} - ${d.sourceOrder.total} ${cur}`] : null])));
+  // Credit Note impact summary: every figure here is read straight off already-computed document data (the
+  // original invoice link, this document's own totals, its stockReturn decision) - nothing is inferred or
+  // estimated. There is no separate "refund" record anywhere in Finance (grepped: no REFUND concept exists in
+  // the codebase), so rather than fabricate a status we say plainly what the system does and does not track.
+  if (d.type === 'credit_note') {
+    const restockLabel = !d.hadStockMovements ? tt('Not applicable (original sale did not decrement stock)')
+      : d.doc.stockReturn == null ? tt('Decision pending')
+      : d.doc.stockReturn.restock ? (d.stockMovements.some((m) => m.kind === 'RETURN_RESTOCK' && m.status !== 'SKIPPED') ? tt('Restocked') : tt('Restock approved (processing)'))
+      : tt('Not restocked (merchant declined)');
+    box.appendChild(h('div', { class: 'impact-card', style: 'margin-top:16px' }, h('h3', null, tt('Impact of this credit note')),
+      h('div', { class: 'impact-grid' },
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Original invoice')), h('div', { class: 'v' }, d.related ? h('a', { href: `#/doc/${d.related.id}` }, d.related.number || tt('(draft)')) : tt('Not linked yet'))),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Credit note amount')), h('div', { class: 'v' }, `${d.totals.gross} ${cur}`)),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Effect on balance')), h('div', { class: 'v' }, d.related ? tt('{0} owed on {1}', `-${d.totals.gross} ${cur}`, d.related.number || tt('(draft)')) : tt('Pending'))),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('VAT impact')), h('div', { class: 'v' }, tt('{0} VAT reversed', `-${d.totals.vat} ${cur}`))),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Restock decision')), h('div', { class: 'v' }, restockLabel)),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Refund')), h('div', { class: 'v' }, tt('Not tracked separately - deducts from what the customer owes')))),
+      d.doc.creditReason ? h('div', { class: 'fin-secondary', style: 'margin-top:10px' }, tt('Reason: {0}', d.doc.creditReason)) : null,
+      !d.doc.lockedAt ? h('div', { class: 'fin-secondary', style: 'margin-top:6px' }, tt('Draft - this impact applies once the credit note is approved and issued.')) : null));
+  }
   const t = d.totals;
+  // Financial hierarchy: the figures a merchant actually needs (what's owed, what's left) read at a clear
+  // glance; the VAT breakdown that gets them there is real but secondary, and "amount due" is the one number
+  // that gets the strongest, color-coded treatment (bad=still owed, ok=settled) - never a wall of equal-weight rows.
+  const finRows = [
+    ...[['Subtotal excl. VAT', t.net], ...t.vatBreakdown.map((g) => [tt('VAT {0}% on {1}', g.vatRateBp / 100, g.taxable), g.vatAmount])].map(([k, v]) => h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, k), h('span', { class: 'fin-value fin-secondary' }, `${v} ${cur}`))),
+    h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Total incl. VAT'), h('span', { class: 'fin-value' }, `${t.gross} ${cur}`)),
+    !isQ && d.settlementView ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Paid'), h('span', { class: 'fin-value' }, `${d.settlementView.paid} ${cur}`)) : null,
+    !isQ && d.settlementView && d.settlement.creditedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Credited'), h('span', { class: 'fin-value' }, `${d.settlementView.credited} ${cur}`)) : null,
+    !isQ && d.settlementView ? h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Amount due'), h('span', { class: `fin-primary ${Number(d.settlementView.remaining) > 0 ? 'due' : 'settled'}`, style: 'font-size:20px' }, `${d.settlementView.remaining} ${cur}`)) : null,
+  ].filter(Boolean);
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),
-    h('div', { class: 'card' }, h('h2', null, 'Totals'), h('div', { class: 'kv', style: 'grid-template-columns:1fr auto' }, [['Subtotal excl. VAT', t.net], ...t.vatBreakdown.map((g) => [tt('VAT {0}% on {1}', g.vatRateBp / 100, g.taxable), g.vatAmount]), ['Total VAT', t.vat], ['Total incl. VAT', t.gross], !isQ && d.settlementView ? ['Paid', d.settlementView.paid] : null, !isQ && d.settlementView && d.settlement.creditedCents ? ['Credited', d.settlementView.credited] : null, !isQ && d.settlementView ? ['Amount due', d.settlementView.remaining] : null].filter(Boolean).map(([k, v]) => [h('div', null, k), h('div', { class: 'right' }, `${v} ${cur}`)])))));
+    h('div', { class: 'card emphasis' }, h('h2', null, 'Totals'), ...finRows)));
   if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference'].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''))))));
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
   const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));

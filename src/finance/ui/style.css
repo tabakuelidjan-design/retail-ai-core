@@ -330,3 +330,102 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
   .tgrid { grid-template-columns: repeat(2, 1fr); }
   .txrow { grid-template-columns: 1fr 1fr; } .txmain { grid-column: 1 / -1; } .txacts { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* ============================================================================================
+   Visual elevation pass (Creative Premium + Dynamic Premium) - 2026-09-22
+   No new fonts, no CSP change: the dashboard's own CSP is style-src 'self', so an external
+   Google Font would need weakening it for pure decoration - the type hierarchy below is built
+   entirely from weight, size, letter-spacing and tabular-nums on the existing system stack.
+   No business logic changed here; every selector below is additive or refines an existing rule.
+   ============================================================================================ */
+
+:root {
+  --shadow-sm: 0 1px 2px rgba(20,28,40,.04), 0 1px 1px rgba(20,28,40,.03);
+  --shadow-card: 0 1px 2px rgba(20,28,40,.04), 0 4px 14px -6px rgba(20,28,40,.10);
+  --accent-soft: #eef3f6; --ink-soft: #8a93a3;
+}
+
+/* Numbers are the product: every figure lines up in a column and reads at a glance. */
+.n, .num, td.num, .kbig, .txamt, .money, .stat .n { font-variant-numeric: tabular-nums; }
+
+/* ---- Typography scale: weight and size carry the hierarchy the brief asks for, not a new face ---- */
+h1 { font-size: 23px; font-weight: 650; letter-spacing: -.01em; }
+h2 { font-size: 15px; font-weight: 650; letter-spacing: -.005em; color: var(--ink); }
+/* Not uppercased/shrunk globally: h3 also renders real content (e.g. a filename in the workspace preview
+   pane), where an uppercase label treatment would look broken. The section-label look lives in .eyebrow
+   instead, used where that treatment is actually correct (e.g. "Before you save"). */
+h3 { font-weight: 650; }
+.eyebrow { font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 4px; }
+
+/* ---- Cards: one consistent rhythm, but not one flat visual weight everywhere ---- */
+.card { box-shadow: var(--shadow-sm); }
+.card.emphasis { border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); box-shadow: var(--shadow-card); }
+.card.quiet { background: var(--accent-soft); border-color: transparent; box-shadow: none; }
+.card + .card { margin-top: 0; }
+
+/* ---- Financial hierarchy: the numbers a merchant needs first must look like it ---- */
+.fin-primary { font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.fin-primary.due { color: var(--bad); } .fin-primary.settled { color: var(--ok); }
+.fin-secondary { font-size: 13.5px; color: var(--ink-soft); }
+.fin-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; }
+.fin-row.total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+.fin-row.total .fin-label { font-weight: 650; color: var(--ink); }
+.fin-row.total .fin-value { font-size: 19px; font-weight: 700; }
+.fin-row .fin-label { color: var(--ink-soft); font-size: 13.5px; }
+.fin-row .fin-value { font-weight: 600; }
+/* Metadata (dates, addresses, legal mentions) is real information but not what a merchant's eye should land on first. */
+.meta-block { font-size: 13px; color: var(--ink-soft); }
+.meta-block .kv div:nth-child(odd) { color: var(--ink-soft); font-size: 12.5px; }
+.meta-block .kv div:nth-child(even) { color: var(--ink); }
+
+/* ---- Action hierarchy: exactly one filled/primary action per screen; everything else recedes ---- */
+button.ghost, .btn.ghost { background: transparent; border-color: var(--line); color: var(--ink); }
+button.ghost:hover, .btn.ghost:hover { background: var(--accent-soft); }
+button.danger { background: transparent; } button.danger:hover { background: #fdeceb; }
+.actions .primary { order: -1; } /* the one thing to do next always reads first, regardless of markup order */
+
+/* ---- Document lifecycle stepper: the existing .stepper/.sdot implementation (above) already does the
+   progression well (checkmarks, connecting lines, a highlighted ring on the current step) - refined here,
+   not replaced, to avoid redeclaring properties that could shift its layout. ---- */
+.stepper li.done .sdot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 14%, transparent); }
+.sdot { transition: background-color .18s ease, box-shadow .18s ease; }
+
+/* ---- Badges: one coherent, slightly more considered palette; tag-style pills for informational states ---- */
+.badge { padding: 3px 10px; font-weight: 650; letter-spacing: .01em; }
+.tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 650; border: 1px solid var(--line); color: var(--ink-soft); background: #fff; }
+.tag.standalone { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+.tag.linked { color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, var(--line)); }
+.tag.peppol-on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+.tag.peppol-off { color: var(--ink-soft); }
+.tag .dot-i { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+
+/* ---- Dashboard: the Action Center is the heart of Finance, not one card among equals ---- */
+.hero h1 { margin-bottom: 2px; }
+.actioncenter { border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-card); padding: 4px; }
+.actioncenter h2 { padding: 12px 14px 4px; }
+.kpirow.quiet { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpirow.quiet .kpi { border: none; background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
+.kpirow.quiet .kpi .n { font-size: 19px; }
+
+/* ---- Credit Note impact summary ---- */
+.impact-card { border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line)); border-radius: 12px; padding: 14px 16px; background: linear-gradient(180deg, var(--accent-soft), #fff 65%); }
+.impact-card h3 { color: var(--accent); }
+.impact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 18px; margin-top: 8px; }
+.impact-item .l { font-size: 12px; color: var(--ink-soft); margin-bottom: 2px; }
+.impact-item .v { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* ---- Dynamic Premium: state changes settle in, never distract ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .card, .badge, .tag, .impact-card { transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease; }
+  .stat .n, .fin-primary, .fin-value { transition: color .2s ease; }
+}
+
+/* ---- Mobile/tablet: cards stack with the same rhythm, sticky totals stay reachable ---- */
+@media (max-width: 900px) {
+  .impact-grid { grid-template-columns: repeat(2, 1fr); }
+  .fin-primary { font-size: 22px; }
+  .actioncenter { border-radius: 12px; }
+}
+@media (max-width: 640px) {
+  .impact-grid { grid-template-columns: 1fr 1fr; }
+}
