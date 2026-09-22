@@ -98,7 +98,7 @@ function avatar(name, size) {
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
-const NAV = [['#/', 'Overview', 'home'], ['@', 'Selling'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['@', 'Buying'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['@', 'Accountant'], ['#/pack', 'Accountant pack', 'book'], ['@', ''], ['#/settings', 'Settings', 'gear']];
+const NAV = [['#/', 'Overview', 'home'], ['@', 'Selling'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['@', 'Buying'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['@', 'Accountant'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['@', ''], ['#/settings', 'Settings', 'gear']];
 function langSwitch() {
   return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
 }
@@ -782,6 +782,7 @@ async function route() {
     if (parts[0] === 'pack') return await viewPack();
     if (parts[0] === 'inbox') return await viewInbox();
     if (parts[0] === 'purchases') return await viewPurchases();
+    if (parts[0] === 'bank') return await viewBank();
     if (parts[0] === 'settings') return await viewSettings();
     location.hash = '#/';
   } catch (e) { if (!(e instanceof ApiError && e.status === 401)) fail(e); }
