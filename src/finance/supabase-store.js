@@ -75,7 +75,10 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       await guard(() => supabase.insert('fin_events', [{ merchant_id: e.merchantId ?? merchantId, document_id: e.documentId, at: e.at, actor: e.actor, action: e.action, from_status: e.fromStatus ?? null, to_status: e.toStatus ?? null, detail: e.detail ?? null }]));
     },
     async listEvents(documentId) {
-      const rows = await supabase.select('fin_events', { select: '*', document_id: eq(documentId), order: 'at.asc,id.asc' });
+      // merchant_id added as defense-in-depth (documentId is already a merchant-scoped handle in every
+      // current caller, but this means a future caller can never read another tenant's events even by
+      // passing the wrong id - see RLS proposal, query audit #3).
+      const rows = await supabase.select('fin_events', { select: '*', document_id: eq(documentId), merchant_id: eq(merchantId), order: 'at.asc,id.asc' });
       return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, at: r.at, actor: r.actor, action: r.action, fromStatus: r.from_status, toStatus: r.to_status, detail: r.detail }));
     },
 
@@ -84,7 +87,8 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       return { id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference };
     },
     async listPayments(documentId) {
-      const rows = await supabase.select('fin_payments', { select: '*', document_id: eq(documentId), order: 'paid_on.asc,created_at.asc' });
+      // merchant_id added as defense-in-depth, same rationale as listEvents above.
+      const rows = await supabase.select('fin_payments', { select: '*', document_id: eq(documentId), merchant_id: eq(merchantId), order: 'paid_on.asc,created_at.asc' });
       return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference }));
     },
     async listPaymentsForMerchant() {

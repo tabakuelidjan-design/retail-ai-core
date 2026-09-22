@@ -56,7 +56,10 @@ async function validateAgainstShopify(shopify, supabase, merchantId, since) {
   }
   const live = nodes.filter((n) => !n.test);
   const stored = await supabase.selectAll('orders', { select: 'id,source_id,is_test,channel_handle', merchant_id: `eq.${merchantId}` });
-  const attribution = await supabase.selectAll('order_attribution', { select: 'order_id,touch,source,utm_source', touch: 'eq.last_visit' });
+  // Fixed 2026-09-22: previously fetched EVERY merchant's order_attribution rows (no merchant_id filter at
+  // all) and relied only on the join below to land on the right ones - safe only by accident (order_id is a
+  // globally unique UUID). Was a CRITICAL tenant-isolation finding from the RLS/merchant-isolation review.
+  const attribution = await supabase.selectAll('order_attribution', { select: 'order_id,touch,source,utm_source', touch: 'eq.last_visit', merchant_id: `eq.${merchantId}` });
   const byOrder = new Map(stored.map((o) => [o.source_id, o]));
   const attrByOrderId = new Map(attribution.map((a) => [a.order_id, a]));
   let channelMismatch = 0;

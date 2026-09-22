@@ -100,7 +100,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
         const variantId = lineItemNode.variant ? (variantIdBySourceId.get(lineItemNode.variant.id) ?? null) : null;
         if (!variantId) summary.orderLinesWithoutVariant += 1;
 
-        const lineRow = normalizeOrderLine(lineItemNode, order.id, variantId);
+        const lineRow = normalizeOrderLine(lineItemNode, order.id, variantId, opts.merchantId);
         const [orderLine] = await supabase.upsert('order_lines', [lineRow], {
           onConflict: 'order_id,source_system,source_id',
         });
@@ -110,7 +110,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
 
       for (const refundNode of orderNode.refunds) {
         summary.refundsFetched += 1;
-        const refundRow = normalizeRefund(refundNode, order.id);
+        const refundRow = normalizeRefund(refundNode, order.id, opts.merchantId);
         const [refund] = await supabase.upsert('refunds', [refundRow], {
           onConflict: 'order_id,source_system,source_id',
         });
@@ -126,7 +126,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
             );
             continue;
           }
-          const refundLineRow = normalizeRefundLine(refundLineNode, refund.id, orderLineId, orderNode.currencyCode);
+          const refundLineRow = normalizeRefundLine(refundLineNode, refund.id, orderLineId, orderNode.currencyCode, opts.merchantId);
           await supabase.upsert('refund_lines', [refundLineRow], {
             onConflict: 'refund_id,order_line_id',
           });

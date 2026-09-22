@@ -28,7 +28,9 @@ export async function syncQualityFlags({ supabase }, { merchantId, detected, now
       summary.alreadyOpen += 1;
       // Same condition, refreshed evidence or severity: update in place, never duplicate.
       if (row.severity !== f.severity || stable(row.details) !== stable(f.details)) {
-        await supabase.update('data_quality_flags', { id: `eq.${row.id}` }, { severity: f.severity, details: f.details });
+        // merchant_id added as defense-in-depth (id alone is already a safe UUID PK match, but this ensures
+        // an update can never touch another tenant's row even in theory - see RLS proposal, query audit #4).
+        await supabase.update('data_quality_flags', { id: `eq.${row.id}`, merchant_id: `eq.${merchantId}` }, { severity: f.severity, details: f.details });
         summary.updated += 1;
       }
     }
@@ -45,7 +47,7 @@ export async function syncQualityFlags({ supabase }, { merchantId, detected, now
 
   for (const row of blocking.values()) {
     if (row.status !== 'open' || !evaluatedRules.includes(row.rule_code) || detectedKeys.has(keyOf(row))) continue;
-    await supabase.update('data_quality_flags', { id: `eq.${row.id}` }, { status: 'resolved', resolved_at: now.toISOString() });
+    await supabase.update('data_quality_flags', { id: `eq.${row.id}`, merchant_id: `eq.${merchantId}` }, { status: 'resolved', resolved_at: now.toISOString() });
     summary.resolved += 1;
   }
 

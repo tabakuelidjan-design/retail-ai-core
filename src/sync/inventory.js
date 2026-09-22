@@ -61,6 +61,9 @@ export async function syncInventory({ shopify, supabase }, opts) {
 
         const [latest] = await supabase.select('inventory_snapshots', {
           select: 'synced_at',
+          // merchant_id added as defense-in-depth (variantId/locationId are already this merchant's own
+          // resolved local ids, so this was safe by construction even before the column existed).
+          merchant_id: `eq.${opts.merchantId}`,
           variant_id: `eq.${variantId}`,
           location_id: `eq.${locationId}`,
           order: 'synced_at.desc',
@@ -73,7 +76,7 @@ export async function syncInventory({ shopify, supabase }, opts) {
         }
 
         await supabase.insert('inventory_snapshots', [
-          normalizeInventorySnapshot(variantId, locationId, quantity, now),
+          normalizeInventorySnapshot(variantId, locationId, quantity, now, opts.merchantId),
         ]);
         summary.snapshotsWritten += 1;
       }
