@@ -276,7 +276,7 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 .arow:hover { transform: translateX(3px); box-shadow: var(--shadow-sm); border-color: #b8c4dd; }
 .aico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #eef1f6; color: #51607a; flex: 0 0 auto; }
 .arow.bad .aico { background: var(--bad-soft); color: #a4241c; } .arow.warn .aico { background: var(--warn-soft); color: #8a4b00; } .arow.info .aico { background: var(--info-soft); color: var(--info); } .arow.ok .aico { background: var(--ok-soft); color: var(--ok); }
-.arow.bad { border-left: 3px solid #d64a3f; } .arow.warn { border-left: 3px solid #e0a03a; } .arow.info { border-left: 3px solid #6d93e0; } .arow.ok { border-left: 3px solid #4bb37b; }
+.arow.bad { border-color: #f0c6c1; } .arow.warn { border-color: #f0dcae; } .arow.info { border-color: #c7d6f2; } .arow.ok { border-color: #c3e6d3; }
 .atext { flex: 1; font-weight: 550; min-width: 0; } .acta { display: inline-flex; align-items: center; gap: 4px; color: var(--info); font-size: 13px; font-weight: 600; white-space: nowrap; }
 
 .sources { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; } .source { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 13px; } .source.on { border-color: #b6dfc8; background: #f2faf5; }
