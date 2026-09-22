@@ -245,3 +245,105 @@ test('Wizard: buildSetupReport for merchant A only reports merchant A\'s facts (
   assert.equal(reportA.checks.find((c) => c.id === 'missing_cost').count, 0, 'must not see B\'s missing cost');
   assert.equal(reportA.checks.find((c) => c.id === 'missing_sku').count, 0, 'must not see B\'s missing SKU');
 });
+
+// ---------- Finance: stock movements, supplier invoices, bank & treasury, cash (migrations 20260922180000/200000/220000) ----------
+
+test('Stock movements: merchant A never lists, reads or updates merchant B\'s movements', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const docA = randomUUID();
+  const docB = randomUUID();
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  const storeB = createSupabaseFinanceStore(supabase, { merchantId: merchantB });
+  const base = (merchantId, documentId, key) => ({
+    merchantId, documentId, documentNumber: 'INV-1', documentType: 'invoice', linePosition: 1, kind: 'SALE_DECREMENT',
+    variantId: randomUUID(), variantSourceId: 'gid://v1', sku: 'SKU-1', locationId: randomUUID(), locationSourceId: 'gid://l1',
+    quantity: 1, delta: -1, status: 'PENDING', error: null, idempotencyKey: key, shopifyAdjustmentId: null, createdAt: new Date().toISOString(), appliedAt: null,
+  });
+  const { row: mA } = await storeA.insertStockMovement(base(merchantA, docA, 'a-key-1'));
+  const { row: mB } = await storeB.insertStockMovement(base(merchantB, docB, 'b-key-1'));
+
+  assert.deepEqual((await storeA.listStockMovements()).map((m) => m.id), [mA.id], 'A must only ever list its own movements');
+  assert.equal(await storeA.getStockMovement(mB.id), null, 'A must not be able to read B\'s movement by its exact id');
+  const updated = await storeA.updateStockMovement(mB.id, { status: 'APPLYING' }, 'PENDING');
+  assert.equal(updated, null, 'A\'s update must not match B\'s row even with the correct expectedStatus');
+  const stillB = await storeB.getStockMovement(mB.id);
+  assert.equal(stillB.status, 'PENDING', 'B\'s movement must be unchanged after A\'s attempted update');
+});
+
+test('Stock movements: idempotency key is scoped per merchant, not global', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  const storeB = createSupabaseFinanceStore(supabase, { merchantId: merchantB });
+  const row = (merchantId) => ({ merchantId, documentId: randomUUID(), documentNumber: null, documentType: 'invoice', linePosition: 1, kind: 'SALE_DECREMENT', variantId: randomUUID(), variantSourceId: null, sku: null, locationId: null, locationSourceId: null, quantity: 1, delta: -1, status: 'PENDING', error: null, idempotencyKey: 'same-key-both-merchants', shopifyAdjustmentId: null, createdAt: new Date().toISOString(), appliedAt: null });
+  const a = await storeA.insertStockMovement(row(merchantA));
+  const b = await storeB.insertStockMovement(row(merchantB));
+  assert.equal(a.created, true);
+  assert.equal(b.created, true, 'the same idempotency key must be allowed for a different merchant - it is not a global key');
+  assert.notEqual(a.row.id, b.row.id);
+});
+
+test('Supplier invoices: merchant A cannot read, update or find-by-sha merchant B\'s invoice', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const bId = randomUUID();
+  await supabase.insert('fin_supplier_invoices', [{ id: bId, merchant_id: merchantB, supplier_name: 'B Supplier', invoice_number: 'F-1', status: 'TO_REVIEW', sha256: 'shared-hash', payment_status: 'unpaid', source: 'manual', currency: 'EUR' }]);
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  assert.equal(await storeA.getSupplierInvoice(bId), null);
+  assert.equal(await storeA.findSupplierInvoiceBySha(merchantA, 'shared-hash'), null, 'a matching SHA for a DIFFERENT merchant must not count as a duplicate for A');
+  const updated = await storeA.updateSupplierInvoice(bId, { status: 'VALIDATED' }, 'TO_REVIEW');
+  assert.equal(updated, null);
+  const stillB = await supabase.select('fin_supplier_invoices', { select: '*', id: `eq.${bId}` });
+  assert.equal(stillB[0].status, 'TO_REVIEW');
+});
+
+test('Bank connection: merchant A never sees or revokes merchant B\'s connection (merchant_id is the primary key, not a guessable id)', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  const storeB = createSupabaseFinanceStore(supabase, { merchantId: merchantB });
+  await storeB.saveBankConnection({ provider: 'ponto', tokenCipher: 'enc(b)', tokenFingerprint: 'fpB', scopes: ['accounts:read'], accountIds: [], grantedAt: new Date().toISOString(), expiresAt: null });
+  assert.equal(await storeA.getBankConnection(), null);
+  await storeA.revokeBankConnection(merchantA, new Date().toISOString());
+  const bConn = await storeB.getBankConnection();
+  assert.equal(bConn.revokedAt, null, 'A revoking its own (nonexistent) connection must never touch B\'s');
+});
+
+test('Bank transactions: merchant A cannot read or update merchant B\'s transaction by its exact id', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const bId = randomUUID();
+  await supabase.insert('fin_bank_transactions', [{ id: bId, merchant_id: merchantB, account_id: 'acc-1', provider_tx_id: 'tx-1', date: '2026-09-22', amount_cents: 1000, currency: 'EUR', source: 'bank', status: 'NEW' }]);
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  assert.equal(await storeA.getBankTransaction(bId), null);
+  const updated = await storeA.updateBankTransaction(bId, { status: 'IGNORED' }, 'NEW');
+  assert.equal(updated, null);
+  const stillB = await supabase.select('fin_bank_transactions', { select: '*', id: `eq.${bId}` });
+  assert.equal(stillB[0].status, 'NEW', 'B\'s transaction must be unchanged after A\'s attempted update');
+});
+
+test('Bank balances, cash counts and cash movements: merchant A\'s lists never include merchant B\'s rows', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
+  const storeB = createSupabaseFinanceStore(supabase, { merchantId: merchantB });
+  await storeA.upsertBankBalance({ accountId: 'acc-a', iban: 'BE00A', balanceCents: 100, currency: 'EUR', asOf: new Date().toISOString() });
+  await storeB.upsertBankBalance({ accountId: 'acc-b', iban: 'BE00B', balanceCents: 200, currency: 'EUR', asOf: new Date().toISOString() });
+  assert.deepEqual((await storeA.listBankBalances()).map((b) => b.accountId), ['acc-a']);
+
+  await storeA.insertCashCount({ amountCents: 500, countedOn: '2026-09-22', note: 'A' });
+  await storeB.insertCashCount({ amountCents: 999, countedOn: '2026-09-22', note: 'B' });
+  const latestA = await storeA.latestCashCount();
+  assert.equal(latestA.note, 'A', 'A\'s latest cash count must never resolve to B\'s row');
+
+  await storeA.insertCashMovement({ kind: 'CASH_IN', amountCents: 10, date: '2026-09-22', note: 'A' });
+  await storeB.insertCashMovement({ kind: 'CASH_IN', amountCents: 20, date: '2026-09-22', note: 'B' });
+  assert.deepEqual((await storeA.listCashMovements()).map((m) => m.note), ['A']);
+});

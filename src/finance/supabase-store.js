@@ -168,12 +168,42 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
     },
     async listBankTransactions(f = {}) { const p = { select: '*', merchant_id: eq(merchantId) }; if (f.status) p.status = eq(f.status); return (await supabase.selectAll('fin_bank_transactions', p)).map(bankTxFromRow); },
     async upsertBankBalance(b) { await supabase.upsert('fin_bank_balances', [{ merchant_id: merchantId, account_id: b.accountId, iban: b.iban, balance_cents: b.balanceCents, currency: b.currency, as_of: b.asOf }], { onConflict: 'merchant_id,account_id' }); },
-    async listBankBalances() { return (await supabase.selectAll('fin_bank_balances', { select: '*', merchant_id: eq(merchantId) })).map((r) => ({ merchantId, accountId: r.account_id, iban: r.iban, balanceCents: Number(r.balance_cents), currency: r.currency, asOf: r.as_of })); },
+    // fin_bank_balances has no `id` column (its primary key is the composite merchant_id/account_id, by design -
+    // one current balance row per account), so selectAll's default `order: 'id.asc'` pagination sort must be
+    // overridden here or every call 400s with "column fin_bank_balances.id does not exist".
+    async listBankBalances() { return (await supabase.selectAll('fin_bank_balances', { select: '*', merchant_id: eq(merchantId), order: 'account_id.asc' })).map((r) => ({ merchantId, accountId: r.account_id, iban: r.iban, balanceCents: Number(r.balance_cents), currency: r.currency, asOf: r.as_of })); },
     async insertCashCount(c) { const [r] = await guard(() => supabase.insert('fin_cash_counts', [{ merchant_id: merchantId, amount_cents: c.amountCents, counted_on: c.countedOn, note: c.note }])); return { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at }; },
     async latestCashCount() { const [r] = await supabase.select('fin_cash_counts', { select: '*', merchant_id: eq(merchantId), order: 'counted_on.desc,created_at.desc', limit: '1' }); return r ? { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at } : null; },
     async insertCashMovement(m) { const [r] = await guard(() => supabase.insert('fin_cash_movements', [{ merchant_id: merchantId, kind: m.kind, amount_cents: m.amountCents, date: m.date, note: m.note }])); return { id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at }; },
     async listCashMovements() { return (await supabase.selectAll('fin_cash_movements', { select: '*', merchant_id: eq(merchantId) })).map((r) => ({ id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at })); },
     async listSupplierInvoices() { return (await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow); },
+
+    // ---- Stock movement ledger (append-only; see stock.js) ----
+    // stockToRow/stockFromRow already existed below, unused - the store side of this feature was never wired up
+    // even though memory-store.js (used by tests) already implements it, and the migration/DB trigger enforcing
+    // append-only + allowed-transitions-only was already live. Found while verifying the new tables end to end.
+    async insertStockMovement(row) {
+      try {
+        const [r] = await guard(() => supabase.insert('fin_stock_movements', [stockToRow(row)]));
+        return { created: true, row: stockFromRow(r) };
+      } catch (e) {
+        if (!/23505|duplicate key|unique/i.test(String(e.message))) throw translateDbError(e);
+        const [ex] = await supabase.select('fin_stock_movements', { select: '*', merchant_id: eq(merchantId), idempotency_key: eq(row.idempotencyKey) });
+        return { created: false, row: stockFromRow(ex) };
+      }
+    },
+    async getStockMovement(id) { const [r] = await supabase.select('fin_stock_movements', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? stockFromRow(r) : null; },
+    async updateStockMovement(id, patch, expectedStatus) {
+      const body = {}; for (const [k, v] of Object.entries(patch)) body[{ status: 'status', error: 'error', shopifyAdjustmentId: 'shopify_adjustment_id', appliedAt: 'applied_at', locationId: 'location_id', locationSourceId: 'location_source_id' }[k]] = v;
+      const r = await guard(() => supabase.update('fin_stock_movements', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
+      return r && r.length ? stockFromRow(r[0]) : null;
+    },
+    async listStockMovements(f = {}) {
+      const p = { select: '*', merchant_id: eq(merchantId), order: 'created_at.asc' };
+      if (f.documentId) p.document_id = eq(f.documentId);
+      if (f.status) p.status = eq(f.status);
+      return (await supabase.selectAll('fin_stock_movements', p)).map(stockFromRow);
+    },
   };
 }
 
