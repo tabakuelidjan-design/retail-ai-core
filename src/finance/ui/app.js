@@ -15,7 +15,9 @@ function h(tag, attrs, ...kids) {
     else if (k === 'on') for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
     else if (k === 'style') { for (const decl of String(v).split(';')) { const i = decl.indexOf(':'); if (i > 0) el.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim()); } } // CSSOM, not an inline style attribute: allowed by the strict CSP
     else if (k === 'value' || k === 'checked' || k === 'disabled' || k === 'selected') el[k] = v;
-    else el.setAttribute(k, v === true ? '' : (k === 'placeholder' || k === 'title' || k === 'aria-label' || k === 'alt' ? tr(String(v)) : String(v)));
+    // data-label drives a CSS ::before (attr(data-label), see .lc[data-label] / .lrow .lc[data-label] in style.css) -
+    // translated here for the same reason placeholder/title/aria-label/alt are: it's merchant-visible text, not markup.
+    else el.setAttribute(k, v === true ? '' : (k === 'placeholder' || k === 'title' || k === 'aria-label' || k === 'alt' || k === 'data-label' ? tr(String(v)) : String(v)));
   }
   const add = (c) => { if (c === null || c === undefined || c === false) return; if (Array.isArray(c)) c.forEach(add); else el.appendChild(c instanceof Node ? c : document.createTextNode(typeof c === 'string' ? tr(c) : String(c))); };
   kids.forEach(add);
@@ -213,7 +215,9 @@ async function viewList(kind, query) {
     }
     shown.forEach((r) => box.appendChild(h('a', { class: 'docrow', href: `#/doc/${r.id}` },
       avatar(r.customer),
-      h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.customer || '-'), h('span', { class: 'ds' }, [r.number || 'not numbered yet', TYPE[r.type], r.issueDate].filter(Boolean).join('  ·  '))),
+      // Each piece translated individually before joining - joining first then translating the combined string
+      // (as this used to do) produces one string that can never exact-match a dictionary key.
+      h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.customer || '-'), h('span', { class: 'ds' }, [tr(r.number || 'not numbered yet'), tr(TYPE[r.type]), r.issueDate].filter(Boolean).join('  ·  '))),
       h('span', { class: 'damt' }, h('strong', null, money2(r)), !isQuote && r.type === 'invoice' && r.remaining ? h('span', { class: 'ds' }, tt('{0} still due', r.remaining)) : null),
       h('span', { class: 'dstat' }, badge(r.effectiveStatus), isQuote ? (r.validUntil ? h('span', { class: 'chip mute' }, tt('Valid until {0}', r.validUntil)) : null) : (r.type === 'invoice' ? dueChip(r.dueDate, r.remainingCents) : null)),
       h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
@@ -596,7 +600,11 @@ async function viewDoc(id) {
   const has = (a) => d.actions.includes(a);
   const call = (path, body, msg) => async () => { try { await api('POST', `/api/documents/${id}/${path}`, body || {}); toast(msg, 'ok'); reload(); } catch (e) { fail(e); if (e.fields || e.code.startsWith('NOT_READY')) reload(); } };
   const isQ = d.type === 'quote';
-  const top = h('div', { class: 'topbar' }, h('div', null, h('h1', null, `${TYPE[d.type]} ${d.number || '(draft)'}`), h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: 'badge' }, d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
+  // TYPE[d.type] and the '(draft)' fallback are each individually translated (both have dictionary entries);
+  // composed here with tt('{0} {1}', ...) rather than a template literal, because a literal fuses them into one
+  // string ("Invoice INV-2026-0001") that can never exact-match a dictionary key - this was the root cause of
+  // the document title staying in English regardless of the selected language.
+  const top = h('div', { class: 'topbar' }, h('div', null, h('h1', null, tt('{0} {1}', tr(TYPE[d.type]), d.number || tt('(draft)'))), h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: 'badge' }, d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
     h('div', { class: 'actions' },
       has('edit') ? h('a', { class: 'btn', href: `#/doc/${id}/edit` }, 'Edit draft') : null,
       has('submit') ? h('button', { class: 'primary', on: { click: call('submit', {}, 'Submitted for approval') } }, 'Submit for approval') : null,
@@ -617,9 +625,12 @@ async function viewDoc(id) {
   if (d.type !== 'credit_note') box.appendChild(h('ol', { class: 'stepper' }, FLOW.map(([v, l], i) => h('li', { class: i < curIdx || (i === curIdx && v === 'PAID') ? 'done' : i === curIdx ? 'current' : '' }, h('span', { class: 'sdot' }, i < curIdx || (i === curIdx && v === 'PAID') ? svgIcon('check', 12) : String(i + 1)), h('span', null, l)))));
   if (d.status === 'READY_FOR_APPROVAL') {
     box.appendChild(h('div', { class: 'banner info' }, h('strong', null, 'Review before you approve. '), tt('Approving issues the document, assigns its number ({0}) and freezes it. Afterwards it can only be corrected with a credit note. Nothing is sent to your customer.', d.nextNumber || tt('next in sequence')), h('div', { class: 'actions', style: 'margin-top:10px' },
-      h('button', { class: 'ok', on: { click: () => confirmModal('Approve and issue', tt('Issue this {0} now? It will receive the next number and cannot be edited afterwards.', tr(TYPE[d.type]).toLowerCase()), 'APPROVE', call('approve', {}, 'Issued')) } }, 'APPROVE'),
-      h('button', { on: { click: call('modify', {}, 'Returned to draft') } }, 'MODIFY'),
-      h('button', { class: 'danger', on: { click: () => confirmModal('Reject', 'The draft will be cancelled. No number is used.', 'REJECT', call('reject', {}, 'Rejected')) } }, 'REJECT'))));
+      // Sentence-case, matching every other button's style (was ALL-CAPS English before - a mixed-language screen
+      // and a style inconsistency: the all-caps form also silently defeated the missing-translation detector,
+      // whose heuristic deliberately ignores ALL-CAPS strings like status codes and currency codes).
+      h('button', { class: 'ok', on: { click: () => confirmModal('Approve and issue', tt('Issue this {0} now? It will receive the next number and cannot be edited afterwards.', tr(TYPE[d.type]).toLowerCase()), 'Approve', call('approve', {}, 'Issued')) } }, 'Approve'),
+      h('button', { on: { click: call('modify', {}, 'Returned to draft') } }, 'Modify'),
+      h('button', { class: 'danger', on: { click: () => confirmModal('Reject', 'The draft will be cancelled. No number is used.', 'Reject', call('reject', {}, 'Rejected')) } }, 'Reject'))));
   }
   if (d.readiness && !d.readiness.ready) box.appendChild(h('div', { class: 'banner bad' }, h('strong', null, 'Not ready to issue: '), h('ul', { class: 'plain' }, d.readiness.errors.map((x) => h('li', null, human(x))))));
   if (d.readiness && d.readiness.warnings.length) box.appendChild(h('div', { class: 'banner warn' }, h('ul', { class: 'plain' }, d.readiness.warnings.map((x) => h('li', null, human(x))))));
@@ -631,7 +642,9 @@ async function viewDoc(id) {
     h('div', { class: 'card' }, h('h2', null, 'Seller'), kv([['Name', s.name], ['Address', addr(s.address || {})], ['VAT', s.vatNumber], ['IBAN', s.iban]])),
     h('div', { class: 'card' }, h('h2', null, 'Customer'), kv([['Name', c.name], ['Address', addr(c.address || {})], ['VAT / no.', c.vatNumber || c.enterpriseNumber], ['Email', c.email]]))));
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Number', d.number || tt('(assigned on approval: {0})', d.nextNumber || tt('next'))], ['Issue date', d.issueDate], [isQ ? 'Valid until' : 'Due date', isQ ? d.validUntil : d.dueDate], ['Payment terms', d.doc.paymentTerms], ['VAT treatment', REGIME[d.doc.vat.regime]], ['Legal mention', d.doc.vat.mention], ['Language', d.doc.language], ['Notes', d.doc.notes],
-    d.related ? ['Related', h('a', { href: `#/doc/${d.related.id}` }, `${TYPE[d.related.type]} ${d.related.number || ''}`)] : null, d.convertedInvoice ? ['Converted to', h('a', { href: `#/doc/${d.convertedInvoice.id}` }, tt('Invoice {0}', d.convertedInvoice.number || tt('(draft)')))] : null,
+    // Same fix as the document title above: TYPE[...] and the number must be translated/composed separately,
+    // never fused into one template-literal string that can't exact-match a dictionary key.
+    d.related ? ['Related', h('a', { href: `#/doc/${d.related.id}` }, tt('{0} {1}', tr(TYPE[d.related.type]), d.related.number || ''))] : null, d.convertedInvoice ? ['Converted to', h('a', { href: `#/doc/${d.convertedInvoice.id}` }, tt('Invoice {0}', d.convertedInvoice.number || tt('(draft)')))] : null,
     d.sourceOrder ? ['Shop/POS order', `#${d.sourceOrder.ref} - ${d.sourceOrder.date} - ${d.sourceOrder.channel} - ${d.sourceOrder.total} ${cur}`] : null])));
   const t = d.totals;
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),

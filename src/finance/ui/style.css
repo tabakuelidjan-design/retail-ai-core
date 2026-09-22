@@ -238,7 +238,10 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; } .side .brand { padding: 0; flex: 1; } .side-cta { margin: 0; padding: 8px 12px; } .side-cta span { display: none; } .side .foot { display: none; }
-  .navlist { flex-direction: row; overflow-x: auto; width: 100%; gap: 4px; padding-bottom: 2px; } .navitem { white-space: nowrap; padding: 8px 12px !important; }
+  /* All 10 sections are reachable here (a horizontal scroll strip, not a shorter menu) - the mask fades the
+     trailing edge so that's obvious at a glance, instead of relying on an accidental cut-off label as the only hint. */
+  .navlist { flex-direction: row; overflow-x: auto; width: 100%; gap: 4px; padding-bottom: 2px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+  .navitem { white-space: nowrap; padding: 8px 12px !important; }
   .main { padding: 18px 14px 96px; } .hero h1 { font-size: 24px; } .kpirow { grid-template-columns: 1fr; } .kpi { border-right: 0; border-bottom: 1px solid var(--line); } .kpi:last-child { border-bottom: 0; }
   .docrow { flex-wrap: wrap; } .damt, .dstat { align-items: flex-start; min-width: 0; } .dmain { flex-basis: calc(100% - 60px); } .dgo { display: none; }
   .stepper li span:not(.sdot) { display: none; } .stepper li.current span:not(.sdot) { display: inline; }

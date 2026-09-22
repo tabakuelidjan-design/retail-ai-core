@@ -78,7 +78,7 @@ export async function startDemo(port = PORT) {
   const retail = createRetailAccess({ loadRetail: async () => ({ data, ledger }), listOrderRefs: async () => new Map(data.orders.map((o, i) => [o.id, String(1001 + i)])) });
   let settings = validateSettings({
     seller: { name: 'Demo Seller SRL', vatNumber: 'BE0000000097', enterpriseNumber: '0000.000.097', iban: 'BE68 5390 0754 7034', email: 'billing@demo-seller.example', address: { street: 'Rue de la Demo 1', postalCode: '5000', city: 'Namur', countryCode: 'BE' } },
-    vat: { allowedRatesPercent: ['21', '12', '6', '0'] }, defaults: { language: 'fr', paymentTermsDays: 30, paymentTerms: 'Payable within 30 days by bank transfer' },
+    vat: { allowedRatesPercent: ['21', '12', '6', '0'] }, defaults: { language: 'fr', paymentTermsDays: 30, paymentTerms: 'Payable sous 30 jours par virement bancaire' },
     accountant: { name: 'Comptable Exemple', email: 'comptable@cabinet.example', preferredFormat: 'zip', software: 'Logiciel Exemple', packageName: 'DEMO' },
     stock: { mode: 'live', locationId: null }, inbox: { financeAddress: 'finance@demo-seller.example', allowedSenders: ['invoices@fournisseur.example'] },
   }, DEFAULT_SETTINGS).settings;
