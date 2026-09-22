@@ -206,6 +206,9 @@ export function createFinanceApp(deps) {
     const cur = settings.defaults.currency;
     const lang = settings.defaults.language;
     const m = (c) => money(c, lang);
+    // Real last-7-days payment totals for the dashboard trend strip - reuses `payments`, already loaded above.
+    // Never estimated: a day with no recorded payment is 0, not interpolated.
+    const last7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${today}T00:00:00Z`) - (6 - i) * 86_400_000).toISOString().slice(0, 10); return { date: d, cents: payments.filter((p) => p.paidOn === d).reduce((a, p) => a + p.amountCents, 0) }; });
     return {
       asOf: today, currency: cur,
       counts: {
@@ -217,6 +220,7 @@ export function createFinanceApp(deps) {
         partiallyPaid: docs.filter(({ doc }) => doc.status === 'PARTIALLY_PAID').length,
       },
       amounts: { outstanding: m(rec.unpaid.outstandingCents), outstandingCents: rec.unpaid.outstandingCents, overdue: m(rec.overdue.outstandingCents), overdueCents: rec.overdue.outstandingCents, dueSoon: m(rec.due_soon.outstandingCents), paidThisMonth: m(paidMonth.reduce((a, p) => a + p.amountCents, 0)), paidThisMonthCents: paidMonth.reduce((a, p) => a + p.amountCents, 0), paidThisMonthCount: paidMonth.length, month },
+      trend7d: last7.map((d) => ({ date: d.date, cents: d.cents, amount: m(d.cents) })),
       aging: Object.fromEntries(Object.entries(rec.aging).map(([k, v]) => [k, { count: v.count, amount: m(v.outstandingCents), cents: v.outstandingCents }])),
       attention: {
         overdue: rec.invoices.filter((i) => i.overdue).slice(0, 5).map((i) => ({ number: i.number, customer: i.customer, daysOverdue: i.daysOverdue, remaining: m(i.remainingCents) })),
@@ -280,6 +284,18 @@ export function createFinanceApp(deps) {
     const end = new Date(Date.UTC(py, pq * 3 + 3, 0)).toISOString().slice(0, 10);
     const pack = await computePack(from, end);
     json(ctx.res, 200, { status: 'OK', period: pack.period, completeness: pack.completeness.status, reasons: pack.completeness.reasons, anomalies: pack.anomalies.length, critical: pack.completeness.critical_anomalies, reconciliation: pack.reconciliation.status });
+  });
+
+  // Dashboard "recent activity" feed: the real document lifecycle trail (fin_events), never a fabricated
+  // or estimated timeline. Fetched separately from /api/overview so a slow merchant history never blocks
+  // the KPIs above it - same lazy-card pattern as /api/overview/pack.
+  on('GET', '/api/overview/activity', async (ctx) => {
+    const { settings } = await servicesFor();
+    const events = await store.listEventsForMerchant({ merchantId, limit: 8 });
+    const docIds = [...new Set(events.map((e) => e.documentId).filter(Boolean))];
+    const docs = new Map((await Promise.all(docIds.map((id) => store.getDocument(id).catch(() => null)))).filter(Boolean).map((d) => [d.id, d]));
+    const m = (c) => money(c, settings.defaults.language);
+    json(ctx.res, 200, { rows: events.map((e) => { const d = docs.get(e.documentId); return { action: e.action, at: e.at, docType: d?.type ?? null, docNumber: d?.number ?? null, docId: e.documentId, amount: e.detail?.amountCents != null ? m(e.detail.amountCents) : null, currency: d?.currency ?? settings.defaults.currency }; }) });
   });
 
   on('POST', '/api/calc', async (ctx) => {

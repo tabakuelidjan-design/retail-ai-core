@@ -96,6 +96,24 @@ function avatar(name, size) {
   let hs = 0; for (const ch of t) hs = (hs * 31 + ch.charCodeAt(0)) >>> 0;
   return h('span', { class: `avatar ${AV_TONES[hs % AV_TONES.length]} ${size || ''}` }, ini);
 }
+/** Dashboard "recent activity" row: one real document-lifecycle event, in plain merchant language.
+ * Every fact here (action, document type/number, amount) comes straight from the event as recorded -
+ * nothing is inferred or reworded into a claim the event doesn't support. */
+function activityRow(e) {
+  const doc = e.docType ? tt('{0} {1}', tr(TYPE[e.docType] || e.docType), e.docNumber || tt('(draft)')) : tt('a document');
+  const LABEL = {
+    APPROVE_AND_ISSUE: () => tt('{0} issued', doc), MARK_SENT: () => tt('{0} marked as sent', doc), SEND_QUOTE: () => tt('{0} sent', doc),
+    RECORD_PAYMENT: () => e.amount ? tt('Payment of {0} received on {1}', `${e.amount} ${e.currency || ''}`.trim(), doc) : tt('Payment received on {0}', doc),
+    CREATE_CREDIT_NOTE: () => tt('{0} created', doc), ACCEPT_QUOTE: () => tt('{0} accepted', doc), REJECT_QUOTE: () => tt('{0} rejected', doc),
+    SUBMIT_FOR_APPROVAL: () => tt('{0} submitted for approval', doc), CANCEL: () => tt('{0} cancelled', doc), REJECT: () => tt('{0} rejected', doc),
+    MODIFY: () => tt('{0} returned to draft', doc), STATUS_CHANGE: () => tt('{0} status updated', doc),
+  };
+  const tone = { APPROVE_AND_ISSUE: 'ok', RECORD_PAYMENT: 'ok', CREATE_CREDIT_NOTE: 'warm', CANCEL: 'warm', REJECT: 'warm', REJECT_QUOTE: 'warm' }[e.action] || 'info';
+  const text = (LABEL[e.action] || (() => tt('{0}: {1}', doc, e.action)))();
+  const dt = e.at ? new Date(e.at) : null;
+  const when = dt ? dt.toLocaleDateString(I18N.tag(), { day: 'numeric', month: 'short' }) + ' ' + dt.toLocaleTimeString(I18N.tag(), { hour: '2-digit', minute: '2-digit' }) : '';
+  return h('a', { class: 'activity-row', href: e.docId ? `#/doc/${e.docId}` : undefined }, h('span', { class: `activity-dot ${tone}` }), h('span', { class: 'activity-text' }, text), h('span', { class: 'activity-time' }, when));
+}
 /** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
@@ -140,34 +158,62 @@ async function viewOverview() {
   const box = h('div'); main.appendChild(box);
   box.appendChild(h('div', { class: 'grid cards' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
   try {
-    const o = await api('GET', '/api/overview');
+    const [o, treasury, purchaseRows] = await Promise.all([
+      api('GET', '/api/overview'),
+      api('GET', '/api/treasury').catch(() => null),
+      api('GET', '/api/inbox?scope=purchases').then((r) => r.rows).catch(() => []),
+    ]);
+    const ac = await api('GET', '/api/actions').catch(() => ({ actions: [], currency: o.currency }));
     clear(box);
     const cur = o.currency;
-    const acard = (tone, icon, n, label, sub, href) => h('a', { class: `acard ${tone}`, href }, h('span', { class: 'aicon' }, svgIcon(icon, 18)), h('span', { class: 'abody' }, h('span', { class: 'an' }, n), h('span', { class: 'al' }, label), sub ? h('span', { class: 'as' }, sub) : null), h('span', { class: 'ago' }, svgIcon('arrow', 16)));
     mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), tt('{0} setting(s) missing.', o.settingsMissing.length) + ' ', h('a', { href: '#/settings' }, 'Open settings')) : null);
-    { const ac = await api('GET', '/api/actions').catch(() => ({ actions: [] })); box.appendChild(actionCenterCard(ac.actions, ac.currency)); }
-    box.appendChild(h('div', { class: 'grid cards', style: 'margin-top:16px' },
-      acard(o.counts.awaitingApproval ? 'warn' : 'calm', 'check', o.counts.awaitingApproval, 'Awaiting your approval', o.counts.awaitingApproval ? 'Review and issue' : 'Nothing to approve', '#/invoices?status=READY_FOR_APPROVAL'),
-      acard(o.counts.overdue ? 'bad' : 'calm', 'alert', o.counts.overdue, 'Overdue invoices', o.counts.overdue ? tt('{0} {1} to collect', o.amounts.overdue, cur) : 'Nothing is late', '#/receivables'),
-      acard(o.counts.quotesToConvert ? 'warn' : 'calm', 'quote', o.counts.quotesToConvert, 'Accepted quotes to convert', tt('{0} quote(s) awaiting response', o.counts.quotesAwaitingResponse), '#/quotes?status=ACCEPTED'),
-      acard('calm', 'clock', o.counts.unpaid, 'Unpaid invoices', tt('{0} {1} outstanding', o.amounts.outstanding, cur), '#/receivables')));
 
-    // Money at a glance: outstanding, overdue, paid this month. Kept - "Paid this month" is not shown anywhere
-    // else on the dashboard - but given a quieter treatment (.kpirow.quiet) since Outstanding/Overdue duplicate
-    // figures the Action Center and the acard grid above already lead with; the Action Center stays the focal point.
-    const kpi = (label, value, sub, tone) => h('div', { class: `kpi ${tone || ''}` }, h('div', { class: 'kl' }, label), h('div', { class: 'kbig' }, value, h('small', null, ` ${cur}`)), sub ? h('div', { class: 'ks' }, sub) : null);
-    box.appendChild(h('div', { class: 'card kpirow quiet' }, kpi('Outstanding', o.amounts.outstanding, tt('{0} unpaid invoice(s)', o.counts.unpaid)), kpi('Overdue', o.amounts.overdue, tt('{0} invoice(s)', o.counts.overdue), o.counts.overdue ? 'bad' : ''), kpi('Paid this month', o.amounts.paidThisMonth, tt('{0} payment(s)', o.amounts.paidThisMonthCount), 'ok')));
+    // ---- Finance Command Center: four decisive figures, not eight equal boxes. Each is real, already-
+    // computed data (treasury liquidity, receivables, supplier payables, Action Center count) - never estimated.
+    const toPay = purchaseRows.filter((r) => r.status === 'TO_PAY');
+    const toPayCents = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
+    const kcard = (tone, label, value, sub, href) => h('a', { class: `kcard ${tone}`, href }, h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value), sub ? h('div', { class: 'ksub' }, sub) : null);
+    box.appendChild(h('div', { class: 'kpi-strip' },
+      kcard('', 'Cash position', treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : tt('Not connected'), treasury?.observed?.liquidCents != null ? 'Bank + cash' : tt('Connect a bank to see this'), '#/bank'),
+      kcard(o.counts.unpaid ? 'warm' : '', 'Amount to collect', fmtMoney(o.amounts.outstandingCents, cur), tt('{0} unpaid invoice(s)', o.counts.unpaid), '#/receivables'),
+      kcard(toPay.length ? 'warm' : '', 'Supplier bills due', fmtMoney(toPayCents, (purchaseRows[0] && purchaseRows[0].currency) || cur), tt('{0} bill(s) to pay', toPay.length), '#/purchases'),
+      kcard(ac.actions.length ? 'bad' : 'ok', 'Critical actions', String(ac.actions.length), ac.actions.length ? tt('need your attention') : tt('all clear'), '#/')));
 
+    // ---- Action Center: the heart of the page ----
+    box.appendChild(actionCenterCard(ac.actions, ac.currency));
+
+    // ---- Trends: only real, already-computed movement - never a decorative chart ----
+    const trendCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Trends')));
+    const t7 = o.trend7d || [];
+    const maxC = Math.max(1, ...t7.map((d) => d.cents));
+    const dow = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(I18N.tag(), { weekday: 'short' });
+    trendCard.appendChild(h('div', { class: 'eyebrow' }, 'Payments received - last 7 days'));
+    trendCard.appendChild(h('div', { class: 'trendrow' }, t7.map((d, i) => {
+      // Bar height is a pixel size for the chart, not a financial figure - kept on its own line/variable so
+      // it reads (and scans) as clearly separate from the displayed amount just below it.
+      const px = Math.max(4, Math.round((d.cents / maxC) * 46));
+      return h('span', { class: `trendbar ${i === t7.length - 1 ? 'today' : ''}`, style: `height:${px}px`, title: `${dow(d.date)}: ${d.amount} ${cur}` });
+    })));
+    trendCard.appendChild(h('div', { class: 'trendmeta' }, t7.map((d) => h('span', null, dow(d.date)))));
     // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
     const KEYS = [['not_due', 'Not yet due', 's0'], ['0_7', '0-7 days', 's1'], ['8_30', '8-30 days', 's2'], ['31_60', '31-60 days', 's3'], ['60_plus', '60+ days', 's4']];
     const totalC = KEYS.reduce((a, [k]) => a + (o.aging[k].cents || 0), 0);
-    const ageCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Ageing of unpaid invoices'), h('a', { href: '#/receivables', class: 'small' }, 'Open payments')));
-    if (!totalC) ageCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
+    trendCard.appendChild(h('div', { class: 'eyebrow', style: 'margin-top:18px' }, 'Invoices paid vs overdue'));
+    if (!totalC) trendCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
     else {
-      ageCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${tr(l)}: ${o.aging[k].amount} ${cur}` }))));
-      ageCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, tt('{0} inv.', o.aging[k].count))))));
+      trendCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${tr(l)}: ${o.aging[k].amount} ${cur}` }))));
+      trendCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, tt('{0} inv.', o.aging[k].count))))));
     }
-    box.appendChild(ageCard);
+    box.appendChild(trendCard);
+
+    // ---- Recent activity: the real document lifecycle trail, fetched lazily so it never blocks the KPIs ----
+    const actCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')), h('div', { class: 'muted small' }, 'Loading...'));
+    box.appendChild(actCard);
+    api('GET', '/api/overview/activity').then((r) => {
+      clear(actCard); actCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')));
+      if (!r.rows.length) { actCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 20)), h('div', null, h('strong', null, 'Nothing yet'), h('div', { class: 'muted small' }, 'Issued invoices, payments and credit notes will show up here.')))); return; }
+      actCard.appendChild(h('div', { class: 'activity' }, r.rows.map((e) => activityRow(e))));
+    }).catch(() => { clear(actCard); actCard.appendChild(h('div', { class: 'muted small' }, 'Activity unavailable.')); });
 
     const row = (r, right) => h('a', { class: 'listrow', href: `#/doc/${r.id || ''}` }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number || TYPE[r.type] || '')), right);
     const overdue = o.attention.overdue.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number)), h('span', { class: 'lr' }, h('strong', null, r.remaining), h('span', { class: 'chip bad' }, tt('{0} days late', r.daysOverdue)))));
@@ -606,7 +652,21 @@ async function viewDoc(id) {
   // composed here with tt('{0} {1}', ...) rather than a template literal, because a literal fuses them into one
   // string ("Invoice INV-2026-0001") that can never exact-match a dictionary key - this was the root cause of
   // the document title staying in English regardless of the selected language.
-  const top = h('div', { class: 'topbar' }, h('div', null, h('h1', null, tt('{0} {1}', tr(TYPE[d.type]), d.number || tt('(draft)'))), h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: `tag ${d.revenueBasis === 'linked_source_order' ? 'linked' : 'standalone'}` }, h('span', { class: 'dot-i' }), d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
+  // ---- Header: one scannable strip with everything a merchant needs before reading further (Xero-style
+  // clarity) - type, number, status and client up top; the money figures that matter right beside them.
+  // Every value here already exists on `d` (the API response) - nothing is recomputed in the browser.
+  const heroFigs = [['Total incl. VAT', `${d.totals.gross} ${cur}`]];
+  if (!isQ && d.settlementView) {
+    heroFigs.push(['Paid', `${d.settlementView.paid} ${cur}`]);
+    heroFigs.push(['Amount due', `${d.settlementView.remaining} ${cur}`, d.settlement.remainingCents > 0 ? 'due' : 'settled']);
+  }
+  heroFigs.push(isQ ? ['Valid until', d.validUntil || '—'] : ['Due date', d.dueDate || '—']);
+  const dochero = h('div', { class: 'dochero' },
+    h('div', { class: 'dh-id' }, h('h1', null, tt('{0} {1}', tr(TYPE[d.type]), d.number || tt('(draft)'))),
+      h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: `tag ${d.revenueBasis === 'linked_source_order' ? 'linked' : 'standalone'}` }, h('span', { class: 'dot-i' }), d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
+    h('div', { class: 'dh-figures' }, heroFigs.map(([label, value, tone]) => h('div', { class: 'dh-fig' }, h('div', { class: 'headline-label' }, label), h('div', { class: `headline-figure ${tone || ''}` }, value)))));
+  box.appendChild(dochero);
+  const top = h('div', { class: 'topbar' },
     h('div', { class: 'actions' },
       has('edit') ? h('a', { class: 'btn', href: `#/doc/${id}/edit` }, 'Edit draft') : null,
       has('submit') ? h('button', { class: 'primary', on: { click: call('submit', {}, 'Submitted for approval') } }, 'Submit for approval') : null,
@@ -662,8 +722,8 @@ async function viewDoc(id) {
     box.appendChild(h('div', { class: 'impact-card', style: 'margin-top:16px' }, h('h3', null, tt('Impact of this credit note')),
       h('div', { class: 'impact-grid' },
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Original invoice')), h('div', { class: 'v' }, d.related ? h('a', { href: `#/doc/${d.related.id}` }, d.related.number || tt('(draft)')) : tt('Not linked yet'))),
-        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Credit note amount')), h('div', { class: 'v' }, `${d.totals.gross} ${cur}`)),
-        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Effect on balance')), h('div', { class: 'v' }, d.related ? tt('{0} owed on {1}', `-${d.totals.gross} ${cur}`, d.related.number || tt('(draft)')) : tt('Pending'))),
+        h('div', { class: 'impact-item lead' }, h('div', { class: 'l' }, tt('Credit note amount')), h('div', { class: 'v' }, `${d.totals.gross} ${cur}`)),
+        h('div', { class: 'impact-item lead' }, h('div', { class: 'l' }, tt('Effect on balance')), h('div', { class: 'v' }, d.related ? tt('{0} owed on {1}', `-${d.totals.gross} ${cur}`, d.related.number || tt('(draft)')) : tt('Pending'))),
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('VAT impact')), h('div', { class: 'v' }, tt('{0} VAT reversed', `-${d.totals.vat} ${cur}`))),
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Restock decision')), h('div', { class: 'v' }, restockLabel)),
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Refund')), h('div', { class: 'v' }, tt('Not tracked separately - deducts from what the customer owes')))),
@@ -679,7 +739,7 @@ async function viewDoc(id) {
     h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Total incl. VAT'), h('span', { class: 'fin-value' }, `${t.gross} ${cur}`)),
     !isQ && d.settlementView ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Paid'), h('span', { class: 'fin-value' }, `${d.settlementView.paid} ${cur}`)) : null,
     !isQ && d.settlementView && d.settlement.creditedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Credited'), h('span', { class: 'fin-value' }, `${d.settlementView.credited} ${cur}`)) : null,
-    !isQ && d.settlementView ? h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Amount due'), h('span', { class: `fin-primary ${Number(d.settlementView.remaining) > 0 ? 'due' : 'settled'}`, style: 'font-size:20px' }, `${d.settlementView.remaining} ${cur}`)) : null,
+    !isQ && d.settlementView ? h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Amount due'), h('span', { class: `fin-primary ${d.settlement.remainingCents > 0 ? 'due' : 'settled'}`, style: 'font-size:20px' }, `${d.settlementView.remaining} ${cur}`)) : null,
   ].filter(Boolean);
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),
     h('div', { class: 'card emphasis' }, h('h2', null, 'Totals'), ...finRows)));

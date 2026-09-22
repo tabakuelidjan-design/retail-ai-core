@@ -429,3 +429,70 @@ button.danger { background: transparent; } button.danger:hover { background: #fd
 @media (max-width: 640px) {
   .impact-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ============================================================================================
+   Visual elevation pass 2 (Pennylane maturity + Holded dynamism + Xero clarity + Accountable ease)
+   - 2026-09-23. Still no new fonts/CSP change. No business logic touched; additive/refining only.
+   Direction: lower card density, more intentional whitespace, one dominant number per screen,
+   a restrained warm accent used only where it earns its place (never a colourful admin palette).
+   ============================================================================================ */
+:root {
+  /* Restrained terracotta - HABB's brand accent, used sparingly for "needs attention now" and premium
+     panel accents, never as a general UI colour (bad/warn already cover ordinary state colouring). */
+  --warm: #b5573f; --warm-soft: #f8ece8;
+  --space-4: 20px; --space-5: 28px; --space-6: 36px;
+}
+/* A touch more breathing room without restructuring the grid: Pennylane reads calmer mainly because
+   of space, not because of fewer components. */
+.card { padding: 18px 20px; }
+.main { padding-top: 26px; }
+.hero { margin-bottom: var(--space-5); }
+h2 { margin-bottom: 14px; }
+
+/* ---- One dominant figure per screen: the largest number on a page should need no explanation ---- */
+.headline-figure { font-size: 34px; font-weight: 700; letter-spacing: -.015em; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.headline-figure.due { color: var(--bad); } .headline-figure.settled { color: var(--ok); }
+.headline-label { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+
+/* ---- Dashboard: Finance Command Center - four decisive figures, not eight equal boxes ---- */
+.kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: var(--space-5); }
+.kcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow-sm); text-decoration: none; color: inherit; transition: box-shadow .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease); }
+.kcard:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
+.kcard .kl { display: flex; align-items: center; gap: 7px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 650; }
+.kcard .kv { font-size: 25px; font-weight: 700; letter-spacing: -.015em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.kcard .ksub { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+.kcard.warm .kv { color: var(--warm); } .kcard.ok .kv { color: var(--ok); } .kcard.bad .kv { color: var(--bad); }
+.kcard .kdot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; display: inline-block; }
+@media (max-width: 1000px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .kpi-strip { grid-template-columns: 1fr; } }
+
+/* ---- Trends: real, already-computed movement - never a decorative sparkline ---- */
+.trendrow { display: flex; align-items: flex-end; gap: 3px; height: 46px; margin: 4px 0 2px; }
+.trendbar { flex: 1; min-width: 3px; background: color-mix(in srgb, var(--accent) 70%, var(--ink-soft)); border-radius: 3px 3px 0 0; transition: height .3s var(--ease); }
+.trendbar.today { background: var(--warm); }
+.trendmeta { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-soft); }
+
+/* ---- Recent activity: the real document trail, one calm timeline ---- */
+.activity { display: flex; flex-direction: column; }
+.activity-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid #f0f1f4; } .activity-row:last-child { border-bottom: 0; }
+.activity-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--ink-soft); flex: 0 0 auto; }
+.activity-dot.ok { background: var(--ok); } .activity-dot.warm { background: var(--warm); } .activity-dot.info { background: var(--info); }
+.activity-text { flex: 1; min-width: 0; font-size: 13.5px; } .activity-text strong { font-weight: 650; }
+.activity-time { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+/* ---- Document detail: one scannable header strip instead of scattered facts (Xero-style clarity) ---- */
+.dochero { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-start; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+.dochero .dh-id { min-width: 200px; } .dochero .dh-id h1 { margin-bottom: 6px; }
+.dochero .dh-figures { display: flex; gap: var(--space-6); flex-wrap: wrap; flex: 1; }
+.dochero .dh-fig { min-width: 100px; }
+
+/* ---- Credit Note impact panel: the warm accent earns its place here - this is the one number-heavy
+   panel per document where "needs your attention" framing is genuinely correct ---- */
+.impact-card { border-left: 3px solid var(--warm); background: linear-gradient(180deg, var(--warm-soft), #fff 55%); }
+.impact-card h3 { color: var(--warm); }
+.impact-item.lead .v { font-size: 20px; }
+
+@media (max-width: 900px) {
+  .dochero { flex-direction: column; gap: 14px; padding: 16px; }
+  .dochero .dh-figures { gap: 18px; }
+}

@@ -83,6 +83,11 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const rows = await supabase.select('fin_events', { select: '*', document_id: eq(documentId), merchant_id: eq(merchantId), order: 'at.asc,id.asc' });
       return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, at: r.at, actor: r.actor, action: r.action, fromStatus: r.from_status, toStatus: r.to_status, detail: r.detail }));
     },
+    /** Recent document lifecycle events across the whole merchant (dashboard "recent activity" feed) - read only, newest first. */
+    async listEventsForMerchant({ limit = 20 } = {}) { // merchantId ignored (closured), kept in the call signature for parity with memory-store
+      const rows = await supabase.select('fin_events', { select: '*', merchant_id: eq(merchantId), order: 'at.desc,id.desc', limit: String(limit) });
+      return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, at: r.at, actor: r.actor, action: r.action, fromStatus: r.from_status, toStatus: r.to_status, detail: r.detail }));
+    },
 
     async addPayment(p) {
       const [r] = await guard(() => supabase.insert('fin_payments', [{ merchant_id: p.merchantId ?? merchantId, document_id: p.documentId, amount_cents: p.amountCents, paid_on: p.paidOn, method: p.method, reference: p.reference ?? null, actor: p.actor ?? null }]));

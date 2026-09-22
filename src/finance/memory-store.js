@@ -57,6 +57,10 @@ export function createMemoryStore() {
 
     async appendEvent(e) { events.push(Object.freeze({ id: randomUUID(), ...clone(e) })); },
     async listEvents(documentId) { return events.filter((e) => e.documentId === documentId).map(clone); },
+    /** Recent document lifecycle events across the whole merchant (dashboard "recent activity" feed) - read only, newest first. */
+    async listEventsForMerchant({ merchantId, limit = 20 } = {}) {
+      return events.filter((e) => e.merchantId === merchantId).sort((a, b) => (b.at ?? '').localeCompare(a.at ?? '')).slice(0, limit).map(clone);
+    },
 
     async addPayment(p) { payments.push(Object.freeze({ id: randomUUID(), ...clone(p) })); return clone(payments.at(-1)); },
     async listPayments(documentId) { return payments.filter((p) => p.documentId === documentId).map(clone); },
