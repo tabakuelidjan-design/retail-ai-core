@@ -8,6 +8,7 @@ export const DEMAND_VERSION = '2B.1';
 export const BUYING_VERSION = '2C.1';
 export const MARKETING_VERSION = '2D.2';
 export const CUSTOMERS_VERSION = '2E.1';
+export const HIERARCHY_VERSION = 'H1.1';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
@@ -116,6 +117,12 @@ export const DEFAULT_CONFIG = {
   gates: { minVerifiedCostCoverage: 0.8, maxStockSnapshotAgeHours: 36, unitCostIsAllInVariableCost: false },
   // Missing-cost triage: stock at or above this many units counts as meaningful inventory.
   triage: { minMeaningfulStock: 1, largestStockPositions: 15 },
+  // Hierarchical sales analytics (product/variant/category/.../channel rollups, hierarchy.js).
+  hierarchy: {
+    aovMinOrders: 3, // fewer orders than this in a node/window => aov_meaningful: false (AOV is still returned, just flagged)
+    monthsOfTrend: 6, // length of the monthly_trend series returned per node, including the current partial month
+    topN: 10, // size of top_products / declining_products / no_recent_sales lists
+  },
 };
 
 export function mergeConfig(overrides = {}) {

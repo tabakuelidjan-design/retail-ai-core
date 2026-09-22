@@ -72,3 +72,46 @@ export function inWindow(instant, window) {
   const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
   return t >= window.start.getTime() && t < window.end.getTime();
 }
+
+/**
+ * `months` consecutive local-calendar-month buckets ending at today's local midnight, oldest first.
+ * The current, still-open month is included as a partial bucket (its own start through `now`) so a
+ * trend line never silently drops the most recent activity; callers that need only complete months
+ * can drop the last bucket when `partial` is true.
+ */
+export function buildMonthBuckets(now, timeZone, months = 12) {
+  const today = localDateString(now, timeZone);
+  const [y, m] = today.split('-').map(Number);
+  const buckets = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const idx = y * 12 + (m - 1) - i;
+    const by = Math.floor(idx / 12);
+    const bm = (idx % 12) + 1;
+    const startStr = `${by}-${String(bm).padStart(2, '0')}-01`;
+    const nextIdx = idx + 1;
+    const ny = Math.floor(nextIdx / 12);
+    const nm = (nextIdx % 12) + 1;
+    const nextStartStr = `${ny}-${String(nm).padStart(2, '0')}-01`;
+    const start = localMidnight(startStr, timeZone);
+    const cappedEndStr = nextStartStr > today ? today : nextStartStr;
+    const end = nextStartStr > today ? now : localMidnight(nextStartStr, timeZone);
+    buckets.push({ key: startStr.slice(0, 7), localStart: startStr, localEnd: cappedEndStr, start, end, partial: nextStartStr > today });
+  }
+  return buckets;
+}
+
+/**
+ * The immediately preceding window of the same local-day length, for period-over-period comparison.
+ * `available_window` and other windows without a `localStart`/`localEnd` pair are not comparable this way.
+ */
+export function previousEquivalentWindow(window) {
+  if (!window.localStart || !window.localEnd) return null;
+  const days = Math.round((new Date(`${window.localEnd}T00:00:00Z`) - new Date(`${window.localStart}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
+  const prevEnd = window.localStart;
+  const prevStart = addDays(window.localStart, -days);
+  return {
+    key: `${window.key}_previous`, label: `Previous ${window.label ?? window.key}`, timeZone: window.timeZone,
+    start: localMidnight(prevStart, window.timeZone), end: localMidnight(prevEnd, window.timeZone),
+    localStart: prevStart, localEnd: prevEnd,
+  };
+}
