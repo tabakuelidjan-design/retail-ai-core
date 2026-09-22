@@ -53,7 +53,7 @@ function unmatchedKey(fact) {
   return `unmatched:${fact.title}`;
 }
 
-function productKeyOf(fact) {
+export function productKeyOf(fact) {
   return fact.productId ?? unmatchedKey(fact);
 }
 
