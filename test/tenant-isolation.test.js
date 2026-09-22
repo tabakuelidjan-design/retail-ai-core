@@ -3,11 +3,8 @@
 // This is the app-level half of the RLS/merchant-isolation proposal - it exercises the same query paths
 // production code uses (loadDataset, createSupabaseFinanceStore), not a reimplementation of them.
 //
-// Analytics (hierarchy.js) and Merchant Setup Wizard isolation tests are deliberately NOT included here:
-// those modules live on separate, still-unmerged branches (feature/hierarchical-sales-analytics,
-// feature/merchant-setup-wizard) and do not exist on `main`, which this branch is built from. They should
-// be added once those branches are rebased on top of this fix, per the one-feature-per-branch discipline -
-// see the migration/isolation report for this explicitly called out as a gap, not an oversight.
+// Analytics (hierarchy.js) and Merchant Setup Wizard (wizard.js) isolation tests are included below, added
+// once those branches were merged/rebased onto this one - see the merge history for the sequencing.
 //
 // RLS-level tests (a session literally forbidden by the database from reading/writing another tenant's row)
 // are also not here: they require the non-bypass authenticated role from the RLS proposal, which does not
@@ -19,10 +16,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { loadDataset } from '../src/metrics/load.js';
+import { buildLedger } from '../src/metrics/ledger.js';
+import { mergeConfig } from '../src/metrics/config.js';
+import { buildWindows } from '../src/metrics/windows.js';
+import { analyzeDimension } from '../src/metrics/hierarchy.js';
+import { buildSetupReport } from '../src/onboarding/wizard.js';
 import { createSupabaseFinanceStore } from '../src/finance/supabase-store.js';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 
 const DAY = 24 * 60 * 60 * 1000;
+const NOW = new Date();
+const CONFIG = mergeConfig();
 
 /** Seeds two independent merchants with overlapping shapes (same relative structure, different ids) so a
  * bug that accidentally matches "any row" rather than "this merchant's row" is guaranteed to be caught. */
@@ -171,4 +175,73 @@ test('adversarial: forging merchant_id on write is rejected by scoped filters, n
   // by saveDocument's update path is keyed on the store's own closed-over merchantId, not the payload's -
   // so the update matches zero rows (throws CONCURRENT_MODIFICATION) rather than silently taking over B's row.
   await assert.rejects(() => storeA.saveDocument({ id: bDocId, merchantId: merchantA, type: 'invoice', status: 'SENT', body: {} }, 1));
+});
+
+// ---------- Analytics (hierarchy.js) isolation ----------
+
+test('analytics: analyzeDimension for merchant A never aggregates merchant B\'s sales', async () => {
+  const { supabase, merchantA, merchantB } = await seedTwoMerchants(createFakeSupabase());
+  const testNow = new Date();
+  const window = buildWindows(testNow, 'UTC', { availableDays: 2 }).available_window;
+
+  const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
+  const ledgerA = buildLedger(dataA, { config: CONFIG });
+  const rowsA = analyzeDimension(ledgerA, {}, { dimension: 'product', window, now: testNow, timeZone: 'UTC' }).rows;
+
+  const dataB = await loadDataset(supabase, merchantB, { since: new Date(0) });
+  const ledgerB = buildLedger(dataB, { config: CONFIG });
+  const rowsB = analyzeDimension(ledgerB, {}, { dimension: 'product', window, now: testNow, timeZone: 'UTC' }).rows;
+
+  assert.equal(rowsA.length, 1);
+  assert.equal(rowsB.length, 1);
+  assert.notEqual(rowsA[0].key, rowsB[0].key, 'A and B must never resolve to the same product key');
+  // Each merchant sees exactly its own single unit sold, never the other's (which would double it to 2).
+  assert.equal(rowsA[0].units_sold, 1);
+  assert.equal(rowsB[0].units_sold, 1);
+});
+
+test('analytics: a channel/collection dimension for merchant A never surfaces merchant B\'s collection', async () => {
+  const { supabase, merchantA } = await seedTwoMerchants(createFakeSupabase());
+  const testNow = new Date();
+  const window = buildWindows(testNow, 'UTC', { availableDays: 2 }).available_window;
+  const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
+  const ledgerA = buildLedger(dataA, { config: CONFIG });
+  const enrichmentA = {
+    categoryPathByProduct: new Map(),
+    collectionsByProduct: new Map([[dataA.products[0].id, [{ id: 'A-collection', title: 'A Collection' }]]]),
+    channelByOrder: new Map(),
+  };
+  const rows = analyzeDimension(ledgerA, enrichmentA, { dimension: 'collection', window, now: testNow, timeZone: 'UTC' }).rows;
+  assert.deepEqual(rows.map((r) => r.key), ['A-collection']);
+  assert.ok(!rows.some((r) => r.key === 'B-collection'));
+});
+
+// ---------- Merchant Setup Wizard isolation ----------
+
+test('Wizard: buildSetupReport for merchant A only reports merchant A\'s facts (missing cost, stock, SKUs)', async () => {
+  const supabase = createFakeSupabase();
+  const merchantA = randomUUID();
+  const merchantB = randomUUID();
+  await supabase.insert('merchants', [{ id: merchantA }, { id: merchantB }]);
+
+  // A: one variant, cost on file, has a SKU. B: one variant, NO cost, NO SKU - if the Wizard leaked B's data
+  // into A's report, A's missing_cost/missing_sku counts would be wrong (1 instead of 0).
+  const build = async (merchantId, tag, { withCost, withSku }) => {
+    const productId = randomUUID(); const variantId = randomUUID(); const orderId = randomUUID();
+    await supabase.insert('products', [{ id: productId, merchant_id: merchantId, title: `${tag} Product`, source_system: 'shopify', source_id: `${tag}-p1` }]);
+    await supabase.insert('variants', [{ id: variantId, merchant_id: merchantId, product_id: productId, sku: withSku ? `${tag}-SKU` : null, title: 'Default', source_system: 'shopify', source_id: `${tag}-v1` }]);
+    await supabase.insert('orders', [{ id: orderId, merchant_id: merchantId, source_system: 'shopify', source_id: `${tag}-o1`, ordered_at: new Date().toISOString(), currency: 'EUR', status: 'PAID', taxes_included: true, is_test: false }]);
+    await supabase.insert('order_lines', [{ id: randomUUID(), order_id: orderId, merchant_id: merchantId, variant_id: variantId, source_system: 'shopify', source_id: `${tag}-l1`, title_snapshot: `${tag} line`, quantity: 1, unit_price: 10, discount_amount: 0, tax_amount: 0 }]);
+    if (withCost) await supabase.insert('product_costs', [{ id: randomUUID(), variant_id: variantId, merchant_id: merchantId, unit_cost: 5, currency: 'EUR', effective_from: new Date(0).toISOString(), source: 'manual_entry', validation_status: 'verified' }]);
+  };
+  await build(merchantA, 'A', { withCost: true, withSku: true });
+  await build(merchantB, 'B', { withCost: false, withSku: false });
+
+  const testNow = new Date();
+  const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
+  const ledgerA = buildLedger(dataA, { config: CONFIG });
+  const reportA = buildSetupReport({ ledger: ledgerA, data: dataA, enrichment: null, company: null, now: testNow, config: CONFIG });
+
+  assert.equal(reportA.checks.find((c) => c.id === 'missing_cost').count, 0, 'must not see B\'s missing cost');
+  assert.equal(reportA.checks.find((c) => c.id === 'missing_sku').count, 0, 'must not see B\'s missing SKU');
 });
