@@ -77,13 +77,15 @@ export function normalizeVariant(node, productId, merchantId) {
  * @param {string} locationId local location uuid
  * @param {number} quantity
  * @param {Date} syncedAt
+ * @param {string} merchantId direct tenant ownership (migration 20260922230000) - required, never inferred
  */
-export function normalizeInventorySnapshot(variantId, locationId, quantity, syncedAt) {
+export function normalizeInventorySnapshot(variantId, locationId, quantity, syncedAt, merchantId) {
   return {
     variant_id: variantId,
     location_id: locationId,
     quantity,
     synced_at: syncedAt.toISOString(),
+    merchant_id: merchantId,
   };
 }
 
@@ -227,11 +229,13 @@ export function normalizeOrder(node, merchantId, locationId, { customerKeySecret
  *   variant no longer exists in the catalog (deleted product) or the line
  *   is a custom item with no catalog variant at all - the order line must
  *   survive either way, using title_snapshot/sku_snapshot.
+ * @param {string} merchantId direct tenant ownership (migration 20260922230000) - required, never inferred
  */
-export function normalizeOrderLine(lineItemNode, orderId, variantId) {
+export function normalizeOrderLine(lineItemNode, orderId, variantId, merchantId) {
   const taxAmount = sumMoney(lineItemNode.taxLines.map((t) => t.priceSet.shopMoney.amount));
   return {
     order_id: orderId,
+    merchant_id: merchantId,
     variant_id: variantId,
     source_system: 'shopify',
     source_id: lineItemNode.id,
@@ -247,10 +251,12 @@ export function normalizeOrderLine(lineItemNode, orderId, variantId) {
 /**
  * @param {{id: string, createdAt: string, totalRefundedSet: {shopMoney: {amount: string}}}} refundNode
  * @param {string} orderId local order uuid
+ * @param {string} merchantId direct tenant ownership (migration 20260922230000) - required, never inferred
  */
-export function normalizeRefund(refundNode, orderId) {
+export function normalizeRefund(refundNode, orderId, merchantId) {
   return {
     order_id: orderId,
+    merchant_id: merchantId,
     source_system: 'shopify',
     source_id: refundNode.id,
     amount: Number(refundNode.totalRefundedSet.shopMoney.amount),
@@ -267,10 +273,14 @@ export function normalizeRefund(refundNode, orderId) {
  *   (the order line is synced before its order's refunds).
  * @param {string} currency the parent order's currency (RefundLineItem
  *   itself carries no currency field of its own).
+ * @param {string} merchantId direct tenant ownership (migration 20260922230000) - supplied directly from the
+ *   sync context (one merchant per run), not derived/cross-checked - that cross-check is only needed when
+ *   backfilling ownership for rows that already exist without it.
  */
-export function normalizeRefundLine(refundLineItemNode, refundId, orderLineId, currency) {
+export function normalizeRefundLine(refundLineItemNode, refundId, orderLineId, currency, merchantId) {
   return {
     refund_id: refundId,
+    merchant_id: merchantId,
     order_line_id: orderLineId,
     quantity: refundLineItemNode.quantity,
     amount: Number(refundLineItemNode.subtotalSet.shopMoney.amount),

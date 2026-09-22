@@ -71,7 +71,9 @@ export function createFakeSupabase() {
       if (params.offset) rows = rows.slice(Number(params.offset));
       if (params.limit) rows = rows.slice(0, Number(params.limit));
 
-      if (params.select) {
+      if (params.select === '*') {
+        rows = rows.map((r) => ({ ...r })); // shallow copy, like a real query result - never a live reference into storage
+      } else if (params.select) {
         const cols = params.select.split(',');
         rows = rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c]])));
       }
@@ -86,6 +88,15 @@ export function createFakeSupabase() {
       const matches = await this.select(table, filters);
       const t = getTable(table);
       for (const m of matches) Object.assign(t.find((r) => r.id === m.id), patch);
+      return matches;
+    },
+
+    async delete(table, filters) {
+      const matches = await this.select(table, filters);
+      const matchedIds = new Set(matches.map((m) => m.id));
+      const t = getTable(table);
+      const kept = t.filter((r) => !matchedIds.has(r.id));
+      tables.set(table, kept);
       return matches;
     },
   };
