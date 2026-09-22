@@ -41,10 +41,10 @@ export async function loadDataset(supabase, merchantId, { since }) {
   const refundLines = await selectByIds(supabase, 'refund_lines', 'refund_id', refunds.map((r) => r.id), 'id,refund_id,order_line_id,quantity,amount,tax_amount', eq);
 
   // Fixed 2026-09-22: previously fetched the globally newest snapshot across ALL merchants, then a global
-  // window, filtering to this merchant's variants only in JS afterward (CRITICAL finding - see
-  // docs/security/HABB-AI-SECURITY-PLAN.md §8 / RLS proposal). inventory_snapshots.merchant_id now exists
-  // (migration 20260922230000): both the "newest" probe and the bulk fetch are scoped by it directly, so no
-  // other merchant's snapshot rows are ever fetched into this process at all.
+  // window, filtering to this merchant's variants only in JS afterward - a CRITICAL tenant-isolation finding
+  // from the RLS/merchant-isolation review. inventory_snapshots.merchant_id now exists (migration
+  // 20260922230000): both the "newest" probe and the bulk fetch are scoped by it directly, so no other
+  // merchant's snapshot rows are ever fetched into this process at all.
   const [newest] = await supabase.select('inventory_snapshots', { select: 'synced_at', ...eq, order: 'synced_at.desc', limit: '1' });
   let snapshots = [];
   if (newest) {
