@@ -273,7 +273,11 @@ function barSpark(values, colors) {
 }
 async function viewOverview() {
   const hour = new Date().getHours();
-  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  // tt() only translates the format STRING passed as its first argument, never the interpolated {n} values -
+  // greet must be translated on its own (tt(greet)) before being substituted in, otherwise "Good morning"
+  // shows up verbatim under a French/Dutch UI regardless of the sentence pattern's own translation. Found
+  // during the homepage structural review (pre-existing bug, inherited from before this redesign).
+  const greet = tt(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
   const first = ((state.settings && state.settings.seller && state.settings.seller.name) || '').trim().split(/\s+/)[0] || '';
   const shell = h('div', { class: 'page-shell' });
   const main = layout('#/', shell);
@@ -326,15 +330,6 @@ async function viewOverview() {
     const netRecorded = o.revenue.thisMonthCents - o.expenses.thisMonthCents;
     box.appendChild(h('div', { class: 'muted small' }, h('strong', { class: netRecorded >= 0 ? 'good' : 'bad' }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), ' ', tt('(not an accounting net profit figure - no VAT, depreciation or accruals)')));
 
-    // ---- Full-width invoice-status bar (#5): Paid / Outstanding / Overdue, real counts+amounts from
-    // overview()'s invoiceStatus (all locked invoices, not period-limited). Uses the width the brief asked
-    // the dashboard to make better use of, rather than adding another narrow card. ----
-    const stBuckets = [['paid', 'ok', 'Paid'], ['outstanding', 'info', 'Outstanding'], ['overdue', 'bad', 'Overdue']];
-    const stTotal = Math.max(1, ...stBuckets.map(() => 1), o.invoiceStatus.paid.cents + o.invoiceStatus.outstanding.cents + o.invoiceStatus.overdue.cents);
-    box.appendChild(h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Invoice status')),
-      h('div', { class: 'statusbar' }, stBuckets.map(([k, tone]) => { const v = o.invoiceStatus[k]; return h('span', { class: `sb-seg ${tone}`, style: `flex:${Math.max(v.cents, v.count ? 1 : 0) || 0.0001}`, title: `${v.amount} ${cur}` }); })),
-      h('div', { class: 'statuslegend' }, stBuckets.map(([k, tone, label]) => { const v = o.invoiceStatus[k]; return h('div', { class: 'sl-item' }, h('span', { class: `sl-dot ${tone}` }), h('span', { class: 'sl-label' }, tt(label)), h('strong', null, `${v.amount} ${cur}`), h('span', { class: 'muted small' }, plural(v.count, '{0} invoice', '{0} invoices'))); }))));
-
     // ---- Central object: real treasury movement + Revenue vs Expenses + Recent activity + Create-invoice CTA.
     // "Due dates" and the secondary quick-actions list moved to the new À faire page (same real data, reused
     // rather than duplicated - see viewTodo()). ----
@@ -386,7 +381,7 @@ async function viewOverview() {
     const ctaCard = h('a', { class: 'card', href: ctaSample ? `#/doc/${ctaSample.id}` : '#/new/invoice', style: 'padding:20px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:14px' },
       h('h3', { class: 'section-title', style: 'font-style:italic;max-width:220px' }, tt('Create, send and track your invoices with ease.')),
       ctaSample ? h('div', { class: 'muted small' }, tt('Most recent: {0} · {1} {2}', ctaSample.number || tt('(draft)'), ctaSample.gross, cur), h('div', { style: 'margin-top:4px' }, badge(ctaSample.effectiveStatus))) : h('div', { class: 'muted small' }, tt('No invoice yet - create your first one.')),
-      h('button', { class: 'btn primary big', type: 'button', style: 'margin-top:auto;width:100%;justify-content:space-between', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16)));
+      h('button', { class: 'btn warm big', type: 'button', style: 'margin-top:auto;width:100%;justify-content:space-between', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16)));
     mid.appendChild(ctaCard);
     box.appendChild(mid);
 

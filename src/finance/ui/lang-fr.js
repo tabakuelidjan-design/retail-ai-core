@@ -523,7 +523,10 @@
   });
   // Banque & Caisse / Trésorerie (views-workspace.js).
   Object.assign(messages, {
-    'Justify': 'Justifier', 'Transactions to justify': 'Transactions à justifier',
+    'Justify': 'Justifier', 'Justified': 'Justifié', 'Nothing to justify': 'Rien à justifier', 'Transactions to justify': 'Transactions à justifier',
+    // Server-provided (analytics.js's own English message id, translated here like every other key -
+    // never hardcoded French in the backend module itself).
+    'Supplier invoices are stored as one total per document (net/VAT/gross) - there is no per-product line detail to break down.': 'Les factures fournisseurs sont enregistrées comme un seul total par document (HT/TVA/TVAC) - il n\'y a pas de détail par ligne/produit à décomposer.',
     'Understand every inflow and outflow, without accounting jargon.': 'Comprenez chaque entrée et sortie, sans jargon comptable.',
     'Confirmed count only': 'Comptage confirmé uniquement',
     'Visualise what is realised, what is committed and your projected position.': 'Visualisez le réalisé, les engagements à venir et votre position projetée.',

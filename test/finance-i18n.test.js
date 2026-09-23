@@ -83,3 +83,15 @@ test('scripts are served and loaded in the right order', () => {
   const server = readFileSync(new URL('../src/finance/server/app.js', import.meta.url), 'utf8');
   for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js', '/views-workspace.js']) assert.ok(server.includes(`'${f}'`), f);
 });
+// Regression: a message string returned by the SERVER (e.g. analytics.js's own English "note" field) is
+// rendered via tt()/tr() at runtime just like any UI literal, but the static COVERAGE test above only scans
+// the client .js files - it can never see a string that only exists in a backend module. Found missing in
+// practice (the Achats analytics limitation note stayed in English under the French UI) - this closes that
+// specific gap by checking backend "note"-style message literals against both dictionaries directly.
+test('server-provided message strings (e.g. analytics.js "note" fields) are also translated in both languages', () => {
+  const lang = loadLang();
+  const src = readFileSync(new URL('../src/finance/analytics.js', import.meta.url), 'utf8');
+  const notes = [...src.matchAll(/\bnote:\s*'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1].replace(/\\'/g, "'"));
+  assert.ok(notes.length > 0, 'at least one server-provided note string is checked');
+  for (const n of notes) for (const l of ['fr', 'nl']) assert.ok(n in lang[l].messages, `${l} translation missing for server note: ${n}`);
+});

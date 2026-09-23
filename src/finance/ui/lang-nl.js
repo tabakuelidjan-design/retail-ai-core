@@ -503,7 +503,10 @@
   });
   // Bank & Cash / Treasury (views-workspace.js).
   Object.assign(messages, {
-    'Justify': 'Verantwoorden', 'Transactions to justify': 'Te verantwoorden transacties',
+    'Justify': 'Verantwoorden', 'Justified': 'Verantwoord', 'Nothing to justify': 'Niets te verantwoorden', 'Transactions to justify': 'Te verantwoorden transacties',
+    // Server-provided (analytics.js's own English message id, translated here like every other key -
+    // never hardcoded Dutch in the backend module itself).
+    'Supplier invoices are stored as one total per document (net/VAT/gross) - there is no per-product line detail to break down.': 'Leveranciersfacturen worden opgeslagen als één totaal per document (netto/btw/bruto) - er is geen detail per lijn/product om uit te splitsen.',
     'Understand every inflow and outflow, without accounting jargon.': 'Begrijp elke inkomende en uitgaande beweging, zonder boekhoudjargon.',
     'Confirmed count only': 'Enkel bevestigde tellingen',
     'Visualise what is realised, what is committed and your projected position.': 'Visualiseer wat gerealiseerd is, wat vaststaat en uw geprojecteerde positie.',

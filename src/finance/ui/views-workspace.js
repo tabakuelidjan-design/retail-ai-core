@@ -222,7 +222,10 @@ function renderAnalytics(r, currency, productDrilldown) {
 async function viewSales(q) {
   let tab = SALES_TYPE_OF[q.get('tab')] ? q.get('tab') : (q.get('tab') === 'analytics' ? 'analytics' : Object.keys(SALES_TYPE_OF).find((k) => SALES_TYPE_OF[k] === (q.get('tab') === 'quotes' ? 'quote' : q.get('tab') === 'credit_notes' ? 'credit_note' : 'invoice')) || 'invoices');
   if (!['invoices', 'quotes', 'credit_notes', 'analytics'].includes(tab)) tab = 'invoices';
-  let status = ''; let text = '';
+  // The global search bar (topbar) navigates here with ?q=..., and the A faire Action Center links here
+  // with ?status=... (e.g. "invoices to approve" -> status=READY_FOR_APPROVAL) - both must be honoured, not
+  // silently dropped (found during the button/action audit; the pre-redesign viewList() read both).
+  let status = q.get('status') || ''; let text = q.get('q') || '';
   const shell = h('div', { class: 'page-shell' });
   layout('#/sales', shell);
   shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
@@ -236,7 +239,7 @@ async function viewSales(q) {
 
   function drawTabs() {
     clear(tabsrow);
-    [['invoices', 'Invoices'], ['quotes', 'Quotes'], ['credit_notes', 'Credit notes'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; location.hash = `#/sales?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+    [['invoices', 'Invoices'], ['quotes', 'Quotes'], ['credit_notes', 'Credit notes'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; status = ''; location.hash = `#/sales?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
   }
   async function loadMetrics() {
     try {
@@ -259,8 +262,7 @@ async function viewSales(q) {
     }
     workspace.style.gridTemplateColumns = ''; wsSide.style.display = '';
     const kind = SALES_TYPE_OF[tab];
-    const filters = SALES_FILTERS[kind];
-    const search = h('input', { placeholder: tr('Search number or customer...') });
+    const search = h('input', { placeholder: tr('Search number or customer...'), value: text });
     wsMain.appendChild(h('div', { class: 'workspace-head' }, h('div', { class: 'tabsrow', style: 'border:0' })));
     wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search), h('div', { class: 'tools' }, h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(shown, [{ header: 'Number', key: 'number' }, { header: 'Customer', key: 'customer' }, { header: 'Issue date', key: 'issueDate' }, { header: 'Due date', key: 'dueDate' }, { header: 'Amount', key: 'gross' }, { header: 'Status', key: 'effectiveStatus' }], `${kind}.csv`) } }, tt('Export')))));
     const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
@@ -559,7 +561,7 @@ function suggestionRow(s, currency, reload) {
     h('div', null, h('span', { class: `chip ${STATUS_TONE[s.status] || 'mute'}` }, tt(STATUS_TEXT[s.status] || s.status))),
     h('div', { class: 'txacts' }));
   const acts = row.lastChild;
-  const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast('Reconciled', 'ok'); reload(); } catch (e) { fail(e); } };
+  const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast(tt('Justified'), 'ok'); reload(); } catch (e) { fail(e); } };
   if (s.candidates.length) {
     if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Justify')));
     else acts.appendChild(h('select', { on: { change: (e) => { if (e.target.value) confirmWith(t.amountCents >= 0 ? { documentId: e.target.value } : { itemId: e.target.value }); } } },
@@ -608,7 +610,7 @@ async function viewBank() {
     const sugCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Transactions to justify')));
     try {
       const sug = (await api('GET', '/api/bank/suggestions')).rows;
-      sugCard.appendChild(sug.length ? h('div', { class: 'txlist' }, sug.map((s) => suggestionRow(s, treasury.currency, draw))) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing to reconcile')))));
+      sugCard.appendChild(sug.length ? h('div', { class: 'txlist' }, sug.map((s) => suggestionRow(s, treasury.currency, draw))) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing to justify')))));
     } catch (e) { fail(e, sugCard); }
     box.appendChild(sugCard);
   }

@@ -23,6 +23,10 @@ h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 0 0 12px;
 button, .btn { white-space: nowrap; font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; }
 button:hover, .btn:hover { border-color: var(--accent); }
 button.primary, .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+/* Terracotta CTA variant (additive, opt-in via .warm): reserved for the one place the brief calls for a
+   terracotta primary action - e.g. the homepage "Create an invoice" card - never the default button colour. */
+button.warm, .btn.warm { background: var(--warm); color: #fff; border-color: var(--warm); }
+button.warm:hover, .btn.warm:hover { background: color-mix(in srgb, var(--warm) 85%, #000); border-color: color-mix(in srgb, var(--warm) 85%, #000); }
 button.danger { color: var(--bad); border-color: #e7b8b4; } button.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
