@@ -461,6 +461,66 @@
     'Sales documents': 'Verkoopdocumenten', 'No sales documents yet.': 'Nog geen verkoopdocument.',
     'Supplier documents': 'Leveranciersdocumenten', 'No supplier documents yet.': 'Nog geen leveranciersdocument.',
   });
+  // Unified Finance module (2026-09-24): shell nav, Home hero/CTA, "Contact us".
+  Object.assign(messages, {
+    'Home': 'Start', 'To do': 'Te doen', 'Sales': 'Verkoop', 'Bank & Cash': 'Bank & Kas', 'More': 'Meer',
+    'Contact us': 'Contact opnemen', 'Reach your configured finance contact:': 'Neem contact op via uw ingesteld financieel adres:', 'No contact address is configured yet.': 'Er is nog geen contactadres ingesteld.',
+    'Working with clarity.': 'Ondernemen met duidelijkheid.', 'Moving forward with peace of mind.': 'Vooruitgaan met gemoedsrust.',
+    'Every invoice, told simply.': 'Elke factuur, eenvoudig verteld.', 'Financial clarity, day after day.': 'Financiële duidelijkheid, dag na dag.',
+    'Create, send and track your invoices with ease.': 'Maak, verstuur en volg uw facturen moeiteloos op.',
+    'Most recent: {0} · {1} {2}': 'Meest recent: {0} · {1} {2}', 'No invoice yet - create your first one.': 'Nog geen factuur - maak uw eerste aan.',
+  });
+  // À faire (viewTodo, views-workspace.js).
+  Object.assign(messages, {
+    'Everything that needs your attention, in one place.': 'Alles wat uw aandacht vereist, op één plek.',
+    'To handle': 'Te behandelen', 'Documents and actions to finalise': 'Documenten en acties om af te ronden',
+    'Urgent': 'Urgent', 'Needs attention now': 'Vereist nu actie',
+    'Worth a look soon': 'Binnenkort te bekijken', 'Informational': 'Informatief', 'No action required yet': 'Nog geen actie vereist',
+    'By priority': 'Op prioriteit', 'Up to date': 'Up-to-date', 'Recommended action': 'Aanbevolen actie',
+  });
+  // Sales/Purchases workspaces + shared analytics panel (views-workspace.js).
+  Object.assign(messages, {
+    'This month': 'Deze maand', 'Last month': 'Vorige maand', 'Last 3 months': 'Laatste 3 maanden', 'This quarter': 'Dit kwartaal', 'This year': 'Dit jaar', 'Custom range': 'Aangepaste periode',
+    'Search a product or SKU...': 'Zoek een product of SKU…',
+    'Sales (excl. VAT)': 'Verkopen (excl. btw)', 'Credit notes (excl. VAT)': 'Creditnota\'s (excl. btw)', 'Net after credit notes': 'Netto na creditnota\'s', 'Documents': 'Documenten',
+    'By product': 'Per product', 'Product': 'Product', 'SKU': 'SKU', 'Qty': 'Aantal', 'Revenue': 'Omzet',
+    'No catalogue product on any sales line in this period.': 'Geen catalogusproduct op de verkooplijnen van deze periode.',
+    '{0} of sales lines have no catalogue product/SKU and are not included in the breakdown above.': '{0} aan verkooplijnen heeft geen catalogusproduct/SKU en is niet opgenomen in het overzicht hierboven.',
+    'Purchases (incl. VAT)': 'Aankopen (incl. btw)', 'By supplier': 'Per leverancier', 'Supplier': 'Leverancier', 'Total': 'Totaal',
+    'No supplier invoice in this period.': 'Geen leveranciersfactuur in deze periode.',
+    'Invoices, quotes and credit notes in one place.': 'Facturen, offertes en creditnota\'s op één plek.', 'New invoice': 'Nieuwe factuur',
+    'Invoices': 'Facturen', 'Credit notes': 'Creditnota\'s', 'Analytics': 'Analyse',
+    'Amount receivable': 'Te ontvangen', 'Overdue': 'Achterstallig', '{0} case(s)': '{0} geval(len)', 'Collected this month': 'Geïnd deze maand', '{0} payment(s)': '{0} betaling(en)',
+    'Quotes to convert': 'Offertes om om te zetten', 'Accepted, not yet invoiced': 'Aanvaard, nog niet gefactureerd',
+    'Search number or customer...': 'Zoek een nummer of klant…', 'Export': 'Exporteren',
+    'Select a document to see its summary here.': 'Selecteer een document om het overzicht hier te zien.',
+    'Open': 'Openen', 'Still due': 'Nog verschuldigd', 'No document matches.': 'Geen document komt overeen.', 'Issued': 'Uitgereikt', 'Due': 'Vervaldatum', 'Document': 'Document', 'Customer': 'Klant', 'Amount': 'Bedrag', 'Status': 'Status',
+    '{0} unit(s) · {1} {2} across {3} document(s).': '{0} eenhe(i)d(en) · {1} {2} over {3} document(en).',
+    'Process supplier invoices, validate the data and track what remains to pay.': 'Verwerk leveranciersfacturen, valideer de gegevens en volg wat nog te betalen is.',
+    '+ Add manually': '+ Handmatig toevoegen', 'To pay': 'Te betalen', 'Documents awaiting validation': 'Documenten in afwachting van validatie',
+    '{0} document(s)': '{0} document(en)', 'Supplier invoice(s)': 'Leveranciersfactu(u)r(en)', 'Supplier, invoice number...': 'Leverancier, factuurnummer…',
+    'Nothing here.': 'Niets hier.',
+  });
+  // Bank & Cash / Treasury (views-workspace.js).
+  Object.assign(messages, {
+    'Justify': 'Verantwoorden', 'Transactions to justify': 'Te verantwoorden transacties',
+    'Understand every inflow and outflow, without accounting jargon.': 'Begrijp elke inkomende en uitgaande beweging, zonder boekhoudjargon.',
+    'Confirmed count only': 'Enkel bevestigde tellingen',
+    'Visualise what is realised, what is committed and your projected position.': 'Visualiseer wat gerealiseerd is, wat vaststaat en uw geprojecteerde positie.',
+    'Available today': 'Vandaag beschikbaar', 'Receivable in {0} days': 'Te ontvangen binnen {0} dagen', 'Payable in {0} days': 'Te betalen binnen {0} dagen',
+    'Treasury position': 'Kaspositie', 'Realised documented balance, last 12 months': 'Gerealiseerd gedocumenteerd saldo, laatste 12 maanden',
+    'Not enough history yet.': 'Nog niet genoeg geschiedenis.',
+    'Expected customer invoices': 'Verwachte klantfacturen', 'Supplier invoices to pay': 'Te betalen leveranciersfacturen',
+    '{0} of overdue receivables is NOT included in this projection (assumed, not expected).': '{0} aan achterstallige vorderingen is NIET opgenomen in deze projectie (verondersteld, niet verwacht).',
+    'VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.': 'Btw wordt hier niet voorzien - raadpleeg het boekhoudpakket voor het officiële btw-cijfer per periode.',
+    'Projection detail unavailable.': 'Projectiedetail niet beschikbaar.',
+  });
+  // Contacts (views-contacts.js), unified visual pass.
+  Object.assign(messages, {
+    'Both': 'Beide', 'To complete': 'Aan te vullen',
+    'Customers, suppliers and financial relationships in one directory.': 'Klanten, leveranciers en financiële relaties in één overzicht.',
+    'Search name, VAT, email...': 'Zoeken op naam, btw, e-mail…', 'Contact details': 'Contactgegevens', '+ Create': '+ Aanmaken',
+  });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.nl = { messages, patterns };
 })();

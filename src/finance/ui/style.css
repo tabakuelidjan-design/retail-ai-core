@@ -806,8 +806,179 @@ html, body { background: var(--bg); }
 .contact-fin .fi { display: flex; flex-direction: column; gap: 2px; }
 .contact-fin .fi .fl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .contact-fin .fi .fv { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.contact-fin .fi.bad .fv { color: var(--bad); }
 .doclist { display: flex; flex-direction: column; gap: 2px; }
 .crow-doc { display: grid; grid-template-columns: minmax(90px, 1.3fr) 84px minmax(84px, 1fr) auto; gap: 10px; align-items: center; padding: 9px 6px; text-decoration: none; color: inherit; border-radius: 8px; transition: background .12s var(--ease); }
 .crow-doc:hover, .crow-doc:focus-visible { background: #f5f7fb; outline: none; }
 .crow-doc .cd-amt { text-align: right; font-variant-numeric: tabular-nums; justify-self: end; }
+
+/* ============================================================================================
+   HABB Finance — unified visual system (2026-09-24). Approved reference: neutral white-grey canvas,
+   navy/terracotta/green signature, serif headings on white surfaces, one coherent product across every
+   page. This block wins the cascade (last in file) and mostly just RETINTS existing token-driven
+   primitives (.card/.btn/.badge/.tc-*/.re-bar-*/.activity-*/.txrow/.tbox/.rail/.tab2...) - only genuinely
+   new page structures (page-shell/hero-row/metric-grid/workspace/queue/treasury/todo) get new classes.
+   ============================================================================================ */
+:root {
+  --bg: #f4f5f5; --card: #ffffff; --ink: #26313a; --ink-soft: #4f667c; --muted: #7c8890; --line: #e2e6e7;
+  --accent: #20384e; --accent-ink: #ffffff; --warm: #be6547; --warm-soft: #f7ebe5; --ok: #17956b; --info: #2c4a60; --bad: #d95c4f;
+  --radius: 12px; --rail-w: 84px; --line-2: #d8dfe1; --shadow: 0 6px 22px rgba(33,50,66,.055);
+}
+html, body { background: var(--bg); }
+.card { border-color: var(--line); box-shadow: var(--shadow); }
+button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
+.badge.ISSUED, .badge.PAID, .badge.CONVERTED, .badge.CLEAN { color: var(--ok); }
+.badge.PARTIALLY_PAID, .badge.PARTIAL, .badge.REVIEW_REQUIRED { color: #a8632b; }
+.badge.OVERDUE { color: var(--bad); }
+
+/* ---- Sidebar: labelled icons (never icon-only at any width), dynamic merchant mark (never a fixed brand letter). ---- */
+.rail { gap: 6px; padding: 16px 0; }
+.rail-mark { background: rgba(255,255,255,.12); color: #fff; font-family: var(--serif); font-size: 19px; }
+.railitem { width: var(--rail-w); height: 54px; border-radius: 12px; flex-direction: column; gap: 4px; font-size: 9px; letter-spacing: .01em; }
+.railitem .rlabel { font-size: 9px; }
+.rail-more { display: none; }
+
+/* ---- Topbar: search pill + merchant meta, unchanged structurally, retinted. ---- */
+.gsearchwrap { border-radius: 16px; box-shadow: 0 2px 8px rgba(42,60,74,.03); }
+
+/* ---- Page shell: hero row + editorial title + optional quote, shared by every page. ---- */
+/* .main keeps its original padding for pages not yet rebuilt on .page-shell (Settings, the invoice/quote
+   form, the accountant pack workflow); a redesigned page supplies its own via .page-shell, so .main's own
+   padding is dropped for those to avoid doubling up. */
+.main:has(.page-shell) { padding: 0; max-width: none; }
+/* No hard max-width: the reference itself does not cap .view's width, and content-grid-3/workspace/etc.
+   are all fr-based, so extra space on very wide desktops goes to those columns proportionally rather than
+   stretching table text or leaving a large dead zone on the right (mandate section 16). */
+.page-shell { display: grid; gap: 18px; padding: 24px 28px 96px; }
+.hero-row { display: grid; grid-template-columns: minmax(280px, 1fr) 320px; gap: 20px; align-items: start; }
+.hero-row .hero-block h1 { font-family: var(--serif); color: var(--accent); font-weight: 500; font-size: 38px; line-height: 1.05; margin: 4px 0 0; }
+.hero-row .subtitle { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+.quote-card { min-height: 60px; display: flex; justify-content: flex-end; align-items: flex-start; }
+.quote-card .quote { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.25; text-align: right; color: #2a4156; margin-top: 6px; }
+@media (max-width: 1280px) { .hero-row { grid-template-columns: 1fr; } .quote-card { display: none; } }
+
+/* ---- Metric strip: icon-left KPI cards with a real sparkline, used by every page's top row. ---- */
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+.metric { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); min-height: 108px; padding: 16px; display: grid; grid-template-columns: 42px minmax(0,1fr) 72px; gap: 11px; align-items: center; text-decoration: none; color: inherit; }
+.metric-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--warm-soft); color: var(--warm); flex: 0 0 auto; }
+.metric-title { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 5px; }
+.metric-value { font-family: var(--serif); font-size: 22px; line-height: 1.1; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.metric-note { margin-top: 6px; color: var(--muted); font-size: 10.5px; }
+.metric-note .good { color: var(--ok); font-weight: 700; } .metric-note .bad { color: var(--bad); font-weight: 700; }
+.metric-spark { height: 46px; align-self: end; } .metric-spark svg { width: 100%; height: 100%; }
+@media (max-width: 1280px) { .metric-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .metric { grid-template-columns: 36px 1fr; padding: 12px; } .metric-spark { display: none; } }
+
+/* ---- Section/content grid shared by page bodies. ---- */
+.section-title { font-family: var(--serif); color: var(--accent); font-weight: 500; font-size: 18px; margin: 0; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.section-sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+.viewall { font-size: 11px; color: var(--info); text-decoration: underline; white-space: nowrap; }
+.content-grid-3 { display: grid; grid-template-columns: minmax(0,2.35fr) minmax(0,1.03fr) minmax(0,.9fr); gap: 14px; }
+.content-grid-bottom { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; }
+.panel-tall .card, .panel-tall { min-height: 320px; }
+@media (max-width: 1280px) { .content-grid-3, .content-grid-bottom { grid-template-columns: 1fr; } }
+
+/* ---- Tabs row: wraps the existing dot-underline .tab2 primitive (unchanged) in a scrollable strip. ---- */
+.tabsrow { display: flex; gap: 16px; border-bottom: 1px solid var(--line); overflow: auto; }
+
+/* ---- Workspace: list + optional right side panel, shared by Ventes/Achats/Banque/Contacts. ---- */
+.workspace { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr); overflow: hidden; }
+.workspace-main { min-width: 0; } .workspace-side { min-width: 0; border-left: 1px solid var(--line); background: var(--card-soft, #f8f9f9); padding: 16px 18px; }
+.workspace-head { padding: 14px 16px 0; } .workspace-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.search-field { flex: 1; max-width: 340px; height: 38px; border: 1px solid var(--line-2); background: #fff; border-radius: 9px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); }
+.search-field input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 12.5px; color: var(--ink); }
+.tools { display: flex; gap: 7px; flex-wrap: wrap; }
+.tool { height: 34px; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 0 11px; color: var(--ink-soft); font-size: 11.5px; cursor: pointer; }
+.tool:hover { border-color: var(--accent); }
+.detail-head { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.detail-head h2 { font-family: var(--serif); color: var(--accent); font-size: 19px; font-weight: 500; margin: 0 0 3px; }
+.detail-head p { margin: 2px 0; color: var(--ink-soft); font-size: 11px; }
+.money-strip { display: grid; grid-template-columns: repeat(3, 1fr); padding: 14px 0; border-bottom: 1px solid var(--line); }
+.money-strip div { padding: 0 10px; border-right: 1px solid var(--line); } .money-strip div:first-child { padding-left: 0; } .money-strip div:last-child { border-right: 0; }
+.money-strip span { display: block; color: var(--muted); font-size: 10px; margin-bottom: 4px; } .money-strip strong { font-size: 15px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wblock { padding: 14px 0; border-bottom: 1px solid var(--line); } .wblock:last-child { border-bottom: 0; } .wblock h3 { font-size: 11.5px; margin: 0 0 8px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.kvfield { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid #eceff0; font-size: 11.5px; }
+.kvfield:last-child { border-bottom: 0; } .kvfield label { color: var(--muted); margin: 0; }
+.docline { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eceff0; align-items: center; }
+.docline:last-child { border-bottom: 0; } .docline strong { font-size: 11.5px; } .docline .docright { text-align: right; }
+@media (max-width: 1280px) { .workspace { grid-template-columns: 1fr; } .workspace-side { border-left: 0; border-top: 1px solid var(--line); } }
+
+/* ---- Queue (Achats): list + document preview + validation form, three panes on desktop. ---- */
+.purchase-shell { display: grid; grid-template-columns: 260px minmax(0,1fr) 340px; overflow: hidden; }
+.queue { padding: 14px; border-right: 1px solid var(--line); overflow: auto; background: #fff; }
+.queue-item { padding: 10px 8px; border-bottom: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.queue-item.selected { background: #f2f5f5; } .queue-item strong { display: block; font-size: 11.5px; } .queue-item small { display: block; color: var(--muted); font-size: 9.5px; margin-top: 3px; }
+.queue-money { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--ink-soft); }
+.doc-preview { padding: 18px; overflow: auto; background: var(--card-soft, #f8f9f9); display: flex; align-items: flex-start; justify-content: center; }
+.form-pane { padding: 16px 18px; background: #fff; border-left: 1px solid var(--line); overflow: auto; }
+@media (max-width: 1280px) { .purchase-shell { grid-template-columns: 220px 1fr; } .form-pane { display: none; } }
+
+/* ---- Banque & Caisse: accounts strip + transaction workspace. ---- */
+.accounts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.account-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+.account-card span { display: block; color: var(--muted); font-size: 10px; } .account-card strong { display: block; font-family: var(--serif); font-size: 19px; color: var(--accent); margin-top: 4px; } .account-card small { display: block; color: var(--muted); font-size: 9.5px; margin-top: 3px; }
+.bank-workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .7fr); }
+.matchbox { margin: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+.matchrow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 11px; }
+@media (max-width: 1280px) { .accounts-grid { grid-template-columns: 1fr; } .bank-workspace { grid-template-columns: 1fr; } }
+
+/* ---- Trésorerie: its own KPI+chart+projection page, distinct from Banque & Caisse. ---- */
+.treasury-grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 12px; }
+.tmetric { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+.tmetric span { display: block; color: var(--muted); font-size: 10px; } .tmetric strong { display: block; font-family: var(--serif); font-size: 19px; color: var(--accent); margin-top: 4px; }
+.treasury-workspace { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .55fr); }
+.tchart-wrap { padding: 16px; } .projection { padding: 16px 18px; background: var(--card-soft, #f8f9f9); border-left: 1px solid var(--line); }
+.proj { padding: 9px 0; border-bottom: 1px solid var(--line); } .proj:last-child { border-bottom: 0; } .proj strong { display: block; font-size: 11px; }
+.proj span { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--ink-soft); margin-top: 4px; }
+.proj b.in { color: var(--ok); } .proj b.out { color: var(--bad); }
+@media (max-width: 1280px) { .treasury-grid { grid-template-columns: 1fr 1fr; } .treasury-workspace { grid-template-columns: 1fr; } .projection { border-left: 0; border-top: 1px solid var(--line); } }
+
+/* ---- À faire: reuses .card/.alist/.arow (Action Center) for the priority list; adds only the split
+   summary/detail pane and a plain tone bar (never a fabricated time-horizon chart - see the report). ---- */
+.todo-workspace { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+.tonebar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); margin: 10px 0 8px; }
+.tonebar span { height: 100%; } .tonebar .bad { background: var(--bad); } .tonebar .warn { background: var(--warm); } .tonebar .info { background: var(--info); } .tonebar .ok { background: var(--ok); }
+.tonelegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--ink-soft); }
+.tonelegend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 5px; vertical-align: -1px; }
+.tonelegend .bad::before { background: var(--bad); } .tonelegend .warn::before { background: var(--warm); } .tonelegend .info::before { background: var(--info); } .tonelegend .ok::before { background: var(--ok); }
+@media (max-width: 1280px) { .todo-workspace { grid-template-columns: 1fr; } }
+
+/* ---- Support ---- */
+.contact-support { position: fixed; right: 22px; bottom: 22px; z-index: 30; height: 44px; border: 0; border-radius: 22px; padding: 0 16px; background: var(--accent); color: #fff; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 22px rgba(32,56,78,.22); font-size: 12px; font-weight: 700; cursor: pointer; }
+
+/* ---- Mobile ≤767: bottom nav (5 entries max incl. Plus), bottom sheet, stacked tables, full-screen drawers. ---- */
+@media (max-width: 767px) {
+  /* Real <table> markup (Ventes/Achats analytics/Contacts lists) converts to stacked label/value rows -
+     "aucun scroll horizontal obligatoire" (mandate section 6) - rather than a cramped, clipped grid. Keyed
+     off td[data-label] (set in JS on every such cell) rather than a wrapper class, so it applies uniformly
+     wherever one of these tables ends up nested (e.g. the analytics panel, which has no .table-wrap). */
+  table:has(td[data-label]), table:has(td[data-label]) tbody, table:has(td[data-label]) tr { display: block; width: 100%; }
+  table:has(td[data-label]) > tr:first-child, table:has(td[data-label]) tbody > tr:first-child { display: none; }
+  table:has(td[data-label]) tr { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; padding: 4px 12px; }
+  table:has(td[data-label]) td { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px solid #eef0f0; text-align: right; }
+  table:has(td[data-label]) td:last-child { border-bottom: 0; }
+  td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; text-align: left; }
+  table:has(td[data-label]) td strong, table:has(td[data-label]) td small { text-align: right; }
+  .rail { justify-content: space-around; }
+  .rail-nav { flex: 1; justify-content: space-around; overflow: visible; }
+  .rail-nav .railitem[data-more] { display: none; }
+  .rail-foot { display: none; }
+  .rail-more { display: flex; }
+  .page-shell { padding: 16px 14px 90px; }
+  .hero-row .hero-block h1 { font-size: 28px; }
+  .content-grid-3, .content-grid-bottom, .accounts-grid, .treasury-grid { grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+  .metric-value { white-space: nowrap; }
+  .workspace, .bank-workspace, .treasury-workspace, .purchase-shell, .todo-workspace { grid-template-columns: 1fr; }
+  .queue { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; }
+  .doc-preview { display: none; }
+  .contact-support { bottom: 76px; }
+  .railitem, .tool, .btn, button { min-height: 40px; }
+}
+.sheet-back { position: fixed; inset: 0; background: rgba(20,30,40,.35); z-index: 40; display: grid; align-items: end; }
+.sheet { background: #fff; border-radius: 16px 16px 0 0; padding: 10px 8px 18px; box-shadow: 0 -12px 30px rgba(16,24,40,.2); max-height: 70vh; overflow: auto; }
+.sheet-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 13px 14px; border: 0; background: none; border-radius: 10px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.sheet-item:hover { background: var(--bg); }
+.sheet-handle { width: 36px; height: 4px; border-radius: 999px; background: var(--line-2); margin: 2px auto 10px; }
 

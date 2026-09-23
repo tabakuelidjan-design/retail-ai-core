@@ -481,6 +481,66 @@
     'Sales documents': 'Documents de vente', 'No sales documents yet.': 'Aucun document de vente.',
     'Supplier documents': 'Documents fournisseurs', 'No supplier documents yet.': 'Aucun document fournisseur.',
   });
+  // HABB Finance unified module (2026-09-24): shell nav, Accueil hero/CTA, "Nous contacter".
+  Object.assign(messages, {
+    'Home': 'Accueil', 'To do': 'À faire', 'Sales': 'Ventes', 'Bank & Cash': 'Banque & Caisse', 'More': 'Plus',
+    'Contact us': 'Nous contacter', 'Reach your configured finance contact:': 'Contactez votre adresse finance configurée :', 'No contact address is configured yet.': 'Aucune adresse de contact n\'est configurée pour le moment.',
+    'Working with clarity.': 'Entreprendre avec clarté.', 'Moving forward with peace of mind.': 'Avancer avec sérénité.',
+    'Every invoice, told simply.': 'Chaque facture racontée simplement.', 'Financial clarity, day after day.': 'La clarté financière, jour après jour.',
+    'Create, send and track your invoices with ease.': 'Créez, envoyez et suivez vos factures en toute simplicité.',
+    'Most recent: {0} · {1} {2}': 'Plus récente : {0} · {1} {2}', 'No invoice yet - create your first one.': 'Aucune facture pour le moment - créez la première.',
+  });
+  // À faire (viewTodo, views-workspace.js).
+  Object.assign(messages, {
+    'Everything that needs your attention, in one place.': 'Tout ce qui demande votre attention, au même endroit.',
+    'To handle': 'À traiter', 'Documents and actions to finalise': 'Documents et actions à finaliser',
+    'Urgent': 'Urgent', 'Needs attention now': 'Nécessite une action maintenant',
+    'Worth a look soon': 'À regarder prochainement', 'Informational': 'Informatif', 'No action required yet': 'Aucune action requise pour le moment',
+    'By priority': 'Par priorité', 'Up to date': 'À jour', 'Recommended action': 'Action recommandée',
+  });
+  // Ventes/Achats workspaces + shared analytics panel (views-workspace.js).
+  Object.assign(messages, {
+    'This month': 'Ce mois-ci', 'Last month': 'Le mois dernier', 'Last 3 months': 'Les 3 derniers mois', 'This quarter': 'Ce trimestre', 'This year': 'Cette année', 'Custom range': 'Période personnalisée',
+    'Search a product or SKU...': 'Rechercher un produit ou une référence…',
+    'Sales (excl. VAT)': 'Ventes (HTVA)', 'Credit notes (excl. VAT)': 'Avoirs (HTVA)', 'Net after credit notes': 'Net après avoirs', 'Documents': 'Documents',
+    'By product': 'Par produit', 'Product': 'Produit', 'SKU': 'Référence', 'Qty': 'Qté', 'Revenue': 'Chiffre d\'affaires',
+    'No catalogue product on any sales line in this period.': 'Aucun produit du catalogue sur les lignes de vente de cette période.',
+    '{0} of sales lines have no catalogue product/SKU and are not included in the breakdown above.': '{0} de lignes de vente n\'ont pas de produit/référence catalogue et ne figurent pas dans la répartition ci-dessus.',
+    'Purchases (incl. VAT)': 'Achats (TVAC)', 'By supplier': 'Par fournisseur', 'Supplier': 'Fournisseur', 'Total': 'Total',
+    'No supplier invoice in this period.': 'Aucune facture fournisseur sur cette période.',
+    'Invoices, quotes and credit notes in one place.': 'Factures, devis et avoirs au même endroit.', 'New invoice': 'Nouvelle facture',
+    'Invoices': 'Factures', 'Credit notes': 'Avoirs', 'Analytics': 'Analytique',
+    'Amount receivable': 'À recevoir', 'Overdue': 'En retard', '{0} case(s)': '{0} cas', 'Collected this month': 'Encaissé ce mois-ci', '{0} payment(s)': '{0} paiement(s)',
+    'Quotes to convert': 'Devis à convertir', 'Accepted, not yet invoiced': 'Acceptés, pas encore facturés',
+    'Search number or customer...': 'Rechercher un numéro ou un client…', 'Export': 'Exporter',
+    'Select a document to see its summary here.': 'Sélectionnez un document pour voir son résumé ici.',
+    'Open': 'Ouvrir', 'Still due': 'Reste dû', 'No document matches.': 'Aucun document ne correspond.', 'Issued': 'Émise', 'Due': 'Échéance', 'Document': 'Document', 'Customer': 'Client', 'Amount': 'Montant', 'Status': 'Statut',
+    '{0} unit(s) · {1} {2} across {3} document(s).': '{0} unité(s) · {1} {2} sur {3} document(s).',
+    'Process supplier invoices, validate the data and track what remains to pay.': 'Traitez les factures fournisseurs, validez les données et suivez ce qui reste à payer.',
+    '+ Add manually': '+ Ajouter manuellement', 'To pay': 'À payer', 'Documents awaiting validation': 'Documents en attente de validation',
+    '{0} document(s)': '{0} document(s)', 'Supplier invoice(s)': 'Facture(s) fournisseur', 'Supplier, invoice number...': 'Fournisseur, numéro de facture…',
+    'Nothing here.': 'Rien ici.',
+  });
+  // Banque & Caisse / Trésorerie (views-workspace.js).
+  Object.assign(messages, {
+    'Justify': 'Justifier', 'Transactions to justify': 'Transactions à justifier',
+    'Understand every inflow and outflow, without accounting jargon.': 'Comprenez chaque entrée et sortie, sans jargon comptable.',
+    'Confirmed count only': 'Comptage confirmé uniquement',
+    'Visualise what is realised, what is committed and your projected position.': 'Visualisez le réalisé, les engagements à venir et votre position projetée.',
+    'Available today': 'Disponible aujourd\'hui', 'Receivable in {0} days': 'À recevoir sous {0} jours', 'Payable in {0} days': 'À payer sous {0} jours',
+    'Treasury position': 'Position de trésorerie', 'Realised documented balance, last 12 months': 'Solde documenté réalisé, 12 derniers mois',
+    'Not enough history yet.': 'Pas encore assez d\'historique.',
+    'Expected customer invoices': 'Factures clients attendues', 'Supplier invoices to pay': 'Factures fournisseurs à payer',
+    '{0} of overdue receivables is NOT included in this projection (assumed, not expected).': '{0} de créances en retard ne sont PAS inclus dans cette projection (supposé, pas attendu).',
+    'VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.': 'La TVA n\'est pas provisionnée ici - consultez le pack comptable pour le chiffre de TVA officiel par période.',
+    'Projection detail unavailable.': 'Détail de la projection indisponible.',
+  });
+  // Contacts (views-contacts.js), unified visual pass.
+  Object.assign(messages, {
+    'Both': 'Les deux', 'To complete': 'À compléter',
+    'Customers, suppliers and financial relationships in one directory.': 'Clients, fournisseurs et relations financières dans un seul répertoire.',
+    'Search name, VAT, email...': 'Rechercher par nom, TVA, e-mail…', 'Contact details': 'Coordonnées', '+ Create': '+ Créer',
+  });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.fr = { messages, patterns };
 })();

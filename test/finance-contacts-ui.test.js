@@ -56,7 +56,7 @@ test('relation derivation: exactly customer-only / supplier-only / both / none, 
 test('routing: #/contacts is a real route, #/companies redirects into it (never removed), and the nav has exactly one Contacts entry', () => {
   assert.match(appSrc, /parts\[0\] === 'contacts'/);
   assert.match(appSrc, /parts\[0\] === 'companies'.*location\.hash = /);
-  const navMatch = appSrc.match(/const NAV = \[.*\];/);
+  const navMatch = appSrc.match(/const NAV = \[[\s\S]*?\n\];/);
   assert.ok(navMatch, 'NAV array found');
   assert.equal((navMatch[0].match(/'#\/contacts'/g) || []).length, 1, 'exactly one #/contacts nav entry');
   assert.equal((navMatch[0].match(/'#\/companies'/g) || []).length, 0, 'no separate #/companies nav entry (single Contacts item, not three)');

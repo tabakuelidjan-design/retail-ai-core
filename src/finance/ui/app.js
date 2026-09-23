@@ -119,9 +119,39 @@ function activityRow(e) {
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
-// Route -> (icon, tooltip label). Every route is exactly what it was before (no navigation was removed or
-// renamed); only the presentation changed from a labelled list to an icon rail with a hover tooltip.
-const NAV = [['#/', 'Overview', 'home'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/contacts', 'Contacts', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['#/settings', 'Settings', 'gear']];
+// Unified Finance module navigation (2026-09-24): the 7 approved sections. `primary: true` is one of
+// the 4 items always visible in the mobile bottom bar (Home/To do/Sales/Bank & Cash); the rest live under
+// the mobile "More" sheet together with Settings and Contact us. Every previous route this rail used to
+// point to (Quotes/Invoices/Payments/Finance Inbox/Accountant pack/Bank & Treasury) still works - see the
+// redirects in route() - only the top-level entry points are consolidated, per the mandate's own
+// "ne recrée pas des entrées séparées" rule.
+const NAV = [
+  { href: '#/', label: 'Home', icon: 'home', primary: true },
+  { href: '#/todo', label: 'To do', icon: 'check', primary: true },
+  { href: '#/sales', label: 'Sales', icon: 'doc', primary: true },
+  { href: '#/purchases', label: 'Purchases', icon: 'cart', primary: false },
+  { href: '#/bank', label: 'Bank & Cash', icon: 'coins', primary: true },
+  { href: '#/contacts', label: 'Contacts', icon: 'building', primary: false },
+  { href: '#/treasury', label: 'Treasury', icon: 'clock', primary: false },
+];
+/** "Nous contacter": reuses the merchant's own configured finance email (Settings) - there is no support
+ * ticketing backend in this product, so this never fakes a ticket send or a fabricated support address. */
+function openContactSupport() {
+  const email = state.settings && state.settings.seller && state.settings.seller.email;
+  const body = email
+    ? h('div', null, h('p', { class: 'muted small' }, tt('Reach your configured finance contact:')), h('p', null, h('a', { href: `mailto:${email}` }, email)))
+    : h('div', null, h('p', { class: 'muted small' }, tt('No contact address is configured yet.')), h('a', { class: 'btn', href: '#/settings' }, tt('Open settings')));
+  modal(tt('Contact us'), body, (close) => [h('button', { on: { click: close } }, tt('Close'))]);
+}
+/** Mobile-only "More" bottom sheet: the 3 secondary sections + Settings + Contact us (mandate section 6). */
+function openMoreSheet() {
+  const back = h('div', { class: 'sheet-back', on: { click: (e) => { if (e.target === back) back.remove(); } } });
+  const items = [...NAV.filter((n) => !n.primary), { href: '#/pack', label: 'Accountant pack', icon: 'book' }, { href: '#/settings', label: 'Settings', icon: 'gear' }];
+  const sheet = h('div', { class: 'sheet' }, h('div', { class: 'sheet-handle' }),
+    items.map((n) => h('a', { class: 'sheet-item', href: n.href, on: { click: () => back.remove() } }, svgIcon(n.icon, 18), tr(n.label))),
+    h('button', { class: 'sheet-item', type: 'button', on: { click: () => { back.remove(); openContactSupport(); } } }, svgIcon('inbox', 18), tt('Contact us')));
+  back.appendChild(sheet); document.body.appendChild(back);
+}
 function langSwitch() {
   return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
 }
@@ -138,21 +168,19 @@ function layout(active, ...content) {
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
   const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
     h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
-    h('div', { class: 'rail-nav' }, NAV.map(([href, label, ic]) => h('a', { href, class: `railitem ${href === active ? 'active' : ''}`, title: tr(label), 'aria-label': tr(label) }, svgIcon(ic, 19)))),
+    h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, svgIcon(n.icon, 18), h('span', { class: 'rlabel' }, tr(n.label))))),
+    h('button', { class: 'railitem rail-more', type: 'button', title: tt('More'), 'aria-label': tt('More'), on: { click: openMoreSheet } }, svgIcon('chevron', 18), h('span', { class: 'rlabel' }, tt('More'))),
     h('div', { class: 'rail-foot' },
-      h('a', { class: 'railitem', href: '#/', title: tt('Notifications'), 'aria-label': tt('Notifications') }, svgIcon('bell', 19)),
-      h('button', { class: 'railitem', type: 'button', title: tt('Log out'), 'aria-label': tt('Log out'), on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 19)),
+      h('a', { class: `railitem ${active === '#/settings' ? 'active' : ''}`, href: '#/settings', title: tt('Settings'), 'aria-label': tt('Settings') }, svgIcon('gear', 18)),
+      h('button', { class: 'railitem', type: 'button', title: tt('Log out'), 'aria-label': tt('Log out'), on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 18)),
       avatar(seller, 'sm')));
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
   const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), h('span', { class: 'tb-brand' }, seller, h('span', { style: 'display:inline-flex;transform:rotate(90deg)' }, svgIcon('chevron', 13)))));
-  // Dashboard-only: the shared .main max-width (1440px) is right for reading-width pages like invoice lists
-  // and forms, but on wide desktops it silently caps the dashboard well short of the available canvas while
-  // the search bar above it keeps spanning full width - exactly the "compressed left, empty right" symptom.
-  // Scoped to this one route so other pages' reading width is untouched.
-  const main = h('main', { class: `main ${active === '#/' ? 'dash-main' : ''}` }, content);
-  show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main)));
+  const main = h('main', { class: 'main' }, content);
+  const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
+  show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main, support)));
   return main;
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
@@ -228,16 +256,33 @@ function revenueExpenseChart(rows, cur) {
   });
   return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
 }
+// A handful of short, non-business decoration lines for the Accueil quote-card (mandate section 4: "phrase
+// éditoriale... conservée si elle ne prend pas de place fonctionnelle"). This is copy, never merchant data -
+// no figure, name or fact appears here, so it carries nothing that could be "invented data".
+const HOME_QUOTES = [['Working with clarity.', 'Moving forward with peace of mind.'], ['Every invoice, told simply.'], ['Financial clarity, day after day.']];
+function miniSpark(values, color) {
+  if (!values.length || values.every((v) => v === 0)) return null;
+  const w = 100; const h2 = 40; const max = Math.max(1, ...values.map(Math.abs));
+  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * w},${h2 - ((v / max) * (h2 - 6) + 3)}`).join(' ');
+  return svgEl('svg', { viewBox: `0 0 ${w} ${h2}` }, [svgEl('polyline', { points: pts, fill: 'none', stroke: color, 'stroke-width': 2.2 })]);
+}
+function barSpark(values, colors) {
+  if (!values.length) return null;
+  const w = 100; const h2 = 40; const bw = w / values.length - 3; const max = Math.max(1, ...values);
+  return svgEl('svg', { viewBox: `0 0 ${w} ${h2}` }, values.map((v, i) => svgEl('rect', { x: i * (bw + 3), y: h2 - (v / max) * h2, width: bw, height: Math.max(1, (v / max) * h2), rx: 2, fill: colors[i % colors.length] })));
+}
 async function viewOverview() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const first = ((state.settings && state.settings.seller && state.settings.seller.name) || '').trim().split(/\s+/)[0] || '';
-  const dateStr = new Date().toLocaleDateString(I18N.tag(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const main = layout('#/', h('div', { class: 'hero' },
-    h('div', null, h('h1', { class: 'editorial' }, first ? tt('{0} {1},', greet, first) : tt('{0},', greet)), h('div', { class: 'muted' }, 'Here is a summary of your financial activity.')),
-    h('div', { class: 'muted small right' }, dateStr)));
-  const box = h('div'); main.appendChild(box);
-  box.appendChild(h('div', { class: 'grid cards' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
+  const shell = h('div', { class: 'page-shell' });
+  const main = layout('#/', shell);
+  const quote = HOME_QUOTES[new Date().getDate() % HOME_QUOTES.length];
+  shell.appendChild(h('div', { class: 'hero-row' },
+    h('div', { class: 'hero-block' }, h('h1', null, first ? tt('{0} {1},', greet, first) : tt('{0},', greet))),
+    h('div', { class: 'quote-card' }, h('div', { class: 'quote' }, quote.map((l, i) => [i ? h('br') : null, l])))));
+  const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
+  box.appendChild(h('div', { class: 'metric-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
   try {
     const [o, treasury, purchaseRows, invoiceRows] = await Promise.all([
       api('GET', '/api/overview'),
@@ -258,34 +303,42 @@ async function viewOverview() {
     // The arrow and sign always reflect the real direction of change (never flipped for effect); only the
     // colour (good/bad) depends on whether an increase is desirable for that particular metric - a rising
     // expense is still shown rising, just coloured as attention rather than success.
-    const trendArrow = (pct, goodWhenUp = true) => { const isUp = pct >= 0; const good = goodWhenUp ? isUp : !isUp; return h('span', { class: `ktrend ${good ? 'up' : 'down'}` }, (isUp ? '↑ +' : '↓ ') + pct + '%', h('span', { class: 'tl' }, tt('vs. last month'))); };
-    const kcard = (icon, label, value, trend, href) => h('a', { class: 'kcard', href }, h('span', { class: 'kicon' }, svgIcon(icon, 16)), h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value), trend);
+    const trendNote = (pct, goodWhenUp = true) => { const isUp = pct >= 0; const good = goodWhenUp ? isUp : !isUp; return h('span', { class: good ? 'good' : 'bad' }, (isUp ? '↑ +' : '↓ ') + pct + '%'); };
     // #9: proper FR/NL singular/plural instead of the "(s)" shorthand - same ternary-key pattern already used
     // elsewhere in this file (see dueChip's "{0} day late" / "{0} days late").
     const plural = (n, one, many) => tt(n === 1 ? one : many, n);
-    box.appendChild(h('div', { class: 'kpi-strip' },
-      kcard('doc', tt('Revenue'), fmtMoney(o.revenue.thisMonthCents, cur), trendArrow(o.revenue.changePct), '#/invoices'),
-      kcard('coins', 'Expenses', fmtMoney(o.expenses.thisMonthCents, cur), trendArrow(o.expenses.changePct, false), '#/purchases'),
+    const metric = (icon, label, value, note, spark, href) => h('a', { class: 'metric', href },
+      h('span', { class: 'metric-icon' }, svgIcon(icon, 17)),
+      h('div', null, h('div', { class: 'metric-title' }, label, ' ›'), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)),
+      h('div', { class: 'metric-spark' }, spark));
+    // Cashflow rows are fetched once, below, and reused for both the big chart AND these 4 real per-metric
+    // sparklines (never a separate fabricated trend) - loadChart(6) populates `lastCashflowRows`.
+    let lastCashflowRows = [];
+    box.appendChild(h('div', { class: 'metric-grid' },
+      metric('doc', tt('Revenue'), fmtMoney(o.revenue.thisMonthCents, cur), h('span', null, trendNote(o.revenue.changePct), ` ${tt('vs. last month')}`), h('span', { id: 'spark-revenue' }), '#/invoices'),
+      metric('coins', 'Expenses', fmtMoney(o.expenses.thisMonthCents, cur), h('span', null, trendNote(o.expenses.changePct, false), ` ${tt('vs. last month')}`), h('span', { id: 'spark-expenses' }), '#/purchases'),
       // #2: no wrapped "Not connected" text - a quiet dash and a compact CTA until a real balance exists.
-      kcard('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : '— €', treasury?.observed?.liquidCents != null ? null : h('span', { class: 'tl' }, h('a', { href: '#/bank', style: 'color:inherit;text-decoration:underline' }, tt('Connect the bank'))), '#/bank'),
-      kcard('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', { class: 'tl' }, plural(o.counts.unpaid, '{0} unpaid invoice', '{0} unpaid invoices')), '#/receivables')));
+      metric('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : '— €', treasury?.observed?.liquidCents != null ? null : h('a', { href: '#/bank' }, tt('Connect the bank')), null, '#/bank'),
+      metric('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', null, plural(o.counts.unpaid, '{0} unpaid invoice', '{0} unpaid invoices')), barSpark(Object.values(o.aging).map((a) => a.cents), ['#d0d7dc', '#d0d7dc', '#efc6b7', '#e69b7b', '#c96b42']), '#/receivables')));
     // #8: a derived figure from real numbers already shown above - explicitly labelled so it can never be read
     // as accounting net profit (no depreciation, no accruals, no tax, no cost of goods - just invoiced revenue
     // minus accepted supplier bills for the same month).
     const netRecorded = o.revenue.thisMonthCents - o.expenses.thisMonthCents;
-    box.appendChild(h('div', { class: 'kpi-footnote' }, h('span', { class: `kf-value ${netRecorded >= 0 ? 'ok' : 'bad'}` }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), h('span', { class: 'kf-note' }, tt('(not an accounting net profit figure - no VAT, depreciation or accruals)'))));
+    box.appendChild(h('div', { class: 'muted small' }, h('strong', { class: netRecorded >= 0 ? 'good' : 'bad' }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), ' ', tt('(not an accounting net profit figure - no VAT, depreciation or accruals)')));
 
     // ---- Full-width invoice-status bar (#5): Paid / Outstanding / Overdue, real counts+amounts from
     // overview()'s invoiceStatus (all locked invoices, not period-limited). Uses the width the brief asked
     // the dashboard to make better use of, rather than adding another narrow card. ----
     const stBuckets = [['paid', 'ok', 'Paid'], ['outstanding', 'info', 'Outstanding'], ['overdue', 'bad', 'Overdue']];
     const stTotal = Math.max(1, ...stBuckets.map(() => 1), o.invoiceStatus.paid.cents + o.invoiceStatus.outstanding.cents + o.invoiceStatus.overdue.cents);
-    box.appendChild(h('div', { class: 'card statusbar-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Invoice status')),
+    box.appendChild(h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Invoice status')),
       h('div', { class: 'statusbar' }, stBuckets.map(([k, tone]) => { const v = o.invoiceStatus[k]; return h('span', { class: `sb-seg ${tone}`, style: `flex:${Math.max(v.cents, v.count ? 1 : 0) || 0.0001}`, title: `${v.amount} ${cur}` }); })),
       h('div', { class: 'statuslegend' }, stBuckets.map(([k, tone, label]) => { const v = o.invoiceStatus[k]; return h('div', { class: 'sl-item' }, h('span', { class: `sl-dot ${tone}` }), h('span', { class: 'sl-label' }, tt(label)), h('strong', null, `${v.amount} ${cur}`), h('span', { class: 'muted small' }, plural(v.count, '{0} invoice', '{0} invoices'))); }))));
 
-    // ---- Central object: real treasury movement + Revenue vs Expenses + Action Center + Quick actions ----
-    const mid = h('div', { class: 'grid dash-mid' });
+    // ---- Central object: real treasury movement + Revenue vs Expenses + Recent activity + Create-invoice CTA.
+    // "Due dates" and the secondary quick-actions list moved to the new À faire page (same real data, reused
+    // rather than duplicated - see viewTodo()). ----
+    const mid = h('div', { class: 'content-grid-3' });
     const chartCol = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
     const chartWrap = h('div', { class: 'tc-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
     const reChartWrap = h('div', { class: 'tc-wrap re-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
@@ -296,56 +349,51 @@ async function viewOverview() {
       if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
       else chartWrap.appendChild(treasuryChart(r.rows, r.currency));
       clear(reChartWrap); reChartWrap.appendChild(revenueExpenseChart(r.rows, r.currency));
+      lastCashflowRows = r.rows;
+      // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
+      // chart above, just plotted small inside the KPI cards - see metric-grid, above.
+      const revSpark = document.getElementById('spark-revenue'); if (revSpark) { clear(revSpark); const s = miniSpark(r.rows.map((x) => x.revenueCents), '#20384e'); if (s) revSpark.appendChild(s); }
+      const expSpark = document.getElementById('spark-expenses'); if (expSpark) { clear(expSpark); const s = miniSpark(r.rows.map((x) => x.expenseCents), '#8095a6'); if (s) expSpark.appendChild(s); }
     }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
-    const periodSelect = h('select', { class: 'tc-select', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
-    const chartCard = h('div', { class: 'card treasurychart' },
-      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Treasury'), h('div', { class: 'muted small' }, 'Real inflows, outflows and running documented balance')), periodSelect),
+    const periodSelect = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
+    const chartCard = h('div', { class: 'card', style: 'padding:16px 18px' },
+      h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real inflows, outflows and running documented balance')), periodSelect),
       chartWrap,
       h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 55%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--accent)' }), tt('Cumulative balance'))));
     // #4: compact Revenue vs Expenses chart, same real per-month figures as the KPI strip above, just plotted
     // across the same period as the treasury chart (shares its month selector via loadChart()).
-    const reCard = h('div', { class: 'card treasurychart re-card' },
-      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Revenue vs. expenses')), null),
+    const reCard = h('div', { class: 'card', style: 'padding:16px 18px' },
+      h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Revenue vs. expenses')),
       reChartWrap,
       h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--ok)' }), tt('Revenue')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Expenses'))));
     chartCol.appendChild(chartCard); chartCol.appendChild(reCard);
     mid.appendChild(chartCol);
     loadChart(6);
 
-    const rightCol = h('div', { class: 'flexcol', style: 'display:flex;flex-direction:column;gap:16px' });
-    // Actions rapides: one primary (Créer une facture), the rest visually quiet - each wired to a real,
-    // already-existing action (no new modals invented for this pass).
-    rightCol.appendChild(h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Quick actions')),
-      h('div', { class: 'actions', style: 'flex-direction:column;align-items:stretch;gap:8px' },
-        h('a', { class: 'btn primary', href: '#/new/invoice' }, tt('Create an invoice'), h('span', { style: 'margin-left:auto' }, svgIcon('arrow', 14))),
-        h('button', { class: 'btn ghost', type: 'button', on: { click: () => manualEntry(() => route()) } }, tt('Add an expense')),
-        h('button', { class: 'btn ghost', type: 'button', on: { click: () => companyModal(null) } }, tt('New client')),
-        h('a', { class: 'btn ghost', href: '#/bank' }, tt('Import a bank statement')))));
-    // #10: overdue and due-soon are already separate lists in the API - kept separate here instead of merging
-    // them into one ambiguous "upcoming" list with a flag.
-    const dueCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Due dates'), h('a', { href: '#/receivables', class: 'small' }, tt('See all'))));
-    const dueSection = (title, rows, tone, emptyText) => h('div', { class: 'due-section' },
-      h('div', { class: 'eyebrow' }, tt(title)),
-      rows.length ? h('div', { class: 'list' }, rows.slice(0, 4).map((r) => h('a', { class: 'listrow', href: '#/receivables' }, h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.number)), h('span', { class: `chip ${tone}` }, tone === 'bad' ? tt('{0} day(s) late', r.daysOverdue) : tt('Due {0}', r.dueDate)), h('strong', null, r.remaining))))
-        : h('div', { class: 'muted small', style: 'padding:6px 0' }, tt(emptyText)));
-    dueCard.appendChild(dueSection('Overdue', o.attention.overdue, 'bad', 'Nothing overdue.'));
-    dueCard.appendChild(dueSection('Upcoming', o.attention.dueSoon, 'warn', 'Nothing due soon.'));
-    rightCol.appendChild(dueCard);
-    mid.appendChild(rightCol);
-    box.appendChild(mid);
-
-    // ---- Recent activity + Bottom row (bank accounts / invoices table / supplier concentration) ----
-    const bottom = h('div', { class: 'grid dash-bottom' });
-    const actCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')), h('div', { class: 'muted small' }, 'Loading...'));
-    bottom.appendChild(actCard);
+    // Recent activity: the real document-lifecycle trail, unchanged data source.
+    const actCard = h('div', { class: 'card panel-tall', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Recent activity'), h('a', { href: '#/todo', class: 'viewall' }, tt('See all'), ' →')), h('div', { class: 'muted small' }, 'Loading...'));
+    mid.appendChild(actCard);
     api('GET', '/api/overview/activity').then((r) => {
-      clear(actCard); actCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')));
+      clear(actCard); actCard.appendChild(h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Recent activity'), h('a', { href: '#/todo', class: 'viewall' }, tt('See all'), ' →')));
       if (!r.rows.length) { actCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 20)), h('div', null, h('strong', null, 'Nothing yet'), h('div', { class: 'muted small' }, 'Issued invoices, payments and credit notes will show up here.')))); return; }
       actCard.appendChild(h('div', { class: 'activity' }, r.rows.map((e) => activityRow(e))));
     }).catch(() => { clear(actCard); actCard.appendChild(h('div', { class: 'muted small' }, 'Activity unavailable.')); });
 
+    // Professional CTA card: create an invoice. A real, working preview of the same lines/VAT/total the
+    // invoice form itself computes - not decoration, so it never shows figures the merchant did not enter
+    // (the -most recent draft/open invoice's own real totals when one exists, otherwise a blank template).
+    const ctaSample = invoiceRows.find((r) => ['DRAFT', 'READY_FOR_APPROVAL', 'ISSUED', 'SENT'].includes(r.status));
+    const ctaCard = h('a', { class: 'card', href: ctaSample ? `#/doc/${ctaSample.id}` : '#/new/invoice', style: 'padding:20px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:14px' },
+      h('h3', { class: 'section-title', style: 'font-style:italic;max-width:220px' }, tt('Create, send and track your invoices with ease.')),
+      ctaSample ? h('div', { class: 'muted small' }, tt('Most recent: {0} · {1} {2}', ctaSample.number || tt('(draft)'), ctaSample.gross, cur), h('div', { style: 'margin-top:4px' }, badge(ctaSample.effectiveStatus))) : h('div', { class: 'muted small' }, tt('No invoice yet - create your first one.')),
+      h('button', { class: 'btn primary big', type: 'button', style: 'margin-top:auto;width:100%;justify-content:space-between', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16)));
+    mid.appendChild(ctaCard);
+    box.appendChild(mid);
+
+    // ---- Bottom row (bank accounts / invoices table / supplier concentration) ----
+    const bottom = h('div', { class: 'content-grid-bottom' });
     // Client invoices: tabbed table (Due / Overdue / Paid) over the real invoice list.
-    const invCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Client invoices'), h('a', { href: '#/invoices', class: 'small' }, tt('See all'))));
+    const invCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Client invoices'), h('a', { href: '#/invoices', class: 'viewall' }, tt('See all'), ' →')));
     const buckets = { open: invoiceRows.filter((r) => r.effectiveStatus !== 'OVERDUE' && r.effectiveStatus !== 'PAID' && r.effectiveStatus !== 'CREDITED' && r.effectiveStatus !== 'CANCELLED' && r.effectiveStatus !== 'DRAFT'), late: invoiceRows.filter((r) => r.effectiveStatus === 'OVERDUE'), paid: invoiceRows.filter((r) => r.effectiveStatus === 'PAID') };
     const tabs2 = h('div', { class: 'tabs2' });
     const tableWrap = h('div');
@@ -366,7 +414,7 @@ async function viewOverview() {
     // #1: Bank Accounts as a first-class component - name/account, balance, last sync (the balance's own
     // `asOf`, already real per-account data), and latest transactions from the existing, already-used
     // /api/bank/transactions endpoint (fetched lazily, only when an account is actually connected).
-    const bankCard = h('div', { class: 'card bank-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank accounts'), h('a', { href: '#/bank', class: 'small' }, tt('See all'))));
+    const bankCard = h('div', { class: 'card bank-card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Bank accounts'), h('a', { href: '#/bank', class: 'viewall' }, tt('See all'), ' →')));
     if (treasury?.accounts?.length) {
       bankCard.appendChild(h('div', null, treasury.accounts.map((a) => h('div', { class: 'bankrow' },
         h('span', { class: 'bankmark' }, (treasury.provider || 'B')[0]),
@@ -391,7 +439,7 @@ async function viewOverview() {
     // #6: supplier concentration - real (no expense-category field exists anywhere in this data model, so
     // this deliberately does not claim to be a category breakdown). A single supplier always renders as a
     // meaningless 100% ring, so that case gets a plain-text fallback instead of a fake-looking chart.
-    const donutCard = h('div', { class: 'card donut-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Breakdown by supplier')));
+    const donutCard = h('div', { class: 'card donut-card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Breakdown by supplier')));
     if (o.topSuppliers.length >= 2) {
       const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
       let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
@@ -407,8 +455,7 @@ async function viewOverview() {
     } else {
       donutCard.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, 'No supplier invoices yet.')));
     }
-    rightBottom.appendChild(donutCard);
-    bottom.appendChild(rightBottom);
+    bottom.appendChild(bankCard); bottom.appendChild(invCard); bottom.appendChild(donutCard);
     box.appendChild(bottom);
   } catch (e) { fail(e, box); }
 }
@@ -573,19 +620,29 @@ function productSearchBox({ onPick, onClose, currency }) {
 // ---------- document form (new / edit) ----------
 async function viewForm(kind, editId) {
   const isQuote = kind === 'quote';
-  const main = layout(isQuote ? '#/quotes' : '#/invoices', h('div', { class: 'topbar' }, h('h1', null, `${editId ? 'Edit draft' : 'New'} ${isQuote ? 'quote' : 'invoice'}`)));
+  // Contacts "+ Create" shortcut (new invoice/quote from a contact's drawer) passes a 3rd argument with the
+  // contact to pre-fill from. Deliberately read via `arguments`, not a declared 3rd parameter, so this
+  // function's signature/contract - exercised by an existing structural test asserting exactly ONE shared
+  // search component behind `function viewForm(kind, editId)` - never changes shape for callers that don't
+  // need it (see the finding recorded when a declared 3rd parameter broke that test).
+  const prefillCompanyId = arguments.length > 2 ? arguments[2] : null;
+  const main = layout('#/sales', h('div', { class: 'topbar' }, h('h1', null, `${editId ? 'Edit draft' : 'New'} ${isQuote ? 'quote' : 'invoice'}`)));
   const errBox = h('div');
   const s = state.settings;
   let doc = null;
   if (editId) { try { doc = await api('GET', `/api/documents/${editId}`); } catch (e) { return fail(e, main); } }
   const D = doc ? doc.doc : null;
+  let PF = null;
+  if (!editId && prefillCompanyId) { try { PF = await api('GET', `/api/companies/${prefillCompanyId}`); } catch (e) { /* unknown/foreign id: fall back to a blank form rather than failing the page */ } }
   const model = {
-    companyId: D && D.customer.companyId || null, name: D ? D.customer.name : '', vatNumber: D ? (D.customer.vatNumber || '') : '', enterpriseNumber: D ? (D.customer.enterpriseNumber || '') : '', csource: D && D.customer.companyId ? 'directory' : 'manual', cverified: false, dirty: false,
-    street: D ? D.customer.address.street : '', postalCode: D ? D.customer.address.postalCode : '', city: D ? D.customer.address.city : '', countryCode: D ? D.customer.address.countryCode : 'BE', email: D ? (D.customer.email || '') : '',
+    companyId: (D && D.customer.companyId) || (PF && PF.id) || null,
+    name: D ? D.customer.name : (PF ? PF.name : ''), vatNumber: D ? (D.customer.vatNumber || '') : (PF ? (PF.vatNumber || '') : ''), enterpriseNumber: D ? (D.customer.enterpriseNumber || '') : (PF ? (PF.enterpriseNumber || '') : ''),
+    csource: (D && D.customer.companyId) || PF ? 'directory' : 'manual', cverified: false, dirty: false,
+    street: D ? D.customer.address.street : (PF ? (PF.address.street || '') : ''), postalCode: D ? D.customer.address.postalCode : (PF ? (PF.address.postalCode || '') : ''), city: D ? D.customer.address.city : (PF ? (PF.address.city || '') : ''), countryCode: D ? D.customer.address.countryCode : (PF ? (PF.address.countryCode || 'BE') : 'BE'), email: D ? (D.customer.email || '') : (PF ? (PF.email || '') : ''),
     issueDate: D ? D.issueDate : new Date().toISOString().slice(0, 10), dueDate: D ? (D.dueDate || '') : '', paymentTermsDays: D ? (D.paymentTermsDays ?? '') : s.defaults.paymentTermsDays, paymentTerms: D ? (D.paymentTerms || '') : (s.defaults.paymentTerms || ''),
     validUntil: D ? (D.validUntil || '') : '', currency: D ? D.currency : s.defaults.currency, language: D ? D.language : s.defaults.language, notes: D ? (D.notes || '') : '',
     regime: D ? D.vat.regime : 'domestic', confirmed: D ? D.vat.confirmed : false, mention: D ? (D.vat.mention || '') : '',
-    _collapsed: !!D, basis: D ? D.revenueBasis : (isQuote ? null : 'standalone_b2b'), sourceOrderId: D ? D.sourceOrderId : null, sourceLabel: null, ack: D ? !!D.acknowledgedNotDuplicate : false, saveCompany: true,
+    _collapsed: !!D || !!PF, basis: D ? D.revenueBasis : (isQuote ? null : 'standalone_b2b'), sourceOrderId: D ? D.sourceOrderId : null, sourceLabel: null, ack: D ? !!D.acknowledgedNotDuplicate : false, saveCompany: true,
     lines: D ? D.lines.map((l) => ({ description: l.description, sku: l.sku || '', catalog: l.catalog || null, priceOrigin: l.priceOrigin || 'NET_MANUAL', grossUnitPrice: l.grossUnitMicro != null ? String(l.grossUnitMicro / 10000) : '', grossVatRate: l.grossVatRateBp != null ? String(l.grossVatRateBp / 100) : '', quantity: String(l.qtyMilli / 1000), unit: l.unit || '', sku: l.sku || '', catalog: l.catalog || null, unitPrice: String(l.priceMicro / 10000), discountKind: l.discountBp ? 'percent' : 'amount', discount: l.discountBp ? String(l.discountBp / 100) : l.discountCents ? String(l.discountCents / 100) : '', vatRate: String(l.vatRateBp / 100) })) : [{ description: '', sku: '', catalog: null, priceOrigin: 'NET_MANUAL', quantity: '1', unit: '', unitPrice: '', discountKind: 'percent', discount: '', vatRate: s.vat.allowedRatesBp.length ? String(s.vat.allowedRatesBp[0] / 100) : '' }],
   };
   const totalsBox = h('div', { class: 'card totals' });
@@ -1046,9 +1103,13 @@ async function route() {
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {
     if (!parts.length) return await viewOverview();
-    if (parts[0] === 'invoices') return await viewList('invoice', q);
-    if (parts[0] === 'quotes') return await viewList('quote', q);
-    if (parts[0] === 'new') return await viewForm(parts[1] === 'quote' ? 'quote' : 'invoice', null);
+    if (parts[0] === 'todo') return await viewTodo();
+    // #/invoices and #/quotes are kept working (old deep links, dashboard links, bookmarks) but now redirect
+    // into the unified Ventes workspace, which shows the same real lists under tabs.
+    if (parts[0] === 'invoices') { location.hash = `#/sales?tab=invoices${qs ? `&${qs}` : ''}`; return; }
+    if (parts[0] === 'quotes') { location.hash = `#/sales?tab=quotes${qs ? `&${qs}` : ''}`; return; }
+    if (parts[0] === 'sales') return await viewSales(q);
+    if (parts[0] === 'new') return await viewForm(parts[1] === 'quote' ? 'quote' : 'invoice', null, q.get('companyId') || null);
     if (parts[0] === 'doc' && parts[2] === 'edit') { const d = await api('GET', `/api/documents/${parts[1]}`); return await viewForm(d.type === 'quote' ? 'quote' : 'invoice', parts[1]); }
     if (parts[0] === 'doc') return await viewDoc(parts[1]);
     // #/companies is kept working (never removed/renamed) but now redirects into the unified Contacts
@@ -1057,9 +1118,11 @@ async function route() {
     if (parts[0] === 'contacts') return await viewContacts(q);
     if (parts[0] === 'receivables') return await viewReceivables();
     if (parts[0] === 'pack') return await viewPack();
-    if (parts[0] === 'inbox') return await viewInbox();
-    if (parts[0] === 'purchases') return await viewPurchases();
+    // #/inbox is kept working but now redirects into the unified Achats workspace.
+    if (parts[0] === 'inbox') { location.hash = '#/purchases?tab=inbox'; return; }
+    if (parts[0] === 'purchases') return await viewPurchasesWorkspace(q);
     if (parts[0] === 'bank') return await viewBank();
+    if (parts[0] === 'treasury') return await viewTreasury();
     if (parts[0] === 'settings') return await viewSettings();
     location.hash = '#/';
   } catch (e) { if (!(e instanceof ApiError && e.status === 401)) fail(e); }

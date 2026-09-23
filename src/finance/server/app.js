@@ -32,6 +32,7 @@ import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
 import { buildContacts, contactDetail, contactExportRow, planImport } from '../contacts.js';
+import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
 import { toCsv } from '../export-csv.js';
 import { buildReceivables } from '../receivables.js';
 import { loadDocsForReports, packFileBuffers } from '../reports.js';
@@ -897,6 +898,33 @@ export function createFinanceApp(deps) {
     const r = buildReceivables(docs, { today: clock.today(), dueSoonDays: settings.dashboard.dueSoonDays });
     const m = (c) => money(c, settings.defaults.language);
     json(ctx.res, 200, { ...r, unpaid: { ...r.unpaid, outstanding: m(r.unpaid.outstandingCents) }, overdue: { ...r.overdue, outstanding: m(r.overdue.outstandingCents) }, due_soon: { ...r.due_soon, outstanding: m(r.due_soon.outstandingCents) }, aging: Object.fromEntries(Object.entries(r.aging).map(([k, v]) => [k, { ...v, outstanding: m(v.outstandingCents) }])), invoices: r.invoices.map((i) => ({ ...i, remaining: m(i.remainingCents), gross: m(i.grossCents) })) });
+  });
+
+  // ---------- Sales/Purchases analytics (unified Finance module): product-level for sales (real
+  // catalogue/sku data on lines), supplier/status-level only for purchases (supplier invoices carry no line
+  // items) - see analytics.js's own module note for exactly why. All from/to filtering happens server-side
+  // on data already loaded once (loadDocsForReports/listSupplierInvoices), never a per-row query. ----------
+  const dateParam = (ctx, key) => { const v = ctx.url.searchParams.get(key); return v && isDate(v) ? v : undefined; };
+  on('GET', '/api/sales/analytics', async (ctx) => {
+    const { settings } = await servicesFor();
+    const m = (c) => money(c, settings.defaults.language);
+    const salesDocs = await loadDocsForReports(store, merchantId);
+    json(ctx.res, 200, buildSalesAnalytics(salesDocs, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m }));
+  });
+  on('GET', '/api/purchases/analytics', async (ctx) => {
+    const { settings } = await servicesFor();
+    const m = (c) => money(c, settings.defaults.language);
+    const supplierInvoices = await store.listSupplierInvoices(merchantId);
+    json(ctx.res, 200, buildPurchaseAnalytics(supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m }));
+  });
+  // Compact period report (Sales/Purchases/Credit notes/Net/VAT/counts) - complements, never replaces, the
+  // Accountant Pack below (still the authoritative per-rate VAT export for actually closing a period).
+  on('GET', '/api/period-report', async (ctx) => {
+    const { settings } = await servicesFor();
+    const m = (c) => money(c, settings.defaults.language);
+    const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
+    const r = buildPeriodReport(salesDocs, supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to') });
+    json(ctx.res, 200, { ...r, sales: { ...r.sales, gross: m(r.sales.grossCents) }, creditNotes: { ...r.creditNotes, gross: m(r.creditNotes.grossCents) }, purchases: { ...r.purchases, gross: m(r.purchases.grossCents) }, netSalesAfterCredits: m(r.netSalesAfterCreditsCents), vat: m(r.vatCents) });
   });
 
   // ---------- accountant pack ----------

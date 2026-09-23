@@ -41,6 +41,18 @@ const confChip = (x) => { const v = x.extraction && x.extraction.fields ? Object
 const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
 /** Integer cents -> text in the UI language, by string composition only (no arithmetic on money). */
+/** Client-side CSV export of rows already visible on screen - real data already fetched for the table, no
+ * server round trip, no fabricated column. RFC 4180-ish: only the two characters that actually need
+ * escaping in these simple text/number columns are handled. Used by Ventes/Achats "Export". */
+function exportRowsAsCsv(rows, columns, filename) {
+  const quote = String.fromCharCode(34); // kept out of any regex literal - see the finding recorded here
+  const needsQuoting = (s) => s.includes(quote) || s.includes(',') || s.includes('\n');
+  const esc = (v) => { const s = String(v ?? ''); return needsQuoting(s) ? quote + s.split(quote).join(quote + quote) + quote : s; };
+  const csv = `﻿${[columns.map((c) => c.header).join(','), ...rows.map((r) => columns.map((c) => esc(typeof c.value === 'function' ? c.value(r) : r[c.key])).join(','))].join('\r\n')}\r\n`;
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = h('a', { href: url, download: filename }); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 const CUR_SYMBOL = { EUR: '€', USD: '$', GBP: '£' };
 function fmtMoney(cents, currency) {
   if (cents == null) return '';
@@ -87,6 +99,256 @@ function openInboxItem(id, reload) {
     body.appendChild(act);
   }
   draw();
+}
+
+// ---------- À faire / To do: the real Action Center, as a first-class page ----------
+async function viewTodo() {
+  const shell = h('div', { class: 'page-shell' });
+  layout('#/todo', shell);
+  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('To do')), h('div', { class: 'subtitle' }, tt('Everything that needs your attention, in one place.')))));
+  const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
+  box.appendChild(h('div', { class: 'metric-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:22px;width:30%' })))));
+  try {
+    const [ac, o] = await Promise.all([api('GET', '/api/actions'), api('GET', '/api/overview')]);
+    clear(box);
+    const actions = ac.actions;
+    const counts = { bad: actions.filter((a) => a.tone === 'bad').length, warn: actions.filter((a) => a.tone === 'warn').length, info: actions.filter((a) => a.tone === 'info').length, ok: actions.filter((a) => a.tone === 'ok').length };
+    const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, String(value)), h('div', { class: 'metric-note' }, note)));
+    box.appendChild(h('div', { class: 'metric-grid' },
+      metric('check', tt('To handle'), actions.length, tt('Documents and actions to finalise')),
+      metric('alert', tt('Urgent'), counts.bad, h('span', { class: 'bad' }, tt('Needs attention now'))),
+      metric('clock', tt('To review'), counts.warn, tt('Worth a look soon')),
+      metric('arrow', tt('Informational'), counts.info + counts.ok, tt('No action required yet'))));
+    // A real breakdown of the SAME actions above, by tone - never a fabricated time-horizon chart (there is
+    // no per-item due-date bucketing in this data model to build "today/tomorrow/48h/this week" honestly).
+    box.appendChild(h('div', { class: 'card', style: 'padding:16px 18px' },
+      h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, tt('Overview')), h('div', { class: 'section-sub' }, tt('By priority'))),
+      h('div', { class: 'tonebar' }, [['bad', counts.bad], ['warn', counts.warn], ['info', counts.info], ['ok', counts.ok]].filter(([, n]) => n).map(([tone, n]) => h('span', { class: tone, style: `flex:${n}` }))),
+      h('div', { class: 'tonelegend' }, [['bad', 'Urgent'], ['warn', 'To review'], ['info', 'Informational'], ['ok', 'Up to date']].map(([tone, l]) => h('span', { class: tone }, tt(l), ` (${counts[tone]})`)))));
+    const mid = h('div', { class: 'todo-workspace' });
+    mid.appendChild(actionCenterCard(actions, o.currency));
+    const top = actions[0];
+    const detail = h('div', { class: 'card panel-medium', style: 'padding:16px 18px' }, h('h3', { class: 'section-title' }, tt('Recommended action')));
+    if (top) {
+      const text = (ACTION_TEXT[top.kind] || (() => top.kind))(top.amount ? { ...top, amount: `${top.amount} ${o.currency}`.trim() } : top);
+      detail.appendChild(h('div', { class: 'wblock', style: 'padding-top:12px' }, h('p', { class: 'muted small', style: 'line-height:1.55' }, text)));
+      if (top.cents != null) detail.appendChild(h('div', { class: 'money-strip', style: 'grid-template-columns:1fr' }, h('div', null, h('span', null, tt('Amount')), h('strong', null, fmtMoney(top.cents, o.currency)))));
+      detail.appendChild(h('div', { style: 'margin-top:12px' }, h('a', { class: 'btn primary big', href: top.href }, tt(CTA_TEXT[top.cta] || 'Review'))));
+    } else {
+      detail.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing needs your attention')), h('div', { class: 'muted small' }, tt('Everything is up to date.')))));
+    }
+    mid.appendChild(detail);
+    box.appendChild(mid);
+  } catch (e) { fail(e, box); }
+}
+
+// ---------- Ventes: Factures / Devis / Avoirs / Analytics, one workspace ----------
+const SALES_FILTERS = { invoice: INV_FILTERS, quote: QUOTE_FILTERS, credit_note: [['', 'All'], ['ISSUED', 'Issued']] };
+const SALES_TYPE_OF = { invoices: 'invoice', quotes: 'quote', credit_notes: 'credit_note' };
+/** from/to (YYYY-MM-DD) for a named period, computed client-side purely to build query params - the server
+ * remains the only authority on which documents actually fall in that range. */
+function periodRange(kind, custom) {
+  const now = new Date(); const y = now.getFullYear(); const m = now.getMonth();
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const first = (yy, mm) => new Date(Date.UTC(yy, mm, 1));
+  const last = (yy, mm) => new Date(Date.UTC(yy, mm + 1, 0));
+  if (kind === 'this_month') return { from: iso(first(y, m)), to: iso(last(y, m)) };
+  if (kind === 'last_month') return { from: iso(first(y, m - 1)), to: iso(last(y, m - 1)) };
+  if (kind === 'last_3_months') return { from: iso(first(y, m - 2)), to: iso(last(y, m)) };
+  if (kind === 'quarter') { const q = Math.floor(m / 3); return { from: iso(first(y, q * 3)), to: iso(last(y, q * 3 + 2)) }; }
+  if (kind === 'year') return { from: iso(first(y, 0)), to: iso(last(y, 11)) };
+  if (kind === 'custom' && custom) return custom;
+  return { from: iso(first(y, m)), to: iso(last(y, m)) };
+}
+const PERIODS = [['this_month', 'This month'], ['last_month', 'Last month'], ['last_3_months', 'Last 3 months'], ['quarter', 'This quarter'], ['year', 'This year'], ['custom', 'Custom range']];
+function periodPicker(onChange) {
+  let kind = 'this_month'; const custom = { from: '', to: '' };
+  const sel = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => { kind = e.target.value; drawCustom(); onChange(periodRange(kind, custom)); } } }, PERIODS.map(([v, l]) => h('option', { value: v }, tt(l))));
+  const customBox = h('span');
+  function drawCustom() {
+    clear(customBox);
+    if (kind !== 'custom') return;
+    const from = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { custom.from = e.target.value; onChange(periodRange(kind, custom)); } } });
+    const to = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { custom.to = e.target.value; onChange(periodRange(kind, custom)); } } });
+    customBox.appendChild(from); customBox.appendChild(to);
+  }
+  return { node: h('span', { class: 'tools' }, sel, customBox), get: () => periodRange(kind, custom) };
+}
+function analyticsPanel({ endpoint, currency, productDrilldown }) {
+  const box = h('div');
+  const search = h('input', { placeholder: tr('Search a product or SKU...') });
+  let range = periodRange('this_month');
+  const picker = periodPicker((r) => { range = r; load(); });
+  let searchTimer = null;
+  search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(load, 220); });
+  const toolbar = h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search), picker.node);
+  const results = h('div');
+  async function load() {
+    clear(results); results.appendChild(h('div', { class: 'muted small', style: 'padding:12px' }, tt('Loading...')));
+    try {
+      const { from, to } = range;
+      const r = await api('GET', `${endpoint}?from=${from || ''}&to=${to || ''}&q=${encodeURIComponent(search.value.trim())}`);
+      clear(results); results.appendChild(renderAnalytics(r, currency, productDrilldown));
+    } catch (e) { clear(results); fail(e, results); }
+  }
+  box.appendChild(toolbar); box.appendChild(results); load();
+  return box;
+}
+function renderAnalytics(r, currency, productDrilldown) {
+  const wrap = h('div', { style: 'padding:16px 18px' });
+  if (r.byProduct !== undefined) {
+    wrap.appendChild(h('div', { class: 'metric-grid', style: 'margin-bottom:14px' },
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Sales (excl. VAT)')), h('div', { class: 'metric-value' }, `${r.salesNet} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('coins', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Credit notes (excl. VAT)')), h('div', { class: 'metric-value' }, `${r.creditNet} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('check', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Net after credit notes')), h('div', { class: 'metric-value' }, `${r.netAfterCredits} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Documents')), h('div', { class: 'metric-value' }, String(r.documentsCount))))));
+    wrap.appendChild(h('h3', { class: 'section-title', style: 'margin-bottom:8px' }, tt('By product')));
+    if (!r.byProduct.length) wrap.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, tt('No catalogue product on any sales line in this period.'))));
+    else wrap.appendChild(h('table', null, h('tr', null, [tt('Product'), tt('SKU'), tt('Qty'), tt('Revenue')].map((x, i) => h('th', { class: i >= 2 ? 'num' : '' }, x))),
+      r.byProduct.map((p) => h('tr', { class: 'click', on: { click: () => productDrilldown(p) } }, h('td', { 'data-label': tr('Product') }, p.name), h('td', { 'data-label': tr('SKU') }, p.sku || '—'), h('td', { class: 'num', 'data-label': tr('Qty') }, String(p.qty)), h('td', { class: 'num', 'data-label': tr('Revenue') }, `${p.revenue} ${currency}`)))));
+    if (r.unattributedNetCents) wrap.appendChild(h('div', { class: 'banner info small', style: 'margin-top:10px' }, tt('{0} of sales lines have no catalogue product/SKU and are not included in the breakdown above.', `${r.unattributedNet} ${currency}`)));
+  } else {
+    wrap.appendChild(h('div', { class: 'metric-grid', style: 'margin-bottom:14px' },
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('coins', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Purchases (incl. VAT)')), h('div', { class: 'metric-value' }, `${r.total} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Documents')), h('div', { class: 'metric-value' }, String(r.documentsCount))))));
+    wrap.appendChild(h('h3', { class: 'section-title', style: 'margin-bottom:8px' }, tt('By supplier')));
+    if (!r.bySupplier.length) wrap.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, tt('No supplier invoice in this period.'))));
+    else wrap.appendChild(h('table', null, h('tr', null, [tt('Supplier'), tt('Documents'), tt('Total')].map((x, i) => h('th', { class: i === 2 ? 'num' : '' }, x))),
+      r.bySupplier.map((s) => h('tr', null, h('td', { 'data-label': tr('Supplier') }, s.name), h('td', { 'data-label': tr('Documents') }, String(s.count)), h('td', { class: 'num', 'data-label': tr('Total') }, `${s.gross} ${currency}`)))));
+    wrap.appendChild(h('div', { class: 'banner info small', style: 'margin-top:10px' }, tt(r.note)));
+  }
+  return wrap;
+}
+async function viewSales(q) {
+  let tab = SALES_TYPE_OF[q.get('tab')] ? q.get('tab') : (q.get('tab') === 'analytics' ? 'analytics' : Object.keys(SALES_TYPE_OF).find((k) => SALES_TYPE_OF[k] === (q.get('tab') === 'quotes' ? 'quote' : q.get('tab') === 'credit_notes' ? 'credit_note' : 'invoice')) || 'invoices');
+  if (!['invoices', 'quotes', 'credit_notes', 'analytics'].includes(tab)) tab = 'invoices';
+  let status = ''; let text = '';
+  const shell = h('div', { class: 'page-shell' });
+  layout('#/sales', shell);
+  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
+    h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/new/invoice' }, svgIcon('plus', 16), tt('New invoice')))));
+  const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
+  const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
+  const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
+  const workspace = h('div', { class: 'card workspace' }); box.appendChild(workspace);
+  const wsMain = h('div', { class: 'workspace-main' }); const wsSide = h('div', { class: 'workspace-side' });
+  workspace.appendChild(wsMain); workspace.appendChild(wsSide);
+
+  function drawTabs() {
+    clear(tabsrow);
+    [['invoices', 'Invoices'], ['quotes', 'Quotes'], ['credit_notes', 'Credit notes'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; location.hash = `#/sales?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+  }
+  async function loadMetrics() {
+    try {
+      const [rec, o] = await Promise.all([api('GET', '/api/receivables'), api('GET', '/api/overview')]);
+      const cur = o.currency;
+      clear(metricRow);
+      const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)));
+      metricRow.appendChild(metric('doc', tt('Amount receivable'), rec.unpaid.outstanding + ' ' + cur, tt('Open invoices')));
+      metricRow.appendChild(metric('alert', tt('Overdue'), rec.overdue.outstanding + ' ' + cur, h('span', { class: 'bad' }, tt('{0} case(s)', rec.overdue.count))));
+      metricRow.appendChild(metric('check', tt('Collected this month'), o.amounts.paidThisMonth + ' ' + cur, h('span', { class: 'good' }, tt('{0} payment(s)', o.amounts.paidThisMonthCount))));
+      metricRow.appendChild(metric('quote', tt('Quotes to convert'), String(o.counts.quotesToConvert), tt('Accepted, not yet invoiced')));
+    } catch (e) { /* metrics are a bonus strip - the workspace below still works without them */ }
+  }
+  function drawBody() {
+    clear(wsMain); clear(wsSide);
+    if (tab === 'analytics') {
+      wsSide.style.display = 'none'; workspace.style.gridTemplateColumns = '1fr';
+      wsMain.appendChild(analyticsPanel({ endpoint: '/api/sales/analytics', currency: state.settings.defaults.currency, productDrilldown: (p) => openProductDrilldown(p, state.settings.defaults.currency) }));
+      return;
+    }
+    workspace.style.gridTemplateColumns = ''; wsSide.style.display = '';
+    const kind = SALES_TYPE_OF[tab];
+    const filters = SALES_FILTERS[kind];
+    const search = h('input', { placeholder: tr('Search number or customer...') });
+    wsMain.appendChild(h('div', { class: 'workspace-head' }, h('div', { class: 'tabsrow', style: 'border:0' })));
+    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search), h('div', { class: 'tools' }, h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(shown, [{ header: 'Number', key: 'number' }, { header: 'Customer', key: 'customer' }, { header: 'Issue date', key: 'issueDate' }, { header: 'Due date', key: 'dueDate' }, { header: 'Amount', key: 'gross' }, { header: 'Status', key: 'effectiveStatus' }], `${kind}.csv`) } }, tt('Export')))));
+    const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
+    let rows = []; let shown = []; let selected = null;
+    function drawSide() {
+      clear(wsSide);
+      if (!selected) { wsSide.appendChild(h('div', { class: 'muted small' }, tt('Select a document to see its summary here.'))); return; }
+      const r = selected;
+      wsSide.appendChild(h('div', { class: 'detail-head' }, h('div', null, h('h2', null, r.number || tt('(draft)')), h('p', null, `${r.customer || ''} · ${r.issueDate || ''}`), h('p', null, badge(r.effectiveStatus))), h('a', { class: 'btn', href: `#/doc/${r.id}` }, tt('Open'))));
+      wsSide.appendChild(h('div', { class: 'money-strip' }, h('div', null, h('span', null, tt('Total')), h('strong', null, r.gross)), r.remaining != null ? h('div', null, h('span', null, tt('Still due')), h('strong', null, r.remaining)) : h('div')));
+    }
+    function drawTable() {
+      const s = text.trim().toLowerCase();
+      shown = rows.filter((r) => (!status || r.effectiveStatus === status) && (!s || `${r.number || ''} ${r.customer || ''}`.toLowerCase().includes(s)));
+      clear(tableWrap);
+      if (!shown.length) { tableWrap.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, tt('No document matches.'))))); return; }
+      tableWrap.appendChild(h('table', null, h('tr', null, [tt('Document'), tt('Customer'), tt('Issued'), tt('Due'), tt('Amount'), tt('Status')].map((x, i) => h('th', { class: i === 4 ? 'num' : '' }, x))),
+        shown.map((r) => h('tr', { class: 'click', on: { click: () => { selected = r; drawSide(); } } }, h('td', { 'data-label': tr('Document') }, h('strong', null, r.number || tt('(draft)')), h('small', null, tt(TYPE[r.type] || r.type))), h('td', { 'data-label': tr('Customer') }, r.customer || '—'), h('td', { 'data-label': tr('Issued') }, r.issueDate || '—'), h('td', { 'data-label': tr('Due') }, r.dueDate || '—'), h('td', { class: 'num', 'data-label': tr('Amount') }, r.gross || ''), h('td', { 'data-label': tr('Status') }, badge(r.effectiveStatus))))));
+    }
+    search.addEventListener('input', () => { text = search.value; drawTable(); });
+    api('GET', `/api/documents?type=${kind}`).then((r) => { rows = r.rows; drawTable(); drawSide(); }).catch((e) => fail(e, tableWrap));
+  }
+  drawTabs(); loadMetrics(); drawBody();
+}
+function openProductDrilldown(p, currency) {
+  modal(p.name, h('div', null, h('p', { class: 'muted small' }, tt('{0} unit(s) · {1} {2} across {3} document(s).', p.qty, p.revenue, currency, p.docIds.length)),
+    h('div', { class: 'doclist' }, p.docIds.map((id) => h('a', { class: 'crow-doc', href: `#/doc/${id}`, style: 'grid-template-columns:1fr auto' }, h('span', null, id.slice(0, 8)), svgIcon('chevron', 14))))),
+    (close) => [h('button', { on: { click: close } }, tt('Close'))]);
+}
+
+// ---------- Achats: À traiter (inbox) / À payer / Payés / Analytics, one workspace. Detail still opens the
+// existing, fully-featured openInboxItem() drawer (validate/reject/pay/link a contact) rather than
+// duplicating that safety-critical logic into a second, less-tested inline pane. ----------
+async function viewPurchasesWorkspace(q) {
+  let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
+  let text = '';
+  const shell = h('div', { class: 'page-shell' });
+  layout('#/purchases', shell);
+  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
+    h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => manualEntry(() => drawBody()) } }, tt('+ Add manually')))));
+  const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
+  const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
+  const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
+  const workspace = h('div', { class: 'card' }); box.appendChild(workspace);
+
+  async function loadMetrics() {
+    try {
+      const [purchases, c] = await Promise.all([api('GET', '/api/inbox?scope=purchases'), api('GET', '/api/inbox/status')]);
+      const cur = (purchases.rows[0] && purchases.rows[0].currency) || 'EUR';
+      const toPay = purchases.rows.filter((r) => r.status === 'TO_PAY');
+      const paidCount = purchases.rows.filter((r) => r.status === 'PAID').length;
+      clear(metricRow);
+      const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)));
+      metricRow.appendChild(metric('inbox', tt('To handle'), String(c.counts.RECEIVED + c.counts.TO_REVIEW), tt('Documents awaiting validation')));
+      metricRow.appendChild(metric('coins', tt('To pay'), `${fmtMoney(toPay.reduce((a, r) => a + (r.grossCents || 0), 0), cur)}`, tt('{0} document(s)', toPay.length)));
+      metricRow.appendChild(metric('check', tt('Paid'), String(paidCount), tt('Supplier invoice(s)')));
+    } catch (e) { /* the workspace below still works without the KPI strip */ }
+  }
+  function drawTabs() {
+    clear(tabsrow);
+    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+  }
+  function drawBody() {
+    clear(workspace);
+    if (tab === 'analytics') {
+      workspace.appendChild(analyticsPanel({ endpoint: '/api/purchases/analytics', currency: state.settings.defaults.currency, productDrilldown: () => {} }));
+      return;
+    }
+    const search = h('input', { placeholder: tr('Supplier, invoice number...') });
+    workspace.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search)));
+    const list = h('div', { class: 'table-wrap' }); workspace.appendChild(list);
+    search.addEventListener('input', () => { text = search.value; draw(); });
+    let rows = [];
+    function draw() {
+      const s = text.trim().toLowerCase();
+      const filtered = rows.filter((r) => !s || `${r.supplierName || ''} ${r.invoiceNumber || ''}`.toLowerCase().includes(s));
+      clear(list);
+      if (!filtered.length) { list.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('doc', 26)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
+      filtered.forEach((r) => list.appendChild(h('a', { class: 'docrow', href: '#', on: { click: (e) => { e.preventDefault(); openInboxItem(r.id, () => { drawTabs(); drawBody(); loadMetrics(); }); } } },
+        avatar(r.supplierName || r.fileName || '?'),
+        h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.supplierName || r.fileName || tt('Unknown supplier')), h('span', { class: 'ds' }, [r.invoiceNumber, r.issueDate].filter(Boolean).join('  ·  '))),
+        h('span', { class: 'damt' }, h('strong', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : ''), confChip(r)),
+        h('span', { class: 'dstat' }, inboxBadge(r.status), sourceBadge(r.source)), h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
+    }
+    const scope = tab === 'inbox' ? 'inbox' : 'purchases';
+    api('GET', `/api/inbox?scope=${scope}`).then((r) => { rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : r.rows; draw(); }).catch((e) => fail(e, list));
+  }
+  drawTabs(); loadMetrics(); drawBody();
 }
 
 // ---------- Finance Inbox ----------
@@ -299,21 +561,30 @@ function suggestionRow(s, currency, reload) {
   const acts = row.lastChild;
   const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast('Reconciled', 'ok'); reload(); } catch (e) { fail(e); } };
   if (s.candidates.length) {
-    if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Confirm')));
+    if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Justify')));
     else acts.appendChild(h('select', { on: { change: (e) => { if (e.target.value) confirmWith(t.amountCents >= 0 ? { documentId: e.target.value } : { itemId: e.target.value }); } } },
       h('option', { value: '' }, tt('Choose...')), s.candidates.map((c) => h('option', { value: t.amountCents >= 0 ? c.documentId : c.itemId }, `${c.number || c.invoiceNumber} — ${c.customer || c.supplierName}`))));
   }
+  // Kept as "Ignore" (not the reference's "Choisir autre chose"): the real action behind this button
+  // dismisses the suggestion - it does not let the merchant pick a different match, so labelling it as a
+  // choice would promise something it does not do.
   acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
   return row;
 }
 async function viewBank() {
-  const main = layout('#/bank', h('div', { class: 'hero' }, h('div', null, h('h1', null, 'Bank & Treasury'), h('div', { class: 'muted' }, 'Read-only: balances and transactions, never a payment or a transfer.'))));
-  const box = h('div'); main.appendChild(box);
+  const shell = h('div', { class: 'page-shell' });
+  layout('#/bank', shell);
+  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Bank & Cash')), h('div', { class: 'subtitle' }, tt('Understand every inflow and outflow, without accounting jargon.'))),
+    h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/treasury' }, tt('Treasury')))));
+  const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   async function draw() {
     clear(box);
     let st, treasury; try { st = await api('GET', '/api/bank/status'); treasury = await api('GET', '/api/treasury'); } catch (e) { return fail(e, box); }
-    box.appendChild(treasuryCard(treasury));
-    const connCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
+    box.appendChild(h('div', { class: 'accounts-grid' },
+      h('div', { class: 'account-card' }, h('span', null, tt('Bank')), h('strong', null, treasury.display.bank ?? '—'), h('small', null, tt(st.state === 'ACTIVE' ? 'Connected' : 'Not connected'))),
+      h('div', { class: 'account-card' }, h('span', null, tt('Cash')), h('strong', null, treasury.display.cash ?? '—'), h('small', null, tt('Confirmed count only'))),
+      h('div', { class: 'account-card' }, h('span', null, tt('Total liquidity')), h('strong', null, treasury.display.liquid ?? '—'), h('small', null, tt('Bank + cash')))));
+    const connCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
     connCard.appendChild(h('div', { class: 'banner info small' }, tt('Read-only access only. This connection can never initiate a payment, a transfer or change a beneficiary.')));
     if (st.state === 'ACTIVE') {
       connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, String(st.grantedAt).slice(0, 10))));
@@ -328,13 +599,13 @@ async function viewBank() {
         h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/bank/import-csv', { csv: csv.value }); toast(tt('{0} transaction(s) imported', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Import CSV'))));
     }
     box.appendChild(connCard);
-    const cashCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
+    const cashCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
     const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
     cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
       h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
     box.appendChild(cashCard);
     // Shown regardless of a live bank connection: a CSV import needs no connection at all, and its transactions still need reconciling.
-    const sugCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Transactions to reconcile'));
+    const sugCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Transactions to justify')));
     try {
       const sug = (await api('GET', '/api/bank/suggestions')).rows;
       sugCard.appendChild(sug.length ? h('div', { class: 'txlist' }, sug.map((s) => suggestionRow(s, treasury.currency, draw))) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing to reconcile')))));
@@ -342,4 +613,46 @@ async function viewBank() {
     box.appendChild(sugCard);
   }
   draw();
+}
+
+// ---------- Trésorerie: its own page, separate from Banque & Caisse - same real /api/treasury +
+// /api/overview/cashflow data the combined page used to show, split out per the mandate's own architecture. ----------
+async function viewTreasury() {
+  const shell = h('div', { class: 'page-shell' });
+  layout('#/treasury', shell);
+  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
+  const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
+  box.appendChild(h('div', { class: 'treasury-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })))));
+  try {
+    const [treasury, cf] = await Promise.all([api('GET', '/api/treasury'), api('GET', '/api/overview/cashflow?months=12')]);
+    clear(box);
+    const tmetric = (label, value, cls) => h('div', { class: `tmetric ${cls || ''}` }, h('span', null, label), h('strong', null, value ?? '—'));
+    const withCurTreasury = (v) => (v == null ? null : `${v} ${treasury.currency}`);
+    box.appendChild(h('div', { class: 'treasury-grid' },
+      tmetric(tt('Available today'), withCurTreasury(treasury.display.liquid), 'main'),
+      tmetric(tt('Receivable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.incoming)),
+      tmetric(tt('Payable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.outgoing)),
+      tmetric(tt('Projection'), withCurTreasury(treasury.display.projection))));
+    if (treasury.warnings?.length) box.appendChild(h('div', { class: 'banner warn small' }, treasury.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
+    const workspace = h('div', { class: 'card treasury-workspace' }); box.appendChild(workspace);
+    const chartWrap = h('div', { class: 'tchart-wrap' },
+      h('div', { class: 'section-head' }, h('div', null, h('h3', { class: 'section-title' }, 'Treasury position'), h('div', { class: 'section-sub' }, tt('Realised documented balance, last 12 months')))));
+    chartWrap.appendChild(cf.hasActivity ? treasuryChart(cf.rows, cf.currency) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
+    const projection = h('div', { class: 'projection' }, h('h3', { class: 'section-title', style: 'font-size:16px' }, tt('Projection')));
+    const proj = (label, note, amount, cls) => h('div', { class: 'proj' }, h('strong', null, label), h('span', null, h('em', null, note), h('b', { class: cls }, amount)));
+    try {
+      const [rec, purchases] = await Promise.all([api('GET', '/api/receivables'), api('GET', '/api/inbox?scope=purchases')]);
+      const toPay = purchases.rows.filter((r) => r.status === 'TO_PAY');
+      const toPayCents = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
+      const cur = treasury.currency;
+      projection.appendChild(proj(tt('Expected customer invoices'), tt('{0} document(s)', rec.due_soon.count + rec.overdue.count), `+ ${rec.due_soon.outstanding}`, 'in'));
+      projection.appendChild(proj(tt('Supplier invoices to pay'), tt('{0} document(s)', toPay.length), `− ${fmtMoney(toPayCents, cur)}`, 'out'));
+      if (treasury.assumed?.overdueReceivablesCents) projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(treasury.assumed.overdueReceivablesCents, cur))));
+      // VAT is deliberately not provisioned here: this product has no running VAT-due estimate outside the
+      // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
+      // parallel VAT figure the mandate explicitly asks not to invent.
+      projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
+    } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
+    workspace.appendChild(chartWrap); workspace.appendChild(projection);
+  } catch (e) { fail(e, box); }
 }
