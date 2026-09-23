@@ -151,6 +151,13 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
       return r && r.length ? supplierFromRow(r[0]) : null;
     },
+    /** Phase 1: link/unlink a supplier invoice to a fin_companies contact. Deliberately NOT gated by
+     * status (unlike updateSupplierInvoice) - linking a contact is a separate concern from the review
+     * workflow and must remain possible at any status, including after payment. contactId=null unlinks. */
+    async setSupplierInvoiceContact(id, contactId) {
+      const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId) }, { supplier_company_id: contactId }));
+      return r && r.length ? supplierFromRow(r[0]) : null;
+    },
     // ---- Bank & Treasury (read only) ----
     async saveBankConnection(c) {
       const row = { merchant_id: merchantId, provider: c.provider, token_ciphertext: c.tokenCipher, token_fingerprint: c.tokenFingerprint, scopes: c.scopes, account_ids: c.accountIds ?? [], granted_at: c.grantedAt, expires_at: c.expiresAt, revoked_at: null, last_used_at: null };
@@ -214,7 +221,10 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
 
 const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'supplier_vat_number', invoiceNumber: 'invoice_number', issueDate: 'issue_date', dueDate: 'due_date', netCents: 'net_cents', vatCents: 'vat_cents', grossCents: 'gross_cents', currency: 'currency',
   source: 'source', status: 'status', paymentReference: 'payment_reference', fileName: 'file_name', contentType: 'content_type', sizeBytes: 'size_bytes', sha256: 'sha256', attachmentRef: 'attachment_ref', receivedAt: 'received_at', fromAddress: 'from_address',
-  subject: 'subject', extraction: 'extraction', validatedAt: 'validated_at', paidAt: 'paid_at', paidAmountCents: 'paid_amount_cents', paidReference: 'paid_reference', rejectedReason: 'rejected_reason' };
+  subject: 'subject', extraction: 'extraction', validatedAt: 'validated_at', paidAt: 'paid_at', paidAmountCents: 'paid_amount_cents', paidReference: 'paid_reference', rejectedReason: 'rejected_reason',
+  // Phase 1 (Contact foundation): additive, nullable link to fin_companies - see 20260924090000_finance_supplier_company_link.
+  // Naming follows the existing customer_company_id/companyId convention on fin_documents, not a new "contactId".
+  supplierCompanyId: 'supplier_company_id' };
 function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
 const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
 const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });

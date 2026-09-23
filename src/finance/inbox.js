@@ -199,6 +199,21 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const all = await store.listSupplierInvoices(merchantId); const c = Object.fromEntries(INBOX_STATUSES.map((s) => [s, all.filter((r) => r.status === s).length]));
       return { ...c, toReview: c.RECEIVED + c.TO_REVIEW, toPayCents: all.filter((r) => r.status === 'TO_PAY').reduce((a, r) => a + (r.grossCents ?? 0), 0) };
     },
+    /** Phase 1 (Contact foundation): link a supplier invoice to an existing fin_companies contact, or
+     * clear the link (contactId = null). Deliberately separate from update()/move(): possible at any
+     * status, never touches supplierName/supplierVatNumber (the historical snapshot), always explicit
+     * (never automatic beyond the one-time, audited backfill in contacts.js), idempotent (re-linking the
+     * same contact, or unlinking an already-unlinked invoice, is a no-op write). Tenant check on the
+     * contact is the caller's responsibility (see /api/inbox/:id/contact in server/app.js) because this
+     * service does not have access to the company store. */
+    async linkContact(id, contactId, actor) {
+      merchantOnly(actor);
+      const r = await must(id);
+      const saved = await store.setSupplierInvoiceContact(id, contactId ?? null);
+      if (!saved) throw new FinanceError('INBOX_ITEM_NOT_FOUND', id);
+      await audit({ at: now(), action: contactId ? 'SUPPLIER_INVOICE_CONTACT_LINKED' : 'SUPPLIER_INVOICE_CONTACT_UNLINKED', itemId: id, contactId: contactId ?? null, previousContactId: r.supplierCompanyId ?? null });
+      return saved;
+    },
   };
 }
 

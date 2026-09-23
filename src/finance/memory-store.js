@@ -153,6 +153,14 @@ export function createMemoryStore() {
       for (const k of Object.keys(patch)) if (['id', 'merchantId', 'sha256', 'attachmentRef', 'source', 'receivedAt', 'fileName', 'contentType', 'sizeBytes'].includes(k)) throw new FinanceError('INBOX_ITEM_IS_IMMUTABLE', k);
       Object.assign(r, patch); r.paymentStatus = r.status === 'PAID' ? 'paid' : 'unpaid'; return clone(r);
     },
+    /** Phase 1: link/unlink a supplier invoice to a fin_companies contact, independent of status/review
+     * workflow (mirrors supabase-store.js). contactId=null unlinks. */
+    async setSupplierInvoiceContact(id, contactId) {
+      const r = supplierInvoices.find((x) => x.id === id);
+      if (!r) return null;
+      r.supplierCompanyId = contactId;
+      return clone(r);
+    },
     async listSupplierInvoices(merchantId) { return supplierInvoices.filter((s) => s.merchantId === merchantId).map(clone); },
     _debug: { docs, events, payments, seqs, hooks },
   };

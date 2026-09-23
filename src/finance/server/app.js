@@ -31,6 +31,7 @@ import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanV
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
+import { buildContacts, contactDetail } from '../contacts.js';
 import { buildReceivables } from '../receivables.js';
 import { loadDocsForReports, packFileBuffers } from '../reports.js';
 import { createFinanceService } from '../service.js';
@@ -511,6 +512,29 @@ export function createFinanceApp(deps) {
       credit: { scoring: 'NOT_IMPLEMENTED', note: 'No credit-risk or solvency scoring exists in this module.' },
     });
   });
+  // Phase 1 (Contact foundation): a read-only projection over the SAME fin_companies referential as
+  // /api/companies - not a second contact store, not a replacement route. Nothing in the existing UI
+  // depends on this endpoint; it exists so the future Contacts UI (Phase 2) does not have to merge several
+  // endpoints itself. One pass over pre-fetched, merchant-scoped data (see contacts.js) - no per-contact query.
+  on('GET', '/api/contacts', async (ctx) => {
+    const { svc, settings } = await servicesFor();
+    const role = ctx.url.searchParams.get('role') ?? 'all';
+    const q = (ctx.url.searchParams.get('q') ?? '').trim().toLowerCase();
+    const m = (c) => money(c, settings.defaults.language);
+    const [companies, salesDocs, supplierInvoices] = await Promise.all([svc.listCompanies(), loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
+    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m });
+    if (role === 'customer') rows = rows.filter((r) => r.isCustomer);
+    else if (role === 'supplier') rows = rows.filter((r) => r.isSupplier);
+    if (q) rows = rows.filter((r) => `${r.displayName} ${r.vatNumber ?? ''}`.toLowerCase().includes(q));
+    json(ctx.res, 200, { rows: rows.sort((a, b) => a.displayName.localeCompare(b.displayName)) });
+  });
+  on('GET', `/api/contacts/${P}`, async (ctx) => {
+    const { svc, settings } = await servicesFor();
+    const c = await svc.getCompany(idParam(ctx.m[1])); // throws COMPANY_NOT_FOUND - same tenant check as /api/companies/:id
+    const m = (c2) => money(c2, settings.defaults.language);
+    const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
+    json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today() }));
+  });
   on('POST', '/api/companies/lookup', async (ctx) => {
     const { settings } = await servicesFor();
     const providers = deps.lookupProviders ? deps.lookupProviders(settings) : settings.companyLookup.provider === 'vies' ? [createViesProvider(), ManualProvider] : [ManualProvider];
@@ -667,7 +691,7 @@ export function createFinanceApp(deps) {
   const attachmentStore = deps.attachmentStore ?? createMemoryAttachmentStore();
   const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit });
   const itemView = (raw) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
-    id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
+    id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
@@ -712,6 +736,16 @@ export function createFinanceApp(deps) {
   inboxAct('reopen', (i, id) => i.reopen(id, actor));
   inboxAct('reject', (i, id, b) => i.reject(id, sanitizeText(b.reason, 300), actor));
   inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100) }, actor); });
+  // Phase 1 (Contact foundation): link/unlink a supplier invoice to a fin_companies contact. { contactId: "<uuid>" }
+  // links; { contactId: null } (or omitted) unlinks. The tenant check on the contact happens here (via the same
+  // svc.getCompany() every other company lookup uses) because inbox.js's service has no access to the company store.
+  on('POST', `/api/inbox/${P}/contact`, async (ctx) => {
+    const { svc } = await servicesFor();
+    const raw = ctx.body?.contactId;
+    const contactId = raw == null || raw === '' ? null : String(raw);
+    if (contactId) await svc.getCompany(contactId); // throws COMPANY_NOT_FOUND if missing or a different merchant's contact
+    json(ctx.res, 200, itemView(await inboxFor().linkContact(idParam(ctx.m[1]), contactId, actor)));
+  });
 
   // ---------- accountant closing package: prepare -> preview -> merchant APPROVES -> send (or .eml fallback). Nothing is sent silently. ----------
   const packages = new Map(); // in memory only: the package is never written to disk; it expires
