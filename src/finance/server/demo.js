@@ -54,14 +54,17 @@ async function seedDemo({ store, attachmentStore, settings, cfg }) {
   const mk = async (type, customer, lines, over = {}) => svc.create({ type, customer, lines, vat: { regime: 'domestic', confirmed: true }, revenueBasis: type === 'invoice' ? 'standalone_b2b' : undefined, ...over }, merchant);
   const issue = async (d) => { await svc.submit(d.id, merchant); return svc.decide(d.id, 'APPROVE', merchant); };
   const a = await issue(await mk('invoice', cust('Atelier Exemple SRL', '0000000196', 'Namur'), [line('Coques personnalisées', 12, '20.6612', { priceOrigin: 'GROSS_CATALOGUE', grossUnitPrice: '25.00', grossVatRate: '21', unitPrice: undefined, catalog: { source: 'retail_core', productId: 'prod-demo-case', variantId: 'var-demo-case-a', productTitle: 'Demo case (personalised)', variantTitle: 'Model A', sku: 'CASE-A' } }), line('Design', 3, '75.00')], { issueDate: '2026-08-12', dueDate: '2026-09-11' }));
-  await svc.recordPayment(a.id, { amountCents: 10000, paidOn: '2026-09-02', method: 'bank_transfer' }, merchant).catch(() => {});
+  // Full payment, computed from the invoice's own real total rather than a hand-typed cents figure - the
+  // previous value here used the wrong field name (amountCents instead of amount) and PAYMENT_AMOUNT_INVALID
+  // was silently swallowed by the catch below, so no September payment was ever actually recorded. Fixed.
+  await svc.recordPayment(a.id, { amount: (a.totals.grossCents / 100).toFixed(2), paidOn: '2026-09-02', method: 'bank_transfer' }, merchant).catch(() => {});
   await issue(await mk('invoice', cust('Boutique Exemple SA', '0000000097', 'Liège'), [line('Support de stand', 2, '140.00'), line('Livraison', 1, '18.00')], { issueDate: '2026-09-15', dueDate: '2026-10-15' }));
   await mk('invoice', cust('Exemple Sans TVA ASBL', '0000000295', 'Mons'), [line('Affiches', 20, '3.50')], { issueDate: '2026-09-20' });
   const q = await mk('quote', cust('Atelier Exemple SRL', '0000000196', 'Namur'), [line('Coffret cadeaux', 30, '48.00')], { issueDate: '2026-09-18' });
   await svc.sendQuote(q.id, merchant);
   // finance inbox / purchases
   const inbox = createInboxService({ store, attachments: attachmentStore, merchantId: MERCHANT, now: clock.now });
-  const ubl = (id, net, vat) => Buffer.from(`<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>${id}</cbc:ID><cbc:IssueDate>2026-09-10</cbc:IssueDate><cbc:DueDate>2026-10-10</cbc:DueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AccountingSupplierParty><cac:Party><cac:PartyTaxScheme><cbc:CompanyID>BE0000000097</cbc:CompanyID></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>Fournisseur Exemple SRL</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">${vat}</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">${net}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">${(Number(net) + Number(vat)).toFixed(2)}</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal></Invoice>`);
+  const ubl = (id, net, vat, issueDate = '2026-09-10', dueDate = '2026-10-10') => Buffer.from(`<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>${id}</cbc:ID><cbc:IssueDate>${issueDate}</cbc:IssueDate><cbc:DueDate>${dueDate}</cbc:DueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AccountingSupplierParty><cac:Party><cac:PartyTaxScheme><cbc:CompanyID>BE0000000097</cbc:CompanyID></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>Fournisseur Exemple SRL</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">${vat}</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">${net}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">${(Number(net) + Number(vat)).toFixed(2)}</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal></Invoice>`);
   const one = (await inbox.ingest({ fileName: 'facture-F-2026-0042.xml', data: ubl('F-2026-0042', '250.00', '52.50'), source: 'peppol' })).item;
   await inbox.ingest({ fileName: 'scan-fournisseur.pdf', data: Buffer.from('%PDF-1.4\n% synthetic demo scan\n%%EOF\n') });
   const two = (await inbox.ingest({ fileName: 'facture-F-2026-0043.xml', data: ubl('F-2026-0043', '80.00', '16.80'), source: 'email' })).item;
@@ -69,6 +72,29 @@ async function seedDemo({ store, attachmentStore, settings, cfg }) {
   const three = (await inbox.ingest({ fileName: 'facture-F-2026-0041.xml', data: ubl('F-2026-0041', '100.00', '21.00'), source: 'upload' })).item;
   await inbox.validate(three.id, merchant); await inbox.markToPay(three.id, merchant); await inbox.pay(three.id, { paidOn: '2026-09-19', amountCents: 12100, reference: 'Virement demo' }, merchant);
   void one;
+  // A few more months of history (synthetic, same demo companies/prices as above) purely so the homepage
+  // Treasury chart's "6 derniers mois"/"12 derniers mois" views have more than one real month to show - the
+  // chart itself must never invent data, but a demo dataset restricted to a single month is not representative
+  // of what the chart looks like once a merchant has been using the module for a while. Every figure here goes
+  // through the exact same real create/issue/pay flow as the entries above - nothing is written directly into
+  // a report or chart row.
+  const months = [
+    { month: '2026-04', revenueNet: '340.00', expenseNet: '120.00', expenseVat: '25.20' },
+    { month: '2026-05', revenueNet: '505.00', expenseNet: '175.00', expenseVat: '36.75' },
+    { month: '2026-06', revenueNet: '446.00', expenseNet: '150.00', expenseVat: '31.50' },
+    { month: '2026-07', revenueNet: '562.00', expenseNet: '198.00', expenseVat: '41.58' },
+    { month: '2026-08', revenueNet: '462.00', expenseNet: '162.00', expenseVat: '34.02' },
+  ];
+  let n = 44;
+  for (const mth of months) {
+    const revInvoice = await issue(await mk('invoice', cust('Boutique Exemple SA', '0000000097', 'Liège'), [line('Prestation démo', 1, mth.revenueNet)], { issueDate: `${mth.month}-05`, dueDate: `${mth.month}-20` }));
+    await svc.recordPayment(revInvoice.id, { amount: (revInvoice.totals.grossCents / 100).toFixed(2), paidOn: `${mth.month}-12`, method: 'bank_transfer' }, merchant).catch(() => {});
+    n += 1;
+    const id = `F-2026-00${n}`;
+    const supplierDoc = (await inbox.ingest({ fileName: `facture-${id}.xml`, data: ubl(id, mth.expenseNet, mth.expenseVat, `${mth.month}-08`, `${mth.month}-28`), source: 'upload' })).item;
+    await inbox.validate(supplierDoc.id, merchant); await inbox.markToPay(supplierDoc.id, merchant);
+    await inbox.pay(supplierDoc.id, { paidOn: `${mth.month}-18`, amountCents: Math.round((Number(mth.expenseNet) + Number(mth.expenseVat)) * 100), reference: 'Virement demo' }, merchant);
+  }
 }
 
 export async function startDemo(port = PORT) {
