@@ -441,6 +441,26 @@
     'Transactions to reconcile': 'Af te stemmen transacties',
     'Nothing to reconcile': 'Niets af te stemmen',
   });
+  // Phase 2: unified Contacts workspace (views-contacts.js).
+  Object.assign(messages, {
+    'Contacts': 'Contacten', 'Business': 'Onderneming', 'Individual': 'Particulier', 'Customer · Supplier': 'Klant · Leverancier',
+    'A financial directory of your customers and suppliers.': 'Financieel overzicht van uw klanten en leveranciers.',
+    '+ New contact': '+ Nieuw contact', 'Search by name, VAT number...': 'Zoeken op naam, btw-nummer…',
+    'All contacts': 'Alle', 'Suppliers': 'Leveranciers',
+    'Your contacts will appear here.': 'Uw contacten verschijnen hier.',
+    'Add a client or a company now; suppliers will also be gathered in this directory once they are linked to your purchase documents.': 'Voeg nu een klant of onderneming toe; leveranciers worden eveneens in dit overzicht opgenomen zodra ze aan uw aankoopdocumenten zijn gekoppeld.',
+    'Add a contact': 'Contact toevoegen',
+    'No supplier matches this search.': 'Geen leverancier komt overeen met deze zoekopdracht.',
+    'No customer matches this search.': 'Geen klant komt overeen met deze zoekopdracht.',
+    'No contact matches this search.': 'Geen contact komt overeen met deze zoekopdracht.',
+    'Clear the search': 'Zoekopdracht wissen',
+    'Contact': 'Contact', 'Relation': 'Relatie', 'Amount receivable': 'Te ontvangen', 'Amount payable': 'Te betalen', 'Last activity': 'Laatste activiteit',
+    'Contacts could not be loaded.': 'Contacten konden niet worden geladen.', 'Retry': 'Opnieuw proberen',
+    '(no number)': '(geen nummer)',
+    'This contact has no invoiced activity yet.': 'Dit contact heeft nog geen gefactureerde activiteit.',
+    'Sales documents': 'Verkoopdocumenten', 'No sales documents yet.': 'Nog geen verkoopdocument.',
+    'Supplier documents': 'Leveranciersdocumenten', 'No supplier documents yet.': 'Nog geen leveranciersdocument.',
+  });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.nl = { messages, patterns };
 })();

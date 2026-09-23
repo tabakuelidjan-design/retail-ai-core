@@ -461,6 +461,26 @@
     'Transactions to reconcile': 'Transactions à rapprocher',
     'Nothing to reconcile': 'Rien à rapprocher',
   });
+  // Phase 2: unified Contacts workspace (views-contacts.js).
+  Object.assign(messages, {
+    'Contacts': 'Contacts', 'Business': 'Entreprise', 'Individual': 'Personne', 'Customer · Supplier': 'Client · Fournisseur',
+    'A financial directory of your customers and suppliers.': 'Répertoire financier de vos clients et fournisseurs.',
+    '+ New contact': '+ Nouveau contact', 'Search by name, VAT number...': 'Rechercher par nom, TVA…',
+    'All contacts': 'Tous', 'Suppliers': 'Fournisseurs',
+    'Your contacts will appear here.': 'Vos contacts apparaîtront ici.',
+    'Add a client or a company now; suppliers will also be gathered in this directory once they are linked to your purchase documents.': 'Ajoutez un client ou une entreprise maintenant ; les fournisseurs seront également réunis dans ce répertoire lorsqu\'ils seront liés à vos documents d\'achat.',
+    'Add a contact': 'Ajouter un contact',
+    'No supplier matches this search.': 'Aucun fournisseur ne correspond à cette recherche.',
+    'No customer matches this search.': 'Aucun client ne correspond à cette recherche.',
+    'No contact matches this search.': 'Aucun contact ne correspond à cette recherche.',
+    'Clear the search': 'Effacer la recherche',
+    'Contact': 'Contact', 'Relation': 'Relation', 'Amount receivable': 'À recevoir', 'Amount payable': 'À payer', 'Last activity': 'Dernière activité',
+    'Contacts could not be loaded.': 'Impossible de charger les contacts.', 'Retry': 'Réessayer',
+    '(no number)': '(sans numéro)',
+    'This contact has no invoiced activity yet.': 'Aucune activité facturée pour ce contact pour le moment.',
+    'Sales documents': 'Documents de vente', 'No sales documents yet.': 'Aucun document de vente.',
+    'Supplier documents': 'Documents fournisseurs', 'No supplier documents yet.': 'Aucun document fournisseur.',
+  });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.fr = { messages, patterns };
 })();

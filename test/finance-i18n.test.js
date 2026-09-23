@@ -25,7 +25,8 @@ const isNotUi = (s) => NOT_UI.has(s) || /^(chip|dot2) /.test(s) || /^[\w.+-]+@[\
 test('COVERAGE: every merchant-facing message of the dashboard exists in French AND Dutch', () => {
   const lang = loadLang();
   const src = `${read('app.js')}
-${read('views-workspace.js')}`;
+${read('views-workspace.js')}
+${read('views-contacts.js')}`;
   const messages = [...extractStrings(src)].map((s) => s.trim()).filter(looksLikeMessage).filter((s) => !isNotUi(s));
   // every literal handed to tt() / tr() must be translated whatever its shape (short, lowercase or upper-case labels included)
   for (const m of src.matchAll(/\b(?:tt|tr)\('((?:[^'\\]|\\.)*)'/g)) messages.push(m[1].replace(/\\'/g, "'"));

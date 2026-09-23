@@ -121,7 +121,7 @@ const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) ret
 
 // Route -> (icon, tooltip label). Every route is exactly what it was before (no navigation was removed or
 // renamed); only the presentation changed from a labelled list to an icon rail with a hover tooltip.
-const NAV = [['#/', 'Overview', 'home'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Customers', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['#/settings', 'Settings', 'gear']];
+const NAV = [['#/', 'Overview', 'home'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/contacts', 'Contacts', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['#/settings', 'Settings', 'gear']];
 function langSwitch() {
   return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
 }
@@ -952,14 +952,9 @@ function creditModal(d) {
     (close) => [h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${d.id}/credit-note`, { reason: reason.value, lines: full.checked ? undefined : rows, restock: restock === null ? undefined : restock }); close(); toast('Credit note draft created', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e, err); } } } }, 'Create draft'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 
-// ---------- companies ----------
-async function viewCompanies() {
-  const main = layout('#/companies', h('div', { class: 'topbar' }, h('h1', null, 'Companies'), h('button', { class: 'primary', on: { click: () => companyModal(null) } }, 'Add a company')));
-  const q = h('input', { placeholder: 'Search name or VAT number...' }); const box = h('div', { class: 'card' });
-  const load = async () => { try { const r = await api('GET', `/api/companies?q=${encodeURIComponent(q.value)}`); clear(box); box.appendChild(r.rows.length ? h('table', null, h('tr', null, ['Company', 'VAT / no.', 'City', 'Source'].map((x) => h('th', null, x))), r.rows.map((c) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/companies/${c.id}`; } } }, h('td', null, c.name), h('td', null, c.vatNumber || c.enterpriseNumber || ''), h('td', null, c.address.city || ''), h('td', null, c.source)))) : h('div', { class: 'muted' }, 'No companies yet. They are added automatically when you create an invoice, or click "Add a company".')); } catch (e) { fail(e, box); } };
-  q.addEventListener('input', () => { clearTimeout(load.t); load.t = setTimeout(load, 200); });
-  main.appendChild(h('div', { class: 'field' }, q)); main.appendChild(box); load();
-}
+// ---------- companies (the "Add/edit a company" form only - the list/detail pages were replaced by the
+// Contacts workspace in views-contacts.js; #/companies now redirects there. This form is still reused
+// as-is by Contacts' "+ New contact" / "Edit", and by the invoice form's own "New client" shortcut). ----------
 function companyModal(existing) {
   const m = existing
     ? { name: existing.name, vatNumber: existing.vatNumber || '', enterpriseNumber: existing.enterpriseNumber || '', street: existing.address.street || '', postalCode: existing.address.postalCode || '', city: existing.address.city || '', countryCode: existing.address.countryCode || 'BE', email: existing.email || '', csource: existing.source || 'manual', cverified: false, dirty: false, companyId: null }
@@ -983,16 +978,6 @@ function companyModal(existing) {
       const body = { kind: 'business', name: m.name, vatNumber: m.vatNumber || undefined, enterpriseNumber: m.enterpriseNumber || undefined, address: { street: m.street, postalCode: m.postalCode, city: m.city, countryCode: m.countryCode }, email: m.email || undefined, source: src };
       const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body); close(); toast('Company saved', 'ok'); location.hash = `#/companies/${r.id}`; if (existing) route(); } catch (e) { fail(e, err); } } } }, 'Save'), h('button', { on: { click: close } }, 'Cancel')]);
   if (search) search.input.focus();
-}
-async function viewCompany(id) {
-  const main = layout('#/companies'); const box = h('div'); main.appendChild(box);
-  try {
-    const r = await api('GET', `/api/companies/${id}`); const c = r.company; const cur = state.settings.defaults.currency; const m2 = (x) => (x / 100).toFixed(2);
-    box.appendChild(h('div', { class: 'topbar' }, h('div', null, h('h1', null, c.name), h('div', { class: 'muted' }, tt('{0} - source: {1}', c.vatNumber || c.enterpriseNumber || tt('no number'), c.source))), h('div', { class: 'actions' }, h('button', { on: { click: () => companyModal(c) } }, 'Edit'))));
-    box.appendChild(h('div', { class: 'grid cards' }, h('div', { class: 'card stat' }, h('div', { class: 'n' }, `${m2(r.outstandingCents)}`), h('div', { class: 'l' }, tt('Outstanding ({0})', cur))), h('div', { class: `card stat ${r.overdueCents ? 'bad' : ''}` }, h('div', { class: 'n' }, `${m2(r.overdueCents)}`), h('div', { class: 'l' }, 'Overdue')), h('div', { class: 'card stat ok' }, h('div', { class: 'n' }, `${m2(r.payments.totalPaidCents)}`), h('div', { class: 'l' }, tt('Paid so far ({0} payment(s){1})', r.payments.count, r.payments.lastPaidOn ? tt(', last {0}', r.payments.lastPaidOn) : '')))));
-    box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Details'), kv([['Address', [c.address.street, `${c.address.postalCode || ''} ${c.address.city || ''}`.trim(), c.address.countryCode].filter(Boolean).join(', ')], ['Email', c.email], ['Peppol ID', c.peppolId], ['Credit scoring', 'Not implemented (no solvency provider)']])));
-    box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Documents'), r.documents.length ? h('table', null, h('tr', null, ['Number', 'Type', 'Date', 'Total', 'Status'].map((x) => h('th', null, x))), r.documents.map((d) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/doc/${d.id}`; } } }, h('td', null, d.number || '(draft)'), h('td', null, TYPE[d.type]), h('td', null, d.issueDate), h('td', null, `${d.gross} ${d.currency}`), h('td', null, badge(d.effectiveStatus))))) : h('div', { class: 'muted' }, 'No documents yet.')));
-  } catch (e) { fail(e, box); }
 }
 
 // ---------- receivables ----------
@@ -1066,7 +1051,10 @@ async function route() {
     if (parts[0] === 'new') return await viewForm(parts[1] === 'quote' ? 'quote' : 'invoice', null);
     if (parts[0] === 'doc' && parts[2] === 'edit') { const d = await api('GET', `/api/documents/${parts[1]}`); return await viewForm(d.type === 'quote' ? 'quote' : 'invoice', parts[1]); }
     if (parts[0] === 'doc') return await viewDoc(parts[1]);
-    if (parts[0] === 'companies') return parts[1] ? await viewCompany(parts[1]) : await viewCompanies();
+    // #/companies is kept working (never removed/renamed) but now redirects into the unified Contacts
+    // workspace - same underlying fin_companies id, so #/companies/:id still lands on the right contact.
+    if (parts[0] === 'companies') { location.hash = parts[1] ? `#/contacts?open=${parts[1]}` : '#/contacts'; return; }
+    if (parts[0] === 'contacts') return await viewContacts(q);
     if (parts[0] === 'receivables') return await viewReceivables();
     if (parts[0] === 'pack') return await viewPack();
     if (parts[0] === 'inbox') return await viewInbox();

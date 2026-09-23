@@ -781,3 +781,33 @@ html, body { background: var(--bg); }
   --space-5: 32px; --space-6: 40px; --space-7: 48px;
 }
 
+/* ============================================================================================
+   Phase 2 — Contacts workspace (2026-09-23). Namespaced .chead/.crow/.contact-* so nothing here can
+   leak onto unrelated tables/rows; reuses .card/.listcard/.pills/.pill/.field/.drawer-head/.badge/
+   .empty exactly as already defined above rather than inventing a parallel visual language.
+   ============================================================================================ */
+.chead, .crow { display: grid; grid-template-columns: minmax(200px, 2.4fr) 96px 150px minmax(96px, 1fr) minmax(96px, 1fr) 96px; gap: 10px; align-items: center; padding: 11px 12px; }
+.chead { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+.crow { text-decoration: none; color: inherit; border-radius: 11px; cursor: pointer; transition: background .12s var(--ease); animation: rise .25s var(--ease) both; }
+.crow:hover, .crow:focus-visible { background: #f5f7fb; outline: none; }
+.crow .num, .chead .num { text-align: right; font-variant-numeric: tabular-nums; }
+.cname { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .cname strong { font-weight: 600; } .cname span { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 900px) {
+  .chead { display: none; }
+  .crow { grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+  .crow .cname { grid-column: 1 / -1; }
+  .crow .ctype { display: none; }
+  .crow [data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; text-transform: uppercase; color: var(--muted); }
+  .crow .num { text-align: left; }
+}
+/* Drawer: identity header, no card/avatar/gradient (mandate section 12) - name dominant, rest secondary text. */
+.contact-head h2 { font-size: 19px; letter-spacing: -.01em; }
+.contact-fin { display: flex; gap: 22px; flex-wrap: wrap; margin: 14px 0 6px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.contact-fin .fi { display: flex; flex-direction: column; gap: 2px; }
+.contact-fin .fi .fl { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.contact-fin .fi .fv { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.doclist { display: flex; flex-direction: column; gap: 2px; }
+.crow-doc { display: grid; grid-template-columns: minmax(90px, 1.3fr) 84px minmax(84px, 1fr) auto; gap: 10px; align-items: center; padding: 9px 6px; text-decoration: none; color: inherit; border-radius: 8px; transition: background .12s var(--ease); }
+.crow-doc:hover, .crow-doc:focus-visible { background: #f5f7fb; outline: none; }
+.crow-doc .cd-amt { text-align: right; font-variant-numeric: tabular-nums; justify-self: end; }
+

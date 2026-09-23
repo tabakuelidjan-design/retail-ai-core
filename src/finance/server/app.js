@@ -39,7 +39,7 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
