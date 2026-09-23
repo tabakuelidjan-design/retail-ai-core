@@ -201,6 +201,27 @@ function treasuryChart(rows, cur) {
   pts.forEach(([x, y], i) => { const r = rows[i]; kids.push(svgEl('circle', { class: 'tc-dot', cx: x, cy: y, r: i === pts.length - 1 ? 4 : 2.5 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${tt('balance')} ${r.balance} ${cur}`)])])); });
   return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
 }
+/** Compact Revenue vs Expenses chart (#4): same /api/overview/cashflow rows as the treasury chart, plotting
+ * revenueCents/expenseCents (real invoiced revenue / accepted supplier-invoice expenses per month) as two
+ * side-by-side bars from a shared baseline. No forecast, no interpolation - a month with nothing real is 0. */
+function revenueExpenseChart(rows, cur) {
+  const W = 760, H = 150, mL = 46, mR = 8, mT = 10, mB = 22;
+  const innerW = W - mL - mR; const n = Math.max(1, rows.length);
+  const slot = innerW / n; const barW = Math.min(20, slot * 0.3);
+  const maxV = Math.max(1, ...rows.flatMap((r) => [r.revenueCents, r.expenseCents]));
+  const baseY = H - mB; const scale = (baseY - mT - 6) / maxV;
+  const xOf = (i) => mL + slot * i + slot / 2;
+  const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
+  const kids = [svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: baseY, y2: baseY })];
+  rows.forEach((r, i) => {
+    const x = xOf(i);
+    const revH = r.revenueCents * scale; const expH = r.expenseCents * scale;
+    kids.push(svgEl('rect', { class: 're-bar-rev', x: x - barW - 1, y: baseY - revH, width: barW, height: Math.max(0, revH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.revenue} ${cur}`)])]));
+    kids.push(svgEl('rect', { class: 're-bar-exp', x: x + 1, y: baseY - expH, width: barW, height: Math.max(0, expH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.expense} ${cur}`)])]));
+    kids.push(svgEl('text', { class: 'tc-axis', x, y: H - 6, 'text-anchor': 'middle' }, [document.createTextNode(monthLabel(r.month))]));
+  });
+  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
+}
 async function viewOverview() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -233,22 +254,56 @@ async function viewOverview() {
     // expense is still shown rising, just coloured as attention rather than success.
     const trendArrow = (pct, goodWhenUp = true) => { const isUp = pct >= 0; const good = goodWhenUp ? isUp : !isUp; return h('span', { class: `ktrend ${good ? 'up' : 'down'}` }, (isUp ? '↑ +' : '↓ ') + pct + '%', h('span', { class: 'tl' }, tt('vs. last month'))); };
     const kcard = (icon, label, value, trend, href) => h('a', { class: 'kcard', href }, h('span', { class: 'kicon' }, svgIcon(icon, 16)), h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value), trend);
+    // #9: proper FR/NL singular/plural instead of the "(s)" shorthand - same ternary-key pattern already used
+    // elsewhere in this file (see dueChip's "{0} day late" / "{0} days late").
+    const plural = (n, one, many) => tt(n === 1 ? one : many, n);
     box.appendChild(h('div', { class: 'kpi-strip' },
       kcard('doc', tt('Revenue'), fmtMoney(o.revenue.thisMonthCents, cur), trendArrow(o.revenue.changePct), '#/invoices'),
       kcard('coins', 'Expenses', fmtMoney(o.expenses.thisMonthCents, cur), trendArrow(o.expenses.changePct, false), '#/purchases'),
-      kcard('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : tt('Not connected'), treasury?.observed?.liquidCents != null ? null : h('span', { class: 'tl' }, tt('Connect a bank to see this')), '#/bank'),
-      kcard('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', { class: 'tl' }, tt('{0} unpaid invoice(s)', o.counts.unpaid)), '#/receivables')));
+      // #2: no wrapped "Not connected" text - a quiet dash and a compact CTA until a real balance exists.
+      kcard('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : '— €', treasury?.observed?.liquidCents != null ? null : h('span', { class: 'tl' }, h('a', { href: '#/bank', style: 'color:inherit;text-decoration:underline' }, tt('Connect the bank'))), '#/bank'),
+      kcard('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', { class: 'tl' }, plural(o.counts.unpaid, '{0} unpaid invoice', '{0} unpaid invoices')), '#/receivables')));
+    // #8: a derived figure from real numbers already shown above - explicitly labelled so it can never be read
+    // as accounting net profit (no depreciation, no accruals, no tax, no cost of goods - just invoiced revenue
+    // minus accepted supplier bills for the same month).
+    const netRecorded = o.revenue.thisMonthCents - o.expenses.thisMonthCents;
+    box.appendChild(h('div', { class: 'kpi-footnote' }, h('span', { class: `kf-value ${netRecorded >= 0 ? 'ok' : 'bad'}` }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), h('span', { class: 'kf-note' }, tt('(not an accounting net profit figure - no VAT, depreciation or accruals)'))));
 
-    // ---- Central object: real treasury movement + Action Center + Quick actions ----
+    // ---- Full-width invoice-status bar (#5): Paid / Outstanding / Overdue, real counts+amounts from
+    // overview()'s invoiceStatus (all locked invoices, not period-limited). Uses the width the brief asked
+    // the dashboard to make better use of, rather than adding another narrow card. ----
+    const stBuckets = [['paid', 'ok', 'Paid'], ['outstanding', 'info', 'Outstanding'], ['overdue', 'bad', 'Overdue']];
+    const stTotal = Math.max(1, ...stBuckets.map(() => 1), o.invoiceStatus.paid.cents + o.invoiceStatus.outstanding.cents + o.invoiceStatus.overdue.cents);
+    box.appendChild(h('div', { class: 'card statusbar-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Invoice status')),
+      h('div', { class: 'statusbar' }, stBuckets.map(([k, tone]) => { const v = o.invoiceStatus[k]; return h('span', { class: `sb-seg ${tone}`, style: `flex:${Math.max(v.cents, v.count ? 1 : 0) || 0.0001}`, title: `${v.amount} ${cur}` }); })),
+      h('div', { class: 'statuslegend' }, stBuckets.map(([k, tone, label]) => { const v = o.invoiceStatus[k]; return h('div', { class: 'sl-item' }, h('span', { class: `sl-dot ${tone}` }), h('span', { class: 'sl-label' }, tt(label)), h('strong', null, `${v.amount} ${cur}`), h('span', { class: 'muted small' }, plural(v.count, '{0} invoice', '{0} invoices'))); }))));
+
+    // ---- Central object: real treasury movement + Revenue vs Expenses + Action Center + Quick actions ----
     const mid = h('div', { class: 'grid dash-mid' });
+    const chartCol = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
     const chartWrap = h('div', { class: 'tc-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
-    const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => { clear(chartWrap); chartWrap.appendChild(treasuryChart(r.rows, r.currency)); }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
+    const reChartWrap = h('div', { class: 'tc-wrap re-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
+    const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => {
+      clear(chartWrap);
+      // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
+      // has actually been recorded yet.
+      if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
+      else chartWrap.appendChild(treasuryChart(r.rows, r.currency));
+      clear(reChartWrap); reChartWrap.appendChild(revenueExpenseChart(r.rows, r.currency));
+    }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
     const periodSelect = h('select', { class: 'tc-select', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
     const chartCard = h('div', { class: 'card treasurychart' },
-      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Treasury'), h('div', { class: 'muted small' }, 'Real inflows, outflows and running balance')), periodSelect),
+      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Treasury'), h('div', { class: 'muted small' }, 'Real inflows, outflows and running documented balance')), periodSelect),
       chartWrap,
       h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 55%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--accent)' }), tt('Cumulative balance'))));
-    mid.appendChild(chartCard);
+    // #4: compact Revenue vs Expenses chart, same real per-month figures as the KPI strip above, just plotted
+    // across the same period as the treasury chart (shares its month selector via loadChart()).
+    const reCard = h('div', { class: 'card treasurychart re-card' },
+      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Revenue vs. expenses')), null),
+      reChartWrap,
+      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--ok)' }), tt('Revenue')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Expenses'))));
+    chartCol.appendChild(chartCard); chartCol.appendChild(reCard);
+    mid.appendChild(chartCol);
     loadChart(6);
 
     const rightCol = h('div', { class: 'flexcol', style: 'display:flex;flex-direction:column;gap:16px' });
@@ -260,11 +315,16 @@ async function viewOverview() {
         h('button', { class: 'btn ghost', type: 'button', on: { click: () => manualEntry(() => route()) } }, tt('Add an expense')),
         h('button', { class: 'btn ghost', type: 'button', on: { click: () => companyModal(null) } }, tt('New client')),
         h('a', { class: 'btn ghost', href: '#/bank' }, tt('Import a bank statement')))));
-    // Due soon: real due-soon + overdue invoices (already computed server-side).
-    const dueRows = [...o.attention.overdue.map((r) => ({ ...r, late: true })), ...o.attention.dueSoon.map((r) => ({ ...r, late: false }))].slice(0, 5);
-    rightCol.appendChild(h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Upcoming due dates'), h('a', { href: '#/receivables', class: 'small' }, tt('See all'))),
-      dueRows.length ? h('div', { class: 'list' }, dueRows.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.number)), h('span', { class: `chip ${r.late ? 'bad' : 'warn'}` }, r.late ? tt('{0} day(s) late', r.daysOverdue) : tt('Due {0}', r.dueDate)), h('strong', null, r.remaining))))
-        : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 20)), h('div', { class: 'muted small' }, 'Nothing coming up.'))));
+    // #10: overdue and due-soon are already separate lists in the API - kept separate here instead of merging
+    // them into one ambiguous "upcoming" list with a flag.
+    const dueCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Due dates'), h('a', { href: '#/receivables', class: 'small' }, tt('See all'))));
+    const dueSection = (title, rows, tone, emptyText) => h('div', { class: 'due-section' },
+      h('div', { class: 'eyebrow' }, tt(title)),
+      rows.length ? h('div', { class: 'list' }, rows.slice(0, 4).map((r) => h('a', { class: 'listrow', href: '#/receivables' }, h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.number)), h('span', { class: `chip ${tone}` }, tone === 'bad' ? tt('{0} day(s) late', r.daysOverdue) : tt('Due {0}', r.dueDate)), h('strong', null, r.remaining))))
+        : h('div', { class: 'muted small', style: 'padding:6px 0' }, tt(emptyText)));
+    dueCard.appendChild(dueSection('Overdue', o.attention.overdue, 'bad', 'Nothing overdue.'));
+    dueCard.appendChild(dueSection('Upcoming', o.attention.dueSoon, 'warn', 'Nothing due soon.'));
+    rightCol.appendChild(dueCard);
     mid.appendChild(rightCol);
     box.appendChild(mid);
 
@@ -297,20 +357,36 @@ async function viewOverview() {
     bottom.appendChild(invCard);
 
     const rightBottom = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
-    // Bank accounts: real per-account balances (fin_bank_balances). Proper empty state, never a raw "—".
-    const bankCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank accounts'), h('a', { href: '#/bank', class: 'small' }, tt('See all'))));
+    // #1: Bank Accounts as a first-class component - name/account, balance, last sync (the balance's own
+    // `asOf`, already real per-account data), and latest transactions from the existing, already-used
+    // /api/bank/transactions endpoint (fetched lazily, only when an account is actually connected).
+    const bankCard = h('div', { class: 'card bank-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank accounts'), h('a', { href: '#/bank', class: 'small' }, tt('See all'))));
     if (treasury?.accounts?.length) {
-      bankCard.appendChild(h('div', null, treasury.accounts.map((a) => h('div', { class: 'bankrow' }, h('span', { class: 'bankmark' }, (treasury.provider || 'B')[0]), h('div', { class: 'bankmeta' }, h('div', { class: 'bname2' }, treasury.provider || tt('Connected account')), h('div', { class: 'biban' }, a.ibanMasked || '')), h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`)))));
+      bankCard.appendChild(h('div', null, treasury.accounts.map((a) => h('div', { class: 'bankrow' },
+        h('span', { class: 'bankmark' }, (treasury.provider || 'B')[0]),
+        h('div', { class: 'bankmeta' }, h('div', { class: 'bname2' }, treasury.provider || tt('Connected account')), h('div', { class: 'biban' }, a.ibanMasked || ''), a.asOf ? h('div', { class: 'blastsync' }, tt('Last sync: {0}', a.asOf)) : null),
+        h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`)))));
+      const txWrap = h('div', { class: 'bank-tx' });
+      bankCard.appendChild(txWrap);
+      api('GET', '/api/bank/transactions').then((r) => {
+        const rows = r.rows.slice(0, 3);
+        if (!rows.length) return;
+        clear(txWrap);
+        txWrap.appendChild(h('div', { class: 'eyebrow', style: 'margin-top:10px' }, tt('Latest transactions')));
+        txWrap.appendChild(h('div', null, rows.map((t) => h('div', { class: 'txmini' }, h('span', { class: 'txmini-c' }, t.counterpartyName || t.reference || tt('(no counterparty)')), h('span', { class: 'txmini-d' }, t.date), h('span', { class: `txmini-a ${t.amountCents < 0 ? 'bad' : 'ok'}` }, fmtMoney(t.amountCents, t.currency))))));
+      }).catch(() => {});
     } else {
+      // Clean empty state with one clear action - never a raw dash for something that simply isn't set up yet.
       bankCard.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small', style: 'margin-top:2px' }, tt('Read-only: no payment can ever be initiated.')))));
     }
-    bankCard.appendChild(h('button', { class: 'ghostrow', style: 'margin-top:10px', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect a read-only account')));
+    bankCard.appendChild(h('button', { class: 'btn primary', style: 'margin-top:10px;width:100%;justify-content:center', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect bank')));
     rightBottom.appendChild(bankCard);
 
-    // Supplier concentration: real (no expense-category field exists anywhere in this data model, so this
-    // deliberately does not claim to be a category breakdown - it is labelled by what it actually is).
+    // #6: supplier concentration - real (no expense-category field exists anywhere in this data model, so
+    // this deliberately does not claim to be a category breakdown). A single supplier always renders as a
+    // meaningless 100% ring, so that case gets a plain-text fallback instead of a fake-looking chart.
     const donutCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Breakdown by supplier')));
-    if (o.topSuppliers.length) {
+    if (o.topSuppliers.length >= 2) {
       const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
       let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
       const circ = 2 * Math.PI * R;
@@ -319,6 +395,9 @@ async function viewOverview() {
       donutCard.appendChild(h('div', { class: 'donutwrap' },
         h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, fmtMoney(o.supplierTotalCents, cur)), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
         h('div', { class: 'donutlegend' }, o.topSuppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`))))));
+    } else if (o.topSuppliers.length === 1) {
+      const s = o.topSuppliers[0];
+      donutCard.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, s.name), h('div', { class: 'muted small', style: 'margin-top:2px' }, tt('{0} - your only supplier so far. A breakdown becomes useful once you have more than one.', `${s.amount} ${cur}`)))));
     } else {
       donutCard.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, 'No supplier invoices yet.')));
     }

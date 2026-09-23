@@ -228,7 +228,19 @@ export function createFinanceApp(deps) {
     for (const s of accepted) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + s.grossCents);
     const supplierTotal = [...bySupplier.values()].reduce((a, c) => a + c, 0);
     const topSuppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, cents]) => ({ name, cents, amount: m(cents), sharePct: supplierTotal > 0 ? Math.round((cents / supplierTotal) * 100) : 0 }));
+    // Paid / Outstanding / Overdue snapshot across all locked invoices - real effectiveStatus per document,
+    // not a period aggregate. `rec.invoices` only holds OPEN ones (buildReceivables drops paid invoices
+    // entirely), so "paid" is derived separately here the same way buildReceivables derives status.
+    const lockedInvoices = nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED');
+    const paidInvoices = lockedInvoices.filter(({ doc, payments: pays, creditNotes }) => effectiveStatus(doc, settlement(doc, pays, creditNotes), today) === 'PAID');
+    const paidCents = paidInvoices.reduce((a, { doc }) => a + doc.totals.grossCents, 0);
+    const invoiceStatus = {
+      paid: { count: paidInvoices.length, cents: paidCents, amount: m(paidCents) },
+      outstanding: { count: rec.unpaid.count - rec.overdue.count, cents: rec.unpaid.outstandingCents - rec.overdue.outstandingCents, amount: m(rec.unpaid.outstandingCents - rec.overdue.outstandingCents) },
+      overdue: { count: rec.overdue.count, cents: rec.overdue.outstandingCents, amount: m(rec.overdue.outstandingCents) },
+    };
     return {
+      invoiceStatus,
       revenue: { thisMonth: m(revenueThis), thisMonthCents: revenueThis, changePct: pctChange(revenueThis, revenueLast) },
       expenses: { thisMonth: m(expenseThis), thisMonthCents: expenseThis, changePct: pctChange(expenseThis, expenseLast) },
       topSuppliers, supplierTotalCents: supplierTotal,
@@ -329,18 +341,26 @@ export function createFinanceApp(deps) {
     const { settings } = await servicesFor();
     const months = [3, 6, 12].includes(Number(ctx.url.searchParams.get('months'))) ? Number(ctx.url.searchParams.get('months')) : 6;
     const today = clock.today();
-    const [payments, supplierInvoices] = await Promise.all([store.listPaymentsForMerchant(merchantId), store.listSupplierInvoices(merchantId).catch(() => [])]);
+    const [payments, supplierInvoices, docs] = await Promise.all([store.listPaymentsForMerchant(merchantId), store.listSupplierInvoices(merchantId).catch(() => []), loadDocsForReports(store, merchantId)]);
     const paidSupplier = supplierInvoices.filter((s) => s.status === 'PAID' && s.paidAt);
+    // Revenue/expense series for the "Revenue vs Expenses" mini-chart - the exact same definitions already used
+    // for the KPI strip's this-month/last-month figures (invoiced gross for revenue, accepted supplier-invoice
+    // gross for expenses), just repeated per month instead of only the current and previous one.
+    const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status));
+    const invoicesLocked = docs.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED');
     const monthKeys = Array.from({ length: months }, (_, i) => { const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - (months - 1 - i), 1)); return d.toISOString().slice(0, 7); });
     const m = (c) => money(c, settings.defaults.language);
     let running = 0;
     const rows = monthKeys.map((mth) => {
       const inflowCents = payments.filter((p) => p.paidOn?.startsWith(mth)).reduce((a, p) => a + p.amountCents, 0);
       const outflowCents = paidSupplier.filter((s) => String(s.paidAt).startsWith(mth)).reduce((a, s) => a + (s.paidAmountCents ?? s.grossCents ?? 0), 0);
+      const revenueCents = invoicesLocked.filter(({ doc }) => doc.issueDate?.startsWith(mth)).reduce((a, { doc }) => a + doc.totals.grossCents, 0);
+      const expenseCents = accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + s.grossCents, 0);
       running += inflowCents - outflowCents;
-      return { month: mth, inflowCents, outflowCents, netCents: inflowCents - outflowCents, balanceCents: running, inflow: m(inflowCents), outflow: m(outflowCents), balance: m(running) };
+      return { month: mth, inflowCents, outflowCents, netCents: inflowCents - outflowCents, balanceCents: running, inflow: m(inflowCents), outflow: m(outflowCents), balance: m(running), revenueCents, expenseCents, revenue: m(revenueCents), expense: m(expenseCents) };
     });
-    json(ctx.res, 200, { currency: settings.defaults.currency, months, rows });
+    const hasActivity = rows.some((r) => r.inflowCents || r.outflowCents);
+    json(ctx.res, 200, { currency: settings.defaults.currency, months, rows, hasActivity });
   });
 
   on('POST', '/api/calc', async (ctx) => {

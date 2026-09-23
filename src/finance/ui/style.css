@@ -626,3 +626,47 @@ html, body { background: var(--bg); }
   .kcard:nth-child(2n) { border-right: 0; } .kcard:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 560px) { .kpi-strip { grid-template-columns: 1fr; } .kcard { border-right: 0 !important; border-bottom: 1px solid var(--line); } .kcard:last-child { border-bottom: 0; } }
+
+/* ============================================================================================
+   Dashboard refinement pass (2026-09-23) - same shell/architecture, denser and more precise.
+   No new routes, no rebuilt structure - additive/refining rules only, same discipline as before.
+   ============================================================================================ */
+/* #7: use more of a wide desktop screen instead of capping at 1240px, and let the dashboard's own
+   columns breathe a little more before the responsive rules step in. */
+.main { max-width: 1440px; }
+@media (min-width: 1300px) { .dash-mid { grid-template-columns: 1.9fr 1fr; } .dash-bottom { grid-template-columns: 1fr 1.6fr 1fr; } }
+
+/* #8: the derived "revenue minus recorded expenses" line under the KPI strip - deliberately plain text,
+   never styled like a 5th KPI card, so it never reads as an official metric on the same footing as the four
+   real ones above it. */
+.kpi-footnote { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 4px 18px; font-size: 13px; }
+.kf-value { font-weight: 650; } .kf-value.ok { color: var(--ok); } .kf-value.bad { color: var(--warm); }
+.kf-note { color: var(--ink-soft); font-size: 12px; }
+
+/* #5: full-width invoice status bar - one glance at paid/outstanding/overdue, not three separate widgets. */
+.statusbar-card { margin-bottom: 16px; }
+.statusbar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--bg); gap: 2px; margin: 4px 0 14px; }
+.sb-seg { min-width: 3px; transition: flex .3s var(--ease); }
+.sb-seg.ok { background: var(--ok); } .sb-seg.info { background: var(--info); } .sb-seg.bad { background: var(--warm); }
+.statuslegend { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px 18px; }
+.sl-item { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.sl-dot { width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto; } .sl-dot.ok { background: var(--ok); } .sl-dot.info { background: var(--info); } .sl-dot.bad { background: var(--warm); }
+.sl-label { color: var(--ink-soft); }
+
+/* #4: compact Revenue vs Expenses chart, sitting under the treasury chart in the same column */
+.re-card { margin-top: 0; } .re-wrap .tc-svg { height: 110px; }
+.re-bar-rev { fill: color-mix(in srgb, var(--ok) 55%, #fff); } .re-bar-exp { fill: color-mix(in srgb, var(--warm) 45%, #fff); }
+
+/* #10: overdue / upcoming as two clearly separated sections in one card, not one merged ambiguous list */
+.due-section + .due-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* #1: Bank Accounts as a first-class component - last-sync line, and a compact recent-transactions list */
+.blastsync { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.bank-tx { margin-top: 4px; }
+.txmini { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid #f1ece2; font-size: 12.5px; }
+.txmini-c { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+.txmini-d { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.txmini-a { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; } .txmini-a.ok { color: var(--ok); } .txmini-a.bad { color: var(--warm); }
+
+@media (max-width: 900px) { .statuslegend { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .statuslegend { grid-template-columns: 1fr; } }
