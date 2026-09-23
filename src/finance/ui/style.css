@@ -496,3 +496,133 @@ h2 { margin-bottom: 14px; }
   .dochero { flex-direction: column; gap: 14px; padding: 16px; }
   .dochero .dh-figures { gap: 18px; }
 }
+
+/* ============================================================================================
+   Visual elevation pass 3 - approved reference implementation (2026-09-23)
+   Dashboard + shared shell only, per the approved brief: narrow navy icon rail, warm ivory canvas,
+   editorial serif headline + clean sans-serif UI type, restrained terracotta, real treasury chart,
+   real tables. No business logic changed. No new font loaded (CSP is style-src 'self') - the
+   "editorial" feel comes from a system/webfont-free serif stack, same constraint as before.
+   ============================================================================================ */
+:root {
+  --bg: #faf6ef; --card: #ffffff; --ink: #1c1a17; --ink-soft: #7a7368; --muted: #8a8377; --line: #e9e2d6;
+  --accent: #12233f; --accent-ink: #ffffff; --warm: #bb5b3f; --warm-soft: #f7e9e2; --ok: #2f7a52; --info: #4a6a8a;
+  --rail-w: 72px; --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif;
+}
+html, body { background: var(--bg); }
+.card { border-color: var(--line); }
+
+/* ---- Shell: narrow icon rail + shared top bar ---- */
+.shell { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+.rail { background: var(--accent); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0; position: sticky; top: 0; height: 100vh; }
+.rail-mark { width: 38px; height: 38px; border-radius: 10px; background: #fff; color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 16px; margin-bottom: 14px; text-decoration: none; }
+.rail-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.railitem { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; color: rgba(255,255,255,.68); text-decoration: none; border: 0; background: transparent; cursor: pointer; position: relative; transition: background .15s var(--ease), color .15s var(--ease); }
+.railitem:hover { background: rgba(255,255,255,.1); color: #fff; }
+.railitem.active { background: rgba(255,255,255,.16); color: #fff; }
+.railitem.active::before { content: ""; position: absolute; left: -8px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--warm); }
+.rail-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 8px; }
+.rail .avatar { background: rgba(255,255,255,.14); color: #fff; }
+
+.mainarea { display: flex; flex-direction: column; min-width: 0; }
+.topbar2 { display: flex; align-items: center; gap: 16px; padding: 14px 32px; border-bottom: 1px solid var(--line); background: var(--card); }
+.gsearchwrap { flex: 1; max-width: 480px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.gsearch { border: 0; background: transparent; flex: 1; padding: 0; font-size: 13.5px; color: var(--ink); }
+.gsearch:focus { outline: none; }
+.gkey { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.tb-brand { display: flex; align-items: center; gap: 4px; font-weight: 650; font-size: 13.5px; color: var(--ink); }
+.tb-right .langswitch { background: var(--bg); }
+.tb-right .langswitch button { color: var(--ink-soft); } .tb-right .langswitch button.on { background: var(--accent); color: #fff; }
+
+/* ---- Editorial headline: serif, used only for the page greeting/title - everything else stays UI sans-serif ---- */
+.editorial { font-family: var(--serif); font-weight: 500; letter-spacing: -.005em; }
+.hero h1.editorial { font-size: 34px; }
+
+/* ---- KPI strip v3: icon + label + dominant value + trend, no colored floating tiles, thin dividers ---- */
+.kpi-strip { grid-template-columns: repeat(4, 1fr); gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0; overflow: hidden; }
+.kcard { border: 0; border-radius: 0; box-shadow: none; border-right: 1px solid var(--line); padding: 18px 20px; }
+.kcard:last-child { border-right: 0; }
+.kcard:hover { box-shadow: none; transform: none; background: color-mix(in srgb, var(--warm) 4%, transparent); }
+.kcard .kicon { width: 34px; height: 34px; border-radius: 999px; background: var(--warm-soft); color: var(--warm); display: inline-grid; place-items: center; margin-bottom: 10px; }
+.kcard .kl { display: flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+.kcard .kv { font-size: 24px; font-weight: 700; color: var(--ink); }
+.kcard .ktrend { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 650; margin-top: 4px; }
+.kcard .ktrend.up { color: var(--ok); } .kcard .ktrend.down { color: var(--warm); }
+.kcard .ktrend .tl { color: var(--ink-soft); font-weight: 500; margin-left: 2px; }
+
+/* ---- Treasury chart: the central visual object ---- */
+.treasurychart { display: flex; flex-direction: column; }
+.tc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.tc-select { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fff; color: var(--ink); }
+.tc-svg { width: 100%; height: auto; }
+.tc-grid line { stroke: var(--line); stroke-width: 1; } .tc-axis text { fill: var(--ink-soft); font-size: 10.5px; }
+.tc-bar-in { fill: color-mix(in srgb, var(--info) 55%, #fff); } .tc-bar-out { fill: color-mix(in srgb, var(--warm) 45%, #fff); }
+.tc-line { fill: none; stroke: var(--accent); stroke-width: 2.25; } .tc-dot { fill: var(--accent); }
+.tc-legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
+.tc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tc-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.tc-tooltip { position: absolute; background: var(--accent); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; pointer-events: none; box-shadow: var(--shadow-card); min-width: 150px; z-index: 5; }
+.tc-tooltip .tt-title { font-weight: 650; margin-bottom: 4px; } .tc-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; color: rgba(255,255,255,.85); }
+.tc-wrap { position: relative; }
+
+/* ---- Sophisticated table: numeric alignment, quiet metadata, compact badges ---- */
+.fintable { width: 100%; border-collapse: collapse; }
+.fintable th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 650; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.fintable td { padding: 11px 10px; border-bottom: 1px solid #f1ece2; vertical-align: middle; font-size: 13.5px; }
+.fintable th.num, .fintable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.fintable tr.click { cursor: pointer; } .fintable tr.click:hover td { background: color-mix(in srgb, var(--warm) 4%, transparent); }
+.fintable .fname { font-weight: 600; }
+.tabs2 { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.tab2 { border: 0; background: transparent; padding: 10px 4px; margin-right: 18px; font-size: 13.5px; color: var(--ink-soft); font-weight: 600; border-bottom: 2px solid transparent; cursor: pointer; }
+.tab2.on { color: var(--ink); border-color: var(--warm); }
+.tab2 .pc { margin-left: 5px; font-size: 11px; background: var(--bg); border-radius: 999px; padding: 1px 6px; }
+
+/* ---- Bank accounts list ---- */
+.bankrow { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid #f1ece2; } .bankrow:last-child { border-bottom: 0; }
+.bankmark { width: 34px; height: 34px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--ink-soft); flex: 0 0 auto; }
+.bankmeta { flex: 1; min-width: 0; } .bankmeta .bname2 { font-weight: 600; font-size: 13.5px; } .bankmeta .biban { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bankbal { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+.ghostrow { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1.5px dashed var(--line); border-radius: 10px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 13.5px; }
+.ghostrow:hover { border-color: var(--warm); color: var(--warm); }
+
+/* ---- Donut (supplier concentration) ---- */
+.donutwrap { display: flex; align-items: center; gap: 18px; }
+.donutlegend { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.donutlegend .dl-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.donutlegend .dl-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+.donutlegend .dl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+.donutlegend .dl-pct { font-weight: 650; font-variant-numeric: tabular-nums; }
+.insight { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--ink-soft); }
+
+/* ---- Dashboard grid regions: real CSS classes (not inline styles) so the responsive rules below can
+   actually win - an inline style attribute would out-rank any external @media rule regardless of breakpoint. ---- */
+.dash-mid { grid-template-columns: 1.6fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+.dash-bottom { grid-template-columns: 1fr 1.4fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+/* Tablet: reduce columns intelligently rather than stacking everything like a phone - the rail, the KPI
+   strip and the treasury chart all keep their desktop shape down to 641px; only the density of the grid
+   regions relaxes. */
+@media (max-width: 1100px) { .dash-bottom { grid-template-columns: 1fr 1fr; } .dash-bottom > :first-child { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .dash-mid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .dash-bottom { grid-template-columns: 1fr; } }
+
+/* ---- Tablet (641-900px): narrower rail and padding, but still a real side rail - not the phone pattern ---- */
+@media (max-width: 900px) and (min-width: 641px) {
+  .main { padding: 22px 20px 48px; } .topbar2 { padding: 12px 20px; }
+}
+/* ---- Phone (<=640px): the desktop rail is replaced by a compact top bar + bottom tab bar; cash/summary first ---- */
+@media (max-width: 640px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { position: fixed; bottom: 0; left: 0; right: 0; top: auto; height: 60px; width: 100%; flex-direction: row; padding: 0 6px; z-index: 20; box-shadow: 0 -6px 20px -10px rgba(16,24,40,.25); }
+  .rail-mark { display: none; }
+  .rail-nav { flex-direction: row; flex: 1; overflow-x: auto; justify-content: space-around; }
+  .rail-foot { flex-direction: row; }
+  .main { padding-bottom: 84px; }
+  .topbar2 { padding: 10px 14px; flex-wrap: wrap; }
+  .gsearchwrap { order: 3; flex-basis: 100%; max-width: none; }
+  .hero h1.editorial { font-size: 26px; }
+}
+@media (max-width: 1000px) {
+  .kcard:nth-child(2n) { border-right: 0; } .kcard:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 560px) { .kpi-strip { grid-template-columns: 1fr; } .kcard { border-right: 0 !important; border-bottom: 1px solid var(--line); } .kcard:last-child { border-bottom: 0; } }

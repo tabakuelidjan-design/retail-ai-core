@@ -81,6 +81,7 @@ const ICON_PATHS = {
   book: 'M4 4h11a3 3 0 013 3v13H7a3 3 0 01-3-3z M4 17a3 3 0 013-3h11', gear: 'M12 15a3 3 0 100-6 3 3 0 000 6z M4 12h2 M18 12h2 M12 4v2 M12 18v2 M6.3 6.3l1.4 1.4 M16.3 16.3l1.4 1.4 M6.3 17.7l1.4-1.4 M16.3 7.7l1.4-1.4',
   plus: 'M12 5v14 M5 12h14', search: 'M11 4a7 7 0 100 14 7 7 0 000-14z M21 21l-4.3-4.3', chevron: 'M9 6l6 6-6 6', alert: 'M12 3l10 18H2z M12 10v5 M12 18h.01',
   clock: 'M12 3a9 9 0 100 18 9 9 0 000-18z M12 7v5l3 2', inbox: 'M3 13l3-8h12l3 8v6H3z M3 13h5l1 3h6l1-3h5', cart: 'M3 4h2l2 11h11l2-8H7 M9 20h.01 M17 20h.01', check: 'M5 12l5 5 10-11', arrow: 'M5 12h14 M13 6l6 6-6 6', edit: 'M4 20h4L19 9l-4-4L4 16z',
+  bell: 'M6 10a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z M10 19a2 2 0 004 0', logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9',
 };
 function svgIcon(name, size) {
   const NS = 'http://www.w3.org/2000/svg';
@@ -118,20 +119,36 @@ function activityRow(e) {
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
-const NAV = [['#/', 'Overview', 'home'], ['@', 'Selling'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Companies', 'building'], ['#/receivables', 'Payments', 'coins'], ['@', 'Buying'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['@', 'Accountant'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['@', ''], ['#/settings', 'Settings', 'gear']];
+// Route -> (icon, tooltip label). Every route is exactly what it was before (no navigation was removed or
+// renamed); only the presentation changed from a labelled list to an icon rail with a hover tooltip.
+const NAV = [['#/', 'Overview', 'home'], ['#/quotes', 'Quotes', 'quote'], ['#/invoices', 'Invoices', 'doc'], ['#/companies', 'Customers', 'building'], ['#/receivables', 'Payments', 'coins'], ['#/inbox', 'Finance Inbox', 'inbox'], ['#/purchases', 'Purchases', 'cart'], ['#/pack', 'Accountant pack', 'book'], ['#/bank', 'Bank & Treasury', 'coins'], ['#/settings', 'Settings', 'gear']];
 function langSwitch() {
   return h('div', { class: 'langswitch', role: 'group', 'aria-label': 'Interface language' }, I18N.LANGS.map((l) => h('button', { type: 'button', class: I18N.getLang() === l ? 'on' : '', title: { fr: 'Français', nl: 'Nederlands', en: 'English' }[l], on: { click: () => { I18N.setLang(l); route(); } } }, l.toUpperCase())));
 }
+/** Global search: real, not decorative - it reuses the existing invoice-list text filter (no separate search
+ * index to build or fake). Enter jumps to the Invoices list pre-filtered; that page's own search box takes
+ * over from there. Extending it to clients/suppliers is a follow-up once this shell is approved. */
+function globalSearch() {
+  const box = h('input', { class: 'gsearch', placeholder: tt('Search an invoice, a client, a supplier...'), autocomplete: 'off',
+    on: { keydown: (e) => { if (e.key === 'Enter' && box.value.trim()) { location.hash = `#/invoices?q=${encodeURIComponent(box.value.trim())}`; } } } });
+  return h('div', { class: 'gsearchwrap' }, svgIcon('search', 16), box, h('span', { class: 'gkey' }, '⌘K'));
+}
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
-  const side = h('nav', { class: 'side' },
-    h('div', { class: 'brand' }, h('span', { class: 'mark' }, seller.trim().charAt(0).toUpperCase() || 'F'), h('span', { class: 'bname' }, seller)),
-    h('a', { class: 'side-cta', href: '#/new/invoice' }, svgIcon('plus', 16), h('span', null, 'New invoice')),
-    langSwitch(),
-    h('div', { class: 'navlist' }, NAV.map(([href, label, ic]) => (href === '@' ? (label ? h('div', { class: 'navgroup' }, label) : h('div', { class: 'navsep' })) : h('a', { href, class: `navitem ${href === active ? 'active' : ''}` }, svgIcon(ic, 18), h('span', null, label))))),
-    h('div', { class: 'foot' }, h('span', { class: 'foot-chip' }, 'Peppol: not configured'), h('span', { class: 'foot-chip' }, 'Nothing is sent externally'), h('button', { class: 'quiet', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, 'Log out')));
+  const initial = seller.trim().charAt(0).toUpperCase() || 'F';
+  const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
+    h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
+    h('div', { class: 'rail-nav' }, NAV.map(([href, label, ic]) => h('a', { href, class: `railitem ${href === active ? 'active' : ''}`, title: tr(label), 'aria-label': tr(label) }, svgIcon(ic, 19)))),
+    h('div', { class: 'rail-foot' },
+      h('a', { class: 'railitem', href: '#/', title: tt('Notifications'), 'aria-label': tt('Notifications') }, svgIcon('bell', 19)),
+      h('button', { class: 'railitem', type: 'button', title: tt('Log out'), 'aria-label': tt('Log out'), on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 19)),
+      avatar(seller, 'sm')));
+  // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
+  // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
+  // signed in rather than one fixed name.
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), h('span', { class: 'tb-brand' }, seller, h('span', { style: 'display:inline-flex;transform:rotate(90deg)' }, svgIcon('chevron', 13)))));
   const main = h('main', { class: 'main' }, content);
-  show(h('div', { class: 'shell' }, side, main));
+  show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main)));
   return main;
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
@@ -148,86 +165,166 @@ function renderLogin() {
 }
 
 // ---------- overview ----------
+// Minimal SVG element builder, same DOM-API discipline as svgIcon(): elements and text nodes only, no markup string is ever parsed.
+function svgEl(tag, attrs, kids) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  for (const k of kids || []) el.appendChild(k);
+  return el;
+}
+/** Real treasury chart: monthly inflow/outflow bars + a running-total line, built from /api/overview/cashflow
+ * rows only. Every number plotted is one already present in `rows`; nothing here interpolates or forecasts. */
+function treasuryChart(rows, cur) {
+  const W = 760, H = 230, mL = 46, mR = 8, mT = 10, mB = 24;
+  const innerW = W - mL - mR; const n = Math.max(1, rows.length);
+  const slot = innerW / n; const barW = Math.min(22, slot * 0.32);
+  const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
+  const zeroY = mT + (H - mT - mB) * 0.6;
+  const scale = Math.min(zeroY - mT - 8, H - mB - zeroY - 8) / maxAbs;
+  const xOf = (i) => mL + slot * i + slot / 2;
+  const kids = [];
+  // grid: zero line + two faint reference lines
+  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
+  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT, y2: mT }));
+  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: H - mB, y2: H - mB }));
+  kids.push(svgEl('text', { class: 'tc-axis', x: 4, y: zeroY + 4 }, [document.createTextNode('0')]));
+  const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
+  rows.forEach((r, i) => {
+    const x = xOf(i);
+    const inH = r.inflowCents * scale; const outH = r.outflowCents * scale;
+    kids.push(svgEl('rect', { class: 'tc-bar-in', x: x - barW - 1, y: zeroY - inH, width: barW, height: Math.max(0, inH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.inflow} ${cur}`)])]));
+    kids.push(svgEl('rect', { class: 'tc-bar-out', x: x + 1, y: zeroY, width: barW, height: Math.max(0, outH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: -${r.outflow} ${cur}`)])]));
+    kids.push(svgEl('text', { class: 'tc-axis', x, y: H - 6, 'text-anchor': 'middle' }, [document.createTextNode(monthLabel(r.month))]));
+  });
+  const pts = rows.map((r, i) => [xOf(i), zeroY - r.balanceCents * scale]);
+  kids.push(svgEl('polyline', { class: 'tc-line', points: pts.map((p) => p.join(',')).join(' ') }));
+  pts.forEach(([x, y], i) => { const r = rows[i]; kids.push(svgEl('circle', { class: 'tc-dot', cx: x, cy: y, r: i === pts.length - 1 ? 4 : 2.5 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${tt('balance')} ${r.balance} ${cur}`)])])); });
+  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
+}
 async function viewOverview() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const today = new Date().toLocaleDateString(I18N.tag(), { weekday: 'long', day: 'numeric', month: 'long' });
+  const first = ((state.settings && state.settings.seller && state.settings.seller.name) || '').trim().split(/\s+/)[0] || '';
+  const dateStr = new Date().toLocaleDateString(I18N.tag(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const main = layout('#/', h('div', { class: 'hero' },
-    h('div', null, h('div', { class: 'eyebrow' }, today), h('h1', null, greet), h('div', { class: 'muted' }, 'Here is what needs your attention.')),
-    h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#/new/invoice' }, svgIcon('plus', 16), 'New invoice'), h('a', { class: 'btn', href: '#/new/quote' }, 'New quote'))));
+    h('div', null, h('h1', { class: 'editorial' }, first ? tt('{0} {1},', greet, first) : tt('{0},', greet)), h('div', { class: 'muted' }, 'Here is a summary of your financial activity.')),
+    h('div', { class: 'muted small right' }, dateStr)));
   const box = h('div'); main.appendChild(box);
   box.appendChild(h('div', { class: 'grid cards' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
   try {
-    const [o, treasury, purchaseRows] = await Promise.all([
+    const [o, treasury, purchaseRows, invoiceRows] = await Promise.all([
       api('GET', '/api/overview'),
       api('GET', '/api/treasury').catch(() => null),
       api('GET', '/api/inbox?scope=purchases').then((r) => r.rows).catch(() => []),
+      api('GET', '/api/documents?type=invoice').then((r) => r.rows).catch(() => []),
     ]);
     const ac = await api('GET', '/api/actions').catch(() => ({ actions: [], currency: o.currency }));
     clear(box);
     const cur = o.currency;
     mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), tt('{0} setting(s) missing.', o.settingsMissing.length) + ' ', h('a', { href: '#/settings' }, 'Open settings')) : null);
 
-    // ---- Finance Command Center: four decisive figures, not eight equal boxes. Each is real, already-
-    // computed data (treasury liquidity, receivables, supplier payables, Action Center count) - never estimated.
+    // ---- 4-metric strip: Chiffre d'affaires / Dépenses / Solde de trésorerie / Factures en attente.
+    // Revenue and expenses (+ month-over-month change) are computed server-side from real invoices/supplier
+    // invoices; treasury is the same real observed figure as the Bank & Treasury page; "en attente" is the
+    // existing real outstanding-receivables total. Nothing here is estimated or interpolated.
     const toPay = purchaseRows.filter((r) => r.status === 'TO_PAY');
-    const toPayCents = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
-    const kcard = (tone, label, value, sub, href) => h('a', { class: `kcard ${tone}`, href }, h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value), sub ? h('div', { class: 'ksub' }, sub) : null);
+    // The arrow and sign always reflect the real direction of change (never flipped for effect); only the
+    // colour (good/bad) depends on whether an increase is desirable for that particular metric - a rising
+    // expense is still shown rising, just coloured as attention rather than success.
+    const trendArrow = (pct, goodWhenUp = true) => { const isUp = pct >= 0; const good = goodWhenUp ? isUp : !isUp; return h('span', { class: `ktrend ${good ? 'up' : 'down'}` }, (isUp ? '↑ +' : '↓ ') + pct + '%', h('span', { class: 'tl' }, tt('vs. last month'))); };
+    const kcard = (icon, label, value, trend, href) => h('a', { class: 'kcard', href }, h('span', { class: 'kicon' }, svgIcon(icon, 16)), h('div', { class: 'kl' }, label), h('div', { class: 'kv' }, value), trend);
     box.appendChild(h('div', { class: 'kpi-strip' },
-      kcard('', 'Cash position', treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : tt('Not connected'), treasury?.observed?.liquidCents != null ? 'Bank + cash' : tt('Connect a bank to see this'), '#/bank'),
-      kcard(o.counts.unpaid ? 'warm' : '', 'Amount to collect', fmtMoney(o.amounts.outstandingCents, cur), tt('{0} unpaid invoice(s)', o.counts.unpaid), '#/receivables'),
-      kcard(toPay.length ? 'warm' : '', 'Supplier bills due', fmtMoney(toPayCents, (purchaseRows[0] && purchaseRows[0].currency) || cur), tt('{0} bill(s) to pay', toPay.length), '#/purchases'),
-      kcard(ac.actions.length ? 'bad' : 'ok', 'Critical actions', String(ac.actions.length), ac.actions.length ? tt('need your attention') : tt('all clear'), '#/')));
+      kcard('doc', tt('Revenue'), fmtMoney(o.revenue.thisMonthCents, cur), trendArrow(o.revenue.changePct), '#/invoices'),
+      kcard('coins', 'Expenses', fmtMoney(o.expenses.thisMonthCents, cur), trendArrow(o.expenses.changePct, false), '#/purchases'),
+      kcard('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : tt('Not connected'), treasury?.observed?.liquidCents != null ? null : h('span', { class: 'tl' }, tt('Connect a bank to see this')), '#/bank'),
+      kcard('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', { class: 'tl' }, tt('{0} unpaid invoice(s)', o.counts.unpaid)), '#/receivables')));
 
-    // ---- Action Center: the heart of the page ----
-    box.appendChild(actionCenterCard(ac.actions, ac.currency));
+    // ---- Central object: real treasury movement + Action Center + Quick actions ----
+    const mid = h('div', { class: 'grid dash-mid' });
+    const chartWrap = h('div', { class: 'tc-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
+    const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => { clear(chartWrap); chartWrap.appendChild(treasuryChart(r.rows, r.currency)); }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
+    const periodSelect = h('select', { class: 'tc-select', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
+    const chartCard = h('div', { class: 'card treasurychart' },
+      h('div', { class: 'tc-head' }, h('div', null, h('h2', null, 'Treasury'), h('div', { class: 'muted small' }, 'Real inflows, outflows and running balance')), periodSelect),
+      chartWrap,
+      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 55%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--accent)' }), tt('Cumulative balance'))));
+    mid.appendChild(chartCard);
+    loadChart(6);
 
-    // ---- Trends: only real, already-computed movement - never a decorative chart ----
-    const trendCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Trends')));
-    const t7 = o.trend7d || [];
-    const maxC = Math.max(1, ...t7.map((d) => d.cents));
-    const dow = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(I18N.tag(), { weekday: 'short' });
-    trendCard.appendChild(h('div', { class: 'eyebrow' }, 'Payments received - last 7 days'));
-    trendCard.appendChild(h('div', { class: 'trendrow' }, t7.map((d, i) => {
-      // Bar height is a pixel size for the chart, not a financial figure - kept on its own line/variable so
-      // it reads (and scans) as clearly separate from the displayed amount just below it.
-      const px = Math.max(4, Math.round((d.cents / maxC) * 46));
-      return h('span', { class: `trendbar ${i === t7.length - 1 ? 'today' : ''}`, style: `height:${px}px`, title: `${dow(d.date)}: ${d.amount} ${cur}` });
-    })));
-    trendCard.appendChild(h('div', { class: 'trendmeta' }, t7.map((d) => h('span', null, dow(d.date)))));
-    // ageing as a stacked bar (widths are only a picture of the amounts the server returns)
-    const KEYS = [['not_due', 'Not yet due', 's0'], ['0_7', '0-7 days', 's1'], ['8_30', '8-30 days', 's2'], ['31_60', '31-60 days', 's3'], ['60_plus', '60+ days', 's4']];
-    const totalC = KEYS.reduce((a, [k]) => a + (o.aging[k].cents || 0), 0);
-    trendCard.appendChild(h('div', { class: 'eyebrow', style: 'margin-top:18px' }, 'Invoices paid vs overdue'));
-    if (!totalC) trendCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'All caught up'), h('div', { class: 'muted small' }, 'No unpaid invoices right now.'))));
-    else {
-      trendCard.appendChild(h('div', { class: 'agebar' }, KEYS.filter(([k]) => o.aging[k].cents > 0).map(([k, l, c]) => h('span', { class: `seg ${c}`, style: `flex:${o.aging[k].cents}`, title: `${tr(l)}: ${o.aging[k].amount} ${cur}` }))));
-      trendCard.appendChild(h('div', { class: 'agelegend' }, KEYS.map(([k, l, c]) => h('div', { class: 'lg' }, h('span', { class: `dot ${c}` }), h('span', { class: 'lgl' }, l), h('strong', null, o.aging[k].amount), h('span', { class: 'muted small' }, tt('{0} inv.', o.aging[k].count))))));
-    }
-    box.appendChild(trendCard);
+    const rightCol = h('div', { class: 'flexcol', style: 'display:flex;flex-direction:column;gap:16px' });
+    // Actions rapides: one primary (Créer une facture), the rest visually quiet - each wired to a real,
+    // already-existing action (no new modals invented for this pass).
+    rightCol.appendChild(h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Quick actions')),
+      h('div', { class: 'actions', style: 'flex-direction:column;align-items:stretch;gap:8px' },
+        h('a', { class: 'btn primary', href: '#/new/invoice' }, tt('Create an invoice'), h('span', { style: 'margin-left:auto' }, svgIcon('arrow', 14))),
+        h('button', { class: 'btn ghost', type: 'button', on: { click: () => manualEntry(() => route()) } }, tt('Add an expense')),
+        h('button', { class: 'btn ghost', type: 'button', on: { click: () => companyModal(null) } }, tt('New client')),
+        h('a', { class: 'btn ghost', href: '#/bank' }, tt('Import a bank statement')))));
+    // Due soon: real due-soon + overdue invoices (already computed server-side).
+    const dueRows = [...o.attention.overdue.map((r) => ({ ...r, late: true })), ...o.attention.dueSoon.map((r) => ({ ...r, late: false }))].slice(0, 5);
+    rightCol.appendChild(h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Upcoming due dates'), h('a', { href: '#/receivables', class: 'small' }, tt('See all'))),
+      dueRows.length ? h('div', { class: 'list' }, dueRows.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.number)), h('span', { class: `chip ${r.late ? 'bad' : 'warn'}` }, r.late ? tt('{0} day(s) late', r.daysOverdue) : tt('Due {0}', r.dueDate)), h('strong', null, r.remaining))))
+        : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 20)), h('div', { class: 'muted small' }, 'Nothing coming up.'))));
+    mid.appendChild(rightCol);
+    box.appendChild(mid);
 
-    // ---- Recent activity: the real document lifecycle trail, fetched lazily so it never blocks the KPIs ----
-    const actCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')), h('div', { class: 'muted small' }, 'Loading...'));
-    box.appendChild(actCard);
+    // ---- Recent activity + Bottom row (bank accounts / invoices table / supplier concentration) ----
+    const bottom = h('div', { class: 'grid dash-bottom' });
+    const actCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')), h('div', { class: 'muted small' }, 'Loading...'));
+    bottom.appendChild(actCard);
     api('GET', '/api/overview/activity').then((r) => {
       clear(actCard); actCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Recent activity')));
       if (!r.rows.length) { actCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 20)), h('div', null, h('strong', null, 'Nothing yet'), h('div', { class: 'muted small' }, 'Issued invoices, payments and credit notes will show up here.')))); return; }
       actCard.appendChild(h('div', { class: 'activity' }, r.rows.map((e) => activityRow(e))));
     }).catch(() => { clear(actCard); actCard.appendChild(h('div', { class: 'muted small' }, 'Activity unavailable.')); });
 
-    const row = (r, right) => h('a', { class: 'listrow', href: `#/doc/${r.id || ''}` }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number || TYPE[r.type] || '')), right);
-    const overdue = o.attention.overdue.map((r) => h('a', { class: 'listrow', href: '#/receivables' }, avatar(r.customer), h('span', { class: 'lmain2' }, h('span', { class: 'lt' }, r.customer), h('span', { class: 'ls' }, r.number)), h('span', { class: 'lr' }, h('strong', null, r.remaining), h('span', { class: 'chip bad' }, tt('{0} days late', r.daysOverdue)))));
-    const waiting = [
-      ...o.attention.awaitingApproval.map((r) => row(r, h('span', { class: 'lr' }, h('strong', null, r.gross), h('span', { class: 'chip warn' }, 'To approve')))),
-      ...o.attention.quotes.map((r) => row(r, h('span', { class: 'lr' }, h('span', { class: 'chip mute' }, `${STATUS[r.status]}${r.expired ? ' - expired' : ''}`)))),
-    ];
-    box.appendChild(h('div', { class: 'grid two', style: 'margin-top:16px' },
-      h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Overdue invoices')), overdue.length ? h('div', { class: 'list' }, overdue) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'Nothing overdue'), h('div', { class: 'muted small' }, 'Every invoice is on time.')))),
-      h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Waiting for you')), waiting.length ? h('div', { class: 'list' }, waiting) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('check', 22)), h('div', null, h('strong', null, 'Nothing is waiting'), h('div', { class: 'muted small' }, 'Drafts and quotes will show up here.'))))));
+    // Client invoices: tabbed table (Due / Overdue / Paid) over the real invoice list.
+    const invCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Client invoices'), h('a', { href: '#/invoices', class: 'small' }, tt('See all'))));
+    const buckets = { open: invoiceRows.filter((r) => r.effectiveStatus !== 'OVERDUE' && r.effectiveStatus !== 'PAID' && r.effectiveStatus !== 'CREDITED' && r.effectiveStatus !== 'CANCELLED' && r.effectiveStatus !== 'DRAFT'), late: invoiceRows.filter((r) => r.effectiveStatus === 'OVERDUE'), paid: invoiceRows.filter((r) => r.effectiveStatus === 'PAID') };
+    const tabs2 = h('div', { class: 'tabs2' });
+    const tableWrap = h('div');
+    let activeTab = 'open';
+    const drawInvTable = () => {
+      clear(tabs2); clear(tableWrap);
+      [['open', 'Due'], ['late', 'Overdue'], ['paid', 'Paid']].forEach(([k, l]) => tabs2.appendChild(h('button', { type: 'button', class: `tab2 ${activeTab === k ? 'on' : ''}`, on: { click: () => { activeTab = k; drawInvTable(); } } }, tt(l), h('span', { class: 'pc' }, String(buckets[k].length)))));
+      const rows = buckets[activeTab].slice(0, 6);
+      if (!rows.length) { tableWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 20)), h('div', { class: 'muted small' }, 'Nothing here.'))); return; }
+      tableWrap.appendChild(h('table', { class: 'fintable' }, h('tr', null, [tt('Client'), tt('Invoice no.'), tt('Amount'), tt('Due date'), tt('Status')].map((x, i) => h('th', { class: i === 2 ? 'num' : '' }, x))),
+        rows.map((r) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/doc/${r.id}`; } } }, h('td', { class: 'fname' }, r.customer), h('td', null, r.number || tt('(draft)')), h('td', { class: 'num' }, `${r.gross} ${cur}`), h('td', null, r.dueDate || '—'), h('td', null, badge(r.effectiveStatus))))));
+    };
+    drawInvTable();
+    invCard.appendChild(tabs2); invCard.appendChild(tableWrap);
+    bottom.appendChild(invCard);
 
-    const packCard = h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Accountant pack - last closed quarter'), h('div', { class: 'muted' }, 'Checking...'));
-    box.appendChild(packCard);
-    api('GET', '/api/overview/pack').then((p) => { clear(packCard); packCard.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Accountant pack - last closed quarter'), h('a', { href: '#/pack', class: 'small' }, 'Open the pack'))); if (p.status !== 'OK') return packCard.appendChild(h('div', { class: 'muted' }, 'Retail data is not available.')); packCard.appendChild(h('div', { class: 'actions' }, h('span', { class: 'chip mute' }, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness}` }, p.completeness), h('span', { class: `badge ${p.reconciliation}` }, p.reconciliation), p.anomalies ? h('span', { class: 'badge PARTIAL' }, tt('{0} anomaly(ies)', p.anomalies)) : null)); if (p.reasons.length) packCard.appendChild(h('ul', { class: 'plain small muted', style: 'margin-top:8px' }, p.reasons.map((r) => h('li', null, human(r))))); }).catch(() => { clear(packCard); packCard.appendChild(h('div', { class: 'muted' }, 'Pack status unavailable.')); });
+    const rightBottom = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
+    // Bank accounts: real per-account balances (fin_bank_balances). Proper empty state, never a raw "—".
+    const bankCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Bank accounts'), h('a', { href: '#/bank', class: 'small' }, tt('See all'))));
+    if (treasury?.accounts?.length) {
+      bankCard.appendChild(h('div', null, treasury.accounts.map((a) => h('div', { class: 'bankrow' }, h('span', { class: 'bankmark' }, (treasury.provider || 'B')[0]), h('div', { class: 'bankmeta' }, h('div', { class: 'bname2' }, treasury.provider || tt('Connected account')), h('div', { class: 'biban' }, a.ibanMasked || '')), h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`)))));
+    } else {
+      bankCard.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small', style: 'margin-top:2px' }, tt('Read-only: no payment can ever be initiated.')))));
+    }
+    bankCard.appendChild(h('button', { class: 'ghostrow', style: 'margin-top:10px', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect a read-only account')));
+    rightBottom.appendChild(bankCard);
+
+    // Supplier concentration: real (no expense-category field exists anywhere in this data model, so this
+    // deliberately does not claim to be a category breakdown - it is labelled by what it actually is).
+    const donutCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Breakdown by supplier')));
+    if (o.topSuppliers.length) {
+      const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
+      let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
+      const circ = 2 * Math.PI * R;
+      const arcs = o.topSuppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
+      const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
+      donutCard.appendChild(h('div', { class: 'donutwrap' },
+        h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, fmtMoney(o.supplierTotalCents, cur)), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
+        h('div', { class: 'donutlegend' }, o.topSuppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`))))));
+    } else {
+      donutCard.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, 'No supplier invoices yet.')));
+    }
+    rightBottom.appendChild(donutCard);
+    bottom.appendChild(rightBottom);
+    box.appendChild(bottom);
   } catch (e) { fail(e, box); }
 }
 

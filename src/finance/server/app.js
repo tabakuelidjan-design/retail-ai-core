@@ -209,7 +209,29 @@ export function createFinanceApp(deps) {
     // Real last-7-days payment totals for the dashboard trend strip - reuses `payments`, already loaded above.
     // Never estimated: a day with no recorded payment is 0, not interpolated.
     const last7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${today}T00:00:00Z`) - (6 - i) * 86_400_000).toISOString().slice(0, 10); return { date: d, cents: payments.filter((p) => p.paidOn === d).reduce((a, p) => a + p.amountCents, 0) }; });
+    // Revenue / expenses this month vs last month - real, computed from documents/supplier invoices already
+    // available to this function (or one extra read-only fetch for supplier invoices). "Revenue" = gross of
+    // invoices issued in the period (never quotes, never drafts); "expenses" = gross of supplier invoices the
+    // merchant has accepted (validated/to pay/paid) in the period. Never a forecast, never interpolated.
+    const lastMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+    const invoiceGrossInMonth = (mth) => nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.issueDate?.startsWith(mth) && doc.status !== 'CANCELLED').reduce((a, { doc }) => a + doc.totals.grossCents, 0);
+    const supplierInvoices = await store.listSupplierInvoices(merchantId).catch(() => []);
+    const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status));
+    const expenseGrossInMonth = (mth) => accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + s.grossCents, 0);
+    const pctChange = (cur2, prev) => (prev > 0 ? Math.round(((cur2 - prev) / prev) * 100) : cur2 > 0 ? 100 : 0);
+    const revenueThis = invoiceGrossInMonth(month); const revenueLast = invoiceGrossInMonth(lastMonth);
+    const expenseThis = expenseGrossInMonth(month); const expenseLast = expenseGrossInMonth(lastMonth);
+    // Top suppliers by accepted amount - real supplier-invoice data, used on the dashboard where the approved
+    // design calls for an expense-category donut; there is no expense-category field anywhere in this data
+    // model, so categories would have to be invented. Supplier concentration is the closest real substitute.
+    const bySupplier = new Map();
+    for (const s of accepted) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + s.grossCents);
+    const supplierTotal = [...bySupplier.values()].reduce((a, c) => a + c, 0);
+    const topSuppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, cents]) => ({ name, cents, amount: m(cents), sharePct: supplierTotal > 0 ? Math.round((cents / supplierTotal) * 100) : 0 }));
     return {
+      revenue: { thisMonth: m(revenueThis), thisMonthCents: revenueThis, changePct: pctChange(revenueThis, revenueLast) },
+      expenses: { thisMonth: m(expenseThis), thisMonthCents: expenseThis, changePct: pctChange(expenseThis, expenseLast) },
+      topSuppliers, supplierTotalCents: supplierTotal,
       asOf: today, currency: cur,
       counts: {
         unpaid: rec.unpaid.count, overdue: rec.overdue.count, dueSoon: rec.due_soon.count,
@@ -224,6 +246,7 @@ export function createFinanceApp(deps) {
       aging: Object.fromEntries(Object.entries(rec.aging).map(([k, v]) => [k, { count: v.count, amount: m(v.outstandingCents), cents: v.outstandingCents }])),
       attention: {
         overdue: rec.invoices.filter((i) => i.overdue).slice(0, 5).map((i) => ({ number: i.number, customer: i.customer, daysOverdue: i.daysOverdue, remaining: m(i.remainingCents) })),
+        dueSoon: rec.invoices.filter((i) => i.dueSoon).slice(0, 5).map((i) => ({ number: i.number, customer: i.customer, dueDate: i.dueDate, remaining: m(i.remainingCents) })),
         awaitingApproval: nonQuote.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL').slice(0, 5).map(({ doc }) => ({ id: doc.id, type: doc.type, customer: doc.customer.name, gross: disp(doc.totals.grossCents, doc) })),
         quotes: quotes.filter(({ doc }) => doc.status === 'SENT' || doc.status === 'ACCEPTED').slice(0, 5).map(({ doc }) => ({ id: doc.id, number: doc.number, status: doc.status, customer: doc.customer.name, expired: !!doc.validUntil && today > doc.validUntil })),
       },
@@ -296,6 +319,28 @@ export function createFinanceApp(deps) {
     const docs = new Map((await Promise.all(docIds.map((id) => store.getDocument(id).catch(() => null)))).filter(Boolean).map((d) => [d.id, d]));
     const m = (c) => money(c, settings.defaults.language);
     json(ctx.res, 200, { rows: events.map((e) => { const d = docs.get(e.documentId); return { action: e.action, at: e.at, docType: d?.type ?? null, docNumber: d?.number ?? null, docId: e.documentId, amount: e.detail?.amountCents != null ? m(e.detail.amountCents) : null, currency: d?.currency ?? settings.defaults.currency }; }) });
+  });
+
+  // Dashboard treasury chart: real monthly totals of client payments received (inflow) and supplier invoices
+  // paid (outflow), with a running net total. This is documented cash MOVEMENT, not the literal bank balance -
+  // the two only match once a bank account is actually connected and reconciled. Never a forecast: a month
+  // with no recorded movement is 0, not interpolated or projected forward.
+  on('GET', '/api/overview/cashflow', async (ctx) => {
+    const { settings } = await servicesFor();
+    const months = [3, 6, 12].includes(Number(ctx.url.searchParams.get('months'))) ? Number(ctx.url.searchParams.get('months')) : 6;
+    const today = clock.today();
+    const [payments, supplierInvoices] = await Promise.all([store.listPaymentsForMerchant(merchantId), store.listSupplierInvoices(merchantId).catch(() => [])]);
+    const paidSupplier = supplierInvoices.filter((s) => s.status === 'PAID' && s.paidAt);
+    const monthKeys = Array.from({ length: months }, (_, i) => { const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - (months - 1 - i), 1)); return d.toISOString().slice(0, 7); });
+    const m = (c) => money(c, settings.defaults.language);
+    let running = 0;
+    const rows = monthKeys.map((mth) => {
+      const inflowCents = payments.filter((p) => p.paidOn?.startsWith(mth)).reduce((a, p) => a + p.amountCents, 0);
+      const outflowCents = paidSupplier.filter((s) => String(s.paidAt).startsWith(mth)).reduce((a, s) => a + (s.paidAmountCents ?? s.grossCents ?? 0), 0);
+      running += inflowCents - outflowCents;
+      return { month: mth, inflowCents, outflowCents, netCents: inflowCents - outflowCents, balanceCents: running, inflow: m(inflowCents), outflow: m(outflowCents), balance: m(running) };
+    });
+    json(ctx.res, 200, { currency: settings.defaults.currency, months, rows });
   });
 
   on('POST', '/api/calc', async (ctx) => {
@@ -523,9 +568,14 @@ export function createFinanceApp(deps) {
   on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('GET', '/api/treasury', async (ctx) => {
-    const { settings } = await servicesFor(); const t = await (await bankFor()).treasury({ currency: settings.defaults.currency });
+    const { settings } = await servicesFor(); const bank = await bankFor(); const t = await bank.treasury({ currency: settings.defaults.currency });
     const m = (c) => (c == null ? null : money(c, settings.defaults.language));
-    json(ctx.res, 200, { ...t, display: { bank: m(t.observed.bankCents), cash: m(t.observed.cashCents), liquid: m(t.observed.liquidCents), incoming: m(t.expected.incomingCents), outgoing: m(t.expected.outgoingCents), overdue: m(t.assumed.overdueReceivablesCents), projection: m(t.projection.cents) } });
+    // Per-account balances for the dashboard's "Comptes bancaires" list - real rows from fin_bank_balances,
+    // never fabricated placeholder accounts. Empty when nothing is connected (the UI shows a proper empty state).
+    const status = await bank.status().catch(() => null);
+    const balances = await store.listBankBalances(merchantId).catch(() => []);
+    const accounts = balances.map((b) => ({ accountId: b.accountId, ibanMasked: b.iban ? `${b.iban.slice(0, 4)} •••• •••• ${b.iban.slice(-4)}` : null, balance: m(b.balanceCents), balanceCents: b.balanceCents, currency: b.currency, asOf: b.asOf }));
+    json(ctx.res, 200, { ...t, display: { bank: m(t.observed.bankCents), cash: m(t.observed.cashCents), liquid: m(t.observed.liquidCents), incoming: m(t.expected.incomingCents), outgoing: m(t.expected.outgoingCents), overdue: m(t.assumed.overdueReceivablesCents), projection: m(t.projection.cents) }, connected: !!status?.connected, provider: status?.adapter?.label ?? null, accounts });
   });
 
   // ---------- Finance Action Center: what to do next, from facts the workspace already holds ----------
