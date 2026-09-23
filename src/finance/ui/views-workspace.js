@@ -48,7 +48,9 @@ function fmtMoney(cents, currency) {
   const lang = I18N.getLang(); const group = lang === 'en' ? ',' : lang === 'nl' ? '.' : ' '; const point = lang === 'en' ? '.' : ',';
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, group); const sym = CUR_SYMBOL[currency] || currency || '';
   const num = `${neg ? '-' : ''}${grouped}${point}${dec}`;
-  return lang === 'fr' ? `${num} ${sym}`.trim() : lang === 'nl' ? `${sym} ${num}`.trim() : `${sym}${num}`;
+  // Phase 0 (section 13): a non-breaking space before the currency symbol in fr-BE, so "1 234,56" and
+  // "€" can never be split across a line wrap. The thousands grouping above already uses U+202F.
+  return lang === 'fr' ? `${num} ${sym}`.trim() : lang === 'nl' ? `${sym} ${num}`.trim() : `${sym}${num}`;
 }
 const centsToInput = (c) => (c == null ? '' : `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`);
 

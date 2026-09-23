@@ -30,13 +30,16 @@ table { width: 100%; border-collapse: collapse; } th, td { text-align: left; pad
 th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 tr.click { cursor: pointer; } tr.click:hover td { background: #faf8f4; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eef0f3; color: #445; }
-.badge.DRAFT, .badge.CANCELLED, .badge.REJECTED { background: #eceff3; color: #556; }
-.badge.READY_FOR_APPROVAL, .badge.SENT, .badge.ACCEPTED { background: #e6eefb; color: var(--info); }
-.badge.ISSUED { background: #e4f3ec; color: var(--ok); } .badge.PAID, .badge.CONVERTED { background: #d9f0e3; color: var(--ok); }
-.badge.PARTIALLY_PAID { background: #fdf0d9; color: var(--warn); } .badge.OVERDUE { background: #fbe4e2; color: var(--bad); }
-.badge.CREDITED { background: #efe7f7; color: #6b3fa0; } .badge.COMPLETE { background: #d9f0e3; color: var(--ok); } .badge.PARTIAL, .badge.REVIEW_REQUIRED { background: #fdf0d9; color: var(--warn); }
-.badge.CLEAN { background: #d9f0e3; color: var(--ok); } .badge.NOT_CONFIGURED { background: #eceff3; color: #556; }
+/* Status primitive (Phase 0): dot + text on a transparent surface, never a filled pill - the colour
+   carries the semantic meaning via the dot (currentColor) and the text colour, never via a background
+   fill. Business status values are untouched; only their representation changed. */
+.badge { display: inline-flex; align-items: center; padding: 2px 0; border-radius: 0; font-size: 12px; font-weight: 650; background: transparent; color: #445; }
+.badge.DRAFT, .badge.CANCELLED, .badge.REJECTED { background: transparent; color: #556; }
+.badge.READY_FOR_APPROVAL, .badge.SENT, .badge.ACCEPTED { background: transparent; color: var(--info); }
+.badge.ISSUED { background: transparent; color: var(--ok); } .badge.PAID, .badge.CONVERTED { background: transparent; color: var(--ok); }
+.badge.PARTIALLY_PAID { background: transparent; color: var(--warn); } .badge.OVERDUE { background: transparent; color: var(--bad); }
+.badge.CREDITED { background: transparent; color: #6b3fa0; } .badge.COMPLETE { background: transparent; color: var(--ok); } .badge.PARTIAL, .badge.REVIEW_REQUIRED { background: transparent; color: var(--warn); }
+.badge.CLEAN { background: transparent; color: var(--ok); } .badge.NOT_CONFIGURED { background: transparent; color: #556; }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 13px; }
 .pill.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -53,7 +56,7 @@ input[type=checkbox], input[type=radio] { width: auto; margin-right: 6px; }
 .formgrid { grid-template-columns: 1fr 330px; align-items: start; } .detailgrid { grid-template-columns: 1fr 320px; align-items: start; }
 .totals { position: sticky; top: 14px; } .totals .t { display: flex; justify-content: space-between; padding: 4px 0; } .totals .big { font-size: 20px; font-weight: 700; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
 .modal-back { position: fixed; inset: 0; background: rgba(20,28,40,.45); display: grid; place-items: center; z-index: 20; padding: 16px; }
-.modal { background: #fff; border-radius: 12px; padding: 20px; width: min(560px, 100%); max-height: 90vh; overflow: auto; }
+.modal { background: #fff; border-radius: 12px; padding: 20px; width: min(560px, 100%); max-height: 90vh; overflow: auto; box-shadow: var(--shadow-md); }
 .toast { position: fixed; right: 18px; bottom: 18px; background: #1c2530; color: #fff; padding: 11px 16px; border-radius: 8px; z-index: 30; max-width: 420px; }
 .toast.bad { background: var(--bad); } .toast.ok { background: var(--ok); }
 iframe.pdf { width: 100%; height: 720px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
@@ -69,7 +72,7 @@ iframe.pdf { width: 100%; height: 720px; border: 1px solid var(--line); border-r
 .searchrow { display: flex; gap: 8px; margin-top: 4px; } .bigsearch { font-size: 16px; padding: 12px 14px; }
 .result { display: block; width: 100%; text-align: left; margin-top: 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; white-space: normal; }
 .result:hover, .result:focus { border-color: var(--accent); background: #faf8f4; } .rname { font-weight: 600; }
-.badge.warn { background: #fdebd3; color: #8a4b00; }
+.badge.warn { background: transparent; color: #8a4b00; }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--info); text-decoration: underline; cursor: pointer; font-size: 12px; }
 
 /* ===== Dynamic premium layer: depth, motion, hierarchy. Restrained accent, no heavy gradients. ===== */
@@ -80,12 +83,14 @@ iframe.pdf { width: 100%; height: 720px; border: 1px solid var(--line); border-r
 }
 html, body { font-family: ui-sans-serif, "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 1, "cv11" 1; }
 h1 { font-size: 24px; font-weight: 650; letter-spacing: -.02em; } h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
-.card { border-color: var(--line); box-shadow: var(--shadow-sm); transition: box-shadow .2s var(--ease), border-color .2s var(--ease); }
-.card:focus-within { box-shadow: var(--shadow-md); }
+/* Phase 0: base surfaces no longer float - separation comes from the canvas/surface contrast, a subtle
+   1px border and space, never a permanent shadow. Elevation is reserved for drawer/modal/popover/menu. */
+.card { border-color: var(--line); transition: border-color .2s var(--ease); }
+.card:focus-within { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
 .side { background: #0f2a52; } .side a { position: relative; transition: background .18s var(--ease), opacity .18s var(--ease), transform .18s var(--ease); }
 .side a:hover { transform: translateX(2px); } .side a.active::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: #fff; }
 button, .btn { transition: background .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease), transform .1s var(--ease); }
-button:hover, .btn:hover { box-shadow: var(--shadow-sm); } button:active:not(:disabled) { transform: translateY(1px); }
+button:hover, .btn:hover { border-color: var(--accent); } button:active:not(:disabled) { transform: translateY(1px); }
 button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(15,42,82,.3), inset 0 1px 0 rgba(255,255,255,.12); } button.primary:hover { background: #163a6e; }
 button:focus-visible, .btn:focus-visible, a:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 input, select, textarea { transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease); }
@@ -96,7 +101,7 @@ tr.click td { transition: background .12s var(--ease); }
 .main > * { animation: rise .32s var(--ease) both; } .main > *:nth-child(2) { animation-delay: .04s; } .main > *:nth-child(3) { animation-delay: .08s; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes flash { from { box-shadow: 0 0 0 3px rgba(36,86,199,.28), var(--shadow-md); } to { box-shadow: var(--shadow-sm); } }
+@keyframes flash { from { box-shadow: 0 0 0 3px rgba(36,86,199,.28); } to { box-shadow: none; } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .totals.flash { animation: flash .7s var(--ease); } .totals .big { font-size: 22px; letter-spacing: -.02em; }
 .cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; } .cardhead h2 { margin: 0; }
@@ -146,7 +151,7 @@ input.ghost { border-color: transparent; background: transparent; font-weight: 6
 /* tablet / phone: each row becomes a compact card with the same hierarchy */
 @media (max-width: 900px) {
   .lhead { display: none; }
-  .lrow { grid-template-columns: 1fr 1fr; gap: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin: 10px 0; padding: 12px; box-shadow: var(--shadow-sm); }
+  .lrow { grid-template-columns: 1fr 1fr; gap: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; padding: 12px; }
   .lprod { grid-column: 1 / -1; } .lstock, .ltot { grid-column: 1 / -1; padding-top: 0; text-align: left; }
   .lc[data-label]::before { content: attr(data-label); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px; }
   .lstock, .ltot { display: flex; justify-content: space-between; align-items: center; } .lstock::before, .ltot::before { margin: 0; }
@@ -178,8 +183,8 @@ button.quiet:hover { background: rgba(255,255,255,.1); border-color: rgba(255,25
 
 /* attention cards */
 .cards { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-.acard { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); text-decoration: none; color: inherit; transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease); }
-.acard:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: #cfd8ea; }
+.acard { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; text-decoration: none; color: inherit; transition: transform .18s var(--ease), border-color .18s var(--ease); }
+.acard:hover { transform: translateY(-2px); border-color: #cfd8ea; }
 .aicon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: #eef1f6; color: #51607a; flex: 0 0 auto; }
 .acard.warn .aicon { background: var(--warn-soft); color: #8a4b00; } .acard.bad .aicon { background: var(--bad-soft); color: #a4241c; }
 .abody { display: flex; flex-direction: column; min-width: 0; flex: 1; } .an { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; } .al { font-size: 13px; color: var(--ink-soft); font-weight: 550; } .as { font-size: 12px; color: var(--muted); }
@@ -262,7 +267,7 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
   .lrow .lprod { grid-column: auto; } .lrow .lc[data-label]::before { display: none; } .lrow .ltot { padding-top: 7px; } .lrow .lstock { padding-top: 6px; }
 }
 @container (max-width: 560px) {
-  .lrow { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; margin: 10px 0; padding: 12px; box-shadow: var(--shadow-sm); }
+  .lrow { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; padding: 12px; }
 }
 
 /* UI language switch */
@@ -275,8 +280,8 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 /* ===== Workspace: grouped navigation, Action Center, Inbox, Purchases, closing workflow, settings cards ===== */
 .navgroup { margin: 14px 10px 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: rgba(255,255,255,.5); font-weight: 650; } .navsep { height: 1px; background: rgba(255,255,255,.12); margin: 10px 8px; }
 .actioncenter { border-color: #cfd8ea; } .alist { display: flex; flex-direction: column; gap: 6px; }
-.arow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--line); background: #fff; text-decoration: none; color: inherit; transition: transform .15s var(--ease), box-shadow .15s var(--ease), border-color .15s var(--ease); animation: rise .28s var(--ease) both; }
-.arow:hover { transform: translateX(3px); box-shadow: var(--shadow-sm); border-color: #b8c4dd; }
+.arow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--line); background: #fff; text-decoration: none; color: inherit; transition: transform .15s var(--ease), border-color .15s var(--ease); animation: rise .28s var(--ease) both; }
+.arow:hover { transform: translateX(3px); border-color: #b8c4dd; }
 .aico { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #eef1f6; color: #51607a; flex: 0 0 auto; }
 .arow.bad .aico { background: var(--bad-soft); color: #a4241c; } .arow.warn .aico { background: var(--warn-soft); color: #8a4b00; } .arow.info .aico { background: var(--info-soft); color: var(--info); } .arow.ok .aico { background: var(--ok-soft); color: var(--ok); }
 .arow.bad { border-color: #f0c6c1; } .arow.warn { border-color: #f0dcae; } .arow.info { border-color: #c7d6f2; } .arow.ok { border-color: #c3e6d3; }
@@ -287,8 +292,8 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 .dropzone { display: flex; align-items: center; gap: 14px; padding: 22px; border: 2px dashed #cfd8ea; border-radius: 14px; background: #fafbff; cursor: pointer; transition: all .18s var(--ease); color: var(--info); }
 .dropzone:hover, .dropzone.over, .dropzone:focus-visible { border-color: var(--info); background: #f0f5ff; transform: translateY(-1px); outline: none; } .dropzone strong { color: var(--ink); }
 .chip.src-peppol { background: #e8efff; color: #2456c7; } .chip.src-email { background: #f1e8fb; color: #6b3fa0; } .chip.src-upload { background: #eef1f6; color: #51607a; } .chip.src-manual { background: #fdf0d5; color: #8a4b00; }
-.badge.IN_RECEIVED, .badge.IN_TO_REVIEW { background: #fdf0d9; color: var(--warn); } .badge.IN_VALIDATED { background: #e6eefb; color: var(--info); } .badge.IN_TO_PAY { background: #fde7e5; color: #a4241c; } .badge.IN_PAID { background: #d9f0e3; color: var(--ok); } .badge.IN_REJECTED { background: #eceff3; color: #556; }
-.modal-back.drawer { place-items: stretch end; padding: 0; } .modal-back.drawer .modal { width: min(560px, 100%); height: 100vh; max-height: 100vh; border-radius: 0; animation: slideIn .25s var(--ease) both; }
+.badge.IN_RECEIVED, .badge.IN_TO_REVIEW { background: transparent; color: var(--warn); } .badge.IN_VALIDATED { background: transparent; color: var(--info); } .badge.IN_TO_PAY { background: transparent; color: #a4241c; } .badge.IN_PAID { background: transparent; color: var(--ok); } .badge.IN_REJECTED { background: transparent; color: #556; }
+.modal-back.drawer { place-items: stretch end; padding: 0; } .modal-back.drawer .modal { width: min(560px, 100%); height: 100vh; max-height: 100vh; border-radius: 0; animation: slideIn .25s var(--ease) both; box-shadow: -8px 0 24px -8px rgba(16,24,40,.18); }
 @keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 .drawer-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; } .conf { color: var(--muted); font-size: 11px; font-weight: 600; }
 .phead, .prow { display: grid; grid-template-columns: minmax(180px, 2.2fr) 96px 96px 96px 84px 130px 110px 90px; gap: 10px; align-items: center; padding: 10px 12px; }
@@ -300,7 +305,7 @@ details.disclosure { padding: 0; } details.disclosure > summary { list-style: no
 .connlist { display: flex; flex-direction: column; gap: 6px; } .conn { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; } .cl { flex: 1; font-size: 13px; } .chips { display: flex; gap: 8px; margin: 10px 0 0; }
 .stepper.mini { margin: 8px 0 12px; }
 @media (max-width: 900px) {
-  .phead { display: none; } .prow { grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; box-shadow: var(--shadow-sm); } .prow .psup { grid-column: 1 / -1; } .prow [data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; text-transform: uppercase; color: var(--muted); }
+  .phead { display: none; } .prow { grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; } .prow .psup { grid-column: 1 / -1; } .prow [data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; text-transform: uppercase; color: var(--muted); }
   .stockstat { grid-template-columns: repeat(3, 1fr); } .dropzone { padding: 16px; } .modal-back.drawer .modal { width: 100%; }
 }
 
@@ -357,9 +362,9 @@ h2 { font-size: 15px; font-weight: 650; letter-spacing: -.005em; color: var(--in
 h3 { font-weight: 650; }
 .eyebrow { font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-soft); margin-bottom: 4px; }
 
-/* ---- Cards: one consistent rhythm, but not one flat visual weight everywhere ---- */
-.card { box-shadow: var(--shadow-sm); }
-.card.emphasis { border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); box-shadow: var(--shadow-card); }
+/* ---- Cards: one consistent rhythm, but not one flat visual weight everywhere. Phase 0: weight comes
+   from the border colour, never from a shadow - base surfaces stay flat against the canvas. ---- */
+.card.emphasis { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
 .card.quiet { background: var(--accent-soft); border-color: transparent; box-shadow: none; }
 .card + .card { margin-top: 0; }
 
@@ -390,8 +395,10 @@ button.danger { background: transparent; } button.danger:hover { background: #fd
 .stepper li.done .sdot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 14%, transparent); }
 .sdot { transition: background-color .18s ease, box-shadow .18s ease; }
 
-/* ---- Badges: one coherent, slightly more considered palette; tag-style pills for informational states ---- */
-.badge { padding: 3px 10px; font-weight: 650; letter-spacing: .01em; }
+/* ---- Badges: dot + text primitive is defined once, near the top of the file (Phase 0) - not re-widened
+   into a pill here. .tag stays a pill deliberately (it is used for filter/context chips, the exception
+   the Phase 0 mandate explicitly allows to keep pill shape). ---- */
+.badge { letter-spacing: .01em; }
 .tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 650; border: 1px solid var(--line); color: var(--ink-soft); background: #fff; }
 .tag.standalone { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
 .tag.linked { color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, var(--line)); }
@@ -401,7 +408,7 @@ button.danger { background: transparent; } button.danger:hover { background: #fd
 
 /* ---- Dashboard: the Action Center is the heart of Finance, not one card among equals ---- */
 .hero h1 { margin-bottom: 2px; }
-.actioncenter { border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-card); padding: 4px; }
+.actioncenter { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 4px; }
 .actioncenter h2 { padding: 12px 14px 4px; }
 .kpirow.quiet { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .kpirow.quiet .kpi { border: none; background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }
@@ -456,8 +463,10 @@ h2 { margin-bottom: 14px; }
 
 /* ---- Dashboard: Finance Command Center - four decisive figures, not eight equal boxes ---- */
 .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: var(--space-5); }
-.kcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow-sm); text-decoration: none; color: inherit; transition: box-shadow .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease); }
-.kcard:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
+/* (superseded by the .kpi-strip .kcard divider layout further below - kept here only for the properties
+   that layout doesn't redeclare: text-decoration/colour/transition.) */
+.kcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; text-decoration: none; color: inherit; transition: border-color .18s var(--ease), transform .18s var(--ease); }
+.kcard:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 20%, var(--line)); }
 .kcard .kl { display: flex; align-items: center; gap: 7px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 650; }
 .kcard .kv { font-size: 25px; font-weight: 700; letter-spacing: -.015em; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .kcard .ksub { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
@@ -481,7 +490,7 @@ h2 { margin-bottom: 14px; }
 .activity-time { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 
 /* ---- Document detail: one scannable header strip instead of scattered facts (Xero-style clarity) ---- */
-.dochero { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-start; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+.dochero { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-start; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 16px; }
 .dochero .dh-id { min-width: 200px; } .dochero .dh-id h1 { margin-bottom: 6px; }
 .dochero .dh-figures { display: flex; gap: var(--space-6); flex-wrap: wrap; flex: 1; }
 .dochero .dh-fig { min-width: 100px; }
@@ -691,7 +700,11 @@ html, body { background: var(--bg); }
 @media (max-width: 640px) { .hero h1.editorial { font-size: 30px; } }
 
 /* #3: denser, calmer cards - more internal air, without inflating total page height (rhythm, not size). */
-.card { padding: 24px 26px; }
+.card { padding: 24px; }
+/* .kcard padding (20/22px) intentionally left as-is: neither value sits on the Phase 0 8px scale
+   (4/8/12/16/24/32/40/48), but rounding it to 16 or 24 would visibly resize the whole KPI strip -
+   exactly the "ne pas modifier fortement la taille des pages" the mandate warns against for a value
+   this close already. Flagged in the Phase 0 report (section G) rather than changed here. */
 .kcard { padding: 20px 22px; }
 .dash-mid, .dash-bottom { margin-top: 22px; }
 .cardhead { margin-bottom: 10px; }
@@ -704,7 +717,7 @@ html, body { background: var(--bg); }
 
 /* #5: Bank Accounts is a strategically important action, not a secondary widget - same accent
    treatment already used for "emphasis" cards elsewhere, a bigger icon and a heavier CTA. */
-.bank-card { border-color: color-mix(in srgb, var(--accent) 18%, var(--line)); box-shadow: var(--shadow-card); }
+.bank-card { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
 .bank-card .empty { padding: 18px 4px; gap: 16px; }
 .bank-card .empty strong { font-size: 15.5px; }
 .bank-card > .btn.primary { padding: 11px 16px; font-size: 14px; }
@@ -739,3 +752,32 @@ html, body { background: var(--bg); }
 .statusbar { height: 14px; margin: 6px 0 16px; }
 .sl-dot { width: 9px; height: 9px; }
 .sl-item { font-size: 13.5px; }
+
+/* ============================================================================================
+   Phase 0 — Fondation visuelle définitive HABB Finance (2026-09-24)
+   Tokens only: canvas, radius, border. No route, no backend, no data model, no page composition,
+   no Dashboard section/order/data changed - see the mandate for the full list of exclusions.
+   This is the FINAL word on these tokens; earlier :root blocks above still exist in the file's
+   history but every property redeclared here is the one that now wins the cascade.
+   ============================================================================================ */
+:root {
+  /* Canvas: warm-neutral, closer to true neutral than the previous ivory (#faf6ef read too yellow). */
+  --bg: #f5f4f1;
+  /* Radius: one small, coherent system instead of the previous 14px "SaaS-soft" value on every surface.
+     Controls (buttons/inputs) were already at 8px and are untouched. Drawer/modal already sit at 10-12px
+     and are untouched. This token now only drives the base surface/card family (.card, .acard, .dochero,
+     .kpi-strip - see the audit note in section G of the Phase 0 report for what was deliberately left
+     at its previous radius, to avoid a blind sweep across ~25 unrelated component-specific values). */
+  --radius: 8px;
+  /* Border: one subtle, cool/neutral separator instead of the previous warm tan (#e9e2d6), matching the
+     brief's own example value family (a low-alpha navy) rather than a hand-picked hex. */
+  --line: rgba(15, 42, 82, 0.08);
+  /* Spacing scale (documentation + the two layout gaps below) - not a retroactive rewrite of every
+     padding in the file (that would be the "blind sweep" the mandate forbids). --space-5/--space-6
+     (used by .hero/.kpi-strip/.dochero margins+gaps) are corrected onto this scale since they were
+     already token-driven; ad hoc pixel paddings elsewhere (.card/.kcard already close, ~25 component-
+     specific radii - see section G) are left for the page-by-page passes to pick up deliberately. */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 32px; --space-6: 40px; --space-7: 48px;
+}
+
