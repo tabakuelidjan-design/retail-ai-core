@@ -233,29 +233,6 @@ function treasuryChart(rows, cur) {
   pts.forEach(([x, y], i) => { const r = rows[i]; kids.push(svgEl('circle', { class: 'tc-dot', cx: x, cy: y, r: i === pts.length - 1 ? 4 : 2.5 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${tt('balance')} ${r.balance} ${cur}`)])])); });
   return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
 }
-/** Compact Revenue vs Expenses chart (#4): same /api/overview/cashflow rows as the treasury chart, plotting
- * revenueCents/expenseCents (real invoiced revenue / accepted supplier-invoice expenses per month) as two
- * side-by-side bars from a shared baseline. No forecast, no interpolation - a month with nothing real is 0. */
-function revenueExpenseChart(rows, cur) {
-  // #4: same viewBox height family as the treasury chart above it, so the two read as comparably
-  // important analytical elements rather than one dominant chart and one afterthought strip.
-  const W = 760, H = 210, mL = 44, mR = 8, mT = 10, mB = 26;
-  const innerW = W - mL - mR; const n = Math.max(1, rows.length);
-  const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
-  const maxV = Math.max(1, ...rows.flatMap((r) => [r.revenueCents, r.expenseCents]));
-  const baseY = H - mB; const scale = (baseY - mT - 6) / maxV;
-  const xOf = (i) => mL + slot * i + slot / 2;
-  const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
-  const kids = [svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: baseY, y2: baseY })];
-  rows.forEach((r, i) => {
-    const x = xOf(i);
-    const revH = r.revenueCents * scale; const expH = r.expenseCents * scale;
-    kids.push(svgEl('rect', { class: 're-bar-rev', x: x - barW - 1, y: baseY - revH, width: barW, height: Math.max(0, revH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.revenue} ${cur}`)])]));
-    kids.push(svgEl('rect', { class: 're-bar-exp', x: x + 1, y: baseY - expH, width: barW, height: Math.max(0, expH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.expense} ${cur}`)])]));
-    kids.push(svgEl('text', { class: 'tc-axis', x, y: H - 6, 'text-anchor': 'middle' }, [document.createTextNode(monthLabel(r.month))]));
-  });
-  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
-}
 // A handful of short, non-business decoration lines for the Accueil quote-card (mandate section 4: "phrase
 // éditoriale... conservée si elle ne prend pas de place fonctionnelle"). This is copy, never merchant data -
 // no figure, name or fact appears here, so it carries nothing that could be "invented data".
@@ -270,6 +247,41 @@ function barSpark(values, colors) {
   if (!values.length) return null;
   const w = 100; const h2 = 40; const bw = w / values.length - 3; const max = Math.max(1, ...values);
   return svgEl('svg', { viewBox: `0 0 ${w} ${h2}` }, values.map((v, i) => svgEl('rect', { x: i * (bw + 3), y: h2 - (v / max) * h2, width: bw, height: Math.max(1, (v / max) * h2), rx: 2, fill: colors[i % colors.length] })));
+}
+// #9: proper FR/NL singular/plural instead of the "(s)" shorthand - same ternary-key pattern used across
+// this file (see dueChip's "{0} day late" / "{0} days late"). Module-scoped so every view can share it.
+const plural = (n, one, many) => tt(n === 1 ? one : many, n);
+// Tone for the CTA preview's status pill - the same semantic mapping as the .badge.* CSS (never a new
+// meaning): paid/issued = ok, sent/awaiting/accepted = info, overdue/rejected = bad, draft/cancelled = muted.
+const CTA_TONE = { DRAFT: 'muted', READY_FOR_APPROVAL: 'info', ISSUED: 'ok', SENT: 'info', PARTIALLY_PAID: 'info', PAID: 'ok', OVERDUE: 'bad', CANCELLED: 'muted', ACCEPTED: 'ok', REJECTED: 'bad', CONVERTED: 'ok', CREDITED: 'muted' };
+// Real invoice-paper preview for the homepage "Create an invoice" card (mandate: same visual treatment as
+// the reference's tilted mini-invoice, but every figure on it must be real). `sample` is the most recent
+// open/recent invoice row (or null); its full detail (real lines, real VAT breakdown, real payable total,
+// real effective status) is fetched the same way the document page itself does - nothing here is invented.
+// When there is no invoice yet, a blank/placeholder paper is shown instead of any number.
+async function invoicePreviewNode(sample, cur) {
+  if (!sample) {
+    return h('div', { class: 'invoice-preview empty' },
+      h('div', { class: 'brandline' }), h('div', { class: 'smallline w1' }), h('div', { class: 'smallline w2' }),
+      h('div', { class: 'mini-table' }, h('div', { class: 'trow' }, h('span', null, tt('Blank template')))));
+  }
+  let detail = null;
+  try { detail = await api('GET', `/api/documents/${sample.id}`); } catch (e) { /* fall back to the list row's own totals below */ }
+  const rows = [];
+  const lines = detail?.doc?.lines || [];
+  const tLines = detail?.totals?.lines || [];
+  if (lines[0] && tLines[0]) rows.push(h('div', { class: 'trow' }, h('span', null, lines[0].description), h('strong', null, tLines[0].net)));
+  if (lines.length > 1) rows.push(h('div', { class: 'trow' }, h('span', null, plural(lines.length - 1, '{0} more line', '{0} more lines'))));
+  const vb = detail?.totals?.vatBreakdown || [];
+  if (vb.length === 1) rows.push(h('div', { class: 'trow' }, h('span', null, tt('VAT {0}%', vb[0].vatRateBp / 100)), h('strong', null, vb[0].vatAmount)));
+  else if (vb.length > 1) rows.push(h('div', { class: 'trow' }, h('span', null, tt('VAT')), h('strong', null, detail.totals.vat)));
+  const total = detail?.totals?.payable ?? sample.gross;
+  const tone = CTA_TONE[sample.effectiveStatus] || 'muted';
+  return h('div', { class: 'invoice-preview' },
+    h('div', { class: 'brandline' }), h('div', { class: 'smallline w1' }), h('div', { class: 'smallline w2' }),
+    h('div', { class: 'mini-table' }, rows.length ? rows : h('div', { class: 'trow' }, h('span', null, sample.number || tt('(draft)')))),
+    h('div', { class: 'cta-total-row' }, h('span', null, tt('Total incl. VAT')), h('span', null, total)),
+    h('span', { class: `cta-badge ${tone}` }, STATUS[sample.effectiveStatus] || sample.effectiveStatus));
 }
 async function viewOverview() {
   const hour = new Date().getHours();
@@ -308,9 +320,6 @@ async function viewOverview() {
     // colour (good/bad) depends on whether an increase is desirable for that particular metric - a rising
     // expense is still shown rising, just coloured as attention rather than success.
     const trendNote = (pct, goodWhenUp = true) => { const isUp = pct >= 0; const good = goodWhenUp ? isUp : !isUp; return h('span', { class: good ? 'good' : 'bad' }, (isUp ? '↑ +' : '↓ ') + pct + '%'); };
-    // #9: proper FR/NL singular/plural instead of the "(s)" shorthand - same ternary-key pattern already used
-    // elsewhere in this file (see dueChip's "{0} day late" / "{0} days late").
-    const plural = (n, one, many) => tt(n === 1 ? one : many, n);
     const metric = (icon, label, value, note, spark, href) => h('a', { class: 'metric', href },
       h('span', { class: 'metric-icon' }, svgIcon(icon, 17)),
       h('div', null, h('div', { class: 'metric-title' }, label, ' ›'), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)),
@@ -330,20 +339,21 @@ async function viewOverview() {
     const netRecorded = o.revenue.thisMonthCents - o.expenses.thisMonthCents;
     box.appendChild(h('div', { class: 'muted small' }, h('strong', { class: netRecorded >= 0 ? 'good' : 'bad' }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), ' ', tt('(not an accounting net profit figure - no VAT, depreciation or accruals)')));
 
-    // ---- Central object: real treasury movement + Revenue vs Expenses + Recent activity + Create-invoice CTA.
+    // ---- Central object: real treasury movement + Recent activity + Create-invoice CTA.
     // "Due dates" and the secondary quick-actions list moved to the new À faire page (same real data, reused
-    // rather than duplicated - see viewTodo()). ----
+    // rather than duplicated - see viewTodo()). The "Revenue vs. expenses" chart that used to sit stacked
+    // under Treasury here was removed (not present in the approved reference's home-middle row, which has
+    // exactly one chart card there) - the same real figures are still visible via the KPI strip's own
+    // sparklines above, and via the dedicated Trésorerie page. Removing it also lets the three cards in this
+    // row share one real min-height instead of one column being taller purely because it stacked two cards. ----
     const mid = h('div', { class: 'content-grid-3' });
-    const chartCol = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
     const chartWrap = h('div', { class: 'tc-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
-    const reChartWrap = h('div', { class: 'tc-wrap re-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
     const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => {
       clear(chartWrap);
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
       // has actually been recorded yet.
       if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
       else chartWrap.appendChild(treasuryChart(r.rows, r.currency));
-      clear(reChartWrap); reChartWrap.appendChild(revenueExpenseChart(r.rows, r.currency));
       lastCashflowRows = r.rows;
       // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
       // chart above, just plotted small inside the KPI cards - see metric-grid, above.
@@ -355,14 +365,7 @@ async function viewOverview() {
       h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real inflows, outflows and running documented balance')), periodSelect),
       chartWrap,
       h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 55%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--accent)' }), tt('Cumulative balance'))));
-    // #4: compact Revenue vs Expenses chart, same real per-month figures as the KPI strip above, just plotted
-    // across the same period as the treasury chart (shares its month selector via loadChart()).
-    const reCard = h('div', { class: 'card', style: 'padding:16px 18px' },
-      h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Revenue vs. expenses')),
-      reChartWrap,
-      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--ok)' }), tt('Revenue')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Expenses'))));
-    chartCol.appendChild(chartCard); chartCol.appendChild(reCard);
-    mid.appendChild(chartCol);
+    mid.appendChild(chartCard);
     loadChart(6);
 
     // Recent activity: the real document-lifecycle trail, unchanged data source.
@@ -374,15 +377,19 @@ async function viewOverview() {
       actCard.appendChild(h('div', { class: 'activity' }, r.rows.map((e) => activityRow(e))));
     }).catch(() => { clear(actCard); actCard.appendChild(h('div', { class: 'muted small' }, 'Activity unavailable.')); });
 
-    // Professional CTA card: create an invoice. A real, working preview of the same lines/VAT/total the
-    // invoice form itself computes - not decoration, so it never shows figures the merchant did not enter
-    // (the -most recent draft/open invoice's own real totals when one exists, otherwise a blank template).
-    const ctaSample = invoiceRows.find((r) => ['DRAFT', 'READY_FOR_APPROVAL', 'ISSUED', 'SENT'].includes(r.status));
-    const ctaCard = h('a', { class: 'card', href: ctaSample ? `#/doc/${ctaSample.id}` : '#/new/invoice', style: 'padding:20px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:14px' },
-      h('h3', { class: 'section-title', style: 'font-style:italic;max-width:220px' }, tt('Create, send and track your invoices with ease.')),
-      ctaSample ? h('div', { class: 'muted small' }, tt('Most recent: {0} · {1} {2}', ctaSample.number || tt('(draft)'), ctaSample.gross, cur), h('div', { style: 'margin-top:4px' }, badge(ctaSample.effectiveStatus))) : h('div', { class: 'muted small' }, tt('No invoice yet - create your first one.')),
-      h('button', { class: 'btn warm big', type: 'button', style: 'margin-top:auto;width:100%;justify-content:space-between', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16)));
+    // Professional CTA card: create an invoice, styled to match the reference's compact card + tilted
+    // invoice-paper preview - but the preview is populated from the real latest invoice (number, first real
+    // line, real VAT, real total, real status) via the same GET /api/documents/:id the document page itself
+    // uses, never from fabricated figures. See invoicePreviewNode() below.
+    const ctaSample = invoiceRows.find((r) => ['DRAFT', 'READY_FOR_APPROVAL', 'ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(r.status));
+    const previewSlot = h('div', { class: 'invoice-preview' }, h('div', { class: 'muted small' }, 'Loading...'));
+    const ctaCard = h('a', { class: 'card cta-card', href: ctaSample ? `#/doc/${ctaSample.id}` : '#/new/invoice' },
+      h('div', { class: 'cta-content' },
+        h('h3', null, tt('Create, send and track your invoices with ease.')),
+        previewSlot,
+        h('button', { class: 'btn warm big cta-button', type: 'button', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16))));
     mid.appendChild(ctaCard);
+    invoicePreviewNode(ctaSample, cur).then((node) => { previewSlot.replaceWith(node); }).catch(() => { clear(previewSlot); previewSlot.appendChild(h('div', { class: 'muted small' }, 'Preview unavailable.')); });
     box.appendChild(mid);
 
     // ---- Bottom row (bank accounts / invoices table / supplier concentration) ----

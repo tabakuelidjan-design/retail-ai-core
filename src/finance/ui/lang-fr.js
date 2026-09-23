@@ -65,6 +65,8 @@
     // totals and lines
     'Live summary': 'Récapitulatif en direct', 'Complete the lines to see totals.': 'Complétez les lignes pour voir les totaux.', 'Add lines to see totals.': 'Ajoutez des lignes pour voir les totaux.', 'Subtotal excl. VAT': 'Sous-total HTVA',
     'VAT {0}% on {1}': 'TVA {0} % sur {1}', 'Total VAT': 'Total TVA', 'Total incl. VAT': 'Total TVAC', 'Rounding adjustment': 'Ajustement d\'arrondi', 'Amount to pay': 'Montant à payer', 'Amount due': 'Montant dû',
+    // Homepage "Create an invoice" preview card (real latest-invoice data, see invoicePreviewNode() in app.js).
+    'VAT {0}%': 'TVA {0} %', 'Blank template': 'Modèle vierge', '{0} more line': '{0} ligne supplémentaire', '{0} more lines': '{0} lignes supplémentaires', 'Preview unavailable.': 'Aperçu indisponible.',
     'Explicit rounding (EN 16931) so the catalogue price stays exactly as published.': 'Arrondi explicite (EN 16931) : le prix du catalogue reste exactement celui publié.', 'Calculated by the finance engine, not by this page.': 'Calculé par le moteur financier, pas par cette page.',
     'VAT ?': 'TVA ?', 'Catalogue {0} incl. VAT': 'Catalogue {0} TVAC', '→ {0} excl. VAT': '→ {0} HTVA', 'Catalogue price excl. VAT': 'Prix catalogue HTVA', 'Catalogue price kept': 'Prix catalogue conservé',
     'Price override (excl. VAT)': 'Prix modifié (HTVA)', 'More than in stock': 'Plus que le stock', 'Confirm VAT rate': 'Confirmez le taux de TVA', 'Change product': 'Changer de produit', 'Search product': 'Rechercher un produit',

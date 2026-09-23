@@ -854,11 +854,11 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
    are all fr-based, so extra space on very wide desktops goes to those columns proportionally rather than
    stretching table text or leaving a large dead zone on the right (mandate section 16). */
 .page-shell { display: grid; gap: 18px; padding: 24px 28px 96px; }
-.hero-row { display: grid; grid-template-columns: minmax(280px, 1fr) 320px; gap: 20px; align-items: start; }
-.hero-row .hero-block h1 { font-family: var(--serif); color: var(--accent); font-weight: 500; font-size: 38px; line-height: 1.05; margin: 4px 0 0; }
+.hero-row { display: grid; grid-template-columns: minmax(360px, 1fr) 300px; gap: 20px; align-items: start; }
+.hero-row .hero-block h1 { font-family: var(--serif); color: var(--accent); font-weight: 500; font-size: 48px; line-height: .98; margin: 18px 0 0; }
 .hero-row .subtitle { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
 .quote-card { min-height: 60px; display: flex; justify-content: flex-end; align-items: flex-start; }
-.quote-card .quote { font-family: var(--serif); font-style: italic; font-size: 17px; line-height: 1.25; text-align: right; color: #2a4156; margin-top: 6px; }
+.quote-card .quote { font-family: var(--serif); font-style: italic; font-size: 20px; line-height: 1.18; text-align: right; color: #2a4156; margin-top: 20px; }
 @media (max-width: 1280px) { .hero-row { grid-template-columns: 1fr; } .quote-card { display: none; } }
 
 /* ---- Metric strip: icon-left KPI cards with a real sparkline, used by every page's top row. ---- */
@@ -878,10 +878,35 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .section-sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
 .viewall { font-size: 11px; color: var(--info); text-decoration: underline; white-space: nowrap; }
-.content-grid-3 { display: grid; grid-template-columns: minmax(0,2.35fr) minmax(0,1.03fr) minmax(0,.9fr); gap: 14px; }
-.content-grid-bottom { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; }
-.panel-tall .card, .panel-tall { min-height: 320px; }
-@media (max-width: 1280px) { .content-grid-3, .content-grid-bottom { grid-template-columns: 1fr; } }
+.content-grid-3 { display: grid; grid-template-columns: minmax(0,2.35fr) minmax(0,1.03fr) minmax(0,.9fr); gap: 14px; align-items: stretch; }
+/* Reference min-height for the three home-middle cards (Treasury / Recent activity / Create invoice) - all
+   three share it so they align top and bottom instead of drifting apart with their own content length. */
+.content-grid-3 > .card { min-height: 360px; box-sizing: border-box; }
+.content-grid-bottom { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; align-items: stretch; }
+.content-grid-bottom > .card { min-height: 255px; box-sizing: border-box; }
+.panel-tall .card, .panel-tall { min-height: 360px; }
+@media (max-width: 1280px) { .content-grid-3, .content-grid-bottom { grid-template-columns: 1fr; } .content-grid-3 > .card, .content-grid-bottom > .card { min-height: 0; } }
+
+/* ---- Homepage "Create an invoice" CTA: compact card + tilted real-invoice preview (reference-matched). ---- */
+.cta-card { position: relative; overflow: hidden; padding: 0; background: linear-gradient(145deg, var(--card) 0%, var(--bg) 56%, #e7ebec 100%); text-decoration: none; color: inherit; display: block; }
+.cta-content { position: relative; z-index: 2; padding: 24px 20px 20px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.cta-content h3 { font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--accent); font-size: 21px; line-height: 1.15; margin: 0; max-width: 175px; }
+.invoice-preview { position: absolute; right: 17px; top: 72px; width: 155px; background: var(--card); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 14px 28px rgba(72,56,45,.10); padding: 14px 12px; transform: rotate(2deg); }
+.invoice-preview.empty { opacity: .65; }
+.brandline { height: 8px; width: 50px; background: var(--accent); border-radius: 3px; margin-bottom: 12px; }
+.smallline { height: 5px; background: var(--line); border-radius: 3px; margin: 5px 0; }
+.smallline.w1 { width: 76%; } .smallline.w2 { width: 54%; }
+.mini-table { margin-top: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 7px 0; }
+.mini-table .trow { display: flex; justify-content: space-between; gap: 6px; font-size: 9px; color: var(--ink-soft); padding: 4px 0; }
+.mini-table .trow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 92px; }
+.mini-table .trow strong { font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cta-total-row { display: flex; justify-content: space-between; margin-top: 10px; font-size: 10px; font-weight: 700; color: var(--ink); }
+.cta-badge { margin-top: 8px; display: inline-block; padding: 3px 7px; border-radius: 8px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.cta-badge.ok { background: color-mix(in srgb, var(--ok) 14%, #fff); color: var(--ok); }
+.cta-badge.info { background: color-mix(in srgb, var(--info) 14%, #fff); color: var(--info); }
+.cta-badge.bad { background: color-mix(in srgb, var(--bad) 14%, #fff); color: var(--bad); }
+.cta-badge.muted { background: var(--line); color: var(--muted); }
+.cta-button.cta-button { margin-top: auto; width: 100%; justify-content: space-between; }
 
 /* ---- Tabs row: wraps the existing dot-underline .tab2 primitive (unchanged) in a scrollable strip. ---- */
 .tabsrow { display: flex; gap: 16px; border-bottom: 1px solid var(--line); overflow: auto; }

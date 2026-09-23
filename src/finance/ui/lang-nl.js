@@ -56,6 +56,8 @@
     '{0} matches': '{0} resultaten', '{0} match': '{0} resultaat', 'SKU {0}': 'SKU {0}', 'No SKU': 'Geen SKU', 'incl. VAT': 'incl. btw', 'excl. VAT': 'excl. btw', 'Search failed.': 'Zoeken mislukt.', 'Close': 'Sluiten',
     'Live summary': 'Live overzicht', 'Complete the lines to see totals.': 'Vul de lijnen aan om de totalen te zien.', 'Add lines to see totals.': 'Voeg lijnen toe om de totalen te zien.', 'Subtotal excl. VAT': 'Subtotaal excl. btw',
     'VAT {0}% on {1}': 'Btw {0}% op {1}', 'Total VAT': 'Totaal btw', 'Total incl. VAT': 'Totaal incl. btw', 'Rounding adjustment': 'Afrondingscorrectie', 'Amount to pay': 'Te betalen bedrag', 'Amount due': 'Verschuldigd bedrag',
+    // Homepage "Create an invoice" preview card (real latest-invoice data, see invoicePreviewNode() in app.js).
+    'VAT {0}%': 'Btw {0}%', 'Blank template': 'Leeg sjabloon', '{0} more line': '{0} extra regel', '{0} more lines': '{0} extra regels', 'Preview unavailable.': 'Voorbeeld niet beschikbaar.',
     'Explicit rounding (EN 16931) so the catalogue price stays exactly as published.': 'Expliciete afronding (EN 16931) zodat de catalogusprijs exact blijft zoals gepubliceerd.', 'Calculated by the finance engine, not by this page.': 'Berekend door de financiële motor, niet door deze pagina.',
     'VAT ?': 'Btw ?', 'Catalogue {0} incl. VAT': 'Catalogus {0} incl. btw', '→ {0} excl. VAT': '→ {0} excl. btw', 'Catalogue price excl. VAT': 'Catalogusprijs excl. btw', 'Catalogue price kept': 'Catalogusprijs behouden',
     'Price override (excl. VAT)': 'Prijs aangepast (excl. btw)', 'More than in stock': 'Meer dan in voorraad', 'Confirm VAT rate': 'Bevestig het btw-tarief', 'Change product': 'Product wijzigen', 'Search product': 'Product zoeken',
