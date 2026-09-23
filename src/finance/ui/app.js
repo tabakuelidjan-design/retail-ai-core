@@ -147,7 +147,11 @@ function layout(active, ...content) {
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
   const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), h('span', { class: 'tb-brand' }, seller, h('span', { style: 'display:inline-flex;transform:rotate(90deg)' }, svgIcon('chevron', 13)))));
-  const main = h('main', { class: 'main' }, content);
+  // Dashboard-only: the shared .main max-width (1440px) is right for reading-width pages like invoice lists
+  // and forms, but on wide desktops it silently caps the dashboard well short of the available canvas while
+  // the search bar above it keeps spanning full width - exactly the "compressed left, empty right" symptom.
+  // Scoped to this one route so other pages' reading width is untouched.
+  const main = h('main', { class: `main ${active === '#/' ? 'dash-main' : ''}` }, content);
   show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main)));
   return main;
 }
@@ -358,7 +362,7 @@ async function viewOverview() {
     invCard.appendChild(tabs2); invCard.appendChild(tableWrap);
     bottom.appendChild(invCard);
 
-    const rightBottom = h('div', { style: 'display:flex;flex-direction:column;gap:16px' });
+    const rightBottom = h('div', { class: 'rb-col', style: 'display:flex;flex-direction:column;gap:16px' });
     // #1: Bank Accounts as a first-class component - name/account, balance, last sync (the balance's own
     // `asOf`, already real per-account data), and latest transactions from the existing, already-used
     // /api/bank/transactions endpoint (fetched lazily, only when an account is actually connected).
@@ -387,7 +391,7 @@ async function viewOverview() {
     // #6: supplier concentration - real (no expense-category field exists anywhere in this data model, so
     // this deliberately does not claim to be a category breakdown). A single supplier always renders as a
     // meaningless 100% ring, so that case gets a plain-text fallback instead of a fake-looking chart.
-    const donutCard = h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Breakdown by supplier')));
+    const donutCard = h('div', { class: 'card donut-card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Breakdown by supplier')));
     if (o.topSuppliers.length >= 2) {
       const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
       let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;

@@ -714,3 +714,28 @@ html, body { background: var(--bg); }
 .tc-axis text { font-size: 12px; }
 .tc-legend { font-size: 13.5px; gap: 20px; margin-top: 12px; }
 .tc-head h2 { font-size: 16px; }
+
+/* ============================================================================================
+   Wide-desktop fix (2026-09-23). Root cause (measured, not guessed): .main's shared max-width
+   (1440px) is correct for reading-width pages (invoice lists, forms) but silently capped the
+   dashboard well short of the available canvas on any screen wider than ~1440px, while the top
+   search bar above it has no such cap - that mismatch is what read as "compressed left, empty
+   right". Scoped to the dashboard route only via .dash-main; every other page keeps its 1440px
+   reading width unchanged. Side margins are preserved by .main's own left/right padding (32px),
+   which stays in effect with or without the max-width cap.
+   ============================================================================================ */
+.dash-main { max-width: none; }
+
+/* #4: the stacked Bank Accounts + Supplier Distribution column reads as one coherent, slightly
+   wider area instead of two mismatched leftovers next to a bigger single-column card. */
+@media (min-width: 900px) { .dash-bottom { grid-template-columns: 1fr 1.5fr 1.15fr; } }
+@media (min-width: 1300px) { .dash-bottom { grid-template-columns: 1fr 1.6fr 1.15fr; } }
+.donut-card { display: flex; flex-direction: column; flex: 1; }
+.donut-card .donutwrap, .donut-card .empty { flex: 1; align-items: center; }
+.rb-col { flex: 1; }
+
+/* #5: a touch more visual presence for the invoice-status bar without turning it into a widget -
+   slightly taller segments, slightly larger dots, same restrained palette. */
+.statusbar { height: 14px; margin: 6px 0 16px; }
+.sl-dot { width: 9px; height: 9px; }
+.sl-item { font-size: 13.5px; }
