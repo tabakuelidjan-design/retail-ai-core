@@ -347,7 +347,9 @@ async function viewOverview() {
     // sparklines above, and via the dedicated Trésorerie page. Removing it also lets the three cards in this
     // row share one real min-height instead of one column being taller purely because it stacked two cards. ----
     const mid = h('div', { class: 'content-grid-3' });
-    const chartWrap = h('div', { class: 'tc-wrap' }, h('div', { class: 'muted small' }, 'Loading...'));
+    // .home-chart scopes the reference-matched recolour (grey/blue Entrées, terracotta Solde) to this one
+    // instance - the Tresorerie page reuses the same treasuryChart()/CSS classes and keeps its own colours.
+    const chartWrap = h('div', { class: 'tc-wrap home-chart' }, h('div', { class: 'muted small' }, 'Loading...'));
     const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => {
       clear(chartWrap);
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
@@ -364,7 +366,7 @@ async function viewOverview() {
     const chartCard = h('div', { class: 'card', style: 'padding:16px 18px' },
       h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real inflows, outflows and running documented balance')), periodSelect),
       chartWrap,
-      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 55%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--accent)' }), tt('Cumulative balance'))));
+      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 20%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Cumulative balance'))));
     mid.appendChild(chartCard);
     loadChart(6);
 
