@@ -175,9 +175,9 @@ function svgEl(tag, attrs, kids) {
 /** Real treasury chart: monthly inflow/outflow bars + a running-total line, built from /api/overview/cashflow
  * rows only. Every number plotted is one already present in `rows`; nothing here interpolates or forecasts. */
 function treasuryChart(rows, cur) {
-  const W = 760, H = 230, mL = 46, mR = 8, mT = 10, mB = 24;
+  const W = 760, H = 230, mL = 44, mR = 8, mT = 8, mB = 22;
   const innerW = W - mL - mR; const n = Math.max(1, rows.length);
-  const slot = innerW / n; const barW = Math.min(22, slot * 0.32);
+  const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
   const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
   const zeroY = mT + (H - mT - mB) * 0.6;
   const scale = Math.min(zeroY - mT - 8, H - mB - zeroY - 8) / maxAbs;
@@ -205,9 +205,11 @@ function treasuryChart(rows, cur) {
  * revenueCents/expenseCents (real invoiced revenue / accepted supplier-invoice expenses per month) as two
  * side-by-side bars from a shared baseline. No forecast, no interpolation - a month with nothing real is 0. */
 function revenueExpenseChart(rows, cur) {
-  const W = 760, H = 150, mL = 46, mR = 8, mT = 10, mB = 22;
+  // #4: same viewBox height family as the treasury chart above it, so the two read as comparably
+  // important analytical elements rather than one dominant chart and one afterthought strip.
+  const W = 760, H = 210, mL = 44, mR = 8, mT = 10, mB = 26;
   const innerW = W - mL - mR; const n = Math.max(1, rows.length);
-  const slot = innerW / n; const barW = Math.min(20, slot * 0.3);
+  const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
   const maxV = Math.max(1, ...rows.flatMap((r) => [r.revenueCents, r.expenseCents]));
   const baseY = H - mB; const scale = (baseY - mT - 6) / maxV;
   const xOf = (i) => mL + slot * i + slot / 2;
