@@ -104,7 +104,11 @@ export async function startDemo(port = PORT) {
   const handler = (req, res) => {
     // A stale cookie from a previous run of this demo (in-memory sessions are wiped on restart) must not be mistaken for "already signed in".
     const existing = /fin_demo_sid=([0-9a-f]+)/.exec(req.headers.cookie ?? '')?.[1];
-    if (req.method === 'GET' && req.url === '/' && (!existing || !app.sessions.has(existing))) {
+    // Match the path only, not the full req.url - a stray query string (e.g. a bookmarked/shared link with
+    // ?something=... appended) must not silently skip the auto-sign-in and fall through to a login wall that
+    // then has no way to fill itself in. The bare origin is always the correct entry point regardless of query.
+    const path = (req.url ?? '/').split('?')[0];
+    if (req.method === 'GET' && path === '/' && (!existing || !app.sessions.has(existing))) {
       const sid = randomBytes(24).toString('hex'); app.sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + 8 * 3600_000 });
       const orig = res.writeHead.bind(res); res.writeHead = (status, hdrs = {}) => orig(status, { ...hdrs, 'Set-Cookie': `fin_demo_sid=${sid}; HttpOnly; SameSite=Strict; Path=/` });
     }
@@ -117,5 +121,7 @@ export async function startDemo(port = PORT) {
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}`) {
   const { port } = await startDemo();
-  console.log(`SYNTHETIC finance dashboard demo: http://127.0.0.1:${port}   token: ${DEMO_TOKEN}`);
+  // Open the bare origin below - it signs the browser in automatically. The token is only needed as a manual
+  // fallback (typed into the login form) if that auto-sign-in is ever bypassed for some reason.
+  console.log(`SYNTHETIC finance dashboard demo: http://127.0.0.1:${port}   (manual-login fallback token: ${DEMO_TOKEN})`);
 }

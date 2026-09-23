@@ -859,7 +859,11 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .hero-row .subtitle { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
 .quote-card { min-height: 60px; display: flex; justify-content: flex-end; align-items: flex-start; }
 .quote-card .quote { font-family: var(--serif); font-style: italic; font-size: 20px; line-height: 1.18; text-align: right; color: #2a4156; margin-top: 20px; }
-@media (max-width: 1280px) { .hero-row { grid-template-columns: 1fr; } .quote-card { display: none; } }
+/* Desktop/compact/mobile hierarchy: >=1180px is desktop (a 1280px-wide screen - the actual HABB user's own
+   1280x720 display, inner width ~1266px - must render the full desktop composition, not the compact
+   fallback); 768-1179px is compact/tablet; <=767px is the dedicated mobile layout below. Was previously
+   1280px, which excluded that exact real screen from ever seeing the desktop layout - corrected here. */
+@media (max-width: 1179px) { .hero-row { grid-template-columns: 1fr; } .quote-card { display: none; } }
 
 /* ---- Metric strip: icon-left KPI cards with a real sparkline, used by every page's top row. ---- */
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
@@ -870,7 +874,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .metric-note { margin-top: 6px; color: var(--muted); font-size: 10.5px; }
 .metric-note .good { color: var(--ok); font-weight: 700; } .metric-note .bad { color: var(--bad); font-weight: 700; }
 .metric-spark { height: 46px; align-self: end; } .metric-spark svg { width: 100%; height: 100%; }
-@media (max-width: 1280px) { .metric-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1179px) { .metric-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .metric { grid-template-columns: 36px 1fr; padding: 12px; } .metric-spark { display: none; } }
 
 /* ---- Section/content grid shared by page bodies. ---- */
@@ -885,7 +889,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .content-grid-bottom { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 14px; align-items: stretch; }
 .content-grid-bottom > .card { min-height: 255px; box-sizing: border-box; }
 .panel-tall .card, .panel-tall { min-height: 360px; }
-@media (max-width: 1280px) { .content-grid-3, .content-grid-bottom { grid-template-columns: 1fr; } .content-grid-3 > .card, .content-grid-bottom > .card { min-height: 0; } }
+@media (max-width: 1179px) { .content-grid-3, .content-grid-bottom { grid-template-columns: 1fr; } .content-grid-3 > .card, .content-grid-bottom > .card { min-height: 0; } }
 
 /* ---- Homepage "Create an invoice" CTA: compact card + tilted real-invoice preview (reference-matched). ---- */
 .cta-card { position: relative; overflow: hidden; padding: 0; background: linear-gradient(145deg, var(--card) 0%, var(--bg) 56%, #e7ebec 100%); text-decoration: none; color: inherit; display: block; }
@@ -931,7 +935,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .kvfield:last-child { border-bottom: 0; } .kvfield label { color: var(--muted); margin: 0; }
 .docline { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eceff0; align-items: center; }
 .docline:last-child { border-bottom: 0; } .docline strong { font-size: 11.5px; } .docline .docright { text-align: right; }
-@media (max-width: 1280px) { .workspace { grid-template-columns: 1fr; } .workspace-side { border-left: 0; border-top: 1px solid var(--line); } }
+@media (max-width: 1179px) { .workspace { grid-template-columns: 1fr; } .workspace-side { border-left: 0; border-top: 1px solid var(--line); } }
 
 /* ---- Queue (Achats): list + document preview + validation form, three panes on desktop. ---- */
 .purchase-shell { display: grid; grid-template-columns: 260px minmax(0,1fr) 340px; overflow: hidden; }
@@ -941,7 +945,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .queue-money { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--ink-soft); }
 .doc-preview { padding: 18px; overflow: auto; background: var(--card-soft, #f8f9f9); display: flex; align-items: flex-start; justify-content: center; }
 .form-pane { padding: 16px 18px; background: #fff; border-left: 1px solid var(--line); overflow: auto; }
-@media (max-width: 1280px) { .purchase-shell { grid-template-columns: 220px 1fr; } .form-pane { display: none; } }
+@media (max-width: 1179px) { .purchase-shell { grid-template-columns: 220px 1fr; } .form-pane { display: none; } }
 
 /* ---- Banque & Caisse: accounts strip + transaction workspace. ---- */
 .accounts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -950,7 +954,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .bank-workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .7fr); }
 .matchbox { margin: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
 .matchrow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 11px; }
-@media (max-width: 1280px) { .accounts-grid { grid-template-columns: 1fr; } .bank-workspace { grid-template-columns: 1fr; } }
+@media (max-width: 1179px) { .accounts-grid { grid-template-columns: 1fr; } .bank-workspace { grid-template-columns: 1fr; } }
 
 /* ---- Trésorerie: its own KPI+chart+projection page, distinct from Banque & Caisse. ---- */
 .treasury-grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 12px; }
@@ -961,7 +965,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .proj { padding: 9px 0; border-bottom: 1px solid var(--line); } .proj:last-child { border-bottom: 0; } .proj strong { display: block; font-size: 11px; }
 .proj span { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--ink-soft); margin-top: 4px; }
 .proj b.in { color: var(--ok); } .proj b.out { color: var(--bad); }
-@media (max-width: 1280px) { .treasury-grid { grid-template-columns: 1fr 1fr; } .treasury-workspace { grid-template-columns: 1fr; } .projection { border-left: 0; border-top: 1px solid var(--line); } }
+@media (max-width: 1179px) { .treasury-grid { grid-template-columns: 1fr 1fr; } .treasury-workspace { grid-template-columns: 1fr; } .projection { border-left: 0; border-top: 1px solid var(--line); } }
 
 /* ---- À faire: reuses .card/.alist/.arow (Action Center) for the priority list; adds only the split
    summary/detail pane and a plain tone bar (never a fabricated time-horizon chart - see the report). ---- */
@@ -971,7 +975,7 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .tonelegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--ink-soft); }
 .tonelegend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 5px; vertical-align: -1px; }
 .tonelegend .bad::before { background: var(--bad); } .tonelegend .warn::before { background: var(--warm); } .tonelegend .info::before { background: var(--info); } .tonelegend .ok::before { background: var(--ok); }
-@media (max-width: 1280px) { .todo-workspace { grid-template-columns: 1fr; } }
+@media (max-width: 1179px) { .todo-workspace { grid-template-columns: 1fr; } }
 
 /* ---- Support ---- */
 .contact-support { position: fixed; right: 22px; bottom: 22px; z-index: 30; height: 44px; border: 0; border-radius: 22px; padding: 0 16px; background: var(--accent); color: #fff; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 22px rgba(32,56,78,.22); font-size: 12px; font-weight: 700; cursor: pointer; }
