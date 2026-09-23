@@ -36,7 +36,7 @@ export function cleanAddress(a, errors, prefix) {
 }
 
 /** Company identity fields shared by the directory and the invoice customer block. */
-export function cleanCompany(c, errors, prefix = 'customer', { identityFromDirectory = false } = {}) {
+export function cleanCompany(c, errors, prefix = 'customer', { identityFromDirectory = false, allowNotes = false } = {}) {
   if (!plain(c)) { errors.push({ field: prefix, code: 'REQUIRED' }); return {}; }
   const out = { kind: c.kind === 'individual' ? 'individual' : 'business', name: sanitizeText(c.name, 120), address: cleanAddress(c.address, errors, `${prefix}.address`) };
   // With a directory company id the identity (name, numbers, address) is loaded server-side, so the client need not send it.
@@ -54,6 +54,11 @@ export function cleanCompany(c, errors, prefix = 'customer', { identityFromDirec
   const ref = sanitizeText(c.buyerReference, 60);
   if (ref) out.buyerReference = ref;
   if (c.companyId != null) { if (typeof c.companyId === 'string' && UUIDISH.test(c.companyId)) out.companyId = c.companyId; else errors.push({ field: `${prefix}.companyId`, code: 'ID_INVALID' }); }
+  // Notes are a Contact-only field (an internal reminder for the merchant) - gated behind allowNotes so the
+  // shared invoice/quote customer block (identityFromDirectory: true) can never pick one up into a document
+  // snapshot. "Une note n'apparaît jamais sur les factures." c.notes !== undefined (rather than truthiness)
+  // so sending an empty string can actually clear a previously saved note.
+  if (allowNotes && c.notes !== undefined) out.notes = sanitizeText(c.notes, 2000);
   return out;
 }
 

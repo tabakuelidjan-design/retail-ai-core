@@ -178,6 +178,20 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       await store.appendEvent({ documentId: null, merchantId: config.merchantId, actor, action: 'COMPANY_UPDATED', fromStatus: null, toStatus: null, detail: { companyId: id }, at: now() });
       return saved;
     },
+    /** Contacts V1: archive/restore. Never deletes the contact or touches any linked document/relation -
+     * archiving is purely a visibility flag consumed by the /api/contacts role=archived filter. */
+    async archiveCompany(id, actor) {
+      await this.getCompany(id); // tenant check, 404 if foreign/missing
+      const saved = await store.setCompanyArchived(id, now());
+      await store.appendEvent({ documentId: null, merchantId: config.merchantId, actor, action: 'COMPANY_ARCHIVED', fromStatus: null, toStatus: null, detail: { companyId: id }, at: now() });
+      return saved;
+    },
+    async restoreCompany(id, actor) {
+      await this.getCompany(id);
+      const saved = await store.setCompanyArchived(id, null);
+      await store.appendEvent({ documentId: null, merchantId: config.merchantId, actor, action: 'COMPANY_RESTORED', fromStatus: null, toStatus: null, detail: { companyId: id }, at: now() });
+      return saved;
+    },
     events: async (id) => { await must(id); return store.listEvents(id); },
     peekNextNumber: async (type, issueDate) => { const y = Number(issueDate.slice(0, 4)); return formatNumber(numbering, type, y, await store.peekNextNumber(config.merchantId, type, y)); },
     get: must,

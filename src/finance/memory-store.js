@@ -140,6 +140,12 @@ export function createMemoryStore() {
       const c = [...companies.values()].find((x) => x.merchantId === merchantId && ((vatNumber && x.vatNumber === vatNumber) || (enterpriseNumber && x.enterpriseNumber === enterpriseNumber)));
       return c ? clone(c) : null;
     },
+    /** Contacts V1: archive/restore without touching any other field (mirrors supabase-store.js). */
+    async setCompanyArchived(id, archivedAt) {
+      const c = companies.get(id); if (!c) return null;
+      c.archivedAt = archivedAt;
+      return clone(c);
+    },
     async saveSupplierInvoice(s) {
       if (s.sha256 && supplierInvoices.some((x) => x.merchantId === s.merchantId && x.sha256 === s.sha256)) throw new FinanceError('DUPLICATE_ATTACHMENT');
       const row = { id: randomUUID(), status: 'TO_REVIEW', ...clone(s) }; supplierInvoices.push(row); return clone(row);

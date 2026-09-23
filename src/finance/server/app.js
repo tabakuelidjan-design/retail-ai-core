@@ -31,7 +31,8 @@ import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanV
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
-import { buildContacts, contactDetail } from '../contacts.js';
+import { buildContacts, contactDetail, contactExportRow, planImport } from '../contacts.js';
+import { toCsv } from '../export-csv.js';
 import { buildReceivables } from '../receivables.js';
 import { loadDocsForReports, packFileBuffers } from '../reports.js';
 import { createFinanceService } from '../service.js';
@@ -484,7 +485,7 @@ export function createFinanceApp(deps) {
 
   const companyBody = (body) => {
     const errors = [];
-    const c = cleanCompany(body, errors, 'company');
+    const c = cleanCompany(body, errors, 'company', { allowNotes: true });
     if (body?.source && ['manual', 'vies', 'cbeapi'].includes(body.source)) c.source = body.source;
     if (errors.length) fields(errors);
     return c;
@@ -516,24 +517,79 @@ export function createFinanceApp(deps) {
   // /api/companies - not a second contact store, not a replacement route. Nothing in the existing UI
   // depends on this endpoint; it exists so the future Contacts UI (Phase 2) does not have to merge several
   // endpoints itself. One pass over pre-fetched, merchant-scoped data (see contacts.js) - no per-contact query.
-  on('GET', '/api/contacts', async (ctx) => {
+  // role: all | customer | supplier | both | incomplete | archived (V1). "all"/"customer"/"supplier"/"both"
+  // implicitly exclude archived contacts (an archived contact is only ever visible under role=archived) -
+  // matching the mandate's "un contact archivé disparaît des vues actives".
+  const contactsFor = async (ctx) => {
     const { svc, settings } = await servicesFor();
     const role = ctx.url.searchParams.get('role') ?? 'all';
     const q = (ctx.url.searchParams.get('q') ?? '').trim().toLowerCase();
     const m = (c) => money(c, settings.defaults.language);
     const [companies, salesDocs, supplierInvoices] = await Promise.all([svc.listCompanies(), loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m });
-    if (role === 'customer') rows = rows.filter((r) => r.isCustomer);
-    else if (role === 'supplier') rows = rows.filter((r) => r.isSupplier);
-    if (q) rows = rows.filter((r) => `${r.displayName} ${r.vatNumber ?? ''}`.toLowerCase().includes(q));
-    json(ctx.res, 200, { rows: rows.sort((a, b) => a.displayName.localeCompare(b.displayName)) });
-  });
+    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m, today: clock.today() });
+    if (role === 'archived') rows = rows.filter((r) => r.archived);
+    else {
+      rows = rows.filter((r) => !r.archived);
+      if (role === 'customer') rows = rows.filter((r) => r.isCustomer);
+      else if (role === 'supplier') rows = rows.filter((r) => r.isSupplier);
+      else if (role === 'both') rows = rows.filter((r) => r.isCustomer && r.isSupplier);
+      else if (role === 'incomplete') rows = rows.filter((r) => r.incomplete);
+    }
+    if (q) rows = rows.filter((r) => `${r.displayName} ${r.vatNumber ?? ''} ${r.email ?? ''}`.toLowerCase().includes(q));
+    return { svc, companies, rows: rows.sort((a, b) => a.displayName.localeCompare(b.displayName)) };
+  };
+  on('GET', '/api/contacts', async (ctx) => { const { rows } = await contactsFor(ctx); json(ctx.res, 200, { rows }); });
   on('GET', `/api/contacts/${P}`, async (ctx) => {
     const { svc, settings } = await servicesFor();
     const c = await svc.getCompany(idParam(ctx.m[1])); // throws COMPANY_NOT_FOUND - same tenant check as /api/companies/:id
     const m = (c2) => money(c2, settings.defaults.language);
     const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
     json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today() }));
+  });
+  // Contacts V1: archive/restore - never a destructive delete, and never touches any other field or any
+  // linked document. Reuses the same tenant-scoped svc.getCompany() check every other company route uses.
+  on('POST', `/api/companies/${P}/archive`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, await svc.archiveCompany(idParam(ctx.m[1]), actor)); });
+  on('POST', `/api/companies/${P}/restore`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, await svc.restoreCompany(idParam(ctx.m[1]), actor)); });
+  // Contacts V1: CSV export. `ids=` (comma-separated) restricts to an explicit selection (bulk export from
+  // the list); otherwise the current role/q filter is exported, exactly as shown on screen.
+  on('GET', '/api/contacts/export.csv', async (ctx) => {
+    const { companies, rows } = await contactsFor(ctx);
+    const idsParam = ctx.url.searchParams.get('ids');
+    const wanted = idsParam ? new Set(idsParam.split(',').map((s) => s.trim()).filter(Boolean)) : null;
+    const byId = new Map(companies.map((c) => [c.id, c]));
+    const selected = wanted ? rows.filter((r) => wanted.has(r.id)) : rows;
+    const csvRows = selected.map((r) => contactExportRow(r, byId.get(r.id)));
+    const cols = ['id', 'kind', 'name', 'vatNumber', 'enterpriseNumber', 'email', 'street', 'postalCode', 'city', 'countryCode', 'isCustomer', 'isSupplier', 'archived', 'source'].map((key) => ({ key, header: key }));
+    send(ctx.res, 200, toCsv(csvRows, cols, { delimiter: ';' }), { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="contacts.csv"', 'Cache-Control': 'no-store' });
+  });
+  // Contacts V1: CSV/simple-object import. dryRun (default true) only returns the plan (create/update/
+  // ambiguous/errors) - nothing is written until the caller resends with dryRun:false, after the merchant has
+  // seen the preview. Matching is the same conservative, non-fuzzy algorithm as the Phase 1 supplier backfill
+  // (see contacts.js planImport): stable id first, then exact VAT, then exact normalised name; anything
+  // ambiguous is reported, never guessed, and never auto-merged.
+  on('POST', '/api/contacts/import', async (ctx) => {
+    const { svc } = await servicesFor();
+    const rows = Array.isArray(ctx.body?.rows) ? ctx.body.rows.slice(0, 2000) : null;
+    if (!rows) fields([{ field: 'rows', code: 'REQUIRED' }]);
+    const companies = await svc.listCompanies();
+    const plan = planImport(rows, companies);
+    const dryRun = ctx.body?.dryRun !== false;
+    let created = 0; let updated = 0; const writeErrors = [];
+    if (!dryRun) {
+      // Each row is applied independently: one bad/duplicate row (e.g. two rows in the same file sharing a
+      // VAT number) is reported and skipped, never aborts the rest of the import.
+      for (const { line, payload } of plan.toCreate) {
+        const errors = []; const c = cleanCompany(payload, errors, 'company', { allowNotes: false });
+        if (errors.length) { writeErrors.push({ line, reason: 'INVALID', fields: errors }); continue; }
+        try { await svc.saveCompany({ ...c, source: 'manual' }, actor); created += 1; } catch (e) { writeErrors.push({ line, reason: e.code ?? 'WRITE_FAILED' }); }
+      }
+      for (const { line, id, patch } of plan.toUpdate) {
+        const errors = []; const c = cleanCompany(patch, errors, 'company', { allowNotes: false });
+        if (errors.length) { writeErrors.push({ line, reason: 'INVALID', fields: errors }); continue; }
+        try { await svc.updateCompany(id, c, actor); updated += 1; } catch (e) { writeErrors.push({ line, reason: e.code ?? 'WRITE_FAILED' }); }
+      }
+    }
+    json(ctx.res, 200, { committed: !dryRun, created: dryRun ? plan.toCreate.length : created, updated: dryRun ? plan.toUpdate.length : updated, ambiguous: plan.ambiguous, errors: dryRun ? plan.errors : [...plan.errors, ...writeErrors] });
   });
   on('POST', '/api/companies/lookup', async (ctx) => {
     const { settings } = await servicesFor();
