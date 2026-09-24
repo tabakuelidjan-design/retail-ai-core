@@ -99,24 +99,41 @@ function avatar(name, size) {
 }
 /** Dashboard "recent activity" row: one real document-lifecycle event, in plain merchant language.
  * Every fact here (action, document type/number, amount) comes straight from the event as recorded -
- * nothing is inferred or reworded into a claim the event doesn't support. */
+ * nothing is inferred or reworded into a claim the event doesn't support. Reference-matched structure: a
+ * short bold title (never includes the document number, so it stays one line) + a muted document-reference
+ * subtitle underneath + a compact time on the right - instead of one long sentence that wraps 3-4 lines. */
 function activityRow(e) {
-  const doc = e.docType ? tt('{0} {1}', tr(TYPE[e.docType] || e.docType), e.docNumber || tt('(draft)')) : tt('a document');
-  const LABEL = {
-    APPROVE_AND_ISSUE: () => tt('{0} issued', doc), MARK_SENT: () => tt('{0} marked as sent', doc), SEND_QUOTE: () => tt('{0} sent', doc),
-    RECORD_PAYMENT: () => e.amount ? tt('Payment of {0} received on {1}', `${e.amount} ${e.currency || ''}`.trim(), doc) : tt('Payment received on {0}', doc),
-    CREATE_CREDIT_NOTE: () => tt('{0} created', doc), ACCEPT_QUOTE: () => tt('{0} accepted', doc), REJECT_QUOTE: () => tt('{0} rejected', doc),
-    SUBMIT_FOR_APPROVAL: () => tt('{0} submitted for approval', doc), CANCEL: () => tt('{0} cancelled', doc), REJECT: () => tt('{0} rejected', doc),
-    MODIFY: () => tt('{0} returned to draft', doc), STATUS_CHANGE: () => tt('{0} status updated', doc),
+  const typeLabel = tr(TYPE[e.docType] || e.docType || tt('a document'));
+  const numberText = e.docNumber || tt('(draft)');
+  const TITLE = {
+    APPROVE_AND_ISSUE: () => tt('{0} issued', typeLabel), MARK_SENT: () => tt('{0} marked as sent', typeLabel), SEND_QUOTE: () => tt('{0} sent', typeLabel),
+    RECORD_PAYMENT: () => e.amount ? tt('Payment of {0} received', `${e.amount} ${e.currency || ''}`.trim()) : tt('Payment received'),
+    CREATE_CREDIT_NOTE: () => tt('{0} created', typeLabel), ACCEPT_QUOTE: () => tt('{0} accepted', typeLabel), REJECT_QUOTE: () => tt('{0} rejected', typeLabel),
+    SUBMIT_FOR_APPROVAL: () => tt('{0} submitted for approval', typeLabel), CANCEL: () => tt('{0} cancelled', typeLabel), REJECT: () => tt('{0} rejected', typeLabel),
+    MODIFY: () => tt('{0} returned to draft', typeLabel), STATUS_CHANGE: () => tt('{0} status updated', typeLabel),
   };
   const tone = { APPROVE_AND_ISSUE: 'ok', RECORD_PAYMENT: 'ok', CREATE_CREDIT_NOTE: 'warm', CANCEL: 'warm', REJECT: 'warm', REJECT_QUOTE: 'warm' }[e.action] || 'info';
   // One icon per real event type (reference-matched: each activity gets its own icon in a coloured circle,
   // not just an undifferentiated dot) - kept to the existing SVG icon set, never a Unicode glyph downgrade.
   const ICON = { APPROVE_AND_ISSUE: 'doc', MARK_SENT: 'arrow', SEND_QUOTE: 'arrow', RECORD_PAYMENT: 'building', CREATE_CREDIT_NOTE: 'doc', ACCEPT_QUOTE: 'check', REJECT_QUOTE: 'alert', SUBMIT_FOR_APPROVAL: 'clock', CANCEL: 'alert', REJECT: 'alert', MODIFY: 'edit', STATUS_CHANGE: 'doc' };
-  const text = (LABEL[e.action] || (() => tt('{0}: {1}', doc, e.action)))();
+  const title = (TITLE[e.action] || (() => tt('{0}: {1}', typeLabel, e.action)))();
   const dt = e.at ? new Date(e.at) : null;
-  const when = dt ? dt.toLocaleDateString(I18N.tag(), { day: 'numeric', month: 'short' }) + ' ' + dt.toLocaleTimeString(I18N.tag(), { hour: '2-digit', minute: '2-digit' }) : '';
-  return h('a', { class: 'activity-row', href: e.docId ? `#/doc/${e.docId}` : undefined }, h('span', { class: `activity-icon ${tone}` }, svgIcon(ICON[e.action] || 'doc', 15)), h('span', { class: 'activity-text' }, text), h('span', { class: 'activity-time' }, when));
+  // Compact relative time ("12 min", "2 h", "3 j" - reference-matched), via the browser's own locale-aware
+  // Intl.RelativeTimeFormat rather than a hand-written translation table: real elapsed time, never rounded
+  // into a false claim (min for under an hour, hour for under a day, day beyond that).
+  const when = dt ? (() => {
+    const diffMs = Date.now() - dt.getTime();
+    const mins = Math.round(diffMs / 60000);
+    const rtf = new Intl.RelativeTimeFormat(I18N.tag(), { numeric: 'auto', style: 'short' });
+    if (mins < 60) return rtf.format(-mins, 'minute');
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return rtf.format(-hours, 'hour');
+    return rtf.format(-Math.round(hours / 24), 'day');
+  })() : '';
+  return h('a', { class: 'activity-row', href: e.docId ? `#/doc/${e.docId}` : undefined },
+    h('span', { class: `activity-icon ${tone}` }, svgIcon(ICON[e.action] || 'doc', 15)),
+    h('span', { class: 'activity-text' }, h('strong', null, title), h('small', null, numberText)),
+    h('span', { class: 'activity-time' }, when));
 }
 /** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
@@ -217,9 +234,25 @@ function treasuryChart(rows, cur, opts = {}) {
   const W = 760, H = 230, mL = 44, mR = 8, mT = 8, mB = 22;
   const innerW = W - mL - mR; const n = Math.max(1, rows.length);
   const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
-  const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
   const zeroY = mT + (H - mT - mB) * (opts.zeroRatio ?? 0.6);
+  // `opts.dualScale` (homepage only - the Tresorerie page passes no opts and keeps its exact previous
+  // behaviour): the running balance is a CUMULATIVE total, naturally several times larger in magnitude than
+  // any single month's inflow/outflow. Sharing one scale across both meant the balance line dictated the
+  // scale and the bars were squeezed down near zero, however tall the card actually was. Bars now scale
+  // against the real monthly flow figures only, and the balance line against its own real range, each
+  // filling its own share of the plot - a chart-geometry fix, not a change to any underlying figure.
+  const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
+  const maxIn = Math.max(1, ...rows.map((r) => r.inflowCents));
+  const maxOut = Math.max(1, ...rows.map((r) => r.outflowCents));
+  const maxBalance = Math.max(1, ...rows.map((r) => Math.abs(r.balanceCents)));
   const scale = Math.min(zeroY - mT - 8, H - mB - zeroY - 8) / maxAbs;
+  // Entrees and Sorties bars each fill their own share of the plot (76%/24%) against their own real monthly
+  // max, instead of both being scaled down to whichever of the two shares is smaller for a shared max - that
+  // was leaving the Entrees bars far short of the height they could honestly use.
+  const inScale = (zeroY - mT - 8) / maxIn;
+  const outScale = (H - mB - zeroY - 8) / maxOut;
+  const lineTop = mT + 6, lineBottom = H - mB - 4;
+  const lineScale = (lineBottom - lineTop) / maxBalance;
   const xOf = (i) => mL + slot * i + slot / 2;
   const kids = [];
   if (!opts.evenGrid) {
@@ -237,15 +270,20 @@ function treasuryChart(rows, cur, opts = {}) {
   const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
   rows.forEach((r, i) => {
     const x = xOf(i);
-    const inH = r.inflowCents * scale; const outH = r.outflowCents * scale;
+    const inH = r.inflowCents * (opts.dualScale ? inScale : scale); const outH = r.outflowCents * (opts.dualScale ? outScale : scale);
     kids.push(svgEl('rect', { class: 'tc-bar-in', x: x - barW - 1, y: zeroY - inH, width: barW, height: Math.max(0, inH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.inflow} ${cur}`)])]));
     kids.push(svgEl('rect', { class: 'tc-bar-out', x: x + 1, y: zeroY, width: barW, height: Math.max(0, outH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: -${r.outflow} ${cur}`)])]));
     kids.push(svgEl('text', { class: 'tc-axis', x, y: H - 6, 'text-anchor': 'middle' }, [document.createTextNode(monthLabel(r.month))]));
   });
-  const pts = rows.map((r, i) => [xOf(i), zeroY - r.balanceCents * scale]);
+  const pts = opts.dualScale
+    ? rows.map((r, i) => [xOf(i), lineBottom - r.balanceCents * lineScale])
+    : rows.map((r, i) => [xOf(i), zeroY - r.balanceCents * scale]);
   kids.push(svgEl('polyline', { class: 'tc-line', points: pts.map((p) => p.join(',')).join(' ') }));
   pts.forEach(([x, y], i) => { const r = rows[i]; kids.push(svgEl('circle', { class: 'tc-dot', cx: x, cy: y, r: i === pts.length - 1 ? 4 : 2.5 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${tt('balance')} ${r.balance} ${cur}`)])])); });
-  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}` }, kids);
+  // `opts.stretch` (homepage only): fill whatever height the card actually has (the row's sibling cards
+  // already stretch to match each other via CSS Grid) instead of a fixed aspect ratio that leaves a
+  // letterboxed gap when the card is taller than the chart's own default proportions would need.
+  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}`, ...(opts.stretch ? { preserveAspectRatio: 'none' } : {}) }, kids);
 }
 // A handful of short, non-business decoration lines for the Accueil quote-card (mandate section 4: "phrase
 // éditoriale... conservée si elle ne prend pas de place fonctionnelle"). This is copy, never merchant data -
@@ -369,7 +407,7 @@ async function viewOverview() {
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
       // has actually been recorded yet.
       if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
-      else chartWrap.appendChild(treasuryChart(r.rows, r.currency, { zeroRatio: 0.76, evenGrid: true }));
+      else chartWrap.appendChild(treasuryChart(r.rows, r.currency, { zeroRatio: 0.76, evenGrid: true, dualScale: true, stretch: true }));
       lastCashflowRows = r.rows;
       // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
       // chart above, just plotted small inside the KPI cards - see metric-grid, above.
@@ -377,7 +415,10 @@ async function viewOverview() {
       const expSpark = document.getElementById('spark-expenses'); if (expSpark) { clear(expSpark); const s = miniSpark(r.rows.map((x) => x.expenseCents), '#8095a6'); if (s) expSpark.appendChild(s); }
     }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
     const periodSelect = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
-    const chartCard = h('div', { class: 'card', style: 'padding:16px 18px' },
+    // home-treasury-card: makes this card a flex column so the chart (.home-chart) can grow to fill whatever
+    // height the row's grid-stretch already gives this card, instead of leaving a leftover gap under the
+    // legend - scoped to this one card, not the shared .card primitive used everywhere else.
+    const chartCard = h('div', { class: 'card home-treasury-card', style: 'padding:16px 18px' },
       h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real inflows, outflows and running documented balance')), periodSelect),
       chartWrap,
       h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 20%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Cumulative balance'))));
@@ -398,14 +439,17 @@ async function viewOverview() {
     // line, real VAT, real total, real status) via the same GET /api/documents/:id the document page itself
     // uses, never from fabricated figures. See invoicePreviewNode() below.
     const ctaSample = invoiceRows.find((r) => ['DRAFT', 'READY_FOR_APPROVAL', 'ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(r.status));
-    const previewSlot = h('div', { class: 'invoice-preview' }, h('div', { class: 'muted small' }, 'Loading...'));
+    // .cta-preview-slot is a stable flex-growing container (higher/right, per the reference) - it fills the
+    // leftover height between the title and the button instead of the mockup floating disconnected with a
+    // large empty gap when the card ends up taller (this row's cards share one height via CSS Grid stretch).
+    const previewSlot = h('div', { class: 'cta-preview-slot' }, h('div', { class: 'muted small' }, 'Loading...'));
     const ctaCard = h('a', { class: 'card cta-card', href: ctaSample ? `#/doc/${ctaSample.id}` : '#/new/invoice' },
       h('div', { class: 'cta-content' },
         h('h3', null, tt('Create, send and track your invoices with ease.')),
         previewSlot,
         h('button', { class: 'btn warm big cta-button', type: 'button', on: { click: (e) => { e.preventDefault(); location.hash = '#/new/invoice'; } } }, tt('Create an invoice'), svgIcon('plus', 16))));
     mid.appendChild(ctaCard);
-    invoicePreviewNode(ctaSample, cur).then((node) => { previewSlot.replaceWith(node); }).catch(() => { clear(previewSlot); previewSlot.appendChild(h('div', { class: 'muted small' }, 'Preview unavailable.')); });
+    invoicePreviewNode(ctaSample, cur).then((node) => { clear(previewSlot); previewSlot.appendChild(node); }).catch(() => { clear(previewSlot); previewSlot.appendChild(h('div', { class: 'muted small' }, 'Preview unavailable.')); });
     box.appendChild(mid);
 
     // ---- Bottom row (bank accounts / invoices table / supplier concentration) ----

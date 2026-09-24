@@ -487,14 +487,18 @@ h2 { margin-bottom: 14px; }
 
 /* ---- Recent activity: the real document trail, one calm timeline ---- */
 .activity { display: flex; flex-direction: column; }
-.activity-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid #f0f1f4; } .activity-row:last-child { border-bottom: 0; }
+.activity-row { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid #f0f1f4; } .activity-row:last-child { border-bottom: 0; }
 /* Reference-matched: a small coloured circle with the event's own icon, replacing the plain dot. */
-.activity-icon { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; flex: 0 0 auto; }
+.activity-icon { width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; flex: 0 0 auto; }
 .activity-icon.ok { background: color-mix(in srgb, var(--ok) 14%, #fff); color: var(--ok); }
 .activity-icon.warm { background: var(--warm-soft); color: var(--warm); }
 .activity-icon.info { background: color-mix(in srgb, var(--info) 12%, #fff); color: var(--info); }
-.activity-text { flex: 1; min-width: 0; font-size: 13.5px; } .activity-text strong { font-weight: 650; }
-.activity-time { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+/* Title + muted document-reference subtitle, each capped to one line (reference-matched type scale, ~11px/
+   9.5px) instead of one long sentence that wraps across several lines. */
+.activity-text { flex: 1; min-width: 0; font-size: 11.5px; display: flex; flex-direction: column; gap: 2px; }
+.activity-text strong { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-text small { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-time { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; flex: 0 0 auto; }
 
 /* ---- Document detail: one scannable header strip instead of scattered facts (Xero-style clarity) ---- */
 .dochero { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-start; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 16px; }
@@ -580,6 +584,12 @@ html, body { background: var(--bg); }
    (the dedicated Tresorerie page reuses the same function/classes and must not change - see viewTreasury()). */
 .home-chart .tc-bar-in { fill: color-mix(in srgb, var(--info) 20%, #fff); }
 .home-chart .tc-line { stroke: var(--warm); } .home-chart .tc-dot { fill: var(--warm); }
+/* Let the homepage Treasury chart fill whatever height its card actually has (the row's other two cards
+   already stretch it there via CSS Grid) instead of a fixed aspect ratio that leaves empty space below the
+   legend. Scoped to .home-treasury-card/.home-chart only - the Tresorerie page's own chart is untouched. */
+.home-treasury-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.home-treasury-card .home-chart { flex: 1; min-height: 0; }
+.home-treasury-card .home-chart .tc-svg { height: 100%; }
 .tc-legend { display: flex; justify-content: center; gap: 16px; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
 .tc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .tc-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
@@ -902,8 +912,11 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 /* ---- Homepage "Create an invoice" CTA: compact card + tilted real-invoice preview (reference-matched). ---- */
 .cta-card { position: relative; overflow: hidden; padding: 0; background: linear-gradient(145deg, var(--card) 0%, var(--bg) 56%, #e7ebec 100%); text-decoration: none; color: inherit; display: block; }
 .cta-content { position: relative; z-index: 2; padding: 24px 20px 20px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
-.cta-content h3 { font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--accent); font-size: 21px; line-height: 1.15; margin: 0; max-width: 175px; }
-.invoice-preview { position: absolute; right: 17px; top: 72px; width: 155px; background: var(--card); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 14px 28px rgba(72,56,45,.10); padding: 14px 12px; transform: rotate(2deg); }
+.cta-content h3 { font-family: var(--serif); font-style: italic; font-weight: 500; color: var(--accent); font-size: 24px; line-height: 1.16; margin: 0; }
+/* Fills the leftover height between the (now larger) headline and the button, keeping the invoice mockup
+   anchored higher/right instead of floating with a big empty gap below it when the card is tall. */
+.cta-preview-slot { flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: flex-end; padding-top: 10px; }
+.invoice-preview { width: 155px; flex: 0 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 14px 28px rgba(72,56,45,.10); padding: 14px 12px; transform: rotate(2deg); }
 .invoice-preview.empty { opacity: .65; }
 .brandline { height: 8px; width: 50px; background: var(--accent); border-radius: 3px; margin-bottom: 12px; }
 .smallline { height: 5px; background: var(--line); border-radius: 3px; margin: 5px 0; }

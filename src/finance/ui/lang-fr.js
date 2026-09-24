@@ -112,7 +112,11 @@
     'Recent activity': 'Activité récente', 'Loading...': 'Chargement...', 'Nothing yet': 'Rien pour l\'instant',
     'Issued invoices, payments and credit notes will show up here.': 'Les factures émises, paiements et avoirs apparaîtront ici.', 'Activity unavailable.': 'Activité indisponible.',
     'a document': 'un document', '{0} issued': '{0} émis(e)', '{0} marked as sent': '{0} marqué(e) comme envoyé(e)', '{0} sent': '{0} envoyé(e)',
-    'Payment of {0} received on {1}': 'Paiement de {0} reçu sur {1}', 'Payment received on {0}': 'Paiement reçu sur {0}', '{0} created': '{0} créé(e)',
+    'Payment of {0} received on {1}': 'Paiement de {0} reçu sur {1}', 'Payment received on {0}': 'Paiement reçu sur {0}',
+    // Homepage Activité récente: title-only variants (no document reference appended - it moves to the row's
+    // own muted subtitle line, see activityRow() in app.js) so the title stays a single short line.
+    'Payment of {0} received': 'Paiement de {0} reçu', 'Payment received': 'Paiement reçu',
+    '{0} created': '{0} créé(e)',
     '{0} accepted': '{0} accepté(e)', '{0} rejected': '{0} refusé(e)', '{0} submitted for approval': '{0} soumis(e) pour approbation',
     '{0} cancelled': '{0} annulé(e)', '{0} returned to draft': '{0} remis(e) en brouillon', '{0} status updated': 'Statut de {0} mis à jour',
     'Impact of this credit note': 'Impact de cet avoir', 'Original invoice': 'Facture d\'origine', 'Credit note amount': 'Montant de l\'avoir', 'Effect on balance': 'Effet sur le solde',
