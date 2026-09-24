@@ -299,7 +299,19 @@ async function viewSales(q) {
     const kind = SALES_TYPE_OF[tab];
     const search = h('input', { placeholder: tr('Search number or customer...'), value: text });
     wsMain.appendChild(h('div', { class: 'workspace-head' }, h('div', { class: 'tabsrow', style: 'border:0' })));
-    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search), h('div', { class: 'tools' }, h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(shown, [{ header: 'Number', key: 'number' }, { header: 'Customer', key: 'customer' }, { header: 'Issue date', key: 'issueDate' }, { header: 'Due date', key: 'dueDate' }, { header: 'Amount', key: 'gross' }, { header: 'Status', key: 'effectiveStatus' }], `${kind}.csv`) } }, tt('Export')))));
+    // Real filters (index(4).html alignment: Periode/Etat/Client, kept alongside the existing Exporter).
+    // Each one actually narrows `shown` below - none is decorative. "Peppol" and "Affichage" from the
+    // reference are not added: there is no per-document Peppol/channel field returned by this list endpoint
+    // to filter on honestly, and a view-density toggle was judged not worth the added surface for this pass.
+    let fromDate = ''; let toDate = ''; let client = '';
+    const statusSel = h('select', { class: 'tool', on: { change: (e) => { status = e.target.value; drawTable(); } } },
+      (SALES_FILTERS[kind] || [['', 'All']]).map(([v, l]) => h('option', { value: v, selected: v === status }, tt(l))));
+    const clientSel = h('select', { class: 'tool', on: { change: (e) => { client = e.target.value; drawTable(); } } }, h('option', { value: '' }, tt('All clients')));
+    const fromInput = h('input', { type: 'date', class: 'tool', style: 'width:auto', on: { change: (e) => { fromDate = e.target.value; drawTable(); } } });
+    const toInput = h('input', { type: 'date', class: 'tool', style: 'width:auto', on: { change: (e) => { toDate = e.target.value; drawTable(); } } });
+    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search),
+      h('div', { class: 'tools' }, fromInput, toInput, statusSel, clientSel,
+        h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(shown, [{ header: 'Number', key: 'number' }, { header: 'Customer', key: 'customer' }, { header: 'Issue date', key: 'issueDate' }, { header: 'Due date', key: 'dueDate' }, { header: 'Amount', key: 'gross' }, { header: 'Status', key: 'effectiveStatus' }], `${kind}.csv`) } }, tt('Export')))));
     const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
     let rows = []; let shown = []; let selected = null;
     function drawSide() {
@@ -307,18 +319,45 @@ async function viewSales(q) {
       if (!selected) { wsSide.appendChild(h('div', { class: 'muted small' }, tt('Select a document to see its summary here.'))); return; }
       const r = selected;
       wsSide.appendChild(h('div', { class: 'detail-head' }, h('div', null, h('h2', null, r.number || tt('(draft)')), h('p', null, `${r.customer || ''} · ${r.issueDate || ''}`), h('p', null, badge(r.effectiveStatus))), h('a', { class: 'btn', href: `#/doc/${r.id}` }, tt('Open'))));
-      wsSide.appendChild(h('div', { class: 'money-strip' }, h('div', null, h('span', null, tt('Total')), h('strong', null, r.gross)), r.remaining != null ? h('div', null, h('span', null, tt('Still due')), h('strong', null, r.remaining)) : h('div')));
+      // Real Paye = Total - Reste du (both already real fields on this row) - never a separately fetched or
+      // estimated figure.
+      const paidCents = r.remainingCents != null ? r.grossCents - r.remainingCents : null;
+      wsSide.appendChild(h('div', { class: 'money-strip' },
+        h('div', null, h('span', null, tt('Total incl. VAT')), h('strong', null, r.gross)),
+        paidCents != null ? h('div', null, h('span', null, tt('Paid')), h('strong', null, fmtMoney(paidCents, r.currency))) : h('div'),
+        r.remaining != null ? h('div', null, h('span', null, tt('Still due')), h('strong', null, r.remaining)) : h('div')));
+      if (r.dueDate) wsSide.appendChild(h('div', { class: 'kv' }, h('span', null, tt('Due date')), h('strong', null, r.dueDate)));
+      // Real inline actions (index(4).html alignment) - reusing the exact same modals/API calls the full
+      // document page already uses, not a re-implementation. "Relancer" is deliberately not added here: there
+      // is no real reminder-sending capability anywhere in this product ("No reminders are sent
+      // automatically" is the existing, honest copy on the Receivables page) - a button for it would be
+      // decorative.
+      const quickActions = h('div', { class: 'actions', style: 'padding:14px 0;border-bottom:1px solid var(--line)' });
+      if (r.type === 'invoice' && r.remainingCents > 0 && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(r.effectiveStatus)) {
+        quickActions.appendChild(h('button', { class: 'primary', on: { click: () => paymentModal(r, () => { api('GET', `/api/documents?type=${kind}`).then((res) => { rows = res.rows; drawTable(); const upd = rows.find((x) => x.id === r.id); if (upd) { selected = upd; drawSide(); } }); }) } }, tt('Collect payment')));
+      }
+      if (r.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(r.effectiveStatus)) {
+        quickActions.appendChild(h('button', { on: { click: async () => { try { const d = await api('GET', `/api/documents/${r.id}`); creditModal(d); } catch (e) { fail(e); } } } }, tt('Create a credit note')));
+      }
+      if (quickActions.children.length) wsSide.appendChild(quickActions);
     }
     function drawTable() {
       const s = text.trim().toLowerCase();
-      shown = rows.filter((r) => (!status || r.effectiveStatus === status) && (!s || `${r.number || ''} ${r.customer || ''}`.toLowerCase().includes(s)));
+      shown = rows.filter((r) => (!status || r.effectiveStatus === status) && (!client || r.customer === client)
+        && (!fromDate || (r.issueDate || '') >= fromDate) && (!toDate || (r.issueDate || '') <= toDate)
+        && (!s || `${r.number || ''} ${r.customer || ''}`.toLowerCase().includes(s)));
       clear(tableWrap);
       if (!shown.length) { tableWrap.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, tt('No document matches.'))))); return; }
       tableWrap.appendChild(h('table', null, h('tr', null, [tt('Document'), tt('Customer'), tt('Issued'), tt('Due'), tt('Amount'), tt('Status')].map((x, i) => h('th', { class: i === 4 ? 'num' : '' }, x))),
         shown.map((r) => h('tr', { class: 'click', on: { click: () => { selected = r; drawSide(); } } }, h('td', { 'data-label': tr('Document') }, h('strong', null, r.number || tt('(draft)')), h('small', null, tt(TYPE[r.type] || r.type))), h('td', { 'data-label': tr('Customer') }, r.customer || '—'), h('td', { 'data-label': tr('Issued') }, r.issueDate || '—'), h('td', { 'data-label': tr('Due') }, r.dueDate || '—'), h('td', { class: 'num', 'data-label': tr('Amount') }, r.gross || ''), h('td', { 'data-label': tr('Status') }, badge(r.effectiveStatus))))));
     }
     search.addEventListener('input', () => { text = search.value; drawTable(); });
-    api('GET', `/api/documents?type=${kind}`).then((r) => { rows = r.rows; drawTable(); drawSide(); }).catch((e) => fail(e, tableWrap));
+    api('GET', `/api/documents?type=${kind}`).then((r) => {
+      rows = r.rows;
+      // Real distinct customer names from this list only - never a separate/fabricated client directory.
+      [...new Set(rows.map((x) => x.customer).filter(Boolean))].sort().forEach((name) => clientSel.appendChild(h('option', { value: name }, name)));
+      drawTable(); drawSide();
+    }).catch((e) => fail(e, tableWrap));
   }
   drawTabs(); loadMetrics(); drawBody();
 }

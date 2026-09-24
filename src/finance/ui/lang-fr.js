@@ -159,6 +159,7 @@
     'When': 'Quand', 'Action': 'Action', 'Status': 'Statut', 'Peppol: NOT CONFIGURED. Structured invoices can be prepared, but nothing is transmitted until a provider is selected.': 'Peppol : NON CONFIGURÉ. Des factures structurées peuvent être préparées, mais rien n\'est transmis tant qu\'aucun prestataire n\'est choisi.',
     'Cancel': 'Annuler', 'Bank transfer': 'Virement bancaire', 'Cash': 'Espèces', 'Card': 'Carte', 'Other': 'Autre', 'Bank reference (optional)': 'Référence bancaire (facultatif)', 'Note (optional)': 'Note (facultatif)', 'Add a payment': 'Ajouter un paiement',
     'Still due: {0} {1}': 'Reste dû : {0} {1}', 'Date paid': 'Date de paiement', 'Note': 'Note', 'Payment recorded': 'Paiement enregistré', 'Record payment': 'Enregistrer le paiement', 'Reason (required)': 'Motif (obligatoire)', 'Remove': 'Retirer',
+    'Collect payment': 'Encaisser', 'All clients': 'Tous les clients',
     'Create a credit note': 'Créer un avoir', 'A credit note corrects an issued invoice. The invoice itself is never changed.': 'Un avoir corrige une facture émise. La facture elle-même n\'est jamais modifiée.', 'Reason': 'Motif', 'Credit the whole invoice': 'Créditer toute la facture',
     'Credit note draft created': 'Brouillon d\'avoir créé', 'Create draft': 'Créer le brouillon',
     // companies

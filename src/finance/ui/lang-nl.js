@@ -142,6 +142,7 @@
     'When': 'Wanneer', 'Action': 'Actie', 'Status': 'Status', 'Peppol: NOT CONFIGURED. Structured invoices can be prepared, but nothing is transmitted until a provider is selected.': 'Peppol: NIET GECONFIGUREERD. Gestructureerde facturen kunnen voorbereid worden, maar er wordt niets verzonden zolang er geen aanbieder gekozen is.',
     'Cancel': 'Annuleren', 'Bank transfer': 'Overschrijving', 'Cash': 'Contant', 'Card': 'Kaart', 'Other': 'Andere', 'Bank reference (optional)': 'Bankreferentie (optioneel)', 'Note (optional)': 'Notitie (optioneel)', 'Add a payment': 'Een betaling toevoegen',
     'Still due: {0} {1}': 'Nog verschuldigd: {0} {1}', 'Date paid': 'Betaaldatum', 'Note': 'Notitie', 'Payment recorded': 'Betaling geregistreerd', 'Record payment': 'Betaling registreren', 'Reason (required)': 'Reden (verplicht)', 'Remove': 'Verwijderen',
+    'Collect payment': 'Innen', 'All clients': 'Alle klanten',
     'Create a credit note': 'Een creditnota maken', 'A credit note corrects an issued invoice. The invoice itself is never changed.': 'Een creditnota corrigeert een uitgegeven factuur. De factuur zelf wordt nooit gewijzigd.', 'Reason': 'Reden', 'Credit the whole invoice': 'De hele factuur crediteren',
     'Credit note draft created': 'Ontwerp van creditnota aangemaakt', 'Create draft': 'Ontwerp maken',
     'Add a company': 'Een bedrijf toevoegen', 'Search name or VAT number...': 'Zoek een naam of btw-nummer…', 'Company': 'Bedrijf', 'Source': 'Bron',
