@@ -32,11 +32,13 @@ function fmtDateShort(iso) {
 }
 
 // ---------- Contacts list ----------
-const CONTACT_TABS = [['all', 'All contacts'], ['customer', 'Customers'], ['supplier', 'Suppliers'], ['both', 'Both'], ['incomplete', 'To complete']];
+// 'archived' uses the backend's existing role=archived filter (already real and tested - just had no UI tab).
+const CONTACT_TABS = [['all', 'All contacts'], ['customer', 'Customers'], ['supplier', 'Suppliers'], ['both', 'Both'], ['incomplete', 'To complete'], ['archived', 'Archived']];
+const CONTACT_SORTS = [['name', 'Name'], ['receivable', 'Amount receivable'], ['payable', 'Amount payable'], ['activity', 'Last activity']];
 async function viewContacts(q) {
   const cur = state.settings.defaults.currency;
   const openId = q ? q.get('open') : null;
-  let role = 'all'; let all = [];
+  let role = 'all'; let all = []; let archivedRows = []; let sort = 'name';
   let searchTimer = null;
 
   const shell = h('div', { class: 'page-shell' });
@@ -61,24 +63,35 @@ async function viewContacts(q) {
   }
   function drawTabs() {
     clear(tabsrow);
-    const counts = { all: all.length, customer: all.filter((r) => r.isCustomer).length, supplier: all.filter((r) => r.isSupplier).length, both: all.filter((r) => r.isCustomer && r.isSupplier).length, incomplete: all.filter((r) => r.incomplete).length };
+    const counts = { all: all.length, customer: all.filter((r) => r.isCustomer).length, supplier: all.filter((r) => r.isSupplier).length, both: all.filter((r) => r.isCustomer && r.isSupplier).length, incomplete: all.filter((r) => r.incomplete).length, archived: archivedRows.length };
     CONTACT_TABS.forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${role === v ? 'on' : ''}`, on: { click: () => { role = v; drawTabs(); drawRows(); } } }, tt(l), h('span', { class: 'pc' }, String(counts[v])))));
   }
-  function baseRows() { return role === 'all' ? all : role === 'customer' ? all.filter((r) => r.isCustomer) : role === 'supplier' ? all.filter((r) => r.isSupplier) : role === 'both' ? all.filter((r) => r.isCustomer && r.isSupplier) : all.filter((r) => r.incomplete); }
+  function baseRows() {
+    if (role === 'archived') return archivedRows;
+    const rows = role === 'all' ? all : role === 'customer' ? all.filter((r) => r.isCustomer) : role === 'supplier' ? all.filter((r) => r.isSupplier) : role === 'both' ? all.filter((r) => r.isCustomer && r.isSupplier) : all.filter((r) => r.incomplete);
+    // Real client-side sort over the already-loaded real rows - never re-fetched or re-derived.
+    const key = { name: (r) => r.displayName, receivable: (r) => -(r.amountReceivableCents ?? 0), payable: (r) => -(r.amountPayableCents ?? 0), activity: (r) => (r.lastActivityAt ? -new Date(r.lastActivityAt).getTime() : 0) }[sort] || ((r) => r.displayName);
+    return [...rows].sort((a, b) => (typeof key(a) === 'string' ? String(key(a)).localeCompare(String(key(b))) : key(a) - key(b)));
+  }
   function drawRows() {
     clear(wsMain);
     const rows = baseRows();
-    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search)));
+    const sortSel = h('select', { class: 'tool', on: { change: (e) => { sort = e.target.value; drawRows(); } } }, CONTACT_SORTS.map(([v, l]) => h('option', { value: v, selected: v === sort }, tt(l))));
+    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search),
+      h('div', { class: 'tools' }, sortSel, h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(rows, [{ header: 'Name', key: 'displayName' }, { header: 'VAT', key: 'vatNumber' }, { header: 'Relation', value: (r) => relationText(r) }, { header: 'Email', key: 'email' }, { header: 'Amount receivable', value: (r) => (r.isCustomer ? withCur(r.amountReceivable, cur) : '') }, { header: 'Amount payable', value: (r) => (r.isSupplier ? withCur(r.amountPayable, cur) : '') }], 'contacts.csv') } }, tt('Export')))));
     const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
     // "No contacts at all" only applies with no active search - a search that matches nothing is always the
     // "no results for this search" state below, never mistaken for an empty directory.
-    if (!all.length && !search.value.trim()) { tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('building', 26)),
+    if (role !== 'archived' && !all.length && !search.value.trim()) { tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('building', 26)),
       h('div', null, h('strong', null, tt('Your contacts will appear here.')),
         h('div', { class: 'muted small', style: 'max-width:420px;margin-top:4px' }, tt('Add a client or a company now; suppliers will also be gathered in this directory once they are linked to your purchase documents.')),
         h('button', { class: 'primary', style: 'margin-top:12px', on: { click: () => companyModal(null) } }, tt('Add a contact'))))); return; }
-    if (!rows.length) { tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('search', 26)),
-      h('div', null, h('strong', null, tt('No contact matches this search.')),
-        search.value ? h('button', { class: 'btn ghost', style: 'margin-top:10px', on: { click: () => { search.value = ''; load(); } } }, tt('Clear the search')) : null))); return; }
+    if (!rows.length) {
+      if (role === 'archived') { tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon ok' }, svgIcon('check', 26)), h('div', null, h('strong', null, tt('No archived contacts.'))))); return; }
+      tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('search', 26)),
+        h('div', null, h('strong', null, tt('No contact matches this search.')),
+          search.value ? h('button', { class: 'btn ghost', style: 'margin-top:10px', on: { click: () => { search.value = ''; load(); } } }, tt('Clear the search')) : null))); return;
+    }
     tableWrap.appendChild(h('table', null, h('tr', null, [tt('Contact'), tt('Relation'), tt('Contact details'), tt('Amount receivable'), tt('Amount payable'), tt('Last activity')].map((x, i) => h('th', { class: i >= 3 && i <= 4 ? 'num' : '' }, x))),
       rows.map((r) => h('tr', { class: 'click', on: { click: () => { openContactDrawer(r.id, load); } } },
         h('td', { 'data-label': tr('Contact') }, h('strong', null, r.displayName), h('small', null, r.vatNumber ? `${r.vatNumber} · ${tt(CONTACT_TYPE_TEXT[r.kind] || r.kind)}` : tt(CONTACT_TYPE_TEXT[r.kind] || r.kind))),
@@ -91,7 +104,9 @@ async function viewContacts(q) {
   async function load() {
     clear(wsMain); wsMain.appendChild(h('div', { style: 'padding:12px' }, [1, 2, 3, 4, 5].map(() => h('div', { class: 'skl', style: 'height:14px;width:60%;margin-bottom:10px' }))));
     try {
-      all = (await api('GET', `/api/contacts?q=${encodeURIComponent(search.value.trim())}`)).rows;
+      const query = encodeURIComponent(search.value.trim());
+      const [main, archived] = await Promise.all([api('GET', `/api/contacts?q=${query}`), api('GET', `/api/contacts?role=archived&q=${query}`)]);
+      all = main.rows; archivedRows = archived.rows;
       drawMetrics(); drawTabs(); drawRows();
     } catch (e) {
       clear(wsMain); wsMain.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon bad' }, svgIcon('alert', 26)),
@@ -127,10 +142,17 @@ function openContactDrawer(id, onClose) {
     const cur = state.settings.defaults.currency;
     body.appendChild(h('div', { class: 'detail-head' },
       h('div', null, h('h2', null, c.displayName), h('p', null, [tt(CONTACT_TYPE_TEXT[c.kind] || c.kind), c.vatNumber].filter(Boolean).join(' · ')), h('p', null, relationText(c))),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `/api/companies/${id}`); companyModal(r.company); } catch (e) { fail(e, err); } } } }, tt('Edit')))));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `/api/companies/${id}`); companyModal(r.company); } catch (e) { fail(e, err); } } } }, tt('Edit')),
+        // Real archive/restore (index(4).html alignment) - the backend has supported this since Phase 1 but
+        // had no UI control anywhere. Never a delete: the contact and its documents are untouched either way.
+        c.archived
+          ? h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/restore`, {}); toast(tt('Contact restored'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Restore'))
+          : h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/archive`, {}); toast(tt('Contact archived'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Archive')))));
     const fin = h('div', { class: 'contact-fin' });
     if (c.isCustomer) fin.appendChild(finItem(tt('Amount receivable'), withCur(c.amountReceivable, cur)));
-    if (c.isCustomer && c.overdueCount > 0) fin.appendChild(finItem(tt('Overdue'), withCur(c.amountOverdue, cur), 'bad'));
+    // More actionable overdue callout (index(4).html alignment): a real link into Ventes, pre-filtered to this
+    // customer's real invoices - not a "Relancer" button, since no reminder-sending capability exists.
+    if (c.isCustomer && c.overdueCount > 0) fin.appendChild(h('a', { href: `#/sales?tab=invoices&q=${encodeURIComponent(c.displayName)}`, class: 'fi bad', style: 'text-decoration:none' }, h('span', { class: 'fl' }, tt('Overdue')), h('span', { class: 'fv' }, withCur(c.amountOverdue, cur))));
     if (c.isSupplier) fin.appendChild(finItem(tt('Amount payable'), withCur(c.amountPayable, cur)));
     if (!c.isCustomer && !c.isSupplier) fin.appendChild(h('div', { class: 'muted small' }, tt('This contact has no invoiced activity yet.')));
     body.appendChild(fin);

@@ -484,6 +484,9 @@
     '+ New contact': '+ Nouveau contact', 'Search by name, VAT number...': 'Rechercher par nom, TVA…',
     'All contacts': 'Tous', 'Suppliers': 'Fournisseurs',
     'Your contacts will appear here.': 'Vos contacts apparaîtront ici.',
+    // Contacts: real archive/restore + sort/export (index(4).html alignment).
+    'Archived': 'Archivés', 'Restore': 'Restaurer', 'Archive': 'Archiver', 'No archived contacts.': 'Aucun contact archivé.',
+    'Contact restored': 'Contact restauré', 'Contact archived': 'Contact archivé',
     'Add a client or a company now; suppliers will also be gathered in this directory once they are linked to your purchase documents.': 'Ajoutez un client ou une entreprise maintenant ; les fournisseurs seront également réunis dans ce répertoire lorsqu\'ils seront liés à vos documents d\'achat.',
     'Add a contact': 'Ajouter un contact',
     'No supplier matches this search.': 'Aucun fournisseur ne correspond à cette recherche.',

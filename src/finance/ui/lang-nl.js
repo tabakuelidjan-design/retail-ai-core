@@ -460,6 +460,8 @@
     '+ New contact': '+ Nieuw contact', 'Search by name, VAT number...': 'Zoeken op naam, btw-nummer…',
     'All contacts': 'Alle', 'Suppliers': 'Leveranciers',
     'Your contacts will appear here.': 'Uw contacten verschijnen hier.',
+    'Archived': 'Gearchiveerd', 'Restore': 'Herstellen', 'Archive': 'Archiveren', 'No archived contacts.': 'Geen gearchiveerde contacten.',
+    'Contact restored': 'Contact hersteld', 'Contact archived': 'Contact gearchiveerd',
     'Add a client or a company now; suppliers will also be gathered in this directory once they are linked to your purchase documents.': 'Voeg nu een klant of onderneming toe; leveranciers worden eveneens in dit overzicht opgenomen zodra ze aan uw aankoopdocumenten zijn gekoppeld.',
     'Add a contact': 'Contact toevoegen',
     'No supplier matches this search.': 'Geen leverancier komt overeen met deze zoekopdracht.',

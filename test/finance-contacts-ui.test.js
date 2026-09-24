@@ -69,14 +69,24 @@ test('the new script is registered so #/contacts can actually load in the browse
   assert.match(server, /'\/views-contacts\.js'/);
 });
 
-test('no client-side money arithmetic: the list/drawer only format server-provided amountReceivable/amountPayable strings, never add/subtract cents', () => {
-  assert.doesNotMatch(contactsSrc, /amountReceivableCents|amountPayableCents/, 'the Phase 1 *Cents fields are for the API only, never consumed here');
+test('no client-side money arithmetic: the list/drawer only format server-provided amountReceivable/amountPayable strings, never derive a new amount from cents', () => {
+  // Phase 3 (real "Trier" sort control) reads amountReceivableCents/amountPayableCents once, purely as a
+  // numeric sort key (negated for descending order) - it never combines them, never derives a new amount
+  // from them, and never feeds them into a money formatter. That distinction is what this test guards:
+  // the Cents fields still may not reach withCur()/fmtMoney() or any displayed string.
+  assert.doesNotMatch(contactsSrc, /withCur\([^)]*Cents|fmtMoney\([^)]*Cents/, 'a *Cents field must never be formatted/displayed directly');
   assert.doesNotMatch(contactsSrc, /grossCents\s*[+\-*/]|Cents\s*[+\-]\s*Cents/, 'no cents arithmetic in the Contacts UI');
+  const sortKeyLine = contactsSrc.split('\n').find((l) => l.includes('amountReceivableCents') || l.includes('amountPayableCents'));
+  assert.ok(sortKeyLine, 'the *Cents fields are still referenced somewhere (the sort key)');
+  assert.match(sortKeyLine, /\bsort\b|\bkey\b/, 'the only place *Cents fields are read is the sort-key map, not the list/drawer rendering');
 });
 
-test('no per-row network call: /api/contacts and /api/contacts/:id are each called exactly once per view (list load, drawer open) - never inside a .map/.forEach', () => {
+test('no per-row network call: each api() call site is a single whole-view or whole-drawer action, never inside a .map/.forEach', () => {
+  // Phase 3 (Archivés tab) added 3 real call sites on top of the original 3:
+  // GET /api/contacts?role=archived (list load, parallel with the main list), and the
+  // archive/restore actions (POST /api/companies/:id/archive|restore) in the drawer footer.
   const apiCalls = contactsSrc.match(/\bapi\(/g) || [];
-  assert.equal(apiCalls.length, 3, 'GET /api/contacts (list), GET /api/contacts/:id (drawer), GET /api/companies/:id (edit prefill) - no more');
+  assert.equal(apiCalls.length, 6, 'GET /api/contacts (list), GET /api/contacts?role=archived (list), GET /api/contacts/:id (drawer), GET /api/companies/:id (edit prefill), POST .../archive, POST .../restore - no more');
   assert.doesNotMatch(contactsSrc, /\.(?:forEach|map)\([^)]*=>[^}]*\bapi\(/s, 'no api() call written inside a row-iteration callback');
 });
 
