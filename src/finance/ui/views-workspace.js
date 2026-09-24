@@ -105,7 +105,7 @@ function openInboxItem(id, reload) {
 async function viewTodo() {
   const shell = h('div', { class: 'page-shell' });
   layout('#/todo', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('To do')), h('div', { class: 'subtitle' }, tt('Everything that needs your attention, in one place.')))));
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('To do')), h('div', { class: 'subtitle' }, tt('Everything that needs your attention, in one place.')))));
   const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
   box.appendChild(h('div', { class: 'metric-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:22px;width:30%' })))));
   try {
@@ -228,7 +228,7 @@ async function viewSales(q) {
   let status = q.get('status') || ''; let text = q.get('q') || '';
   const shell = h('div', { class: 'page-shell' });
   layout('#/sales', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/new/invoice' }, svgIcon('plus', 16), tt('New invoice')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
@@ -301,7 +301,7 @@ async function viewPurchasesWorkspace(q) {
   let text = '';
   const shell = h('div', { class: 'page-shell' });
   layout('#/purchases', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => manualEntry(() => drawBody()) } }, tt('+ Add manually')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
@@ -576,7 +576,7 @@ function suggestionRow(s, currency, reload) {
 async function viewBank() {
   const shell = h('div', { class: 'page-shell' });
   layout('#/bank', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Bank & Cash')), h('div', { class: 'subtitle' }, tt('Understand every inflow and outflow, without accounting jargon.'))),
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Bank & Cash')), h('div', { class: 'subtitle' }, tt('Understand every inflow and outflow, without accounting jargon.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/treasury' }, tt('Treasury')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   async function draw() {
@@ -622,7 +622,7 @@ async function viewBank() {
 async function viewTreasury() {
   const shell = h('div', { class: 'page-shell' });
   layout('#/treasury', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   box.appendChild(h('div', { class: 'treasury-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })))));
   try {

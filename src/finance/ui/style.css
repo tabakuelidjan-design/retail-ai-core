@@ -894,6 +894,12 @@ html, body { background: var(--bg); }
   --bg: #f4f5f5; --card: #ffffff; --ink: #26313a; --ink-soft: #4f667c; --muted: #7c8890; --line: #e2e6e7;
   --accent: #20384e; --accent-ink: #ffffff; --warm: #be6547; --warm-soft: #f7ebe5; --ok: #17956b; --info: #2c4a60; --bad: #d95c4f;
   --radius: 12px; --rail-w: 84px; --line-2: #d8dfe1; --shadow: 0 6px 22px rgba(33,50,66,.055);
+  /* index(4).html design-system aliases (2026-09-25): same values, canonical reference names, so shared
+     components can be written against the reference's own vocabulary instead of ad hoc hex. --surface/
+     --surface-soft/--navy-2/--green-soft/--blue-soft map 1:1 onto tokens already used above. */
+  --surface: var(--card); --surface-soft: #f8f9f9; --navy: var(--accent); --navy-2: var(--info);
+  --terracotta: var(--warm); --terracotta-soft: var(--warm-soft); --green: var(--ok); --green-soft: #eaf5f0;
+  --red: var(--bad); --blue-soft: #edf2f6; --text: var(--ink);
 }
 html, body { background: var(--bg); }
 .card { border-color: var(--line); box-shadow: var(--shadow); }
@@ -923,6 +929,13 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .page-shell { display: grid; gap: 18px; padding: 24px 28px 96px; }
 .hero-row { display: grid; grid-template-columns: minmax(360px, 1fr) 300px; gap: 20px; align-items: start; }
 .hero-row .hero-block h1 { font-family: var(--serif); color: var(--accent); font-weight: 500; font-size: 48px; line-height: .98; margin: 18px 0 0; }
+/* Reference-matched: only the homepage greeting is the large 48px editorial size (.hero-row without this
+   modifier). Every subpage title (A faire/Ventes/Achats/Banque/Contacts/Tresorerie) uses .hero-row.subpage,
+   matching the reference's .subpage-hero h1/.page-head h1 (34px) - a single shared rule, not six page-by-page
+   overrides. */
+.hero-row.subpage { grid-template-columns: 1fr auto; align-items: flex-start; }
+.hero-row.subpage .hero-block h1 { font-size: 34px; line-height: 1.1; margin: 0 0 6px; }
+.hero-row.subpage .quote-card { min-height: 0; }
 .hero-row .subtitle { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
 .quote-card { min-height: 60px; display: flex; justify-content: flex-end; align-items: flex-start; }
 .quote-card .quote { font-family: var(--serif); font-style: italic; font-size: 20px; line-height: 1.18; text-align: right; color: #2a4156; margin-top: 20px; }

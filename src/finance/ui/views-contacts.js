@@ -41,7 +41,7 @@ async function viewContacts(q) {
 
   const shell = h('div', { class: 'page-shell' });
   layout('#/contacts', shell);
-  shell.appendChild(h('div', { class: 'hero-row' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Contacts')), h('div', { class: 'subtitle' }, tt('Customers, suppliers and financial relationships in one directory.'))),
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Contacts')), h('div', { class: 'subtitle' }, tt('Customers, suppliers and financial relationships in one directory.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => companyModal(null) } }, tt('+ New contact')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
