@@ -307,6 +307,11 @@
     'PDF, image or structured XML (UBL). They stay private and are never sent anywhere.': 'PDF, image ou XML structuré (UBL). Ils restent privés et ne sont envoyés nulle part.',
     '{0} was already received': '{0} avait déjà été reçu',
     '{0} received': '{0} reçu',
+    // Achats: 3-pane workspace (queue/preview/form), restored Import action, real document preview.
+    'Import': 'Importer', 'Import supplier documents': 'Importer des documents fournisseurs',
+    'This entry has no source document.': 'Cette entrée n\'a pas de document source.', 'Preview is not available for this file type.': 'L\'aperçu n\'est pas disponible pour ce type de fichier.',
+    'Select a document to preview it here.': 'Sélectionnez un document pour l\'aperçu ici.', 'Select a document from the queue to review it here.': 'Sélectionnez un document dans la file pour le vérifier ici.',
+    'Source file': 'Fichier source',
     'The inbox is empty': 'La boîte de réception est vide',
     'Documents you receive will appear here for review.': 'Les documents reçus apparaîtront ici pour vérification.',
     'Unknown supplier': 'Fournisseur inconnu',
@@ -483,6 +488,10 @@
     'No supplier matches this search.': 'Aucun fournisseur ne correspond à cette recherche.',
     'No customer matches this search.': 'Aucun client ne correspond à cette recherche.',
     'No contact matches this search.': 'Aucun contact ne correspond à cette recherche.',
+    // Achats: real "link a contact" control (POST /api/inbox/:id/contact), previously supported by the
+    // backend but with no UI control anywhere.
+    'Linked contact': 'Contact lié', 'Search contacts by name or VAT...': 'Rechercher un contact par nom ou TVA...', 'No contact matches.': 'Aucun contact ne correspond.',
+    'Contact linked': 'Contact lié', 'Contact unlinked': 'Contact délié', 'Unlink': 'Délier',
     'Clear the search': 'Effacer la recherche',
     'Contact': 'Contact', 'Relation': 'Relation', 'Amount receivable': 'À recevoir', 'Amount payable': 'À payer', 'Last activity': 'Dernière activité',
     'Contacts could not be loaded.': 'Impossible de charger les contacts.', 'Retry': 'Réessayer',

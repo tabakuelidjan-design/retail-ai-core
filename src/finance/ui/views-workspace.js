@@ -66,11 +66,13 @@ function fmtMoney(cents, currency) {
 }
 const centsToInput = (c) => (c == null ? '' : `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`);
 
-// ---------- item review drawer (edit fields, see the source document, validate / reject) ----------
-function openInboxItem(id, reload) {
+// ---------- item review pane (edit fields, see the source document, validate / reject / pay / link a
+// contact) - the shared renderer behind both the Achats workspace's persistent right pane and the modal
+// drawer used elsewhere (A faire, Contacts). Exactly the same real API calls either way. ----------
+function renderInboxDetail(host, id, opts = {}) {
+  const onChange = opts.onChange || (() => {});
   const body = h('div', { class: 'drawer-body' }); const err = h('div');
-  const back = modal('Supplier invoice', h('div', null, err, body), (close) => [h('button', { on: { click: () => { close(); reload(); } } }, tt('Close'))]);
-  back.classList.add('drawer');
+  clear(host); host.appendChild(err); host.appendChild(body);
   async function draw() {
     clear(body);
     let it; try { it = await api('GET', `/api/inbox/${id}`); } catch (e) { return fail(e, body); }
@@ -84,21 +86,54 @@ function openInboxItem(id, reload) {
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
     body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), h('div', null)));
+    // Real, existing backend capability (POST /api/inbox/:id/contact) that had no UI control anywhere -
+    // links this supplier invoice to an existing contact by searching the same real /api/contacts list.
+    const contactBox = h('div', { class: 'field' }, h('label', null, tt('Linked contact')), h('div', { class: 'muted small' }, tt('Loading...')));
+    body.appendChild(contactBox);
+    (async () => {
+      clear(contactBox); contactBox.appendChild(h('label', null, tt('Linked contact')));
+      if (it.supplierCompanyId) {
+        let name = it.supplierCompanyId;
+        try { name = (await api('GET', `/api/contacts/${it.supplierCompanyId}`)).displayName; } catch (e) { /* keep the id as a fallback */ }
+        contactBox.appendChild(h('div', { class: 'row r2', style: 'align-items:center' }, h('strong', null, name), h('button', { type: 'button', on: { click: async () => { try { await api('POST', `/api/inbox/${id}/contact`, { contactId: null }); toast(tt('Contact unlinked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Unlink'))));
+      } else {
+        const q = h('input', { placeholder: tr('Search contacts by name or VAT...') });
+        const results = h('div');
+        let timer = null;
+        q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(async () => {
+          clear(results); const term = q.value.trim(); if (!term) return;
+          try { const rows = (await api('GET', `/api/contacts?q=${encodeURIComponent(term)}`)).rows.slice(0, 6);
+            if (!rows.length) { results.appendChild(h('div', { class: 'muted small' }, tt('No contact matches.'))); return; }
+            rows.forEach((c) => results.appendChild(h('button', { type: 'button', class: 'result', on: { click: async () => { try { await api('POST', `/api/inbox/${id}/contact`, { contactId: c.id }); toast(tt('Contact linked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, c.displayName)));
+          } catch (e) { fail(e, results); }
+        }, 220); });
+        contactBox.appendChild(q); contactBox.appendChild(results);
+      }
+    })();
     if (it.errors.length && ['RECEIVED', 'TO_REVIEW'].includes(it.status)) body.appendChild(h('div', { class: 'banner info small' }, h('strong', null, tt('Still needed before validation:')), h('ul', { class: 'plain' }, it.errors.map((c) => h('li', null, inboxErrText(c))))));
     const act = h('div', { class: 'actions', style: 'margin-top:12px' });
-    const go = (path, payload, msg) => async () => { try { await api('POST', `/api/inbox/${id}/${path}`, payload || {}); toast(msg, 'ok'); draw(); } catch (e) { fail(e, err); } };
+    const go = (path, payload, msg) => async () => { try { await api('POST', `/api/inbox/${id}/${path}`, payload || {}); toast(msg, 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } };
     if (editable) {
-      act.appendChild(h('button', { on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); toast('Saved', 'ok'); draw(); } catch (e) { fail(e, err); } } } }, tt('Save')));
-      act.appendChild(h('button', { class: 'primary', on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); await api('POST', `/api/inbox/${id}/validate`, {}); toast('Validated', 'ok'); draw(); } catch (e) { fail(e, err); } } } }, tt('Validate')));
-      act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
+      act.appendChild(h('button', { on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); toast('Saved', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Save')));
+      act.appendChild(h('button', { class: 'primary', on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); await api('POST', `/api/inbox/${id}/validate`, {}); toast('Validated', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Validate')));
+      act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
     } else if (it.status === 'VALIDATED') { act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
     else if (it.status === 'TO_PAY') {
-      act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
+      act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
       act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction')));
     } else if (it.status === 'PAID') act.appendChild(h('span', { class: 'muted' }, tt('Paid on {0}', it.paidAt || '')));
     body.appendChild(act);
   }
   draw();
+  return { refresh: draw };
+}
+// Modal wrapper for the places that still want an overlay drawer (A faire, Contacts) - identical behaviour
+// to before: reload() runs when the modal is closed, not after every inline action.
+function openInboxItem(id, reload) {
+  const host = h('div', { class: 'drawer-body-host' });
+  const back = modal('Supplier invoice', host, (close) => [h('button', { on: { click: () => { close(); reload(); } } }, tt('Close'))]);
+  back.classList.add('drawer');
+  renderInboxDetail(host, id);
 }
 
 // ---------- À faire / To do: the real Action Center, as a first-class page ----------
@@ -296,13 +331,35 @@ function openProductDrilldown(p, currency) {
 // ---------- Achats: À traiter (inbox) / À payer / Payés / Analytics, one workspace. Detail still opens the
 // existing, fully-featured openInboxItem() drawer (validate/reject/pay/link a contact) rather than
 // duplicating that safety-critical logic into a second, less-tested inline pane. ----------
+// Real upload (POST /api/inbox/upload, the same route the old Finance Inbox page used) - restores an
+// "Importer" action on the Achats page, found missing during the index(4).html audit despite the backend
+// route already existing and working.
+function importDocumentsModal(done) {
+  const input = h('input', { type: 'file', accept: '.pdf,.png,.jpg,.jpeg,.xml', multiple: true, style: 'display:none' });
+  const status = h('div', { class: 'muted small', style: 'margin-top:10px' });
+  const drop = h('div', { class: 'dropzone', tabindex: '0', on: { click: () => input.click(), keydown: (e) => { if (e.key === 'Enter') input.click(); } } }, svgIcon('plus', 22), h('div', null, h('strong', null, tt('Drop invoices here, or click to choose')), h('div', { class: 'muted small' }, tt('PDF, image or structured XML (UBL). They stay private and are never sent anywhere.'))));
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  const toB64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); });
+  async function send(files) {
+    for (const file of files) {
+      try { const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); status.appendChild(h('div', null, r.duplicate ? tt('{0} was already received', file.name) : tt('{0} received', file.name))); } catch (e) { status.appendChild(h('div', { class: 'bad' }, `${file.name}: ${e.message || e}`)); }
+    }
+    done();
+  }
+  input.addEventListener('change', () => send([...input.files])); drop.addEventListener('drop', (e) => send([...e.dataTransfer.files]));
+  modal(tt('Import supplier documents'), h('div', null, drop, input, status), (close) => [h('button', { on: { click: close } }, tt('Close'))]);
+}
 async function viewPurchasesWorkspace(q) {
   let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
   let text = '';
+  let selectedId = null;
   const shell = h('div', { class: 'page-shell' });
   layout('#/purchases', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
-    h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => manualEntry(() => drawBody()) } }, tt('+ Add manually')))));
+    h('div', { class: 'actions', style: 'align-self:center' },
+      h('button', { class: 'btn', type: 'button', on: { click: () => importDocumentsModal(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('Import')),
+      h('button', { class: 'btn primary big', type: 'button', on: { click: () => manualEntry(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('+ Add manually')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
   const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
@@ -323,32 +380,65 @@ async function viewPurchasesWorkspace(q) {
   }
   function drawTabs() {
     clear(tabsrow);
-    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+  }
+  // Real inline preview of the actual uploaded source document (image or PDF via the existing, already-used
+  // /api/inbox/:id/file route) - never a fabricated document image. Anything else gets an honest fallback
+  // with a link to open the real file, rather than pretending to render it inline.
+  function docPreviewNode(it) {
+    if (!it.hasFile) return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', { class: 'muted small' }, tt('This entry has no source document.')));
+    const url = `/api/inbox/${it.id}/file`;
+    if ((it.contentType || '').startsWith('image/')) return h('img', { src: url, alt: it.fileName || '', style: 'max-width:100%;max-height:100%;border-radius:8px;box-shadow:var(--shadow);object-fit:contain' });
+    if (it.contentType === 'application/pdf') return h('iframe', { src: url, title: it.fileName || 'PDF', style: 'width:100%;height:100%;min-height:520px;border:0;border-radius:8px;background:#fff' });
+    return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', null, h('strong', null, it.fileName || tt('Source file')), h('div', { class: 'muted small' }, tt('Preview is not available for this file type.'))), h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, tt('Open the source document')));
   }
   function drawBody() {
     clear(workspace);
     if (tab === 'analytics') {
+      workspace.className = 'card';
       workspace.appendChild(analyticsPanel({ endpoint: '/api/purchases/analytics', currency: state.settings.defaults.currency, productDrilldown: () => {} }));
       return;
     }
-    const search = h('input', { placeholder: tr('Supplier, invoice number...') });
-    workspace.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search)));
-    const list = h('div', { class: 'table-wrap' }); workspace.appendChild(list);
-    search.addEventListener('input', () => { text = search.value; draw(); });
+    // Persistent 3-pane workspace (queue / document preview / validation form), replacing the previous
+    // list+modal pattern - same real data and the same shared renderInboxDetail() actions, just always
+    // visible instead of behind a click-to-open overlay. Collapses responsively (see .purchase-shell CSS).
+    workspace.className = 'card purchase-shell';
+    const queueTabs = h('div', { class: 'queue-tabs' });
+    const search = h('label', { class: 'search-field', style: 'width:100%;margin-bottom:10px' }, svgIcon('search', 14), h('input', { placeholder: tr('Supplier, invoice number...'), on: { input: (e) => { text = e.target.value; drawQueue(); } } }));
+    const queueList = h('div');
+    const queue = h('aside', { class: 'queue' }, queueTabs, search, queueList);
+    const preview = h('section', { class: 'doc-preview' }, h('div', { class: 'muted small' }, tt('Select a document to preview it here.')));
+    const formPane = h('aside', { class: 'form-pane' }, h('div', { class: 'muted small' }, tt('Select a document from the queue to review it here.')));
+    workspace.appendChild(queue); workspace.appendChild(preview); workspace.appendChild(formPane);
     let rows = [];
-    function draw() {
+    function selectRow(id) {
+      selectedId = id; drawQueue();
+      const it = rows.find((r) => r.id === id); if (!it) return;
+      clear(preview); preview.appendChild(docPreviewNode(it));
+      clear(formPane); renderInboxDetail(formPane, id, { onChange: () => { drawTabs(); loadMetrics(); loadRows(); } });
+    }
+    function drawQueue() {
+      clear(queueTabs); clear(queueList);
+      [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid']].forEach(([v, l]) => queueTabs.appendChild(h('button', { type: 'button', class: tab === v ? 'active' : '', on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); loadRows(); } } }, tt(l), ' ', String(v === 'inbox' ? rows.filter((r) => ['RECEIVED', 'TO_REVIEW'].includes(r.status)).length : v === 'to_pay' ? rows.filter((r) => r.status === 'TO_PAY').length : rows.filter((r) => r.status === 'PAID').length))));
       const s = text.trim().toLowerCase();
       const filtered = rows.filter((r) => !s || `${r.supplierName || ''} ${r.invoiceNumber || ''}`.toLowerCase().includes(s));
-      clear(list);
-      if (!filtered.length) { list.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('doc', 26)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
-      filtered.forEach((r) => list.appendChild(h('a', { class: 'docrow', href: '#', on: { click: (e) => { e.preventDefault(); openInboxItem(r.id, () => { drawTabs(); drawBody(); loadMetrics(); }); } } },
-        avatar(r.supplierName || r.fileName || '?'),
-        h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.supplierName || r.fileName || tt('Unknown supplier')), h('span', { class: 'ds' }, [r.invoiceNumber, r.issueDate].filter(Boolean).join('  ·  '))),
-        h('span', { class: 'damt' }, h('strong', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : ''), confChip(r)),
-        h('span', { class: 'dstat' }, inboxBadge(r.status), sourceBadge(r.source)), h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
+      if (!filtered.length) { queueList.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 22)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
+      if (!selectedId && filtered.length) selectedId = filtered[0].id;
+      filtered.forEach((r) => queueList.appendChild(h('div', { class: `queue-item ${r.id === selectedId ? 'selected' : ''}`, on: { click: () => selectRow(r.id) } },
+        h('strong', null, r.supplierName || r.fileName || tt('Unknown supplier')),
+        h('small', null, [r.invoiceNumber, r.issueDate].filter(Boolean).join('  ·  ')),
+        h('div', { class: 'queue-money' }, h('b', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : '—'), inboxBadge(r.status)))));
     }
-    const scope = tab === 'inbox' ? 'inbox' : 'purchases';
-    api('GET', `/api/inbox?scope=${scope}`).then((r) => { rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : r.rows; draw(); }).catch((e) => fail(e, list));
+    function loadRows() {
+      const scope = tab === 'inbox' ? 'inbox' : 'purchases';
+      api('GET', `/api/inbox?scope=${scope}`).then((r) => {
+        rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : r.rows;
+        drawQueue();
+        if (rows.length) selectRow(selectedId && rows.some((r2) => r2.id === selectedId) ? selectedId : rows[0].id);
+        else { clear(preview); preview.appendChild(h('div', { class: 'muted small' }, tt('Select a document to preview it here.'))); clear(formPane); formPane.appendChild(h('div', { class: 'muted small' }, tt('Select a document from the queue to review it here.'))); }
+      }).catch((e) => fail(e, queueList));
+    }
+    loadRows();
   }
   drawTabs(); loadMetrics(); drawBody();
 }

@@ -1028,7 +1028,10 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .queue-money { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--ink-soft); }
 .doc-preview { padding: 18px; overflow: auto; background: var(--card-soft, #f8f9f9); display: flex; align-items: flex-start; justify-content: center; }
 .form-pane { padding: 16px 18px; background: #fff; border-left: 1px solid var(--line); overflow: auto; }
-@media (max-width: 1179px) { .purchase-shell { grid-template-columns: 220px 1fr; } .form-pane { display: none; } }
+/* Tablet: hide the document *preview* (least essential - the real file is still one click away via the
+   form pane's "Open the source document" link), not the validation form - Validate/Reject/Pay must stay
+   reachable without a third, unusably narrow column. */
+@media (max-width: 1179px) { .purchase-shell { grid-template-columns: 220px 1fr; } .doc-preview { display: none; } }
 
 /* ---- Banque & Caisse: accounts strip + transaction workspace. ---- */
 .accounts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
