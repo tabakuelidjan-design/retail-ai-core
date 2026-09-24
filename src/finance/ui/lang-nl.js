@@ -517,6 +517,11 @@
   // Bank & Cash / Treasury (views-workspace.js).
   Object.assign(messages, {
     'Justify': 'Verantwoorden', 'Justified': 'Verantwoord', 'Nothing to justify': 'Niets te verantwoorden', 'Transactions to justify': 'Te verantwoorden transacties',
+    'To justify': 'Te verantwoorden', 'Justified transactions': 'Verantwoord', 'Suggestion': 'Suggestie', 'Unresolved': 'Onopgelost',
+    'Select a transaction to see it here.': 'Selecteer een transactie om ze hier te bekijken.',
+    'This transaction is already justified.': 'Deze transactie is al verantwoord.',
+    'No match suggestion is available for this transaction yet.': 'Er is nog geen overeenkomstsuggestie beschikbaar voor deze transactie.',
+    'Label, amount, reference...': 'Omschrijving, bedrag, referentie...',
     // Server-provided (analytics.js's own English message id, translated here like every other key -
     // never hardcoded Dutch in the backend module itself).
     'Supplier invoices are stored as one total per document (net/VAT/gross) - there is no per-product line detail to break down.': 'Leveranciersfacturen worden opgeslagen als één totaal per document (netto/btw/bruto) - er is geen detail per lijn/product om uit te splitsen.',

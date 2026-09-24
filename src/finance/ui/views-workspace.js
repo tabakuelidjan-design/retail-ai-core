@@ -640,17 +640,15 @@ function treasuryCard(t) {
   card.appendChild(h('div', { class: 'hint' }, tt('Observed = bank balance / confirmed cash count. Expected = invoices and supplier invoices due. Assumed = excluded from the projection.')));
   return card;
 }
-function suggestionRow(s, currency, reload) {
-  const STATUS_TONE = { EXACT: 'ok', PROBABLE: 'ok', PARTIAL: 'warn', OVERPAYMENT: 'warn', AMBIGUOUS: 'warn', NO_MATCH: 'mute' };
-  const STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PARTIAL: 'Partial payment', OVERPAYMENT: 'Overpayment', AMBIGUOUS: 'Several candidates', NO_MATCH: 'No match' };
+// Shared match actions (Justify one candidate / choose among several / Ignore) - exactly the same real
+// POST /api/bank/transactions/:id/confirm|ignore calls used before, now feeding the ledger's detail pane
+// instead of a flat inline row.
+const TX_STATUS_TEXT = { NEW: 'Unresolved', MATCHED: 'Justified', IGNORED: 'Ignored' };
+const MATCH_STATUS_TONE = { EXACT: 'ok', PROBABLE: 'ok', PARTIAL: 'warn', OVERPAYMENT: 'warn', AMBIGUOUS: 'warn', NO_MATCH: 'mute' };
+const MATCH_STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PARTIAL: 'Partial payment', OVERPAYMENT: 'Overpayment', AMBIGUOUS: 'Several candidates', NO_MATCH: 'No match' };
+function matchActions(s, reload) {
   const t = s.transaction;
-  const row = h('div', { class: 'txrow' },
-    h('div', { class: 'txmain' }, h('span', { class: `chip ${t.amountCents >= 0 ? 'ok' : 'mute'}` }, t.amountCents >= 0 ? tt('IN') : tt('OUT')),
-      h('span', { class: 'dt' }, t.counterpartyName || tt('Unknown')), h('span', { class: 'ds' }, [t.date, t.reference].filter(Boolean).join('  ·  '))),
-    h('div', { class: 'txamt' }, h('strong', null, fmtMoney(t.amountCents, t.currency))),
-    h('div', null, h('span', { class: `chip ${STATUS_TONE[s.status] || 'mute'}` }, tt(STATUS_TEXT[s.status] || s.status))),
-    h('div', { class: 'txacts' }));
-  const acts = row.lastChild;
+  const acts = h('div', { class: 'actions' });
   const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast(tt('Justified'), 'ok'); reload(); } catch (e) { fail(e); } };
   if (s.candidates.length) {
     if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Justify')));
@@ -661,7 +659,7 @@ function suggestionRow(s, currency, reload) {
   // dismisses the suggestion - it does not let the merchant pick a different match, so labelling it as a
   // choice would promise something it does not do.
   acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
-  return row;
+  return acts;
 }
 async function viewBank() {
   const shell = h('div', { class: 'page-shell' });
@@ -696,13 +694,84 @@ async function viewBank() {
     cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
       h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
     box.appendChild(cashCard);
-    // Shown regardless of a live bank connection: a CSV import needs no connection at all, and its transactions still need reconciling.
-    const sugCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Transactions to justify')));
-    try {
-      const sug = (await api('GET', '/api/bank/suggestions')).rows;
-      sugCard.appendChild(sug.length ? h('div', { class: 'txlist' }, sug.map((s) => suggestionRow(s, treasury.currency, draw))) : h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', null, h('strong', null, tt('Nothing to justify')))));
-    } catch (e) { fail(e, sugCard); }
-    box.appendChild(sugCard);
+    // Real transaction ledger (index(4).html alignment) - shown regardless of a live bank connection (a CSV
+    // import needs no connection at all, and its transactions still need reconciling). Replaces the previous
+    // flat "suggestions only" list: every real transaction is browsable here, not only the unresolved ones.
+    const ledgerCard = h('div', { class: 'card workspace-card' });
+    box.appendChild(ledgerCard);
+    let ledgerTab = 'to_justify'; let ledgerText = ''; let selectedTxId = null; let periodFrom = null; let periodTo = null;
+    let allTx = []; let suggestionsById = new Map();
+    const ledgerTabs = h('div', { class: 'workspace-head' }, h('div', { class: 'tabs' }));
+    const ledgerToolbar = h('div', { class: 'workspace-toolbar' });
+    const ledgerBody = h('div', { class: 'bank-workspace' });
+    ledgerCard.appendChild(ledgerTabs); ledgerCard.appendChild(ledgerToolbar); ledgerCard.appendChild(ledgerBody);
+    const txList = h('div', { class: 'tx-list' }); const txDetail = h('aside', { class: 'tx-detail' }, h('div', { class: 'muted small' }, tt('Select a transaction to see it here.')));
+    ledgerBody.appendChild(txList); ledgerBody.appendChild(txDetail);
+    // 'Justified transactions' is its own key, not the shared 'Justified' used in single-transaction toasts -
+    // the tab label needs the plural ("Justifiees"), which would be the wrong grammar for a one-transaction toast.
+    const LEDGER_TABS = [['to_justify', 'To justify'], ['all', 'All'], ['in', 'Inflows'], ['out', 'Outflows'], ['matched', 'Justified transactions']];
+    function bucketOf(kind) {
+      if (kind === 'to_justify') return allTx.filter((t) => suggestionsById.has(t.id));
+      if (kind === 'in') return allTx.filter((t) => t.amountCents >= 0);
+      if (kind === 'out') return allTx.filter((t) => t.amountCents < 0);
+      if (kind === 'matched') return allTx.filter((t) => t.status === 'MATCHED');
+      return allTx;
+    }
+    function drawLedgerTabs() {
+      const row = ledgerTabs.firstChild; clear(row);
+      LEDGER_TABS.forEach(([v, l]) => row.appendChild(h('button', { type: 'button', class: ledgerTab === v ? 'active' : '', on: { click: () => { ledgerTab = v; selectedTxId = null; drawLedgerTabs(); drawList(); } } }, tt(l), h('span', null, String(bucketOf(v).length)))));
+    }
+    function selectTx(id) {
+      selectedTxId = id; drawList();
+      const t = allTx.find((x) => x.id === id); if (!t) return;
+      clear(txDetail);
+      const sug = suggestionsById.get(id);
+      txDetail.appendChild(h('div', { class: 'detail-head' }, h('div', null, h('h2', null, fmtMoney(t.amountCents, t.currency)), h('p', null, `${t.source ? tt(SOURCE_BADGE[t.source] || t.source) + ' · ' : ''}${t.date}`), h('p', null, t.counterpartyName || tt('Unknown')))));
+      txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Details')),
+        h('div', { class: 'kv' }, h('span', null, tt('Reference')), h('strong', null, t.reference || t.structuredReference || '—')),
+        h('div', { class: 'kv' }, h('span', null, tt('Status')), h('strong', null, tt(TX_STATUS_TEXT[t.status] || t.status)))));
+      if (sug) {
+        txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')),
+          h('div', { class: 'muted small', style: 'margin-bottom:8px' }, h('span', { class: `chip ${MATCH_STATUS_TONE[sug.status] || 'mute'}` }, tt(MATCH_STATUS_TEXT[sug.status] || sug.status))),
+          matchActions(sug, () => draw())));
+      } else if (t.status === 'MATCHED') {
+        txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('This transaction is already justified.'))));
+      } else {
+        txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('No match suggestion is available for this transaction yet.'))));
+      }
+    }
+    function drawList() {
+      clear(txList);
+      const s = ledgerText.trim().toLowerCase();
+      const rows = bucketOf(ledgerTab)
+        .filter((t) => !s || `${t.counterpartyName || ''} ${t.reference || ''}`.toLowerCase().includes(s))
+        .filter((t) => (!periodFrom || t.date >= periodFrom) && (!periodTo || t.date <= periodTo));
+      if (!rows.length) { txList.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 22)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
+      if (!selectedTxId && rows.length) selectedTxId = rows[0].id;
+      let lastDay = null;
+      rows.forEach((t) => {
+        if (t.date !== lastDay) { txList.appendChild(h('div', { class: 'day' }, t.date)); lastDay = t.date; }
+        txList.appendChild(h('div', { class: `tx ${t.id === selectedTxId ? 'selected' : ''}`, on: { click: () => selectTx(t.id) } },
+          h('div', null, h('strong', null, t.counterpartyName || tt('Unknown')), h('small', null, [t.reference, suggestionsById.has(t.id) ? tt('To justify') : tt(TX_STATUS_TEXT[t.status] || t.status)].filter(Boolean).join(' · '))),
+          h('div', { class: `amount ${t.amountCents >= 0 ? 'in' : ''}` }, `${t.amountCents >= 0 ? '+ ' : ''}${fmtMoney(t.amountCents, t.currency)}`)));
+      });
+    }
+    function loadLedger() {
+      Promise.all([api('GET', '/api/bank/transactions'), api('GET', '/api/bank/suggestions')]).then(([tx, sug]) => {
+        allTx = tx.rows.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        suggestionsById = new Map(sug.rows.map((s) => [s.transactionId, s]));
+        drawLedgerTabs(); drawList();
+        if (allTx.length) selectTx(selectedTxId && allTx.some((t) => t.id === selectedTxId) ? selectedTxId : bucketOf(ledgerTab)[0]?.id ?? allTx[0].id);
+      }).catch((e) => fail(e, txList));
+    }
+    const searchInput = h('input', { placeholder: tr('Label, amount, reference...'), on: { input: (e) => { ledgerText = e.target.value; drawList(); } } });
+    // Real, opt-in date-range filter (empty = no filter, so it never hides real transactions by a silent
+    // default period) - a genuine "Periode" control, not decorative.
+    const fromInput = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { periodFrom = e.target.value || null; drawList(); } } });
+    const toInput = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { periodTo = e.target.value || null; drawList(); } } });
+    ledgerToolbar.appendChild(h('label', { class: 'search-field' }, svgIcon('search', 14), searchInput));
+    ledgerToolbar.appendChild(h('div', { class: 'tools' }, fromInput, toInput));
+    loadLedger();
   }
   draw();
 }

@@ -543,6 +543,12 @@
   // Banque & Caisse / Trésorerie (views-workspace.js).
   Object.assign(messages, {
     'Justify': 'Justifier', 'Justified': 'Justifié', 'Nothing to justify': 'Rien à justifier', 'Transactions to justify': 'Transactions à justifier',
+    // Banque & Caisse: real transaction ledger (index(4).html alignment).
+    'To justify': 'À justifier', 'Justified transactions': 'Justifiées', 'Suggestion': 'Suggestion', 'Unresolved': 'Non résolue',
+    'Select a transaction to see it here.': 'Sélectionnez une transaction pour la voir ici.',
+    'This transaction is already justified.': 'Cette transaction est déjà justifiée.',
+    'No match suggestion is available for this transaction yet.': 'Aucune suggestion de rapprochement n\'est disponible pour cette transaction.',
+    'Label, amount, reference...': 'Libellé, montant, référence...',
     // Server-provided (analytics.js's own English message id, translated here like every other key -
     // never hardcoded French in the backend module itself).
     'Supplier invoices are stored as one total per document (net/VAT/gross) - there is no per-product line detail to break down.': 'Les factures fournisseurs sont enregistrées comme un seul total par document (HT/TVA/TVAC) - il n\'y a pas de détail par ligne/produit à décomposer.',
