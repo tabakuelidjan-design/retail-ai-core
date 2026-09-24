@@ -110,10 +110,13 @@ function activityRow(e) {
     MODIFY: () => tt('{0} returned to draft', doc), STATUS_CHANGE: () => tt('{0} status updated', doc),
   };
   const tone = { APPROVE_AND_ISSUE: 'ok', RECORD_PAYMENT: 'ok', CREATE_CREDIT_NOTE: 'warm', CANCEL: 'warm', REJECT: 'warm', REJECT_QUOTE: 'warm' }[e.action] || 'info';
+  // One icon per real event type (reference-matched: each activity gets its own icon in a coloured circle,
+  // not just an undifferentiated dot) - kept to the existing SVG icon set, never a Unicode glyph downgrade.
+  const ICON = { APPROVE_AND_ISSUE: 'doc', MARK_SENT: 'arrow', SEND_QUOTE: 'arrow', RECORD_PAYMENT: 'building', CREATE_CREDIT_NOTE: 'doc', ACCEPT_QUOTE: 'check', REJECT_QUOTE: 'alert', SUBMIT_FOR_APPROVAL: 'clock', CANCEL: 'alert', REJECT: 'alert', MODIFY: 'edit', STATUS_CHANGE: 'doc' };
   const text = (LABEL[e.action] || (() => tt('{0}: {1}', doc, e.action)))();
   const dt = e.at ? new Date(e.at) : null;
   const when = dt ? dt.toLocaleDateString(I18N.tag(), { day: 'numeric', month: 'short' }) + ' ' + dt.toLocaleTimeString(I18N.tag(), { hour: '2-digit', minute: '2-digit' }) : '';
-  return h('a', { class: 'activity-row', href: e.docId ? `#/doc/${e.docId}` : undefined }, h('span', { class: `activity-dot ${tone}` }), h('span', { class: 'activity-text' }, text), h('span', { class: 'activity-time' }, when));
+  return h('a', { class: 'activity-row', href: e.docId ? `#/doc/${e.docId}` : undefined }, h('span', { class: `activity-icon ${tone}` }, svgIcon(ICON[e.action] || 'doc', 15)), h('span', { class: 'activity-text' }, text), h('span', { class: 'activity-time' }, when));
 }
 /** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
 function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
@@ -206,19 +209,30 @@ function svgEl(tag, attrs, kids) {
 }
 /** Real treasury chart: monthly inflow/outflow bars + a running-total line, built from /api/overview/cashflow
  * rows only. Every number plotted is one already present in `rows`; nothing here interpolates or forecasts. */
-function treasuryChart(rows, cur) {
+// `opts` is optional and additive - every existing caller (the Tresorerie page) passes none and gets the exact
+// same output as before. `opts.zeroRatio`/`opts.gridLines` are only used by the homepage's own call, to bring
+// its chart's proportions (a tall Entrees region, a short Sorties dip, several faint horizontal rows) closer
+// to the approved reference, without changing the shared component's default behaviour anywhere else.
+function treasuryChart(rows, cur, opts = {}) {
   const W = 760, H = 230, mL = 44, mR = 8, mT = 8, mB = 22;
   const innerW = W - mL - mR; const n = Math.max(1, rows.length);
   const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
   const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
-  const zeroY = mT + (H - mT - mB) * 0.6;
+  const zeroY = mT + (H - mT - mB) * (opts.zeroRatio ?? 0.6);
   const scale = Math.min(zeroY - mT - 8, H - mB - zeroY - 8) / maxAbs;
   const xOf = (i) => mL + slot * i + slot / 2;
   const kids = [];
-  // grid: zero line + two faint reference lines
-  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
-  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT, y2: mT }));
-  kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: H - mB, y2: H - mB }));
+  if (!opts.evenGrid) {
+    // grid: zero line + two faint reference lines (unchanged default)
+    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
+    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT, y2: mT }));
+    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: H - mB, y2: H - mB }));
+  } else {
+    // Reference-matched: 3 faint rows at 25/50/75% of the plot height, plus the zero line - purely chart
+    // chrome (like graph paper behind the bars), never a data value, so this is not "inventing" anything.
+    for (const f of [0.25, 0.5, 0.75]) kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT + (H - mT - mB) * f, y2: mT + (H - mT - mB) * f }));
+    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
+  }
   kids.push(svgEl('text', { class: 'tc-axis', x: 4, y: zeroY + 4 }, [document.createTextNode('0')]));
   const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
   rows.forEach((r, i) => {
@@ -355,7 +369,7 @@ async function viewOverview() {
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
       // has actually been recorded yet.
       if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
-      else chartWrap.appendChild(treasuryChart(r.rows, r.currency));
+      else chartWrap.appendChild(treasuryChart(r.rows, r.currency, { zeroRatio: 0.76, evenGrid: true }));
       lastCashflowRows = r.rows;
       // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
       // chart above, just plotted small inside the KPI cards - see metric-grid, above.

@@ -488,8 +488,11 @@ h2 { margin-bottom: 14px; }
 /* ---- Recent activity: the real document trail, one calm timeline ---- */
 .activity { display: flex; flex-direction: column; }
 .activity-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid #f0f1f4; } .activity-row:last-child { border-bottom: 0; }
-.activity-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--ink-soft); flex: 0 0 auto; }
-.activity-dot.ok { background: var(--ok); } .activity-dot.warm { background: var(--warm); } .activity-dot.info { background: var(--info); }
+/* Reference-matched: a small coloured circle with the event's own icon, replacing the plain dot. */
+.activity-icon { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; flex: 0 0 auto; }
+.activity-icon.ok { background: color-mix(in srgb, var(--ok) 14%, #fff); color: var(--ok); }
+.activity-icon.warm { background: var(--warm-soft); color: var(--warm); }
+.activity-icon.info { background: color-mix(in srgb, var(--info) 12%, #fff); color: var(--info); }
 .activity-text { flex: 1; min-width: 0; font-size: 13.5px; } .activity-text strong { font-weight: 650; }
 .activity-time { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 
@@ -577,7 +580,7 @@ html, body { background: var(--bg); }
    (the dedicated Tresorerie page reuses the same function/classes and must not change - see viewTreasury()). */
 .home-chart .tc-bar-in { fill: color-mix(in srgb, var(--info) 20%, #fff); }
 .home-chart .tc-line { stroke: var(--warm); } .home-chart .tc-dot { fill: var(--warm); }
-.tc-legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
+.tc-legend { display: flex; justify-content: center; gap: 16px; font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
 .tc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .tc-swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .tc-tooltip { position: absolute; background: var(--accent); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; pointer-events: none; box-shadow: var(--shadow-card); min-width: 150px; z-index: 5; }

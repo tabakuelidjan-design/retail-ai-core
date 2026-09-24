@@ -329,7 +329,9 @@ export function createFinanceApp(deps) {
   // the KPIs above it - same lazy-card pattern as /api/overview/pack.
   on('GET', '/api/overview/activity', async (ctx) => {
     const { settings } = await servicesFor();
-    const events = await store.listEventsForMerchant({ merchantId, limit: 8 });
+    // Reference-matched compact list (this endpoint is only consumed by the homepage's Recent activity card):
+    // 5 most-recent real events, not fabricated - just a smaller slice of the same real event log.
+    const events = await store.listEventsForMerchant({ merchantId, limit: 5 });
     const docIds = [...new Set(events.map((e) => e.documentId).filter(Boolean))];
     const docs = new Map((await Promise.all(docIds.map((id) => store.getDocument(id).catch(() => null)))).filter(Boolean).map((d) => [d.id, d]));
     const m = (c) => money(c, settings.defaults.language);
