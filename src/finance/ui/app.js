@@ -485,7 +485,7 @@ async function viewOverview() {
     // over the real invoice list, replacing the previous spreadsheet-style table. The leading square is
     // decorative only (matches the reference's own markup, which has no selection logic behind it either) -
     // never a fake checkbox implying a bulk action that doesn't exist.
-    const invCard = h('div', { class: 'card' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Client invoices'), h('a', { href: '#/invoices', class: 'viewall' }, tt('See all'), ' →')));
+    const invCard = h('div', { class: 'card homeinv-card' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Client invoices'), h('a', { href: '#/invoices', class: 'viewall' }, tt('See all'), ' →')));
     const buckets = { open: invoiceRows.filter((r) => r.effectiveStatus !== 'OVERDUE' && r.effectiveStatus !== 'PAID' && r.effectiveStatus !== 'CREDITED' && r.effectiveStatus !== 'CANCELLED' && r.effectiveStatus !== 'DRAFT'), late: invoiceRows.filter((r) => r.effectiveStatus === 'OVERDUE'), paid: invoiceRows.filter((r) => r.effectiveStatus === 'PAID') };
     const tabs2 = h('div', { class: 'tabs2' });
     const listWrap = h('div', { class: 'homeinv-list' });
@@ -513,7 +513,7 @@ async function viewOverview() {
     const donutCard = h('div', { class: 'card donut-card' });
     const periodSel = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => loadBreakdown(e.target.value) } }, [['all', tt('All time')], ['month', tt('This month')]].map(([v, l]) => h('option', { value: v, selected: v === 'all' }, l)));
     donutCard.appendChild(h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, tt('Expense breakdown')), periodSel));
-    const donutBody = h('div', { class: 'muted small' }, 'Loading...');
+    const donutBody = h('div', { class: 'donut-body' }, h('div', { class: 'muted small' }, 'Loading...'));
     donutCard.appendChild(donutBody);
     const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
     // Always the same donut-dashboard structure (ring + centered total + legend on the right), even when

@@ -623,7 +623,9 @@ html, body { background: var(--bg); }
 /* Whole card is a flex column so the connect row always anchors at the bottom (margin-top:auto) regardless
    of whether the state above it is the populated bank list or the empty state - matches the reference's own
    fixed card rhythm instead of leaving a variable gap. */
-.bank-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+/* Extra bottom padding lifts the connect row a little off the card's bottom edge - it still anchors low via
+   margin-top:auto, just not glued flush to the last pixel, matching the reference's own finished-card rhythm. */
+.bank-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding-bottom: 24px; }
 .connect-row { height: 38px; border: 1px dashed var(--line-2); border-radius: 8px; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; flex: 0 0 auto; }
 .connect-row:hover { border-color: var(--warm); color: var(--warm); }
 /* Tight top-anchored icon/title/text, same card geometry as the populated state - not centred/padded like a
@@ -633,29 +635,30 @@ html, body { background: var(--bg); }
 .bank-empty strong { font-size: 14.5px; font-weight: 700; color: var(--ink); }
 
 /* ---- Client invoices: compact single-line rows (reference-matched), replacing the spreadsheet table ---- */
-.homeinv-list { display: flex; flex-direction: column; margin-top: 6px; }
-/* More room for the client name (it was truncating too eagerly), less for the fixed-format invoice number,
-   and the same neutral line colour as the rest of the design system (was a mismatched warm grey). */
-/* minmax(0, Nfr), not a bare Nfr: without it a flexible track's minimum is its own content's width, so the
-   longest column (the due/status pill, e.g. "Echeance dans 21 jours") was winning most of the row's width
-   and squeezing the client name down to a sliver regardless of the fr ratio. Tighter gap/font and a smaller
-   decorative checkbox/chevron reclaim the extra room this narrow (1fr-of-3.4) card needs to avoid truncating
-   the client name and invoice number, which are the two columns that must stay legible. */
-.homeinv-row { display: grid; grid-template-columns: 11px minmax(0,1.5fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,.65fr) 11px; gap: 6px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 11.5px; }
+/* The card is a flex column so a short real list (as few as one real invoice) centers within the available
+   height instead of sitting top-stuck with a large dead gap below it - never a fake extra row, just better
+   use of the space real content already has. */
+.homeinv-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.homeinv-list { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 2px; }
+/* More room for the client name, a slightly more compact pill, and a bit more visual presence overall
+   (padding/font) than the previous pass - the row should read as a deliberate dashboard row, not a leftover.
+   minmax(0, Nfr), not a bare Nfr: without it a flexible track's minimum is its own content's width, so the
+   longest column would win most of the row regardless of the fr ratio. */
+.homeinv-row { display: grid; grid-template-columns: 11px minmax(0,1.7fr) minmax(0,1.05fr) minmax(0,.95fr) minmax(0,.4fr) 11px; gap: 6px; align-items: center; padding: 13px 5px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px; }
 .homeinv-row:last-child { border-bottom: 0; } .homeinv-row:hover { background: color-mix(in srgb, var(--warm) 4%, transparent); }
-.homeinv-box { width: 11px; height: 11px; border: 1px solid var(--line-2); border-radius: 3px; flex: 0 0 auto; }
+.homeinv-box { width: 12px; height: 12px; border: 1px solid var(--line-2); border-radius: 3px; flex: 0 0 auto; }
 /* Shrinks the pill inside this one narrow column without touching the shared .chip rule used elsewhere. */
-.homeinv-pillwrap .chip { font-size: 9.5px; padding: 3px 6px; }
+.homeinv-pillwrap .chip { font-size: 8.5px; padding: 2px 5px; }
 .homeinv-client { font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .homeinv-number { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.homeinv-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.homeinv-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; white-space: nowrap; }
 /* Clips the (shared, unmodified) .chip if it's ever wider than this compact column - keeps the grid track's
    own width authoritative instead of letting a long pill string dictate it. */
 .homeinv-pillwrap { overflow: hidden; max-width: 100%; }
 .homeinv-chevron { color: var(--muted); text-align: center; }
 
 /* ---- Donut (supplier concentration) ---- */
-.donutwrap { display: flex; align-items: center; gap: 18px; }
+.donutwrap { display: flex; align-items: center; gap: 13px; }
 .donutlegend { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .donutlegend .dl-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .donutlegend .dl-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
@@ -783,8 +786,8 @@ html, body { background: var(--bg); }
    treatment already used for "emphasis" cards elsewhere, a bigger icon and a heavier CTA. */
 /* Reference-matched: same neutral border as its siblings, not a special accent tint. */
 /* Reference's bottom insight callout - real month-over-month change, links to Achats (the real source data). */
-.expense-insight { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 9px 10px; border-radius: 8px; background: var(--warm-soft); color: var(--ink-soft); font-size: 11px; text-decoration: none; }
-.expense-insight .eiico { width: 26px; height: 26px; border-radius: 7px; background: color-mix(in srgb, var(--warm) 16%, #fff); color: var(--warm); display: grid; place-items: center; flex: 0 0 auto; }
+.expense-insight { display: flex; align-items: center; gap: 7px; margin-top: 10px; padding: 7px 9px; border-radius: 8px; background: var(--warm-soft); color: var(--ink-soft); font-size: 10.5px; text-decoration: none; }
+.expense-insight .eiico { width: 22px; height: 22px; border-radius: 6px; background: color-mix(in srgb, var(--warm) 16%, #fff); color: var(--warm); display: grid; place-items: center; flex: 0 0 auto; }
 .expense-insight span:nth-child(2) { flex: 1; }
 
 /* #6: chart legibility - larger axis/legend text, tighter plotting margins so real bars aren't lost
@@ -808,8 +811,11 @@ html, body { background: var(--bg); }
    wider area instead of two mismatched leftovers next to a bigger single-column card. */
 @media (min-width: 900px) { .dash-bottom { grid-template-columns: 1fr 1.5fr 1.15fr; } }
 @media (min-width: 1300px) { .dash-bottom { grid-template-columns: 1fr 1.6fr 1.15fr; } }
-.donut-card { display: flex; flex-direction: column; flex: 1; }
-.donut-card .donutwrap, .donut-card .empty { flex: 1; align-items: center; }
+.donut-card { display: flex; flex-direction: column; flex: 1; height: 100%; box-sizing: border-box; }
+/* .donut-body is the actual direct flex child (donutwrap/empty used to be nested one level deeper, inside a
+   plain div, where flex:1 had no effect) - centering it vertically balances the donut+legend+insight group
+   in the leftover space instead of leaving it stranded right under the header. */
+.donut-body { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .rb-col { flex: 1; }
 
 /* #5: a touch more visual presence for the invoice-status bar without turning it into a widget -
