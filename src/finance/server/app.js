@@ -338,6 +338,31 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, { rows: events.map((e) => { const d = docs.get(e.documentId); return { action: e.action, at: e.at, docType: d?.type ?? null, docNumber: d?.number ?? null, docId: e.documentId, amount: e.detail?.amountCents != null ? m(e.detail.amountCents) : null, currency: d?.currency ?? settings.defaults.currency }; }) });
   });
 
+  // Dashboard "Repartition des depenses" donut: real supplier-invoice totals grouped by supplier (there is no
+  // expense-category field anywhere in this data model, so a category breakdown would have to be invented -
+  // supplier concentration is the closest honest substitute, and the legend shows real supplier names, never
+  // invented category labels). `period` is real and functional: 'month' scopes to the current calendar month,
+  // anything else (default) is all-time - both filter the exact same real accepted supplier invoices, nothing
+  // estimated or interpolated for a period with no data.
+  on('GET', '/api/overview/expense-breakdown', async (ctx) => {
+    const { settings } = await servicesFor();
+    const period = ctx.url.searchParams.get('period') === 'month' ? 'month' : 'all';
+    const month = clock.today().slice(0, 7);
+    const m = (c) => money(c, settings.defaults.language);
+    const supplierInvoices = await store.listSupplierInvoices(merchantId).catch(() => []);
+    const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status) && (period === 'all' || s.issueDate?.startsWith(month)));
+    const bySupplier = new Map();
+    for (const s of accepted) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + s.grossCents);
+    const total = [...bySupplier.values()].reduce((a, c) => a + c, 0);
+    const suppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, cents]) => ({ name, cents, amount: m(cents), sharePct: total > 0 ? Math.round((cents / total) * 100) : 0 }));
+    // Real month-over-month change on the total, same definition as the KPI strip's own trend figures.
+    const lastMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+    const thisMonthTotal = accepted.filter((s) => period === 'month' || s.issueDate?.startsWith(month)).reduce((a, s) => a + s.grossCents, 0);
+    const lastMonthTotal = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status) && s.issueDate?.startsWith(lastMonth)).reduce((a, s) => a + s.grossCents, 0);
+    const changePct = lastMonthTotal > 0 ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100) : thisMonthTotal > 0 ? 100 : 0;
+    json(ctx.res, 200, { period, suppliers, total, totalDisplay: m(total), currency: settings.defaults.currency, changePct });
+  });
+
   // Dashboard treasury chart: real monthly totals of client payments received (inflow) and supplier invoices
   // paid (outflow), with a running net total. This is documented cash MOVEMENT, not the literal bank balance -
   // the two only match once a bank account is actually connected and reconciled. Never a forecast: a month

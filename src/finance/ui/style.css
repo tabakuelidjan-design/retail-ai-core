@@ -609,13 +609,31 @@ html, body { background: var(--bg); }
 .tab2.on { color: var(--ink); border-color: var(--warm); }
 .tab2 .pc { margin-left: 5px; font-size: 11px; background: var(--bg); border-radius: 999px; padding: 1px 6px; }
 
-/* ---- Bank accounts list ---- */
-.bankrow { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid #f1ece2; } .bankrow:last-child { border-bottom: 0; }
-.bankmark { width: 34px; height: 34px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--ink-soft); flex: 0 0 auto; }
-.bankmeta { flex: 1; min-width: 0; } .bankmeta .bname2 { font-weight: 600; font-size: 13.5px; } .bankmeta .biban { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.bankbal { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+/* ---- Bank accounts list (reference-matched: bigger logo badge, larger serif balance) ---- */
+.bank-list { display: flex; flex-direction: column; }
+.bankrow { display: flex; align-items: center; gap: 12px; padding: 13px 4px; border-bottom: 1px solid #f1ece2; } .bankrow:last-child { border-bottom: 0; }
+.bankmark { width: 44px; height: 44px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, #fff); display: grid; place-items: center; font-weight: 800; font-size: 12px; letter-spacing: .01em; color: var(--accent); flex: 0 0 auto; }
+.bankmeta { flex: 1; min-width: 0; } .bankmeta .bname2 { font-weight: 650; font-size: 13px; color: var(--ink); } .bankmeta .biban { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.bankbal-col { text-align: right; flex: 0 0 auto; }
+.bankbal { font-family: var(--serif); font-variant-numeric: tabular-nums; font-weight: 500; font-size: 17px; color: var(--ink); }
 .ghostrow { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1.5px dashed var(--line); border-radius: 10px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 13.5px; }
 .ghostrow:hover { border-color: var(--warm); color: var(--warm); }
+/* Reference's outlined "+ Connecter" placeholder row - a real button (routes to #/bank), just styled as a
+   subtle secondary affordance instead of a loud solid CTA, matching the reference's own visual weight. */
+.connect-row { height: 38px; border: 1px dashed var(--line-2); border-radius: 8px; margin-top: 9px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; }
+.connect-row:hover { border-color: var(--warm); color: var(--warm); }
+.bank-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 22px 4px; }
+.bank-empty .eicon { width: 38px; height: 38px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 6px; }
+
+/* ---- Client invoices: compact single-line rows (reference-matched), replacing the spreadsheet table ---- */
+.homeinv-list { display: flex; flex-direction: column; margin-top: 4px; }
+.homeinv-row { display: grid; grid-template-columns: 14px 1.3fr .95fr .85fr 1fr 14px; gap: 9px; align-items: center; padding: 10px 4px; border-bottom: 1px solid #f1ece2; cursor: pointer; font-size: 12.5px; }
+.homeinv-row:last-child { border-bottom: 0; } .homeinv-row:hover { background: color-mix(in srgb, var(--warm) 4%, transparent); }
+.homeinv-box { width: 13px; height: 13px; border: 1px solid var(--line-2); border-radius: 3px; }
+.homeinv-client { font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.homeinv-number { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.homeinv-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.homeinv-chevron { color: var(--muted); text-align: center; }
 
 /* ---- Donut (supplier concentration) ---- */
 .donutwrap { display: flex; align-items: center; gap: 18px; }
@@ -739,10 +757,14 @@ html, body { background: var(--bg); }
 
 /* #5: Bank Accounts is a strategically important action, not a secondary widget - same accent
    treatment already used for "emphasis" cards elsewhere, a bigger icon and a heavier CTA. */
-.bank-card { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
-.bank-card .empty { padding: 18px 4px; gap: 16px; }
-.bank-card .empty strong { font-size: 15.5px; }
-.bank-card > .btn.primary { padding: 11px 16px; font-size: 14px; }
+/* Reference-matched: same neutral border as its siblings, not a special accent tint. */
+/* Donut card empty/single-supplier states, same premium card geometry as the populated donut. */
+.donut-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 22px 4px; }
+.donut-empty .eicon { width: 38px; height: 38px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 6px; }
+/* Reference's bottom insight callout - real month-over-month change, links to Achats (the real source data). */
+.expense-insight { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 9px 10px; border-radius: 8px; background: var(--warm-soft); color: var(--ink-soft); font-size: 11px; text-decoration: none; }
+.expense-insight .eiico { width: 26px; height: 26px; border-radius: 7px; background: color-mix(in srgb, var(--warm) 16%, #fff); color: var(--warm); display: grid; place-items: center; flex: 0 0 auto; }
+.expense-insight span:nth-child(2) { flex: 1; }
 
 /* #6: chart legibility - larger axis/legend text, tighter plotting margins so real bars aren't lost
    in dead canvas, slightly wider bars and bigger hover targets. */

@@ -452,36 +452,20 @@ async function viewOverview() {
     invoicePreviewNode(ctaSample, cur).then((node) => { clear(previewSlot); previewSlot.appendChild(node); }).catch(() => { clear(previewSlot); previewSlot.appendChild(h('div', { class: 'muted small' }, 'Preview unavailable.')); });
     box.appendChild(mid);
 
-    // ---- Bottom row (bank accounts / invoices table / supplier concentration) ----
+    // ---- Bottom row (bank accounts / invoices list / expense breakdown) ----
     const bottom = h('div', { class: 'content-grid-bottom' });
-    // Client invoices: tabbed table (Due / Overdue / Paid) over the real invoice list.
-    const invCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Client invoices'), h('a', { href: '#/invoices', class: 'viewall' }, tt('See all'), ' →')));
-    const buckets = { open: invoiceRows.filter((r) => r.effectiveStatus !== 'OVERDUE' && r.effectiveStatus !== 'PAID' && r.effectiveStatus !== 'CREDITED' && r.effectiveStatus !== 'CANCELLED' && r.effectiveStatus !== 'DRAFT'), late: invoiceRows.filter((r) => r.effectiveStatus === 'OVERDUE'), paid: invoiceRows.filter((r) => r.effectiveStatus === 'PAID') };
-    const tabs2 = h('div', { class: 'tabs2' });
-    const tableWrap = h('div');
-    let activeTab = 'open';
-    const drawInvTable = () => {
-      clear(tabs2); clear(tableWrap);
-      [['open', 'Due'], ['late', 'Overdue'], ['paid', 'Paid']].forEach(([k, l]) => tabs2.appendChild(h('button', { type: 'button', class: `tab2 ${activeTab === k ? 'on' : ''}`, on: { click: () => { activeTab = k; drawInvTable(); } } }, tt(l), h('span', { class: 'pc' }, String(buckets[k].length)))));
-      const rows = buckets[activeTab].slice(0, 6);
-      if (!rows.length) { tableWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 20)), h('div', { class: 'muted small' }, 'Nothing here.'))); return; }
-      tableWrap.appendChild(h('table', { class: 'fintable' }, h('tr', null, [tt('Client'), tt('Invoice no.'), tt('Amount'), tt('Due date'), tt('Status')].map((x, i) => h('th', { class: i === 2 ? 'num' : '' }, x))),
-        rows.map((r) => h('tr', { class: 'click', on: { click: () => { location.hash = `#/doc/${r.id}`; } } }, h('td', { class: 'fname' }, r.customer), h('td', null, r.number || tt('(draft)')), h('td', { class: 'num' }, `${r.gross} ${cur}`), h('td', null, r.dueDate || '—'), h('td', null, badge(r.effectiveStatus))))));
-    };
-    drawInvTable();
-    invCard.appendChild(tabs2); invCard.appendChild(tableWrap);
-    bottom.appendChild(invCard);
 
-    const rightBottom = h('div', { class: 'rb-col', style: 'display:flex;flex-direction:column;gap:16px' });
-    // #1: Bank Accounts as a first-class component - name/account, balance, last sync (the balance's own
-    // `asOf`, already real per-account data), and latest transactions from the existing, already-used
-    // /api/bank/transactions endpoint (fetched lazily, only when an account is actually connected).
-    const bankCard = h('div', { class: 'card bank-card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Bank accounts'), h('a', { href: '#/bank', class: 'viewall' }, tt('See all'), ' →')));
+    // #1: Bank accounts - real per-account balance/IBAN/last-sync from /api/treasury, real latest transactions
+    // from /api/bank/transactions (fetched lazily, only when an account is actually connected). No invented
+    // month-over-month percentage: there is no such field in this data model, so the reference's "+6%" line is
+    // replaced by the account's own real last-sync date instead of a fabricated number.
+    const bankCard = h('div', { class: 'card bank-card' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Bank accounts'), h('a', { href: '#/bank', class: 'viewall' }, tt('See all'), ' →')));
     if (treasury?.accounts?.length) {
-      bankCard.appendChild(h('div', null, treasury.accounts.map((a) => h('div', { class: 'bankrow' },
-        h('span', { class: 'bankmark' }, (treasury.provider || 'B')[0]),
-        h('div', { class: 'bankmeta' }, h('div', { class: 'bname2' }, treasury.provider || tt('Connected account')), h('div', { class: 'biban' }, a.ibanMasked || ''), a.asOf ? h('div', { class: 'blastsync' }, tt('Last sync: {0}', a.asOf)) : null),
-        h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`)))));
+      const initials = (treasury.provider || 'B').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'B';
+      bankCard.appendChild(h('div', { class: 'bank-list' }, treasury.accounts.map((a) => h('div', { class: 'bankrow' },
+        h('span', { class: 'bankmark' }, initials),
+        h('div', { class: 'bankmeta' }, h('div', { class: 'bname2' }, treasury.provider || tt('Connected account')), h('div', { class: 'biban' }, a.ibanMasked || '')),
+        h('div', { class: 'bankbal-col' }, h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`), a.asOf ? h('div', { class: 'blastsync' }, tt('Last sync: {0}', a.asOf)) : null)))));
       const txWrap = h('div', { class: 'bank-tx' });
       bankCard.appendChild(txWrap);
       api('GET', '/api/bank/transactions').then((r) => {
@@ -492,31 +476,75 @@ async function viewOverview() {
         txWrap.appendChild(h('div', null, rows.map((t) => h('div', { class: 'txmini' }, h('span', { class: 'txmini-c' }, t.counterpartyName || t.reference || tt('(no counterparty)')), h('span', { class: 'txmini-d' }, t.date), h('span', { class: `txmini-a ${t.amountCents < 0 ? 'bad' : 'ok'}` }, fmtMoney(t.amountCents, t.currency))))));
       }).catch(() => {});
     } else {
-      // Clean empty state with one clear action - never a raw dash for something that simply isn't set up yet.
-      bankCard.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small', style: 'margin-top:2px' }, tt('Read-only: no payment can ever be initiated.')))));
+      // Same card geometry/spacing as the connected state (never a bare line of text) - just no invented balance.
+      bankCard.appendChild(h('div', { class: 'bank-empty' }, h('span', { class: 'eicon' }, svgIcon('building', 22)), h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small' }, tt('Read-only: no payment can ever be initiated.'))));
     }
-    bankCard.appendChild(h('button', { class: 'btn primary', style: 'margin-top:10px;width:100%;justify-content:center', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect bank')));
-    rightBottom.appendChild(bankCard);
+    bankCard.appendChild(h('button', { class: 'connect-row', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect bank')));
 
-    // #6: supplier concentration - real (no expense-category field exists anywhere in this data model, so
-    // this deliberately does not claim to be a category breakdown). A single supplier always renders as a
-    // meaningless 100% ring, so that case gets a plain-text fallback instead of a fake-looking chart.
-    const donutCard = h('div', { class: 'card donut-card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Breakdown by supplier')));
-    if (o.topSuppliers.length >= 2) {
-      const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
-      let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
-      const circ = 2 * Math.PI * R;
-      const arcs = o.topSuppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
-      const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
-      donutCard.appendChild(h('div', { class: 'donutwrap' },
-        h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, fmtMoney(o.supplierTotalCents, cur)), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
-        h('div', { class: 'donutlegend' }, o.topSuppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`))))));
-    } else if (o.topSuppliers.length === 1) {
-      const s = o.topSuppliers[0];
-      donutCard.appendChild(h('div', { class: 'empty' }, h('div', null, h('strong', null, s.name), h('div', { class: 'muted small', style: 'margin-top:2px' }, tt('{0} - your only supplier so far. A breakdown becomes useful once you have more than one.', `${s.amount} ${cur}`)))));
-    } else {
-      donutCard.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, 'No supplier invoices yet.')));
-    }
+    // #2: Client invoices - compact single-line rows (client / number / amount / due-status pill / chevron)
+    // over the real invoice list, replacing the previous spreadsheet-style table. The leading square is
+    // decorative only (matches the reference's own markup, which has no selection logic behind it either) -
+    // never a fake checkbox implying a bulk action that doesn't exist.
+    const invCard = h('div', { class: 'card' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Client invoices'), h('a', { href: '#/invoices', class: 'viewall' }, tt('See all'), ' →')));
+    const buckets = { open: invoiceRows.filter((r) => r.effectiveStatus !== 'OVERDUE' && r.effectiveStatus !== 'PAID' && r.effectiveStatus !== 'CREDITED' && r.effectiveStatus !== 'CANCELLED' && r.effectiveStatus !== 'DRAFT'), late: invoiceRows.filter((r) => r.effectiveStatus === 'OVERDUE'), paid: invoiceRows.filter((r) => r.effectiveStatus === 'PAID') };
+    const tabs2 = h('div', { class: 'tabs2' });
+    const listWrap = h('div', { class: 'homeinv-list' });
+    let activeTab = 'open';
+    const drawInvList = () => {
+      clear(tabs2); clear(listWrap);
+      [['open', 'Due'], ['late', 'Overdue'], ['paid', 'Paid']].forEach(([k, l]) => tabs2.appendChild(h('button', { type: 'button', class: `tab2 ${activeTab === k ? 'on' : ''}`, on: { click: () => { activeTab = k; drawInvList(); } } }, tt(l), h('span', { class: 'pc' }, String(buckets[k].length)))));
+      const rows = buckets[activeTab].slice(0, 5);
+      if (!rows.length) { listWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon ok' }, svgIcon('check', 20)), h('div', { class: 'muted small' }, 'Nothing here.'))); return; }
+      listWrap.appendChild(h('div', null, rows.map((r) => h('div', { class: 'homeinv-row', on: { click: () => { location.hash = `#/doc/${r.id}`; } } },
+        h('span', { class: 'homeinv-box' }),
+        h('strong', { class: 'homeinv-client' }, r.customer),
+        h('span', { class: 'homeinv-number' }, r.number || tt('(draft)')),
+        h('span', { class: 'homeinv-amount' }, `${r.gross} ${cur}`),
+        activeTab === 'paid' ? h('span', { class: 'chip ok' }, tt('Paid')) : (dueChip(r.dueDate, r.remainingCents) || h('span')),
+        h('span', { class: 'homeinv-chevron' }, '›')))));
+    };
+    drawInvList();
+    invCard.appendChild(tabs2); invCard.appendChild(listWrap);
+
+    // #3: Expense breakdown ("Repartition des depenses") - real supplier-invoice totals grouped by supplier
+    // (no expense-category field exists anywhere in this data model, so a category breakdown would have to be
+    // invented; the legend shows real supplier company names, never invented category labels like "Marketing").
+    // The period selector is real and functional (GET /api/overview/expense-breakdown?period=), not decorative.
+    const donutCard = h('div', { class: 'card donut-card' });
+    const periodSel = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => loadBreakdown(e.target.value) } }, [['all', tt('All time')], ['month', tt('This month')]].map(([v, l]) => h('option', { value: v, selected: v === 'all' }, l)));
+    donutCard.appendChild(h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, tt('Expense breakdown')), periodSel));
+    const donutBody = h('div', { class: 'muted small' }, 'Loading...');
+    donutCard.appendChild(donutBody);
+    const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
+    const renderBreakdown = (r) => {
+      clear(donutBody);
+      if (r.suppliers.length >= 2) {
+        let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
+        const circ = 2 * Math.PI * R;
+        const arcs = r.suppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
+        const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
+        donutBody.appendChild(h('div', { class: 'donutwrap' },
+          h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, r.totalDisplay), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
+          h('div', { class: 'donutlegend' }, r.suppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`))))));
+        // Real month-over-month change on the total, same definition as the KPI strip's own trend figures -
+        // clicking it opens Achats, where the underlying supplier invoices live.
+        if (r.changePct !== 0) {
+          const down = r.changePct < 0;
+          donutBody.appendChild(h('a', { class: 'expense-insight', href: '#/purchases' },
+            h('span', { class: 'eiico' }, svgIcon('coins', 16)),
+            h('span', null, down ? tt('Your expenses are down {0}% from last month.', Math.abs(r.changePct)) : tt('Your expenses are up {0}% from last month.', r.changePct)),
+            h('span', { class: 'muted' }, '›')));
+        }
+      } else if (r.suppliers.length === 1) {
+        const s = r.suppliers[0];
+        donutBody.appendChild(h('div', { class: 'donut-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 22)), h('strong', null, s.name), h('div', { class: 'muted small' }, tt('{0} - your only supplier so far. A breakdown becomes useful once you have more than one.', `${s.amount} ${cur}`))));
+      } else {
+        donutBody.appendChild(h('div', { class: 'donut-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 22)), h('strong', null, tt('No supplier invoices yet.')), h('div', { class: 'muted small' }, tt('A breakdown will appear here once expenses are recorded.'))));
+      }
+    };
+    const loadBreakdown = (period) => api('GET', `/api/overview/expense-breakdown?period=${period}`).then(renderBreakdown).catch(() => { clear(donutBody); donutBody.appendChild(h('div', { class: 'muted small' }, 'Breakdown unavailable.')); });
+    loadBreakdown('all');
+
     bottom.appendChild(bankCard); bottom.appendChild(invCard); bottom.appendChild(donutCard);
     box.appendChild(bottom);
   } catch (e) { fail(e, box); }

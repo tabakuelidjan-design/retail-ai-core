@@ -145,6 +145,10 @@
     'Due dates': 'Échéances', 'Nothing overdue.': 'Rien en retard.', 'Upcoming': 'À venir', 'Nothing due soon.': 'Rien à venir prochainement.',
     'Last sync: {0}': 'Dernière synchro : {0}', 'Latest transactions': 'Dernières transactions', '(no counterparty)': '(sans contrepartie)', 'Connect bank': 'Connecter une banque',
     '{0} - your only supplier so far. A breakdown becomes useful once you have more than one.': '{0} - votre seul fournisseur pour l\'instant. Une répartition devient utile à partir de deux fournisseurs.',
+    // Homepage "Repartition des depenses" card (real supplier-invoice totals, see /api/overview/expense-breakdown).
+    'Expense breakdown': 'Répartition des dépenses', 'All time': 'Depuis le début', 'A breakdown will appear here once expenses are recorded.': 'Une répartition apparaîtra ici une fois des dépenses enregistrées.',
+    'Your expenses are down {0}% from last month.': 'Vos dépenses sont en baisse de {0} % par rapport au mois dernier.', 'Your expenses are up {0}% from last month.': 'Vos dépenses sont en hausse de {0} % par rapport au mois dernier.',
+    'Breakdown unavailable.': 'Répartition indisponible.',
     'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.': 'LIÉ : cette facture documente une vente boutique/caisse existante. Elle ne crée pas de chiffre d\'affaires supplémentaire.',
     'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.': 'AUTONOME : il s\'agit d\'une nouvelle vente B2B en dehors de la boutique. Ce chiffre d\'affaires s\'ajoute au reste.',
     'Returned to draft': 'Remis en brouillon', 'Reject': 'Refuser', 'The draft will be cancelled. No number is used.': 'Le brouillon sera annulé. Aucun numéro n\'est utilisé.', 'Not ready to issue:': 'Pas prêt à être émis :',
