@@ -696,7 +696,9 @@ export function createFinanceApp(deps) {
   on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('GET', '/api/treasury', async (ctx) => {
-    const { settings } = await servicesFor(); const bank = await bankFor(); const t = await bank.treasury({ currency: settings.defaults.currency });
+    const { settings } = await servicesFor(); const bank = await bankFor();
+    const horizonDays = [30, 60, 90].includes(Number(ctx.url.searchParams.get('horizon'))) ? Number(ctx.url.searchParams.get('horizon')) : 7;
+    const t = await bank.treasury({ currency: settings.defaults.currency, horizonDays });
     const m = (c) => (c == null ? null : money(c, settings.defaults.language));
     // Per-account balances for the dashboard's "Comptes bancaires" list - real rows from fin_bank_balances,
     // never fabricated placeholder accounts. Empty when nothing is connected (the UI shows a proper empty state).

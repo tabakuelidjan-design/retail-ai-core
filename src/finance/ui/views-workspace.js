@@ -817,42 +817,68 @@ async function viewBank() {
 
 // ---------- Trésorerie: its own page, separate from Banque & Caisse - same real /api/treasury +
 // /api/overview/cashflow data the combined page used to show, split out per the mandate's own architecture. ----------
+const TREASURY_HORIZONS = [[30, '30 days'], [60, '60 days'], [90, '90 days']];
 async function viewTreasury() {
+  let horizon = 30;
   const shell = h('div', { class: 'page-shell' });
   layout('#/treasury', shell);
-  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
+  const hzRow = h('div', { class: 'tabsrow' });
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.'))), hzRow));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
-  box.appendChild(h('div', { class: 'treasury-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })))));
-  try {
-    const [treasury, cf] = await Promise.all([api('GET', '/api/treasury'), api('GET', '/api/overview/cashflow?months=12')]);
-    clear(box);
-    const tmetric = (label, value, cls) => h('div', { class: `tmetric ${cls || ''}` }, h('span', null, label), h('strong', null, value ?? '—'));
-    const withCurTreasury = (v) => (v == null ? null : `${v} ${treasury.currency}`);
-    box.appendChild(h('div', { class: 'treasury-grid' },
-      tmetric(tt('Available today'), withCurTreasury(treasury.display.liquid), 'main'),
-      tmetric(tt('Receivable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.incoming)),
-      tmetric(tt('Payable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.outgoing)),
-      tmetric(tt('Projection'), withCurTreasury(treasury.display.projection))));
-    if (treasury.warnings?.length) box.appendChild(h('div', { class: 'banner warn small' }, treasury.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
-    const workspace = h('div', { class: 'card treasury-workspace' }); box.appendChild(workspace);
-    const chartWrap = h('div', { class: 'tchart-wrap' },
-      h('div', { class: 'section-head' }, h('div', null, h('h3', { class: 'section-title' }, 'Treasury position'), h('div', { class: 'section-sub' }, tt('Realised documented balance, last 12 months')))));
-    chartWrap.appendChild(cf.hasActivity ? treasuryChart(cf.rows, cf.currency) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
-    const projection = h('div', { class: 'projection' }, h('h3', { class: 'section-title', style: 'font-size:16px' }, tt('Projection')));
-    const proj = (label, note, amount, cls) => h('div', { class: 'proj' }, h('strong', null, label), h('span', null, h('em', null, note), h('b', { class: cls }, amount)));
+  const metricsRow = h('div', { class: 'treasury-grid' }); const warnBox = h('div', null); const workspace = h('div', { class: 'card treasury-workspace' });
+  metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
+  box.appendChild(metricsRow); box.appendChild(warnBox); box.appendChild(workspace);
+
+  function drawHzRow() {
+    clear(hzRow);
+    TREASURY_HORIZONS.forEach(([days, label]) => hzRow.appendChild(h('button', { type: 'button', class: `tab2 ${horizon === days ? 'on' : ''}`, on: { click: () => { if (horizon === days) return; horizon = days; drawHzRow(); loadHorizon(); } } }, tt(label))));
+  }
+  drawHzRow();
+
+  const chartWrap = h('div', { class: 'tchart-wrap' },
+    h('div', { class: 'section-head' }, h('div', null, h('h3', { class: 'section-title' }, 'Treasury position'), h('div', { class: 'section-sub' }, tt('Realised documented balance, last 12 months')))));
+  const projection = h('div', { class: 'projection' });
+  workspace.appendChild(chartWrap); workspace.appendChild(projection);
+
+  async function loadHorizon() {
+    metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
+    clear(warnBox);
     try {
-      const [rec, purchases] = await Promise.all([api('GET', '/api/receivables'), api('GET', '/api/inbox?scope=purchases')]);
-      const toPay = purchases.rows.filter((r) => r.status === 'TO_PAY');
-      const toPayCents = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
-      const cur = treasury.currency;
-      projection.appendChild(proj(tt('Expected customer invoices'), tt('{0} document(s)', rec.due_soon.count + rec.overdue.count), `+ ${rec.due_soon.outstanding}`, 'in'));
-      projection.appendChild(proj(tt('Supplier invoices to pay'), tt('{0} document(s)', toPay.length), `− ${fmtMoney(toPayCents, cur)}`, 'out'));
-      if (treasury.assumed?.overdueReceivablesCents) projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(treasury.assumed.overdueReceivablesCents, cur))));
-      // VAT is deliberately not provisioned here: this product has no running VAT-due estimate outside the
-      // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
-      // parallel VAT figure the mandate explicitly asks not to invent.
-      projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
-    } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
-    workspace.appendChild(chartWrap); workspace.appendChild(projection);
-  } catch (e) { fail(e, box); }
+      const treasury = await api('GET', `/api/treasury?horizon=${horizon}`);
+      const tmetric = (label, value, cls) => h('div', { class: `tmetric ${cls || ''}` }, h('span', null, label), h('strong', null, value ?? '—'));
+      const withCurTreasury = (v) => (v == null ? null : `${v} ${treasury.currency}`);
+      metricsRow.replaceChildren(
+        tmetric(tt('Available today'), withCurTreasury(treasury.display.liquid), 'main'),
+        tmetric(tt('Receivable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.incoming)),
+        tmetric(tt('Payable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.outgoing)),
+        tmetric(tt('Projection'), withCurTreasury(treasury.display.projection)));
+      if (treasury.warnings?.length) warnBox.appendChild(h('div', { class: 'banner warn small' }, treasury.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
+      clear(projection);
+      projection.appendChild(h('h3', { class: 'section-title', style: 'font-size:16px' }, tt('Projection')));
+      const proj = (label, note, amount, cls) => h('div', { class: 'proj' }, h('strong', null, label), h('span', null, h('em', null, note), h('b', { class: cls }, amount)));
+      try {
+        // Both figures come straight from /api/treasury's own `expected` block, which buildTreasury() already
+        // scopes to the selected horizonDays server-side - not a separate, fixed-window fetch. This is what
+        // makes the projection panel actually move when the 30/60/90-day toggle changes, instead of always
+        // showing the same fixed "due soon" window regardless of the selected horizon.
+        const cur = treasury.currency;
+        projection.appendChild(proj(tt('Expected customer invoices'), tt('{0} document(s)', treasury.expected.incomingCount), `+ ${treasury.display.incoming ?? fmtMoney(0, cur)}`, 'in'));
+        projection.appendChild(proj(tt('Supplier invoices to pay'), tt('{0} document(s)', treasury.expected.outgoingCount), `− ${treasury.display.outgoing ?? fmtMoney(0, cur)}`, 'out'));
+        if (treasury.assumed?.overdueReceivablesCents) projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(treasury.assumed.overdueReceivablesCents, cur))));
+        // VAT is deliberately not provisioned here: this product has no running VAT-due estimate outside the
+        // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
+        // parallel VAT figure the mandate explicitly asks not to invent.
+        projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
+      } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
+    } catch (e) { fail(e, metricsRow); }
+  }
+
+  // The 12-month realised-flow chart is deliberately independent of the horizon toggle: it always shows the
+  // same real, already-closed months (from /api/overview/cashflow), never a projection - so it is fetched
+  // once here and never re-fetched when the horizon selector changes.
+  try {
+    const cf = await api('GET', '/api/overview/cashflow?months=12');
+    chartWrap.appendChild(cf.hasActivity ? treasuryChart(cf.rows, cf.currency) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
+  } catch (e) { chartWrap.appendChild(h('div', { class: 'muted small' }, tt('Chart unavailable.'))); }
+  await loadHorizon();
 }
