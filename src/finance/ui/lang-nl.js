@@ -131,7 +131,7 @@
     '{0} - your only supplier so far. A breakdown becomes useful once you have more than one.': '{0} - vooralsnog uw enige leverancier. Een verdeling wordt nuttig zodra u er meer dan één heeft.',
     'Expense breakdown': 'Verdeling van uitgaven', 'All time': 'Sinds het begin', 'A breakdown will appear here once expenses are recorded.': 'Er verschijnt hier een verdeling zodra uitgaven zijn geregistreerd.',
     'Your expenses are down {0}% from last month.': 'Uw uitgaven zijn {0}% gedaald ten opzichte van vorige maand.', 'Your expenses are up {0}% from last month.': 'Uw uitgaven zijn {0}% gestegen ten opzichte van vorige maand.',
-    'Breakdown unavailable.': 'Verdeling niet beschikbaar.',
+    'Breakdown unavailable.': 'Verdeling niet beschikbaar.', 'No expenses documented': 'Geen uitgaven geregistreerd',
     'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.': 'GEKOPPELD: deze factuur documenteert een bestaande winkel-/kassaverkoop. Ze creëert GEEN extra omzet.',
     'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.': 'ZELFSTANDIG: dit is een nieuwe B2B-verkoop buiten de winkel. Dit is bijkomende omzet.',
     'Returned to draft': 'Teruggezet naar ontwerp', 'Reject': 'Weigeren', 'The draft will be cancelled. No number is used.': 'Het ontwerp wordt geannuleerd. Er wordt geen nummer gebruikt.', 'Not ready to issue:': 'Nog niet klaar om uit te geven:',

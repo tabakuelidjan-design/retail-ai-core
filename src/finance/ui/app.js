@@ -500,7 +500,7 @@ async function viewOverview() {
         h('strong', { class: 'homeinv-client' }, r.customer),
         h('span', { class: 'homeinv-number' }, r.number || tt('(draft)')),
         h('span', { class: 'homeinv-amount' }, `${r.gross} ${cur}`),
-        activeTab === 'paid' ? h('span', { class: 'chip ok' }, tt('Paid')) : (dueChip(r.dueDate, r.remainingCents) || h('span')),
+        h('span', { class: 'homeinv-pillwrap' }, activeTab === 'paid' ? h('span', { class: 'chip ok' }, tt('Paid')) : (dueChip(r.dueDate, r.remainingCents) || h('span'))),
         h('span', { class: 'homeinv-chevron' }, '›')))));
     };
     drawInvList();
@@ -516,30 +516,38 @@ async function viewOverview() {
     const donutBody = h('div', { class: 'muted small' }, 'Loading...');
     donutCard.appendChild(donutBody);
     const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
+    // Always the same donut-dashboard structure (ring + centered total + legend on the right), even when
+    // data is sparse - a single real supplier renders as one real 100% segment, zero suppliers renders an
+    // empty grey ring with a documented "no expenses yet" state, never a plain text fallback that drops the
+    // card's geometry.
     const renderBreakdown = (r) => {
       clear(donutBody);
-      if (r.suppliers.length >= 2) {
-        let acc = 0; const R = 46, CX = 55, CY = 55, STROKE = 16;
-        const circ = 2 * Math.PI * R;
-        const arcs = r.suppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
-        const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
-        donutBody.appendChild(h('div', { class: 'donutwrap' },
-          h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, r.totalDisplay), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
-          h('div', { class: 'donutlegend' }, r.suppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`))))));
-        // Real month-over-month change on the total, same definition as the KPI strip's own trend figures -
-        // clicking it opens Achats, where the underlying supplier invoices live.
-        if (r.changePct !== 0) {
-          const down = r.changePct < 0;
-          donutBody.appendChild(h('a', { class: 'expense-insight', href: '#/purchases' },
-            h('span', { class: 'eiico' }, svgIcon('coins', 16)),
-            h('span', null, down ? tt('Your expenses are down {0}% from last month.', Math.abs(r.changePct)) : tt('Your expenses are up {0}% from last month.', r.changePct)),
-            h('span', { class: 'muted' }, '›')));
-        }
-      } else if (r.suppliers.length === 1) {
-        const s = r.suppliers[0];
-        donutBody.appendChild(h('div', { class: 'donut-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 22)), h('strong', null, s.name), h('div', { class: 'muted small' }, tt('{0} - your only supplier so far. A breakdown becomes useful once you have more than one.', `${s.amount} ${cur}`))));
+      const R = 46, CX = 55, CY = 55, STROKE = 16;
+      const circ = 2 * Math.PI * R;
+      let arcs;
+      if (r.suppliers.length) {
+        let acc = 0;
+        arcs = r.suppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
       } else {
-        donutBody.appendChild(h('div', { class: 'donut-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 22)), h('strong', null, tt('No supplier invoices yet.')), h('div', { class: 'muted small' }, tt('A breakdown will appear here once expenses are recorded.'))));
+        // Empty ring: one full, unfilled grey stroke - no colour segment, since there is nothing real to plot.
+        arcs = [svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: 'var(--line)', 'stroke-width': STROKE })];
+      }
+      const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
+      const legend = r.suppliers.length
+        ? r.suppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`)))
+        : [h('div', { class: 'dl-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 18)), h('strong', null, tt('No expenses documented')), h('div', { class: 'muted small' }, tt('A breakdown will appear here once expenses are recorded.')))];
+      donutBody.appendChild(h('div', { class: 'donutwrap' },
+        h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, r.totalDisplay), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
+        h('div', { class: 'donutlegend' }, legend)));
+      // Real month-over-month change on the total, same definition as the KPI strip's own trend figures -
+      // clicking it opens Achats, where the underlying supplier invoices live. Only shown when there is a
+      // real change to report (never for the empty state, where changePct is always 0).
+      if (r.changePct !== 0) {
+        const down = r.changePct < 0;
+        donutBody.appendChild(h('a', { class: 'expense-insight', href: '#/purchases' },
+          h('span', { class: 'eiico' }, svgIcon('coins', 16)),
+          h('span', null, down ? tt('Your expenses are down {0}% from last month.', Math.abs(r.changePct)) : tt('Your expenses are up {0}% from last month.', r.changePct)),
+          h('span', { class: 'muted' }, '›')));
       }
     };
     const loadBreakdown = (period) => api('GET', `/api/overview/expense-breakdown?period=${period}`).then(renderBreakdown).catch(() => { clear(donutBody); donutBody.appendChild(h('div', { class: 'muted small' }, 'Breakdown unavailable.')); });

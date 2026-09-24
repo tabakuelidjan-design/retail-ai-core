@@ -19,7 +19,7 @@ function loadI18n(stored) {
 }
 
 // Strings in app.js that look like text but are not merchant-facing (keys, CSS, headers, keyboard names, file names, debug).
-const NOT_UI = new Set(['Content-Type', 'X-CSRF-Token', 'UI error:', 'currentColor', '--accent', 'Enter', 'ArrowDown', 'ArrowUp', 'Escape', 'image/png,image/jpeg', 'pack.json', '60_plus', 'accounts@company.example', 'INV-2026-0001', '_MISSING', '_blank', 'YYYY-MM-DD']);
+const NOT_UI = new Set(['Content-Type', 'X-CSRF-Token', 'UI error:', 'currentColor', '--accent', 'var(--line)', 'Enter', 'ArrowDown', 'ArrowUp', 'Escape', 'image/png,image/jpeg', 'pack.json', '60_plus', 'accounts@company.example', 'INV-2026-0001', '_MISSING', '_blank', 'YYYY-MM-DD']);
 const isNotUi = (s) => NOT_UI.has(s) || /^(chip|dot2) /.test(s) || /^[\w.+-]+@[\w.-]+$/.test(s) || /^[a-z-]+:[^\s]/.test(s) || /^[a-z]+[A-Za-z0-9]*$/.test(s) || /^[a-z-]+ \{\}$/.test(s) || /[:;]\s?[\w{}.-]+;?$/.test(s) && /^(margin|flex|grid|--)/.test(s) || /^\[data-/.test(s) || /^(banner|toast|badge|pill|acard|kpi|seg|dot|avatar|navitem|lrow|basis|picker-row|card stat) /.test(s) || /^\{\}/.test(s) && !/[A-Za-z]{4,}\s/.test(s.replace(/\{\}/g, ''));
 
 test('COVERAGE: every merchant-facing message of the dashboard exists in French AND Dutch', () => {

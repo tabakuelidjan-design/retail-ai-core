@@ -620,19 +620,38 @@ html, body { background: var(--bg); }
 .ghostrow:hover { border-color: var(--warm); color: var(--warm); }
 /* Reference's outlined "+ Connecter" placeholder row - a real button (routes to #/bank), just styled as a
    subtle secondary affordance instead of a loud solid CTA, matching the reference's own visual weight. */
-.connect-row { height: 38px; border: 1px dashed var(--line-2); border-radius: 8px; margin-top: 9px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; }
+/* Whole card is a flex column so the connect row always anchors at the bottom (margin-top:auto) regardless
+   of whether the state above it is the populated bank list or the empty state - matches the reference's own
+   fixed card rhythm instead of leaving a variable gap. */
+.bank-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.connect-row { height: 38px; border: 1px dashed var(--line-2); border-radius: 8px; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--ink-soft); background: transparent; width: 100%; cursor: pointer; font-size: 12px; font-weight: 600; flex: 0 0 auto; }
 .connect-row:hover { border-color: var(--warm); color: var(--warm); }
-.bank-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 22px 4px; }
-.bank-empty .eicon { width: 38px; height: 38px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 6px; }
+/* Tight top-anchored icon/title/text, same card geometry as the populated state - not centred/padded like a
+   generic placeholder. */
+.bank-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 4px 4px 0; }
+.bank-empty .eicon { width: 34px; height: 34px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 2px; }
+.bank-empty strong { font-size: 14.5px; font-weight: 700; color: var(--ink); }
 
 /* ---- Client invoices: compact single-line rows (reference-matched), replacing the spreadsheet table ---- */
-.homeinv-list { display: flex; flex-direction: column; margin-top: 4px; }
-.homeinv-row { display: grid; grid-template-columns: 14px 1.3fr .95fr .85fr 1fr 14px; gap: 9px; align-items: center; padding: 10px 4px; border-bottom: 1px solid #f1ece2; cursor: pointer; font-size: 12.5px; }
+.homeinv-list { display: flex; flex-direction: column; margin-top: 6px; }
+/* More room for the client name (it was truncating too eagerly), less for the fixed-format invoice number,
+   and the same neutral line colour as the rest of the design system (was a mismatched warm grey). */
+/* minmax(0, Nfr), not a bare Nfr: without it a flexible track's minimum is its own content's width, so the
+   longest column (the due/status pill, e.g. "Echeance dans 21 jours") was winning most of the row's width
+   and squeezing the client name down to a sliver regardless of the fr ratio. Tighter gap/font and a smaller
+   decorative checkbox/chevron reclaim the extra room this narrow (1fr-of-3.4) card needs to avoid truncating
+   the client name and invoice number, which are the two columns that must stay legible. */
+.homeinv-row { display: grid; grid-template-columns: 11px minmax(0,1.5fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,.65fr) 11px; gap: 6px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 11.5px; }
 .homeinv-row:last-child { border-bottom: 0; } .homeinv-row:hover { background: color-mix(in srgb, var(--warm) 4%, transparent); }
-.homeinv-box { width: 13px; height: 13px; border: 1px solid var(--line-2); border-radius: 3px; }
+.homeinv-box { width: 11px; height: 11px; border: 1px solid var(--line-2); border-radius: 3px; flex: 0 0 auto; }
+/* Shrinks the pill inside this one narrow column without touching the shared .chip rule used elsewhere. */
+.homeinv-pillwrap .chip { font-size: 9.5px; padding: 3px 6px; }
 .homeinv-client { font-weight: 650; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .homeinv-number { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .homeinv-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+/* Clips the (shared, unmodified) .chip if it's ever wider than this compact column - keeps the grid track's
+   own width authoritative instead of letting a long pill string dictate it. */
+.homeinv-pillwrap { overflow: hidden; max-width: 100%; }
 .homeinv-chevron { color: var(--muted); text-align: center; }
 
 /* ---- Donut (supplier concentration) ---- */
@@ -642,6 +661,11 @@ html, body { background: var(--bg); }
 .donutlegend .dl-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
 .donutlegend .dl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
 .donutlegend .dl-pct { font-weight: 650; font-variant-numeric: tabular-nums; }
+/* Zero-supplier state: keeps the same donut-dashboard geometry (empty ring + this column) instead of
+   collapsing to a bare paragraph. */
+.dl-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.dl-empty .eicon { width: 30px; height: 30px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 2px; }
+.dl-empty strong { font-size: 13px; }
 .insight { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-size: 13px; color: var(--ink-soft); }
 
 /* ---- Dashboard grid regions: real CSS classes (not inline styles) so the responsive rules below can
@@ -758,9 +782,6 @@ html, body { background: var(--bg); }
 /* #5: Bank Accounts is a strategically important action, not a secondary widget - same accent
    treatment already used for "emphasis" cards elsewhere, a bigger icon and a heavier CTA. */
 /* Reference-matched: same neutral border as its siblings, not a special accent tint. */
-/* Donut card empty/single-supplier states, same premium card geometry as the populated donut. */
-.donut-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 22px 4px; }
-.donut-empty .eicon { width: 38px; height: 38px; border-radius: 50%; background: var(--bg); color: var(--muted); display: grid; place-items: center; margin-bottom: 6px; }
 /* Reference's bottom insight callout - real month-over-month change, links to Achats (the real source data). */
 .expense-insight { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 9px 10px; border-radius: 8px; background: var(--warm-soft); color: var(--ink-soft); font-size: 11px; text-decoration: none; }
 .expense-insight .eiico { width: 26px; height: 26px; border-radius: 7px; background: color-mix(in srgb, var(--warm) 16%, #fff); color: var(--warm); display: grid; place-items: center; flex: 0 0 auto; }
