@@ -7,10 +7,40 @@ const state = { csrf: null, settings: null, missing: [] };
 const app = document.getElementById('app');
 
 // ---------- tiny DOM helper ----------
+// Dates are typed and shown day-first (dd/mm/yyyy) in every language, whatever the browser's own locale: the native
+// <input type=date> follows the browser, not the app language. This drop-in keeps the same contract for every caller:
+// `.value` reads and writes an ISO date (yyyy-mm-dd, '' when empty or incomplete) and a `change` event fires when the
+// typed date becomes valid (or is cleared).
+const DATE_PLACEHOLDER = { fr: 'jj/mm/aaaa', nl: 'dd/mm/jjjj', en: 'dd/mm/yyyy' };
+const NATIVE_VALUE = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+function isoFromDisplay(raw) {
+  const d = String(raw).replace(/\D/g, '');
+  if (d.length !== 8) return '';
+  const dd = +d.slice(0, 2); const mm = +d.slice(2, 4); const yy = +d.slice(4);
+  const dt = new Date(Date.UTC(yy, mm - 1, dd));
+  if (yy < 1900 || dt.getUTCFullYear() !== yy || dt.getUTCMonth() !== mm - 1 || dt.getUTCDate() !== dd) return '';
+  return `${String(yy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+function displayFromIso(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; }
+function makeDateInput(el, initialIso) {
+  el.type = 'text'; el.inputMode = 'numeric'; el.maxLength = 10; el.autocomplete = 'off';
+  el.setAttribute('placeholder', DATE_PLACEHOLDER[I18N.getLang()] || DATE_PLACEHOLDER.fr);
+  Object.defineProperty(el, 'value', { configurable: true, get() { return isoFromDisplay(NATIVE_VALUE.get.call(this)); }, set(v) { NATIVE_VALUE.set.call(this, displayFromIso(v)); } });
+  let last = '';
+  el.addEventListener('input', () => {
+    const digits = NATIVE_VALUE.get.call(el).replace(/\D/g, '').slice(0, 8);
+    NATIVE_VALUE.set.call(el, digits.length > 4 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}` : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits);
+    const now = isoFromDisplay(NATIVE_VALUE.get.call(el));
+    if (now !== last) { last = now; el.dispatchEvent(new Event('change', { bubbles: true })); }
+  });
+  if (initialIso) { el.value = initialIso; last = isoFromDisplay(NATIVE_VALUE.get.call(el)); }
+}
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
+  const isDate = tag === 'input' && attrs && attrs.type === 'date';
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === null || v === undefined || v === false) continue;
+    if (isDate && (k === 'type' || k === 'value')) continue;
     if (k === 'class') el.className = v;
     else if (k === 'on') for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
     else if (k === 'style') { for (const decl of String(v).split(';')) { const i = decl.indexOf(':'); if (i > 0) el.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim()); } } // CSSOM, not an inline style attribute: allowed by the strict CSP
@@ -21,6 +51,7 @@ function h(tag, attrs, ...kids) {
   }
   const add = (c) => { if (c === null || c === undefined || c === false) return; if (Array.isArray(c)) c.forEach(add); else el.appendChild(c instanceof Node ? c : document.createTextNode(typeof c === 'string' ? tr(c) : String(c))); };
   kids.forEach(add);
+  if (isDate) makeDateInput(el, attrs.value);
   return el;
 }
 /** Append only when there is something to append (a conditional element may be null). */
@@ -146,14 +177,17 @@ const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) ret
 // redirects in route() - only the top-level entry points are consolidated, per the mandate's own
 // "ne recrée pas des entrées séparées" rule.
 const NAV = [
-  { href: '#/', label: 'Home', icon: 'home', primary: true },
-  { href: '#/todo', label: 'To do', icon: 'check', primary: true },
-  { href: '#/sales', label: 'Sales', icon: 'doc', primary: true },
-  { href: '#/purchases', label: 'Purchases', icon: 'cart', primary: false },
-  { href: '#/bank', label: 'Bank & Cash', icon: 'coins', primary: true },
-  { href: '#/contacts', label: 'Contacts', icon: 'building', primary: false },
-  { href: '#/treasury', label: 'Treasury', icon: 'clock', primary: false },
+  { href: '#/', label: 'Home', icon: 'home', nordla: 'accueil', primary: true },
+  { href: '#/todo', label: 'To do', icon: 'check', nordla: 'aFaire', primary: true },
+  { href: '#/sales', label: 'Sales', icon: 'doc', nordla: 'ventes', primary: true },
+  { href: '#/purchases', label: 'Purchases', icon: 'cart', nordla: 'achats', primary: false },
+  { href: '#/bank', label: 'Bank & Cash', icon: 'coins', nordla: 'banqueEtCaisse', primary: true },
+  { href: '#/contacts', label: 'Contacts', icon: 'building', nordla: 'contacts', primary: false },
+  { href: '#/treasury', label: 'Treasury', icon: 'clock', nordla: 'tresorerie', primary: false },
+  { href: '#/pack', label: 'Accountant pack', icon: 'book', nordla: 'packComptable', primary: false },
 ];
+/** Official Nordla icon for a NAV entry (Home has no official asset yet -> generic svgIcon, flagged in the report). */
+function navIcon(n, size) { return n.nordla ? NordlaIcon.semantic(n.nordla, size) : svgIcon(n.icon, size === 'lg' ? 20 : 18); }
 /** "Nous contacter": reuses the merchant's own configured finance email (Settings) - there is no support
  * ticketing backend in this product, so this never fakes a ticket send or a fabricated support address. */
 function openContactSupport() {
@@ -166,9 +200,9 @@ function openContactSupport() {
 /** Mobile-only "More" bottom sheet: the 3 secondary sections + Settings + Contact us (mandate section 6). */
 function openMoreSheet() {
   const back = h('div', { class: 'sheet-back', on: { click: (e) => { if (e.target === back) back.remove(); } } });
-  const items = [...NAV.filter((n) => !n.primary), { href: '#/pack', label: 'Accountant pack', icon: 'book' }, { href: '#/settings', label: 'Settings', icon: 'gear' }];
+  const items = [...NAV.filter((n) => !n.primary), { href: '#/settings', label: 'Settings', icon: 'gear', nordla: 'parametres' }];
   const sheet = h('div', { class: 'sheet' }, h('div', { class: 'sheet-handle' }),
-    items.map((n) => h('a', { class: 'sheet-item', href: n.href, on: { click: () => back.remove() } }, svgIcon(n.icon, 18), tr(n.label))),
+    items.map((n) => h('a', { class: 'sheet-item', href: n.href, on: { click: () => back.remove() } }, h('span', { class: 'sheet-ico' }, navIcon(n, 'md')), tr(n.label))),
     h('button', { class: 'sheet-item', type: 'button', on: { click: () => { back.remove(); openContactSupport(); } } }, svgIcon('inbox', 18), tt('Contact us')));
   back.appendChild(sheet); document.body.appendChild(back);
 }
@@ -181,24 +215,38 @@ function langSwitch() {
 function globalSearch() {
   const box = h('input', { class: 'gsearch', placeholder: tt('Search an invoice, a client, a supplier...'), autocomplete: 'off',
     on: { keydown: (e) => { if (e.key === 'Enter' && box.value.trim()) { location.hash = `#/invoices?q=${encodeURIComponent(box.value.trim())}`; } } } });
-  return h('div', { class: 'gsearchwrap' }, svgIcon('search', 16), box, h('span', { class: 'gkey' }, '⌘K'));
+  return h('div', { class: 'gsearchwrap' }, NordlaIcon.semantic('recherche', 'sm'), box, h('span', { class: 'gkey' }, '⌘K'));
+}
+/** Top-right account chip: the seller name opens a small menu holding "Log out" (it no longer lives in the navigation rail). */
+let accountMenuWired = false;
+function accountMenu(seller) {
+  if (!accountMenuWired) {
+    accountMenuWired = true;
+    const closeAll = () => document.querySelectorAll('.acct.open').forEach((el) => { el.classList.remove('open'); const b = el.querySelector('.tb-brand'); if (b) b.setAttribute('aria-expanded', 'false'); });
+    document.addEventListener('click', (e) => { if (!e.target.closest || !e.target.closest('.acct')) closeAll(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+  }
+  const logout = h('button', { class: 'acct-item', type: 'button', role: 'menuitem', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 16), tt('Log out'));
+  const wrap = h('div', { class: 'acct' });
+  const trigger = h('button', { class: 'tb-brand', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', on: { click: () => { const open = wrap.classList.toggle('open'); trigger.setAttribute('aria-expanded', String(open)); } } }, seller, h('span', { class: 'acct-chev' }, svgIcon('chevron', 13)));
+  wrap.appendChild(trigger);
+  wrap.appendChild(h('div', { class: 'acct-menu', role: 'menu' }, logout));
+  return wrap;
 }
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
   const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
     h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
-    h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, svgIcon(n.icon, 18), h('span', { class: 'rlabel' }, tr(n.label))))),
+    h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, h('span', { class: n.nordla ? 'rail-ico official' : 'rail-ico' }, navIcon(n, 'md')), h('span', { class: 'rlabel' }, tr(n.label))))),
     h('button', { class: 'railitem rail-more', type: 'button', title: tt('More'), 'aria-label': tt('More'), on: { click: openMoreSheet } }, svgIcon('chevron', 18), h('span', { class: 'rlabel' }, tt('More'))),
     h('div', { class: 'rail-foot' },
-      h('a', { class: `railitem ${active === '#/settings' ? 'active' : ''}`, href: '#/settings', title: tt('Settings'), 'aria-label': tt('Settings') }, svgIcon('gear', 18)),
-      h('button', { class: 'railitem', type: 'button', title: tt('Log out'), 'aria-label': tt('Log out'), on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 18)),
-      avatar(seller, 'sm')));
+      h('a', { class: `railitem ${active === '#/settings' ? 'active' : ''}`, href: '#/settings', title: tt('Settings'), 'aria-label': tt('Settings') }, h('span', { class: 'rail-ico official' }, NordlaIcon.semantic('parametres', 'md')))));
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), h('span', { class: 'tb-brand' }, seller, h('span', { style: 'display:inline-flex;transform:rotate(90deg)' }, svgIcon('chevron', 13)))));
-  const main = h('main', { class: 'main' }, content);
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), accountMenu(seller)));
+  const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
   show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main, support)));
   return main;
@@ -224,81 +272,44 @@ function svgEl(tag, attrs, kids) {
   for (const k of kids || []) el.appendChild(k);
   return el;
 }
-/** Real treasury chart: monthly inflow/outflow bars + a running-total line, built from /api/overview/cashflow
- * rows only. Every number plotted is one already present in `rows`; nothing here interpolates or forecasts. */
-// `opts` is optional and additive - every existing caller (the Tresorerie page) passes none and gets the exact
-// same output as before. `opts.zeroRatio`/`opts.gridLines` are only used by the homepage's own call, to bring
-// its chart's proportions (a tall Entrees region, a short Sorties dip, several faint horizontal rows) closer
-// to the approved reference, without changing the shared component's default behaviour anywhere else.
-function treasuryChart(rows, cur, opts = {}) {
-  const W = 760, H = 230, mL = 44, mR = 8, mT = 8, mB = 22;
-  const innerW = W - mL - mR; const n = Math.max(1, rows.length);
-  const slot = innerW / n; const barW = Math.min(26, slot * 0.34);
-  const zeroY = mT + (H - mT - mB) * (opts.zeroRatio ?? 0.6);
-  // `opts.dualScale` (homepage only - the Tresorerie page passes no opts and keeps its exact previous
-  // behaviour): the running balance is a CUMULATIVE total, naturally several times larger in magnitude than
-  // any single month's inflow/outflow. Sharing one scale across both meant the balance line dictated the
-  // scale and the bars were squeezed down near zero, however tall the card actually was. Bars now scale
-  // against the real monthly flow figures only, and the balance line against its own real range, each
-  // filling its own share of the plot - a chart-geometry fix, not a change to any underlying figure.
-  const maxAbs = Math.max(1, ...rows.flatMap((r) => [r.inflowCents, r.outflowCents, Math.abs(r.balanceCents)]));
-  const maxIn = Math.max(1, ...rows.map((r) => r.inflowCents));
-  const maxOut = Math.max(1, ...rows.map((r) => r.outflowCents));
-  const maxBalance = Math.max(1, ...rows.map((r) => Math.abs(r.balanceCents)));
-  const scale = Math.min(zeroY - mT - 8, H - mB - zeroY - 8) / maxAbs;
-  // Entrees and Sorties bars each fill their own share of the plot (76%/24%) against their own real monthly
-  // max, instead of both being scaled down to whichever of the two shares is smaller for a shared max - that
-  // was leaving the Entrees bars far short of the height they could honestly use.
-  const inScale = (zeroY - mT - 8) / maxIn;
-  const outScale = (H - mB - zeroY - 8) / maxOut;
-  const lineTop = mT + 6, lineBottom = H - mB - 4;
-  const lineScale = (lineBottom - lineTop) / maxBalance;
-  const xOf = (i) => mL + slot * i + slot / 2;
-  const kids = [];
-  if (!opts.evenGrid) {
-    // grid: zero line + two faint reference lines (unchanged default)
-    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
-    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT, y2: mT }));
-    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: H - mB, y2: H - mB }));
-  } else {
-    // Reference-matched: 3 faint rows at 25/50/75% of the plot height, plus the zero line - purely chart
-    // chrome (like graph paper behind the bars), never a data value, so this is not "inventing" anything.
-    for (const f of [0.25, 0.5, 0.75]) kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: mT + (H - mT - mB) * f, y2: mT + (H - mT - mB) * f }));
-    kids.push(svgEl('line', { class: 'tc-grid', x1: mL, x2: W - mR, y1: zeroY, y2: zeroY }));
-  }
-  kids.push(svgEl('text', { class: 'tc-axis', x: 4, y: zeroY + 4 }, [document.createTextNode('0')]));
-  const monthLabel = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short' });
-  rows.forEach((r, i) => {
-    const x = xOf(i);
-    const inH = r.inflowCents * (opts.dualScale ? inScale : scale); const outH = r.outflowCents * (opts.dualScale ? outScale : scale);
-    kids.push(svgEl('rect', { class: 'tc-bar-in', x: x - barW - 1, y: zeroY - inH, width: barW, height: Math.max(0, inH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${r.inflow} ${cur}`)])]));
-    kids.push(svgEl('rect', { class: 'tc-bar-out', x: x + 1, y: zeroY, width: barW, height: Math.max(0, outH), rx: 2 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: -${r.outflow} ${cur}`)])]));
-    kids.push(svgEl('text', { class: 'tc-axis', x, y: H - 6, 'text-anchor': 'middle' }, [document.createTextNode(monthLabel(r.month))]));
-  });
-  const pts = opts.dualScale
-    ? rows.map((r, i) => [xOf(i), lineBottom - r.balanceCents * lineScale])
-    : rows.map((r, i) => [xOf(i), zeroY - r.balanceCents * scale]);
-  kids.push(svgEl('polyline', { class: 'tc-line', points: pts.map((p) => p.join(',')).join(' ') }));
-  pts.forEach(([x, y], i) => { const r = rows[i]; kids.push(svgEl('circle', { class: 'tc-dot', cx: x, cy: y, r: i === pts.length - 1 ? 4 : 2.5 }, [svgEl('title', {}, [document.createTextNode(`${monthLabel(r.month)}: ${tt('balance')} ${r.balance} ${cur}`)])])); });
-  // `opts.stretch` (homepage only): fill whatever height the card actually has (the row's sibling cards
-  // already stretch to match each other via CSS Grid) instead of a fixed aspect ratio that leaves a
-  // letterboxed gap when the card is taller than the chart's own default proportions would need.
-  return svgEl('svg', { class: 'tc-svg', viewBox: `0 0 ${W} ${H}`, ...(opts.stretch ? { preserveAspectRatio: 'none' } : {}) }, kids);
+// ---- Nordla Chart System glue (Finance): turns real API rows into the shared chart components. It only reshapes
+// numbers already returned by /api/overview/cashflow - no point, period or percentage is ever invented.
+const cashMonth = (mth) => new Date(`${mth}-01T00:00:00Z`).toLocaleDateString(I18N.tag(), { month: 'short', timeZone: 'UTC' });
+const fmtCompactMoney = (cents, cur) => new Intl.NumberFormat(I18N.tag(), { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 1 }).format(cents / 100);
+const pctChange = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 1000) / 10 : null);
+const chartNeedsData = () => NordlaCharts.insufficient(tt('Insufficient data'), tt('At least 2 months of recorded activity are needed to draw this chart.'));
+/** Months before the first recorded activity are real zeros, but plotting them only wastes the chart width: drop the leading empty ones. */
+const activeRows = (rows) => { const i = rows.findIndex((r) => r.inflowCents || r.outflowCents || r.revenueCents || r.expenseCents); return i < 0 ? [] : rows.slice(i); };
+/** Trend Line card body: cumulative documented balance over the returned months. Delta = last month vs the previous one. */
+function cashTrendChart(rows, cur, title) {
+  rows = activeRows(rows);
+  if (rows.length < 2) return chartNeedsData();
+  const last = rows[rows.length - 1].balanceCents; const delta = pctChange(last, rows[rows.length - 2].balanceCents);
+  return h('div', { class: 'nc-wrap' },
+    NordlaCharts.head({ title, value: fmtMoney(last, cur), delta, good: delta == null ? undefined : delta >= 0, vs: tt('vs. previous period') }),
+    NordlaCharts.trendLine(rows.map((r) => ({ label: cashMonth(r.month), value: r.balanceCents })), { format: (v) => fmtCompactMoney(v, cur), label: title }));
+}
+/** Comparison: monthly inflows vs outflows (paired bars). */
+function cashComparisonChart(rows, cur) {
+  rows = activeRows(rows);
+  if (rows.length < 2) return chartNeedsData();
+  return NordlaCharts.comparison(rows.map((r) => ({ label: cashMonth(r.month), a: r.inflowCents, b: r.outflowCents })), [{ name: tt('Inflows'), cls: 'cur' }, { name: tt('Outflows'), cls: 'alt' }], { format: (v) => fmtCompactMoney(v, cur), label: tt('Inflows vs outflows') });
+}
+/** Waterfall: opening balance -> real net change of each month -> closing balance. Opening = first cumulative balance minus its own net flow. */
+function cashWaterfallChart(rows, cur) {
+  rows = activeRows(rows);
+  if (rows.length < 2) return chartNeedsData();
+  const opening = rows[0].balanceCents - rows[0].netCents;
+  const steps = [{ label: tt('Opening balance'), short: tt('Start'), value: opening, total: true }, ...rows.map((r) => ({ label: cashMonth(r.month), value: r.netCents })), { label: tt('Closing balance'), short: tt('End'), value: rows[rows.length - 1].balanceCents, total: true }];
+  return NordlaCharts.waterfall(steps, { format: (v) => fmtCompactMoney(v, cur), label: tt('What moved the balance') });
 }
 // A handful of short, non-business decoration lines for the Accueil quote-card (mandate section 4: "phrase
 // éditoriale... conservée si elle ne prend pas de place fonctionnelle"). This is copy, never merchant data -
 // no figure, name or fact appears here, so it carries nothing that could be "invented data".
 const HOME_QUOTES = [['Working with clarity.', 'Moving forward with peace of mind.'], ['Every invoice, told simply.'], ['Financial clarity, day after day.']];
-function miniSpark(values, color) {
-  if (!values.length || values.every((v) => v === 0)) return null;
-  const w = 100; const h2 = 40; const max = Math.max(1, ...values.map(Math.abs));
-  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * w},${h2 - ((v / max) * (h2 - 6) + 3)}`).join(' ');
-  return svgEl('svg', { viewBox: `0 0 ${w} ${h2}` }, [svgEl('polyline', { points: pts, fill: 'none', stroke: color, 'stroke-width': 2.2 })]);
-}
-function barSpark(values, colors) {
-  if (!values.length) return null;
-  const w = 100; const h2 = 40; const bw = w / values.length - 3; const max = Math.max(1, ...values);
-  return svgEl('svg', { viewBox: `0 0 ${w} ${h2}` }, values.map((v, i) => svgEl('rect', { x: i * (bw + 3), y: h2 - (v / max) * h2, width: bw, height: Math.max(1, (v / max) * h2), rx: 2, fill: colors[i % colors.length] })));
+function miniSpark(values) {
+  if (values.length < 2 || values.every((v) => v === 0)) return null;
+  return NordlaCharts.sparkline(values);
 }
 // #9: proper FR/NL singular/plural instead of the "(s)" shorthand - same ternary-key pattern used across
 // this file (see dueChip's "{0} day late" / "{0} days late"). Module-scoped so every view can share it.
@@ -343,7 +354,7 @@ async function viewOverview() {
   // during the homepage structural review (pre-existing bug, inherited from before this redesign).
   const greet = tt(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
   const first = ((state.settings && state.settings.seller && state.settings.seller.name) || '').trim().split(/\s+/)[0] || '';
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell home' });
   const main = layout('#/', shell);
   const quote = HOME_QUOTES[new Date().getDate() % HOME_QUOTES.length];
   shell.appendChild(h('div', { class: 'hero-row' },
@@ -384,7 +395,7 @@ async function viewOverview() {
       metric('coins', 'Expenses', fmtMoney(o.expenses.thisMonthCents, cur), h('span', null, trendNote(o.expenses.changePct, false), ` ${tt('vs. last month')}`), h('span', { id: 'spark-expenses' }), '#/purchases'),
       // #2: no wrapped "Not connected" text - a quiet dash and a compact CTA until a real balance exists.
       metric('building', tt('Cash position'), treasury?.observed?.liquidCents != null ? fmtMoney(treasury.observed.liquidCents, cur) : '— €', treasury?.observed?.liquidCents != null ? null : h('a', { href: '#/bank' }, tt('Connect the bank')), null, '#/bank'),
-      metric('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', null, plural(o.counts.unpaid, '{0} unpaid invoice', '{0} unpaid invoices')), barSpark(Object.values(o.aging).map((a) => a.cents), ['#d0d7dc', '#d0d7dc', '#efc6b7', '#e69b7b', '#c96b42']), '#/receivables')));
+      metric('clock', tt('Amount to collect'), fmtMoney(o.amounts.outstandingCents, cur), h('span', null, plural(o.counts.unpaid, '{0} unpaid invoice', '{0} unpaid invoices')), null, '#/receivables')));
     // #8: a derived figure from real numbers already shown above - explicitly labelled so it can never be read
     // as accounting net profit (no depreciation, no accruals, no tax, no cost of goods - just invoiced revenue
     // minus accepted supplier bills for the same month).
@@ -401,27 +412,26 @@ async function viewOverview() {
     const mid = h('div', { class: 'content-grid-3' });
     // .home-chart scopes the reference-matched recolour (grey/blue Entrées, terracotta Solde) to this one
     // instance - the Tresorerie page reuses the same treasuryChart()/CSS classes and keeps its own colours.
-    const chartWrap = h('div', { class: 'tc-wrap home-chart' }, h('div', { class: 'muted small' }, 'Loading...'));
+    const chartWrap = h('div', { class: 'home-chart' }, h('div', { class: 'muted small' }, 'Loading...'));
     const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => {
       clear(chartWrap);
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
       // has actually been recorded yet.
-      if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
-      else chartWrap.appendChild(treasuryChart(r.rows, r.currency, { zeroRatio: 0.76, evenGrid: true, dualScale: true, stretch: true }));
+      if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('tresorerie', 'md')), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
+      else chartWrap.appendChild(cashTrendChart(r.rows, r.currency, tt('Cumulative balance')));
       lastCashflowRows = r.rows;
       // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
       // chart above, just plotted small inside the KPI cards - see metric-grid, above.
-      const revSpark = document.getElementById('spark-revenue'); if (revSpark) { clear(revSpark); const s = miniSpark(r.rows.map((x) => x.revenueCents), '#20384e'); if (s) revSpark.appendChild(s); }
-      const expSpark = document.getElementById('spark-expenses'); if (expSpark) { clear(expSpark); const s = miniSpark(r.rows.map((x) => x.expenseCents), '#8095a6'); if (s) expSpark.appendChild(s); }
+      const revSpark = document.getElementById('spark-revenue'); if (revSpark) { clear(revSpark); const s = miniSpark(r.rows.map((x) => x.revenueCents)); if (s) revSpark.appendChild(s); }
+      const expSpark = document.getElementById('spark-expenses'); if (expSpark) { clear(expSpark); const s = miniSpark(r.rows.map((x) => x.expenseCents)); if (s) expSpark.appendChild(s); }
     }).catch(() => { clear(chartWrap); chartWrap.appendChild(h('div', { class: 'muted small' }, 'Cash-flow unavailable.')); });
     const periodSelect = h('select', { class: 'tool', style: 'width:auto', on: { change: (e) => loadChart(Number(e.target.value)) } }, [[3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(([v, l]) => h('option', { value: v, selected: v === 6 }, tt(l))));
     // home-treasury-card: makes this card a flex column so the chart (.home-chart) can grow to fill whatever
     // height the row's grid-stretch already gives this card, instead of leaving a leftover gap under the
     // legend - scoped to this one card, not the shared .card primitive used everywhere else.
     const chartCard = h('div', { class: 'card home-treasury-card', style: 'padding:16px 18px' },
-      h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real inflows, outflows and running documented balance')), periodSelect),
-      chartWrap,
-      h('div', { class: 'tc-legend' }, h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--info) 20%, #fff)' }), tt('Inflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:color-mix(in srgb, var(--warm) 45%, #fff)' }), tt('Outflows')), h('span', null, h('span', { class: 'tc-swatch', style: 'background:var(--warm)' }), tt('Cumulative balance'))));
+      h('div', { class: 'section-head' }, h('div', null, h('h2', { class: 'section-title' }, 'Treasury'), h('div', { class: 'section-sub' }, 'Real documented balance, month by month')), periodSelect),
+      chartWrap);
     mid.appendChild(chartCard);
     loadChart(6);
 
@@ -477,7 +487,7 @@ async function viewOverview() {
       }).catch(() => {});
     } else {
       // Same card geometry/spacing as the connected state (never a bare line of text) - just no invented balance.
-      bankCard.appendChild(h('div', { class: 'bank-empty' }, h('span', { class: 'eicon' }, svgIcon('building', 22)), h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small' }, tt('Read-only: no payment can ever be initiated.'))));
+      bankCard.appendChild(h('div', { class: 'bank-empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('banqueEtCaisse', 'lg')), h('strong', null, tt('No bank account connected')), h('div', { class: 'muted small' }, tt('Read-only: no payment can ever be initiated.'))));
     }
     bankCard.appendChild(h('button', { class: 'connect-row', type: 'button', on: { click: () => { location.hash = '#/bank'; } } }, svgIcon('plus', 14), tt('Connect bank')));
 
@@ -515,30 +525,13 @@ async function viewOverview() {
     donutCard.appendChild(h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, tt('Expense breakdown')), periodSel));
     const donutBody = h('div', { class: 'donut-body' }, h('div', { class: 'muted small' }, 'Loading...'));
     donutCard.appendChild(donutBody);
-    const COLORS = ['var(--accent)', 'var(--warm)', 'var(--info)', 'var(--ok)', 'var(--muted)'];
-    // Always the same donut-dashboard structure (ring + centered total + legend on the right), even when
-    // data is sparse - a single real supplier renders as one real 100% segment, zero suppliers renders an
-    // empty grey ring with a documented "no expenses yet" state, never a plain text fallback that drops the
-    // card's geometry.
+    // Nordla Donut Breakdown (shared component): only real supplier shares are plotted; with no expense
+    // recorded there is nothing to plot, so the documented empty state is shown instead of an empty ring.
     const renderBreakdown = (r) => {
       clear(donutBody);
-      const R = 46, CX = 55, CY = 55, STROKE = 16;
-      const circ = 2 * Math.PI * R;
-      let arcs;
-      if (r.suppliers.length) {
-        let acc = 0;
-        arcs = r.suppliers.map((s, i) => { const frac = s.sharePct / 100; const dash = `${Math.max(0, frac * circ - 2)} ${circ}`; const el = svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: COLORS[i % COLORS.length], 'stroke-width': STROKE, 'stroke-dasharray': dash, 'stroke-dashoffset': -acc * circ, transform: `rotate(-90 ${CX} ${CY})` }); acc += frac; return el; });
-      } else {
-        // Empty ring: one full, unfilled grey stroke - no colour segment, since there is nothing real to plot.
-        arcs = [svgEl('circle', { cx: CX, cy: CY, r: R, fill: 'none', stroke: 'var(--line)', 'stroke-width': STROKE })];
-      }
-      const donutSvg = svgEl('svg', { viewBox: '0 0 110 110', width: 110, height: 110 }, arcs);
-      const legend = r.suppliers.length
-        ? r.suppliers.map((s, i) => h('div', { class: 'dl-row' }, h('span', { class: 'dl-dot', style: `background:${COLORS[i % COLORS.length]}` }), h('span', { class: 'dl-name' }, s.name), h('span', { class: 'dl-pct' }, `${s.sharePct}%`)))
-        : [h('div', { class: 'dl-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 18)), h('strong', null, tt('No expenses documented')), h('div', { class: 'muted small' }, tt('A breakdown will appear here once expenses are recorded.')))];
-      donutBody.appendChild(h('div', { class: 'donutwrap' },
-        h('div', { style: 'position:relative;flex:0 0 auto' }, donutSvg, h('div', { style: 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center' }, h('div', { style: 'font-weight:700;font-size:15px' }, r.totalDisplay), h('div', { class: 'muted', style: 'font-size:10.5px' }, tt('Total')))),
-        h('div', { class: 'donutlegend' }, legend)));
+      donutBody.appendChild(r.suppliers.length
+        ? NordlaCharts.donut(r.suppliers.map((s) => ({ name: s.name, pct: s.sharePct })), { totalValue: r.totalDisplay, totalLabel: tt('Total'), size: 150 })
+        : h('div', { class: 'dl-empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 18)), h('strong', null, tt('No expenses documented')), h('div', { class: 'muted small' }, tt('A breakdown will appear here once expenses are recorded.'))));
       // Real month-over-month change on the total, same definition as the KPI strip's own trend figures -
       // clicking it opens Achats, where the underlying supplier invoices live. Only shown when there is a
       // real change to report (never for the empty state, where changePct is always 0).
@@ -570,7 +563,7 @@ async function viewList(kind, query) {
   const search = h('input', { class: 'listsearch', placeholder: isQuote ? 'Search quotes by customer or number' : 'Search invoices by customer or number', autocomplete: 'off' });
   const pills = h('div', { class: 'pills' });
   const box = h('div', { class: 'card listcard' });
-  main.appendChild(h('div', { class: 'toolbar' }, h('div', { class: 'searchbox' }, svgIcon('search', 16), search), pills));
+  main.appendChild(h('div', { class: 'toolbar' }, h('div', { class: 'searchbox' }, NordlaIcon.semantic('recherche', 'sm'), search), pills));
   main.appendChild(box);
   box.appendChild(h('div', null, [1, 2, 3, 4].map(() => h('div', { class: 'docrow sk' }, h('span', { class: 'avatar' }), h('span', { class: 'skl', style: 'height:14px;flex:1' })))));
   let rows = [];
@@ -1146,6 +1139,13 @@ async function viewReceivables() {
   } catch (e) { fail(e, box); }
 }
 
+// ---------- settings ----------
+async function viewSettings() {
+  const main = layout('#/settings', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Settings'), h('div', { class: 'muted small' }, 'Your company details, numbering and VAT rates. No passwords or keys are stored here.')))); const err = h('div'); main.appendChild(err);
+  let r; try { r = await loadSettings(); } catch (e) { return fail(e, err); }
+  const s = JSON.parse(JSON.stringify(state.settings)); const rates = s.vat.allowedRatesBp.map((b) => String(b / 100)).join(', ');
+  const st = { rates };
+  const inp = (obj, key, label, opts) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: obj[key] ?? '', placeholder: (opts && opts.ph) || '', on: { input: (e) => { obj[key] = e.target.value; } } }), opts && opts.hint ? h('div', { class: 'hint' }, opts.hint) : null);
 // ---------- accountant pack ----------
 async function viewPack() {
   const t = new Date().toISOString().slice(0, 10); const y = Number(t.slice(0, 4)); const q = Math.floor((Number(t.slice(5, 7)) - 1) / 3);
@@ -1174,13 +1174,6 @@ async function viewPack() {
   }
 }
 
-// ---------- settings ----------
-async function viewSettings() {
-  const main = layout('#/settings', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Settings'), h('div', { class: 'muted small' }, 'Your company details, numbering and VAT rates. No passwords or keys are stored here.')))); const err = h('div'); main.appendChild(err);
-  let r; try { r = await loadSettings(); } catch (e) { return fail(e, err); }
-  const s = JSON.parse(JSON.stringify(state.settings)); const rates = s.vat.allowedRatesBp.map((b) => String(b / 100)).join(', ');
-  const st = { rates };
-  const inp = (obj, key, label, opts) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: obj[key] ?? '', placeholder: (opts && opts.ph) || '', on: { input: (e) => { obj[key] = e.target.value; } } }), opts && opts.hint ? h('div', { class: 'hint' }, opts.hint) : null);
   const sel = (obj, key, label, options) => h('div', { class: 'field' }, h('label', null, label), h('select', { on: { change: (e) => { obj[key] = e.target.value; } } }, options.map(([v, l]) => h('option', { value: v, selected: obj[key] === v }, l))));
   if (r.missing.length) main.appendChild(h('div', { class: 'banner warn' }, h('strong', null, 'Still needed before real invoices: '), r.missing.map((m) => human(m.replace(/[.]/g, '_').toUpperCase())).join(', ')));
   main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Your company (seller)'), h('div', { class: 'row r2' }, inp(s.seller, 'name', 'Legal name'), inp(s.seller, 'email', 'Finance email')), h('div', { class: 'row r2' }, inp(s.seller, 'vatNumber', 'VAT number', { ph: 'BE0123456789' }), inp(s.seller, 'enterpriseNumber', 'Enterprise number', { ph: '0123.456.789' })), h('div', { class: 'row r2' }, inp(s.seller.address, 'street', 'Street and number'), inp(s.seller.address, 'postalCode', 'Postal code')), h('div', { class: 'row r2' }, inp(s.seller.address, 'city', 'City'), inp(s.seller.address, 'countryCode', 'Country (2 letters)')), h('div', { class: 'row r2' }, inp(s.seller, 'iban', 'IBAN'), inp(s.seller, 'bic', 'BIC (optional)'))));

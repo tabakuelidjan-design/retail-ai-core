@@ -12,6 +12,7 @@
 
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
@@ -41,7 +42,7 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -1020,6 +1021,7 @@ export function createFinanceApp(deps) {
       const host = req.headers.host ?? '';
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
+      if (req.method === 'GET') { const shared = await readNordlaShared(url.pathname); if (shared) return send(res, 200, shared.body, { 'Content-Type': shared.type, 'Cache-Control': 'no-store' }); }
       if (req.method === 'GET' && STATIC[url.pathname]) { const [file, type] = STATIC[url.pathname]; return send(res, 200, await readFile(new URL(file, UI)), { 'Content-Type': type, 'Cache-Control': 'no-store' }); }
       if (!url.pathname.startsWith('/api/')) throw new HttpError(404, 'NOT_FOUND');
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);

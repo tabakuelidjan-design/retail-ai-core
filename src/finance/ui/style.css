@@ -212,7 +212,7 @@ button.quiet:hover { background: rgba(255,255,255,.1); border-color: rgba(255,25
 
 /* lists */
 .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-.searchbox { position: relative; flex: 1 1 260px; max-width: 380px; } .searchbox svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.searchbox { position: relative; flex: 1 1 260px; max-width: 380px; } .searchbox svg, .searchbox .nordla-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
 .listsearch { padding-left: 36px; border-radius: 10px; background: #fff; }
 .pills { margin: 0; } .pill { display: inline-flex; align-items: center; gap: 7px; transition: all .15s var(--ease); } .pill:hover { border-color: #b8c4dd; }
 .pc { font-size: 11px; background: rgba(15,42,82,.08); border-radius: 999px; padding: 1px 7px; } .pill.active .pc { background: rgba(255,255,255,.22); }
@@ -527,9 +527,14 @@ h2 { margin-bottom: 14px; }
 :root {
   --bg: #faf6ef; --card: #ffffff; --ink: #1c1a17; --ink-soft: #7a7368; --muted: #8a8377; --line: #e9e2d6;
   --accent: #12233f; --accent-ink: #ffffff; --warm: #bb5b3f; --warm-soft: #f7e9e2; --ok: #2f7a52; --info: #4a6a8a;
-  --rail-w: 72px; --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif;
+  --rail-w: 72px;
+  /* Typography comes from the shared Nordla tokens (nordla-tokens.css) - see that file's note about
+     Finance's CSP not yet allowing the actual webfonts to load. --serif is kept as an alias so every
+     existing var(--serif) usage below needs no change. */
+  --serif: var(--font-display);
+  --sans: var(--font-ui);
 }
-html, body { background: var(--bg); }
+html, body { background: var(--bg); font-family: var(--sans); }
 .card { border-color: var(--line); }
 
 /* ---- Shell: narrow icon rail + shared top bar ---- */
@@ -577,13 +582,13 @@ html, body { background: var(--bg); }
 .tc-select { font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fff; color: var(--ink); }
 .tc-svg { width: 100%; height: auto; }
 .tc-grid line { stroke: var(--line); stroke-width: 1; } .tc-axis text { fill: var(--ink-soft); font-size: 10.5px; }
-.tc-bar-in { fill: color-mix(in srgb, var(--info) 55%, #fff); } .tc-bar-out { fill: color-mix(in srgb, var(--warm) 45%, #fff); }
-.tc-line { fill: none; stroke: var(--accent); stroke-width: 2.25; } .tc-dot { fill: var(--accent); }
+.tc-bar-in { fill: color-mix(in srgb, var(--chart-slate) 55%, #fff); } .tc-bar-out { fill: color-mix(in srgb, var(--chart-terracotta) 50%, #fff); }
+.tc-line { fill: none; stroke: var(--chart-navy); stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; } .tc-dot { fill: var(--chart-navy); }
 /* Homepage-only recolour to match index(4).html's Treasury chart (grey/blue Entrées, terracotta Solde line) -
    scoped to .home-chart so the shared treasuryChart() component keeps its existing colours everywhere else
    (the dedicated Tresorerie page reuses the same function/classes and must not change - see viewTreasury()). */
-.home-chart .tc-bar-in { fill: color-mix(in srgb, var(--info) 20%, #fff); }
-.home-chart .tc-line { stroke: var(--warm); } .home-chart .tc-dot { fill: var(--warm); }
+.home-chart .tc-bar-in { fill: color-mix(in srgb, var(--chart-slate) 25%, #fff); }
+.home-chart .tc-line { stroke: var(--chart-navy); } .home-chart .tc-dot { fill: var(--chart-terracotta); }
 /* Let the homepage Treasury chart fill whatever height its card actually has (the row's other two cards
    already stretch it there via CSS Grid) instead of a fixed aspect ratio that leaves empty space below the
    legend. Scoped to .home-treasury-card/.home-chart only - the Tresorerie page's own chart is untouched. */
@@ -1101,3 +1106,266 @@ button.primary, .btn.primary { box-shadow: 0 1px 2px rgba(32,56,78,.28); }
 .sheet-item:hover { background: var(--bg); }
 .sheet-handle { width: 36px; height: 4px; border-radius: 999px; background: var(--line-2); margin: 2px auto 10px; }
 
+/* Shared Nordla "Parle à Nordla" icon (nordla-icon.js) - fixed optical sizes, never stretched.
+   Not wired into any UI element in Finance yet (no Ask Nordla entry point exists here today) -
+   ready for when one is added. */
+.nordla-icon { object-fit: contain; flex: 0 0 auto; display: inline-block; vertical-align: middle; }
+.nordla-icon-sm { width: 16px; height: 16px; }
+.nordla-icon-md { width: 20px; height: 20px; }
+.nordla-icon-lg { width: 28px; height: 28px; }
+
+
+/* Official Nordla icons in the navy rail: the assets are navy+terracotta and must not be recoloured, so they sit on a
+   white rounded chip (required for legibility on navy). Home has no official asset and keeps its generic outline glyph. */
+.rail-ico { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; }
+.rail-ico.official { background: #fff; }
+.rail-ico .nordla-icon { width: 22px; height: 22px; }
+.railitem.active .rail-ico.official { box-shadow: 0 0 0 2px var(--warm); }
+.sheet-ico { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; }
+.metric-icon .nordla-icon { width: 22px; height: 22px; }
+
+/* Nordla Chart System layout (Finance). The chart components themselves live in shared/nordla-charts.css. */
+.home-treasury-card .home-chart { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; padding-top: 6px; }
+.nc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.nc-grid-2 .span2 { grid-column: 1 / -1; }
+.nc-card { padding: 16px 18px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.nc-card .section-title { margin: 0; }
+@media (max-width: 860px) { .nc-grid-2 { grid-template-columns: 1fr; } }
+.donut-body .nc-donut { justify-content: center; }
+
+/* KPI Sparkline card (Nordla Chart System 01): value + delta on top, the sparkline spans the full card width below. */
+.metric { grid-template-columns: 42px minmax(0,1fr); }
+.metric-spark { grid-column: 1 / -1; height: 44px; align-self: stretch; margin-top: 2px; min-width: 0; }
+.metric-spark:not(:has(svg, .nc-chart)) { display: none; }
+.metric-spark .nc-chart, .metric-spark span { display: block; width: 100%; }
+@media (max-width: 560px) { .metric-spark { display: block; } .metric-spark:not(:has(svg, .nc-chart)) { display: none; } }
+/* The Donut Breakdown needs room for ring + legend side by side (board 05): give its card a wider column. */
+@media (min-width: 1180px) { .content-grid-bottom { grid-template-columns: minmax(0,.8fr) minmax(0,1.3fr) minmax(0,1.15fr); } }
+.donut-body .nc-donut { flex-wrap: nowrap; }
+.donut-body .nc-donut-legend { flex: 1 1 0; }
+
+/* ---------- Accueil - premium pass (scoped to .page-shell:is(.home, .premium): no other page is affected) ----------
+   Cool Nordla canvas, white cards with a single hairline border and no shadow, one sans family with a clear
+   size hierarchy (serif kept out of numbers and card titles), a calm CTA, no decorative underlines. */
+.main:has(.page-shell:is(.home, .premium)) { background: #f4f5f7; }
+.page-shell:is(.home, .premium) { gap: 20px; padding: 28px 32px 96px; --home-border: #e5e7eb; }
+:is(.home, .premium) .hero-row .hero-block h1 { font-family: var(--font-display); font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -.005em; color: var(--chart-navy); margin: 4px 0 0; }
+:is(.home, .premium) .quote-card .quote { font-family: var(--font-ui); font-style: normal; font-weight: 500; font-size: 13px; line-height: 1.5; color: var(--chart-slate); margin-top: 8px; }
+:is(.home, .premium) .card, .home .metric { background: #fff; border: 1px solid var(--home-border); border-radius: 14px; box-shadow: none; }
+:is(.home, .premium) .card { padding: 22px 24px; }
+:is(.home, .premium) .section-title { font-family: var(--font-ui); font-size: 15px; font-weight: 650; letter-spacing: 0; color: var(--chart-navy); margin: 0; }
+:is(.home, .premium) .section-sub { font-size: 12.5px; color: var(--chart-slate); margin-top: 3px; }
+:is(.home, .premium) .viewall, .home .card .section-head a { font-size: 12.5px; font-weight: 600; color: var(--chart-slate); text-decoration: none; }
+:is(.home, .premium) .viewall:hover { color: var(--chart-navy); }
+
+/* KPI cards: label, big value, delta, sparkline - same structure in all four, no icon disc */
+:is(.home, .premium) .metric { grid-template-columns: 1fr; gap: 0; align-items: stretch; align-content: start; padding: 18px 20px 16px; min-height: 148px; }
+:is(.home, .premium) .metric-icon { display: none; }
+:is(.home, .premium) .metric-title { font-size: 13px; font-weight: 500; color: var(--chart-slate); margin: 0 0 8px; }
+:is(.home, .premium) .metric-value { font-family: var(--font-ui); font-size: 28px; font-weight: 700; letter-spacing: -.01em; color: var(--chart-navy); line-height: 1.15; }
+:is(.home, .premium) .metric-note { margin-top: 6px; font-size: 12px; color: var(--chart-slate); }
+:is(.home, .premium) .metric-note .good { color: var(--chart-positive); } .home .metric-note .bad { color: var(--chart-negative); }
+:is(.home, .premium) .metric-note a { color: var(--chart-navy); font-weight: 600; text-decoration: none; }
+:is(.home, .premium) .metric-spark { margin-top: 10px; }
+
+/* Treasury card */
+:is(.home, .premium) .home-treasury-card { padding: 22px 24px; }
+
+/* Recent activity: quiet rows, no link underlines */
+:is(.home, .premium) .activity-row { padding: 12px 2px; border-bottom: 1px solid #eef0f3; }
+:is(.home, .premium) .activity-row a, .home .activity-text a { text-decoration: none; color: var(--chart-navy); }
+:is(.home, .premium) .activity-text { font-size: 13px; gap: 3px; }
+:is(.home, .premium) .activity-text strong { font-weight: 600; }
+:is(.home, .premium) .activity-text small { font-size: 11.5px; color: var(--chart-slate); }
+:is(.home, .premium) .activity-time { font-size: 11.5px; color: var(--chart-slate); }
+
+/* Create-invoice CTA: flat white card, plain headline, un-tilted preview, no gradient */
+:is(.home, .premium) .cta-card { background: #fff; padding: 0; }
+:is(.home, .premium) .cta-content { padding: 22px 24px; }
+:is(.home, .premium) .cta-content h3 { font-family: var(--font-ui); font-style: normal; font-weight: 700; font-size: 18px; line-height: 1.3; letter-spacing: -.005em; color: var(--chart-navy); }
+:is(.home, .premium) .invoice-preview { transform: none; box-shadow: none; border-color: var(--home-border); }
+:is(.home, .premium) .cta-button { width: 100%; justify-content: center; }
+
+/* Bottom row: equal card rhythm, centred empty states */
+:is(.home, .premium) .content-grid-bottom > .card { min-height: 260px; }
+:is(.home, .premium) .empty, .home .bank-empty { color: var(--chart-slate); }
+:is(.home, .premium) .expense-insight { border-radius: 10px; }
+:is(.home, .premium) a { text-decoration: none; } :is(.home, .premium) a:hover { text-decoration: none; }
+:is(.home, .premium) .activity-row a:hover strong, .home .metric-note a:hover { text-decoration: underline; }
+.page-shell:is(.home, .premium) { letter-spacing: 0; }
+
+/* ---------- Subpages (premium): title block, tabs, toolbar, table. First applied to Ventes. ---------- */
+.premium .hero-row.subpage .hero-block h1 { font-size: 28px; line-height: 1.2; margin: 0 0 4px; }
+.premium .hero-row .subtitle { font-size: 13.5px; color: var(--chart-slate); margin-top: 4px; }
+.premium .metric { min-height: 112px; }
+.premium .tabsrow { border-bottom: 1px solid var(--home-border); gap: 4px; }
+.premium .tab2 { font-size: 13.5px; font-weight: 600; color: var(--chart-slate); padding: 12px 6px; margin-right: 22px; border-bottom-width: 2px; }
+.premium .tab2.on { color: var(--chart-navy); border-color: var(--chart-terracotta); }
+.premium .workspace { border-radius: 14px; }
+.premium .workspace-side { background: #fafbfc; border-left: 1px solid var(--home-border); }
+.premium .workspace-toolbar { padding: 16px 20px; border-bottom: 1px solid var(--home-border); gap: 12px; align-items: center; justify-content: flex-start; }
+.premium .search-field { flex: 1 1 260px; max-width: 320px; height: 40px; border: 1px solid var(--home-border); border-radius: 10px; background: #fff; }
+.premium .search-field input { font-size: 13px; }
+.premium .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.premium .tools .tool, .premium .tools button.tool, .premium .tools select, .premium .tools input { width: auto; min-width: 0; height: 40px; padding: 0 12px; font-size: 13px; color: var(--chart-navy); border: 1px solid var(--home-border); border-radius: 10px; background: #fff; box-sizing: border-box; }
+.premium .tools button.tool { font-weight: 600; cursor: pointer; }
+.premium .table-wrap table { border-collapse: collapse; width: 100%; }
+.premium .table-wrap th { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--chart-slate); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--home-border); background: #fff; }
+.premium .table-wrap th.num, .premium .table-wrap td.num { text-align: right; }
+.premium .table-wrap td { padding: 14px 16px; font-size: 13.5px; color: var(--chart-navy); border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+.premium .table-wrap td strong { display: block; font-weight: 600; font-size: 13.5px; }
+.premium .table-wrap td small { display: block; font-size: 11.5px; color: var(--chart-slate); margin-top: 2px; }
+.premium .table-wrap tr.click:hover td { background: #f8f9fb; }
+.premium .table-wrap td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.premium .badge { font-size: 11.5px; font-weight: 600; }
+.premium .workspace-toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+.premium .search-field { max-width: none; flex: 0 0 auto; width: 100%; }
+.premium .tools { margin-left: 0; }
+.premium .table-wrap td { padding: 10px 16px; }
+
+/* ---------- Premium: shared refinements for Achats, Banque & Caisse, Contacts, À faire ---------- */
+html:has(.page-shell:is(.home, .premium)), body:has(.page-shell:is(.home, .premium)) { background: #f4f5f7; }
+.premium .metric-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.premium .accounts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.premium .account-card { background: #fff; border: 1px solid var(--home-border); border-radius: 14px; box-shadow: none; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
+.premium .account-card span { font-size: 13px; font-weight: 500; color: var(--chart-slate); }
+.premium .account-card strong { font-family: var(--font-ui); font-size: 28px; font-weight: 700; color: var(--chart-navy); line-height: 1.15; }
+.premium .account-card small { font-size: 12px; color: var(--chart-slate); }
+/* filter pills (Banque, Achats) */
+.premium .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.premium .tabs button { border: 1px solid var(--home-border); background: #fff; color: var(--chart-slate); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.premium .tabs button span { margin-left: 7px; font-weight: 500; opacity: .75; }
+.premium .tabs button.active { background: var(--chart-navy); border-color: var(--chart-navy); color: #fff; }
+/* forms: readable, consistent controls */
+.premium input:not([type=checkbox]):not([type=radio]), .premium select, .premium textarea { font-size: 13px; color: var(--chart-navy); border: 1px solid var(--home-border); border-radius: 10px; background: #fff; box-sizing: border-box; }
+.premium input:not([type=checkbox]):not([type=radio]), .premium select { height: 38px; padding: 0 12px; }
+.premium textarea { padding: 10px 12px; }
+.premium .field label, .premium label { font-size: 12px; color: var(--chart-slate); font-weight: 500; }
+.premium .card, .premium .account-card { border-color: var(--home-border); }
+/* À faire: calm neutral action rows (the icon carries the tone, not a coloured border) */
+.premium .arow, .premium .arow.bad, .premium .arow.warn, .premium .arow.info, .premium .arow.ok { border-color: var(--home-border); background: #fff; }
+.premium .arow:hover { transform: none; background: #f8f9fb; border-color: #d5dae1; }
+.premium .arow .atext { font-size: 13.5px; color: var(--chart-navy); }
+.premium .arow .acta { font-size: 12.5px; font-weight: 600; color: var(--chart-slate); }
+/* empty states */
+.premium .empty.big strong { color: var(--chart-navy); font-size: 15px; }
+.premium .search-field input, .premium .search-field input:not([type=checkbox]) { border: 0; height: auto; padding: 0; background: transparent; border-radius: 0; }
+.premium .queue-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.premium .queue-tabs button { border: 1px solid var(--home-border); background: #fff; color: var(--chart-slate); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.premium .queue-tabs button.active { background: var(--chart-navy); border-color: var(--chart-navy); color: #fff; }
+.premium .form-pane .row.r3, .premium .form-pane .row.r4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.premium .form-pane .field { min-width: 0; }
+.premium .form-pane .field input, .premium .form-pane .field select { width: 100%; }
+
+.todo-donut { max-width: 560px; padding-top: 14px; }
+
+/* Every page except Trésorerie shares the premium canvas (Trésorerie is migrated once validated). */
+.main.premium, html:has(.main.premium), body:has(.main.premium) { background: #f4f5f7; }
+.main.premium .field input:not([type=checkbox]):not([type=radio]), .main.premium .field select, .main.premium .field textarea { border: 1px solid var(--home-border, #e5e7eb); border-radius: 10px; background: #fff; }
+.main.premium .search-field input:not([type=checkbox]) { border: 0; background: transparent; }
+.todo-donut .nc-donut-legend { max-width: 300px; }
+
+/* Nordla shared fonts: Montserrat for UI, Lora for editorial (self-hosted, see shared/nordla-fonts.css). */
+:root { --sans: var(--font-ui); --serif: var(--font-display); }
+html, body { font-family: var(--font-ui); }
+
+/* Montserrat is wider than the previous system font: let rail labels wrap on two lines instead of overlapping the next item. */
+@media (min-width: 761px) { .railitem { height: auto; min-height: 54px; padding: 4px 2px; } .railitem .rlabel { white-space: normal; text-align: center; line-height: 1.15; max-width: 76px; } }
+.main.premium .topbar h1 { font-family: var(--font-display); font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -.005em; color: var(--chart-navy); }
+.main.premium .topbar .muted { color: var(--chart-slate); }
+/* Trésorerie top figures: same card/number style as every other page */
+.premium .tmetric { background: #fff; border: 1px solid var(--home-border); border-radius: 14px; box-shadow: none; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.premium .tmetric span { font-size: 13px; font-weight: 500; color: var(--chart-slate); }
+.premium .tmetric strong { font-family: var(--font-ui); font-size: 28px; font-weight: 700; letter-spacing: -.01em; color: var(--chart-navy); line-height: 1.15; }
+/* Mobile: the Accueil invoice rows must wrap instead of forcing the page wider than the screen. */
+@media (max-width: 600px) {
+  .homeinv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .homeinv-pillwrap { width: auto; }
+  .homeinv-pillwrap .chip { max-width: 100%; }
+}
+/* Grid tracks may shrink below their content's min width (otherwise one nowrap child widens the whole page on phones). */
+.page-shell { grid-template-columns: minmax(0, 1fr); }
+.page-shell > * { min-width: 0; }
+@media (max-width: 560px) {
+  .page-shell .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .page-shell .metric { min-width: 0; padding: 14px 14px 12px; }
+  .page-shell .metric-value { font-size: 22px; white-space: normal; overflow-wrap: anywhere; }
+  .page-shell .metric-title { font-size: 12px; }
+}
+.page-shell > div:not(.hero-row) { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (max-width: 1179px) { .content-grid-3, .content-grid-bottom { grid-template-columns: minmax(0, 1fr); } .content-grid-3 > *, .content-grid-bottom > * { min-width: 0; } }
+@media (max-width: 600px) { .donut-body .nc-donut { flex-wrap: wrap; justify-content: center; } .donut-body .nc-donut-legend { flex: 1 1 100%; max-width: none; } }
+.tabs2 { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.tabs2::-webkit-scrollbar { display: none; }
+@media (max-width: 560px) { .page-shell.premium .metric-grid, .page-shell.home .metric-grid, .premium .accounts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .page-shell.premium .metric { min-height: 0; } }
+@media (max-width: 560px) {
+  .premium .workspace-toolbar { padding: 14px; }
+  .premium .tools { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .premium .tools .tool, .premium .tools input, .premium .tools select, .premium .tools button.tool { width: 100%; min-width: 0; }
+  .premium .table-wrap td strong { display: inline; }
+  .premium .table-wrap td small { display: inline; margin-left: 8px; }
+}
+@media (max-width: 700px) {
+  .hero-row.subpage { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .hero-row.subpage .quote-card { justify-content: flex-start; flex-wrap: wrap; gap: 8px; align-self: start; }
+}
+/* Mobile bottom bar: two-line labels (e.g. "Banque & Caisse") must fit inside the bar. */
+@media (max-width: 760px) {
+  .rail { height: 68px; }
+  .railitem { min-height: 0; padding: 4px 2px; gap: 3px; }
+  .railitem .rail-ico { width: 30px; height: 30px; }
+  .railitem .rlabel { font-size: 9px; line-height: 1.1; max-width: 68px; }
+}
+@media (max-width: 700px) { .premium .card > table, .premium .card > .table-wrap { display: block; overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; } }
+
+/* Navigation from the shared Nordla menu tokens (nordla-tokens.css): module surface, light icon tiles, terracotta active. */
+.rail { background: var(--nordla-menu-bg); }
+.rail-mark { background: var(--nordla-menu-mark-bg); color: var(--nordla-menu-text-active); }
+.railitem { color: var(--nordla-menu-text); }
+.railitem:hover { background: transparent; color: var(--nordla-menu-text-active); }
+.railitem.active { background: var(--nordla-menu-active-row); color: var(--nordla-menu-text-active); }
+.railitem .rail-ico.official { background: var(--nordla-menu-icon-bg); transition: background .15s ease; }
+.railitem:hover .rail-ico.official { background: var(--nordla-menu-icon-bg-hover); }
+.railitem.active .rail-ico.official { background: var(--nordla-menu-icon-bg-hover); box-shadow: 0 0 0 2px var(--nordla-menu-active); }
+.rail-more .rlabel, .rail-foot .railitem { color: var(--nordla-menu-text); }
+
+/* ---- Shared navigation dimensions (tokens in nordla-tokens.css), identical to every other Nordla module ---- */
+:root { --rail-w: var(--nordla-nav-width); }
+@media (min-width: 761px) {
+  .shell { grid-template-columns: var(--nordla-nav-width) minmax(0, 1fr); }
+  .rail { width: var(--nordla-nav-width); padding: var(--nordla-nav-pad-y) 0; gap: var(--nordla-nav-gap); }
+  .rail-mark { width: var(--nordla-nav-mark); height: var(--nordla-nav-mark); margin-bottom: var(--nordla-nav-mark-gap); }
+  .rail-nav { gap: var(--nordla-nav-gap); }
+  .railitem { width: var(--nordla-nav-width); min-height: var(--nordla-nav-item-h); padding: 4px; gap: 4px; border-radius: var(--nordla-nav-radius); font-size: var(--nordla-nav-label); }
+  .railitem .rlabel { font-size: var(--nordla-nav-label); max-width: none; }
+  .railitem .rail-ico { width: var(--nordla-nav-tile); height: var(--nordla-nav-tile); border-radius: var(--nordla-nav-tile-radius); }
+  .railitem .rail-ico .nordla-icon { width: var(--nordla-nav-icon); height: var(--nordla-nav-icon); }
+}
+
+/* Cold Nordla neutral surfaces for the language switcher and the global search (were warm cream). Active language unchanged. */
+.tb-right .langswitch { background: #F4F6F8; border: 1px solid #E5E7EB; }
+.gsearchwrap { background: #F7F8FA; border-color: #E5E7EB; }
+.gkey { border-color: #E5E7EB; }
+
+/* Compact rail (height-responsive): spacing comes from the shared tokens; dimensions of tile/icon/label/width are unchanged. */
+@media (min-width: 761px) {
+  .rail { padding: var(--nordla-nav-pad-y) 0; gap: var(--nordla-nav-gap); }
+  .rail-mark { margin-bottom: var(--nordla-nav-mark-gap); }
+  .rail-nav { gap: var(--nordla-nav-gap); }
+  .railitem { min-height: var(--nordla-nav-item-h); padding: var(--nordla-nav-item-pad) 4px; gap: var(--nordla-nav-item-gap); }
+  .rail-foot { gap: var(--nordla-nav-utility-gap); padding-top: var(--nordla-nav-utility-gap); }
+}
+
+/* The rail keeps the shared fixed dimensions; if the window is shorter than the rail it scrolls inside itself. */
+@media (min-width: 761px) { .rail { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; } .rail::-webkit-scrollbar { display: none; } }
+
+/* Account menu (top right). Logout moved here from the navigation rail. */
+.acct { position: relative; }
+button.tb-brand { background: none; border: 0; padding: 6px 4px; font-family: inherit; cursor: pointer; border-radius: 8px; }
+button.tb-brand:hover { background: #F4F6F8; box-shadow: none; }
+.acct-chev { display: inline-flex; transform: rotate(90deg); }
+.acct.open .acct-chev { transform: rotate(-90deg); }
+.acct-menu { display: none; position: absolute; right: 0; top: calc(100% + 6px); min-width: 170px; background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 6px; z-index: 40; }
+.acct.open .acct-menu { display: block; }
+.acct-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 9px 10px; border-radius: 8px; font: 500 13px var(--font-ui); color: var(--chart-navy); cursor: pointer; text-align: left; }
+.acct-item:hover { background: #F4F6F8; box-shadow: none; }

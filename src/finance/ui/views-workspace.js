@@ -138,7 +138,7 @@ function openInboxItem(id, reload) {
 
 // ---------- À faire / To do: the real Action Center, as a first-class page ----------
 async function viewTodo() {
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/todo', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('To do')), h('div', { class: 'subtitle' }, tt('Everything that needs your attention, in one place.')))));
   const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
@@ -158,8 +158,9 @@ async function viewTodo() {
     // no per-item due-date bucketing in this data model to build "today/tomorrow/48h/this week" honestly).
     box.appendChild(h('div', { class: 'card', style: 'padding:16px 18px' },
       h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, tt('Overview')), h('div', { class: 'section-sub' }, tt('By priority'))),
-      h('div', { class: 'tonebar' }, [['bad', counts.bad], ['warn', counts.warn], ['info', counts.info], ['ok', counts.ok]].filter(([, n]) => n).map(([tone, n]) => h('span', { class: tone, style: `flex:${n}` }))),
-      h('div', { class: 'tonelegend' }, [['bad', 'Urgent'], ['warn', 'To review'], ['info', 'Informational'], ['ok', 'Up to date']].map(([tone, l]) => h('span', { class: tone }, tt(l), ` (${counts[tone]})`)))));
+      actions.length
+        ? h('div', { class: 'todo-donut' }, NordlaCharts.donut([['bad', 'Urgent', 'c2'], ['warn', 'To review', 'c3'], ['info', 'Informational', 'c4'], ['ok', 'Up to date', 'c1']].map(([tone, l, cls]) => ({ name: `${tt(l)} (${counts[tone]})`, pct: Math.round((counts[tone] / actions.length) * 1000) / 10, cls })), { totalValue: String(actions.length), totalLabel: tt('To handle'), size: 132 }))
+        : h('div', { class: 'muted small', style: 'padding-top:10px' }, tt('Nothing needs your attention'))));
     const mid = h('div', { class: 'todo-workspace' });
     mid.appendChild(actionCenterCard(actions, o.currency));
     const top = actions[0];
@@ -216,7 +217,7 @@ function analyticsPanel({ endpoint, currency, productDrilldown }) {
   const picker = periodPicker((r) => { range = r; load(); });
   let searchTimer = null;
   search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(load, 220); });
-  const toolbar = h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search), picker.node);
+  const toolbar = h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, NordlaIcon.semantic('recherche', 'sm'), search), picker.node);
   const results = h('div');
   async function load() {
     clear(results); results.appendChild(h('div', { class: 'muted small', style: 'padding:12px' }, tt('Loading...')));
@@ -233,7 +234,7 @@ function renderAnalytics(r, currency, productDrilldown) {
   const wrap = h('div', { style: 'padding:16px 18px' });
   if (r.byProduct !== undefined) {
     wrap.appendChild(h('div', { class: 'metric-grid', style: 'margin-bottom:14px' },
-      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Sales (excl. VAT)')), h('div', { class: 'metric-value' }, `${r.salesNet} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, NordlaIcon.semantic('ventes', 'sm')), h('div', null, h('div', { class: 'metric-title' }, tt('Sales (excl. VAT)')), h('div', { class: 'metric-value' }, `${r.salesNet} ${currency}`))),
       h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('coins', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Credit notes (excl. VAT)')), h('div', { class: 'metric-value' }, `${r.creditNet} ${currency}`))),
       h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('check', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Net after credit notes')), h('div', { class: 'metric-value' }, `${r.netAfterCredits} ${currency}`))),
       h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Documents')), h('div', { class: 'metric-value' }, String(r.documentsCount))))));
@@ -244,7 +245,7 @@ function renderAnalytics(r, currency, productDrilldown) {
     if (r.unattributedNetCents) wrap.appendChild(h('div', { class: 'banner info small', style: 'margin-top:10px' }, tt('{0} of sales lines have no catalogue product/SKU and are not included in the breakdown above.', `${r.unattributedNet} ${currency}`)));
   } else {
     wrap.appendChild(h('div', { class: 'metric-grid', style: 'margin-bottom:14px' },
-      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('coins', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Purchases (incl. VAT)')), h('div', { class: 'metric-value' }, `${r.total} ${currency}`))),
+      h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, NordlaIcon.semantic('achats', 'sm')), h('div', null, h('div', { class: 'metric-title' }, tt('Purchases (incl. VAT)')), h('div', { class: 'metric-value' }, `${r.total} ${currency}`))),
       h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon('doc', 16)), h('div', null, h('div', { class: 'metric-title' }, tt('Documents')), h('div', { class: 'metric-value' }, String(r.documentsCount))))));
     wrap.appendChild(h('h3', { class: 'section-title', style: 'margin-bottom:8px' }, tt('By supplier')));
     if (!r.bySupplier.length) wrap.appendChild(h('div', { class: 'empty' }, h('div', { class: 'muted small' }, tt('No supplier invoice in this period.'))));
@@ -261,7 +262,7 @@ async function viewSales(q) {
   // with ?status=... (e.g. "invoices to approve" -> status=READY_FOR_APPROVAL) - both must be honoured, not
   // silently dropped (found during the button/action audit; the pre-redesign viewList() read both).
   let status = q.get('status') || ''; let text = q.get('q') || '';
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/sales', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/new/invoice' }, svgIcon('plus', 16), tt('New invoice')))));
@@ -309,7 +310,7 @@ async function viewSales(q) {
     const clientSel = h('select', { class: 'tool', on: { change: (e) => { client = e.target.value; drawTable(); } } }, h('option', { value: '' }, tt('All clients')));
     const fromInput = h('input', { type: 'date', class: 'tool', style: 'width:auto', on: { change: (e) => { fromDate = e.target.value; drawTable(); } } });
     const toInput = h('input', { type: 'date', class: 'tool', style: 'width:auto', on: { change: (e) => { toDate = e.target.value; drawTable(); } } });
-    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search),
+    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, NordlaIcon.semantic('recherche', 'sm'), search),
       h('div', { class: 'tools' }, fromInput, toInput, statusSel, clientSel,
         h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(shown, [{ header: 'Number', key: 'number' }, { header: 'Customer', key: 'customer' }, { header: 'Issue date', key: 'issueDate' }, { header: 'Due date', key: 'dueDate' }, { header: 'Amount', key: 'gross' }, { header: 'Status', key: 'effectiveStatus' }], `${kind}.csv`) } }, tt('Export')))));
     const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
@@ -393,7 +394,7 @@ async function viewPurchasesWorkspace(q) {
   let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
   let text = '';
   let selectedId = null;
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/purchases', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
     h('div', { class: 'actions', style: 'align-self:center' },
@@ -443,7 +444,7 @@ async function viewPurchasesWorkspace(q) {
     // visible instead of behind a click-to-open overlay. Collapses responsively (see .purchase-shell CSS).
     workspace.className = 'card purchase-shell';
     const queueTabs = h('div', { class: 'queue-tabs' });
-    const search = h('label', { class: 'search-field', style: 'width:100%;margin-bottom:10px' }, svgIcon('search', 14), h('input', { placeholder: tr('Supplier, invoice number...'), on: { input: (e) => { text = e.target.value; drawQueue(); } } }));
+    const search = h('label', { class: 'search-field', style: 'width:100%;margin-bottom:10px' }, NordlaIcon.semantic('recherche', 'sm'), h('input', { placeholder: tr('Supplier, invoice number...'), on: { input: (e) => { text = e.target.value; drawQueue(); } } }));
     const queueList = h('div');
     const queue = h('aside', { class: 'queue' }, queueTabs, search, queueList);
     const preview = h('section', { class: 'doc-preview' }, h('div', { class: 'muted small' }, tt('Select a document to preview it here.')));
@@ -550,7 +551,6 @@ async function viewPurchases() {
   load();
 }
 
-// ---------- accountant closing workflow (month / quarter / year / custom -> prepare -> preview -> APPROVE -> send, or .eml) ----------
 function accountantWorkspace() {
   const now = new Date(); const y = now.getFullYear(); const qn = Math.floor(now.getMonth() / 3) + 1;
   const spec = { kind: 'quarter', year: y, quarter: qn === 1 ? 4 : qn - 1, month: now.getMonth() + 1, from: `${y}-01-01`, to: now.toISOString().slice(0, 10) };
@@ -602,6 +602,7 @@ function accountantWorkspace() {
   return card;
 }
 
+// ---------- accountant closing workflow (month / quarter / year / custom -> prepare -> preview -> APPROVE -> send, or .eml) ----------
 // ---------- settings: accountant, stock, finance inbox, Peppol topology, connectors ----------
 async function workspaceSettingsCards() {
   const s = state.settings; const wrap = h('div');
@@ -701,7 +702,7 @@ function matchActions(s, reload) {
   return acts;
 }
 async function viewBank() {
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/bank', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Bank & Cash')), h('div', { class: 'subtitle' }, tt('Understand every inflow and outflow, without accounting jargon.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/treasury' }, tt('Treasury')))));
@@ -808,7 +809,7 @@ async function viewBank() {
     // default period) - a genuine "Periode" control, not decorative.
     const fromInput = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { periodFrom = e.target.value || null; drawList(); } } });
     const toInput = h('input', { type: 'date', style: 'width:auto', on: { change: (e) => { periodTo = e.target.value || null; drawList(); } } });
-    ledgerToolbar.appendChild(h('label', { class: 'search-field' }, svgIcon('search', 14), searchInput));
+    ledgerToolbar.appendChild(h('label', { class: 'search-field' }, NordlaIcon.semantic('recherche', 'sm'), searchInput));
     ledgerToolbar.appendChild(h('div', { class: 'tools' }, fromInput, toInput));
     loadLedger();
   }
@@ -820,7 +821,7 @@ async function viewBank() {
 const TREASURY_HORIZONS = [[30, '30 days'], [60, '60 days'], [90, '90 days']];
 async function viewTreasury() {
   let horizon = 30;
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/treasury', shell);
   const hzRow = h('div', { class: 'tabsrow' });
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.'))), hzRow));
@@ -878,7 +879,15 @@ async function viewTreasury() {
   // once here and never re-fetched when the horizon selector changes.
   try {
     const cf = await api('GET', '/api/overview/cashflow?months=12');
-    chartWrap.appendChild(cf.hasActivity ? treasuryChart(cf.rows, cf.currency) : h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('coins', 20)), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
+    if (!cf.hasActivity) chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('tresorerie', 'md')), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
+    else {
+      // Nordla Chart System: Trend Line (balance over time) + Comparison (inflows vs outflows) + Waterfall (what moved the balance).
+      const card = (title, sub, body, cls) => h('div', { class: cls ? 'card nc-card span2' : 'card nc-card' }, h('h3', { class: 'section-title' }, title), sub ? h('div', { class: 'section-sub' }, sub) : null, body);
+      chartWrap.appendChild(h('div', { class: 'nc-grid-2' },
+        card(tt('Cash position over time'), null, cashTrendChart(cf.rows, cf.currency, tt('Cumulative balance'))),
+        card(tt('Inflows vs outflows'), null, cashComparisonChart(cf.rows, cf.currency)),
+        card(tt('What moved the balance'), tt('Net change per month'), cashWaterfallChart(cf.rows, cf.currency), 'span2')));
+    }
   } catch (e) { chartWrap.appendChild(h('div', { class: 'muted small' }, tt('Chart unavailable.'))); }
   await loadHorizon();
 }

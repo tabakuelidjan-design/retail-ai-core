@@ -41,7 +41,7 @@ async function viewContacts(q) {
   let role = 'all'; let all = []; let archivedRows = []; let sort = 'name';
   let searchTimer = null;
 
-  const shell = h('div', { class: 'page-shell' });
+  const shell = h('div', { class: 'page-shell premium' });
   layout('#/contacts', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Contacts')), h('div', { class: 'subtitle' }, tt('Customers, suppliers and financial relationships in one directory.'))),
     h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => companyModal(null) } }, tt('+ New contact')))));
@@ -77,7 +77,7 @@ async function viewContacts(q) {
     clear(wsMain);
     const rows = baseRows();
     const sortSel = h('select', { class: 'tool', on: { change: (e) => { sort = e.target.value; drawRows(); } } }, CONTACT_SORTS.map(([v, l]) => h('option', { value: v, selected: v === sort }, tt(l))));
-    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, svgIcon('search', 14), search),
+    wsMain.appendChild(h('div', { class: 'workspace-toolbar' }, h('label', { class: 'search-field' }, NordlaIcon.semantic('recherche', 'sm'), search),
       h('div', { class: 'tools' }, sortSel, h('button', { class: 'tool', type: 'button', on: { click: () => exportRowsAsCsv(rows, [{ header: 'Name', key: 'displayName' }, { header: 'VAT', key: 'vatNumber' }, { header: 'Relation', value: (r) => relationText(r) }, { header: 'Email', key: 'email' }, { header: 'Amount receivable', value: (r) => (r.isCustomer ? withCur(r.amountReceivable, cur) : '') }, { header: 'Amount payable', value: (r) => (r.isSupplier ? withCur(r.amountPayable, cur) : '') }], 'contacts.csv') } }, tt('Export')))));
     const tableWrap = h('div', { class: 'table-wrap' }); wsMain.appendChild(tableWrap);
     // "No contacts at all" only applies with no active search - a search that matches nothing is always the
@@ -88,7 +88,7 @@ async function viewContacts(q) {
         h('button', { class: 'primary', style: 'margin-top:12px', on: { click: () => companyModal(null) } }, tt('Add a contact'))))); return; }
     if (!rows.length) {
       if (role === 'archived') { tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon ok' }, svgIcon('check', 26)), h('div', null, h('strong', null, tt('No archived contacts.'))))); return; }
-      tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('search', 26)),
+      tableWrap.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('recherche', 'lg')),
         h('div', null, h('strong', null, tt('No contact matches this search.')),
           search.value ? h('button', { class: 'btn ghost', style: 'margin-top:10px', on: { click: () => { search.value = ''; load(); } } }, tt('Clear the search')) : null))); return;
     }
