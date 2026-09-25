@@ -4,7 +4,7 @@ import http from 'node:http';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { countsOf, finishRun, latestSyncStatus, startRun } from '../src/sync/run-log.js';
+import { countsOf, finishRun, latestSyncStatus, recordStartupFailure, startRun } from '../src/sync/run-log.js';
 import { createAnalyticsPremiumApp } from '../src/analytics-premium/server/app.js';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 
@@ -78,4 +78,17 @@ test('/api/sync-status exposes sync and report generation as two separate facts'
     const server = http.createServer(app); await new Promise((r) => server.listen(0, '127.0.0.1', r));
     try { const r = await get(server.address().port, '/api/sync-status'); assert.equal(r.status, 200); check(r.json); } finally { await new Promise((r) => server.close(r)); }
   }
+});
+
+test('a sync that fails before it knows the merchant (bad Shopify credentials) still leaves a FAILED trace and keeps the last good sync', async () => {
+  const sb = createFakeSupabase();
+  await sb.upsert('merchants', [{ source_system: 'shopify', source_id: 'gid://shop/1', name: 'M' }], { onConflict: 'source_system,source_id' });
+  const merchant = sb._tables.get('merchants')[0].id;
+  const ok = await startRun(sb, { merchantId: merchant, mode: 'all', now: at('2026-09-26T10:00:00Z') });
+  await finishRun(sb, ok, { ok: true, summaries: {}, now: at('2026-09-26T10:01:00Z') });
+  assert.ok(await recordStartupFailure(sb, { mode: 'all', error: 'Shopify token exchange HTTP 400', now: at('2026-09-26T10:15:00Z') }));
+  const s = await latestSyncStatus(sb, merchant, { now: at('2026-09-26T10:16:00Z') });
+  assert.equal(s.lastAttempt.status, 'FAILED'); assert.equal(s.latestFailed, true); assert.equal(s.lastSuccess.finishedAt, '2026-09-26T10:01:00.000Z');
+  // no merchant / several merchants: nothing is guessed
+  assert.equal(await recordStartupFailure(createFakeSupabase(), { mode: 'all', error: 'x' }), null);
 });

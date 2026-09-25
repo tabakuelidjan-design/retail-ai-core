@@ -8,7 +8,7 @@
 import http from 'node:http';
 import { createAnalyticsPremiumApp } from './app.js';
 import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
-import { reportRefreshState, startReportRefresh } from './report-refresh.js';
+import { reportRefreshState, startSyncAwareRefresh } from './report-refresh.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
 
@@ -30,7 +30,8 @@ try {
     if (hosting.hosted) console.log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);
     else console.log(`Analytics Premium (Brief) running at http://127.0.0.1:${hosting.port}`);
   });
-  if (hosting.hosted) startReportRefresh({ hours: hosting.refreshHours });
+  // The report is built FROM the synced Supabase data: regenerate when a newer successful sync exists (checked every few minutes), plus a safety-net interval.
+  if (hosting.hosted) startSyncAwareRefresh({ getSyncFinishedAt: async () => (syncStatus ? (await syncStatus())?.lastSuccess?.finishedAt ?? null : null), checkMinutes: hosting.checkMinutes, fallbackHours: hosting.refreshHours });
 } catch (e) {
   console.error(e instanceof HostingConfigError ? `analytics configuration error: ${e.message}` : `analytics failed to start: ${e.message}`);
   process.exitCode = 1;

@@ -52,3 +52,17 @@ export async function latestSyncStatus(supabase, merchantId, { now = new Date(),
     latestFailed: lastAttempt.status === 'FAILED' || interrupted,
   };
 }
+
+/**
+ * A sync that fails BEFORE it knows the merchant (for example Shopify rejects the credentials) still has to leave a trace, otherwise the modules
+ * would keep showing the last good sync as if nothing happened. Single-tenant fallback: only when exactly one merchant exists.
+ */
+export async function recordStartupFailure(supabase, { mode, error, now = new Date() }) {
+  try {
+    const merchants = await supabase.select('merchants', { select: 'id', limit: '2' });
+    if (merchants.length !== 1) return null;
+    const id = await startRun(supabase, { merchantId: merchants[0].id, mode, now });
+    await finishRun(supabase, id, { ok: false, summaries: {}, error, now });
+    return id;
+  } catch { return null; }
+}

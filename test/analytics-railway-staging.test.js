@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createAnalyticsPremiumApp } from '../src/analytics-premium/server/app.js';
 import { HostingConfigError, basicPassword, clientIpOf, createGuard, isHosted, parseAllowedHosts, resolveHosting } from '../src/analytics-premium/server/hosting.js';
-import { runReportOnce, startReportRefresh } from '../src/analytics-premium/server/report-refresh.js';
+import { runReportOnce, startReportRefresh, startSyncAwareRefresh } from '../src/analytics-premium/server/report-refresh.js';
 
 // Railway staging for Analytics. SYNTHETIC values only.
 const TOKEN = 't'.repeat(32);
@@ -19,7 +19,7 @@ const basic = (pw, user = 'x') => `Basic ${Buffer.from(`${user}:${pw}`).toString
 test('local mode is unchanged: loopback, ANALYTICS_PREMIUM_PORT or 4411, no barrier', () => {
   assert.equal(isHosted({}), false);
   assert.equal(isHosted({ PORT: '8080' }), false);
-  assert.deepEqual(resolveHosting({}), { hosted: false, host: '127.0.0.1', port: 4411, allowedHosts: null, token: null, trustProxyHops: 0, refreshHours: 0 });
+  assert.deepEqual(resolveHosting({}), { hosted: false, host: '127.0.0.1', port: 4411, allowedHosts: null, token: null, trustProxyHops: 0, refreshHours: 0, checkMinutes: 5 });
   assert.equal(resolveHosting({ ANALYTICS_PREMIUM_PORT: '4500' }).port, 4500);
 });
 
@@ -131,4 +131,25 @@ test('report refresh: runs the Core report command at startup, repeats on the in
   assert.equal(runs, 1); assert.equal(tick.ms, 6 * 3600_000);
   tick.fn(); assert.equal(runs, 2);
   startReportRefresh({ hours: 0, run: async () => {}, setIntervalFn: () => { throw new Error('no timer expected'); } });
+});
+
+test('report refresh is sync-aware: regenerates only when a newer successful sync exists, retries after a failure, never on an unchanged sync', async () => {
+  let sync = '2026-09-26T10:00:00Z'; let runs = 0; let okNext = true; let clock = 0;
+  const handle = startSyncAwareRefresh({ getSyncFinishedAt: async () => sync, run: async () => { runs += 1; return okNext; }, checkMinutes: 5, fallbackHours: 6, setIntervalFn: () => ({ unref() {} }), now: () => clock });
+  await handle.first;
+  assert.equal(runs, 1, 'first report at startup');
+  assert.equal(await handle.tick(), false); assert.equal(runs, 1, 'same sync: nothing to regenerate');
+  sync = '2026-09-26T10:15:00Z'; clock += 15 * 60_000;
+  okNext = false; assert.equal(await handle.tick(), false); assert.equal(runs, 2, 'a newer sync triggers a run');
+  okNext = true; assert.equal(await handle.tick(), true); assert.equal(runs, 3, 'the failed run is retried on the next check (the previous report stays in place)');
+  assert.equal(await handle.tick(), false); assert.equal(runs, 3, 'built from the newest sync now');
+  clock += 7 * 3600_000; assert.equal(await handle.tick(), true); assert.equal(runs, 4, 'safety net: regenerate after fallbackHours even with no newer sync');
+});
+
+test('report refresh falls back to the interval when the sync status cannot be read', async () => {
+  let runs = 0; let clock = 0;
+  const handle = startSyncAwareRefresh({ getSyncFinishedAt: async () => { throw new Error('db down'); }, run: async () => { runs += 1; return true; }, checkMinutes: 5, fallbackHours: 1, setIntervalFn: () => ({ unref() {} }), now: () => clock });
+  await handle.first; assert.equal(runs, 1);
+  clock += 30 * 60_000; await handle.tick(); assert.equal(runs, 1);
+  clock += 31 * 60_000; await handle.tick(); assert.equal(runs, 2);
 });

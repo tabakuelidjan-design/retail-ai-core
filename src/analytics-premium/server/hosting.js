@@ -33,7 +33,7 @@ export function parseAllowedHosts(raw) {
 }
 
 export function resolveHosting(env = process.env) {
-  if (!isHosted(env)) return { hosted: false, host: '127.0.0.1', port: Number(env.ANALYTICS_PREMIUM_PORT || 4411), allowedHosts: null, token: null, trustProxyHops: 0, refreshHours: 0 };
+  if (!isHosted(env)) return { hosted: false, host: '127.0.0.1', port: Number(env.ANALYTICS_PREMIUM_PORT || 4411), allowedHosts: null, token: null, trustProxyHops: 0, refreshHours: 0, checkMinutes: 5 };
   const port = Number(env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new HostingConfigError('Hosted mode needs the platform PORT environment variable (a port number). Railway sets it automatically.');
   const allowedHosts = parseAllowedHosts(env.ANALYTICS_ALLOWED_HOSTS);
@@ -45,7 +45,10 @@ export function resolveHosting(env = process.env) {
   const refreshRaw = env.ANALYTICS_REPORT_REFRESH_HOURS;
   const refreshHours = refreshRaw === undefined || refreshRaw === '' ? 6 : Number(refreshRaw);
   if (!Number.isFinite(refreshHours) || refreshHours < 0 || refreshHours > 168) throw new HostingConfigError('ANALYTICS_REPORT_REFRESH_HOURS must be between 0 and 168 (0 = generate once at startup only; default 6).');
-  return { hosted: true, host: '0.0.0.0', port, allowedHosts, token: String(env.ANALYTICS_ACCESS_TOKEN), trustProxyHops, refreshHours };
+  const checkRaw = env.ANALYTICS_REPORT_CHECK_MINUTES;
+  const checkMinutes = checkRaw === undefined || checkRaw === '' ? 5 : Number(checkRaw);
+  if (!Number.isFinite(checkMinutes) || checkMinutes < 1 || checkMinutes > 1440) throw new HostingConfigError('ANALYTICS_REPORT_CHECK_MINUTES must be between 1 and 1440 (default 5).');
+  return { hosted: true, host: '0.0.0.0', port, allowedHosts, token: String(env.ANALYTICS_ACCESS_TOKEN), trustProxyHops, refreshHours, checkMinutes };
 }
 
 /** Same rule as Finance: behind N trusted proxies the real peer is the entry N-from-the-right of X-Forwarded-For; the rest is forgeable. */

@@ -14,7 +14,7 @@ import { syncInventory } from './inventory.js';
 import { syncProductCosts } from './cost.js';
 import { syncOrders } from './orders.js';
 import { loadCustomerKeySecret } from '../customers/pseudonym.js';
-import { finishRun, startRun } from './run-log.js';
+import { finishRun, recordStartupFailure, startRun } from './run-log.js';
 
 const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
 const sinceDays = Number(process.env.SYNC_ORDERS_SINCE_DAYS);
@@ -74,7 +74,8 @@ async function main() {
     ok = false; failure = err;
     throw err;
   } finally {
-    await finishRun(supabase, runId, { ok, summaries, error: failure?.message });
+    if (runId) await finishRun(supabase, runId, { ok, summaries, error: failure?.message });
+    else if (failure) await recordStartupFailure(supabase, { mode, error: failure.message });
   }
 }
 

@@ -34,3 +34,30 @@ export function startReportRefresh({ hours, run = runReportOnce, setIntervalFn =
   if (hours > 0) { timer = setIntervalFn(() => { run(); }, hours * 3600_000); timer.unref?.(); }
   return { first, stop: () => timer && clearInterval(timer) };
 }
+
+/**
+ * Regenerate the report only when needed: at startup, whenever a NEWER successful Shopify sync exists than the one the current report was
+ * built from, and as a safety net every `fallbackHours` (0 = never) even when the sync status cannot be read. A failed generation does not
+ * advance the "built from" marker, so it is retried on the next check, and the previous report file stays in place.
+ */
+export function startSyncAwareRefresh({ getSyncFinishedAt, run = runReportOnce, checkMinutes = 5, fallbackHours = 6, setIntervalFn = setInterval, now = () => Date.now() }) {
+  let builtFrom = null; let lastRunAt = null; let running = false;
+  const tick = async () => {
+    if (running) return false;
+    let sync = null;
+    try { sync = (await getSyncFinishedAt?.()) ?? null; } catch { sync = null; }
+    const due = lastRunAt === null || (sync !== null && sync !== builtFrom) || (fallbackHours > 0 && now() - lastRunAt >= fallbackHours * 3600_000);
+    if (!due) return false;
+    running = true;
+    try {
+      const ok = await run();
+      lastRunAt = now();
+      if (ok && sync !== null) builtFrom = sync;
+      return ok;
+    } finally { running = false; }
+  };
+  const first = tick();
+  const timer = setIntervalFn(() => { tick(); }, Math.max(1, checkMinutes) * 60_000);
+  timer.unref?.();
+  return { first, tick, stop: () => clearInterval(timer) };
+}
