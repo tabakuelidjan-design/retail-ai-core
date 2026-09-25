@@ -28,6 +28,7 @@ import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
+import { refundRows } from '../refund-rows.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
@@ -59,7 +60,7 @@ const safeName = (s) => String(s).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80);
 const cents = (c) => formatCents(c);
 
 /**
- * @param {object} deps { merchantId, store, token, settings: {load, save, saveLogo}, retail?, retailConfig, timeZone, clock?, audit?, retailHistory?, lookupProviders?, allowedHosts?, secureCookie?, trustProxyHops? }
+ * @param {object} deps { merchantId, store, token, settings: {load, save, saveLogo}, retail?, retailConfig, timeZone, clock?, audit?, retailHistory?, lookupProviders?, allowedHosts?, secureCookie?, trustProxyHops?, syncStatus? }
  */
 export function createFinanceApp(deps) {
   const { merchantId, store, token, settings: settingsIo, retail = null, retailConfig, timeZone = 'UTC', retailHistory = async () => null } = deps;
@@ -315,6 +316,12 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, { ok: true, csrf: s.csrf }, { 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
   }, { public: true });
 
+  // Sync health: the last Shopify -> Supabase SYNCHRONISATION (from the Core sync run log), factual and read-only. Pack/report generation is not a sync.
+  on('GET', '/api/sync-status', async (ctx) => {
+    let sync = { available: false, reason: 'NOT_CONFIGURED' };
+    try { if (deps.syncStatus) sync = await deps.syncStatus(); } catch { sync = { available: false, reason: 'STATUS_UNAVAILABLE' }; }
+    json(ctx.res, 200, { sync });
+  });
   on('GET', '/api/session', async (ctx) => {
     const s = sessionOf(ctx.req);
     json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf } : { authenticated: false });
@@ -900,7 +907,7 @@ export function createFinanceApp(deps) {
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
       .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = (data.refunds ?? []).filter((r) => inRange(r.refunded_at, period.start, period.end)).map((r) => ({ date: String(r.refunded_at).slice(0, 10), amount: String(r.amount), orderRef: null }));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
     const supplierInvoices = ((await store.listSupplierInvoices?.()) ?? []).filter((s) => inRange(s.issue_date ?? s.issueDate, period.start, period.end)).map((s) => ({ supplierName: s.supplier_name ?? s.supplierName, supplierVatNumber: s.supplier_vat_number ?? s.supplierVatNumber, invoiceNumber: s.invoice_number ?? s.invoiceNumber, issueDate: s.issue_date ?? s.issueDate, dueDate: s.due_date ?? s.dueDate, netCents: Number(s.net_cents ?? s.netCents), vatCents: Number(s.vat_cents ?? s.vatCents), grossCents: Number(s.gross_cents ?? s.grossCents), status: s.status ?? s.payment_status ?? s.paymentStatus, source: s.source, attachmentRef: s.attachment_ref ?? s.attachmentRef }));
     const acc = settings.accountant;
     const built = await buildAccountantPackage({ pack, period, docs, refunds, supplierInvoices, merchantName: settings.seller.name ?? '', filePrefix: 'Comptabilite', namePrefix: acc.packageName || undefined, branding: settings.branding, generatedAt: clock.now() });
@@ -955,7 +962,7 @@ export function createFinanceApp(deps) {
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
       .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = (data.refunds ?? []).filter((r) => inRange(r.refunded_at, period.start, period.end)).map((r) => ({ date: String(r.refunded_at).slice(0, 10), amount: String(r.amount), orderRef: null }));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
     const rows = (await store.listSupplierInvoices(merchantId)).filter((r) => r.status !== 'REJECTED');
     const purchases = rows.filter((r) => inRange(r.issueDate, period.start, period.end)).map((r) => ({ ...r }));
     if (withFiles) {

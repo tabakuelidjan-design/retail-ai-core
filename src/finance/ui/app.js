@@ -244,6 +244,30 @@ function accountMenu(seller) {
   wrap.appendChild(h('div', { class: 'acct-menu', role: 'menu' }, logout));
   return wrap;
 }
+/** Shopify synchronisation health (the last sync of the sales data, NOT a report or pack generation). Refreshed on every page draw. */
+function agoText(iso) {
+  if (!iso) return '-';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return tt('just now');
+  if (mins < 60) return tt('{0} min ago', mins);
+  const hrs = Math.round(mins / 60);
+  return hrs < 24 ? tt('{0} h ago', hrs) : tt('{0} d ago', Math.round(hrs / 24));
+}
+async function refreshSyncPill() {
+  const el = document.querySelector('[data-sync-pill]');
+  if (!el) return;
+  try {
+    const r = await api('GET', '/api/sync-status'); const s = r.sync;
+    const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
+    let text; let tone = 'ok';
+    if (!s || !s.available) { text = tt('Shopify sync unknown'); tone = 'warn'; }
+    else if (s.latestFailed) { text = tt('Shopify sync failed · latest data {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
+    else if (s.stale) { text = tt('Shopify sync out of date · {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }
+    else text = tt('Shopify sync {0}', agoText(s.lastSuccess.finishedAt));
+    label.textContent = text; dot.className = `sync-dot ${tone}`;
+  } catch (e) { /* the pill keeps its neutral text */ }
+}
+
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
@@ -256,7 +280,8 @@ function layout(active, ...content) {
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, langSwitch(), accountMenu(seller)));
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Shopify sync unknown'))), langSwitch(), accountMenu(seller)));
+  setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
   show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main, support)));

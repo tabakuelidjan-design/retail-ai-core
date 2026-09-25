@@ -25,7 +25,7 @@ export function makeMarketingData() {
   ];
   const variants = [{ id: 'v1', product_id: 'p1', sku: 'SAME', title: 'Default' }, { id: 'v2', product_id: 'p2', sku: 'SAME', title: 'Default' }];
   const order = (id, day, channel, idx = 1) => ({
-    id, ordered_at: `2026-09-${day}T10:00:00Z`, status: 'PAID', currency: 'EUR', taxes_included: true, is_test: false,
+    id, ordered_at: `2026-09-${day}T10:00:00Z`, status: 'PAID', currency: 'EUR', taxes_included: true, is_test: false, order_name: `#${id}`, shipping_price: 0, shipping_discount: 0, shipping_tax: 0, shipping_tax_rate_bp: null,
     source_name: channel, channel_handle: channel, customer_order_index: idx, journey_ready: true,
   });
   const orders = [order('o1', '10', 'pos'), order('o2', '12', 'web'), order('o3', '13', 'web', 2), order('o4', '14', 'web'), order('o5', '15', 'web'), order('o6', '16', 'web'), order('o7', '17', 'web'), order('o8', '18', 'pos')];

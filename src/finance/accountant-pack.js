@@ -3,7 +3,7 @@
 // computeSalesMetrics uses), so there is exactly one definition of sales and it cannot drift. Finance documents add ONLY
 // standalone B2B sales; invoices linked to an existing shop/POS order are listed as documentation and never added.
 
-import { aggregate, windowFacts } from '../metrics/sales.js';
+import { aggregate, aggregateShipping, windowFacts } from '../metrics/sales.js';
 import { addDays as addLocalDays, localDateString, localMidnight } from '../metrics/windows.js';
 import { historyCoversPeriod } from '../sync/history.js';
 import { findNumberingGaps } from './numbering.js';
@@ -34,9 +34,14 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   const orderOfLine = new Map(ledger.lineFacts.map((l) => [l.orderLineId, l.orderId]));
   const part = (c) => aggregate(facts.lines.filter((l) => cls(l.orderId) === c), facts.refunds.filter((r) => cls(orderOfLine.get(r.orderLineId)) === c), ledger.config);
   const total = aggregate(facts.lines, facts.refunds, ledger.config);
+  // Shipping is a separate revenue stream (with its own VAT) and is reported apart from product sales, then added to the totals.
+  const shipOf = (c) => aggregateShipping(facts.shipping.filter((x) => cls(x.orderId) === c), facts.shippingRefunds.filter((x) => cls(x.orderId) === c));
+  const ship = aggregateShipping(facts.shipping, facts.shippingRefunds);
+  const shippingUncaptured = ledger.shippingCoverage?.uncaptured ? facts.orders.length - facts.shipping.length : 0;
   const byChannel = Object.fromEntries(['pos', 'online', 'other'].map((c) => {
-    const a = part(c);
-    return [c, { orders: facts.orders.filter((o) => cls(o.id) === c).length, gross_sales: a.gross_sales, discounts: a.discounts, refunds: a.refunds, net_sales: a.net_sales, vat: a.tax, net_sales_ex_vat: a.net_sales_ex_tax }];
+    const a = part(c); const sc = shipOf(c);
+    return [c, { orders: facts.orders.filter((o) => cls(o.id) === c).length, gross_sales: a.gross_sales, discounts: a.discounts, refunds: a.refunds, net_sales: a.net_sales, vat: a.tax, net_sales_ex_vat: a.net_sales_ex_tax,
+      shipping_incl_vat_after_refunds: sc.net_incl_tax_after_refunds, shipping_vat_after_refunds: sc.tax_after_refunds, shipping_ex_vat_after_refunds: sc.net_ex_tax_after_refunds }];
   }));
   // ---- retail VAT by rate: only from rates the source REPORTED per line (taxRateBp); anything else is explicitly unavailable ----
   const lineById = new Map(ledger.lineFacts.map((l) => [l.orderLineId, l]));
@@ -44,16 +49,36 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   const bucket = (bp) => { const k = bp === null || bp === undefined ? 'unknown' : bp; if (!rateRows.has(k)) rateRows.set(k, { rateBp: k === 'unknown' ? null : k, taxable: 0, vat: 0, lines: 0 }); return rateRows.get(k); };
   for (const l of facts.lines) { const b = bucket(l.taxRateBp); b.taxable += l.exTaxBeforeRefund; b.vat += l.tax; b.lines += 1; }
   for (const r of facts.refunds) { const b = bucket(lineById.get(r.orderLineId)?.taxRateBp); b.taxable -= r.exTax; b.vat -= r.tax; }
+  // Shipping: the rate is the one Shopify reported on the shipping tax line (never assumed). Several rates or none reported -> unknown, which
+  // makes the VAT breakdown PARTIAL exactly like a product line without a captured rate.
+  // A shipping line with no VAT reported at all is a 0% line (the source says no tax applies); several different rates stay unknown.
+  const shipRate = (x) => (x.taxRateBp ?? (x.tax === 0 ? 0 : null));
+  const shipRateOf = new Map((ledger.shippingFacts ?? []).map((x) => [x.orderId, shipRate(x)]));
+  for (const x of facts.shipping) { if (x.charged === 0 && x.tax === 0) continue; const b = bucket(shipRate(x)); b.taxable += x.exTax; b.vat += x.tax; b.lines += 1; }
+  for (const r of facts.shippingRefunds) { const b = bucket(shipRateOf.get(r.orderId)); b.taxable -= r.exTax; b.vat -= r.tax; }
   const knownRates = [...rateRows.values()].filter((b) => b.rateBp !== null).sort((a, b) => a.rateBp - b.rateBp).map((b) => ({ vatRateBp: b.rateBp, taxableCents: toCents(b.taxable), vatCents: toCents(b.vat), lines: b.lines }));
   const unknownRate = rateRows.get('unknown');
   const retailVatByRate = {
     status: unknownRate && (unknownRate.lines > 0 || Math.abs(unknownRate.taxable) > 0.004 || Math.abs(unknownRate.vat) > 0.004) ? 'PARTIAL' : knownRates.length || !facts.lines.length ? 'COMPLETE' : 'PARTIAL',
     by_rate: knownRates,
     unavailable: unknownRate ? { lines: unknownRate.lines, taxableCents: toCents(unknownRate.taxable), vatCents: toCents(unknownRate.vat), reason: 'THE_SOURCE_RATE_WAS_NOT_CAPTURED_FOR_THESE_LINES (synced before rate capture, or compound taxes); re-sync to populate' } : null,
-    reconciles_with_total_vat: Math.abs(sum([...rateRows.values()], (b) => b.vat) - total.tax) < 0.005,
-    basis: 'VAT rate as reported by the source per order line; base = line amount excl. tax minus refunded excl. tax',
+    reconciles_with_total_vat: Math.abs(sum([...rateRows.values()], (b) => b.vat) - (total.tax + ship.tax_after_refunds)) < 0.005,
+    basis: 'VAT rate as reported by the source per order line and per shipping line; base = amount excl. tax minus refunded excl. tax',
   };
-  const retail = { orders: facts.orders.length, currency: ledger.currency, gross_sales: total.gross_sales, discounts: total.discounts, refunds: total.refunds, net_sales: total.net_sales, vat: total.tax, net_sales_ex_vat: total.net_sales_ex_tax, by_channel: byChannel, vat_by_rate: retailVatByRate };
+  const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
+  const otherRefunds = round2(sum(facts.refundTotals, (r) => r.otherAmount));
+  const retail = {
+    orders: facts.orders.length, currency: ledger.currency,
+    // PRODUCT figures (unchanged definitions): product lines only
+    gross_sales: total.gross_sales, discounts: total.discounts, refunds: total.refunds, net_sales: total.net_sales, vat: total.tax, net_sales_ex_vat: total.net_sales_ex_tax,
+    // SHIPPING, apart, as reported by the source (NULL columns = not captured, counted in orders_without_shipping_data, never zero)
+    shipping: { ...ship, orders_without_shipping_data: shippingUncaptured, coverage: shippingUncaptured > 0 ? 'PARTIAL' : 'COMPLETE' },
+    // Refunds with explicit semantics: `refunds` above is the PRODUCT refund; this is the full picture.
+    refunds_breakdown: { product: total.refunds, shipping: ship.refunds_incl_tax, other: otherRefunds, total: round2(total.refunds + ship.refunds_incl_tax + otherRefunds) },
+    // TOTALS = product + shipping, after refunds: the figures that go into the accounting totals
+    total_net_sales: round2(total.net_sales + ship.net_incl_tax_after_refunds), total_vat: round2(total.tax + ship.tax_after_refunds), total_net_sales_ex_vat: round2(total.net_sales_ex_tax + ship.net_ex_tax_after_refunds),
+    by_channel: byChannel, vat_by_rate: retailVatByRate,
+  };
 
   // ---- finance documents in the period ----
   const issued = docs.filter(({ doc }) => doc.type !== 'quote' && ISSUED.includes(doc.status) && inPeriod(doc.issueDate, period));
@@ -93,9 +118,9 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
     note: 'Standalone credit notes reduce B2B sales; credit notes on invoices linked to a shop/POS sale are documentation (the shop refund carries the effect).',
   };
   const totals = {
-    sales_ex_vat_cents: toCents(retail.net_sales_ex_vat) + b2b.net_ex_vat_cents,
-    vat_collected_cents: toCents(retail.vat) + b2b.vat_cents,
-    sales_incl_vat_cents: toCents(retail.net_sales) + b2b.gross_incl_vat_cents,
+    sales_ex_vat_cents: toCents(retail.total_net_sales_ex_vat) + b2b.net_ex_vat_cents,
+    vat_collected_cents: toCents(retail.total_vat) + b2b.vat_cents,
+    sales_incl_vat_cents: toCents(retail.total_net_sales) + b2b.gross_incl_vat_cents,
   };
 
   // combined VAT by rate: retail known rates + standalone B2B rates. Retail lines without a reported rate stay separate and make it PARTIAL.
@@ -158,6 +183,7 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   if (retailHistory?.lastSyncedAt && retailHistory.lastSyncedAt < window.end.toISOString()) reasons.push('RETAIL_LAST_SYNC_BEFORE_PERIOD_END');
   if (ledger.excluded.test) reasons.push(`${ledger.excluded.test}_TEST_ORDERS_EXCLUDED`);
   if (ledger.excluded.otherCurrency) reasons.push(`${ledger.excluded.otherCurrency}_ORDERS_IN_OTHER_CURRENCY_EXCLUDED`);
+  if (shippingUncaptured > 0) reasons.push(`SHIPPING_NOT_CAPTURED_FOR_${shippingUncaptured}_ORDERS`);
   if (retailVatByRate.status === 'PARTIAL') reasons.push(`RETAIL_VAT_RATE_UNAVAILABLE_FOR_${retailVatByRate.unavailable?.lines ?? 0}_LINES`);
   const critical = anomalies.filter((a) => a.severity === 'critical').length;
   const blockingGaps = reasons.filter((r) => r.startsWith('RETAIL_HISTORY') || r === 'RETAIL_LAST_SYNC_BEFORE_PERIOD_END' || r.startsWith('RETAIL_VAT_RATE') || r === 'PERIOD_NOT_CLOSED' || r === 'NO_RETAIL_ORDERS_LOADED');
@@ -193,12 +219,20 @@ export function summaryLines(pack) {
   return [
     { line: 'Retail gross sales (shop + POS)', source: 'Retail Core', amount: e(pack.retail.gross_sales) },
     { line: 'Retail discounts', source: 'Retail Core', amount: e(pack.retail.discounts) },
-    { line: 'Retail refunds', source: 'Retail Core', amount: e(pack.retail.refunds) },
-    { line: 'Retail net sales incl. VAT', source: 'Retail Core', amount: e(pack.retail.net_sales) },
-    { line: 'Retail VAT collected', source: 'Retail Core', amount: e(pack.retail.vat) },
-    { line: 'Retail net sales excl. VAT', source: 'Retail Core', amount: e(pack.retail.net_sales_ex_vat) },
-    { line: '  of which POS excl. VAT', source: 'Retail Core', amount: e(pack.retail.by_channel.pos.net_sales_ex_vat) },
-    { line: '  of which online excl. VAT', source: 'Retail Core', amount: e(pack.retail.by_channel.online.net_sales_ex_vat) },
+    { line: 'Retail product refunds', source: 'Retail Core', amount: e(pack.retail.refunds) },
+    { line: 'Retail product net sales incl. VAT', source: 'Retail Core', amount: e(pack.retail.net_sales) },
+    { line: 'Retail product VAT collected', source: 'Retail Core', amount: e(pack.retail.vat) },
+    { line: 'Retail product net sales excl. VAT', source: 'Retail Core', amount: e(pack.retail.net_sales_ex_vat) },
+    { line: 'Retail shipping charged incl. VAT', source: 'Retail Core', amount: e(pack.retail.shipping.charged_incl_tax) },
+    { line: 'Retail shipping refunds incl. VAT', source: 'Retail Core', amount: e(pack.retail.shipping.refunds_incl_tax) },
+    { line: 'Retail shipping net excl. VAT (after refunds)', source: 'Retail Core', amount: e(pack.retail.shipping.net_ex_tax_after_refunds) },
+    { line: 'Retail shipping VAT collected (after refunds)', source: 'Retail Core', amount: e(pack.retail.shipping.tax_after_refunds) },
+    { line: 'Retail refunds total (products + shipping + other)', source: 'Retail Core', amount: e(pack.retail.refunds_breakdown.total) },
+    { line: 'Retail net sales incl. VAT', source: 'Retail Core', amount: e(pack.retail.total_net_sales) },
+    { line: 'Retail VAT collected', source: 'Retail Core', amount: e(pack.retail.total_vat) },
+    { line: 'Retail net sales excl. VAT', source: 'Retail Core', amount: e(pack.retail.total_net_sales_ex_vat) },
+    { line: '  of which POS excl. VAT (products + shipping)', source: 'Retail Core', amount: e(pack.retail.by_channel.pos.net_sales_ex_vat + pack.retail.by_channel.pos.shipping_ex_vat_after_refunds) },
+    { line: '  of which online excl. VAT (products + shipping)', source: 'Retail Core', amount: e(pack.retail.by_channel.online.net_sales_ex_vat + pack.retail.by_channel.online.shipping_ex_vat_after_refunds) },
     { line: 'Standalone B2B net excl. VAT (invoices - credit notes)', source: 'Finance documents', amount: formatCents(pack.b2b.net_ex_vat_cents) },
     { line: 'Standalone B2B VAT', source: 'Finance documents', amount: formatCents(pack.b2b.vat_cents) },
     { line: 'Standalone B2B incl. VAT', source: 'Finance documents', amount: formatCents(pack.b2b.gross_incl_vat_cents) },

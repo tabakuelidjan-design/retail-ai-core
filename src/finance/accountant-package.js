@@ -4,6 +4,7 @@
 //
 // Folder and file names are French (first market: Belgium); the labels inside the PDFs are French.
 
+import { REFUND_CSV_KEYS, refundCsvRows } from './refund-rows.js';
 import { createHash } from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import { summaryLines } from './accountant-pack.js';
@@ -33,8 +34,14 @@ export function resolvePeriod(spec = {}) {
 }
 
 const FR_LINE = {
-  'Retail gross sales (shop + POS)': 'Ventes brutes retail (boutique + caisse)', 'Retail discounts': 'Remises retail', 'Retail refunds': 'Remboursements retail', 'Retail net sales incl. VAT': 'Ventes nettes retail TVAC',
-  'Retail VAT collected': 'TVA collectée retail', 'Retail net sales excl. VAT': 'Ventes nettes retail HTVA', '  of which POS excl. VAT': '  dont caisse HTVA', '  of which online excl. VAT': '  dont en ligne HTVA',
+  'Retail gross sales (shop + POS)': 'Ventes brutes retail (boutique + caisse)', 'Retail discounts': 'Remises retail', 'Retail product refunds': 'Remboursements produits retail', 'Retail product net sales incl. VAT': 'Ventes nettes produits retail TVAC',
+  'Retail product VAT collected': 'TVA collectée produits retail', 'Retail product net sales excl. VAT': 'Ventes nettes produits retail HTVA',
+  'Retail shipping charged incl. VAT': 'Livraison facturée retail TVAC', 'Retail shipping refunds incl. VAT': 'Remboursements livraison retail TVAC',
+  'Retail shipping net excl. VAT (after refunds)': 'Livraison nette retail HTVA (après remboursements)', 'Retail shipping VAT collected (after refunds)': 'TVA collectée sur livraison retail (après remboursements)',
+  'Retail refunds total (products + shipping + other)': 'Remboursements retail total (produits + livraison + autres)',
+  'Retail net sales incl. VAT': 'Ventes nettes retail TVAC (produits + livraison)',
+  'Retail VAT collected': 'TVA collectée retail (produits + livraison)', 'Retail net sales excl. VAT': 'Ventes nettes retail HTVA (produits + livraison)',
+  '  of which POS excl. VAT (products + shipping)': '  dont caisse HTVA (produits + livraison)', '  of which online excl. VAT (products + shipping)': '  dont en ligne HTVA (produits + livraison)',
   'Standalone B2B net excl. VAT (invoices - credit notes)': 'B2B autonome net HTVA (factures - avoirs)', 'Standalone B2B VAT': 'TVA B2B autonome', 'Standalone B2B incl. VAT': 'B2B autonome TVAC',
   'Linked invoices (documentation only, NOT added)': 'Factures liées (documentation seulement, NON ajoutées)', 'TOTAL sales excl. VAT': 'TOTAL ventes HTVA', 'TOTAL VAT collected': 'TOTAL TVA collectée', 'TOTAL sales incl. VAT': 'TOTAL ventes TVAC',
 };
@@ -114,7 +121,7 @@ export async function buildAccountantPackage({ pack, period, docs, refunds = [],
   add('04_Factures_clients/liste.csv', base.get(`${stem}_documents.csv`).data);
   for (const d of credits) add(`05_Avoirs/${d.doc.number}.pdf`, await renderDocumentPdf(d.doc, { originalNumber: d.originalNumber, branding }));
   // 06 refunds (retail): dates and amounts only, no customer data
-  add(`06_Remboursements/remboursements_${L}.csv`, toCsv(refunds.map((r) => ({ date: r.date, montant: r.amount, commande: r.orderRef ?? '' })), [{ key: 'date', header: 'date' }, { key: 'montant', header: 'montant' }, { key: 'commande', header: 'commande' }]));
+  add(`06_Remboursements/remboursements_${L}.csv`, toCsv(refundCsvRows(refunds), REFUND_CSV_KEYS.map((k) => ({ key: k, header: k }))));
   // 07 supplier invoices (list; attachments join here once private document storage is connected)
   add(`07_Factures_fournisseurs/liste_${L}.csv`, toCsv(supplierInvoices.map((s) => ({ fournisseur: s.supplierName, tva_fournisseur: s.supplierVatNumber ?? '', numero: s.invoiceNumber, date: s.issueDate, echeance: s.dueDate ?? '', htva: formatCents(s.netCents), tva: formatCents(s.vatCents), tvac: formatCents(s.grossCents), statut: s.status ?? s.paymentStatus, source: s.source, piece: s.attachmentRef ? 'oui' : 'non' })),
     ['fournisseur', 'tva_fournisseur', 'numero', 'date', 'echeance', 'htva', 'tva', 'tvac', 'statut', 'source', 'piece'].map((k) => ({ key: k, header: k }))));

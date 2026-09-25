@@ -777,6 +777,7 @@
   Object.assign(messages, { 'The PDF preview is available after saving.': 'L’aperçu du PDF est disponible après l’enregistrement.' });
   Object.assign(messages, { '{0} in another currency': '{0} dans une autre devise' });
   Object.assign(messages, { 'One foreign-currency document is not included in the EUR totals': '1 document en devise étrangère non inclus dans les totaux EUR', '{0} foreign-currency documents are not included in the EUR totals': '{0} documents en devise étrangère non inclus dans les totaux EUR' });
+  Object.assign(messages, { 'just now': 'à l’instant', '{0} min ago': 'il y a {0} min', '{0} h ago': 'il y a {0} h', '{0} d ago': 'il y a {0} j', 'Shopify sync unknown': 'Synchro Shopify inconnue', 'Shopify sync failed · latest data {0}': 'Synchro Shopify en échec · dernières données {0}', 'Shopify sync out of date · {0}': 'Synchro Shopify ancienne · {0}', 'Shopify sync {0}': 'Synchro Shopify {0}' });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.fr = { messages, patterns };
 })();

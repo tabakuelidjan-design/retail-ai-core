@@ -15,6 +15,7 @@
 //   review      COMPLETE but at least one warning (missing receipt, unmatched transaction, ...)
 //   ready       COMPLETE and no warning
 
+import { REFUND_CSV_KEYS, refundCsvRows } from './refund-rows.js';
 import { createHash } from 'node:crypto';
 import { toCsv } from './export-csv.js';
 import { formatCents } from './money.js';
@@ -249,7 +250,7 @@ async function collectFiles(input, model, include) {
     if (inc.xlsx) add('sales', `Ventes_${L}.xlsx`, base.get(`${stem}.xlsx`).data, 'xlsx');
     if (inc.csv) {
       add('sales', `Ventes_synthese_${L}.csv`, base.get(`${stem}_summary.csv`).data, 'csv');
-      add('sales', `Remboursements_${L}.csv`, csvOf(input.refunds.map((r) => ({ date: r.date, montant: r.amount, commande: r.orderRef ?? '' })), ['date', 'montant', 'commande']), 'csv');
+      add('sales', `Remboursements_${L}.csv`, csvOf(refundCsvRows(input.refunds), REFUND_CSV_KEYS), 'csv');
     }
   }
   if (want('bank')) {
@@ -262,7 +263,7 @@ async function collectFiles(input, model, include) {
   if (want('pos')) {
     const p = pack.retail.by_channel.pos;
     if (inc.csv) {
-      add('pos', `Ventes_POS_${L}.csv`, csvOf([{ commandes: p.orders, ventes_brutes: p.gross_sales, remises: p.discounts, remboursements: p.refunds, ventes_nettes_tvac: p.net_sales, tva: p.vat, ventes_nettes_htva: p.net_sales_ex_vat }], ['commandes', 'ventes_brutes', 'remises', 'remboursements', 'ventes_nettes_tvac', 'tva', 'ventes_nettes_htva']), 'csv');
+      add('pos', `Ventes_POS_${L}.csv`, csvOf([{ commandes: p.orders, ventes_brutes: p.gross_sales, remises: p.discounts, remboursements: p.refunds, ventes_nettes_tvac: p.net_sales, tva: p.vat, ventes_nettes_htva: p.net_sales_ex_vat, livraison_nette_tvac: p.shipping_incl_vat_after_refunds, tva_livraison: p.shipping_vat_after_refunds, total_htva_avec_livraison: Math.round((p.net_sales_ex_vat + p.shipping_ex_vat_after_refunds) * 100) / 100 }], ['commandes', 'ventes_brutes', 'remises', 'remboursements', 'ventes_nettes_tvac', 'tva', 'ventes_nettes_htva', 'livraison_nette_tvac', 'tva_livraison', 'total_htva_avec_livraison']), 'csv');
       if (input.cash.movements.length) add('pos', `Mouvements_especes_${L}.csv`, csvOf(input.cash.movements.map((m) => ({ date: m.date, type: m.kind, montant: formatCents(m.amountCents), note: m.note ?? '' })), ['date', 'type', 'montant', 'note']), 'csv');
     }
   }
@@ -384,7 +385,10 @@ export function fingerprintOf(input) {
   return {
     invoices: ids(input.invoices.map((d) => d.doc.id)), creditNotes: ids(input.creditNotes.map((d) => d.doc.id)),
     purchases: input.purchases.map((r) => `${r.id}:${r.status}`).sort(), bankTransactions: input.bank.transactions.length,
-    retail: { orders: input.pack.retail.orders, netCents: Math.round(input.pack.retail.net_sales * 100) }, refunds: input.refunds.length,
+    // netCents = product net (unchanged); the extra fields notice shipping, VAT and refund changes coming from a new Shopify sync
+    retail: { orders: input.pack.retail.orders, netCents: Math.round(input.pack.retail.net_sales * 100), totalCents: Math.round((input.pack.retail.total_net_sales ?? input.pack.retail.net_sales) * 100),
+      vatCents: Math.round((input.pack.retail.total_vat ?? input.pack.retail.vat ?? 0) * 100), shippingCents: Math.round((input.pack.retail.shipping?.net_incl_tax_after_refunds ?? 0) * 100) },
+    refunds: input.refunds.length, refundCents: Math.round(input.refunds.reduce((a, r) => a + Number(r.amount ?? 0), 0) * 100),
   };
 }
 /** What changed since a stored fingerprint: new documents, changed purchases, changed retail figures. null when nothing changed. */
@@ -395,7 +399,10 @@ export function changesSince(prev, cur) {
   const purchasesAdded = cur.purchases.filter((s) => !prevIds.has(s.split(':')[0])).length;
   const purchasesChanged = cur.purchases.filter((s) => prev.purchases.length && !prev.purchases.includes(s) && prevIds.has(s.split(':')[0])).length;
   const r = { newInvoices: added(prev.invoices, cur.invoices).length, newCreditNotes: added(prev.creditNotes, cur.creditNotes).length, newPurchases: purchasesAdded, changedPurchases: purchasesChanged,
-    newBankTransactions: Math.max(0, cur.bankTransactions - prev.bankTransactions), retailChanged: prev.retail.orders !== cur.retail.orders || prev.retail.netCents !== cur.retail.netCents, newRefunds: Math.max(0, cur.refunds - prev.refunds) };
+    newBankTransactions: Math.max(0, cur.bankTransactions - prev.bankTransactions), retailChanged: prev.retail.orders !== cur.retail.orders || prev.retail.netCents !== cur.retail.netCents
+      || ['totalCents', 'vatCents', 'shippingCents'].some((k) => prev.retail[k] !== undefined && prev.retail[k] !== cur.retail[k])
+      || (prev.refundCents !== undefined && prev.refundCents !== cur.refundCents),
+    newRefunds: Math.max(0, cur.refunds - prev.refunds) };
   r.newDocuments = r.newInvoices + r.newCreditNotes + r.newPurchases;
   return r.newDocuments || r.changedPurchases || r.newBankTransactions || r.retailChanged || r.newRefunds ? r : null;
 }

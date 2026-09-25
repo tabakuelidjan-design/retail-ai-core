@@ -264,8 +264,14 @@ test('changesSince / fingerprint: unit behaviour (added, changed, retail figures
   assert.equal(changesSince(base, { ...base, purchases: ['p1:PAID'] }).changedPurchases, 1);
   assert.equal(changesSince(base, { ...base, retail: { orders: 6, netCents: 1200 } }).retailChanged, true);
   assert.equal(changesSince(base, { ...base, bankTransactions: 5 }).newBankTransactions, 3);
+  // a new Shopify sync that only changes shipping, VAT or a refund amount (same order count, same product net) is noticed too
+  const full = { ...base, retail: { orders: 5, netCents: 1000, totalCents: 1000, vatCents: 174, shippingCents: 0 }, refundCents: 500 };
+  assert.equal(changesSince(full, structuredClone(full)), null);
+  assert.equal(changesSince(full, { ...full, retail: { ...full.retail, shippingCents: 700, totalCents: 1700, vatCents: 295 } }).retailChanged, true);
+  assert.equal(changesSince(full, { ...full, refundCents: 2699 }).retailChanged, true);
+  assert.equal(changesSince(base, structuredClone(base)), null, 'a fingerprint stored before these fields existed is not reported as changed');
   const fp = fingerprintOf({ invoices: [{ doc: { id: 'x' } }], creditNotes: [], purchases: [{ id: 'p', status: 'PAID' }], bank: { transactions: [] }, pack: { retail: { orders: 1, net_sales: 10.5 } }, refunds: [] });
-  assert.deepEqual(fp, { invoices: ['x'], creditNotes: [], purchases: ['p:PAID'], bankTransactions: 0, retail: { orders: 1, netCents: 1050 }, refunds: 0 });
+  assert.deepEqual(fp, { invoices: ['x'], creditNotes: [], purchases: ['p:PAID'], bankTransactions: 0, retail: { orders: 1, netCents: 1050, totalCents: 1050, vatCents: 0, shippingCents: 0 }, refunds: 0, refundCents: 0 });
 });
 
 // ---------- VAT (indicative) ----------

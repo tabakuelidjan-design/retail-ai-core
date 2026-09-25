@@ -14,6 +14,7 @@ import { createShopifyPriceSource } from '../catalog.js';
 import { createShopifyStockApplier } from '../stock.js';
 import { createSupabaseAttachmentStore } from '../inbox.js';
 import { createFinanceApp } from './app.js';
+import { latestSyncStatus } from '../../sync/run-log.js';
 import { HostingConfigError, resolveHosting } from './hosting.js';
 
 const AUDIT_LOG = 'data/local/finance/audit.log';
@@ -40,6 +41,7 @@ async function main() {
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
     merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), stockApplier: createShopifyStockApplier(rt.shopify), attachmentStore: createSupabaseAttachmentStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: rt.retailHistory,
+    syncStatus: () => latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(process.env.SYNC_STALE_AFTER_MINUTES || 60) }),
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     settings: {
       load: () => loadSettings(),
