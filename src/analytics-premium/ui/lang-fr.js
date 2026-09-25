@@ -649,4 +649,12 @@ window.NORDLA_DICTS.fr = {
   'pr.d.refunded': '{0} remboursé(s)',
   'pr.d.noRecent': 'Aucune vente dans l’historique disponible.',
   'pr.d.recentNote': 'Une ligne par ligne de commande : montant hors TVA, net des remboursements enregistrés.',
+
+  // ---- Account control (top-right profile menu) ----
+  'account.menuLabel': 'Menu du compte',
+  'account.title': 'Compte',
+  'account.statusLocal': 'Aperçu local · aucune session active',
+  'account.noSession': 'Analytics Premium ne dispose pas encore de connexion : aucune session à fermer et aucune page de paramètres du compte. Ces actions apparaîtront ici dès qu’elles existeront réellement.',
+  'account.settings': 'Paramètres',
+  'account.logout': 'Se déconnecter',
 };

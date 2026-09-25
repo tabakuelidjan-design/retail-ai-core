@@ -582,3 +582,29 @@ button { font-family: inherit; }
 .wc-row-caveat { font-size: 11.5px; color: var(--chart-slate); margin-top: 3px; }
 .kpi-cost-detail { font-size: 11.5px; color: var(--chart-slate); margin-top: 4px; line-height: 1.4; }
 .avatar svg { display: block; }
+
+/* ---------- Account control (top-right profile icon + chevron) - account-menu.js ---------- */
+.ap-account { position: relative; flex: 0 0 auto; }
+.ap-account-btn { border: 0; background: transparent; padding: 2px; margin: 0; border-radius: 999px; cursor: pointer; font: inherit; }
+.ap-account-btn:hover .avatar, .ap-account.open .ap-account-btn .avatar { box-shadow: 0 0 0 3px #E5E7EB; }
+.ap-account-btn:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 2px; }
+.ap-account-btn > svg { transition: transform .15s ease; }
+.ap-account.open .ap-account-btn > svg { transform: rotate(180deg); }
+.ap-account-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 288px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px; font-family: var(--font-ui); box-shadow: 0 10px 28px -12px rgba(15, 39, 71, .22); text-align: left; }
+.ap-account-menu:focus { outline: none; }
+.ap-account-menu[hidden] { display: none; }
+.ap-account-head { display: flex; align-items: center; gap: 12px; }
+.ap-account-avatar { width: 36px; height: 36px; }
+.ap-account-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ap-account-id strong { font-size: 13.5px; font-weight: 650; color: var(--chart-navy); }
+.ap-account-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chart-slate); }
+.ap-account-dot { width: 7px; height: 7px; border-radius: 50%; background: #9AA4B2; flex: 0 0 auto; }
+.ap-account-note { margin: 12px 0 0; padding: 10px 12px; background: #F7F8FA; border: 1px solid #E5E7EB; border-radius: 10px; font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); }
+.ap-account-items { display: flex; flex-direction: column; margin-top: 10px; padding-top: 8px; border-top: 1px solid #eef0f3; }
+.ap-account-item { display: flex; align-items: center; min-height: 40px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--chart-navy); font: 500 13.5px var(--font-ui); text-decoration: none; text-align: left; cursor: pointer; }
+.ap-account-item:hover, .ap-account-item:focus-visible { background: #F7F8FA; outline: none; }
+@media (max-width: 900px) {
+  .topbar-right .ap-account { order: 3; margin-left: 8px; }
+  .topbar-right .ap-account .avatar-group { margin-left: 0; }
+  .ap-account-menu { width: min(300px, calc(100vw - 32px)); }
+}

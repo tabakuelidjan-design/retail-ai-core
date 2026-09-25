@@ -23,6 +23,7 @@ const STATIC = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
+  '/account-menu.js': ['account-menu.js', 'text/javascript; charset=utf-8'],
   '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'],
   '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'],
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],

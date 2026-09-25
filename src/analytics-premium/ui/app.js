@@ -171,7 +171,8 @@ function topbar(brief, onLangChange, opts = {}) {
         ? h('span', { class: 'period-pill locked', title: t('period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), h('span', { class: 'period-fixed' }, t('period.fixed')))
         : h('span', { class: 'period-pill' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), icon('chevronDown', 13)),
       langSwitch(onLangChange),
-      h('span', { class: 'avatar-group' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, svg(['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4.5 20c0-3.6 3.4-5.5 7.5-5.5s7.5 1.9 7.5 5.5'], 16)), icon('chevronDown', 13))));
+      // Account control (profile icon + chevron): opens a compact menu - see account-menu.js.
+      NordlaAccountMenu.accountControl({ h, t, svg, icon })));
 }
 
 function hero() {

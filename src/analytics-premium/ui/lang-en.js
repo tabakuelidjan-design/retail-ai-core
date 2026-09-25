@@ -649,4 +649,12 @@ window.NORDLA_DICTS.en = {
   'pr.d.refunded': '{0} refunded',
   'pr.d.noRecent': 'No sale in the available history.',
   'pr.d.recentNote': 'One row per order line: amount excl. VAT, net of recorded refunds.',
+
+  // ---- Account control (top-right profile menu) ----
+  'account.menuLabel': 'Account menu',
+  'account.title': 'Account',
+  'account.statusLocal': 'Local preview · no active session',
+  'account.noSession': 'Analytics Premium does not have sign-in yet: there is no session to end and no account settings page. These actions will appear here as soon as they really exist.',
+  'account.settings': 'Settings',
+  'account.logout': 'Sign out',
 };

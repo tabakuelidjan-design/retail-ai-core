@@ -649,4 +649,12 @@ window.NORDLA_DICTS.nl = {
   'pr.d.refunded': '{0} terugbetaald',
   'pr.d.noRecent': 'Geen verkoop in de beschikbare historiek.',
   'pr.d.recentNote': 'Eén regel per bestelregel: bedrag excl. btw, na geregistreerde terugbetalingen.',
+
+  // ---- Account control (top-right profile menu) ----
+  'account.menuLabel': 'Accountmenu',
+  'account.title': 'Account',
+  'account.statusLocal': 'Lokaal voorbeeld · geen actieve sessie',
+  'account.noSession': 'Analytics Premium heeft nog geen aanmelding: er is geen sessie om te sluiten en geen pagina met accountinstellingen. Deze acties verschijnen hier zodra ze echt bestaan.',
+  'account.settings': 'Instellingen',
+  'account.logout': 'Afmelden',
 };
