@@ -15,6 +15,7 @@ import { createShopifyStockApplier } from '../stock.js';
 import { createSupabaseAttachmentStore } from '../inbox.js';
 import { createFinanceApp } from './app.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
+import { mergeRetailHistory } from '../retail-history.js';
 import { HostingConfigError, resolveHosting } from './hosting.js';
 
 const AUDIT_LOG = 'data/local/finance/audit.log';
@@ -40,7 +41,7 @@ async function main() {
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
-    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), stockApplier: createShopifyStockApplier(rt.shopify), attachmentStore: createSupabaseAttachmentStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: rt.retailHistory,
+    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), stockApplier: createShopifyStockApplier(rt.shopify), attachmentStore: createSupabaseAttachmentStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
     syncStatus: () => latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(process.env.SYNC_STALE_AFTER_MINUTES || 60) }),
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     settings: {
