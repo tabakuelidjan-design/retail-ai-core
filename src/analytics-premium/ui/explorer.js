@@ -127,7 +127,7 @@ function exExport(d) {
   lines.push(['section', 'label', 'value', 'extra'].map(q).join(','));
   for (const r of d.series.daily) lines.push(['sales_daily', r.date, r.net_sales_ex_tax, r.order_count].map(q).join(','));
   for (const r of d.series.weekly) lines.push(['sales_weekly', r.week_start, r.net_sales_ex_tax, r.order_count].map(q).join(','));
-  for (const c of d.categories) lines.push(['category', c.name ?? '', c.net_sales_ex_tax, c.share].map(q).join(','));
+  for (const c of d.categories) lines.push(['category', c.name ?? t('ex.uncategorised'), c.net_sales_ex_tax, c.share].map(q).join(','));
   for (const p of d.top_products) lines.push(['top_product', p.title, p.net_sales_ex_tax, p.units_sold].map(q).join(','));
   for (const r of d.top_customers.rows) lines.push(['top_customer', r.label, r.net_sales_ex_tax, r.order_count].map(q).join(','));
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -900,10 +900,10 @@ function exExportComparison(d) {
   for (const k of cv.kpis) row('kpi', k.key, k.current, k.previous, k.delta_abs, k.delta_pct, '');
   for (const b of cv.blocks || []) row('block', `${b.start_date}..${b.end_date}`, b.current, b.previous, '', '', `previous ${b.previous_start_date}..${b.previous_end_date}${b.partial ? ` partial(${b.days} days)` : ''}`);
   for (const a of cv.aligned_days || []) row('aligned_day', a.index, a.current, a.previous, '', '', `${a.date} vs ${a.previous_date}`);
-  if (cv.waterfall) for (const s of cv.waterfall.steps) row('waterfall_category', s.other ? `other(${s.count})` : s.name ?? '', '', '', s.delta, '', '');
+  if (cv.waterfall) for (const s of cv.waterfall.steps) row('waterfall_category', s.other ? `other(${s.count})` : s.name ?? t('ex.uncategorised'), '', '', s.delta, '', '');
   const c = d.contributions; if (c) for (const m of [...c.positive, ...c.negative]) row('product_contribution', m.title, '', '', m.delta, '', '');
   for (const r of d.channels_view.channels) row('channel', r.name ?? '', r.net_sales_ex_tax, r.previous ? r.previous.net_sales_ex_tax : '', r.delta ? r.delta.net_sales_ex_tax : '', r.delta ? r.delta.net_sales_ex_tax_pct : '', r.status);
-  for (const r of cv.categories) row('category', r.name ?? '', r.current, r.previous, r.delta, r.delta_pct, r.status);
+  for (const r of cv.categories) row('category', r.name ?? t('ex.uncategorised'), r.current, r.previous, r.delta, r.delta_pct, r.status);
   const kc = d.customers && d.customers.kpis; const cov = d.customers && d.customers.coverage;
   if (kc && kc.previous) { row('customers_identified_active', '', kc.active, kc.previous.active, '', '', ''); row('customers_identified_revenue', '', kc.identified_net_sales_ex_tax, kc.previous.identified_net_sales_ex_tax, '', '', ''); }
   if (cov) row('customer_identification_coverage', '', cov.identified_share, cov.previous_identified_share, '', '', 'share of orders with an identified customer');
@@ -911,6 +911,23 @@ function exExportComparison(d) {
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `explorer-comparison-${(d.generatedAt || '').slice(0, 10) || 'export'}.csv`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** Factual notice shown instead of a meaningless comparison when the previous period is not fully inside the business history. */
+function cmpCoverageNotice(cov) {
+  if (!cov || cov.sufficient) return null;
+  return h('div', { class: 'ex-card ex-cov-notice', role: 'note' },
+    h('strong', null, t('cmp.insufficientHistory')), ' ',
+    h('span', { class: 'ex-foot' }, t('cmp.insufficientDetail', cov.previous_days_with_history, cov.previous_days, cov.history_start)));
+}
+
+/** Shipping, kept apart from the product KPIs on purpose; only shown when the source reported some. */
+function exShippingNote(d) {
+  const sh = d.kpis && d.kpis.shipping;
+  if (!sh || (!sh.orders_with_shipping && !sh.refunds_incl_tax)) return null;
+  return h('div', { class: 'ex-foot ex-ship-note' },
+    t('ex.ship.note', exMoney(sh.net_ex_tax_after_refunds, d.currency), exMoney(d.kpis.total_net_sales_ex_tax_with_shipping, d.currency)),
+    sh.coverage === 'PARTIAL' ? ' ' + t('ex.ship.partial', sh.orders_without_shipping_data) : '');
 }
 
 function renderExplorerPage(main) {
@@ -921,6 +938,7 @@ function renderExplorerPage(main) {
     h('button', { class: 'ex-export', type: 'button', disabled: d && d.available ? null : 'disabled', on: { click: () => { if (d && d.available) { if (exActiveTab() === 'comparison' && d.comparison_view) exExportComparison(d); else exExport(d); } } } }, svg(['M12 4v10', 'M8 10l4 4 4-4', 'M5 19h14'], 15), t('ex.export'))));
   main.appendChild(exTabs());
   if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), t('ex.noReport')))); return; }
+  { const n = cmpCoverageNotice(d.comparison_coverage); if (n) main.appendChild(n); }
   if (exActiveTab() === 'sales') { renderSalesTab(main, d); return; }
   if (exActiveTab() === 'products') { renderProductsTab(main, d); return; }
   if (exActiveTab() === 'customers') { renderCustomersTab(main, d); return; }
@@ -929,6 +947,7 @@ function renderExplorerPage(main) {
   if (exActiveTab() === 'period') { renderPeriodTab(main, d); return; }
   if (exActiveTab() === 'comparison') { renderComparisonTab(main, d); return; }
   main.appendChild(exKpiRow(d));
+  { const n = exShippingNote(d); if (n) main.appendChild(n); }
   main.appendChild(h('div', { class: 'ex-grid-2' }, exSalesCard(d), exCategoryCard(d)));
   main.appendChild(h('div', { class: 'ex-grid-2 even' }, exTopProducts(d), exTopCustomers(d)));
 }

@@ -18,7 +18,7 @@
 
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { productKeyOf } from '../metrics/products.js';
-import { inWindow, localDateString, previousEquivalentWindow } from '../metrics/windows.js';
+import { inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 import { classifyCustomerOrders } from './explorer.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -175,6 +175,7 @@ export function buildCustomersWorkspace({ ledger, data, windows, now, config, ti
 
   return {
     period: { start: win.localStart, end: win.localEnd, previous_start: prevWin?.localStart ?? null, previous_end: prevWin?.localEnd ?? null },
+    comparison_coverage: comparisonCoverage(win),
     history, list: rows, top, recency,
     watch: { lapsed, both_periods: bothPeriods, own_rhythm: ownRhythm },
     details,

@@ -29,7 +29,7 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir, guard }) {
+export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus }) {
   return async function handle(req, res) {
     try {
       // Hosted staging: host allow-list + access token, before anything (pages, static files, api) is served.
@@ -45,6 +45,14 @@ export function createAnalyticsPremiumApp({ reportsDir, guard }) {
       if (req.method === 'GET') {
         const shared = await readNordlaShared(url.pathname);
         if (shared) { res.writeHead(200, { 'Content-Type': shared.type, 'Cache-Control': 'no-store' }); res.end(shared.body); return; }
+      }
+      if (req.method === 'GET' && url.pathname === '/api/sync-status') {
+        // Two separate facts, never mixed: the last Shopify -> Supabase SYNCHRONISATION, and the last REPORT generation from the synced data.
+        let sync = { available: false, reason: 'NOT_CONFIGURED' };
+        try { if (syncStatus) sync = await syncStatus(); } catch { sync = { available: false, reason: 'STATUS_UNAVAILABLE' }; }
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ sync, report: reportStatus ? reportStatus() : null }));
+        return;
       }
       if (req.method === 'GET' && url.pathname === '/api/brief') {
         const brief = await loadBrief(reportsDir);

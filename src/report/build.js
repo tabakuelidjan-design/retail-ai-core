@@ -5,7 +5,7 @@
 import { METRICS_VERSION } from '../metrics/config.js';
 import { buildProductPerformance, buildRankings, buildSegments, buildVariantPerformance } from '../metrics/products.js';
 import { computeSalesMetrics } from '../metrics/sales.js';
-import { buildDayBuckets, buildWindows, previousEquivalentWindow } from '../metrics/windows.js';
+import { buildDayBuckets, buildWindows, comparisonCoverage, localDateString, previousEquivalentWindow } from '../metrics/windows.js';
 import { detectCashRisks } from '../signals/cash-risk.js';
 import { detectCommercialCandidates } from '../signals/commercial.js';
 import { buildExplorer } from './explorer.js';
@@ -15,7 +15,8 @@ import { buildProductsWorkspace } from './products-workspace.js';
 const DETAIL_WINDOWS = ['last_30_days', 'available_window'];
 
 export function buildReport({ ledger, now, timeZone, config, data }) {
-  const windows = buildWindows(now, timeZone);
+  const historyStart = data?.firstOrderAt ? localDateString(new Date(data.firstOrderAt), timeZone) : null;
+  const windows = buildWindows(now, timeZone, { historyStart });
   const report = {
     metrics_version: METRICS_VERSION,
     generated_at: now.toISOString(),
@@ -103,7 +104,10 @@ export function buildReport({ ledger, now, timeZone, config, data }) {
     report.products.last_30_days.active_product_count = (last30Rows ?? []).filter((r) => r.units_sold > 0).length;
     report.products.last_30_days.active_product_count_previous = prevRows.filter((r) => r.units_sold > 0).length;
   } else {
-    report.sales.last_30_days.comparison = { available: false };
+    // Either there is no earlier period, or the earlier period is not fully inside the business history (for example the first sale
+    // was inside it): the raw coverage is kept so the page can say so factually instead of showing a meaningless percentage.
+    const coverage = comparisonCoverage(windows.last_30_days);
+    report.sales.last_30_days.comparison = coverage && !coverage.sufficient ? { available: false, reason: 'INSUFFICIENT_HISTORY', coverage } : { available: false };
   }
 
   report.variants = { available_window_top_revenue: buildVariantPerformance(ledger, windows.available_window)

@@ -8,9 +8,9 @@
 //    customer metrics - the share of orders that ARE identified is reported as `identified_share`.
 //  - Categories are the catalogue's own `product_type`; an empty type is reported as name = null ("uncategorised").
 
-import { aggregate, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
+import { aggregate, aggregateShipping, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { buildDayBuckets, inWindow, previousEquivalentWindow } from '../metrics/windows.js';
+import { buildDayBuckets, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
@@ -65,8 +65,15 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   const cur = summarize(win);
   const prev = prevWin ? summarize(prevWin) : null;
 
+  // Shipping is reported beside the product KPIs, never folded into them (product KPIs intentionally represent product lines only).
+  const curFacts = windowFacts(ledger, win);
+  const shipping = aggregateShipping(curFacts.shipping, curFacts.shippingRefunds);
+  const shippingUncaptured = ledger.shippingCoverage?.uncaptured ? cur.orders.length - curFacts.shipping.length : 0;
+
   const kpis = {
     net_sales_ex_tax: cur.total.net_sales_ex_tax,
+    shipping: { ...shipping, orders_without_shipping_data: shippingUncaptured, coverage: shippingUncaptured > 0 ? 'PARTIAL' : 'COMPLETE' },
+    total_net_sales_ex_tax_with_shipping: round2(cur.total.net_sales_ex_tax + shipping.net_ex_tax_after_refunds),
     order_count: cur.orders.length,
     units_sold: cur.total.units_sold,
     aov_ex_tax: cur.orders.length ? round2(cur.total.net_sales_ex_tax / cur.orders.length) : null,
@@ -177,7 +184,8 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   const customersBlock = buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur, prev, win, prevWin, rawOrder });
   const products = buildProductsBlock({ cur, prev, curRows, prevRows: prev ? prevRowsAll() : null, win, typeOfProduct, createdAtOf, kpis, categories });
   return { kpis, series: { daily, weekly: weeklySeries(daily) }, comparison, contributions, days, channels, categories, top_products, top_customers, products, customers: customersBlock, channels_view: channelsBlock, geo_view: buildGeoBlock({ ledger, data, windows, win, rawOrder }), period_view: buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, lineById }),
-    comparison_view: buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers: customersBlock }) };
+    comparison_view: buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers: customersBlock }),
+    comparison_coverage: comparisonCoverage(win) };
 }
 
 /**

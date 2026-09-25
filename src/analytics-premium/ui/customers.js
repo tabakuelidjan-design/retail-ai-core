@@ -304,6 +304,7 @@ function renderCustomersPage(main) {
   const d = cachedCustomers;
   main.appendChild(clHeader(d));
   if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), t('ex.noReport')))); return; }
+  { const n = cmpCoverageNotice(d.comparison_coverage); if (n) main.appendChild(n); }
   main.appendChild(clCoverage(d));
   main.appendChild(clKpiRow(d));
   main.appendChild(h('div', { class: 'ex-grid-2 cl-grid' }, clTopCard(d), clDistributionCard(d)));

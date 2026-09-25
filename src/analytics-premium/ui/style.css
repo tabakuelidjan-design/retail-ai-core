@@ -608,3 +608,9 @@ button { font-family: inherit; }
   .topbar-right .ap-account .avatar-group { margin-left: 0; }
   .ap-account-menu { width: min(300px, calc(100vw - 32px)); }
 }
+
+.ex-cov-notice { margin: 0 0 12px; padding: 12px 14px; }
+.ex-ship-note { margin: 8px 0 12px; }
+
+.sync-dot.warn { background: var(--warn, #b7791f); }
+.sync-dot.bad { background: var(--bad, #b3261e); }

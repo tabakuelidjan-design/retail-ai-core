@@ -8,13 +8,19 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
+/** Last report generation attempt (a report is generated FROM the synced data; it is not a Shopify sync). */
+export const reportRefreshState = { lastAttemptAt: null, lastSuccessAt: null, lastStatus: null };
+
 export function runReportOnce({ spawnFn = spawn, cwd = ROOT, log = console.log } = {}) {
   return new Promise((resolve) => {
     const child = spawnFn(process.execPath, ['src/report/index.js', 'report'], { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
     let err = '';
+    reportRefreshState.lastAttemptAt = new Date().toISOString();
     child.stderr?.on('data', (d) => { err = (err + d).slice(-2000); });
     child.on('error', (e) => { log(`report refresh could not start: ${String(e.message).slice(0, 160)}`); resolve(false); });
     child.on('close', (code) => {
+      reportRefreshState.lastStatus = code === 0 ? 'SUCCESS' : 'FAILED';
+      if (code === 0) reportRefreshState.lastSuccessAt = new Date().toISOString();
       if (code === 0) log('report refresh: ok');
       else log(`report refresh failed (exit ${code}): ${(err.trim().split('\n').pop() ?? '').slice(0, 200)}`);
       resolve(code === 0);

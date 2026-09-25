@@ -104,6 +104,7 @@ export async function loadWhatChanged(reportsDir) {
     currency,
     period: { key: 'last_30_days', label: 'Last 30 days' },
     comparisonAvailable,
+    comparisonCoverage: cmp?.coverage ?? null,
     insight,
     watch,
     otherChanges,

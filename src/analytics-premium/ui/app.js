@@ -162,10 +162,30 @@ function langSwitch(onChange) {
     NORDLA_I18N.SUPPORTED.map((l) => h('button', { type: 'button', class: NORDLA_I18N.getLang() === l ? 'on' : '', title: NAMES[l], on: { click: () => { NORDLA_I18N.setLang(l); onChange(); } } }, l.toUpperCase())));
 }
 
+/** Shopify synchronisation health (NOT the report generation shown next to it): last successful sync, or a factual failed/stale state. */
+async function refreshSyncPill() {
+  const el = document.querySelector('[data-sync-pill]');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/sync-status');
+    if (!r.ok) return;
+    const s = (await r.json()).sync;
+    const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
+    let text; let tone = 'ok';
+    if (!s || !s.available) { text = t('topbar.syncUnknown'); tone = 'warn'; }
+    else if (s.latestFailed) { text = t('topbar.syncFailed', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
+    else if (s.stale) { text = t('topbar.syncStale', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }
+    else text = t('topbar.shopifySync', fmtAgo(s.lastSuccess.finishedAt));
+    label.textContent = text; dot.className = `sync-dot ${tone}`;
+  } catch (e) { /* the pill simply keeps its neutral text */ }
+}
+
 function topbar(brief, onLangChange, opts = {}) {
+  setTimeout(refreshSyncPill, 0);
   return h('div', { class: 'topbar' },
     h('div', { class: 'topbar-title' }, t('topbar.title')),
     h('div', { class: 'topbar-right' },
+      h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, t('topbar.syncUnknown'))),
       h('span', { class: 'sync-pill' }, h('span', { class: 'sync-dot' }), t('topbar.reportGenerated', brief ? fmtAgo(brief.generatedAt) : t('common.dash'))),
       opts.periodLocked
         ? h('span', { class: 'period-pill locked', title: t('period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), h('span', { class: 'period-fixed' }, t('period.fixed')))
@@ -264,7 +284,8 @@ function wcHero() {
  * decline narrative. */
 function wcInsightCard(data) {
   if (!data.comparisonAvailable || !data.insight) {
-    return h('div', { class: 'insight-card' }, h('div', { class: 'insight-left', style: 'grid-column:1/-1' }, h('h2', { class: 'insight-title' }, t('wc.noComparison'))));
+    const cov = data.comparisonCoverage && !data.comparisonCoverage.sufficient ? data.comparisonCoverage : null;
+    return h('div', { class: 'insight-card' }, h('div', { class: 'insight-left', style: 'grid-column:1/-1' }, h('h2', { class: 'insight-title' }, cov ? t('cmp.insufficientHistory') : t('wc.noComparison')), cov ? h('p', { class: 'insight-sub' }, t('cmp.insufficientDetail', cov.previous_days_with_history, cov.previous_days, cov.history_start)) : null));
   }
   const ins = data.insight;
   const dir = dirSuffix(ins.direction);

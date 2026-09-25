@@ -323,6 +323,7 @@ function renderProductsPage(main) {
   const d = cachedProducts;
   main.appendChild(prHeader(d));
   if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), t('ex.noReport')))); return; }
+  { const n = cmpCoverageNotice(d.comparison_coverage); if (n) main.appendChild(n); }
   main.appendChild(prScope(d));
   main.appendChild(prKpiRow(d));
   main.appendChild(h('div', { class: 'ex-grid-2 even pr-grid' }, prMoversCard(d, 'growth'), prMoversCard(d, 'decline')));

@@ -8,14 +8,24 @@
 import http from 'node:http';
 import { createAnalyticsPremiumApp } from './app.js';
 import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
-import { startReportRefresh } from './report-refresh.js';
+import { reportRefreshState, startReportRefresh } from './report-refresh.js';
+import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
+import { latestSyncStatus } from '../../sync/run-log.js';
 
 const REPORTS_DIR = new URL('../../../reports/', import.meta.url);
 
 try {
   const hosting = resolveHosting(); // fails fast, before anything is served
   const guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops }) : undefined;
-  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard });
+  // Sync health: read-only, from the sync_runs table the Core sync writes. Single-tenant staging: exactly one merchant is expected.
+  let supabase = null;
+  try { if (process.env.SUPABASE_URL) supabase = createSupabaseClient(loadSupabaseConfigFromEnv()); } catch { supabase = null; }
+  const syncStatus = supabase ? async () => {
+    const merchants = await supabase.select('merchants', { select: 'id', limit: '2' });
+    if (merchants.length !== 1) return { available: false, reason: 'MERCHANT_NOT_UNIQUE' };
+    return latestSyncStatus(supabase, merchants[0].id, { staleAfterMinutes: Number(process.env.SYNC_STALE_AFTER_MINUTES || 60) });
+  } : undefined;
+  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }) });
   http.createServer(handler).listen(hosting.port, hosting.host, () => {
     if (hosting.hosted) console.log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);
     else console.log(`Analytics Premium (Brief) running at http://127.0.0.1:${hosting.port}`);

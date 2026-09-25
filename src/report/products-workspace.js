@@ -25,7 +25,7 @@
 import { createHash } from 'node:crypto';
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { buildDayBuckets, inWindow, localDateString, previousEquivalentWindow } from '../metrics/windows.js';
+import { buildDayBuckets, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 import { productEvolutionStatus } from './explorer.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -164,6 +164,7 @@ export function buildProductsWorkspace({ ledger, data, windows, now, config, tim
 
   return {
     period: { start: win.localStart, end: win.localEnd, previous_start: prevWin?.localStart ?? null, previous_end: prevWin?.localEnd ?? null },
+    comparison_coverage: comparisonCoverage(win),
     totals: { net_sales_ex_tax: totalRevenue, units_sold: totalUnits, previous_net_sales_ex_tax: prevTotal, delta: totalDelta },
     kpis, list: rows, new_products: newProducts, watch, details,
   };
