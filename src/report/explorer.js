@@ -264,13 +264,17 @@ function buildProductsBlock({ cur, prev, curRows, prevRows, win, typeOfProduct, 
  * Dormancy: NOT defined in Nordla, so no "dormant" metric. Only factual recency buckets (days since last known order).
  * Cohorts: not built - see `cohort` (history shorter than config.customers.shortHistoryDays, few repeat buyers).
  */
+/** The Clients-tab status rule, over a customer's orders IN ONE WINDOW (`meta` = [{ idx }], idx = trusted order index or null).
+ * Exported so the main Clients workspace (customers-workspace.js) applies exactly the same definition. */
+export function classifyCustomerOrders(meta) {
+  if (meta.some((m) => m.idx === 1)) return 'new';
+  if (meta.some((m) => m.idx != null && m.idx > 1) || meta.length >= 2) return 'returning';
+  return 'unknown';
+}
+
 function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur, prev, win, prevWin, rawOrder }) {
   const c = config.customers;
-  const classify = (cust) => {
-    if (cust.meta.some((m) => m.idx === 1)) return 'new';
-    if (cust.meta.some((m) => m.idx != null && m.idx > 1) || cust.meta.length >= 2) return 'returning';
-    return 'unknown';
-  };
+  const classify = (cust) => classifyCustomerOrders(cust.meta);
   const mean = (arr) => (arr.length ? round2(arr.reduce((a, x) => a + x, 0) / arr.length) : null);
   const median = (arr) => { if (!arr.length) return null; const x = [...arr].sort((a, b) => a - b); const m = x.length >> 1; return round2(x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2); };
 

@@ -139,7 +139,7 @@ const NAV_ITEMS = [
   ['brief', 'resume', 'nav.brief', '#/'],
   ['changed', 'ceQuiAChange', 'nav.changed', '#/what-changed'],
   ['explore', 'explorer', 'nav.explore', '#/explorer'],
-  ['customers', 'clients', 'nav.customers', null],
+  ['customers', 'clients', 'nav.customers', '#/customers'],
   ['products', 'produits', 'nav.products', null],
 ];
 function sidebar(activeRoute) {
@@ -441,6 +441,7 @@ const ROUTES = {
   'explorer/zones': { key: 'explore', load: loadExplorerIfNeeded, render: renderExplorerPage },
   'explorer/period': { key: 'explore', load: loadExplorerIfNeeded, render: renderExplorerPage },
   'explorer/comparison': { key: 'explore', load: loadExplorerIfNeeded, render: renderExplorerPage },
+  customers: { key: 'customers', load: loadCustomersIfNeeded, render: renderCustomersPage },
 };
 async function route() {
   const hash = location.hash.replace(/^#\/?/, '');

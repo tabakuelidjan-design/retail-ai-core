@@ -9,6 +9,7 @@ import { buildDayBuckets, buildWindows, previousEquivalentWindow } from '../metr
 import { detectCashRisks } from '../signals/cash-risk.js';
 import { detectCommercialCandidates } from '../signals/commercial.js';
 import { buildExplorer } from './explorer.js';
+import { buildCustomersWorkspace } from './customers-workspace.js';
 
 const DETAIL_WINDOWS = ['last_30_days', 'available_window'];
 
@@ -108,5 +109,7 @@ export function buildReport({ ledger, now, timeZone, config, data }) {
     .sort((a, b) => b.net_sales_ex_tax - a.net_sales_ex_tax).slice(0, 10) };
   // Explorer page (Analytics Premium): needs the raw rows (customer_key, product_type), so it is only built when `data` is given.
   if (data) report.explorer = { last_30_days: buildExplorer({ ledger, data, windows, now, config, dailySeries: report.sales.last_30_days.daily_series, timeZone }) };
+  // Main Clients workspace (Analytics Premium): per-customer list + detail, pseudonymous labels only (customers-workspace.js).
+  if (data) report.customers_workspace = { last_30_days: buildCustomersWorkspace({ ledger, data, windows, now, config, timeZone }) };
   return { report, windows };
 }

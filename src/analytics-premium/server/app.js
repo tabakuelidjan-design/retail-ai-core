@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { loadBrief } from './brief.js';
 import { loadWhatChanged } from './what-changed.js';
 import { loadExplorer } from './explorer.js';
+import { loadCustomers, loadCustomerDetail } from './customers.js';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const UI = new URL('../ui/', import.meta.url);
@@ -14,6 +15,8 @@ const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/explorer.js': ['explorer.js', 'text/javascript; charset=utf-8'],
+  '/customers.js': ['customers.js', 'text/javascript; charset=utf-8'],
+  '/customers.css': ['customers.css', 'text/css; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
@@ -54,6 +57,20 @@ export function createAnalyticsPremiumApp({ reportsDir }) {
       if (req.method === 'GET' && url.pathname === '/api/explorer') {
         const data = await loadExplorer(reportsDir);
         if (!data) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'NO_REPORT_AVAILABLE' } })); return; }
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(data));
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/customers') {
+        const data = await loadCustomers(reportsDir);
+        if (!data) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'NO_REPORT_AVAILABLE' } })); return; }
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(data));
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/customers/detail') {
+        const data = await loadCustomerDetail(reportsDir, url.searchParams.get('id'));
+        if (data.error) { res.writeHead(data.error === 'INVALID_CUSTOMER_ID' ? 400 : 404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: data.error } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
         return;
