@@ -14,11 +14,13 @@ import { createShopifyPriceSource } from '../catalog.js';
 import { createShopifyStockApplier } from '../stock.js';
 import { createSupabaseAttachmentStore } from '../inbox.js';
 import { createFinanceApp } from './app.js';
+import { HostingConfigError, resolveHosting } from './hosting.js';
 
-const PORT = Number(process.env.FINANCE_PORT || 4310);
 const AUDIT_LOG = 'data/local/finance/audit.log';
 
-async function ensureToken() {
+async function ensureToken(hosting) {
+  // Hosted: the token comes from the platform variables only; nothing is read from or written to a .env file.
+  if (hosting.tokenRequired) return process.env.FINANCE_DASHBOARD_TOKEN;
   if (process.env.FINANCE_DASHBOARD_TOKEN && process.env.FINANCE_DASHBOARD_TOKEN.length >= 24) return process.env.FINANCE_DASHBOARD_TOKEN;
   if (existsSync('.env') && /^FINANCE_DASHBOARD_TOKEN=.{24,}/m.test(await readFile('.env', 'utf8'))) {
     const m = /^FINANCE_DASHBOARD_TOKEN=(.{24,})$/m.exec(await readFile('.env', 'utf8'));
@@ -31,12 +33,14 @@ async function ensureToken() {
 }
 
 async function main() {
-  const token = await ensureToken();
+  const hosting = resolveHosting(); // fails fast (before any network call) when a hosted deployment is misconfigured
+  const token = await ensureToken(hosting);
   const rt = await createRuntime();
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
     merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), stockApplier: createShopifyStockApplier(rt.shopify), attachmentStore: createSupabaseAttachmentStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: rt.retailHistory,
+    allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     settings: {
       load: () => loadSettings(),
       save: (s) => saveSettings(s),
@@ -45,9 +49,12 @@ async function main() {
     audit: async (e) => appendFile(AUDIT_LOG, `${JSON.stringify(e)}\n`).catch(() => {}),
   });
   const server = http.createServer(app.handler);
-  server.listen(PORT, '127.0.0.1', () => {
-    console.log(`Finance dashboard: http://127.0.0.1:${PORT}   (loopback only)`);
-    console.log('Log in with the token stored in .env (FINANCE_DASHBOARD_TOKEN). Nothing is sent externally.');
+  server.listen(hosting.port, hosting.host, () => {
+    if (hosting.hosted) console.log(`Finance dashboard (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only.`);
+    else {
+      console.log(`Finance dashboard: http://127.0.0.1:${hosting.port}   (loopback only)`);
+      console.log('Log in with the token stored in .env (FINANCE_DASHBOARD_TOKEN). Nothing is sent externally.');
+    }
   });
 }
-main().catch((e) => { console.error('dashboard failed to start:', e.message); process.exitCode = 1; });
+main().catch((e) => { console.error(e instanceof HostingConfigError ? `dashboard configuration error: ${e.message}` : `dashboard failed to start: ${e.message}`); process.exitCode = 1; });

@@ -45,6 +45,7 @@ export async function startApp(o = {}) {
     settings: { load: async () => structuredClone(settings), save: async (s) => { settings = structuredClone(s); }, saveLogo: async ({ ext, bytes }) => { logos.push(bytes.length); return `data/local/finance/logo.${ext}`; } },
     audit: o.audit ?? (async (e) => { audits.push(e); }),
     lookupProviders: o.lookupProviders, companySearchProvider: o.companySearchProvider, companyRegistry: o.companyRegistry, priceSource: o.priceSource, stockApplier: o.stockApplier, mailAdapter: o.mailAdapter, accessPoint: o.accessPoint, bankAdapter: o.bankAdapter, bankVaultKey: o.bankVaultKey,
+    ...(o.deps ?? {}),
   });
   const server = http.createServer(app.handler);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

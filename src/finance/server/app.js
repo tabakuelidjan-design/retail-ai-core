@@ -10,6 +10,7 @@
 //   * lifecycle actions run as a merchant actor through the finance service, which audits each one
 //   * strict response headers (CSP without inline script, no sniffing, no caching of API data)
 
+import { clientIpOf } from './hosting.js';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
@@ -58,7 +59,7 @@ const safeName = (s) => String(s).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80);
 const cents = (c) => formatCents(c);
 
 /**
- * @param {object} deps { merchantId, store, token, settings: {load, save, saveLogo}, retail?, retailConfig, timeZone, clock?, audit?, retailHistory?, lookupProviders?, allowedHosts? }
+ * @param {object} deps { merchantId, store, token, settings: {load, save, saveLogo}, retail?, retailConfig, timeZone, clock?, audit?, retailHistory?, lookupProviders?, allowedHosts?, secureCookie?, trustProxyHops? }
  */
 export function createFinanceApp(deps) {
   const { merchantId, store, token, settings: settingsIo, retail = null, retailConfig, timeZone = 'UTC', retailHistory = async () => null } = deps;
@@ -69,11 +70,12 @@ export function createFinanceApp(deps) {
   const failures = new Map();
   const packCache = new Map();
   const tokenHash = sha(token);
+  const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
   // ---------- plumbing ----------
   const headers = (extra = {}) => ({
     'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.shopify.com; frame-src 'self'; object-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...extra,
+    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...(deps.secureCookie ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...extra,
   });
   const send = (res, status, body, extra = {}) => { res.writeHead(status, headers(extra)); res.end(body); };
   const json = (res, status, obj, extra = {}) => send(res, status, JSON.stringify(obj), { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra });
@@ -296,7 +298,7 @@ export function createFinanceApp(deps) {
   const P = '([A-Za-z0-9_-]{1,64})';
 
   on('POST', '/api/login', async (ctx) => {
-    const ip = ctx.req.socket.remoteAddress ?? 'unknown';
+    const ip = clientIpOf(ctx.req, deps.trustProxyHops ?? 0);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > Date.now()) throw new HttpError(429, 'TOO_MANY_ATTEMPTS');
     const supplied = typeof ctx.body?.token === 'string' ? ctx.body.token : '';
@@ -310,7 +312,7 @@ export function createFinanceApp(deps) {
     const s = { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS };
     sessions.set(sid, s);
     await audit({ at: clock.now(), action: 'LOGIN' });
-    json(ctx.res, 200, { ok: true, csrf: s.csrf }, { 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}` });
+    json(ctx.res, 200, { ok: true, csrf: s.csrf }, { 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
   }, { public: true });
 
   on('GET', '/api/session', async (ctx) => {
@@ -318,7 +320,7 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf } : { authenticated: false });
   }, { public: true });
 
-  on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` }); });
+  on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${cookieFlags}` }); });
 
   on('GET', '/api/overview', async (ctx) => { const { svc, settings } = await servicesFor(); json(ctx.res, 200, await overview(svc, settings)); });
 
@@ -1168,7 +1170,7 @@ export function createFinanceApp(deps) {
   async function handler(req, res) {
     try {
       const host = req.headers.host ?? '';
-      if (!(deps.allowedHosts ? deps.allowedHosts.includes(host) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
+      if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
       if (req.method === 'GET') { const shared = await readNordlaShared(url.pathname); if (shared) return send(res, 200, shared.body, { 'Content-Type': shared.type, 'Cache-Control': 'no-store' }); }
       if (req.method === 'GET' && STATIC[url.pathname]) { const [file, type] = STATIC[url.pathname]; return send(res, 200, await readFile(new URL(file, UI)), { 'Content-Type': type, 'Cache-Control': 'no-store' }); }
