@@ -10,6 +10,7 @@ import { detectCashRisks } from '../signals/cash-risk.js';
 import { detectCommercialCandidates } from '../signals/commercial.js';
 import { buildExplorer } from './explorer.js';
 import { buildCustomersWorkspace } from './customers-workspace.js';
+import { buildProductsWorkspace } from './products-workspace.js';
 
 const DETAIL_WINDOWS = ['last_30_days', 'available_window'];
 
@@ -111,5 +112,7 @@ export function buildReport({ ledger, now, timeZone, config, data }) {
   if (data) report.explorer = { last_30_days: buildExplorer({ ledger, data, windows, now, config, dailySeries: report.sales.last_30_days.daily_series, timeZone }) };
   // Main Clients workspace (Analytics Premium): per-customer list + detail, pseudonymous labels only (customers-workspace.js).
   if (data) report.customers_workspace = { last_30_days: buildCustomersWorkspace({ ledger, data, windows, now, config, timeZone }) };
+  // Main Produits workspace (Analytics Premium): per-product list + detail (products-workspace.js).
+  if (data) report.products_workspace = { last_30_days: buildProductsWorkspace({ ledger, data, windows, now, config, timeZone }) };
   return { report, windows };
 }

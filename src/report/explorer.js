@@ -189,17 +189,20 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
  *   not_sold_before   no previous revenue but the product already existed  -> no % (never +infinity)
  *   no_previous       there is no previous window at all
  */
+/** Explorer's evolution status of a product SOLD in the current window (see the list above). `before` = previous-window
+ * revenue (null when there is no previous window). Exported so the main Produits workspace applies the same rule. */
+export function productEvolutionStatus(before, createdAt, windowStart) {
+  if (before == null) return 'no_previous';
+  if (before > 0) return 'compared';
+  return createdAt && new Date(createdAt) >= windowStart ? 'new' : 'not_sold_before';
+}
+
 function buildProductsBlock({ cur, prev, curRows, prevRows, win, typeOfProduct, createdAtOf, kpis, categories }) {
   const prevByKey = prevRows ? new Map(prevRows.map((r) => [r.product_key, r])) : null;
   const sorted = [...curRows].sort((a, b) => b.net_sales_ex_tax - a.net_sales_ex_tax);
   const totalRevenue = sorted.reduce((a, r) => a + r.net_sales_ex_tax, 0);
   const totalUnits = sorted.reduce((a, r) => a + r.units_sold, 0);
-  const statusOf = (r, before) => {
-    if (!prevByKey) return 'no_previous';
-    if (before > 0) return 'compared';
-    const created = createdAtOf(r.product_key);
-    return created && new Date(created) >= win.start ? 'new' : 'not_sold_before';
-  };
+  const statusOf = (r, before) => productEvolutionStatus(prevByKey ? before : null, createdAtOf(r.product_key), win.start);
   const evo = (r) => {
     const p = prevByKey ? prevByKey.get(r.product_key) : null;
     const before = prevByKey ? p?.net_sales_ex_tax ?? 0 : null;
