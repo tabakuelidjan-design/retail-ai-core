@@ -13,7 +13,7 @@ import { syncOrders } from './orders.js';
 import { loadCustomerKeySecret } from '../customers/pseudonym.js';
 import { SHOP_CREATED_QUERY } from '../shopify/queries.js';
 import { getGrantedScopes, nextCoverage, planOrdersSync, readCoverage, writeCoverage } from './history.js';
-import { finishRun, startRun } from './run-log.js';
+import { finishRun, recordStartupFailure, startRun } from './run-log.js';
 
 const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
 
@@ -103,6 +103,7 @@ main()
   .then(() => finishRun(run.supabase, run.id, { ok: run.ok, summaries: run.summaries, error: run.ok ? null : 'the sync reported errors' }))
   .catch(async (err) => {
     console.error('sync failed:', err);
-    await finishRun(run.supabase, run.id, { ok: false, summaries: run.summaries, error: err?.message });
+    if (run.id) await finishRun(run.supabase, run.id, { ok: false, summaries: run.summaries, error: err?.message });
+    else if (run.supabase) await recordStartupFailure(run.supabase, { mode: process.argv[2], error: err?.message });
     process.exit(1);
   });
