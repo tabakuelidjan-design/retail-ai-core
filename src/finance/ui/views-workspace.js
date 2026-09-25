@@ -38,7 +38,7 @@ const sourceBadge = (s) => h('span', { class: `chip src-${s}` }, tt(SOURCE_BADGE
 const INBOX_STATUS = { RECEIVED: 'Received', TO_REVIEW: 'To review', VALIDATED: 'Validated', TO_PAY: 'To pay', PAID: 'Paid', REJECTED: 'Rejected' };
 const inboxBadge = (s) => h('span', { class: `badge IN_${s}` }, tt(INBOX_STATUS[s] || s));
 const confChip = (x) => { const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
-const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing' };
+const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
 /** Integer cents -> text in the UI language, by string composition only (no arithmetic on money). */
 /** Client-side CSV export of rows already visible on screen - real data already fetched for the table, no
@@ -82,6 +82,8 @@ function renderInboxDetail(host, id, opts = {}) {
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
     if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, tt(w === 'TOTALS_DO_NOT_ADD_UP' ? 'The extracted totals do not add up: check them.' : w === 'SUPPLIER_CREDIT_NOTE_REVIEW_MANUALLY' ? 'This looks like a supplier credit note: review it manually.' : w)))));
     if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `/api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
+    else if (it.status !== 'REJECTED') body.appendChild(h('div', { style: 'margin:8px 0' }, attachButton(id, () => { draw(); onChange(); })));
+    body.appendChild(captureInfoNode(it));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
@@ -399,7 +401,8 @@ async function viewPurchasesWorkspace(q) {
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),
     h('div', { class: 'actions', style: 'align-self:center' },
       h('button', { class: 'btn', type: 'button', on: { click: () => importDocumentsModal(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('Import')),
-      h('button', { class: 'btn primary big', type: 'button', on: { click: () => manualEntry(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('+ Add manually')))));
+      h('button', { class: 'btn', type: 'button', on: { click: () => manualEntry(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('+ Add manually')),
+      h('button', { class: 'btn primary warm big', type: 'button', on: { click: () => openExpenseCapture(() => { drawTabs(); drawBody(); loadMetrics(); }) } }, tt('Add an expense')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
   const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
@@ -408,13 +411,15 @@ async function viewPurchasesWorkspace(q) {
   async function loadMetrics() {
     try {
       const [purchases, c] = await Promise.all([api('GET', '/api/inbox?scope=purchases'), api('GET', '/api/inbox/status')]);
-      const cur = (purchases.rows[0] && purchases.rows[0].currency) || 'EUR';
-      const toPay = purchases.rows.filter((r) => r.status === 'TO_PAY');
+      // Amounts are only added within ONE currency (the default one): a foreign-currency document is never summed into it.
+      const cur = (state.settings && state.settings.defaults && state.settings.defaults.currency) || 'EUR';
+      const toPayAll = purchases.rows.filter((r) => r.status === 'TO_PAY');
+      const toPay = toPayAll.filter((r) => (r.currency || cur) === cur); const otherCur = toPayAll.length - toPay.length;
       const paidCount = purchases.rows.filter((r) => r.status === 'PAID').length;
       clear(metricRow);
       const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)));
       metricRow.appendChild(metric('inbox', tt('To handle'), String(c.counts.RECEIVED + c.counts.TO_REVIEW), tt('Documents awaiting validation')));
-      metricRow.appendChild(metric('coins', tt('To pay'), `${fmtMoney(toPay.reduce((a, r) => a + (r.grossCents || 0), 0), cur)}`, tt('{0} document(s)', toPay.length)));
+      metricRow.appendChild(metric('coins', tt('To pay'), `${fmtMoney(toPay.reduce((a, r) => a + (r.grossCents || 0), 0), cur)}`, tt('{0} document(s)', toPay.length) + (otherCur ? ` · ${tt('{0} in another currency', otherCur)}` : '')));
       metricRow.appendChild(metric('check', tt('Paid'), String(paidCount), tt('Supplier invoice(s)')));
     } catch (e) { /* the workspace below still works without the KPI strip */ }
   }
@@ -549,57 +554,6 @@ async function viewPurchases() {
       kpi.appendChild(h('div', { class: 'kpi ok' }, h('div', { class: 'kl' }, tt('Paid')), h('div', { class: 'kbig' }, String(c.counts.PAID)), h('div', { class: 'ks' }, tt('supplier invoice(s)'))));
       draw(); } catch (e) { fail(e, box); } }
   load();
-}
-
-function accountantWorkspace() {
-  const now = new Date(); const y = now.getFullYear(); const qn = Math.floor(now.getMonth() / 3) + 1;
-  const spec = { kind: 'quarter', year: y, quarter: qn === 1 ? 4 : qn - 1, month: now.getMonth() + 1, from: `${y}-01-01`, to: now.toISOString().slice(0, 10) };
-  if (qn === 1) spec.year = y - 1;
-  const card = h('div', { class: 'card closing' }); const out = h('div');
-  const kindSel = h('select', { on: { change: (e) => { spec.kind = e.target.value; draw(); } } }, [['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['custom', 'Custom period']].map(([v, l]) => h('option', { value: v, selected: v === spec.kind }, tt(l))));
-  const controls = h('div', { class: 'row r4', style: 'align-items:end' });
-  function draw() {
-    clear(controls);
-    controls.appendChild(h('div', { class: 'field' }, h('label', null, tt('Period')), kindSel));
-    const num = (k, label, min, max) => h('div', { class: 'field' }, h('label', null, label), h('input', { type: 'number', value: String(spec[k]), min, max, on: { input: (e) => { spec[k] = Number(e.target.value); } } }));
-    if (spec.kind === 'quarter') { controls.appendChild(num('year', tr('Year'), 2000, 2100)); controls.appendChild(h('div', { class: 'field' }, h('label', null, tt('Quarter')), h('select', { on: { change: (e) => { spec.quarter = Number(e.target.value); } } }, [1, 2, 3, 4].map((n) => h('option', { value: String(n), selected: n === spec.quarter }, `Q${n}`))))); }
-    else if (spec.kind === 'month') { controls.appendChild(num('year', tr('Year'), 2000, 2100)); controls.appendChild(num('month', tr('Month'), 1, 12)); }
-    else if (spec.kind === 'year') controls.appendChild(num('year', tr('Year'), 2000, 2100));
-    else { controls.appendChild(h('div', { class: 'field' }, h('label', null, tt('From')), h('input', { type: 'date', value: spec.from, on: { input: (e) => { spec.from = e.target.value; } } }))); controls.appendChild(h('div', { class: 'field' }, h('label', null, tt('To')), h('input', { type: 'date', value: spec.to, on: { input: (e) => { spec.to = e.target.value; } } }))); }
-    controls.appendChild(h('div', { class: 'field' }, h('button', { class: 'primary', on: { click: prepare } }, tt('Prepare the accountant file'))));
-  }
-  async function prepare() {
-    clear(out); out.appendChild(h('div', { class: 'skl', style: 'height:80px;margin-top:12px' }));
-    try { renderPreview(await api('POST', '/api/accountant/prepare', spec)); } catch (e) { clear(out); fail(e, out); }
-  }
-  function renderPreview(p) {
-    clear(out);
-    const warn = (w) => tt({ ACCOUNTANT_EMAIL_MISSING: 'No accountant address is set: add it in Settings.', PACK_INCOMPLETE: 'The period data is incomplete: see the anomalies file in the package.', DIRECT_SEND_NOT_CONFIGURED: 'Direct sending is not configured: download the package or the .eml file and send it yourself.' }[w] || w);
-    out.appendChild(h('div', { class: 'preview' },
-      h('div', { class: 'pv-head' }, h('div', null, h('div', { class: 'eyebrow' }, tt('Preview')), h('h3', null, p.fileName)), h('span', { class: `badge ${p.completeness}` }, p.completeness)),
-      p.warnings.length ? h('div', { class: 'banner warn small' }, p.warnings.map((w) => h('div', null, warn(w)))) : null,
-      h('div', { class: 'grid two' },
-        h('div', null, h('h4', null, tt('Recipient')), h('div', { class: 'kv' }, h('div', null, tt('Name')), h('div', null, p.recipient.name || '-'), h('div', null, tt('Email')), h('div', null, p.recipient.email || tt('not set'))),
-          h('h4', { style: 'margin-top:12px' }, tt('Message')), h('div', { class: 'msgbox' }, h('div', { class: 'small muted' }, tt('Subject')), h('div', null, p.subject), h('pre', null, p.body))),
-        h('div', null, h('h4', null, tt('Attachment')), h('div', { class: 'file' }, svgIcon('doc', 16), h('span', null, p.fileName), h('span', { class: 'muted small' }, fmtBytes(p.size))),
-          h('h4', { style: 'margin-top:12px' }, tt('Contents')), h('div', { class: 'small muted' }, tt('{0} invoice(s) · {1} credit note(s) · {2} refund(s) · {3} supplier invoice(s)', p.counts.invoices, p.counts.creditNotes, p.counts.refunds, p.counts.supplierInvoices)),
-          h('ul', { class: 'plain small filelist' }, p.files.slice(0, 14).map((f) => h('li', null, f.path))), p.files.length > 14 ? h('div', { class: 'muted small' }, tt('+ {0} more files', p.files.length - 14)) : null)),
-      h('div', { class: 'actions', style: 'margin-top:14px' },
-        h('a', { class: 'btn', href: p.downloadUrl }, tt('Download the ZIP')), h('a', { class: 'btn', href: p.emlUrl }, tt('Download the .eml (fallback)')),
-        h('button', { class: 'primary', disabled: !p.recipient.configured, on: { click: () => approveSend(p) } }, tt('Send to accountant')),
-        h('span', { class: 'muted small' }, tt('Nothing is sent until you approve.')))));
-  }
-  function approveSend(p) {
-    const ok = h('input', { type: 'checkbox' }); const err = h('div');
-    const go = h('button', { class: 'primary', disabled: true, on: { click: async () => { try { await api('POST', `/api/accountant/package/${p.id}/send`, { approve: true, recipient: p.recipient.email }); go.closest('.modal-back').remove(); toast('Sent to the accountant', 'ok'); p.sent = true; renderPreview(p); } catch (e) { if (e.code === 'DIRECT_SEND_NOT_CONFIGURED') { fail(e, err); } else fail(e, err); } } } }, tt('APPROVE and send'));
-    ok.addEventListener('change', () => { go.disabled = !ok.checked; });
-    modal('Send to accountant', h('div', null, err, h('p', null, tt('You are about to send {0} to:', p.fileName)), h('div', { class: 'banner info' }, h('strong', null, p.recipient.email), p.recipient.name ? ` (${p.recipient.name})` : ''), h('p', { class: 'muted small' }, tt('The package contains your sales, VAT and documents for the period. Sending goes through: {0}.', p.sendChannel)),
-      h('label', { style: 'color:var(--ink)' }, ok, tt('I approve sending this package to this recipient.'))),
-      (close) => [go, h('button', { on: { click: close } }, tt('Cancel'))]);
-  }
-  card.appendChild(h('div', { class: 'cardhead' }, h('h2', null, 'Close the period'), h('span', { class: 'muted small' }, 'One click: the whole accountant file, checked and ready.')));
-  card.appendChild(controls); card.appendChild(out); draw();
-  return card;
 }
 
 // ---------- accountant closing workflow (month / quarter / year / custom -> prepare -> preview -> APPROVE -> send, or .eml) ----------

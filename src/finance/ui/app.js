@@ -71,6 +71,10 @@ const TXT = {
   CUSTOMER_COMPANY_NUMBER_MISSING: 'Enter the customer VAT or enterprise number', SELLER_NAME_MISSING: 'Complete your company details in Settings', SELLER_VAT_NUMBER_MISSING: 'Add your VAT number in Settings',
   PAYMENT_INSTRUCTIONS_MISSING: 'Add your IBAN in Settings (or payment terms on the invoice)', DUE_DATE_MISSING_OR_INVALID: 'Set a due date', LINKED_BASIS_WITHOUT_SOURCE_ORDER: 'Select the shop/POS order to link',
   SOURCE_ORDER_NOT_FOUND_IN_RETAIL_CORE: 'The linked order was not found', CREDIT_REASON_MISSING: 'Give a reason for the credit note',
+  PACK_HAS_BLOCKING_ISSUES: 'The pack cannot be generated: blocking items remain', WARNINGS_NOT_ACKNOWLEDGED: 'Confirm that you want to generate the pack despite the warnings', RETAIL_SOURCE_UNAVAILABLE: 'The sales source cannot be read right now',
+  CATEGORY_EMPTY: 'This category has no document in the period', CATEGORY_UNKNOWN: 'Unknown category', PACK_NOT_FOUND: 'Pack not found', PACK_FILE_NOT_STORED: 'The file of this pack is no longer stored',
+  ATTACHMENT_TYPE_NOT_ALLOWED: 'Only JPEG, PNG and PDF files are accepted', ATTACHMENT_TOO_LARGE: 'The file is too large (12 MB maximum)', ATTACHMENT_EMPTY: 'The file is empty', DUPLICATE_ATTACHMENT: 'This file is already attached to another document', ATTACHMENT_ALREADY_PRESENT: 'This document already has a supporting document',
+  NOT_READY_TO_VALIDATE: 'Complete the missing fields first',
 };
 const human = (code) => { const c = String(code).split(' ')[0].split('(')[0]; if (TXT[c]) return TXT[c]; if (/^LINE_\d+_/.test(c)) return tt('Line {0}: {1}', c.split('_')[1], (TXT[c.split('_').slice(2).join('_')] ? tr(TXT[c.split('_').slice(2).join('_')]) : c.split('_').slice(2).join(' ').toLowerCase())); if (/^CUSTOMER_ADDRESS_/.test(c)) return tt('Customer address: {0} is missing', tr(c.replace('CUSTOMER_ADDRESS_', '').replace('_MISSING', '').toLowerCase().replace('_', ''))); if (/^POSSIBLE_DUPLICATE/.test(c)) return 'This looks like a shop sale that is not linked. Link it, or confirm it is a separate sale.'; return c.replace(/_/g, ' ').toLowerCase().replace(/^./, (x) => x.toUpperCase()); };
 const STATUS = { DRAFT: 'Draft', READY_FOR_APPROVAL: 'Ready for approval', ISSUED: 'Issued', SENT: 'Sent', PARTIALLY_PAID: 'Partially paid', PAID: 'Paid', OVERDUE: 'Overdue', CREDITED: 'Credited', CANCELLED: 'Cancelled', ACCEPTED: 'Accepted', REJECTED: 'Rejected', CONVERTED: 'Converted' };
@@ -1146,34 +1150,6 @@ async function viewSettings() {
   const s = JSON.parse(JSON.stringify(state.settings)); const rates = s.vat.allowedRatesBp.map((b) => String(b / 100)).join(', ');
   const st = { rates };
   const inp = (obj, key, label, opts) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: obj[key] ?? '', placeholder: (opts && opts.ph) || '', on: { input: (e) => { obj[key] = e.target.value; } } }), opts && opts.hint ? h('div', { class: 'hint' }, opts.hint) : null);
-// ---------- accountant pack ----------
-async function viewPack() {
-  const t = new Date().toISOString().slice(0, 10); const y = Number(t.slice(0, 4)); const q = Math.floor((Number(t.slice(5, 7)) - 1) / 3);
-  const from = h('input', { type: 'date', value: `${y}-${String(q * 3 + 1).padStart(2, '0')}-01` }); const to = h('input', { type: 'date', value: t });
-  const out = h('div');
-  const main = layout('#/pack', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Accountant pack'), h('div', { class: 'muted small' }, 'Shop/POS sales come from the validated retail figures; only standalone B2B invoices are added.'))),
-    h('div', { class: 'card' }, h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, 'From'), from), h('div', { class: 'field' }, h('label', null, 'To'), to), h('div', { class: 'field' }, h('button', { class: 'primary', on: { click: gen } }, 'Generate pack')))), out);
-  main.insertBefore(accountantWorkspace(), main.children[1] || null);
-  async function gen() {
-    clear(out); out.appendChild(h('div', { class: 'muted', style: 'margin:12px' }, 'Generating...'));
-    try {
-      const r = await api('POST', '/api/pack', { from: from.value, to: to.value }); const p = r.pack; const cur = p.currency; const e2 = (c) => (c / 100).toFixed(2); clear(out);
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('strong', null, `${p.period.start} to ${p.period.end}`), h('span', { class: `badge ${p.completeness.status}` }, p.completeness.status), h('span', { class: `badge ${p.reconciliation.status}` }, tt('Reconciliation: {0}', tr(p.reconciliation.status))), h('span', { class: 'muted small' }, tt('generated {0}', p.generated_at))), p.completeness.reasons.length ? h('ul', { class: 'plain small', style: 'margin-top:8px' }, p.completeness.reasons.map((x) => h('li', null, human(x)))) : h('div', { class: 'small muted' }, 'All source data for this period is present.'), h('div', { class: 'small muted', style: 'margin-top:6px' }, tt('Sources: {0}', p.source_systems.map((s) => s.system).join(', ')))));
-      const row = (l, v, b) => h('tr', null, h('td', null, b ? h('strong', null, l) : l), h('td', { class: 'num' }, b ? h('strong', null, v) : v));
-      out.appendChild(h('div', { class: 'grid two', style: 'margin-top:16px' },
-        h('div', { class: 'card' }, h('h2', null, 'Shop and POS (retail)'), h('table', null, row('Gross sales', `${p.retail.gross_sales.toFixed(2)} ${cur}`), row('Discounts', p.retail.discounts.toFixed(2)), row('Refunds', p.retail.refunds.toFixed(2)), row('Net sales incl. VAT', p.retail.net_sales.toFixed(2)), row('VAT', p.retail.vat.toFixed(2)), row('Net sales excl. VAT', p.retail.net_sales_ex_vat.toFixed(2), true), row('POS excl. VAT', p.retail.by_channel.pos.net_sales_ex_vat.toFixed(2)), row('Online excl. VAT', p.retail.by_channel.online.net_sales_ex_vat.toFixed(2)))),
-        h('div', { class: 'card' }, h('h2', null, 'Invoices and credit notes'), h('table', null, row('Standalone B2B invoices', String(p.b2b.standalone_invoices)), row('Standalone credit notes', String(p.b2b.standalone_credit_notes)), row('B2B net excl. VAT', e2(p.b2b.net_ex_vat_cents), true), row('B2B VAT', e2(p.b2b.vat_cents)), row('Linked invoices (not added)', `${p.b2b_linked.documents} / ${e2(p.b2b_linked.gross_documented_cents)}`), row('Credit notes issued', `${p.credit_notes.issued} / ${e2(p.credit_notes.gross_cents)}`)))));
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Totals (retail + standalone B2B)'), h('table', null, row('Sales excl. VAT', `${e2(p.totals.sales_ex_vat_cents)} ${cur}`, true), row('VAT collected', e2(p.totals.vat_collected_cents)), row('Sales incl. VAT', e2(p.totals.sales_incl_vat_cents), true))));
-      const v = p.vat_summary;
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'actions' }, h('h2', null, 'VAT by rate'), h('span', { class: `badge ${v.status}` }, v.status)), h('table', null, h('tr', null, ['Rate', 'Taxable base', 'VAT'].map((x, i) => h('th', { class: i ? 'num' : '' }, x))), v.combined_by_rate.map((g) => h('tr', null, h('td', null, `${g.vatRateBp / 100}%`), h('td', { class: 'num' }, e2(g.taxableCents)), h('td', { class: 'num' }, e2(g.vatCents))))), v.retail_unclassified ? h('div', { class: 'banner warn small', style: 'margin-top:10px' }, tt('Unavailable: {0} retail line(s) have no captured VAT rate (base {1}, VAT {2}). They are not spread across rates.', v.retail_unclassified.lines, e2(v.retail_unclassified.taxableCents), e2(v.retail_unclassified.vatCents))) : null, v.b2b.by_treatment.filter((x) => x.exemptOrReverseCharge).map((x) => h('div', { class: 'small' }, tt('B2B {0}: base {1} (no VAT)', tr(REGIME[x.regime] || x.regime), e2(x.taxableCents))))));
-      const ps = p.payment_status_of_period_invoices;
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payment status of B2B invoices in the period'), h('table', null, Object.entries(ps).map(([k, x]) => row(k.replace('_', ' '), tt('{0} invoice(s) - {1}', x.count, e2(x.cents)))))));
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, tt('Anomalies ({0})', p.anomalies.length)), p.anomalies.length ? h('ul', { class: 'plain' }, p.anomalies.map((a) => h('li', null, `[${a.severity}] ${human(a.code)} - ${a.detail}`))) : h('div', { class: 'muted' }, 'None detected.')));
-      out.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Downloads'), h('div', { class: 'actions' }, r.downloads.map((d) => h('a', { class: 'btn', href: d.url }, d.name.replace(/^accountant-pack_[\d-]+_[\d-]+/, '').replace(/^_/, '') || 'pack.json')))));
-    } catch (e) { fail(e, out); }
-  }
-}
-
   const sel = (obj, key, label, options) => h('div', { class: 'field' }, h('label', null, label), h('select', { on: { change: (e) => { obj[key] = e.target.value; } } }, options.map(([v, l]) => h('option', { value: v, selected: obj[key] === v }, l))));
   if (r.missing.length) main.appendChild(h('div', { class: 'banner warn' }, h('strong', null, 'Still needed before real invoices: '), r.missing.map((m) => human(m.replace(/[.]/g, '_').toUpperCase())).join(', ')));
   main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Your company (seller)'), h('div', { class: 'row r2' }, inp(s.seller, 'name', 'Legal name'), inp(s.seller, 'email', 'Finance email')), h('div', { class: 'row r2' }, inp(s.seller, 'vatNumber', 'VAT number', { ph: 'BE0123456789' }), inp(s.seller, 'enterpriseNumber', 'Enterprise number', { ph: '0123.456.789' })), h('div', { class: 'row r2' }, inp(s.seller.address, 'street', 'Street and number'), inp(s.seller.address, 'postalCode', 'Postal code')), h('div', { class: 'row r2' }, inp(s.seller.address, 'city', 'City'), inp(s.seller.address, 'countryCode', 'Country (2 letters)')), h('div', { class: 'row r2' }, inp(s.seller, 'iban', 'IBAN'), inp(s.seller, 'bic', 'BIC (optional)'))));
@@ -1208,7 +1184,7 @@ async function route() {
     if (parts[0] === 'companies') { location.hash = parts[1] ? `#/contacts?open=${parts[1]}` : '#/contacts'; return; }
     if (parts[0] === 'contacts') return await viewContacts(q);
     if (parts[0] === 'receivables') return await viewReceivables();
-    if (parts[0] === 'pack') return await viewPack();
+    if (parts[0] === 'pack') return await viewPackComptable();
     // #/inbox is kept working but now redirects into the unified Achats workspace.
     if (parts[0] === 'inbox') { location.hash = '#/purchases?tab=inbox'; return; }
     if (parts[0] === 'purchases') return await viewPurchasesWorkspace(q);

@@ -20,13 +20,14 @@ function loadI18n(stored) {
 
 // Strings in app.js that look like text but are not merchant-facing (keys, CSS, headers, keyboard names, file names, debug).
 const NOT_UI = new Set(['Content-Type', 'X-CSRF-Token', 'UI error:', 'currentColor', '--accent', 'var(--line)', 'Enter', 'ArrowDown', 'ArrowUp', 'Escape', 'image/png,image/jpeg', 'image/', 'application/pdf', 'pack.json', '60_plus', 'accounts@company.example', 'INV-2026-0001', '_MISSING', '_blank', 'YYYY-MM-DD', 'contacts.csv']);
-const isNotUi = (s) => NOT_UI.has(s) || /^(var\(--chart-[a-z-]+\)|color-mix\(in srgb, var\(--chart-[a-z-]+\) \d+%, #fff\))$/.test(s) || /^(chip|dot2) /.test(s) || /^rail-ico( official)?$/.test(s) || /^(jj|dd)\/mm\/(aaaa|jjjj|yyyy)$/.test(s) || /^[\w.+-]+@[\w.-]+$/.test(s) || /^[a-z-]+:[^\s]/.test(s) || /^[a-z]+[A-Za-z0-9]*$/.test(s) || /^[a-z-]+ \{\}$/.test(s) || /[:;]\s?[\w{}.-]+;?$/.test(s) && /^(margin|flex|grid|--)/.test(s) || /^\[data-/.test(s) || /^(banner|toast|badge|pill|acard|kpi|seg|dot|avatar|navitem|lrow|basis|picker-row|card stat) /.test(s) || /^\{\}/.test(s) && !/[A-Za-z]{4,}\s/.test(s.replace(/\{\}/g, ''));
+const isNotUi = (s) => NOT_UI.has(s) || /^image\/(\*|jpeg,image\/png(,application\/pdf)?)$/.test(s) || /^(vatRate|paymentMethod|chiffreAffaires|commandes|baisse|achats|ventes)$/.test(s) || /^pk-[a-z0-9-]+(\s?\{\d?\})?$/.test(s) || /^(var\(--chart-[a-z-]+\)|color-mix\(in srgb, var\(--chart-[a-z-]+\) \d+%, #fff\))$/.test(s) || /^(chip|dot2) /.test(s) || /^rail-ico( official)?$/.test(s) || /^(jj|dd)\/mm\/(aaaa|jjjj|yyyy)$/.test(s) || /^[\w.+-]+@[\w.-]+$/.test(s) || /^[a-z-]+:[^\s]/.test(s) || /^[a-z]+[A-Za-z0-9]*$/.test(s) || /^[a-z-]+ \{\}$/.test(s) || /[:;]\s?[\w{}.-]+;?$/.test(s) && /^(margin|flex|grid|--)/.test(s) || /^\[data-/.test(s) || /^(banner|toast|badge|pill|acard|kpi|seg|dot|avatar|navitem|lrow|basis|picker-row|card stat) /.test(s) || /^\{\}/.test(s) && !/[A-Za-z]{4,}\s/.test(s.replace(/\{\}/g, ''));
 
 test('COVERAGE: every merchant-facing message of the dashboard exists in French AND Dutch', () => {
   const lang = loadLang();
   const src = `${read('app.js')}
 ${read('views-workspace.js')}
-${read('views-contacts.js')}`;
+${read('views-contacts.js')}
+${read('views-pack.js')}`;
   const messages = [...extractStrings(src)].map((s) => s.trim()).filter(looksLikeMessage).filter((s) => !isNotUi(s));
   // every literal handed to tt() / tr() must be translated whatever its shape (short, lowercase or upper-case labels included)
   for (const m of src.matchAll(/\b(?:tt|tr)\('((?:[^'\\]|\\.)*)'/g)) messages.push(m[1].replace(/\\'/g, "'"));
@@ -81,7 +82,7 @@ test('scripts are served and loaded in the right order', () => {
   const order = ['/lang-fr.js', '/lang-nl.js', '/i18n.js', '/app.js', '/views-workspace.js'].map((s) => html.indexOf(s));
   assert.ok(order.every((n) => n > 0) && [...order].sort((x, y) => x - y).join() === order.join());
   const server = readFileSync(new URL('../src/finance/server/app.js', import.meta.url), 'utf8');
-  for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js', '/views-workspace.js']) assert.ok(server.includes(`'${f}'`), f);
+  for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js', '/views-workspace.js', '/views-pack.js']) assert.ok(server.includes(`'${f}'`), f);
 });
 // Regression: a message string returned by the SERVER (e.g. analytics.js's own English "note" field) is
 // rendered via tt()/tr() at runtime just like any UI literal, but the static COVERAGE test above only scans

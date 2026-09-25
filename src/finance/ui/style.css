@@ -1369,3 +1369,82 @@ button.tb-brand:hover { background: #F4F6F8; box-shadow: none; }
 .acct.open .acct-menu { display: block; }
 .acct-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 9px 10px; border-radius: 8px; font: 500 13px var(--font-ui); color: var(--chart-navy); cursor: pointer; text-align: left; }
 .acct-item:hover { background: #F4F6F8; box-shadow: none; }
+
+/* ---------- Pack comptable v1 + expense capture (namespaced .pk-*, scoped to the pack page and the capture modal) ---------- */
+.pack-page .pk-stack { display: grid; gap: 16px; min-width: 0; }
+.pk-card { padding: 18px 20px; min-width: 0; border-radius: 14px; }
+.pk-card .cardhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pk-card .cardhead h2 { margin: 0; }
+.pk-period { display: grid; grid-template-columns: repeat(4, minmax(0, 190px)); gap: 12px; align-items: end; }
+.pk-period .field { margin-bottom: 0; } .pk-period select, .pk-period input { width: 100%; }
+.pk-range { margin: 10px 0 4px; font-weight: 600; font-size: 14px; color: var(--ink); }
+.pk-verdict { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; }
+.pk-verdict-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pk-verdict-h { font-family: var(--serif, Georgia, serif); font-weight: 500; font-size: 26px; line-height: 1.15; margin: 10px 0 8px; color: var(--ink); }
+.pk-state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.pk-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pk-state.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); } .pk-state.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); } .pk-state.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.pk-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; color: var(--ink); font-size: 14px; }
+.pk-facts li { position: relative; padding-left: 14px; } .pk-facts li::before { content: ""; position: absolute; left: 0; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+.pk-facts.small { font-size: 13px; }
+.pk-verdict-cta button { min-width: 220px; }
+.pk-issues { display: grid; gap: 8px; }
+.pk-issue { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; }
+.pk-issue.blocking { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.pk-issue-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pk-issue-title { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.pk-issue-meta { overflow-wrap: anywhere; }
+.pk-ctls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pk-ctl { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pk-ctl-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .pk-ctl-h strong { font-size: 14px; }
+.pk-ico { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #f3f5f8; color: var(--muted); flex: 0 0 auto; }
+.pk-ico img, .pk-ico svg { max-width: 22px; max-height: 22px; }
+.pk-vatgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.pk-kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; } .pk-kv.strong { font-weight: 700; }
+.pk-vatgrid .pk-kv { flex-direction: column; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; } .pk-vatgrid .pk-kv strong { font-size: 18px; }
+.pk-rates { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.pk-cats { display: grid; gap: 8px; }
+.pk-cat { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; }
+.pk-cat-title { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pk-cat.empty { background: #fafbfc; }
+.pk-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+.pk-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--ink); } .pk-check em { display: block; font-style: normal; color: var(--muted); font-size: 12px; } .pk-check.off { opacity: .6; }
+.pk-more { margin-top: 12px; } .pk-more summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.pk-prev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; } .pk-prev-grid h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.pk-actions { margin-top: 14px; }
+.pk-done { margin-top: 16px; border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line)); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; background: #f6fbf8; }
+.pk-changed { display: grid; gap: 6px; margin-bottom: 12px; }
+.pk-hist { display: grid; gap: 8px; }
+.pk-hrow { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.pk-hver { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .pk-hact { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pk-hmeta .mono { font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.pk-hcats { position: relative; } .pk-hcats summary { list-style: none; cursor: pointer; } .pk-hcats summary::-webkit-details-marker { display: none; }
+.pk-hcats-list { display: grid; gap: 4px; margin-top: 6px; } .pk-hcats-list a { font-size: 13px; }
+.pk-state, .pk-card .chip { white-space: nowrap; }
+/* capture modal */
+.pk-capmodal .modal { width: min(640px, 100%); }
+.pk-bigbtns { display: grid; gap: 10px; margin: 12px 0; }
+.pk-bigbtn { display: grid; gap: 2px; text-align: left; white-space: normal; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+.pk-bigbtn strong { font-size: 16px; } .pk-bigbtn span { color: var(--muted); font-size: 13px; }
+.pk-bigbtn.primary { background: var(--warm, #c75a3b); border-color: var(--warm, #c75a3b); color: #fff; } .pk-bigbtn.primary span { color: rgba(255,255,255,.85); }
+.pk-prev { border: 1px solid var(--line); border-radius: 12px; background: #f7f8fa; display: grid; place-items: center; overflow: hidden; margin-bottom: 10px; }
+.pk-prev-img { max-width: 100%; max-height: 260px; object-fit: contain; display: block; } .pk-prev-pdf { width: 100%; height: 260px; border: 0; background: #fff; }
+.pk-src { margin: 4px 0 12px; overflow-wrap: anywhere; }
+.pk-capinfo { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; display: grid; gap: 8px; } .pk-capinfo-h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pk-cap .row { margin-bottom: 0; } .pk-cap .field input, .pk-cap .field select { width: 100%; }
+@media (max-width: 1100px) { .pk-ctls { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pk-period { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .pk-card { padding: 14px 14px; } .pk-verdict { grid-template-columns: minmax(0, 1fr); } .pk-verdict-cta button { width: 100%; min-width: 0; } .pk-verdict-h { font-size: 22px; }
+  .pk-issue { grid-template-columns: minmax(0, 1fr); gap: 8px; } .pk-issue-act .btn, .pk-issue-act button { width: 100%; }
+  .pk-ctls, .pk-vatgrid, .pk-checks, .pk-prev-grid, .pk-period { grid-template-columns: minmax(0, 1fr); }
+  .pk-cat { grid-template-columns: 34px minmax(0, 1fr); } .pk-cat-act { grid-column: 1 / -1; } .pk-cat-act .btn { width: 100%; text-align: center; }
+  .pk-hrow { grid-template-columns: minmax(0, 1fr); gap: 8px; } .pk-hact .btn, .pk-hact summary { width: 100%; text-align: center; }
+  .pk-actions .primary, .pk-actions .btn { width: 100%; text-align: center; }
+  .pk-cap .row.r2, .pk-cap .row.r3 { grid-template-columns: minmax(0, 1fr); } .pk-capmodal .modal { max-height: 94vh; padding: 16px; }
+  .pk-bigbtn { padding: 16px; }
+}
+.pk-actions button, .pk-actions .btn, .pk-verdict-cta button, .pk-cat-act .btn, .pk-issue-act button { white-space: normal; }
+.pk-prev-file { padding: 22px 14px; gap: 6px; text-align: center; }
+body:has(.modal-back) .contact-support { display: none; }
+.pk-done { min-width: 0; } .pk-done .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .pk-done .btn, .pk-done button { white-space: normal; }
+@media (max-width: 720px) { .pk-done .actions .btn, .pk-done .actions button { width: 100%; text-align: center; } }

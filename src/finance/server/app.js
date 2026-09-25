@@ -25,12 +25,13 @@ import { createBankService } from '../bank-service.js';
 import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
-import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors } from '../inbox.js';
+import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
+import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
 import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
-import { formatCents, fromScaled, toCents } from '../money.js';
+import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
 import { buildContacts, contactDetail, contactExportRow, planImport } from '../contacts.js';
 import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
@@ -42,7 +43,7 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -782,8 +783,21 @@ export function createFinanceApp(deps) {
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
-    errors: validationErrors(raw),
+    errors: validationErrorsFor(raw),
+    capture: (() => { const c = r.extraction?.capture; return c ? { kind: c.kind, origin: c.origin, capturedAt: c.capturedAt, category: c.category ?? null, paymentMethod: c.paymentMethod ?? null, note: c.note ?? null, eurAmountCents: c.eurAmountCents ?? null, eurAmountSource: c.eurAmountSource ?? null,
+      vatRateBp: c.vatRateBp ?? null, hasOriginal: !!c.original, originalContentType: c.original?.contentType ?? null, originalFileName: c.original?.fileName ?? null, pdfGenerated: !!c.pdf?.generated } : null; })(),
+    receipt: (() => { const c = r.extraction?.receipt; return c ? { hasOriginal: !!c.original, originalContentType: c.original?.contentType ?? null, originalFileName: c.original?.fileName ?? null, pdfGenerated: !!c.pdf?.generated, attachedAt: c.attachedAt } : null; })(),
   }; };
+  // merchant-typed capture metadata (category, payment method, note, EUR amount actually charged): sanitised, never computed
+  const captureMetaInput = (b = {}) => {
+    const out = {};
+    if ('category' in b) out.category = String(b.category ?? '');
+    if ('paymentMethod' in b) out.paymentMethod = String(b.paymentMethod ?? '');
+    if ('note' in b) out.note = sanitizeText(b.note, 300);
+    if ('eur' in b) { if (b.eur === '' || b.eur == null) out.eurAmountCents = null; else { const c = toCents(String(b.eur)); if (!Number.isInteger(c) || c <= 0) fields([{ field: 'eur', code: 'AMOUNT_INVALID' }]); out.eurAmountCents = c; } }
+    if ('vatRate' in b) { if (b.vatRate === '' || b.vatRate == null) out.vatRateBp = null; else { const bp = percentToBp(String(b.vatRate)); if (!Number.isInteger(bp) || bp < 0 || bp > 10000) fields([{ field: 'vatRate', code: 'VAT_RATE_INVALID' }]); out.vatRateBp = bp; } }
+    return out;
+  };
   const AMOUNTS = ['netCents', 'vatCents', 'grossCents'];
   const inboxInput = (b) => {
     const out = {}; const errors = [];
@@ -810,9 +824,31 @@ export function createFinanceApp(deps) {
     const r = await inboxFor().ingest({ source: 'upload', fileName: name, data: Buffer.from(b64, 'base64') });
     json(ctx.res, r.duplicate ? 200 : 201, { duplicate: r.duplicate, item: itemView(r.item) });
   }, { bodyLimit: 9_000_000 });
+  // Expense capture (camera photo / image / PDF): the original is stored untouched, an image also gets a PDF container; the merchant reviews the fields.
+  on('POST', '/api/inbox/capture', async (ctx) => {
+    const b = ctx.body ?? {}; const name = sanitizeText(b.fileName, 120); const b64 = typeof b.dataBase64 === 'string' ? b.dataBase64 : '';
+    if (!name || !b64) fields([{ field: 'file', code: 'REQUIRED' }]);
+    const { out, errors } = inboxInput(b.fields ?? {}); if (errors.length) fields(errors);
+    const r = await inboxFor().captureExpense({ fileName: name, data: Buffer.from(b64, 'base64'), origin: typeof b.origin === 'string' ? b.origin : 'image', fields: out, meta: captureMetaInput(b.capture ?? {}) }, actor);
+    json(ctx.res, r.duplicate ? 200 : 201, { duplicate: r.duplicate, item: itemView(r.item) });
+  }, { bodyLimit: 17_500_000 });
+  on('POST', `/api/inbox/${P}/attach`, async (ctx) => {
+    const name = sanitizeText(ctx.body?.fileName, 120); const b64 = typeof ctx.body?.dataBase64 === 'string' ? ctx.body.dataBase64 : '';
+    if (!name || !b64) fields([{ field: 'file', code: 'REQUIRED' }]);
+    json(ctx.res, 200, itemView(await inboxFor().attachDocument(idParam(ctx.m[1]), { fileName: name, data: Buffer.from(b64, 'base64') }, actor)));
+  }, { bodyLimit: 17_500_000 });
+  on('GET', `/api/inbox/${P}/original`, async (ctx) => {
+    const f = await inboxFor().originalFile(idParam(ctx.m[1]));
+    send(ctx.res, 200, f.data, { 'Content-Type': f.contentType, 'Content-Disposition': `inline; filename="${String(f.fileName).replace(/"/g, '')}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  });
   on('POST', '/api/inbox/manual', async (ctx) => { const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors); json(ctx.res, 201, itemView(await inboxFor().createManual(out, actor))); });
   on('GET', `/api/inbox/${P}`, async (ctx) => json(ctx.res, 200, itemView(await inboxFor().get(idParam(ctx.m[1])))));
-  on('PUT', `/api/inbox/${P}`, async (ctx) => { const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors); json(ctx.res, 200, itemView(await inboxFor().update(idParam(ctx.m[1]), out, actor))); });
+  on('PUT', `/api/inbox/${P}`, async (ctx) => {
+    const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors);
+    const meta = ctx.body?.capture ? captureMetaInput(ctx.body.capture) : null; const svc = inboxFor(); const id = idParam(ctx.m[1]);
+    let saved = await svc.update(id, out, actor); if (meta) saved = await svc.updateCapture(id, meta, actor);
+    json(ctx.res, 200, itemView(saved));
+  });
   on('GET', `/api/inbox/${P}/file`, async (ctx) => {
     const f = await inboxFor().file(idParam(ctx.m[1]));
     send(ctx.res, 200, f.data, { 'Content-Type': f.contentType, 'Content-Disposition': `inline; filename="${String(f.fileName).replace(/"/g, '')}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -890,6 +926,104 @@ export function createFinanceApp(deps) {
     p.sentAt = clock.now(); p.preview.sent = true;
     await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_SENT', detail: { period: p.preview.period.label, sha256: p.preview.sha256, messageId: r.messageId ?? null } });
     json(ctx.res, 200, { status: 'SENT', messageId: r.messageId ?? null, sentAt: p.sentAt });
+  });
+
+  // ---------- Pack comptable v1: prepare -> control -> complete -> download (complete pack or one category at a time) ----------
+  const periodFromQuery = (q) => ({ kind: q.get('kind'), year: Number(q.get('year')), quarter: Number(q.get('quarter')), month: Number(q.get('month')), from: q.get('from'), to: q.get('to') });
+  /** Everything the pack is built from, read once. `withFiles` also fetches the stored attachments (needed to build files, not to show the page). */
+  async function gatherPackComptable(spec, { withFiles = false } = {}) {
+    let period; try { period = resolvePeriod(spec ?? {}); } catch { fields([{ field: 'period', code: 'PERIOD_INVALID' }]); }
+    const settings = await settingsIo.load();
+    const pack = await computePack(period.start, period.end);
+    const { data } = await retail.ledgerData(period.start);
+    const all = await loadDocsForReports(store, merchantId);
+    const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
+    const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
+      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+    const refunds = (data.refunds ?? []).filter((r) => inRange(r.refunded_at, period.start, period.end)).map((r) => ({ date: String(r.refunded_at).slice(0, 10), amount: String(r.amount), orderRef: null }));
+    const rows = (await store.listSupplierInvoices(merchantId)).filter((r) => r.status !== 'REJECTED');
+    const purchases = rows.filter((r) => inRange(r.issueDate, period.start, period.end)).map((r) => ({ ...r }));
+    if (withFiles) {
+      for (const r of purchases) {
+        if (!r.attachmentRef) continue;
+        const f = await attachmentStore.get(r.attachmentRef).catch(() => null);
+        if (!f) { r._attachmentMissing = true; continue; }
+        r._data = f.data;
+        const o = originalOf(r);
+        if (o && pdfOf(r)?.generated) { const of = await attachmentStore.get(o.ref).catch(() => null); if (of) r._original = of.data; }
+      }
+    }
+    const tx = await store.listBankTransactions({ merchantId });
+    const dates = tx.map((t) => t.date).filter(Boolean).sort();
+    const cash = (await store.listCashMovements(merchantId)).filter((m) => inRange(m.date, period.start, period.end));
+    return {
+      period, pack, currency: pack.currency, merchantName: settings.seller.name ?? '', namePrefix: settings.accountant?.packageName || undefined, branding: settings.branding,
+      invoices: docs.filter((d) => d.doc.type === 'invoice'), creditNotes: docs.filter((d) => d.doc.type === 'credit_note'), refunds, purchases, undatedInbox: rows.filter((r) => !r.issueDate).length,
+      bank: { transactions: tx.filter((t) => inRange(t.date, period.start, period.end)), allCount: tx.length, first: dates[0] ?? null, last: dates.at(-1) ?? null }, cash: { movements: cash }, generatedAt: clock.now(), settings,
+    };
+  }
+  const packEvents = async () => historyFromEvents(await store.listEventsForMerchant({ merchantId, limit: 1000 }));
+  const historyView = (r) => ({ packId: r.packId, label: r.label, period: r.period, version: r.version, versionLabel: r.versionLabel, generatedAt: r.generatedAt, generatedBy: r.generatedBy, verdict: r.verdict, completeness: r.completeness, counts: r.counts, fileCount: r.fileCount, sha256: r.sha256, size: r.size, fileName: r.fileName, warnings: r.warnings,
+    downloadUrl: `/api/pack-comptable/history/${r.packId}/download`, categories: CATEGORIES.map((c) => ({ id: c.id, count: r.categories?.find((x) => x.id === c.id)?.count ?? null, status: r.categories?.find((x) => x.id === c.id)?.status ?? null, url: `/api/pack-comptable/history/${r.packId}/category?category=${c.id}` })) });
+  const modelView = (input, model, history) => {
+    const versions = history.filter((h) => h.label === packLabel(input.period)); const latest = versions[0] ?? null;
+    return { model, preview: previewCounts(model, {}, input), history: { versions: versions.map(historyView), latest: latest ? historyView(latest) : null, changed: latest ? changesSince(latest.fingerprint, fingerprintOf(input)) : null } };
+  };
+  on('POST', '/api/pack-comptable/status', async (ctx) => {
+    if (!retail) throw new HttpError(503, 'RETAIL_SOURCE_UNAVAILABLE');
+    const input = await gatherPackComptable(ctx.body);
+    json(ctx.res, 200, { period: input.period, ...modelView(input, analyzePack(input), await packEvents()) });
+  });
+  on('POST', '/api/pack-comptable/preview', async (ctx) => {
+    if (!retail) throw new HttpError(503, 'RETAIL_SOURCE_UNAVAILABLE');
+    const input = await gatherPackComptable(ctx.body?.period); const model = analyzePack(input);
+    json(ctx.res, 200, { counts: previewCounts(model, ctx.body?.include, input), blocking: model.counts.blocking, warnings: model.counts.warnings, verdict: model.verdict, completeness: model.completeness });
+  });
+  on('POST', '/api/pack-comptable/generate', async (ctx) => {
+    if (!retail) throw new HttpError(503, 'RETAIL_SOURCE_UNAVAILABLE');
+    const include = normalizeInclude(ctx.body?.include);
+    const input = await gatherPackComptable(ctx.body?.period, { withFiles: true }); const model = analyzePack(input);
+    if (model.counts.blocking) throw new HttpError(422, 'PACK_HAS_BLOCKING_ISSUES', { blocking: model.issues.filter((i) => i.level === 'blocking').map((i) => i.code) });
+    if (model.verdict !== 'ready' && ctx.body?.acknowledgeWarnings !== true) throw new HttpError(422, 'WARNINGS_NOT_ACKNOWLEDGED', { warnings: model.counts.warnings });
+    const history = await packEvents(); const label = packLabel(input.period); const n = nextVersion(history, label); const versionLabel = `v${n}.0`;
+    const built = await buildPackComptable({ input, model, include, version: versionLabel });
+    const packId = randomUUID(); const storageRef = `${merchantId}/packs/${label}/v${n}_${built.sha256.slice(0, 12)}.zip`;
+    await attachmentStore.put(storageRef, built.zip, { contentType: 'application/zip' });
+    const record = { packId, label, period: { start: input.period.start, end: input.period.end, kind: input.period.kind, label: input.period.label }, version: n, versionLabel, generatedAt: input.generatedAt, generatedBy: 'merchant', verdict: model.verdict, completeness: model.completeness,
+      counts: built.counts, categories: model.categories.map((c) => ({ id: c.id, count: c.count, status: c.status })), fileCount: built.fileCount, sha256: built.sha256, size: built.size, fileName: built.fileName, storageRef, warnings: model.counts.warnings, include, fingerprint: fingerprintOf(input) };
+    await store.appendEvent({ merchantId, documentId: null, at: input.generatedAt, actor, action: PACK_ACTION, detail: record });
+    await audit({ at: clock.now(), action: 'PACK_COMPTABLE_GENERATED', detail: { label, version: versionLabel, sha256: built.sha256, verdict: model.verdict, warnings: model.counts.warnings } });
+    // the same in-memory package the existing "send to accountant" step (approval-gated) works from
+    const acc = input.settings.accountant; const msg = accountantMessage({ merchantName: input.merchantName, accountantName: acc.name, periodLabel: input.period.label, zipName: built.fileName, completeness: model.completeness });
+    prune(); packages.set(packId, { preview: { id: packId, period: input.period, fileName: built.fileName, size: built.size, sha256: built.sha256, completeness: model.completeness, counts: { invoices: built.counts.invoices, creditNotes: built.counts.creditNotes, refunds: input.refunds.length, supplierInvoices: built.counts.purchases }, files: built.files,
+      recipient: { name: acc.name, email: acc.email, configured: !!acc.email }, subject: msg.subject, body: msg.text, attachments: [{ name: built.fileName, size: built.size, sha256: built.sha256 }], canSendDirectly: mailer().canSend && !!acc.email, sendChannel: mailer().label, requiresApproval: true, sent: false,
+      warnings: [...(!acc.email ? ['ACCOUNTANT_EMAIL_MISSING'] : []), ...(!mailer().canSend ? ['DIRECT_SEND_NOT_CONFIGURED'] : [])] }, zip: built.zip, message: msg, from: input.settings.seller.email ?? '', expires: Date.now() + 30 * 60_000, approvedAt: null, sentAt: null });
+    const pv = packages.get(packId).preview;
+    json(ctx.res, 200, { record: historyView(record), send: { ...pv, downloadUrl: `/api/accountant/package/${packId}/download`, emlUrl: `/api/accountant/package/${packId}/eml` } });
+  });
+  on('GET', '/api/pack-comptable/category', async (ctx) => {
+    if (!retail) throw new HttpError(503, 'RETAIL_SOURCE_UNAVAILABLE');
+    const category = ctx.url.searchParams.get('category');
+    if (!CATEGORIES.some((c) => c.id === category)) fields([{ field: 'category', code: 'CATEGORY_UNKNOWN' }]);
+    const input = await gatherPackComptable(periodFromQuery(ctx.url.searchParams), { withFiles: true }); const model = analyzePack(input);
+    let built; try { built = await buildCategoryPackage({ input, model, category }); } catch (e) { if (e.code === 'CATEGORY_EMPTY') throw new HttpError(422, 'CATEGORY_EMPTY'); throw e; }
+    await audit({ at: clock.now(), action: 'PACK_COMPTABLE_CATEGORY_DOWNLOADED', detail: { category, label: packLabel(input.period), sha256: built.sha256 } });
+    send(ctx.res, 200, built.zip, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${safeName(built.fileName)}"`, 'Cache-Control': 'no-store' });
+  });
+  on('GET', '/api/pack-comptable/history', async (ctx) => json(ctx.res, 200, { rows: (await packEvents()).map(historyView) }));
+  const historyRecord = async (ctx) => { const id = idParam(ctx.m[1]); const r = (await packEvents()).find((x) => x.packId === id); if (!r) throw new HttpError(404, 'PACK_NOT_FOUND'); return r; };
+  on('GET', `/api/pack-comptable/history/${P}/download`, async (ctx) => {
+    const r = await historyRecord(ctx); const f = await attachmentStore.get(r.storageRef);
+    if (!f) throw new HttpError(404, 'PACK_FILE_NOT_STORED');
+    await audit({ at: clock.now(), action: 'PACK_COMPTABLE_DOWNLOADED', detail: { packId: r.packId, versionLabel: r.versionLabel } });
+    send(ctx.res, 200, f.data, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${safeName(r.fileName)}"`, 'Cache-Control': 'no-store' });
+  });
+  on('GET', `/api/pack-comptable/history/${P}/category`, async (ctx) => {
+    const r = await historyRecord(ctx); const f = await attachmentStore.get(r.storageRef);
+    if (!f) throw new HttpError(404, 'PACK_FILE_NOT_STORED');
+    const category = ctx.url.searchParams.get('category'); if (!CATEGORIES.some((c) => c.id === category)) fields([{ field: 'category', code: 'CATEGORY_UNKNOWN' }]);
+    let out; try { out = categoryFromStoredZip(f.data, category); } catch (e) { if (e.code === 'CATEGORY_EMPTY') throw new HttpError(422, 'CATEGORY_EMPTY'); throw e; }
+    send(ctx.res, 200, out.zip, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${safeName(out.fileName)}"`, 'Cache-Control': 'no-store' });
   });
 
   // ---------- stock synchronisation (Shopify stays the source of truth; Finance keeps an append-only movement ledger) ----------

@@ -167,6 +167,12 @@ export function createMemoryStore() {
       r.supplierCompanyId = contactId;
       return clone(r);
     },
+    /** Attach a first document to a record that has none. An existing attachment is never replaced (returns null). */
+    async setSupplierInvoiceAttachment(id, patch) {
+      const r = supplierInvoices.find((x) => x.id === id);
+      if (!r || r.attachmentRef) return null;
+      Object.assign(r, clone(patch)); return clone(r);
+    },
     async listSupplierInvoices(merchantId) { return supplierInvoices.filter((s) => s.merchantId === merchantId).map(clone); },
     _debug: { docs, events, payments, seqs, hooks },
   };

@@ -196,6 +196,11 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
     async latestCashCount() { const [r] = await supabase.select('fin_cash_counts', { select: '*', merchant_id: eq(merchantId), order: 'counted_on.desc,created_at.desc', limit: '1' }); return r ? { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at } : null; },
     async insertCashMovement(m) { const [r] = await guard(() => supabase.insert('fin_cash_movements', [{ merchant_id: merchantId, kind: m.kind, amount_cents: m.amountCents, date: m.date, note: m.note }])); return { id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at }; },
     async listCashMovements() { return (await supabase.selectAll('fin_cash_movements', { select: '*', merchant_id: eq(merchantId) })).map((r) => ({ id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at })); },
+    /** Attach a first document to a record that has none (the filter makes it a no-op when one exists). */
+    async setSupplierInvoiceAttachment(id, patch) {
+      const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), attachment_ref: 'is.null' }, supplierToRow(patch, true)));
+      return r && r.length ? supplierFromRow(r[0]) : null;
+    },
     async listSupplierInvoices() { return (await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow); },
 
     // ---- Stock movement ledger (append-only; see stock.js) ----

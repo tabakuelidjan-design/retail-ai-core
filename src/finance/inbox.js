@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { toCents } from './money.js';
+import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf, isCapturedExpense, normalizeCaptureMeta } from './expense-capture.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -119,6 +120,10 @@ export function validationErrors(r) {
   return e;
 }
 
+/** Validation rules for a record: a captured expense (receipt, ticket) uses the lighter expense rules; every other document keeps the full invoice rules. */
+export const validationErrorsFor = (r) => (isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r));
+const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '');
+
 /**
  * @param {{store: object, attachments: object, extractor?: object, merchantId: string, now?: () => string, audit?: Function}} deps
  */
@@ -162,6 +167,87 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       await audit({ at: now(), action: 'INBOX_ITEM_RECEIVED', itemId: row.id, source, extractor: ex.extractor });
       return { item: await move(row, 'TO_REVIEW'), duplicate: false }; // extraction attempted: a person reviews next
     },
+    /**
+     * Capture a receipt / ticket / supplier document (camera photo, image or PDF) as a purchase record awaiting review.
+     * The original file is stored untouched; an image also gets a PDF container that becomes the document served and packed.
+     * Fields typed by the merchant are stored as given (original currency preserved); nothing is extracted or converted.
+     */
+    async captureExpense({ fileName, data, origin = 'image', fields = {}, meta = {}, receivedAt }, actor) {
+      merchantOnly(actor);
+      if (!CAPTURE_ORIGINS.includes(origin)) throw new FinanceError('CAPTURE_ORIGIN_INVALID', origin);
+      if (!Buffer.isBuffer(data) || !data.length) throw new FinanceError('ATTACHMENT_EMPTY');
+      if (data.length > CAPTURE_MAX_BYTES) throw new FinanceError('ATTACHMENT_TOO_LARGE');
+      const contentType = sniffType(data);
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(contentType)) throw new FinanceError('ATTACHMENT_TYPE_NOT_ALLOWED');
+      const sha256 = createHash('sha256').update(data).digest('hex');
+      const dup = await store.findSupplierInvoiceBySha(merchantId, sha256);
+      if (dup) return { item: dup, duplicate: true };
+      const at = receivedAt ?? now();
+      const originalName = safeName(fileName);
+      const originalRef = `${merchantId}/${sha256}/${originalName}`;
+      await attachments.put(originalRef, data, { contentType });
+      let pdfRef = originalRef; let pdfName = originalName; let pdfSize = data.length; let pdfSha = sha256; let generated = false;
+      if (contentType !== 'application/pdf') {
+        const pdf = await imageToPdf({ data, contentType, title: baseOf(originalName), capturedAt: at, originalName, originalSha256: sha256 });
+        pdfName = `${safeName(baseOf(originalName))}.pdf`; pdfRef = `${merchantId}/${sha256}/${pdfName}`;
+        await attachments.put(pdfRef, pdf, { contentType: 'application/pdf' });
+        pdfSha = createHash('sha256').update(pdf).digest('hex'); pdfSize = pdf.length; generated = true;
+      }
+      const capture = { kind: 'expense', origin, capturedAt: at, category: null, paymentMethod: null, note: null, eurAmountCents: null, eurAmountSource: null, vatRateBp: null, ...normalizeCaptureMeta(meta),
+        original: { ref: originalRef, sha256, contentType, fileName: originalName, sizeBytes: data.length }, pdf: { ref: pdfRef, sha256: pdfSha, generated, sizeBytes: pdfSize } };
+      const row = await store.saveSupplierInvoice({
+        merchantId, source: 'upload', status: 'RECEIVED', ...clean(pick(fields)), currency: (fields.currency ? String(fields.currency).toUpperCase() : null), fileName: pdfName, contentType: 'application/pdf', sizeBytes: pdfSize, sha256, attachmentRef: pdfRef,
+        receivedAt: at, fromAddress: null, subject: null, extraction: { extractor: 'manual', at: now(), fields: {}, warnings: [], capture },
+      });
+      await audit({ at: now(), action: 'EXPENSE_CAPTURED', itemId: row.id, origin, pdfGenerated: generated });
+      return { item: await move(row, 'TO_REVIEW'), duplicate: false };
+    },
+    /**
+     * Attach a first supporting document to a record that has none (e.g. a manually typed invoice with a missing receipt).
+     * Same rules as a capture: the original is kept untouched, an image also gets a PDF container. Never replaces an attachment.
+     */
+    async attachDocument(id, { fileName, data }, actor) {
+      merchantOnly(actor); const r = await must(id);
+      if (r.attachmentRef) throw new FinanceError('ATTACHMENT_ALREADY_PRESENT', id);
+      if (r.status === 'REJECTED') throw new FinanceError('ITEM_REJECTED', id);
+      if (!Buffer.isBuffer(data) || !data.length) throw new FinanceError('ATTACHMENT_EMPTY');
+      if (data.length > CAPTURE_MAX_BYTES) throw new FinanceError('ATTACHMENT_TOO_LARGE');
+      const contentType = sniffType(data);
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(contentType)) throw new FinanceError('ATTACHMENT_TYPE_NOT_ALLOWED');
+      const sha256 = createHash('sha256').update(data).digest('hex');
+      if (await store.findSupplierInvoiceBySha(merchantId, sha256)) throw new FinanceError('DUPLICATE_ATTACHMENT');
+      const originalName = safeName(fileName); const originalRef = `${merchantId}/${sha256}/${originalName}`;
+      await attachments.put(originalRef, data, { contentType });
+      let pdfRef = originalRef; let pdfName = originalName; let pdfSize = data.length; let pdfSha = sha256; let generated = false;
+      if (contentType !== 'application/pdf') {
+        const pdf = await imageToPdf({ data, contentType, title: baseOf(originalName), capturedAt: now(), originalName, originalSha256: sha256 });
+        pdfName = `${safeName(baseOf(originalName))}.pdf`; pdfRef = `${merchantId}/${sha256}/${pdfName}`;
+        await attachments.put(pdfRef, pdf, { contentType: 'application/pdf' }); pdfSha = createHash('sha256').update(pdf).digest('hex'); pdfSize = pdf.length; generated = true;
+      }
+      const receipt = { attachedAt: now(), original: { ref: originalRef, sha256, contentType, fileName: originalName, sizeBytes: data.length }, pdf: { ref: pdfRef, sha256: pdfSha, generated, sizeBytes: pdfSize } };
+      const saved = await store.setSupplierInvoiceAttachment(id, { fileName: pdfName, contentType: 'application/pdf', sizeBytes: pdfSize, sha256, attachmentRef: pdfRef, extraction: { ...(r.extraction ?? { extractor: 'manual', at: now(), fields: {}, warnings: [] }), receipt } });
+      if (!saved) throw new FinanceError('ATTACHMENT_ALREADY_PRESENT', id);
+      await audit({ at: now(), action: 'SUPPLIER_INVOICE_DOCUMENT_ATTACHED', itemId: id, pdfGenerated: generated });
+      return saved;
+    },
+    /** Edit the capture metadata (category, payment method, note, merchant-typed EUR amount) while the record is unvalidated. */
+    async updateCapture(id, metaPatch, actor) {
+      merchantOnly(actor); const r = await must(id);
+      if (!isCapturedExpense(r)) throw new FinanceError('NOT_A_CAPTURED_EXPENSE', id);
+      if (!['RECEIVED', 'TO_REVIEW'].includes(r.status)) throw new FinanceError('ONLY_UNVALIDATED_ITEMS_CAN_BE_EDITED', r.status);
+      const capture = { ...r.extraction.capture, ...normalizeCaptureMeta(metaPatch) };
+      const saved = await store.updateSupplierInvoice(id, { extraction: { ...r.extraction, capture } }, r.status);
+      if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
+      await audit({ at: now(), action: 'EXPENSE_CAPTURE_EDITED', itemId: id }); return saved;
+    },
+    /** The untouched original of a captured document (the PDF container is served by file()). */
+    async originalFile(id) {
+      const r = await must(id); const o = r.extraction?.capture?.original ?? r.extraction?.receipt?.original;
+      if (!o) throw new FinanceError('ATTACHMENT_NOT_FOUND', id);
+      const f = await attachments.get(o.ref); if (!f) throw new FinanceError('ATTACHMENT_NOT_FOUND', id);
+      await audit({ at: now(), action: 'INBOX_ORIGINAL_ACCESSED', itemId: id });
+      return { data: f.data, contentType: o.contentType, fileName: o.fileName };
+    },
     async createManual(input, actor) {
       merchantOnly(actor);
       const row = await store.saveSupplierInvoice({ merchantId, source: 'manual', status: 'RECEIVED', ...clean(pick(input)), receivedAt: now(), extraction: { extractor: 'manual', at: now(), fields: {}, warnings: [] } });
@@ -179,7 +265,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     },
     async validate(id, actor) {
       merchantOnly(actor); const r = await must(id);
-      const errors = validationErrors(r); if (errors.length) throw new FinanceError('NOT_READY_TO_VALIDATE', errors.join(', '));
+      const errors = validationErrorsFor(r); if (errors.length) throw new FinanceError('NOT_READY_TO_VALIDATE', errors.join(', '));
       const dup = (await store.listSupplierInvoices(merchantId)).find((x) => x.id !== id && x.invoiceNumber && x.invoiceNumber === r.invoiceNumber && (x.supplierVatNumber ? x.supplierVatNumber === r.supplierVatNumber : x.supplierName === r.supplierName) && ['VALIDATED', 'TO_PAY', 'PAID'].includes(x.status));
       if (dup) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE', dup.id);
       return move(r, 'VALIDATED', { validatedAt: now() });
