@@ -35,7 +35,7 @@ export function buildLedger(data, { config, currency } = {}) {
     if (o.is_test) { excluded.test += 1; continue; }
     if (config.excludedOrderStatuses.includes(o.status)) { excluded.status += 1; continue; }
     if (o.currency !== ledgerCurrency) { excluded.otherCurrency += 1; continue; }
-    const order = { id: o.id, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included };
+    const order = { id: o.id, name: o.order_name ?? null, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included };
     orders.push(order);
     orderById.set(o.id, order);
   }
@@ -65,6 +65,26 @@ export function buildLedger(data, { config, currency } = {}) {
     lineFactById.set(l.id, fact);
   }
 
+  // Shipping charged per order, exactly as the source reported it. NULL columns = not captured (counted, never treated as zero).
+  const shippingFacts = [];
+  const shippingCoverage = { orders: 0, captured: 0, uncaptured: 0 };
+  for (const o of data.orders) {
+    const order = orderById.get(o.id);
+    if (!order) continue;
+    shippingCoverage.orders += 1;
+    if (o.shipping_price === null || o.shipping_price === undefined) { shippingCoverage.uncaptured += 1; continue; }
+    shippingCoverage.captured += 1;
+    const gross = num(o.shipping_price); const discount = num(o.shipping_discount); const tax = num(o.shipping_tax);
+    const charged = gross - discount;
+    shippingFacts.push({
+      orderId: o.id, orderName: order.name, orderedAt: order.orderedAt, taxesIncluded: order.taxesIncluded,
+      gross, discount, tax, taxRateBp: o.shipping_tax_rate_bp ?? null, charged,
+      // same convention as product lines: with taxes included the price contains the VAT, otherwise it is added on top
+      exTax: order.taxesIncluded ? charged - tax : charged,
+      inclTax: order.taxesIncluded ? charged : charged + tax,
+    });
+  }
+
   const refundById = new Map(data.refunds.map((r) => [r.id, r]));
   const refundFacts = [];
   const linesByRefund = new Map();
@@ -88,13 +108,23 @@ export function buildLedger(data, { config, currency } = {}) {
   // Refund money beyond the mapped product lines (shipping, manual adjustments):
   // reported, but not part of product net sales.
   const refundTotals = [];
+  const shippingRefundFacts = [];
   for (const r of data.refunds) {
     if (!orderById.has(r.order_id)) continue;
     const mapped = (linesByRefund.get(r.id) ?? []).reduce(
       (a, { fact, line }) => a + fact.amount + (line.taxesIncluded ? 0 : fact.tax), 0);
+    const shippingCaptured = r.shipping_subtotal !== null && r.shipping_subtotal !== undefined;
+    const shipSub = shippingCaptured ? num(r.shipping_subtotal) : 0;
+    const shipTax = shippingCaptured ? num(r.shipping_tax) : 0;
+    const shippingAmount = shipSub + shipTax; // shipping refunded, incl. VAT
+    if (shippingCaptured && (shipSub !== 0 || shipTax !== 0)) {
+      shippingRefundFacts.push({ refundId: r.id, orderId: r.order_id, orderName: orderById.get(r.order_id).name, refundedAt: new Date(r.refunded_at), subtotal: shipSub, tax: shipTax, exTax: shipSub, inclTax: shippingAmount });
+    }
     refundTotals.push({
-      refundId: r.id, orderId: r.order_id, refundedAt: new Date(r.refunded_at),
-      amount: num(r.amount), otherAmount: num(r.amount) - mapped, lineCount: (linesByRefund.get(r.id) ?? []).length,
+      refundId: r.id, orderId: r.order_id, orderName: orderById.get(r.order_id).name, refundedAt: new Date(r.refunded_at),
+      amount: num(r.amount), productAmount: mapped, shippingAmount, shippingCaptured,
+      // refund money that is neither a mapped product line nor (captured) shipping: manual adjustments and, when shipping was not captured, shipping
+      otherAmount: num(r.amount) - mapped - shippingAmount, lineCount: (linesByRefund.get(r.id) ?? []).length,
     });
   }
 
@@ -115,7 +145,7 @@ export function buildLedger(data, { config, currency } = {}) {
   }
 
   return {
-    currency: ledgerCurrency, config, orders, lineFacts, refundFacts, refundTotals,
+    currency: ledgerCurrency, config, orders, lineFacts, refundFacts, refundTotals, shippingFacts, shippingRefundFacts, shippingCoverage,
     variantById, productById, costsByVariant, stockByVariant, excluded,
   };
 }

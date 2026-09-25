@@ -36,12 +36,15 @@ export function localMidnight(dateStr, timeZone) {
  * available_window: the last `availableDays` local days through `now` - the
  * span of order history the source system exposes.
  */
-export function buildWindows(now, timeZone, { availableDays = 60 } = {}) {
+export function buildWindows(now, timeZone, { availableDays = 60, historyStart = null } = {}) {
   const today = localDateString(now, timeZone);
   const startOfToday = localMidnight(today, timeZone);
   const mk = (key, label, startStr, end) => ({
     key, label, timeZone, start: localMidnight(startStr, timeZone), end,
     localStart: startStr, localEnd: today,
+    // Local date (YYYY-MM-DD) of the first real order of the business, when known: the comparison logic uses it to tell whether the
+    // previous period had any business history at all.
+    historyStart,
   });
   return {
     yesterday: mk('yesterday', 'Yesterday', addDays(today, -1), startOfToday),
@@ -104,11 +107,35 @@ export function buildMonthBuckets(now, timeZone, months = 12) {
  * The immediately preceding window of the same local-day length, for period-over-period comparison.
  * `available_window` and other windows without a `localStart`/`localEnd` pair are not comparable this way.
  */
+const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
+
+/**
+ * Factual coverage of a comparison: how many days each side has real business history for (history starts at the first real order).
+ * `sufficient` only when the previous period has exactly as many days of history as the current one - no arbitrary threshold.
+ * Returns null when the start of the history is unknown (coverage then cannot be asserted either way).
+ */
+export function comparisonCoverage(window) {
+  if (!window?.localStart || !window?.localEnd || !window.historyStart) return null;
+  const days = daysBetween(window.localStart, window.localEnd);
+  const prevStart = addDays(window.localStart, -days);
+  const covered = (start, end) => Math.max(0, Math.min(days, daysBetween(start > window.historyStart ? start : window.historyStart, end)));
+  const currentCovered = covered(window.localStart, window.localEnd);
+  const previousCovered = covered(prevStart, window.localStart);
+  return {
+    sufficient: previousCovered === currentCovered && previousCovered === days,
+    history_start: window.historyStart, current_days: days, current_days_with_history: currentCovered,
+    previous_days: days, previous_days_with_history: previousCovered,
+  };
+}
+
 export function previousEquivalentWindow(window) {
   if (!window.localStart || !window.localEnd) return null;
   const days = Math.round((new Date(`${window.localEnd}T00:00:00Z`) - new Date(`${window.localStart}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
   const prevEnd = window.localStart;
   const prevStart = addDays(window.localStart, -days);
+  // A previous period that is not fully inside the business history is not a comparable period: no comparison is offered.
+  const cov = comparisonCoverage(window);
+  if (cov && !cov.sufficient) return null;
   return {
     key: `${window.key}_previous`, label: `Previous ${window.label ?? window.key}`, timeZone: window.timeZone,
     start: localMidnight(prevStart, window.timeZone), end: localMidnight(prevEnd, window.timeZone),

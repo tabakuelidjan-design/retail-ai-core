@@ -13,8 +13,16 @@ import { syncOrders } from './orders.js';
 import { loadCustomerKeySecret } from '../customers/pseudonym.js';
 import { SHOP_CREATED_QUERY } from '../shopify/queries.js';
 import { getGrantedScopes, nextCoverage, planOrdersSync, readCoverage, writeCoverage } from './history.js';
+import { finishRun, startRun } from './run-log.js';
 
 const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
+
+// Run log (table sync_runs): best effort, never fails a sync. A failed run erases nothing (the sync only upserts) and is recorded FAILED
+// so Analytics and Finance can show the data as stale instead of pretending it is current.
+const run = { supabase: null, id: null, summaries: {}, ok: true };
+const record = (name, summary) => { run.summaries[name] = summary; if (summary.errors.length > 0) run.ok = false; };
+// SYNC_ORDERS_SINCE_DAYS: a longer refresh window than the default 60 days (refunds on older orders); it needs the read_all_orders scope.
+const envSinceDays = Number(process.env.SYNC_ORDERS_SINCE_DAYS);
 
 async function main() {
   const mode = process.argv[2];
@@ -25,11 +33,13 @@ async function main() {
 
   const shopify = createShopifyClient(loadShopifyConfigFromEnv());
   const supabase = createSupabaseClient(loadSupabaseConfigFromEnv());
+  run.supabase = supabase;
 
   let merchantId;
   if (mode === 'catalog' || mode === 'all') {
     const summary = await syncCatalog({ shopify, supabase });
     console.log('catalog sync summary:', JSON.stringify(summary, null, 2));
+    record('catalog', summary);
     if (summary.errors.length > 0) process.exitCode = 1;
   }
 
@@ -48,6 +58,7 @@ async function main() {
       process.exit(1);
     }
     merchantId = merchant.id;
+    run.id = await startRun(supabase, { merchantId, mode });
   }
 
   if (mode === 'inventory' || mode === 'all') {
@@ -57,12 +68,14 @@ async function main() {
     const timeZone = process.env.MERCHANT_TIMEZONE || 'UTC';
     const summary = await syncInventory({ shopify, supabase }, { merchantId, timeZone });
     console.log('inventory sync summary:', JSON.stringify(summary, null, 2));
+    record('inventory', summary);
     if (summary.errors.length > 0) process.exitCode = 1;
   }
 
   if (mode === 'cost' || mode === 'all') {
     const summary = await syncProductCosts({ shopify, supabase }, { merchantId });
     console.log('cost sync summary:', JSON.stringify(summary, null, 2));
+    record('cost', summary);
     if (summary.errors.length > 0) process.exitCode = 1;
   }
 
@@ -70,7 +83,7 @@ async function main() {
     // --since YYYY-MM-DD, or --full-history (= since the store was created): needs the read_all_orders scope on the live token.
     const args = process.argv.slice(3);
     const sinceIdx = args.indexOf('--since');
-    let since = sinceIdx > -1 ? args[sinceIdx + 1] : null;
+    let since = sinceIdx > -1 ? args[sinceIdx + 1] : (Number.isInteger(envSinceDays) && envSinceDays > 0 ? new Date(Date.now() - envSinceDays * 86_400_000).toISOString().slice(0, 10) : null);
     let storeCreatedOn = null;
     if (args.includes('--full-history') || since) {
       storeCreatedOn = (await shopify.graphql(SHOP_CREATED_QUERY)).shop.createdAt.slice(0, 10);
@@ -80,12 +93,16 @@ async function main() {
     if (!plan.ok) { console.error(JSON.stringify(plan)); process.exit(1); }
     const summary = await syncOrders({ shopify, supabase }, { merchantId, customerKeySecret: loadCustomerKeySecret(), since });
     console.log('orders sync summary:', JSON.stringify(summary, null, 2));
+    record('orders', summary);
     if (summary.errors.length > 0) process.exitCode = 1;
     else await writeCoverage(nextCoverage(await readCoverage(), { plan, now: new Date(), storeCreatedOn }));
   }
 }
 
-main().catch((err) => {
-  console.error('sync failed:', err);
-  process.exit(1);
-});
+main()
+  .then(() => finishRun(run.supabase, run.id, { ok: run.ok, summaries: run.summaries, error: run.ok ? null : 'the sync reported errors' }))
+  .catch(async (err) => {
+    console.error('sync failed:', err);
+    await finishRun(run.supabase, run.id, { ok: false, summaries: run.summaries, error: err?.message });
+    process.exit(1);
+  });
