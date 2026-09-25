@@ -29,9 +29,11 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir }) {
+export function createAnalyticsPremiumApp({ reportsDir, guard }) {
   return async function handle(req, res) {
     try {
+      // Hosted staging: host allow-list + access token, before anything (pages, static files, api) is served.
+      if (guard && !(await guard(req, res))) return;
       const url = new URL(req.url, 'http://localhost');
       if (req.method === 'GET' && STATIC[url.pathname]) {
         const [file, type] = STATIC[url.pathname];
