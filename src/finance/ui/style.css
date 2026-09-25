@@ -1448,3 +1448,5 @@ button.tb-brand:hover { background: #F4F6F8; box-shadow: none; }
 body:has(.modal-back) .contact-support { display: none; }
 .pk-done { min-width: 0; } .pk-done .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .pk-done .btn, .pk-done button { white-space: normal; }
 @media (max-width: 720px) { .pk-done .actions .btn, .pk-done .actions button { width: 100%; text-align: center; } }
+
+.foreign-note { margin: 6px 0 2px; }

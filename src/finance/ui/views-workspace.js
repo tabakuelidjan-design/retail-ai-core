@@ -156,6 +156,7 @@ async function viewTodo() {
       metric('alert', tt('Urgent'), counts.bad, h('span', { class: 'bad' }, tt('Needs attention now'))),
       metric('clock', tt('To review'), counts.warn, tt('Worth a look soon')),
       metric('arrow', tt('Informational'), counts.info + counts.ok, tt('No action required yet'))));
+    mount(box, foreignNote(foreignCount(ac.foreign)));
     // A real breakdown of the SAME actions above, by tone - never a fabricated time-horizon chart (there is
     // no per-item due-date bucketing in this data model to build "today/tomorrow/48h/this week" honestly).
     box.appendChild(h('div', { class: 'card', style: 'padding:16px 18px' },
@@ -255,6 +256,7 @@ function renderAnalytics(r, currency, productDrilldown) {
       r.bySupplier.map((s) => h('tr', null, h('td', { 'data-label': tr('Supplier') }, s.name), h('td', { 'data-label': tr('Documents') }, String(s.count)), h('td', { class: 'num', 'data-label': tr('Total') }, `${s.gross} ${currency}`)))));
     wrap.appendChild(h('div', { class: 'banner info small', style: 'margin-top:10px' }, tt(r.note)));
   }
+  mount(wrap, foreignNote(r.excludedForeign));
   return wrap;
 }
 async function viewSales(q) {
@@ -289,6 +291,7 @@ async function viewSales(q) {
       metricRow.appendChild(metric('alert', tt('Overdue'), rec.overdue.outstanding + ' ' + cur, h('span', { class: 'bad' }, tt('{0} case(s)', rec.overdue.count))));
       metricRow.appendChild(metric('check', tt('Collected this month'), o.amounts.paidThisMonth + ' ' + cur, h('span', { class: 'good' }, tt('{0} payment(s)', o.amounts.paidThisMonthCount))));
       metricRow.appendChild(metric('quote', tt('Quotes to convert'), String(o.counts.quotesToConvert), tt('Accepted, not yet invoiced')));
+      const sfn = foreignNote(rec.foreignDocuments); if (sfn) { sfn.style.gridColumn = '1 / -1'; metricRow.appendChild(sfn); }
     } catch (e) { /* metrics are a bonus strip - the workspace below still works without them */ }
   }
   function drawBody() {
@@ -411,15 +414,14 @@ async function viewPurchasesWorkspace(q) {
   async function loadMetrics() {
     try {
       const [purchases, c] = await Promise.all([api('GET', '/api/inbox?scope=purchases'), api('GET', '/api/inbox/status')]);
-      // Amounts are only added within ONE currency (the default one): a foreign-currency document is never summed into it.
+      // EUR-only: the To-pay amount and its count come from the server (foreign-currency documents are never added)
       const cur = (state.settings && state.settings.defaults && state.settings.defaults.currency) || 'EUR';
-      const toPayAll = purchases.rows.filter((r) => r.status === 'TO_PAY');
-      const toPay = toPayAll.filter((r) => (r.currency || cur) === cur); const otherCur = toPayAll.length - toPay.length;
       const paidCount = purchases.rows.filter((r) => r.status === 'PAID').length;
       clear(metricRow);
       const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)));
       metricRow.appendChild(metric('inbox', tt('To handle'), String(c.counts.RECEIVED + c.counts.TO_REVIEW), tt('Documents awaiting validation')));
-      metricRow.appendChild(metric('coins', tt('To pay'), `${fmtMoney(toPay.reduce((a, r) => a + (r.grossCents || 0), 0), cur)}`, tt('{0} document(s)', toPay.length) + (otherCur ? ` · ${tt('{0} in another currency', otherCur)}` : '')));
+      metricRow.appendChild(metric('coins', tt('To pay'), `${fmtMoney(c.counts.toPayCents || 0, cur)}`, tt('{0} document(s)', (c.counts.TO_PAY || 0) - (c.counts.toPayForeign || 0))));
+      const pfn = foreignNote(c.counts.toPayForeign); if (pfn) { pfn.style.gridColumn = '1 / -1'; metricRow.appendChild(pfn); }
       metricRow.appendChild(metric('check', tt('Paid'), String(paidCount), tt('Supplier invoice(s)')));
     } catch (e) { /* the workspace below still works without the KPI strip */ }
   }
@@ -668,6 +670,7 @@ async function viewBank() {
       h('div', { class: 'account-card' }, h('span', null, tt('Bank')), h('strong', null, treasury.display.bank ?? '—'), h('small', null, tt(st.state === 'ACTIVE' ? 'Connected' : 'Not connected'))),
       h('div', { class: 'account-card' }, h('span', null, tt('Cash')), h('strong', null, treasury.display.cash ?? '—'), h('small', null, tt('Confirmed count only'))),
       h('div', { class: 'account-card' }, h('span', null, tt('Total liquidity')), h('strong', null, treasury.display.liquid ?? '—'), h('small', null, tt('Bank + cash')))));
+    mount(box, foreignNote(foreignCount(treasury.excluded)));
     const connCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
     connCard.appendChild(h('div', { class: 'banner info small' }, tt('Read-only access only. This connection can never initiate a payment, a transfer or change a beneficiary.')));
     if (st.state === 'ACTIVE') {
@@ -824,6 +827,7 @@ async function viewTreasury() {
         // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
         // parallel VAT figure the mandate explicitly asks not to invent.
         projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
+        mount(projection, foreignNote(foreignCount(treasury.excluded)));
       } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
     } catch (e) { fail(e, metricsRow); }
   }
@@ -833,6 +837,7 @@ async function viewTreasury() {
   // once here and never re-fetched when the horizon selector changes.
   try {
     const cf = await api('GET', '/api/overview/cashflow?months=12');
+    mount(chartWrap, foreignNote(foreignCount(cf.excluded)));
     if (!cf.hasActivity) chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('tresorerie', 'md')), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
     else {
       // Nordla Chart System: Trend Line (balance over time) + Comparison (inflows vs outflows) + Waterfall (what moved the balance).

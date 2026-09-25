@@ -32,7 +32,8 @@ export function buildActions(f) {
   if (f.draftsMissingVat > 0) add({ id: 'vat', tone: 'warn', kind: 'documents_missing_vat', count: f.draftsMissingVat, params: {}, href: '#/invoices?status=DRAFT', cta: 'review' });
   if (f.quotesToConvert > 0) add({ id: 'quotes', tone: 'info', kind: 'quotes_to_convert', count: f.quotesToConvert, params: {}, href: '#/quotes?status=ACCEPTED', cta: 'review' });
   if (f.inbox.toReview > 0) add({ id: 'inbox', tone: 'warn', kind: 'supplier_invoices_to_review', count: f.inbox.toReview, params: {}, href: '#/inbox', cta: 'validate' });
-  if (f.inbox.TO_PAY > 0) add({ id: 'pay', tone: 'info', kind: 'supplier_invoices_to_pay', count: f.inbox.TO_PAY, cents: f.inbox.toPayCents, params: {}, href: '#/purchases', cta: 'review' });
+  const eurToPay = f.inbox.TO_PAY - (f.inbox.toPayForeign ?? 0); // only documents inside the EUR amount are counted next to it
+  if (eurToPay > 0) add({ id: 'pay', tone: 'info', kind: 'supplier_invoices_to_pay', count: eurToPay, cents: f.inbox.toPayCents, params: { excludedForeign: f.inbox.toPayForeign ?? 0 }, href: '#/purchases', cta: 'review' });
   const sc = f.stock?.counts;
   if (sc && (sc.FAILED || sc.UNCERTAIN)) add({ id: 'stock', tone: 'bad', kind: 'stock_movements_need_attention', count: sc.FAILED + sc.UNCERTAIN, params: {}, href: '#/settings', cta: 'review' });
   if (q.daysLeft <= (f.closingWarnDays ?? 14)) add({ id: 'closing', tone: 'info', kind: 'quarter_closes_soon', count: q.daysLeft, params: { quarter: q.quarter, year: q.year, days: q.daysLeft }, href: '#/pack', cta: 'prepare_pack' });

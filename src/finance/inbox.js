@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { toCents } from './money.js';
+import { eurOfSupplier } from './currency.js';
 import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf, isCapturedExpense, normalizeCaptureMeta } from './expense-capture.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
@@ -281,9 +282,11 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     async reject(id, reason, actor) { merchantOnly(actor); const r = await must(id); if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED'); return move(r, 'REJECTED', { rejectedReason: String(reason).slice(0, 300) }); },
     async reopen(id, actor) { merchantOnly(actor); const r = await must(id); return move(r, 'TO_REVIEW', { validatedAt: null }); },
     async file(id) { const r = await must(id); const f = await attachments.get(r.attachmentRef); if (!f) throw new FinanceError('ATTACHMENT_NOT_FOUND', id); await audit({ at: now(), action: 'INBOX_ATTACHMENT_ACCESSED', itemId: id }); return { ...f, fileName: r.fileName, contentType: r.contentType }; },
-    async counts() {
+    /** Counts per status. `toPayCents` is EUR-only (Finance currency): foreign-currency documents are counted in `toPayForeign`, never summed. */
+    async counts(currency = 'EUR') {
       const all = await store.listSupplierInvoices(merchantId); const c = Object.fromEntries(INBOX_STATUSES.map((s) => [s, all.filter((r) => r.status === s).length]));
-      return { ...c, toReview: c.RECEIVED + c.TO_REVIEW, toPayCents: all.filter((r) => r.status === 'TO_PAY').reduce((a, r) => a + (r.grossCents ?? 0), 0) };
+      const eur = all.filter((r) => r.status === 'TO_PAY').map((r) => eurOfSupplier(r, currency));
+      return { ...c, toReview: c.RECEIVED + c.TO_REVIEW, toPayCents: eur.reduce((a, v) => a + (v ?? 0), 0), toPayForeign: eur.filter((v) => v === null).length };
     },
     /** Phase 1 (Contact foundation): link a supplier invoice to an existing fin_companies contact, or
      * clear the link (contactId = null). Deliberately separate from update()/move(): possible at any

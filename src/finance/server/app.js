@@ -26,6 +26,7 @@ import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
+import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
@@ -200,13 +201,17 @@ export function createFinanceApp(deps) {
 
   // ---------- overview ----------
   async function overview(svc, settings) {
-    const docs = await loadDocsForReports(store, merchantId);
+    // EUR-only: documents in another currency stay visible in their own screens but never enter these totals
+    const allDocs = await loadDocsForReports(store, merchantId);
+    const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
+    const foreignSales = allDocs.filter(({ doc }) => !isNative(doc, settings.defaults.currency) && doc.type !== 'quote' && doc.lockedAt).length;
+    const nativeIds = new Set(docs.map(({ doc }) => doc.id));
     const today = clock.today();
     const rec = buildReceivables(docs, { today, dueSoonDays: settings.dashboard.dueSoonDays });
     const nonQuote = docs.filter(({ doc }) => doc.type !== 'quote');
     const quotes = docs.filter(({ doc }) => doc.type === 'quote');
     const month = today.slice(0, 7);
-    const payments = await store.listPaymentsForMerchant(merchantId);
+    const payments = (await store.listPaymentsForMerchant(merchantId)).filter((p) => nativeIds.has(p.documentId));
     const paidMonth = payments.filter((p) => p.paidOn?.startsWith(month));
     const cur = settings.defaults.currency;
     const lang = settings.defaults.language;
@@ -222,7 +227,7 @@ export function createFinanceApp(deps) {
     const invoiceGrossInMonth = (mth) => nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.issueDate?.startsWith(mth) && doc.status !== 'CANCELLED').reduce((a, { doc }) => a + doc.totals.grossCents, 0);
     const supplierInvoices = await store.listSupplierInvoices(merchantId).catch(() => []);
     const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status));
-    const expenseGrossInMonth = (mth) => accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + s.grossCents, 0);
+    const expenseGrossInMonth = (mth) => accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + (eurOfSupplier(s, settings.defaults.currency) ?? 0), 0);
     const pctChange = (cur2, prev) => (prev > 0 ? Math.round(((cur2 - prev) / prev) * 100) : cur2 > 0 ? 100 : 0);
     const revenueThis = invoiceGrossInMonth(month); const revenueLast = invoiceGrossInMonth(lastMonth);
     const expenseThis = expenseGrossInMonth(month); const expenseLast = expenseGrossInMonth(lastMonth);
@@ -230,7 +235,7 @@ export function createFinanceApp(deps) {
     // design calls for an expense-category donut; there is no expense-category field anywhere in this data
     // model, so categories would have to be invented. Supplier concentration is the closest real substitute.
     const bySupplier = new Map();
-    for (const s of accepted) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + s.grossCents);
+    for (const s of accepted) { const e = eurOfSupplier(s, settings.defaults.currency); if (e !== null) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + e); }
     const supplierTotal = [...bySupplier.values()].reduce((a, c) => a + c, 0);
     const topSuppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, cents]) => ({ name, cents, amount: m(cents), sharePct: supplierTotal > 0 ? Math.round((cents / supplierTotal) * 100) : 0 }));
     // Paid / Outstanding / Overdue snapshot across all locked invoices - real effectiveStatus per document,
@@ -250,6 +255,7 @@ export function createFinanceApp(deps) {
       expenses: { thisMonth: m(expenseThis), thisMonthCents: expenseThis, changePct: pctChange(expenseThis, expenseLast) },
       topSuppliers, supplierTotalCents: supplierTotal,
       asOf: today, currency: cur,
+      foreign: { salesDocuments: foreignSales, purchaseDocuments: accepted.filter((s) => eurOfSupplier(s, settings.defaults.currency) === null).length },
       counts: {
         unpaid: rec.unpaid.count, overdue: rec.overdue.count, dueSoon: rec.due_soon.count,
         awaitingApproval: nonQuote.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL').length,
@@ -353,16 +359,17 @@ export function createFinanceApp(deps) {
     const m = (c) => money(c, settings.defaults.language);
     const supplierInvoices = await store.listSupplierInvoices(merchantId).catch(() => []);
     const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status) && (period === 'all' || s.issueDate?.startsWith(month)));
+    const CUR = settings.defaults.currency;
     const bySupplier = new Map();
-    for (const s of accepted) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + s.grossCents);
+    for (const s of accepted) { const e = eurOfSupplier(s, CUR); if (e !== null) bySupplier.set(s.supplierName, (bySupplier.get(s.supplierName) || 0) + e); }
     const total = [...bySupplier.values()].reduce((a, c) => a + c, 0);
     const suppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, cents]) => ({ name, cents, amount: m(cents), sharePct: total > 0 ? Math.round((cents / total) * 100) : 0 }));
     // Real month-over-month change on the total, same definition as the KPI strip's own trend figures.
     const lastMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
-    const thisMonthTotal = accepted.filter((s) => period === 'month' || s.issueDate?.startsWith(month)).reduce((a, s) => a + s.grossCents, 0);
-    const lastMonthTotal = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status) && s.issueDate?.startsWith(lastMonth)).reduce((a, s) => a + s.grossCents, 0);
+    const thisMonthTotal = accepted.filter((s) => period === 'month' || s.issueDate?.startsWith(month)).reduce((a, s) => a + (eurOfSupplier(s, CUR) ?? 0), 0);
+    const lastMonthTotal = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status) && s.issueDate?.startsWith(lastMonth)).reduce((a, s) => a + (eurOfSupplier(s, CUR) ?? 0), 0);
     const changePct = lastMonthTotal > 0 ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100) : thisMonthTotal > 0 ? 100 : 0;
-    json(ctx.res, 200, { period, suppliers, total, totalDisplay: m(total), currency: settings.defaults.currency, changePct });
+    json(ctx.res, 200, { period, suppliers, total, totalDisplay: m(total), currency: settings.defaults.currency, changePct, excludedForeign: accepted.filter((s) => eurOfSupplier(s, CUR) === null).length });
   });
 
   // Dashboard treasury chart: real monthly totals of client payments received (inflow) and supplier invoices
@@ -374,25 +381,27 @@ export function createFinanceApp(deps) {
     const months = [3, 6, 12].includes(Number(ctx.url.searchParams.get('months'))) ? Number(ctx.url.searchParams.get('months')) : 6;
     const today = clock.today();
     const [payments, supplierInvoices, docs] = await Promise.all([store.listPaymentsForMerchant(merchantId), store.listSupplierInvoices(merchantId).catch(() => []), loadDocsForReports(store, merchantId)]);
+    const CUR = settings.defaults.currency; const nativeIds = new Set(docs.filter(({ doc }) => isNative(doc, CUR)).map(({ doc }) => doc.id));
     const paidSupplier = supplierInvoices.filter((s) => s.status === 'PAID' && s.paidAt);
     // Revenue/expense series for the "Revenue vs Expenses" mini-chart - the exact same definitions already used
     // for the KPI strip's this-month/last-month figures (invoiced gross for revenue, accepted supplier-invoice
     // gross for expenses), just repeated per month instead of only the current and previous one.
     const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status));
-    const invoicesLocked = docs.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED');
+    const invoicesLocked = docs.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED' && isNative(doc, CUR));
     const monthKeys = Array.from({ length: months }, (_, i) => { const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - (months - 1 - i), 1)); return d.toISOString().slice(0, 7); });
     const m = (c) => money(c, settings.defaults.language);
     let running = 0;
     const rows = monthKeys.map((mth) => {
-      const inflowCents = payments.filter((p) => p.paidOn?.startsWith(mth)).reduce((a, p) => a + p.amountCents, 0);
-      const outflowCents = paidSupplier.filter((s) => String(s.paidAt).startsWith(mth)).reduce((a, s) => a + (s.paidAmountCents ?? s.grossCents ?? 0), 0);
+      const inflowCents = payments.filter((p) => p.paidOn?.startsWith(mth) && nativeIds.has(p.documentId)).reduce((a, p) => a + p.amountCents, 0);
+      const outflowCents = paidSupplier.filter((s) => String(s.paidAt).startsWith(mth)).reduce((a, s) => a + (eurPaidOfSupplier(s, CUR) ?? 0), 0);
       const revenueCents = invoicesLocked.filter(({ doc }) => doc.issueDate?.startsWith(mth)).reduce((a, { doc }) => a + doc.totals.grossCents, 0);
-      const expenseCents = accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + s.grossCents, 0);
+      const expenseCents = accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + (eurOfSupplier(s, CUR) ?? 0), 0);
       running += inflowCents - outflowCents;
       return { month: mth, inflowCents, outflowCents, netCents: inflowCents - outflowCents, balanceCents: running, inflow: m(inflowCents), outflow: m(outflowCents), balance: m(running), revenueCents, expenseCents, revenue: m(revenueCents), expense: m(expenseCents) };
     });
     const hasActivity = rows.some((r) => r.inflowCents || r.outflowCents);
-    json(ctx.res, 200, { currency: settings.defaults.currency, months, rows, hasActivity });
+    const excluded = { salesDocuments: docs.filter(({ doc }) => !isNative(doc, CUR) && doc.type === 'invoice' && doc.lockedAt).length, purchaseDocuments: accepted.filter((s) => eurOfSupplier(s, CUR) === null).length };
+    json(ctx.res, 200, { currency: settings.defaults.currency, months, rows, hasActivity, excluded });
   });
 
   on('POST', '/api/calc', async (ctx) => {
@@ -532,7 +541,8 @@ export function createFinanceApp(deps) {
     const c = await svc.getCompany(idParam(ctx.m[1]));
     const today = clock.today();
     const docs = (await loadDocsForReports(store, merchantId)).filter(({ doc }) => doc.customer?.companyId === c.id || (c.vatNumber && doc.customer?.vatNumber === c.vatNumber));
-    const invoices = docs.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt);
+    const homeCur = (await settingsIo.load()).defaults.currency;
+    const invoices = docs.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && isNative(doc, homeCur));
     const rec = buildReceivables(invoices, { today });
     const pays = docs.flatMap(({ payments }) => payments);
     json(ctx.res, 200, {
@@ -713,7 +723,9 @@ export function createFinanceApp(deps) {
   // ---------- Finance Action Center: what to do next, from facts the workspace already holds ----------
   on('GET', '/api/actions', async (ctx) => {
     const { svc, settings, stock } = await servicesFor();
-    const docs = await loadDocsForReports(store, merchantId);
+    const allDocs = await loadDocsForReports(store, merchantId);
+    const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
+    const foreignSales = allDocs.filter(({ doc }) => !isNative(doc, settings.defaults.currency) && doc.type !== 'quote' && doc.lockedAt).length;
     const today = clock.today();
     const rec = buildReceivables(docs, { today, dueSoonDays: settings.dashboard.dueSoonDays });
     const drafts = docs.filter(({ doc }) => ['DRAFT', 'READY_FOR_APPROVAL'].includes(doc.status) && doc.type !== 'quote').slice(0, 40);
@@ -727,12 +739,13 @@ export function createFinanceApp(deps) {
         pack = { status: 'OK', period: p.period, completeness: p.completeness.status, reconciliation: p.reconciliation.status, anomalies: p.anomalies.length, orders: p.retail.orders };
       } catch { pack = null; }
     }
+    const inboxCounts = await inboxFor().counts(settings.defaults.currency).catch(() => ({ toReview: 0, TO_PAY: 0, toPayCents: 0, toPayForeign: 0 }));
     const actions = buildActions({
-      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: await inboxFor().counts().catch(() => ({ toReview: 0, TO_PAY: 0, toPayCents: 0 })), stock: await stock.status().catch(() => null),
+      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: inboxCounts, stock: await stock.status().catch(() => null),
       draftsMissingVat, awaitingApproval: docs.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL' && doc.type !== 'quote').length, quotesToConvert: docs.filter(({ doc }) => doc.type === 'quote' && doc.status === 'ACCEPTED').length,
       pack, settingsMissing: missingForInvoicing(settings).length,
     });
-    json(ctx.res, 200, { asOf: today, currency: settings.defaults.currency, actions: actions.map((a) => ({ ...a, amount: a.cents != null ? money(a.cents, settings.defaults.language) : null })) });
+    json(ctx.res, 200, { asOf: today, currency: settings.defaults.currency, foreign: { salesDocuments: foreignSales, purchaseDocuments: inboxCounts.toPayForeign ?? 0 }, actions: actions.map((a) => ({ ...a, amount: a.cents != null ? money(a.cents, settings.defaults.language) : null })) });
   });
 
   on('GET', '/api/connectors', async (ctx) => json(ctx.res, 200, { connectors: connectorStatus({ accountingExport: deps.accountingExport, bankReconciliation: deps.bankReconciliation, customerPortal: deps.customerPortal, mail: mailer(), accessPoint: accessPoint(), inbox: INBOX_ADAPTERS }) }));
@@ -809,7 +822,7 @@ export function createFinanceApp(deps) {
   };
   on('GET', '/api/inbox/status', async (ctx) => {
     const settings = await settingsIo.load(); const inbox = inboxFor();
-    json(ctx.res, 200, { counts: await inbox.counts(), adapters: INBOX_ADAPTERS.map((a) => (a.name === 'email' ? { ...a, financeAddressSet: !!settings.inbox.financeAddress } : a)), statuses: INBOX_STATUSES, extractor: (deps.documentExtractor ?? defaultExtractor).label });
+    json(ctx.res, 200, { counts: await inbox.counts(settings.defaults.currency), adapters: INBOX_ADAPTERS.map((a) => (a.name === 'email' ? { ...a, financeAddressSet: !!settings.inbox.financeAddress } : a)), statuses: INBOX_STATUSES, extractor: (deps.documentExtractor ?? defaultExtractor).label });
   });
   on('GET', '/api/inbox', async (ctx) => {
     const st = ctx.url.searchParams.get('scope');
@@ -1058,10 +1071,12 @@ export function createFinanceApp(deps) {
   // ---------- receivables ----------
   on('GET', '/api/receivables', async (ctx) => {
     const { settings } = await servicesFor();
-    const docs = await loadDocsForReports(store, merchantId);
+    const allDocs = await loadDocsForReports(store, merchantId);
+    const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
+    const foreignDocuments = allDocs.filter(({ doc }) => !isNative(doc, settings.defaults.currency) && doc.type === 'invoice' && doc.lockedAt).length;
     const r = buildReceivables(docs, { today: clock.today(), dueSoonDays: settings.dashboard.dueSoonDays });
     const m = (c) => money(c, settings.defaults.language);
-    json(ctx.res, 200, { ...r, unpaid: { ...r.unpaid, outstanding: m(r.unpaid.outstandingCents) }, overdue: { ...r.overdue, outstanding: m(r.overdue.outstandingCents) }, due_soon: { ...r.due_soon, outstanding: m(r.due_soon.outstandingCents) }, aging: Object.fromEntries(Object.entries(r.aging).map(([k, v]) => [k, { ...v, outstanding: m(v.outstandingCents) }])), invoices: r.invoices.map((i) => ({ ...i, remaining: m(i.remainingCents), gross: m(i.grossCents) })) });
+    json(ctx.res, 200, { ...r, foreignDocuments, unpaid: { ...r.unpaid, outstanding: m(r.unpaid.outstandingCents) }, overdue: { ...r.overdue, outstanding: m(r.overdue.outstandingCents) }, due_soon: { ...r.due_soon, outstanding: m(r.due_soon.outstandingCents) }, aging: Object.fromEntries(Object.entries(r.aging).map(([k, v]) => [k, { ...v, outstanding: m(v.outstandingCents) }])), invoices: r.invoices.map((i) => ({ ...i, remaining: m(i.remainingCents), gross: m(i.grossCents) })) });
   });
 
   // ---------- Sales/Purchases analytics (unified Finance module): product-level for sales (real
@@ -1073,13 +1088,13 @@ export function createFinanceApp(deps) {
     const { settings } = await servicesFor();
     const m = (c) => money(c, settings.defaults.language);
     const salesDocs = await loadDocsForReports(store, merchantId);
-    json(ctx.res, 200, buildSalesAnalytics(salesDocs, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m }));
+    json(ctx.res, 200, buildSalesAnalytics(salesDocs, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m, currency: settings.defaults.currency }));
   });
   on('GET', '/api/purchases/analytics', async (ctx) => {
     const { settings } = await servicesFor();
     const m = (c) => money(c, settings.defaults.language);
     const supplierInvoices = await store.listSupplierInvoices(merchantId);
-    json(ctx.res, 200, buildPurchaseAnalytics(supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m }));
+    json(ctx.res, 200, buildPurchaseAnalytics(supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), q: ctx.url.searchParams.get('q') ?? '', m, currency: settings.defaults.currency }));
   });
   // Compact period report (Sales/Purchases/Credit notes/Net/VAT/counts) - complements, never replaces, the
   // Accountant Pack below (still the authoritative per-rate VAT export for actually closing a period).
@@ -1087,7 +1102,7 @@ export function createFinanceApp(deps) {
     const { settings } = await servicesFor();
     const m = (c) => money(c, settings.defaults.language);
     const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    const r = buildPeriodReport(salesDocs, supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to') });
+    const r = buildPeriodReport(salesDocs, supplierInvoices, { from: dateParam(ctx, 'from'), to: dateParam(ctx, 'to'), currency: settings.defaults.currency });
     json(ctx.res, 200, { ...r, sales: { ...r.sales, gross: m(r.sales.grossCents) }, creditNotes: { ...r.creditNotes, gross: m(r.creditNotes.grossCents) }, purchases: { ...r.purchases, gross: m(r.purchases.grossCents) }, netSalesAfterCredits: m(r.netSalesAfterCreditsCents), vat: m(r.vatCents) });
   });
 

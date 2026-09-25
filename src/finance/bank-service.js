@@ -6,6 +6,7 @@ import { formatCents } from './money.js';
 import { NoBankAdapter, assertReadOnlyAdapter, parseBankCsv } from './bank.js';
 import { suggest } from './reconcile.js';
 import { buildTreasury } from './treasury.js';
+import { eurOfSupplier } from './currency.js';
 
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 
@@ -24,7 +25,10 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
     }
     return out;
   };
-  const payables = async () => (await inbox.list({ statuses: ['VALIDATED', 'TO_PAY'] })).map((r) => ({ itemId: r.id, invoiceNumber: r.invoiceNumber, supplierName: r.supplierName, grossCents: r.grossCents, paymentReference: r.paymentReference, dueDate: r.dueDate, status: r.status }));
+  const payablesAll = async () => inbox.list({ statuses: ['VALIDATED', 'TO_PAY'] });
+  const toPayable = (r, cur) => ({ itemId: r.id, invoiceNumber: r.invoiceNumber, supplierName: r.supplierName, grossCents: eurOfSupplier(r, cur), paymentReference: r.paymentReference, dueDate: r.dueDate, status: r.status });
+  // EUR-only: a foreign-currency payable never enters matching or the projection (unless the merchant typed its EUR amount)
+  const payables = async (cur = 'EUR') => (await payablesAll()).map((r) => toPayable(r, cur)).filter((p) => p.grossCents !== null);
   const store1 = async (accountId, list, source) => { let created = 0; for (const t of list) { const r = await store.insertBankTransaction({ merchantId, accountId, providerTxId: String(t.id), date: t.date, amountCents: t.amountCents, currency: t.currency ?? 'EUR', counterpartyName: t.counterpartyName ?? null, reference: t.reference ?? null, structuredReference: t.structuredReference ?? null, source, status: 'NEW', importedAt: clock.now() }); if (r.created) created += 1; } return created; };
 
   return {
@@ -107,10 +111,14 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       return store.insertCashMovement({ merchantId, kind, amountCents, date, note: note ? String(note).slice(0, 200) : null, createdAt: clock.now() });
     },
     async treasury({ horizonDays = 7, currency = 'EUR' } = {}) {
-      const today = clock.today(); const balances = await store.listBankBalances(merchantId);
-      const recv = (await openInvoices()).map((i) => ({ number: i.number, dueDate: i.dueDate, remainingCents: i.remainingCents }));
-      const pay = (await payables()).map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, grossCents: p.grossCents }));
-      return buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount: await store.latestCashCount(merchantId), cashMovements: await store.listCashMovements(merchantId), receivables: recv, payables: pay });
+      const today = clock.today(); const balancesAll = await store.listBankBalances(merchantId);
+      const balances = balancesAll.filter((b) => (b.currency ?? currency) === currency); // an account in another currency is never added to the EUR position
+      const recvAll = await openInvoices(); const recvNative = recvAll.filter((i) => (i.currency ?? currency) === currency);
+      const recv = recvNative.map((i) => ({ number: i.number, dueDate: i.dueDate, remainingCents: i.remainingCents }));
+      const allP = await payablesAll(); const payNative = allP.map((r) => toPayable(r, currency)).filter((p) => p.grossCents !== null);
+      const pay = payNative.map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, grossCents: p.grossCents }));
+      const t = buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount: await store.latestCashCount(merchantId), cashMovements: await store.listCashMovements(merchantId), receivables: recv, payables: pay });
+      return { ...t, excluded: { foreignReceivables: recvAll.length - recvNative.length, foreignPayables: allP.length - payNative.length, foreignBankAccounts: balancesAll.length - balances.length } };
     },
   };
 }

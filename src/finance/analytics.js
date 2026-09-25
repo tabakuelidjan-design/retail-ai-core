@@ -13,13 +13,16 @@
 // Both limits are surfaced explicitly in the returned shape (`productDataAvailable`, `note`) rather than
 // silently omitted, so the UI can show an honest message instead of an empty-looking screen.
 
+import { eurOfSupplier, isNative } from './currency.js';
+
 const inRange = (dateStr, from, to) => (!dateStr ? false : (!from || dateStr >= from) && (!to || dateStr <= to));
 
 /**
  * @param {Array} salesDocs loadDocsForReports() shape: [{doc, payments, creditNotes}]
  * @param {{from?: string, to?: string, q?: string, m: (cents:number)=>string}} opts
  */
-export function buildSalesAnalytics(salesDocs, { from, to, q, m }) {
+export function buildSalesAnalytics(salesDocs, { from, to, q, m, currency = 'EUR' }) {
+  let excludedForeign = 0; // sales documents in another currency: never added to these EUR figures
   const qNorm = (q || '').trim().toLowerCase();
   const byKey = new Map(); // productKey -> { name, sku, qtyMilli, netCents, docIds:Set }
   let unattributedNetCents = 0; let unattributedQtyMilli = 0;
@@ -29,6 +32,7 @@ export function buildSalesAnalytics(salesDocs, { from, to, q, m }) {
     if (!doc.lockedAt || doc.status === 'CANCELLED') continue;
     if (doc.type !== 'invoice' && doc.type !== 'credit_note') continue;
     if (!inRange(doc.issueDate, from, to)) continue;
+    if (!isNative(doc, currency)) { excludedForeign += 1; continue; }
     documentsCount += 1;
     const sign = doc.type === 'credit_note' ? -1 : 1;
     if (sign > 0) salesNetCents += doc.totals?.netCents ?? 0; else creditNetCents += doc.totals?.netCents ?? 0;
@@ -47,7 +51,7 @@ export function buildSalesAnalytics(salesDocs, { from, to, q, m }) {
   }
   const byProduct = [...byKey.values()].map((p) => ({ name: p.name, sku: p.sku, qty: p.qtyMilli / 1000, revenueCents: p.netCents, revenue: m(p.netCents), docIds: [...p.docIds] })).sort((a, b) => b.revenueCents - a.revenueCents);
   return {
-    from: from ?? null, to: to ?? null, documentsCount,
+    from: from ?? null, to: to ?? null, documentsCount, excludedForeign,
     salesNetCents, salesNet: m(salesNetCents), creditNetCents, creditNet: m(creditNetCents),
     netAfterCreditsCents: salesNetCents - creditNetCents, netAfterCredits: m(salesNetCents - creditNetCents),
     byProduct, unattributedNetCents, unattributedNet: m(unattributedNetCents), unattributedQty: unattributedQtyMilli / 1000,
@@ -60,7 +64,8 @@ export function buildSalesAnalytics(salesDocs, { from, to, q, m }) {
  * Achats: supplier/status/period only - fin_supplier_invoices has no line items (see module note above).
  * @param {Array} supplierInvoices listSupplierInvoices() output
  */
-export function buildPurchaseAnalytics(supplierInvoices, { from, to, q, m }) {
+export function buildPurchaseAnalytics(supplierInvoices, { from, to, q, m, currency = 'EUR' }) {
+  let excludedForeign = 0; // supplier documents that cannot enter EUR totals (foreign currency without a typed EUR amount)
   const qNorm = (q || '').trim().toLowerCase();
   const bySupplier = new Map();
   let totalCents = 0; let documentsCount = 0;
@@ -71,15 +76,17 @@ export function buildPurchaseAnalytics(supplierInvoices, { from, to, q, m }) {
     documentsCount += 1;
     if (inv.status in STATUS_COUNTS) STATUS_COUNTS[inv.status] += 1;
     if (inv.status !== 'REJECTED') {
-      totalCents += inv.grossCents ?? 0;
+      const eur = eurOfSupplier(inv, currency);
+      if (eur === null) { excludedForeign += 1; continue; }
+      totalCents += eur;
       const cur = bySupplier.get(inv.supplierName) ?? { name: inv.supplierName, grossCents: 0, count: 0, docIds: [] };
-      cur.grossCents += inv.grossCents ?? 0; cur.count += 1; cur.docIds.push(inv.id);
+      cur.grossCents += eur; cur.count += 1; cur.docIds.push(inv.id);
       bySupplier.set(inv.supplierName, cur);
     }
   }
   const bySupplierRows = [...bySupplier.values()].map((s) => ({ ...s, gross: m(s.grossCents) })).sort((a, b) => b.grossCents - a.grossCents);
   return {
-    from: from ?? null, to: to ?? null, documentsCount, totalCents, total: m(totalCents),
+    from: from ?? null, to: to ?? null, documentsCount, excludedForeign, totalCents, total: m(totalCents),
     statusCounts: STATUS_COUNTS, bySupplier: bySupplierRows,
     productDataAvailable: false,
     note: 'Supplier invoices are stored as one total per document (net/VAT/gross) - there is no per-product line detail to break down.',
@@ -91,17 +98,20 @@ export function buildPurchaseAnalytics(supplierInvoices, { from, to, q, m }) {
  * replace, the existing Accountant Pack (/api/pack, viewPack()), which remains the authoritative per-rate
  * VAT breakdown and export for closing a real fiscal period; the VAT figure here is the document-level
  * vat_cents already computed and stored by the finance engine, not a second computation. */
-export function buildPeriodReport(salesDocs, supplierInvoices, { from, to }) {
+export function buildPeriodReport(salesDocs, supplierInvoices, { from, to, currency = 'EUR' }) {
+  let excludedSales = 0;
   let invoicesCents = 0; let invoicesCount = 0; let creditCents = 0; let creditCount = 0; let vatCents = 0;
   for (const { doc } of salesDocs) {
     if (!doc.lockedAt || doc.status === 'CANCELLED' || !inRange(doc.issueDate, from, to)) continue;
+    if (!isNative(doc, currency)) { excludedSales += 1; continue; }
     if (doc.type === 'invoice') { invoicesCents += doc.totals?.grossCents ?? 0; invoicesCount += 1; vatCents += doc.totals?.vatCents ?? 0; }
     else if (doc.type === 'credit_note') { creditCents += doc.totals?.grossCents ?? 0; creditCount += 1; vatCents -= doc.totals?.vatCents ?? 0; }
   }
   const purchases = supplierInvoices.filter((s) => s.status !== 'REJECTED' && inRange(s.issueDate, from, to));
-  const purchasesCents = purchases.reduce((a, s) => a + (s.grossCents ?? 0), 0);
+  const purchasesCents = purchases.reduce((a, s) => a + (eurOfSupplier(s, currency) ?? 0), 0);
+  const excludedPurchases = purchases.filter((s) => eurOfSupplier(s, currency) === null).length;
   return {
-    from, to,
+    from, to, excluded: { salesDocuments: excludedSales, purchaseDocuments: excludedPurchases },
     sales: { grossCents: invoicesCents, count: invoicesCount },
     creditNotes: { grossCents: creditCents, count: creditCount },
     purchases: { grossCents: purchasesCents, count: purchases.length },

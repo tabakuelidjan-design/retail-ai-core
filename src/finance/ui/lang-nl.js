@@ -748,6 +748,7 @@
   });
   Object.assign(messages, { 'The PDF preview is available after saving.': 'Het PDF-voorbeeld is beschikbaar na het opslaan.' });
   Object.assign(messages, { '{0} in another currency': '{0} in een andere valuta' });
+  Object.assign(messages, { 'One foreign-currency document is not included in the EUR totals': '1 document in vreemde valuta is niet opgenomen in de EUR-totalen', '{0} foreign-currency documents are not included in the EUR totals': '{0} documenten in vreemde valuta zijn niet opgenomen in de EUR-totalen' });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.nl = { messages, patterns };
 })();

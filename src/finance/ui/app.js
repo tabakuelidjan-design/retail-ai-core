@@ -82,6 +82,13 @@ const badge = (s) => h('span', { class: `badge ${s}` }, STATUS[s] || s);
 const TYPE = { invoice: 'Invoice', quote: 'Quote', credit_note: 'Credit note' };
 const REGIME = { domestic: 'Domestic - VAT charged', intra_eu_b2b_exempt: 'Intra-EU B2B - VAT exempt', reverse_charge: 'Reverse charge (customer accounts for VAT)', export_outside_eu: 'Export outside the EU', vat_exempt_small_business: 'VAT-exempt (small business scheme)' };
 
+/** Finance v1 is EUR-only: documents in another currency keep their own amount but never enter a EUR total. This is the factual note shown next to such totals. */
+function foreignNote(n) {
+  if (!n) return null;
+  return h('div', { class: 'muted small foreign-note' }, n === 1 ? tt('One foreign-currency document is not included in the EUR totals') : tt('{0} foreign-currency documents are not included in the EUR totals', n));
+}
+const foreignCount = (x) => (x ? Object.values(x).reduce((a, v) => a + (Number(v) || 0), 0) : 0);
+
 function toast(msg, kind) { const t = h('div', { class: `toast ${kind || ''}` }, msg); document.body.appendChild(t); setTimeout(() => t.remove(), 4200); }
 
 // ---------- API ----------
@@ -405,6 +412,7 @@ async function viewOverview() {
     // minus accepted supplier bills for the same month).
     const netRecorded = o.revenue.thisMonthCents - o.expenses.thisMonthCents;
     box.appendChild(h('div', { class: 'muted small' }, h('strong', { class: netRecorded >= 0 ? 'good' : 'bad' }, tt('Revenue − recorded expenses: {0}', fmtMoney(netRecorded, cur))), ' ', tt('(not an accounting net profit figure - no VAT, depreciation or accruals)')));
+    mount(box, foreignNote(foreignCount(o.foreign)));
 
     // ---- Central object: real treasury movement + Recent activity + Create-invoice CTA.
     // "Due dates" and the secondary quick-actions list moved to the new À faire page (same real data, reused
@@ -424,6 +432,7 @@ async function viewOverview() {
       if (!r.hasActivity) { chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('tresorerie', 'md')), h('div', null, h('strong', null, 'Not enough history yet'), h('div', { class: 'muted small' }, 'Record payments and supplier bills to see real cash movement here.')))); }
       else chartWrap.appendChild(cashTrendChart(r.rows, r.currency, tt('Cumulative balance')));
       lastCashflowRows = r.rows;
+      mount(chartWrap, foreignNote(foreignCount(r.excluded)));
       // Real per-metric sparklines (never fabricated): the same monthly revenue/expense series as the big
       // chart above, just plotted small inside the KPI cards - see metric-grid, above.
       const revSpark = document.getElementById('spark-revenue'); if (revSpark) { clear(revSpark); const s = miniSpark(r.rows.map((x) => x.revenueCents)); if (s) revSpark.appendChild(s); }
@@ -546,6 +555,7 @@ async function viewOverview() {
           h('span', null, down ? tt('Your expenses are down {0}% from last month.', Math.abs(r.changePct)) : tt('Your expenses are up {0}% from last month.', r.changePct)),
           h('span', { class: 'muted' }, '›')));
       }
+      mount(donutBody, foreignNote(r.excludedForeign));
     };
     const loadBreakdown = (period) => api('GET', `/api/overview/expense-breakdown?period=${period}`).then(renderBreakdown).catch(() => { clear(donutBody); donutBody.appendChild(h('div', { class: 'muted small' }, 'Breakdown unavailable.')); });
     loadBreakdown('all');
@@ -1137,6 +1147,7 @@ async function viewReceivables() {
   const main = layout('#/receivables', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Payments and receivables'), h('div', { class: 'muted small' }, 'No reminders are sent automatically.')))); const box = h('div'); main.appendChild(box);
   try {
     const r = await api('GET', '/api/receivables'); const cur = state.settings.defaults.currency;
+    mount(box, foreignNote(r.foreignDocuments));
     box.appendChild(h('div', { class: 'grid cards' }, [['Unpaid', r.unpaid.count, r.unpaid.outstanding, ''], ['Due soon', r.due_soon.count, r.due_soon.outstanding, 'warn'], ['Overdue', r.overdue.count, r.overdue.outstanding, r.overdue.count ? 'bad' : '']].map(([l, n, a, cls]) => h('div', { class: `card stat ${cls}` }, h('div', { class: 'n' }, `${a}`), h('div', { class: 'l' }, tt('{0}: {1} invoice(s) ({2})', tr(l), n, cur))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Ageing (days past due)'), h('table', null, h('tr', null, ['Not yet due', '0-7', '8-30', '31-60', '60+'].map((x) => h('th', { class: 'num' }, x))), h('tr', null, ['not_due', '0_7', '8_30', '31_60', '60_plus'].map((k) => h('td', { class: 'num' }, `${r.aging[k].outstanding} (${r.aging[k].count})`))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Open invoices'), r.invoices.length ? h('table', null, h('tr', null, ['Invoice', 'Customer', 'Due', 'Days late', 'Total', 'Still due', 'Status'].map((x, i) => h('th', { class: i >= 3 && i < 6 ? 'num' : '' }, x))), r.invoices.map((i) => h('tr', null, h('td', null, i.number), h('td', null, i.customer), h('td', null, i.dueDate), h('td', { class: 'num' }, i.daysOverdue > 0 ? String(i.daysOverdue) : ''), h('td', { class: 'num' }, i.gross), h('td', { class: 'num' }, i.remaining), h('td', null, badge(i.effectiveStatus))))) : h('div', { class: 'muted' }, 'No open invoices.'), h('p', { class: 'small muted' }, 'Open an invoice from the Invoices page to register a payment.')));

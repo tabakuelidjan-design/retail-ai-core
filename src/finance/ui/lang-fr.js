@@ -776,6 +776,7 @@
   });
   Object.assign(messages, { 'The PDF preview is available after saving.': 'L’aperçu du PDF est disponible après l’enregistrement.' });
   Object.assign(messages, { '{0} in another currency': '{0} dans une autre devise' });
+  Object.assign(messages, { 'One foreign-currency document is not included in the EUR totals': '1 document en devise étrangère non inclus dans les totaux EUR', '{0} foreign-currency documents are not included in the EUR totals': '{0} documents en devise étrangère non inclus dans les totaux EUR' });
   window.FINANCE_LANG = window.FINANCE_LANG || {};
   window.FINANCE_LANG.fr = { messages, patterns };
 })();
