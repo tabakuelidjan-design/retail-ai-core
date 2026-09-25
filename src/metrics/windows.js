@@ -68,6 +68,27 @@ export function buildWeekBuckets(now, timeZone, weeks = 8) {
   return buckets;
 }
 
+/**
+ * `days` consecutive single-local-day buckets ending at today's local midnight (today itself
+ * excluded, same convention as last_30_days), oldest first. For real day-by-day series (e.g. a
+ * revenue sparkline) - never a fabricated or interpolated point, each bucket is a real half-open
+ * [start, end) instant range a caller can pass straight to windowFacts/computeSalesMetrics.
+ */
+export function buildDayBuckets(now, timeZone, days = 30) {
+  const today = localDateString(now, timeZone);
+  const buckets = [];
+  for (let i = days; i >= 1; i -= 1) {
+    const startStr = addDays(today, -i);
+    const endStr = addDays(today, -i + 1);
+    buckets.push({
+      key: startStr, label: startStr, timeZone,
+      localStart: startStr, localEnd: endStr,
+      start: localMidnight(startStr, timeZone), end: localMidnight(endStr, timeZone),
+    });
+  }
+  return buckets;
+}
+
 export function inWindow(instant, window) {
   const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
   return t >= window.start.getTime() && t < window.end.getTime();

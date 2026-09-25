@@ -40,6 +40,10 @@ export function normalizeProduct(node, merchantId) {
     product_type: node.productType?.trim() ? node.productType.trim() : null,
     source_created_at: node.createdAt ?? null,
     source_status: node.status ?? null,
+    // The product's real primary image from Shopify, if it has one. Null stays null - never
+    // substituted with another product's image or a generic placeholder.
+    image_url: node.featuredImage?.url ?? null,
+    image_alt_text: node.featuredImage?.altText ?? null,
     source_system: 'shopify',
     source_id: node.id,
   };

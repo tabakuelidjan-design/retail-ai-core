@@ -89,6 +89,9 @@ export function buildProductPerformance(ledger, window, now) {
       product_key: key,
       product_id: product ? key : null,
       title: product?.title ?? pLines[0]?.title ?? 'Unmatched historical item',
+      // The product's real image from Shopify, if it has one - never backfilled from another
+      // product or a stock photo. Unmatched historical items (no catalog product) have none.
+      image_url: product?.image_url ?? null,
       matched: Boolean(product),
       ...agg,
       refund_rate: agg.units_sold > 0 ? Math.round((agg.units_refunded / agg.units_sold) * 10000) / 10000 : null,
@@ -136,7 +139,7 @@ function entry(row, extra) {
     product_key: row.product_key, title: row.title, units_sold: row.units_sold,
     net_sales_ex_tax: row.net_sales_ex_tax, cost_status: row.cost_status,
     cost_confidence: row.contribution_margin_v0.cost_confidence,
-    caveats: row.contribution_margin_v0.caveats, ...extra,
+    caveats: row.contribution_margin_v0.caveats, image_url: row.image_url, ...extra,
   };
 }
 

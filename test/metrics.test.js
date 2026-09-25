@@ -4,7 +4,7 @@ import { mergeConfig } from '../src/metrics/config.js';
 import { buildLedger } from '../src/metrics/ledger.js';
 import { buildProductPerformance, buildRankings, buildSegments } from '../src/metrics/products.js';
 import { computeSalesMetrics } from '../src/metrics/sales.js';
-import { buildWindows } from '../src/metrics/windows.js';
+import { buildDayBuckets, buildWindows } from '../src/metrics/windows.js';
 import { detectCashRisks } from '../src/signals/cash-risk.js';
 import { detectCommercialCandidates } from '../src/signals/commercial.js';
 import { CONFIG, FULL_WINDOW, makeData } from './fixtures/metrics-sample.js';
@@ -225,6 +225,17 @@ test('timezone windows: local calendar days in the merchant zone, DST-safe, zone
   assert.equal(dst.last_7_days.start.toISOString(), '2026-10-22T22:00:00.000Z'); // 23 Oct 00:00 CEST
   assert.equal(dst.last_7_days.end.toISOString(), '2026-10-29T23:00:00.000Z'); // 30 Oct 00:00 CET
   assert.equal(buildWindows(NOW, 'America/New_York').yesterday.start.toISOString(), '2026-09-20T04:00:00.000Z');
+});
+
+test('buildDayBuckets: 30 real, contiguous, non-overlapping single-day windows ending at today, oldest first', () => {
+  const days = buildDayBuckets(new Date('2026-09-21T09:00:00Z'), 'Europe/Brussels', 30);
+  assert.equal(days.length, 30);
+  assert.equal(days[0].localStart, '2026-08-22'); // oldest: 30 local days before today (2026-09-21)
+  assert.equal(days[29].localStart, '2026-09-20'); // newest: yesterday, the most recent complete local day
+  for (let i = 0; i < days.length; i += 1) {
+    assert.ok(days[i].start.getTime() < days[i].end.getTime(), 'each bucket is a real, non-empty interval');
+    if (i > 0) assert.equal(days[i - 1].end.getTime(), days[i].start.getTime(), 'buckets are contiguous, no gap or overlap');
+  }
 });
 
 test('available window spans the source order window through now', () => {

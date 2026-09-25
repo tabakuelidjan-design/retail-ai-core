@@ -86,7 +86,7 @@ async function main() {
   }
 
   if (mode === 'report' || mode === 'all') {
-    const { report } = buildReport({ ledger, now, timeZone, config });
+    const { report } = buildReport({ ledger, now, timeZone, config, data });
     await mkdir('reports', { recursive: true });
     const stamp = now.toISOString().slice(0, 10);
     await writeFile(`reports/report-${stamp}.json`, JSON.stringify(report, null, 2));
