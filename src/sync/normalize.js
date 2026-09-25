@@ -209,6 +209,25 @@ const sumMoney = (amounts) => amounts.reduce((total, a) => total + Number(a), 0)
  *   order has no retailLocation (e.g. an online order) or its location
  *   hasn't been synced by the catalog sync yet.
  */
+/**
+ * Shipping as reported by the source. `shippingLines` absent from the node = not captured (all NULL, never assumed to be zero);
+ * present but empty = the order had no shipping (zeros).
+ */
+export function normalizeShipping(node) {
+  if (!node.shippingLines) return { shipping_price: null, shipping_discount: null, shipping_tax: null, shipping_tax_rate_bp: null };
+  const lines = node.shippingLines.edges.map((e) => e.node);
+  const price = lines.reduce((a, l) => a + Number(l.originalPriceSet.shopMoney.amount), 0);
+  const discounted = lines.reduce((a, l) => a + Number(l.discountedPriceSet.shopMoney.amount), 0);
+  const taxLines = lines.flatMap((l) => l.taxLines ?? []);
+  const rates = [...new Set(taxLines.map((t) => Math.round(Number(t.rate) * 10000)))];
+  return {
+    shipping_price: Math.round(price * 100) / 100,
+    shipping_discount: Math.round((price - discounted) * 100) / 100,
+    shipping_tax: Math.round(taxLines.reduce((a, t) => a + Number(t.priceSet.shopMoney.amount), 0) * 100) / 100,
+    shipping_tax_rate_bp: rates.length === 1 ? rates[0] : null, // several different rates on shipping: not collapsed into one
+  };
+}
+
 export function normalizeOrder(node, merchantId, locationId, { customerKeySecret = null } = {}) {
   return {
     merchant_id: merchantId,
@@ -220,6 +239,8 @@ export function normalizeOrder(node, merchantId, locationId, { customerKeySecret
     status: node.displayFinancialStatus,
     taxes_included: node.taxesIncluded,
     is_test: node.test === true,
+    order_name: node.name ?? null,
+    ...normalizeShipping(node),
     ...normalizeOrderChannel(node),
     // Only present when customer keys are enabled: a keyed hash of the customer id (never the id itself).
     ...(customerKeySecret ? { customer_key: pseudonymizeCustomerId(node.customer?.id, customerKeySecret) } : {}),
@@ -265,6 +286,12 @@ export function normalizeRefund(refundNode, orderId, merchantId) {
     source_id: refundNode.id,
     amount: Number(refundNode.totalRefundedSet.shopMoney.amount),
     refunded_at: refundNode.createdAt,
+    ...(refundNode.refundShippingLines
+      ? {
+        shipping_subtotal: Math.round(refundNode.refundShippingLines.edges.reduce((a, e) => a + Number(e.node.subtotalAmountSet.shopMoney.amount), 0) * 100) / 100,
+        shipping_tax: Math.round(refundNode.refundShippingLines.edges.reduce((a, e) => a + Number(e.node.taxAmountSet.shopMoney.amount), 0) * 100) / 100,
+      }
+      : { shipping_subtotal: null, shipping_tax: null }),
     reason: null, // Shopify's refund note field is free text written by staff and may contain
     // customer-identifying context; V1 doesn't need it, so it's never read (see queries.js).
   };

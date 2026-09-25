@@ -30,9 +30,18 @@ export function sixtyDayWindowQuery(now = new Date()) {
 }
 
 /**
+ * Search-string for an explicit start date (YYYY-MM-DD). Going further back than 60 days needs the read_all_orders scope on the
+ * Shopify app; without it Shopify itself refuses older orders. Used by `node src/sync/index.js orders --since=YYYY-MM-DD`.
+ */
+export function sinceQuery(since) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since ?? '') || Number.isNaN(Date.parse(`${since}T00:00:00Z`))) throw new Error('--since must be YYYY-MM-DD');
+  return `created_at:>=${since}`;
+}
+
+/**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
- * @param {{merchantId: string, now?: Date, customerKeySecret?: string|null}} opts  customerKeySecret: when set, orders carry a keyed hash of the customer id
+ * @param {{merchantId: string, now?: Date, since?: string, customerKeySecret?: string|null}} opts  customerKeySecret: when set, orders carry a keyed hash of the customer id
  */
 export async function syncOrders({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
@@ -57,7 +66,7 @@ export async function syncOrders({ shopify, supabase }, opts) {
   });
   const variantIdBySourceId = new Map(localVariants.map((v) => [v.source_id, v.id]));
 
-  const searchQuery = sixtyDayWindowQuery(now);
+  const searchQuery = opts.since ? sinceQuery(opts.since) : sixtyDayWindowQuery(now);
   let cursor = null;
   let hasNextPage = true;
 

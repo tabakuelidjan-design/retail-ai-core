@@ -85,6 +85,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
       edges {
         node {
           id
+          name
           createdAt
           test
           currencyCode
@@ -107,6 +108,15 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
           }
           retailLocation {
             id
+          }
+          shippingLines(first: 10) {
+            edges {
+              node {
+                originalPriceSet { shopMoney { amount } }
+                discountedPriceSet { shopMoney { amount } }
+                taxLines { rate priceSet { shopMoney { amount } } }
+              }
+            }
           }
           lineItems(first: 50) {
             edges {
@@ -146,6 +156,14 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
             totalRefundedSet {
               shopMoney {
                 amount
+              }
+            }
+            refundShippingLines(first: 10) {
+              edges {
+                node {
+                  subtotalAmountSet { shopMoney { amount } }
+                  taxAmountSet { shopMoney { amount } }
+                }
               }
             }
             refundLineItems(first: 50) {
