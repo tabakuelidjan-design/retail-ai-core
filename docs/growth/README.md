@@ -38,12 +38,12 @@ Experiments are not started.
   pack icons, on Overview too.
 - Every Growth icon file is an RGBA PNG with a transparent background (tested); no blend-mode workaround.
 - Generic business concepts (revenue, stock, segments, trophies…) keep the shared official Nordla icons.
+- **Channel logos** — Google Search, Google Business, Instagram, TikTok, Facebook: 128px transparent exports of the v2
+  pack's `channels/`, in `src/growth/ui/assets/channels/`, wired through `CHANNEL_LOGOS` (monograms remain only as a
+  load-failure fallback). The pack notes they are reference renders; swap in each platform's official brand files before
+  a public release if its brand rules require it.
 
 ## Placeholders still present
-**PLACEHOLDER channel logos** — `CHANNEL_LOGOS` (app.js) maps a channel id to a logo file in `src/growth/ui/assets/channels/`
-(served at `/growth-assets/channels/<file>`). All entries are `null`: monograms G, IG, TT, FB, GB are shown. The final
-pack's `channels/` files are not wired: the pack's own README calls them "reference renders" to be replaced by each
-platform's official assets.
 
 **PLACEHOLDER content thumbnails** — neutral swatch + channel mark until the data source provides real thumbnails.
 

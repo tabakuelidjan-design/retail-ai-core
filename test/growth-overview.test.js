@@ -35,7 +35,8 @@ test('growth server: serves the page, its own assets, the shared design system a
     assert.equal((await fetch(`${base}/nope`)).status, 404);
     assert.equal((await fetch(`${base}/api/growth/overview`, { method: 'POST' })).status, 405);
     assert.equal((await fetch(`${base}/nordla-assets/../package.json`)).status, 404);
-    // Channel logo slot: no official file supplied yet -> 404 (UI shows placeholders); traversal impossible.
+    // Channel logos are served; unknown files 404; traversal impossible.
+    assert.equal((await fetch(`${base}/growth-assets/channels/instagram.png`)).status, 200);
     assert.equal((await fetch(`${base}/growth-assets/channels/instagram.svg`)).status, 404);
     assert.equal((await fetch(`${base}/growth-assets/channels/..%2F..%2Fserver%2Fapp.js`)).status, 404);
   });
@@ -69,14 +70,19 @@ test('growth UI: sidebar is Growth\'s own navigation (7 Growth pages + Nordla AI
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
 
-test('growth UI: no TEMP_ICON left (the final Growth pack replaces them); channel logos and thumbnails stay marked as placeholders', async () => {
+test('growth UI: no TEMP_ICON left (the final Growth pack replaces them); channel logos wired; thumbnails still marked as placeholders', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8') + await readFile(new URL('opportunities.js', UI), 'utf8');
   assert.ok(!src.includes('TEMP_ICON'), 'every TEMP_ICON has an official replacement in the final Growth pack');
   assert.ok(!src.includes("NordlaIcon.parle('default'"), 'AI Insights uses its own pack icon, not the Parle à Nordla stand-in');
   assert.match(src, /PLACEHOLDER thumbnail/);
-  assert.match(src, /const CHANNEL_LOGOS = \{[^}]*\}/);
-  assert.ok(!/CHANNEL_LOGOS = \{[^}]*'[a-z-]+\.(svg|png|webp)'/.test(src), 'no logo file is wired until an official asset is supplied');
-  assert.match(src, /CHANNEL_PLACEHOLDER = .*\/\/ PLACEHOLDER/);
+  // Channel logos: every channel of the demo payload has a wired, transparent logo file on disk (monogram = fallback only).
+  const logos = Object.fromEntries([...src.split('const CHANNEL_LOGOS = {')[1].split('};')[0].matchAll(/'?([\w-]+)'?: '([\w-]+\.png)'/g)].map((m) => [m[1], m[2]]));
+  for (const c of buildDemoOverview(new Date('2026-09-26T10:00:00Z')).channels) {
+    assert.ok(logos[c.id], `no logo wired for ${c.id}`);
+    const png = await readFile(new URL(`assets/channels/${logos[c.id]}`, UI));
+    assert.equal(png[25], 6, `${logos[c.id]} must be an RGBA PNG (transparent)`);
+  }
+  assert.match(src, /const CHANNEL_FALLBACK = /);
 });
 
 test('demo overview: figures are internally consistent (no contradictory example numbers)', () => {

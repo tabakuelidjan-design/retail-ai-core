@@ -219,20 +219,19 @@ function attentionCard(d) {
 }
 
 // ---------- Channel performance (Analytics' ex-table) ----------
-// Channel logo slot. CHANNEL_LOGOS maps a channel id to an OFFICIAL platform logo file served from
-// /growth-assets/channels/<file> (src/growth/ui/assets/channels/). None is supplied yet, so every entry is null and a
-// PLACEHOLDER monogram is shown - never a redrawn or look-alike logo, never a downloaded file. To activate one: add
-// the official file to that folder and set its name here (e.g. instagram: 'instagram.svg').
-const CHANNEL_LOGOS = { 'google-search': null, instagram: null, tiktok: null, facebook: null, 'google-business': null };
-const CHANNEL_PLACEHOLDER = { 'google-search': 'G', instagram: 'IG', tiktok: 'TT', facebook: 'FB', 'google-business': 'GB' }; // PLACEHOLDER
-const placeholderMark = (id) => h('span', { class: 'gr-ch gr-ch-placeholder', 'data-channel': id, 'aria-hidden': 'true' }, CHANNEL_PLACEHOLDER[id] || '·');
+// Channel logos: files of the Nordla Growth Icon Pack v2 (channels/), 128px transparent exports in
+// src/growth/ui/assets/channels/, served at /growth-assets/channels/<file>. Never redrawn, never downloaded.
+// CHANNEL_FALLBACK: the monogram shown only for a channel without a logo file or if its file fails to load.
+const CHANNEL_LOGOS = { 'google-search': 'google-search.png', instagram: 'instagram.png', tiktok: 'tiktok.png', facebook: 'facebook.png', 'google-business': 'google-business.png' };
+const CHANNEL_FALLBACK = { 'google-search': 'G', instagram: 'IG', tiktok: 'TT', facebook: 'FB', 'google-business': 'GB' };
+const fallbackMark = (id) => h('span', { class: 'gr-ch gr-ch-fallback', 'data-channel': id, 'aria-hidden': 'true' }, CHANNEL_FALLBACK[id] || '·');
 // Channel display names come from the payload (data.channels), not from the UI.
 const channelName = (id) => ((data && data.channels.find((c) => c.id === id)) || {}).name || id;
 function channelMark(id) {
   const file = CHANNEL_LOGOS[id];
-  if (!file) return placeholderMark(id);
+  if (!file) return fallbackMark(id);
   const img = h('img', { class: 'gr-ch gr-ch-logo', src: `/growth-assets/channels/${file}`, alt: '', 'aria-hidden': 'true' });
-  img.addEventListener('error', () => img.replaceWith(placeholderMark(id)));
+  img.addEventListener('error', () => img.replaceWith(fallbackMark(id)));
   return img;
 }
 function channelCard(d) {

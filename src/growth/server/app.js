@@ -41,8 +41,8 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 };
 
-// Growth's own assets: official Growth icons (src/growth/ui/assets/icons/) and, once supplied, official channel logo
-// files (src/growth/ui/assets/channels/, none yet: the UI shows placeholders). Plain file names only, no traversal.
+// Growth's own assets: Growth icons (src/growth/ui/assets/icons/) and channel logo
+// files (src/growth/ui/assets/channels/). Plain file names only, no traversal.
 const GROWTH_ASSETS = new URL('../ui/assets/', import.meta.url);
 const GROWTH_ASSET = /^\/growth-assets\/(icons|channels)\/([a-z0-9-]+\.(svg|png|webp))$/;
 const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
