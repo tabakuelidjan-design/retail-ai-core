@@ -32,7 +32,8 @@ test('no provider configured: connect refuses, nothing is connected, no account 
     assert.equal((await c.get('/api/treasury')).data.display.bank, null, 'no bank balance is shown without a bank');
     assert.equal((await c.get('/api/bank/transactions')).data.rows.length, 0);
     // a consent request without any connection attempt cannot create anything either
-    assert.ok((await c.post('/api/bank/consent', { code: 'x', state: 'y' })).status >= 400);
+    const fake = await c.post('/api/bank/consent', { code: 'x', state: 'y' });
+    assert.equal(fake.status, 409, 'a consent with no provider is a clean refusal, not a server error'); assert.equal(fake.data.error.code, 'BANK_NOT_CONFIGURED');
     assert.equal((await c.get('/api/bank/status')).data.connected, false);
   } finally { await a.close(); }
 });

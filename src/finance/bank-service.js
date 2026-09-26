@@ -40,7 +40,8 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
     },
     async beginConsent(redirectUri, actor) { merchantOnly(actor); if (!adapter.configured || !adapter.beginConsent) throw new FinanceError('BANK_NOT_CONFIGURED'); return adapter.beginConsent({ redirectUri }); },
     async completeConsent(payload, actor) {
-      merchantOnly(actor); const r = await adapter.completeConsent(payload);
+      merchantOnly(actor); if (!adapter.configured || !adapter.completeConsent) throw new FinanceError('BANK_NOT_CONFIGURED');
+      const r = await adapter.completeConsent(payload);
       await vault.save({ provider: adapter.name, token: r.token, expiresAt: r.expiresAt, accountIds: r.accountIds, scopes: adapter.scopes });
       await audit({ at: clock.now(), action: 'BANK_CONSENT_GRANTED', provider: adapter.name, scopes: adapter.scopes });
       return vault.view();
