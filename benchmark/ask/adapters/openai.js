@@ -4,7 +4,8 @@
 //   - reasoning.effort: none | low | medium | high | xhigh | max (per the model page); reasoning models take no temperature in the Responses API (config.params may still
 //     pass what the API accepts);
 //   - the response carries `output` items; the one of type "function_call" holds `arguments` (a JSON string);
-//   - usage: input_tokens (cached included), output_tokens (reasoning included), input_tokens_details.cached_tokens, output_tokens_details.reasoning_tokens.
+//   - usage: input_tokens (cached and cache-write tokens included), output_tokens (reasoning included), input_tokens_details.cached_tokens and .cache_write_tokens
+//     (cache writes are billed at 1.25x the uncached input rate), output_tokens_details.reasoning_tokens.
 
 import { createAdapter } from './shared/core.js';
 
@@ -30,7 +31,7 @@ const wire = {
     const u = json.usage;
     return {
       call: item ? { name: item.name, args } : null, incomplete: json.status === 'incomplete' && !item, model: json.model ?? null, id: json.id ?? null,
-      usage: u ? { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cached: u.input_tokens_details?.cached_tokens ?? 0, cacheWrite: 0, reasoning: u.output_tokens_details?.reasoning_tokens ?? 0 } : null,
+      usage: u ? { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cached: u.input_tokens_details?.cached_tokens ?? 0, cacheWrite: u.input_tokens_details?.cache_write_tokens ?? 0, reasoning: u.output_tokens_details?.reasoning_tokens ?? 0 } : null,
     };
   },
 };
