@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scrubSecrets } from './secrets.js';
 
 export const BENCHMARK_NAME = 'nordla-ask-benchmark';
 export const BENCHMARK_VERSION = '1.1.0';      // 1.0.0: 30 cases + oracle; 1.1.0: acceptable plans, repetitions, metadata (the 30 questions are unchanged)
@@ -21,7 +22,7 @@ export function redact(value) {
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_KEY.test(k) && (typeof v === 'string' ? v !== '' && !ENV_NAME.test(v) : v !== null && typeof v === 'object') ? '[redacted]' : redact(v)]));   // only strings/objects can be secrets: counts and flags stay
   }
-  return typeof value === 'string' && SECRET_VALUE.test(value) ? '[redacted]' : value;
+  return typeof value === 'string' ? (SECRET_VALUE.test(value) ? '[redacted]' : scrubSecrets(value)) : value;   // key-shaped or masked-key fragments inside any string
 }
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');

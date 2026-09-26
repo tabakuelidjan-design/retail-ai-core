@@ -52,6 +52,9 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
   const errors = []; const models = new Set(); let lastResponseId = null;
   const secretsNow = () => [env[config.apiKeyEnv]];   // read at use time; never kept on the adapter object
 
+  // EVERY request that is really sent counts - successes and failures (401, 400, 429, 5xx, timeouts, network errors) alike - so that this counter agrees with the budget guard,
+  // which counts at the same point. A request refused by the guard (BUDGET_EXCEEDED) was never sent and is not counted.
+  const sendingFetch = async (u, init) => { try { const r = await fetchImpl(u, init); calls.requests += 1; return r; } catch (e) { if (e?.code !== 'BUDGET_EXCEEDED') calls.requests += 1; throw e; } };
   const note = (kind, e) => { errors.push({ kind, code: e.code ?? null, status: e.status ?? null, message: scrub(e.message, secretsNow()).slice(0, 200) }); if (errors.length > 20) errors.shift(); };
   const account = (u) => {
     if (!u) return;
@@ -69,8 +72,8 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
     try {
       for (let attempt = 0; ; attempt += 1) {
         const body = wire.build({ config, system, user, tool, reminder: attempt > 0 ? reminderText(tool.name) : null });
-        const { json, events, attempts } = await postJson({ url, headers: wire.headers(apiKey), body, fetchImpl, timeoutMs, signal, maxRetries, sleep, secrets: [apiKey], provider: providerName }).catch((e) => { for (const ev of e.events ?? []) countEvent(ev); throw e; });
-        calls.requests += attempts; for (const ev of events) countEvent(ev);
+        const { json, events } = await postJson({ url, headers: wire.headers(apiKey), body, fetchImpl: sendingFetch, timeoutMs, signal, maxRetries, sleep, secrets: [apiKey], provider: providerName }).catch((e) => { for (const ev of e.events ?? []) countEvent(ev); throw e; });
+        for (const ev of events) countEvent(ev);
         const r = wire.parse(json); if (r.model) models.add(r.model); lastResponseId = r.id ?? lastResponseId; account(r.usage);
         if (r.incomplete) throw new AdapterError('INCOMPLETE', `${providerName}: the model stopped before finishing (raise maxOutputTokens)`);
         if (r.call && r.call.name === tool.name && r.call.args && typeof r.call.args === 'object' && !Array.isArray(r.call.args)) return r.call.args;   // returned exactly as the model wrote it
@@ -93,7 +96,7 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
         provider: providerName, model: config.model, modelVersion: [...models].length === 1 ? [...models][0] : [...models].join(', ') || null, modelsSeen: [...models], lastResponseId,
         reasoningEffort: config.reasoningEffort, temperature: config.params?.temperature ?? null,
         params: { maxOutputTokens: config.maxOutputTokens ?? null, toolChoice: wire.toolChoiceFor(config), ...(config.params ?? {}) },
-        endpoint: `${base.origin}${wire.path}`, apiKeyEnv: config.apiKeyEnv, timeoutMs, maxRetries, maxFormatRetries, today: config.today, timeZone: ctx.timeZone,
+        endpoint: url /* exactly the URL that is called */, apiKeyEnv: config.apiKeyEnv, timeoutMs, maxRetries, maxFormatRetries, today: config.today, timeZone: ctx.timeZone,
         pricing: config.pricing, promptSha256: promptFingerprint(ctx), systemPromptSha256: sha256(system),
         usageTotals: { ...totals, costUsd: Math.round(totals.costUsd * 1e8) / 1e8 }, callCounts: { ...calls }, recentErrors: errors,
       });

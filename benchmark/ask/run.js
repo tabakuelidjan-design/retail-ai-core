@@ -26,6 +26,7 @@ import { collectMetadata } from './lib/meta.js';
 import { summarizeRuns } from './lib/score.js';
 import { validateCases } from './lib/validate-cases.js';
 import { createBenchmarkTools } from './lib/dataset.js';
+import { findKeyFragments } from './lib/secrets.js';
 import { verifyTruth } from './lib/truth.js';
 
 const args = process.argv.slice(2);
@@ -78,6 +79,10 @@ const stopped = aborted || (budget?.isExceeded() ?? false);   // a refused reque
 const runExtra = { smoke, budget: budget?.snapshot() ?? null, aborted: stopped };
 const meta = collectMetadata({ provider, config, adapterFile, repeatMetadata, runExtra, repeats, only, timeoutMs: Number(opt('timeout-ms') ?? 60_000), startedAt, finishedAt, casesFile, datasetFile, referenceDate: '2026-09-26' });
 const report = { meta, ...summarizeRuns(runs, { provider: provider.name, truthChecked: truth.checked }) };
+// Last line of defence: a report is never written if it still holds any exploitable piece of the API key (whole, prefix, suffix, masked echo).
+const secretText = JSON.stringify(report); const liveKey = !isOracle && config.apiKeyEnv ? process.env[config.apiKeyEnv] : null;
+const leaks = findKeyFragments(secretText, liveKey);
+if (leaks.length) fail(`REPORT WITHHELD: it would contain ${leaks.join(', ')} of the API key. Nothing was written. (Please report this: the redaction missed something.)`, 5);
 const out = opt('out') ?? path.join(dirPath, 'results', `${startedAt.toISOString().replace(/[:.]/g, '-')}-${provider.name.replace(/[^a-z0-9]+/gi, '_')}${smoke ? '-smoke' : ''}.json`);
 mkdirSync(path.dirname(out), { recursive: true }); writeFileSync(out, JSON.stringify(report, null, 2));
 

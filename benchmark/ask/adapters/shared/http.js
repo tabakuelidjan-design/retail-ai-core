@@ -1,17 +1,15 @@
 // The only place an adapter talks to the network, through an INJECTED `fetchImpl` (tests pass a mock; nothing here reaches a real server unless the runner was
 // explicitly opted in). Timeouts, rate limits and provider errors become typed AdapterErrors; secrets are scrubbed from everything that can be logged.
 
+import { scrubSecrets } from '../../lib/secrets.js';
+
 export class AdapterError extends Error {
   /** @param {'PROVIDER_TIMEOUT'|'RATE_LIMIT'|'HTTP_ERROR'|'NETWORK'|'INVALID_RESPONSE'|'INCOMPLETE'|'MISSING_API_KEY'|'BAD_CONFIG'} code */
   constructor(code, message, extra = {}) { super(message); this.name = 'AdapterError'; this.code = code; Object.assign(this, extra); }
 }
 
-/** Replace every occurrence of a secret (and Authorization / x-api-key style header echoes) in a text. */
-export function scrub(text, secrets = []) {
-  let out = String(text ?? '');
-  for (const s of secrets) if (s && s.length >= 6) out = out.split(s).join('[redacted]');
-  return out.replace(/(authorization|x-api-key|api[_-]?key)["']?\s*[:=]\s*["']?(?:Bearer\s+)?[^\s"',}]+/gi, '$1: [redacted]').replace(/Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g, 'Bearer [redacted]');
-}
+/** Removes a key whole or in part (see lib/secrets.js): exact value, long prefixes/suffixes, masked echoes such as "Incorrect API key provided: sk-...****abcd", key-shaped tokens. */
+export const scrub = scrubSecrets;
 
 export const RETRYABLE = new Set([429, 500, 502, 503, 504, 529]);
 const MAX_WAIT_MS = 30_000;
