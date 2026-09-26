@@ -1502,3 +1502,24 @@ body:has(.modal-back) .contact-support { display: none; }
 .drawer-body .doc-intel-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; min-width: 0; } .drawer-body .doc-intel-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .drawer-body .doc-intel-actions { display: flex; gap: 6px; flex-wrap: wrap; } .drawer-body .doc-intel-actions button { white-space: normal; padding: 6px 10px; font-size: 13px; }
 .drawer-body .doc-intel-dup { border-top: 1px dashed var(--line); padding-top: 6px; display: grid; gap: 4px; min-width: 0; overflow-wrap: break-word; } .drawer-body table.mini.doc-diff { table-layout: fixed; } .drawer-body table.mini.doc-diff th, .drawer-body table.mini.doc-diff td { white-space: normal; text-align: left; overflow-wrap: break-word; } .drawer-body table.mini.doc-diff th:first-child, .drawer-body table.mini.doc-diff td:first-child { width: 34%; }
+
+/* Phone bottom bar (<=640px): the 4 primary items + "Plus" share the full width in equal parts instead of keeping the
+   84px desktop rail width, so "Plus" never leaves the screen on narrow viewports (Samsung display zoom / Android text
+   size shrink the CSS viewport to ~320-360px). The bar grows in height if larger text needs a second label line. */
+@media (max-width: 640px) {
+  .rail { height: auto; min-height: 68px; gap: 2px; padding: 0 4px env(safe-area-inset-bottom, 0px); align-items: stretch; }
+  .rail-nav { flex: 4 1 0; min-width: 0; overflow: visible; gap: 2px; justify-content: stretch; align-items: stretch; }
+  .rail-nav .railitem, .rail .rail-more { flex: 1 1 0; width: auto; min-width: 0; height: auto; min-height: 56px; padding: 6px 2px; align-self: center; }
+  .railitem .rlabel { max-width: 100%; text-align: center; white-space: normal; }
+  /* Settings > Peppol status chips: wrap instead of widening the page (a wider page drags the fixed bar off-screen). */
+  .chips { flex-wrap: wrap; }
+  /* Long nowrap button labels (To do > recommended action, Settings > stock) may wrap on phones instead of widening the page. */
+  .todo-workspace .btn, .actions > button, .todo-workspace .acta { white-space: normal; text-align: center; }
+  .todo-workspace > * { min-width: 0; }
+  /* Top bar (language switch + account): wraps on very narrow / zoomed screens instead of widening every page. */
+  .tb-right { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; min-width: 0; }
+  /* Same rule for three page-level rows found at 275px (412px phone at 150% zoom): Home period selects, Pack custom-range link, Settings connection chips. */
+  .section-head { flex-wrap: wrap; } .section-head select.tool { max-width: 100%; min-width: 0; }
+  .pk-card .linkbtn { white-space: normal; text-align: left; }
+  .conn { flex-wrap: wrap; }
+}
