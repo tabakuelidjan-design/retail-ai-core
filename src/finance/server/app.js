@@ -1181,7 +1181,7 @@ export function createFinanceApp(deps) {
   function errorResponse(res, e) {
     if (e instanceof HttpError) return json(res, e.status, { error: { code: e.code, ...(e.extra ?? {}) } });
     if (e instanceof FinanceError) {
-      const status = NOT_FOUND_CODES.includes(e.code) ? 404 : UNPROCESSABLE.includes(e.code) ? 422 : 409;
+      const status = NOT_FOUND_CODES.includes(e.code) ? 404 : UNPROCESSABLE.includes(e.code) ? 422 : e.code === 'BANK_IMPORT_FAILED_NOTHING_SAVED' ? 503 : 409;
       return json(res, status, { error: { code: e.code, message: e.detail ?? null } });
     }
     console.error('finance dashboard internal error:', e?.message);

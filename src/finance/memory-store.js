@@ -74,6 +74,20 @@ export function createMemoryStore() {
       if (dup) return { created: false, row: clone(dup) };
       const t = { id: randomUUID(), ...clone(row) }; bankTx.push(t); return { created: true, row: clone(t) };
     },
+    /**
+     * ATOMIC batch: every row is validated and de-duplicated first (against the stored transactions and inside the batch); the rows are then added in one
+     * step. Any problem throws BEFORE anything is stored, so a batch is saved completely or not at all. Returns { created, duplicates }.
+     */
+    async insertBankTransactionsBatch(rows) {
+      const fresh = []; const seen = new Set(bankTx.map((t) => `${t.merchantId}|${t.accountId}|${t.providerTxId}`));
+      for (const row of rows) {
+        if (!Number.isInteger(row.amountCents) || !row.date || !row.providerTxId) throw new FinanceError('BANK_TRANSACTION_INVALID', String(row.providerTxId ?? ''));
+        const k = `${row.merchantId}|${row.accountId}|${row.providerTxId}`; if (seen.has(k)) continue; seen.add(k);
+        fresh.push({ id: randomUUID(), ...clone(row) });
+      }
+      bankTx.push(...fresh);
+      return { created: fresh.length, duplicates: rows.length - fresh.length };
+    },
     async getBankTransaction(id) { const t = bankTx.find((x) => x.id === id); return t ? clone(t) : null; },
     async updateBankTransaction(id, patch, expectedStatus) {
       const t = bankTx.find((x) => x.id === id); if (!t || t.status !== expectedStatus) return null;

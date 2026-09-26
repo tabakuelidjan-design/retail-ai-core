@@ -30,7 +30,11 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
   const toPayable = (r, cur) => ({ itemId: r.id, invoiceNumber: r.invoiceNumber, supplierName: r.supplierName, grossCents: eurOfSupplier(r, cur), paymentReference: r.paymentReference, dueDate: r.dueDate, status: r.status });
   // EUR-only: a foreign-currency payable never enters matching or the projection (unless the merchant typed its EUR amount)
   const payables = async (cur = 'EUR') => (await payablesAll()).map((r) => toPayable(r, cur)).filter((p) => p.grossCents !== null);
-  const store1 = async (accountId, list, source) => { let created = 0; for (const t of list) { const r = await store.insertBankTransaction({ merchantId, accountId, providerTxId: String(t.id), date: t.date, amountCents: t.amountCents, currency: t.currency ?? 'EUR', counterpartyName: t.counterpartyName ?? null, reference: t.reference ?? null, structuredReference: t.structuredReference ?? null, source, status: 'NEW', importedAt: clock.now() }); if (r.created) created += 1; } return created; };
+  // All rows of a list are stored in ONE atomic batch: completely or not at all (never a partial import).
+  const store1 = async (accountId, list, source) => {
+    const rows = list.map((t) => ({ merchantId, accountId, providerTxId: String(t.id), date: t.date, amountCents: t.amountCents, currency: t.currency ?? 'EUR', counterpartyName: t.counterpartyName ?? null, reference: t.reference ?? null, structuredReference: t.structuredReference ?? null, source, status: 'NEW', importedAt: clock.now() }));
+    return store.insertBankTransactionsBatch(rows);
+  };
 
   return {
     async status() {
@@ -55,7 +59,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
         for (const a of await adapter.accounts(token)) {
           const b = await adapter.balances(token, a.id); balances.push({ accountId: a.id, balanceCents: b.balanceCents, asOf: b.asOf });
           await store.upsertBankBalance({ merchantId, accountId: a.id, iban: a.iban ?? null, balanceCents: b.balanceCents, currency: b.currency ?? 'EUR', asOf: b.asOf });
-          created += await store1(a.id, await adapter.transactions(token, a.id, { from: start, to: end }), 'bank');
+          created += (await store1(a.id, await adapter.transactions(token, a.id, { from: start, to: end }), 'bank')).created;
         }
         return { created, accounts: balances.length };
       });
@@ -79,9 +83,14 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
     async importCsv(text) {
       const { rows, errors } = parseBankCsv(text);
       if (errors.length) throw new FinanceError('BANK_CSV_ROWS_INVALID', errors.map((e) => `${e.line}:${e.reason}`).join(',').slice(0, 500));
-      const created = await store1(CSV_ACCOUNT, rows, 'csv');
-      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created, duplicates: rows.length - created });
-      return { created, duplicates: rows.length - created, rejected: [] };
+      let r;
+      try { r = await store1(CSV_ACCOUNT, rows, 'csv'); } catch (e) {
+        // The batch is atomic: nothing of this statement was stored. Say so, keep the technical detail out of the answer, and let the merchant retry.
+        try { await audit({ at: clock.now(), action: 'BANK_CSV_IMPORT_FAILED', rows: rows.length }); } catch { /* auditing must not hide the failure */ }
+        throw new FinanceError('BANK_IMPORT_FAILED_NOTHING_SAVED');
+      }
+      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates: r.duplicates });
+      return { created: r.created, duplicates: r.duplicates, rejected: [] };
     },
     async transactions(f = {}) { return (await store.listBankTransactions({ merchantId, ...f })).sort((a, b) => String(b.date).localeCompare(String(a.date))); },
     async suggestions() {

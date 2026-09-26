@@ -180,6 +180,12 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
         const [ex] = await supabase.select('fin_bank_transactions', { select: '*', merchant_id: eq(merchantId), account_id: eq(t.accountId), provider_tx_id: eq(t.providerTxId) }); return { created: false, row: bankTxFromRow(ex) };
       }
     },
+    /** ATOMIC batch: a single INSERT ... ON CONFLICT DO NOTHING statement (one request, one database transaction). Returns { created, duplicates }. */
+    async insertBankTransactionsBatch(rows) {
+      if (!rows.length) return { created: 0, duplicates: 0 };
+      const inserted = await guard(() => supabase.insertIgnoringDuplicates('fin_bank_transactions', rows.map(bankTxToRow), { onConflict: 'merchant_id,account_id,provider_tx_id' }));
+      return { created: inserted.length, duplicates: rows.length - inserted.length };
+    },
     async getBankTransaction(id) { const [r] = await supabase.select('fin_bank_transactions', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? bankTxFromRow(r) : null; },
     async updateBankTransaction(id, patch, expectedStatus) {
       const map = { status: 'status', matchedKind: 'matched_kind', matchedDocumentId: 'matched_document_id', matchedPaymentId: 'matched_payment_id', matchedAmountCents: 'matched_amount_cents', matchedAt: 'matched_at' };

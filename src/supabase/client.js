@@ -50,6 +50,19 @@ export function createSupabaseClient(config) {
       });
     },
 
+    /**
+     * ONE INSERT statement for the whole batch (a single HTTP request = a single database transaction: all rows or none), rows that already exist
+     * (same `onConflict` key) are skipped, and only the rows really inserted are returned.
+     */
+    async insertIgnoringDuplicates(table, rows, { onConflict }) {
+      if (rows.length === 0) return [];
+      return request(`/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify(rows),
+      });
+    },
+
     /** Plain insert, never merges - used for append-only tables like inventory_snapshots. */
     async insert(table, rows) {
       if (rows.length === 0) return [];
