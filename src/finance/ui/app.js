@@ -1163,6 +1163,8 @@ function companyModal(existing, ctx) {
       email: existing.email || '', phone: existing.phone || '', iban: existing.iban || '', notes: existing.notes || '', role: roleOf(eff || existing.declaredRoles || {}),
       csource: existing.source || 'manual', cverified: !!existing.verifiedAt, dirty: false, companyId: existing.id }
     : { kind: 'business', name: '', firstName: '', vatNumber: '', enterpriseNumber: '', street: '', postalCode: '', city: '', countryCode: 'BE', email: '', phone: '', iban: '', notes: '', role: '', csource: 'manual', cverified: false, dirty: false, companyId: null };
+  // Create from a purchase document: prefilled with what the document carries (never saved without the person's click).
+  if (!existing && ctx && ctx.prefill) { for (const k of ['kind', 'name', 'vatNumber', 'enterpriseNumber', 'iban', 'street', 'postalCode', 'city', 'countryCode', 'role']) if (ctx.prefill[k]) m[k] = ctx.prefill[k]; m.csource = 'document'; }
   const err = h('div', { role: 'alert' }); const box = h('div'); const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
   let bk = null; let confirmDuplicate = false;
   const inp = (k, label, ph, opts = {}) => h('div', { class: `field ${opts.cls || ''}` }, h('label', null, label, opts.required ? h('span', { class: 'req', 'aria-hidden': 'true' }, ' *') : null),
@@ -1222,6 +1224,7 @@ function companyModal(existing, ctx) {
     try {
       const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body);
       bk.remove(); toast(tt('Contact saved'), 'ok');
+      if (ctx && ctx.onSaved) { await ctx.onSaved(r); return; } // e.g. created from a purchase document: link it there, stay on the document
       const target = `#/contacts?open=${r.id}`;
       if (location.hash === target) route(); else location.hash = target; // the list reloads and the new / edited contact opens
     } catch (e) {

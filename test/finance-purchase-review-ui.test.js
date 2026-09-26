@@ -44,11 +44,14 @@ function loadUi(apiImpl) {
   const appSrc = src('app.js'); const start = appSrc.indexOf('function h(tag, attrs, ...kids) {'); const close = /\r?\n\}\r?\n/.exec(appSrc.slice(start)); assert.ok(start >= 0 && close, 'h() found in app.js'); const end = start + close.index + close[0].length;
   // eslint-disable-next-line no-new-func
   g.h = new Function(`${appSrc.slice(start, end)}\nreturn h;`)();
+  const mountLine = /^const mount = .*$/m.exec(appSrc); assert.ok(mountLine, 'mount() found in app.js');
+  // eslint-disable-next-line no-new-func
+  g.mount = new Function(`${mountLine[0]}\nreturn mount;`)();
   // eslint-disable-next-line no-new-func
   new Function(src('views-pack.js'))(); // defines window.captureInfoNode / window.attachButton (the real ones)
   // eslint-disable-next-line no-new-func
   const ws = new Function(`${src('views-workspace.js')}\nreturn { renderInboxDetail, PURCHASE_TABS };`)();
-  return { ...ws, restore: () => { for (const [k, v] of Object.entries(saved)) g[k] = v; delete g.h; delete g.captureInfoNode; delete g.attachButton; } };
+  return { ...ws, restore: () => { for (const [k, v] of Object.entries(saved)) g[k] = v; delete g.h; delete g.mount; delete g.captureInfoNode; delete g.attachButton; } };
 }
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -134,4 +137,32 @@ test('Achats: the views are reachable by URL and translated', () => {
   assert.match(ws, /rows = r\.rows\.filter\(view\.keep\);/);
   const fr = src('lang-fr.js'); assert.match(fr, /"Validated documents": "Validées"/); assert.match(fr, /'Credit notes': 'Avoirs'|"Credit notes": "Avoirs"/);
   assert.match(src('lang-nl.js'), /"Validated documents": "Gevalideerd"/);
+});
+
+test('review pane (phase 2): the Supplier and Duplicates blocks show recognised / to confirm / unknown and none / possible, with only explicit actions', async () => {
+  const a = await startApp(); const c = await a.authed(); let ui;
+  try {
+    const contact = (await c.post('/api/companies', { kind: 'business', name: 'Fournisseur UI SRL', vatNumber: 'BE0000000097', roles: { customer: false, supplier: true }, address: { countryCode: 'BE' } })).data;
+    const man = async (o) => (await c.post('/api/inbox/manual', { issueDate: '2026-09-01', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR', ...o })).data.id;
+    const recognised = await man({ supplierName: 'Fournisseur UI SRL', supplierVatNumber: 'BE0000000097', invoiceNumber: 'R-1' });
+    const byName = await man({ supplierName: 'fournisseur ui srl', invoiceNumber: 'N-1', issueDate: '2026-08-01', gross: '99.00', net: '99.00', vat: '0.00' });
+    const unknown = await man({ supplierName: 'Nouveau Fournisseur SA', invoiceNumber: 'U-1' });
+    const possible = await man({ supplierName: 'Fournisseur UI SRL', supplierVatNumber: 'BE0000000097', invoiceNumber: 'R-2', issueDate: '2026-09-03' });
+    const items = new Map(); for (const id of [recognised, byName, unknown, possible]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
+    ui = loadUi(async (m, path) => { const it = items.get(path.split('/')[3]); if (it) return it; throw new Error(`unexpected ${m} ${path}`); });
+    const blocks = async (id) => { const r = await render(ui, id); const one = (cls) => byClass(r.body, cls)[0];
+      const text = (el) => (el ? el.textContent : null); const btns = (el) => (el ? byTag(el, 'button').map((b) => b.textContent) : []);
+      return { supplier: text(one('doc-supplier')), supplierButtons: btns(one('doc-supplier')), dups: text(one('doc-dups')), dupButtons: btns(one('doc-dups')), linked: items.get(id).supplierCompanyId }; };
+    let b = await blocks(recognised);
+    assert.match(b.supplier, /Supplier recognised/); assert.match(b.supplier, /Fournisseur UI SRL/); assert.match(b.supplier, /Same VAT number · 99 %/);
+    assert.deepEqual(b.supplierButtons, ['Confirm', 'Choose another contact']); assert.equal(b.linked, null, 'shown, never linked by itself');
+    assert.match(b.dups, /Possible duplicate/, 'R-1 and R-2: same supplier, same total, 2 days apart');
+    b = await blocks(byName); assert.match(b.supplier, /To confirm/); assert.match(b.supplier, /Same name · 80 %/); assert.match(b.dups, /None/); assert.deepEqual(b.dupButtons, []);
+    b = await blocks(unknown); assert.match(b.supplier, /Unknown supplier/); assert.deepEqual(b.supplierButtons, ['Create this supplier', 'Choose another contact', 'Not now']);
+    b = await blocks(possible);
+    assert.match(b.dups, /Possible duplicate/); assert.match(b.dups, /R-1/); assert.match(b.dups, /same supplier · same type · same total incl\. VAT · close date · different number/);
+    assert.match(b.dups, /Invoice numberR-2R-1/, 'the differences are listed: this document vs the other');
+    assert.deepEqual(b.dupButtons, ['Open the other document', 'Not a duplicate', 'It is a duplicate: reject this document']);
+    assert.equal(contact.id.length > 0, true);
+  } finally { ui?.restore(); await a.close(); }
 });

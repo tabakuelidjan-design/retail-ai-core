@@ -52,6 +52,68 @@ const CHECK_TEXT = { TOTALS_DO_NOT_ADD_UP: 'The extracted totals do not add up: 
   LINES_DO_NOT_ADD_UP: 'The invoice lines do not add up to the lines total.', PAYABLE_DIFFERS_FROM_TOTAL: 'The amount to pay differs from the total incl. VAT (prepayment or rounding).',
   CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.' };
 const checkText = (c) => tt(CHECK_TEXT[c] || INBOX_ERR[c] || c);
+
+// ---------- phase 2: supplier recognition and duplicates, two discreet blocks of the review pane ----------
+// Nothing is linked or created without a click: "Confirm", "Choose another contact", "Create this supplier" (the contact form,
+// prefilled with what the document carries, Supplier role), "Not now". Duplicates are shown as certain or possible, never decided.
+const MATCH_METHOD = { VAT: 'Same VAT number', ENTERPRISE_NUMBER: 'Same enterprise number', NAME: 'Same name', LINKED: 'Linked' };
+const MATCH_SIGNAL = { ADDRESS_MATCHES: 'same address', ADDRESS_DIFFERS: 'different address' };
+const DUP_REASON = { SAME_FILE: 'same file', SAME_SUPPLIER: 'same supplier', SAME_NUMBER: 'same number', SAME_TYPE: 'same type', SAME_TOTAL: 'same total incl. VAT', SAME_DATE: 'same date', CLOSE_DATE: 'close date', NUMBER_MISSING: 'number missing', NUMBER_DIFFERENT: 'different number' };
+const DIFF_LABEL = { invoiceNumber: 'Invoice number', issueDate: 'Invoice date', dueDate: 'Due date', netCents: 'Excl. VAT', vatCents: 'VAT', grossCents: 'Incl. VAT', currency: 'Currency', supplierVatNumber: 'Supplier VAT number', fileName: 'File', source: 'Source', status: 'Status' };
+const intelHead = (title, cls, label) => h('div', { class: 'doc-intel-h' }, h('strong', null, tt(title)), h('span', { class: `chip ${cls}` }, tt(label)));
+function supplierBlock(it, reload, err, focusSearch) {
+  const sm = it.supplierMatch; if (!sm) return null;
+  const box = h('div', { class: 'doc-intel doc-supplier' });
+  const why = (c) => [tt(MATCH_METHOD[c.method] || c.method), ...(c.signals || []).map((s) => tt(MATCH_SIGNAL[s] || s)), `${Math.round(c.confidence * 100)} %`].join(' · ');
+  const link = (contactId, created) => async () => { try { await api('POST', `/api/inbox/${it.id}/contact`, { contactId, created: !!created }); toast(tt('Contact linked'), 'ok'); reload(); } catch (e) { fail(e, err); } };
+  const other = h('button', { type: 'button', on: { click: () => focusSearch() } }, tt('Choose another contact'));
+  if (sm.status === 'linked') { box.appendChild(intelHead('Supplier', 'ok', 'Linked')); if (sm.candidates[0]) box.appendChild(h('div', { class: 'small' }, sm.candidates[0].displayName)); return box; }
+  if (sm.proposal) {
+    const c = sm.proposal;
+    box.appendChild(intelHead('Supplier', sm.status === 'recognized' ? 'ok' : 'warn', sm.status === 'recognized' ? 'Supplier recognised' : 'To confirm'));
+    box.appendChild(h('div', { class: 'doc-intel-row' }, h('span', null, h('b', null, c.displayName), h('span', { class: 'muted small' }, ` ${why(c)}`)),
+      h('span', { class: 'doc-intel-actions' }, h('button', { type: 'button', class: 'primary', on: { click: link(c.contactId) } }, tt('Confirm')), other)));
+    return box;
+  }
+  if (sm.status === 'to_confirm') {
+    box.appendChild(intelHead('Supplier', 'warn', 'To confirm'));
+    box.appendChild(h('div', { class: 'muted small' }, tt('Several contacts match: choose the right one.')));
+    sm.candidates.forEach((c) => box.appendChild(h('div', { class: 'doc-intel-row' }, h('span', null, h('b', null, c.displayName), h('span', { class: 'muted small' }, ` ${why(c)}`)),
+      h('span', { class: 'doc-intel-actions' }, h('button', { type: 'button', on: { click: link(c.contactId) } }, tt('Choose'))))));
+    return box;
+  }
+  box.appendChild(intelHead('Supplier', 'mute', 'Unknown supplier'));
+  const declined = (sm.decisions || []).some((d) => d.action === 'DECLINED_CREATE');
+  box.appendChild(h('div', { class: 'muted small' }, tt(declined ? 'No contact matches this supplier. Creation was declined for now.' : 'No contact matches this supplier.')));
+  const acts = h('div', { class: 'doc-intel-actions' });
+  if (sm.createPrefill) acts.appendChild(h('button', { type: 'button', class: 'primary', on: { click: () => companyModal(null, { prefill: sm.createPrefill, onSaved: async (c) => link(c.id, true)() }) } }, tt('Create this supplier')));
+  acts.appendChild(other);
+  if (sm.createPrefill && !declined) acts.appendChild(h('button', { type: 'button', on: { click: async () => { try { await api('POST', `/api/inbox/${it.id}/supplier-decision`, { action: 'decline_create' }); reload(); } catch (e) { fail(e, err); } } } }, tt('Not now')));
+  box.appendChild(acts);
+  return box;
+}
+function duplicatesBlock(it, reload, err) {
+  const d = it.duplicates; if (!d) return null;
+  const box = h('div', { class: 'doc-intel doc-dups' });
+  const live = d.items.filter((i) => !i.dismissed); const setAside = d.items.length - live.length;
+  box.appendChild(intelHead('Duplicates', d.level === 'certain' ? 'bad' : d.level === 'possible' ? 'warn' : 'mute', d.level === 'certain' ? 'Certain duplicate' : d.level === 'possible' ? 'Possible duplicate' : 'None'));
+  if (setAside) box.appendChild(h('div', { class: 'muted small' }, tt('{0} possible duplicate(s) set aside by you.', setAside)));
+  const val = (k, v, cur) => (v == null || v === '' ? '—' : /Cents$/.test(k) ? fmtMoney(v, cur) : k === 'status' ? tt(INBOX_STATUS[v] || v) : k === 'source' ? tt(SOURCE_BADGE[v] || v) : String(v));
+  const decide = (otherId, decision) => async () => { try { await api('POST', `/api/inbox/${it.id}/duplicate-decision`, { otherId, decision }); toast(tt('Saved'), 'ok'); reload(); } catch (e) { fail(e, err); } };
+  live.forEach((i) => {
+    const o = i.document || {};
+    const row = h('div', { class: 'doc-intel-dup' },
+      h('div', null, h('b', null, o.supplierName || o.fileName || '—'), h('span', { class: 'muted small' }, ` ${[o.invoiceNumber || tt('no number'), o.issueDate, o.grossCents != null ? fmtMoney(o.grossCents, o.currency) : null].filter(Boolean).join(' · ')} `), inboxBadge(o.status)),
+      h('div', { class: 'muted small' }, i.reasons.map((r) => tt(DUP_REASON[r] || r)).join(' · ')));
+    if (i.level === 'possible' && i.differences && i.differences.length) row.appendChild(h('table', { class: 'mini doc-diff' }, h('thead', null, h('tr', null, h('th', null, tt('Field')), h('th', null, tt('This document')), h('th', null, tt('Other document')))),
+      h('tbody', null, i.differences.map((x) => h('tr', null, h('td', null, tt(DIFF_LABEL[x.field] || x.field)), h('td', null, val(x.field, x.thisValue, it.currency)), h('td', null, val(x.field, x.otherValue, o.currency)))))));
+    const acts = h('div', { class: 'doc-intel-actions' }, h('button', { type: 'button', on: { click: () => openInboxItem(i.id, reload) } }, tt('Open the other document')));
+    if (i.level === 'possible') acts.appendChild(h('button', { type: 'button', on: { click: decide(i.id, 'not_duplicate') } }, tt('Not a duplicate')));
+    if (['RECEIVED', 'TO_REVIEW', 'VALIDATED'].includes(it.status)) acts.appendChild(h('button', { type: 'button', class: 'danger', on: { click: decide(i.id, 'duplicate') } }, tt('It is a duplicate: reject this document')));
+    row.appendChild(acts); box.appendChild(row);
+  });
+  return box;
+}
 /** Integer cents -> text in the UI language, by string composition only (no arithmetic on money). */
 /** Client-side CSV export of rows already visible on screen - real data already fetched for the table, no
  * server round trip, no fabricated column. RFC 4180-ish: only the two characters that actually need
@@ -94,6 +156,8 @@ function renderInboxDetail(host, id, opts = {}) {
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
     if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, checkText(w)))));
     if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
+    let focusContactSearch = () => {};
+    mount(body, supplierBlock(it, () => { draw(); onChange(); }, err, () => focusContactSearch())); mount(body, duplicatesBlock(it, () => { draw(); onChange(); }, err));
     if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `/api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
     else if (it.status !== 'REJECTED') body.appendChild(h('div', { style: 'margin:8px 0' }, attachButton(id, () => { draw(); onChange(); })));
     const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
@@ -123,6 +187,7 @@ function renderInboxDetail(host, id, opts = {}) {
         contactBox.appendChild(h('div', { class: 'row r2', style: 'align-items:center' }, h('strong', null, name), h('button', { type: 'button', on: { click: async () => { try { await api('POST', `/api/inbox/${id}/contact`, { contactId: null }); toast(tt('Contact unlinked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Unlink'))));
       } else {
         const q = h('input', { placeholder: tr('Search contacts by name or VAT...') });
+        focusContactSearch = () => { if (q.scrollIntoView) q.scrollIntoView({ block: 'center' }); if (q.focus) q.focus(); };
         const results = h('div');
         let timer = null;
         q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(async () => {
@@ -411,7 +476,14 @@ function importDocumentsModal(done) {
   const toB64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); });
   async function send(files) {
     for (const file of files) {
-      try { const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); status.appendChild(h('div', null, r.duplicate ? tt('{0} was already received', file.name) : tt('{0} received', file.name))); } catch (e) { status.appendChild(h('div', { class: 'bad' }, `${file.name}: ${e.message || e}`)); }
+      const openExisting = (existingId) => h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(existingId, done) } }, tt('Open the existing document'));
+      try {
+        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) });
+        status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : tt('{0} received', file.name), r.duplicate ? [' ', openExisting(r.item.id)] : null));
+      } catch (e) {
+        if (e.code === 'DUPLICATE_SUPPLIER_INVOICE' && e.extra && e.extra.existing) status.appendChild(h('div', { class: 'bad' }, tt('{0}: this document already exists (same supplier, number and type: {1}).', file.name, e.extra.existing.invoiceNumber || '—'), ' ', openExisting(e.extra.existing.id)));
+        else status.appendChild(h('div', { class: 'bad' }, `${file.name}: ${e.message || e}`));
+      }
     }
     done();
   }

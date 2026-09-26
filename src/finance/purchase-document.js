@@ -123,6 +123,14 @@ export function extractUbl(data) {
       : pid ? [pid, 'AccountingSupplierParty/Party/PartyIdentification/ID', 0.95] : null;
   if (ent) { const raw = txt(ent[0]); const n = normalizeBelgianNumber(raw); put('supplierEnterpriseNumber', n.ok ? n.enterpriseNumber : raw, ent[1], n.ok ? ent[2] : 0.4); }
 
+  // postal address (kept as read: a secondary matching signal and a prefill for "create this supplier"; not stored as a column)
+  const pa = kid(party, 'PostalAddress');
+  if (pa) {
+    const street = [txt(kid(pa, 'StreetName')), txt(kid(pa, 'AdditionalStreetName'))].filter(Boolean).join(', ') || null;
+    const addr = { street, postalCode: txt(kid(pa, 'PostalZone')), city: txt(kid(pa, 'CityName')), countryCode: compact(txt(at(pa, 'Country/IdentificationCode'))) };
+    if (Object.values(addr).some(Boolean)) put('supplierAddress', addr, 'AccountingSupplierParty/Party/PostalAddress', 0.95);
+  }
+
   // payment
   const means = kids(doc, 'PaymentMeans');
   const pm = means.find((m) => kid(m, 'PayeeFinancialAccount')) ?? means[0];

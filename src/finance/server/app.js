@@ -52,8 +52,8 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
-const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
+const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -901,7 +901,18 @@ export function createFinanceApp(deps) {
     send(ctx.res, 200, f.data, { 'Content-Type': f.contentType, 'Content-Disposition': `inline; filename="${String(f.fileName).replace(/"/g, '')}"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
   });
   on('POST', '/api/inbox/manual', async (ctx) => { const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors); json(ctx.res, 201, itemView(await inboxFor().createManual(out, actor))); });
-  on('GET', `/api/inbox/${P}`, async (ctx) => json(ctx.res, 200, itemView(await inboxFor().get(idParam(ctx.m[1])))));
+  // One document for the review screen, with the live supplier proposal and duplicates (phase 2: nothing is linked or created here).
+  on('GET', `/api/inbox/${P}`, async (ctx) => { const inbox = inboxFor(); const id = idParam(ctx.m[1]); const item = itemView(await inbox.get(id)); json(ctx.res, 200, { ...item, ...(await inbox.intelligence(id)) }); });
+  // The person declined to create the proposed supplier: recorded; no contact is created.
+  on('POST', `/api/inbox/${P}/supplier-decision`, async (ctx) => {
+    if (ctx.body?.action !== 'decline_create') fields([{ field: 'action', code: 'INVALID' }]);
+    json(ctx.res, 200, itemView(await inboxFor().declineSupplierCreation(idParam(ctx.m[1]), actor)));
+  });
+  // The person's decision on a duplicate: 'not_duplicate' (possible duplicates only) or 'duplicate' (this document is rejected).
+  on('POST', `/api/inbox/${P}/duplicate-decision`, async (ctx) => {
+    const otherId = idParam(String(ctx.body?.otherId ?? '')); const decision = String(ctx.body?.decision ?? '');
+    json(ctx.res, 200, itemView(await inboxFor().decideDuplicate(idParam(ctx.m[1]), otherId, decision, actor)));
+  });
   on('PUT', `/api/inbox/${P}`, async (ctx) => {
     const { out, errors } = inboxInput(ctx.body); if (errors.length) fields(errors);
     const meta = ctx.body?.capture ? captureMetaInput(ctx.body.capture) : null; const svc = inboxFor(); const id = idParam(ctx.m[1]);
@@ -926,7 +937,7 @@ export function createFinanceApp(deps) {
     const raw = ctx.body?.contactId;
     const contactId = raw == null || raw === '' ? null : String(raw);
     if (contactId) await svc.getCompany(contactId); // throws COMPANY_NOT_FOUND if missing or a different merchant's contact
-    json(ctx.res, 200, itemView(await inboxFor().linkContact(idParam(ctx.m[1]), contactId, actor)));
+    json(ctx.res, 200, itemView(await inboxFor().linkContact(idParam(ctx.m[1]), contactId, actor, { created: ctx.body?.created === true })));
   });
 
   // ---------- accountant closing package: prepare -> preview -> merchant APPROVES -> send (or .eml fallback). Nothing is sent silently. ----------
@@ -1205,7 +1216,7 @@ export function createFinanceApp(deps) {
     if (e instanceof HttpError) return json(res, e.status, { error: { code: e.code, ...(e.extra ?? {}) } });
     if (e instanceof FinanceError) {
       const status = NOT_FOUND_CODES.includes(e.code) ? 404 : UNPROCESSABLE.includes(e.code) ? 422 : e.code === 'BANK_IMPORT_FAILED_NOTHING_SAVED' ? 503 : 409;
-      return json(res, status, { error: { code: e.code, message: e.detail ?? null } });
+      return json(res, status, { error: { code: e.code, message: e.detail ?? null, ...(e.existing ? { existing: e.existing } : {}) } }); // existing: the document a refused duplicate would repeat
     }
     console.error('finance dashboard internal error:', e?.message);
     return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
