@@ -44,7 +44,7 @@ export function adapterInfo(file) {
  * @param {{ provider: object, config?: object, adapterFile?: string, repeats: number, only?: string[]|null, timeoutMs?: number, startedAt: Date, finishedAt: Date,
  *           casesFile: string, datasetFile?: string, referenceDate: string }} p
  */
-export function collectMetadata({ provider, config = {}, adapterFile = null, repeatMetadata = [], repeats, only = null, timeoutMs = null, startedAt, finishedAt, casesFile, datasetFile = null, referenceDate }) {
+export function collectMetadata({ provider, config = {}, adapterFile = null, repeatMetadata = [], runExtra = {}, repeats, only = null, timeoutMs = null, startedAt, finishedAt, casesFile, datasetFile = null, referenceDate }) {
   const own = redact(typeof provider.metadata === 'function' ? provider.metadata() ?? {} : {});
   const cfg = redact(config);
   return {
@@ -52,7 +52,7 @@ export function collectMetadata({ provider, config = {}, adapterFile = null, rep
       name: BENCHMARK_NAME, version: BENCHMARK_VERSION, cases: 30, casesSha256: sha256(readFileSync(casesFile)),
       dataset: 'synthetic-fixed', datasetSha256: datasetFile ? sha256(readFileSync(datasetFile)) : null, referenceDate,
     },
-    run: { startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt - startedAt, repeats, only, timeoutMs, node: process.version, platform: process.platform },
+    run: { startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString(), durationMs: finishedAt - startedAt, repeats, only, timeoutMs, node: process.version, platform: process.platform, ...runExtra },
     nordla: nordlaInfo(),
     provider: {
       name: provider.name,

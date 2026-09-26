@@ -235,7 +235,7 @@ export function createProvider(config) {
   const cfg = path.join(dir, 'cfg.json');
   writeFileSync(cfg, JSON.stringify({ model: 'm-1', temperature: 0.2, apiKey: 'sk-SECRETSECRETSECRET1234', apiKeyEnv: 'MY_PROVIDER_KEY', headers: { Authorization: 'Bearer abc123def456ghi789' }, nested: { token: 'zzz-top-secret' }, note: 'sk-INLINEINLINEINLINE9999' }));
   const out = path.join(dir, 'result.json');
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', adapter, '--config', cfg, '--only', 'S01,C01', '--repeats', '2', '--out', out], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', MY_PROVIDER_KEY: 'sk-ENVSECRETVALUE99999999' } });
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', adapter, '--config', cfg, '--only', 'S01,C01', '--repeats', '2', '--max-requests', '50', '--out', out], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', MY_PROVIDER_KEY: 'sk-ENVSECRETVALUE99999999' } });
   assert.equal(r.status, 0, r.stderr);
   const raw = readFileSync(out, 'utf8'); const rep = JSON.parse(raw); const m = rep.meta;
   for (const secret of ['sk-SECRETSECRETSECRET1234', 'abc123def456ghi789', 'zzz-top-secret', 'sk-INLINEINLINEINLINE9999', 'sk-LEAKYLEAKYLEAKY123456', 'sk-ENVSECRETVALUE99999999']) assert.ok(!raw.includes(secret), `no secret in the result: ${secret.slice(0, 8)}...`);
