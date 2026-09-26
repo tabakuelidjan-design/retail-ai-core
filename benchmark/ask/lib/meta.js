@@ -11,7 +11,7 @@ export const BENCHMARK_NAME = 'nordla-ask-benchmark';
 export const BENCHMARK_VERSION = '1.1.0';      // 1.0.0: 30 cases + oracle; 1.1.0: acceptable plans, repetitions, metadata (the 30 questions are unchanged)
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
-const SECRET_KEY = /(api[_-]?key|token|secret|password|passwd|authorization|bearer|credential)/i;
+const SECRET_KEY = /(api[_-]?key|token(?!s)|secret|password|passwd|authorization|bearer|credential)/i;   // "tokens" (a count) is not a secret
 const SECRET_VALUE = /^(sk|pk|rk|xox[bap]|ghp|gho|AIza)[-_A-Za-z0-9]{12,}$|^Bearer\s+\S+/;
 const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;    // the NAME of an environment variable is not a secret ("OPENAI_KEY" tells nothing); its value is never read here
 
@@ -19,7 +19,7 @@ const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;    // the NAME of an environment variable 
 export function redact(value) {
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_KEY.test(k) && !(typeof v === 'string' && ENV_NAME.test(v)) && v !== null && v !== '' ? '[redacted]' : redact(v)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_KEY.test(k) && (typeof v === 'string' ? v !== '' && !ENV_NAME.test(v) : v !== null && typeof v === 'object') ? '[redacted]' : redact(v)]));   // only strings/objects can be secrets: counts and flags stay
   }
   return typeof value === 'string' && SECRET_VALUE.test(value) ? '[redacted]' : value;
 }
@@ -44,7 +44,7 @@ export function adapterInfo(file) {
  * @param {{ provider: object, config?: object, adapterFile?: string, repeats: number, only?: string[]|null, timeoutMs?: number, startedAt: Date, finishedAt: Date,
  *           casesFile: string, datasetFile?: string, referenceDate: string }} p
  */
-export function collectMetadata({ provider, config = {}, adapterFile = null, repeats, only = null, timeoutMs = null, startedAt, finishedAt, casesFile, datasetFile = null, referenceDate }) {
+export function collectMetadata({ provider, config = {}, adapterFile = null, repeatMetadata = [], repeats, only = null, timeoutMs = null, startedAt, finishedAt, casesFile, datasetFile = null, referenceDate }) {
   const own = redact(typeof provider.metadata === 'function' ? provider.metadata() ?? {} : {});
   const cfg = redact(config);
   return {
@@ -61,6 +61,7 @@ export function collectMetadata({ provider, config = {}, adapterFile = null, rep
       temperature: own.temperature ?? cfg.temperature ?? null,             // or the equivalent sampling setting of that provider
       metadata: own,                                                       // anything else the adapter chooses to declare (already redacted)
       config: cfg,                                                         // the --config file (already redacted)
+      repeatMetadata: redact(repeatMetadata),                              // metadata() of the provider instance of EACH repetition (usage totals, call counts, errors)
     },
     adapter: adapterInfo(adapterFile),
   };

@@ -50,13 +50,13 @@ let mod = null; if (!isOracle) mod = await import(pathToFileURL(adapterFile).hre
 const createProvider = async () => (isOracle ? createOracleProvider({ cases }) : mod.createProvider(config));    // a NEW instance for every repetition
 
 const startedAt = new Date();
-const { runs, provider, datasetFile } = await runBenchmark({
+const { runs, provider, datasetFile, repeatMetadata } = await runBenchmark({
   cases, createProvider, repeats, only, timeoutMs: Number(opt('timeout-ms') ?? 60_000),
   onCase: ({ repeat, score: s }) => console.log(`#${repeat} ${s.pass ? 'PASS' : 'FAIL'}  ${s.id}  ${s.category.padEnd(13)} ${s.language}  ${s.status}  ${s.latency.totalMs} ms`),
 });
 const finishedAt = new Date();
 
-const meta = collectMetadata({ provider, config, adapterFile, repeats, only, timeoutMs: Number(opt('timeout-ms') ?? 60_000), startedAt, finishedAt, casesFile, datasetFile, referenceDate: '2026-09-26' });
+const meta = collectMetadata({ provider, config, adapterFile, repeatMetadata, repeats, only, timeoutMs: Number(opt('timeout-ms') ?? 60_000), startedAt, finishedAt, casesFile, datasetFile, referenceDate: '2026-09-26' });
 const report = { meta, ...summarizeRuns(runs, { provider: provider.name, truthChecked: truth.checked }) };
 const out = opt('out') ?? path.join(dirPath, 'results', `${startedAt.toISOString().replace(/[:.]/g, '-')}-${provider.name.replace(/[^a-z0-9]+/gi, '_')}.json`);
 mkdirSync(path.dirname(out), { recursive: true }); writeFileSync(out, JSON.stringify(report, null, 2));

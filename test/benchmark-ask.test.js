@@ -122,7 +122,7 @@ test('SAFETY: the benchmark lives outside test/, npm test never reaches a provid
   const run = (a, env = {}) => spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), ...a], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '', ...env } });
   const noArg = run([]); assert.equal(noArg.status, 2); assert.match(noArg.stderr, /usage/);
   const real = run(['--provider', './adapters/does-not-exist.js']); assert.equal(real.status, 2); assert.match(real.stderr, /Refusing to call a real provider/);
-  const src = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = path.join(d, f); if (statSync(p).isDirectory()) { if (f !== 'results') walk(p); } else if (/\.(js|json|md)$/.test(f)) src.push([p, readFileSync(p, 'utf8')]); } }; walk(path.join(ROOT, 'benchmark/ask'));
+  const src = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = path.join(d, f); if (statSync(p).isDirectory()) { if (f !== 'results' && f !== 'adapters') walk(p); /* adapters: policed by test/benchmark-adapters.test.js */ } else if (/\.(js|json|md)$/.test(f)) src.push([p, readFileSync(p, 'utf8')]); } }; walk(path.join(ROOT, 'benchmark/ask'));
   for (const [p, s] of src.filter(([p]) => p.endsWith('.js'))) { assert.ok(!/\bfetch\(|node:https?|XMLHttpRequest|WebSocket|https?:\/\//.test(s), `${path.basename(p)}: no network`); assert.ok(!/openai|anthropic|claude|gemini|kimi|mistral|api[_-]?key|\bsk-[A-Za-z0-9]{10,}/i.test(s.replace(/\/\/.*$/gm, '')), `${path.basename(p)}: no provider named`); }
 });
 
