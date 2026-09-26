@@ -62,6 +62,10 @@ const CHECK_TEXT = { TOTALS_DO_NOT_ADD_UP: 'The extracted totals do not add up: 
   DOCUMENT_IS_PRO_FORMA: 'This document is a pro forma: it is not an invoice and cannot be recorded as a purchase.', DOCUMENT_IS_BOOKING_CONFIRMATION: 'This document is a booking confirmation, not an invoice: nothing was read as an invoice.',
   MULTIPLE_INVOICES_IN_PDF: 'This PDF contains several invoices: the totals were not read. Import each invoice separately.', DATE_LABELS_NOT_ALIGNED: 'The date labels could not be matched with their dates: check the dates.',
   SUPPLIER_NAME_AMBIGUOUS: 'Several supplier names are printed: check the supplier.',
+  MARKETPLACE_VAT_BELONGS_TO_PLATFORM: 'The VAT number printed belongs to the marketplace, not to the seller: it was not used as the supplier VAT number.',
+  PAYMENT_REFERENCE_AMBIGUOUS: 'Several payment references are printed: check the payment reference.', INVOICE_PAGES_AMBIGUOUS: 'Some pages carry several invoice numbers: check which pages belong to which invoice.',
+  LINES_MIXED_CURRENCIES: 'The invoice lines and the totals are in different currencies: check the lines.', ITEMS_TABLE_CONTINUED_ON_NEXT_PAGES: 'The lines table continues over several pages: check the lines.',
+  VAT_CODE_NOT_INTERPRETED: 'The lines carry a VAT code that the document does not explain: check the VAT.',
   SCAN_REQUIRES_OCR: 'This document seems to be scanned. Automatic reading needs image analysis, which is not enabled yet.', PDF_TEXT_UNREADABLE: 'The text of this PDF could not be read: enter the fields manually.',
   PDF_TEXT_NOTHING_RECOGNISED: 'No invoice information was recognised in the text of this PDF: enter the fields manually.', PDF_PAGES_TRUNCATED: 'Only the first 20 pages were read.',
   SUPPLIER_VAT_AMBIGUOUS: 'Several VAT numbers are printed: check the supplier\'s.', SUPPLIER_ENTERPRISE_NUMBER_AMBIGUOUS: 'Several enterprise numbers are printed: check the supplier\'s.', SUPPLIER_NOT_IDENTIFIED_BY_VAT: 'The supplier was not identified by a VAT number: check its name.',
@@ -177,6 +181,10 @@ function renderInboxDetail(host, id, opts = {}) {
     body.appendChild(h('div', { class: 'drawer-head' }, inboxBadge(it.status), docTypeChip(it), sourceBadge(it.source), confChip(it), it.fileName ? h('span', { class: 'muted small' }, `${it.fileName} · ${fmtBytes(it.sizeBytes || 0)}`) : null));
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
     if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, checkText(w)))));
+    if (it.extraction && Array.isArray(it.extraction.invoices) && it.extraction.invoices.length) { // several invoices in one PDF: listed as read, none is chosen
+      body.appendChild(h('div', { class: 'banner warn small doc-invoices' }, h('strong', null, tt('Invoices found in this PDF (none was chosen):')), h('ul', { class: 'plain' }, it.extraction.invoices.map((v) => h('li', null,
+        tt('Invoice {0} · pages {1} · {2} · {3}', v.invoiceNumber, (v.pages || []).join(', ') || '?', v.supplierName || tt('seller to check'), Number.isInteger(v.grossCents) ? fmtMoney(v.grossCents, v.currency || it.currency || 'EUR') : tt('total to check')))))));
+    }
     if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
     let focusContactSearch = () => {};
     mount(body, supplierBlock(it, () => { draw(); onChange(); }, err, () => focusContactSearch())); mount(body, duplicatesBlock(it, () => { draw(); onChange(); }, err));

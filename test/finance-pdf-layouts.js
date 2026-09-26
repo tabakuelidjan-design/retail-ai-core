@@ -35,7 +35,94 @@ const amazonPage = ({ lang = 'nl', number, total, net, vat, order }) => (lang ==
   [389, 460, '21 %'], [420, 460, net], [470, 460, vat], [301, 478, 'Total'], [420, 478, net], [470, 478, vat],
 ]);
 
+// ---- phase 3.2 ----
+export const PAY_REF = 'EXw1Payref2Token9Abc';
+/** Amazon marketplace invoice: the seller ("Verkocht door"), optionally its own VAT number, optionally the block of the platform that declares the VAT. */
+const marketPage = ({ seller, sellerVat = null, platform = null, fr = false, payGap = 14, payRef = PAY_REF }) => [
+  [516, 20, 'Factuur', 14], [342, 60, 'Betaald'], [342, 74, 'Referentie-ID betaling'], [342, 74 + payGap, payRef],
+  [300, 110, `Verkocht door ${seller}`], ...(sellerVat ? [[342, 124, `Btw-nummer ${sellerVat}`]] : []),
+  [344, 140, 'Factuurdatum'], [470, 140, '31-05-2026'], [344, 154, 'Factuurnummer'], [470, 154, 'BE77EXEMPLE09'], [344, 168, 'Totaal te betalen'], [470, 168, '40,47 €'],
+  ...(platform ? [[344, 190, fr ? 'TVA déclarée par' : 'Btw afgedragen door'], [450, 190, platform], [344, 206, fr ? 'TVA' : 'Btw-nummer'], [450, 206, LU_VAT]] : []),
+  [35, 240, 'Factuuradres'], [35, 254, OWN_NAME], [35, 268, 'Rue Exemple 1'], [35, 282, 'Bruxelles, 1000'],
+  [38, 330, 'Beschrijving'], [260, 330, 'Aantal'], [440, 330, 'Subtotaal item'], [38, 350, 'Ledstrip Exemple 5 m'], [260, 350, '1'], [440, 350, '40,47 €'],
+  [298, 390, 'Totaal factuur'], [440, 390, '40,47 €'],
+  [341, 430, 'Btw-tarief'], [400, 430, 'Subtotaal item'], [470, 430, 'Subtotaal btw'], [356, 460, '21 %'], [400, 460, '33,45 €'], [470, 460, '7,02 €'], [301, 478, 'Totaal'], [400, 478, '33,45 €'], [470, 478, '7,02 €'],
+  ...(platform ? [[28, 790, 'Btw afgedragen door Exemple Retail in het land van levering', 6]] : []),
+];
+/** Shopify-hardware-like receipt: the VAT label, its amount and its rate on three stacked lines ("PL VAT -" / "€0,00" / "POLAND 0.0%"). */
+const stackedVatPage = ({ rateY = 336, vat = '€0,00' } = {}) => [
+  [389, 60, 'Receipt / Tax Invoice 264828-EXM'], [62, 100, 'ITEMS'], [300, 100, 'PRICE'], [360, 100, 'QTY'], [430, 100, 'ITEM TOTAL'],
+  [62, 115, 'Card reader Exemple'], [300, 115, '€507,00'], [360, 115, '1'], [430, 115, '€507,00'],
+  [429, 300, 'Subtotal'], [500, 300, '€507,00'], [430, 322, 'PL VAT -'], [524, 329, vat], [402, rateY, 'POLAND 0.0%'], [409, 360, 'TOTAL (EUR)'], [500, 360, '€507,00'],
+  [155, 400, 'As the recipient you are liable to account for reverse charge VAT'],
+];
+/** Shipping-line invoice with a "Tax" column holding a code ("C2"), explained (or not) by a legend under the totals. */
+const taxCodePage = ({ codes = ['C2', 'C2'], legend = 'C2 Auto Liquidation - VAT due by the client', vat = '0.00', total = '300.00' } = {}) => [
+  [21, 20, 'EXEMPLE - LINES', 10], [21, 30, 'BOULEVARD EXEMPLE'], [21, 40, '13235..MARSEILLE'], [21, 50, `VAT NO. ${FR_VAT}`], [299, 90, 'INVOICE'], [299, 100, 'EXDIC000001'], [24, 112, 'Date: 26-MAR-2026'],
+  [23, 220, 'Size/Type'], [80, 220, 'Charge Description'], [260, 220, 'Tax'], [360, 220, 'Rate Currency'], [430, 220, 'Amount'],
+  [26, 232, '20ST C'], [80, 232, 'Terminal Handling Charge'], [260, 232, codes[0]], [360, 232, '250.00 EUR'], [430, 232, '250.00'],
+  [26, 252, '20ST C'], [80, 252, 'Documentation Fee'], [260, 252, codes[1]], [360, 252, '50.00 EUR'], [430, 252, '50.00'],
+  [404, 270, 'Currency Charge Totals'], [300, 295, 'Total Excluding Tax'], [490, 295, '300.00'], ...(legend ? [[27, 307, legend]] : []),
+  [380, 325, 'Total VAT'], [490, 325, vat], [380, 337, 'Total Including Tax'], [490, 337, total],
+];
+/** Chinese supplier: address under the name (no postcode), buyer / beneficiary addresses elsewhere, an items table repeated page after page. */
+const CN_HEADER = (y) => [[36, y, 'ITEM NO'], [100, y, 'description'], [250, y, 'PRICE'], [320, y, 'PCS'], [400, y, 'AMOUNT'], [480, y, 'T. KG']];
+const cnRow = (y, no, desc, price, pcs, amount) => [[36, y, no], [100, y, desc], [250, y, price], [320, y, pcs], [400, y, amount], [480, y, '10.00']];
+const cnFirstPage = () => [
+  [118, 20, 'ZHEJIANG EXEMPLE TRADE CO.,LIMITED', 12], [150, 34, 'ROOM 2106, EXEMPLE BUILDING B, FUTIAN STREET, YIWU CITY, ZHEJIANG, CHINA', 8], [200, 46, 'TEL/FAX: 0579-0000 0000', 8],
+  [299, 60, 'INVOICE', 14], [36, 80, `Customer: ${OWN_NAME}`], [36, 92, 'Street: Rue Exemple 1'], [36, 104, 'ADDRESS: ROOM 2705, EXEMPLE ROAD, YIWU CITY, ZHEJIANG, CHINA'],
+  [300, 80, 'Invoice NO.:'], [300, 92, 'TA20260101001'], [300, 116, 'DATE:2026/02/13'],
+  ...CN_HEADER(130), ...cnRow(150, 'TA001', 'C-C cable 2M', '¥3.20', '200', '¥640.00'), ...cnRow(170, 'TA002', '65W charger', '¥8.80', '50', '¥440.00'),
+];
+const cnTotals = (y, usd = true) => [[312, y, 'RMB TOTAL:'], [400, y, 'RMB'], [460, y, '¥3,164.00'], ...(usd ? [[190, y + 30, 'USD TOTAL:'], [400, y + 30, 'USD'], [460, y + 30, '$451.43']] : [])];
+
 export const LAYOUTS = {
+  /** Marketplace case A: Amazon sells itself; the "VAT declared by" block names the SAME entity -> normal behaviour. */
+  amazonDirect: () => makePdf([marketPage({ seller: 'Exemple Retail S.à r.l., Belgisch bijkantoor', sellerVat: LU_VAT, platform: 'Exemple Retail S.a.r.L.' })]),
+  /** Marketplace case B: an EU seller with its OWN VAT number (OSS), no platform block. */
+  amazonEuSeller: () => makePdf([marketPage({ seller: 'Exemple Handel B.V.', sellerVat: NL_VAT })]),
+  /** Marketplace case C: a non-EU seller; the VAT is declared by the platform, whose VAT number is printed under the declaration. */
+  amazonThirdParty: () => makePdf([marketPage({ seller: 'Exemple Keji Youxian Gongsi', platform: 'Exemple Retail S.a.r.L.' })]),
+  amazonThirdPartyFr: () => makePdf([marketPage({ seller: 'Exemple Keji Youxian Gongsi', platform: 'Exemple Retail S.a.r.L.', fr: true })]),
+  /** Case C with a seller that ALSO prints its own VAT number: the seller keeps its own. */
+  amazonThirdPartyOwnVat: () => makePdf([marketPage({ seller: 'Exemple Commerce SAS', sellerVat: FR_VAT, platform: 'Exemple Retail S.a.r.L.' })]),
+  /** Payment reference: under its label but too far, or a sentence under the label: never read. */
+  payRefFar: () => makePdf([marketPage({ seller: 'Exemple Handel B.V.', sellerVat: NL_VAT, payGap: 30 })]),
+  payRefSentence: () => makePdf([marketPage({ seller: 'Exemple Handel B.V.', sellerVat: NL_VAT, payRef: 'Betaald met kaart 1234' })]),
+  /** Back Market-like order "payée via" the platform, the platform's VAT number in its footer line. */
+  marketplacePaidVia: () => makePdf([[
+    [97, 20, 'Exemple Trading B.V. • Exempelstraat 25-E • 7512HL Enschede • The Netherlands', 8], [369, 50, OWN_NAME], [43, 140, 'Facture', 14],
+    [43, 170, 'Numéro de facture:'], [150, 170, '80184653'], [43, 185, 'Date de facture:'], [150, 185, '30-04-2026'],
+    [397, 500, 'TVA (21% incl.)'], [470, 500, '€ 112.81'], [397, 560, 'Montant total'], [470, 560, '€ 650.00'],
+    [28, 620, 'Cette commande a été payée via Exemple Market.'], [164, 700, `Exemple Market • KvK: 93428855 • N° TVA: ${NL_VAT}`],
+  ]]),
+  stackedVat: () => makePdf([stackedVatPage()]),
+  stackedVatRateFar: () => makePdf([stackedVatPage({ rateY: 380 })]),
+  stackedVatZeroRateWithVat: () => makePdf([stackedVatPage({ vat: '€5,00' })]),
+  taxCodeLegend: () => makePdf([taxCodePage()]),
+  taxCodeNoLegend: () => makePdf([taxCodePage({ legend: null })]),
+  taxCodeLegendNotReverse: () => makePdf([taxCodePage({ legend: 'C2 Standard services' })]),
+  taxCodeVatNotZero: () => makePdf([taxCodePage({ vat: '63.00', total: '363.00' })]),
+  taxCodeTwoCodes: () => makePdf([taxCodePage({ codes: ['C2', 'C1'] })]),
+  /** Two invoices, and a third page that carries BOTH numbers (it cannot be given to either). */
+  twoInvoicesMixedPage: () => makePdf([amazonPage({ number: 'BE66EXEMPLE01', total: '40,47 €', net: '33,45 €', vat: '7,02 €', order: '406-1740119-2061933' }),
+    amazonPage({ number: 'BE66EXEMPLE02', total: '13,99 €', net: '11,56 €', vat: '2,43 €', order: '406-1740119-2061933' }),
+    [[344, 134, 'Factuurnummer'], [470, 134, 'BE66EXEMPLE01'], [344, 160, 'Factuurnummer'], [470, 160, 'BE66EXEMPLE02']]]),
+  /** Zhejiang-like: the same items header repeated on 3 pages, lines in ¥, totals in RMB and USD. */
+  chinaMultipage: () => makePdf([cnFirstPage(),
+    [...CN_HEADER(40), ...cnRow(60, 'TA003', '45W charger suit', '¥6.60', '100', '¥660.00'), ...cnRow(80, 'TA004', '3in1 cable', '¥5.20', '200', '¥1,040.00')],
+    [...CN_HEADER(40), ...cnRow(60, 'TA005', 'Photo frame 8 inch', '¥4.00', '96', '¥384.00'), ...cnTotals(200)]]),
+  /** The next page holds ANOTHER table (a packing list): never merged. */
+  chinaOtherTable: () => makePdf([cnFirstPage(),
+    [[36, 40, 'CARTON NO'], [100, 40, 'description'], [250, 40, 'NET WEIGHT'], [400, 40, 'TOTAL'], [36, 60, 'CTN-1'], [100, 60, 'cables'], [250, 60, '12.50'], [400, 60, '¥960.00'], ...cnTotals(200, false)]]),
+  /** The first table ends with its own totals on page 1: the table on page 2 is another one. */
+  chinaTableClosed: () => makePdf([[...cnFirstPage(), [312, 200, 'RMB TOTAL:'], [460, 200, '¥1,080.00']],
+    [...CN_HEADER(40), ...cnRow(60, 'TA003', '45W charger suit', '¥6.60', '100', '¥660.00'), ...cnTotals(200, false)]]),
+  /** A buyer block right under the supplier name, with a Chinese address: never the supplier's. */
+  chinaBuyerBelow: () => makePdf([[
+    [118, 20, 'ZHEJIANG EXEMPLE TRADE CO.,LIMITED', 12], [118, 34, 'Customer: Exemple Buyer Ltd'], [118, 46, 'ROOM 1, EXEMPLE ROAD, SHENZHEN CITY, GUANGDONG, CHINA'],
+    [299, 70, 'INVOICE', 14], [300, 90, 'DATE:2026/02/13'],
+  ]]),
   /** Airline e-ticket: "TICKET NUMBER" (not a till receipt), "DATE: 10 APR 2025", "TOTAL | : EUR | 756.96". */
   airTicket: () => makePdf([[[67, 40, 'ELECTRONIC TICKET PASSENGER ITINERARY RECEIPT'], [67, 60, 'TICKET NUMBER'], [200, 60, ': 880-0000000000'], [67, 80, 'EXEMPLE AIRLINES'], [250, 80, 'DATE: 10 APR 2025'],
     [67, 110, 'FROM /TO'], [200, 110, 'FLIGHT'], [300, 110, 'ARRIVAL DATE: 16APR'], [67, 300, 'AIR FARE'], [200, 300, ': EUR'], [300, 300, '345.00'], [67, 312, 'TAX'], [200, 312, ': EUR'], [300, 312, '35.50BE'],

@@ -96,6 +96,12 @@ const beDigits = (s) => { const n = normalizeBelgianNumber(s); return n.ok ? n.d
 const normName = (s) => (s ? String(s).toUpperCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim() : null);
 const structuredValid = (d) => { const base = Number(d.slice(0, 10)); const mod = base % 97 || 97; return mod === Number(d.slice(10)); };
 const COUNTRY_WORDS = { BE: /^(?:belgi(?:que|ë|e|um)|belgique)$/i, NL: /^(?:the\s+)?netherlands$|^nederland$|^pays-bas$/i, FR: /^france$|^frankrijk$/i, IE: /^ireland$|^irlande$|^ierland$/i, LU: /^luxembourg$|^luxemburg$/i, DE: /^germany$|^deutschland$|^allemagne$|^duitsland$/i };
+/** Words that do not tell two companies apart (legal forms, branch words): "Amazon EU S.à r.l., Belgisch bijkantoor" and "Amazon EU S.a.r.L." are one entity. */
+const ENTITY_NOISE = new Set(['S', 'A', 'R', 'L', 'SA', 'SARL', 'SRL', 'SPRL', 'BV', 'B', 'V', 'NV', 'N', 'GMBH', 'LTD', 'LIMITED', 'CO', 'INC', 'LLC', 'PLC', 'AG', 'SAS',
+  'BELGISCH', 'BIJKANTOOR', 'SUCCURSALE', 'BELGE', 'BRANCH', 'THE']);
+const entityKey = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().split(/[^A-Z0-9]+/).filter((w) => w && !ENTITY_NOISE.has(w)).slice(0, 2);
+/** Same entity: the distinctive words of the shorter name start the other's ("AMAZON" / "AMAZON EU"). Unknown names are never the same entity. */
+const sameEntity = (a, b) => { if (!a?.length || !b?.length) return false; const [s, t] = a.length <= b.length ? [a, b] : [b, a]; return s.every((w, i) => t[i] === w); };
 const countryOfWord = (s) => Object.entries(COUNTRY_WORDS).find(([, re]) => re.test(String(s).trim()))?.[0] ?? null;
 
 // ---------- labels (FR / NL / EN) ----------
@@ -113,7 +119,15 @@ const L = {
   issueBooking: /\b(?:date\s*of\s*booking|booking\s*date|date\s*de\s*r[ée]servation|reserveringsdatum)\b/i,
   billingRef: /\b(?:concerne|relative\s*à|se\s*rapportant\s*à|annule|en\s*r[ée]f[ée]rence\s*à|sur|betreft|m\.?b\.?t\.?|voor|original|related|refers?\s*to|credit(?:s|ing)?)\s*(?:la\s*|de\s*)?(?:facture|factuur|invoice)\s*(?:n[°o]\.?|nr\.?|no\.?|number|#)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-/._]{0,29})/gi,
   order: /\b(?:bon\s*de\s*commande|n[°o]\.?\s*(?:de\s*)?commande|num[ée]ro\s*de\s*(?:la\s*)?commande|commande|votre\s*r[ée]f[ée]rence|v\/?\s*r[ée]f\.?|purchase\s*order|order\s*(?:no\.?|number|ref(?:erence)?|#)|your\s*ref(?:erence)?|PO|bestelbon|bestelnummer|bestelling|uw\s*ref(?:erentie)?|booking\s*(?:no\.?|number|ref(?:erence)?|#)|num[ée]ro\s*de\s*confirmation|confirmation\s*(?:no\.?|number))\s*(?:n[°o]\.?|nr\.?|no\.?)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-/._]{0,29})/gi,
-  paymentFree: /\b(?:communication|mededeling|r[ée]f[ée]rence\s*(?:de\s*)?paiement|payment\s*reference|betalingsreferentie|referentie\s*betaling)\s*[:.]?\s*(.{3,60})$/i,
+  paymentFree: /\b(?:communication|mededeling|r[ée]f[ée]rence\s*(?:de\s*)?paiement|payment\s*reference|betalingsreferentie|referentie(?:-?\s*id)?\s*betaling)\s*[:.]?\s*(.{3,60})$/i,
+  // the same label alone in its cell, its value printed under it ("Referentie-ID betaling" / "NXlWw...xOBK")
+  paymentLabelOnly: /^(?:communication|mededeling|r[ée]f[ée]rence\s*(?:de\s*)?paiement|payment\s*reference|betalingsreferentie|referentie(?:-?\s*id)?\s*betaling)\s*[:.]?$/i,
+  // marketplace: the VAT is collected / declared by the platform ("Btw afgedragen door | Amazon EU S.a.r.L.", "TVA déclarée par ...")
+  platformVat: /^(?:btw\s*afgedragen\s*door|tva\s*d[ée]clar[ée]e\s*par|tva\s*collect[ée]e\s*par|vat\s*(?:collected|declared|remitted)\s*by)\s*[:.]?\s*(.*)$/i,
+  platformNameEnd: /\s+(?:in|dans|au|en|within)\s.*$/i, // "Amazon in het land van levering" -> "Amazon"
+  viaPlatform: /\b(?:pay[ée]e?\s+via|paid\s+(?:via|through)|betaald\s+via)\s+(\p{L}[\p{L}\s&'-]{1,40}?)\s*[.!]?$/iu,
+  // a VAT code legend that says the VAT is due by the customer (reverse charge): "C2 | Auto Liquidation - Article 196 ..."
+  reverseCharge: /auto[\s-]?liquidation|reverse[\s-]?charge|tva\s*due\s*par\s*le\s*preneur|vat\s*due\s*by\s*the\s*(?:client|customer|recipient)|btw\s*verlegd|verlegging/i,
   vatWord: /\b(?:tva|btw|vat)\b/i,
   rateWord: /\b(?:taux|tarief|rate)\b|%|btw-tarief/i,
   rate: /(?<![\d,.])(\d{1,2}(?:[.,]\d{1,2})?)\s?%/,
@@ -209,7 +223,42 @@ export function extractFromPdfLines(pages, own = {}) {
     for (const m of l.text.matchAll(BE_VAT_RE)) { const n = normalizeBelgianNumber(m[1]); if (n.ok) vatHits.push({ value: n.vatNumber, line: l, digits: n.digits }); }
     for (const m of l.text.matchAll(EU_VAT_LABELLED_RE)) { const v = euVatOf(m[1]); if (v && !v.startsWith('BE')) vatHits.push({ value: v, line: l, digits: null }); }
   }
-  const supplierVats = vatHits.filter((h) => !ownVat.has(h.value) && !(h.digits && ownEnt.has(h.digits)));
+  // ---- marketplace: a VAT number that the document gives to the PLATFORM ("Btw afgedragen door | Amazon EU S.a.r.L." + "Btw-nummer | LU...",
+  // or a "Back Market • N° TVA: ..." line of an order "payée via Back Market") is never the seller's VAT number when the seller is another entity ----
+  const valueNear = (li, ci, rest) => { // the value of a label: in its own cell, the next cell, or the aligned cell below (a header row)
+    const l = lines[li];
+    if (letters(rest) >= 2) return { li, ci, text: rest };
+    if (l.cells[ci + 1] && letters(l.cells[ci + 1].text) >= 2) return { li, ci: ci + 1, text: l.cells[ci + 1].text };
+    for (let j = li + 1; j < lines.length && j <= li + 3 && lines[j].page === l.page && l.y - lines[j].y <= 30; j += 1) {
+      const k = lines[j].cells.findIndex((x) => Math.abs(x.x - l.cells[ci].x) <= 25); if (k >= 0) return { li: j, ci: k, text: lines[j].cells[k].text };
+    }
+    return null;
+  };
+  const sellerLabels = [];
+  lines.forEach((l, li) => l.cells.forEach((c, ci) => { const m = L.seller.exec(c.text.trim()); if (!m) return; const v = valueNear(li, ci, m[1].trim()); if (v && plausibleName(v.text) && notOurs(v.text)) sellerLabels.push({ ...v, rule: 'LABEL_SELLER', conf: 0.8 }); }));
+  const platforms = []; // { name, key, vats: Set, at }
+  lines.forEach((l, li) => l.cells.forEach((c, ci) => {
+    const m = L.platformVat.exec(c.text.trim()); if (!m) return;
+    const v = valueNear(li, ci, m[1].trim()); if (!v) return;
+    const name = v.text.replace(L.platformNameEnd, '').trim(); const key = entityKey(name); if (!key.length || !plausibleName(name)) return;
+    const vats = new Set(); // the VAT number printed right under the declaration, in the same column ("Btw-nummer | LU...")
+    for (let j = v.li + 1; j < lines.length && j <= v.li + 2 && lines[j].page === l.page && lines[v.li].y - lines[j].y <= 30; j += 1) {
+      if (Math.abs(lines[j].cells[0].x - l.cells[0].x) > 25) continue; for (const h of vatHits) if (h.line === lines[j]) vats.add(h.value);
+    }
+    platforms.push({ name, key, vats, at: cellAt(v.li, v.ci), how: 'VAT_DECLARED_BY_PLATFORM' });
+  }));
+  for (const l of lines) { const m = L.viaPlatform.exec(l.text.trim()); if (!m) continue; const name = m[1].trim(); const key = entityKey(name); if (key.length && plausibleName(name)) platforms.push({ name, key, vats: new Set(), at: l, how: 'ORDER_PAID_VIA_PLATFORM' }); }
+  for (const p of platforms) for (const h of vatHits) if (sameEntity(entityKey(h.line.cells[0].text.split(/\s+[•|]\s+|\s+-\s+/)[0]), p.key)) p.vats.add(h.value); // "Back Market • KvK • N° TVA: ..."
+  const sellerKey = sellerLabels.length ? entityKey(sellerLabels[0].text) : null;
+  const foreignPlatforms = platforms.filter((p) => p.vats.size && !(sellerKey && sameEntity(sellerKey, p.key))); // seller unknown or another entity
+  const platformVatValues = new Set(foreignPlatforms.flatMap((p) => [...p.vats]));
+  if (foreignPlatforms.length) {
+    const p = foreignPlatforms[0]; const vat = [...p.vats][0]; const hit = vatHits.find((h) => h.value === vat);
+    put('platformVatNumber', vat, platformVatValues.size === 1 ? 0.8 : 0.4, hit.line, p.how); put('platformName', p.name, 0.7, p.at, p.how);
+    warnings.push('MARKETPLACE_VAT_BELONGS_TO_PLATFORM');
+  }
+  const isPlatformName = (s) => foreignPlatforms.some((p) => sameEntity(entityKey(s), p.key));
+  const supplierVats = vatHits.filter((h) => !ownVat.has(h.value) && !(h.digits && ownEnt.has(h.digits)) && !platformVatValues.has(h.value));
   const distinctVats = [...new Set(supplierVats.map((h) => h.value))];
   let supplierVatHit = null;
   if (distinctVats.length === 1) { supplierVatHit = supplierVats[0]; put('supplierVatNumber', supplierVatHit.value, 0.9, supplierVatHit.line, 'VAT_NUMBER_NOT_OURS'); } else if (distinctVats.length > 1) {
@@ -228,17 +277,7 @@ export function extractFromPdfLines(pages, own = {}) {
   else if (distinctIban.length > 1) { const best = ibanHits.find((h) => h.labelled) ?? ibanHits[0]; put('supplierIban', best.value, 0.4, best.line, 'IBAN_FIRST_OF_SEVERAL'); warnings.push('IBAN_AMBIGUOUS'); }
 
   // ---- supplier name: a "seller" label, else the block above the supplier's VAT number, else a company name at the top of page 1 ----
-  const nameCands = [];
-  const sellerValue = (li, ci, rest) => {
-    const l = lines[li];
-    if (letters(rest) >= 2) return { li, ci, text: rest };
-    if (l.cells[ci + 1] && letters(l.cells[ci + 1].text) >= 2) return { li, ci: ci + 1, text: l.cells[ci + 1].text };
-    for (let j = li + 1; j < lines.length && j <= li + 3 && lines[j].page === l.page && l.y - lines[j].y <= 30; j += 1) { // value BELOW its label (a header row)
-      const k = lines[j].cells.findIndex((x) => Math.abs(x.x - l.cells[ci].x) <= 25); if (k >= 0) return { li: j, ci: k, text: lines[j].cells[k].text };
-    }
-    return null;
-  };
-  lines.forEach((l, li) => l.cells.forEach((c, ci) => { const m = L.seller.exec(c.text.trim()); if (!m) return; const v = sellerValue(li, ci, m[1].trim()); if (v && plausibleName(v.text) && notOurs(v.text)) nameCands.push({ ...v, rule: 'LABEL_SELLER', conf: 0.8 }); }));
+  const nameCands = [...sellerLabels];
   const inColumnBlock = (vl, vcell, maxUp = 160) => lines.map((l, li) => ({ l, li })).filter(({ l }) => l.page === vl.page && l.y > vl.y && l.y - vl.y <= maxUp).sort((a, b) => a.l.y - b.l.y)
     .map(({ l, li }) => { const ci = l.cells.map((c, k) => [Math.abs(c.x - vcell.x), k]).sort((a, b) => a[0] - b[0])[0][1]; return { l, li, ci, c: l.cells[ci] }; }).filter(({ c }) => Math.abs(c.x - vcell.x) <= 60);
   if (!nameCands.length && supplierVatHit) {
@@ -254,7 +293,7 @@ export function extractFromPdfLines(pages, own = {}) {
       const l = lines[li]; if (l.page !== 1 || topY - l.y > 260) continue;
       for (let ci = 0; ci < l.cells.length; ci += 1) {
         const part = l.cells[ci].text.split(/\s+[•|]\s+|\s+-\s+(?=\S)/)[0].trim();
-        if (hasLegalForm(part) && plausibleName(part) && notOurs(part)) { nameCands.push({ li, ci, text: part, rule: 'NAME_WITH_LEGAL_FORM_AT_TOP', conf: supplierVatHit ? 0.5 : 0.4 }); break outer; }
+        if (hasLegalForm(part) && plausibleName(part) && notOurs(part) && !isPlatformName(part)) { nameCands.push({ li, ci, text: part, rule: 'NAME_WITH_LEGAL_FORM_AT_TOP', conf: supplierVatHit ? 0.5 : 0.4 }); break outer; }
       }
     }
     if (nameCands.length && !supplierVatHit) warnings.push('SUPPLIER_NOT_IDENTIFIED_BY_VAT');
@@ -293,6 +332,7 @@ export function extractFromPdfLines(pages, own = {}) {
       const n = lines[j]; if (n.page !== l.page || l.y - n.y > 100) break;
       const c = n.cells.find((x) => Math.abs(x.x - cell.x) <= 60); if (!c) continue;
       if (/\b(?:tva|btw|vat|iban|tel|phone|e-?mail|www|kbo|bce|rpr|rpm)\b|@/i.test(c.text)) break;
+      if (/\b(?:buyer|customer|consignee|beneficiar\w*|bill\s*to|ship\s*to|invoice\s*to|acheteur|destinataire|koper|klant)\b/i.test(c.text)) break; // another party's block starts
       below.push({ n, c });
     }
     for (let k = 0; k < below.length; k += 1) {
@@ -302,11 +342,18 @@ export function extractFromPdfLines(pages, own = {}) {
       const country = countryOfWord(below[k + 1]?.c.text ?? '') ?? pc.country ?? vatCountry() ?? null;
       return { street, postalCode: pc.postalCode, city: pc.city, countryCode: country, at: { ...below[k].n, text: below[k].c.text } };
     }
+    // a Chinese address has no postcode line: the lines right under the supplier's name, up to the one ending with "CHINA", with a ", ... CITY" part
+    const cn = below.findIndex((b) => /\bCHINA\s*$/i.test(b.c.text.trim()));
+    if (cn >= 0 && cn <= 2) {
+      const full = below.slice(0, cn + 1).map((b) => b.c.text.trim()).join(' ').replace(/\s+/g, ' ');
+      const city = /(?:^|,)\s*([A-Z][A-Za-z ]{1,30}?)\s+CITY\b/i.exec(full);
+      if (city) return { street: full.slice(0, city.index).replace(/[\s,]+$/, '') || null, postalCode: null, city: city[1].trim(), countryCode: 'CN', at: { ...below[0].n, text: below[0].c.text }, cn: true };
+    }
     return null;
   };
   for (const cand of nameCands.filter((n) => nameKey(n.text) === nameKey(nameCands[0]?.text ?? ''))) {
     const a = addressFrom(cand); if (!a) continue;
-    const { at, ...addr } = a; put('supplierAddress', addr, 0.6, at, 'ADDRESS_UNDER_SUPPLIER_NAME'); break;
+    const { at, cn, ...addr } = a; put('supplierAddress', addr, cn ? 0.5 : 0.6, at, cn ? 'ADDRESS_CN_UNDER_SUPPLIER_NAME' : 'ADDRESS_UNDER_SUPPLIER_NAME'); break;
   }
   if (!f.supplierAddress && supplierVatHit && nameAt) { // the historical layout: postal line between the name and the VAT number
     const vl = supplierVatHit.line; const vcell = l2cell(vl, supplierVatHit.value) ?? vl.cells[0];
@@ -358,13 +405,34 @@ export function extractFromPdfLines(pages, own = {}) {
   const strongVals = [...new Set(numCands.filter((n) => n.strong).map((n) => n.value))]; const anyVals = [...new Set(numCands.map((n) => n.value))];
   const explicitVals = [...new Set(numCands.filter((n) => n.explicit).map((n) => n.value))];
   const severalInvoices = explicitVals.length > 1;
-  if (severalInvoices) { warnings.push('MULTIPLE_INVOICES_IN_PDF'); put('invoiceNumber', explicitVals[0], 0.4, numCands.find((n) => n.value === explicitVals[0]).line, 'FIRST_OF_SEVERAL_INVOICES'); } else if (strongVals.length === 1) put('invoiceNumber', strongVals[0], 0.85, numCands.find((n) => n.value === strongVals[0]).line, 'LABEL_DOCUMENT_NUMBER');
+  // several invoices in one PDF: each explicit number gets the pages that carry it (and only it); no invoice is chosen, no document total is read
+  const invoicesInPdf = [];
+  if (severalInvoices) {
+    warnings.push('MULTIPLE_INVOICES_IN_PDF');
+    const onPage = new Map(); for (const n of numCands.filter((x) => x.explicit)) { if (!onPage.has(n.line.page)) onPage.set(n.line.page, new Set()); onPage.get(n.line.page).add(n.value); }
+    for (const v of explicitVals) {
+      const pages = [...onPage].filter(([, s]) => s.size === 1 && s.has(v)).map(([p]) => p).sort((a, b) => a - b); const at = numCands.find((n) => n.value === v && n.explicit).line;
+      invoicesInPdf.push({ invoiceNumber: v, pages, provenance: { invoiceNumber: { page: at.page, path: 'EXPLICIT_INVOICE_NUMBER', text: String(at.text).slice(0, 160) } } });
+    }
+    if ([...onPage.values()].some((s) => s.size > 1)) warnings.push('INVOICE_PAGES_AMBIGUOUS');
+  } else if (strongVals.length === 1) put('invoiceNumber', strongVals[0], 0.85, numCands.find((n) => n.value === strongVals[0]).line, 'LABEL_DOCUMENT_NUMBER');
   else if (strongVals.length > 1) { put('invoiceNumber', strongVals[0], 0.4, numCands.find((n) => n.value === strongVals[0]).line, 'FIRST_OF_SEVERAL_NUMBERS'); warnings.push('INVOICE_NUMBER_AMBIGUOUS'); } else if (anyVals.length === 1) put('invoiceNumber', anyVals[0], 0.6, numCands[0].line, 'LABEL_NUMBER'); else if (anyVals.length > 1) warnings.push('INVOICE_NUMBER_AMBIGUOUS');
   const distinctOrders = [...new Set(orders.map((o) => o.value))];
   if (distinctOrders.length === 1) put('orderReference', distinctOrders[0], 0.8, orders[0].line, 'LABEL_ORDER_REFERENCE'); else if (distinctOrders.length > 1) warnings.push('ORDER_REFERENCE_AMBIGUOUS');
   const sc = lines.map((l) => ({ l, m: STRUCTURED_RE.exec(l.text) })).find((x) => x.m);
   if (sc) { const d = sc.m[2] + sc.m[3] + sc.m[4]; const ok = structuredValid(d); put('paymentReference', `+++${sc.m[2]}/${sc.m[3]}/${sc.m[4]}+++`, ok ? 0.95 : 0.4, sc.l, ok ? 'STRUCTURED_COMMUNICATION' : 'STRUCTURED_COMMUNICATION_CHECK_DIGITS_WRONG'); if (!ok) warnings.push('STRUCTURED_COMMUNICATION_INVALID'); } else {
     const fr = lines.map((l) => ({ l, m: L.paymentFree.exec(l.text) })).find((x) => x.m); if (fr) put('paymentReference', fr.m[1].split(/\s{3,}/)[0].trim(), 0.6, fr.l, 'LABEL_PAYMENT_REFERENCE');
+    else { // the label alone in its cell, its value alone in the aligned cell right under it: one token of letters / digits, never a date or an amount
+      const refs = [];
+      lines.forEach((l, li) => l.cells.forEach((c) => {
+        if (!L.paymentLabelOnly.test(c.text.trim())) return;
+        const n = lines[li + 1]; if (!n || n.page !== l.page || l.y - n.y > 20) return;
+        const b = n.cells.find((x) => Math.abs(x.x - c.x) <= 25); const t = b ? b.text.trim() : '';
+        if (/^[A-Za-z0-9+/=_-]{8,60}$/.test(t) && hasDigit(t) && !datesIn(t).length && !amountsIn(t).length) refs.push({ value: t, line: { ...n, text: t, x: b.x } });
+      }));
+      const vals = [...new Set(refs.map((r) => r.value))];
+      if (vals.length === 1) put('paymentReference', vals[0], 0.6, refs[0].line, 'LABEL_PAYMENT_REFERENCE_BELOW'); else if (vals.length > 1) warnings.push('PAYMENT_REFERENCE_AMBIGUOUS');
+    }
   }
 
   // ---- dates: each date gets the label of its own column (same cell, left cell, or the aligned cell of a header row above) ----
@@ -432,6 +500,16 @@ export function extractFromPdfLines(pages, own = {}) {
     breakdown.push({ taxableCents: am.length >= 2 ? Math.abs(am[0].cents) : null, vatCents: Math.abs(am[am.length - 1].cents), rateBp, category: rateBp === 0 ? (L.exemption.test(text) ? 'E' : 'Z') : 'S',
       exemptionReason: rateBp === 0 ? (L.exemption.exec(text)?.[0] ?? null) : null, _line: l });
   });
+  // a VAT label, its amount and its rate on three stacked lines ("PL VAT -" / "€0,00" / "POLAND 0.0%"): one row, only when the three are adjacent
+  if (!breakdown.length) lines.forEach((l, li) => {
+    const a = lines[li + 1]; const r = lines[li + 2]; if (!a || !r || a.page !== l.page || r.page !== l.page || l.y - a.y > 20 || a.y - r.y > 20) return;
+    if (itemsSpan.has(li) || amountsIn(l.text).length || !l.cells.some((c) => classifyAmountLabel(c.text)?.[0] === 'vatCents')) return;
+    const am = amountsIn(a.text); const rate = L.rate.exec(r.text);
+    if (am.length !== 1 || !a.cells.every((c) => amountsIn(c.text).length || isCurrencyOnly(c.text)) || !rate || amountsIn(r.text).length || r.cells.length !== 1) return;
+    const rateBp = Math.round(Number(rate[1].replace(',', '.')) * 100); const vatCents = Math.abs(am[0].cents);
+    if (rateBp === 0 && vatCents !== 0) return; // a 0 % rate with a VAT amount is not one row
+    breakdown.push({ taxableCents: null, vatCents, rateBp, category: rateBp === 0 ? (L.exemption.test(text) ? 'E' : 'Z') : 'S', exemptionReason: rateBp === 0 ? (L.exemption.exec(text)?.[0] ?? null) : null, _line: r });
+  });
 
   // ---- totals: every amount gets the label of its own column; tables above are excluded ----
   const cands = { netCents: [], vatCents: [], grossCents: [] };
@@ -461,6 +539,17 @@ export function extractFromPdfLines(pages, own = {}) {
   }
   const neg = Object.values(cands).flat().some((c) => c.cents < 0);
   for (const k of Object.keys(cands)) for (const c of cands[k]) c.cents = Math.abs(c.cents);
+  for (const inv of invoicesInPdf) { // per invoice: its seller and its total incl. VAT, read on its own pages only; a value is kept only when it is the only one
+    const on = (l) => inv.pages.includes(l.page);
+    const sellers = sellerLabels.filter((s) => on(lines[s.li])); const keys = [...new Set(sellers.map((s) => entityKey(s.text).join(' ')))];
+    if (keys.length === 1) { const s = sellers[0]; inv.supplierName = s.text.trim(); inv.provenance.supplierName = { page: lines[s.li].page, path: 'LABEL_SELLER', text: lines[s.li].cells[s.ci].text.slice(0, 160) }; }
+    const gross = cands.grossCents.filter((c) => on(c.line) && c.strength >= 2); const vals = [...new Set(gross.map((c) => c.cents))];
+    if (vals.length === 1) {
+      const c = gross[0]; const cur = Object.entries(CUR_RE).filter(([, re]) => re.test(c.line.text)).map(([k]) => k);
+      inv.grossCents = c.cents; if (cur.length === 1) inv.currency = cur[0]; inv.provenance.grossCents = { page: c.line.page, path: c.rule, text: String(c.line.text).slice(0, 160) };
+    }
+    if (!inv.supplierName || !Number.isInteger(inv.grossCents) || !inv.pages.length) inv.toCheck = true;
+  }
   const chosen = {};
   if (!severalInvoices) {
     for (const [k, list] of Object.entries(cands)) {
@@ -496,8 +585,8 @@ export function extractFromPdfLines(pages, own = {}) {
   // ---- invoice lines: rows of the items table; a row may span several text lines (description above its amounts) ----
   if (!severalInvoices) {
     let items = [];
-    for (const hi of itemHeaders) {
-      const found = []; let pending = null; let started = false;
+    const readTable = (hi) => {
+      const found = []; let pending = null; let started = false; let hdr = hi;
       const cont = lines[hi + 1] && lines[hi + 1].page === lines[hi].page && lines[hi].y - lines[hi + 1].y <= 16 && /^\(/.test(lines[hi + 1].text.trim()) ? lines[hi + 1] : null;
       const marks = [...lines[hi].cells, ...(cont ? cont.cells : [])];
       const exclCell = marks.find((c) => /\((?:\s*excl|\s*ht\b|\s*htva|\s*hors)/i.test(c.text)); const hasIncl = marks.some((c) => /\((?:\s*incl|\s*ttc)/i.test(c.text));
@@ -506,7 +595,7 @@ export function extractFromPdfLines(pages, own = {}) {
       const amountCol = lines[hi].cells.filter((c) => /^(?:amount|total|totaal|montant|bedrag|subtotaal|item\s*total|line\s*total|prix\s*total|sub-?total)\b/i.test(c.text.trim())).pop() ?? null;
       for (let j = hi + 1; j < lines.length && itemsSpan.has(j); j += 1) {
         const l = lines[j]; const am = amountsIn(l.text);
-        if (isItemsHeader(l)) { pending = null; continue; } // a second header inside the same span
+        if (isItemsHeader(l)) { pending = null; hdr = j; continue; } // a second header inside the same span
         if (!am.length) {
           if (!started && /^\(/.test(l.text.trim())) continue; // header continuation "(excl. btw)"
           const t = l.cells.slice().sort((a, b) => letters(b.text) - letters(a.text))[0].text.trim();
@@ -530,22 +619,58 @@ export function extractFromPdfLines(pages, own = {}) {
           if (ex) lineNet = Math.round(Math.abs(amountsIn(ex.text)[0].cents) * (exclIsUnit && Number.isInteger(q) ? q : 1));
         }
         found.push({ position: found.length + 1, id: null, description, quantity: qty ? qty.text.trim().replace(',', '.') : null, unitCode: null,
-          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l, _amounts: right.length }); // amounts of the amount columns only (not those written inside a description)
+          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l, _amounts: right.length, _hi: hdr }); // amounts of the amount columns only (not those written inside a description)
         pending = null;
+      }
+      return found;
+    };
+    // a table continued on the next page: the SAME header repeated at the top of the next page, and the table ran to the end of its page (no totals in between)
+    const headerKey = (l) => l.cells.map((c) => `${c.text.trim().toLowerCase()}@${Math.round(c.x / 10)}`).join('|');
+    const runsToPageEnd = (hi) => { let j = hi + 1; while (j < lines.length && itemsSpan.has(j)) j += 1; return j > hi + 1 && (j >= lines.length || lines[j].page !== lines[hi].page); };
+    let continued = false;
+    for (let h = 0; h < itemHeaders.length; h += 1) {
+      let found = readTable(itemHeaders[h]); if (!found.length) continue;
+      for (let k = h + 1, last = itemHeaders[h]; k < itemHeaders.length; k += 1) {
+        const nx = itemHeaders[k];
+        if (lines[nx].page !== lines[last].page + 1 || headerKey(lines[nx]) !== headerKey(lines[itemHeaders[h]]) || !runsToPageEnd(last)) break;
+        found = found.concat(readTable(nx)); last = nx; continued = true;
       }
       // when most rows carry several amounts (quantity, price, total), a row with a single amount is a group subtotal or a reference, not a line
       const multi = found.filter((r) => r._amounts >= 2).length;
-      const rows = multi >= 2 && multi > found.length / 2 ? found.filter((r) => r._amounts >= 2).map((r, i) => ({ ...r, position: i + 1 })) : found;
+      const rows = (multi >= 2 && multi > found.length / 2 ? found.filter((r) => r._amounts >= 2) : found).map((r, i) => ({ ...r, position: i + 1 }));
       if (rows.length) { items = rows; break; }
     }
     if (items.length) {
+      // VAT codes in a tax column ("C2"): read only through the document's own legend ("C2 | Auto Liquidation - Article 196 ..."), and only when the
+      // VAT total is 0; otherwise the code is kept as printed and nothing is interpreted
+      const taxColOf = (it) => lines[it._hi].cells.find((c) => /^(?:tax|tva|btw|vat)(?:\s*code)?$/i.test(c.text.trim()));
+      if (items.some(taxColOf)) {
+        for (const it of items) { const col = taxColOf(it); const c = col && it._line.cells.find((x) => Math.abs(x.x - col.x) <= 20 && /^[A-Z]{1,2}\d{1,2}$/.test(x.text.trim())); if (c) it.taxCode = c.text.trim(); }
+        const codes = [...new Set(items.map((it) => it.taxCode).filter(Boolean))];
+        if (codes.length) {
+          // the legend: a line (outside the lines table) that STARTS with the code, then its explanation ("C2 | Auto Liquidation ..." or "C2 Auto Liquidation ...")
+          const legendOf = (code) => lines.map((l, li) => ({ l, li, m: new RegExp(`^${code}(?![A-Za-z0-9])\\s*[-:|]?\\s*(.+)$`).exec(l.text.trim()) })).find((x) => x.m && !itemsSpan.has(x.li) && L.reverseCharge.test(x.m[1]));
+          const legend = legendOf(codes[0]);
+          if (codes.length === 1 && items.every((it) => it.taxCode === codes[0]) && legend && f.vatCents?.value === 0 && !f.vatBreakdown) {
+            for (const it of items) { it.rateBp = 0; it.category = 'AE'; }
+            put('vatBreakdown', [{ taxableCents: Number.isInteger(f.netCents?.value) ? f.netCents.value : null, vatCents: 0, rateBp: 0, category: 'AE', exemptionReason: legend.m[1].replace(/\s{2,}/g, ' ').slice(0, 120) }], 0.6, legend.l, 'VAT_CODE_LEGEND_REVERSE_CHARGE');
+          } else warnings.push('VAT_CODE_NOT_INTERPRETED');
+        }
+      }
       const sum = items.reduce((a, it) => a + it.netCents, 0); const net = f.netCents?.value;
       const ok = Number.isInteger(net) && sum === net;
-      put('lines', items.map(({ _line, _amounts, ...it }) => it), ok ? 0.7 : Number.isInteger(net) ? 0.4 : 0.5, items[0]._line, 'ITEMS_TABLE');
+      // currencies of the amount columns only ("EUR | 11.69", "¥3.20"), never those written inside a description ("... USD 13,45 X 0,869")
+      const amountCells = (l) => l.cells.filter((c) => isCurrencyOnly(c.text) || (amountsIn(c.text).length && letters(c.text) < 4));
+      const lineCurrencies = new Set(items.flatMap((it) => amountCells(it._line).flatMap((c) => Object.entries(CUR_RE).filter(([, re]) => re.test(c.text)).map(([k]) => k))));
+      const mixed = present.length > 1 && lineCurrencies.size >= 1 && (lineCurrencies.size > 1 || !f.currency || !lineCurrencies.has(f.currency.value)); // lines in ¥, totals in $: never compared
+      put('lines', items.map(({ _line, _amounts, _hi, ...it }) => it), mixed ? 0.4 : ok ? 0.7 : Number.isInteger(net) ? 0.4 : 0.5, items[0]._line, continued ? 'ITEMS_TABLE_CONTINUED_ON_NEXT_PAGES' : 'ITEMS_TABLE');
       if (Number.isInteger(net) && !ok) warnings.push('LINES_DO_NOT_ADD_UP');
+      if (mixed) warnings.push('LINES_MIXED_CURRENCIES');
+      if (continued) warnings.push('ITEMS_TABLE_CONTINUED_ON_NEXT_PAGES');
     }
   }
-  return { extractor: 'pdf_text', fields: f, warnings: [...new Set(warnings)] };
+  if (severalInvoices && distinctNames.length > 1) { delete f.supplierName; delete f.supplierAddress; } // each invoice has its own seller: none is chosen for the whole PDF
+  return { extractor: 'pdf_text', fields: f, warnings: [...new Set(warnings)], ...(invoicesInPdf.length ? { invoices: invoicesInPdf } : {}) };
 }
 /** The cell of a line that contains a given value (for its x position). */
 function l2cell(line, value) { const d = String(value).replace(/\D/g, '').slice(-9); return line.cells?.find((c) => c.text.replace(/\D/g, '').includes(d)) ?? null; }

@@ -213,7 +213,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         row = await store.saveSupplierInvoice({
           merchantId, source, status: 'RECEIVED', ...fieldsIn, currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
           receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null,
-          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance, ...(ex.pdf ? { pdf: ex.pdf } : {}),
+          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance, ...(ex.pdf ? { pdf: ex.pdf } : {}), ...(ex.invoices ? { invoices: ex.invoices } : {}), // several invoices in one PDF: listed, none chosen
             matching: matchingSnapshot(match), duplicateCheck: duplicateSnapshot(dups) },
         });
       } catch (e) { await discardUnreferenced([ref]); throw e; } // e.g. refused by the database unique index (concurrent import)

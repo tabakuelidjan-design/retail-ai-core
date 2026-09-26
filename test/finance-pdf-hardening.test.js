@@ -64,7 +64,7 @@ test('a PDF with TWO invoices: reported, totals not read, number proposed with a
   const r = await read('twoInvoices'); const x = v(r);
   assert.ok(r.warnings.includes('MULTIPLE_INVOICES_IN_PDF'));
   assert.deepEqual([x.grossCents, x.netCents, x.vatCents, x.lines, x.vatBreakdown], [undefined, undefined, undefined, undefined, undefined]);
-  assert.equal(x.invoiceNumber, 'BE66EXEMPLE01'); assert.equal(r.fields.invoiceNumber.confidence, 0.4);
+  assert.equal(x.invoiceNumber, undefined, 'phase 3.2: no invoice is chosen automatically; each one is listed in r.invoices');
 });
 test('CMA-like shipping invoice: number under the title, "Account Number" ignored, 26-MAR-2026 / "Payable by", "Total Excluding Tax", call date ignored', async () => {
   const r = await read('shipping'); const x = v(r);
@@ -74,6 +74,7 @@ test('CMA-like shipping invoice: number under the title, "Account Number" ignore
   assert.deepEqual(x.supplierAddress, { street: "BOULEVARD EXEMPLE, 4 QUAI D'EXEMPLE", postalCode: '13235', city: 'MARSEILLE', countryCode: 'FR' });
   assert.deepEqual(x.lines.map((l) => [l.description, l.netCents]), [['Terminal Handling Charge', 25000], ['Documentation Fee', 5000]]);
   assert.deepEqual(r.warnings, []);
+  assert.deepEqual(x.vatBreakdown.map((b) => [b.rateBp, b.taxableCents, b.vatCents, b.category]), [[0, 30000, 0, 'AE']], 'phase 3.2: "C2" read through its reverse-charge legend');
 });
 test('Shopify-like bill and receipt: "Bill #", "Paid on Jan 12, 2026", "Receipt / Tax Invoice", "Limited", Eircode, rows on several lines, "Thank you" is not a name', async () => {
   const b = v(await read('bill'));
