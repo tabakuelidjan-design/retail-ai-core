@@ -758,12 +758,11 @@ export function createFinanceApp(deps) {
   on('GET', '/api/treasury', async (ctx) => {
     const { settings } = await servicesFor(); const bank = await bankFor();
     const horizonDays = [30, 60, 90].includes(Number(ctx.url.searchParams.get('horizon'))) ? Number(ctx.url.searchParams.get('horizon')) : 7;
-    const t = await bank.treasury({ currency: settings.defaults.currency, horizonDays });
+    // Treasury, bank status and per-account balances are independent reads: fetched in parallel.
+    const [t, status, balances] = await Promise.all([bank.treasury({ currency: settings.defaults.currency, horizonDays }), bank.status().catch(() => null), store.listBankBalances(merchantId).catch(() => [])]);
     const m = (c) => (c == null ? null : money(c, settings.defaults.language));
     // Per-account balances for the dashboard's "Comptes bancaires" list - real rows from fin_bank_balances,
     // never fabricated placeholder accounts. Empty when nothing is connected (the UI shows a proper empty state).
-    const status = await bank.status().catch(() => null);
-    const balances = await store.listBankBalances(merchantId).catch(() => []);
     const accounts = balances.map((b) => ({ accountId: b.accountId, ibanMasked: b.iban ? `${b.iban.slice(0, 4)} •••• •••• ${b.iban.slice(-4)}` : null, balance: m(b.balanceCents), balanceCents: b.balanceCents, currency: b.currency, asOf: b.asOf }));
     json(ctx.res, 200, { ...t, display: { bank: m(t.observed.bankCents), cash: m(t.observed.cashCents), liquid: m(t.observed.liquidCents), incoming: m(t.expected.incomingCents), outgoing: m(t.expected.outgoingCents), overdue: m(t.assumed.overdueReceivablesCents), projection: m(t.projection.cents) }, connected: !!status?.connected, provider: status?.adapter?.label ?? null, accounts });
   });

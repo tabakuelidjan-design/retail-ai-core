@@ -38,8 +38,8 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
 
   return {
     async status() {
-      const c = vault ? await vault.view() : { connected: false, state: 'NOT_CONNECTED' };
-      const tx = await store.listBankTransactions({ merchantId });
+      // Independent reads: fetched in parallel (each is a database round trip).
+      const [c, tx] = await Promise.all([vault ? vault.view() : { connected: false, state: 'NOT_CONNECTED' }, store.listBankTransactions({ merchantId })]);
       return { ...c, adapter: { name: adapter.name, label: adapter.label, configured: adapter.configured, scopes: adapter.scopes }, readOnly: true, paymentInitiation: false,
         counts: { NEW: tx.filter((t) => t.status === 'NEW').length, MATCHED: tx.filter((t) => t.status === 'MATCHED').length, IGNORED: tx.filter((t) => t.status === 'IGNORED').length }, csvImportAvailable: true };
     },
@@ -137,13 +137,15 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       return store.insertCashMovement({ merchantId, kind, amountCents, date, note: note ? String(note).slice(0, 200) : null, createdAt: clock.now() });
     },
     async treasury({ horizonDays = 7, currency = 'EUR' } = {}) {
-      const today = clock.today(); const balancesAll = await store.listBankBalances(merchantId);
+      const today = clock.today();
+      // The five sources are independent reads: fetched in parallel (each is a database round trip), then combined as before.
+      const [balancesAll, recvAll, allP, cashCount, cashMovements] = await Promise.all([store.listBankBalances(merchantId), openInvoices(), payablesAll(), store.latestCashCount(merchantId), store.listCashMovements(merchantId)]);
       const balances = balancesAll.filter((b) => (b.currency ?? currency) === currency); // an account in another currency is never added to the EUR position
-      const recvAll = await openInvoices(); const recvNative = recvAll.filter((i) => (i.currency ?? currency) === currency);
+      const recvNative = recvAll.filter((i) => (i.currency ?? currency) === currency);
       const recv = recvNative.map((i) => ({ number: i.number, dueDate: i.dueDate, remainingCents: i.remainingCents }));
-      const allP = await payablesAll(); const payNative = allP.map((r) => toPayable(r, currency)).filter((p) => p.grossCents !== null);
+      const payNative = allP.map((r) => toPayable(r, currency)).filter((p) => p.grossCents !== null);
       const pay = payNative.map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, grossCents: p.grossCents }));
-      const t = buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount: await store.latestCashCount(merchantId), cashMovements: await store.listCashMovements(merchantId), receivables: recv, payables: pay });
+      const t = buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount, cashMovements, receivables: recv, payables: pay });
       return { ...t, excluded: { foreignReceivables: recvAll.length - recvNative.length, foreignPayables: allP.length - payNative.length, foreignBankAccounts: balancesAll.length - balances.length } };
     },
   };
