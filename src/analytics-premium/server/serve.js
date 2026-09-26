@@ -7,6 +7,7 @@
 
 import http from 'node:http';
 import { createAnalyticsPremiumApp } from './app.js';
+import { createAssistant, loadAssistantProvider } from './assistant.js';
 import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
 import { reportRefreshState, startSyncAwareRefresh } from './report-refresh.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
@@ -25,7 +26,10 @@ try {
     if (merchants.length !== 1) return { available: false, reason: 'MERCHANT_NOT_UNIQUE' };
     return latestSyncStatus(supabase, merchants[0].id, { staleAfterMinutes: Number(process.env.SYNC_STALE_AFTER_MINUTES || 60) });
   } : undefined;
-  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }) });
+  // Assistant: figures come from the report; the AI explanation only exists when a provider adapter is configured (none is bundled today).
+  const { status: providerStatus, provider } = loadAssistantProvider();
+  const ask = createAssistant({ reportsDir: REPORTS_DIR, provider, providerStatus });
+  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask });
   http.createServer(handler).listen(hosting.port, hosting.host, () => {
     if (hosting.hosted) console.log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);
     else console.log(`Analytics Premium (Brief) running at http://127.0.0.1:${hosting.port}`);

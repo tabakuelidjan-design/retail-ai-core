@@ -198,7 +198,7 @@ function topbar(brief, onLangChange, opts = {}) {
 function hero() {
   return h('div', { class: 'hero' },
     h('h1', null, `${greeting()}.`, h('br'), t('hero.subtitle')),
-    h('button', { class: 'cta-primary', type: 'button' }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla'), h('kbd', null, '⌘K')));
+    askButton());
 }
 
 const covPct = (v) => (v == null ? t('common.dash') : `${Math.round(v * 100)} %`);
@@ -273,7 +273,7 @@ const dirSuffix = (d) => (d === 'up' ? 'Up' : d === 'down' ? 'Down' : 'Flat');
 function wcHero() {
   return h('div', { class: 'hero wc-hero' },
     h('div', null, h('h1', null, t('wc.title')), h('p', { class: 'hero-subtitle' }, t('wc.subtitle'))),
-    h('button', { class: 'cta-primary', type: 'button' }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla'), h('kbd', null, '⌘K')));
+    askButton());
 }
 
 /** The main "what changed" insight: real period-over-period comparison (last 30 days vs the

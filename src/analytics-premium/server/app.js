@@ -15,6 +15,7 @@ const UI = new URL('../ui/', import.meta.url);
 const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/ask.js': ['ask.js', 'text/javascript; charset=utf-8'],
   '/explorer.js': ['explorer.js', 'text/javascript; charset=utf-8'],
   '/customers.js': ['customers.js', 'text/javascript; charset=utf-8'],
   '/customers.css': ['customers.css', 'text/css; charset=utf-8'],
@@ -29,7 +30,7 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus }) {
+export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask }) {
   return async function handle(req, res) {
     try {
       // Hosted staging: host allow-list + access token, before anything (pages, static files, api) is served.
@@ -45,6 +46,19 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
       if (req.method === 'GET') {
         const shared = await readNordlaShared(url.pathname);
         if (shared) { res.writeHead(200, { 'Content-Type': shared.type, 'Cache-Control': 'no-store' }); res.end(shared.body); return; }
+      }
+      if (req.method === 'POST' && url.pathname === '/api/ask') {
+        // "Parle à Nordla": JSON only, same-origin only (the browser sends the access credentials automatically, so cross-site posts are refused).
+        const json = (status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+        const origin = req.headers.origin;
+        if (origin) { let ok = false; try { ok = new URL(origin).host === req.headers.host; } catch { ok = false; } if (!ok) return json(403, { error: { code: 'ORIGIN_NOT_ALLOWED' } }); }
+        if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(415, { error: { code: 'JSON_REQUIRED' } });
+        if (!ask) return json(503, { error: { code: 'ASSISTANT_NOT_AVAILABLE' } });
+        const chunks = []; let size = 0;
+        for await (const c of req) { size += c.length; if (size > 4096) return json(413, { error: { code: 'BODY_TOO_LARGE' } }); chunks.push(c); }
+        let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: { code: 'INVALID_JSON' } }); }
+        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr' });
+        return json(r.status, r.body);
       }
       if (req.method === 'GET' && url.pathname === '/api/sync-status') {
         // Two separate facts, never mixed: the last Shopify -> Supabase SYNCHRONISATION, and the last REPORT generation from the synced data.
