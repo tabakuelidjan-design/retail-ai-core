@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nordla ask benchmark - score schema",
+  "description": "Shape of what lib/score.js produces. Sub-scores are SEPARATE by design: there is no composite, weighted or averaged score across them.",
+  "$defs": {
+    "rate": { "type": "object", "required": ["value", "num", "den"], "properties": { "value": { "type": ["number", "null"], "description": "num / den, null when den = 0" }, "num": { "type": "integer" }, "den": { "type": "integer" } } },
+    "check": {
+      "type": "object", "required": ["id", "applicable", "pass"],
+      "properties": { "id": { "type": "string" }, "applicable": { "type": "boolean" }, "pass": { "type": ["boolean", "null"], "description": "null when the check does not apply to this case" } },
+      "additionalProperties": true
+    }
+  },
+  "caseScore": {
+    "type": "object", "required": ["id", "category", "language", "status", "pass", "checks", "premises", "hypotheses", "latency", "usage"],
+    "properties": {
+      "pass": { "type": "boolean", "description": "true only if EVERY applicable check passed (a conjunction, never an average)" },
+      "checks": {
+        "type": "array", "items": { "$ref": "#/$defs/check" },
+        "description": "planValid | premisesDeclared | premiseVerdict | noSpuriousPremise | toolSelection (required, forbidden, minDistinct, exact periods, unknown tools) | status | intermediateTurns | clarification | explanationVerified | quantities | forbiddenQuantities | labels | noCausalAfterContradiction | limitations | caveats | gaps | honestRefusal | privacy"
+      },
+      "premises": { "type": "object", "description": "expected, declared, matched, missed, spurious, omittedField, verdict" },
+      "hypotheses": { "type": "object", "properties": { "accepted": { "type": "integer" }, "rejected": { "type": "integer" } } },
+      "latency": { "type": "object", "properties": { "totalMs": {}, "planMs": {}, "explainMs": {}, "providerCalls": { "type": "integer" } } },
+      "usage": { "type": "object", "description": "Reported by the adapter's drainUsage(); null when the adapter reports nothing (never estimated)", "properties": { "inputTokens": { "type": ["integer", "null"] }, "outputTokens": { "type": ["integer", "null"] }, "costUsd": { "type": ["number", "null"] } } }
+    }
+  },
+  "providerReport": {
+    "type": "object", "required": ["provider", "cases", "note", "subScores", "byCategory", "byLanguage", "perCase"],
+    "properties": {
+      "subScores": {
+        "type": "object",
+        "properties": {
+          "successRate": { "$ref": "#/$defs/rate", "description": "cases whose every applicable check passed" },
+          "planValidity": { "$ref": "#/$defs/rate" },
+          "premiseRecall": { "$ref": "#/$defs/rate", "description": "expected premises that the provider declared / expected premises" },
+          "premiseFalsePositiveRate": { "$ref": "#/$defs/rate", "description": "questions with no expected premise for which a premise was declared anyway" },
+          "premiseVerdictAccuracy": { "$ref": "#/$defs/rate" },
+          "toolSelectionRate": { "$ref": "#/$defs/rate" },
+          "statusAccuracy": { "$ref": "#/$defs/rate" },
+          "explanationVerificationPassRate": { "$ref": "#/$defs/rate", "description": "explanations accepted by the server-side verifier at the first attempt" },
+          "quantityCitationRate": { "$ref": "#/$defs/rate" },
+          "clarificationAccuracy": { "$ref": "#/$defs/rate", "description": "asked when it had to, and did NOT ask when it must not" },
+          "honestRefusalRate": { "$ref": "#/$defs/rate" },
+          "noCausalAfterContradictionRate": { "$ref": "#/$defs/rate" },
+          "hypotheses": { "type": "object", "properties": { "accepted": { "type": "integer" }, "rejected": { "type": "integer" } } },
+          "privacyViolations": { "type": "object", "properties": { "total": { "type": "integer" }, "cases": { "type": "integer" } } },
+          "unknownToolCalls": { "type": "integer" },
+          "medianLatencyMs": { "type": ["number", "null"] }, "p95LatencyMs": { "type": ["number", "null"] },
+          "tokens": { "type": "object", "properties": { "input": { "type": ["integer", "null"] }, "output": { "type": ["integer", "null"] } } },
+          "averageCostPerQuestionUsd": { "type": ["number", "null"] }
+        }
+      },
+      "byCategory": { "type": "object", "additionalProperties": { "$ref": "#/$defs/rate" } },
+      "byLanguage": { "type": "object", "additionalProperties": { "$ref": "#/$defs/rate" }, "description": "success rate per language: detects a provider that collapses in Dutch or English" }
+    }
+  }
+}

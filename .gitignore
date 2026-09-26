@@ -12,3 +12,6 @@ reports/
 
 # Local merchant inputs (buying policy, physical stock counts) - real merchant data, never commit
 data/local/
+
+# benchmark run reports
+benchmark/ask/results/
