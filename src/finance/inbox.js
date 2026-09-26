@@ -120,7 +120,9 @@ export function validationErrors(r) {
 
 /** Validation rules for a record: a captured expense (receipt, ticket) uses the lighter expense rules; every other document keeps the full invoice rules.
  * Both also get the deterministic checks of the common document model (identifiers, document type). */
-export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors];
+export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors,
+  // a pro forma is not an invoice: it is never recorded as a purchase (reject it and import the final invoice)
+  ...((r.extraction?.warnings ?? []).includes('DOCUMENT_IS_PRO_FORMA') ? ['PRO_FORMA_NOT_AN_INVOICE'] : [])];
 
 const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '');
 

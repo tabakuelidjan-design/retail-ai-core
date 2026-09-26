@@ -184,6 +184,6 @@ test('review pane (phase 3): a PDF shows where each value was read (page) or tha
     r = await render(ui, scan);
     assert.match(r.body.textContent, /This document seems to be scanned\. Automatic reading needs image analysis, which is not enabled yet\./); assert.match(r.head.textContent, /Scanned document/);
     assert.ok(r.fields.length >= 14 && r.buttons.includes('Validate'), 'the form stays fully available for manual entry');
-    r = await render(ui, amb); assert.match(r.body.textContent, /Several totals are printed: the one where excl\. VAT \+ VAT = total was kept\. Check it\./);
+    r = await render(ui, amb); assert.match(r.body.textContent, /Several totals are printed: the most explicit one was kept\. Check it\./);
   } finally { ui?.restore(); await a.close(); }
 });

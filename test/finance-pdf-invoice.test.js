@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { amountsIn, datesIn, readPdfDocument, SCAN_TEXT_THRESHOLD } from '../src/finance/pdf-invoice.js';
 import { readPdfText } from '../src/finance/pdf-text.js';
-import { CASES, COMM, NL_IBAN, OWN, SUPPLIER_IBAN, makeIban, makeStructured } from './finance-pdf-fixtures.js';
+import { CASES, COMM, NL_IBAN, OWN, SUPPLIER_IBAN, makeIban, makePdf, makeStructured } from './finance-pdf-fixtures.js';
 import { startApp } from './finance-dashboard-helpers.js';
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -64,12 +64,17 @@ test('credit note: typed CREDIT_NOTE, stored positive, the credited invoice is n
 });
 test('several dates: only a labelled one is taken; delivery / period dates are ignored; unlabelled ones stay to check', async () => {
   const x = v(await read('manyDates')); assert.deepEqual([x.issueDate, x.dueDate], ['2026-09-10', '2026-10-10']);
-  const u = await read('unlabelledDates'); assert.equal(v(u).issueDate, undefined); assert.ok(u.warnings.includes('ISSUE_DATE_AMBIGUOUS'));
+  // "Imprimé le 12/09/2026" is a print date (ignored); the only other date is proposed, marked to check
+  const u = await read('unlabelledDates'); assert.equal(v(u).issueDate, '2026-09-10'); assert.equal(u.fields.issueDate.confidence, 0.6); assert.equal(u.fields.issueDate.path, 'ONLY_DATE_ON_DOCUMENT');
+  // two dates without any label stay to check
+  const two = await readPdfDocument(await makePdf([[[50, 30, 'FACTURE', 18], [50, 170, 'Facture n° TR-7'], [50, 185, 'Namur, le 10/09/2026'], [50, 200, 'Bruxelles, 12/09/2026'], [330, 352, 'Total TVAC'], [460, 352, '121,00 €']]]), own);
+  assert.equal(v(two).issueDate, undefined); assert.ok(two.warnings.includes('ISSUE_DATE_AMBIGUOUS'));
 });
 test('several amounts: never "the largest"; a total is chosen only by an explicit rule, otherwise it stays to check', async () => {
   const r = await read('manyAmounts'); const x = v(r);
   assert.equal(x.grossCents, 121000, 'net + VAT = total designates 1 210,00 among "Total TVAC 1 210,00" and "Solde à payer 710,00"; the 2 500,00 guarantee is ignored');
-  assert.equal(r.fields.grossCents.confidence, 0.7); assert.ok(r.warnings.includes('AMOUNTS_CHOSEN_BY_CONSISTENCY'));
+  assert.equal(r.fields.grossCents.confidence, 0.7); assert.ok(r.warnings.includes('SEVERAL_AMOUNTS_MOST_EXPLICIT_LABEL_KEPT'), '"Total TVAC" (invoice total) is more explicit than "Solde à payer"');
+  assert.equal(x.netCents + x.vatCents, x.grossCents);
   const a = await read('ambiguousTotals'); assert.equal(v(a).grossCents, undefined); assert.ok(a.warnings.includes('TOTAL_INCL_VAT_AMBIGUOUS'));
 });
 test('IBAN and structured communication: two supplier IBANs -> proposed with a low confidence; wrong check digits -> flagged', async () => {
