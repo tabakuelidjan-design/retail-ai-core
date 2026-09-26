@@ -25,18 +25,36 @@ export function createSupabaseClient(config) {
     'Content-Type': 'application/json',
   };
 
+  // Transient failures (gateway 502/503/504, 429, network reset) are retried a few times with a growing pause. Everything the client sends is safe to repeat
+  // (GET, DELETE, upserts, insert-ignoring-duplicates) except the plain append-only insert and RPCs, which opt out with { retry: false }.
+  const RETRY_STATUS = new Set([429, 502, 503, 504]);
+  const retries = Number.isInteger(config.retries) ? config.retries : 3;
+  const baseDelayMs = config.retryBaseDelayMs ?? 500;
+  const sleep = config.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+
   async function request(path, options) {
-    const res = await fetch(`${config.url}/rest/v1${path}`, {
-      ...options,
-      headers: { ...baseHeaders, ...(options?.headers || {}) },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Supabase REST ${options?.method || 'GET'} ${path} -> HTTP ${res.status}: ${body.slice(0, 500)}`);
+    const { retry = true, ...fetchOptions } = options || {};
+    for (let attempt = 0; ; attempt += 1) {
+      const canRetry = retry && attempt < retries;
+      let res;
+      try {
+        res = await fetch(`${config.url}/rest/v1${path}`, {
+          ...fetchOptions,
+          headers: { ...baseHeaders, ...(fetchOptions.headers || {}) },
+        });
+      } catch (e) {
+        if (canRetry) { await sleep(baseDelayMs * 2 ** attempt); continue; }
+        throw e;
+      }
+      if (!res.ok) {
+        if (canRetry && RETRY_STATUS.has(res.status)) { await res.text().catch(() => ''); await sleep(baseDelayMs * 2 ** attempt); continue; }
+        const body = await res.text().catch(() => '');
+        throw new Error(`Supabase REST ${fetchOptions.method || 'GET'} ${path} -> HTTP ${res.status}: ${body.slice(0, 500)}`);
+      }
+      if (res.status === 204) return null;
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     }
-    if (res.status === 204) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
   }
 
   return {
@@ -70,6 +88,7 @@ export function createSupabaseClient(config) {
         method: 'POST',
         headers: { Prefer: 'return=representation' },
         body: JSON.stringify(rows),
+        retry: false, // not idempotent: a repeated request could add the rows twice
       });
     },
 
@@ -96,7 +115,8 @@ export function createSupabaseClient(config) {
 
     /** Call a Postgres function (RPC), e.g. rpc('fin_next_number', { p_merchant, p_type, p_year }). */
     async rpc(fn, args) {
-      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
+      // Never retried: a function may have run before the response was lost (e.g. fin_next_number would burn a number).
+      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}), retry: false });
     },
 
     /** DELETE rows matching raw PostgREST filters. Database triggers may refuse (e.g. locked finance documents). */
