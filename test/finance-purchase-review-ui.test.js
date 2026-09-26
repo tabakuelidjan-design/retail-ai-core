@@ -166,3 +166,24 @@ test('review pane (phase 2): the Supplier and Duplicates blocks show recognised 
     assert.equal(contact.id.length > 0, true);
   } finally { ui?.restore(); await a.close(); }
 });
+
+test('review pane (phase 3): a PDF shows where each value was read (page) or that it must be checked - never a percentage; a scan says so', async () => {
+  const { CASES } = await import('./finance-pdf-fixtures.js');
+  const a = await startApp(); const c = await a.authed(); let ui;
+  try {
+    const up = async (name, buf) => (await c.post('/api/inbox/upload', { fileName: name, dataBase64: buf.toString('base64') })).data.item.id;
+    const text = await up('facture.pdf', await CASES.frSimple()); const scan = await up('scan.pdf', await CASES.scanned(PNG)); const amb = await up('ambigu.pdf', await CASES.manyAmounts());
+    const items = new Map(); for (const id of [text, scan, amb]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
+    ui = loadUi(async (m, path) => items.get(path.split('/')[3]));
+    const labels = (r) => all(r.body, (e) => e.tagName === 'LABEL').map((l) => l.textContent);
+    let r = await render(ui, text);
+    assert.ok(labels(r).includes('Invoice number · PDF p. 1')); assert.ok(labels(r).includes('Incl. VAT · PDF p. 1'));
+    assert.ok(labels(r).includes('VAT · to check'), 'VAT computed from the printed VAT row: weak rule, to check');
+    assert.equal(labels(r).filter((l) => /%$/.test(l)).length, 0, 'no heuristic percentage next to a PDF value');
+    assert.match(r.head.textContent, /Read from the PDF: 2 field\(s\) to check/, 'the VAT (from the VAT row) and the supplier address (block rule)');
+    r = await render(ui, scan);
+    assert.match(r.body.textContent, /This document seems to be scanned\. Automatic reading needs image analysis, which is not enabled yet\./); assert.match(r.head.textContent, /Scanned document/);
+    assert.ok(r.fields.length >= 14 && r.buttons.includes('Validate'), 'the form stays fully available for manual entry');
+    r = await render(ui, amb); assert.match(r.body.textContent, /Several totals are printed: the one where excl\. VAT \+ VAT = total was kept\. Check it\./);
+  } finally { ui?.restore(); await a.close(); }
+});

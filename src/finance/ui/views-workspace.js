@@ -37,7 +37,13 @@ const SOURCE_BADGE = { peppol: 'Peppol', email: 'E-mail', upload: 'Upload', manu
 const sourceBadge = (s) => h('span', { class: `chip src-${s}` }, tt(SOURCE_BADGE[s] || s));
 const INBOX_STATUS = { RECEIVED: 'Received', TO_REVIEW: 'To review', VALIDATED: 'Validated', TO_PAY: 'To pay', PAID: 'Paid', REJECTED: 'Rejected' };
 const inboxBadge = (s) => h('span', { class: `badge IN_${s}` }, tt(INBOX_STATUS[s] || s));
-const confChip = (x) => { const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
+const confChip = (x) => {
+  if (x.extraction && x.extraction.extractor === 'pdf_text') {
+    const w = x.extraction.warnings || []; if (w.includes('SCAN_REQUIRES_OCR')) return h('span', { class: 'chip warn' }, tt('Scanned document'));
+    const pv = Object.values(x.extraction.provenance || {}); if (!pv.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction'));
+    const weak = pv.filter((p) => p.confidence < 0.7).length; return h('span', { class: `chip ${weak ? 'warn' : 'ok'}` }, weak ? tt('Read from the PDF: {0} field(s) to check', weak) : tt('Read from the PDF'));
+  }
+ const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
 const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
   SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
@@ -50,7 +56,15 @@ const CHECK_TEXT = { TOTALS_DO_NOT_ADD_UP: 'The extracted totals do not add up: 
   EXTRACTION_FAILED: 'Automatic reading failed: enter the fields manually.', VAT_BREAKDOWN_INCOMPLETE: 'The VAT breakdown is incomplete.', VAT_BREAKDOWN_TAXABLE_DOES_NOT_MATCH_NET: 'The VAT breakdown does not match the amount excl. VAT.',
   VAT_BREAKDOWN_DOES_NOT_MATCH_VAT: 'The VAT breakdown does not match the VAT amount.', VAT_RATE_AMOUNT_MISMATCH: 'A VAT amount does not match its rate.', VAT_RATE_UNUSUAL_FOR_BELGIUM: 'A VAT rate is not a usual Belgian rate (0, 6, 12, 21 %).',
   LINES_DO_NOT_ADD_UP: 'The invoice lines do not add up to the lines total.', PAYABLE_DIFFERS_FROM_TOTAL: 'The amount to pay differs from the total incl. VAT (prepayment or rounding).',
-  CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.' };
+  CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.',
+  SCAN_REQUIRES_OCR: 'This document seems to be scanned. Automatic reading needs image analysis, which is not enabled yet.', PDF_TEXT_UNREADABLE: 'The text of this PDF could not be read: enter the fields manually.',
+  PDF_TEXT_NOTHING_RECOGNISED: 'No invoice information was recognised in the text of this PDF: enter the fields manually.', PDF_PAGES_TRUNCATED: 'Only the first 20 pages were read.',
+  SUPPLIER_VAT_AMBIGUOUS: 'Several VAT numbers are printed: check the supplier\'s.', SUPPLIER_ENTERPRISE_NUMBER_AMBIGUOUS: 'Several enterprise numbers are printed: check the supplier\'s.', SUPPLIER_NOT_IDENTIFIED_BY_VAT: 'The supplier was not identified by a VAT number: check its name.',
+  IBAN_AMBIGUOUS: 'Several IBANs are printed: check the one to pay.', INVOICE_NUMBER_AMBIGUOUS: 'Several document numbers are printed: check the invoice number.', ORDER_REFERENCE_AMBIGUOUS: 'Several order references are printed.',
+  ISSUE_DATE_AMBIGUOUS: 'The invoice date could not be told apart from the other dates: check it.', DUE_DATE_AMBIGUOUS: 'Several due dates are printed: check it.', DATE_FORMAT_AMBIGUOUS: 'A date could be read day-first or month-first: check it.',
+  CURRENCY_AMBIGUOUS: 'Several currencies are printed: check the currency.', STRUCTURED_COMMUNICATION_INVALID: 'The structured communication has wrong check digits: check it.',
+  TOTAL_INCL_VAT_AMBIGUOUS: 'The total incl. VAT could not be identified with certainty: check it.', TOTAL_EXCL_VAT_AMBIGUOUS: 'The total excl. VAT could not be identified with certainty: check it.', VAT_AMOUNT_AMBIGUOUS: 'The VAT amount could not be identified with certainty: check it.',
+  AMOUNTS_CHOSEN_BY_CONSISTENCY: 'Several totals are printed: the one where excl. VAT + VAT = total was kept. Check it.', SEVERAL_AMOUNTS_MOST_EXPLICIT_LABEL_KEPT: 'Several totals are printed: the most explicit one was kept. Check it.' };
 const checkText = (c) => tt(CHECK_TEXT[c] || INBOX_ERR[c] || c);
 
 // ---------- phase 2: supplier recognition and duplicates, two discreet blocks of the review pane ----------
@@ -152,7 +166,9 @@ function renderInboxDetail(host, id, opts = {}) {
     clear(body);
     let it; try { it = await api('GET', `/api/inbox/${id}`); } catch (e) { return fail(e, body); }
     const editable = ['RECEIVED', 'TO_REVIEW'].includes(it.status);
-    const f = {}; const inp = (k, label, val, ph, cls) => { const el = h('input', { value: val ?? '', placeholder: ph || '', disabled: !editable, on: { input: (e) => { f[k] = e.target.value; } } }); f[k] = val ?? ''; return h('div', { class: `field ${cls || ''}` }, h('label', null, label, it.extraction && it.extraction.fields && it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] * 100)}%`) : null), el); };
+    // where a prefilled value comes from: a PDF value shows its page, or "to check" when its reading rule is weak (no % shown for heuristics)
+    const fieldMark = (x, key) => { const pv = x.provenance && x.provenance[key]; if (pv && pv.source === 'PDF_TEXT') return h('span', { class: `conf ${pv.confidence < 0.7 ? 'check' : ''}` }, ` · ${pv.confidence < 0.7 ? tt('to check') : tt('PDF p. {0}', pv.page)}`); return h('span', { class: 'conf' }, ` ${Math.round(x.extraction.fields[key] * 100)}%`); };
+    const f = {}; const inp = (k, label, val, ph, cls) => { const el = h('input', { value: val ?? '', placeholder: ph || '', disabled: !editable, on: { input: (e) => { f[k] = e.target.value; } } }); f[k] = val ?? ''; return h('div', { class: `field ${cls || ''}` }, h('label', null, label, it.extraction && it.extraction.fields && it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] !== undefined ? fieldMark(it, k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)) : null), el); };
     body.appendChild(h('div', { class: 'drawer-head' }, inboxBadge(it.status), docTypeChip(it), sourceBadge(it.source), confChip(it), it.fileName ? h('span', { class: 'muted small' }, `${it.fileName} · ${fmtBytes(it.sizeBytes || 0)}`) : null));
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
     if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, checkText(w)))));
@@ -164,7 +180,7 @@ function renderInboxDetail(host, id, opts = {}) {
     const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
     const typeSel = h('select', { disabled: !editable, 'data-field': 'documentType', on: { change: (e) => { f.documentType = e.target.value; } } }, Object.keys(DOC_TYPE).map((k) => h('option', { value: k, selected: k === it.documentType }, tt(DOC_TYPE[k]))));
     f.documentType = it.documentType;
-    body.appendChild(h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Document type'), it.extraction && it.extraction.fields && it.extraction.fields.documentType !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields.documentType * 100)}%`) : null), typeSel),
+    body.appendChild(h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Document type'), it.extraction && it.extraction.fields && it.extraction.fields.documentType !== undefined ? fieldMark(it, 'documentType') : null), typeSel),
       it.documentType === 'CREDIT_NOTE' ? inp('billingReference', tr('Credited invoice number'), it.billingReference) : inp('orderReference', tr('Order reference'), it.orderReference)));
     if (it.documentType === 'CREDIT_NOTE') body.appendChild(h('div', { class: 'muted small doc-sign' }, tt('A credit note reduces your purchases: its amounts are entered as positive amounts.')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
@@ -478,10 +494,14 @@ function importDocumentsModal(done) {
   async function send(files) {
     for (const file of files) {
       const openExisting = (existingId) => h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(existingId, done) } }, tt('Open the existing document'));
+      const pending = h('div', { class: 'muted doc-analysing', role: 'status' }, tt('{0}: analysing the document…', file.name)); status.appendChild(pending);
       try {
-        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) });
-        status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : tt('{0} received', file.name), r.duplicate ? [' ', openExisting(r.item.id)] : null));
+        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); pending.remove();
+        const scan = !r.duplicate && r.item.extraction && (r.item.extraction.warnings || []).includes('SCAN_REQUIRES_OCR');
+        const review = h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(r.item.id, done) } }, tt('Review'));
+        status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : scan ? tt('{0}: scanned document, fill in the fields by hand.', file.name) : tt('{0} received', file.name), ' ', r.duplicate ? openExisting(r.item.id) : review));
       } catch (e) {
+        pending.remove();
         if (e.code === 'DUPLICATE_SUPPLIER_INVOICE' && e.extra && e.extra.existing) status.appendChild(h('div', { class: 'bad' }, tt('{0}: this document already exists (same supplier, number and type: {1}).', file.name, e.extra.existing.invoiceNumber || '—'), ' ', openExisting(e.extra.existing.id)));
         else status.appendChild(h('div', { class: 'bad' }, `${file.name}: ${e.message || e}`));
       }

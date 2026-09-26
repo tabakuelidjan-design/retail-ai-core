@@ -15,6 +15,7 @@ import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf
 import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf, readUblDocument } from './purchase-document.js';
 import { normalizeBelgianNumber } from './company.js';
 import { findDuplicates, isReferenced, matchSupplier } from './purchase-matching.js';
+import { readPdfDocument } from './pdf-invoice.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -56,8 +57,15 @@ export const NoExtractor = { name: 'none', label: 'Aucune extraction automatique
  * High confidence because the data is structured; still always human-reviewed.
  */
 export const UblExtractor = { name: 'ubl', label: 'Facture structurée UBL / Peppol', async extract({ data }) { return readUblDocument(data); } };
+/** Local reading of the text layer of a PDF (phase 3): same model, same checks. A scan (no text) is reported, never guessed (no OCR yet). */
+export const PdfTextExtractor = { name: 'pdf_text', label: 'PDF texte (lecture locale)', async extract({ data, context }) { return readPdfDocument(data, context ?? {}); } };
 /** Chooses the extractor from the sniffed type. PDF / image extraction (OCR) is a replaceable boundary: none is configured, so those need manual entry. */
-export const defaultExtractor = { name: 'auto', label: 'UBL structuré ; PDF / image : saisie manuelle', async extract(file) { return file.contentType === 'application/xml' ? UblExtractor.extract(file) : NoExtractor.extract(file); } };
+/** One pipeline, one order: structured UBL / Peppol first, then the text layer of a PDF; an image needs OCR (not enabled): manual entry. */
+export const defaultExtractor = { name: 'auto', label: 'UBL structuré ; PDF texte (lecture locale) ; image : saisie manuelle', async extract(file) {
+  if (file.contentType === 'application/xml') return UblExtractor.extract(file);
+  if (file.contentType === 'application/pdf') return PdfTextExtractor.extract(file);
+  return NoExtractor.extract(file);
+} };
 
 // ---------- private attachment storage ----------
 export function createMemoryAttachmentStore() {
@@ -119,7 +127,7 @@ const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '')
 /**
  * @param {{store: object, attachments: object, extractor?: object, merchantId: string, now?: () => string, audit?: Function}} deps
  */
-export function createInboxService({ store, attachments, extractor = defaultExtractor, merchantId, now = () => new Date().toISOString(), audit = async () => {} }) {
+export function createInboxService({ store, attachments, extractor = defaultExtractor, merchantId, now = () => new Date().toISOString(), audit = async () => {}, ownIdentity = async () => ({}) }) {
   const merchantOnly = (actor) => { if (actor?.type !== 'merchant') throw new FinanceError('THIS_STEP_REQUIRES_A_MERCHANT_ACTOR'); };
   const must = async (id) => { const r = await store.getSupplierInvoice(id); if (!r || r.merchantId !== merchantId) throw new FinanceError('INBOX_ITEM_NOT_FOUND', id); return r; };
   const move = async (r, to, patch = {}) => {
@@ -172,7 +180,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     return saved;
   };
   /** Where each field came from: { source, path, page, zone, confidence, value as read } for an extracted field. */
-  const provenanceOf = (ex) => Object.fromEntries(Object.entries(ex.fields ?? {}).map(([k, v]) => [k, { source: v.source ?? ex.extractor, path: v.path ?? null, page: v.page ?? null, zone: v.zone ?? null, confidence: v.confidence,
+  const provenanceOf = (ex) => Object.fromEntries(Object.entries(ex.fields ?? {}).map(([k, v]) => [k, { source: v.source ?? ex.extractor, path: v.path ?? null, page: v.page ?? null, zone: v.zone ?? null, ...(v.text ? { text: v.text } : {}), confidence: v.confidence,
     ...(Array.isArray(v.value) ? { count: v.value.length } : { value: v.value }) }]));
   return {
     /** Adapters call this with a file they were allowed to read. Idempotent by content hash. */
@@ -186,7 +194,9 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const dup = await store.findSupplierInvoiceBySha(merchantId, sha256);
       if (dup) return { item: dup, duplicate: true };
       // read first (local, in memory): a certain duplicate is refused before the file is ever stored
-      const ex = await extractor.extract({ fileName, contentType, data }).catch(() => ({ extractor: 'failed', fields: {}, warnings: ['EXTRACTION_FAILED'] }));
+      // the merchant's own identity is given to the reader so that it is never read as the supplier's (a PDF shows both parties)
+      const context = await ownIdentity().catch(() => ({}));
+      const ex = await extractor.extract({ fileName, contentType, data, context }).catch(() => ({ extractor: 'failed', fields: {}, warnings: ['EXTRACTION_FAILED'] }));
       const values = Object.fromEntries(Object.entries(ex.fields).map(([k, v]) => [k, v.value]));
       let fieldsIn; try { fieldsIn = clean(pick(values)); } catch { fieldsIn = clean(pick(values, FIELD_KEYS.filter((k) => k !== 'documentType'))); } // an unknown type is never stored; the person chooses
       const provenance = provenanceOf(ex);
@@ -201,7 +211,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         row = await store.saveSupplierInvoice({
           merchantId, source, status: 'RECEIVED', ...fieldsIn, currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
           receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null,
-          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance,
+          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance, ...(ex.pdf ? { pdf: ex.pdf } : {}),
             matching: matchingSnapshot(match), duplicateCheck: duplicateSnapshot(dups) },
         });
       } catch (e) { await discardUnreferenced([ref]); throw e; } // e.g. refused by the database unique index (concurrent import)

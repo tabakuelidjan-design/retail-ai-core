@@ -832,7 +832,9 @@ export function createFinanceApp(deps) {
 
   // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------
   const attachmentStore = deps.attachmentStore ?? createMemoryAttachmentStore();
-  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit });
+  // the merchant's own identity (Settings > seller): a PDF shows both parties, the reader must never take ours for the supplier's
+  const ownIdentity = async () => { const s = (await settingsIo.load()).seller ?? {}; return { vatNumbers: [s.vatNumber].filter(Boolean), enterpriseNumbers: [s.enterpriseNumber].filter(Boolean), ibans: [s.iban].filter(Boolean), names: [s.name].filter(Boolean) }; };
+  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
   const itemView = (raw) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,

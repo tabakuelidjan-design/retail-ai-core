@@ -237,13 +237,19 @@ export function checkPurchaseDocument(r) {
  * Extract + check in one step: the confidence of every field concerned by a finding is lowered (never raised), so the review
  * screen can point at it. Also keeps the historical TOTALS_DO_NOT_ADD_UP rule (net + VAT = total).
  */
-export function readUblDocument(data) {
-  const ex = extractUbl(data); const f = ex.fields; const warnings = [...ex.warnings];
+export function readUblDocument(data) { return finalizeExtraction(extractUbl(data)); }
+
+/**
+ * The same final step for EVERY reader (UBL today, PDF text, later OCR): the historical net + VAT = total rule and the model checks
+ * lower the confidence of the fields they concern (never raise it). The reader never decides whether a document is correct.
+ */
+export function finalizeExtraction(ex) {
+  const f = ex.fields; const warnings = [...ex.warnings];
   if (!Object.keys(f).length) return ex;
   const flat = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.value]));
   const lower = (k, c) => { if (f[k]) f[k].confidence = Math.min(f[k].confidence, c); };
   if (isInt(flat.netCents) && isInt(flat.vatCents) && isInt(flat.grossCents) && flat.netCents + flat.vatCents !== flat.grossCents) { warnings.push('TOTALS_DO_NOT_ADD_UP'); for (const k of ['netCents', 'vatCents', 'grossCents']) lower(k, 0.4); }
   // The model checks themselves are recomputed on every read (they follow the person's corrections); here they only lower confidence.
   for (const k of checkPurchaseDocument(flat).fieldsAffected) lower(k, 0.5);
-  return { extractor: 'ubl', fields: f, warnings: [...new Set(warnings)] };
+  return { ...ex, fields: f, warnings: [...new Set(warnings)] };
 }
