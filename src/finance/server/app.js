@@ -14,6 +14,7 @@ import { clientIpOf } from './hosting.js';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
+import { createStaticAssets } from './static-assets.js';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
@@ -80,6 +81,7 @@ export function createFinanceApp(deps) {
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...(deps.secureCookie ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...extra,
   });
   const send = (res, status, body, extra = {}) => { res.writeHead(status, headers(extra)); res.end(body); };
+  const staticAssets = createStaticAssets({ resolve: async (pathname) => (await readNordlaShared(pathname)) ?? (STATIC[pathname] ? { body: await readFile(new URL(STATIC[pathname][0], UI)), type: STATIC[pathname][1] } : null) });
   const json = (res, status, obj, extra = {}) => send(res, status, JSON.stringify(obj), { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra });
   // Oversized bodies are drained (not stored) and answered with 413, so the client gets a real response instead of a dropped connection.
   const readBody = (req, limit = 1_200_000) => new Promise((resolve, reject) => {
@@ -1227,8 +1229,8 @@ export function createFinanceApp(deps) {
       const host = req.headers.host ?? '';
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
-      if (req.method === 'GET') { const shared = await readNordlaShared(url.pathname); if (shared) return send(res, 200, shared.body, { 'Content-Type': shared.type, 'Cache-Control': 'no-store' }); }
-      if (req.method === 'GET' && STATIC[url.pathname]) { const [file, type] = STATIC[url.pathname]; return send(res, 200, await readFile(new URL(file, UI)), { 'Content-Type': type, 'Cache-Control': 'no-store' }); }
+      // Static files (shared Nordla files first, then Finance's own): compressed, validated, versioned - see static-assets.js.
+      if (req.method === 'GET' && await staticAssets.serve(req, res, url, send)) return;
       if (!url.pathname.startsWith('/api/')) throw new HttpError(404, 'NOT_FOUND');
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);
       if (!route) throw new HttpError(url.pathname === '/api/session' ? 405 : 404, 'NOT_FOUND');
