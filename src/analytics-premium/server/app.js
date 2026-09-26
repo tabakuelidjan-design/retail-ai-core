@@ -74,7 +74,7 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
         for await (const c of req) { size += c.length; if (size > 4096) return json(413, { error: { code: 'BODY_TOO_LARGE' } }); chunks.push(c); }
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: { code: 'INVALID_JSON' } }); }
         const sel = body?.period && typeof body.period === 'object' ? { period: String(body.period.period ?? '').slice(0, 30), from: typeof body.period.from === 'string' ? body.period.from.slice(0, 10) : undefined, to: typeof body.period.to === 'string' ? body.period.to.slice(0, 10) : undefined } : null;
-        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr', selected: sel, history: Array.isArray(body?.history) ? body.history.slice(-3).map((h) => ({ role: h?.role, text: typeof h?.text === 'string' ? h.text.slice(0, 300) : '' })) : [] });
+        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr', selected: sel, history: Array.isArray(body?.history) ? body.history.slice(-6).map((h) => ({ role: h?.role, text: typeof h?.text === 'string' ? h.text.slice(0, 300) : '' })) : [] });
         return json(r.status, r.body);
       }
       if (req.method === 'GET' && url.pathname === '/api/sync-status') {

@@ -21,8 +21,11 @@ const FORBIDDEN_KEYS = new Set(['email', 'mail', 'phone', 'telephone', 'tel', 'a
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const IBAN = /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,4})?\b/;
 const PHONE = /\+\d[\d .-]{7,}\d/g;
+// Postal addresses (conservative): a street word + name + house number, or a 4-digit postal code followed by a capitalised town ("5000 Namur").
+const STREET = /\b(?:rue|avenue|av\.|boulevard|bd|chauss[ée]e|place|impasse|straat|laan|weg|plein|street|road|lane)\s+[\p{L}'’. -]{2,40}?\s+\d{1,4}\b/giu;
+const POSTAL_TOWN = /\b\d{4}\s+\p{Lu}\p{L}{2,}(?:[- ]\p{Lu}\p{L}+)*/gu;
 /** Replace every personal-looking span of a string (an e-mail, an IBAN, a phone number) and count them; the rest of the text is kept. */
-const redactText = (s) => { let n = 0; const sub = (re) => { s = s.replace(re, () => { n += 1; return '[redacted]'; }); }; sub(EMAIL); sub(IBAN); sub(PHONE); return { text: s, n }; };
+const redactText = (s) => { let n = 0; const sub = (re) => { s = s.replace(re, () => { n += 1; return '[redacted]'; }); }; sub(EMAIL); sub(IBAN); sub(PHONE); sub(STREET); sub(POSTAL_TOWN); return { text: s, n }; };
 
 /** Deep copy without forbidden keys, with personal-looking strings replaced. Returns { value, redactions }. */
 export function sanitize(value) {

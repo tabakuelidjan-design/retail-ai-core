@@ -16,12 +16,13 @@ import { createFakeProvider } from './fixtures/fake-ai-provider.js';
 // Phase 2: plan -> tools -> facts -> explain -> verify, with a FAKE provider only (no real AI provider exists here). SYNTHETIC data only.
 
 async function setup({ dirty = false, ...providerOpts } = {}) {
+  const diagnostics = [];
   resetPeriodCache();
   const dir = await writeDataset({ dirty });
   const provider = createFakeProvider(providerOpts);
   const tools = createToolLayer({ reportsDir: dir, now: () => NOW });
-  const ask = createOrchestrator({ provider, tools, timeoutMs: 400 });
-  return { dir, provider, tools, ask };
+  const ask = createOrchestrator({ provider, tools, timeoutMs: 400, onDiagnostic: (d) => diagnostics.push(d) });
+  return { dir, provider, tools, ask, diagnostics };
 }
 const val = (r, ref) => r.facts.find((f) => f.ref === ref)?.value;
 
@@ -31,7 +32,7 @@ test('simple question, one tool: plan -> get_sales_metrics -> facts -> explain -
   assert.equal(r.status, 'OK'); assert.equal(r.explanation.status, 'VERIFIED'); assert.equal(r.toolCalls.length, 1); assert.equal(r.toolCalls[0].tool, 'get_sales_metrics');
   const direct = await tools.call('get_sales_metrics', {});
   assert.equal(val(r, 'c1.values.net_sales_ex_tax'), direct.values.find((v) => v.key === 'net_sales_ex_tax').value, 'the fact is the tool layer\'s figure');
-  assert.ok(r.answer.text.includes('chiffre d\'affaires net')); assert.ok(r.answer.claims.every((c) => c.factRefs.length >= 1));
+  assert.ok(r.answer.text.includes('chiffre d\'affaires net')); assert.ok(r.answer.parts.every((c) => c.factRefs.length >= 1));
   assert.equal(provider.seen.plan.length, 1, 'one planning turn'); assert.equal(provider.seen.explain.length, 1);
 });
 
@@ -41,9 +42,9 @@ test('compound question ("why did my sales drop"): the planner asks for 4 tools,
   assert.equal(r.status, 'OK');
   assert.deepEqual(r.toolCalls.map((c) => c.tool), ['get_sales_metrics', 'compare_sales', 'get_top_products', 'get_channels']); assert.ok(r.toolCalls.every((c) => c.ok));
   for (const p of ['c1.values.net_sales_ex_tax', 'c2.comparison.net_sales_ex_tax.delta_pct', 'c3.items.0.label', 'c4.items.0.share']) assert.notEqual(val(r, p), undefined, p);
-  const used = new Set(r.answer.claims.flatMap((c) => c.factRefs.map((f) => f.split('.')[0]))); assert.ok(used.size >= 2, `the answer draws on several tool results (${[...used]})`); assert.ok(r.answer.claims.some((c) => c.factRefs.some((f) => f.includes('.comparison.'))), 'and on the comparison facts');
-  assert.ok(r.answer.hypotheses.length === 1 && r.answer.hypotheses[0].factRefs.length >= 1 && r.answer.hypotheses[0].confidence === 'low', 'the hypothesis is kept, with its evidence');
-  assert.ok(/possible/i.test(r.answer.hypotheses[0].text));
+  const used = new Set(r.answer.parts.flatMap((c) => c.factRefs.map((f) => f.split('.')[0]))); assert.ok(used.size >= 2, `the answer draws on several tool results (${[...used]})`); assert.ok(r.answer.parts.some((c) => c.factRefs.some((f) => f.includes('.comparison.'))), 'and on the comparison facts');
+  const hyp = r.answer.parts.filter((x) => x.type === 'hypothesis'); assert.ok(hyp.length === 1 && hyp[0].factRefs.length >= 1 && hyp[0].confidence === 'low', 'the hypothesis is kept, with its evidence');
+  assert.ok(/possible/i.test(hyp[0].text));
 });
 
 test('two planning turns: the second turn sees only the OUTCOME of the first calls (tool, args, ok) - never a value', async () => {
@@ -69,7 +70,7 @@ test('an unknown tool is refused (never run, counted against the limit); invalid
   assert.equal(r.status, 'OK'); assert.deepEqual(r.toolCalls.map((c) => [c.tool, c.ok, c.errorCode ?? null, !!c.rejected]), [['get_sales_metrics', true, null, false], ['get_vat', false, 'UNKNOWN_TOOL', true], ['drop_database', false, 'UNKNOWN_TOOL', true], ['get_top_products', false, 'INVALID_ARGUMENT', true]]);
   assert.equal(r.facts.every((f) => f.ref.startsWith('c1.')), true, 'only the valid call produced facts');
   const allBad = await (await setup({ planner: () => ({ toolCalls: [{ tool: 'nope' }] }) })).ask({ question: 'x' });
-  assert.equal(allBad.status, 'NO_FACTS'); assert.equal(allBad.explanation.status, 'SKIPPED');
+  assert.equal(allBad.status, 'CANNOT_ANSWER'); assert.equal(allBad.reason, 'NO_DATA'); assert.equal(allBad.explanation.status, 'SKIPPED');
 });
 
 test(`limits: at most ${MAX_TOOL_CALLS} tool calls per question and ${MAX_PLAN_TURNS} planning turns`, async () => {
@@ -100,7 +101,7 @@ test('provider failures: planner error/timeout -> PLAN_FAILED (no detail leaked)
 test('HALLUCINATION BLOCKED: an invented percentage is rejected, never displayed, and the deterministic facts are shown instead', async () => {
   const s = await setup({ explainMode: 'invent-percent' });
   const r = await s.ask({ question: 'Pourquoi mes ventes ont baissé ce mois-ci ?' });
-  assert.equal(r.status, 'FACTS_ONLY'); assert.equal(r.explanation.status, 'REJECTED'); assert.deepEqual(r.explanation.reasons, [{ code: 'QUANTITY_NOT_SUPPORTED', where: 'claims[0]' }]);
+  assert.equal(r.status, 'FACTS_ONLY'); assert.equal(r.explanation.status, 'REJECTED'); assert.deepEqual(s.diagnostics[0].reasons, [{ code: 'QUANTITY_NOT_SUPPORTED', where: 'claims[0]' }], 'the technical reason goes to diagnostics only'); assert.ok(!JSON.stringify(r).includes('QUANTITY_NOT_SUPPORTED'), 'and never to the client');
   assert.equal(r.answer, undefined); const json = JSON.stringify(r);
   assert.ok(!/\b52\b/.test(json), 'the invented figure appears nowhere in the response'); assert.ok(r.facts.length > 10, 'the real facts are there');
   assert.notEqual(val(r, 'c2.comparison.net_sales_ex_tax.delta_pct'), 0.52);
@@ -108,32 +109,33 @@ test('HALLUCINATION BLOCKED: an invented percentage is rejected, never displayed
 
 test('every kind of unsupported claim is rejected: wrong amount, wrong unit, wrong sign, wrong date, number or date slipped into the text, unknown ref, no ref, bad shape, number only in the answer', async () => {
   const expected = { 'invent-in-text': 'UNSUPPORTED_NUMBER_IN_TEXT', 'no-ref': 'CLAIM_WITHOUT_FACT_REF', 'unknown-ref': 'UNKNOWN_FACT_REF', 'wrong-unit': 'QUANTITY_UNIT_MISMATCH', 'wrong-sign': 'QUANTITY_NOT_SUPPORTED',
-    'wrong-money': 'QUANTITY_NOT_SUPPORTED', 'wrong-date': 'QUANTITY_NOT_SUPPORTED', 'date-in-text': 'UNSUPPORTED_DATE_IN_TEXT', 'answer-number': 'UNSUPPORTED_NUMBER_IN_ANSWER', 'invalid-shape': 'INVALID_EXPLANATION_SHAPE' };
+    'wrong-money': 'QUANTITY_NOT_SUPPORTED', 'wrong-date': 'QUANTITY_NOT_SUPPORTED', 'date-in-text': 'UNSUPPORTED_DATE_IN_TEXT', 'invalid-shape': 'INVALID_EXPLANATION_SHAPE' };
   for (const [mode, code] of Object.entries(expected)) {
     const s = await setup({ explainMode: mode }); const r = await s.ask({ question: 'Pourquoi mes ventes ont baissé ce mois-ci ?' });
-    assert.equal(r.status, 'FACTS_ONLY', mode); assert.equal(r.explanation.status, 'REJECTED', mode); assert.equal(r.explanation.reasons[0].code, code, mode); assert.equal(r.answer, undefined, mode);
+    assert.equal(r.status, 'FACTS_ONLY', mode); assert.equal(r.explanation.status, 'REJECTED', mode); assert.equal(s.diagnostics[0].reasons[0].code, code, mode); assert.equal(r.answer, undefined, mode);
     assert.ok(!/\b(52|999|1000)\b/.test(JSON.stringify(r)), `${mode}: the rejected number is never echoed`);
   }
 });
 
 test('claim without factRef is rejected as a whole (the explanation is not shown)', async () => {
   const s = await setup({ explainMode: 'no-ref' }); const r = await s.ask({ question: 'Quel est mon chiffre d\'affaires ?' });
-  assert.equal(r.explanation.status, 'REJECTED'); assert.equal(r.explanation.reasons[0].code, 'CLAIM_WITHOUT_FACT_REF'); assert.equal(r.answer, undefined); assert.ok(r.facts.length);
+  assert.equal(r.explanation.status, 'REJECTED'); assert.equal(s.diagnostics[0].reasons[0].code, 'CLAIM_WITHOUT_FACT_REF'); assert.equal(r.answer, undefined); assert.ok(r.facts.length);
 });
 
 test('hypotheses: without proof, with an unknown ref, with an unsupported number, or stated as a certainty -> suppressed one by one; the valid one and the answer are kept', async () => {
   const s = await setup({ explainMode: 'hyp' }); const r = await s.ask({ question: 'Pourquoi mes ventes ont baissé ce mois-ci ?' });
   assert.equal(r.status, 'OK'); assert.equal(r.explanation.status, 'VERIFIED');
-  assert.equal(r.answer.hypotheses.length, 1); assert.match(r.answer.hypotheses[0].text, /Une cause possible est le poids/);
-  assert.deepEqual(r.explanation.suppressedHypotheses, [{ index: 1, code: 'HYPOTHESIS_WITHOUT_EVIDENCE' }, { index: 2, code: 'UNKNOWN_FACT_REF' }, { index: 3, code: 'UNSUPPORTED_NUMBER_IN_TEXT' }, { index: 4, code: 'HYPOTHESIS_STATED_AS_CERTAINTY' }]);
+  const hp = r.answer.parts.filter((x) => x.type === 'hypothesis'); assert.equal(hp.length, 1); assert.match(hp[0].text, /Une cause possible est le poids/);
+  assert.deepEqual(s.diagnostics.find((d) => d.type === 'HYPOTHESES_SUPPRESSED').suppressedHypotheses, [{ index: 1, code: 'HYPOTHESIS_WITHOUT_EVIDENCE' }, { index: 2, code: 'UNKNOWN_FACT_REF' }, { index: 3, code: 'UNSUPPORTED_NUMBER_IN_TEXT' }, { index: 4, code: 'HYPOTHESIS_STATED_AS_CERTAINTY' }]);
   assert.ok(!JSON.stringify(r.answer).includes('77'), 'the unsupported number of a suppressed hypothesis is not shown');
 });
 
-test('a valid answer is kept intact: same text, same claims, same factRefs as the provider produced', async () => {
+test('a valid answer is kept intact: the displayed text and parts are exactly the verified claims (kind, text, factRefs) the provider produced', async () => {
   const s = await setup(); const r = await s.ask({ question: 'Pourquoi mes ventes ont baissé ce mois-ci ?' });
-  const given = JSON.parse(JSON.stringify(r.answer)); assert.equal(r.status, 'OK'); assert.equal(given.claims.length >= 3, true);
+  assert.equal(r.status, 'OK'); const given = s.provider.lastExplanation;
+  assert.deepEqual(r.answer.parts.filter((p) => p.type !== 'hypothesis').map((p) => [p.type, p.text, p.factRefs]), given.claims.map((c) => [c.kind ?? 'fact', c.text, c.factRefs]));
+  assert.equal(r.answer.text, given.claims.map((c) => c.text).join(' '));
   for (const c of given.claims) for (const q of c.quantities ?? []) assert.equal(checkQuantity(q, r.facts.find((f) => f.ref === q.factRef)), null);
-  const net = r.facts.find((f) => f.ref === 'c1.values.net_sales_ex_tax').value; assert.ok(given.answer === undefined && given.text.includes(String(net.toFixed(2)).replace('.', ',')));
 });
 
 test('PRIVACY: the planner gets only question, language, short sanitized history, catalog, selected period and call outcomes; the explainer only facts - never personal data', async () => {
@@ -142,7 +144,7 @@ test('PRIVACY: the planner gets only question, language, short sanitized history
   const r = await s.ask({ question: 'Pourquoi mes ventes ont baissé ce mois-ci ? contact jean@example.com', history, selected: { period: 'last_7_days' } });
   assert.equal(r.status, 'OK');
   const p = s.provider.seen.plan[0]; assert.deepEqual(Object.keys(p).sort(), ['catalog', 'history', 'lang', 'previousCalls', 'question', 'selectedPeriod', 'turn']);
-  assert.equal(p.history.length, 3, 'a short history only'); assert.ok(p.history.every((h) => h.text.length <= 300));
+  assert.ok(p.history.length <= 6, 'a short history only (3 exchanges at most)'); assert.ok(p.history.every((h) => h.text.length <= 300));
   const e = s.provider.seen.explain[0]; assert.deepEqual(Object.keys(e).sort(), ['calls', 'facts', 'lang', 'question', 'rules']);
   for (const payload of [p, e]) { const j = JSON.stringify(payload); assert.ok(!/@[\w-]+\./.test(j), 'no e-mail'); assert.ok(!/\+32[\d ]{6,}/.test(j), 'no phone'); assert.ok(!/BE68/.test(j), 'no IBAN'); assert.ok(!/[a-e]{64}/.test(j), 'no customer key'); }
   assert.ok(e.facts.some((f) => /Fixture Gadget/.test(String(f.value)) || true)); assert.ok(!JSON.stringify(e).includes('jean.dupont'), 'a product title that carried an e-mail is redacted before the provider sees it');
@@ -160,7 +162,7 @@ test('short conversation context: "Et le mois dernier ?" is understood from the 
   const s = await setup();
   const r = await s.ask({ question: 'Et le mois dernier ?', history: [{ role: 'user', text: 'Quel est mon meilleur produit ce mois-ci ?' }, { role: 'assistant', text: 'Produit X.' }] });
   assert.equal(r.toolCalls[0].tool, 'get_top_products'); assert.equal(r.toolCalls[0].args.period.period, 'previous_month'); assert.equal(r.status, 'OK');
-  const alone = await s.ask({ question: 'Et le mois dernier ?' }); assert.equal(alone.status, 'NO_FACTS', 'no history, no guess');
+  const alone = await s.ask({ question: 'Et le mois dernier ?' }); assert.equal(alone.status, 'CANNOT_ANSWER', 'no history, no guess');
 });
 
 test('/api/ask with an AI provider: the orchestrated answer; without one, the deterministic keyword path is unchanged; when planning fails it falls back and says so', async () => {

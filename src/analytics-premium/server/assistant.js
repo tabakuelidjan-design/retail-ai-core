@@ -118,8 +118,8 @@ export const SUPPORTED_QUESTIONS = ['revenue', 'orders', 'units', 'aov', 'refund
  * plan -> Nordla tools -> facts -> explain -> verify (ai/orchestrator.js); when it is absent - or when its planning fails - the deterministic keyword path below answers
  * the simple questions exactly as before.
  */
-export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date(), aiProvider = null, aiTimeoutMs }) {
-  const orchestrate = aiProvider ? createOrchestrator({ provider: aiProvider, tools: createToolLayer({ reportsDir, now }), ...(aiTimeoutMs ? { timeoutMs: aiTimeoutMs } : {}) }) : null;
+export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date(), aiProvider = null, aiTimeoutMs, onDiagnostic }) {
+  const orchestrate = aiProvider ? createOrchestrator({ provider: aiProvider, tools: createToolLayer({ reportsDir, now }), ...(aiTimeoutMs ? { timeoutMs: aiTimeoutMs } : {}), ...(onDiagnostic ? { onDiagnostic } : {}) }) : null;
   // `selected` = the period chosen in the page ({period, from, to}); it is used only when the question does not name a period itself.
   return async function ask({ question, lang = 'fr', selected = null, history = [] }) {
     const text = typeof question === 'string' ? question.trim() : '';

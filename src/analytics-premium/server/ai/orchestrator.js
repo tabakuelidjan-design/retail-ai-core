@@ -10,8 +10,9 @@
 // The provider never computes a figure and never touches data; the Tool Layer makes no network call. Nothing here names a provider.
 
 import { sanitize, validate } from '../tools/contract.js';
-import { EXPLAIN_RULES, MAX_CLARIFICATION, MAX_HISTORY_TEXT, MAX_HISTORY_TURNS, MAX_PLAN_TURNS, MAX_TOOL_CALLS, PLAN_SCHEMA, PROVIDER_TIMEOUT_MS, assertProvider, callProvider } from './contract.js';
-import { buildFacts, explainPayload } from './facts.js';
+import { EXPLAIN_RULES, KNOWN_GAPS, MAX_CLARIFICATION, MAX_HISTORY_TEXT, MAX_HISTORY_TURNS, MAX_PLAN_TURNS, MAX_TOOL_CALLS, PLAN_SCHEMA, PROVIDER_TIMEOUT_MS, assertProvider, callProvider } from './contract.js';
+import { buildFacts, caveatsFor, explainPayload } from './facts.js';
+import { buildSummary } from './summary.js';
 import { verifyExplanation } from './verify.js';
 
 /** The client sends the recent turns; they are untrusted: keep the last few, cap their length, redact anything personal. */
@@ -24,7 +25,7 @@ export function cleanHistory(history) {
 
 const cleanSelected = (selected) => (selected && typeof selected.period === 'string' ? sanitize({ period: selected.period, ...(selected.from ? { from: String(selected.from) } : {}), ...(selected.to ? { to: String(selected.to) } : {}) }).value : null);
 
-export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEOUT_MS }) {
+export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEOUT_MS, onDiagnostic = () => {} }) {
   assertProvider(provider);
   const catalog = tools.catalog();
 
@@ -48,12 +49,16 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
       } catch (e) { return { status: 'PLAN_FAILED', code: e.code ?? 'PROVIDER_ERROR', turns }; }
       turns = turn;
       const shape = plan && typeof plan === 'object' ? validate(PLAN_SCHEMA, plan, 'plan') : 'plan must be an object';
-      const intents = plan && typeof plan === 'object' ? ['toolCalls', 'clarification', 'done'].filter((k) => plan[k] !== undefined && !(k === 'toolCalls' && !plan.toolCalls.length) && !(k === 'done' && plan.done === false)).length : 0;
+      const intents = plan && typeof plan === 'object' ? ['toolCalls', 'clarification', 'cannotAnswer', 'done'].filter((k) => plan[k] !== undefined && !(k === 'toolCalls' && !plan.toolCalls.length) && !(k === 'done' && plan.done === false)).length : 0;
       if (shape || intents > 1) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };
       if (plan.clarification) {
         if (executed.length) break;                                   // facts already exist: answer with them rather than ask late
         if (/\d/.test(plan.clarification.text)) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };   // a question to the user carries no figure
         return { status: 'CLARIFICATION', clarification: { text: sanitize(plan.clarification.text.slice(0, MAX_CLARIFICATION)).value }, turns, toolCalls: [] };
+      }
+      if (plan.cannotAnswer) {
+        if (executed.length) break;
+        return { status: 'CANNOT_ANSWER', reason: 'PROVIDER_DECLINED', gaps: [...new Set((plan.cannotAnswer.gaps ?? []).filter((g) => KNOWN_GAPS.includes(g)))], turns, toolCalls: [], limitations: [], summary: { currency: 'EUR', calls: [] }, facts: [] };
       }
       if (!plan.toolCalls?.length) break;                             // done (or nothing to add)
       for (const call of plan.toolCalls) {
@@ -68,14 +73,28 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
     }
 
     const facts = buildFacts(executed);
-    const base = { turns, toolCalls: [...facts.calls, ...rejectedCalls.map((r) => ({ ok: false, tool: r.tool, errorCode: r.code, rejected: true }))], limits: { maxToolCalls: MAX_TOOL_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated }, notices: facts.notices, facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })) };
-    if (!facts.list.length) return { status: 'NO_FACTS', ...base, explanation: { status: 'SKIPPED' } };
+    const currency = executed.find((e) => e.result.ok)?.result.currency ?? 'EUR';
+    const base = {
+      turns, toolCalls: [...facts.calls, ...rejectedCalls.map((r) => ({ ok: false, tool: r.tool, errorCode: r.code, rejected: true }))],
+      limits: { maxToolCalls: MAX_TOOL_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated },
+      limitations: facts.notices, summary: buildSummary(executed, currency),
+      facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })),   // for "Voir les sources de l'analyse" only
+    };
+    if (!facts.list.length) {
+      // Every call failed (no data, history too short, ...): a deterministic refusal that says what Nordla knows to be missing. No model text.
+      const gaps = [...new Set(facts.notices.filter((n) => n.code === 'INSUFFICIENT_HISTORY').map(() => 'history'))];
+      return { status: 'CANNOT_ANSWER', reason: 'NO_DATA', gaps, ...base, explanation: { status: 'SKIPPED' } };
+    }
 
     let explanation;
     try { explanation = await callProvider((signal) => provider.explain({ ...explainPayload({ question: q, lang, facts, rules: EXPLAIN_RULES }), signal }), timeoutMs); }
-    catch (e) { return { status: 'FACTS_ONLY', ...base, explanation: { status: e.code === 'PROVIDER_TIMEOUT' ? 'TIMEOUT' : 'UNAVAILABLE' } }; }
+    catch (e) { onDiagnostic({ type: 'EXPLAIN_FAILED', code: e.code }); return { status: 'FACTS_ONLY', ...base, explanation: { status: e.code === 'PROVIDER_TIMEOUT' ? 'TIMEOUT' : 'UNAVAILABLE' } }; }
     const v = verifyExplanation(explanation, facts);
-    if (v.status !== 'VERIFIED') return { status: 'FACTS_ONLY', ...base, explanation: { status: 'REJECTED', reasons: v.reasons, suppressedHypotheses: v.suppressedHypotheses } };
-    return { status: 'OK', ...base, answer: { text: v.answer, claims: v.claims, hypotheses: v.hypotheses }, explanation: { status: 'VERIFIED', suppressedHypotheses: v.suppressedHypotheses } };
+    // Technical rejection reasons are diagnostics: they never reach the client.
+    if (v.status !== 'VERIFIED') { onDiagnostic({ type: 'EXPLANATION_REJECTED', reasons: v.reasons, suppressedHypotheses: v.suppressedHypotheses }); return { status: 'FACTS_ONLY', ...base, explanation: { status: 'REJECTED' } }; }
+    if (v.suppressedHypotheses.length) onDiagnostic({ type: 'HYPOTHESES_SUPPRESSED', suppressedHypotheses: v.suppressedHypotheses });
+    // The displayed answer is the verified claims and hypotheses only; each part carries the limitations that affect the figures it quotes.
+    const parts = v.parts.map((p) => { const caveats = caveatsFor(p.factRefs, facts.notices); return caveats.length ? { ...p, caveats } : p; });
+    return { status: 'OK', ...base, answer: { text: v.text, parts }, explanation: { status: 'VERIFIED' } };
   };
 }
