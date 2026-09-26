@@ -5,7 +5,7 @@
 
 import { normalizeBelgianNumber } from './company.js';
 import { REVENUE_BASES } from './document.js';
-import { sanitizeText } from './settings.js';
+import { isValidIban, sanitizeText } from './settings.js';
 import { VAT_REGIMES } from './vat.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -59,6 +59,20 @@ export function cleanCompany(c, errors, prefix = 'customer', { identityFromDirec
   // snapshot. "Une note n'apparaît jamais sur les factures." c.notes !== undefined (rather than truthiness)
   // so sending an empty string can actually clear a previously saved note.
   if (allowNotes && c.notes !== undefined) out.notes = sanitizeText(c.notes, 2000);
+  if (allowNotes) {
+    // Contacts form only. Phone: digits with the usual separators, 6 to 15 digits (E.164 length), an optional leading +.
+    if (c.phone !== undefined) { const ph = sanitizeText(c.phone, 30); if (!ph) out.phone = null; else if (/^\+?[0-9 ().\/-]+$/.test(ph) && ph.replace(/[^0-9]/g, '').length >= 6 && ph.replace(/[^0-9]/g, '').length <= 15) out.phone = ph; else errors.push({ field: `${prefix}.phone`, code: 'PHONE_INVALID' }); }
+    // IBAN: the same ISO 13616 mod-97 check as the seller IBAN in Settings; stored compact and upper-case.
+    if (c.iban !== undefined) { const ib = sanitizeText(c.iban, 40); if (!ib) out.iban = null; else { const compact = ib.toUpperCase().replace(/\s+/g, ''); if (isValidIban(compact)) out.iban = compact; else errors.push({ field: `${prefix}.iban`, code: 'IBAN_INVALID' }); } }
+    // First name: individuals only (a company has a single legal name).
+    if (c.firstName !== undefined) out.firstName = out.kind === 'individual' ? sanitizeText(c.firstName, 80) : null;
+    // Declared roles: when given, at least one of customer / supplier.
+    if (c.roles !== undefined) {
+      const r = plain(c.roles) ? c.roles : {};
+      out.declaredRoles = { customer: r.customer === true, supplier: r.supplier === true };
+      if (!out.declaredRoles.customer && !out.declaredRoles.supplier) errors.push({ field: `${prefix}.roles`, code: 'ROLE_REQUIRED' });
+    }
+  }
   return out;
 }
 

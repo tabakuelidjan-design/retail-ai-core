@@ -269,7 +269,7 @@ async function viewSales(q) {
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/sales', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Sales')), h('div', { class: 'subtitle' }, tt('Invoices, quotes and credit notes in one place.'))),
-    h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/new/invoice' }, svgIcon('plus', 16), tt('New invoice')))));
+    h('div', { class: 'quote-card sales-actions', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/new/invoice' }, svgIcon('plus', 16), tt('New invoice')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
   const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
@@ -776,7 +776,7 @@ async function viewBank() {
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/bank', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Bank & Cash')), h('div', { class: 'subtitle' }, tt('Understand every inflow and outflow, without accounting jargon.'))),
-    h('div', { class: 'quote-card', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/treasury' }, tt('Treasury')))));
+    h('div', { class: 'quote-card bank-actions', style: 'align-self:center' }, h('a', { class: 'btn primary big', href: '#/treasury' }, tt('Treasury')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   async function draw() {
     clear(box);

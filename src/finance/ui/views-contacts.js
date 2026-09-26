@@ -12,9 +12,11 @@
 // French/Dutch text a merchant actually sees lives in lang-fr.js/lang-nl.js, keyed by these exact strings.
 
 const CONTACT_TYPE_TEXT = { business: 'Business', individual: 'Individual' };
-const RELATION_TEXT = { both: 'Customer · Supplier', customer: 'Customer', supplier: 'Supplier', none: '—' };
+const RELATION_TEXT = { both: 'Customer + Supplier', customer: 'Customer', supplier: 'Supplier', none: '—' };
 const relationKey = (row) => (row.isCustomer && row.isSupplier ? 'both' : row.isCustomer ? 'customer' : row.isSupplier ? 'supplier' : 'none');
 const relationText = (row) => tt(RELATION_TEXT[relationKey(row)]);
+/** The role as a badge (same text as relationText; nothing when the contact has no role yet). */
+const relationBadge = (row) => { const k = relationKey(row); return k === 'none' ? h('span', { class: 'muted' }, '—') : h('span', { class: `chip role-${k}` }, relationText(row)); };
 
 /** Appends the merchant's currency symbol to an already-formatted amount string (from the server's own
  * money() helper), using the same fr/nl/en placement rule as fmtMoney() - never recomputed from cents here. */
@@ -44,7 +46,7 @@ async function viewContacts(q) {
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/contacts', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Contacts')), h('div', { class: 'subtitle' }, tt('Customers, suppliers and financial relationships in one directory.'))),
-    h('div', { class: 'quote-card', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => companyModal(null) } }, tt('+ New contact')))));
+    h('div', { class: 'quote-card contacts-actions', style: 'align-self:center' }, h('button', { class: 'btn primary big', type: 'button', on: { click: () => companyModal(null) } }, tt('+ New contact')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   const metricRow = h('div', { class: 'metric-grid' }); box.appendChild(metricRow);
   const tabsrow = h('div', { class: 'tabsrow' }); box.appendChild(tabsrow);
@@ -95,8 +97,8 @@ async function viewContacts(q) {
     tableWrap.appendChild(h('table', null, h('tr', null, [tt('Contact'), tt('Relation'), tt('Contact details'), tt('Amount receivable'), tt('Amount payable'), tt('Last activity')].map((x, i) => h('th', { class: i >= 3 && i <= 4 ? 'num' : '' }, x))),
       rows.map((r) => h('tr', { class: 'click', on: { click: () => { openContactDrawer(r.id, load); } } },
         h('td', { 'data-label': tr('Contact') }, h('strong', null, r.displayName), h('small', null, r.vatNumber ? `${r.vatNumber} · ${tt(CONTACT_TYPE_TEXT[r.kind] || r.kind)}` : tt(CONTACT_TYPE_TEXT[r.kind] || r.kind))),
-        h('td', { 'data-label': tr('Relation') }, relationText(r)),
-        h('td', { 'data-label': tr('Contact details') }, r.email || '—'),
+        h('td', { 'data-label': tr('Relation') }, relationBadge(r)),
+        h('td', { 'data-label': tr('Contact details') }, [r.email, r.phone].filter(Boolean).join(' · ') || '—'),
         h('td', { class: 'num', 'data-label': tr('Amount receivable') }, r.isCustomer ? withCur(r.amountReceivable, cur) : '—'),
         h('td', { class: 'num', 'data-label': tr('Amount payable') }, r.isSupplier ? withCur(r.amountPayable, cur) : '—'),
         h('td', { 'data-label': tr('Last activity') }, fmtDateShort(r.lastActivityAt))))));
@@ -141,13 +143,19 @@ function openContactDrawer(id, onClose) {
     let c; try { c = await api('GET', `/api/contacts/${id}`); } catch (e) { return fail(e, body); }
     const cur = state.settings.defaults.currency;
     body.appendChild(h('div', { class: 'detail-head' },
-      h('div', null, h('h2', null, c.displayName), h('p', null, [tt(CONTACT_TYPE_TEXT[c.kind] || c.kind), c.vatNumber].filter(Boolean).join(' · ')), h('p', null, relationText(c))),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `/api/companies/${id}`); companyModal(r.company); } catch (e) { fail(e, err); } } } }, tt('Edit')),
+      h('div', null, h('h2', null, c.displayName), h('p', null, [tt(CONTACT_TYPE_TEXT[c.kind] || c.kind), c.vatNumber].filter(Boolean).join(' · ')), h('p', null, relationBadge(c))),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `/api/companies/${id}`); back.remove(); companyModal(r.company, c); } catch (e) { fail(e, err); } } } }, tt('Edit')),
         // Real archive/restore (index(4).html alignment) - the backend has supported this since Phase 1 but
         // had no UI control anywhere. Never a delete: the contact and its documents are untouched either way.
         c.archived
           ? h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/restore`, {}); toast(tt('Contact restored'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Restore'))
           : h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/archive`, {}); toast(tt('Contact archived'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Archive')))));
+    // Contact details: only what is really stored (nothing is shown for an empty field).
+    const a = c.address || {};
+    // A country code alone (the form's default) is not an address: shown only with a street, a postal code or a city.
+    const addr = a.street || a.postalCode || a.city ? [a.street, [a.postalCode, a.city].filter(Boolean).join(' '), a.countryCode].filter(Boolean).join(', ') : null;
+    const details = [[tt('Email'), c.email], [tt('Phone'), c.phone], [tt('Address'), addr], [tt('VAT number'), c.vatNumber], [tt('Enterprise number'), c.enterpriseNumber], ['IBAN', c.iban], [tt('Notes'), c.notes]].filter(([, v]) => v);
+    body.appendChild(details.length ? h('div', { class: 'kv contact-kv' }, details.flatMap(([k, v]) => [h('div', null, k), h('div', null, v)])) : h('div', { class: 'muted small' }, tt('No contact details yet.')));
     const fin = h('div', { class: 'contact-fin' });
     if (c.isCustomer) fin.appendChild(finItem(tt('Amount receivable'), withCur(c.amountReceivable, cur)));
     // More actionable overdue callout (index(4).html alignment): a real link into Ventes, pre-filtered to this

@@ -75,6 +75,7 @@ const TXT = {
   CATEGORY_EMPTY: 'This category has no document in the period', CATEGORY_UNKNOWN: 'Unknown category', PACK_NOT_FOUND: 'Pack not found', PACK_FILE_NOT_STORED: 'The file of this pack is no longer stored',
   ATTACHMENT_TYPE_NOT_ALLOWED: 'Only JPEG, PNG and PDF files are accepted', ATTACHMENT_TOO_LARGE: 'The file is too large (12 MB maximum)', ATTACHMENT_EMPTY: 'The file is empty', DUPLICATE_ATTACHMENT: 'This file is already attached to another document', ATTACHMENT_ALREADY_PRESENT: 'This document already has a supporting document',
   NOT_READY_TO_VALIDATE: 'Complete the missing fields first',
+  ROLE_REQUIRED: 'Choose Customer, Supplier or both', PHONE_INVALID: 'Invalid phone number', CONTACT_POSSIBLE_DUPLICATE: 'A contact with this name already exists', ROLE_IN_USE: 'This role is used by existing documents',
   BANK_IMPORT_FAILED_NOTHING_SAVED: "The import failed and nothing was saved. You can try again.",
   BANK_CSV_EMPTY: "The CSV has no data line (a header line and at least one transaction are needed)", BANK_CSV_COLUMNS_NOT_FOUND: "No date and amount columns were found in the first line", BANK_CSV_ENCODING_INVALID: "The file is not UTF-8 encoded: accents would be corrupted. Export it again as a UTF-8 CSV.", BANK_CSV_ROWS_INVALID: "The file has invalid lines: nothing was imported", BANK_CSV_FILE_TYPE: "Choose a .csv file", BANK_CSV_FILE_EMPTY: "The file is empty", BANK_CSV_FILE_TOO_LARGE: "The file is too large (3.5 MB maximum)", BANK_CSV_FILE_UNREADABLE: "The file could not be read", BANK_CSV_FILE_MISSING: "Choose a file",
 };
@@ -1144,28 +1145,104 @@ function creditModal(d) {
 // ---------- companies (the "Add/edit a company" form only - the list/detail pages were replaced by the
 // Contacts workspace in views-contacts.js; #/companies now redirects there. This form is still reused
 // as-is by Contacts' "+ New contact" / "Edit", and by the invoice form's own "New client" shortcut). ----------
-function companyModal(existing) {
+/**
+ * Contact form (add / edit) - the ONE contact store (fin_companies), used by Contacts "+ New contact", the empty state and "Edit".
+ *   role      Customer / Supplier / Both (required). A role backed by real documents cannot be removed (the option is disabled and the
+ *             server refuses it too) - keep both roles or archive the contact.
+ *   kind      Business (legal name, VAT, enterprise number, optional register lookup) or Individual (first name + name).
+ *   details   email, phone, address, IBAN, notes - all optional. Checks (email, phone, VAT / enterprise, IBAN) are done by the server.
+ * `ctx` (edit only) = the contact detail from /api/contacts/:id: its effective roles and document counts.
+ */
+function companyModal(existing, ctx) {
+  const eff = ctx && ctx.roles ? { customer: !!(ctx.isCustomer), supplier: !!(ctx.isSupplier) } : null;
+  const locked = { customer: !!(ctx && ctx.customerDocumentCount), supplier: !!(ctx && ctx.supplierDocumentCount) };
+  const roleOf = (r) => (r.customer && r.supplier ? 'both' : r.customer ? 'customer' : r.supplier ? 'supplier' : '');
   const m = existing
-    ? { name: existing.name, vatNumber: existing.vatNumber || '', enterpriseNumber: existing.enterpriseNumber || '', street: existing.address.street || '', postalCode: existing.address.postalCode || '', city: existing.address.city || '', countryCode: existing.address.countryCode || 'BE', email: existing.email || '', csource: existing.source || 'manual', cverified: false, dirty: false, companyId: null }
-    : { name: '', vatNumber: '', enterpriseNumber: '', street: '', postalCode: '', city: '', countryCode: 'BE', email: '', csource: 'manual', cverified: false, dirty: false, companyId: null };
-  const err = h('div'); const box = h('div'); const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
-  let bk = null;
+    ? { kind: existing.kind === 'individual' ? 'individual' : 'business', name: existing.name, firstName: existing.firstName || '', vatNumber: existing.vatNumber || '', enterpriseNumber: existing.enterpriseNumber || '',
+      street: existing.address.street || '', postalCode: existing.address.postalCode || '', city: existing.address.city || '', countryCode: existing.address.countryCode || 'BE',
+      email: existing.email || '', phone: existing.phone || '', iban: existing.iban || '', notes: existing.notes || '', role: roleOf(eff || existing.declaredRoles || {}),
+      csource: existing.source || 'manual', cverified: !!existing.verifiedAt, dirty: false, companyId: existing.id }
+    : { kind: 'business', name: '', firstName: '', vatNumber: '', enterpriseNumber: '', street: '', postalCode: '', city: '', countryCode: 'BE', email: '', phone: '', iban: '', notes: '', role: '', csource: 'manual', cverified: false, dirty: false, companyId: null };
+  const err = h('div', { role: 'alert' }); const box = h('div'); const sourceLine = h('div', { class: 'hint', style: 'margin:4px 0 10px' });
+  let bk = null; let confirmDuplicate = false;
+  const inp = (k, label, ph, opts = {}) => h('div', { class: `field ${opts.cls || ''}` }, h('label', null, label, opts.required ? h('span', { class: 'req', 'aria-hidden': 'true' }, ' *') : null),
+    h(opts.textarea ? 'textarea' : 'input', { value: m[k] || '', placeholder: ph || '', rows: opts.textarea ? 3 : null, type: opts.type || null, inputmode: opts.inputmode || null, autocomplete: opts.autocomplete || 'off', 'aria-required': opts.required ? 'true' : null, 'data-field': k,
+      on: { input: (e) => { m[k] = e.target.value; if (opts.identity) { m.dirty = true; clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); } } } }, opts.textarea ? m[k] || '' : null));
+  const choice = (group, value, label, current, onPick, disabled, hint) => h('label', { class: ['choice', current === value ? 'on' : '', disabled ? 'off' : ''].filter(Boolean).join(' '), title: hint || null },
+    h('input', { type: 'radio', name: group, value, checked: current === value ? 'checked' : null, disabled: disabled ? 'disabled' : null, on: { change: () => onPick(value) } }), h('span', null, label));
   const draw = () => {
     clear(box);
-    const inp = (k, label, ph, identity) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: m[k] || '', placeholder: ph || '', on: { input: (e) => { m[k] = e.target.value; if (identity) { m.dirty = true; clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); } } } }));
-    box.appendChild(h('div', { class: 'row r2' }, inp('name', 'Company name', '', true), inp('vatNumber', 'VAT number', 'BE0123456789', true)));
-    box.appendChild(h('div', { class: 'row r2' }, inp('enterpriseNumber', 'Enterprise number', '0123.456.789', true), inp('street', 'Street and number', '', true)));
-    box.appendChild(h('div', { class: 'row r3' }, inp('postalCode', 'Postal code', '', true), inp('city', 'City', '', true), inp('countryCode', 'Country (2 letters)', 'BE', true)));
-    clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); box.appendChild(sourceLine);
-    box.appendChild(inp('email', 'Email (optional)', 'accounts@company.example', false));
+    // Role (required). An option that would drop a role backed by documents is disabled, with the reason.
+    const lockNote = [];
+    if (locked.customer) lockNote.push(tt('This contact has {0} sales document(s): the Customer role cannot be removed.', ctx.customerDocumentCount));
+    if (locked.supplier) lockNote.push(tt('This contact has {0} supplier document(s): the Supplier role cannot be removed.', ctx.supplierDocumentCount));
+    const drops = (v) => (locked.customer && v === 'supplier') || (locked.supplier && v === 'customer');
+    box.appendChild(h('div', { class: 'field' }, h('label', null, tt('Type of contact'), h('span', { class: 'req', 'aria-hidden': 'true' }, ' *')),
+      h('div', { class: 'choices', role: 'radiogroup', 'aria-label': tt('Type of contact') }, [['customer', tt('Customer')], ['supplier', tt('Supplier')], ['both', tt('Customer + Supplier')]].map(([v, l]) => choice('crole', v, l, m.role, (x) => { m.role = x; draw(); }, drops(v), drops(v) ? tt('Keep both roles or archive the contact.') : null))),
+      lockNote.length ? h('div', { class: 'hint' }, lockNote.join(' '), ' ', tt('Keep both roles or archive the contact.')) : null));
+    box.appendChild(h('div', { class: 'field' }, h('label', null, tt('This contact is')),
+      h('div', { class: 'choices', role: 'radiogroup', 'aria-label': tt('This contact is') }, [['business', tt('A company')], ['individual', tt('A person')]].map(([v, l]) => choice('ckind', v, l, m.kind, (x) => { m.kind = x; draw(); })))));
+    if (m.kind === 'business') {
+      box.appendChild(h('div', { class: 'row r2' }, inp('name', tt('Company name'), '', { identity: true, required: true, autocomplete: 'organization' }), inp('vatNumber', tt('VAT number'), 'BE0123456789', { identity: true })));
+      box.appendChild(h('div', { class: 'row r2' }, inp('enterpriseNumber', tt('Enterprise number'), '0123.456.789', { identity: true }), h('div')));
+      clear(sourceLine); sourceLine.appendChild(document.createTextNode(sourceText(m))); box.appendChild(sourceLine);
+    } else {
+      box.appendChild(h('div', { class: 'row r2' }, inp('firstName', tt('First name'), '', { autocomplete: 'given-name' }), inp('name', tt('Last name'), '', { required: true, autocomplete: 'family-name' })));
+    }
+    box.appendChild(h('div', { class: 'row r2' }, inp('email', tt('Email'), 'accounts@company.example', { type: 'email', inputmode: 'email', autocomplete: 'email' }), inp('phone', tt('Phone'), '+32 81 00 00 00', { type: 'tel', inputmode: 'tel', autocomplete: 'tel' })));
+    box.appendChild(inp('street', tt('Street and number'), '', { identity: m.kind === 'business', autocomplete: 'street-address' }));
+    box.appendChild(h('div', { class: 'row r3' }, inp('postalCode', tt('Postal code'), '', { identity: m.kind === 'business', autocomplete: 'postal-code' }), inp('city', tt('City'), '', { identity: m.kind === 'business' }), inp('countryCode', tt('Country (2 letters)'), 'BE', { identity: m.kind === 'business' })));
+    box.appendChild(inp('iban', tt('IBAN (optional)'), 'BE68 5390 0754 7034'));
+    box.appendChild(inp('notes', tt('Notes (never shown on invoices)'), '', { textarea: true }));
   };
-  const search = existing ? null : companySearchBox({ onPick: (r) => { if (r.source === 'directory') { toast('This company is already in your directory', 'ok'); if (bk) bk.remove(); location.hash = `#/companies/${r.id}`; return; } fillFromResult(m, r); draw(); } });
-  draw();
-  bk = modal(existing ? 'Edit company' : 'Add a company', h('div', null, err, search ? search.node : null, h('div', { style: 'margin-top:14px' }, box)),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try {
-      const src = m.dirty || !m.csource ? 'manual' : m.csource;
-      const body = { kind: 'business', name: m.name, vatNumber: m.vatNumber || undefined, enterpriseNumber: m.enterpriseNumber || undefined, address: { street: m.street, postalCode: m.postalCode, city: m.city, countryCode: m.countryCode }, email: m.email || undefined, source: src };
-      const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body); close(); toast('Company saved', 'ok'); location.hash = `#/companies/${r.id}`; if (existing) route(); } catch (e) { fail(e, err); } } } }, 'Save'), h('button', { on: { click: close } }, 'Cancel')]);
+  const search = existing ? null : companySearchBox({ onPick: (r) => { if (r.source === 'directory') { toast(tt('This company is already in your directory'), 'ok'); if (bk) bk.remove(); location.hash = `#/contacts?open=${r.id}`; return; } fillFromResult(m, r); m.kind = 'business'; draw(); } });
+  const searchWrap = search ? h('div', { class: 'contact-lookup' }, search.node) : null;
+  const syncLookup = () => { if (searchWrap) searchWrap.style.display = m.kind === 'business' ? '' : 'none'; };
+  draw(); syncLookup();
+
+  // Server field paths -> the labels the merchant sees in this form.
+  // Server field paths (company.x / company.address.x) -> the labels the merchant sees in this form.
+  const FIELD_LABEL = { name: () => (m.kind === 'business' ? 'Company name' : 'Last name'), firstName: () => 'First name', email: () => 'Email', phone: () => 'Phone', iban: () => 'IBAN (optional)',
+    vatNumber: () => 'VAT number', enterpriseNumber: () => 'Enterprise number', roles: () => 'Type of contact', countryCode: () => 'Country (2 letters)', postalCode: () => 'Postal code' };
+  const fieldLabel = (path) => { const k = String(path).replace(/^company\.(address\.)?/, ''); return FIELD_LABEL[k] ? tt(FIELD_LABEL[k]()) : k; };
+  const showFieldErrors = (list) => err.appendChild(h('div', { class: 'banner bad' }, h('div', null, tt('Please correct the following:')),
+    h('ul', { class: 'plain' }, list.map((f) => h('li', null, tt('{0}: {1}', fieldLabel(f.field), tr(human(f.code))))))));
+  async function save(btn) {
+    clear(err);
+    const problems = [];
+    if (!m.role) problems.push({ field: 'roles', code: 'ROLE_REQUIRED' });
+    if (!String(m.name || '').trim()) problems.push({ field: 'name', code: 'REQUIRED' });
+    if (problems.length) { showFieldErrors(problems); return; }
+    const src = m.dirty || !m.csource ? 'manual' : m.csource;
+    const body = { kind: m.kind, name: m.name, firstName: m.kind === 'individual' ? (m.firstName || '') : undefined,
+      vatNumber: m.kind === 'business' ? (m.vatNumber || undefined) : undefined, enterpriseNumber: m.kind === 'business' ? (m.enterpriseNumber || undefined) : undefined,
+      address: { street: m.street, postalCode: m.postalCode, city: m.city, countryCode: m.countryCode }, email: m.email || undefined, phone: m.phone || '', iban: m.iban || '', notes: m.notes || '',
+      roles: { customer: m.role === 'customer' || m.role === 'both', supplier: m.role === 'supplier' || m.role === 'both' }, source: src, confirmDuplicate: confirmDuplicate || undefined };
+    btn.disabled = true;
+    try {
+      const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body);
+      bk.remove(); toast(tt('Contact saved'), 'ok');
+      const target = `#/contacts?open=${r.id}`;
+      if (location.hash === target) route(); else location.hash = target; // the list reloads and the new / edited contact opens
+    } catch (e) {
+      btn.disabled = false;
+      if (e.code === 'CONTACT_POSSIBLE_DUPLICATE') {
+        err.appendChild(h('div', { class: 'banner warn' }, h('div', null, tt('A contact named "{0}" already exists.', e.extra.existingName)),
+          h('div', { class: 'actions', style: 'margin-top:8px' },
+            h('button', { type: 'button', on: { click: () => { bk.remove(); location.hash = `#/contacts?open=${e.extra.existingId}`; } } }, tt('Open the existing contact')),
+            h('button', { type: 'button', on: { click: () => { confirmDuplicate = true; save(btn); } } }, tt('Create anyway')))));
+      } else if (e.code === 'ROLE_IN_USE') {
+        err.appendChild(h('div', { class: 'banner bad' }, h('ul', { class: 'plain' }, (e.extra.problems || []).map((p) => h('li', null, tt(p.role === 'customer' ? 'This contact has {0} sales document(s): the Customer role cannot be removed.' : 'This contact has {0} supplier document(s): the Supplier role cannot be removed.', p.documents)))),
+          h('div', null, tt('Keep both roles or archive the contact.'))));
+      } else if (e.code === 'INPUT_INVALID' && e.fields) showFieldErrors(e.fields);
+      else fail(e, err);
+    }
+  }
+  const saveBtn = h('button', { class: 'primary', type: 'button', on: { click: (ev) => save(ev.currentTarget) } }, tt('Save'));
+  bk = modal(existing ? tt('Edit contact') : tt('Add a contact'), h('div', { class: 'contact-form' }, err, searchWrap, h('div', { style: 'margin-top:14px' }, box)),
+    (close) => [saveBtn, h('button', { type: 'button', on: { click: close } }, tt('Cancel'))]);
+  // radio clicks call draw(): keep the register lookup in sync with the kind
+  box.addEventListener('change', syncLookup);
   if (search) search.input.focus();
 }
 

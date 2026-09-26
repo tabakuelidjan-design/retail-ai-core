@@ -93,15 +93,54 @@ export function peppolReadiness(company) {
   return { applicable: true, ready: missing.length === 0, missing };
 }
 
+/** Display name: an individual is "First Last" when a first name exists; a company is its legal name. */
+export function contactDisplayName(company) {
+  return company.kind === 'individual' && company.firstName ? `${company.firstName} ${company.name}` : company.name;
+}
+
+/** A contact's roles: declared by the merchant, derived from real documents, and the effective union shown everywhere. */
+export function contactRoles(company, { customerDocuments = 0, supplierDocuments = 0 } = {}) {
+  const declared = { customer: company.declaredRoles?.customer === true, supplier: company.declaredRoles?.supplier === true };
+  const fromDocuments = { customer: customerDocuments > 0, supplier: supplierDocuments > 0 };
+  return { declared, fromDocuments, isCustomer: declared.customer || fromDocuments.customer, isSupplier: declared.supplier || fromDocuments.supplier };
+}
+
+/**
+ * Role change guard (pure). A role supported by real documents can never be removed: the merchant keeps both roles or archives the contact.
+ * Returns the problems (empty = allowed). Counts are the same "real activity" definitions as buildContacts (issued sales documents, linked
+ * supplier invoices).
+ */
+export function roleChangeProblems(requested, { customerDocuments = 0, supplierDocuments = 0 } = {}) {
+  const problems = [];
+  if (!requested?.customer && customerDocuments > 0) problems.push({ role: 'customer', code: 'ROLE_CUSTOMER_HAS_DOCUMENTS', documents: customerDocuments });
+  if (!requested?.supplier && supplierDocuments > 0) problems.push({ role: 'supplier', code: 'ROLE_SUPPLIER_HAS_DOCUMENTS', documents: supplierDocuments });
+  return problems;
+}
+
+/** Obvious duplicates when there is no VAT / enterprise number to tell them apart: same normalised display name, not archived. */
+export function possibleNameDuplicate(candidate, companies, { excludeId = null } = {}) {
+  const n = normalizeName(contactDisplayName(candidate)); if (!n) return null;
+  return companies.find((c) => c.id !== excludeId && !c.archivedAt && normalizeName(contactDisplayName(c)) === n) ?? null;
+}
+
+/** Real activity counts per contact (issued, non-cancelled sales documents; linked supplier invoices) - the definitions used everywhere here. */
+export function activityCounts(companyId, { salesDocs, supplierInvoices }) {
+  return {
+    customerDocuments: salesDocs.filter(({ doc }) => doc.customer?.companyId === companyId && doc.lockedAt && doc.status !== 'CANCELLED').length,
+    supplierDocuments: supplierInvoices.filter((inv) => inv.supplierCompanyId === companyId).length,
+  };
+}
+
 /** One row of the /api/contacts projection. Pure - no I/O, everything is pre-fetched by the caller. */
 function projectContact(company, { salesByCompany, supplierByCompany, m }) {
   const sales = salesByCompany.get(company.id) ?? { count: 0, receivableCents: 0, overdueCents: 0, overdueCount: 0, lastActivity: null };
   const supplier = supplierByCompany.get(company.id) ?? { count: 0, payableCents: 0, lastActivity: null };
   const lastActivityAt = [sales.lastActivity, supplier.lastActivity].filter(Boolean).sort().at(-1) ?? null;
   const peppol = peppolReadiness(company);
+  const roles = contactRoles(company, { customerDocuments: sales.count, supplierDocuments: supplier.count });
   return {
-    id: company.id, kind: company.kind, displayName: company.name, vatNumber: company.vatNumber, email: company.email ?? null,
-    isCustomer: sales.count > 0, isSupplier: supplier.count > 0,
+    id: company.id, kind: company.kind, displayName: contactDisplayName(company), vatNumber: company.vatNumber, email: company.email ?? null, phone: company.phone ?? null,
+    isCustomer: roles.isCustomer, isSupplier: roles.isSupplier, roles: { declared: roles.declared, fromDocuments: roles.fromDocuments },
     customerDocumentCount: sales.count, supplierDocumentCount: supplier.count,
     amountReceivableCents: sales.receivableCents, amountPayableCents: supplier.payableCents, amountOverdueCents: sales.overdueCents,
     amountReceivable: m(sales.receivableCents), amountPayable: m(supplier.payableCents), amountOverdue: m(sales.overdueCents),
@@ -165,11 +204,14 @@ export function contactDetail(company, { salesDocs, supplierInvoices, m, today }
   const overdueCents = overdue.reduce((a, { doc, payments, creditNotes }) => a + settlement(doc, payments, creditNotes).remainingCents, 0);
   const payableCents = linkedSupplier.filter((inv) => inv.status === 'TO_PAY').reduce((a, inv) => a + (inv.grossCents ?? 0), 0);
   const peppol = peppolReadiness(company);
+  const roles = contactRoles(company, { customerDocuments: salesRows.length, supplierDocuments: supplierRows.length });
   return {
-    id: company.id, kind: company.kind, displayName: company.name, vatNumber: company.vatNumber, enterpriseNumber: company.enterpriseNumber,
-    email: company.email ?? null, address: company.address ?? { street: null, postalCode: null, city: null, countryCode: null },
+    id: company.id, kind: company.kind, displayName: contactDisplayName(company), firstName: company.firstName ?? null, name: company.name,
+    vatNumber: company.vatNumber, enterpriseNumber: company.enterpriseNumber,
+    email: company.email ?? null, phone: company.phone ?? null, iban: company.iban ?? null, address: company.address ?? { street: null, postalCode: null, city: null, countryCode: null },
     notes: company.notes ?? null, archived: !!company.archivedAt, source: company.source ?? 'manual',
-    isCustomer: salesRows.length > 0, isSupplier: supplierRows.length > 0,
+    isCustomer: roles.isCustomer, isSupplier: roles.isSupplier, roles: { declared: roles.declared, fromDocuments: roles.fromDocuments },
+    customerDocumentCount: salesRows.length, supplierDocumentCount: supplierRows.length,
     amountReceivable: m(receivableCents), amountPayable: m(payableCents), amountOverdue: m(overdueCents), overdueCount: overdue.length,
     peppol: { applicable: peppol.applicable, ready: peppol.ready, missing: peppol.missing },
     salesDocuments: salesRows, supplierDocuments: supplierRows,

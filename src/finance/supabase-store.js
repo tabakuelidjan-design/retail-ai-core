@@ -121,7 +121,7 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
 
     async saveCompany(c) {
       const row = { merchant_id: merchantId, kind: c.kind ?? 'business', name: c.name, enterprise_number: c.enterpriseNumber ?? null, vat_number: c.vatNumber ?? null, legal_form: c.legalForm ?? null,
-        street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null, source: c.source ?? 'manual', verified_at: c.verifiedAt ?? null, notes: c.notes ?? null };
+        street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null, first_name: c.firstName ?? null, phone: c.phone ?? null, iban: c.iban ?? null, declared_customer: !!c.declaredRoles?.customer, declared_supplier: !!c.declaredRoles?.supplier, source: c.source ?? 'manual', verified_at: c.verifiedAt ?? null, notes: c.notes ?? null };
       const [r] = await guard(() => supabase.insert('fin_companies', [row]));
       return companyFromRow(r);
     },
@@ -130,7 +130,7 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       // Deliberately does not touch archived_at: archiving/restoring is a separate, explicit action
       // (setCompanyArchived) so an ordinary "Edit" save can never silently resurrect an archived contact.
       const row = { kind: c.kind ?? 'business', name: c.name, enterprise_number: c.enterpriseNumber ?? null, vat_number: c.vatNumber ?? null, legal_form: c.legalForm ?? null,
-        street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null, notes: c.notes ?? null };
+        street: c.address?.street ?? null, postal_code: c.address?.postalCode ?? null, city: c.address?.city ?? null, country_code: c.address?.countryCode ?? null, contact_email: c.email ?? null, peppol_id: c.peppolId ?? null, notes: c.notes ?? null, first_name: c.firstName ?? null, phone: c.phone ?? null, iban: c.iban ?? null, declared_customer: !!c.declaredRoles?.customer, declared_supplier: !!c.declaredRoles?.supplier };
       const rows = await guard(() => supabase.update('fin_companies', { id: eq(id), merchant_id: eq(merchantId) }, row));
       return rows?.[0] ? companyFromRow(rows[0]) : null;
     },
@@ -251,6 +251,7 @@ const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId
 const bankTxFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, accountId: r.account_id, providerTxId: r.provider_tx_id, date: r.date, amountCents: Number(r.amount_cents), currency: r.currency, counterpartyName: r.counterparty_name, reference: r.reference, structuredReference: r.structured_reference, source: r.source, status: r.status, matchedKind: r.matched_kind, matchedDocumentId: r.matched_document_id, matchedPaymentId: r.matched_payment_id, matchedAmountCents: r.matched_amount_cents == null ? null : Number(r.matched_amount_cents), matchedAt: r.matched_at, importedAt: r.imported_at });
 const stockToRow = (m) => ({ merchant_id: m.merchantId, document_id: m.documentId, document_number: m.documentNumber, document_type: m.documentType, line_position: m.linePosition, kind: m.kind, variant_id: m.variantId, variant_source_id: m.variantSourceId, sku: m.sku, location_id: m.locationId, location_source_id: m.locationSourceId, quantity: m.quantity, delta: m.delta, status: m.status, error: m.error, idempotency_key: m.idempotencyKey });
 const stockFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, documentId: r.document_id, documentNumber: r.document_number, documentType: r.document_type, linePosition: r.line_position, kind: r.kind, variantId: r.variant_id, variantSourceId: r.variant_source_id, sku: r.sku, locationId: r.location_id, locationSourceId: r.location_source_id, quantity: r.quantity, delta: r.delta, status: r.status, error: r.error, idempotencyKey: r.idempotency_key, shopifyAdjustmentId: r.shopify_adjustment_id, createdAt: r.created_at, appliedAt: r.applied_at });
-const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,
+export const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,
   address: { street: r.street, postalCode: r.postal_code, city: r.city, countryCode: r.country_code }, email: r.contact_email, peppolId: r.peppol_id, source: r.source, verifiedAt: r.verified_at,
-  notes: r.notes ?? null, archivedAt: r.archived_at ?? null });
+  notes: r.notes ?? null, archivedAt: r.archived_at ?? null,
+  firstName: r.first_name ?? null, phone: r.phone ?? null, iban: r.iban ?? null, declaredRoles: { customer: r.declared_customer === true, supplier: r.declared_supplier === true } });

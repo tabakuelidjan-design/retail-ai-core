@@ -36,7 +36,7 @@ import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanV
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
-import { buildContacts, contactDetail, contactExportRow, planImport } from '../contacts.js';
+import { buildContacts, contactDetail, contactExportRow, planImport, activityCounts, contactDisplayName, possibleNameDuplicate, roleChangeProblems } from '../contacts.js';
 import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
 import { toCsv } from '../export-csv.js';
 import { buildReceivables } from '../receivables.js';
@@ -541,10 +541,28 @@ export function createFinanceApp(deps) {
   on('POST', '/api/companies', async (ctx) => {
     const { svc } = await servicesFor();
     const c = companyBody(ctx.body);
+    // Obvious duplicate (same name, no distinguishing VAT / enterprise number): refused until the merchant confirms it is a different contact.
+    if (!c.vatNumber && !c.enterpriseNumber && ctx.body?.confirmDuplicate !== true) {
+      const dup = possibleNameDuplicate(c, await svc.listCompanies());
+      if (dup) throw new HttpError(409, 'CONTACT_POSSIBLE_DUPLICATE', { existingId: dup.id, existingName: contactDisplayName(dup) });
+    }
     const saved = await svc.saveCompany({ ...c, source: c.source ?? 'manual', verifiedAt: c.source === 'vies' || c.source === 'cbeapi' ? clock.now() : null }, actor);
     json(ctx.res, 201, saved);
   });
-  on('PUT', `/api/companies/${P}`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, await svc.updateCompany(idParam(ctx.m[1]), companyBody(ctx.body), actor)); });
+  on('PUT', `/api/companies/${P}`, async (ctx) => {
+    const { svc } = await servicesFor(); const id = idParam(ctx.m[1]); const c = companyBody(ctx.body);
+    const cur = await svc.getCompany(id); // tenant check first (404 for a foreign / missing contact)
+    if (c.declaredRoles) {
+      // A role backed by real documents can never be removed silently: keep it, or archive the contact.
+      const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
+      const counts = activityCounts(id, { salesDocs, supplierInvoices });
+      const effective = { customer: c.declaredRoles.customer, supplier: c.declaredRoles.supplier };
+      const problems = roleChangeProblems(effective, counts);
+      if (problems.length) throw new HttpError(409, 'ROLE_IN_USE', { problems });
+    }
+    if (c.firstName === undefined && c.kind !== 'individual') c.firstName = null; // a company never keeps a first name
+    json(ctx.res, 200, await svc.updateCompany(cur.id, c, actor));
+  });
   on('GET', `/api/companies/${P}`, async (ctx) => {
     const { svc } = await servicesFor();
     const c = await svc.getCompany(idParam(ctx.m[1]));
@@ -584,7 +602,7 @@ export function createFinanceApp(deps) {
       else if (role === 'both') rows = rows.filter((r) => r.isCustomer && r.isSupplier);
       else if (role === 'incomplete') rows = rows.filter((r) => r.incomplete);
     }
-    if (q) rows = rows.filter((r) => `${r.displayName} ${r.vatNumber ?? ''} ${r.email ?? ''}`.toLowerCase().includes(q));
+    if (q) rows = rows.filter((r) => `${r.displayName} ${r.vatNumber ?? ''} ${r.email ?? ''} ${r.phone ?? ''}`.toLowerCase().includes(q));
     return { svc, companies, rows: rows.sort((a, b) => a.displayName.localeCompare(b.displayName)) };
   };
   on('GET', '/api/contacts', async (ctx) => { const { rows } = await contactsFor(ctx); json(ctx.res, 200, { rows }); });
