@@ -36,6 +36,7 @@ test('PDF: an explicit payment term is located and kept as the supplier wrote it
 
 test('PDF: no condition, a warranty / return period, or an unrecognised wording never produce a term the grammar computes from', async () => {
   const none = await read({}); assert.equal(none.fields.paymentTerms, undefined); assert.ok(!none.warnings.some((w) => w.startsWith('PAYMENT_TERMS')));
+  const dispute = await read({ terms: ['Please contact billing@example.com within 7 days after invoice date', 'Payment reference 2Q0xx7im6CPubdtNFZRL'] }); assert.equal(dispute.fields.paymentTerms, undefined, 'a dispute period and a reference id are not payment terms (seen on real invoices)');
   const warranty = await read({ terms: ['Garantie 30 jours', 'Retour sous 14 jours'] }); assert.equal(warranty.fields.paymentTerms, undefined, 'not payment terms');
   const contract = await read({ termsLabel: 'Selon contrat' }); assert.equal(contract.fields.paymentTerms.value, 'Selon contrat'); assert.ok(contract.fields.paymentTerms.confidence < 0.7, 'kept for the person, flagged to check'); assert.ok(contract.warnings.includes('PAYMENT_TERMS_NOT_RECOGNISED'));
   const two = await read({ terms: ['Paiement à 14 jours', 'Paiement à 30 jours'] }); assert.equal(two.fields.paymentTerms, undefined); assert.ok(two.warnings.includes('PAYMENT_TERMS_AMBIGUOUS'), 'two different terms: abstention');

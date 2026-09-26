@@ -23,7 +23,7 @@ export const UNLABELLED_MAX_LENGTH = 80;
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’`´]/g, "'").replace(/\s+/g, ' ').trim();
 
 const DAY_UNIT = '(?:jours?|jrs?|dagen|days?|j|d)';
-const DAY_NUMBER = new RegExp(`(?<![\\d.,/])(\\d{1,4})\\s*${DAY_UNIT}(?![a-z])`, 'g');
+const DAY_NUMBER = new RegExp(`(?<![a-z\\d.,/])(\\d{1,4})\\s*${DAY_UNIT}(?![a-z])`, 'g');   // a number glued to letters ("3j27...") is part of an identifier, not a duration
 const NET_N = /\bnet\s*(\d{1,3})\b(?!\s*(?:%|eur|€|usd|[.,]\d))/;
 const EOM = /(?:fin\s+de\s+mois|fin\s+mois|\bfdm\b|\bf\.d\.m\b|\bfm\b|einde\s+(?:van\s+de\s+)?maand|\beom\b|end\s+of\s+(?:the\s+)?month)/;
 const IMMEDIATE = new RegExp([
@@ -39,8 +39,11 @@ const PREPAID_ANYWHERE = /\b(?:upfront|up-front|prepaid|pre-paid|prepayment|voor
 const PREPAID_WHOLE = /^(?:payment\s+upfront|upfront\s+payment|paiement\s+anticipe|paiement\s+a\s+l'avance|paye|deja\s+paye|betaald|paid|prepaid|already\s+paid|vooruitbetaling|reeds\s+betaald)[\s.!]*$/;
 // wording that makes a text something else than a term we compute from: discounts, deposits, instalments, contracts, percentages.
 const EXCLUDED = /(?:\d+\s*\/\s*\d+\s*net|escompte|korting|discount|skonto|acompte|deposit|voorschot|\bsolde\b|balance\s+due|instal|termijnen|tranche|\d+\s*%|selon\s+(?:le\s+)?contrat|volgens\s+(?:het\s+)?contract|as\s+agreed|according\s+to\s+(?:the\s+)?contract|sur\s+accord|na\s+overeenkomst)/;
-const PAYMENT_CUE = /(?:paiement|payable|payer|reglement|regler|betaal|betalen|betaling|payment|\bpay\b|\bnet\b|\bdue\b|within|binnen|comptant)/;
-const NOT_PAYMENT = /(?:garantie|warranty|retour|return|livraison|delivery|levering|geldig|valable|valid|offre|offer|devis|quote|reclam|expire|delai\s+de\s+(?:livraison|retractation)|bedenktijd)/;
+// an unlabelled text must talk about PAYING: "within N days" alone can be a dispute period, a delivery time...
+const PAYMENT_CUE = /(?:paiement|payable|payer|reglement|regler|betaal|betalen|betaling|payment|\bpay\b|\bnet\s*\d|\d\s*(?:jours?|jrs?|dagen|days?|j|d)\s*net\b)/;
+// a long letters+digits token (a payment reference, an order id): a text that carries one is not a wording of terms
+const IDENTIFIER = /\b(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{12,}\b/;
+const NOT_PAYMENT = /(?:garantie|warranty|retour|return|livraison|delivery|levering|geldig|valable|valid|offre|offer|devis|quote|reclam|expire|delai\s+de\s+(?:livraison|retractation)|bedenktijd|contact|dispute|litige|geschil|claims?\b|complain|plainte|objection|bezwaar|protest|@|www\.|https?:)/;
 const FROM_INVOICE = /(?:date\s+(?:de\s+)?(?:la\s+)?facture|factuurdatum|invoice\s+date|from\s+(?:the\s+)?invoice|de\s+la\s+facture|after\s+invoice|na\s+factuur|apres\s+facture|date\s+d'emission|issue\s+date)/;
 const FROM_OTHER_EVENT = /(?:reception|ontvangst|receipt|received|livraison|delivery|levering|expedition|shipment|verzending|commande|order\s+date|besteldatum|bill\s+of\s+lading|b\/l)/;
 
@@ -51,7 +54,7 @@ const term = (kind, days, ref, explicit, eom) => ({ kind, days, referencePoint: 
 export function parsePaymentTerms(text, { labelled = false } = {}) {
   const t = norm(text);
   if (!t || (!labelled && t.length > UNLABELLED_MAX_LENGTH)) return result('NOT_A_TERM');
-  if (!labelled && NOT_PAYMENT.test(t)) return result('NOT_A_TERM');
+  if (!labelled && (NOT_PAYMENT.test(t) || IDENTIFIER.test(t))) return result('NOT_A_TERM');
   const fail = () => result(labelled ? 'OUT_OF_GRAMMAR' : 'NOT_A_TERM');
 
   if (PREPAID_WHOLE.test(t) || (labelled && PREPAID_ANYWHERE.test(t))) return result('PARSED', term('PREPAID', null, null, false, false));

@@ -56,3 +56,9 @@ test('termSignature: the same term in different words has the same signature', (
   const a = parsePaymentTerms('Paiement à 30 jours').parsed; const b = parsePaymentTerms('Net 30').parsed; const c = parsePaymentTerms('Net 14').parsed; const d = parsePaymentTerms('30 jours fin de mois', { labelled: true }).parsed;
   assert.equal(termSignature(a), termSignature(b)); assert.notEqual(termSignature(a), termSignature(c)); assert.notEqual(termSignature(a), termSignature(d)); assert.equal(termSignature(null), '');
 });
+
+test('regression from real invoices: a dispute period, a reference id, "every 30 days", a printed date and "T/T" are not terms the grammar computes from', () => {
+  for (const t of ['Please contact billing@example.com within 7 days after invoice date', 'Contact disputes within 7 days after invoice date', 'Référence de paiement Zx3j27dzquPabcd', 'Payment reference 2Q0xx7im6CPubdtNFZRL', 'Every 30 days', 'Payable by 02-APR-2026', 'Payment before delivery of Bill Of Lading']) not(t, false, 'NOT_A_TERM');
+  not('T/T', true, 'OUT_OF_GRAMMAR');
+  ok('within 7 days after invoice date', true, { kind: 'NET_DAYS', days: 7, endOfMonth: false, referencePoint: 'INVOICE_DATE' });   // the SAME words after a "payment terms" label are a term
+});
