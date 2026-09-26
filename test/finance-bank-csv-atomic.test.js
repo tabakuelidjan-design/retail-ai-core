@@ -59,7 +59,7 @@ test('Supabase client: insertIgnoringDuplicates sends ONE POST with ignore-dupli
   const seen = []; const realFetch = globalThis.fetch;
   try {
     globalThis.fetch = async (url, opts) => { seen.push({ url, opts }); return seen.length === 1 ? { ok: true, status: 201, text: async () => '[{"id":"a"}]' } : { ok: false, status: 503, text: async () => 'upstream down' }; };
-    const c = createSupabaseClient({ url: 'https://x.example.test', serviceRoleKey: 'k'.repeat(30) });
+    const c = createSupabaseClient({ url: 'https://x.example.test', serviceRoleKey: 'k'.repeat(30), retries: 0 });
     const rows = [{ a: 1 }, { a: 2 }];
     assert.deepEqual(await c.insertIgnoringDuplicates('fin_bank_transactions', rows, { onConflict: 'merchant_id,account_id,provider_tx_id' }), [{ id: 'a' }]);
     assert.equal(seen.length, 1); assert.match(seen[0].url, /\/rest\/v1\/fin_bank_transactions\?on_conflict=merchant_id%2Caccount_id%2Cprovider_tx_id$/);
