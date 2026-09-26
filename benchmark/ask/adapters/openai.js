@@ -7,7 +7,7 @@
 //   - usage: input_tokens (cached and cache-write tokens included), output_tokens (reasoning included), input_tokens_details.cached_tokens and .cache_write_tokens
 //     (cache writes are billed at 1.25x the uncached input rate), output_tokens_details.reasoning_tokens.
 
-import { createAdapter } from './shared/core.js';
+import { createAdapter, specOf } from './shared/core.js';
 
 const wire = {
   allowedHosts: ['api.openai.com'], defaultBaseUrl: 'https://api.openai.com/v1', path: '/responses',
@@ -38,3 +38,6 @@ const wire = {
 
 /** @param {object} config see benchmark/ask/adapters/README.md  @param {{ fetch?, sleep?, env? }} [deps] injected by tests */
 export function createProvider(config, deps) { return createAdapter({ providerName: 'openai', wire, config, deps }); }
+
+/** Declared for the preflight. Reasoning models take no temperature / top_p in the Responses API; only the documented request fields below may be added through config.params. */
+export const spec = specOf('openai', wire, { supportedParams: ['service_tier', 'metadata', 'user', 'truncation'], unsupportedParams: { temperature: 'reasoning models take no temperature in the Responses API', top_p: 'reasoning models take no top_p in the Responses API' }, toolChoices: ['forced', 'auto'] });

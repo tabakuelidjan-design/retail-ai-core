@@ -7,7 +7,7 @@
 //   - the answer's tool call is in choices[0].message.tool_calls[].function.arguments (a JSON string); `reasoning_content` is ignored;
 //   - usage: prompt_tokens (cached included), completion_tokens, prompt_tokens_details.cached_tokens / cache_write_tokens (no separate reasoning counter).
 
-import { createAdapter } from './shared/core.js';
+import { createAdapter, specOf } from './shared/core.js';
 
 const wire = {
   allowedHosts: ['api.moonshot.ai'], defaultBaseUrl: 'https://api.moonshot.ai/v1', path: '/chat/completions',
@@ -37,3 +37,6 @@ const wire = {
 };
 
 export function createProvider(config, deps) { return createAdapter({ providerName: 'kimi', wire, config, deps }); }
+
+/** Declared for the preflight. No extra request parameter is declared for Kimi K3 (the official page does not document sampling constraints for it): none is forwarded. */
+export const spec = specOf('kimi', wire, { supportedParams: [], unsupportedParams: { temperature: 'not documented for K3 on the official page', top_p: 'not documented for K3 on the official page' }, toolChoices: ['forced', 'required'] });

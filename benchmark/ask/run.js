@@ -22,7 +22,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createOracleProvider } from './lib/oracle-provider.js';
 import { runBenchmark } from './lib/benchmark.js';
 import { createBudget } from './lib/budget-guard.js';
-import { collectMetadata } from './lib/meta.js';
+import { adapterInfo, collectMetadata, nordlaInfo } from './lib/meta.js';
+import { PREFLIGHT_EXIT_CODE, formatFailure, runPreflight } from './lib/preflight.js';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { summarizeRuns } from './lib/score.js';
 import { validateCases } from './lib/validate-cases.js';
 import { createBenchmarkTools } from './lib/dataset.js';
@@ -37,7 +40,7 @@ const fail = (msg, code = 2) => { console.error(msg); process.exit(code); };
 const providerArg = opt('provider');
 if (!providerArg) fail('usage: node benchmark/ask/run.js --provider oracle | --provider <adapter module> (--smoke | --max-requests N) [--repeats N] [--max-cost-usd X] [--config file.json] [--only S01,P01] [--out file.json]');
 const isOracle = providerArg === 'oracle';
-if (!isOracle && process.env.NORDLA_BENCH_ALLOW_PROVIDER_CALLS !== '1') fail('Refusing to call a real provider: set NORDLA_BENCH_ALLOW_PROVIDER_CALLS=1 to confirm that this run may call an external AI service (and may cost money).');
+// (a real provider is checked by the PREFLIGHT below - opt-in, request cap, repeats, config, key - before anything network-related exists)
 
 const dirPath = fileURLToPath(new URL('.', import.meta.url));
 const casesFile = path.join(dirPath, 'cases.json');
@@ -46,25 +49,42 @@ const problems = validateCases(cases); if (problems.length) fail(`cases.json is 
 
 // --- smoke preset and caps ---
 const smoke = flag('smoke'); const spec = smoke ? JSON.parse(readFileSync(path.join(dirPath, 'smoke.json'), 'utf8')) : null;
-if (smoke && (opt('only') !== null || opt('repeats') !== null)) fail('--smoke fixes the cases and a single repetition (the same for every provider): do not combine it with --only or --repeats');
+if (isOracle && smoke && (opt('only') !== null || opt('repeats') !== null)) fail('--smoke fixes the cases and a single repetition (the same for every provider): do not combine it with --only or --repeats');
 if (spec) { const missing = spec.cases.filter((id) => !cases.some((c) => c.id === id)); if (missing.length) fail(`smoke.json names unknown cases: ${missing.join(', ')}`, 3); }
-const intOpt = (name) => { const v = opt(name); if (v === null) return null; const n = Number(v); if (!Number.isInteger(n) || n < 1) fail(`--${name} must be a positive integer`); return n; };
-const numOpt = (name) => { const v = opt(name); if (v === null) return null; const n = Number(v); if (!Number.isFinite(n) || n <= 0) fail(`--${name} must be a positive number`); return n; };
+const intOpt = (name) => { const v = opt(name); if (v === null) return null; const n = Number(v); if (!Number.isInteger(n) || n < 1) fail(`--${name} must be a positive integer`, isOracle ? 2 : PREFLIGHT_EXIT_CODE); return n; };
+const numOpt = (name) => { const v = opt(name); if (v === null) return null; const n = Number(v); if (!Number.isFinite(n) || n <= 0) fail(`--${name} must be a positive number`, isOracle ? 2 : PREFLIGHT_EXIT_CODE); return n; };
 const repeats = smoke ? spec.repeats : (opt('repeats') === null ? 1 : Number(opt('repeats')));
-if (!Number.isInteger(repeats) || repeats < 1 || repeats > 10) fail('--repeats must be an integer from 1 to 10');
+if (isOracle && (!Number.isInteger(repeats) || repeats < 1 || repeats > 10)) fail('--repeats must be an integer from 1 to 10');
 const only = smoke ? spec.cases : (opt('only')?.split(',') ?? null);
 const maxRequests = intOpt('max-requests') ?? spec?.maxRequests ?? null; const maxCostUsd = numOpt('max-cost-usd') ?? spec?.maxCostUsd ?? null;
-if (smoke && maxRequests > spec.maxRequests) fail(`--max-requests cannot exceed the smoke cap (${spec.maxRequests})`);
-if (smoke && maxCostUsd > spec.maxCostUsd) fail(`--max-cost-usd cannot exceed the smoke cap (${spec.maxCostUsd})`);
-if (!isOracle && maxRequests === null) fail('A real-provider run needs a request cap: use --smoke, or --max-requests N (every HTTP attempt counts, retries included).');
-const budget = !isOracle ? createBudget({ maxRequests, maxCostUsd }) : null;
+if (isOracle && smoke && maxRequests > spec.maxRequests) fail(`--max-requests cannot exceed the smoke cap (${spec.maxRequests})`);
+if (smoke && maxCostUsd > spec.maxCostUsd) fail(`--max-cost-usd cannot exceed the smoke cap (${spec.maxCostUsd})`, isOracle ? 2 : PREFLIGHT_EXIT_CODE);
+
+// --- config, then the mandatory PREFLIGHT of a real provider: local checks only, nothing network-related has been imported, created or called yet ---
+const sha = (f) => createHash('sha256').update(readFileSync(f)).digest('hex');
+let config = {}; let configProblem = false;
+if (opt('config')) { try { config = JSON.parse(readFileSync(opt('config'), 'utf8')); } catch { config = null; configProblem = true; } }
+const adapterFile = isOracle ? path.join(dirPath, 'lib/oracle-provider.js') : path.resolve(providerArg);
+let mod = null; let priced = true;
+if (!isOracle) {
+  let specDecl = null; let loadProblem = false;
+  if (existsSync(adapterFile)) { try { mod = await import(pathToFileURL(adapterFile).href); specDecl = mod.spec ?? null; if (typeof mod.createProvider !== 'function') loadProblem = true; } catch { loadProblem = true; } } else loadProblem = true;
+  const pre = runPreflight({
+    spec: loadProblem ? null : specDecl, config: configProblem || !opt('config') ? null : config, env: process.env,
+    options: { smoke, repeats: repeats, repeatsGiven: opt('repeats') !== null, maxRequests, only: opt('only')?.split(',') ?? null }, smokePreset: spec,
+    casesOk: true, casesSha256: sha(casesFile), datasetSha256: sha(fileURLToPath(new URL('./lib/dataset.js', import.meta.url))), nordla: nordlaInfo(), adapter: adapterInfo(adapterFile), today: new Date(),
+  });
+  if (!pre.ok) fail(formatFailure(pre), PREFLIGHT_EXIT_CODE);
+  for (const w of pre.warnings) console.error(`warning: ${w.field}: ${w.message}`);
+  for (const [k, v] of Object.entries(pre.summary)) console.log(`${k}: ${v}`);
+  console.log('');
+  priced = pre.priced;
+}
+const budget = !isOracle ? createBudget({ maxRequests, maxCostUsd: priced ? maxCostUsd : null }) : null;
 
 const { tools } = await createBenchmarkTools();
 const truth = await verifyTruth(cases, tools); if (truth.drift.length) fail(`The fixed dataset drifted from the pinned truth:\n${JSON.stringify(truth.drift, null, 1)}`, 3);
 
-const adapterFile = isOracle ? path.join(dirPath, 'lib/oracle-provider.js') : path.resolve(providerArg);
-const config = opt('config') ? JSON.parse(readFileSync(opt('config'), 'utf8')) : {};
-let mod = null; if (!isOracle) mod = await import(pathToFileURL(adapterFile).href);
 // a NEW instance for every repetition; a real adapter only ever gets the budget-guarded fetch
 const createProvider = async () => (isOracle ? createOracleProvider({ cases }) : budget.track(await mod.createProvider(config, { fetch: budget.wrapFetch(globalThis.fetch) })));
 
@@ -78,6 +98,8 @@ const finishedAt = new Date();
 const stopped = aborted || (budget?.isExceeded() ?? false);   // a refused request also means something was cut short
 const runExtra = { smoke, budget: budget?.snapshot() ?? null, aborted: stopped };
 const meta = collectMetadata({ provider, config, adapterFile, repeatMetadata, runExtra, repeats, only, timeoutMs: Number(opt('timeout-ms') ?? 60_000), startedAt, finishedAt, casesFile, datasetFile, referenceDate: '2026-09-26' });
+// Without configured pricing the cost is UNKNOWN, not 0: the scorer sums a missing cost as 0, so it is nulled here (scoring itself is untouched).
+if (!isOracle && !priced) for (const run of runs) for (const sc of run) if (sc.usage) sc.usage.costUsd = null;
 const report = { meta, ...summarizeRuns(runs, { provider: provider.name, truthChecked: truth.checked }) };
 // Last line of defence: a report is never written if it still holds any exploitable piece of the API key (whole, prefix, suffix, masked echo).
 const secretText = JSON.stringify(report); const liveKey = !isOracle && config.apiKeyEnv ? process.env[config.apiKeyEnv] : null;

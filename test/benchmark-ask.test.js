@@ -121,7 +121,7 @@ test('SAFETY: the benchmark lives outside test/, npm test never reaches a provid
   assert.ok(!readdirSync(path.join(ROOT, 'test')).some((f) => f === 'ask'), 'no benchmark run inside test/');
   const run = (a, env = {}) => spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), ...a], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '', ...env } });
   const noArg = run([]); assert.equal(noArg.status, 2); assert.match(noArg.stderr, /usage/);
-  const real = run(['--provider', './adapters/does-not-exist.js']); assert.equal(real.status, 2); assert.match(real.stderr, /Refusing to call a real provider/);
+  const real = run(['--provider', './adapters/does-not-exist.js']); assert.equal(real.status, 6); assert.match(real.stderr, /PREFLIGHT FAILED.*Refusing to call a real provider.*No request was sent/);
   const src = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = path.join(d, f); if (statSync(p).isDirectory()) { if (f !== 'results' && f !== 'adapters') walk(p); /* adapters: policed by test/benchmark-adapters.test.js */ } else if (/\.(js|json|md)$/.test(f)) src.push([p, readFileSync(p, 'utf8')]); } }; walk(path.join(ROOT, 'benchmark/ask'));
   for (const [p, s] of src.filter(([p]) => p.endsWith('.js'))) { assert.ok(!/\bfetch\(|node:https?|XMLHttpRequest|WebSocket|https?:\/\//.test(s), `${path.basename(p)}: no network`); assert.ok(!/openai|anthropic|claude|gemini|kimi|mistral|(?<!x-)api[_-]?key(?!Env)|\bsk-[A-Za-z0-9]{10,}/i.test(s.replace(/\/\/.*$/gm, '')), `${path.basename(p)}: no provider named`); }
 });
@@ -226,14 +226,15 @@ test('reproducibility metadata: benchmark version/hashes, run times, Nordla comm
   const oracleUrl = new URL('../benchmark/ask/lib/oracle-provider.js', import.meta.url).href; const casesUrl = new URL('../benchmark/ask/cases.json', import.meta.url).href;
   writeFileSync(adapter, `import { readFileSync } from 'node:fs';
 import { createOracleProvider } from '${oracleUrl}';
+export const spec = { provider: 'fake', allowedHosts: ['api.example.test'], defaultBaseUrl: 'https://api.example.test/v1', path: '/x', endpoint: 'https://api.example.test/v1/x', efforts: ['high'], supportedParams: [], unsupportedParams: {}, toolChoices: ['forced'], controlledFields: [], configKeys: ['model', 'reasoningEffort', 'apiKeyEnv', 'today', 'pricing', 'pricingSource', 'params'] };
 export function createProvider(config) {
   const cases = JSON.parse(readFileSync(new URL('${casesUrl}'), 'utf8'));
   const p = createOracleProvider({ cases });
-  return { ...p, name: 'fake-adapter', metadata: () => ({ model: config.model, modelVersion: 'm-1-2026-01-01', temperature: config.temperature, apiKey: 'sk-LEAKYLEAKYLEAKY123456', region: 'eu' }) };
+  return { ...p, name: 'fake-adapter', metadata: () => ({ model: config.model, modelVersion: 'm-1-2026-01-01', temperature: config._temperature, apiKey: 'sk-LEAKYLEAKYLEAKY123456', region: 'eu' }) };
 }
 `);
   const cfg = path.join(dir, 'cfg.json');
-  writeFileSync(cfg, JSON.stringify({ model: 'm-1', temperature: 0.2, apiKey: 'sk-SECRETSECRETSECRET1234', apiKeyEnv: 'MY_PROVIDER_KEY', headers: { Authorization: 'Bearer abc123def456ghi789' }, nested: { token: 'zzz-top-secret' }, note: 'sk-INLINEINLINEINLINE9999' }));
+  writeFileSync(cfg, JSON.stringify({ model: 'm-1', reasoningEffort: 'high', today: '2026-09-26', pricing: { inputPerMTok: 1, outputPerMTok: 1 }, pricingSource: { url: 'https://example.test/pricing', retrievedOn: '2026-09-26' }, _temperature: 0.2, _apiKey: 'sk-SECRETSECRETSECRET1234', apiKeyEnv: 'MY_PROVIDER_KEY', _headers: { Authorization: 'Bearer abc123def456ghi789' }, _nested: { token: 'zzz-top-secret' }, _note: 'sk-INLINEINLINEINLINE9999' }));
   const out = path.join(dir, 'result.json');
   const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', adapter, '--config', cfg, '--only', 'S01,C01', '--repeats', '2', '--max-requests', '50', '--out', out], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', MY_PROVIDER_KEY: 'sk-ENVSECRETVALUE99999999' } });
   assert.equal(r.status, 0, r.stderr);
@@ -244,7 +245,7 @@ export function createProvider(config) {
   assert.equal(m.benchmark.casesSha256, createHash('sha256').update(readFileSync(path.join(ROOT, 'benchmark/ask/cases.json'))).digest('hex')); assert.match(m.benchmark.datasetSha256, /^[0-9a-f]{64}$/);
   assert.ok(Date.parse(m.run.startedAt) <= Date.parse(m.run.finishedAt)); assert.equal(m.run.repeats, 2); assert.deepEqual(m.run.only, ['S01', 'C01']);
   assert.equal(m.nordla.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim()); assert.equal(typeof m.nordla.dirty, 'boolean'); assert.ok(m.nordla.branch);
-  assert.deepEqual([m.provider.name, m.provider.model, m.provider.modelVersion, m.provider.temperature], ['fake-adapter', 'm-1', 'm-1-2026-01-01', 0.2]); assert.equal(m.provider.config.apiKey, '[redacted]'); assert.equal(m.provider.config.apiKeyEnv, 'MY_PROVIDER_KEY'); assert.equal(m.provider.metadata.region, 'eu');
+  assert.deepEqual([m.provider.name, m.provider.model, m.provider.modelVersion, m.provider.temperature], ['fake-adapter', 'm-1', 'm-1-2026-01-01', 0.2]); assert.equal(m.provider.config._apiKey, '[redacted]'); assert.equal(m.provider.config.apiKeyEnv, 'MY_PROVIDER_KEY'); assert.equal(m.provider.metadata.region, 'eu');
   assert.equal(m.adapter.path, 'fake-adapter.mjs'); assert.equal(m.adapter.commit, null, 'an adapter outside the repository has no commit'); assert.match(m.adapter.sha256, /^[0-9a-f]{64}$/);
   const oracle = adapterInfo(path.join(ROOT, 'benchmark/ask/lib/oracle-provider.js')); assert.match(oracle.commit, /^[0-9a-f]{40}$/, 'an adapter inside the repository carries its last commit'); assert.equal(oracle.path, 'benchmark/ask/lib/oracle-provider.js');
   assert.equal(rep.subScores.successRate.den, 4, '2 cases x 2 repetitions');

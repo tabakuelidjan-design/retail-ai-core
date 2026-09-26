@@ -111,10 +111,11 @@ test('scrubber units: exact value, long prefix/suffix, standalone short suffix/p
 
 test('last line of defence in the runner: if a key fragment ever slips into a report, the report is WITHHELD (exit 5, nothing written); a properly redacted error echo still runs to the end', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'secret-net-')); const key = REALISTIC.openai[1]; const conf = path.join(dir, 'c.json');
-  writeFileSync(conf, JSON.stringify({ model: 'm', reasoningEffort: 'high', apiKeyEnv: 'NET_TEST_KEY', today: '2026-09-26', pricing: { inputPerMTok: 1, outputPerMTok: 1 } }));
+  writeFileSync(conf, JSON.stringify({ model: 'm-1', reasoningEffort: 'high', apiKeyEnv: 'NET_TEST_KEY', today: '2026-09-26', pricing: { inputPerMTok: 1, outputPerMTok: 1 }, pricingSource: { url: 'https://example.test/pricing', retrievedOn: '2026-09-26' } }));
   const oracleUrl = new URL('../benchmark/ask/lib/oracle-provider.js', import.meta.url).href; const casesUrl = new URL('../benchmark/ask/cases.json', import.meta.url).href;
   const adapter = (metaExpr) => { const f = path.join(dir, `a-${Math.random().toString(36).slice(2)}.mjs`); writeFileSync(f, `import { readFileSync } from 'node:fs';
 import { createOracleProvider } from '${oracleUrl}';
+export const spec = { provider: 'fake', allowedHosts: ['api.example.test'], defaultBaseUrl: 'https://api.example.test/v1', path: '/x', endpoint: 'https://api.example.test/v1/x', efforts: ['high'], supportedParams: [], unsupportedParams: {}, toolChoices: ['forced'], controlledFields: [], configKeys: ['model', 'reasoningEffort', 'apiKeyEnv', 'today', 'pricing', 'pricingSource', 'params'] };
 export function createProvider() { const cases = JSON.parse(readFileSync(new URL('${casesUrl}'), 'utf8')); const p = createOracleProvider({ cases }); return { ...p, name: 'net-test', metadata: () => (${metaExpr}) }; }
 `); return f; };
   const run = (file, out) => spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', file, '--config', conf, '--only', 'S01', '--max-requests', '5', '--out', out], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', NET_TEST_KEY: key } });

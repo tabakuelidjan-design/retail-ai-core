@@ -77,3 +77,9 @@ read at call time, scrubbed from every error message, and results are redacted b
 | **Absolute worst case** (each call also uses its corrective retry and 2 HTTP retries: ×6) | 612 | 1 836 | 5 508 |
 
 The expected figure is measured on the scripted oracle (56 provider calls). Tokens are not estimated here: they depend on the model, and the runs report them.
+
+## Mandatory preflight (every real run)
+
+Before anything network-related is created, `run.js` runs `lib/preflight.js`: local checks only, **no request, no test of the key**. It checks the adapter (`spec` export), endpoint (official, https), model, reasoning effort, supported parameters (nothing silently ignored), the key variable (present, non-empty, not a placeholder), `NORDLA_BENCH_ALLOW_PROVIDER_CALLS=1`, the request cap, `--repeats`, cases/dataset/commit/adapter identification and pricing (full run: dated and sourced pricing required; `--smoke` without pricing = warning, cost stays `null`).
+
+On failure: `PREFLIGHT FAILED — <field or variable to fix>. No request was sent.`, exit code **6**. The message never contains a key, a fragment of one, or the offending value. On success it prints Provider / Model / Endpoint / Reasoning effort / Repeats / API key: present / Provider calls: enabled / Preflight: PASS.

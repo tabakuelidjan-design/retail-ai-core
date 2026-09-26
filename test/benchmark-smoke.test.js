@@ -67,11 +67,14 @@ test('a format/retry problem cannot cause a flood of calls: retries, corrective 
 });
 
 const run = (args, env = {}) => spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), ...args], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '', ...env } });
+const FAKE_SPEC = "export const spec = { provider: 'fake', allowedHosts: ['api.example.test'], defaultBaseUrl: 'https://api.example.test/v1', path: '/x', endpoint: 'https://api.example.test/v1/x', efforts: ['high'], supportedParams: [], unsupportedParams: {}, toolChoices: ['forced'], controlledFields: [], configKeys: ['model', 'reasoningEffort', 'apiKeyEnv', 'today', 'pricing', 'pricingSource', 'params'] };\n";
+const FAKE_CFG = { model: 'm-1', reasoningEffort: 'high', today: '2026-09-26', apiKeyEnv: 'OPENAI_API_KEY', pricing: { inputPerMTok: 1, outputPerMTok: 1 }, pricingSource: { url: 'https://example.test/pricing', retrievedOn: '2026-09-26' } };
+function fakeConfig(dir) { const f = path.join(dir, 'cfg.json'); writeFileSync(f, JSON.stringify(FAKE_CFG)); return f; }
 function fakeAdapter() {   // an adapter that never touches the network: the oracle, behind the adapter interface
   const dir = mkdtempSync(path.join(tmpdir(), 'smoke-adapter-')); const file = path.join(dir, 'oracle-adapter.mjs');
   writeFileSync(file, `import { readFileSync } from 'node:fs';
 import { createOracleProvider } from '${new URL('../benchmark/ask/lib/oracle-provider.js', import.meta.url).href}';
-export function createProvider() { const cases = JSON.parse(readFileSync(new URL('${new URL('../benchmark/ask/cases.json', import.meta.url).href}'), 'utf8')); return { ...createOracleProvider({ cases }), name: 'oracle-behind-adapter' }; }
+${FAKE_SPEC}export function createProvider() { const cases = JSON.parse(readFileSync(new URL('${new URL('../benchmark/ask/cases.json', import.meta.url).href}'), 'utf8')); return { ...createOracleProvider({ cases }), name: 'oracle-behind-adapter' }; }
 `);
   return { dir, file };
 }
@@ -79,16 +82,16 @@ export function createProvider() { const cases = JSON.parse(readFileSync(new URL
 test('the runner: a real-provider run needs the opt-in AND a request cap; --smoke fixes cases/repetitions and cannot be widened', () => {
   const a = fakeAdapter(); const ALLOW = { NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1' };
   assert.match(run(['--provider', a.file, '--smoke']).stderr, /Refusing to call a real provider/);
-  const nocap = run(['--provider', a.file, '--repeats', '3'], ALLOW); assert.equal(nocap.status, 2); assert.match(nocap.stderr, /needs a request cap: use --smoke, or --max-requests N/);
-  for (const bad of [['--smoke', '--only', 'S01'], ['--smoke', '--repeats', '3']]) { const r = run(['--provider', a.file, ...bad], ALLOW); assert.equal(r.status, 2, bad.join(' ')); assert.match(r.stderr, /do not combine it with --only or --repeats/); }
-  assert.match(run(['--provider', a.file, '--smoke', '--max-requests', '13'], ALLOW).stderr, /cannot exceed the smoke cap \(12\)/); assert.match(run(['--provider', a.file, '--smoke', '--max-cost-usd', '2'], ALLOW).stderr, /cannot exceed the smoke cap \(1\)/);
+  const nocap = run(['--provider', a.file, '--repeats', '3'], ALLOW); assert.equal(nocap.status, 6); assert.match(nocap.stderr, /needs a request cap: use --smoke, or --max-requests N/);
+  for (const bad of [['--smoke', '--only', 'S01'], ['--smoke', '--repeats', '3']]) { const r = run(['--provider', a.file, '--config', fakeConfig(a.dir), ...bad], { ...ALLOW, OPENAI_API_KEY: 'sk-SHOULDNEVERAPPEAR123456' }); assert.equal(r.status, 6, bad.join(' ')); assert.match(r.stderr, /do not combine it with --only or --repeats/); }
+  assert.match(run(['--provider', a.file, '--config', fakeConfig(a.dir), '--smoke', '--max-requests', '13'], { ...ALLOW, OPENAI_API_KEY: 'sk-SHOULDNEVERAPPEAR123456' }).stderr, /cannot exceed the smoke cap \(12\)/); assert.match(run(['--provider', a.file, '--smoke', '--max-cost-usd', '2'], ALLOW).stderr, /cannot exceed the smoke cap \(1\)/);
   assert.match(run(['--provider', a.file, '--max-requests', '0'], ALLOW).stderr, /positive integer/); assert.match(run(['--provider', a.file, '--max-requests', '5', '--max-cost-usd', 'abc'], ALLOW).stderr, /positive number/);
   const oracle = run(['--provider', 'oracle', '--only', 'S01', '--out', path.join(a.dir, 'o.json')]); assert.equal(oracle.status, 0, 'the oracle needs neither opt-in nor cap');
 });
 
 test('the runner --smoke end to end (through an adapter that makes no network call): the 3 cases, 1 repetition, budget and metadata recorded, no secret', () => {
   const a = fakeAdapter(); const out = path.join(a.dir, 'smoke.json');
-  const r = run(['--provider', a.file, '--smoke', '--out', out], { NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', OPENAI_API_KEY: 'sk-SHOULDNEVERAPPEAR123456' }); assert.equal(r.status, 0, r.stderr);
+  const r = run(['--provider', a.file, '--config', fakeConfig(a.dir), '--smoke', '--out', out], { NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', OPENAI_API_KEY: 'sk-SHOULDNEVERAPPEAR123456' }); assert.equal(r.status, 0, r.stderr);
   const rep = JSON.parse(readFileSync(out, 'utf8')); assert.deepEqual(rep.perCase.map((c) => c.id), ['S01', 'M03', 'P01']); assert.equal(rep.meta.run.repeats, 1); assert.equal(rep.meta.run.smoke, true); assert.equal(rep.meta.run.aborted, false);
   assert.deepEqual(rep.meta.run.budget, { maxRequests: 12, maxCostUsd: 1, requests: 0, costUsd: 0, exceeded: null }, 'the guard was in place (this adapter used no fetch)');
   assert.equal(rep.subScores.successRate.value, 1); assert.equal(rep.cases, 3); assert.ok(rep.meta.benchmark.casesSha256 && rep.meta.nordla.commit && rep.meta.adapter.sha256); assert.ok(!JSON.stringify(rep).includes('SHOULDNEVERAPPEAR'));
@@ -97,13 +100,13 @@ test('the runner --smoke end to end (through an adapter that makes no network ca
 
 test('a run that hits the cap stops with exit code 4 and a partial report (loopback-only probe: the guard refuses the second request before any network access)', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'smoke-probe-')); const file = path.join(dir, 'probe-adapter.mjs'); const out = path.join(dir, 'aborted.json');
-  writeFileSync(file, `export function createProvider(config, deps) {
+  writeFileSync(file, `${FAKE_SPEC}export function createProvider(config, deps) {
   return { name: 'budget-probe', metadata: () => ({ usageTotals: { costUsd: 0 } }),
     async plan() { try { await deps.fetch('http://127.0.0.1:9/probe'); } catch (e) { if (e.code === 'BUDGET_EXCEEDED') throw e; } await deps.fetch('http://127.0.0.1:9/probe'); throw new Error('unreachable'); },
     async explain() { throw new Error('unreachable'); } };
 }
 `);
-  const r = run(['--provider', file, '--max-requests', '1', '--only', 'S01,S02,S03', '--out', out], { NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1' });
+  const r = run(['--provider', file, '--config', fakeConfig(dir), '--max-requests', '1', '--only', 'S01,S02,S03', '--out', out], { NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', OPENAI_API_KEY: 'sk-SHOULDNEVERAPPEAR123456' });
   assert.equal(r.status, 4, r.stderr); assert.match(r.stderr, /RUN STOPPED/);
   const rep = JSON.parse(readFileSync(out, 'utf8')); assert.equal(rep.meta.run.aborted, true); assert.equal(rep.meta.run.budget.exceeded.reason, 'MAX_REQUESTS'); assert.equal(rep.cases, 1, 'the run ended after the first case, S02 and S03 were never attempted');
   assert.equal(rep.perCase[0].status, 'PLAN_FAILED');

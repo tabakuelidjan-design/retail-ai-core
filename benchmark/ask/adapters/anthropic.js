@@ -8,7 +8,7 @@
 //   - headers: x-api-key, anthropic-version: 2023-06-01;
 //   - usage: input_tokens (EXCLUDING cache), output_tokens (thinking included), cache_read_input_tokens, cache_creation_input_tokens.
 
-import { createAdapter } from './shared/core.js';
+import { createAdapter, specOf } from './shared/core.js';
 
 const wire = {
   allowedHosts: ['api.anthropic.com'], defaultBaseUrl: 'https://api.anthropic.com', path: '/v1/messages',
@@ -36,3 +36,6 @@ const wire = {
 };
 
 export function createProvider(config, deps) { return createAdapter({ providerName: 'anthropic', wire, config, deps }); }
+
+/** Declared for the preflight. Opus 5.5 rejects temperature / top_p / top_k (other than defaults) and a forced tool choice. */
+export const spec = specOf('anthropic', wire, { supportedParams: ['metadata', 'service_tier', 'inference_geo'], unsupportedParams: { temperature: 'Claude Opus 5.5 rejects any non-default temperature', top_p: 'Claude Opus 5.5 rejects any non-default top_p', top_k: 'Claude Opus 5.5 rejects any non-default top_k' }, toolChoices: ['auto'] });

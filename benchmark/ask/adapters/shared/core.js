@@ -22,7 +22,7 @@ export function validateConfig(config, wire, providerName) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(config.today ?? '')) bad('config.today (YYYY-MM-DD) is required: the plan contract carries no date, so every provider is told the same fixed reference date');
   const p = config.pricing;
   const priced = (x) => num(x) !== null && x >= 0;   // (null >= 0 is true in JavaScript: a null price must NOT pass)
-  if (!p || !priced(p.inputPerMTok) || !priced(p.outputPerMTok)) bad('config.pricing.inputPerMTok and outputPerMTok are required numbers (USD per million tokens, from the provider\'s official price page): the cost must be computable');
+  if (p !== undefined && p !== null && (!priced(p.inputPerMTok) || !priced(p.outputPerMTok))) bad('config.pricing.inputPerMTok and outputPerMTok must be numbers when config.pricing is given (USD per million tokens, from the provider\'s official price page); leave pricing out and the cost stays null');
   const base = new URL(config.baseUrl ?? wire.defaultBaseUrl);
   if (!wire.allowedHosts.includes(base.hostname) || base.protocol !== 'https:') bad(`baseUrl host must be one of ${wire.allowedHosts.join(', ')} over https (the API key is only ever sent to the provider's official host)`);
   return base;
@@ -56,9 +56,10 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
   // which counts at the same point. A request refused by the guard (BUDGET_EXCEEDED) was never sent and is not counted.
   const sendingFetch = async (u, init) => { try { const r = await fetchImpl(u, init); calls.requests += 1; return r; } catch (e) { if (e?.code !== 'BUDGET_EXCEEDED') calls.requests += 1; throw e; } };
   const note = (kind, e) => { errors.push({ kind, code: e.code ?? null, status: e.status ?? null, message: scrub(e.message, secretsNow()).slice(0, 200) }); if (errors.length > 20) errors.shift(); };
+  const priced = !!config.pricing;   // without pricing the cost is null - never invented
   const account = (u) => {
     if (!u) return;
-    const add = { inputTokens: u.input ?? 0, outputTokens: u.output ?? 0, cachedTokens: u.cached ?? 0, cacheWriteTokens: u.cacheWrite ?? 0, reasoningTokens: u.reasoning ?? 0, costUsd: costOf({ input: u.input ?? 0, output: u.output ?? 0, cached: u.cached, cacheWrite: u.cacheWrite }, config.pricing) };
+    const add = { inputTokens: u.input ?? 0, outputTokens: u.output ?? 0, cachedTokens: u.cached ?? 0, cacheWriteTokens: u.cacheWrite ?? 0, reasoningTokens: u.reasoning ?? 0, costUsd: priced ? costOf({ input: u.input ?? 0, output: u.output ?? 0, cached: u.cached, cacheWrite: u.cacheWrite }, config.pricing) : 0 };
     pending ??= { inputTokens: 0, outputTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0 };
     for (const k of Object.keys(add)) { pending[k] += add[k]; totals[k] += add[k]; }
   };
@@ -89,7 +90,7 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
     plan: (input) => call('plan', input),
     explain: (input) => call('explain', input),
     /** Tokens and cost of the calls since the previous drain (null when there were none). The benchmark reads it after every provider call. */
-    drainUsage() { const u = pending; pending = null; return u ? { ...u, costUsd: Math.round(u.costUsd * 1e8) / 1e8 } : null; },
+    drainUsage() { const u = pending; pending = null; return u ? { ...u, costUsd: priced ? Math.round(u.costUsd * 1e8) / 1e8 : null } : null; },
     /** Everything needed to reproduce and interpret the run - no secret (the key is never stored here; the environment variable NAME only). */
     metadata() {
       const own = redact({
@@ -97,10 +98,23 @@ export function createAdapter({ providerName, wire, config, deps = {} }) {
         reasoningEffort: config.reasoningEffort, temperature: config.params?.temperature ?? null,
         params: { maxOutputTokens: config.maxOutputTokens ?? null, toolChoice: wire.toolChoiceFor(config), ...(config.params ?? {}) },
         endpoint: url /* exactly the URL that is called */, apiKeyEnv: config.apiKeyEnv, timeoutMs, maxRetries, maxFormatRetries, today: config.today, timeZone: ctx.timeZone,
-        pricing: config.pricing, promptSha256: promptFingerprint(ctx), systemPromptSha256: sha256(system),
-        usageTotals: { ...totals, costUsd: Math.round(totals.costUsd * 1e8) / 1e8 }, callCounts: { ...calls }, recentErrors: errors,
+        pricing: config.pricing ?? null, pricingSource: config.pricingSource ?? null, promptSha256: promptFingerprint(ctx), systemPromptSha256: sha256(system),
+        usageTotals: { ...totals, costUsd: priced ? Math.round(totals.costUsd * 1e8) / 1e8 : null }, callCounts: { ...calls }, recentErrors: errors,
       });
       return own;
     },
   };
+}
+
+/** Fields the adapter itself controls in the request body: a config `params` entry may never override them. */
+export const CONTROLLED_FIELDS = ['model', 'input', 'messages', 'system', 'tools', 'tool_choice', 'reasoning', 'reasoning_effort', 'output_config', 'max_output_tokens', 'max_tokens', 'max_completion_tokens', 'store', 'stream', 'thinking'];
+export const CONFIG_KEYS = ['model', 'reasoningEffort', 'apiKeyEnv', 'today', 'timeZone', 'maxOutputTokens', 'timeoutMs', 'maxRetries', 'maxFormatRetries', 'pricing', 'pricingSource', 'params', 'toolChoice', 'baseUrl'];
+
+/**
+ * What an adapter declares about itself (read by the preflight, no network): the provider, its ONLY endpoint, the reasoning efforts it accepts, the extra request
+ * parameters it supports (anything else in config.params is refused, never silently forwarded or dropped) and the tool-choice modes it can honour.
+ */
+export function specOf(provider, wire, { supportedParams = [], unsupportedParams = {}, toolChoices = ['forced'] } = {}) {
+  const base = new URL(wire.defaultBaseUrl);
+  return { provider, allowedHosts: wire.allowedHosts, defaultBaseUrl: wire.defaultBaseUrl, path: wire.path, endpoint: `${base.origin}${base.pathname.replace(/\/$/, '')}${wire.path}`, efforts: wire.efforts, supportedParams, unsupportedParams, toolChoices, controlledFields: CONTROLLED_FIELDS, configKeys: CONFIG_KEYS };
 }

@@ -58,7 +58,7 @@ test('config: the model id, the reasoning effort, the key VARIABLE NAME, the ref
   for (const [kind, mod, model, envName] of ALL) {
     const ok = cfg(model, envName); assert.doesNotThrow(() => mod.createProvider(ok, { env: KEYS }), kind);
     for (const [label, bad, re] of [['no model', { model: undefined }, /config\.model is required/], ['no effort key', { reasoningEffort: undefined }, /reasoningEffort is required/], ['a key instead of a name', { apiKeyEnv: 'sk-abcdef123456' }, /NAME of an environment variable/],
-      ['no date', { today: undefined }, /config\.today/], ['no pricing', { pricing: null }, /pricing/], ['nulls in pricing', { pricing: { inputPerMTok: null, outputPerMTok: null } }, /pricing/], ['foreign host', { baseUrl: 'https://evil.example.com/v1' }, /official host/], ['http', { baseUrl: 'http://api.openai.com/v1' }, /official host|https/], ['bad effort', { reasoningEffort: 'turbo' }, /reasoningEffort/]]) {
+      ['no date', { today: undefined }, /config\.today/], ['nulls in pricing', { pricing: { inputPerMTok: null, outputPerMTok: null } }, /pricing/], ['foreign host', { baseUrl: 'https://evil.example.com/v1' }, /official host/], ['http', { baseUrl: 'http://api.openai.com/v1' }, /official host|https/], ['bad effort', { reasoningEffort: 'turbo' }, /reasoningEffort/]]) {
       assert.throws(() => mod.createProvider({ ...ok, ...bad }, { env: KEYS }), (e) => e instanceof AdapterError && e.code === 'BAD_CONFIG' && re.test(e.message), `${kind}: ${label}`);
     }
   }
