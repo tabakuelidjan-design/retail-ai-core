@@ -33,3 +33,14 @@ test('upserts are retried (safe to repeat) but the plain append-only insert is n
 test('retries can be turned off with retries: 0', () => withFetch([bad(502)], async (c, calls) => {
   await assert.rejects(c.select('t', {}), /HTTP 502/); assert.equal(calls.length, 1);
 }, { retries: 0 }));
+
+test('RPCs are never retried (a function may have run before the response was lost), while reads, upserts and deletes still are', () => withFetch([bad(504)], async (c, calls, pauses) => {
+  await assert.rejects(c.rpc('fin_next_number', { p_type: 'invoice' }), /HTTP 504/); assert.equal(calls.length, 1, 'a repeated RPC could burn an invoice number'); assert.deepEqual(pauses, []);
+}).then(() => withFetch([new Error('ECONNRESET')], async (c, calls) => {
+  await assert.rejects(c.rpc('fin_issue_document', {}), /ECONNRESET/); assert.equal(calls.length, 1);
+})).then(() => withFetch([bad(503), ok([{ a: 1 }]), bad(429), ok([{ id: 1 }]), bad(502), ok([])], async (c, calls) => {
+  assert.deepEqual(await c.select('t', {}), [{ a: 1 }]);
+  assert.deepEqual(await c.upsert('t', [{ a: 1 }], { onConflict: 'a' }), [{ id: 1 }]);
+  assert.deepEqual(await c.delete('t', { id: 'eq.1' }), []);
+  assert.deepEqual(calls, ['GET', 'GET', 'POST', 'POST', 'DELETE', 'DELETE']);
+})));

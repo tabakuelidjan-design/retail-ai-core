@@ -26,7 +26,7 @@ export function createSupabaseClient(config) {
   };
 
   // Transient failures (gateway 502/503/504, 429, network reset) are retried a few times with a growing pause. Everything the client sends is safe to repeat
-  // (GET, DELETE, upserts, insert-ignoring-duplicates) except the plain append-only insert, which opts out with { retry: false }.
+  // (GET, DELETE, upserts, insert-ignoring-duplicates) except the plain append-only insert and RPCs, which opt out with { retry: false }.
   const RETRY_STATUS = new Set([429, 502, 503, 504]);
   const retries = Number.isInteger(config.retries) ? config.retries : 3;
   const baseDelayMs = config.retryBaseDelayMs ?? 500;
@@ -115,7 +115,8 @@ export function createSupabaseClient(config) {
 
     /** Call a Postgres function (RPC), e.g. rpc('fin_next_number', { p_merchant, p_type, p_year }). */
     async rpc(fn, args) {
-      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
+      // Never retried: a function may have run before the response was lost (e.g. fin_next_number would burn a number).
+      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}), retry: false });
     },
 
     /** DELETE rows matching raw PostgREST filters. Database triggers may refuse (e.g. locked finance documents). */
