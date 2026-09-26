@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import vm from 'node:vm';
-import { readFile } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { createGrowthApp } from '../src/growth/server/app.js';
 import { buildDemoOverview } from '../src/growth/server/demo-overview.js';
 
@@ -23,7 +23,7 @@ test('growth server: serves the page, its own assets, the shared design system a
     const html = await page.text();
     assert.match(html, /data-module="growth"/);
     assert.match(page.headers.get('content-security-policy'), /default-src 'self'/);
-    for (const p of ['/app.js', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/nordla-tokens.css', '/i18n.js', '/nordla-icon.js', '/nordla-charts.js', '/nordla-charts.css', '/nordla-fonts.css', '/nordla-assets/official-icons/01_navigation_modules_growth.png']) {
+    for (const p of ['/app.js', '/opportunities.js', '/growth-assets/icons/opportunities.png', '/api/growth/opportunities', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/nordla-tokens.css', '/i18n.js', '/nordla-icon.js', '/nordla-charts.js', '/nordla-charts.css', '/nordla-fonts.css', '/nordla-assets/official-icons/01_navigation_modules_growth.png']) {
       const r = await fetch(base + p); assert.equal(r.status, 200, p); await r.arrayBuffer();
     }
     // Reused Analytics stylesheet is served byte-identical (a reuse, not a fork).
@@ -69,10 +69,11 @@ test('growth UI: sidebar is Growth\'s own navigation (7 Growth pages + Nordla AI
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
 
-test('growth UI: temporary icons and channel placeholders are explicitly marked', async () => {
-  const src = await readFile(new URL('app.js', UI), 'utf8');
+test('growth UI: no TEMP_ICON left (the final Growth pack replaces them); channel logos and thumbnails stay marked as placeholders', async () => {
+  const src = await readFile(new URL('app.js', UI), 'utf8') + await readFile(new URL('opportunities.js', UI), 'utf8');
+  assert.ok(!src.includes('TEMP_ICON'), 'every TEMP_ICON has an official replacement in the final Growth pack');
+  assert.ok(!src.includes("NordlaIcon.parle('default'"), 'AI Insights uses its own pack icon, not the Parle à Nordla stand-in');
   assert.match(src, /PLACEHOLDER thumbnail/);
-  for (const concept of ['Opportunities', 'Campaigns', 'Experiments', 'AI Insights', 'Needs Attention']) assert.ok(src.includes(`TEMP_ICON (${concept})`), `TEMP_ICON marker missing for ${concept}`);
   assert.match(src, /const CHANNEL_LOGOS = \{[^}]*\}/);
   assert.ok(!/CHANNEL_LOGOS = \{[^}]*'[a-z-]+\.(svg|png|webp)'/.test(src), 'no logo file is wired until an official asset is supplied');
   assert.match(src, /CHANNEL_PLACEHOLDER = .*\/\/ PLACEHOLDER/);
@@ -126,18 +127,28 @@ test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and ever
   for (const i of [...d.insights, ...d.attention, ...d.opportunities]) for (const l of ['fr', 'nl', 'en']) assert.ok(i.title[l], `demo text missing ${l}`);
 });
 
-test('growth UI: every official icon it asks for exists and is not a known-defective export', async () => {
+test('growth UI: every icon it asks for is a Growth pack file on disk or a valid (non-defective) official Nordla icon', async () => {
   const ctx = { window: {}, document: { createElement: () => ({ setAttribute() {} }) } };
   vm.runInNewContext(await readFile(new URL('nordla-icon.js', SHARED), 'utf8'), ctx);
   const { ICONS, DEFECTIVE } = ctx.window.NordlaIcon;
   const src = await readFile(new URL('app.js', UI), 'utf8');
-  const aliasMap = Object.fromEntries([...src.split('const GROWTH_ICONS = {')[1].split('};')[0].matchAll(/(\w+): '(\w+)'/g)].map((m) => [m[1], m[2]]));
-  const aliases = Object.values(aliasMap);
+  const pack = Object.fromEntries([...src.split('const GROWTH_PACK = {')[1].split('};')[0].matchAll(/(\w+): '([\w-]+)'/g)].map((m) => [m[1], m[2]]));
+  for (const f of Object.values(pack)) {
+    const png = await readFile(new URL(`assets/icons/${f}.png`, UI)); // throws if missing
+    assert.equal(png.toString('latin1', 1, 4), 'PNG', `${f}.png is a PNG`);
+    assert.equal(png[25], 6, `${f}.png must be RGBA (transparent), PNG colour type 6`);
+  }
+  assert.ok(!/GROWTH_PACK_OPAQUE|gr-pack-opaque/.test(src), 'no opaque-icon workaround left');
+  assert.ok(!/mix-blend-mode/.test(await readFile(new URL('growth.css', UI), 'utf8')), 'no blend-mode workaround left in growth.css');
+  const aliasMap = Object.fromEntries([...src.split('const GROWTH_ICONS = {')[1].split('};')[0].matchAll(/(\w+): '([\w:]+)'/g)].map((m) => [m[1], m[2]]));
   const navSrc = src.split('const GROWTH_NAV = [')[1].split('function navItem')[0];
   const nav = [...navSrc.matchAll(/icon: '(\w+)'/g)].map((m) => aliasMap[m[1]] || m[1]);
   const direct = [...src.matchAll(/NordlaIcon\.semantic\('(\w+)'/g)].map((m) => m[1]);
-  for (const name of [...aliases, ...nav, ...direct]) {
+  for (const name of [...Object.values(aliasMap), ...nav, ...direct]) {
+    if (name.startsWith('pack:')) { assert.ok(pack[name.slice(5)], `${name} is not in GROWTH_PACK`); continue; }
     assert.ok(!DEFECTIVE[name], `${name} is a defective export and must not be rendered`);
     assert.ok(ICONS[name], `${name} is not an official Nordla icon`);
   }
+  // The five former TEMP_ICON concepts now use their own pack icons.
+  for (const [k, v] of Object.entries({ opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', experiments: 'pack:experiments', aiInsights: 'pack:aiInsights', needsAttention: 'pack:needsAttention' })) assert.equal(aliasMap[k], v, k);
 });

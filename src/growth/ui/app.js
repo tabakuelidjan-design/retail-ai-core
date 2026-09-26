@@ -1,5 +1,6 @@
 'use strict';
-// Nordla Growth - Growth Overview. Plain DOM, no framework, same conventions as Analytics Premium:
+// Nordla Growth - shell (navigation, top bar, router) + Growth Overview page; the Opportunités page lives in
+// opportunities.js. Plain DOM, no framework, same conventions as Analytics Premium:
 // every visual is an existing Nordla component (Analytics' ex-* cards/tabs/KPI tiles/tables, the shared rail,
 // NordlaCharts, NordlaIcon); growth.css only adds the Growth grid and the few list rows Analytics has no
 // equivalent for. All copy goes through NORDLA_I18N.t() (lang-fr/nl/en.js); demo content carries its own
@@ -10,7 +11,7 @@ const t = NORDLA_I18N.t;
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') el.className = v;
+    if (k === 'class') { if (v != null) el.className = v; }
     else if (k === 'style') el.style.cssText = v; // CSSOM, allowed by the strict CSP (no inline style attributes)
     else if (k === 'on' && v) for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
     else if (v != null) el.setAttribute(k, v);
@@ -29,46 +30,55 @@ function arrow(dir, size = 13) {
 }
 
 // ---------- icons ----------
-// Growth semantic name -> official Nordla icon (NordlaIcon.semantic), per the Nordla Growth Icons v1 pack, whose
-// files are all aliases of the official pack. Five concepts (Opportunities, Campaigns, Experiments, AI Insights,
-// Needs Attention) have NO usable official icon yet: the pack points them to exports NordlaIcon.DEFECTIVE blocks
-// (clipped crops, see src/shared/assets/nordla/official-icons/DEFECTS.md). They temporarily borrow another valid
-// official icon, marked TEMP_ICON - NOT a decision. Each will get its own clean official re-export (to be supplied):
-// add it to NordlaIcon.ICONS and point the TEMP_ICON entries below to it. Never a defective export.
+// Two official sources only (no other icon library):
+//  1. The Nordla Growth Icon Pack (final), Growth's own icons: src/growth/ui/assets/icons/, served at /growth-assets/icons/.
+//     Files are transparent 256px exports of the supplied 1254px originals (downscaled only: never redrawn, recoloured or
+//     cropped).
+//  2. The shared official Nordla icons (NordlaIcon.semantic) for generic business concepts (revenue, stock, ...).
+const GROWTH_PACK = {
+  overview: 'growth-overview', opportunities: 'opportunities', campaigns: 'campaigns', content: 'content',
+  storeGrowth: 'store-growth', audience: 'audience', experiments: 'experiments', settings: 'settings',
+  aiInsights: 'ai-insights', needsAttention: 'needs-attention', approvals: 'approvals',
+};
+const ICON_PX = { sm: 16, md: 20, lg: 28 };
+function packIcon(file, size) {
+  const img = document.createElement('img');
+  img.src = `/growth-assets/icons/${file}.png`;
+  img.width = img.height = ICON_PX[size] || ICON_PX.md;
+  img.className = `nordla-icon nordla-icon-${ICON_PX[size] ? size : 'md'} gr-pack-icon`;
+  img.alt = ''; img.setAttribute('aria-hidden', 'true');
+  return img;
+}
+// Growth concept -> 'pack:<key>' (Growth pack) or an official Nordla icon name.
 const GROWTH_ICONS = {
-  growth: 'growth',
-  // Growth navigation (pack 01_navigation).
-  opportunities: 'produitEnHausse', // TEMP_ICON (Opportunities) - awaiting official re-export
-  content: 'produits',
-  audience: 'clients',
-  revenueInfluenced: 'chiffreAffaires',
-  activeOpportunities: 'produitEnHausse', // TEMP_ICON (Opportunities) - awaiting official re-export
-  topOpportunities: 'produitEnHausse', // TEMP_ICON (Opportunities) - awaiting official re-export
-  activeCampaigns: 'nouveauClient', // TEMP_ICON (Campaigns) - awaiting official re-export
-  campaigns: 'nouveauClient', // TEMP_ICON (Campaigns) - awaiting official re-export
-  roas: 'croissance',
-  experimentsRunning: 'synchronisation', // TEMP_ICON (Experiments) - awaiting official re-export
-  experiments: 'synchronisation', // TEMP_ICON (Experiments) - awaiting official re-export
-  needsAttention: 'aFaire', // TEMP_ICON (Needs Attention) - awaiting official re-export
-  // AI Insights: TEMP_ICON - drawn with the Parle à Nordla asset in insightsCard(), awaiting its own official re-export.
-  growthPulse: 'croissance',
-  channelPerformance: 'croissance',
-  contentPerformance: 'meilleurProduit',
-  storeGrowth: 'ventes',
+  // navigation
+  overview: 'pack:overview', opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', content: 'pack:content',
+  storeGrowth: 'pack:storeGrowth', audience: 'pack:audience', experiments: 'pack:experiments', settings: 'pack:settings',
+  // Overview page
+  revenueInfluenced: 'chiffreAffaires', activeOpportunities: 'pack:opportunities', topOpportunities: 'pack:opportunities',
+  activeCampaigns: 'pack:campaigns', roas: 'croissance', experimentsRunning: 'pack:experiments', aiInsights: 'pack:aiInsights',
+  needsAttention: 'pack:needsAttention', growthPulse: 'croissance', channelPerformance: 'croissance', contentPerformance: 'meilleurProduit',
+  // Opportunités page
+  potentialRevenue: 'chiffreAffaires', approvals: 'pack:approvals', inProgress: 'synchronisation', wins: 'meilleurProduit',
+  impactEffort: 'croissance', segments: 'pack:audience',
   // Row icons, chosen from the data item's `kind` (the data source never names icons: presentation stays in the UI).
   insightMomentum: 'produitEnHausse', insightCampaign: 'croissance', insightTraffic: 'ventes', insightStock: 'stock',
   attentionApproval: 'approval', attentionOpportunity: 'stock', attentionExperiment: 'calendrier',
   opportunityTraffic: 'ventes', opportunityStock: 'stock', opportunityCustomers: 'segmentClient',
+  recoStock: 'stock', recoCampaign: 'croissance', recoSegment: 'segmentClient', recoStore: 'pack:storeGrowth',
 };
 const kindIcon = (group, kind) => `${group}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
-const gi = (name, size = 'md') => NordlaIcon.semantic(GROWTH_ICONS[name] || name, size);
+function gi(name, size = 'md') {
+  const v = GROWTH_ICONS[name] || name;
+  return v.startsWith('pack:') ? packIcon(GROWTH_PACK[v.slice(5)], size) : NordlaIcon.semantic(v, size);
+}
 
 // ---------- formatting (same rules as Analytics' Explorer: Intl per language, whole euros, "+28 %") ----------
 const LANG_TAG = { fr: 'fr-BE', nl: 'nl-BE', en: 'en-GB' };
 const tag = () => LANG_TAG[NORDLA_I18N.getLang()] || 'fr-BE';
 const loc = (o) => (o && typeof o === 'object' ? o[NORDLA_I18N.getLang()] ?? o.fr : o);
-// Currency comes from the payload (data.currency), never assumed by the UI.
-const cur = () => (data && data.currency) || 'EUR';
+// Currency comes from the current page's payload, never assumed by the UI.
+const cur = () => ((PAGES[currentPage()].get() || {}).currency) || 'EUR';
 const money = (v) => new Intl.NumberFormat(tag(), { style: 'currency', currency: cur(), maximumFractionDigits: 0 }).format(v);
 const compactMoney = (v) => new Intl.NumberFormat(tag(), { style: 'currency', currency: cur(), notation: 'compact', maximumFractionDigits: 1 }).format(v);
 const num = (v) => new Intl.NumberFormat(tag(), { maximumFractionDigits: 0 }).format(v);
@@ -91,35 +101,36 @@ const icoBubble = (iconName) => h('span', { class: 'gr-ico' }, gi(iconName));
 // ---------- Growth navigation (this module's own menu) ----------
 // Growth is a standalone Nordla module: like Finance and Analytics it has its own navigation and needs no other module
 // to work. It shares the Nordla design system with them: same rail component and tokens (.sidebar/.nav-item,
-// --nordla-menu-*; <html data-module="growth"> selects Growth's menu colour). Only Overview is built: the other Growth
-// pages are visibly disabled ("coming soon"), never a dead link. `mobile: true` = one of the 5 entries of the mobile
-// bottom bar (same density as Analytics); the others are desktop-only while they are not built.
+// --nordla-menu-*; <html data-module="growth"> selects Growth's menu colour). Built pages have an href (hash routes of
+// this module only); the others are visibly disabled ("coming soon"), never a dead link. `mobile: true` = one of the 5
+// entries of the mobile bottom bar (same density as Analytics); the others are desktop-only while they are not built.
 const GROWTH_NAV = [
-  { key: 'overview', icon: 'growth', href: '#/', mobile: true },
-  { key: 'opportunities', icon: 'opportunities', mobile: true },
+  { key: 'overview', icon: 'overview', href: '#/', mobile: true },
+  { key: 'opportunities', icon: 'opportunities', href: '#/opportunities', mobile: true },
   { key: 'campaigns', icon: 'campaigns', mobile: true },
   { key: 'content', icon: 'content', mobile: true },
   { key: 'storeGrowth', icon: 'storeGrowth' },
   { key: 'audience', icon: 'audience' },
   { key: 'experiments', icon: 'experiments' },
 ];
-// Secondary zone (bottom of the rail).
+// Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
   { key: 'ai', parle: true, mobile: true },
-  { key: 'settings', icon: 'parametres' },
+  { key: 'settings', icon: 'settings' },
 ];
-function navItem(n) {
+function navItem(n, active) {
   const ico = h('span', { class: 'ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : gi(n.icon, 'md'));
-  const cls = `nav-item${n.href ? ' active' : ' inert'}${n.mobile ? '' : ' gr-desktop-only'}${n.parle ? ' gr-ai' : ''}`;
+  const on = n.key === active;
+  const cls = `nav-item${on ? ' active' : ''}${n.href ? '' : ' inert'}${n.mobile ? '' : ' gr-desktop-only'}${n.parle ? ' gr-ai' : ''}`;
   return n.href
-    ? h('a', { class: cls, href: n.href, 'aria-current': 'page' }, ico, t(`gr.nav.${n.key}`))
+    ? h('a', { class: cls, href: n.href, ...(on ? { 'aria-current': 'page' } : {}) }, ico, t(`gr.nav.${n.key}`))
     : h('span', { class: cls, title: t('gr.nav.soon'), 'aria-disabled': 'true' }, ico, t(`gr.nav.${n.key}`));
 }
-function sidebar() {
+function sidebar(active) {
   return h('nav', { class: 'sidebar', 'aria-label': t('gr.nav.aria') },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('gr.brand'))),
-    h('div', { class: 'nav' }, GROWTH_NAV.map(navItem)),
-    h('div', { class: 'nav gr-nav-foot' }, GROWTH_NAV_FOOT.map(navItem)));
+    h('div', { class: 'nav' }, GROWTH_NAV.map((n) => navItem(n, active))),
+    h('div', { class: 'nav gr-nav-foot' }, GROWTH_NAV_FOOT.map((n) => navItem(n, active))));
 }
 
 function langSwitch() {
@@ -185,7 +196,7 @@ function pulseCard(d) {
 // ---------- AI insights (Nordla AI as an integrated layer, not a chat) ----------
 function insightsCard(d) {
   return h('div', { class: 'ex-card gr-ai' },
-    h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, NordlaIcon.parle('default', 'md') /* TEMP_ICON (AI Insights) */, t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
+    h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
     h('div', { class: 'ex-movers' }, d.insights.map((i) => h('div', { class: 'ex-mover gr-row' },
       icoBubble(kindIcon('insight', i.kind)),
       h('div', { class: 'ex-mover-main' }, h('div', { class: 'ex-mover-name' }, loc(i.title)), h('div', { class: 'ex-mover-sub gr-wrap' }, loc(i.text))),
@@ -324,30 +335,45 @@ function experimentsCard(d) {
       h('div', { class: 'gr-side' }, h('span', { class: 'gr-muted' }, t('gr.exp.ends')), h('strong', null, dayFmt(x.end)))))));
 }
 
-// ---------- page ----------
-let data = null; let loadFailed = false;
-function render() {
-  document.documentElement.lang = NORDLA_I18N.getLang();
-  const app = document.getElementById('app');
-  const main = h('main', { class: 'main gr-main' });
-  app.replaceChildren(h('div', { class: 'shell' }, sidebar(), main));
-  main.appendChild(topbar(data));
-  main.appendChild(h('div', { class: 'ex-head' }, h('div', null, h('h1', { class: 'ex-title' }, t('gr.title')), h('p', { class: 'ex-sub' }, t('gr.subtitle')))));
-  if (!data) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), loadFailed ? t('gr.loadError') : ''))); return; }
-  // Each section is built on its own: a failing section is replaced by an empty state, the rest of the page still renders.
-  const safe = (fn) => { try { return fn(data); } catch (e) { console.error('growth section failed', e); return h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), '')); } };
+// ---------- pages + router ----------
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités. Each page's payload is fetched once
+// and cached; a language or filter change re-renders from the cache.
+let data = null; let oppData = null; const loadFailed = {};
+const PAGES = {
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
+};
+function currentPage() { return location.hash.replace(/^#\/?/, '') === 'opportunities' ? 'opportunities' : 'overview'; }
+
+function renderOverview(main, safe) {
   main.appendChild(safe(kpiRow));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(pulseCard), safe(insightsCard), safe(attentionCard)));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(channelCard), safe(campaignsCard), safe(contentCard)));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(storeCard), safe(opportunitiesCard), safe(experimentsCard)));
 }
 
-async function start() {
-  render();
-  try {
-    const r = await fetch('/api/growth/overview');
-    if (r.ok) data = await r.json(); else loadFailed = true;
-  } catch (e) { loadFailed = true; }
-  render();
+function render() {
+  const key = currentPage(); const page = PAGES[key]; const d = page.get();
+  document.documentElement.lang = NORDLA_I18N.getLang();
+  const app = document.getElementById('app');
+  const main = h('main', { class: 'main gr-main' });
+  app.replaceChildren(h('div', { class: 'shell' }, sidebar(key), main));
+  main.appendChild(topbar(d));
+  main.appendChild(h('div', { class: 'ex-head' }, h('div', null, h('h1', { class: 'ex-title' }, t(page.title)), h('p', { class: 'ex-sub' }, t(page.subtitle)))));
+  if (!d) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), loadFailed[key] ? t('gr.loadError') : ''))); return; }
+  // Each section is built on its own: a failing section is replaced by an empty state, the rest of the page still renders.
+  const safe = (fn) => { try { return fn(d); } catch (e) { console.error('growth section failed', e); return h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), '')); } };
+  page.render(main, safe);
 }
-start();
+
+async function route() {
+  const key = currentPage(); const page = PAGES[key];
+  render();
+  if (!page.get()) {
+    try { const r = await fetch(page.url); if (r.ok) page.set(await r.json()); else loadFailed[key] = true; } catch (e) { loadFailed[key] = true; }
+    if (currentPage() === key) render();
+  }
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+route();

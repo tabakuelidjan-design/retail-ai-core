@@ -1,4 +1,4 @@
-# Nordla Growth — Growth Overview
+# Nordla Growth
 
 Run locally: `npm run growth` → http://127.0.0.1:4413 (loopback only, no hosted mode, no access-token layer yet).
 
@@ -11,11 +11,13 @@ Analytics to work: it imports none of their code and calls none of their service
 the shared design-system files (`src/shared`) and Analytics' stylesheet/tokens/i18n runtime (see "Reuse").
 
 ## Scope
-Only **Growth Overview** is built. No other Growth page exists yet.
+Built: **Growth Overview** (`#/`) and **Opportunités** (`#/opportunities`). Campaigns, Content, Store Growth, Audience and
+Experiments are not started.
 
 ## Navigation (Growth's own)
 - Rail: Overview · Opportunities · Campaigns · Content · Store Growth · Audience · Experiments — then, in the bottom
-  zone: Nordla AI · Settings. Only Overview is active; the others are disabled ("Bientôt disponible"), never dead links.
+  zone: Nordla AI · Settings. Overview and Opportunities are links (the current one is active); the others are disabled
+  ("Bientôt disponible"), never dead links. Routing is internal to Growth (hash routes, one payload per page, cached).
 - Mobile bottom bar (5 slots, same density as Analytics): Overview · Opportunities · Campaigns · Content · Nordla AI.
   Store Growth, Audience, Experiments and Settings are desktop-only while they are not built; when they are, the bar
   will need a "More" entry (Finance's pattern).
@@ -25,32 +27,39 @@ Only **Growth Overview** is built. No other Growth page exists yet.
 - Analytics `style.css`, `nordla-tokens.css`, `i18n.js` served **as-is** (byte-identical, tested). `growth.css` only
   adds namespaced `.gr-*` layout/list details.
 - Charts: `NordlaCharts.trendLines` / `trendLine` / `sparkline` / `head` (same axes, tooltips, responsive redraw).
-- Icons: `NordlaIcon` only. The Growth Icons v1 pack is pixel-identical to existing official icons: no file added.
+- Icons: the Growth pack (final) for Growth concepts, `NordlaIcon` for generic business concepts (see "Icons").
 
-## Temporary items (to be replaced by official assets supplied separately)
-**TEMP_ICON** (marked in `src/growth/ui/app.js`) — five concepts have no usable official icon: the pack points them to
-exports `NordlaIcon.DEFECTIVE` blocks (`official-icons/DEFECTS.md`). Temporary borrowings, not decisions:
+## Icons
+- **Nordla Growth Icon Pack (final)** — `src/growth/ui/assets/icons/`, served at `/growth-assets/icons/`. The 11 files used
+  are transparent 256px exports of the supplied 1254px originals (downscaled only: not redrawn, recoloured or cropped;
+  settings, approvals, audience, store-growth, content and growth-overview come from the transparent re-exports). Unused:
+  `nordla-ai.png` (the rail keeps the official "Parle à Nordla" asset, as in Analytics), `decision-ledger.png` (no page yet).
+- The five former `TEMP_ICON`s are gone: Opportunities, Campaigns, Experiments, AI Insights, Needs Attention use their own
+  pack icons, on Overview too.
+- Every Growth icon file is an RGBA PNG with a transparent background (tested); no blend-mode workaround.
+- Generic business concepts (revenue, stock, segments, trophies…) keep the shared official Nordla icons.
 
-| Concept | Temporary icon |
-|---|---|
-| Opportunities | `produitEnHausse` |
-| Campaigns | `nouveauClient` |
-| Experiments | `synchronisation` |
-| AI Insights | Parle à Nordla asset |
-| Needs Attention | `aFaire` |
-
-When the re-exports arrive: add them to `NordlaIcon.ICONS`, point the `TEMP_ICON` entries to them.
-
-**PLACEHOLDER channel logos** — `CHANNEL_LOGOS` (app.js) maps a channel id to an official logo file in
-`src/growth/ui/assets/channels/` (served at `/growth-assets/channels/<file>`). All entries are `null`, so monograms
-G, IG, TT, FB, GB are shown. Nothing is downloaded or redrawn.
+## Placeholders still present
+**PLACEHOLDER channel logos** — `CHANNEL_LOGOS` (app.js) maps a channel id to a logo file in `src/growth/ui/assets/channels/`
+(served at `/growth-assets/channels/<file>`). All entries are `null`: monograms G, IG, TT, FB, GB are shown. The final
+pack's `channels/` files are not wired: the pack's own README calls them "reference renders" to be replaced by each
+platform's official assets.
 
 **PLACEHOLDER content thumbnails** — neutral swatch + channel mark until the data source provides real thumbnails.
 
 ## Data
-All figures come from `src/growth/server/demo-overview.js` (`demo: true`, badge "Données de démonstration"). The UI
-holds no demo value (names, amounts, currency, dates and texts come from the payload; the data names row *kinds*, never
+All figures are demonstration data: `src/growth/server/demo-overview.js` and `demo-opportunities.js` (`demo: true`, badge
+"Données de démonstration"). On Opportunités every KPI is computed from the pipeline rows (tested), so the page cannot
+contradict itself. The UI holds no demo value (names, amounts, currency, dates and texts come from the payload; the data names row *kinds*, never
 icons — enforced by a test). Replacing the source = returning the same payload shape from a real builder.
+
+## Known demo-data gaps
+- Opportunités: with the six pipeline rows given in the brief (12 500 €) and 12 active opportunities, the potential revenue
+  is 14 800 €, not 12 800 € (derived, not typed).
+- Opportunités: "Nécessite votre approbation" lists the three rows in status "Prête à approuver" (Trafic magasin, Offre
+  étudiants, Bundle coque + support); "Upsell boîte cadeau" is "En cours" in the pipeline, so it is not awaiting approval.
+- Overview and Opportunités demo sets are independent (e.g. Overview's top opportunities and figures differ). To align
+  when the real engine feeds both pages.
 
 ## Accepted duplication / debt (phase decision: Finance and Analytics are frozen, no shared refactor now)
 - Growth serves Analytics' `style.css` directly: a later Analytics CSS change also applies to Growth.
@@ -60,5 +69,6 @@ icons — enforced by a test). Replacing the source = returning the same payload
   ordering (`.gr-demo`).
 - Some `gr.*` translations repeat Analytics wording (e.g. "vs période précédente").
 - Row kind → icon mapping lives in the UI: a new kind needs a UI entry.
-- Some tests read `app.js` as text (navigation and marker checks).
+- Some tests read `app.js` as text (navigation and marker checks); the page render test uses a minimal fake DOM.
+- Growth's `h()` helper diverges slightly from Analytics' (ignores a `null` class).
 - No extraction to `src/shared` in this phase.

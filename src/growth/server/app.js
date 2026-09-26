@@ -13,6 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { buildDemoOverview } from './demo-overview.js';
+import { buildDemoOpportunities } from './demo-opportunities.js';
 
 const UI = new URL('../ui/', import.meta.url);
 // Reused as-is from Analytics Premium (same design system; see header note).
@@ -22,6 +23,7 @@ const CSS = 'text/css; charset=utf-8';
 const STATIC = {
   '/': [UI, 'index.html', 'text/html; charset=utf-8'],
   '/app.js': [UI, 'app.js', JS],
+  '/opportunities.js': [UI, 'opportunities.js', JS],
   '/growth.css': [UI, 'growth.css', CSS],
   '/lang-fr.js': [UI, 'lang-fr.js', JS],
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
@@ -39,10 +41,10 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 };
 
-// Official channel (platform) logo files, once supplied: src/growth/ui/assets/channels/<name>.<svg|png|webp>.
-// Plain file names only, no traversal possible. None is supplied yet (the UI shows placeholders).
-const CHANNEL_ASSETS = new URL('../ui/assets/channels/', import.meta.url);
-const CHANNEL_ASSET = /^\/growth-assets\/channels\/([a-z0-9-]+\.(svg|png|webp))$/;
+// Growth's own assets: official Growth icons (src/growth/ui/assets/icons/) and, once supplied, official channel logo
+// files (src/growth/ui/assets/channels/, none yet: the UI shows placeholders). Plain file names only, no traversal.
+const GROWTH_ASSETS = new URL('../ui/assets/', import.meta.url);
+const GROWTH_ASSET = /^\/growth-assets\/(icons|channels)\/([a-z0-9-]+\.(svg|png|webp))$/;
 const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 
 export function createGrowthApp({ now = () => new Date() } = {}) {
@@ -58,9 +60,10 @@ export function createGrowthApp({ now = () => new Date() } = {}) {
       }
       const shared = await readNordlaShared(url.pathname);
       if (shared) return send(res, 200, shared.type, shared.body);
-      const logo = CHANNEL_ASSET.exec(url.pathname);
-      if (logo) { try { return send(res, 200, IMG[logo[2]], await readFile(new URL(logo[1], CHANNEL_ASSETS))); } catch { return json(res, 404, { error: { code: 'NOT_FOUND' } }); } }
+      const asset = GROWTH_ASSET.exec(url.pathname);
+      if (asset) { try { return send(res, 200, IMG[asset[3]], await readFile(new URL(`${asset[1]}/${asset[2]}`, GROWTH_ASSETS))); } catch { return json(res, 404, { error: { code: 'NOT_FOUND' } }); } }
       if (url.pathname === '/api/growth/overview') return json(res, 200, buildDemoOverview(now()));
+      if (url.pathname === '/api/growth/opportunities') return json(res, 200, buildDemoOpportunities(now()));
       return json(res, 404, { error: { code: 'NOT_FOUND' } });
     } catch (e) {
       return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
