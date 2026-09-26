@@ -118,4 +118,14 @@ export async function periodReport(reportsDir, query, { now = new Date() } = {})
   return { ok: true, report: { ...report, period_info: { ...report.period_info, key: r.key } } };
 }
 
+/**
+ * The product catalogue of the dataset snapshot (id, title, handle, type, status) - no figure. It lets a tool tell "no such product" from "a product with no
+ * sale in the period", which the period reports alone cannot (they only list products that sold).
+ */
+export async function datasetCatalog(reportsDir) {
+  const c = await loadSnapshot(reportsDir);
+  if (!c) return null;
+  return { generatedAt: c.snapshot.generated_at ?? null, products: (c.snapshot.data.products ?? []).map((p) => ({ id: p.id, title: p.title ?? null, handle: p.handle ?? null, productType: p.product_type ?? null, status: p.source_status ?? null })) };
+}
+
 export const resetPeriodCache = () => { cache.mtime = null; cache.snapshot = null; cache.results = new Map(); };

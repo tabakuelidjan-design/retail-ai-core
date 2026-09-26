@@ -118,14 +118,14 @@ test('safety: no innerHTML anywhere, provider text is only ever set as text, and
 
 test('dictionary coverage: every key the answer UI needs exists in FR, NL and EN - limitation codes, tool names, metrics, gaps, kinds, confidences', () => {
   const dicts = { fr: ui('lang-fr.js'), nl: ui('lang-nl.js'), en: ui('lang-en.js') };
-  const toolsSrc = readFileSync(new URL('../src/analytics-premium/server/tools/analytics-tools.js', import.meta.url), 'utf8');
+  const toolsSrc = ['analytics-tools.js', 'analytics-tools-extra.js'].map((f) => readFileSync(new URL(`../src/analytics-premium/server/tools/${f}`, import.meta.url), 'utf8')).join(' ');
   const factsSrc = readFileSync(new URL('../src/analytics-premium/server/ai/facts.js', import.meta.url), 'utf8');
   const reasonCodes = [...new Set([...toolsSrc.matchAll(/code: '([A-Z_]+)'/g)].map((m) => m[1]))];
   const metricKeys = [...new Set([...toolsSrc.matchAll(/fact\('([a-z_]+)'/g)].map((m) => m[1]).concat([...toolsSrc.matchAll(/\['([a-z_]+)', '(?:money|count)'\]/g)].map((m) => m[1])))];
-  const toolNames = [...toolsSrc.matchAll(/name: '(get_[a-z_]+|compare_[a-z_]+)'/g)].map((m) => m[1]);
+  const toolNames = [...toolsSrc.matchAll(/(?:name: |moneyTool\()'(get_[a-z_]+|compare_[a-z_]+|find_[a-z_]+)'/g)].map((m) => m[1]);
   const need = [...reasonCodes.map((c) => `ask.lim.${c}`), ...ERROR_CODES.filter((c) => !['UNKNOWN_TOOL', 'INVALID_ARGUMENT'].includes(c)).map((c) => `ask.lim.${c}`), 'ask.lim.VALUE_MISSING', 'ask.lim.DATA_STALE', 'ask.lim.GENERIC', 'ask.lim.title',
     ...metricKeys.map((k) => `ask.metric.${k}`), ...toolNames.map((n) => `ask.tool.${n}`), ...KNOWN_GAPS.map((g) => `ask.gap.${g}`), 'ask.kind.comparison', 'ask.kind.correlation', 'ask.conf.low', 'ask.conf.medium', 'ask.conf.high'];
-  assert.ok(toolNames.length >= 8 && metricKeys.length >= 20 && reasonCodes.length >= 5, 'the scan found the codes it should');
+  assert.ok(toolNames.length >= 13 && metricKeys.length >= 35 && reasonCodes.length >= 6, 'the scan found the codes it should');
   const staticKeys = [...askSrc.matchAll(/t\('((?:ask|common)\.[A-Za-z0-9_.]+)'/g)].map((m) => m[1]);
   for (const [lang, src] of Object.entries(dicts)) for (const key of new Set([...need, ...staticKeys])) assert.ok(src.includes(`'${key}':`), `${lang}: missing ${key}`);
   const sev = [...factsSrc.matchAll(/([A-Z_]+): '(?:info|warning)'/g)].map((m) => m[1]); for (const c of sev) assert.ok(dicts.fr.includes(`'ask.lim.${c}':`), c);

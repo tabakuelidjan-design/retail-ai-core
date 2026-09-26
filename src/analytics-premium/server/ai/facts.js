@@ -14,13 +14,15 @@ import { sanitize } from '../tools/contract.js';
 const CURRENCY = /^[A-Z]{3}$/;
 
 // How serious each limitation is for the reader, and which figures of its detail the message needs (aggregates only). The wording lives in the UI dictionary.
-const SEVERITY = { PERIOD_INCLUDES_TODAY: 'info', PRODUCT_PARTIAL: 'info' };
+const SEVERITY = { PERIOD_INCLUDES_TODAY: 'info', PRODUCT_PARTIAL: 'info', PRODUCT_HAS_NO_SALES_IN_PERIOD: 'info' };
 function paramsOf(reason) {
   const d = reason.detail; const p = {};
   if (reason.code === 'PERIOD_STARTS_BEFORE_HISTORY') p.historyStart = d?.historyStart ?? null;
   if (reason.code === 'COMPARISON_HISTORY_INSUFFICIENT') p.historyStart = d?.history_start ?? null;
   if (reason.code === 'COSTS_PARTIAL') p.costCoverage = d?.costCoverage ?? null;
   if (reason.code === 'CUSTOMERS_PARTIALLY_IDENTIFIED') p.identifiedShare = d?.identifiedShare ?? null;
+  if (reason.code === 'SHIPPING_DATA_PARTIAL') p.ordersWithoutShippingData = d?.ordersWithoutShippingData ?? null;
+  if (reason.code === 'PRODUCT_HAS_NO_SALES_IN_PERIOD') p.count = d?.count ?? null;
   return p;
 }
 

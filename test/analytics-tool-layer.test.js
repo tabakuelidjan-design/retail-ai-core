@@ -58,13 +58,13 @@ const qs = (p) => (p.period === 'custom' ? `period=custom&from=${p.from}&to=${p.
 const val = (res, key) => res.values.find((v) => v.key === key)?.value;
 const PERIODS_UNDER_TEST = [{ period: 'last_7_days' }, { period: 'last_30_days' }, { period: 'last_90_days' }, { period: 'this_month' }, { period: 'previous_month' }, { period: 'this_week' }, { period: 'custom', from: '2026-07-01', to: '2026-07-31' }];
 
-test('catalog: 8 typed tools with JSON-Schema inputs, provider-neutral (no provider names, no network) and Phase-5 tools absent', async () => {
+test('catalog: 13 typed tools with JSON-Schema inputs, provider-neutral (no provider names, no network) and Phase-5 tools absent', async () => {
   const s = await setup();
   try {
     const cat = s.tools.catalog();
-    assert.deepEqual(cat.map((t) => t.name), ['get_sales_metrics', 'compare_sales', 'get_top_products', 'get_product_metrics', 'get_customers', 'get_customer_metrics', 'get_channels', 'get_categories']);
+    assert.deepEqual(cat.map((t) => t.name), ['get_sales_metrics', 'compare_sales', 'get_top_products', 'get_product_metrics', 'get_customers', 'get_customer_metrics', 'get_channels', 'get_categories', 'get_discounts', 'get_refunds', 'get_shipping', 'get_vat', 'find_product']);
     for (const t of cat) { assert.ok(t.description.length > 20); assert.equal(t.inputSchema.type, 'object'); assert.equal(t.inputSchema.additionalProperties, false); assert.deepEqual(Object.keys(t).sort(), ['description', 'inputSchema', 'name'], 'the catalog carries no code and no data'); }
-    for (const absent of ['find_product', 'get_vat', 'get_shipping', 'get_discounts', 'get_orders', 'get_refunds']) assert.ok(!s.tools.has(absent), `${absent} is Phase 5`);
+    for (const absent of ['get_orders', 'get_weather']) assert.ok(!s.tools.has(absent), `${absent} does not exist yet`);
     const src = readdirSync(new URL('../src/analytics-premium/server/tools/', import.meta.url)).map((f) => readFileSync(new URL(`../src/analytics-premium/server/tools/${f}`, import.meta.url), 'utf8')).join('\n');
     assert.ok(!/openai|anthropic|claude|kimi|gpt-|gemini|mistral/i.test(src), 'no provider is named in the tool layer');
     assert.ok(!/\bfetch\(|node:http|node:https|XMLHttpRequest/.test(src), 'the tool layer makes no network call');
@@ -207,7 +207,7 @@ test('structured errors, never an estimate: UNKNOWN_TOOL, INVALID_ARGUMENT, INVA
   const s = await setup();
   try {
     const code = (r) => { assert.equal(r.ok, false); assert.ok(r.error.message.length > 5); return r.error.code; };
-    assert.equal(code(await s.tools.call('get_vat', {})), 'UNKNOWN_TOOL');
+    assert.equal(code(await s.tools.call('get_weather', {})), 'UNKNOWN_TOOL');
     assert.equal(code(await s.tools.call('get_top_products', { limit: 500 })), 'INVALID_ARGUMENT');
     assert.equal(code(await s.tools.call('get_top_products', { sort: 'cheapest' })), 'INVALID_ARGUMENT');
     assert.equal(code(await s.tools.call('get_sales_metrics', { period: { period: 'next_week' } })), 'INVALID_ARGUMENT');

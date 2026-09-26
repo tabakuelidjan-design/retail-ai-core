@@ -7,11 +7,12 @@
 // Phase 2 plugs the AI provider on top:  provider.plan(question, catalog) -> tool calls -> tools.call(...) -> facts -> provider.explain(facts).
 
 import { ANALYTICS_TOOLS } from './analytics-tools.js';
+import { EXTRA_ANALYTICS_TOOLS } from './analytics-tools-extra.js';
 import { PRIVACY, fail, freshnessOf, sanitize, validate } from './contract.js';
 
 export const MAX_TOOL_CALLS_PER_QUESTION = 4;
 
-export function createToolLayer({ reportsDir, now = () => new Date(), staleAfterMinutes = 180, tools = ANALYTICS_TOOLS } = {}) {
+export function createToolLayer({ reportsDir, now = () => new Date(), staleAfterMinutes = 180, tools = [...ANALYTICS_TOOLS, ...EXTRA_ANALYTICS_TOOLS] } = {}) {
   const byName = new Map(tools.map((t) => [t.name, t]));
   return {
     catalog: () => tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),

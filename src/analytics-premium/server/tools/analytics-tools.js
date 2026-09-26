@@ -6,7 +6,7 @@
 // common contract (contract.js). The only arithmetic here is compare_sales's difference between two engine outputs, done with the engine's own `pct` /
 // `absDelta` so the convention (ratio, null without a positive baseline) is identical to the Explorer's comparison.
 
-import { MAX_SPAN_DAYS, PERIODS, periodReport } from '../period-engine.js';
+import { MAX_SPAN_DAYS, PERIODS, datasetCatalog, periodReport } from '../period-engine.js';
 import { loadExplorer } from '../explorer.js';
 import { loadProducts, loadProductDetail, PRODUCT_ID } from '../products.js';
 import { loadCustomers, loadCustomerDetail, CUSTOMER_ID } from '../customers.js';
@@ -160,7 +160,12 @@ async function getProductMetrics(ctx, args) {
   const p = await loadPeriod(ctx, 'get_product_metrics', args, args.period); if (p.error) return p.error;
   const { report, info, historyStart } = p; const cur = eur(report);
   const d = await loadProductDetail(ctx.reportsDir, args.productId, report);
-  if (d.error) return fail('get_product_metrics', args, 'NOT_FOUND', ERROR_TEXT.NOT_FOUND, { period: periodOf(info), detail: 'No sales for this product in the period, or the id is unknown.' });
+  if (d.error) {
+    // Not in the period's sold products: either the product exists (no sale in the period) or the id is unknown - the catalogue tells which.
+    const catalog = await datasetCatalog(ctx.reportsDir);
+    const exists = !!catalog?.products.some((x) => x.id === args.productId);
+    return fail('get_product_metrics', args, 'NOT_FOUND', ERROR_TEXT.NOT_FOUND, { period: periodOf(info), reason: exists ? 'NO_SALES_IN_PERIOD' : 'UNKNOWN_PRODUCT' });
+  }
   const x = d.product; const prev = previousOf(info);
   const values = [fact('net_sales_ex_tax', x.net_sales_ex_tax, cur), fact('units_sold', x.units_sold, 'count'), fact('share', x.share, 'ratio'),
     fact('previous_net_sales_ex_tax', x.previous_net_sales_ex_tax ?? null, cur), fact('previous_units_sold', x.previous_units_sold ?? null, 'count'),
@@ -227,6 +232,9 @@ async function listFromExplorer(ctx, tool, args, key, mapRow) {
 
 const getChannels = (ctx, args) => listFromExplorer(ctx, 'get_channels', args, 'channels', (r, cur) => ({ ref: r.name, label: r.name, values: [fact('net_sales_ex_tax', r.net_sales_ex_tax, cur), fact('order_count', r.order_count, 'count'), fact('share', r.share, 'ratio')] }));
 const getCategories = (ctx, args) => listFromExplorer(ctx, 'get_categories', args, 'categories', (r, cur) => ({ ref: r.name ?? null, label: r.name ?? null, values: [fact('net_sales_ex_tax', r.net_sales_ex_tax, cur), fact('units_sold', r.units_sold, 'count'), fact('share', r.share, 'ratio')], ...(r.name == null ? { flags: { uncategorised: true } } : {}) }));
+
+// Shared with the extra tools (analytics-tools-extra.js): same period resolution, same contract, same completeness rules.
+export { loadPeriod, success, baseReasons, previousOf, eur, periodOf, ERROR_TEXT, PERIOD_SCHEMA, LIMIT_SCHEMA };
 
 // ---------- catalog ----------
 

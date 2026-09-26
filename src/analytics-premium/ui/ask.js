@@ -94,8 +94,8 @@ function askPeriodText(p) { return t('ask.period', askDate(p.from), askDate(p.to
 
 /** One limitation of the data, in words. Codes and parameters come from Nordla; the wording is here. */
 function askLimitText(l) {
-  const p = l.params || {}; const k = `ask.lim.${l.code}`;
-  const arg = l.code === 'DATA_STALE' ? p.ageMinutes : l.code === 'CUSTOMERS_PARTIALLY_IDENTIFIED' ? (p.identifiedShare == null ? '' : `${Math.round(p.identifiedShare * 100)} %`) : l.code === 'COSTS_PARTIAL' ? '' : l.code === 'VALUE_MISSING' ? askMetric(p.metric) : p.historyStart ? askDate(p.historyStart) : '';
+  const p = l.params || {}; const k = l.code === 'NOT_FOUND' && p.reason ? `ask.lim.NOT_FOUND.${p.reason}` : `ask.lim.${l.code}`;
+  const arg = l.code === 'DATA_STALE' ? p.ageMinutes : l.code === 'CUSTOMERS_PARTIALLY_IDENTIFIED' ? (p.identifiedShare == null ? '' : `${Math.round(p.identifiedShare * 100)} %`) : l.code === 'COSTS_PARTIAL' ? '' : l.code === 'VALUE_MISSING' ? askMetric(p.metric) : l.code === 'SHIPPING_DATA_PARTIAL' ? p.ordersWithoutShippingData : l.code === 'PRODUCT_HAS_NO_SALES_IN_PERIOD' ? p.count : p.historyStart ? askDate(p.historyStart) : '';
   const s = t(k, arg);
   return s === k ? t('ask.lim.GENERIC') : s;
 }
@@ -117,7 +117,7 @@ function askDeterministic(summary) {
     (summary.calls || []).map((c) => h('div', { class: 'ask-call' },
       h('div', { class: 'ask-call-title' }, askTool(c.tool)), h('div', { class: 'ask-meta' }, askPeriodText(c.period)),
       c.values.length ? h('ul', { class: 'ask-figures' }, c.values.filter((v) => v.value != null).map((v) => h('li', null, h('span', null, askMetric(v.key)), h('strong', null, askFmt(v.value, v.unit))))) : null,
-      c.items.length ? h('ol', { class: 'ask-items' }, c.items.map((i) => h('li', null, h('span', null, i.label == null ? t('ask.item.none') : i.label), i.values[0] ? h('strong', null, askFmt(i.values[0].value, i.values[0].unit)) : null))) : null,
+      c.items.length ? h('ol', { class: 'ask-items' }, c.items.map((i) => h('li', null, h('span', null, i.label == null ? t('ask.item.none') : i.label), i.values[0] ? h('strong', null, askFmt(i.values[0].value, i.values[0].unit)) : i.status === 'NO_SALES_IN_PERIOD' ? h('em', null, t('ask.item.noSales')) : null))) : null,
       c.comparison && c.comparison.rows.length ? h('div', { class: 'ask-meta' }, t('ask.used.compared', askDate(c.comparison.reference && c.comparison.reference.from), askDate(c.comparison.reference && c.comparison.reference.to)),
         c.comparison.rows.filter((r) => r.delta_pct != null).slice(0, 4).map((r) => h('span', { class: 'ask-delta' }, `${askMetric(r.key)} ${r.delta_pct > 0 ? '+' : ''}${askFmt(r.delta_pct, 'ratio')}`))) : null)));
 }

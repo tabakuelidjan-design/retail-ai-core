@@ -65,9 +65,9 @@ test('clarification: no tool runs, no explanation is requested, and a clarificat
 });
 
 test('an unknown tool is refused (never run, counted against the limit); invalid arguments are refused; the valid call still runs', async () => {
-  const s = await setup({ planner: () => ({ toolCalls: [{ tool: 'get_vat', args: {} }, { tool: 'drop_database', args: {} }, { tool: 'get_top_products', args: { limit: 999 } }, { tool: 'get_sales_metrics', args: {} }] }) });
+  const s = await setup({ planner: () => ({ toolCalls: [{ tool: 'get_weather', args: {} }, { tool: 'drop_database', args: {} }, { tool: 'get_top_products', args: { limit: 999 } }, { tool: 'get_sales_metrics', args: {} }] }) });
   const r = await s.ask({ question: 'x' });
-  assert.equal(r.status, 'OK'); assert.deepEqual(r.toolCalls.map((c) => [c.tool, c.ok, c.errorCode ?? null, !!c.rejected]), [['get_sales_metrics', true, null, false], ['get_vat', false, 'UNKNOWN_TOOL', true], ['drop_database', false, 'UNKNOWN_TOOL', true], ['get_top_products', false, 'INVALID_ARGUMENT', true]]);
+  assert.equal(r.status, 'OK'); assert.deepEqual(r.toolCalls.map((c) => [c.tool, c.ok, c.errorCode ?? null, !!c.rejected]), [['get_sales_metrics', true, null, false], ['get_weather', false, 'UNKNOWN_TOOL', true], ['drop_database', false, 'UNKNOWN_TOOL', true], ['get_top_products', false, 'INVALID_ARGUMENT', true]]);
   assert.equal(r.facts.every((f) => f.ref.startsWith('c1.')), true, 'only the valid call produced facts');
   const allBad = await (await setup({ planner: () => ({ toolCalls: [{ tool: 'nope' }] }) })).ask({ question: 'x' });
   assert.equal(allBad.status, 'CANNOT_ANSWER'); assert.equal(allBad.reason, 'NO_DATA'); assert.equal(allBad.explanation.status, 'SKIPPED');
