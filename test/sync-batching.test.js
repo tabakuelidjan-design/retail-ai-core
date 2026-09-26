@@ -7,8 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 import { MERCHANT_ID, seedVolumeCatalog, variantPages, volumeShopify, countRequests } from './fixtures/sync-volume.js';
-import { referenceSyncProductCosts } from './fixtures/sync-reference-669096b.js';
+import { referenceSyncProductCosts, referenceSyncInventory } from './fixtures/sync-reference-669096b.js';
 import { syncProductCosts } from '../src/sync/cost.js';
+import { syncInventory } from '../src/sync/inventory.js';
 
 const withoutIds = (rows) => rows.map(({ id, ...rest }) => rest);
 
@@ -98,4 +99,73 @@ test('costs: another merchant\'s history is never read', async () => {
   ]);
   const summary = await syncProductCosts({ shopify: volumeShopify(), supabase }, { merchantId: MERCHANT_ID, now: new Date('2026-09-26T08:00:00Z') });
   assert.equal(summary.newCostRows, 283); // var-1's 2.50 belongs to another merchant: it does not count as history
+});
+
+// --- inventory snapshots ---
+
+const snapshotRows = (db) => withoutIds(db._tables.get('inventory_snapshots') ?? []);
+
+test('inventory: same snapshots as before across local-day boundaries, DST, gaps and a failed page', async () => {
+  const dbs = await twoDatabases();
+  const timeZone = 'Europe/Brussels';
+  const run = async (iso, extra = {}) => {
+    const r = await runBoth(dbs, referenceSyncInventory, syncInventory, { now: new Date(iso), timeZone, ...extra });
+    assert.deepEqual(snapshotRows(dbs.batched), snapshotRows(dbs.reference), `after run at ${iso}`);
+    return r;
+  };
+
+  const first = await run('2026-09-26T06:00:00Z');
+  assert.equal(snapshotRows(dbs.batched).length, 344);
+  report('inventory, first cycle of the day (344 snapshots)', first);
+  assert.deepEqual(first.byCall, { 'select variants': 1, 'select locations': 1, 'selectAll inventory_snapshots': 1, 'insert inventory_snapshots': 1 });
+
+  const steady = await run('2026-09-26T06:15:00Z');
+  report('inventory, later cycle same day (nothing to write)', steady);
+  assert.equal(steady.before, 346);
+  assert.equal(steady.after, 3);
+
+  const moved = (shift) => () => volumeShopify({ variants: variantPages({ quantityShift: shift }) });
+  await run('2026-09-26T21:59:00Z', { shopify: moved(1) }); // 23:59 in Brussels: still the same local day
+  await run('2026-09-26T22:01:00Z', { shopify: moved(2) }); // 00:01 on the 27th in Brussels: new snapshots
+  assert.equal(snapshotRows(dbs.batched).length, 344 * 2);
+  await run('2026-09-30T08:00:00Z', { shopify: moved(3) }); // after a gap longer than the lookback window
+  assert.equal(snapshotRows(dbs.batched).length, 344 * 3);
+
+  // DST ends on 2026-10-25 in Brussels: that local day lasts 25 h.
+  await run('2026-10-24T22:30:00Z'); // 00:30 CEST on the 25th
+  await run('2026-10-25T22:30:00Z'); // 23:30 CET on the 25th - same local day, nothing written
+  assert.equal(snapshotRows(dbs.batched).length, 344 * 4);
+
+  // Shopify fails on page 4: the snapshots decided on pages 1-3 are still written.
+  await run('2026-10-27T08:00:00Z', { shopify: () => volumeShopify({ failAtCursor: 'v3' }) });
+  assert.ok(snapshotRows(dbs.batched).length > 344 * 4);
+});
+
+test('inventory: a snapshot dated after now (clock skew) is still the latest one, as before', async () => {
+  const dbs = await twoDatabases();
+  for (const db of [dbs.reference, dbs.batched]) {
+    await db.insert('inventory_snapshots', [
+      { variant_id: 'var-6', location_id: 'loc-2', quantity: 1, synced_at: '2026-09-27T06:00:00.000Z', merchant_id: MERCHANT_ID }, // tomorrow
+      { variant_id: 'var-6', location_id: 'loc-1', quantity: 1, synced_at: '2026-09-26T05:00:00.000Z', merchant_id: MERCHANT_ID }, // today
+      { variant_id: 'var-12', location_id: 'loc-1', quantity: 1, synced_at: '2026-09-16T05:00:00.000Z', merchant_id: MERCHANT_ID }, // long ago
+      { variant_id: 'var-18', location_id: 'loc-1', quantity: 1, synced_at: '2026-09-26T05:00:00.000Z', merchant_id: 'other-merchant' },
+    ]);
+  }
+  const { after } = await runBoth(dbs, referenceSyncInventory, syncInventory, { now: new Date('2026-09-26T08:00:00Z') });
+  assert.deepEqual(snapshotRows(dbs.batched), snapshotRows(dbs.reference));
+  assert.equal(snapshotRows(dbs.batched).length, 4 + 343); // only var-6 / loc-1 already has today's snapshot
+  assert.equal(after, 4);
+});
+
+test('inventory: the read stays one request however much history accumulates', async () => {
+  const supabase = createFakeSupabase();
+  await seedVolumeCatalog(supabase);
+  for (let day = 1; day <= 5; day += 1) {
+    await syncInventory({ shopify: volumeShopify(), supabase }, { merchantId: MERCHANT_ID, now: new Date(Date.UTC(2026, 8, day, 8)), timeZone: 'Europe/Brussels' });
+  }
+  assert.equal(snapshotRows(supabase).length, 344 * 5); // 1,720 rows: two pages if the whole history were read
+  const { client, counts } = countRequests(supabase);
+  await syncInventory({ shopify: volumeShopify(), supabase: client }, { merchantId: MERCHANT_ID, now: new Date('2026-09-05T08:15:00Z'), timeZone: 'Europe/Brussels' });
+  assert.equal(counts.byCall['selectAll inventory_snapshots'], 1); // only the last 48 h (688 rows) are read
+  assert.equal(counts.total, 3);
 });

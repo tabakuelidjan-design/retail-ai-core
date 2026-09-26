@@ -5,9 +5,40 @@
 // row - this is what lets future stockout-day math tell "unchanged" apart
 // from "sync didn't run" and "real movement" (see
 // docs/architecture/inventory-cost-sync.md).
+//
+// Batched: the merchant's recent snapshots are read once (not once per variant x location) and the new
+// snapshots are inserted together at the end, so a cycle costs a handful of requests instead of two per pair.
 
 import { VARIANT_INVENTORY_COST_PAGE_QUERY } from '../shopify/queries.js';
 import { extractAvailableQuantity, normalizeInventorySnapshot, shouldWriteInventorySnapshot } from './normalize.js';
+import { insertInChunks } from './batch.js';
+
+// A local calendar day starts at most 25 h before any instant in it (DST), so a snapshot older than this can
+// never be on `now`'s local day: for shouldWriteInventorySnapshot it is the same as no snapshot at all.
+// Reading only this window keeps the read one page long however much history accumulates.
+export const SNAPSHOT_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+
+const pairKey = (variantId, locationId) => `${variantId}|${locationId}`;
+
+/**
+ * The most recent snapshot per (variant, location) among the merchant's snapshots since now - 48 h
+ * (including any dated after `now`). A pair with none in the window gets no entry.
+ * @returns {Map<string, {synced_at: string}>} keyed by pairKey(variantId, locationId)
+ */
+export async function loadRecentLatestSnapshots(supabase, merchantId, now) {
+  const rows = await supabase.selectAll('inventory_snapshots', {
+    select: 'id,variant_id,location_id,synced_at',
+    merchant_id: `eq.${merchantId}`,
+    synced_at: `gte.${new Date(now.getTime() - SNAPSHOT_LOOKBACK_MS).toISOString()}`,
+  });
+  const latest = new Map();
+  for (const row of rows) {
+    const key = pairKey(row.variant_id, row.location_id);
+    const current = latest.get(key);
+    if (!current || Date.parse(row.synced_at) > Date.parse(current.synced_at)) latest.set(key, row);
+  }
+  return latest;
+}
 
 /**
  * @param {{graphql: Function}} shopify
@@ -27,6 +58,8 @@ export async function syncInventory({ shopify, supabase }, opts) {
   ]);
   const variantIdBySourceId = new Map(localVariants.map((v) => [v.source_id, v.id]));
   const locationIdBySourceId = new Map(localLocations.map((l) => [l.source_id, l.id]));
+  const latestByPair = await loadRecentLatestSnapshots(supabase, opts.merchantId, now);
+  const newSnapshots = [];
 
   let cursor = null;
   let hasNextPage = true;
@@ -59,25 +92,15 @@ export async function syncInventory({ shopify, supabase }, opts) {
         const quantity = extractAvailableQuantity(node.inventoryItem, locationSourceId);
         if (quantity === null) continue;
 
-        const [latest] = await supabase.select('inventory_snapshots', {
-          select: 'synced_at',
-          // merchant_id added as defense-in-depth (variantId/locationId are already this merchant's own
-          // resolved local ids, so this was safe by construction even before the column existed).
-          merchant_id: `eq.${opts.merchantId}`,
-          variant_id: `eq.${variantId}`,
-          location_id: `eq.${locationId}`,
-          order: 'synced_at.desc',
-          limit: '1',
-        });
-
-        if (!shouldWriteInventorySnapshot(latest ?? null, now, timeZone)) {
+        const key = pairKey(variantId, locationId);
+        if (!shouldWriteInventorySnapshot(latestByPair.get(key) ?? null, now, timeZone)) {
           summary.snapshotsSkippedSameDay += 1;
           continue;
         }
 
-        await supabase.insert('inventory_snapshots', [
-          normalizeInventorySnapshot(variantId, locationId, quantity, now, opts.merchantId),
-        ]);
+        const snapshot = normalizeInventorySnapshot(variantId, locationId, quantity, now, opts.merchantId);
+        newSnapshots.push(snapshot);
+        latestByPair.set(key, snapshot); // a pair seen twice in one run is skipped the second time, as before
         summary.snapshotsWritten += 1;
       }
     }
@@ -86,5 +109,7 @@ export async function syncInventory({ shopify, supabase }, opts) {
     cursor = page.productVariants.pageInfo.endCursor;
   }
 
+  // Also after a failed page fetch: the snapshots decided before the failure are written, as they were one by one.
+  await insertInChunks(supabase, 'inventory_snapshots', newSnapshots);
   return summary;
 }
