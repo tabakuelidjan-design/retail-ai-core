@@ -41,16 +41,29 @@ function catalogRows(data, onlyVariantId = null) {
 
 /** @param {{loadRetail: (sinceDate?: string) => Promise<{ledger: object, data: object}>, listOrderRefs?: () => Promise<Map<string,string>>, ttlMs?: number, nowMs?: () => number}} deps */
 export function createRetailAccess({ loadRetail, listOrderRefs = async () => new Map(), ttlMs = 60_000, nowMs = () => Date.now() }) {
-  let cache = null;
+  // One cache entry PER window (sinceDate), not a single slot: /api/actions reads the current quarter AND the full history, so a
+  // single slot evicted one with the other and every Home visit reloaded both. Concurrent callers of the same window share the load
+  // in flight. A failed load is never cached. At most MAX_WINDOWS windows are kept (oldest dropped).
+  const MAX_WINDOWS = 4;
+  let windows = []; // [{ since, at, value }], oldest first (plain arrays: this read-only module has no delete/write call at all)
+  let pending = []; // [{ since, promise }]
   const get = async (sinceDate) => {
-    if (cache && cache.since === (sinceDate ?? null) && nowMs() - cache.at < ttlMs) return cache.value;
-    const value = await loadRetail(sinceDate);
-    cache = { at: nowMs(), since: sinceDate ?? null, value };
-    return value;
+    const since = sinceDate ?? null;
+    const hit = windows.find((w) => w.since === since);
+    if (hit && nowMs() - hit.at < ttlMs) return hit.value;
+    const running = pending.find((p) => p.since === since);
+    if (running) return running.promise;
+    const promise = loadRetail(sinceDate);
+    pending = [...pending, { since, promise }];
+    try {
+      const value = await promise;
+      windows = [...windows.filter((w) => w.since !== since), { since, at: nowMs(), value }].slice(-MAX_WINDOWS);
+      return value;
+    } finally { pending = pending.filter((p) => p.promise !== promise); }
   };
   return {
     ledgerData: get,
-    clearCache: () => { cache = null; },
+    clearCache: () => { windows = []; pending = []; },
 
     /**
      * Search shop/POS orders to link an invoice to. Filters: free text (reference or item title), date range, amount range.
