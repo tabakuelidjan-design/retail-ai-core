@@ -154,10 +154,10 @@ test('review pane (phase 2): the Supplier and Duplicates blocks show recognised 
       const text = (el) => (el ? el.textContent : null); const btns = (el) => (el ? byTag(el, 'button').map((b) => b.textContent) : []);
       return { supplier: text(one('doc-supplier')), supplierButtons: btns(one('doc-supplier')), dups: text(one('doc-dups')), dupButtons: btns(one('doc-dups')), linked: items.get(id).supplierCompanyId }; };
     let b = await blocks(recognised);
-    assert.match(b.supplier, /Supplier recognised/); assert.match(b.supplier, /Fournisseur UI SRL/); assert.match(b.supplier, /Same VAT number · 99 %/);
+    assert.match(b.supplier, /Supplier recognised/); assert.match(b.supplier, /Fournisseur UI SRL/); assert.match(b.supplier, /Strong match — same VAT number/); assert.doesNotMatch(b.supplier, /%/, 'no heuristic score shown as a percentage');
     assert.deepEqual(b.supplierButtons, ['Confirm', 'Choose another contact']); assert.equal(b.linked, null, 'shown, never linked by itself');
     assert.match(b.dups, /Possible duplicate/, 'R-1 and R-2: same supplier, same total, 2 days apart');
-    b = await blocks(byName); assert.match(b.supplier, /To confirm/); assert.match(b.supplier, /Same name · 80 %/); assert.match(b.dups, /None/); assert.deepEqual(b.dupButtons, []);
+    b = await blocks(byName); assert.match(b.supplier, /To confirm/); assert.match(b.supplier, /To confirm — same name/); assert.doesNotMatch(b.supplier, /%/); assert.match(b.dups, /None/); assert.deepEqual(b.dupButtons, []);
     b = await blocks(unknown); assert.match(b.supplier, /Unknown supplier/); assert.deepEqual(b.supplierButtons, ['Create this supplier', 'Choose another contact', 'Not now']);
     b = await blocks(possible);
     assert.match(b.dups, /Possible duplicate/); assert.match(b.dups, /R-1/); assert.match(b.dups, /same supplier · same type · same total incl\. VAT · close date · different number/);

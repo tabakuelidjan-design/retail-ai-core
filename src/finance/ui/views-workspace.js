@@ -56,15 +56,16 @@ const checkText = (c) => tt(CHECK_TEXT[c] || INBOX_ERR[c] || c);
 // ---------- phase 2: supplier recognition and duplicates, two discreet blocks of the review pane ----------
 // Nothing is linked or created without a click: "Confirm", "Choose another contact", "Create this supplier" (the contact form,
 // prefilled with what the document carries, Supplier role), "Not now". Duplicates are shown as certain or possible, never decided.
-const MATCH_METHOD = { VAT: 'Same VAT number', ENTERPRISE_NUMBER: 'Same enterprise number', NAME: 'Same name', LINKED: 'Linked' };
-const MATCH_SIGNAL = { ADDRESS_MATCHES: 'same address', ADDRESS_DIFFERS: 'different address' };
+// The reason is shown in words; the internal heuristic score is never displayed as a percentage (it is not a probability).
+const matchReason = (c) => (c.method === 'VAT' ? 'Strong match — same VAT number' : c.method === 'ENTERPRISE_NUMBER' ? 'Strong match — same enterprise number'
+  : (c.signals || []).includes('ADDRESS_MATCHES') ? 'To confirm — similar name and address' : (c.signals || []).includes('ADDRESS_DIFFERS') ? 'To confirm — same name, different address' : 'To confirm — same name');
 const DUP_REASON = { SAME_FILE: 'same file', SAME_SUPPLIER: 'same supplier', SAME_NUMBER: 'same number', SAME_TYPE: 'same type', SAME_TOTAL: 'same total incl. VAT', SAME_DATE: 'same date', CLOSE_DATE: 'close date', NUMBER_MISSING: 'number missing', NUMBER_DIFFERENT: 'different number' };
 const DIFF_LABEL = { invoiceNumber: 'Invoice number', issueDate: 'Invoice date', dueDate: 'Due date', netCents: 'Excl. VAT', vatCents: 'VAT', grossCents: 'Incl. VAT', currency: 'Currency', supplierVatNumber: 'Supplier VAT number', fileName: 'File', source: 'Source', status: 'Status' };
 const intelHead = (title, cls, label) => h('div', { class: 'doc-intel-h' }, h('strong', null, tt(title)), h('span', { class: `chip ${cls}` }, tt(label)));
 function supplierBlock(it, reload, err, focusSearch) {
   const sm = it.supplierMatch; if (!sm) return null;
   const box = h('div', { class: 'doc-intel doc-supplier' });
-  const why = (c) => [tt(MATCH_METHOD[c.method] || c.method), ...(c.signals || []).map((s) => tt(MATCH_SIGNAL[s] || s)), `${Math.round(c.confidence * 100)} %`].join(' · ');
+  const why = (c) => tt(matchReason(c));
   const link = (contactId, created) => async () => { try { await api('POST', `/api/inbox/${it.id}/contact`, { contactId, created: !!created }); toast(tt('Contact linked'), 'ok'); reload(); } catch (e) { fail(e, err); } };
   const other = h('button', { type: 'button', on: { click: () => focusSearch() } }, tt('Choose another contact'));
   if (sm.status === 'linked') { box.appendChild(intelHead('Supplier', 'ok', 'Linked')); if (sm.candidates[0]) box.appendChild(h('div', { class: 'small' }, sm.candidates[0].displayName)); return box; }
@@ -77,7 +78,7 @@ function supplierBlock(it, reload, err, focusSearch) {
   }
   if (sm.status === 'to_confirm') {
     box.appendChild(intelHead('Supplier', 'warn', 'To confirm'));
-    box.appendChild(h('div', { class: 'muted small' }, tt('Several contacts match: choose the right one.')));
+    box.appendChild(h('div', { class: 'muted small' }, tt('Several contacts match'), ' — ', tt('choose the right one.')));
     sm.candidates.forEach((c) => box.appendChild(h('div', { class: 'doc-intel-row' }, h('span', null, h('b', null, c.displayName), h('span', { class: 'muted small' }, ` ${why(c)}`)),
       h('span', { class: 'doc-intel-actions' }, h('button', { type: 'button', on: { click: link(c.contactId) } }, tt('Choose'))))));
     return box;

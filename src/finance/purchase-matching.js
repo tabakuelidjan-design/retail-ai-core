@@ -23,7 +23,12 @@ import { contactDisplayName, normalizeName, normalizeVat } from './contacts.js';
 import { normalizeBelgianNumber } from './company.js';
 import { documentTypeOf } from './purchase-document.js';
 
+// Heuristic scores, used ONLY to order candidates. They are not calibrated probabilities and are never shown as percentages:
+// the person sees a structured level (HIGH / MEDIUM / LOW, AMBIGUOUS when several contacts match) and the reason.
 export const MATCH_CONFIDENCE = { VAT: 0.99, ENTERPRISE_NUMBER: 0.98, NAME: 0.8, NAME_AND_ADDRESS: 0.9, NAME_ADDRESS_DIFFERS: 0.6 };
+export const MATCH_LEVELS = ['HIGH', 'MEDIUM', 'LOW', 'AMBIGUOUS'];
+/** HIGH = same VAT or enterprise number; MEDIUM = same name and same address; LOW = same name only (or another address). */
+const levelOf = (method, signals) => (method === 'VAT' || method === 'ENTERPRISE_NUMBER' || method === 'LINKED' ? 'HIGH' : signals.includes('ADDRESS_MATCHES') ? 'MEDIUM' : 'LOW');
 export const PROBABLE_DUPLICATE_WINDOW_DAYS = 7;
 
 const beDigits = (v) => { if (!v) return null; const n = normalizeBelgianNumber(v); return n.ok ? n.digits : null; };
@@ -45,7 +50,7 @@ const identifiersConflict = (a, b) => {
   if (a.enterprise && b.enterprise && a.enterprise === b.enterprise) return false;
   return true;
 };
-const candidate = (c, method, confidence, signals = []) => ({ contactId: c.id, displayName: contactDisplayName(c), method, confidence, signals, vatNumber: c.vatNumber ?? null, enterpriseNumber: c.enterpriseNumber ?? null });
+const candidate = (c, method, confidence, signals = []) => ({ contactId: c.id, displayName: contactDisplayName(c), method, level: levelOf(method, signals), confidence, signals, vatNumber: c.vatNumber ?? null, enterpriseNumber: c.enterpriseNumber ?? null });
 
 /**
  * Propose the supplier contact of a purchase document. Never links.
@@ -56,7 +61,7 @@ export function matchSupplier(r, companies) {
   const active = companies.filter((c) => !c.archivedAt);
   if (r.supplierCompanyId) {
     const c = companies.find((x) => x.id === r.supplierCompanyId);
-    return { status: 'linked', proposal: null, candidates: c ? [candidate(c, 'LINKED', 1)] : [], createPrefill: null };
+    return { status: 'linked', level: null, proposal: null, candidates: c ? [candidate(c, 'LINKED', 1)] : [], createPrefill: null };
   }
   let tier = [];
   if (doc.vat) tier = active.filter((c) => contactIdentity(c).vat === doc.vat).map((c) => candidate(c, 'VAT', MATCH_CONFIDENCE.VAT));
@@ -74,11 +79,11 @@ export function matchSupplier(r, companies) {
   }
   if (!tier.length) {
     const hasSomething = doc.name || doc.vat || doc.enterprise;
-    return { status: 'unknown', proposal: null, candidates: [], createPrefill: hasSomething ? createPrefillOf(r) : null };
+    return { status: 'unknown', level: null, proposal: null, candidates: [], createPrefill: hasSomething ? createPrefillOf(r) : null };
   }
   tier.sort((a, b) => b.confidence - a.confidence);
-  if (tier.length === 1) return { status: tier[0].method === 'NAME' ? 'to_confirm' : 'recognized', proposal: tier[0], candidates: tier, createPrefill: null };
-  return { status: 'to_confirm', proposal: null, candidates: tier, createPrefill: null }; // ambiguous: the person chooses
+  if (tier.length === 1) return { status: tier[0].method === 'NAME' ? 'to_confirm' : 'recognized', level: tier[0].level, proposal: tier[0], candidates: tier, createPrefill: null };
+  return { status: 'to_confirm', level: 'AMBIGUOUS', proposal: null, candidates: tier, createPrefill: null }; // ambiguous: the person chooses
 }
 
 /** Fields to prefill "Create this supplier" with - only what the document carries (a Supplier, business contact). */

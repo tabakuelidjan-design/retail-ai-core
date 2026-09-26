@@ -19,6 +19,7 @@ test('matching: exact VAT wins, whatever the formatting; a VAT match is "recogni
   const m = matchSupplier(docOf({ vat: 'be 0000.000.097', name: 'Fournisseur Exemple SRL' }), cs);
   assert.equal(m.status, 'recognized'); assert.equal(m.proposal.contactId, 'a'); assert.equal(m.proposal.method, 'VAT'); assert.equal(m.proposal.confidence, MATCH_CONFIDENCE.VAT);
   assert.equal(m.candidates.length, 1, 'a later tier (name) is never mixed with the VAT tier');
+  assert.deepEqual([m.level, m.proposal.level], ['HIGH', 'HIGH'], 'a structured level, not a probability');
 });
 test('matching: exact enterprise number, including the one inside a Belgian VAT number', () => {
   const cs = [company('a', { ent: '0000.000.097' }), company('b', { vat: 'BE0000000196' })];
@@ -30,6 +31,8 @@ test('matching: exact normalised name is only "to confirm"; the address is a sec
   const cs = [company('a', { name: 'Imprimerie Exemple S.R.L.', address: { street: 'Rue de la Gare 1', postalCode: '5000' } })];
   let m = matchSupplier(docOf({ name: 'imprimerie exemple srl' }), cs); assert.deepEqual([m.status, m.proposal.method, m.proposal.confidence], ['to_confirm', 'NAME', MATCH_CONFIDENCE.NAME]);
   m = matchSupplier(docOf({ name: 'Imprimerie Exemple SRL', address: { street: 'Rue de la gare, 1', postalCode: '5000' } }), cs); assert.deepEqual([m.proposal.confidence, m.proposal.signals], [MATCH_CONFIDENCE.NAME_AND_ADDRESS, ['ADDRESS_MATCHES']]);
+  assert.equal(matchSupplier(docOf({ name: 'imprimerie exemple srl' }), cs).level, 'LOW');
+  assert.equal(matchSupplier(docOf({ name: 'Imprimerie Exemple SRL', address: { street: 'Rue de la gare, 1', postalCode: '5000' } }), cs).level, 'MEDIUM');
   m = matchSupplier(docOf({ name: 'Imprimerie Exemple SRL', address: { postalCode: '1000' } }), cs); assert.deepEqual([m.status, m.proposal.confidence, m.proposal.signals], ['to_confirm', MATCH_CONFIDENCE.NAME_ADDRESS_DIFFERS, ['ADDRESS_DIFFERS']]);
   assert.equal(matchSupplier(docOf({ name: 'Imprimerie Exemple', address: { postalCode: '5000' } }), cs).status, 'unknown', 'never fuzzy: a shorter name is not the same name; an address alone never matches');
   const withVat = [company('a', { name: 'Imprimerie Exemple SRL', vat: 'BE0000000196' })];
@@ -38,6 +41,7 @@ test('matching: exact normalised name is only "to confirm"; the address is a sec
 test('matching: several candidates -> to confirm, no proposal (nothing can be linked automatically); archived contacts are never proposed', () => {
   const cs = [company('a', { vat: 'BE0000000097', name: 'X SRL' }), company('b', { vat: 'BE0000000097', name: 'X SA' })];
   const m = matchSupplier(docOf({ vat: 'BE0000000097' }), cs); assert.deepEqual([m.status, m.proposal, m.candidates.map((c) => c.contactId)], ['to_confirm', null, ['a', 'b']]);
+  assert.equal(m.level, 'AMBIGUOUS');
   const n = matchSupplier(docOf({ name: 'Même Nom SRL' }), [company('a', { name: 'Même Nom SRL' }), company('b', { name: 'MEME NOM SRL' }), company('c', { name: 'Même nom srl' })]);
   assert.equal(n.status, 'to_confirm'); assert.equal(n.proposal, null); assert.equal(n.candidates.length, 2, "accents are kept: 'MEME' is not 'MÊME'");
   assert.equal(matchSupplier(docOf({ vat: 'BE0000000097' }), [company('a', { vat: 'BE0000000097', archivedAt: '2026-09-01T00:00:00Z' })]).status, 'unknown');
@@ -173,7 +177,7 @@ test('HTTP: recognised supplier -> the person confirms; the decision, method and
   g = (await h.c.get(`/api/inbox/${it.id}`)).data;
   assert.equal(g.supplierCompanyId, c.id); assert.equal(g.supplierMatch.status, 'linked');
   const d = g.supplierMatch.decisions.at(-1);
-  assert.deepEqual([d.action, d.contactId, d.proposedContactId, d.method, d.confidence, d.matchStatus], ['CONFIRMED_PROPOSAL', c.id, c.id, 'VAT', 0.99, 'recognized']);
+  assert.deepEqual([d.action, d.contactId, d.proposedContactId, d.method, d.level, d.matchStatus], ['CONFIRMED_PROPOSAL', c.id, c.id, 'VAT', 'HIGH', 'recognized']);
 }));
 test('HTTP: another contact can be chosen instead of the proposal; the choice is recorded as such', withH(async (h) => {
   const proposed = await newContact(h, { name: 'Fournisseur Exemple SRL', vatNumber: 'BE0000000097' });

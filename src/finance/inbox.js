@@ -161,7 +161,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       try { await attachments.remove(ref); await audit({ at: now(), action: 'INBOX_UNREFERENCED_FILE_REMOVED', ref }); } catch { /* kept: a failed clean-up never fails the request */ }
     }
   };
-  const matchingSnapshot = (m) => ({ at: now(), status: m.status, proposal: m.proposal ? { contactId: m.proposal.contactId, displayName: m.proposal.displayName, method: m.proposal.method, confidence: m.proposal.confidence } : null,
+  const matchingSnapshot = (m) => ({ at: now(), status: m.status, level: m.level ?? null, proposal: m.proposal ? { contactId: m.proposal.contactId, displayName: m.proposal.displayName, method: m.proposal.method, level: m.proposal.level, confidence: m.proposal.confidence } : null,
     candidates: m.candidates.map((c) => ({ contactId: c.contactId, method: c.method, confidence: c.confidence })) });
   const duplicateSnapshot = (d) => ({ at: now(), level: d.level, items: d.items.map((i) => ({ id: i.id, level: i.level, reasons: i.reasons })) });
   const appendDecision = async (r, key, entry) => {
@@ -365,7 +365,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const action = !contactId ? 'UNLINKED' : created ? 'CREATED_AND_LINKED' : proposed && proposed.contactId === contactId ? 'CONFIRMED_PROPOSAL' : 'CHOSE_OTHER_CONTACT';
       const saved = await store.setSupplierInvoiceContact(id, contactId ?? null);
       if (!saved) throw new FinanceError('INBOX_ITEM_NOT_FOUND', id);
-      const entry = { at: now(), action, contactId: contactId ?? null, previousContactId: r.supplierCompanyId ?? null, matchStatus: live.status, proposedContactId: proposed?.contactId ?? null, method: proposed?.method ?? null, confidence: proposed?.confidence ?? null };
+      const entry = { at: now(), action, contactId: contactId ?? null, previousContactId: r.supplierCompanyId ?? null, matchStatus: live.status, proposedContactId: proposed?.contactId ?? null, method: proposed?.method ?? null, level: proposed?.level ?? live.level ?? null, confidence: proposed?.confidence ?? null };
       const withDecision = await appendDecision(saved, 'supplierDecisions', entry);
       await audit({ at: now(), action: contactId ? 'SUPPLIER_INVOICE_CONTACT_LINKED' : 'SUPPLIER_INVOICE_CONTACT_UNLINKED', itemId: id, contactId: contactId ?? null, previousContactId: r.supplierCompanyId ?? null, decision: action, method: entry.method });
       return withDecision;
