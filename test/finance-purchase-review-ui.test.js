@@ -208,7 +208,7 @@ test('the review pane shows where the due date comes from, the supplier\'s wordi
     let t = await text(computed.id);
     for (const s of ['Due date origin', 'Computed from the payment terms', 'Payment terms: Paiement à 30 jours', 'There are 14 days left to pay this invoice.', 'No payment recorded']) assert.ok(t.includes(s), `EN: ${s}`);
     assert.ok(!t.includes('differs'), 'no divergence here');
-    t = await text(diverging.id); assert.ok(t.includes('Printed on the invoice') && t.includes('The printed due date differs from the one the payment terms give (2026-10-10) by 15 day(s): check which one applies.'), 'the divergence is shown, never hidden');
+    t = await text(diverging.id); assert.ok(t.includes('Printed on the invoice') && t.includes('Printed due date: 2026-10-25') && t.includes('Due date given by the payment terms: 2026-10-10') && t.includes('You must acknowledge the difference before validating.') && t.includes('Acknowledge the difference'), 'both dates and the acknowledgement control are shown, never hidden');
     t = await text(unknown.id); assert.ok(t.includes('Not stated on the document') && t.includes('Payment terms: Selon contrat') && t.includes('The due date is not computed from this wording: enter it yourself if you know it.'));
     t = await text(none.id); assert.ok(t.includes('Not stated on the document') && t.includes('No due date stated.') && !t.includes('Payment terms:'), 'no wording, no due date, nothing invented');
 
@@ -216,9 +216,9 @@ test('the review pane shows where the due date comes from, the supplier\'s wordi
     try {
       globalThis.tt = ttIn('fr'); t = await text(computed.id);
       for (const s of ["Origine de l'échéance", "Calculée d'après les conditions de paiement", 'Conditions de paiement : Paiement à 30 jours', 'Il reste 14 jours pour payer cette facture.', 'Aucun paiement enregistré']) assert.ok(t.includes(s), `FR: ${s}`);
-      t = await text(diverging.id); assert.ok(t.includes("L'échéance imprimée diffère de 15 jour(s) de celle des conditions de paiement (2026-10-10) : vérifiez laquelle s'applique."), 'FR divergence');
+      t = await text(diverging.id); for (const x of ['Échéance imprimée : 2026-10-25', 'Échéance selon les conditions de paiement : 2026-10-10', 'Prendre acte de la différence']) assert.ok(t.includes(x), `FR: ${x}`);
       t = await text(none.id); assert.ok(t.includes('Échéance non renseignée.'));
-      globalThis.tt = ttIn('nl'); t = await text(computed.id);
+      globalThis.tt = ttIn('nl'); t = await text(diverging.id); for (const x of ['Gedrukte vervaldatum: 2026-10-25', 'Verschil bevestigen']) assert.ok(t.includes(x), `NL: ${x}`); t = await text(computed.id);
       for (const s of ['Herkomst van de vervaldatum', 'Berekend op basis van de betalingsvoorwaarden', 'Betalingsvoorwaarden: Paiement à 30 jours', 'Er zijn nog 14 dagen om deze factuur te betalen.', 'Geen betaling geregistreerd']) assert.ok(t.includes(s), `NL: ${s}`);
     } finally { globalThis.tt = real; }
 

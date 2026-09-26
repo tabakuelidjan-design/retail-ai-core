@@ -44,7 +44,7 @@ const confChip = (x) => {
     const weak = pv.filter((p) => p.confidence < 0.7).length; return h('span', { class: `chip ${weak ? 'warn' : 'ok'}` }, weak ? tt('Read from the PDF: {0} field(s) to check', weak) : tt('Read from the PDF'));
   }
  const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
-const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
+const INBOX_ERR = { DUE_DATE_CONFLICT_NOT_ACKNOWLEDGED: 'The printed due date differs from the payment terms: acknowledge the difference', SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
   SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', PRO_FORMA_NOT_AN_INVOICE: 'This is a pro forma, not an invoice: reject it and import the final invoice', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
 // Due date and payment (phase 4.7). The server derives everything (origin, status axes, days remaining); this only words it. Nothing here is model-written.
@@ -69,12 +69,19 @@ function dueOriginLabel(d) {
   return tt('Not stated on the document');
 }
 /** Under the due-date field of the review form: where the date comes from, the supplier's wording, a divergence to look at, the status. */
-const dueNote = (it) => {
+const dueNote = (it, acknowledge) => {
   const d = it.due; if (!d) return null;
   const rows = [h('div', { class: 'muted small' }, tt('Due date origin'), ': ', h('strong', null, dueOriginLabel(d)))];
   if (d.terms && d.terms.raw) rows.push(h('div', { class: 'muted small' }, tt('Payment terms: {0}', d.terms.raw)));
   if (d.terms && d.terms.status === 'OUT_OF_GRAMMAR' && d.origin === 'UNKNOWN') rows.push(h('div', { class: 'muted small' }, tt('The due date is not computed from this wording: enter it yourself if you know it.')));
-  if (d.divergence) rows.push(h('div', { class: 'chip warn' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
+  const cf = d.conflict; const conflictShown = !!(cf && cf.state !== 'NONE');
+  if (conflictShown) {
+    const ok = cf.state === 'ACKNOWLEDGED';
+    rows.push(h('div', { class: `banner ${ok ? 'ok' : 'warn'} small due-conflict`, style: 'margin:8px 0' }, h('div', null, tt('Printed due date: {0}', cf.printed)), h('div', null, tt('Due date given by the payment terms: {0}', cf.computed)),
+      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', String(cf.acknowledgedAt || '').slice(0, 10)))
+        : h('div', null, h('div', { style: 'margin:6px 0' }, tt('The printed date stays the due date. You must acknowledge the difference before validating.')), acknowledge ? h('button', { type: 'button', class: 'tool due-ack', style: 'height:auto;min-height:34px;padding:6px 11px;white-space:normal;text-align:left', on: { click: acknowledge } }, tt('Acknowledge the difference')) : null)));
+  }
+  if (d.divergence && !conflictShown) rows.push(h('div', { class: 'banner info small', style: 'margin:8px 0' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
   const sentence = dueSentence(d.message, it.currency); if (sentence) rows.push(h('div', { class: 'small' }, sentence));
   if (d.settlement === 'UNPAID') rows.push(h('div', { class: 'muted small' }, tt('No payment recorded')));
   return h('div', { class: 'due-note' }, rows);
@@ -237,7 +244,8 @@ function renderInboxDetail(host, id, opts = {}) {
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierEnterpriseNumber', tr('Enterprise number'), it.supplierEnterpriseNumber, '0123.456.789'), inp('supplierIban', tr('Supplier IBAN'), it.supplierIban, 'BE68 5390 0754 7034')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
-    if (dueNote(it)) body.appendChild(dueNote(it));
+    const dueBox = dueNote(it, ['RECEIVED', 'TO_REVIEW'].includes(it.status) ? async () => { try { await api('POST', `/api/inbox/${id}/acknowledge-due-conflict`, {}); toast('Difference acknowledged', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } : null);
+    if (dueBox) body.appendChild(dueBox);
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
     body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), it.documentType === 'CREDIT_NOTE' ? inp('orderReference', tr('Order reference'), it.orderReference) : h('div', null)));
     if (it.vatBreakdown && it.vatBreakdown.length) body.appendChild(h('div', { class: 'field doc-vat' }, h('label', null, tt('VAT by rate')), h('table', { class: 'mini' }, h('thead', null, h('tr', null, h('th', null, tt('Rate')), h('th', null, tt('Excl. VAT')), h('th', null, tt('VAT')))),

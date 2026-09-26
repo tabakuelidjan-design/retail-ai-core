@@ -35,12 +35,12 @@ export async function startApp(o = {}) {
   let settings = o.settings ?? baseSettings();
   const fake = o.retail === undefined ? makeRetail() : null;
   const retail = o.retail === undefined ? fake.retail : o.retail;
-  const clockRef = { today: o.today ?? '2026-09-21' };
+  const clockRef = { today: o.today ?? '2026-09-21', now: o.now ?? null };
   const audits = [];
   const logos = [];
   const app = createFinanceApp({
-    merchantId: o.merchantId ?? 'merchant-test-1', store, token: TOKEN, retail, retailConfig: mergeConfig({}), timeZone: 'UTC',
-    clock: { now: () => `${clockRef.today}T10:00:00.000Z`, today: () => clockRef.today },
+    merchantId: o.merchantId ?? 'merchant-test-1', store, token: TOKEN, retail, retailConfig: mergeConfig({}), timeZone: o.timeZone ?? 'UTC',
+    clock: { now: () => clockRef.now ?? `${clockRef.today}T10:00:00.000Z`, today: () => clockRef.today },
     retailHistory: async () => o.history ?? null,
     settings: { load: async () => structuredClone(settings), save: async (s) => { settings = structuredClone(s); }, saveLogo: async ({ ext, bytes }) => { logos.push(bytes.length); return `data/local/finance/logo.${ext}`; } },
     audit: o.audit ?? (async (e) => { audits.push(e); }),
@@ -67,7 +67,7 @@ export async function startApp(o = {}) {
     return c;
   }
   const authed = async () => { const c = client(); const r = await c.login(); if (r.status !== 200) throw new Error('login failed'); return c; };
-  return { base, port, server, store, app, client, authed, audits, logos, fake, setToday: (d) => { clockRef.today = d; }, getSettings: () => settings, setSettings: (s) => { settings = s; }, close: () => new Promise((r) => server.close(r)) };
+  return { base, port, server, store, app, client, authed, audits, logos, fake, setToday: (d) => { clockRef.today = d; clockRef.now = null; }, setNow: (iso) => { clockRef.now = iso; }, getSettings: () => settings, setSettings: (s) => { settings = s; }, close: () => new Promise((r) => server.close(r)) };
 }
 
 export const CUSTOMER_BODY = { kind: 'business', name: 'Client Exemple SA', vatNumber: 'BE0000000196', address: { street: 'Avenue Test 2', postalCode: '5000', city: 'Namur', countryCode: 'BE' } };

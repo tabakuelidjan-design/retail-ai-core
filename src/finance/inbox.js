@@ -16,7 +16,7 @@ import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf,
 import { normalizeBelgianNumber } from './company.js';
 import { findDuplicates, isReferenced, matchSupplier } from './purchase-matching.js';
 import { readPdfDocument } from './pdf-invoice.js';
-import { buildDue, refreshDueAfterIssueDateChange } from './payables/index.js';
+import { DUE_CONFLICT_ERROR, acknowledgeDueConflict, buildDue, dueConflictOf, refreshDueAfterIssueDateChange, supersedeAcknowledgements } from './payables/index.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -123,7 +123,9 @@ export function validationErrors(r) {
  * Both also get the deterministic checks of the common document model (identifiers, document type). */
 export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors,
   // a pro forma is not an invoice: it is never recorded as a purchase (reject it and import the final invoice)
-  ...((r.extraction?.warnings ?? []).includes('DOCUMENT_IS_PRO_FORMA') ? ['PRO_FORMA_NOT_AN_INVOICE'] : [])];
+  ...((r.extraction?.warnings ?? []).includes('DOCUMENT_IS_PRO_FORMA') ? ['PRO_FORMA_NOT_AN_INVOICE'] : []),
+  // a printed due date that differs from the one the payment terms give must be acknowledged by a person before the purchase is validated
+  ...(dueConflictOf(r).state === 'UNACKNOWLEDGED' ? [DUE_CONFLICT_ERROR] : [])];
 
 const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '');
 
@@ -342,7 +344,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
           if (fresh.due) patch.extraction.due = fresh.due;
           if (fresh.dueDate !== undefined) { patch.dueDate = fresh.dueDate; if (fresh.provenance) provenance.dueDate = fresh.provenance; else delete provenance.dueDate; }
         }
-        if (changed.includes('dueDate') && patch.extraction.due) patch.extraction.due = { ...patch.extraction.due, effective: { value: patch.dueDate ?? null, origin: patch.dueDate ? 'MANUAL' : 'UNKNOWN' }, suppressed: !patch.dueDate };
+        if (changed.includes('dueDate') && patch.extraction.due) patch.extraction.due = supersedeAcknowledgements({ ...patch.extraction.due, effective: { value: patch.dueDate ?? null, origin: patch.dueDate ? 'MANUAL' : 'UNKNOWN' }, suppressed: !patch.dueDate }, patch.dueDate ? 'DUE_DATE_EDITED' : 'DUE_DATE_CLEARED', now());
       }
       const saved = await store.updateSupplierInvoice(id, patch, r.status);
       if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
@@ -354,6 +356,16 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const dup = (await store.listSupplierInvoices(merchantId)).find((x) => x.id !== id && documentTypeOf(x) === documentTypeOf(r) && x.invoiceNumber && x.invoiceNumber === r.invoiceNumber && (x.supplierVatNumber ? x.supplierVatNumber === r.supplierVatNumber : x.supplierName === r.supplierName) && ['VALIDATED', 'TO_PAY', 'PAID'].includes(x.status));
       if (dup) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE', dup.id);
       return move(r, 'VALIDATED', { validatedAt: now() });
+    },
+    /** A person acknowledges that the printed due date differs from the payment terms. The printed date stays the due date; warning and evidence stay; the act is recorded. */
+    async acknowledgeDueConflict(id, actor) {
+      merchantOnly(actor); const r = await must(id);
+      if (!['RECEIVED', 'TO_REVIEW'].includes(r.status)) throw new FinanceError('ONLY_UNVALIDATED_ITEMS_CAN_BE_EDITED', r.status);
+      if (dueConflictOf(r).state !== 'UNACKNOWLEDGED') throw new FinanceError('NO_DUE_CONFLICT_TO_ACKNOWLEDGE', id);
+      const due = acknowledgeDueConflict(r, { at: now(), by: actor?.type ?? 'merchant' });
+      const saved = await store.updateSupplierInvoice(id, { extraction: { ...r.extraction, due } }, r.status);
+      if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
+      await audit({ at: now(), action: 'SUPPLIER_INVOICE_DUE_CONFLICT_ACKNOWLEDGED', itemId: id }); return saved;
     },
     async markToPay(id, actor) { merchantOnly(actor); const r = await must(id); if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id); return move(r, 'TO_PAY'); },
     async pay(id, { paidOn, amountCents, reference }, actor) {

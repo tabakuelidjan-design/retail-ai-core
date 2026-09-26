@@ -9,6 +9,7 @@
 // printed date stays and the difference is reported (never hidden).
 
 import { addDays, daysBetween } from '../document.js';
+import { localDateString } from '../../metrics/windows.js';
 import { parsePaymentTerms } from './payment-terms.js';
 
 export const DUE_ORIGINS = ['MANUAL', 'PRINTED', 'COMPUTED_FROM_TERMS', 'UNKNOWN'];
@@ -110,3 +111,45 @@ export function refreshDueAfterIssueDateChange(row, newIssueDate) {
 
 /** Jours restants = échéance - aujourd'hui (negative = overdue). Same convention as receivables.js (daysOverdue = today - due). */
 export const daysRemaining = (dueDate, today) => (isIsoDate(dueDate) && isIsoDate(today) ? daysBetween(today, dueDate) : null);
+
+/**
+ * The merchant's CIVIL date for an instant. The time zone is always a parameter (the merchant's setting): the result never depends on the machine or the server zone.
+ * Every calculation of days remaining / due today / overdue receives this date; once resolved, those calculations are pure.
+ * @param {Date|string|number} instant @param {string} timeZone IANA name, e.g. the merchant's configured zone
+ */
+export function civilDateIn(instant, timeZone) {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(d.getTime())) throw new RangeError('civilDateIn: invalid instant');
+  return localDateString(d, timeZone);
+}
+
+// ---------- printed / computed conflict and its acknowledgement ----------
+export const DUE_CONFLICT_ERROR = 'DUE_DATE_CONFLICT_NOT_ACKNOWLEDGED';
+
+/**
+ * State of the printed-vs-computed conflict of a record.
+ *   NONE            no difference, or nothing to decide: only one date, no date, or a person has since set / cleared the date (that decision replaces the conflict)
+ *   UNACKNOWLEDGED  the printed date stays the due date, but a person has not yet acknowledged the difference: the purchase cannot be validated
+ *   ACKNOWLEDGED    a person acknowledged exactly THIS difference (same printed date, same computed date, same wording); the warning and the evidence stay
+ * An acknowledgement is bound to what was shown: if the computed date, the printed date or the wording changed afterwards, it no longer counts.
+ */
+export function dueConflictOf(row) {
+  const ex = row?.extraction?.due; const div = ex?.divergence;
+  if (!div || dueOriginOf(row).origin !== 'PRINTED' || row.dueDate !== div.printed) return { state: 'NONE' };
+  const wording = ex.terms?.raw ?? null;
+  const ack = [...(ex.acknowledgements ?? [])].reverse().find((a) => !a.supersededAt);
+  const valid = !!ack && ack.printed === div.printed && ack.computed === div.computed && ack.terms === wording;
+  return { state: valid ? 'ACKNOWLEDGED' : 'UNACKNOWLEDGED', printed: div.printed, computed: div.computed, days: div.days, terms: wording, acknowledgedAt: valid ? ack.at : null };
+}
+
+/** The due block with an acknowledgement appended (history is kept; nothing is removed). Throws when there is no conflict waiting for one. */
+export function acknowledgeDueConflict(row, { at, by = 'merchant' }) {
+  const c = dueConflictOf(row); if (c.state !== 'UNACKNOWLEDGED') throw new RangeError('NO_DUE_CONFLICT_TO_ACKNOWLEDGE');
+  return { ...row.extraction.due, acknowledgements: [...(row.extraction.due.acknowledgements ?? []), { at, by, printed: c.printed, computed: c.computed, terms: c.terms, days: c.days }] };
+}
+
+/** A person changed or cleared the due date: every open acknowledgement is marked superseded (kept in the history, never reused). */
+export function supersedeAcknowledgements(due, reason, at) {
+  if (!due?.acknowledgements?.length) return due;
+  return { ...due, acknowledgements: due.acknowledgements.map((a) => (a.supersededAt ? a : { ...a, supersededAt: at, supersededBy: reason })) };
+}
