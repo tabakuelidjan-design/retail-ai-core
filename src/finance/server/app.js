@@ -770,25 +770,30 @@ export function createFinanceApp(deps) {
   // ---------- Finance Action Center: what to do next, from facts the workspace already holds ----------
   on('GET', '/api/actions', async (ctx) => {
     const { svc, settings, stock } = await servicesFor();
-    const allDocs = await loadDocsForReports(store, merchantId);
-    const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
-    const foreignSales = allDocs.filter(({ doc }) => !isNative(doc, settings.defaults.currency) && doc.type !== 'quote' && doc.lockedAt).length;
     const today = clock.today();
-    const rec = buildReceivables(docs, { today, dueSoonDays: settings.dashboard.dueSoonDays });
-    const drafts = docs.filter(({ doc }) => ['DRAFT', 'READY_FOR_APPROVAL'].includes(doc.status) && doc.type !== 'quote').slice(0, 40);
-    let draftsMissingVat = 0;
-    for (const { doc } of drafts) { const r = await svc.readiness(doc).catch(() => null); if (r && r.errors.some((e) => /VAT/.test(String(e)))) draftsMissingVat += 1; }
-    let pack = null;
-    if (retail) {
+    // The accountant-pack summary, the supplier inbox counts and the stock status do not depend on the documents: they start now and
+    // run in parallel with the document reads below (each source is one or more database round trips). Same fallbacks as before.
+    const packP = (async () => {
+      if (!retail) return null;
       try {
         const y = Number(today.slice(0, 4)); const q = Math.floor((Number(today.slice(5, 7)) - 1) / 3); const py = q === 0 ? y - 1 : y; const pq = q === 0 ? 3 : q - 1;
         const p = await computePack(`${py}-${String(pq * 3 + 1).padStart(2, '0')}-01`, new Date(Date.UTC(py, pq * 3 + 3, 0)).toISOString().slice(0, 10));
-        pack = { status: 'OK', period: p.period, completeness: p.completeness.status, reconciliation: p.reconciliation.status, anomalies: p.anomalies.length, orders: p.retail.orders };
-      } catch { pack = null; }
-    }
-    const inboxCounts = await inboxFor().counts(settings.defaults.currency).catch(() => ({ toReview: 0, TO_PAY: 0, toPayCents: 0, toPayForeign: 0 }));
+        return { status: 'OK', period: p.period, completeness: p.completeness.status, reconciliation: p.reconciliation.status, anomalies: p.anomalies.length, orders: p.retail.orders };
+      } catch { return null; }
+    })();
+    const inboxP = inboxFor().counts(settings.defaults.currency).catch(() => ({ toReview: 0, TO_PAY: 0, toPayCents: 0, toPayForeign: 0 }));
+    const stockP = stock.status().catch(() => null);
+    const allDocs = await loadDocsForReports(store, merchantId);
+    const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
+    const foreignSales = allDocs.filter(({ doc }) => !isNative(doc, settings.defaults.currency) && doc.type !== 'quote' && doc.lockedAt).length;
+    const rec = buildReceivables(docs, { today, dueSoonDays: settings.dashboard.dueSoonDays });
+    const drafts = docs.filter(({ doc }) => ['DRAFT', 'READY_FOR_APPROVAL'].includes(doc.status) && doc.type !== 'quote').slice(0, 40);
+    // readiness() only reads: the (at most 40) drafts are checked in parallel instead of one after the other.
+    const readiness = await Promise.all(drafts.map(({ doc }) => svc.readiness(doc).catch(() => null)));
+    const draftsMissingVat = readiness.filter((r) => r && r.errors.some((e) => /VAT/.test(String(e)))).length;
+    const [pack, inboxCounts, stockStatus] = await Promise.all([packP, inboxP, stockP]);
     const actions = buildActions({
-      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: inboxCounts, stock: await stock.status().catch(() => null),
+      today, currency: settings.defaults.currency, dueSoonDays: settings.dashboard.dueSoonDays, receivables: rec, inbox: inboxCounts, stock: stockStatus,
       draftsMissingVat, awaitingApproval: docs.filter(({ doc }) => doc.status === 'READY_FOR_APPROVAL' && doc.type !== 'quote').length, quotesToConvert: docs.filter(({ doc }) => doc.type === 'quote' && doc.status === 'ACCEPTED').length,
       pack, settingsMissing: missingForInvoicing(settings).length,
     });
