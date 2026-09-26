@@ -2,6 +2,8 @@
 //
 //   0. premises  what the question takes for granted ("why did my sales DROP?") is checked against the facts first (premise.js); a contradicted or
 //                unverifiable premise stops the analysis: Nordla corrects it or says it cannot verify it.
+//   Budgets: the ANALYSIS budget (MAX_TOOL_CALLS = 4) is for the calls that answer the question; the PREMISE budget (MAX_PREMISE_CALLS = 2) is separate and
+//                only for verifying premises. A call already made (same tool + args) is re-used by either side at no cost: at most 6 executions, only when needed.
 //   1. plan      the provider reads the question (+ short history, tool catalog, selected period) and asks for tool calls, or for a clarification.
 //                At most MAX_PLAN_TURNS turns and MAX_TOOL_CALLS calls per question. The second turn only sees the OUTCOME of the first calls, never a value.
 //   2. tools     every call is validated against the registry and its JSON Schema, then run by the deterministic Tool Layer (same engines as the pages).
@@ -12,11 +14,14 @@
 // The provider never computes a figure and never touches data; the Tool Layer makes no network call. Nothing here names a provider.
 
 import { sanitize, validate } from '../tools/contract.js';
-import { EXPLAIN_RULES, KNOWN_GAPS, MAX_CLARIFICATION, MAX_HISTORY_TEXT, MAX_HISTORY_TURNS, MAX_PLAN_TURNS, MAX_TOOL_CALLS, PLAN_SCHEMA, PROVIDER_TIMEOUT_MS, assertProvider, callProvider } from './contract.js';
+import { EXPLAIN_RULES, KNOWN_GAPS, MAX_CLARIFICATION, MAX_HISTORY_TEXT, MAX_HISTORY_TURNS, MAX_PLAN_TURNS, MAX_PREMISE_CALLS, MAX_TOOL_CALLS, PLAN_SCHEMA, PROVIDER_TIMEOUT_MS, assertProvider, callProvider } from './contract.js';
 import { buildFacts, caveatsFor, explainPayload } from './facts.js';
 import { buildSummary } from './summary.js';
 import { verifyExplanation } from './verify.js';
 import { checkPremise, premiseProblem } from './premise.js';
+
+/** JSON with sorted keys: the same arguments written in another order are the same call. */
+const stable = (v) => (Array.isArray(v) ? `[${v.map(stable).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v));
 
 /** The client sends the recent turns; they are untrusted: keep the last few, cap their length, redact anything personal. */
 export function cleanHistory(history) {
@@ -43,19 +48,21 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
   return async function ask({ question, lang = 'fr', history = [], selected = null }) {
     const q = sanitize(String(question ?? '')).value;
     const hist = cleanHistory(history); const sel = cleanSelected(selected);
-    const executed = []; const rejectedCalls = []; const premiseChecks = []; let turns = 0; let truncated = false;
+    const executed = []; const rejectedCalls = []; const premiseChecks = []; let turns = 0; let truncated = false; let premiseBudgetExceeded = false;
+    const used = { premise: 0, analysis: 0 };   // executions per budget; a re-used call costs nothing
 
     /** The one place a tool runs: same call (tool + args) is re-used, the budget (MAX_TOOL_CALLS, rejected calls included) is enforced. null = budget used up. */
-    const run = async (tool, args) => {
+    const run = async (tool, args, purpose = 'analysis') => {
       // the tool layer's default period is the last 30 days: a call that names none is the same call as one that names it
       const hasPeriod = !!catalog.find((t) => t.name === tool)?.inputSchema?.properties?.period;
-      const key = `${tool}|${JSON.stringify(hasPeriod ? { ...args, period: args.period ?? { period: 'last_30_days' } } : args)}`;
+      const key = `${tool}|${stable(hasPeriod ? { ...args, period: args.period ?? { period: 'last_30_days' } } : args)}`;
       const at = executed.findIndex((e) => e.key === key);
       if (at >= 0) return { result: executed[at].result, id: `c${at + 1}` };
-      if (executed.length + rejectedCalls.length >= MAX_TOOL_CALLS) { truncated = true; return null; }
+      if (purpose === 'premise' ? used.premise >= MAX_PREMISE_CALLS : used.analysis + rejectedCalls.length >= MAX_TOOL_CALLS) { if (purpose === 'premise') premiseBudgetExceeded = true; else truncated = true; return null; }
       const result = await tools.call(tool, args);
       if (!result.ok && result.error.code === 'INVALID_ARGUMENT') { rejectedCalls.push({ tool, code: 'INVALID_ARGUMENT' }); return { result, id: null, rejected: true }; }
-      executed.push({ tool, args, result, key });
+      used[purpose] += 1;
+      executed.push({ tool, args, result, key, purpose });
       return { result, id: `c${executed.length}` };
     };
 
@@ -64,7 +71,7 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
       const facts = buildFacts(executed); const currency = executed.find((e) => e.result.ok)?.result.currency ?? 'EUR';
       return { facts, base: {
         turns, toolCalls: [...facts.calls, ...rejectedCalls.map((r) => ({ ok: false, tool: r.tool, errorCode: r.code, rejected: true }))],
-        limits: { maxToolCalls: MAX_TOOL_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated },
+        limits: { maxToolCalls: MAX_TOOL_CALLS, maxPremiseCalls: MAX_PREMISE_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated, premiseBudgetExceeded },
         limitations: facts.notices, summary: buildSummary(executed, currency),
         facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })),   // for "Voir les sources de l'analyse" only
       } };
@@ -76,9 +83,11 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
         plan = await callProvider((signal) => provider.plan({ question: q, lang, history: hist, catalog, selectedPeriod: sel, turn, previousCalls: executed.map((e) => ({ tool: e.tool, args: e.args, ok: e.result.ok, ...(e.result.ok ? {} : { errorCode: e.result.error.code }) })), signal }), timeoutMs);
       } catch (e) { return { status: 'PLAN_FAILED', code: e.code ?? 'PROVIDER_ERROR', turns }; }
       turns = turn;
+      if (plan && typeof plan === 'object' && plan.premises === undefined) onDiagnostic({ type: 'PREMISES_MISSING', turn });   // the field is mandatory: an omission is measurable
       const shape = plan && typeof plan === 'object' ? validate(PLAN_SCHEMA, plan, 'plan') : 'plan must be an object';
       const intents = plan && typeof plan === 'object' ? ['toolCalls', 'clarification', 'cannotAnswer', 'done'].filter((k) => plan[k] !== undefined && !(k === 'toolCalls' && !plan.toolCalls.length) && !(k === 'done' && plan.done === false)).length : 0;
       if (shape || intents > 1 || (plan.premises ?? []).some(premiseProblem)) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };
+      onDiagnostic({ type: 'PREMISES_DECLARED', turn, premises: plan.premises.map(({ kind, metric, direction, level, scope }) => ({ kind, metric, direction, level, scope })) });   // internal only (benchmark), never shown
       if (plan.clarification) {
         if (executed.length) break;                                   // facts already exist: answer with them rather than ask late
         if (/\d/.test(plan.clarification.text)) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };   // a question to the user carries no figure
@@ -92,7 +101,7 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
       // FALSE-PREMISE GUARD: what the question takes for granted is checked against Nordla's facts BEFORE anything is analysed. The provider's own tool calls
       // for this plan only run when every premise is supported.
       if (plan.premises?.length) {
-        for (const premise of plan.premises) premiseChecks.push(await checkPremise({ premise, run, periodArg: premise.period ?? sel ?? undefined }));
+        for (const premise of plan.premises) premiseChecks.push(await checkPremise({ premise, run: (tool, args) => run(tool, args, 'premise'), periodArg: premise.period ?? sel ?? undefined }));
         const bad = premiseChecks.some((c) => c.verdict === 'contradicted') ? 'PREMISE_CONTRADICTED' : premiseChecks.some((c) => c.verdict === 'unknown') ? 'PREMISE_UNVERIFIABLE' : null;
         if (bad) {
           onDiagnostic({ type: bad, checks: premiseChecks.map((c) => ({ kind: c.kind, metric: c.metric, verdict: c.verdict, reason: c.reason })) });
@@ -104,7 +113,7 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
 
       if (!plan.toolCalls?.length) break;                             // done (or nothing to add)
       for (const call of plan.toolCalls) {
-        if (executed.length + rejectedCalls.length >= MAX_TOOL_CALLS) { truncated = true; break; }
+        if (used.analysis + rejectedCalls.length >= MAX_TOOL_CALLS) { truncated = true; break; }
         if (!tools.has(call.tool)) { rejectedCalls.push({ tool: String(call.tool).slice(0, 64), code: 'UNKNOWN_TOOL' }); continue; }
         await run(call.tool, withSelected(call, sel));
       }

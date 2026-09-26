@@ -21,7 +21,7 @@ async function setup({ dirty = false, ...providerOpts } = {}) {
   const dir = await writeDataset({ dirty });
   const provider = createFakeProvider(providerOpts);
   const tools = createToolLayer({ reportsDir: dir, now: () => NOW });
-  const ask = createOrchestrator({ provider, tools, timeoutMs: 400, onDiagnostic: (d) => diagnostics.push(d) });
+  const ask = createOrchestrator({ provider, tools, timeoutMs: 400, onDiagnostic: (d) => { if (!d.type.startsWith('PREMISES_')) diagnostics.push(d); } /* the premise-declaration events are benchmark data, not rejections */ });
   return { dir, provider, tools, ask, diagnostics };
 }
 const val = (r, ref) => r.facts.find((f) => f.ref === ref)?.value;

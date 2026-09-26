@@ -15,7 +15,7 @@ import { createFakeProvider } from './fixtures/fake-ai-provider.js';
 async function setup(opts = {}) {
   resetPeriodCache(); const dir = await writeDataset(); const diagnostics = [];
   const provider = createFakeProvider({ declarePremises: true, explainMode: 'hyp', ...opts });
-  const ask = createOrchestrator({ provider, tools: createToolLayer({ reportsDir: dir, now: () => NOW }), timeoutMs: 400, onDiagnostic: (d) => diagnostics.push(d) });
+  const ask = createOrchestrator({ provider, tools: createToolLayer({ reportsDir: dir, now: () => NOW }), timeoutMs: 400, onDiagnostic: (d) => { if (!d.type.startsWith('PREMISES_')) diagnostics.push(d); } /* the premise-declaration events are benchmark data, not rejections */ });
   return { provider, ask, diagnostics };
 }
 const check = (r) => r.premise.checks[0];
@@ -93,13 +93,11 @@ test('the provider keeps pursuing the false premise (more tool calls, a second p
   assert.equal(JSON.stringify(r).includes('Une cause possible'), false);
 });
 
-test('premise guard limits: at most 2 premises, well-formed only (malformed or unknown metric -> the plan is invalid, nothing runs); the 4-call cap still holds', async () => {
+test('premise guard limits: at most 2 premises, well-formed only (malformed or unknown metric -> the plan is invalid, nothing runs); the budgets are tested in analytics-ai-budgets.test.js', async () => {
   const bad = [{ kind: 'trend', metric: 'sales' }, { kind: 'trend', metric: 'weather', direction: 'decrease' }, { kind: 'ranking', scope: 'product' }, { kind: 'level', metric: 'sales' }, { kind: 'mystery' }];
   for (const premise of bad) { const s = await setup({ planner: () => ({ toolCalls: [{ tool: 'get_sales_metrics', args: {} }], premises: [premise] }) }); const r = await s.ask({ question: 'x' }); assert.deepEqual([r.status, r.code], ['PLAN_FAILED', 'PLAN_INVALID'], JSON.stringify(premise)); }
   const three = await setup({ planner: () => ({ toolCalls: [{ tool: 'get_sales_metrics', args: {} }], premises: Array(3).fill({ kind: 'trend', metric: 'sales', direction: 'increase' }) }) });
   assert.equal((await three.ask({ question: 'x' })).status, 'PLAN_FAILED');
-  const two = await setup({ planner: () => ({ toolCalls: [{ tool: 'get_customers', args: {} }, { tool: 'get_channels', args: {} }], premises: [{ kind: 'trend', metric: 'refunds', direction: 'decrease' }, { kind: 'ranking', scope: 'product', subject: 'fixture widget' }] }) });
-  const r = await two.ask({ question: 'x' }); assert.equal(r.status, 'OK'); assert.equal(r.toolCalls.length, 4, 'evidence (2 + 2 calls) uses the whole budget; the provider\'s extra calls are cut'); assert.equal(r.limits.truncated, true);
   assert.equal(premiseProblem({ kind: 'trend', metric: 'sales', direction: 'increase' }), null);
 });
 

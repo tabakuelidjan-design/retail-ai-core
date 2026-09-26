@@ -16,7 +16,8 @@
 
 import { MAX_PREMISES, PREMISE_SCHEMA } from './premise.js';
 
-export const MAX_TOOL_CALLS = 4;        // per question, across all planning turns
+export const MAX_TOOL_CALLS = 4;        // ANALYSIS budget: tool calls that answer the question, across all planning turns
+export const MAX_PREMISE_CALLS = 2;     // PREMISE budget: tool calls dedicated to verifying what the question takes for granted (a call already made is re-used for free)
 export const MAX_PLAN_TURNS = 2;
 export const MAX_HISTORY_TURNS = 6;      // messages = 3 exchanges (question + answer); kept in the page only, never stored
 export const MAX_HISTORY_TEXT = 300;
@@ -26,9 +27,9 @@ export const PROVIDER_TIMEOUT_MS = 20_000;
 /** What Nordla knows it does not have (yet). Only these codes can be named as missing; anything else stays generic. */
 export const KNOWN_GAPS = ['costs', 'traffic', 'ad_spend', 'payment_fees', 'inventory', 'finance', 'forecast', 'history'];
 
-/** Plan: exactly one of toolCalls / clarification / cannotAnswer / done (`more` optionally asks for a second planning turn). */
+/** Plan: `premises` is MANDATORY (an empty list when the question takes nothing for granted), and exactly one of toolCalls / clarification / cannotAnswer / done (`more` optionally asks for a second planning turn). */
 export const PLAN_SCHEMA = {
-  type: 'object', additionalProperties: false,
+  type: 'object', additionalProperties: false, required: ['premises'],
   properties: {
     toolCalls: { type: 'array', maxItems: 16, items: { type: 'object', additionalProperties: false, required: ['tool'], properties: { tool: { type: 'string', maxLength: 64 }, args: { type: 'object' } } } },
     clarification: { type: 'object', additionalProperties: false, required: ['text'], properties: { text: { type: 'string', minLength: 1, maxLength: MAX_CLARIFICATION } } },

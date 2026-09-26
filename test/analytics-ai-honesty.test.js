@@ -12,7 +12,7 @@ import { createFakeProvider } from './fixtures/fake-ai-provider.js';
 async function setup({ now = NOW, ...providerOpts } = {}) {
   resetPeriodCache(); const dir = await writeDataset(); const diagnostics = [];
   const provider = createFakeProvider(providerOpts); const tools = createToolLayer({ reportsDir: dir, now: () => now });
-  return { provider, diagnostics, ask: createOrchestrator({ provider, tools, timeoutMs: 400, onDiagnostic: (d) => diagnostics.push(d) }) };
+  return { provider, diagnostics, ask: createOrchestrator({ provider, tools, timeoutMs: 400, onDiagnostic: (d) => { if (!d.type.startsWith('PREMISES_')) diagnostics.push(d); } /* the premise-declaration events are benchmark data, not rejections */ }) };
 }
 const codes = (r) => r.limitations.map((l) => l.code);
 

@@ -99,7 +99,7 @@ export function explanationFor(mode, facts) {
 /** @param {{ planner?, explainMode?: string, planError?, explainError?: 'throw'|'hang' }} opts */
 /**
  * The premise a "why" question takes for granted, as a fake model would state it in structure (test-only understanding; the business code has no such rules).
- * Only used when the fake is created with `declarePremises: true`.
+ * Only used when the fake is created with `declarePremises: true` (and not `forgetPremises`).
  */
 export function premisesFor(question) {
   const q = question.toLowerCase(); const out = [];
@@ -115,7 +115,7 @@ export function premisesFor(question) {
   return out;
 }
 
-export function createFakeProvider({ planner = defaultPlanner, explainMode = 'honest', planError = null, explainError = null, declarePremises = false } = {}) {
+export function createFakeProvider({ planner = defaultPlanner, explainMode = 'honest', planError = null, explainError = null, declarePremises = false, omitPremises = false, forgetPremises = false } = {}) {
   const seen = { plan: [], explain: [] };
   const provider = {
     name: 'fake-test-provider', seen, lastExplanation: null,
@@ -124,8 +124,11 @@ export function createFakeProvider({ planner = defaultPlanner, explainMode = 'ho
       if (planError === 'throw') throw new Error('secret provider failure: sk-live-123');
       if (planError === 'hang') await new Promise((_, rej) => signal.addEventListener('abort', () => rej(new Error('aborted'))));
       const plan = typeof planner === 'function' ? planner(input) : planner;
-      const premises = declarePremises && plan?.toolCalls ? premisesFor(input.question) : [];
-      return premises.length ? { ...plan, premises } : plan;
+      // A compliant provider ALWAYS returns `premises` (empty when there is none). `omitPremises` simulates one that leaves the field out; `forgetPremises` one
+      // that returns [] for a question that does take something for granted.
+      if (omitPremises) return plan;
+      const premises = plan?.premises ?? (declarePremises && !forgetPremises && plan?.toolCalls ? premisesFor(input.question) : []);
+      return { ...plan, premises };
     },
     async explain(input) {
       const { signal, ...rest } = input; seen.explain.push(JSON.parse(JSON.stringify(rest)));
