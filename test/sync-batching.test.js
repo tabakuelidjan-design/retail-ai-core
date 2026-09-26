@@ -6,10 +6,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
-import { MERCHANT_ID, seedVolumeCatalog, variantPages, volumeShopify, countRequests } from './fixtures/sync-volume.js';
-import { referenceSyncProductCosts, referenceSyncInventory } from './fixtures/sync-reference-669096b.js';
+import { MERCHANT_ID, seedVolumeCatalog, variantPages, orderPages, volumeShopify, countRequests } from './fixtures/sync-volume.js';
+import { referenceSyncProductCosts, referenceSyncInventory, referenceSyncOrders } from './fixtures/sync-reference-669096b.js';
 import { syncProductCosts } from '../src/sync/cost.js';
 import { syncInventory } from '../src/sync/inventory.js';
+import { syncOrders } from '../src/sync/orders.js';
 
 const withoutIds = (rows) => rows.map(({ id, ...rest }) => rest);
 
@@ -168,4 +169,67 @@ test('inventory: the read stays one request however much history accumulates', a
   await syncInventory({ shopify: volumeShopify(), supabase: client }, { merchantId: MERCHANT_ID, now: new Date('2026-09-05T08:15:00Z'), timeZone: 'Europe/Brussels' });
   assert.equal(counts.byCall['selectAll inventory_snapshots'], 1); // only the last 48 h (688 rows) are read
   assert.equal(counts.total, 3);
+});
+
+// --- orders, lines, visits, refunds, refund lines ---
+
+/**
+ * The order tables with every generated id replaced by the natural key of the row it points to: the batched
+ * code inserts rows in a different order than the one-by-one code, so the generated ids differ by design.
+ */
+function orderTables(db) {
+  const t = (name) => db._tables.get(name) ?? [];
+  const orderKey = new Map(t('orders').map((o) => [o.id, o.source_id]));
+  const lineKey = new Map(t('order_lines').map((l) => [l.id, `${orderKey.get(l.order_id)}|${l.source_id}`]));
+  const refundKey = new Map(t('refunds').map((r) => [r.id, `${orderKey.get(r.order_id)}|${r.source_id}`]));
+  const sorted = (rows) => rows.map((r) => JSON.stringify(r)).sort();
+  return {
+    orders: sorted(withoutIds(t('orders'))),
+    order_attribution: sorted(withoutIds(t('order_attribution')).map((r) => ({ ...r, order_id: orderKey.get(r.order_id) }))),
+    order_lines: sorted(withoutIds(t('order_lines')).map((r) => ({ ...r, order_id: orderKey.get(r.order_id) }))),
+    refunds: sorted(withoutIds(t('refunds')).map((r) => ({ ...r, order_id: orderKey.get(r.order_id) }))),
+    refund_lines: sorted(withoutIds(t('refund_lines')).map((r) => ({ ...r, refund_id: refundKey.get(r.refund_id), order_line_id: lineKey.get(r.order_line_id) }))),
+  };
+}
+
+test('orders: same orders, lines, visits, refunds and refund lines as before, with far fewer requests', async () => {
+  const dbs = await twoDatabases();
+  const now = new Date('2026-09-26T08:00:00Z');
+  const run = async (extra = {}) => {
+    const r = await runBoth(dbs, referenceSyncOrders, syncOrders, { now, ...extra });
+    assert.deepEqual(orderTables(dbs.batched), orderTables(dbs.reference));
+    return r;
+  };
+
+  const first = await run();
+  const tables = orderTables(dbs.batched);
+  assert.equal(tables.orders.length, 80);
+  assert.equal(tables.order_lines.length, 100);
+  assert.equal(tables.refunds.length, 9);
+  assert.equal(tables.refund_lines.length, 9); // 10 refund lines: two on one order line collapse to the last, one has no line
+  assert.ok(tables.order_attribution.length > 0);
+  report('orders, one cycle (80 orders, 100 lines)', first);
+  assert.equal(first.before, 212);
+  assert.equal(first.after, 2 + 4 * 5); // 2 lookups + 4 pages x (orders, visits, lines, refunds, refund lines)
+
+  await run(); // steady cycle: same input again, nothing duplicated
+  await run({ shopify: () => volumeShopify({ orders: orderPages({ refundAmountShift: 3 }) }) }); // refunds updated in place
+  await run({ customerKeySecret: 'x'.repeat(64) }); // customer_key column appears on every order
+  await run({ shopify: () => volumeShopify({ orders: orderPages({ refundAmountShift: 5 }), failAtCursor: 'o2' }) }); // Shopify fails on page 3
+});
+
+test('orders: rows with different columns never share a request (PostgREST would write NULL into the missing ones)', async () => {
+  const { upsertInChunks } = await import('../src/sync/batch.js');
+  const supabase = createFakeSupabase();
+  const { client, counts } = countRequests(supabase);
+  await upsertInChunks(client, 'orders', [
+    { merchant_id: 'm', source_system: 's', source_id: '1', status: 'PAID' },
+    { merchant_id: 'm', source_system: 's', source_id: '2', status: 'PAID', customer_key: 'k' },
+    { merchant_id: 'm', source_system: 's', source_id: '1', status: 'REFUNDED' }, // same order again: the last row wins
+  ], { onConflict: 'merchant_id,source_system,source_id' });
+  assert.equal(counts.total, 2);
+  assert.deepEqual(supabase._tables.get('orders').map(({ id, ...r }) => r), [
+    { merchant_id: 'm', source_system: 's', source_id: '1', status: 'REFUNDED' },
+    { merchant_id: 'm', source_system: 's', source_id: '2', status: 'PAID', customer_key: 'k' },
+  ]);
 });

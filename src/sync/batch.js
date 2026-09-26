@@ -33,7 +33,6 @@ export async function upsertInChunks(supabase, table, rows, { onConflict, chunkS
   const lastByConflictKey = new Map();
   for (const row of rows) {
     const conflictKey = JSON.stringify(keys.map((k) => row[k]));
-    lastByConflictKey.delete(conflictKey); // re-insert so the surviving row keeps the position of its last occurrence
     lastByConflictKey.set(conflictKey, row);
   }
   const returned = [];
