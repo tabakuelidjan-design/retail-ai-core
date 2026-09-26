@@ -14,7 +14,9 @@ import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWin
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
-const pct = (now, before) => (before > 0 ? round4((now - before) / before) : null);
+// Exported so the assistant tools compare two periods with EXACTLY the engine's convention (ratio, null without a positive baseline; absolute delta to 2 decimals).
+export const pct = (now, before) => (before > 0 ? round4((now - before) / before) : null);
+export const absDelta = (c, p) => (c == null || p == null ? null : round2(c - p));
 const DAY = 86400000;
 
 function mondayOf(dateStr) {
@@ -480,7 +482,7 @@ function buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, 
   const pv = kpis.previous;
   if (!pv || !timeZone) return null;
 
-  const delta = (c, p) => (c == null || p == null ? null : round2(c - p));
+  const delta = absDelta;
   const kpi = (key, c, p) => ({ key, current: c, previous: p, delta_abs: delta(c, p), delta_pct: c != null && p != null ? pct(c, p) : null });
   const kpiRows = [
     kpi('net_sales_ex_tax', kpis.net_sales_ex_tax, pv.net_sales_ex_tax),
