@@ -14,6 +14,7 @@ import { createShopifyPriceSource } from '../catalog.js';
 import { createShopifyStockApplier } from '../stock.js';
 import { createSupabaseAttachmentStore } from '../inbox.js';
 import { createFinanceApp } from './app.js';
+import { createFileSessionPersistence } from './session-store.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
 import { mergeRetailHistory } from '../retail-history.js';
 import { HostingConfigError, resolveHosting } from './hosting.js';
@@ -50,6 +51,8 @@ async function main() {
       saveLogo: async ({ ext, bytes }) => { const p = join(LOGO_DIR, `logo.${ext}`).replace(/\\/g, '/'); await writeFile(p, bytes); return p; },
     },
     audit: async (e) => appendFile(AUDIT_LOG, `${JSON.stringify(e)}\n`).catch(() => {}),
+    // Sessions survive a redeploy: kept next to the settings (hosted: on the Finance volume), session ids stored hashed only.
+    sessionPersistence: createFileSessionPersistence('data/local/finance/sessions.json'),
   });
   const server = http.createServer(app.handler);
   server.listen(hosting.port, hosting.host, () => {

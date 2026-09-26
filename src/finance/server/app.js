@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { createStaticAssets } from './static-assets.js';
 import { createRequestReadCache } from './request-read-cache.js';
+import { createSessionStore } from './session-store.js';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
@@ -73,7 +74,8 @@ export function createFinanceApp(deps) {
   if (!token || String(token).length < 24) throw new Error('FINANCE_DASHBOARD_TOKEN must be set (at least 24 characters)');
   const clock = deps.clock ?? { now: () => new Date().toISOString(), today: () => new Date().toISOString().slice(0, 10) };
   const audit = deps.audit ?? (async () => {});
-  const sessions = new Map();
+  // Same get/set/has/delete as before; persisted (hashed ids) when the launcher gives a persistence, so a redeploy keeps people signed in.
+  const sessions = createSessionStore({ persistence: deps.sessionPersistence ?? null });
   const failures = new Map();
   const packCache = new Map();
   const tokenHash = sha(token);
