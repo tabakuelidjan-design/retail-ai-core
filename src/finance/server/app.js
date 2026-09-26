@@ -867,11 +867,12 @@ export function createFinanceApp(deps) {
   const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
   // the merchant's civil date (their configured time zone), for every day-based reading of a due date; never the server's zone
   const merchantToday = () => civilDateIn(new Date(clock.now()), timeZone);
-  const itemView = (raw) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
+  // `today` = the merchant's civil date, computed once per request by a list (not once per purchase: each computation builds an Intl formatter)
+  const itemView = (raw, today = merchantToday()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
-    due: dueViewOf(raw, { today: merchantToday() }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
+    due: dueViewOf(raw, { today }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
     // common purchase-document model (phase 1): type + accounting direction, identifiers, VAT by rate, lines, where each field came from
@@ -909,7 +910,7 @@ export function createFinanceApp(deps) {
     const st = ctx.url.searchParams.get('scope');
     const f = st === 'purchases' ? { statuses: ['VALIDATED', 'TO_PAY', 'PAID'] } : st === 'inbox' ? { statuses: ['RECEIVED', 'TO_REVIEW', 'REJECTED'] } : {};
     const status = ctx.url.searchParams.get('status'); if (status && INBOX_STATUSES.includes(status)) f.status = status;
-    json(ctx.res, 200, { rows: (await inboxFor().list(f)).map(itemView) });
+    const today = merchantToday(); json(ctx.res, 200, { rows: (await inboxFor().list(f)).map((raw) => itemView(raw, today)) });
   });
   // Upload as JSON (base64): sniffed, size-limited, stored privately, extracted, then left TO_REVIEW for a person. Same file twice = same record.
   on('POST', '/api/inbox/upload', async (ctx) => {
