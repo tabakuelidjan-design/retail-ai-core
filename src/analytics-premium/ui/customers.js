@@ -9,8 +9,9 @@ let cachedCustomers = null;
 async function loadCustomersIfNeeded() {
   if (cachedCustomers) return;
   try {
-    const res = await fetch('/api/customers');
+    const res = await fetch(`/api/customers?${periodQuery()}`);
     if (res.ok) cachedCustomers = await res.json();
+    else { let code = null; try { code = (await res.json()).error.code; } catch (e) { code = null; } cachedCustomers = { available: false, periodError: code || 'GENERIC' }; }
   } catch (e) { /* surfaces as the empty state */ }
 }
 
@@ -225,7 +226,7 @@ async function clOpen(id) {
   if (!clEscHandler) { clEscHandler = (e) => { if (e.key === 'Escape') clClose(); }; document.addEventListener('keydown', clEscHandler); }
   panel.querySelector('.cl-close')?.focus();
   if (!clDetails.has(id)) {
-    try { const res = await fetch(`/api/customers/detail?id=${encodeURIComponent(id)}`); if (res.ok) clDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
+    try { const res = await fetch(`/api/customers/detail?id=${encodeURIComponent(id)}&${periodQuery()}`); if (res.ok) clDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
   }
   if (clState.selected !== id || !panel.isConnected) return;
   const data = clDetails.get(id);
@@ -300,11 +301,12 @@ function clExport(d) {
 
 function renderCustomersPage(main) {
   clClose();
-  main.appendChild(topbar(cachedCustomers, () => { const keep = clState.selected; route().then(() => { if (keep) clOpen(keep); }); }, { periodLocked: true }));
+  main.appendChild(topbar(cachedCustomers, () => { const keep = clState.selected; route().then(() => { if (keep) clOpen(keep); }); }, { periodPicker: () => route() }));
   const d = cachedCustomers;
   main.appendChild(clHeader(d));
-  if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), t('ex.noReport')))); return; }
+  if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), d && d.periodError ? t(periodErrorKey(d.periodError)) : t('ex.noReport')))); return; }
   { const n = cmpCoverageNotice(d.comparison_coverage); if (n) main.appendChild(n); }
+  { const rl = periodRangeLine(d); if (rl) main.appendChild(rl); }
   main.appendChild(clCoverage(d));
   main.appendChild(clKpiRow(d));
   main.appendChild(h('div', { class: 'ex-grid-2 cl-grid' }, clTopCard(d), clDistributionCard(d)));

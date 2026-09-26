@@ -21,10 +21,10 @@ async function latestReport(reportsDir) {
   return JSON.parse(await readFile(path.join(reportsDir, dated[0].f), 'utf8'));
 }
 
-export async function loadProducts(reportsDir) {
-  const report = await latestReport(reportsDir);
+export async function loadProducts(reportsDir, given = null) {
+  const report = given ?? await latestReport(reportsDir);
   if (!report) return null;
-  const base = { generatedAt: report.generated_at, currency: report.currency ?? 'EUR', period: { key: 'last_30_days' } };
+  const base = { generatedAt: report.generated_at, currency: report.currency ?? 'EUR', period: { key: 'last_30_days' }, ...(report.period_info ? { period_info: report.period_info } : {}) };
   const ex = report.explorer?.last_30_days;
   const ws = report.products_workspace?.last_30_days;
   if (!ex?.products || !ws) return { ...base, available: false };
@@ -44,9 +44,9 @@ export async function loadProducts(reportsDir) {
   };
 }
 
-export async function loadProductDetail(reportsDir, id) {
+export async function loadProductDetail(reportsDir, id, given = null) {
   if (typeof id !== 'string' || !PRODUCT_ID.test(id)) return { error: 'INVALID_PRODUCT_ID' };
-  const report = await latestReport(reportsDir);
+  const report = given ?? await latestReport(reportsDir);
   const detail = report?.products_workspace?.last_30_days?.details?.[id];
   if (!detail) return { error: 'PRODUCT_NOT_FOUND' };
   return { generatedAt: report.generated_at, currency: report.currency ?? 'EUR', product: detail };

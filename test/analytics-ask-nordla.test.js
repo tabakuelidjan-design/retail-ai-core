@@ -25,13 +25,18 @@ async function dirWith(report) {
 const ask = (dir, extra = {}) => createAssistant({ reportsDir: dir, ...extra });
 
 test('understanding is deterministic: intent and period from the question, in FR / NL / EN', () => {
-  assert.deepEqual({ ...understand('Quel est mon chiffre d’affaires des 30 derniers jours ?') }, { intent: 'revenue', period: 'last_30_days', periodExplicit: true, unsupportedSpan: false });
+  assert.deepEqual({ ...understand('Quel est mon chiffre d’affaires des 30 derniers jours ?') }, { intent: 'revenue', period: 'last_30_days', periodQuery: { period: 'last_30_days' }, periodExplicit: true, unsupportedSpan: false });
   assert.equal(understand('Combien de commandes hier ?').period, 'yesterday');
+  assert.deepEqual(understand('Quel est mon CA sur 90 jours ?').periodQuery, { period: 'last_90_days' });
+  assert.deepEqual(understand('Quel est mon CA sur 45 jours ?').periodQuery, { period: 'last_n_days', days: 45 });
+  assert.deepEqual(understand('Quel est mon CA ce mois ?').periodQuery, { period: 'this_month' });
+  assert.deepEqual(understand('Quel est mon CA le mois dernier ?').periodQuery, { period: 'previous_month' });
+  assert.equal(understand('Quel est mon CA ?').periodQuery, null, 'no period named: the period selected in the page is used');
   assert.equal(understand('Combien de commandes ces 7 derniers jours ?').intent, 'orders');
   assert.equal(understand('Wat is mijn omzet?').intent, 'revenue'); assert.equal(understand('What is my average order value?').intent, 'aov');
   assert.equal(understand('Quel est mon meilleur produit ?').intent, 'top_product');
   assert.equal(understand('Raconte-moi une blague').intent, null);
-  assert.equal(understand('Quel est mon CA sur 90 jours ?').unsupportedSpan, true);
+  assert.equal(understand('Quel est mon CA sur 5000 jours ?').unsupportedSpan, true);
   assert.equal(understand('chiffre d’affaires du dernier trimestre').unsupportedSpan, true);
 });
 
@@ -48,7 +53,7 @@ test('a successful answer: the figures are the report figures, with period, sour
 test('other periods and intents read the matching report blocks', async () => {
   const a = ask(await dirWith(REPORT));
   assert.equal((await a({ question: 'Combien de commandes hier ?' })).body.figures[0].value, 1);
-  assert.equal((await a({ question: 'Combien de commandes cette semaine ?' })).body.figures[0].value, 7);
+  assert.equal((await a({ question: 'Combien de commandes ces 7 derniers jours ?' })).body.figures[0].value, 7);
   assert.equal((await a({ question: 'Quel est mon panier moyen ?' })).body.figures[0].value, 27.11);
   assert.equal((await a({ question: 'Combien de clients ?' })).body.figures[0].value, 12);
   assert.equal((await a({ question: 'Quel est mon meilleur produit ?' })).body.figures[0].value, 'Casque test');
@@ -60,7 +65,7 @@ test('other periods and intents read the matching report blocks', async () => {
 
 test('nothing is invented: unknown question, unavailable period, missing report and empty data all give explicit errors and NO figures', async () => {
   const a = ask(await dirWith(REPORT));
-  for (const [q, code, status] of [['Raconte-moi une blague', 'UNSUPPORTED_QUESTION', 422], ['Quel est mon CA sur 90 jours ?', 'UNSUPPORTED_PERIOD', 422], ['', 'EMPTY_QUESTION', 400], ['x'.repeat(501), 'QUESTION_TOO_LONG', 400]]) {
+  for (const [q, code, status] of [['Raconte-moi une blague', 'UNSUPPORTED_QUESTION', 422], ['Quel est mon CA du dernier trimestre ?', 'UNSUPPORTED_PERIOD', 422], ['Quel est mon CA sur 90 jours ?', 'DATASET_UNAVAILABLE', 404], ['', 'EMPTY_QUESTION', 400], ['x'.repeat(501), 'QUESTION_TOO_LONG', 400]]) {
     const r = await a({ question: q }); assert.equal(r.status, status, q.slice(0, 20)); assert.equal(r.body.error.code, code); assert.equal(r.body.figures, undefined);
   }
   const none = await ask(await dirWith(null))({ question: 'Quel est mon chiffre d’affaires ?' });

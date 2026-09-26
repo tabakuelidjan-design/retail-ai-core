@@ -187,9 +187,10 @@ function topbar(brief, onLangChange, opts = {}) {
     h('div', { class: 'topbar-right' },
       h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, t('topbar.syncUnknown'))),
       h('span', { class: 'sync-pill' }, h('span', { class: 'sync-dot' }), t('topbar.reportGenerated', brief ? fmtAgo(brief.generatedAt) : t('common.dash'))),
-      opts.periodLocked
-        ? h('span', { class: 'period-pill locked', title: t('period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), h('span', { class: 'period-fixed' }, t('period.fixed')))
-        : h('span', { class: 'period-pill' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), icon('chevronDown', 13)),
+      // Explorer / Produits / Clients get the real period selector; Brief and Ce qui a changé stay on the report's fixed 30 days and say so.
+      opts.periodPicker
+        ? periodPicker(opts.periodPicker)
+        : h('span', { class: 'period-pill locked', title: t('period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), brief?.period ? t('period.last30Days') : t('common.dash'), h('span', { class: 'period-fixed' }, t('period.fixed'))),
       langSwitch(onLangChange),
       // Account control (profile icon + chevron): opens a compact menu - see account-menu.js.
       NordlaAccountMenu.accountControl({ h, t, svg, icon })));
@@ -466,7 +467,9 @@ const ROUTES = {
   customers: { key: 'customers', load: loadCustomersIfNeeded, render: renderCustomersPage },
   products: { key: 'products', load: loadProductsIfNeeded, render: renderProductsPage },
 };
+let uiRestored = false;
 async function route() {
+  if (!uiRestored) { uiRestored = true; uiStateRestore(); }
   const hash = location.hash.replace(/^#\/?/, '');
   const r = ROUTES[hash] ?? ROUTES[''];
   const app = document.getElementById('app');

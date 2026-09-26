@@ -25,7 +25,7 @@
 import { createHash } from 'node:crypto';
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { buildDayBuckets, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
+import { dayBucketsOfWindow, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 import { productEvolutionStatus } from './explorer.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -131,7 +131,7 @@ export function buildProductsWorkspace({ ledger, data, windows, now, config, tim
 
   // ---- per-product detail (served one at a time): daily series of the current window + the latest sales ----
   const { lines: winLines, refunds: winRefunds } = windowFacts(ledger, win);
-  const days = buildDayBuckets(now, tz, 30);
+  const days = dayBucketsOfWindow(win);
   const refundsByLine = new Map();
   for (const r of ledger.refundFacts) { if (!refundsByLine.has(r.orderLineId)) refundsByLine.set(r.orderLineId, []); refundsByLine.get(r.orderLineId).push(r); }
   const linesByKey = new Map(); const winLinesByKey = new Map(); const winRefundsByKey = new Map();

@@ -8,8 +8,9 @@ let cachedExplorer = null;
 async function loadExplorerIfNeeded() {
   if (cachedExplorer) return;
   try {
-    const res = await fetch('/api/explorer');
+    const res = await fetch(`/api/explorer?${periodQuery()}`);
     if (res.ok) cachedExplorer = await res.json();
+    else { let code = null; try { code = (await res.json()).error.code; } catch (e) { code = null; } cachedExplorer = { available: false, periodError: code || 'GENERIC' }; }
   } catch (e) { /* surfaces as the empty state */ }
 }
 
@@ -921,6 +922,12 @@ function cmpCoverageNotice(cov) {
     h('span', { class: 'ex-foot' }, t('cmp.insufficientDetail', cov.previous_days_with_history, cov.previous_days, cov.history_start)));
 }
 
+/** Money movements of the period from the same deterministic aggregate: discounts, product refunds and product VAT (shipping has its own note). */
+function exMoneyNote(d) {
+  const k = d.kpis; if (!k || k.discounts == null) return null;
+  return h('div', { class: 'ex-foot ex-money-note' }, t('ex.money.note', exMoney(k.discounts, d.currency), exMoney(k.refunds, d.currency), exMoney(k.tax, d.currency)));
+}
+
 /** Shipping, kept apart from the product KPIs on purpose; only shown when the source reported some. */
 function exShippingNote(d) {
   const sh = d.kpis && d.kpis.shipping;
@@ -931,14 +938,16 @@ function exShippingNote(d) {
 }
 
 function renderExplorerPage(main) {
-  main.appendChild(topbar(cachedExplorer, () => route(), { periodLocked: true }));
+  main.appendChild(topbar(cachedExplorer, () => route(), { periodPicker: () => route() }));
   const d = cachedExplorer;
   main.appendChild(h('div', { class: 'ex-head' },
     h('div', null, h('h1', { class: 'ex-title' }, t('ex.title')), h('p', { class: 'ex-sub' }, t('ex.subtitle'))),
     h('button', { class: 'ex-export', type: 'button', disabled: d && d.available ? null : 'disabled', on: { click: () => { if (d && d.available) { if (exActiveTab() === 'comparison' && d.comparison_view) exExportComparison(d); else exExport(d); } } } }, svg(['M12 4v10', 'M8 10l4 4 4-4', 'M5 19h14'], 15), t('ex.export'))));
   main.appendChild(exTabs());
-  if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), t('ex.noReport')))); return; }
+  if (!d || !d.available) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('ex.insufficient'), d && d.periodError ? t(periodErrorKey(d.periodError)) : t('ex.noReport')))); return; }
+  { const rl = periodRangeLine(d); if (rl) main.appendChild(rl); }
   { const n = cmpCoverageNotice(d.comparison_coverage); if (n) main.appendChild(n); }
+  if (d.kpis && d.kpis.order_count === 0) main.appendChild(h('div', { class: 'ex-card ex-empty-period', role: 'status' }, t('period.empty')));
   if (exActiveTab() === 'sales') { renderSalesTab(main, d); return; }
   if (exActiveTab() === 'products') { renderProductsTab(main, d); return; }
   if (exActiveTab() === 'customers') { renderCustomersTab(main, d); return; }
@@ -947,6 +956,7 @@ function renderExplorerPage(main) {
   if (exActiveTab() === 'period') { renderPeriodTab(main, d); return; }
   if (exActiveTab() === 'comparison') { renderComparisonTab(main, d); return; }
   main.appendChild(exKpiRow(d));
+  { const n = exMoneyNote(d); if (n) main.appendChild(n); }
   { const n = exShippingNote(d); if (n) main.appendChild(n); }
   main.appendChild(h('div', { class: 'ex-grid-2' }, exSalesCard(d), exCategoryCard(d)));
   main.appendChild(h('div', { class: 'ex-grid-2 even' }, exTopProducts(d), exTopCustomers(d)));

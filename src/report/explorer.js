@@ -10,7 +10,7 @@
 
 import { aggregate, aggregateShipping, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { buildDayBuckets, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
+import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
@@ -72,6 +72,8 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
 
   const kpis = {
     net_sales_ex_tax: cur.total.net_sales_ex_tax,
+    // product money movements of the period, from the same deterministic aggregate (incl. VAT as presented by the source; shipping is separate below)
+    gross_sales: cur.total.gross_sales, discounts: cur.total.discounts, refunds: cur.total.refunds, net_sales_incl_tax: cur.total.net_sales, tax: cur.total.tax,
     shipping: { ...shipping, orders_without_shipping_data: shippingUncaptured, coverage: shippingUncaptured > 0 ? 'PARTIAL' : 'COMPLETE' },
     total_net_sales_ex_tax_with_shipping: round2(cur.total.net_sales_ex_tax + shipping.net_ex_tax_after_refunds),
     order_count: cur.orders.length,
@@ -128,8 +130,7 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   // Blocks of 7 days from the start of each period keep the chart readable; the last block may be shorter (`days`).
   let comparison = null;
   if (prev && timeZone) {
-    const buckets = buildDayBuckets(now, timeZone, 60);
-    const prevDays = buckets.slice(0, 30).map((b) => { const m = computeSalesMetrics(ledger, b); return { date: b.localStart, net_sales_ex_tax: m.net_sales_ex_tax, order_count: m.order_count }; });
+    const prevDays = dayBucketsOfWindow(prevWin).map((b) => { const m = computeSalesMetrics(ledger, b); return { date: b.localStart, net_sales_ex_tax: m.net_sales_ex_tax, order_count: m.order_count }; });
     if (prevDays.length === daily.length && daily.length) {
       const blocks = [];
       for (let i = 0; i < daily.length; i += 7) {
@@ -184,7 +185,7 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   const customersBlock = buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur, prev, win, prevWin, rawOrder });
   const products = buildProductsBlock({ cur, prev, curRows, prevRows: prev ? prevRowsAll() : null, win, typeOfProduct, createdAtOf, kpis, categories });
   return { kpis, series: { daily, weekly: weeklySeries(daily) }, comparison, contributions, days, channels, categories, top_products, top_customers, products, customers: customersBlock, channels_view: channelsBlock, geo_view: buildGeoBlock({ ledger, data, windows, win, rawOrder }), period_view: buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, lineById }),
-    comparison_view: buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers: customersBlock }),
+    comparison_view: buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers: customersBlock, prevWin }),
     comparison_coverage: comparisonCoverage(win) };
 }
 
@@ -351,7 +352,7 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
   const recency = { identified_customers: lastByKey.size, buckets: rec, history_days: historyDays, dormant_defined: false };
 
   // ---- weekly trend of identified customers over the current window (from the real day buckets) ----
-  const dayBuckets = buildDayBuckets(now, timeZone, 30);
+  const dayBuckets = dayBucketsOfWindow(win);
   const weeks = new Map();
   for (const b of dayBuckets) {
     const wk = mondayOf(b.localStart);
@@ -475,7 +476,7 @@ function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, line
 // unidentified order, any revenue without category, costs not fully verified). The only limit is presentational:
 export const CMP_WATERFALL_MAX_STEPS = 5; // display density only; the remainder is grouped as "other" so the waterfall still reconciles
 
-function buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers }) {
+function buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, daily, comparison, typeOf, products, customers, prevWin }) {
   const pv = kpis.previous;
   if (!pv || !timeZone) return null;
 
@@ -489,8 +490,7 @@ function buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, 
   ];
 
   // day-index aligned series (Day 1..N of each period; calendar dates are NOT aligned)
-  const buckets = buildDayBuckets(now, timeZone, 60);
-  const prevBuckets = buckets.slice(0, 30);
+  const prevBuckets = dayBucketsOfWindow(prevWin);
   const prevDays = prevBuckets.map((b) => computeSalesMetrics(ledger, b).net_sales_ex_tax);
   const aligned = daily.length === prevDays.length
     ? daily.map((d, i) => ({ index: i + 1, date: d.date, previous_date: prevBuckets[i].localStart, current: d.net_sales_ex_tax ?? 0, previous: prevDays[i] ?? 0 }))
@@ -609,7 +609,7 @@ function buildChannelsBlock({ ledger, data, windows, now, config, timeZone, win,
   const prevTotal = prev ? [...prev.values()].reduce((a, c) => a + c.net_sales_ex_tax, 0) : null;
 
   // weekly revenue per channel over the current window (from the real day buckets)
-  const dayBuckets = buildDayBuckets(now, timeZone, 30);
+  const dayBuckets = dayBucketsOfWindow(win);
   const weekOf = (b) => mondayOf(b.localStart);
   const weekKeys = []; for (const b of dayBuckets) { const w = weekOf(b); if (!weekKeys.includes(w)) weekKeys.push(w); }
   const daysInWeek = (w) => dayBuckets.filter((b) => weekOf(b) === w).length;

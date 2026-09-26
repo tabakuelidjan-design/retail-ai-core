@@ -4,7 +4,7 @@
 // Writes reports to ./reports/ (gitignored: real merchant numbers never get committed).
 // No LLM anywhere: every figure comes from the deterministic modules.
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
 import { SHOP_QUERY } from '../shopify/queries.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
@@ -90,6 +90,14 @@ async function main() {
     await mkdir('reports', { recursive: true });
     const stamp = now.toISOString().slice(0, 10);
     await writeFile(`reports/report-${stamp}.json`, JSON.stringify(report, null, 2));
+    // Dataset snapshot for the Analytics period selector: the period engine rebuilds any period from the SAME rows with the SAME deterministic functions.
+    // Full history (not just the report's 60 days), written atomically so a reader never sees a half-written file.
+    const fullSince = new Date(now.getTime() - 1100 * 24 * 60 * 60 * 1000);
+    const full = await loadDataset(supabase, merchant.id, { since: fullSince });
+    const snapshot = { version: 1, generated_at: now.toISOString(), time_zone: timeZone, currency: ledger.currency, data: full };
+    await writeFile('reports/dataset.json.tmp', JSON.stringify(snapshot));
+    await rename('reports/dataset.json.tmp', 'reports/dataset.json');
+    console.log(`dataset snapshot written to reports/dataset.json (${full.orders.length} orders)`);
     await writeFile(`reports/report-${stamp}.md`, renderMarkdown(report, extras));
     console.log(`report written to reports/report-${stamp}.{json,md}`);
   }

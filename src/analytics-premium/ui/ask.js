@@ -45,13 +45,19 @@ function askRenderError(box, key) {
   box.appendChild(h('div', { class: 'ask-error', role: 'alert' }, t(key)));
 }
 
+/** The period chosen in the page, only on the pages that have the selector (Explorer, Produits, Clients); elsewhere the assistant uses the last 30 days. */
+function askSelectedPeriod() {
+  if (typeof periodState === 'undefined' || !/^#\/(explorer|products|customers)/.test(location.hash)) return null;
+  return { period: periodState.key, from: periodState.from, to: periodState.to };
+}
+
 async function askSubmit(input, box, btn) {
   const question = input.value.trim();
   if (!question) { askRenderError(box, 'ask.err.EMPTY_QUESTION'); input.focus(); return; }
   btn.disabled = true; box.textContent = ''; box.appendChild(h('div', { class: 'ask-loading', role: 'status' }, t('ask.loading')));
   const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), ASK_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang() }), signal: ac.signal });
+    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod() }), signal: ac.signal });
     let data = null; try { data = await res.json(); } catch (e) { data = null; }
     if (res.ok && data && Array.isArray(data.figures) && data.figures.length) askRenderAnswer(box, data);
     else askRenderError(box, askErrorKey(data && data.error && data.error.code));

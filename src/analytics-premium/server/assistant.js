@@ -13,6 +13,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localDateString } from '../../metrics/windows.js';
+import { MAX_SPAN_DAYS, periodReport } from './period-engine.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 export const MAX_QUESTION = 500;
@@ -32,14 +33,28 @@ export function loadAssistantProvider(env = process.env, registry = PROVIDER_REG
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’'`´]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
 const has = (q, words) => words.some((w) => q.includes(w));
 
+/**
+ * Explicit period in the question -> a period-engine query ({period, days?}), or null when the question does not name one (the period the user selected in
+ * the page is then used). Returns { unsupported: true } for spans the engine does not know (quarter, "since the start"...).
+ */
+function explicitPeriod(q) {
+  const n = /\b(\d{1,4})\s*(?:derniers?\s+)?(jours?|days?|dagen)\b/.exec(q);
+  if (n) { const d = Number(n[1]); return d >= 1 && d <= MAX_SPAN_DAYS ? { query: d === 7 ? { period: 'last_7_days' } : d === 30 ? { period: 'last_30_days' } : d === 90 ? { period: 'last_90_days' } : { period: 'last_n_days', days: d }, label: `last_${d}_days` } : { unsupported: true }; }
+  if (/\b(3|trois)\s*mois\b|\b3 months\b/.test(q)) return { query: { period: 'last_90_days' }, label: 'last_90_days' };
+  if (has(q, ['mois dernier', 'mois precedent', 'last month', 'previous month', 'vorige maand'])) return { query: { period: 'previous_month' }, label: 'previous_month' };
+  if (has(q, ['ce mois', 'this month', 'deze maand', 'mois en cours'])) return { query: { period: 'this_month' }, label: 'this_month' };
+  if (has(q, ['cette semaine', 'this week', 'deze week'])) return { query: { period: 'this_week' }, label: 'this_week' };
+  if (has(q, ['cette annee', 'this year', 'dit jaar'])) return { query: { period: 'this_year' }, label: 'this_year' };
+  if (has(q, ['hier', 'yesterday', 'gisteren'])) return { query: { period: 'yesterday' }, label: 'yesterday' };
+  if (has(q, ['semaine derniere', 'last week', 'semaine', 'vorige week']) || /\bweek\b/.test(q)) return { query: { period: 'last_7_days' }, label: 'last_7_days' };
+  if (has(q, ['dernier mois', '30 derniers'])) return { query: { period: 'last_30_days' }, label: 'last_30_days' };
+  if (has(q, ['trimestre', 'quarter', 'kwartaal', 'annee derniere', 'last year', 'vorig jaar', 'depuis le debut', 'since the start', 'depuis toujours', 'jaar'])) return { unsupported: true };
+  return null;
+}
+
 /** Deterministic intent + period from the question text (French, Dutch, English keywords). Returns null intent when the question is not understood. */
 export function understand(question) {
   const q = norm(question);
-  const periodWords = { yesterday: ['hier', 'yesterday', 'gisteren'], last_7_days: ['7 jours', '7 derniers jours', '7 days', '7 dagen', 'semaine', 'week'], last_30_days: ['30 jours', '30 derniers jours', '30 days', '30 dagen', 'dernier mois', 'mois dernier', 'last month', 'vorige maand', 'ce mois'] };
-  let period = null;
-  for (const [k, w] of Object.entries(periodWords)) if (has(q, w)) { period = k; break; }
-  // any other explicit span (90 jours, 12 mois, trimestre, annee, year, 3 months ...) is not available in the report
-  const unsupportedSpan = period === null && (/\b\d+\s*(jours?|days?|dagen|mois|months?|maanden|semaines?|weeks?)\b/.test(q) || has(q, ['trimestre', 'quarter', 'kwartaal', 'annee', 'year', 'jaar', 'depuis le debut', 'since the start']));
   const intents = [
     ['top_product', ['meilleur produit', 'produit le plus', 'best product', 'top product', 'beste product', 'produit phare', 'best seller', 'meilleure vente']],
     ['top_channel', ['canal', 'channel', 'kanaal', 'point of sale', 'boutique ou en ligne', 'en ligne ou']],
@@ -51,7 +66,8 @@ export function understand(question) {
     ['revenue', ['chiffre d affaires', 'chiffre daffaires', 'revenue', 'omzet', 'ventes', 'sales', 'verkoop', 'combien ai-je vendu', 'ca ']],
   ];
   const intent = intents.find(([, w]) => has(q, w))?.[0] ?? null;
-  return { intent, period: period ?? 'last_30_days', periodExplicit: period !== null, unsupportedSpan };
+  const ep = explicitPeriod(q);
+  return { intent, period: ep?.label ?? null, periodQuery: ep?.query ?? null, periodExplicit: !!ep && !ep.unsupported, unsupportedSpan: !!ep?.unsupported };
 }
 
 async function latestReport(reportsDir) {
@@ -95,24 +111,38 @@ export const SUPPORTED_QUESTIONS = ['revenue', 'orders', 'units', 'aov', 'refund
  * @param {{reportsDir: string|URL, provider?: {name: string, explain: Function}|null, providerStatus?: string, timeoutMs?: number}} deps
  * @returns {Promise<{status: number, body: object}>}
  */
-export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS }) {
-  return async function ask({ question, lang = 'fr' }) {
+export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date() }) {
+  // `selected` = the period chosen in the page ({period, from, to}); it is used only when the question does not name a period itself.
+  return async function ask({ question, lang = 'fr', selected = null }) {
     const text = typeof question === 'string' ? question.trim() : '';
     if (!text) return { status: 400, body: { error: { code: 'EMPTY_QUESTION' } } };
     if (text.length > MAX_QUESTION) return { status: 400, body: { error: { code: 'QUESTION_TOO_LONG', max: MAX_QUESTION } } };
 
     const u = understand(text);
     if (!u.intent) return { status: 422, body: { error: { code: 'UNSUPPORTED_QUESTION', supported: SUPPORTED_QUESTIONS } } };
-    if (u.unsupportedSpan) return { status: 422, body: { error: { code: 'UNSUPPORTED_PERIOD', available: ['yesterday', 'last_7_days', 'last_30_days'] } } };
+    if (u.unsupportedSpan) return { status: 422, body: { error: { code: 'UNSUPPORTED_PERIOD', available: ['yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'this_week', 'this_month', 'previous_month', 'this_year'] } } };
 
-    const rep = await latestReport(reportsDir);
-    if (!rep) return { status: 404, body: { error: { code: 'NO_REPORT_AVAILABLE' } } };
-    const got = figuresFor(u.intent, u.period, rep.report);
-    if (got.unavailable) return { status: 422, body: { error: { code: got.unavailable === 'ONLY_LAST_30_DAYS' ? 'ONLY_LAST_30_DAYS' : got.unavailable === 'NO_SALES' ? 'NO_DATA_FOR_QUESTION' : 'PERIOD_NOT_IN_REPORT', intent: u.intent, period: u.period } } };
-
-    const w = rep.report.sales[u.period].window;
+    // The period: the one named in the question, else the one selected in the page, else the last 30 days. The figures then come from the SAME
+    // period engine as Explorer (same deterministic functions, same dataset), so the answer always matches what the page shows for that period.
+    const query = u.periodQuery ?? (selected && typeof selected.period === 'string' ? { period: selected.period, from: selected.from ?? undefined, to: selected.to ?? undefined } : { period: 'last_30_days' });
+    let report; let periodKey = 'last_30_days';
+    const eng = await periodReport(reportsDir, query, { now: now() });
+    if (eng.ok) report = eng.report;
+    else if (eng.code === 'DATASET_UNAVAILABLE') {
+      // No dataset snapshot yet (right after a deploy): only the three periods stored in the generated report can be answered, and only from it.
+      const legacy = { yesterday: 'yesterday', last_7_days: 'last_7_days', last_30_days: 'last_30_days' }[query.period];
+      const rep0 = await latestReport(reportsDir);
+      if (!rep0) return { status: 404, body: { error: { code: 'NO_REPORT_AVAILABLE' } } };
+      if (!legacy) return { status: 404, body: { error: { code: 'DATASET_UNAVAILABLE' } } };
+      report = rep0.report; periodKey = legacy; report.__file = rep0.file;
+    } else return { status: eng.status, body: { error: { code: eng.code } } };
+    const got = figuresFor(u.intent, periodKey, report);
+    if (got.unavailable) return { status: 422, body: { error: { code: got.unavailable === 'ONLY_LAST_30_DAYS' ? 'ONLY_LAST_30_DAYS' : got.unavailable === 'NO_SALES' ? 'NO_DATA_FOR_QUESTION' : 'PERIOD_NOT_IN_REPORT', intent: u.intent, period: periodKey } } };
+    const rep = { file: report.__file ?? String(report.generated_at ?? '').slice(0, 10), report };
+    const pi = rep.report.period_info;
+    const w = rep.report.sales[periodKey].window;
     const tz = w?.timeZone ?? rep.report.merchant_timezone ?? 'UTC';
-    const period = w ? { key: u.period, start: localDateString(new Date(w.start), tz), end: localDateString(dayBefore(w.end), tz), timeZone: tz } : { key: u.period };
+    const period = pi ? { key: pi.key, start: pi.start, end: pi.end, days: pi.days, timeZone: pi.timeZone } : w ? { key: periodKey, start: localDateString(new Date(w.start), tz), end: localDateString(dayBefore(w.end), tz), timeZone: tz } : { key: periodKey };
     const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? 'EUR', sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
 
     if (provider && providerStatus === 'OK') {

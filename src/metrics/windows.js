@@ -92,6 +92,19 @@ export function buildDayBuckets(now, timeZone, days = 30) {
   return buckets;
 }
 
+/**
+ * One bucket per local calendar day of an arbitrary window [localStart, localEnd) (same bucket shape as buildDayBuckets). The Explorer's series, weekly
+ * trends and day-by-day comparison are built from these, so they follow whatever period is asked for instead of a fixed 30 days.
+ */
+export function dayBucketsOfWindow(window) {
+  const out = [];
+  for (let d = window.localStart; d < window.localEnd; d = addDays(d, 1)) {
+    const next = addDays(d, 1);
+    out.push({ key: d, label: d, timeZone: window.timeZone, localStart: d, localEnd: next, start: localMidnight(d, window.timeZone), end: localMidnight(next, window.timeZone) });
+  }
+  return out;
+}
+
 export function inWindow(instant, window) {
   const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
   return t >= window.start.getTime() && t < window.end.getTime();

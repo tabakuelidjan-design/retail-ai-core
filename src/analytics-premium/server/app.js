@@ -10,12 +10,14 @@ import { loadExplorer } from './explorer.js';
 import { loadCustomers, loadCustomerDetail } from './customers.js';
 import { loadProducts, loadProductDetail } from './products.js';
 import { readNordlaShared } from '../../shared/nordla-static.js';
+import { periodReport } from './period-engine.js';
 
 const UI = new URL('../ui/', import.meta.url);
 const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/ask.js': ['ask.js', 'text/javascript; charset=utf-8'],
+  '/period.js': ['period.js', 'text/javascript; charset=utf-8'],
   '/explorer.js': ['explorer.js', 'text/javascript; charset=utf-8'],
   '/customers.js': ['customers.js', 'text/javascript; charset=utf-8'],
   '/customers.css': ['customers.css', 'text/css; charset=utf-8'],
@@ -30,7 +32,16 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask }) {
+export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask, now = () => new Date() }) {
+  /** Explorer / Produits / Clients accept ?period=<preset>|custom&from=&to=. With no period parameter the fixed-30-day report is served as before. */
+  async function periodGiven(url) {
+    const period = url.searchParams.get('period'); const from = url.searchParams.get('from'); const to = url.searchParams.get('to');
+    if (!period && !from && !to) return { given: null };
+    const r = await periodReport(reportsDir, { period: period || (from || to ? 'custom' : undefined), from, to }, { now: now() });
+    // Right after a deploy the dataset snapshot may not exist yet: the default 30 days is still served from the generated report; other periods say so.
+    if (!r.ok && r.code === 'DATASET_UNAVAILABLE' && (!period || period === 'last_30_days') && !from && !to) return { given: null };
+    return r.ok ? { given: r.report } : { error: { status: r.status, code: r.code } };
+  }
   return async function handle(req, res) {
     try {
       // Hosted staging: host allow-list + access token, before anything (pages, static files, api) is served.
@@ -57,7 +68,8 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
         const chunks = []; let size = 0;
         for await (const c of req) { size += c.length; if (size > 4096) return json(413, { error: { code: 'BODY_TOO_LARGE' } }); chunks.push(c); }
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: { code: 'INVALID_JSON' } }); }
-        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr' });
+        const sel = body?.period && typeof body.period === 'object' ? { period: String(body.period.period ?? '').slice(0, 30), from: typeof body.period.from === 'string' ? body.period.from.slice(0, 10) : undefined, to: typeof body.period.to === 'string' ? body.period.to.slice(0, 10) : undefined } : null;
+        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr', selected: sel });
         return json(r.status, r.body);
       }
       if (req.method === 'GET' && url.pathname === '/api/sync-status') {
@@ -83,35 +95,40 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/explorer') {
-        const data = await loadExplorer(reportsDir);
+        const pg = await periodGiven(url); if (pg.error) { res.writeHead(pg.error.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: pg.error.code } })); return; }
+        const data = await loadExplorer(reportsDir, pg.given);
         if (!data) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'NO_REPORT_AVAILABLE' } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/customers') {
-        const data = await loadCustomers(reportsDir);
+        const pg = await periodGiven(url); if (pg.error) { res.writeHead(pg.error.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: pg.error.code } })); return; }
+        const data = await loadCustomers(reportsDir, pg.given);
         if (!data) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'NO_REPORT_AVAILABLE' } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/customers/detail') {
-        const data = await loadCustomerDetail(reportsDir, url.searchParams.get('id'));
+        const pg = await periodGiven(url); if (pg.error) { res.writeHead(pg.error.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: pg.error.code } })); return; }
+        const data = await loadCustomerDetail(reportsDir, url.searchParams.get('id'), pg.given);
         if (data.error) { res.writeHead(data.error === 'INVALID_CUSTOMER_ID' ? 400 : 404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: data.error } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/products') {
-        const data = await loadProducts(reportsDir);
+        const pg = await periodGiven(url); if (pg.error) { res.writeHead(pg.error.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: pg.error.code } })); return; }
+        const data = await loadProducts(reportsDir, pg.given);
         if (!data) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: 'NO_REPORT_AVAILABLE' } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/products/detail') {
-        const data = await loadProductDetail(reportsDir, url.searchParams.get('id'));
+        const pg = await periodGiven(url); if (pg.error) { res.writeHead(pg.error.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: pg.error.code } })); return; }
+        const data = await loadProductDetail(reportsDir, url.searchParams.get('id'), pg.given);
         if (data.error) { res.writeHead(data.error === 'INVALID_PRODUCT_ID' ? 400 : 404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { code: data.error } })); return; }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(data));
