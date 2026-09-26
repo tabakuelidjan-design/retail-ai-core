@@ -19,6 +19,10 @@ import { isValidIban } from './settings.js';
 import { toCents } from './money.js';
 import { finalizeExtraction } from './purchase-document.js';
 import { readPdfText } from './pdf-text.js';
+import { parsePaymentTerms, termSignature } from './payables/payment-terms.js';
+
+/** The label of a payment-terms cell ("Conditions de paiement : ..."); the value follows it, or sits in the next cell, or right below. */
+const TERMS_LABEL = /(?<!\p{L})(?:conditions?\s*(?:de\s*)?(?:paiement|r[èe]glement)|modalit[ée]s?\s*(?:de\s*)?(?:paiement|r[èe]glement)|betalingsvoorwaarden|betalingsconditie|betalingstermijn|betalingswijze\s*\/\s*termijn|payment\s*terms?|terms\s*of\s*payment|terms\s*of\s*sale)(?!\p{L})/iu;
 
 export const SOURCE = 'PDF_TEXT';
 /** Below this many non-space characters (all pages together) the PDF is treated as a scan: its text needs image analysis (OCR). */
@@ -465,6 +469,25 @@ export function extractFromPdfLines(pages, own = {}) {
   }
   pickDate('dueDate', due, 'LABEL_DUE_DATE');
   if (f.dueDate && f.issueDate && f.dueDate.value === f.issueDate.value && f.dueDate.zone && f.issueDate.zone && f.dueDate.zone.y === f.issueDate.zone.y && f.dueDate.zone.x === f.issueDate.zone.x) { delete f.dueDate; warnings.push('DUE_DATE_AMBIGUOUS'); } // one printed date cannot be both
+
+  // ---- payment terms: only the supplier's own explicit wording, judged by the closed grammar of payables/payment-terms.js (never computed here) ----
+  {
+    const cands = [];
+    lines.forEach((l, li) => l.cells.forEach((c, ci) => {
+      const m = TERMS_LABEL.exec(c.text);
+      if (m) {
+        let val = c.text.slice(m.index + m[0].length).replace(/^[\s:.\-–—]+/, '').trim();
+        if (!val) val = (l.cells[ci + 1]?.text ?? '').trim();
+        if (!val) { const below = lines[li + 1]; const cell = below && below.page === l.page && l.y - below.y <= 24 ? below.cells.find((x) => Math.abs(x.x - c.x) <= 40) : null; val = (cell?.text ?? '').trim(); }
+        if (val) cands.push({ line: l, text: val, rule: 'LABEL_PAYMENT_TERMS', labelled: true });
+      } else if (c.text.length <= 80) cands.push({ line: l, text: c.text, rule: 'TERMS_PHRASE', labelled: false });
+    }));
+    const judged = cands.map((c) => ({ ...c, r: parsePaymentTerms(c.text, { labelled: c.labelled }) })).filter((c) => c.r.status !== 'NOT_A_TERM');
+    const parsed = judged.filter((c) => c.r.status === 'PARSED'); const signatures = [...new Set(parsed.map((c) => termSignature(c.r.parsed)))];
+    if (signatures.length > 1 || judged.some((c) => c.r.status === 'AMBIGUOUS')) warnings.push('PAYMENT_TERMS_AMBIGUOUS');
+    else if (signatures.length === 1) { const c = parsed.find((x) => x.labelled) ?? parsed[0]; put('paymentTerms', c.text, c.labelled ? 0.85 : 0.75, c.line, c.rule); }
+    else if (judged.length) { const c = judged.find((x) => x.labelled) ?? judged[0]; put('paymentTerms', c.text, 0.6, c.line, c.rule); warnings.push('PAYMENT_TERMS_NOT_RECOGNISED'); }
+  }
 
   // ---- tables that are never document totals: invoice lines, and the VAT-by-rate table ----
   const isItemsHeader = (l) => L.itemsHeader.test(l.text) && L.itemsHeaderAmount.test(l.text) && !amountsIn(l.text).length && !datesIn(l.text).length;

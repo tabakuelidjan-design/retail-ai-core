@@ -136,6 +136,7 @@ export function extractUbl(data) {
   const pm = means.find((m) => kid(m, 'PayeeFinancialAccount')) ?? means[0];
   put('supplierIban', compact(txt(at(pm, 'PayeeFinancialAccount/ID'))), 'PaymentMeans/PayeeFinancialAccount/ID', 0.95);
   put('paymentReference', txt(kid(pm, 'PaymentID')), 'PaymentMeans/PaymentID', 0.9);
+  put('paymentTerms', txt(at(doc, 'PaymentTerms/Note')), 'PaymentTerms/Note', 0.9);   // the supplier's own wording; judged by payables/payment-terms.js, never computed here
 
   // totals
   const cur = f.currency?.value ?? null;
