@@ -253,7 +253,7 @@ test('privacy: results carry aggregated facts and pseudonymous ids only; sanitiz
       assert.ok(!/[a-e]{64}/.test(json), 'no customer key'); assert.ok(!/@[\w-]+\./.test(json), 'no e-mail'); assert.ok(!/customer_key|"email"|"phone"|"address"|"iban"/i.test(json));
     }
     const { value, redactions } = sanitize({ label: 'Widget', note: 'write to jean.dupont@example.com', bank: 'BE68 5390 0754 7034', tel: '+32 470 12 34 56', email: 'x@y.be', nested: [{ customer_key: 'abc', ok: 1, phoneText: 'call +32 81 12 34 56' }], safe: 'Coque iPhone 15 Pro Max 25 EUR' });
-    assert.equal(value.note, '[redacted]'); assert.equal(value.bank, '[redacted]'); assert.ok(!('tel' in value) && !('email' in value)); assert.ok(!('customer_key' in value.nested[0])); assert.equal(value.nested[0].phoneText, '[redacted]');
+    assert.equal(value.note, 'write to [redacted]'); assert.equal(value.bank, '[redacted]'); assert.ok(!('tel' in value) && !('email' in value)); assert.ok(!('customer_key' in value.nested[0])); assert.equal(value.nested[0].phoneText, 'call [redacted]');
     assert.equal(value.safe, 'Coque iPhone 15 Pro Max 25 EUR', 'ordinary product names are untouched'); assert.equal(value.label, 'Widget'); assert.ok(redactions >= 6);
   } finally { await s.close(); }
 });
@@ -265,11 +265,11 @@ test('input validation subset behaves: required, enums, integer bounds, addition
   assert.match(validate(sch, { a: 'x', extra: 1 }), /not allowed/); assert.match(validate(sch, { a: 'x', id: 'zz' }), /format/); assert.match(validate(sch, 'nope'), /object/);
 });
 
-test('the existing assistant and /api/ask are untouched: the keyword fallback still answers, the tool layer is not wired into it yet', async () => {
+test('the existing assistant and /api/ask are untouched: the keyword fallback still answers, the tool layer is only reachable through the optional AI orchestrator', async () => {
   const s = await setup();
   try {
     const src = readFileSync(new URL('../src/analytics-premium/server/assistant.js', import.meta.url), 'utf8');
-    assert.ok(!/tools\//.test(src), 'assistant.js does not import the tool layer in Phase 1');
+    assert.match(src, /aiProvider \? createOrchestrator\(/, 'the tool layer is only reached through the optional AI orchestrator (Phase 2); without an aiProvider the keyword path runs alone');
     const ask = createAssistant({ reportsDir: s.dir, now: () => NOW });
     const server = http.createServer(createAnalyticsPremiumApp({ reportsDir: s.dir, now: () => NOW, ask })); await new Promise((r) => server.listen(0, '127.0.0.1', r));
     try {

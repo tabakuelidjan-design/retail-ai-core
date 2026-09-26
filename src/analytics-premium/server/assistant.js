@@ -14,6 +14,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localDateString } from '../../metrics/windows.js';
 import { MAX_SPAN_DAYS, periodReport } from './period-engine.js';
+import { createToolLayer } from './tools/index.js';
+import { createOrchestrator } from './ai/orchestrator.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 export const MAX_QUESTION = 500;
@@ -111,12 +113,25 @@ export const SUPPORTED_QUESTIONS = ['revenue', 'orders', 'units', 'aov', 'refund
  * @param {{reportsDir: string|URL, provider?: {name: string, explain: Function}|null, providerStatus?: string, timeoutMs?: number}} deps
  * @returns {Promise<{status: number, body: object}>}
  */
-export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date() }) {
+/**
+ * `provider` (legacy) only words the figures of the keyword path. `aiProvider` is the Phase 2 contract { plan, explain }: when it is configured, questions go through
+ * plan -> Nordla tools -> facts -> explain -> verify (ai/orchestrator.js); when it is absent - or when its planning fails - the deterministic keyword path below answers
+ * the simple questions exactly as before.
+ */
+export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date(), aiProvider = null, aiTimeoutMs }) {
+  const orchestrate = aiProvider ? createOrchestrator({ provider: aiProvider, tools: createToolLayer({ reportsDir, now }), ...(aiTimeoutMs ? { timeoutMs: aiTimeoutMs } : {}) }) : null;
   // `selected` = the period chosen in the page ({period, from, to}); it is used only when the question does not name a period itself.
-  return async function ask({ question, lang = 'fr', selected = null }) {
+  return async function ask({ question, lang = 'fr', selected = null, history = [] }) {
     const text = typeof question === 'string' ? question.trim() : '';
     if (!text) return { status: 400, body: { error: { code: 'EMPTY_QUESTION' } } };
     if (text.length > MAX_QUESTION) return { status: 400, body: { error: { code: 'QUESTION_TOO_LONG', max: MAX_QUESTION } } };
+
+    let aiFailure = null;
+    if (orchestrate) {
+      const r = await orchestrate({ question: text, lang, history, selected });
+      if (r.status !== 'PLAN_FAILED') return { status: 200, body: { mode: 'ai', ...r } };
+      aiFailure = r.code; // the AI planner is unavailable or invalid: fall back to the deterministic keyword path, and say so
+    }
 
     const u = understand(text);
     if (!u.intent) return { status: 422, body: { error: { code: 'UNSUPPORTED_QUESTION', supported: SUPPORTED_QUESTIONS } } };
@@ -159,6 +174,7 @@ export function createAssistant({ reportsDir, provider = null, providerStatus = 
         body.explanation = { status: e?.code === 'TIMEOUT' ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE', provider: provider.name }; // explicit, never hidden; the provider's message is not exposed
       } finally { clearTimeout(timer); }
     }
+    if (aiFailure) body.ai = { status: 'UNAVAILABLE', code: aiFailure };
     return { status: 200, body };
   };
 }

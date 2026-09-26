@@ -18,16 +18,17 @@ export const fail = (tool, args, code, message, detail = {}) => ({ ok: false, to
 export const fact = (key, value, unit) => ({ key, value: value ?? null, unit });
 
 const FORBIDDEN_KEYS = new Set(['email', 'mail', 'phone', 'telephone', 'tel', 'address', 'street', 'iban', 'bic', 'customer_key', 'customerkey', 'first_name', 'last_name', 'firstname', 'lastname', 'full_name', 'fullname', 'invoice', 'document', 'raw']);
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const IBAN = /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,4})?\b/;
-const PHONE = /\+\d[\d .-]{7,}\d/;
-const looksPersonal = (s) => EMAIL.test(s) || IBAN.test(s) || PHONE.test(s);
+const PHONE = /\+\d[\d .-]{7,}\d/g;
+/** Replace every personal-looking span of a string (an e-mail, an IBAN, a phone number) and count them; the rest of the text is kept. */
+const redactText = (s) => { let n = 0; const sub = (re) => { s = s.replace(re, () => { n += 1; return '[redacted]'; }); }; sub(EMAIL); sub(IBAN); sub(PHONE); return { text: s, n }; };
 
 /** Deep copy without forbidden keys, with personal-looking strings replaced. Returns { value, redactions }. */
 export function sanitize(value) {
   let redactions = 0;
   const walk = (v) => {
-    if (typeof v === 'string') { if (looksPersonal(v)) { redactions += 1; return '[redacted]'; } return v; }
+    if (typeof v === 'string') { const r = redactText(v); redactions += r.n; return r.text; }
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === 'object') {
       const out = {};
@@ -53,7 +54,7 @@ export function completenessOf(reasons, missing = []) {
   return { status: reasons.length || missing.length ? 'PARTIAL' : 'COMPLETE', reasons, missing };
 }
 
-/** Minimal input validation against a JSON-Schema subset (object / string / integer / enum / required / additionalProperties:false). Returns an error string or null. */
+/** Minimal validation against a JSON-Schema subset (object / array / string / integer / number / boolean / enum / required / additionalProperties:false / min-max bounds). Returns an error string or null. */
 export function validate(schema, value, at = 'args') {
   if (schema.type === 'object') {
     if (value == null || typeof value !== 'object' || Array.isArray(value)) return `${at} must be an object`;
@@ -67,7 +68,21 @@ export function validate(schema, value, at = 'args') {
   if (schema.type === 'string') {
     if (typeof value !== 'string') return `${at} must be a string`;
     if (schema.enum && !schema.enum.includes(value)) return `${at} must be one of ${schema.enum.join(', ')}`;
+    if (schema.maxLength != null && value.length > schema.maxLength) return `${at} is too long`;
+    if (schema.minLength != null && value.length < schema.minLength) return `${at} is too short`;
     if (schema.pattern && !new RegExp(schema.pattern).test(value)) return `${at} has an invalid format`;
+    return null;
+  }
+  if (schema.type === 'array') {
+    if (!Array.isArray(value)) return `${at} must be an array`;
+    if (schema.minItems != null && value.length < schema.minItems) return `${at} must have at least ${schema.minItems} item(s)`;
+    if (schema.maxItems != null && value.length > schema.maxItems) return `${at} must have at most ${schema.maxItems} item(s)`;
+    for (let i = 0; i < value.length; i += 1) { const e = schema.items ? validate(schema.items, value[i], `${at}[${i}]`) : null; if (e) return e; }
+    return null;
+  }
+  if (schema.type === 'boolean') return typeof value === 'boolean' ? null : `${at} must be a boolean`;
+  if (schema.type === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return `${at} must be a number`;
     return null;
   }
   if (schema.type === 'integer') {
