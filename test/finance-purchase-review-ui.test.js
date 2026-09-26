@@ -47,7 +47,7 @@ function loadUi(apiImpl) {
   // eslint-disable-next-line no-new-func
   new Function(src('views-pack.js'))(); // defines window.captureInfoNode / window.attachButton (the real ones)
   // eslint-disable-next-line no-new-func
-  const ws = new Function(`${src('views-workspace.js')}\nreturn { renderInboxDetail };`)();
+  const ws = new Function(`${src('views-workspace.js')}\nreturn { renderInboxDetail, PURCHASE_TABS };`)();
   return { ...ws, restore: () => { for (const [k, v] of Object.entries(saved)) g[k] = v; delete g.h; delete g.captureInfoNode; delete g.attachButton; } };
 }
 
@@ -98,12 +98,40 @@ test('the review pane renders fields and actions for a UBL invoice, an imported 
   } finally { ui?.restore(); await a.close(); }
 });
 
-test('Achats: an "Avoirs" tab lists the validated supplier credit notes, which never appear under "To pay"', () => {
+test('Achats views: every purchase document appears in exactly one view (To handle / Validated / To pay / Paid / Credit notes)', async () => {
+  const a = await startApp(); const c = await a.authed(); let ui;
+  try {
+    const man = async (n, extra = {}) => (await c.post('/api/inbox/manual', { supplierName: 'Fournisseur Vues SA', invoiceNumber: n, issueDate: '2026-09-01', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR', ...extra })).data.id;
+    const ok = async (r) => { assert.ok(r.status < 300, JSON.stringify(r.data)); return r; };
+    const toReview = await man('V-REVIEW');
+    const validated = await man('V-VALID'); await ok(await c.post(`/api/inbox/${validated}/validate`, {}));
+    const toPay = await man('V-TOPAY'); await ok(await c.post(`/api/inbox/${toPay}/validate`, {})); await ok(await c.post(`/api/inbox/${toPay}/to-pay`, {}));
+    const paid = await man('V-PAID'); await ok(await c.post(`/api/inbox/${paid}/validate`, {})); await ok(await c.post(`/api/inbox/${paid}/to-pay`, {})); await ok(await c.post(`/api/inbox/${paid}/pay`, { paidOn: '2026-09-20', amount: '12.10' }));
+    const credit = await man('V-AVOIR', { documentType: 'CREDIT_NOTE' }); await ok(await c.post(`/api/inbox/${credit}/validate`, {}));
+    assert.equal((await c.post(`/api/inbox/${credit}/to-pay`, {})).status, 409, 'a credit note is never marked to pay');
+    const scopes = { inbox: (await c.get('/api/inbox?scope=inbox')).data.rows, purchases: (await c.get('/api/inbox?scope=purchases')).data.rows };
+    ui = loadUi(async () => { throw new Error('no api call expected'); });
+    const T = ui.PURCHASE_TABS;
+    assert.deepEqual(Object.keys(T), ['inbox', 'validated', 'to_pay', 'paid', 'credit_notes']);
+    const viewsOf = (id) => Object.entries(T).filter(([, t]) => scopes[t.scope].filter(t.keep).some((r) => r.id === id)).map(([k]) => k);
+    assert.deepEqual(viewsOf(toReview), ['inbox'], 'TO_REVIEW invoice: To handle');
+    assert.deepEqual(viewsOf(validated), ['validated'], 'VALIDATED invoice: Validated (not To pay)');
+    assert.deepEqual(viewsOf(toPay), ['to_pay'], 'TO_PAY invoice: To pay');
+    assert.deepEqual(viewsOf(paid), ['paid'], 'PAID invoice: Paid');
+    assert.deepEqual(viewsOf(credit), ['credit_notes'], 'VALIDATED credit note: Credit notes only');
+    assert.equal(T.validated.label, 'Validated documents'); assert.equal(T.credit_notes.label, 'Credit notes');
+    // the validated invoice still offers the normal next step; the validated credit note never does
+    const items = new Map(); for (const id of [validated, credit]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
+    ui.restore(); ui = loadUi(async (m, path) => items.get(path.split('/')[3]));
+    assert.deepEqual((await render(ui, validated)).buttons, ['Mark to pay', 'Reopen for correction']);
+    assert.deepEqual((await render(ui, credit)).buttons, ['Reopen for correction']);
+  } finally { ui?.restore(); await a.close(); }
+});
+
+test('Achats: the views are reachable by URL and translated', () => {
   const ws = src('views-workspace.js');
-  assert.match(ws, /\['inbox', 'to_pay', 'paid', 'credit_notes'\]\.includes\(q\.get\('tab'\)\)/, 'the tab is reachable by URL (#/purchases?tab=credit_notes)');
-  assert.match(ws, /\['paid', 'Paid'\], \['credit_notes', 'Credit notes'\], \['analytics', 'Analytics'\]/, 'top tab row');
-  assert.match(ws, /\['paid', 'Paid'\], \['credit_notes', 'Credit notes'\]\]\.forEach/, 'queue tab row');
-  assert.match(ws, /tab === 'credit_notes' \? r\.rows\.filter\(\(x\) => x\.documentType === 'CREDIT_NOTE'\)/, 'rows = credit notes of the purchases scope (validated)');
-  assert.match(ws, /tab === 'to_pay' \? r\.rows\.filter\(\(x\) => x\.status === 'TO_PAY'\)/, '"To pay" is unchanged: status TO_PAY only');
-  const fr = src('lang-fr.js'); assert.match(fr, /'Credit notes': 'Avoirs'|"Credit notes": "Avoirs"/);
+  assert.match(ws, /let tab = q\.get\('tab'\) === 'analytics' \? 'analytics' : PURCHASE_TABS\[q\.get\('tab'\)\] \? q\.get\('tab'\) : 'inbox';/);
+  assert.match(ws, /rows = r\.rows\.filter\(view\.keep\);/);
+  const fr = src('lang-fr.js'); assert.match(fr, /"Validated documents": "Validées"/); assert.match(fr, /'Credit notes': 'Avoirs'|"Credit notes": "Avoirs"/);
+  assert.match(src('lang-nl.js'), /"Validated documents": "Gevalideerd"/);
 });

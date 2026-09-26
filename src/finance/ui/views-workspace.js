@@ -418,8 +418,18 @@ function importDocumentsModal(done) {
   input.addEventListener('change', () => send([...input.files])); drop.addEventListener('drop', (e) => send([...e.dataTransfer.files]));
   modal(tt('Import supplier documents'), h('div', null, drop, input, status), (close) => [h('button', { on: { click: close } }, tt('Close'))]);
 }
+// Achats queue views. Each purchase document appears in exactly one of them:
+//   To handle = RECEIVED / TO_REVIEW / REJECTED (any type) | Validated = validated invoice / receipt, not yet scheduled for payment
+//   To pay = TO_PAY | Paid = PAID | Credit notes = validated supplier credit notes (never "to pay").
+const PURCHASE_TABS = {
+  inbox: { label: 'To handle', scope: 'inbox', keep: () => true },
+  validated: { label: 'Validated documents', scope: 'purchases', keep: (r) => r.status === 'VALIDATED' && r.documentType !== 'CREDIT_NOTE' },
+  to_pay: { label: 'To pay', scope: 'purchases', keep: (r) => r.status === 'TO_PAY' },
+  paid: { label: 'Paid', scope: 'purchases', keep: (r) => r.status === 'PAID' },
+  credit_notes: { label: 'Credit notes', scope: 'purchases', keep: (r) => r.documentType === 'CREDIT_NOTE' },
+};
 async function viewPurchasesWorkspace(q) {
-  let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid', 'credit_notes'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
+  let tab = q.get('tab') === 'analytics' ? 'analytics' : PURCHASE_TABS[q.get('tab')] ? q.get('tab') : 'inbox';
   let text = '';
   let selectedId = null;
   const shell = h('div', { class: 'page-shell premium' });
@@ -450,7 +460,7 @@ async function viewPurchasesWorkspace(q) {
   }
   function drawTabs() {
     clear(tabsrow);
-    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['credit_notes', 'Credit notes'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+    [...Object.entries(PURCHASE_TABS).map(([v, t]) => [v, t.label]), ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
   }
   // Real inline preview of the actual uploaded source document (image or PDF via the existing, already-used
   // /api/inbox/:id/file route) - never a fabricated document image. Anything else gets an honest fallback
@@ -489,7 +499,7 @@ async function viewPurchasesWorkspace(q) {
     }
     function drawQueue() {
       clear(queueTabs); clear(queueList);
-      [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['credit_notes', 'Credit notes']].forEach(([v, l]) => queueTabs.appendChild(h('button', { type: 'button', class: tab === v ? 'active' : '', on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); loadRows(); } } }, tt(l), ' ', String(v === 'inbox' ? rows.filter((r) => ['RECEIVED', 'TO_REVIEW'].includes(r.status)).length : v === 'to_pay' ? rows.filter((r) => r.status === 'TO_PAY').length : v === 'credit_notes' ? rows.filter((r) => r.documentType === 'CREDIT_NOTE').length : rows.filter((r) => r.status === 'PAID').length))));
+      Object.entries(PURCHASE_TABS).map(([v, t]) => [v, t.label]).forEach(([v, l]) => queueTabs.appendChild(h('button', { type: 'button', class: tab === v ? 'active' : '', on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); loadRows(); } } }, tt(l), ' ', String(v === 'inbox' ? rows.filter((r) => ['RECEIVED', 'TO_REVIEW'].includes(r.status)).length : rows.filter(PURCHASE_TABS[v].keep).length))));
       const s = text.trim().toLowerCase();
       const filtered = rows.filter((r) => !s || `${r.supplierName || ''} ${r.invoiceNumber || ''}`.toLowerCase().includes(s));
       if (!filtered.length) { queueList.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 22)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
@@ -500,10 +510,10 @@ async function viewPurchasesWorkspace(q) {
         h('div', { class: 'queue-money' }, h('b', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : '—'), docTypeChip(r), inboxBadge(r.status)))));
     }
     function loadRows() {
-      const scope = tab === 'inbox' ? 'inbox' : 'purchases';
-      api('GET', `/api/inbox?scope=${scope}`).then((r) => {
-        // Avoirs: validated supplier credit notes. A credit note never becomes TO_PAY, so without this tab it would leave every queue once validated.
-        rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : tab === 'credit_notes' ? r.rows.filter((x) => x.documentType === 'CREDIT_NOTE') : r.rows;
+      const view = PURCHASE_TABS[tab];
+      api('GET', `/api/inbox?scope=${view.scope}`).then((r) => {
+        // Avoirs: a credit note never becomes TO_PAY; Validées: a validated invoice stays visible until it is marked to pay.
+        rows = r.rows.filter(view.keep);
         drawQueue();
         if (rows.length) selectRow(selectedId && rows.some((r2) => r2.id === selectedId) ? selectedId : rows[0].id);
         else { clear(preview); preview.appendChild(h('div', { class: 'muted small' }, tt('Select a document to preview it here.'))); clear(formPane); formPane.appendChild(h('div', { class: 'muted small' }, tt('Select a document from the queue to review it here.'))); }
