@@ -2,6 +2,7 @@
 // Benchmark runner for "Demander à Nordla" providers.
 //
 //   node benchmark/ask/run.js --provider oracle [--repeats 3]                      harness check: the scripted oracle, no model, no network (always allowed)
+//   ... add --preflight-only to run ONLY the preflight (same checks, then exit 0: no provider, no request, no report)
 //   node benchmark/ask/run.js --provider <adapter.js> --config <cfg> --smoke       the SMOKE test of a real provider: 3 fixed cases, 1 repetition, hard caps
 //   node benchmark/ask/run.js --provider <adapter.js> --config <cfg> --max-requests N [--repeats 3]   a real-provider run with an explicit request cap
 //
@@ -79,7 +80,10 @@ if (!isOracle) {
   for (const [k, v] of Object.entries(pre.summary)) console.log(`${k}: ${v}`);
   console.log('');
   priced = pre.priced;
+  // --preflight-only: the same preflight, then stop - no provider, no dataset, no report, no request
+  if (flag('preflight-only')) { console.log('Preflight only: nothing was created, no request was sent, no report was written.'); process.exit(0); }
 }
+if (isOracle && flag('preflight-only')) fail('--preflight-only applies to a real provider (the oracle has nothing to check)');
 const budget = !isOracle ? createBudget({ maxRequests, maxCostUsd: priced ? maxCostUsd : null }) : null;
 
 const { tools } = await createBenchmarkTools();

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -139,4 +139,24 @@ test('a passing preflight prints the safe summary; the only network attempt is t
   assert.ok(!(r.stdout + r.stderr).includes(REAL_LOOKING_KEY) && !(r.stdout + r.stderr).includes(REAL_LOOKING_KEY.slice(-8)), 'the key is never printed');
   assert.ok(existsSync(marker) && readFileSync(marker, 'utf8').split('\n')[0] === 'fetch api.openai.com', 'the trap caught the run\'s own first request (after the PASS)');
   const out = JSON.parse(readFileSync(path.join(dir, 'o.json'), 'utf8')); assert.equal(out.meta.run.budget.requests <= 12, true);
+});
+
+test('--preflight-only: same preflight, prints the safe summary, exits 0 with a VALID config - and no network, no provider, no report is possible (every network primitive is trapped)', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'preflight-only-')); const marker = path.join(dir, 'attempt.txt'); const trap = path.join(dir, 'trap.mjs');
+  writeFileSync(trap, `import net from 'node:net'; import tls from 'node:tls'; import dns from 'node:dns'; import http from 'node:http'; import https from 'node:https'; import { appendFileSync } from 'node:fs';
+const hit = (what) => { appendFileSync(${JSON.stringify(marker)}, what + '\\n'); throw new Error('NETWORK ATTEMPT: ' + what); };
+globalThis.fetch = (...a) => hit('fetch');
+net.Socket.prototype.connect = function () { return hit('net.connect'); }; net.connect = () => hit('net.connect'); net.createConnection = () => hit('net.createConnection'); tls.connect = () => hit('tls.connect');
+dns.lookup = () => hit('dns.lookup'); dns.resolve = () => hit('dns.resolve'); http.request = () => hit('http.request'); https.request = () => hit('https.request'); http.get = () => hit('http.get'); https.get = () => hit('https.get');
+`);
+  const conf = path.join(dir, 'c.json'); writeFileSync(conf, JSON.stringify(cfg())); const out = path.join(dir, 'report.json'); const resultsDir = path.join(ROOT, 'benchmark/ask/results');
+  const before = existsSync(resultsDir) ? readdirSync(resultsDir).length : 0;
+  const run = (env, extra = []) => spawnSync(process.execPath, ['--import', pathToFileURL(trap).href, path.join(ROOT, 'benchmark/ask/run.js'), '--provider', path.join(ROOT, 'benchmark/ask/adapters/openai.js'), '--config', conf, '--smoke', '--preflight-only', '--out', out, ...extra], { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, ...env } });
+  const ok = run({ NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', OPENAI_API_KEY: REAL_LOOKING_KEY }); assert.equal(ok.status, 0, ok.stderr);
+  for (const line of ['Provider: openai', 'Model: gpt-6-sol', 'Endpoint: https://api.openai.com/v1/responses', 'API key: present', 'Provider calls: enabled', 'Preflight: PASS', 'no request was sent']) assert.ok(ok.stdout.includes(line), line);
+  assert.ok(!ok.stdout.includes('budget:') && !/^#\d/m.test(ok.stdout), 'no case was run'); assert.ok(!(ok.stdout + ok.stderr).includes(REAL_LOOKING_KEY.slice(0, 10)));
+  assert.equal(existsSync(marker), false, 'no network primitive was touched'); assert.equal(existsSync(out), false, 'no report'); assert.equal(existsSync(resultsDir) ? readdirSync(resultsDir).length : 0, before, 'no report in results/');
+  const bad = run({ NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1' }); assert.equal(bad.status, PREFLIGHT_EXIT_CODE); assert.match(bad.stderr, /^PREFLIGHT FAILED — OPENAI_API_KEY is missing/);
+  const oracle = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--preflight-only'], { encoding: 'utf8' }); assert.equal(oracle.status, 2);
+  assert.equal(existsSync(marker), false);
 });
