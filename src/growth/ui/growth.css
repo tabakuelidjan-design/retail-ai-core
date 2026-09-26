@@ -1,0 +1,118 @@
+/* Nordla Growth - only what Analytics Premium's stylesheet (served as /style.css) does not already have.
+   Everything visual (cards, KPI tiles, tabs, tables, chips, rail, charts) comes from that stylesheet and the
+   shared tokens; this file adds the Growth grid, a few list-row details and small tone variants of existing
+   chips. Every selector is namespaced .gr-* (or scoped under one) so nothing here can leak into another module. */
+
+/* ---- grids (same 16px gaps and 900/560 breakpoints as Explorer; 2 columns from 901px, 3 from 1360px) ---- */
+.gr-grid { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-grid > .ex-card { display: flex; flex-direction: column; }
+@media (min-width: 901px) {
+  .gr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-grid > :first-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1360px) {
+  .gr-grid-main { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-grid-wide { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-grid > :first-child { grid-column: auto; }
+}
+
+/* ---- KPI row: 5 of Explorer's tiles. 5 columns when they fit, else 3 + 2 (full rows), 2, 1 ---- */
+.ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.gr-kpi-row > .ex-kpi { grid-column: span 2; }
+.gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: span 3; }
+@media (min-width: 1360px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .gr-kpi-row > .ex-kpi, .gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+  .gr-kpi-row .ex-kpi { gap: 12px; padding: 18px 16px; }
+  .gr-kpi-row .ex-kpi-ico { width: 46px; height: 46px; }
+  .gr-kpi-row .ex-kpi-ico .nordla-icon { width: 24px; height: 24px; }
+}
+@media (max-width: 900px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-kpi-row > .ex-kpi, .gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+  .gr-kpi-row > .ex-kpi:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: minmax(0, 1fr); }
+}
+.ex-delta.gr-kpi-note { display: block; }
+.gr-kpi-note strong { color: var(--chart-navy); margin-right: 4px; }
+.gr-kpi-note.good strong { color: var(--chart-positive); }
+.gr-kpi-note.warn strong { color: var(--chart-terracotta); }
+
+/* ---- card titles with their official icon (same weight/size as .ex-card-head h3) ---- */
+.gr-card-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+/* ---- Growth Pulse ---- */
+.gr-pulse-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 6px; }
+.gr-pulse-aside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--chart-slate); text-align: right; padding-bottom: 3px; }
+.gr-pulse-aside strong { font-size: 15px; font-weight: 700; color: var(--chart-navy); }
+.gr-pulse .nc-wrap, .gr-pulse > .nc-chart { margin-top: auto; }
+
+/* ---- list rows (Explorer's .ex-mover) ---- */
+.gr-row { align-items: flex-start; }
+.gr-row .ex-mover-name { line-height: 1.35; }
+.gr-wrap { line-height: 1.5; }
+.gr-ico { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 50%; background: #F4F6F8; display: grid; place-items: center; }
+.gr-ico .nordla-icon { width: 20px; height: 20px; }
+.gr-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; margin-top: 6px; background: var(--chart-slate); }
+.gr-dot.good { background: var(--chart-positive); }
+.gr-dot.warn { background: var(--chart-terracotta); }
+.gr-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; flex: 0 0 auto; font-size: 11.5px; }
+.gr-side strong { font-size: 14px; font-weight: 700; color: var(--chart-navy); white-space: nowrap; }
+.gr-muted { color: var(--chart-slate); font-size: 11.5px; }
+.gr-ink { color: var(--chart-navy); }
+.gr-pos { color: var(--chart-positive) !important; }
+.gr-att-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; }
+.gr-action { padding: 5px 10px; font-size: 12px; flex: 0 0 auto; white-space: nowrap; margin-left: auto; }
+.gr-action[disabled] { cursor: not-allowed; opacity: .75; }
+.ex-mover-delta .ex-chip { margin-top: 3px; }
+
+/* Tone variants of Explorer's .ex-chip (verified positive = green token, watch = terracotta tint = the default chip). */
+.ex-chip.gr-good { background: color-mix(in srgb, var(--chart-positive) 12%, #fff); color: var(--chart-positive); }
+.ex-chip.gr-warn { background: color-mix(in srgb, var(--chart-terracotta) 12%, #fff); color: var(--chart-terracotta); border: 1px solid color-mix(in srgb, var(--chart-terracotta) 35%, #fff); }
+
+/* ---- channel mark: PLACEHOLDER monogram until the official platform logo files are supplied ---- */
+.gr-ch { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 8px; background: #F4F6F8; border: 1px solid var(--border); display: grid; place-items: center; font: 700 10px var(--font-ui); letter-spacing: .02em; color: var(--chart-navy); }
+/* Official logo file, once supplied (CHANNEL_LOGOS): same 28px slot, never stretched. */
+.gr-ch.gr-ch-logo { background: #fff; padding: 3px; object-fit: contain; }
+.gr-ch-cell { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; line-height: 1.3; }
+.gr-unit { display: block; font-size: 10.5px; color: var(--chart-slate); }
+.gr-table { min-width: 380px; }
+.gr-table th, .gr-table td { padding-left: 8px; padding-right: 8px; }
+.ex-table.gr-table th { white-space: normal; line-height: 1.3; vertical-align: bottom; letter-spacing: .03em; }
+.gr-table td { padding-top: 9px; padding-bottom: 9px; }
+.gr-table td:nth-child(2) { min-width: 0; } /* Explorer's product-name column rule does not apply here */
+.gr-table th:first-child, .gr-table td:first-child { padding-left: 0; }
+.gr-table th:last-child, .gr-table td:last-child { padding-right: 0; }
+.gr-budget { max-width: 220px; margin: 7px 0 4px; }
+.gr-thumb { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; background: #F4F6F8; border: 1px solid var(--border); }
+.gr-thumb .gr-ch { border: 0; background: transparent; }
+
+/* ---- Store growth: three KPI sparklines side by side, stacking on narrow cards ---- */
+.gr-store-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px 18px; }
+.gr-store-metric { min-width: 0; padding: 4px 0; }
+.gr-store-value { font-family: var(--font-ui); font-size: 22px; font-weight: 700; color: var(--chart-navy); line-height: 1.2; margin: 4px 0 4px; }
+.gr-store-metric .kpi-spark { height: auto; margin-top: 8px; }
+
+/* ---- rail: the Nordla AI entry keeps the terracotta chip (Analytics' "Parle à Nordla" treatment) ---- */
+.nav-item.gr-ai .ico { background: var(--nordla-menu-active); }
+.nav-item.gr-ai.inert .ico { opacity: 1; }
+/* Secondary zone (Nordla AI, Settings) at the bottom of the rail; in the mobile bottom bar it takes one slot of five. */
+@media (min-width: 901px) { .sidebar .nav.gr-nav-foot { margin-top: auto; } }
+@media (max-width: 900px) { .nav-item.gr-desktop-only { display: none; } .sidebar .nav.gr-nav-foot { flex: 0 0 20%; } }
+
+.gr-demo { white-space: nowrap; }
+/* Analytics' mobile topbar flattens .topbar-right (display: contents) and orders its children: keep the demo flag after the title. */
+@media (max-width: 900px) { .topbar-right .gr-demo { order: 1; } }
+.gr-demo-short { display: none; }
+@media (max-width: 560px) { .gr-demo-long { display: none; } .gr-demo-short { display: inline; } }
+
+@media (max-width: 560px) {
+  .gr-row { flex-wrap: wrap; }
+  .gr-row .ex-mover-main { flex: 1 1 0; }
+  .gr-side { align-items: flex-start; text-align: left; flex-direction: row; flex-wrap: wrap; gap: 4px 10px; flex-basis: 100%; padding-left: 48px; }
+  .gr-camps .gr-side, .gr-content .ex-mover-delta { padding-left: 40px; }
+  .gr-content .ex-mover-delta { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; text-align: left; }
+  .gr-pulse-aside { align-items: flex-start; text-align: left; }
+}
