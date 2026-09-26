@@ -15,6 +15,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { createStaticAssets } from './static-assets.js';
+import { createRequestReadCache } from './request-read-cache.js';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
@@ -65,7 +66,10 @@ const cents = (c) => formatCents(c);
  * @param {object} deps { merchantId, store, token, settings: {load, save, saveLogo}, retail?, retailConfig, timeZone, clock?, audit?, retailHistory?, lookupProviders?, allowedHosts?, secureCookie?, trustProxyHops?, syncStatus? }
  */
 export function createFinanceApp(deps) {
-  const { merchantId, store, token, settings: settingsIo, retail = null, retailConfig, timeZone = 'UTC', retailHistory = async () => null } = deps;
+  const { merchantId, token, settings: settingsIo, retail = null, retailConfig, timeZone = 'UTC', retailHistory = async () => null } = deps;
+  // Same store, but identical reads within one request hit the database once (see request-read-cache.js).
+  const readCache = createRequestReadCache();
+  const store = readCache.wrap(deps.store);
   if (!token || String(token).length < 24) throw new Error('FINANCE_DASHBOARD_TOKEN must be set (at least 24 characters)');
   const clock = deps.clock ?? { now: () => new Date().toISOString(), today: () => new Date().toISOString().slice(0, 10) };
   const audit = deps.audit ?? (async () => {});
@@ -1224,7 +1228,8 @@ export function createFinanceApp(deps) {
     return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
   }
 
-  async function handler(req, res) {
+  const handler = (req, res) => readCache.run(() => handleRequest(req, res));
+  async function handleRequest(req, res) {
     try {
       const host = req.headers.host ?? '';
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
