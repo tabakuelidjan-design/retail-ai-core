@@ -526,15 +526,18 @@ export function extractFromPdfLines(pages, own = {}) {
           if (ex) lineNet = Math.round(Math.abs(amountsIn(ex.text)[0].cents) * (exclIsUnit && Number.isInteger(q) ? q : 1));
         }
         found.push({ position: found.length + 1, id: null, description, quantity: qty ? qty.text.trim().replace(',', '.') : null, unitCode: null,
-          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l });
+          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l, _amounts: amountsIn(l.text).length });
         pending = null;
       }
-      if (found.length) { items = found; break; }
+      // when most rows carry several amounts (quantity, price, total), a row with a single amount is a group subtotal or a reference, not a line
+      const multi = found.filter((r) => r._amounts >= 2).length;
+      const rows = multi >= 2 && multi > found.length / 2 ? found.filter((r) => r._amounts >= 2).map((r, i) => ({ ...r, position: i + 1 })) : found;
+      if (rows.length) { items = rows; break; }
     }
     if (items.length) {
       const sum = items.reduce((a, it) => a + it.netCents, 0); const net = f.netCents?.value;
       const ok = Number.isInteger(net) && sum === net;
-      put('lines', items.map(({ _line, ...it }) => it), ok ? 0.7 : Number.isInteger(net) ? 0.4 : 0.5, items[0]._line, 'ITEMS_TABLE');
+      put('lines', items.map(({ _line, _amounts, ...it }) => it), ok ? 0.7 : Number.isInteger(net) ? 0.4 : 0.5, items[0]._line, 'ITEMS_TABLE');
       if (Number.isInteger(net) && !ok) warnings.push('LINES_DO_NOT_ADD_UP');
     }
   }
