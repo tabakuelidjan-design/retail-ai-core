@@ -658,7 +658,7 @@ function matchActions(s, reload) {
   return acts;
 }
 /** "Connect a bank": always opens a real workflow - the automatic connection when a provider is configured, the CSV statement import otherwise. Never simulates a connection. */
-function openBankConnectModal(st, getCsvField) {
+function openBankConnectModal(st, getCsvImporter) {
   const plan = bankConnectPlan(st);
   const err = h('div', { class: 'banner bad small', style: 'display:none', role: 'alert' });
   const body = h('div', { class: 'bank-connect', style: 'display:grid;gap:14px' },
@@ -679,9 +679,87 @@ function openBankConnectModal(st, getCsvField) {
         location.assign(url);
       } catch (e) { ev.target.disabled = false; err.textContent = tt('The bank connection could not be started. Nothing was connected.'); err.style.display = ''; }
     } } }, tt('Connect with my bank')) : null,
-    plan.csvImport ? h('button', { type: 'button', on: { click: () => { close(); const f = getCsvField(); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } } } }, tt('Import a CSV statement')) : null,
+    // Opens the real file picker (same click = same user gesture, so the browser allows it); the paste box stays available below.
+    plan.csvImport ? h('button', { type: 'button', on: { click: () => { close(); const imp = getCsvImporter(); if (imp) imp.pickFile(); } } }, tt('Import a CSV statement')) : null,
     h('button', { type: 'button', on: { click: close } }, tt('Cancel'))]);
   return back;
+}
+
+/**
+ * Bank statement CSV import - two ways in, ONE path: choose a .csv file, or paste CSV text. Both are previewed by the backend
+ * (POST /api/bank/import-csv/preview, which writes nothing) and only imported after the merchant confirms (POST /api/bank/import-csv,
+ * all-or-nothing, idempotent). Nothing is sent anywhere else. See bank-csv.js for the DOM-free rules.
+ */
+function bankCsvImporter(onImported) {
+  const cents = (c) => fmtMoney(c, 'EUR'); // same formatting as the bank ledger below
+  const fileInput = h('input', { type: 'file', accept: CSV_ACCEPT, class: 'csv-file-input', tabindex: '-1', 'aria-hidden': 'true' });
+  const fileName = h('span', { class: 'muted small csv-file-name' }, tt('No file chosen'));
+  const pickBtn = h('button', { type: 'button', class: 'primary', on: { click: () => fileInput.click() } }, tt('Choose a CSV file'));
+  const paste = h('textarea', { rows: 4, placeholder: tt('Paste your bank statement CSV export here'), 'aria-label': tt('Or paste CSV data') });
+  const out = h('div', { class: 'csv-preview', 'aria-live': 'polite' });
+  const previewBtn = h('button', { type: 'button', on: { click: () => { fileInput.value = ''; fileName.textContent = tt('No file chosen'); run(paste.value, tt('Pasted data')); } } }, tt('Preview'));
+
+  function reset() { clear(out); fileInput.value = ''; fileName.textContent = tt('No file chosen'); }
+  function problem(code) { clear(out); out.appendChild(h('div', { class: 'banner bad small', role: 'alert' }, human(code))); }
+
+  async function run(text, sourceLabel) {
+    const bad = csvTextProblem(text); if (bad) return problem(bad);
+    clear(out); out.appendChild(h('div', { class: 'muted small' }, tt('Reading the statement...')));
+    let pv; try { pv = await api('POST', '/api/bank/import-csv/preview', { csv: text }); } catch (e) { return fail(e, out); }
+    render(pv, text, sourceLabel);
+  }
+
+  function render(pv, text, sourceLabel) {
+    clear(out);
+    const plan = csvImportPlan(pv);
+    const errBox = h('div', { class: 'csv-import-error', role: 'alert' }); // an import failure is shown here; the preview stays on screen
+    const colText = ['date', 'amount', 'counterparty', 'reference', 'id'].filter((k) => pv.columns[k]).map((k) => `${tt(`CSV column ${k}`)}: ${pv.columns[k]}`).join(' / ');
+    out.appendChild(h('div', { class: 'card', style: 'padding:14px 16px;margin-top:10px' },
+      h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, tt('Statement preview')), h('span', { class: 'chip mute' }, sourceLabel)),
+      h('div', { class: 'kv' },
+        h('div', null, tt('Lines detected')), h('div', null, String(pv.dataLines)),
+        h('div', null, tt('Period covered')), h('div', null, pv.period ? `${pv.period.from} - ${pv.period.to}` : tt('Not determined')),
+        h('div', null, tt('Recognised columns')), h('div', null, colText || '-'),
+        h('div', null, tt('Invalid lines')), h('div', null, String(pv.invalid.length)),
+        h('div', null, tt('Already imported')), h('div', null, String(pv.duplicates.alreadyImported)),
+        h('div', null, tt('Repeated in the file')), h('div', null, String(pv.duplicates.inFile)),
+        h('div', null, tt('New transactions')), h('div', null, h('strong', null, String(pv.importable)))),
+      pv.invalid.length ? h('div', { class: 'banner bad small', role: 'alert', style: 'margin-top:10px' },
+        h('div', null, tt('Nothing will be imported while the file has invalid lines. Fix them in the file and try again.')),
+        h('ul', { class: 'plain' }, pv.invalid.slice(0, 8).map((e) => h('li', null, tt('Line {0}: {1}', e.line, tt(csvRowReason(e.reason)))))),
+        pv.invalid.length > 8 ? h('div', null, tt('and {0} more', pv.invalid.length - 8)) : null) : null,
+      !pv.invalid.length && !pv.importable ? h('div', { class: 'banner info small', style: 'margin-top:10px' }, tt('All these transactions are already imported: there is nothing new.')) : null,
+      pv.sample.length ? h('div', { class: 'table-wrap', style: 'margin-top:10px' }, h('table', { class: 'table' },
+        h('thead', null, h('tr', null, h('th', null, tt('Line')), h('th', null, tt('Date')), h('th', { class: 'num' }, tt('Amount')), h('th', null, tt('Counterparty')))),
+        h('tbody', null, pv.sample.map((r) => h('tr', null, h('td', null, String(r.line)), h('td', null, r.date), h('td', { class: 'num' }, cents(r.amountCents)), h('td', null, r.counterpartyName || '-')))))) : null,
+      errBox,
+      h('div', { class: 'actions', style: 'margin-top:12px' },
+        h('button', { type: 'button', class: 'primary csv-confirm', disabled: plan.canImport ? null : 'disabled', on: { click: async (ev) => {
+          ev.target.disabled = true; clear(errBox);
+          try {
+            const r = await api('POST', '/api/bank/import-csv', { csv: text });
+            reset(); paste.value = '';
+            toast(r.duplicates ? tt('{0} transaction(s) imported, {1} already present', r.created, r.duplicates) : tt('{0} transaction(s) imported', r.created), 'ok');
+            onImported();
+          } catch (e) { ev.target.disabled = false; fail(e, errBox); }
+        } } }, plan.canImport ? tt('Import {0} transaction(s)', plan.count) : tt('Import')),
+        h('button', { type: 'button', class: 'csv-cancel', on: { click: reset } }, tt('Cancel')))));
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const f = fileInput.files && fileInput.files[0]; if (!f) return;
+    fileName.textContent = f.name;
+    const bad = csvFileProblem(f); if (bad) return problem(bad);
+    let text; try { text = await f.text(); } catch (e) { return problem('BANK_CSV_FILE_UNREADABLE'); }
+    run(text, f.name);
+  });
+
+  const el = h('div', { class: 'csv-import', style: 'margin-top:12px;display:grid;gap:10px' },
+    h('h3', { class: 'section-title', style: 'margin:0' }, tt('Import a bank statement (CSV) - no bank connection needed')),
+    h('div', { class: 'field' }, h('label', null, tt('Import a CSV file')), h('div', { class: 'actions', style: 'align-items:center;flex-wrap:wrap' }, pickBtn, fileName, fileInput)),
+    h('div', { class: 'field' }, h('label', null, tt('Or paste CSV data')), paste, h('div', { class: 'actions', style: 'margin-top:8px' }, previewBtn)),
+    out);
+  return { el, pickFile: () => { el.scrollIntoView({ block: 'center' }); fileInput.click(); }, fileInput, paste };
 }
 
 /** The user is back from the bank (?code&state, or ?error): success is only claimed after the backend really stored a consent. */
@@ -716,10 +794,9 @@ async function viewBank() {
         h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
         h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
     } else {
-      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', type: 'button', on: { click: () => openBankConnectModal(st, () => csv) } }, tt('Connect a bank'))));
-      const csv = h('textarea', { rows: 4, placeholder: tt('Paste your bank statement CSV export here') });
-      connCard.appendChild(h('div', { class: 'field', style: 'margin-top:10px' }, h('label', null, tt('Or import a CSV statement (no bank connection needed)')), csv,
-        h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/bank/import-csv', { csv: csv.value }); toast(tt('{0} transaction(s) imported', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Import CSV'))));
+      const importer = bankCsvImporter(() => draw());
+      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', type: 'button', on: { click: () => openBankConnectModal(st, () => importer) } }, tt('Connect a bank'))));
+      connCard.appendChild(importer.el);
     }
     box.appendChild(connCard);
     const cashCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));

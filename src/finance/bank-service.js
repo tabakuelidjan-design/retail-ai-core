@@ -8,6 +8,7 @@ import { suggest } from './reconcile.js';
 import { buildTreasury } from './treasury.js';
 import { eurOfSupplier } from './currency.js';
 
+const CSV_ACCOUNT = 'csv-import'; // every CSV statement lands in this pseudo-account (idempotence key: account + transaction id)
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 
 /**
@@ -61,11 +62,26 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       await audit({ at: clock.now(), action: 'BANK_SYNC', created: r.created });
       return r;
     },
+    /**
+     * CSV preview: parses and compares with what is already stored - WRITES NOTHING. The merchant sees the lines, the period, the recognised
+     * columns, the invalid lines and the duplicates before deciding to import. Both the file picker and the paste box go through here.
+     */
+    async previewCsv(text) {
+      const p = parseBankCsv(text);
+      const existing = new Set((await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT).map((t) => String(t.providerTxId)));
+      const seen = new Set(); let inFile = 0; let already = 0; let importable = 0;
+      for (const r of p.rows) { if (seen.has(r.id)) inFile += 1; else if (existing.has(String(r.id))) already += 1; else importable += 1; seen.add(r.id); }
+      return { dataLines: p.dataLines, validRows: p.rows.length, invalid: p.errors, period: p.period, columns: p.columns, delimiter: p.delimiter,
+        duplicates: { alreadyImported: already, inFile }, importable,
+        sample: p.rows.slice(0, 5).map((r) => ({ line: r.line, date: r.date, amountCents: r.amountCents, counterpartyName: r.counterpartyName, reference: r.reference })) };
+    },
+    /** All-or-nothing: a file with ANY invalid line imports nothing (never a silent partial import). Idempotent: known transactions are skipped. */
     async importCsv(text) {
       const { rows, errors } = parseBankCsv(text);
-      const created = await store1('csv-import', rows, 'csv');
-      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created, rejected: errors.length });
-      return { created, duplicates: rows.length - created, rejected: errors };
+      if (errors.length) throw new FinanceError('BANK_CSV_ROWS_INVALID', errors.map((e) => `${e.line}:${e.reason}`).join(',').slice(0, 500));
+      const created = await store1(CSV_ACCOUNT, rows, 'csv');
+      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created, duplicates: rows.length - created });
+      return { created, duplicates: rows.length - created, rejected: [] };
     },
     async transactions(f = {}) { return (await store.listBankTransactions({ merchantId, ...f })).sort((a, b) => String(b.date).localeCompare(String(a.date))); },
     async suggestions() {

@@ -87,27 +87,67 @@ export function createConsentVault({ store, merchantId, key, now = () => new Dat
 }
 
 // ---------- CSV statement import: the no-credentials route ----------
-/** Bank CSV exports (downloaded by the merchant) parsed into transactions. Read-only by nature: no bank access at all. */
+/**
+ * Bank CSV exports (downloaded by the merchant) parsed into transactions. Read-only by nature: no bank access at all.
+ *
+ * What is supported (generic, no bank-specific format):
+ *   - header on the FIRST non-empty line; columns found by name (FR / NL / EN): date (date, datum, valeur), amount (amount, montant,
+ *     bedrag) - both required -, and optional reference, counterparty and id columns
+ *   - delimiter ';' or ',' (whichever splits the header into more cells), or given explicitly; double-quoted cells
+ *   - dates YYYY-MM-DD or DD/MM/YYYY (also DD.MM.YYYY, DD-MM-YYYY); an impossible calendar date (31/13/2026) is rejected
+ *   - amounts with a decimal comma or point (12,50 / 12.50 / -1.234,56 / 1,234.56); a leading minus is a debit;
+ *     at most 2 decimals - a trailing group of 3 digits is read as thousands (1.234 = 1234,00)
+ *   - text must be valid UTF-8 (a U+FFFD replacement character means the file was decoded with the wrong encoding and is refused)
+ * Not supported (reported, never guessed): introduction lines before the header, separate debit / credit columns, 2-digit years.
+ *
+ * Every data line becomes either a row or an error (line number + reason): nothing is dropped silently. `id` comes from the file's
+ * id column only when its values are present and unique across the file; otherwise a content hash (date|amount|reference|counterparty).
+ */
 export function parseBankCsv(text, { delimiter, columns } = {}) {
-  const lines = String(text ?? '').split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) throw new FinanceError('BANK_CSV_EMPTY');
-  const delim = delimiter ?? (lines[0].split(';').length > lines[0].split(',').length ? ';' : ',');
+  const raw = String(text ?? '').replace(/^\uFEFF/, '');
+  if (raw.includes('\uFFFD')) throw new FinanceError('BANK_CSV_ENCODING_INVALID');
+  const all = raw.split(/\r?\n/);
+  const numbered = all.map((l, i) => ({ l, n: i + 1 })).filter((x) => x.l.trim());
+  if (numbered.length < 2) throw new FinanceError('BANK_CSV_EMPTY');
+  const headLine = numbered[0].l;
+  const delim = delimiter ?? (headLine.split(';').length > headLine.split(',').length ? ';' : ',');
   const cells = (l) => { const out = []; let cur = ''; let q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === delim && !q) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()); };
-  const head = cells(lines[0]).map((h) => h.toLowerCase());
+  const headRaw = cells(headLine); const head = headRaw.map((h) => h.toLowerCase());
   const pick = (names) => head.findIndex((h) => names.some((n) => h.includes(n)));
   const map = { date: columns?.date ?? pick(['date', 'datum', 'valeur']), amount: columns?.amount ?? pick(['amount', 'montant', 'bedrag']), ref: columns?.reference ?? pick(['communication', 'mededeling', 'reference', 'référence', 'message']), name: columns?.counterparty ?? pick(['counterparty', 'contrepartie', 'tegenpartij', 'name', 'nom', 'naam']), id: columns?.id ?? pick(['id', 'transaction', 'number', 'numéro', 'nummer']) };
   if (map.date < 0 || map.amount < 0) throw new FinanceError('BANK_CSV_COLUMNS_NOT_FOUND');
-  const toIso = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d) ?? /^(\d{2})[/.-](\d{2})[/.-](\d{4})/.exec(d); if (!m) return null; return m[1].length === 4 ? `${m[1]}-${m[2]}-${m[3]}` : `${m[3]}-${m[2]}-${m[1]}`; };
-  const toCents = (a) => { let t = String(a).replace(/[^\d,.\-]/g, ''); const neg = t.startsWith('-'); t = t.replace('-', ''); const last = Math.max(t.lastIndexOf(','), t.lastIndexOf('.')); if (last < 0) t = `${t}.00`; else { const dec = t.slice(last + 1); if (dec.length > 2) t = `${t.replace(/[.,]/g, '')}.00`; else t = `${t.slice(0, last).replace(/[.,]/g, '')}.${dec.padEnd(2, '0')}`; } const [i, d] = t.split('.'); const v = Number(i) * 100 + Number(d); return Number.isFinite(v) ? (neg ? -v : v) : null; };
-  const rows = []; const errors = [];
-  lines.slice(1).forEach((l, i) => {
+  const toIso = (d) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d) ?? /^(\d{2})[/.-](\d{2})[/.-](\d{4})$/.exec(d); if (!m) return null;
+    const [y, mo, da] = m[1].length === 4 ? [m[1], m[2], m[3]] : [m[3], m[2], m[1]];
+    const t = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(da)));
+    return t.getUTCFullYear() === Number(y) && t.getUTCMonth() === Number(mo) - 1 && t.getUTCDate() === Number(da) ? `${y}-${mo}-${da}` : null;
+  };
+  const toCents = (a) => {
+    const src = String(a).trim(); if (!/\d/.test(src) || /[a-df-z]/i.test(src.replace(/eur|€/gi, ''))) return null; // letters (other than a currency) = not an amount
+    let t = src.replace(/[^\d,.\-]/g, ''); const neg = t.startsWith('-'); t = t.replace(/-/g, '');
+    const last = Math.max(t.lastIndexOf(','), t.lastIndexOf('.'));
+    if (last < 0) t = `${t}.00`; else { const dec = t.slice(last + 1); if (dec.length > 2) t = `${t.replace(/[.,]/g, '')}.00`; else t = `${t.slice(0, last).replace(/[.,]/g, '')}.${dec.padEnd(2, '0')}`; }
+    const [i, d] = t.split('.'); if (!/^\d+$/.test(i || '') || !/^\d{2}$/.test(d)) return null;
+    const v = Number(i) * 100 + Number(d); return Number.isSafeInteger(v) ? (neg ? -v : v) : null;
+  };
+  const parsed = []; const errors = [];
+  for (const { l, n } of numbered.slice(1)) {
     const c = cells(l); const date = toIso(c[map.date] ?? ''); const amountCents = toCents(c[map.amount] ?? '');
-    if (!date || amountCents === null) { errors.push({ line: i + 2, code: 'ROW_INVALID' }); return; }
-    const reference = map.ref >= 0 ? c[map.ref] : ''; const counterpartyName = map.name >= 0 ? c[map.name] : '';
-    const id = (map.id >= 0 && c[map.id]) ? c[map.id] : createHash('sha256').update(`${date}|${amountCents}|${reference}|${counterpartyName}`).digest('hex').slice(0, 24);
-    rows.push({ id, date, amountCents, currency: 'EUR', counterpartyName, reference, structuredReference: (/\+\+\+\s*(\d{3})\s*\/\s*(\d{4})\s*\/\s*(\d{5})\s*\+\+\+/.exec(reference) ?? []).slice(1).join('') || null });
-  });
-  return { rows, errors };
+    if (!date || amountCents === null) { errors.push({ line: n, code: 'ROW_INVALID', reason: !date ? 'DATE_INVALID' : 'AMOUNT_INVALID' }); continue; }
+    const reference = map.ref >= 0 ? (c[map.ref] ?? '') : ''; const counterpartyName = map.name >= 0 ? (c[map.name] ?? '') : '';
+    parsed.push({ line: n, fileId: map.id >= 0 ? (c[map.id] ?? '') : '', date, amountCents, currency: 'EUR', counterpartyName, reference, structuredReference: (/\+\+\+\s*(\d{3})\s*\/\s*(\d{4})\s*\/\s*(\d{5})\s*\+\+\+/.exec(reference) ?? []).slice(1).join('') || null });
+  }
+  // The file's own id column is only trusted when every row has a distinct value (a "Type de transaction" column would otherwise merge rows).
+  const fileIds = parsed.map((r) => r.fileId);
+  const idsUsable = map.id >= 0 && fileIds.every(Boolean) && new Set(fileIds).size === fileIds.length;
+  const rows = parsed.map(({ line, fileId, ...r }) => ({ id: idsUsable ? fileId : createHash('sha256').update(`${r.date}|${r.amountCents}|${r.reference}|${r.counterpartyName}`).digest('hex').slice(0, 24), line, ...r }));
+  const dates = rows.map((r) => r.date).sort();
+  const colName = (i) => (i >= 0 ? headRaw[i] : null);
+  return {
+    rows, errors, delimiter: delim, dataLines: numbered.length - 1,
+    columns: { date: colName(map.date), amount: colName(map.amount), reference: colName(map.ref), counterparty: colName(map.name), id: idsUsable ? colName(map.id) : null },
+    period: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : null,
+  };
 }
 
 /** A synthetic in-memory bank for tests and the demo. It exposes exactly the read-only contract and nothing else. */

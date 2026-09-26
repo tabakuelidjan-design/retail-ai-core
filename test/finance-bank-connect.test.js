@@ -173,7 +173,8 @@ test('the connect window offers the automatic connection state, the CSV import a
   for (const k of ["tt('Automatic connection')", "tt('No banking service is configured yet for this company.')", "tt('Bank statement import')", "tt('Import a CSV statement')", "tt('Cancel')", "tt('Connect with my bank')"]) assert.ok(m.includes(k), k);
   assert.match(m, /plan\.automatic\s*\?/, 'the automatic button only exists when a provider is configured');
   assert.match(m, /safeAuthorizationUrl/); assert.match(m, /location\.assign\(url\)/);
-  assert.match(m, /close\(\); const f = getCsvField\(\)/, 'the CSV button closes the window and focuses the existing CSV field');
+  // Changed on purpose: the CSV button used to only focus the paste box; it now opens the real file picker (the paste box stays below).
+  assert.match(m, /close\(\); const imp = getCsvImporter\(\); if \(imp\) imp\.pickFile\(\)/, 'the CSV button closes the window and opens the CSV file picker');
   assert.doesNotMatch(m, /\/api\/bank\/consent/, 'the window itself never completes a consent');
 });
 
