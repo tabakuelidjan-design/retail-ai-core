@@ -11,8 +11,8 @@ import { buildXlsx } from './xlsx.js';
 
 /** Every document with its payments and credit notes, ready for settlement maths. */
 export async function loadDocsForReports(store, merchantId) {
-  const docs = await store.listDocuments({ merchantId });
-  const payments = await store.listPaymentsForMerchant(merchantId);
+  // Two independent reads (one database round trip each): fetched in parallel.
+  const [docs, payments] = await Promise.all([store.listDocuments({ merchantId }), store.listPaymentsForMerchant(merchantId)]);
   const byDoc = new Map();
   for (const p of payments) (byDoc.get(p.documentId) ?? byDoc.set(p.documentId, []).get(p.documentId)).push(p);
   return docs.map((doc) => ({ doc, payments: byDoc.get(doc.id) ?? [], creditNotes: docs.filter((d) => d.type === 'credit_note' && d.relatedDocumentId === doc.id) }));

@@ -211,6 +211,8 @@ export function createFinanceApp(deps) {
 
   // ---------- overview ----------
   async function overview(svc, settings) {
+    // Supplier invoices do not depend on the documents: their read starts now, in parallel with the document reads.
+    const supplierInvoicesP = store.listSupplierInvoices(merchantId).catch(() => []);
     // EUR-only: documents in another currency stay visible in their own screens but never enter these totals
     const allDocs = await loadDocsForReports(store, merchantId);
     const docs = allDocs.filter(({ doc }) => isNative(doc, settings.defaults.currency));
@@ -235,7 +237,7 @@ export function createFinanceApp(deps) {
     // merchant has accepted (validated/to pay/paid) in the period. Never a forecast, never interpolated.
     const lastMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
     const invoiceGrossInMonth = (mth) => nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.issueDate?.startsWith(mth) && doc.status !== 'CANCELLED').reduce((a, { doc }) => a + doc.totals.grossCents, 0);
-    const supplierInvoices = await store.listSupplierInvoices(merchantId).catch(() => []);
+    const supplierInvoices = await supplierInvoicesP;
     const accepted = supplierInvoices.filter((s) => ['VALIDATED', 'TO_PAY', 'PAID'].includes(s.status));
     const expenseGrossInMonth = (mth) => accepted.filter((s) => s.issueDate?.startsWith(mth)).reduce((a, s) => a + (eurOfSupplier(s, settings.defaults.currency) ?? 0), 0);
     const pctChange = (cur2, prev) => (prev > 0 ? Math.round(((cur2 - prev) / prev) * 100) : cur2 > 0 ? 100 : 0);
