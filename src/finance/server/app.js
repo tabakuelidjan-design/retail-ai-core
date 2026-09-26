@@ -333,7 +333,10 @@ export function createFinanceApp(deps) {
   });
   on('GET', '/api/session', async (ctx) => {
     const s = sessionOf(ctx.req);
-    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf } : { authenticated: false });
+    // ?include=settings (startup): a signed-in browser also receives exactly what GET /api/settings returns, saving one round trip.
+    // Never included for an anonymous caller.
+    const withSettings = s && ctx.url.searchParams.get('include') === 'settings';
+    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(withSettings ? { settings: await settingsPayload() } : {}) } : { authenticated: false });
   }, { public: true });
 
   on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${cookieFlags}` }); });
@@ -1196,7 +1199,8 @@ export function createFinanceApp(deps) {
 
   // ---------- settings ----------
   const publicSettings = (s) => ({ ...s, branding: { ...s.branding, logoPath: undefined, hasLogo: !!s.branding.logoPath }, peppol: { ...s.peppol, provider: null, status: 'NOT_CONFIGURED' } });
-  on('GET', '/api/settings', async (ctx) => { const s = await settingsIo.load(); json(ctx.res, 200, { settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }); });
+  async function settingsPayload() { const s = await settingsIo.load(); return { settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }; }
+  on('GET', '/api/settings', async (ctx) => json(ctx.res, 200, await settingsPayload()));
   on('PUT', '/api/settings', async (ctx) => {
     const cur = await settingsIo.load();
     const { settings, errors } = validateSettings(ctx.body, cur);

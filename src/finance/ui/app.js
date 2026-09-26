@@ -291,7 +291,8 @@ function layout(active, ...content) {
   return main;
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
-async function loadSettings() { const r = await api('GET', '/api/settings'); state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
+/** @param {object} [pre] a /api/settings payload already received (startup: /api/session?include=settings) */
+async function loadSettings(pre) { const r = pre ?? await api('GET', '/api/settings'); state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
 
 // ---------- login ----------
 function renderLogin() {
@@ -1294,7 +1295,8 @@ try {
 } catch (e) { pendingBankReturn = null; }
 
 async function route() {
-  if (!state.csrf) { try { const s = await api('GET', '/api/session'); if (s.authenticated) { state.csrf = s.csrf; await loadSettings(); } else return renderLogin(); } catch (e) { return renderLogin(); } }
+  // One request instead of two at startup: the session answer carries the settings when signed in.
+  if (!state.csrf) { try { const s = await api('GET', '/api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
   if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {
