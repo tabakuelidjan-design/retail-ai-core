@@ -46,7 +46,7 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/bank-connect.js': ['bank-connect.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -711,8 +711,21 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined }, actor));
   });
   on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => json(ctx.res, 200, txView(await (await bankFor()).ignore(idParam(ctx.m[1]), actor))));
-  on('POST', '/api/bank/connect', async (ctx) => json(ctx.res, 200, await (await bankFor()).beginConsent(`http://${ctx.req.headers.host}/#/bank`, actor)));
-  on('POST', '/api/bank/consent', async (ctx) => json(ctx.res, 200, await (await bankFor()).completeConsent({ code: sanitizeText(ctx.body?.code, 500), state: sanitizeText(ctx.body?.state, 200) }, actor)));
+  // The provider sends the user back to the app root with ?code&state (or ?error): an OAuth redirect URI cannot carry a #fragment. The scheme is https
+  // whenever the app runs behind HTTPS (hosted). Only a well-formed https authorization URL is ever returned to the browser; the state is returned so
+  // the browser can check it on return. No token ever leaves the vault.
+  on('POST', '/api/bank/connect', async (ctx) => {
+    const r = await (await bankFor()).beginConsent(`${deps.secureCookie ? 'https' : 'http'}://${ctx.req.headers.host}/`, actor);
+    let url = null; try { const u = new URL(String(r?.authorizationUrl)); if (u.protocol === 'https:' && u.hostname) url = u.href; } catch { url = null; }
+    if (!url) throw new HttpError(502, 'BANK_PROVIDER_INVALID_AUTHORIZATION_URL');
+    json(ctx.res, 200, { authorizationUrl: url, state: typeof r.state === 'string' ? r.state.slice(0, 200) : null });
+  });
+  on('POST', '/api/bank/consent', async (ctx) => {
+    // A consent is only ever completed from a real return (code AND state): never from an empty request.
+    const code = sanitizeText(ctx.body?.code, 500); const st = sanitizeText(ctx.body?.state, 200);
+    if (!code || !st) fields([{ field: !code ? 'code' : 'state', code: 'REQUIRED' }]);
+    json(ctx.res, 200, await (await bankFor()).completeConsent({ code, state: st }, actor));
+  });
   on('POST', '/api/bank/disconnect', async (ctx) => json(ctx.res, 200, await (await bankFor()).disconnect(actor)));
   on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });

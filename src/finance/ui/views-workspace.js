@@ -657,6 +657,43 @@ function matchActions(s, reload) {
   acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
   return acts;
 }
+/** "Connect a bank": always opens a real workflow - the automatic connection when a provider is configured, the CSV statement import otherwise. Never simulates a connection. */
+function openBankConnectModal(st, getCsvField) {
+  const plan = bankConnectPlan(st);
+  const err = h('div', { class: 'banner bad small', style: 'display:none', role: 'alert' });
+  const body = h('div', { class: 'bank-connect', style: 'display:grid;gap:14px' },
+    h('div', null, h('h3', null, tt('Automatic connection')),
+      plan.automatic
+        ? h('p', { class: 'muted small' }, tt('You sign in at your bank. Nordla only gets read-only access: it can never make a payment or a transfer.'))
+        : h('p', { class: 'muted small' }, tt('No banking service is configured yet for this company.'), ' ', tt('An automatic connection needs a read-only bank data provider (PSD2) to be set up first.'))),
+    h('div', null, h('h3', null, tt('Bank statement import')), h('p', { class: 'muted small' }, tt('Import a bank statement CSV: it works today, without any bank connection.'))),
+    err);
+  const back = modal(tt('Connect a bank'), body, (close) => [
+    plan.automatic ? h('button', { class: 'primary', type: 'button', on: { click: async (ev) => {
+      ev.target.disabled = true; err.style.display = 'none';
+      try {
+        const r = await api('POST', '/api/bank/connect', {});
+        const url = safeAuthorizationUrl(r && r.authorizationUrl);
+        if (!url) throw new Error('INVALID_AUTHORIZATION_URL');
+        try { sessionStorage.setItem(BANK_STATE_KEY, String(r.state || '')); } catch (e) { /* the return will then be refused, never guessed */ }
+        location.assign(url);
+      } catch (e) { ev.target.disabled = false; err.textContent = tt('The bank connection could not be started. Nothing was connected.'); err.style.display = ''; }
+    } } }, tt('Connect with my bank')) : null,
+    plan.csvImport ? h('button', { type: 'button', on: { click: () => { close(); const f = getCsvField(); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } } } }, tt('Import a CSV statement')) : null,
+    h('button', { type: 'button', on: { click: close } }, tt('Cancel'))]);
+  return back;
+}
+
+/** The user is back from the bank (?code&state, or ?error): success is only claimed after the backend really stored a consent. */
+async function processBankReturn(ret) {
+  if (ret.kind === 'cancelled') { toast(tt('Bank connection cancelled. Nothing was connected.'), 'ok'); return; }
+  if (ret.kind === 'error') { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); return; }
+  let saved = null; try { saved = sessionStorage.getItem(BANK_STATE_KEY); sessionStorage.removeItem(BANK_STATE_KEY); } catch (e) { saved = null; }
+  if (!bankStateMatches(saved, ret.state)) { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); return; }
+  try { const r = await api('POST', '/api/bank/consent', { code: ret.code, state: ret.state }); toast(r && r.connected ? tt('Bank connected (read-only).') : tt('The bank connection failed. Nothing was connected.'), r && r.connected ? 'ok' : 'bad'); }
+  catch (e) { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); }
+}
+
 async function viewBank() {
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/bank', shell);
@@ -679,8 +716,7 @@ async function viewBank() {
         h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
         h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
     } else {
-      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', disabled: !st.adapter.configured, on: { click: async () => { try { const r = await api('POST', '/api/bank/connect', {}); toast(tt('Provider: {0}', st.adapter.name), 'ok'); console.log(r.authorizationUrl); } catch (e) { fail(e); } } } }, tt('Connect a bank')),
-        !st.adapter.configured ? h('span', { class: 'muted small' }, tt('No bank provider is configured yet.')) : null));
+      connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', type: 'button', on: { click: () => openBankConnectModal(st, () => csv) } }, tt('Connect a bank'))));
       const csv = h('textarea', { rows: 4, placeholder: tt('Paste your bank statement CSV export here') });
       connCard.appendChild(h('div', { class: 'field', style: 'margin-top:10px' }, h('label', null, tt('Or import a CSV statement (no bank connection needed)')), csv,
         h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/bank/import-csv', { csv: csv.value }); toast(tt('{0} transaction(s) imported', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Import CSV'))));

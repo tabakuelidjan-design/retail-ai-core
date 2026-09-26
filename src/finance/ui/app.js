@@ -1201,8 +1201,17 @@ async function viewSettings() {
 }
 
 // ---------- router ----------
+// A return from the bank arrives as /?code&state (or ?error). Capture it immediately and remove it from the address bar (the code never stays in the URL,
+// history or referrers); it is processed once, after the session is confirmed.
+let pendingBankReturn = null;
+try {
+  pendingBankReturn = parseBankReturn(location.search);
+  if (pendingBankReturn) { history.replaceState(null, '', location.pathname + '#/bank'); }
+} catch (e) { pendingBankReturn = null; }
+
 async function route() {
   if (!state.csrf) { try { const s = await api('GET', '/api/session'); if (s.authenticated) { state.csrf = s.csrf; await loadSettings(); } else return renderLogin(); } catch (e) { return renderLogin(); } }
+  if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {
     if (!parts.length) return await viewOverview();
