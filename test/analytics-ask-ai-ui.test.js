@@ -24,9 +24,14 @@ function makeDom() {
   return { h, walk, deep };
 }
 /** `responses`: a list of JSON bodies (or { ok:false, status, body }) returned by successive POST /api/ask calls. */
-function loadAsk(responses) {
+/** The real dictionary + the real {0} substitution of i18n.js, for tests that check actual sentences. */
+function realT(lang) {
+  const w = {}; vm.runInNewContext(ui(`lang-${lang}.js`), { window: w }); const d = w.NORDLA_DICTS[lang];
+  return (k, ...a) => { const raw = d[k] ?? k; return a.length ? raw.replace(/\{(\d+)\}/g, (_, i) => (a[i] != null ? a[i] : '')) : raw; };
+}
+function loadAsk(responses, lang = null) {
   const { h, walk, deep } = makeDom(); const fetches = []; const body = { children: [], appendChild(c) { this.children.push(c); return c; } }; let i = 0;
-  const ctx = { document: { body, addEventListener() {}, removeEventListener() {} }, h, t: (k, ...a) => [k, ...a].join('|'), NordlaIcon: { parle: () => 'icon' }, NORDLA_I18N: { getLang: () => 'fr' }, AbortController, setTimeout, clearTimeout, console, Intl,
+  const ctx = { document: { body, addEventListener() {}, removeEventListener() {} }, h, t: lang ? realT(lang) : (k, ...a) => [k, ...a].join('|'), NordlaIcon: { parle: () => 'icon' }, NORDLA_I18N: { getLang: () => lang || 'fr' }, AbortController, setTimeout, clearTimeout, console, Intl,
     location: { hash: '#/' }, fetch: async (url, opts) => { fetches.push({ url, body: JSON.parse(opts.body) }); const r = responses[Math.min(i, responses.length - 1)]; i += 1; if (r instanceof Error) throw r; return r.ok === false ? { ok: false, json: async () => r.body } : { ok: true, json: async () => r }; } };
   vm.runInNewContext(`${speechSrc}\n${askSrc}\nSPEECH_PROVIDERS.splice(0, SPEECH_PROVIDERS.length);\nthis.__api = { openAsk, closeAsk };`, ctx);
   ctx.__api.openAsk();
@@ -129,4 +134,60 @@ test('dictionary coverage: every key the answer UI needs exists in FR, NL and EN
   const staticKeys = [...askSrc.matchAll(/t\('((?:ask|common)\.[A-Za-z0-9_.]+)'/g)].map((m) => m[1]);
   for (const [lang, src] of Object.entries(dicts)) for (const key of new Set([...need, ...staticKeys])) assert.ok(src.includes(`'${key}':`), `${lang}: missing ${key}`);
   const sev = [...factsSrc.matchAll(/([A-Z_]+): '(?:info|warning)'/g)].map((m) => m[1]); for (const c of sev) assert.ok(dicts.fr.includes(`'ask.lim.${c}':`), c);
+});
+
+// ---------- false premises ----------
+const premiseBody = (checks, extra = {}) => ({ mode: 'ai', status: 'PREMISE_CONTRADICTED', explanation: { status: 'SKIPPED' }, toolCalls: [], limitations: [], summary: { currency: 'EUR', calls: [] }, facts: [], premise: { checks, ...extra } });
+const flat = (s) => s.replace(/\s+/g, ' ').trim();
+const trendCheck = (over) => ({ kind: 'trend', metric: 'sales', direction: 'decrease', verdict: 'contradicted', callIds: ['c1'], actual: { direction: 'increase', delta_pct: 0.3709, delta_abs: 227.35, current: 840.31, previous: 612.96, unit: 'EUR', reference: { from: '2026-07-28', to: '2026-08-26' } }, ...over });
+
+test('a contradicted premise is corrected in words (FR/NL/EN, right verb agreement), with a follow-up offer, and never shows a cause analysis', async () => {
+  const d = loadAsk([premiseBody([trendCheck({})], { suggestion: { kind: 'explain_change', metric: 'sales', direction: 'increase' } })], 'fr'); await d.ask('Pourquoi mes ventes ont baissé ?');
+  const text = flat(d.deep(d.find('ask-premise')));
+  assert.ok(text.includes('D’après les données disponibles, vos ventes n’ont pas baissé sur cette période : l’évolution constatée est une hausse de 37,09 % par rapport à la période précédente.'), text);
+  assert.ok(d.find('ask-premise').className.includes('contradicted')); assert.equal(d.all('ask-part').length, 0); assert.equal(d.all('ask-hyps').length, 0);
+  assert.match(d.deep(d.find('ask-suggest')), /Je peux analyser ce qui explique cette hausse\./);
+  const sg = loadAsk([premiseBody([trendCheck({ metric: 'aov', direction: 'decrease' })])], 'fr'); await sg.ask('x'); assert.match(flat(sg.deep(sg.find('ask-premise'))), /le panier moyen n’a pas baissé/, 'singular agreement');
+  const en = loadAsk([premiseBody([trendCheck({ metric: 'vat', direction: 'increase', actual: { direction: 'decrease', delta_pct: -0.1, delta_abs: -5, current: 45, previous: 50, unit: 'EUR' } })])], 'en'); await en.ask('x');
+  assert.match(flat(en.deep(en.find('ask-premise'))), /According to the available data, VAT has not increased in this period: the observed change is a decrease of 10\.0?\s?%/);
+  const nl = loadAsk([premiseBody([trendCheck({ metric: 'refunds', direction: 'increase', actual: { direction: 'unchanged', delta_pct: 0, delta_abs: 0, current: 8, previous: 8, unit: 'EUR' } })])], 'nl'); await nl.ask('x');
+  assert.match(flat(nl.deep(nl.find('ask-premise'))), /zijn de terugbetalingen niet gestegen in deze periode: de waarde is stabiel gebleven/);
+});
+
+test('the follow-up offer sends a real question (the user can also ignore it); the correction is what the conversation remembers', async () => {
+  const d = loadAsk([premiseBody([trendCheck({})], { suggestion: { kind: 'explain_change', metric: 'sales', direction: 'increase' } }), { mode: 'ai', status: 'CANNOT_ANSWER', reason: 'PROVIDER_DECLINED', gaps: [], toolCalls: [], limitations: [], summary: { currency: 'EUR', calls: [] }, facts: [] }], 'fr');
+  await d.ask('Pourquoi mes ventes ont baissé ?'); d.find('ask-suggest').fire('click'); await new Promise((r) => setTimeout(r, 10));
+  assert.equal(d.fetches.length, 2); assert.equal(d.fetches[1].body.question, 'Qu’est-ce qui explique cette hausse de vos ventes ?');
+  assert.match(d.fetches[1].body.history[1].text, /^D’après les données disponibles, vos ventes n’ont pas baissé/); assert.ok(d.fetches[1].body.history[1].text.length <= 300);
+});
+
+test('other contradicted premises: a level ("zero") and a ranking (best product / channel / category); no follow-up offer when nothing changed', async () => {
+  const lvl = loadAsk([premiseBody([{ kind: 'level', metric: 'sales', level: 'zero', verdict: 'contradicted', callIds: ['c1'], actual: { value: 489.25, unit: 'EUR' } }])], 'fr'); await lvl.ask('x');
+  assert.match(flat(lvl.deep(lvl.find('ask-premise'))), /la valeur de vos ventes n’est pas nulle sur cette période : elle est de 489,25 €/); assert.equal(lvl.all('ask-suggest').length, 0);
+  for (const [scope, phrase] of [['product', 'n’est pas le meilleur produit'], ['channel', 'n’est pas le meilleur canal'], ['category', 'n’est pas la meilleure catégorie']]) {
+    const d = loadAsk([premiseBody([{ kind: 'ranking', scope, subject: 'Gadget', verdict: 'contradicted', callIds: ['c1'], actual: { top: 'Widget' } }])], 'fr'); await d.ask('x');
+    const text = flat(d.deep(d.find('ask-premise'))); assert.ok(text.includes(`« Gadget » ${phrase}`) && text.includes('« Widget »'), text);
+  }
+});
+
+test('an unverifiable premise: "Nordla cannot verify this statement with the available data", with the reason it knows; no analysis, no invented answer', async () => {
+  const u = { kind: 'ranking', scope: 'product', subject: 'Licorne', verdict: 'unknown', reason: 'NOT_IN_CATALOG', callIds: [] };
+  const d = loadAsk([{ ...premiseBody([u]), status: 'PREMISE_UNVERIFIABLE' }], 'fr'); await d.ask('Pourquoi mon meilleur produit est Licorne ?');
+  assert.equal(flat(d.deep(d.find('ask-premise'))), 'Nordla ne peut pas vérifier cette affirmation avec les données disponibles. Aucun produit de ce nom n’existe au catalogue.'); assert.ok(d.find('ask-premise').className.includes('unverifiable'));
+  const g = loadAsk([{ ...premiseBody([{ ...u, kind: 'trend', metric: 'sales', direction: 'decrease', reason: 'SOMETHING_NEW' }]), status: 'PREMISE_UNVERIFIABLE' }], 'fr'); await g.ask('x');
+  assert.equal(flat(g.deep(g.find('ask-premise'))), 'Nordla ne peut pas vérifier cette affirmation avec les données disponibles.', 'an unknown reason code adds nothing');
+});
+
+test('dictionary coverage of the premise texts: every metric, trend combination, ranking scope, unknown reason and suggestion in FR, NL and EN', () => {
+  const premiseSrc = readFileSync(new URL('../src/analytics-premium/server/ai/premise.js', import.meta.url), 'utf8');
+  const metrics = [...premiseSrc.matchAll(/^ {2}(\w+): \{ tool: '/gm)].map((m) => m[1]);
+  assert.ok(metrics.length >= 8, `found ${metrics.length} premise metrics`);
+  const keys = [];
+  for (const m of metrics) keys.push(`ask.premise.metric.${m}`, `ask.premise.pl.${m}`);
+  for (const [a, b] of [['decrease', 'increase'], ['decrease', 'unchanged'], ['increase', 'decrease'], ['increase', 'unchanged']]) for (const n of ['sg', 'pl']) keys.push(`ask.premise.trend.${a}.${b}.${n}`);
+  for (const sc of ['product', 'channel', 'category']) keys.push(`ask.premise.ranking.${sc}.contradicted`);
+  for (const r of ['NOT_IN_CATALOG', 'COMPARISON_UNAVAILABLE', 'INSUFFICIENT_HISTORY', 'NO_DATA']) keys.push(`ask.premise.unknownReason.${r}`);
+  for (const d of ['increase', 'decrease']) keys.push(`ask.premise.suggest.${d}`, `ask.premise.suggestQ.${d}`);
+  keys.push('ask.premise.level.contradicted', 'ask.premise.unknown');
+  for (const lang of ['fr', 'nl', 'en']) { const src = ui(`lang-${lang}.js`); for (const k of keys) assert.ok(src.includes(`'${k}':`), `${lang}: ${k}`); }
 });

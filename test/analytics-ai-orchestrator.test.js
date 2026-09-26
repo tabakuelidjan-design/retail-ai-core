@@ -74,14 +74,14 @@ test('an unknown tool is refused (never run, counted against the limit); invalid
 });
 
 test(`limits: at most ${MAX_TOOL_CALLS} tool calls per question and ${MAX_PLAN_TURNS} planning turns`, async () => {
-  const many = { tool: 'get_sales_metrics', args: {} };
-  const a = await setup({ planner: () => ({ toolCalls: [many, many, many, many, many, many] }) });
+  const call = (limit) => ({ tool: 'get_top_products', args: { limit } }); // distinct calls (an identical call is re-used, not run twice)
+  const a = await setup({ planner: () => ({ toolCalls: [1, 2, 3, 4, 5, 6].map(call) }) });
   const r = await a.ask({ question: 'x' });
   assert.equal(r.toolCalls.length, 4); assert.equal(r.limits.truncated, true); assert.equal(r.limits.maxToolCalls, 4);
-  const b = await setup({ planner: () => ({ toolCalls: [many], more: true }) });
+  const b = await setup({ planner: ({ turn }) => ({ toolCalls: [call(turn)], more: true }) });
   const r2 = await b.ask({ question: 'x' });
   assert.equal(b.provider.seen.plan.length, 2, 'a provider that always asks for more is stopped after 2 turns'); assert.equal(r2.turns, 2); assert.equal(r2.toolCalls.length, 2);
-  const c = await setup({ planner: ({ turn }) => ({ toolCalls: turn === 1 ? [many, many, many] : [many, many, many], more: true }) });
+  const c = await setup({ planner: ({ turn }) => ({ toolCalls: turn === 1 ? [call(1), call(2), call(3)] : [call(4), call(5), call(6)], more: true }) });
   const r3 = await c.ask({ question: 'x' }); assert.equal(r3.toolCalls.length, 4, 'the cap spans the turns'); assert.equal(r3.limits.truncated, true);
 });
 
@@ -145,7 +145,7 @@ test('PRIVACY: the planner gets only question, language, short sanitized history
   assert.equal(r.status, 'OK');
   const p = s.provider.seen.plan[0]; assert.deepEqual(Object.keys(p).sort(), ['catalog', 'history', 'lang', 'previousCalls', 'question', 'selectedPeriod', 'turn']);
   assert.ok(p.history.length <= 6, 'a short history only (3 exchanges at most)'); assert.ok(p.history.every((h) => h.text.length <= 300));
-  const e = s.provider.seen.explain[0]; assert.deepEqual(Object.keys(e).sort(), ['calls', 'facts', 'lang', 'question', 'rules']);
+  const e = s.provider.seen.explain[0]; assert.deepEqual(Object.keys(e).sort(), ['calls', 'facts', 'lang', 'premises', 'question', 'rules']);
   for (const payload of [p, e]) { const j = JSON.stringify(payload); assert.ok(!/@[\w-]+\./.test(j), 'no e-mail'); assert.ok(!/\+32[\d ]{6,}/.test(j), 'no phone'); assert.ok(!/BE68/.test(j), 'no IBAN'); assert.ok(!/[a-e]{64}/.test(j), 'no customer key'); }
   assert.ok(e.facts.some((f) => /Fixture Gadget/.test(String(f.value)) || true)); assert.ok(!JSON.stringify(e).includes('jean.dupont'), 'a product title that carried an e-mail is redacted before the provider sees it');
   assert.deepEqual(p.catalog.map((t) => Object.keys(t).sort()).flat().filter((k, i, a) => a.indexOf(k) === i).sort(), ['description', 'inputSchema', 'name'], 'the catalog carries no data');

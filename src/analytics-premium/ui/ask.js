@@ -142,8 +142,38 @@ function askUsed(d) {
     facts.length ? h('details', { class: 'ask-sources' }, h('summary', null, t('ask.sources.title')), h('div', { class: 'ask-sources-wrap' }, h('table', { class: 'ask-sources-table' }, h('tbody', null, facts)))) : null);
 }
 
+// ---------- false premises: what the question took for granted, checked by Nordla against its own figures ----------
+let askAsk = null; // (question) => sends it as if typed in the field; set while the box is open
+
+function askPremisePhrase(metric) { return t(`ask.premise.metric.${metric}`); }
+/** The correction (or the "cannot verify" statement) for one checked premise, in words. Structure in, sentence out: no user wording is matched. */
+function askPremiseText(c) {
+  if (c.verdict === 'unknown') {
+    const rk = `ask.premise.unknownReason.${c.reason}`; const why = t(rk);
+    return [t('ask.premise.unknown'), why === rk ? null : why].filter(Boolean).join(' ');
+  }
+  const a = c.actual || {};
+  if (c.kind === 'trend') {
+    const pl = t(`ask.premise.pl.${c.metric}`) === '1' ? 'pl' : 'sg';
+    const amount = a.delta_pct != null ? askFmt(Math.abs(a.delta_pct), 'ratio') : askFmt(Math.abs(a.delta_abs), a.unit);
+    return t(`ask.premise.trend.${c.direction}.${a.direction}.${pl}`, askPremisePhrase(c.metric), amount);
+  }
+  if (c.kind === 'level') return t('ask.premise.level.contradicted', askPremisePhrase(c.metric), askFmt(a.value, a.unit));
+  return t(`ask.premise.ranking.${c.scope}.contradicted`, c.subject, a.top);
+}
+function askPremiseEntry(d) {
+  const checks = (d.premise && d.premise.checks) || [];
+  const bad = checks.filter((c) => c.verdict === (d.status === 'PREMISE_CONTRADICTED' ? 'contradicted' : 'unknown'));
+  const texts = bad.map(askPremiseText);
+  const sg = d.premise && d.premise.suggestion;
+  const chip = sg ? h('button', { type: 'button', class: 'ask-chip ask-suggest', on: { click: () => { if (askAsk) askAsk(t(`ask.premise.suggestQ.${sg.direction}`, askPremisePhrase(sg.metric))); } } }, t(`ask.premise.suggest.${sg.direction}`)) : null;
+  const main = h('div', { class: `ask-answer ask-premise ${d.status === 'PREMISE_CONTRADICTED' ? 'contradicted' : 'unverifiable'}`, role: 'status' }, texts.map((x) => h('p', null, x)), chip);
+  return { node: h('div', { class: 'ask-ai-result' }, main, askLimits(d.limitations), askUsed(d)), text: texts.join(' ').slice(0, 300) };
+}
+
 /** @returns {{ node, text }} node = what is displayed for this answer, text = a short plain-text version for the conversation memory */
 function askAiEntry(d) {
+  if (d.status === 'PREMISE_CONTRADICTED' || d.status === 'PREMISE_UNVERIFIABLE') return askPremiseEntry(d);
   let main; let text = '';
   if (d.status === 'OK' && d.answer && Array.isArray(d.answer.parts)) {
     const plain = d.answer.parts.filter((p) => p.type !== 'hypothesis'); const hyps = d.answer.parts.filter((p) => p.type === 'hypothesis');
@@ -190,7 +220,7 @@ function askMicIcon() {
   return h('img', { class: 'ask-mic-icon', src: '/assets/nordla-mic.png', srcset: '/assets/nordla-mic.png 1x, /assets/nordla-mic@2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
 }
 
-function closeAsk() { askThread = []; /* the conversation lives only while the box is open */ if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
+function closeAsk() { askThread = []; askAsk = null; /* the conversation lives only while the box is open */ if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
 function askEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeAsk(); } }
 
 function openAsk() {
@@ -199,6 +229,7 @@ function openAsk() {
   const box = h('div', { class: 'ask-result' });
   const send = h('button', { type: 'button', class: 'cta-primary ask-send' }, t('ask.send'));
   const run = () => askSubmit(input, box, send);
+  askAsk = (question) => { input.value = question; run(); };
   send.addEventListener('click', run);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
   // Voice: speech -> text in THIS field (correctable) -> the same run() / POST /api/ask as a typed question. Nothing is ever sent by the voice layer itself.

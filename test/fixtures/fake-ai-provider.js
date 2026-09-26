@@ -12,6 +12,11 @@ export function defaultPlanner({ question, history, selectedPeriod, turn, previo
     { tool: 'compare_sales', args: { periodA: { period: 'last_30_days' }, periodB: { period: 'previous_month' } } },
     { tool: 'get_top_products', args: { period: { period: 'last_30_days' }, sort: 'revenue', limit: 3 } },
     { tool: 'get_channels', args: { period: { period: 'last_30_days' } } }] };
+  // any other "why" question: the same cause analysis (the fake model would happily run it - the premise guard is what must stop it when the premise is false)
+  if (has(q, /pourquoi/)) return { toolCalls: [
+    { tool: 'get_sales_metrics', args: { period: { period: 'last_30_days' } } },
+    { tool: 'get_top_products', args: { period: { period: 'last_30_days' }, sort: 'revenue', limit: 3 } },
+    { tool: 'get_channels', args: { period: { period: 'last_30_days' } } }] };
   if (has(q, /remboursements?.*(expliquent|baisse)/)) {
     if (turn === 1) return { toolCalls: [{ tool: 'get_sales_metrics', args: { period: { period: 'last_30_days' } } }], more: true };
     return { toolCalls: [{ tool: 'get_sales_metrics', args: { period: { period: 'previous_month' } } }] };   // second turn: it saw only "call 1 ok"
@@ -92,7 +97,25 @@ export function explanationFor(mode, facts) {
 }
 
 /** @param {{ planner?, explainMode?: string, planError?, explainError?: 'throw'|'hang' }} opts */
-export function createFakeProvider({ planner = defaultPlanner, explainMode = 'honest', planError = null, explainError = null } = {}) {
+/**
+ * The premise a "why" question takes for granted, as a fake model would state it in structure (test-only understanding; the business code has no such rules).
+ * Only used when the fake is created with `declarePremises: true`.
+ */
+export function premisesFor(question) {
+  const q = question.toLowerCase(); const out = [];
+  if (/pourquoi.*ventes.*(baiss|recul)/.test(q)) out.push({ kind: 'trend', metric: 'sales', direction: 'decrease' });
+  if (/pourquoi.*ventes.*(augment|hausse|progress)/.test(q)) out.push({ kind: 'trend', metric: 'sales', direction: 'increase' });
+  if (/pourquoi.*remboursements.*(augment|hausse)/.test(q)) out.push({ kind: 'trend', metric: 'refunds', direction: 'increase' });
+  if (/pourquoi.*panier moyen.*baiss/.test(q)) out.push({ kind: 'trend', metric: 'aov', direction: 'decrease' });
+  if (/pourquoi.*remises.*(augment|hausse)/.test(q)) out.push({ kind: 'trend', metric: 'discounts', direction: 'increase' });
+  if (/pourquoi.*tva.*([ée]lev|augment|hausse)/.test(q)) out.push({ kind: 'trend', metric: 'vat', direction: 'increase' });
+  if (/pourquoi.*ventes.*nulles/.test(q)) out.push({ kind: 'level', metric: 'sales', level: 'zero' });
+  const best = q.match(/pourquoi.*meilleur produit (?:est|c.est) (.+?)\s*\??$/);
+  if (best) out.push({ kind: 'ranking', scope: 'product', subject: best[1] });
+  return out;
+}
+
+export function createFakeProvider({ planner = defaultPlanner, explainMode = 'honest', planError = null, explainError = null, declarePremises = false } = {}) {
   const seen = { plan: [], explain: [] };
   const provider = {
     name: 'fake-test-provider', seen, lastExplanation: null,
@@ -100,7 +123,9 @@ export function createFakeProvider({ planner = defaultPlanner, explainMode = 'ho
       const { signal, ...rest } = input; seen.plan.push(JSON.parse(JSON.stringify(rest)));
       if (planError === 'throw') throw new Error('secret provider failure: sk-live-123');
       if (planError === 'hang') await new Promise((_, rej) => signal.addEventListener('abort', () => rej(new Error('aborted'))));
-      return typeof planner === 'function' ? planner(input) : planner;
+      const plan = typeof planner === 'function' ? planner(input) : planner;
+      const premises = declarePremises && plan?.toolCalls ? premisesFor(input.question) : [];
+      return premises.length ? { ...plan, premises } : plan;
     },
     async explain(input) {
       const { signal, ...rest } = input; seen.explain.push(JSON.parse(JSON.stringify(rest)));

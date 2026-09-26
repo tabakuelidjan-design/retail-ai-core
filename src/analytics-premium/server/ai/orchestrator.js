@@ -1,5 +1,7 @@
 // Nordla ask orchestrator (Phase 2):   plan -> tools -> facts -> explain -> verify
 //
+//   0. premises  what the question takes for granted ("why did my sales DROP?") is checked against the facts first (premise.js); a contradicted or
+//                unverifiable premise stops the analysis: Nordla corrects it or says it cannot verify it.
 //   1. plan      the provider reads the question (+ short history, tool catalog, selected period) and asks for tool calls, or for a clarification.
 //                At most MAX_PLAN_TURNS turns and MAX_TOOL_CALLS calls per question. The second turn only sees the OUTCOME of the first calls, never a value.
 //   2. tools     every call is validated against the registry and its JSON Schema, then run by the deterministic Tool Layer (same engines as the pages).
@@ -14,6 +16,7 @@ import { EXPLAIN_RULES, KNOWN_GAPS, MAX_CLARIFICATION, MAX_HISTORY_TEXT, MAX_HIS
 import { buildFacts, caveatsFor, explainPayload } from './facts.js';
 import { buildSummary } from './summary.js';
 import { verifyExplanation } from './verify.js';
+import { checkPremise, premiseProblem } from './premise.js';
 
 /** The client sends the recent turns; they are untrusted: keep the last few, cap their length, redact anything personal. */
 export function cleanHistory(history) {
@@ -40,7 +43,32 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
   return async function ask({ question, lang = 'fr', history = [], selected = null }) {
     const q = sanitize(String(question ?? '')).value;
     const hist = cleanHistory(history); const sel = cleanSelected(selected);
-    const executed = []; const rejectedCalls = []; let turns = 0; let truncated = false;
+    const executed = []; const rejectedCalls = []; const premiseChecks = []; let turns = 0; let truncated = false;
+
+    /** The one place a tool runs: same call (tool + args) is re-used, the budget (MAX_TOOL_CALLS, rejected calls included) is enforced. null = budget used up. */
+    const run = async (tool, args) => {
+      // the tool layer's default period is the last 30 days: a call that names none is the same call as one that names it
+      const hasPeriod = !!catalog.find((t) => t.name === tool)?.inputSchema?.properties?.period;
+      const key = `${tool}|${JSON.stringify(hasPeriod ? { ...args, period: args.period ?? { period: 'last_30_days' } } : args)}`;
+      const at = executed.findIndex((e) => e.key === key);
+      if (at >= 0) return { result: executed[at].result, id: `c${at + 1}` };
+      if (executed.length + rejectedCalls.length >= MAX_TOOL_CALLS) { truncated = true; return null; }
+      const result = await tools.call(tool, args);
+      if (!result.ok && result.error.code === 'INVALID_ARGUMENT') { rejectedCalls.push({ tool, code: 'INVALID_ARGUMENT' }); return { result, id: null, rejected: true }; }
+      executed.push({ tool, args, result, key });
+      return { result, id: `c${executed.length}` };
+    };
+
+    /** Facts, summary and limitations of what has been executed so far (for every kind of answer). */
+    const snapshot = () => {
+      const facts = buildFacts(executed); const currency = executed.find((e) => e.result.ok)?.result.currency ?? 'EUR';
+      return { facts, base: {
+        turns, toolCalls: [...facts.calls, ...rejectedCalls.map((r) => ({ ok: false, tool: r.tool, errorCode: r.code, rejected: true }))],
+        limits: { maxToolCalls: MAX_TOOL_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated },
+        limitations: facts.notices, summary: buildSummary(executed, currency),
+        facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })),   // for "Voir les sources de l'analyse" only
+      } };
+    };
 
     for (let turn = 1; turn <= MAX_PLAN_TURNS; turn += 1) {
       let plan;
@@ -50,7 +78,7 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
       turns = turn;
       const shape = plan && typeof plan === 'object' ? validate(PLAN_SCHEMA, plan, 'plan') : 'plan must be an object';
       const intents = plan && typeof plan === 'object' ? ['toolCalls', 'clarification', 'cannotAnswer', 'done'].filter((k) => plan[k] !== undefined && !(k === 'toolCalls' && !plan.toolCalls.length) && !(k === 'done' && plan.done === false)).length : 0;
-      if (shape || intents > 1) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };
+      if (shape || intents > 1 || (plan.premises ?? []).some(premiseProblem)) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };
       if (plan.clarification) {
         if (executed.length) break;                                   // facts already exist: answer with them rather than ask late
         if (/\d/.test(plan.clarification.text)) return { status: 'PLAN_FAILED', code: 'PLAN_INVALID', turns };   // a question to the user carries no figure
@@ -60,26 +88,30 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
         if (executed.length) break;
         return { status: 'CANNOT_ANSWER', reason: 'PROVIDER_DECLINED', gaps: [...new Set((plan.cannotAnswer.gaps ?? []).filter((g) => KNOWN_GAPS.includes(g)))], turns, toolCalls: [], limitations: [], summary: { currency: 'EUR', calls: [] }, facts: [] };
       }
+
+      // FALSE-PREMISE GUARD: what the question takes for granted is checked against Nordla's facts BEFORE anything is analysed. The provider's own tool calls
+      // for this plan only run when every premise is supported.
+      if (plan.premises?.length) {
+        for (const premise of plan.premises) premiseChecks.push(await checkPremise({ premise, run, periodArg: premise.period ?? sel ?? undefined }));
+        const bad = premiseChecks.some((c) => c.verdict === 'contradicted') ? 'PREMISE_CONTRADICTED' : premiseChecks.some((c) => c.verdict === 'unknown') ? 'PREMISE_UNVERIFIABLE' : null;
+        if (bad) {
+          onDiagnostic({ type: bad, checks: premiseChecks.map((c) => ({ kind: c.kind, metric: c.metric, verdict: c.verdict, reason: c.reason })) });
+          const { base } = snapshot();
+          const contradicted = premiseChecks.find((c) => c.verdict === 'contradicted' && c.kind === 'trend' && c.actual && c.actual.direction !== 'unchanged');
+          return { status: bad, ...base, premise: sanitize({ checks: premiseChecks, ...(contradicted ? { suggestion: { kind: 'explain_change', metric: contradicted.metric, direction: contradicted.actual.direction } } : {}) }).value, explanation: { status: 'SKIPPED' } };
+        }
+      }
+
       if (!plan.toolCalls?.length) break;                             // done (or nothing to add)
       for (const call of plan.toolCalls) {
         if (executed.length + rejectedCalls.length >= MAX_TOOL_CALLS) { truncated = true; break; }
         if (!tools.has(call.tool)) { rejectedCalls.push({ tool: String(call.tool).slice(0, 64), code: 'UNKNOWN_TOOL' }); continue; }
-        const args = withSelected(call, sel);
-        const result = await tools.call(call.tool, args);
-        if (!result.ok && result.error.code === 'INVALID_ARGUMENT') { rejectedCalls.push({ tool: call.tool, code: 'INVALID_ARGUMENT' }); continue; }
-        executed.push({ tool: call.tool, args, result });
+        await run(call.tool, withSelected(call, sel));
       }
       if (!plan.more || truncated) break;   // a second planning turn only when the provider asks for one
     }
 
-    const facts = buildFacts(executed);
-    const currency = executed.find((e) => e.result.ok)?.result.currency ?? 'EUR';
-    const base = {
-      turns, toolCalls: [...facts.calls, ...rejectedCalls.map((r) => ({ ok: false, tool: r.tool, errorCode: r.code, rejected: true }))],
-      limits: { maxToolCalls: MAX_TOOL_CALLS, maxPlanTurns: MAX_PLAN_TURNS, truncated },
-      limitations: facts.notices, summary: buildSummary(executed, currency),
-      facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })),   // for "Voir les sources de l'analyse" only
-    };
+    const { facts, base } = snapshot();
     if (!facts.list.length) {
       // Every call failed (no data, history too short, ...): a deterministic refusal that says what Nordla knows to be missing. No model text.
       const gaps = [...new Set(facts.notices.filter((n) => n.code === 'INSUFFICIENT_HISTORY').map(() => 'history'))];
@@ -87,7 +119,7 @@ export function createOrchestrator({ provider, tools, timeoutMs = PROVIDER_TIMEO
     }
 
     let explanation;
-    try { explanation = await callProvider((signal) => provider.explain({ ...explainPayload({ question: q, lang, facts, rules: EXPLAIN_RULES }), signal }), timeoutMs); }
+    try { explanation = await callProvider((signal) => provider.explain({ ...explainPayload({ question: q, lang, facts, rules: EXPLAIN_RULES, premises: premiseChecks }), signal }), timeoutMs); }
     catch (e) { onDiagnostic({ type: 'EXPLAIN_FAILED', code: e.code }); return { status: 'FACTS_ONLY', ...base, explanation: { status: e.code === 'PROVIDER_TIMEOUT' ? 'TIMEOUT' : 'UNAVAILABLE' } }; }
     const v = verifyExplanation(explanation, facts);
     // Technical rejection reasons are diagnostics: they never reach the client.

@@ -14,6 +14,8 @@
 //            and - on the second turn only - the OUTCOME of the calls already made (tool, args, ok, error code): never a value.
 //   explain  the question and the FACTS returned by the tools (aggregated, pseudonymous), with each call's completeness. Never raw records, never personal data.
 
+import { MAX_PREMISES, PREMISE_SCHEMA } from './premise.js';
+
 export const MAX_TOOL_CALLS = 4;        // per question, across all planning turns
 export const MAX_PLAN_TURNS = 2;
 export const MAX_HISTORY_TURNS = 6;      // messages = 3 exchanges (question + answer); kept in the page only, never stored
@@ -33,6 +35,9 @@ export const PLAN_SCHEMA = {
     done: { type: 'boolean' },
     // The provider says the question cannot be answered with these tools; `gaps` optionally names what is missing, from KNOWN_GAPS only.
     cannotAnswer: { type: 'object', additionalProperties: false, properties: { gaps: { type: 'array', maxItems: 4, items: { type: 'string', enum: KNOWN_GAPS } } } },
+    // What the question TAKES FOR GRANTED ("why did my sales drop?" assumes a drop), stated as structure. Nordla checks each premise against its own facts
+    // before any analysis is built on it (premise.js). Not counted as an intent: it accompanies toolCalls, or stands alone.
+    premises: { type: 'array', maxItems: MAX_PREMISES, items: PREMISE_SCHEMA },
     more: { type: 'boolean' },   // with toolCalls: ask me to plan again once these calls have run (turn 2 sees their outcome, never a value)
   },
 };

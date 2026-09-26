@@ -66,11 +66,12 @@ export function buildFacts(callResults) {
 }
 
 /** What `explain` receives: facts and call summaries, sanitized. Never anything else. */
-export function explainPayload({ question, lang, facts, rules }) {
+export function explainPayload({ question, lang, facts, rules, premises = [] }) {
   const { value } = sanitize({
     question, lang,
     facts: facts.list.map((f) => ({ ref: f.ref, value: f.value, unit: f.unit, description: f.description })),
     calls: facts.calls, rules,
+    premises: premises.map((c) => ({ kind: c.kind, metric: c.metric ?? null, verdict: c.verdict })),
   });
   return value;
 }

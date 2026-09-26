@@ -715,3 +715,7 @@ button { font-family: inherit; }
 .ask-src-tool { color: var(--muted); }
 .ask-sources-table tr:first-child td { border-top: 0; }
 .ask-sources-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ask-premise { display: grid; gap: 8px; }
+.ask-premise p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.ask-premise.contradicted { border-left: 3px solid var(--warn); padding-left: 12px; }
+.ask-suggest { justify-self: start; }
