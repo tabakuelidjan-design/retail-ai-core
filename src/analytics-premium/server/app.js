@@ -32,12 +32,14 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask, now = () => new Date() }) {
+export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask, now = () => new Date(), onDatasetMissing = null }) {
   /** Explorer / Produits / Clients accept ?period=<preset>|custom&from=&to=. With no period parameter the fixed-30-day report is served as before. */
   async function periodGiven(url) {
     const period = url.searchParams.get('period'); const from = url.searchParams.get('from'); const to = url.searchParams.get('to');
     if (!period && !from && !to) return { given: null };
     const r = await periodReport(reportsDir, { period: period || (from || to ? 'custom' : undefined), from, to }, { now: now() });
+    // The dataset snapshot is a rebuildable cache: when a request finds it missing, a rebuild from the synchronised data is started (no manual step).
+    if (!r.ok && r.code === 'DATASET_UNAVAILABLE' && onDatasetMissing) { try { onDatasetMissing(); } catch { /* the periodic check will rebuild it anyway */ } }
     // Right after a deploy the dataset snapshot may not exist yet: the default 30 days is still served from the generated report; other periods say so.
     if (!r.ok && r.code === 'DATASET_UNAVAILABLE' && (!period || period === 'last_30_days') && !from && !to) return { given: null };
     return r.ok ? { given: r.report } : { error: { status: r.status, code: r.code } };

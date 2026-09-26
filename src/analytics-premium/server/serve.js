@@ -6,6 +6,8 @@
 // No synthetic data anywhere.
 
 import http from 'node:http';
+import { access } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { createAnalyticsPremiumApp } from './app.js';
 import { createAssistant, loadAssistantProvider } from './assistant.js';
 import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
@@ -29,13 +31,15 @@ try {
   // Assistant: figures come from the report; the AI explanation only exists when a provider adapter is configured (none is bundled today).
   const { status: providerStatus, provider } = loadAssistantProvider();
   const ask = createAssistant({ reportsDir: REPORTS_DIR, provider, providerStatus });
-  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask });
+  let refresher = null;
+  const handler = createAnalyticsPremiumApp({ reportsDir: REPORTS_DIR, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask, onDatasetMissing: () => { if (refresher) refresher.tick(); } });
   http.createServer(handler).listen(hosting.port, hosting.host, () => {
     if (hosting.hosted) console.log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);
     else console.log(`Analytics Premium (Brief) running at http://127.0.0.1:${hosting.port}`);
   });
   // The report is built FROM the synced Supabase data: regenerate when a newer successful sync exists (checked every few minutes), plus a safety-net interval.
-  if (hosting.hosted) startSyncAwareRefresh({ getSyncFinishedAt: async () => (syncStatus ? (await syncStatus())?.lastSuccess?.finishedAt ?? null : null), checkMinutes: hosting.checkMinutes, fallbackHours: hosting.refreshHours });
+  const datasetFile = fileURLToPath(new URL('dataset.json', REPORTS_DIR));
+  if (hosting.hosted) refresher = startSyncAwareRefresh({ getSyncFinishedAt: async () => (syncStatus ? (await syncStatus())?.lastSuccess?.finishedAt ?? null : null), needsRebuild: async () => access(datasetFile).then(() => false, () => true), checkMinutes: hosting.checkMinutes, fallbackHours: hosting.refreshHours });
 } catch (e) {
   console.error(e instanceof HostingConfigError ? `analytics configuration error: ${e.message}` : `analytics failed to start: ${e.message}`);
   process.exitCode = 1;

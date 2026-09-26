@@ -289,3 +289,46 @@ test('UI wiring: the three workspaces send the period, details use it, errors ar
   assert.match(menu, /period\.p\.custom/); assert.match(menu, /type: 'date'/); assert.doesNotMatch(menu, /innerHTML/);
   for (const lang of ['fr', 'nl', 'en']) { const src = ui(`lang-${lang}.js`); for (const k of ['period.p.last_90_days', 'period.p.custom', 'period.from', 'period.to', 'period.err.PERIOD_ORDER', 'period.err.INVALID_DATE', 'period.empty', 'cmp.insufficientHistory']) assert.match(src, new RegExp(`'${k.replace(/\./g, '\\.')}'`), `${lang} ${k}`); }
 });
+
+// ---------- resilience: dataset.json is a rebuildable cache, never the source of truth ----------
+import { startSyncAwareRefresh } from '../src/analytics-premium/server/report-refresh.js';
+import { readFile as readFileP, rm } from 'node:fs/promises';
+
+test('a missing snapshot is rebuilt at the next check even when nothing else changed; a present one is left alone', async () => {
+  let runs = 0; let missing = true;
+  const h = startSyncAwareRefresh({ getSyncFinishedAt: async () => '2026-09-26T10:00:00Z', needsRebuild: async () => missing, run: async () => { runs += 1; missing = false; return true; }, setIntervalFn: () => ({ unref() {} }), now: () => 0 });
+  await h.first; assert.equal(runs, 1);
+  assert.equal(await h.tick(), false); assert.equal(runs, 1, 'snapshot present + same sync: nothing to do');
+  missing = true; assert.equal(await h.tick(), true); assert.equal(runs, 2, 'snapshot deleted: rebuilt at the next check, no manual step');
+  const failing = startSyncAwareRefresh({ getSyncFinishedAt: async () => null, needsRebuild: async () => { throw new Error('fs'); }, run: async () => true, setIntervalFn: () => ({ unref() {} }), now: () => 0 });
+  await failing.first; // a failing existence check never breaks the loop
+});
+
+test('END TO END: no snapshot -> the request says so and starts ONE rebuild from the source data -> the next request is fully served; the source data is never modified', async () => {
+  resetPeriodCache();
+  const { d } = dataset(); const source = JSON.stringify(d); // stands for the synchronised data (Supabase): the single source of truth
+  const dir = await mkdtemp(path.join(tmpdir(), 'period-'));
+  let rebuilds = 0; let writes = 0;
+  const rebuild = async () => { rebuilds += 1; await new Promise((r) => setTimeout(r, 30)); await writeFile(path.join(dir, 'dataset.json'), JSON.stringify({ version: 1, generated_at: '2026-09-26T09:00:00.000Z', time_zone: TZ, currency: 'EUR', data: JSON.parse(source) })); writes += 1; return true; };
+  const refresher = startSyncAwareRefresh({ getSyncFinishedAt: async () => 'sync-1', needsRebuild: async () => { try { await readFileP(path.join(dir, 'dataset.json')); return false; } catch { return true; } }, run: rebuild, setIntervalFn: () => ({ unref() {} }), now: () => 0 });
+  await refresher.first; assert.equal(rebuilds, 1, 'startup builds it');
+  await rm(path.join(dir, 'dataset.json')); resetPeriodCache(); // the container was recreated: the file is gone
+  const server = http.createServer(createAnalyticsPremiumApp({ reportsDir: dir, now: () => NOW, onDatasetMissing: () => refresher.tick() })); await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const port = server.address().port;
+    const first = await get2(port, '/api/explorer?period=last_90_days'); assert.equal(first.status, 404); assert.equal(first.json.error.code, 'DATASET_UNAVAILABLE');
+    await get2(port, '/api/explorer?period=last_30_days&x=1'); // a second request while rebuilding must not start a second rebuild
+    for (let n = 0; n < 50 && writes < 2; n += 1) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(rebuilds, 2, 'exactly one rebuild for the two requests'); resetPeriodCache();
+    const again = await get2(port, '/api/explorer?period=last_90_days'); assert.equal(again.status, 200); assert.equal(again.json.kpis.order_count > 0, true);
+    assert.equal(JSON.stringify(d), source, 'the source data is untouched');
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test('a corrupt or truncated snapshot is treated like a missing one (explicit error, rebuild), never as data', async () => {
+  resetPeriodCache();
+  const dir = await mkdtemp(path.join(tmpdir(), 'period-')); await writeFile(path.join(dir, 'dataset.json'), '{"version":1,"data":{"orders":[');
+  assert.deepEqual(await periodReport(dir, { period: 'last_30_days' }, { now: NOW }), { ok: false, status: 404, code: 'DATASET_UNAVAILABLE' });
+  await writeFile(path.join(dir, 'dataset.json'), JSON.stringify({ version: 1, data: {} }));
+  resetPeriodCache(); assert.equal((await periodReport(dir, { period: 'last_30_days' }, { now: NOW })).code, 'DATASET_UNAVAILABLE');
+});
