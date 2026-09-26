@@ -102,7 +102,7 @@ const countryOfWord = (s) => Object.entries(COUNTRY_WORDS).find(([, re]) => re.t
 const L = {
   creditTitle: /^(?:note\s*de\s*cr[ée]dit|avoir|credit\s*-?\s*note|creditnota|kredietnota)\b/i,
   invoiceTitle: /^(?:facture|invoice|factuur|tax\s*invoice|bill\s*#|receipt\s*\/\s*tax\s*invoice)|\btax\s*invoice\b/i,
-  receiptTitle: /^(?:e-?receipt|receipt|re[çc]u|ticket(?:\s*de\s*caisse)?|kassabon|kwitantie)\b/i,
+  receiptTitle: /^(?:e-?receipt|receipt|re[çc]u|ticket\s*de\s*caisse|kassaticket|kassabon|kwitantie)\b/i,
   proforma: /\bpro[\s-]?forma\b/i,
   booking: /confirmation\s*de\s*r[ée]servation|booking\s*confirmation|reservation\s*confirmation|reserveringsbevestiging|bevestiging\s*van\s*(?:uw\s*)?reservering/i,
   due: /(?<!\p{L})(?:date\s*d['’]\s*[ée]ch[ée]ance|[ée]ch[ée]ance|à\s*payer\s*avant|à\s*r[ée]gler\s*avant|payable\s*(?:avant|le)|vervaldatum|vervaldag|te\s*betalen\s*(?:voor|vóór|tegen)|uiterste\s*betaal\s*datum|due\s*date|due\s*on|payment\s*due|pay\s*by|payable\s*by)(?!\p{L})/iu,
@@ -110,6 +110,7 @@ const L = {
   issuePayment: /\b(?:payment\s*date|paid\s*on|date\s*de\s*paiement|betaaldatum|betaald\s*op|receipt\s*date)\b/i,
   otherDate: /\b(?:livraison|levering|delivery|commande|order|bestel\w*|p[ée]riode|period|periode|prestation|dienst|service|échéancier|call\s*date|e\.?t\.?[sa]\b\.?|departure|arrival|check-?in|check-?out|rate\s*application|valid\w*|expir\w*|imprim\w*|printed|shipping|verzend\w*|exp[ée]di\w*|voyage|vessel|created)\b/i,
   issueGeneric: /\b(?:date|datum)\s*[:.]?\s*$/i,
+  issueBooking: /\b(?:date\s*of\s*booking|booking\s*date|date\s*de\s*r[ée]servation|reserveringsdatum)\b/i,
   billingRef: /\b(?:concerne|relative\s*à|se\s*rapportant\s*à|annule|en\s*r[ée]f[ée]rence\s*à|sur|betreft|m\.?b\.?t\.?|voor|original|related|refers?\s*to|credit(?:s|ing)?)\s*(?:la\s*|de\s*)?(?:facture|factuur|invoice)\s*(?:n[°o]\.?|nr\.?|no\.?|number|#)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-/._]{0,29})/gi,
   order: /\b(?:bon\s*de\s*commande|n[°o]\.?\s*(?:de\s*)?commande|num[ée]ro\s*de\s*(?:la\s*)?commande|commande|votre\s*r[ée]f[ée]rence|v\/?\s*r[ée]f\.?|purchase\s*order|order\s*(?:no\.?|number|ref(?:erence)?|#)|your\s*ref(?:erence)?|PO|bestelbon|bestelnummer|bestelling|uw\s*ref(?:erentie)?|booking\s*(?:no\.?|number|ref(?:erence)?|#)|num[ée]ro\s*de\s*confirmation|confirmation\s*(?:no\.?|number))\s*(?:n[°o]\.?|nr\.?|no\.?)?\s*[:.]?\s*([A-Z0-9][A-Z0-9\-/._]{0,29})/gi,
   paymentFree: /\b(?:communication|mededeling|r[ée]f[ée]rence\s*(?:de\s*)?paiement|payment\s*reference|betalingsreferentie|referentie\s*betaling)\s*[:.]?\s*(.{3,60})$/i,
@@ -136,7 +137,7 @@ const AMOUNT_LABELS = [
 const classifyAmountLabel = (label) => { const t = label.replace(/^[\s*:·•-]+/, '').trim(); return AMOUNT_LABELS.find(([, , , re]) => re.test(t)) ?? null; };
 const hasDigit = (s) => /\d/.test(s);
 const letters = (s) => (String(s).match(/\p{L}/gu) ?? []).length;
-const isCurrencyOnly = (s) => /^(?:€|\$|£|¥|EUR|USD|GBP|CHF|CNY|RMB)$/i.test(String(s).trim());
+const isCurrencyOnly = (s) => /^[\s:·|.-]*(?:€|\$|£|¥|EUR|USD|GBP|CHF|CNY|RMB)[\s:·|.-]*$/i.test(String(s));
 const clean = (s) => String(s).replace(/[\s:·|.\-–#]+$/, '').trim();
 
 /** Lines of all pages, each with its cells (columns). */
@@ -380,7 +381,7 @@ export function extractFromPdfLines(pages, own = {}) {
         loose.push(hit); continue;
       }
       if (L.due.test(t)) due.push({ ...hit, strength: 3 }); else if (L.issueExplicit.test(t)) issue.push({ ...hit, strength: 3 });
-      else if (L.otherDate.test(t)) continue; else if (L.issuePayment.test(t)) issue.push({ ...hit, strength: 2 }); else if (L.issueGeneric.test(t)) issue.push({ ...hit, strength: 1 }); else loose.push(hit);
+      else if (L.otherDate.test(t)) continue; else if (L.issuePayment.test(t)) issue.push({ ...hit, strength: 2 }); else if (L.issueGeneric.test(t) || L.issueBooking.test(t)) issue.push({ ...hit, strength: 1 }); else loose.push(hit);
     }
   }));
   const pickDate = (k, hits, rule) => {

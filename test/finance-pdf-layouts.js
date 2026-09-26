@@ -36,6 +36,13 @@ const amazonPage = ({ lang = 'nl', number, total, net, vat, order }) => (lang ==
 ]);
 
 export const LAYOUTS = {
+  /** Airline e-ticket: "TICKET NUMBER" (not a till receipt), "DATE: 10 APR 2025", "TOTAL | : EUR | 756.96". */
+  airTicket: () => makePdf([[[67, 40, 'ELECTRONIC TICKET PASSENGER ITINERARY RECEIPT'], [67, 60, 'TICKET NUMBER'], [200, 60, ': 880-0000000000'], [67, 80, 'EXEMPLE AIRLINES'], [250, 80, 'DATE: 10 APR 2025'],
+    [67, 110, 'FROM /TO'], [200, 110, 'FLIGHT'], [300, 110, 'ARRIVAL DATE: 16APR'], [67, 300, 'AIR FARE'], [200, 300, ': EUR'], [300, 300, '345.00'], [67, 312, 'TAX'], [200, 312, ': EUR'], [300, 312, '35.50BE'],
+    [67, 324, 'TOTAL'], [200, 324, ': EUR'], [300, 324, '756.96']]]),
+  /** Travel e-receipt: "Date of Booking: 11:54 PM, October 23, 2025" and a later flight date. */
+  travelBooking: () => makePdf([[[99, 40, 'Trip.Exemple Travel Singapore Pte. Ltd.'], [99, 70, 'Booking No. 1185317900000000'], [99, 85, 'Date of Booking: 11:54 PM, October 23, 2025 (GMT+8)'], [281, 120, 'Receipt', 12],
+    [106, 200, 'Shenzhen - Yiwu'], [300, 200, 'November 1, 2025'], [106, 260, 'Fare'], [300, 260, '€87.06'], [106, 290, 'Total (Google Pay)'], [300, 290, '€95.53']]]),
   /** X-Forwarding: date labels ABOVE their values, "BTW Import" as an invoice line, "Totaal" in the middle of a line, VAT number in the footer. */
   labelsAbove: () => makePdf([[
     [26, 40, 'BV Exemple-Transit', 12], [26, 56, 'Rootputstraat 31'], [26, 70, '9100 Sint-Niklaas'], [26, 84, 'België'], ...own(343, 120),

@@ -112,6 +112,14 @@ test('forwarder invoice: "Invoice Date | : 19-12-2025", ETS / ETA ignored, EUR o
   assert.deepEqual([x.invoiceNumber, x.issueDate, x.vatCents, x.grossCents, x.currency], ['25100231', '2025-12-19', 0, 27767, 'EUR']);
   assert.deepEqual(x.lines.map((l) => [l.description, l.netCents]), [['UNLOADING / RELOADING COST 2,690 CBM X 45,00', 12105], ['LOCAL IMPORT CHARGES USD 180,23 X 0,869', 15662]]);
 });
+test('REGRESSION (found by the real-invoice diff): ": EUR" is a currency cell, not a label; an airline "TICKET NUMBER" is not a till receipt', async () => {
+  const r = await read('airTicket'); const x = v(r);
+  assert.equal(x.grossCents, 75696); assert.equal(x.currency, 'EUR'); assert.equal(x.issueDate, '2025-04-10'); assert.equal(x.documentType, undefined);
+});
+test('REGRESSION (found by the real-invoice diff): on a travel receipt, the booking date is the purchase date, not the flight date', async () => {
+  const r = await read('travelBooking'); const x = v(r);
+  assert.deepEqual([x.documentType, x.issueDate, x.grossCents, x.orderReference], ['RECEIPT', '2025-10-23', 9553, '1185317900000000']);
+});
 test('VAT numbers: a word or a malformed string is never accepted', async () => {
   const pdf = await makePdf([[[50, 30, 'FACTURE', 18], [50, 60, 'Régime TVA LUXEMBOURGEOISE'], [50, 75, 'VAT NL12345'], [50, 90, 'TVA FR ABCDEFGHIJK'], [50, 105, 'Btw-nummer DE12345678'], [50, 170, 'Facture n° V-1']]]);
   const r = await readPdfDocument(pdf, own); assert.equal(r.fields.supplierVatNumber, undefined);
