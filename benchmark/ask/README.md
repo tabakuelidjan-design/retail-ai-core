@@ -65,6 +65,12 @@ Languages: **24 FR, 3 NL, 3 EN** (natural phrasings, not translations of each ot
 }
 ```
 
+**Several valid strategies.** Where more than one tool plan is acceptable, `expected.tools.acceptablePlans` lists them (each: `required` tools, with `"a|b"`
+alternatives, and `minDistinct`); `required`/`minDistinct` are then `[]`/`0`. A case passes its tool check if **at least one plan is satisfied** with data that was
+really obtained (the tool answered — except in refusal cases, where the tool's error is the point), no `forbidden` tool was used (this applies to every plan),
+the exact `periods` were covered, and the provider stayed inside the budgets (2 premise-verification calls + 4 analysis calls). The order of the calls never
+matters. Cases where one plan suffices keep `required` / `forbidden` / `minDistinct`.
+
 No expected answer text: the reasoning structure is evaluated, not the prose. Numbers are checked against Nordla's facts: a quantity counts as cited only if the
 verified answer references the fact that holds it.
 
@@ -79,19 +85,34 @@ recall, premise false-positive rate, premise verdict accuracy, tool selection ra
 accuracy, honest refusal rate, no-causal-after-contradiction rate, privacy violations, unknown tool calls, median and p95 latency, tokens, average cost per
 question. A model that writes well but misses premises shows a low `premiseRecall` no matter what its other scores are.
 
+### Repetitions and stability
+
+`--repeats N` (1 to 10, default 1; **3 for the final comparison**) runs the whole benchmark N times, each repetition fully independent (a new provider
+instance, a new dataset and new orchestrators). The existing sub-scores are pooled over all case × repetition samples; the report adds a `stability` block:
+the distribution of cases by passes (`3/3`, `2/3`, `1/3`, `0/3`), the mean per-case success rate, the unstable cases (passed sometimes), the cases whose status
+changed between repetitions, and the latency and cost spread (standard deviation; cost is `null` until an adapter reports it). Still no composite score.
+
+### Reproducibility metadata (`meta` in every result file)
+
+benchmark name/version and the SHA-256 of `cases.json` and of the fixed dataset · start/finish time and repetitions · Nordla commit, branch and whether the
+working tree was dirty · provider name, model, exact model version, temperature (or equivalent) as declared by the adapter's optional `metadata()` or the config
+· the redacted config · the adapter's path, last commit, uncommitted changes and file hash. **Secrets never enter a result:** the config and the adapter metadata
+are redacted by key name (`apiKey`, `token`, `secret`, `password`, `authorization`…) and by value shape (`sk-…`, `Bearer …`); the environment is never dumped
+(the *name* of an environment variable may appear, never its value).
+
 Latency is measured around each provider call. Tokens and cost come from the adapter's optional `drainUsage()`; without it they are `null` — never estimated.
 
 ## Running
 
 ```bash
-# harness check: the oracle must pass 30/30 (no model, no network)
-node benchmark/ask/run.js --provider oracle
+# harness check: the oracle must pass 30/30 on every repetition (no model, no network)
+node benchmark/ask/run.js --provider oracle --repeats 3
 ```
 
 Later, with a real adapter (an ES module exporting `createProvider(config) → { name, plan, explain, drainUsage? }`, i.e. the Nordla AI provider contract):
 
 ```bash
-NORDLA_BENCH_ALLOW_PROVIDER_CALLS=1 node benchmark/ask/run.js --provider ./benchmark/ask/adapters/<name>.js --config <name>.json
+NORDLA_BENCH_ALLOW_PROVIDER_CALLS=1 node benchmark/ask/run.js --provider ./benchmark/ask/adapters/<name>.js --config <name>.json --repeats 3
 ```
 
 Same 30 cases, same data, same tools, same expectations for every provider; compare the sub-score tables side by side. A second, qualitative pass on the real HABB

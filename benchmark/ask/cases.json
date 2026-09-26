@@ -56,7 +56,10 @@
     "turns": [ { "user": "Donne-moi le montant exact des remises accordées le mois dernier." } ],
     "expected": {
       "premises": [], "verdict": null, "status": ["OK"], "clarification": false,
-      "tools": { "required": ["get_discounts"], "forbidden": [], "minDistinct": 1 },
+      "tools": { "required": [], "forbidden": [], "minDistinct": 0, "acceptablePlans": [
+        { "required": ["get_discounts"], "minDistinct": 1 },
+        { "required": ["get_sales_metrics"], "minDistinct": 1 }
+      ] },
       "periods": [ { "from": "2026-08-01", "to": "2026-08-31" } ],
       "gaps": [], "limitations": [], "caveats": [],
       "quantities": [ { "kind": "money", "value": 8, "source": { "tool": "get_discounts", "args": { "period": { "period": "previous_month" } }, "path": "values.discounts" } } ],
@@ -115,7 +118,11 @@
     "turns": [ { "user": "Qu’est-ce qui a changé dans mon activité cette semaine ?" } ],
     "expected": {
       "premises": [], "verdict": null, "status": ["OK"], "clarification": false,
-      "tools": { "required": ["get_sales_metrics|compare_sales"], "forbidden": [], "minDistinct": 2 },
+      "tools": { "required": [], "forbidden": [], "minDistinct": 0, "acceptablePlans": [
+        { "required": ["get_sales_metrics", "get_top_products|get_channels|get_categories|get_customers"], "minDistinct": 2 },
+        { "required": ["compare_sales", "get_top_products|get_channels|get_categories|get_customers"], "minDistinct": 2 },
+        { "required": ["get_sales_metrics", "compare_sales"], "minDistinct": 2 }
+      ] },
       "periods": [], "gaps": [], "limitations": [], "caveats": [],
       "quantities": [], "forbiddenQuantities": [], "labels": [], "hypotheses": "allowed", "privacy": { "mustNotReachProvider": [] }, "unknownToolCalls": 0, "honestRefusal": false
     },
@@ -126,7 +133,10 @@
     "turns": [ { "user": "Compare juillet et septembre." } ],
     "expected": {
       "premises": [], "verdict": null, "status": ["OK"], "clarification": false,
-      "tools": { "required": ["compare_sales|get_sales_metrics"], "forbidden": [], "minDistinct": 1 },
+      "tools": { "required": [], "forbidden": [], "minDistinct": 0, "acceptablePlans": [
+        { "required": ["compare_sales"], "minDistinct": 1 },
+        { "required": ["get_sales_metrics"], "minDistinct": 1 }
+      ] },
       "periods": [ { "from": "2026-07-01", "to": "2026-07-31" } ],
       "gaps": [], "limitations": [], "caveats": [],
       "quantities": [], "forbiddenQuantities": [], "labels": [], "hypotheses": "none", "privacy": { "mustNotReachProvider": [] }, "unknownToolCalls": 0, "honestRefusal": false
@@ -150,7 +160,10 @@
     "turns": [ { "user": "Geef me een overzicht van de kortingen, terugbetalingen en de omzet van vorige maand." } ],
     "expected": {
       "premises": [], "verdict": null, "status": ["OK"], "clarification": false,
-      "tools": { "required": ["get_discounts", "get_refunds", "get_sales_metrics|compare_sales"], "forbidden": [], "minDistinct": 3 },
+      "tools": { "required": [], "forbidden": [], "minDistinct": 0, "acceptablePlans": [
+        { "required": ["get_discounts", "get_refunds", "get_sales_metrics|compare_sales"], "minDistinct": 3 },
+        { "required": ["get_sales_metrics"], "minDistinct": 1 }
+      ] },
       "periods": [ { "from": "2026-08-01", "to": "2026-08-31" } ],
       "gaps": [], "limitations": [], "caveats": [],
       "quantities": [

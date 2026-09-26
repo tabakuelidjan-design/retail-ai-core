@@ -16,7 +16,7 @@
       "pass": { "type": "boolean", "description": "true only if EVERY applicable check passed (a conjunction, never an average)" },
       "checks": {
         "type": "array", "items": { "$ref": "#/$defs/check" },
-        "description": "planValid | premisesDeclared | premiseVerdict | noSpuriousPremise | toolSelection (required, forbidden, minDistinct, exact periods, unknown tools) | status | intermediateTurns | clarification | explanationVerified | quantities | forbiddenQuantities | labels | noCausalAfterContradiction | limitations | caveats | gaps | honestRefusal | privacy"
+        "description": "planValid | premisesDeclared | premiseVerdict | noSpuriousPremise | toolSelection (acceptable plans or required/minDistinct, forbidden, exact periods, unknown tools) | budgets | status | intermediateTurns | clarification | explanationVerified | quantities | forbiddenQuantities | labels | noCausalAfterContradiction | limitations | caveats | gaps | honestRefusal | privacy"
       },
       "premises": { "type": "object", "description": "expected, declared, matched, missed, spurious, omittedField, verdict" },
       "hypotheses": { "type": "object", "properties": { "accepted": { "type": "integer" }, "rejected": { "type": "integer" } } },
@@ -35,7 +35,8 @@
           "premiseRecall": { "$ref": "#/$defs/rate", "description": "expected premises that the provider declared / expected premises" },
           "premiseFalsePositiveRate": { "$ref": "#/$defs/rate", "description": "questions with no expected premise for which a premise was declared anyway" },
           "premiseVerdictAccuracy": { "$ref": "#/$defs/rate" },
-          "toolSelectionRate": { "$ref": "#/$defs/rate" },
+          "toolSelectionRate": { "$ref": "#/$defs/rate", "description": "at least one acceptable plan satisfied with data really obtained, no forbidden tool, exact periods, no unknown tool" },
+          "budgetComplianceRate": { "$ref": "#/$defs/rate", "description": "stayed inside 2 premise-verification + 4 analysis tool calls" },
           "statusAccuracy": { "$ref": "#/$defs/rate" },
           "explanationVerificationPassRate": { "$ref": "#/$defs/rate", "description": "explanations accepted by the server-side verifier at the first attempt" },
           "quantityCitationRate": { "$ref": "#/$defs/rate" },
@@ -51,7 +52,31 @@
         }
       },
       "byCategory": { "type": "object", "additionalProperties": { "$ref": "#/$defs/rate" } },
-      "byLanguage": { "type": "object", "additionalProperties": { "$ref": "#/$defs/rate" }, "description": "success rate per language: detects a provider that collapses in Dutch or English" }
+      "byLanguage": { "type": "object", "additionalProperties": { "$ref": "#/$defs/rate" }, "description": "success rate per language: detects a provider that collapses in Dutch or English" },
+      "stability": {
+        "type": "object", "required": ["repeats", "casePassDistribution", "meanPerCaseSuccessRate", "unstableCases", "statusChanged", "latency", "cost", "perCase"],
+        "description": "What N independent repetitions reveal. Pooled sub-scores stay in subScores; nothing here is a composite.",
+        "properties": {
+          "repeats": { "type": "integer" },
+          "casePassDistribution": { "type": "object", "description": "cases by number of passing repetitions, e.g. { \"3/3\": 26, \"2/3\": 3, \"1/3\": 1, \"0/3\": 0 }" },
+          "meanPerCaseSuccessRate": { "$ref": "#/$defs/rate" },
+          "unstableCases": { "type": "array", "items": { "type": "string" }, "description": "passed in some repetitions and failed in others" },
+          "statusChanged": { "type": "array", "items": { "type": "string" }, "description": "final status differed between repetitions" },
+          "latency": { "type": "object", "properties": { "meanStdDevMs": {}, "maxStdDevMs": {} } },
+          "cost": { "type": ["object", "null"], "description": "null until the adapter reports cost" },
+          "perCase": { "type": "array", "items": { "type": "object", "properties": { "id": {}, "passes": {}, "of": {}, "rate": {}, "statuses": {}, "latencyMeanMs": {}, "latencyStdDevMs": {}, "costMeanUsd": {}, "costStdDevUsd": {} } } }
+        }
+      },
+      "meta": {
+        "type": "object", "description": "Reproducibility metadata. Never contains a secret (redacted by key name and value shape; the environment is never dumped).",
+        "properties": {
+          "benchmark": { "type": "object", "properties": { "name": {}, "version": {}, "cases": {}, "casesSha256": {}, "dataset": {}, "datasetSha256": {}, "referenceDate": {} } },
+          "run": { "type": "object", "properties": { "startedAt": {}, "finishedAt": {}, "durationMs": {}, "repeats": {}, "only": {}, "timeoutMs": {}, "node": {}, "platform": {} } },
+          "nordla": { "type": "object", "properties": { "commit": {}, "branch": {}, "dirty": {} } },
+          "provider": { "type": "object", "properties": { "name": {}, "model": {}, "modelVersion": {}, "temperature": {}, "metadata": {}, "config": {} } },
+          "adapter": { "type": ["object", "null"], "properties": { "path": {}, "commit": {}, "uncommittedChanges": {}, "sha256": {} } }
+        }
+      }
     }
   }
 }

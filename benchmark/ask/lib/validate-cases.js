@@ -34,6 +34,11 @@ export function validateCases(cases) {
     const t = e.tools ?? {};
     for (const n of [...(t.required ?? []).flatMap((x) => x.split('|')), ...(t.forbidden ?? []).filter((x) => x !== '*')]) if (!TOOL_NAMES.includes(n)) err(id, `unknown tool ${n}`);
     if (!Number.isInteger(t.minDistinct) || t.minDistinct < 0) err(id, 'tools.minDistinct');
+    if (t.acceptablePlans !== undefined) {
+      if (!Array.isArray(t.acceptablePlans) || t.acceptablePlans.length < 2) err(id, 'tools.acceptablePlans needs at least 2 plans (otherwise use required / minDistinct)');
+      for (const p of t.acceptablePlans ?? []) { if (!Array.isArray(p.required) || !p.required.length) err(id, 'a plan needs required tools'); for (const n of (p.required ?? []).flatMap((x) => x.split('|'))) if (!TOOL_NAMES.includes(n)) err(id, `unknown tool ${n} in a plan`); if (p.minDistinct !== undefined && (!Number.isInteger(p.minDistinct) || p.minDistinct < 0)) err(id, 'plan.minDistinct'); }
+      if (t.required.length || t.minDistinct) err(id, 'with acceptablePlans, required must be [] and minDistinct 0 (the plans replace them)');
+    }
     for (const p of e.periods ?? []) if (!DATE.test(p.from) || !DATE.test(p.to) || p.from > p.to) err(id, `bad period ${JSON.stringify(p)}`);
     for (const g of e.gaps ?? []) if (!KNOWN_GAPS.includes(g)) err(id, `unknown gap ${g}`);
     for (const q of e.quantities ?? []) { if (!QUANTITY_KINDS.includes(q.kind) || q.value === undefined || !q.source?.tool || !q.source?.path) err(id, `bad quantity ${JSON.stringify(q).slice(0, 60)}`); if (q.source?.tool && !TOOL_NAMES.includes(q.source.tool)) err(id, `unknown source tool ${q.source.tool}`); }

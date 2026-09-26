@@ -19,6 +19,7 @@ export function createOracleProvider({ cases, plans = JSON.parse(readFileSync(ne
   return {
     name: `oracle${degrade === 'none' ? '' : `:${degrade}`}`,
     setContext(caseId, turn) { ctx = { caseId, turn }; },
+    metadata: () => ({ model: 'oracle', modelVersion: null, temperature: null, note: 'scripted stand-in, not a model' }),
     async plan() {
       const plan = JSON.parse(JSON.stringify(plans[ctx.caseId][ctx.turn]));
       if (degrade === 'forgetPremises') plan.premises = [];

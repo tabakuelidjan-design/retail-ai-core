@@ -5,6 +5,7 @@
 //
 //   scoreCase(case, record)            -> per-case score: `checks` (each pass/fail/not applicable), raw measures, latency, usage
 //   summarize(caseScores, meta)        -> per-provider report: `subScores` (separate), `byCategory`, `byLanguage`, `perCase`
+//   summarizeRuns(runs, meta)          -> the same over N independent repetitions, plus `stability` (per-case pass counts, latency/cost spread)
 
 import { sanitize } from '../../../src/analytics-premium/server/tools/contract.js';
 import { resolvePeriod } from '../../../src/analytics-premium/server/period-engine.js';
@@ -58,13 +59,19 @@ export function scoreCase(testCase, record) {
   // --- tool selection ---
   const calls = res.toolCalls ?? []; const executed = calls.filter((c) => !c.rejected);
   const names = executed.map((c) => c.tool);
-  const requiredOk = exp.tools.required.every((alt) => alt.split('|').some((n) => names.includes(n)));
+  // Several strategies can be valid: `acceptablePlans` lists them (each = required tools, with "a|b" alternatives, and minDistinct). The call ORDER never matters.
+  // The data must really have been OBTAINED (the tool answered) unless the case expects a refusal, where the tool's error is the point. `forbidden` applies to every plan.
+  const plans = exp.tools.acceptablePlans ?? [{ required: exp.tools.required, minDistinct: exp.tools.minDistinct }];
+  const needsData = !exp.status.some((st) => ['CANNOT_ANSWER', 'PREMISE_UNVERIFIABLE'].includes(st));
+  const have = needsData ? executed.filter((c) => c.ok).map((c) => c.tool) : names;
+  const planFits = plans.map((p) => p.required.every((alt) => alt.split('|').some((n) => have.includes(n))) && new Set(have).size >= (p.minDistinct ?? 0));
+  const requiredOk = planFits.some(Boolean); const planMatched = planFits.findIndex(Boolean); const distinctOk = requiredOk;
   const forbiddenOk = exp.tools.forbidden.includes('*') ? names.length === 0 : exp.tools.forbidden.every((n) => !names.includes(n));
-  const distinctOk = new Set(names).size >= exp.tools.minDistinct;
   const windows = executed.flatMap((c) => windowsOfArgs(c.tool, c.args)); const covered = exp.periods.filter((p) => windows.some((w) => w.from === p.from && w.to === p.to));
   const periodsOk = covered.length === exp.periods.length;
   const unknownToolCalls = calls.filter((c) => c.rejected && c.errorCode === 'UNKNOWN_TOOL').length; const invalidArgCalls = calls.filter((c) => c.rejected && c.errorCode === 'INVALID_ARGUMENT').length;
-  check('toolSelection', true, requiredOk && forbiddenOk && distinctOk && periodsOk && unknownToolCalls <= exp.unknownToolCalls, { requiredOk, forbiddenOk, distinctOk, periodsOk, unknownToolCalls, invalidArgCalls, executed: names });
+  check('toolSelection', true, requiredOk && forbiddenOk && distinctOk && periodsOk && unknownToolCalls <= exp.unknownToolCalls, { requiredOk, forbiddenOk, periodsOk, planMatched, plansAcceptable: plans.length, unknownToolCalls, invalidArgCalls, executed: names });
+  check('budgets', true, !res.limits?.truncated && !res.limits?.premiseBudgetExceeded, { truncated: !!res.limits?.truncated, premiseBudgetExceeded: !!res.limits?.premiseBudgetExceeded });
 
   // --- final status, clarification, intermediate turns ---
   check('status', true, exp.status.includes(res.status), { expected: exp.status, actual: res.status });
@@ -137,6 +144,7 @@ export function summarize(scores, meta = {}) {
       premiseFalsePositiveRate: rate(fp.length, noPremise.length),                                // questions with no premise for which it declared one anyway
       premiseVerdictAccuracy: passRate(scores, 'premiseVerdict'),
       toolSelectionRate: passRate(scores, 'toolSelection'),
+      budgetComplianceRate: passRate(scores, 'budgets'),                                         // the provider stayed inside the premise (2) and analysis (4) tool budgets
       statusAccuracy: passRate(scores, 'status'),
       explanationVerificationPassRate: passRate(scores, 'explanationVerified'),
       quantityCitationRate: passRate(scores, 'quantities'),
@@ -152,5 +160,40 @@ export function summarize(scores, meta = {}) {
     },
     byCategory: group('category'), byLanguage: group('language'),
     perCase: scores,
+  };
+}
+
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+const stdDev = (xs) => { if (xs.length < 2) return xs.length ? 0 : null; const m = mean(xs); return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / xs.length); };
+
+/**
+ * N independent repetitions of the whole benchmark (`runs` = one array of case scores per repetition). The existing sub-scores are pooled over all repetitions
+ * (each case x repetition is one sample); `stability` adds what repetitions reveal. Still no composite score.
+ */
+export function summarizeRuns(runs, meta = {}) {
+  const N = runs.length;
+  const pooled = runs.flatMap((r, k) => r.map((s) => ({ ...s, repeat: k + 1 })));
+  const base = summarize(pooled, { ...meta, repeats: N });
+  const ids = runs[0].map((s) => s.id);
+  const perCase = ids.map((id) => {
+    const each = runs.map((r) => r.find((s) => s.id === id)); const passes = each.filter((s) => s.pass).length;
+    const lat = each.map((s) => s.latency.totalMs).filter((x) => x != null); const cost = each.map((s) => s.usage.costUsd).filter((x) => x != null);
+    return { id, category: each[0].category, language: each[0].language, passes, of: N, rate: round(passes / N), statuses: each.map((s) => s.status),
+      latencyMeanMs: round(mean(lat), 1), latencyStdDevMs: round(stdDev(lat), 2), costMeanUsd: cost.length ? round(mean(cost), 6) : null, costStdDevUsd: cost.length ? round(stdDev(cost), 6) : null };
+  });
+  const distribution = {}; for (let k = N; k >= 0; k -= 1) distribution[`${k}/${N}`] = perCase.filter((c) => c.passes === k).length;
+  const sds = perCase.map((c) => c.latencyStdDevMs).filter((x) => x != null); const csd = perCase.map((c) => c.costStdDevUsd).filter((x) => x != null);
+  return {
+    ...base,
+    stability: {
+      repeats: N,
+      casePassDistribution: distribution,                                           // e.g. { '3/3': 26, '2/3': 3, '1/3': 1, '0/3': 0 }
+      meanPerCaseSuccessRate: rate(perCase.reduce((a, c) => a + c.passes, 0), ids.length * N),   // mean over cases of (passes / N)
+      unstableCases: perCase.filter((c) => c.passes > 0 && c.passes < N).map((c) => c.id),         // passed sometimes, failed sometimes
+      statusChanged: perCase.filter((c) => new Set(c.statuses).size > 1).map((c) => c.id),
+      latency: { meanStdDevMs: round(mean(sds), 2), maxStdDevMs: sds.length ? Math.max(...sds) : null },
+      cost: csd.length ? { meanStdDevUsd: round(mean(csd), 6), maxStdDevUsd: Math.max(...csd) } : null,   // null until an adapter reports cost
+      perCase,
+    },
   };
 }

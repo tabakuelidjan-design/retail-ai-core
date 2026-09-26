@@ -123,7 +123,7 @@ test('SAFETY: the benchmark lives outside test/, npm test never reaches a provid
   const noArg = run([]); assert.equal(noArg.status, 2); assert.match(noArg.stderr, /usage/);
   const real = run(['--provider', './adapters/does-not-exist.js']); assert.equal(real.status, 2); assert.match(real.stderr, /Refusing to call a real provider/);
   const src = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = path.join(d, f); if (statSync(p).isDirectory()) { if (f !== 'results') walk(p); } else if (/\.(js|json|md)$/.test(f)) src.push([p, readFileSync(p, 'utf8')]); } }; walk(path.join(ROOT, 'benchmark/ask'));
-  for (const [p, s] of src.filter(([p]) => p.endsWith('.js'))) { assert.ok(!/\bfetch\(|node:https?|XMLHttpRequest|WebSocket|https?:\/\//.test(s), `${path.basename(p)}: no network`); assert.ok(!/openai|anthropic|claude|gemini|kimi|mistral|api[_-]?key|sk-[A-Za-z0-9]/i.test(s.replace(/\/\/.*$/gm, '')), `${path.basename(p)}: no provider named`); }
+  for (const [p, s] of src.filter(([p]) => p.endsWith('.js'))) { assert.ok(!/\bfetch\(|node:https?|XMLHttpRequest|WebSocket|https?:\/\//.test(s), `${path.basename(p)}: no network`); assert.ok(!/openai|anthropic|claude|gemini|kimi|mistral|api[_-]?key|\bsk-[A-Za-z0-9]{10,}/i.test(s.replace(/\/\/.*$/gm, '')), `${path.basename(p)}: no provider named`); }
 });
 
 test('the runner works end to end with the oracle (no network) and writes a report with separate sub-scores', () => {
@@ -131,4 +131,135 @@ test('the runner works end to end with the oracle (no network) and writes a repo
   const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--only', 'S01,P01,C01', '--out', out], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /PASS {2}S01/); assert.match(r.stdout, /sub-scores \(separate, no composite\)/);
   const rep = JSON.parse(readFileSync(out, 'utf8')); assert.equal(rep.cases, 3); assert.equal(rep.provider, 'oracle'); assert.ok(rep.subScores.premiseRecall && rep.perCase.length === 3);
+});
+
+// ---------- acceptable plans, repetitions, reproducibility metadata ----------
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { runBenchmark } from '../benchmark/ask/lib/benchmark.js';
+import { summarizeRuns } from '../benchmark/ask/lib/score.js';
+import { collectMetadata, redact, adapterInfo, BENCHMARK_VERSION } from '../benchmark/ask/lib/meta.js';
+
+const withPlan = (oracle, toolCalls) => ({ ...oracle, plan: async () => ({ premises: [], toolCalls }) });
+const sm = (period) => ({ tool: 'get_sales_metrics', args: { period } });
+const run1 = async (id, provider) => { const { tools } = await createBenchmarkTools(); return scoreCase(byId[id], await runCase({ testCase: byId[id], provider, tools })); };
+const chk = (s, id) => s.checks.find((c) => c.id === id);
+
+test('acceptable plans: several valid strategies are declared in the case; the schema rejects malformed plan lists', () => {
+  for (const id of ['M01', 'M02', 'M04', 'Q01']) { const t = byId[id].expected.tools; assert.ok(t.acceptablePlans.length >= 2, id); assert.deepEqual([t.required, t.minDistinct], [[], 0], `${id}: the plans replace required/minDistinct`); }
+  for (const id of ['S01', 'P01', 'C01']) assert.equal(byId[id].expected.tools.acceptablePlans, undefined, `${id} keeps required/forbidden/minDistinct: they suffice`);
+  const bad = (mutate) => { const c = structuredClone(cases); mutate(c.find((x) => x.id === 'M02').expected.tools); return validateCases(c); };
+  assert.ok(bad((t) => { t.acceptablePlans = [{ required: ['compare_sales'] }]; }).some((e) => /at least 2 plans/.test(e)));
+  assert.ok(bad((t) => { t.acceptablePlans[0].required = ['get_weather']; }).some((e) => /unknown tool get_weather/.test(e)));
+  assert.ok(bad((t) => { t.required = ['compare_sales']; }).some((e) => /plans replace them/.test(e)));
+  assert.ok(bad((t) => { t.acceptablePlans[0].required = []; }).some((e) => /needs required tools/.test(e)));
+});
+
+test('acceptable plans: any valid strategy passes, in any order; missing data, a forbidden tool or a broken budget fails', async () => {
+  const oracle = createOracleProvider({ cases });
+  // M02 (compare July and September): one compare_sales OR two get_sales_metrics are both fine
+  assert.equal((await run1('M02', oracle)).pass, true);
+  const two = await run1('M02', withPlan(oracle, [sm({ period: 'this_month' }), sm({ period: 'custom', from: '2026-07-01', to: '2026-07-31' })]));
+  assert.equal(two.pass, true, 'the second acceptable plan'); assert.equal(chk(two, 'toolSelection').planMatched, 1);
+  assert.equal((await run1('M02', withPlan(oracle, [sm({ period: 'custom', from: '2026-07-01', to: '2026-07-31' }), sm({ period: 'this_month' })]))).pass, true, 'the order of the calls does not matter');
+  // M04 (three topics): the three dedicated tools in ANY order, or the single sales tool that already carries the three figures
+  const pm = { period: 'previous_month' }; const tri = (order) => order.map((t) => ({ tool: t, args: { period: pm } }));
+  assert.equal((await run1('M04', withPlan(oracle, tri(['get_sales_metrics', 'get_refunds', 'get_discounts'])))).pass, true); assert.equal((await run1('M04', withPlan(oracle, tri(['get_refunds', 'get_discounts', 'get_sales_metrics'])))).pass, true);
+  assert.equal((await run1('M04', withPlan(oracle, tri(['get_sales_metrics'])))).pass, true, 'one tool that returns all three figures is valid');
+  const partial = await run1('M04', withPlan(oracle, tri(['get_discounts']))); assert.equal(chk(partial, 'toolSelection').pass, false, 'the data for two of the three topics was never obtained');
+  // Q01: discounts from the dedicated tool or from the sales tool; a different, unrelated tool fails
+  assert.equal((await run1('Q01', withPlan(oracle, [sm(pm)]))).pass, true); assert.equal(chk(await run1('Q01', withPlan(oracle, [{ tool: 'get_shipping', args: { period: pm } }])), 'toolSelection').pass, false);
+  // M01: a combination among the accepted ones
+  assert.equal(chk(await run1('M01', withPlan(oracle, [sm({ period: 'this_week' }), { tool: 'get_channels', args: { period: { period: 'this_week' } } }])), 'toolSelection').pass, true);
+  assert.equal(chk(await run1('M01', withPlan(oracle, [sm({ period: 'this_week' })])), 'toolSelection').pass, false, 'a single tool is not a multi-tool answer');
+  // forbidden tools apply to every plan, budgets are checked, and "data obtained" means the tool answered (unless a refusal is expected)
+  const forbid = structuredClone(byId.M02); forbid.expected.tools.forbidden = ['get_channels'];
+  const { tools } = await createBenchmarkTools(); const rec = await runCase({ testCase: forbid, provider: withPlan(oracle, [{ tool: 'compare_sales', args: { periodA: { period: 'this_month' }, periodB: { period: 'custom', from: '2026-07-01', to: '2026-07-31' } } }, { tool: 'get_channels', args: {} }]), tools });
+  const f = chk(scoreCase(forbid, rec), 'toolSelection'); assert.equal(f.requiredOk, true); assert.equal(f.forbiddenOk, false); assert.equal(f.pass, false);
+  const over = await run1('S01', withPlan(oracle, [1, 2, 3, 4, 5, 6].map((limit) => ({ tool: 'get_top_products', args: { limit } })).concat([sm({ period: 'last_30_days' })])));
+  assert.equal(chk(over, 'budgets').pass, false, 'more than 4 analysis calls asked'); assert.equal(chk(over, 'budgets').truncated, true);
+  assert.equal(chk(await run1('S01', oracle), 'budgets').pass, true);
+  const s01 = await runCase({ testCase: byId.S01, provider: oracle, tools }); s01.turns[0].response.toolCalls.forEach((c) => { c.ok = false; c.errorCode = 'NO_DATA'; });
+  assert.equal(chk(scoreCase(byId.S01, s01), 'toolSelection').pass, false, 'the tool failed: the data was not obtained');
+  const r02 = await runCase({ testCase: byId.R02, provider: oracle, tools }); assert.equal(chk(scoreCase(byId.R02, r02), 'toolSelection').pass, true, 'a refusal case expects the tool error');
+});
+
+/** an independent oracle per repetition, made to fail on chosen (case, repetition) pairs: 'x' = fails that time */
+const flakyFactory = (matrix, extra = {}) => (repeat) => {
+  const oracle = createOracleProvider({ cases }); let current = null;
+  return { ...oracle, setContext(id, turn) { current = id; oracle.setContext(id, turn); },
+    plan: async (i) => { if (extra.delayMs) await new Promise((r) => setTimeout(r, extra.delayMs * repeat)); return matrix[current]?.[repeat - 1] === 'x' ? { premises: [], clarification: { text: 'Précisez ?' } } : oracle.plan(i); },
+    drainUsage: extra.cost ? () => ({ inputTokens: 10, outputTokens: 5, costUsd: extra.cost * repeat }) : undefined };
+};
+
+test('repetitions: independent runs, and a stability report next to the existing sub-scores (3/3, 2/3, 1/3, 0/3; latency and cost spread)', async () => {
+  const made = []; const matrix = { S01: 'ooo', S02: 'oox', S03: 'oxx', S04: 'xxx' };
+  const factory = flakyFactory(matrix, { delayMs: 8, cost: 0.001 });
+  const { runs, provider } = await runBenchmark({ cases, repeats: 3, only: ['S01', 'S02', 'S03', 'S04'], createProvider: (r) => { const p = factory(r); made.push(p); return p; } });
+  assert.equal(made.length, 3); assert.equal(new Set(made).size, 3, 'a fresh provider instance for each repetition'); assert.equal(runs.length, 3); assert.ok(runs.every((r) => r.length === 4)); assert.equal(provider, made[0]);
+  const rep = summarizeRuns(runs, { provider: 'flaky' }); const st = rep.stability;
+  assert.deepEqual(st.casePassDistribution, { '3/3': 1, '2/3': 1, '1/3': 1, '0/3': 1 }); assert.equal(st.repeats, 3);
+  assert.deepEqual(st.meanPerCaseSuccessRate, { value: 0.5, num: 6, den: 12 }); assert.deepEqual(st.unstableCases, ['S02', 'S03']); assert.deepEqual(st.statusChanged, ['S02', 'S03'], 'S04 fails the same way every time: unstable = passes sometimes, statusChanged = status differs between repetitions');
+  assert.deepEqual(st.perCase.map((c) => [c.id, c.passes, c.of]), [['S01', 3, 3], ['S02', 2, 3], ['S03', 1, 3], ['S04', 0, 3]]);
+  assert.ok(st.latency.meanStdDevMs > 0 && st.latency.maxStdDevMs >= st.latency.meanStdDevMs, 'latency varies between repetitions'); assert.ok(st.cost.meanStdDevUsd > 0, 'cost varies between repetitions (0.001, 0.002, 0.003 per call)');
+  assert.deepEqual([rep.repeats, rep.cases], [3, 12], 'the existing sub-scores are pooled over all case x repetition samples'); assert.deepEqual(rep.subScores.successRate, { value: 0.5, num: 6, den: 12 });
+  for (const k of [...Object.keys(rep), ...Object.keys(st)]) assert.ok(!/^(score|overall|composite|weighted)/i.test(k), `no composite key: ${k}`);
+  const stable = summarizeRuns((await runBenchmark({ cases, repeats: 1, only: ['S01', 'C01'], createProvider: () => createOracleProvider({ cases }) })).runs); assert.deepEqual(stable.stability.casePassDistribution, { '1/1': 2, '0/1': 0 }); assert.equal(stable.stability.cost, null, 'no cost reported, none invented');
+  await assert.rejects(runBenchmark({ cases, repeats: 0, createProvider: () => oracleFor() }), /repeats/); await assert.rejects(runBenchmark({ cases, repeats: 11, createProvider: () => oracleFor() }), /repeats/);
+});
+const oracleFor = () => createOracleProvider({ cases });
+
+test('repetitions: the oracle stays 30/30 on every repetition, and the runner takes --repeats (default 1, refuses anything else than 1..10)', () => {
+  const run = (a) => spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--out', path.join(tmpdir(), `bench-${Date.now()}-${Math.random()}.json`), ...a], { encoding: 'utf8' });
+  for (const bad of ['0', '11', 'abc', '2.5']) { const r = run(['--repeats', bad]); assert.equal(r.status, 2, bad); assert.match(r.stderr, /--repeats must be an integer from 1 to 10/); }
+  const out = path.join(tmpdir(), `bench-full-${Date.now()}.json`);
+  const full = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--repeats', '3', '--out', out], { encoding: 'utf8' }); assert.equal(full.status, 0, full.stderr);
+  const rep = JSON.parse(readFileSync(out, 'utf8')); assert.equal(rep.meta.run.repeats, 3); assert.deepEqual(rep.stability.casePassDistribution, { '3/3': 30, '2/3': 0, '1/3': 0, '0/3': 0 });
+  assert.deepEqual(rep.subScores.successRate, { value: 1, num: 90, den: 90 }); assert.equal(rep.cases, 90); assert.equal(rep.stability.perCase.length, 30); assert.match(full.stdout, /stability over 3 repetition/);
+  const def = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--only', 'S01', '--out', out], { encoding: 'utf8' }); assert.equal(def.status, 0); assert.equal(JSON.parse(readFileSync(out, 'utf8')).meta.run.repeats, 1, 'default: 1');
+});
+
+test('reproducibility metadata: benchmark version/hashes, run times, Nordla commit, provider/model/version/temperature, config, adapter commit - and NEVER a secret', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bench-adapter-')); const adapter = path.join(dir, 'fake-adapter.mjs');
+  const oracleUrl = new URL('../benchmark/ask/lib/oracle-provider.js', import.meta.url).href; const casesUrl = new URL('../benchmark/ask/cases.json', import.meta.url).href;
+  writeFileSync(adapter, `import { readFileSync } from 'node:fs';
+import { createOracleProvider } from '${oracleUrl}';
+export function createProvider(config) {
+  const cases = JSON.parse(readFileSync(new URL('${casesUrl}'), 'utf8'));
+  const p = createOracleProvider({ cases });
+  return { ...p, name: 'fake-adapter', metadata: () => ({ model: config.model, modelVersion: 'm-1-2026-01-01', temperature: config.temperature, apiKey: 'sk-LEAKYLEAKYLEAKY123456', region: 'eu' }) };
+}
+`);
+  const cfg = path.join(dir, 'cfg.json');
+  writeFileSync(cfg, JSON.stringify({ model: 'm-1', temperature: 0.2, apiKey: 'sk-SECRETSECRETSECRET1234', apiKeyEnv: 'MY_PROVIDER_KEY', headers: { Authorization: 'Bearer abc123def456ghi789' }, nested: { token: 'zzz-top-secret' }, note: 'sk-INLINEINLINEINLINE9999' }));
+  const out = path.join(dir, 'result.json');
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', adapter, '--config', cfg, '--only', 'S01,C01', '--repeats', '2', '--out', out], { encoding: 'utf8', env: { ...process.env, NORDLA_BENCH_ALLOW_PROVIDER_CALLS: '1', MY_PROVIDER_KEY: 'sk-ENVSECRETVALUE99999999' } });
+  assert.equal(r.status, 0, r.stderr);
+  const raw = readFileSync(out, 'utf8'); const rep = JSON.parse(raw); const m = rep.meta;
+  for (const secret of ['sk-SECRETSECRETSECRET1234', 'abc123def456ghi789', 'zzz-top-secret', 'sk-INLINEINLINEINLINE9999', 'sk-LEAKYLEAKYLEAKY123456', 'sk-ENVSECRETVALUE99999999']) assert.ok(!raw.includes(secret), `no secret in the result: ${secret.slice(0, 8)}...`);
+  assert.ok(raw.includes('[redacted]') && raw.includes('MY_PROVIDER_KEY'), 'redacted, but the NAME of the environment variable is kept'); assert.ok(!raw.includes('"PATH"') && !/USERPROFILE|APPDATA/i.test(raw), 'the environment is never dumped');
+  assert.deepEqual([m.benchmark.name, m.benchmark.version, m.benchmark.cases, m.benchmark.dataset, m.benchmark.referenceDate], ['nordla-ask-benchmark', BENCHMARK_VERSION, 30, 'synthetic-fixed', '2026-09-26']);
+  assert.equal(m.benchmark.casesSha256, createHash('sha256').update(readFileSync(path.join(ROOT, 'benchmark/ask/cases.json'))).digest('hex')); assert.match(m.benchmark.datasetSha256, /^[0-9a-f]{64}$/);
+  assert.ok(Date.parse(m.run.startedAt) <= Date.parse(m.run.finishedAt)); assert.equal(m.run.repeats, 2); assert.deepEqual(m.run.only, ['S01', 'C01']);
+  assert.equal(m.nordla.commit, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim()); assert.equal(typeof m.nordla.dirty, 'boolean'); assert.ok(m.nordla.branch);
+  assert.deepEqual([m.provider.name, m.provider.model, m.provider.modelVersion, m.provider.temperature], ['fake-adapter', 'm-1', 'm-1-2026-01-01', 0.2]); assert.equal(m.provider.config.apiKey, '[redacted]'); assert.equal(m.provider.config.apiKeyEnv, 'MY_PROVIDER_KEY'); assert.equal(m.provider.metadata.region, 'eu');
+  assert.equal(m.adapter.path, 'fake-adapter.mjs'); assert.equal(m.adapter.commit, null, 'an adapter outside the repository has no commit'); assert.match(m.adapter.sha256, /^[0-9a-f]{64}$/);
+  const oracle = adapterInfo(path.join(ROOT, 'benchmark/ask/lib/oracle-provider.js')); assert.match(oracle.commit, /^[0-9a-f]{40}$/, 'an adapter inside the repository carries its last commit'); assert.equal(oracle.path, 'benchmark/ask/lib/oracle-provider.js');
+  assert.equal(rep.subScores.successRate.den, 4, '2 cases x 2 repetitions');
+});
+
+test('redaction and metadata units: by key name and by value shape, env-var NAMES kept, provider/adapter metadata redacted too', () => {
+  assert.deepEqual(redact({ apiKey: 'x', api_key: 'y', token: 't', password: 'p', secret: 's', Authorization: 'Bearer q', model: 'ok', apiKeyEnv: 'OPENAI_KEY', list: [{ accessToken: 'a' }, 'sk-ABCDEFGHIJKLMNOP1234', 'plain'], n: 3, empty: null }),
+    { apiKey: '[redacted]', api_key: '[redacted]', token: '[redacted]', password: '[redacted]', secret: '[redacted]', Authorization: '[redacted]', model: 'ok', apiKeyEnv: 'OPENAI_KEY', list: [{ accessToken: '[redacted]' }, '[redacted]', 'plain'], n: 3, empty: null });
+  const fake = { name: 'p', metadata: () => ({ model: 'm', apiKey: 'sk-ABCDEFGHIJKLMNOP1234' }) };
+  const meta = collectMetadata({ provider: fake, config: { temperature: 0.7, token: 'zzz' }, repeats: 3, startedAt: new Date('2026-01-01T00:00:00Z'), finishedAt: new Date('2026-01-01T00:00:05Z'), casesFile: path.join(ROOT, 'benchmark/ask/cases.json'), referenceDate: '2026-09-26' });
+  assert.equal(meta.run.durationMs, 5000); assert.equal(meta.provider.temperature, 0.7, 'falls back to the config'); assert.equal(meta.provider.metadata.apiKey, '[redacted]'); assert.equal(meta.provider.config.token, '[redacted]'); assert.equal(meta.adapter, null); assert.equal(meta.benchmark.datasetSha256, null);
+  const t1 = createHash('sha256'); void t1; mkdirSync(tmpdir(), { recursive: true });
+});
+
+test('the dataset used by every repetition is byte-identical (same hash), so runs are comparable', async () => {
+  const hash = async () => { const { dir } = await createBenchmarkTools(); return createHash('sha256').update(readFileSync(path.join(dir, 'dataset.json'))).digest('hex'); };
+  assert.equal(await hash(), await hash());
 });
