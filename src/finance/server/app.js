@@ -27,6 +27,7 @@ import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
+import { dueViewOf } from '../payables/index.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
 import { DOCUMENT_TYPES, accountingSign, checkPurchaseDocument, documentTypeOf, purchaseModelOf } from '../purchase-document.js';
 import { refundRows } from '../refund-rows.js';
@@ -839,6 +840,7 @@ export function createFinanceApp(deps) {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
+    due: dueViewOf(raw, { today: clock.today() }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
     // common purchase-document model (phase 1): type + accounting direction, identifiers, VAT by rate, lines, where each field came from

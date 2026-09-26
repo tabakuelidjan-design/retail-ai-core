@@ -16,6 +16,7 @@ import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf,
 import { normalizeBelgianNumber } from './company.js';
 import { findDuplicates, isReferenced, matchSupplier } from './purchase-matching.js';
 import { readPdfDocument } from './pdf-invoice.js';
+import { buildDue, refreshDueAfterIssueDateChange } from './payables/index.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -202,6 +203,9 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const values = Object.fromEntries(Object.entries(ex.fields).map(([k, v]) => [k, v.value]));
       let fieldsIn; try { fieldsIn = clean(pick(values)); } catch { fieldsIn = clean(pick(values, FIELD_KEYS.filter((k) => k !== 'documentType'))); } // an unknown type is never stored; the person chooses
       const provenance = provenanceOf(ex);
+      // due date (phase 4.7): the printed date is used as read; a date is computed ONLY from an explicit payment term of the closed grammar, and its wording is kept
+      const dueInfo = buildDue({ issueDate: fieldsIn.issueDate ?? null, fields: ex.fields });
+      if (dueInfo.origin === 'COMPUTED_FROM_TERMS') { fieldsIn.dueDate = dueInfo.dueDate; provenance.dueDate = dueInfo.provenance; }
       const candidate = { merchantId, ...fieldsIn, currency: values.currency ?? null, sha256, extraction: { provenance } };
       const rows = await rowsOf();
       refuseCertainDuplicate(candidate, rows);
@@ -213,7 +217,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         row = await store.saveSupplierInvoice({
           merchantId, source, status: 'RECEIVED', ...fieldsIn, currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
           receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null,
-          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance, ...(ex.pdf ? { pdf: ex.pdf } : {}), ...(ex.invoices ? { invoices: ex.invoices } : {}), // several invoices in one PDF: listed, none chosen
+          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: [...new Set([...(ex.warnings ?? []), ...dueInfo.warnings])], provenance, ...(dueInfo.due ? { due: dueInfo.due } : {}), ...(ex.pdf ? { pdf: ex.pdf } : {}), ...(ex.invoices ? { invoices: ex.invoices } : {}), // several invoices in one PDF: listed, none chosen
             matching: matchingSnapshot(match), duplicateCheck: duplicateSnapshot(dups) },
         });
       } catch (e) { await discardUnreferenced([ref]); throw e; } // e.g. refused by the database unique index (concurrent import)
@@ -332,6 +336,13 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         const provenance = { ...(r.extraction?.provenance ?? {}) };
         for (const k of changed) { const extracted = provenance[k]?.source === 'user' ? provenance[k].extracted : provenance[k]; provenance[k] = { source: 'user', at: now(), confidence: 1, ...(extracted ? { extracted } : {}) }; }
         patch.extraction = { ...(r.extraction ?? { extractor: 'manual', at: now(), fields: {}, warnings: [] }), provenance };
+        // due date (phase 4.7): the origin stays in provenance.dueDate (source 'user' = MANUAL); clearing the date is a decision, not a gap to fill back
+        if (changed.includes('issueDate') && !changed.includes('dueDate')) {
+          const fresh = refreshDueAfterIssueDateChange(r, patch.issueDate ?? null);
+          if (fresh.due) patch.extraction.due = fresh.due;
+          if (fresh.dueDate !== undefined) { patch.dueDate = fresh.dueDate; if (fresh.provenance) provenance.dueDate = fresh.provenance; else delete provenance.dueDate; }
+        }
+        if (changed.includes('dueDate') && patch.extraction.due) patch.extraction.due = { ...patch.extraction.due, effective: { value: patch.dueDate ?? null, origin: patch.dueDate ? 'MANUAL' : 'UNKNOWN' }, suppressed: !patch.dueDate };
       }
       const saved = await store.updateSupplierInvoice(id, patch, r.status);
       if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
