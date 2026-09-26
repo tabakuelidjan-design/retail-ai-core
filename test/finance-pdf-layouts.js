@@ -107,8 +107,8 @@ export const LAYOUTS = {
   china: () => makePdf([[
     [118, 20, 'ZHEJIANG EXEMPLE TRADE CO.,LIMITED', 12], [299, 40, 'INVOICE', 14], [36, 60, 'Street: Rue Exemple 1'], [300, 60, 'Invoice NO.:'],
     [36, 72, 'city : Bruxelles'], [300, 84, 'DATE:2026/02/13'], [36, 96, 'VAT: BE0000 000 097'],
-    [36, 120, 'ITEM NO'], [100, 120, 'description'], [250, 120, 'PRICE'], [320, 120, 'PCS'], [400, 120, 'AMOUNT'],
-    [36, 135, 'TA001'], [100, 135, 'C-C cable 2M'], [250, 135, '¥3.20'], [320, 135, '200'], [400, 135, '¥640.00'],
+    [36, 120, 'ITEM NO'], [100, 120, 'description'], [250, 120, 'PRICE'], [320, 120, 'PCS'], [400, 120, 'AMOUNT'], [480, 120, 'T. KG'],
+    [36, 135, 'TA001'], [100, 135, 'C-C cable 2M'], [250, 135, '¥3.20'], [320, 135, '200'], [400, 135, '¥640.00'], [480, 135, '13.40'],
     [312, 300, 'RMB TOTAL:'], [400, 300, 'RMB'], [460, 300, '¥640.00'], [190, 330, 'USD TOTAL:'], [400, 330, 'USD'], [460, 330, '$91.43'],
     [36, 420, 'BANK ADDRESS: NO.158 EXEMPLE ROAD YIWU CITY'], [36, 432, 'BENEFICIARY: ZHEJIANG EXEMPLE TRADE CO.,LIMITED'],
   ]]),

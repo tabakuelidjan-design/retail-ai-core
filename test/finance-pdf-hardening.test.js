@@ -94,6 +94,7 @@ test('Chinese commercial invoice: empty "Invoice NO." stays empty (never "158" f
   const r = await read('china'); const x = v(r);
   assert.equal(x.invoiceNumber, undefined); assert.equal(x.issueDate, '2026-02-13'); assert.equal(x.supplierName, 'ZHEJIANG EXEMPLE TRADE CO.,LIMITED');
   assert.equal(x.currency, undefined); assert.ok(r.warnings.includes('CURRENCY_AMBIGUOUS'));
+  assert.deepEqual(x.lines.map((l) => [l.description, l.netCents]), [['C-C cable 2M', 64000]], 'the AMOUNT column, not the weight column printed after it');
 });
 test('travel e-receipt: a RECEIPT, "PTE. LTD.", "Aug 30, 2025", "EUR582.28" paid (not the amount before discount), booking number as reference', async () => {
   const x = v(await read('travelReceipt'));

@@ -501,6 +501,8 @@ export function extractFromPdfLines(pages, own = {}) {
       const marks = [...lines[hi].cells, ...(cont ? cont.cells : [])];
       const exclCell = marks.find((c) => /\((?:\s*excl|\s*ht\b|\s*htva|\s*hors)/i.test(c.text)); const hasIncl = marks.some((c) => /\((?:\s*incl|\s*ttc)/i.test(c.text));
       const exclIsUnit = exclCell ? lines[hi].cells.some((c) => Math.abs(c.x - exclCell.x) <= 25 && /per\s*eenheid|unitaire|unit/i.test(c.text)) : false;
+      // the amount column named by the header (the rightmost "Amount / Total / Bedrag"): a later column may be a weight or a remark
+      const amountCol = lines[hi].cells.filter((c) => /^(?:amount|total|totaal|montant|bedrag|subtotaal|item\s*total|line\s*total|prix\s*total|sub-?total)\b/i.test(c.text.trim())).pop() ?? null;
       for (let j = hi + 1; j < lines.length && itemsSpan.has(j); j += 1) {
         const l = lines[j]; const am = amountsIn(l.text);
         if (isItemsHeader(l)) { pending = null; continue; } // a second header inside the same span
@@ -521,12 +523,13 @@ export function extractFromPdfLines(pages, own = {}) {
         const qty = l.cells.find((c) => /^\d+(?:[.,]\d{1,3})?$/.test(c.text.trim()) && !amountsIn(c.text).length);
         const rate = L.rate.exec(l.text);
         let lineNet = Math.abs(right[right.length - 1].cents);
+        if (amountCol) { const near = l.cells.filter((c) => amountsIn(c.text).length && Math.abs(c.x - amountCol.x) <= 60).sort((a, b) => Math.abs(a.x - amountCol.x) - Math.abs(b.x - amountCol.x))[0]; if (near) lineNet = Math.abs(amountsIn(near.text).pop().cents); }
         if (exclCell && hasIncl) { // the last column includes VAT: take the aligned excl. VAT column
           const ex = l.cells.find((c) => Math.abs(c.x - exclCell.x) <= 30 && amountsIn(c.text).length); const q = qty ? Number(qty.text.trim().replace(',', '.')) : 1;
           if (ex) lineNet = Math.round(Math.abs(amountsIn(ex.text)[0].cents) * (exclIsUnit && Number.isInteger(q) ? q : 1));
         }
         found.push({ position: found.length + 1, id: null, description, quantity: qty ? qty.text.trim().replace(',', '.') : null, unitCode: null,
-          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l, _amounts: amountsIn(l.text).length });
+          unitPrice: right.length >= 2 ? right[right.length - 2].raw.trim() : null, netCents: lineNet, rateBp: rate ? Math.round(Number(rate[1].replace(',', '.')) * 100) : null, category: null, _line: l, _amounts: right.length }); // amounts of the amount columns only (not those written inside a description)
         pending = null;
       }
       // when most rows carry several amounts (quantity, price, total), a row with a single amount is a group subtotal or a reference, not a line
