@@ -402,13 +402,15 @@ async function viewOverview() {
   const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
   box.appendChild(h('div', { class: 'metric-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:26px;width:40%' }), h('div', { class: 'skl', style: 'height:12px;width:70%;margin-top:12px' })))));
   try {
-    const [o, treasury, purchaseRows, invoiceRows] = await Promise.all([
+    // The Action Center does not depend on the other four: requested in the same batch instead of after them (one round trip less).
+    const [o, treasury, purchaseRows, invoiceRows, acOrNull] = await Promise.all([
       api('GET', '/api/overview'),
       api('GET', '/api/treasury').catch(() => null),
       api('GET', '/api/inbox?scope=purchases').then((r) => r.rows).catch(() => []),
       api('GET', '/api/documents?type=invoice').then((r) => r.rows).catch(() => []),
+      api('GET', '/api/actions').catch(() => null),
     ]);
-    const ac = await api('GET', '/api/actions').catch(() => ({ actions: [], currency: o.currency }));
+    const ac = acOrNull ?? { actions: [], currency: o.currency };
     clear(box);
     const cur = o.currency;
     mount(box, o.settingsMissing.length ? h('div', { class: 'banner warn' }, h('strong', null, 'Finish your setup before issuing real invoices: '), tt('{0} setting(s) missing.', o.settingsMissing.length) + ' ', h('a', { href: '#/settings' }, 'Open settings')) : null);
