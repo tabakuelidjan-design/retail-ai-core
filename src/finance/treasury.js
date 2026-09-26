@@ -11,7 +11,7 @@ const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400
  *   bank: Array<{accountId: string, balanceCents: number, asOf: string}>|null,
  *   cashCount: {amountCents: number, countedOn: string}|null, cashMovements?: Array<{date: string, kind: string, amountCents: number}>,
  *   receivables: Array<{number: string, dueDate: string, remainingCents: number}>,
- *   payables: Array<{invoiceNumber: string, supplierName: string, dueDate: string|null, grossCents: number}>}} f
+ *   payables: Array<{invoiceNumber: string, supplierName: string, dueDate: string|null, dueOrigin?: string, grossCents: number}>}} f
  */
 export function buildTreasury(f) {
   const horizon = f.horizonDays ?? 7; const end = addDays(f.asOf, horizon);
@@ -33,6 +33,7 @@ export function buildTreasury(f) {
   const overdueIn = f.receivables.filter((r) => r.remainingCents > 0 && r.dueDate < f.asOf);
   const outgoing = f.payables.filter((p) => p.dueDate && p.dueDate <= end); // includes payables already past due: they must be paid
   const sum = (xs, k) => xs.reduce((a, x) => a + x[k], 0);
+  const fromTerms = outgoing.filter((p) => p.dueOrigin === 'COMPUTED_FROM_TERMS'); // due dates computed from an explicit payment term: counted, but never confused with a printed date
   const expectedIn = sum(incoming, 'remainingCents'); const expectedOut = sum(outgoing, 'grossCents'); const overdueCents = sum(overdueIn, 'remainingCents');
   const projectionCents = liquidCents === null ? null : liquidCents + expectedIn - expectedOut;
 
@@ -43,7 +44,7 @@ export function buildTreasury(f) {
   return {
     asOf: f.asOf, horizonDays: horizon, currency: f.currency ?? 'EUR',
     observed: { bankCents, bankAsOf: bankConnected ? f.bank.map((b) => b.asOf).sort().at(-1) : null, cashCents, cashAsOf, liquidCents },
-    expected: { incomingCents: expectedIn, incomingCount: incoming.length, outgoingCents: expectedOut, outgoingCount: outgoing.length },
+    expected: { incomingCents: expectedIn, incomingCount: incoming.length, outgoingCents: expectedOut, outgoingCount: outgoing.length, outgoingFromTermsCents: sum(fromTerms, 'grossCents'), outgoingFromTermsCount: fromTerms.length },
     assumed: { overdueReceivablesCents: overdueCents, overdueCount: overdueIn.length, note: 'NOT_INCLUDED_IN_THE_PROJECTION' },
     projection: { cents: projectionCents, basis: 'PROJECTED', horizonEnd: end, formula: 'OBSERVED_LIQUIDITY + EXPECTED_IN - EXPECTED_OUT' },
     items: [

@@ -37,20 +37,88 @@ const SOURCE_BADGE = { peppol: 'Peppol', email: 'E-mail', upload: 'Upload', manu
 const sourceBadge = (s) => h('span', { class: `chip src-${s}` }, tt(SOURCE_BADGE[s] || s));
 const INBOX_STATUS = { RECEIVED: 'Received', TO_REVIEW: 'To review', VALIDATED: 'Validated', TO_PAY: 'To pay', PAID: 'Paid', REJECTED: 'Rejected' };
 const inboxBadge = (s) => h('span', { class: `badge IN_${s}` }, tt(INBOX_STATUS[s] || s));
-const confChip = (x) => { const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
-const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
-  SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
+const confChip = (x) => {
+  if (x.extraction && x.extraction.extractor === 'pdf_text') {
+    const w = x.extraction.warnings || []; if (w.includes('SCAN_REQUIRES_OCR')) return h('span', { class: 'chip warn' }, tt('Scanned document'));
+    const pv = Object.values(x.extraction.provenance || {}); if (!pv.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction'));
+    const weak = pv.filter((p) => p.confidence < 0.7).length; return h('span', { class: `chip ${weak ? 'warn' : 'ok'}` }, weak ? tt('Read from the PDF: {0} field(s) to check', weak) : tt('Read from the PDF'));
+  }
+ const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
+const INBOX_ERR = { DUE_DATE_CONFLICT_NOT_ACKNOWLEDGED: 'The printed due date differs from the payment terms: acknowledge the difference', SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
+  SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', PRO_FORMA_NOT_AN_INVOICE: 'This is a pro forma, not an invoice: reject it and import the final invoice', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
+// Due date and payment (phase 4.7). The server derives everything (origin, status axes, days remaining); this only words it. Nothing here is model-written.
+function dueSentence(m, currency) {
+  if (!m) return '';
+  switch (m.kind) {
+    case 'DAYS_LEFT': return tt('There are {0} days left to pay this invoice.', m.days);
+    case 'DUE_SOON': return m.days === 1 ? tt('Due tomorrow.') : tt('Due in {0} days.', m.days);
+    case 'DUE_TODAY': return tt('This invoice is due today.');
+    case 'OVERDUE': return m.days === 1 ? tt('Overdue for 1 day.') : tt('Overdue for {0} days.', m.days);
+    case 'PAID': return m.paidAt ? tt('Paid on {0}', m.paidAt) : tt('Paid');
+    case 'PARTIAL': return tt('Partial payment: {0} of {1}.', fmtMoney(m.paidCents, currency), fmtMoney(m.grossCents, currency)) + (m.calendar ? ' ' + dueSentence(m.calendar, currency) : '');
+    case 'PREPAID': return tt('Paid at the source according to the document (to be confirmed).');
+    case 'NO_DUE_DATE': return tt('No due date stated.');
+    default: return '';
+  }
+}
+function dueOriginLabel(d) {
+  if (d.origin === 'PRINTED') return tt('Printed on the invoice');
+  if (d.origin === 'COMPUTED_FROM_TERMS') return tt('Computed from the payment terms');
+  if (d.origin === 'MANUAL') return d.legacy ? tt('Entered by a person (origin not recorded)') : tt('Entered by a person');
+  return tt('Not stated on the document');
+}
+/** Under the due-date field of the review form: where the date comes from, the supplier's wording, a divergence to look at, the status. */
+const dueNote = (it, acknowledge) => {
+  const d = it.due; if (!d) return null;
+  const rows = [h('div', { class: 'muted small' }, tt('Due date origin'), ': ', h('strong', null, dueOriginLabel(d)))];
+  if (d.terms && d.terms.raw) rows.push(h('div', { class: 'muted small' }, tt('Payment terms: {0}', d.terms.raw)));
+  if (d.terms && d.terms.status === 'OUT_OF_GRAMMAR' && d.origin === 'UNKNOWN') rows.push(h('div', { class: 'muted small' }, tt('The due date is not computed from this wording: enter it yourself if you know it.')));
+  const cf = d.conflict; const conflictShown = !!(cf && cf.state !== 'NONE');
+  if (conflictShown) {
+    const ok = cf.state === 'ACKNOWLEDGED';
+    rows.push(h('div', { class: `banner ${ok ? 'ok' : 'warn'} small due-conflict`, style: 'margin:8px 0' }, h('div', null, tt('Printed due date: {0}', cf.printed)), h('div', null, tt('Due date given by the payment terms: {0}', cf.computed)),
+      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', String(cf.acknowledgedAt || '').slice(0, 10)))
+        : h('div', null, h('div', { style: 'margin:6px 0' }, tt('The printed date stays the due date. You must acknowledge the difference before validating.')), acknowledge ? h('button', { type: 'button', class: 'tool due-ack', style: 'height:auto;min-height:34px;padding:6px 11px;white-space:normal;text-align:left', on: { click: acknowledge } }, tt('Acknowledge the difference')) : null)));
+  }
+  if (d.divergence && !conflictShown) rows.push(h('div', { class: 'banner info small', style: 'margin:8px 0' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
+  const sentence = dueSentence(d.message, it.currency); if (sentence) rows.push(h('div', { class: 'small' }, sentence));
+  if (d.settlement === 'UNPAID') rows.push(h('div', { class: 'muted small' }, tt('No payment recorded')));
+  return h('div', { class: 'due-note' }, rows);
+};
+/** A compact reading of the due date for a list row. */
+const dueListChip = (r) => {
+  const d = r.due; if (!d || !d.message) return null; const m = d.message.kind === 'PARTIAL' ? d.message.calendar : d.message;
+  if (!m || ['NO_DUE_DATE', 'PREPAID'].includes(m.kind)) return null; if (m.kind === 'OVERDUE') return h('span', { class: 'chip bad' }, dueSentence(m, r.currency));
+  return h('span', { class: m.kind === 'DAYS_LEFT' ? 'chip mute' : 'chip warn' }, dueSentence(m, r.currency));
+};
 // Common purchase-document model: the type (amounts stay positive; a credit note reduces purchases) and the deterministic checks.
 const DOC_TYPE = { INVOICE: 'Invoice', CREDIT_NOTE: 'Credit note', RECEIPT: 'Receipt / ticket', EXPENSE: 'Other expense' };
-const docTypeChip = (r) => (r.documentType && r.documentType !== 'INVOICE' ? h('span', { class: r.documentType === 'CREDIT_NOTE' ? 'chip warn doc-type' : 'chip mute doc-type' }, tt(DOC_TYPE[r.documentType] || r.documentType)) : null);
+// a pro forma read in a PDF is shown as such (never as a normal invoice), whatever the stored default type
+const docTypeChip = (r) => ((r.extraction && (r.extraction.warnings || []).includes('DOCUMENT_IS_PRO_FORMA')) ? h('span', { class: 'chip bad doc-type' }, tt('Pro forma'))
+  : r.documentType && r.documentType !== 'INVOICE' ? h('span', { class: r.documentType === 'CREDIT_NOTE' ? 'chip warn doc-type' : 'chip mute doc-type' }, tt(DOC_TYPE[r.documentType] || r.documentType)) : null);
 const CHECK_TEXT = { TOTALS_DO_NOT_ADD_UP: 'The extracted totals do not add up: check them.', NEGATIVE_INVOICE_READ_AS_CREDIT_NOTE: 'This invoice has negative amounts: it was read as a credit note with positive amounts. Check the type.',
   NEGATIVE_AMOUNTS_ON_CREDIT_NOTE: 'This credit note has negative amounts: they were read as positive amounts.', XML_DOCTYPE_NOT_ALLOWED: 'This XML file was refused for safety (DOCTYPE): enter the fields manually.',
   XML_MALFORMED: 'This XML file could not be read: enter the fields manually.', NOT_A_UBL_INVOICE_OR_CREDIT_NOTE: 'This XML file is not a UBL invoice or credit note: enter the fields manually.', TOO_MANY_LINES_TRUNCATED: 'Only the first 500 lines were read.',
   EXTRACTION_FAILED: 'Automatic reading failed: enter the fields manually.', VAT_BREAKDOWN_INCOMPLETE: 'The VAT breakdown is incomplete.', VAT_BREAKDOWN_TAXABLE_DOES_NOT_MATCH_NET: 'The VAT breakdown does not match the amount excl. VAT.',
   VAT_BREAKDOWN_DOES_NOT_MATCH_VAT: 'The VAT breakdown does not match the VAT amount.', VAT_RATE_AMOUNT_MISMATCH: 'A VAT amount does not match its rate.', VAT_RATE_UNUSUAL_FOR_BELGIUM: 'A VAT rate is not a usual Belgian rate (0, 6, 12, 21 %).',
   LINES_DO_NOT_ADD_UP: 'The invoice lines do not add up to the lines total.', PAYABLE_DIFFERS_FROM_TOTAL: 'The amount to pay differs from the total incl. VAT (prepayment or rounding).',
-  CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.' };
+  CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.',
+  DOCUMENT_IS_PRO_FORMA: 'This document is a pro forma: it is not an invoice and cannot be recorded as a purchase.', DOCUMENT_IS_BOOKING_CONFIRMATION: 'This document is a booking confirmation, not an invoice: nothing was read as an invoice.',
+  MULTIPLE_INVOICES_IN_PDF: 'This PDF contains several invoices: the totals were not read. Import each invoice separately.', DATE_LABELS_NOT_ALIGNED: 'The date labels could not be matched with their dates: check the dates.',
+  SUPPLIER_NAME_AMBIGUOUS: 'Several supplier names are printed: check the supplier.',
+  MARKETPLACE_VAT_BELONGS_TO_PLATFORM: 'The VAT number printed belongs to the marketplace, not to the seller: it was not used as the supplier VAT number.',
+  PAYMENT_REFERENCE_AMBIGUOUS: 'Several payment references are printed: check the payment reference.', INVOICE_PAGES_AMBIGUOUS: 'Some pages carry several invoice numbers: check which pages belong to which invoice.',
+  LINES_MIXED_CURRENCIES: 'The invoice lines and the totals are in different currencies: check the lines.', ITEMS_TABLE_CONTINUED_ON_NEXT_PAGES: 'The lines table continues over several pages: check the lines.',
+  VAT_CODE_NOT_INTERPRETED: 'The lines carry a VAT code that the document does not explain: check the VAT.',
+  SCAN_REQUIRES_OCR: 'This document seems to be scanned. Automatic reading needs image analysis, which is not enabled yet.', PDF_TEXT_UNREADABLE: 'The text of this PDF could not be read: enter the fields manually.',
+  PDF_TEXT_NOTHING_RECOGNISED: 'No invoice information was recognised in the text of this PDF: enter the fields manually.', PDF_PAGES_TRUNCATED: 'Only the first 20 pages were read.',
+  SUPPLIER_VAT_AMBIGUOUS: 'Several VAT numbers are printed: check the supplier\'s.', SUPPLIER_ENTERPRISE_NUMBER_AMBIGUOUS: 'Several enterprise numbers are printed: check the supplier\'s.', SUPPLIER_NOT_IDENTIFIED_BY_VAT: 'The supplier was not identified by a VAT number: check its name.',
+  IBAN_AMBIGUOUS: 'Several IBANs are printed: check the one to pay.', INVOICE_NUMBER_AMBIGUOUS: 'Several document numbers are printed: check the invoice number.', ORDER_REFERENCE_AMBIGUOUS: 'Several order references are printed.',
+  ISSUE_DATE_AMBIGUOUS: 'The invoice date could not be told apart from the other dates: check it.', DUE_DATE_AMBIGUOUS: 'Several due dates are printed: check it.', DATE_FORMAT_AMBIGUOUS: 'A date could be read day-first or month-first: check it.',
+  CURRENCY_AMBIGUOUS: 'Several currencies are printed: check the currency.', STRUCTURED_COMMUNICATION_INVALID: 'The structured communication has wrong check digits: check it.',
+  TOTAL_INCL_VAT_AMBIGUOUS: 'The total incl. VAT could not be identified with certainty: check it.', TOTAL_EXCL_VAT_AMBIGUOUS: 'The total excl. VAT could not be identified with certainty: check it.', VAT_AMOUNT_AMBIGUOUS: 'The VAT amount could not be identified with certainty: check it.',
+  AMOUNTS_CHOSEN_BY_CONSISTENCY: 'Several totals are printed: the one where excl. VAT + VAT = total was kept. Check it.', SEVERAL_AMOUNTS_MOST_EXPLICIT_LABEL_KEPT: 'Several totals are printed: the most explicit one was kept. Check it.' };
 const checkText = (c) => tt(CHECK_TEXT[c] || INBOX_ERR[c] || c);
 
 // ---------- phase 2: supplier recognition and duplicates, two discreet blocks of the review pane ----------
@@ -152,10 +220,16 @@ function renderInboxDetail(host, id, opts = {}) {
     clear(body);
     let it; try { it = await api('GET', `/api/inbox/${id}`); } catch (e) { return fail(e, body); }
     const editable = ['RECEIVED', 'TO_REVIEW'].includes(it.status);
-    const f = {}; const inp = (k, label, val, ph, cls) => { const el = h('input', { value: val ?? '', placeholder: ph || '', disabled: !editable, on: { input: (e) => { f[k] = e.target.value; } } }); f[k] = val ?? ''; return h('div', { class: `field ${cls || ''}` }, h('label', null, label, it.extraction && it.extraction.fields && it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] * 100)}%`) : null), el); };
+    // where a prefilled value comes from: a PDF value shows its page, or "to check" when its reading rule is weak (no % shown for heuristics)
+    const fieldMark = (x, key) => { const pv = x.provenance && x.provenance[key]; if (pv && pv.source === 'PDF_TEXT') return h('span', { class: `conf ${pv.confidence < 0.7 ? 'check' : ''}` }, ` · ${pv.confidence < 0.7 ? tt('to check') : tt('PDF p. {0}', pv.page)}`); return h('span', { class: 'conf' }, ` ${Math.round(x.extraction.fields[key] * 100)}%`); };
+    const f = {}; const inp = (k, label, val, ph, cls) => { const el = h('input', { value: val ?? '', placeholder: ph || '', disabled: !editable, on: { input: (e) => { f[k] = e.target.value; } } }); f[k] = val ?? ''; return h('div', { class: `field ${cls || ''}` }, h('label', null, label, it.extraction && it.extraction.fields && it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] !== undefined ? fieldMark(it, k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)) : null), el); };
     body.appendChild(h('div', { class: 'drawer-head' }, inboxBadge(it.status), docTypeChip(it), sourceBadge(it.source), confChip(it), it.fileName ? h('span', { class: 'muted small' }, `${it.fileName} · ${fmtBytes(it.sizeBytes || 0)}`) : null));
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
     if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, checkText(w)))));
+    if (it.extraction && Array.isArray(it.extraction.invoices) && it.extraction.invoices.length) { // several invoices in one PDF: listed as read, none is chosen
+      body.appendChild(h('div', { class: 'banner warn small doc-invoices' }, h('strong', null, tt('Invoices found in this PDF (none was chosen):')), h('ul', { class: 'plain' }, it.extraction.invoices.map((v) => h('li', null,
+        tt('Invoice {0} · pages {1} · {2} · {3}', v.invoiceNumber, (v.pages || []).join(', ') || '?', v.supplierName || tt('seller to check'), Number.isInteger(v.grossCents) ? fmtMoney(v.grossCents, v.currency || it.currency || 'EUR') : tt('total to check')))))));
+    }
     if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
     let focusContactSearch = () => {};
     mount(body, supplierBlock(it, () => { draw(); onChange(); }, err, () => focusContactSearch())); mount(body, duplicatesBlock(it, () => { draw(); onChange(); }, err));
@@ -164,12 +238,14 @@ function renderInboxDetail(host, id, opts = {}) {
     const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
     const typeSel = h('select', { disabled: !editable, 'data-field': 'documentType', on: { change: (e) => { f.documentType = e.target.value; } } }, Object.keys(DOC_TYPE).map((k) => h('option', { value: k, selected: k === it.documentType }, tt(DOC_TYPE[k]))));
     f.documentType = it.documentType;
-    body.appendChild(h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Document type'), it.extraction && it.extraction.fields && it.extraction.fields.documentType !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields.documentType * 100)}%`) : null), typeSel),
+    body.appendChild(h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Document type'), it.extraction && it.extraction.fields && it.extraction.fields.documentType !== undefined ? fieldMark(it, 'documentType') : null), typeSel),
       it.documentType === 'CREDIT_NOTE' ? inp('billingReference', tr('Credited invoice number'), it.billingReference) : inp('orderReference', tr('Order reference'), it.orderReference)));
     if (it.documentType === 'CREDIT_NOTE') body.appendChild(h('div', { class: 'muted small doc-sign' }, tt('A credit note reduces your purchases: its amounts are entered as positive amounts.')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierEnterpriseNumber', tr('Enterprise number'), it.supplierEnterpriseNumber, '0123.456.789'), inp('supplierIban', tr('Supplier IBAN'), it.supplierIban, 'BE68 5390 0754 7034')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
+    const dueBox = dueNote(it, ['RECEIVED', 'TO_REVIEW'].includes(it.status) ? async () => { try { await api('POST', `/api/inbox/${id}/acknowledge-due-conflict`, {}); toast('Difference acknowledged', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } : null);
+    if (dueBox) body.appendChild(dueBox);
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
     body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), it.documentType === 'CREDIT_NOTE' ? inp('orderReference', tr('Order reference'), it.orderReference) : h('div', null)));
     if (it.vatBreakdown && it.vatBreakdown.length) body.appendChild(h('div', { class: 'field doc-vat' }, h('label', null, tt('VAT by rate')), h('table', { class: 'mini' }, h('thead', null, h('tr', null, h('th', null, tt('Rate')), h('th', null, tt('Excl. VAT')), h('th', null, tt('VAT')))),
@@ -478,10 +554,14 @@ function importDocumentsModal(done) {
   async function send(files) {
     for (const file of files) {
       const openExisting = (existingId) => h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(existingId, done) } }, tt('Open the existing document'));
+      const pending = h('div', { class: 'muted doc-analysing', role: 'status' }, tt('{0}: analysing the document…', file.name)); status.appendChild(pending);
       try {
-        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) });
-        status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : tt('{0} received', file.name), r.duplicate ? [' ', openExisting(r.item.id)] : null));
+        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); pending.remove();
+        const scan = !r.duplicate && r.item.extraction && (r.item.extraction.warnings || []).includes('SCAN_REQUIRES_OCR');
+        const review = h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(r.item.id, done) } }, tt('Review'));
+        status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : scan ? tt('{0}: scanned document, fill in the fields by hand.', file.name) : tt('{0} received', file.name), ' ', r.duplicate ? openExisting(r.item.id) : review));
       } catch (e) {
+        pending.remove();
         if (e.code === 'DUPLICATE_SUPPLIER_INVOICE' && e.extra && e.extra.existing) status.appendChild(h('div', { class: 'bad' }, tt('{0}: this document already exists (same supplier, number and type: {1}).', file.name, e.extra.existing.invoiceNumber || '—'), ' ', openExisting(e.extra.existing.id)));
         else status.appendChild(h('div', { class: 'bad' }, `${file.name}: ${e.message || e}`));
       }
@@ -654,7 +734,7 @@ async function viewPurchases() {
     box.appendChild(h('div', { class: 'phead' }, ['Supplier', 'Date', 'Due', 'Excl. VAT', 'VAT', 'Total', 'Status', 'Source'].map((x, i) => h('div', { class: i >= 3 && i <= 5 ? 'right' : '' }, tt(x)))));
     shown.forEach((r) => box.appendChild(h('a', { class: 'prow', href: '#', on: { click: (e) => { e.preventDefault(); openInboxItem(r.id, load); } } },
       h('div', { class: 'psup' }, avatar(r.supplierName), h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.supplierName), h('span', { class: 'ds' }, r.invoiceNumber))),
-      h('div', { class: 'pc-d', 'data-label': tr('Date') }, r.issueDate), h('div', { class: 'pc-d', 'data-label': tr('Due') }, r.dueDate || '-'), h('div', { class: 'right', 'data-label': tr('Excl. VAT') }, fmtMoney(r.netCents, r.currency)), h('div', { class: 'right', 'data-label': tr('VAT') }, fmtMoney(r.vatCents, r.currency)), h('div', { class: 'right', 'data-label': tr('Total') }, h('strong', null, fmtMoney(r.grossCents, r.currency))),
+      h('div', { class: 'pc-d', 'data-label': tr('Date') }, r.issueDate), h('div', { class: 'pc-d', 'data-label': tr('Due') }, r.dueDate || '-', dueListChip(r) ? h('div', null, dueListChip(r)) : null), h('div', { class: 'right', 'data-label': tr('Excl. VAT') }, fmtMoney(r.netCents, r.currency)), h('div', { class: 'right', 'data-label': tr('VAT') }, fmtMoney(r.vatCents, r.currency)), h('div', { class: 'right', 'data-label': tr('Total') }, h('strong', null, fmtMoney(r.grossCents, r.currency))),
       h('div', { 'data-label': tr('Status') }, inboxBadge(r.status)), h('div', { 'data-label': tr('Source') }, sourceBadge(r.source)))));
   }
   async function load() { try { rows = (await api('GET', '/api/inbox?scope=purchases')).rows; const c = await api('GET', '/api/inbox/status'); clear(kpi); const cur = (rows[0] && rows[0].currency) || 'EUR'; const toPay = rows.filter((r) => r.status === 'TO_PAY'); const sum = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);

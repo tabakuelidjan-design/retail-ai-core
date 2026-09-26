@@ -1523,3 +1523,5 @@ body:has(.modal-back) .contact-support { display: none; }
   .pk-card .linkbtn { white-space: normal; text-align: left; }
   .conn { flex-wrap: wrap; }
 }
+/* phase 3: a value read in a PDF that must be checked */
+.drawer-body .conf.check { color: #8a4b00; font-weight: 600; } .doc-analysing::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; } @keyframes spin { to { transform: rotate(360deg); } }

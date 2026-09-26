@@ -7,6 +7,7 @@ import { NoBankAdapter, assertReadOnlyAdapter, parseBankCsv } from './bank.js';
 import { suggest } from './reconcile.js';
 import { buildTreasury } from './treasury.js';
 import { eurOfSupplier } from './currency.js';
+import { dueForProjection } from './payables/index.js';
 
 const CSV_ACCOUNT = 'csv-import'; // every CSV statement lands in this pseudo-account (idempotence key: account + transaction id)
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
@@ -27,7 +28,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
     return out;
   };
   const payablesAll = async () => inbox.list({ statuses: ['VALIDATED', 'TO_PAY'] });
-  const toPayable = (r, cur) => ({ itemId: r.id, invoiceNumber: r.invoiceNumber, supplierName: r.supplierName, grossCents: eurOfSupplier(r, cur), paymentReference: r.paymentReference, dueDate: r.dueDate, status: r.status });
+  const toPayable = (r, cur) => ({ itemId: r.id, invoiceNumber: r.invoiceNumber, supplierName: r.supplierName, grossCents: eurOfSupplier(r, cur), paymentReference: r.paymentReference, dueDate: dueForProjection(r).dueDate, dueOrigin: dueForProjection(r).origin, status: r.status });
   // EUR-only: a foreign-currency payable never enters matching or the projection (unless the merchant typed its EUR amount)
   const payables = async (cur = 'EUR') => (await payablesAll()).map((r) => toPayable(r, cur)).filter((p) => p.grossCents !== null);
   // All rows of a list are stored in ONE atomic batch: completely or not at all (never a partial import).
@@ -144,7 +145,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       const recvNative = recvAll.filter((i) => (i.currency ?? currency) === currency);
       const recv = recvNative.map((i) => ({ number: i.number, dueDate: i.dueDate, remainingCents: i.remainingCents }));
       const payNative = allP.map((r) => toPayable(r, currency)).filter((p) => p.grossCents !== null);
-      const pay = payNative.map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, grossCents: p.grossCents }));
+      const pay = payNative.map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, dueOrigin: p.dueOrigin, grossCents: p.grossCents }));
       const t = buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount, cashMovements, receivables: recv, payables: pay });
       return { ...t, excluded: { foreignReceivables: recvAll.length - recvNative.length, foreignPayables: allP.length - payNative.length, foreignBankAccounts: balancesAll.length - balances.length } };
     },

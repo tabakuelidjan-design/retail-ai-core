@@ -30,6 +30,7 @@ import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
+import { civilDateIn, dueViewOf } from '../payables/index.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
 import { DOCUMENT_TYPES, accountingSign, checkPurchaseDocument, documentTypeOf, purchaseModelOf } from '../purchase-document.js';
 import { refundRows } from '../refund-rows.js';
@@ -741,7 +742,7 @@ export function createFinanceApp(deps) {
   const bankFor = async () => {
     const { svc } = await servicesFor();
     const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
-    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
+    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock: { ...clock, today: merchantToday }, audit,
       finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, c.payment, a); } } });
   };
   const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
@@ -861,11 +862,16 @@ export function createFinanceApp(deps) {
 
   // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------
   const attachmentStore = deps.attachmentStore ?? createMemoryAttachmentStore();
-  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit });
+  // the merchant's own identity (Settings > seller): a PDF shows both parties, the reader must never take ours for the supplier's
+  const ownIdentity = async () => { const s = (await settingsIo.load()).seller ?? {}; return { vatNumbers: [s.vatNumber].filter(Boolean), enterpriseNumbers: [s.enterpriseNumber].filter(Boolean), ibans: [s.iban].filter(Boolean), names: [s.name].filter(Boolean) }; };
+  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
+  // the merchant's civil date (their configured time zone), for every day-based reading of a due date; never the server's zone
+  const merchantToday = () => civilDateIn(new Date(clock.now()), timeZone);
   const itemView = (raw) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
+    due: dueViewOf(raw, { today: merchantToday() }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
     // common purchase-document model (phase 1): type + accounting direction, identifiers, VAT by rate, lines, where each field came from
@@ -956,6 +962,7 @@ export function createFinanceApp(deps) {
   inboxAct('validate', (i, id) => i.validate(id, actor));
   inboxAct('to-pay', (i, id) => i.markToPay(id, actor));
   inboxAct('reopen', (i, id) => i.reopen(id, actor));
+  inboxAct('acknowledge-due-conflict', (i, id) => i.acknowledgeDueConflict(id, actor));
   inboxAct('reject', (i, id, b) => i.reject(id, sanitizeText(b.reason, 300), actor));
   inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100) }, actor); });
   // Phase 1 (Contact foundation): link/unlink a supplier invoice to a fin_companies contact. { contactId: "<uuid>" }

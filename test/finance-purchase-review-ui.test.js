@@ -166,3 +166,65 @@ test('review pane (phase 2): the Supplier and Duplicates blocks show recognised 
     assert.equal(contact.id.length > 0, true);
   } finally { ui?.restore(); await a.close(); }
 });
+
+test('review pane (phase 3): a PDF shows where each value was read (page) or that it must be checked - never a percentage; a scan says so', async () => {
+  const { CASES } = await import('./finance-pdf-fixtures.js');
+  const a = await startApp(); const c = await a.authed(); let ui;
+  try {
+    const up = async (name, buf) => (await c.post('/api/inbox/upload', { fileName: name, dataBase64: buf.toString('base64') })).data.item.id;
+    const text = await up('facture.pdf', await CASES.frSimple()); const scan = await up('scan.pdf', await CASES.scanned(PNG)); const amb = await up('ambigu.pdf', await CASES.manyAmounts());
+    const items = new Map(); for (const id of [text, scan, amb]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
+    ui = loadUi(async (m, path) => items.get(path.split('/')[3]));
+    const labels = (r) => all(r.body, (e) => e.tagName === 'LABEL').map((l) => l.textContent);
+    let r = await render(ui, text);
+    assert.ok(labels(r).includes('Invoice number · PDF p. 1')); assert.ok(labels(r).includes('Incl. VAT · PDF p. 1'));
+    assert.ok(labels(r).includes('VAT · to check'), 'VAT computed from the printed VAT row: weak rule, to check');
+    assert.equal(labels(r).filter((l) => /%$/.test(l)).length, 0, 'no heuristic percentage next to a PDF value');
+    assert.match(r.head.textContent, /Read from the PDF: 2 field\(s\) to check/, 'the VAT (from the VAT row) and the supplier address (block rule)');
+    r = await render(ui, scan);
+    assert.match(r.body.textContent, /This document seems to be scanned\. Automatic reading needs image analysis, which is not enabled yet\./); assert.match(r.head.textContent, /Scanned document/);
+    assert.ok(r.fields.length >= 14 && r.buttons.includes('Validate'), 'the form stays fully available for manual entry');
+    r = await render(ui, amb); assert.match(r.body.textContent, /Several totals are printed: the most explicit one was kept\. Check it\./);
+  } finally { ui?.restore(); await a.close(); }
+});
+
+// ---------- phase 4.7: due date and payment terms in the review pane (English source text, French and Dutch) ----------
+const LANGS = (() => { const win = {}; for (const f of ['lang-fr.js', 'lang-nl.js']) new Function('window', src(f))(win); return win.FINANCE_LANG; })();
+const ttIn = (lang) => (key, ...a) => a.reduce((acc, v, i) => acc.replace(`{${i}}`, v), String(LANGS[lang].messages[key] ?? key));
+const withTerms = (id, extra) => UBL('Invoice', id).toString('utf8').replace('</Invoice>', `${extra}</Invoice>`);
+
+test('the review pane shows where the due date comes from, the supplier\'s wording, a divergence and the days left - in English, French and Dutch', async () => {
+  const a = await startApp({ today: '2026-09-26' }); const c = await a.authed(); let ui;
+  try {
+    const up = async (name, xml) => (await c.post('/api/inbox/upload', { fileName: name, dataBase64: Buffer.from(xml).toString('base64') })).data.item;
+    const computed = await up('a.xml', withTerms('F-DUE-1', '<cac:PaymentTerms><cbc:Note>Paiement à 30 jours</cbc:Note></cac:PaymentTerms>'));            // 2026-09-10 + 30 = 2026-10-10 -> 14 days left
+    const diverging = await up('b.xml', withTerms('F-DUE-2', '<cbc:DueDate>2026-10-25</cbc:DueDate><cac:PaymentTerms><cbc:Note>Paiement à 30 jours</cbc:Note></cac:PaymentTerms>'));
+    const unknown = await up('c.xml', withTerms('F-DUE-3', '<cac:PaymentTerms><cbc:Note>Selon contrat</cbc:Note></cac:PaymentTerms>'));
+    const none = await up('d.xml', UBL('Invoice', 'F-DUE-4').toString('utf8'));
+    const items = new Map(); for (const it of [computed, diverging, unknown, none]) items.set(it.id, (await c.get(`/api/inbox/${it.id}`)).data);
+    ui = loadUi(async (method, path) => { const id = path.split('/')[3]; if (method === 'GET' && items.has(id)) return items.get(id); throw new Error(`unexpected ${method} ${path}`); });
+    const text = async (id) => (await render(ui, id)).body.textContent;
+
+    let t = await text(computed.id);
+    for (const s of ['Due date origin', 'Computed from the payment terms', 'Payment terms: Paiement à 30 jours', 'There are 14 days left to pay this invoice.', 'No payment recorded']) assert.ok(t.includes(s), `EN: ${s}`);
+    assert.ok(!t.includes('differs'), 'no divergence here');
+    t = await text(diverging.id); assert.ok(t.includes('Printed on the invoice') && t.includes('Printed due date: 2026-10-25') && t.includes('Due date given by the payment terms: 2026-10-10') && t.includes('You must acknowledge the difference before validating.') && t.includes('Acknowledge the difference'), 'both dates and the acknowledgement control are shown, never hidden');
+    t = await text(unknown.id); assert.ok(t.includes('Not stated on the document') && t.includes('Payment terms: Selon contrat') && t.includes('The due date is not computed from this wording: enter it yourself if you know it.'));
+    t = await text(none.id); assert.ok(t.includes('Not stated on the document') && t.includes('No due date stated.') && !t.includes('Payment terms:'), 'no wording, no due date, nothing invented');
+
+    const real = globalThis.tt;
+    try {
+      globalThis.tt = ttIn('fr'); t = await text(computed.id);
+      for (const s of ["Origine de l'échéance", "Calculée d'après les conditions de paiement", 'Conditions de paiement : Paiement à 30 jours', 'Il reste 14 jours pour payer cette facture.', 'Aucun paiement enregistré']) assert.ok(t.includes(s), `FR: ${s}`);
+      t = await text(diverging.id); for (const x of ['Échéance imprimée : 2026-10-25', 'Échéance selon les conditions de paiement : 2026-10-10', 'Prendre acte de la différence']) assert.ok(t.includes(x), `FR: ${x}`);
+      t = await text(none.id); assert.ok(t.includes('Échéance non renseignée.'));
+      globalThis.tt = ttIn('nl'); t = await text(diverging.id); for (const x of ['Gedrukte vervaldatum: 2026-10-25', 'Verschil bevestigen']) assert.ok(t.includes(x), `NL: ${x}`); t = await text(computed.id);
+      for (const s of ['Herkomst van de vervaldatum', 'Berekend op basis van de betalingsvoorwaarden', 'Betalingsvoorwaarden: Paiement à 30 jours', 'Er zijn nog 14 dagen om deze factuur te betalen.', 'Geen betaling geregistreerd']) assert.ok(t.includes(s), `NL: ${s}`);
+    } finally { globalThis.tt = real; }
+
+    a.setToday('2026-10-17'); items.set(computed.id, (await c.get(`/api/inbox/${computed.id}`)).data);
+    assert.ok((await text(computed.id)).includes('Overdue for 7 days.'), 'overdue for 7 days (computed date already before today)');
+    a.setToday('2026-10-10'); items.set(computed.id, (await c.get(`/api/inbox/${computed.id}`)).data);
+    assert.ok((await text(computed.id)).includes('This invoice is due today.'));
+  } finally { ui?.restore(); await a.close(); }
+});

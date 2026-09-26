@@ -33,7 +33,8 @@ test('structured invoice (UBL / Peppol): extracted with per-field confidence, bu
 }));
 test('a PDF or an image: stored privately, no extraction is trusted or invented, the merchant enters the fields', withH(async (h) => {
   const it = (await upload(h, 'scan.pdf', PDF)).data.item;
-  assert.equal(it.status, 'TO_REVIEW'); assert.equal(it.supplierName, null); assert.equal(it.extraction.extractor, 'none'); assert.deepEqual(it.extraction.fields, {});
+  assert.equal(it.status, 'TO_REVIEW'); assert.equal(it.supplierName, null); assert.equal(it.extraction.extractor, 'pdf_text'); assert.deepEqual(it.extraction.fields, {});
+  assert.deepEqual(it.extraction.warnings, ['PDF_TEXT_UNREADABLE'], 'a PDF whose text cannot be read gives nothing, never a guess');
   assert.ok(it.errors.includes('SUPPLIER_NAME_MISSING') && it.errors.includes('GROSS_AMOUNT_INVALID'));
   assert.equal((await upload(h, 'photo.png', PNG)).data.item.contentType, 'image/png');
 }));

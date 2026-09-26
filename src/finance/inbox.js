@@ -15,6 +15,8 @@ import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf
 import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf, readUblDocument } from './purchase-document.js';
 import { normalizeBelgianNumber } from './company.js';
 import { findDuplicates, isReferenced, matchSupplier } from './purchase-matching.js';
+import { readPdfDocument } from './pdf-invoice.js';
+import { DUE_CONFLICT_ERROR, acknowledgeDueConflict, buildDue, dueConflictOf, refreshDueAfterIssueDateChange, supersedeAcknowledgements } from './payables/index.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -56,8 +58,15 @@ export const NoExtractor = { name: 'none', label: 'Aucune extraction automatique
  * High confidence because the data is structured; still always human-reviewed.
  */
 export const UblExtractor = { name: 'ubl', label: 'Facture structurée UBL / Peppol', async extract({ data }) { return readUblDocument(data); } };
+/** Local reading of the text layer of a PDF (phase 3): same model, same checks. A scan (no text) is reported, never guessed (no OCR yet). */
+export const PdfTextExtractor = { name: 'pdf_text', label: 'PDF texte (lecture locale)', async extract({ data, context }) { return readPdfDocument(data, context ?? {}); } };
 /** Chooses the extractor from the sniffed type. PDF / image extraction (OCR) is a replaceable boundary: none is configured, so those need manual entry. */
-export const defaultExtractor = { name: 'auto', label: 'UBL structuré ; PDF / image : saisie manuelle', async extract(file) { return file.contentType === 'application/xml' ? UblExtractor.extract(file) : NoExtractor.extract(file); } };
+/** One pipeline, one order: structured UBL / Peppol first, then the text layer of a PDF; an image needs OCR (not enabled): manual entry. */
+export const defaultExtractor = { name: 'auto', label: 'UBL structuré ; PDF texte (lecture locale) ; image : saisie manuelle', async extract(file) {
+  if (file.contentType === 'application/xml') return UblExtractor.extract(file);
+  if (file.contentType === 'application/pdf') return PdfTextExtractor.extract(file);
+  return NoExtractor.extract(file);
+} };
 
 // ---------- private attachment storage ----------
 export function createMemoryAttachmentStore() {
@@ -112,14 +121,18 @@ export function validationErrors(r) {
 
 /** Validation rules for a record: a captured expense (receipt, ticket) uses the lighter expense rules; every other document keeps the full invoice rules.
  * Both also get the deterministic checks of the common document model (identifiers, document type). */
-export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors];
+export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors,
+  // a pro forma is not an invoice: it is never recorded as a purchase (reject it and import the final invoice)
+  ...((r.extraction?.warnings ?? []).includes('DOCUMENT_IS_PRO_FORMA') ? ['PRO_FORMA_NOT_AN_INVOICE'] : []),
+  // a printed due date that differs from the one the payment terms give must be acknowledged by a person before the purchase is validated
+  ...(dueConflictOf(r).state === 'UNACKNOWLEDGED' ? [DUE_CONFLICT_ERROR] : [])];
 
 const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '');
 
 /**
  * @param {{store: object, attachments: object, extractor?: object, merchantId: string, now?: () => string, audit?: Function}} deps
  */
-export function createInboxService({ store, attachments, extractor = defaultExtractor, merchantId, now = () => new Date().toISOString(), audit = async () => {} }) {
+export function createInboxService({ store, attachments, extractor = defaultExtractor, merchantId, now = () => new Date().toISOString(), audit = async () => {}, ownIdentity = async () => ({}) }) {
   const merchantOnly = (actor) => { if (actor?.type !== 'merchant') throw new FinanceError('THIS_STEP_REQUIRES_A_MERCHANT_ACTOR'); };
   const must = async (id) => { const r = await store.getSupplierInvoice(id); if (!r || r.merchantId !== merchantId) throw new FinanceError('INBOX_ITEM_NOT_FOUND', id); return r; };
   const move = async (r, to, patch = {}) => {
@@ -172,7 +185,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     return saved;
   };
   /** Where each field came from: { source, path, page, zone, confidence, value as read } for an extracted field. */
-  const provenanceOf = (ex) => Object.fromEntries(Object.entries(ex.fields ?? {}).map(([k, v]) => [k, { source: v.source ?? ex.extractor, path: v.path ?? null, page: v.page ?? null, zone: v.zone ?? null, confidence: v.confidence,
+  const provenanceOf = (ex) => Object.fromEntries(Object.entries(ex.fields ?? {}).map(([k, v]) => [k, { source: v.source ?? ex.extractor, path: v.path ?? null, page: v.page ?? null, zone: v.zone ?? null, ...(v.text ? { text: v.text } : {}), confidence: v.confidence,
     ...(Array.isArray(v.value) ? { count: v.value.length } : { value: v.value }) }]));
   return {
     /** Adapters call this with a file they were allowed to read. Idempotent by content hash. */
@@ -186,10 +199,15 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const dup = await store.findSupplierInvoiceBySha(merchantId, sha256);
       if (dup) return { item: dup, duplicate: true };
       // read first (local, in memory): a certain duplicate is refused before the file is ever stored
-      const ex = await extractor.extract({ fileName, contentType, data }).catch(() => ({ extractor: 'failed', fields: {}, warnings: ['EXTRACTION_FAILED'] }));
+      // the merchant's own identity is given to the reader so that it is never read as the supplier's (a PDF shows both parties)
+      const context = await ownIdentity().catch(() => ({}));
+      const ex = await extractor.extract({ fileName, contentType, data, context }).catch(() => ({ extractor: 'failed', fields: {}, warnings: ['EXTRACTION_FAILED'] }));
       const values = Object.fromEntries(Object.entries(ex.fields).map(([k, v]) => [k, v.value]));
       let fieldsIn; try { fieldsIn = clean(pick(values)); } catch { fieldsIn = clean(pick(values, FIELD_KEYS.filter((k) => k !== 'documentType'))); } // an unknown type is never stored; the person chooses
       const provenance = provenanceOf(ex);
+      // due date (phase 4.7): the printed date is used as read; a date is computed ONLY from an explicit payment term of the closed grammar, and its wording is kept
+      const dueInfo = buildDue({ issueDate: fieldsIn.issueDate ?? null, fields: ex.fields });
+      if (dueInfo.origin === 'COMPUTED_FROM_TERMS') { fieldsIn.dueDate = dueInfo.dueDate; provenance.dueDate = dueInfo.provenance; }
       const candidate = { merchantId, ...fieldsIn, currency: values.currency ?? null, sha256, extraction: { provenance } };
       const rows = await rowsOf();
       refuseCertainDuplicate(candidate, rows);
@@ -201,7 +219,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         row = await store.saveSupplierInvoice({
           merchantId, source, status: 'RECEIVED', ...fieldsIn, currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
           receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null,
-          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance,
+          extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: [...new Set([...(ex.warnings ?? []), ...dueInfo.warnings])], provenance, ...(dueInfo.due ? { due: dueInfo.due } : {}), ...(ex.pdf ? { pdf: ex.pdf } : {}), ...(ex.invoices ? { invoices: ex.invoices } : {}), // several invoices in one PDF: listed, none chosen
             matching: matchingSnapshot(match), duplicateCheck: duplicateSnapshot(dups) },
         });
       } catch (e) { await discardUnreferenced([ref]); throw e; } // e.g. refused by the database unique index (concurrent import)
@@ -320,6 +338,13 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
         const provenance = { ...(r.extraction?.provenance ?? {}) };
         for (const k of changed) { const extracted = provenance[k]?.source === 'user' ? provenance[k].extracted : provenance[k]; provenance[k] = { source: 'user', at: now(), confidence: 1, ...(extracted ? { extracted } : {}) }; }
         patch.extraction = { ...(r.extraction ?? { extractor: 'manual', at: now(), fields: {}, warnings: [] }), provenance };
+        // due date (phase 4.7): the origin stays in provenance.dueDate (source 'user' = MANUAL); clearing the date is a decision, not a gap to fill back
+        if (changed.includes('issueDate') && !changed.includes('dueDate')) {
+          const fresh = refreshDueAfterIssueDateChange(r, patch.issueDate ?? null);
+          if (fresh.due) patch.extraction.due = fresh.due;
+          if (fresh.dueDate !== undefined) { patch.dueDate = fresh.dueDate; if (fresh.provenance) provenance.dueDate = fresh.provenance; else delete provenance.dueDate; }
+        }
+        if (changed.includes('dueDate') && patch.extraction.due) patch.extraction.due = supersedeAcknowledgements({ ...patch.extraction.due, effective: { value: patch.dueDate ?? null, origin: patch.dueDate ? 'MANUAL' : 'UNKNOWN' }, suppressed: !patch.dueDate }, patch.dueDate ? 'DUE_DATE_EDITED' : 'DUE_DATE_CLEARED', now());
       }
       const saved = await store.updateSupplierInvoice(id, patch, r.status);
       if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
@@ -331,6 +356,16 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const dup = (await store.listSupplierInvoices(merchantId)).find((x) => x.id !== id && documentTypeOf(x) === documentTypeOf(r) && x.invoiceNumber && x.invoiceNumber === r.invoiceNumber && (x.supplierVatNumber ? x.supplierVatNumber === r.supplierVatNumber : x.supplierName === r.supplierName) && ['VALIDATED', 'TO_PAY', 'PAID'].includes(x.status));
       if (dup) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE', dup.id);
       return move(r, 'VALIDATED', { validatedAt: now() });
+    },
+    /** A person acknowledges that the printed due date differs from the payment terms. The printed date stays the due date; warning and evidence stay; the act is recorded. */
+    async acknowledgeDueConflict(id, actor) {
+      merchantOnly(actor); const r = await must(id);
+      if (!['RECEIVED', 'TO_REVIEW'].includes(r.status)) throw new FinanceError('ONLY_UNVALIDATED_ITEMS_CAN_BE_EDITED', r.status);
+      if (dueConflictOf(r).state !== 'UNACKNOWLEDGED') throw new FinanceError('NO_DUE_CONFLICT_TO_ACKNOWLEDGE', id);
+      const due = acknowledgeDueConflict(r, { at: now(), by: actor?.type ?? 'merchant' });
+      const saved = await store.updateSupplierInvoice(id, { extraction: { ...r.extraction, due } }, r.status);
+      if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
+      await audit({ at: now(), action: 'SUPPLIER_INVOICE_DUE_CONFLICT_ACKNOWLEDGED', itemId: id }); return saved;
     },
     async markToPay(id, actor) { merchantOnly(actor); const r = await must(id); if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id); return move(r, 'TO_PAY'); },
     async pay(id, { paidOn, amountCents, reference }, actor) {
