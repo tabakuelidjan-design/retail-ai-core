@@ -17,6 +17,10 @@ export function createMemoryStore() {
   const seqs = new Map();
   const companies = new Map();
   const supplierInvoices = [];
+  // Mirrors the database unique index fin_supplier_invoice_type_uq (merchant, supplier name, number, document type): NULLs never collide,
+  // a missing type is the column default (INVOICE; a captured expense is typed RECEIPT by the application).
+  const typeOf = (x) => x.documentType ?? 'INVOICE';
+  const sameSupplierDocument = (s, exceptId = null) => s.supplierName != null && s.invoiceNumber != null && supplierInvoices.some((x) => x.id !== exceptId && x.merchantId === s.merchantId && x.supplierName === s.supplierName && x.invoiceNumber === s.invoiceNumber && typeOf(x) === typeOf(s));
   const stockMovements = [];
   const bankConnections = new Map(); const bankTx = []; const bankBalances = new Map(); const cashCounts = []; const cashMovements = [];
   const hooks = { beforeCommit: null }; // failure injection for crash tests: throw to simulate a crash inside the transaction
@@ -162,6 +166,7 @@ export function createMemoryStore() {
     },
     async saveSupplierInvoice(s) {
       if (s.sha256 && supplierInvoices.some((x) => x.merchantId === s.merchantId && x.sha256 === s.sha256)) throw new FinanceError('DUPLICATE_ATTACHMENT');
+      if (sameSupplierDocument(s)) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE');
       const row = { id: randomUUID(), status: 'TO_REVIEW', ...clone(s) }; supplierInvoices.push(row); return clone(row);
     },
     async getSupplierInvoice(id) { const r = supplierInvoices.find((x) => x.id === id); return r ? clone(r) : null; },
@@ -171,6 +176,7 @@ export function createMemoryStore() {
       const r = supplierInvoices.find((x) => x.id === id);
       if (!r || r.status !== expectedStatus) return null;
       for (const k of Object.keys(patch)) if (['id', 'merchantId', 'sha256', 'attachmentRef', 'source', 'receivedAt', 'fileName', 'contentType', 'sizeBytes'].includes(k)) throw new FinanceError('INBOX_ITEM_IS_IMMUTABLE', k);
+      if (sameSupplierDocument({ ...r, ...patch }, id)) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE');
       Object.assign(r, patch); r.paymentStatus = r.status === 'PAID' ? 'paid' : 'unpaid'; return clone(r);
     },
     /** Phase 1: link/unlink a supplier invoice to a fin_companies contact, independent of status/review

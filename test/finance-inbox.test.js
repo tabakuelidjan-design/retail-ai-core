@@ -76,8 +76,12 @@ test('manual entry, rejection with a reason, reopening to correct, and duplicate
   assert.equal((await h.c.post(`/api/inbox/${man.data.id}/validate`, {})).status, 200);
   assert.equal((await h.c.post(`/api/inbox/${man.data.id}/reopen`, {})).data.status, 'TO_REVIEW');
   assert.equal((await h.c.post(`/api/inbox/${man.data.id}/validate`, {})).status, 200);
-  const dup = await h.c.post('/api/inbox/manual', { supplierName: 'Fournisseur Manuel SA', invoiceNumber: 'M-1', issueDate: '2026-09-01', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR' });
-  const d = await h.c.post(`/api/inbox/${dup.data.id}/validate`, {}); assert.equal(d.status, 409); assert.match(JSON.stringify(d.data), /DUPLICATE_SUPPLIER_INVOICE/);
+  // same supplier + number + type: refused at creation, as the database unique index does (fin_supplier_invoice_type_uq)
+  const d = await h.c.post('/api/inbox/manual', { supplierName: 'Fournisseur Manuel SA', invoiceNumber: 'M-1', issueDate: '2026-09-01', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR' });
+  assert.equal(d.status, 409); assert.match(JSON.stringify(d.data), /DUPLICATE_SUPPLIER_INVOICE/);
+  // a record whose number is still missing cannot be completed into a duplicate either
+  const dup = await h.c.post('/api/inbox/manual', { supplierName: 'Fournisseur Manuel SA', issueDate: '2026-09-01', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR' });
+  assert.equal((await h.c.put(`/api/inbox/${dup.data.id}`, { invoiceNumber: 'M-1' })).status, 409, 'the edit itself is refused by the same unique rule');
   assert.equal((await h.c.post(`/api/inbox/${dup.data.id}/reject`, {})).status, 422, 'a reason is required');
   const rj = await h.c.post(`/api/inbox/${dup.data.id}/reject`, { reason: 'Doublon' }); assert.equal(rj.data.status, 'REJECTED'); assert.equal(rj.data.rejectedReason, 'Doublon');
   assert.equal((await h.c.post('/api/inbox/manual', { net: 'abc' })).status, 422);

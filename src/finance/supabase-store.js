@@ -33,6 +33,8 @@ export function translateDbError(err) {
   const m = String(err?.message ?? err);
   if (m.includes('fin_documents_number_uq')) return new FinanceError('DUPLICATE_DOCUMENT_NUMBER');
   if (m.includes('fin_documents_one_invoice_per_order_uq')) return new FinanceError('SOURCE_ORDER_ALREADY_INVOICED');
+  // same supplier + number (+ type, once 20260926160000 is applied): the same purchase document already exists
+  if (m.includes('fin_supplier_invoice_type_uq') || m.includes('fin_supplier_invoice_uq')) return new FinanceError('DUPLICATE_SUPPLIER_INVOICE');
   if (m.includes('FIN_CONCURRENT_MODIFICATION')) return new FinanceError('CONCURRENT_MODIFICATION', 'document changed or was already issued');
   if (m.includes('FIN_NOT_FOUND')) return new FinanceError('DOCUMENT_NOT_FOUND');
   if (m.includes('is immutable') || m.includes('cannot be deleted')) return new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', 'refused by the database');

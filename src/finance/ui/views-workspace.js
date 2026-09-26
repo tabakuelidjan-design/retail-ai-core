@@ -419,7 +419,7 @@ function importDocumentsModal(done) {
   modal(tt('Import supplier documents'), h('div', null, drop, input, status), (close) => [h('button', { on: { click: close } }, tt('Close'))]);
 }
 async function viewPurchasesWorkspace(q) {
-  let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
+  let tab = q.get('tab') === 'analytics' ? 'analytics' : ['inbox', 'to_pay', 'paid', 'credit_notes'].includes(q.get('tab')) ? q.get('tab') : 'inbox';
   let text = '';
   let selectedId = null;
   const shell = h('div', { class: 'page-shell premium' });
@@ -450,7 +450,7 @@ async function viewPurchasesWorkspace(q) {
   }
   function drawTabs() {
     clear(tabsrow);
-    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
+    [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['credit_notes', 'Credit notes'], ['analytics', 'Analytics']].forEach(([v, l]) => tabsrow.appendChild(h('button', { type: 'button', class: `tab2 ${tab === v ? 'on' : ''}`, on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); drawBody(); } } }, tt(l))));
   }
   // Real inline preview of the actual uploaded source document (image or PDF via the existing, already-used
   // /api/inbox/:id/file route) - never a fabricated document image. Anything else gets an honest fallback
@@ -489,7 +489,7 @@ async function viewPurchasesWorkspace(q) {
     }
     function drawQueue() {
       clear(queueTabs); clear(queueList);
-      [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid']].forEach(([v, l]) => queueTabs.appendChild(h('button', { type: 'button', class: tab === v ? 'active' : '', on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); loadRows(); } } }, tt(l), ' ', String(v === 'inbox' ? rows.filter((r) => ['RECEIVED', 'TO_REVIEW'].includes(r.status)).length : v === 'to_pay' ? rows.filter((r) => r.status === 'TO_PAY').length : rows.filter((r) => r.status === 'PAID').length))));
+      [['inbox', 'To handle'], ['to_pay', 'To pay'], ['paid', 'Paid'], ['credit_notes', 'Credit notes']].forEach(([v, l]) => queueTabs.appendChild(h('button', { type: 'button', class: tab === v ? 'active' : '', on: { click: () => { tab = v; selectedId = null; location.hash = `#/purchases?tab=${v}`; drawTabs(); loadRows(); } } }, tt(l), ' ', String(v === 'inbox' ? rows.filter((r) => ['RECEIVED', 'TO_REVIEW'].includes(r.status)).length : v === 'to_pay' ? rows.filter((r) => r.status === 'TO_PAY').length : v === 'credit_notes' ? rows.filter((r) => r.documentType === 'CREDIT_NOTE').length : rows.filter((r) => r.status === 'PAID').length))));
       const s = text.trim().toLowerCase();
       const filtered = rows.filter((r) => !s || `${r.supplierName || ''} ${r.invoiceNumber || ''}`.toLowerCase().includes(s));
       if (!filtered.length) { queueList.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 22)), h('div', { class: 'muted small' }, tt('Nothing here.')))); return; }
@@ -502,7 +502,8 @@ async function viewPurchasesWorkspace(q) {
     function loadRows() {
       const scope = tab === 'inbox' ? 'inbox' : 'purchases';
       api('GET', `/api/inbox?scope=${scope}`).then((r) => {
-        rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : r.rows;
+        // Avoirs: validated supplier credit notes. A credit note never becomes TO_PAY, so without this tab it would leave every queue once validated.
+        rows = tab === 'to_pay' ? r.rows.filter((x) => x.status === 'TO_PAY') : tab === 'paid' ? r.rows.filter((x) => x.status === 'PAID') : tab === 'credit_notes' ? r.rows.filter((x) => x.documentType === 'CREDIT_NOTE') : r.rows;
         drawQueue();
         if (rows.length) selectRow(selectedId && rows.some((r2) => r2.id === selectedId) ? selectedId : rows[0].id);
         else { clear(preview); preview.appendChild(h('div', { class: 'muted small' }, tt('Select a document to preview it here.'))); clear(formPane); formPane.appendChild(h('div', { class: 'muted small' }, tt('Select a document from the queue to review it here.'))); }

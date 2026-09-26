@@ -195,6 +195,11 @@ test('migration: additive only, positive amounts enforced, captured receipts typ
   for (const c of ['supplier_enterprise_number text', 'supplier_iban text', 'order_reference text', 'billing_reference text', 'vat_breakdown jsonb', 'lines jsonb']) assert.ok(sql.includes(`add column ${c}`), c);
   assert.match(sql, /coalesce\(net_cents, 0\) >= 0 and coalesce\(vat_cents, 0\) >= 0 and coalesce\(gross_cents, 0\) >= 0/);
   assert.match(sql, /set document_type = 'RECEIPT' where coalesce\(\(extraction -> 'capture' ->> 'kind'\) = 'expense', false\)/);
+  // uniqueness now includes the type; the new index exists BEFORE the old one is dropped; the file-hash index is untouched
+  const create = sql.indexOf('create unique index fin_supplier_invoice_type_uq on fin_supplier_invoices (merchant_id, supplier_name, invoice_number, document_type);');
+  const drop = sql.indexOf('drop index fin_supplier_invoice_uq;');
+  assert.ok(create > 0 && drop > create, 'create the new unique index, then drop the old one');
+  assert.doesNotMatch(sql, /fin_supplier_invoice_sha_uq/);
   const store = readFileSync(new URL('../src/finance/supabase-store.js', import.meta.url), 'utf8');
   for (const col of ['document_type', 'supplier_enterprise_number', 'supplier_iban', 'order_reference', 'billing_reference', 'vat_breakdown', 'lines']) assert.ok(store.includes(`'${col}'`), col);
 });
@@ -210,3 +215,33 @@ test('UI: the review pane renders for a document that is not a capture (captureI
   assert.match(ws, /const capInfo = captureInfoNode\(it\); if \(capInfo\) body\.appendChild\(capInfo\);/);
   assert.match(ws, /'data-field': 'documentType'/); assert.match(ws, /if \(it\.documentType !== 'CREDIT_NOTE'\) act\.appendChild/);
 });
+
+test('uniqueness: same file = same record; same invoice or same credit note twice = refused; invoice + credit note with one number = allowed', withH(async (h) => {
+  const inv = doc({ id: 'F-UNIQ-1' });
+  const first = await upload(h, 'f.xml', inv); assert.equal(first.status, 201);
+  const again = await upload(h, 'f-copie.xml', inv); assert.equal(again.status, 200); assert.equal(again.data.duplicate, true); assert.equal(again.data.item.id, first.data.item.id, 'identical file hash: idempotent');
+  const other = await upload(h, 'f-renvoi.xml', Buffer.concat([inv, Buffer.from('\n')])); // same invoice, other bytes
+  assert.equal(other.status, 409); assert.match(JSON.stringify(other.data), /DUPLICATE_SUPPLIER_INVOICE/, 'the same invoice twice is refused');
+  const cnXml = doc({ root: 'CreditNote', id: 'F-UNIQ-1', billing: '<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>F-UNIQ-1</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>' });
+  const cn = await upload(h, 'nc.xml', cnXml); assert.equal(cn.status, 201, 'a credit note may carry the number of the invoice it cancels'); assert.equal(cn.data.item.documentType, 'CREDIT_NOTE');
+  const cn2 = await upload(h, 'nc-renvoi.xml', Buffer.concat([cnXml, Buffer.from('\n')]));
+  assert.equal(cn2.status, 409); assert.match(JSON.stringify(cn2.data), /DUPLICATE_SUPPLIER_INVOICE/, 'the same credit note twice is refused');
+  const rows = (await h.c.get('/api/inbox')).data.rows; assert.equal(rows.length, 2);
+  // the database error names are translated to the same refusal
+  const { translateDbError } = await import('../src/finance/supabase-store.js');
+  for (const idx of ['fin_supplier_invoice_type_uq', 'fin_supplier_invoice_uq']) assert.equal(translateDbError(new Error(`duplicate key value violates unique constraint "${idx}"`)).code, 'DUPLICATE_SUPPLIER_INVOICE');
+}));
+
+test('accounting impact: invoice 100 EUR = purchases +100, credit note 100 EUR = purchases -100, both stored as +100', withH(async (h) => {
+  const hundred = { net: '100.00', vat: '0.00', gross: '100.00', subtotals: sub('100.00', '0.00', '0', 'Z') };
+  const inv = (await upload(h, 'f.xml', doc({ id: 'F-100', ...hundred }))).data.item;
+  const cn = (await upload(h, 'nc.xml', doc({ root: 'CreditNote', id: 'NC-100', ...hundred, billing: '<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>F-100</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>' }))).data.item;
+  const total = async () => (await h.c.get('/api/overview/expense-breakdown')).data.total;
+  assert.equal(await total(), 0);
+  assert.equal((await h.c.post(`/api/inbox/${inv.id}/validate`, {})).status, 200); assert.equal(await total(), 10000, 'invoice: +100');
+  assert.equal((await h.c.post(`/api/inbox/${cn.id}/validate`, {})).status, 200); assert.equal(await total(), 0, 'credit note: -100');
+  const stored = (await h.c.get(`/api/inbox/${cn.id}`)).data;
+  assert.deepEqual([stored.netCents, stored.vatCents, stored.grossCents, stored.accountingSign], [10000, 0, 10000, -1], 'the credit note is stored positive; only its type makes it negative');
+  const pa = (await h.c.get('/api/purchases/analytics')).data;
+  assert.equal(pa.totalCents, 0, 'the purchases analytics nets the credit note too'); assert.equal(pa.documentsCount, 2); assert.equal(pa.bySupplier[0].grossCents, 0);
+}));

@@ -26,5 +26,11 @@ update fin_supplier_invoices set document_type = 'RECEIPT' where coalesce((extra
 alter table fin_supplier_invoices add constraint fin_supplier_invoice_amounts_not_negative
   check (coalesce(net_cents, 0) >= 0 and coalesce(vat_cents, 0) >= 0 and coalesce(gross_cents, 0) >= 0);
 
--- Duplicate detection per supplier and document type.
-create index fin_supplier_invoice_type_idx on fin_supplier_invoices (merchant_id, document_type);
+-- Uniqueness per supplier, document number AND document type: an invoice and the credit note that cancels it may carry the same
+-- number (both are distinct documents); the same invoice twice, or the same credit note twice, is still refused.
+-- The new index is created BEFORE the old one is dropped, inside the same migration transaction: there is never a moment without
+-- protection. Its key is a strict superset of the old key, so every row that satisfies the old index satisfies the new one
+-- (it cannot fail on existing data). NULL numbers stay allowed, exactly as before (a document under review may not have one yet).
+-- The file hash index (fin_supplier_invoice_sha_uq: same file = same record) is not touched.
+create unique index fin_supplier_invoice_type_uq on fin_supplier_invoices (merchant_id, supplier_name, invoice_number, document_type);
+drop index fin_supplier_invoice_uq;
