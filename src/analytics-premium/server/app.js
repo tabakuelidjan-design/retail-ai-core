@@ -27,6 +27,8 @@ const STATIC = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
+  '/assets/nordla-mic.png': ['assets/nordla-mic.png', 'image/png'],
+  '/assets/nordla-mic@2x.png': ['assets/nordla-mic@2x.png', 'image/png'],
   '/account-menu.js': ['account-menu.js', 'text/javascript; charset=utf-8'],
   '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'],
   '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'],

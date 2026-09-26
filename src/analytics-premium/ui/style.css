@@ -615,7 +615,7 @@ button { font-family: inherit; }
 .sync-dot.warn { background: var(--warn, #b7791f); }
 .sync-dot.bad { background: var(--bad, #b3261e); }
 
-/* "Parle à Nordla" question box (existing tokens only) */
+/* "Demander à Nordla" question box (existing tokens only); its microphone is "Parler à Nordla" */
 .ask-back { position: fixed; inset: 0; background: rgba(20, 30, 45, .45); display: flex; align-items: flex-start; justify-content: center; padding: 10vh 16px 16px; z-index: 60; overflow-y: auto; }
 .ask-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(20, 30, 45, .18); width: min(640px, 100%); padding: 18px 20px; display: grid; gap: 14px; }
 .ask-head { display: flex; align-items: center; justify-content: space-between; }
@@ -669,8 +669,14 @@ button { font-family: inherit; }
 .ask-mic:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
 .ask-mic.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .ask-mic:disabled { opacity: .6; cursor: not-allowed; }
+.ask-mic { line-height: 1.2; }
+.ask-mic-icon { width: 22px; height: 22px; flex: 0 0 22px; display: block; object-fit: contain; border-radius: 50%; }
+.ask-mic.on .ask-mic-icon { box-shadow: 0 0 0 2px var(--accent); }
 .ask-voice-status { font-size: 13px; color: var(--ink-soft); min-height: 0; }
 .ask-voice-status:empty { display: none; }
 .ask-voice-status.bad { color: var(--bad); }
 
 @media (max-width: 720px) { .ask-mic { min-height: 40px; padding: 8px 16px; } }
+
+.ask-mic-short { display: none; }
+@media (max-width: 359px) { .ask-mic-full { display: none; } .ask-mic-short { display: inline; } }

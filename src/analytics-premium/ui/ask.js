@@ -1,5 +1,5 @@
 'use strict';
-// "Parle à Nordla": the question box. The figures come from the server (read from the Nordla report - never computed in the browser, never by a model);
+// "Demander à Nordla": the question box (typed questions; "Parler à Nordla" is only the microphone inside it). The figures come from the server (read from the Nordla report - never computed in the browser, never by a model);
 // this file only asks, waits, and shows the answer, its period and source, the AI explanation status, or a clear error. No innerHTML anywhere.
 
 const ASK_TIMEOUT_MS = 30000;
@@ -67,6 +67,11 @@ async function askSubmit(input, box, btn) {
   } finally { clearTimeout(timer); btn.disabled = false; }
 }
 
+/** The Nordla microphone icon (ui/assets, 96 px + 192 px for dense screens). Decorative: the button's text says what it does. */
+function askMicIcon() {
+  return h('img', { class: 'ask-mic-icon', src: '/assets/nordla-mic.png', srcset: '/assets/nordla-mic.png 1x, /assets/nordla-mic@2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
+}
+
 function closeAsk() { if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
 function askEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeAsk(); } }
 
@@ -79,14 +84,16 @@ function openAsk() {
   send.addEventListener('click', run);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
   // Voice: speech -> text in THIS field (correctable) -> the same run() / POST /api/ask as a typed question. Nothing is ever sent by the voice layer itself.
-  const micLabel = h('span', { class: 'ask-mic-label' }, t('ask.voice.start'));
-  const mic = h('button', { type: 'button', class: 'ask-mic', 'aria-pressed': 'false' }, h('span', { 'aria-hidden': 'true' }, '\uD83C\uDFA4'), ' ', micLabel);
+  const micFull = h('span', { class: 'ask-mic-full' }); const micShort = h('span', { class: 'ask-mic-short', 'aria-hidden': 'true' });
+  const micLabel = h('span', { class: 'ask-mic-label' }, micFull, micShort);
+  const mic = h('button', { type: 'button', class: 'ask-mic', 'aria-pressed': 'false' }, askMicIcon(), micLabel);
   const voiceStatus = h('div', { class: 'ask-voice-status', role: 'status', 'aria-live': 'polite' });
   let delivered = false;
   const renderVoice = (st) => {
     mic.classList.toggle('on', st === 'listening'); mic.setAttribute('aria-pressed', st === 'listening' ? 'true' : 'false');
     mic.disabled = st === 'unsupported' || st === 'transcribing';
-    micLabel.textContent = t(st === 'listening' ? 'ask.voice.stop' : 'ask.voice.start');
+    micFull.textContent = t(st === 'listening' ? 'ask.voice.stop' : 'ask.voice.start'); micShort.textContent = t(st === 'listening' ? 'ask.voice.stop' : 'ask.voice.short');
+    mic.setAttribute('aria-label', micFull.textContent); // the full name stays available to screen readers when the compact text is shown
     const key = { listening: 'ask.voice.listening', transcribing: 'ask.voice.transcribing', denied: 'ask.voice.denied', mic: 'ask.voice.mic', noSpeech: 'ask.voice.noSpeech', network: 'ask.voice.network', generic: 'ask.voice.generic', unsupported: 'ask.voice.unsupported' }[st] || (delivered ? 'ask.voice.done' : null);
     voiceStatus.textContent = key ? t(key) : '';
     voiceStatus.classList.toggle('bad', ['denied', 'mic', 'noSpeech', 'network', 'generic', 'unsupported'].includes(st));
@@ -103,7 +110,7 @@ function openAsk() {
   input.focus();
 }
 
-/** The "Parle à Nordla" button (Brief and What changed heroes). */
+/** The "Demander à Nordla" button (Brief and What changed heroes). */
 function askButton() {
   return h('button', { class: 'cta-primary', type: 'button', on: { click: openAsk } }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla'), h('kbd', null, '⌘K'));
 }

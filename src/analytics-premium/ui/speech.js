@@ -1,5 +1,5 @@
 'use strict';
-// Voice input for "Parle à Nordla": speech provider -> text -> the question field -> the SAME /api/ask as typed questions.
+// Voice input ("Parler à Nordla", the microphone of the "Demander à Nordla" box): speech provider -> text -> the question field -> the SAME /api/ask as typed questions.
 // This file only turns speech into TEXT. It never records, stores or uploads audio (no MediaRecorder, no getUserMedia, no fetch), and it never submits
 // anything by itself: the transcription lands in the text field, where the user can correct it, and only the user's own "send" runs the question.
 //

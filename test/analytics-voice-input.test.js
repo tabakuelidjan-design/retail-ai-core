@@ -191,3 +191,67 @@ test('no audio handling anywhere in the front end, and no new server route: spee
   for (const lang of ['fr', 'nl', 'en']) { const src = ui(`lang-${lang}.js`); for (const k of ['start', 'stop', 'listening', 'transcribing', 'done', 'denied', 'mic', 'noSpeech', 'network', 'generic', 'unsupported', 'privacy']) assert.match(src, new RegExp(`'ask\\.voice\\.${k}'`), `${lang} ${k}`); }
   assert.match(ui('lang-fr.js'), /'ask\.voice\.listening': 'Je vous écoute…'/);
 });
+
+// ---------- names + icon ("Demander à Nordla" = the text assistant, "Parler à Nordla" = the microphone only) ----------
+const langSrc = (l) => ui(`lang-${l}.js`);
+const val = (src, key) => { const m = new RegExp(`'${key.replace(/\./g, '\.')}': '([^']*)'`).exec(src); return m ? m[1] : null; };
+
+test('names: the text assistant is "Demander à Nordla" everywhere; "Parler à Nordla" is reserved for the microphone (FR / NL / EN)', () => {
+  const expected = { fr: ['Demander à Nordla', 'Parler à Nordla'], nl: ['Vraag het Nordla', 'Praat met Nordla'], en: ['Ask Nordla', 'Talk to Nordla'] };
+  for (const [l, [text, voice]] of Object.entries(expected)) {
+    const src = langSrc(l);
+    assert.equal(val(src, 'nav.askNordla'), text, `${l} open button / sidebar`); assert.equal(val(src, 'ask.title'), text, `${l} window title + aria-label`);
+    assert.equal(val(src, 'ask.voice.start'), voice, `${l} microphone button`);
+    assert.notEqual(text, voice, `${l}: the two uses have different names`);
+  }
+  for (const l of ['fr', 'nl', 'en']) assert.doesNotMatch(langSrc(l), /Parle à Nordla/, `${l}: the old name is gone`);
+  // the box itself: title and field label use ask.title, the microphone uses ask.voice.start
+  assert.match(askSrc, /'aria-label': t\('ask\.title'\)/); assert.match(askSrc, /h\('h2', null, t\('ask\.title'\)\)/);
+});
+
+test('icon: the microphone button shows the new Nordla microphone icon, never the old emoji, in the ready AND listening states', () => {
+  assert.doesNotMatch(askSrc, /\uD83C\uDFA4|🎤/, 'the emoji is gone from ask.js');
+  const fp = fakeProvider(); const d = loadAsk({ providers: [() => fp.provider] });
+  const mic = d.find('ask-mic'); const icon = () => mic.children.find((c) => c.className === 'ask-mic-icon');
+  assert.equal(icon().tag, 'img'); assert.equal(icon().attrs.src, '/assets/nordla-mic.png'); assert.match(icon().attrs.srcset, /nordla-mic@2x\.png 2x/);
+  assert.equal(icon().attrs.alt, ''); assert.equal(icon().attrs['aria-hidden'], 'true', 'decorative: the button text says what it does');
+  assert.equal(icon().attrs.width, icon().attrs.height, 'square: the proportions are kept');
+  assert.match(d.deep(mic), /ask\.voice\.start/);
+  mic.fire('click'); // listening: same icon, "Stop" label, active state
+  assert.ok(icon(), 'the icon stays during listening'); assert.match(d.deep(mic), /ask\.voice\.stop/); assert.ok(mic.classList.has('on')); assert.equal(mic.attrs['aria-pressed'], 'true');
+  fp.emit('onEnd'); assert.ok(icon()); assert.match(d.deep(mic), /ask\.voice\.start/); assert.ok(!mic.classList.has('on'));
+  assert.equal(d.fetches.length, 0, 'the end of speech never sends anything by itself');
+});
+
+test('icon files are real square PNGs served by the Analytics server; the active state is styled on the same icon', async () => {
+  for (const [f, px] of [['nordla-mic.png', 96], ['nordla-mic@2x.png', 192]]) {
+    const b = readFileSync(new URL(`../src/analytics-premium/ui/assets/${f}`, import.meta.url));
+    assert.equal(b.subarray(1, 4).toString('latin1'), 'PNG'); assert.equal(b.readUInt32BE(16), px); assert.equal(b.readUInt32BE(20), px);
+  }
+  const { createAnalyticsPremiumApp } = await import('../src/analytics-premium/server/app.js');
+  const http = await import('node:http'); const { mkdtemp } = await import('node:fs/promises'); const { tmpdir } = await import('node:os'); const path = await import('node:path');
+  const server = http.createServer(createAnalyticsPremiumApp({ reportsDir: await mkdtemp(path.join(tmpdir(), 'ap-mic-')) }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/assets/nordla-mic.png`);
+    assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'image/png');
+  } finally { server.close(); }
+  const css = ui('style.css');
+  assert.match(css, /\.ask-mic-icon \{ width: 22px; height: 22px; flex: 0 0 22px;[^}]*object-fit: contain;/, 'fixed square size, never stretched');
+  assert.match(css, /\.ask-mic\.on \.ask-mic-icon \{/, 'listening: an active state on the same icon');
+});
+
+test('privacy wording: audio is neither recorded nor stored, recognition is the browser\'s, only the transcribed text reaches Nordla (FR / NL / EN)', () => {
+  assert.equal(val(langSrc('fr'), 'ask.voice.privacy'), 'Nordla n’enregistre ni ne stocke votre audio. La reconnaissance vocale est fournie par votre navigateur et peut, selon le navigateur, utiliser les services de son fournisseur. Seul le texte transcrit est envoyé à Nordla.');
+  assert.match(val(langSrc('nl'), 'ask.voice.privacy'), /neemt uw audio niet op en slaat die niet op[\s\S]*browser[\s\S]*Alleen de getranscribeerde tekst wordt naar Nordla verzonden\./);
+  assert.match(val(langSrc('en'), 'ask.voice.privacy'), /does not record or store your audio[\s\S]*provided by your browser[\s\S]*Only the transcribed text is sent to Nordla\./);
+});
+
+test('mobile: the microphone is never hidden on small screens; below 360 px only the text is shortened, the full aria-label stays, the icon stays', () => {
+  const css = ui('style.css'); const ask = ui('ask.js');
+  assert.ok(!/@media[^{]*\{[^}]*\.ask-mic(?!-)[^}]*display:\s*none/.test(css), 'no media query hides the microphone button');
+  assert.match(css, /@media \(max-width: 359px\) \{ \.ask-mic-full \{ display: none; \} \.ask-mic-short \{ display: inline; \} \}/);
+  assert.match(ask, /mic\.setAttribute\('aria-label', micFull\.textContent\)/);
+  assert.match(ask, /ask\.voice\.short/);
+  for (const l of ['lang-fr.js', 'lang-nl.js', 'lang-en.js']) assert.match(ui(l), /'ask\.voice\.short':/);
+});
