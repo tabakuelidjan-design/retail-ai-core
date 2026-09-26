@@ -326,9 +326,21 @@ export function createFinanceApp(deps) {
   }, { public: true });
 
   // Sync health: the last Shopify -> Supabase SYNCHRONISATION (from the Core sync run log), factual and read-only. Pack/report generation is not a sync.
+  // The sync pill is refreshed on every page view, but the Shopify sync itself runs every ~15 minutes: the status is answered from a
+  // 30 s memo (shared by concurrent requests) instead of one database query per page view. A failure is never memoised.
+  const SYNC_STATUS_TTL_MS = 30_000;
+  const nowMs = deps.nowMs ?? (() => Date.now());
+  let syncMemo = null; // { at, promise }
+  const syncStatusMemo = () => {
+    if (syncMemo && nowMs() - syncMemo.at < SYNC_STATUS_TTL_MS) return syncMemo.promise;
+    const promise = Promise.resolve().then(() => deps.syncStatus());
+    syncMemo = { at: nowMs(), promise };
+    promise.catch(() => { if (syncMemo?.promise === promise) syncMemo = null; });
+    return promise;
+  };
   on('GET', '/api/sync-status', async (ctx) => {
     let sync = { available: false, reason: 'NOT_CONFIGURED' };
-    try { if (deps.syncStatus) sync = await deps.syncStatus(); } catch { sync = { available: false, reason: 'STATUS_UNAVAILABLE' }; }
+    try { if (deps.syncStatus) sync = await syncStatusMemo(); } catch { sync = { available: false, reason: 'STATUS_UNAVAILABLE' }; }
     json(ctx.res, 200, { sync });
   });
   on('GET', '/api/session', async (ctx) => {
