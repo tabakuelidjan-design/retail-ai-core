@@ -47,6 +47,44 @@ const confChip = (x) => {
 const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
   SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', PRO_FORMA_NOT_AN_INVOICE: 'This is a pro forma, not an invoice: reject it and import the final invoice', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
+// Due date and payment (phase 4.7). The server derives everything (origin, status axes, days remaining); this only words it. Nothing here is model-written.
+function dueSentence(m, currency) {
+  if (!m) return '';
+  switch (m.kind) {
+    case 'DAYS_LEFT': return tt('There are {0} days left to pay this invoice.', m.days);
+    case 'DUE_SOON': return m.days === 1 ? tt('Due tomorrow.') : tt('Due in {0} days.', m.days);
+    case 'DUE_TODAY': return tt('This invoice is due today.');
+    case 'OVERDUE': return m.days === 1 ? tt('Overdue for 1 day.') : tt('Overdue for {0} days.', m.days);
+    case 'PAID': return m.paidAt ? tt('Paid on {0}', m.paidAt) : tt('Paid');
+    case 'PARTIAL': return tt('Partial payment: {0} of {1}.', fmtMoney(m.paidCents, currency), fmtMoney(m.grossCents, currency)) + (m.calendar ? ' ' + dueSentence(m.calendar, currency) : '');
+    case 'PREPAID': return tt('Paid at the source according to the document (to be confirmed).');
+    case 'NO_DUE_DATE': return tt('No due date stated.');
+    default: return '';
+  }
+}
+function dueOriginLabel(d) {
+  if (d.origin === 'PRINTED') return tt('Printed on the invoice');
+  if (d.origin === 'COMPUTED_FROM_TERMS') return tt('Computed from the payment terms');
+  if (d.origin === 'MANUAL') return d.legacy ? tt('Entered by a person (origin not recorded)') : tt('Entered by a person');
+  return tt('Not stated on the document');
+}
+/** Under the due-date field of the review form: where the date comes from, the supplier's wording, a divergence to look at, the status. */
+const dueNote = (it) => {
+  const d = it.due; if (!d) return null;
+  const rows = [h('div', { class: 'muted small' }, tt('Due date origin'), ': ', h('strong', null, dueOriginLabel(d)))];
+  if (d.terms && d.terms.raw) rows.push(h('div', { class: 'muted small' }, tt('Payment terms: {0}', d.terms.raw)));
+  if (d.terms && d.terms.status === 'OUT_OF_GRAMMAR' && d.origin === 'UNKNOWN') rows.push(h('div', { class: 'muted small' }, tt('The due date is not computed from this wording: enter it yourself if you know it.')));
+  if (d.divergence) rows.push(h('div', { class: 'chip warn' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
+  const sentence = dueSentence(d.message, it.currency); if (sentence) rows.push(h('div', { class: 'small' }, sentence));
+  if (d.settlement === 'UNPAID') rows.push(h('div', { class: 'muted small' }, tt('No payment recorded')));
+  return h('div', { class: 'due-note' }, rows);
+};
+/** A compact reading of the due date for a list row. */
+const dueListChip = (r) => {
+  const d = r.due; if (!d || !d.message) return null; const m = d.message.kind === 'PARTIAL' ? d.message.calendar : d.message;
+  if (!m || ['NO_DUE_DATE', 'PREPAID'].includes(m.kind)) return null; if (m.kind === 'OVERDUE') return h('span', { class: 'chip bad' }, dueSentence(m, r.currency));
+  return h('span', { class: m.kind === 'DAYS_LEFT' ? 'chip mute' : 'chip warn' }, dueSentence(m, r.currency));
+};
 // Common purchase-document model: the type (amounts stay positive; a credit note reduces purchases) and the deterministic checks.
 const DOC_TYPE = { INVOICE: 'Invoice', CREDIT_NOTE: 'Credit note', RECEIPT: 'Receipt / ticket', EXPENSE: 'Other expense' };
 // a pro forma read in a PDF is shown as such (never as a normal invoice), whatever the stored default type
@@ -199,6 +237,7 @@ function renderInboxDetail(host, id, opts = {}) {
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierEnterpriseNumber', tr('Enterprise number'), it.supplierEnterpriseNumber, '0123.456.789'), inp('supplierIban', tr('Supplier IBAN'), it.supplierIban, 'BE68 5390 0754 7034')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
+    if (dueNote(it)) body.appendChild(dueNote(it));
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
     body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), it.documentType === 'CREDIT_NOTE' ? inp('orderReference', tr('Order reference'), it.orderReference) : h('div', null)));
     if (it.vatBreakdown && it.vatBreakdown.length) body.appendChild(h('div', { class: 'field doc-vat' }, h('label', null, tt('VAT by rate')), h('table', { class: 'mini' }, h('thead', null, h('tr', null, h('th', null, tt('Rate')), h('th', null, tt('Excl. VAT')), h('th', null, tt('VAT')))),
@@ -687,7 +726,7 @@ async function viewPurchases() {
     box.appendChild(h('div', { class: 'phead' }, ['Supplier', 'Date', 'Due', 'Excl. VAT', 'VAT', 'Total', 'Status', 'Source'].map((x, i) => h('div', { class: i >= 3 && i <= 5 ? 'right' : '' }, tt(x)))));
     shown.forEach((r) => box.appendChild(h('a', { class: 'prow', href: '#', on: { click: (e) => { e.preventDefault(); openInboxItem(r.id, load); } } },
       h('div', { class: 'psup' }, avatar(r.supplierName), h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.supplierName), h('span', { class: 'ds' }, r.invoiceNumber))),
-      h('div', { class: 'pc-d', 'data-label': tr('Date') }, r.issueDate), h('div', { class: 'pc-d', 'data-label': tr('Due') }, r.dueDate || '-'), h('div', { class: 'right', 'data-label': tr('Excl. VAT') }, fmtMoney(r.netCents, r.currency)), h('div', { class: 'right', 'data-label': tr('VAT') }, fmtMoney(r.vatCents, r.currency)), h('div', { class: 'right', 'data-label': tr('Total') }, h('strong', null, fmtMoney(r.grossCents, r.currency))),
+      h('div', { class: 'pc-d', 'data-label': tr('Date') }, r.issueDate), h('div', { class: 'pc-d', 'data-label': tr('Due') }, r.dueDate || '-', dueListChip(r) ? h('div', null, dueListChip(r)) : null), h('div', { class: 'right', 'data-label': tr('Excl. VAT') }, fmtMoney(r.netCents, r.currency)), h('div', { class: 'right', 'data-label': tr('VAT') }, fmtMoney(r.vatCents, r.currency)), h('div', { class: 'right', 'data-label': tr('Total') }, h('strong', null, fmtMoney(r.grossCents, r.currency))),
       h('div', { 'data-label': tr('Status') }, inboxBadge(r.status)), h('div', { 'data-label': tr('Source') }, sourceBadge(r.source)))));
   }
   async function load() { try { rows = (await api('GET', '/api/inbox?scope=purchases')).rows; const c = await api('GET', '/api/inbox/status'); clear(kpi); const cur = (rows[0] && rows[0].currency) || 'EUR'; const toPay = rows.filter((r) => r.status === 'TO_PAY'); const sum = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
