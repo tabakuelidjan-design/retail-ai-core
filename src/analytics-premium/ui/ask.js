@@ -5,6 +5,7 @@
 const ASK_TIMEOUT_MS = 30000;
 const ASK_EXAMPLES = ['ask.q.revenue', 'ask.q.orders', 'ask.q.aov', 'ask.q.topProduct', 'ask.q.channel'];
 let askOpen = null;
+let askSpeech = null;
 
 /** error code -> message key (fixed set: a provider's or a server's free text is never displayed) */
 function askErrorKey(code) {
@@ -66,7 +67,7 @@ async function askSubmit(input, box, btn) {
   } finally { clearTimeout(timer); btn.disabled = false; }
 }
 
-function closeAsk() { if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
+function closeAsk() { if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
 function askEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeAsk(); } }
 
 function openAsk() {
@@ -77,10 +78,26 @@ function openAsk() {
   const run = () => askSubmit(input, box, send);
   send.addEventListener('click', run);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  // Voice: speech -> text in THIS field (correctable) -> the same run() / POST /api/ask as a typed question. Nothing is ever sent by the voice layer itself.
+  const micLabel = h('span', { class: 'ask-mic-label' }, t('ask.voice.start'));
+  const mic = h('button', { type: 'button', class: 'ask-mic', 'aria-pressed': 'false' }, h('span', { 'aria-hidden': 'true' }, '\uD83C\uDFA4'), ' ', micLabel);
+  const voiceStatus = h('div', { class: 'ask-voice-status', role: 'status', 'aria-live': 'polite' });
+  let delivered = false;
+  const renderVoice = (st) => {
+    mic.classList.toggle('on', st === 'listening'); mic.setAttribute('aria-pressed', st === 'listening' ? 'true' : 'false');
+    mic.disabled = st === 'unsupported' || st === 'transcribing';
+    micLabel.textContent = t(st === 'listening' ? 'ask.voice.stop' : 'ask.voice.start');
+    const key = { listening: 'ask.voice.listening', transcribing: 'ask.voice.transcribing', denied: 'ask.voice.denied', mic: 'ask.voice.mic', noSpeech: 'ask.voice.noSpeech', network: 'ask.voice.network', generic: 'ask.voice.generic', unsupported: 'ask.voice.unsupported' }[st] || (delivered ? 'ask.voice.done' : null);
+    voiceStatus.textContent = key ? t(key) : '';
+    voiceStatus.classList.toggle('bad', ['denied', 'mic', 'noSpeech', 'network', 'generic', 'unsupported'].includes(st));
+  };
+  askSpeech = createSpeechController({ provider: pickSpeechProvider(), getLang: () => NORDLA_I18N.getLang(), onState: renderVoice, onText: (txt, isFinal) => { input.value = String(txt).slice(0, 500); if (isFinal) { delivered = true; input.focus(); } } });
+  mic.addEventListener('click', () => { delivered = false; askSpeech.toggle(); });
+  const voice = h('div', { class: 'ask-voice' }, mic, voiceStatus, askSpeech.supported ? h('div', { class: 'ask-meta ask-voice-note' }, t('ask.voice.privacy')) : null);
   const examples = h('div', { class: 'ask-examples' }, h('div', { class: 'ask-meta' }, t('ask.examples')), ASK_EXAMPLES.map((k) => h('button', { type: 'button', class: 'ask-chip', on: { click: () => { input.value = t(k); run(); } } }, t(k))));
   const panel = h('div', { class: 'ask-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('ask.title') },
     h('div', { class: 'ask-head' }, h('h2', null, t('ask.title')), h('button', { type: 'button', class: 'ask-close', 'aria-label': t('ask.close'), on: { click: closeAsk } }, '×')),
-    h('div', { class: 'ask-form' }, input, send), examples, box);
+    h('div', { class: 'ask-form' }, input, send), voice, examples, box);
   const back = h('div', { class: 'ask-back', on: { click: (e) => { if (e.target === back) closeAsk(); } } }, panel);
   document.body.appendChild(back); askOpen = back; document.addEventListener('keydown', askEsc, true);
   input.focus();

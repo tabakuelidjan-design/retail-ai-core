@@ -17,6 +17,7 @@ const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/ask.js': ['ask.js', 'text/javascript; charset=utf-8'],
+  '/speech.js': ['speech.js', 'text/javascript; charset=utf-8'],
   '/period.js': ['period.js', 'text/javascript; charset=utf-8'],
   '/explorer.js': ['explorer.js', 'text/javascript; charset=utf-8'],
   '/customers.js': ['customers.js', 'text/javascript; charset=utf-8'],

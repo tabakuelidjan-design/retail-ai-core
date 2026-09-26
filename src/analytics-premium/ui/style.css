@@ -662,3 +662,15 @@ button { font-family: inherit; }
 .ex-empty-period { padding: 12px 14px; color: var(--ink-soft); margin-bottom: 12px; }
 .ex-money-note { margin: 8px 0 0; }
 @media (max-width: 720px) { .period-menu { left: 0; right: 0; min-width: 0; } }
+
+/* Voice input in the question box */
+.ask-voice { display: grid; gap: 6px; }
+.ask-mic { justify-self: start; display: inline-flex; align-items: center; gap: 6px; background: var(--canvas); border: 1px solid var(--border-strong); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+.ask-mic:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.ask-mic.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.ask-mic:disabled { opacity: .6; cursor: not-allowed; }
+.ask-voice-status { font-size: 13px; color: var(--ink-soft); min-height: 0; }
+.ask-voice-status:empty { display: none; }
+.ask-voice-status.bad { color: var(--bad); }
+
+@media (max-width: 720px) { .ask-mic { min-height: 40px; padding: 8px 16px; } }
