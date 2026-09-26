@@ -1491,3 +1491,7 @@ body:has(.modal-back) .contact-support { display: none; }
    (Contacts), "New invoice" (Sales) and "Treasury" (Bank). Without this rule those actions vanished on phones, tablets and narrower
    laptop windows. Targeted on purpose: only these three action cards, never the quote-card in general. */
 @media (max-width: 1179px) { .hero-row.subpage .quote-card.contacts-actions, .hero-row.subpage .quote-card.sales-actions, .hero-row.subpage .quote-card.bank-actions { display: flex; } }
+/* purchase-document model (review pane): VAT by rate and invoice lines, read-only */
+.drawer-body table.mini { width: 100%; border-collapse: collapse; font-size: 13px; } .drawer-body table.mini th, .drawer-body table.mini td { padding: 4px 6px; border-bottom: 1px solid #eceef2; text-align: left; } .drawer-body table.mini td:not(:first-child), .drawer-body table.mini th:not(:first-child) { text-align: right; white-space: nowrap; }
+.drawer-body .doc-lines { margin: 8px 0; } .drawer-body .doc-lines summary { cursor: pointer; font-weight: 600; font-size: 13px; } .drawer-body .doc-lines table.mini td:first-child { overflow-wrap: anywhere; }
+.drawer-body .doc-sign { margin: -4px 0 8px; }

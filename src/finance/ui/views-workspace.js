@@ -38,8 +38,20 @@ const sourceBadge = (s) => h('span', { class: `chip src-${s}` }, tt(SOURCE_BADGE
 const INBOX_STATUS = { RECEIVED: 'Received', TO_REVIEW: 'To review', VALIDATED: 'Validated', TO_PAY: 'To pay', PAID: 'Paid', REJECTED: 'Rejected' };
 const inboxBadge = (s) => h('span', { class: `badge IN_${s}` }, tt(INBOX_STATUS[s] || s));
 const confChip = (x) => { const v = x.extraction && x.extraction.fields ? Object.values(x.extraction.fields) : []; if (!v.length) return h('span', { class: 'chip mute' }, tt('No automatic extraction')); const m = Math.min(...v); return h('span', { class: `chip ${m >= 0.9 ? 'ok' : m >= 0.6 ? 'warn' : 'bad'}` }, tt('Confidence {0}%', Math.round(m * 100))); };
-const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing' };
+const INBOX_ERR = { SUPPLIER_NAME_MISSING: 'Supplier name is missing', INVOICE_NUMBER_MISSING: 'Invoice number is missing', ISSUE_DATE_INVALID: 'Invoice date is missing or invalid', DUE_DATE_INVALID: 'Due date is invalid', NET_AMOUNT_INVALID: 'Amount excl. VAT is missing', VAT_AMOUNT_INVALID: 'VAT amount is missing', GROSS_AMOUNT_INVALID: 'Amount incl. VAT is missing', VAT_EXCEEDS_TOTAL: 'The VAT is higher than the total', NET_PLUS_VAT_DOES_NOT_EQUAL_TOTAL: 'Excl. VAT + VAT does not equal the total', CURRENCY_INVALID: 'Currency is missing',
+  SUPPLIER_IBAN_INVALID: 'The supplier IBAN is invalid', SUPPLIER_ENTERPRISE_NUMBER_INVALID: 'The enterprise number is invalid', SUPPLIER_VAT_NUMBER_INVALID: 'The supplier VAT number is invalid', DOCUMENT_TYPE_INVALID: 'Choose the document type', VAT_BREAKDOWN_NEGATIVE: 'The VAT breakdown has negative amounts' };
 const inboxErrText = (c) => tt(INBOX_ERR[c] || c);
+// Common purchase-document model: the type (amounts stay positive; a credit note reduces purchases) and the deterministic checks.
+const DOC_TYPE = { INVOICE: 'Invoice', CREDIT_NOTE: 'Credit note', RECEIPT: 'Receipt / ticket', EXPENSE: 'Other expense' };
+const docTypeChip = (r) => (r.documentType && r.documentType !== 'INVOICE' ? h('span', { class: r.documentType === 'CREDIT_NOTE' ? 'chip warn doc-type' : 'chip mute doc-type' }, tt(DOC_TYPE[r.documentType] || r.documentType)) : null);
+const CHECK_TEXT = { TOTALS_DO_NOT_ADD_UP: 'The extracted totals do not add up: check them.', NEGATIVE_INVOICE_READ_AS_CREDIT_NOTE: 'This invoice has negative amounts: it was read as a credit note with positive amounts. Check the type.',
+  NEGATIVE_AMOUNTS_ON_CREDIT_NOTE: 'This credit note has negative amounts: they were read as positive amounts.', XML_DOCTYPE_NOT_ALLOWED: 'This XML file was refused for safety (DOCTYPE): enter the fields manually.',
+  XML_MALFORMED: 'This XML file could not be read: enter the fields manually.', NOT_A_UBL_INVOICE_OR_CREDIT_NOTE: 'This XML file is not a UBL invoice or credit note: enter the fields manually.', TOO_MANY_LINES_TRUNCATED: 'Only the first 500 lines were read.',
+  EXTRACTION_FAILED: 'Automatic reading failed: enter the fields manually.', VAT_BREAKDOWN_INCOMPLETE: 'The VAT breakdown is incomplete.', VAT_BREAKDOWN_TAXABLE_DOES_NOT_MATCH_NET: 'The VAT breakdown does not match the amount excl. VAT.',
+  VAT_BREAKDOWN_DOES_NOT_MATCH_VAT: 'The VAT breakdown does not match the VAT amount.', VAT_RATE_AMOUNT_MISMATCH: 'A VAT amount does not match its rate.', VAT_RATE_UNUSUAL_FOR_BELGIUM: 'A VAT rate is not a usual Belgian rate (0, 6, 12, 21 %).',
+  LINES_DO_NOT_ADD_UP: 'The invoice lines do not add up to the lines total.', PAYABLE_DIFFERS_FROM_TOTAL: 'The amount to pay differs from the total incl. VAT (prepayment or rounding).',
+  CREDIT_NOTE_WITHOUT_INVOICE_REFERENCE: 'This credit note does not say which invoice it credits.', VAT_AND_ENTERPRISE_NUMBER_DIFFER: 'The VAT number and the enterprise number do not match.' };
+const checkText = (c) => tt(CHECK_TEXT[c] || INBOX_ERR[c] || c);
 /** Integer cents -> text in the UI language, by string composition only (no arithmetic on money). */
 /** Client-side CSV export of rows already visible on screen - real data already fetched for the table, no
  * server round trip, no fabricated column. RFC 4180-ish: only the two characters that actually need
@@ -78,16 +90,27 @@ function renderInboxDetail(host, id, opts = {}) {
     let it; try { it = await api('GET', `/api/inbox/${id}`); } catch (e) { return fail(e, body); }
     const editable = ['RECEIVED', 'TO_REVIEW'].includes(it.status);
     const f = {}; const inp = (k, label, val, ph, cls) => { const el = h('input', { value: val ?? '', placeholder: ph || '', disabled: !editable, on: { input: (e) => { f[k] = e.target.value; } } }); f[k] = val ?? ''; return h('div', { class: `field ${cls || ''}` }, h('label', null, label, it.extraction && it.extraction.fields && it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields[k.replace(/^net$|^vat$|^gross$/, (m) => `${m}Cents`)] * 100)}%`) : null), el); };
-    body.appendChild(h('div', { class: 'drawer-head' }, inboxBadge(it.status), sourceBadge(it.source), confChip(it), it.fileName ? h('span', { class: 'muted small' }, `${it.fileName} · ${fmtBytes(it.sizeBytes || 0)}`) : null));
+    body.appendChild(h('div', { class: 'drawer-head' }, inboxBadge(it.status), docTypeChip(it), sourceBadge(it.source), confChip(it), it.fileName ? h('span', { class: 'muted small' }, `${it.fileName} · ${fmtBytes(it.sizeBytes || 0)}`) : null));
     if (it.rejectedReason) body.appendChild(h('div', { class: 'banner warn small' }, tt('Rejected: {0}', it.rejectedReason)));
-    if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, tt(w === 'TOTALS_DO_NOT_ADD_UP' ? 'The extracted totals do not add up: check them.' : w === 'SUPPLIER_CREDIT_NOTE_REVIEW_MANUALLY' ? 'This looks like a supplier credit note: review it manually.' : w)))));
+    if (it.extraction && it.extraction.warnings && it.extraction.warnings.length) body.appendChild(h('div', { class: 'banner warn small' }, it.extraction.warnings.map((w) => h('div', null, checkText(w)))));
+    if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
     if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `/api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
     else if (it.status !== 'REJECTED') body.appendChild(h('div', { style: 'margin:8px 0' }, attachButton(id, () => { draw(); onChange(); })));
-    body.appendChild(captureInfoNode(it));
+    const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
+    const typeSel = h('select', { disabled: !editable, 'data-field': 'documentType', on: { change: (e) => { f.documentType = e.target.value; } } }, Object.keys(DOC_TYPE).map((k) => h('option', { value: k, selected: k === it.documentType }, tt(DOC_TYPE[k]))));
+    f.documentType = it.documentType;
+    body.appendChild(h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Document type'), it.extraction && it.extraction.fields && it.extraction.fields.documentType !== undefined ? h('span', { class: 'conf' }, ` ${Math.round(it.extraction.fields.documentType * 100)}%`) : null), typeSel),
+      it.documentType === 'CREDIT_NOTE' ? inp('billingReference', tr('Credited invoice number'), it.billingReference) : inp('orderReference', tr('Order reference'), it.orderReference)));
+    if (it.documentType === 'CREDIT_NOTE') body.appendChild(h('div', { class: 'muted small doc-sign' }, tt('A credit note reduces your purchases: its amounts are entered as positive amounts.')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
+    body.appendChild(h('div', { class: 'row r2' }, inp('supplierEnterpriseNumber', tr('Enterprise number'), it.supplierEnterpriseNumber, '0123.456.789'), inp('supplierIban', tr('Supplier IBAN'), it.supplierIban, 'BE68 5390 0754 7034')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
-    body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), h('div', null)));
+    body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), it.documentType === 'CREDIT_NOTE' ? inp('orderReference', tr('Order reference'), it.orderReference) : h('div', null)));
+    if (it.vatBreakdown && it.vatBreakdown.length) body.appendChild(h('div', { class: 'field doc-vat' }, h('label', null, tt('VAT by rate')), h('table', { class: 'mini' }, h('thead', null, h('tr', null, h('th', null, tt('Rate')), h('th', null, tt('Excl. VAT')), h('th', null, tt('VAT')))),
+      h('tbody', null, it.vatBreakdown.map((b) => h('tr', null, h('td', null, b.rateBp == null ? (b.category || '—') : `${(b.rateBp / 100).toString().replace('.', ',')} %`), h('td', null, b.taxableCents == null ? '—' : fmtMoney(b.taxableCents, it.currency)), h('td', null, b.vatCents == null ? '—' : fmtMoney(b.vatCents, it.currency))))))));
+    if (it.lines && it.lines.length) body.appendChild(h('details', { class: 'doc-lines' }, h('summary', null, tt('{0} invoice line(s)', it.lines.length)), h('table', { class: 'mini' }, h('thead', null, h('tr', null, h('th', null, tt('Description')), h('th', null, tt('Qty')), h('th', null, tt('Excl. VAT')), h('th', null, tt('Rate')))),
+      h('tbody', null, it.lines.map((l) => h('tr', null, h('td', null, l.description || '—'), h('td', null, l.quantity || '—'), h('td', null, l.netCents == null ? '—' : fmtMoney(l.netCents, it.currency)), h('td', null, l.rateBp == null ? '—' : `${(l.rateBp / 100).toString().replace('.', ',')} %`)))))));
     // Real, existing backend capability (POST /api/inbox/:id/contact) that had no UI control anywhere -
     // links this supplier invoice to an existing contact by searching the same real /api/contacts list.
     const contactBox = h('div', { class: 'field' }, h('label', null, tt('Linked contact')), h('div', { class: 'muted small' }, tt('Loading...')));
@@ -119,7 +142,7 @@ function renderInboxDetail(host, id, opts = {}) {
       act.appendChild(h('button', { on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); toast('Saved', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Save')));
       act.appendChild(h('button', { class: 'primary', on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); await api('POST', `/api/inbox/${id}/validate`, {}); toast('Validated', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Validate')));
       act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
-    } else if (it.status === 'VALIDATED') { act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
+    } else if (it.status === 'VALIDATED') { if (it.documentType !== 'CREDIT_NOTE') act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
     else if (it.status === 'TO_PAY') {
       act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
       act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction')));
@@ -474,7 +497,7 @@ async function viewPurchasesWorkspace(q) {
       filtered.forEach((r) => queueList.appendChild(h('div', { class: `queue-item ${r.id === selectedId ? 'selected' : ''}`, on: { click: () => selectRow(r.id) } },
         h('strong', null, r.supplierName || r.fileName || tt('Unknown supplier')),
         h('small', null, [r.invoiceNumber, r.issueDate].filter(Boolean).join('  ·  ')),
-        h('div', { class: 'queue-money' }, h('b', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : '—'), inboxBadge(r.status)))));
+        h('div', { class: 'queue-money' }, h('b', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : '—'), docTypeChip(r), inboxBadge(r.status)))));
     }
     function loadRows() {
       const scope = tab === 'inbox' ? 'inbox' : 'purchases';
@@ -522,7 +545,7 @@ async function viewInbox() {
       avatar(r.supplierName || r.fileName || '?'),
       h('span', { class: 'dmain' }, h('span', { class: 'dt' }, r.supplierName || r.fileName || tt('Unknown supplier')), h('span', { class: 'ds' }, [r.invoiceNumber, r.issueDate, r.fileName].filter(Boolean).join('  ·  '))),
       h('span', { class: 'damt' }, h('strong', null, r.grossCents != null ? fmtMoney(r.grossCents, r.currency) : ''), confChip(r)),
-      h('span', { class: 'dstat' }, inboxBadge(r.status), sourceBadge(r.source)), h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
+      h('span', { class: 'dstat' }, inboxBadge(r.status), docTypeChip(r), sourceBadge(r.source)), h('span', { class: 'dgo' }, svgIcon('chevron', 16)))));
   }
   draw();
 }

@@ -28,6 +28,7 @@ import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
+import { DOCUMENT_TYPES, accountingSign, checkPurchaseDocument, documentTypeOf, purchaseModelOf } from '../purchase-document.js';
 import { refundRows } from '../refund-rows.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
@@ -838,6 +839,9 @@ export function createFinanceApp(deps) {
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
+    // common purchase-document model (phase 1): type + accounting direction, identifiers, VAT by rate, lines, where each field came from
+    documentType: documentTypeOf(raw), accountingSign: accountingSign(raw), supplierEnterpriseNumber: r.supplierEnterpriseNumber, supplierIban: r.supplierIban, orderReference: r.orderReference, billingReference: r.billingReference,
+    vatBreakdown: Array.isArray(raw.vatBreakdown) ? raw.vatBreakdown : [], lines: Array.isArray(raw.lines) ? raw.lines : [], provenance: r.extraction?.provenance ?? {}, checks: checkPurchaseDocument(purchaseModelOf(raw)).warnings,
     capture: (() => { const c = r.extraction?.capture; return c ? { kind: c.kind, origin: c.origin, capturedAt: c.capturedAt, category: c.category ?? null, paymentMethod: c.paymentMethod ?? null, note: c.note ?? null, eurAmountCents: c.eurAmountCents ?? null, eurAmountSource: c.eurAmountSource ?? null,
       vatRateBp: c.vatRateBp ?? null, hasOriginal: !!c.original, originalContentType: c.original?.contentType ?? null, originalFileName: c.original?.fileName ?? null, pdfGenerated: !!c.pdf?.generated } : null; })(),
     receipt: (() => { const c = r.extraction?.receipt; return c ? { hasOriginal: !!c.original, originalContentType: c.original?.contentType ?? null, originalFileName: c.original?.fileName ?? null, pdfGenerated: !!c.pdf?.generated, attachedAt: c.attachedAt } : null; })(),
@@ -855,7 +859,8 @@ export function createFinanceApp(deps) {
   const AMOUNTS = ['netCents', 'vatCents', 'grossCents'];
   const inboxInput = (b) => {
     const out = {}; const errors = [];
-    for (const k of ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'paymentReference']) if (k in (b ?? {})) out[k] = sanitizeText(b[k], 120);
+    for (const k of ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'paymentReference', 'orderReference', 'billingReference', 'supplierEnterpriseNumber', 'supplierIban']) if (k in (b ?? {})) out[k] = sanitizeText(b[k], 120);
+    if ('documentType' in (b ?? {}) && b.documentType !== '' && b.documentType != null) { const t = String(b.documentType).toUpperCase(); if (DOCUMENT_TYPES.includes(t)) out.documentType = t; else errors.push({ field: 'documentType', code: 'DOCUMENT_TYPE_INVALID' }); }
     for (const k of ['issueDate', 'dueDate']) if (k in (b ?? {})) { if (b[k] === '' || b[k] == null) out[k] = null; else if (isDate(b[k])) out[k] = b[k]; else errors.push({ field: k, code: 'DATE_INVALID' }); }
     if ('currency' in (b ?? {})) { const c = sanitizeText(b.currency, 3)?.toUpperCase(); if (!c || /^[A-Z]{3}$/.test(c)) out.currency = c ?? null; else errors.push({ field: 'currency', code: 'CURRENCY_INVALID' }); }
     for (const k of ['net', 'vat', 'gross']) if (k in (b ?? {})) { if (b[k] === '' || b[k] == null) out[`${k}Cents`] = null; else { const c = toCents(String(b[k])); if (Number.isInteger(c) && c >= 0) out[`${k}Cents`] = c; else errors.push({ field: k, code: 'AMOUNT_INVALID' }); } }

@@ -10,9 +10,10 @@
 
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
-import { toCents } from './money.js';
 import { eurOfSupplier } from './currency.js';
 import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf, isCapturedExpense, normalizeCaptureMeta } from './expense-capture.js';
+import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf, readUblDocument } from './purchase-document.js';
+import { normalizeBelgianNumber } from './company.js';
 
 export const INBOX_STATUSES = ['RECEIVED', 'TO_REVIEW', 'VALIDATED', 'TO_PAY', 'PAID', 'REJECTED'];
 export const INBOX_SOURCES = ['upload', 'email', 'peppol', 'manual'];
@@ -49,32 +50,11 @@ export function filterFinanceMessage(msg, { financeAddress, allowedSenders = [] 
 // ---------- extraction ----------
 export const NoExtractor = { name: 'none', label: 'Aucune extraction automatique', async extract() { return { extractor: 'none', fields: {}, warnings: [] }; } };
 
-const tag = (xml, name) => { const m = new RegExp(`<(?:[A-Za-z0-9]+:)?${name}(?:\\s[^>]*)?>([^<]*)</(?:[A-Za-z0-9]+:)?${name}>`).exec(xml); return m ? m[1].trim() : null; };
-const block = (xml, name) => { const m = new RegExp(`<(?:[A-Za-z0-9]+:)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[A-Za-z0-9]+:)?${name}>`).exec(xml); return m ? m[1] : ''; };
-const cents = (s) => { if (s == null) return null; const c = toCents(s); return Number.isInteger(c) ? c : null; };
-
-/** Deterministic reader for structured invoices (Peppol BIS / UBL 2.1). High confidence because the data is structured, still human-reviewed. */
-export const UblExtractor = {
-  name: 'ubl', label: 'Facture structurée UBL / Peppol',
-  async extract({ data }) {
-    const xml = data.toString('utf8');
-    const isCredit = /<(?:[A-Za-z0-9]+:)?CreditNote[\s>]/.test(xml.slice(0, 2000));
-    const supplier = block(xml, 'AccountingSupplierParty');
-    const totals = block(xml, 'LegalMonetaryTotal');
-    const docHead = xml.replace(/<(?:[A-Za-z0-9]+:)?AccountingSupplierParty[\s\S]*$/, '');
-    const f = {}; const put = (k, value, confidence = 0.98) => { if (value !== null && value !== undefined && value !== '') f[k] = { value, confidence }; };
-    put('invoiceNumber', tag(docHead, 'ID')); put('issueDate', tag(docHead, 'IssueDate')); put('dueDate', tag(docHead, 'DueDate')); put('currency', tag(docHead, 'DocumentCurrencyCode'));
-    put('supplierName', tag(block(supplier, 'PartyLegalEntity'), 'RegistrationName') ?? tag(block(supplier, 'PartyName'), 'Name'));
-    put('supplierVatNumber', tag(block(supplier, 'PartyTaxScheme'), 'CompanyID'));
-    put('netCents', cents(tag(totals, 'TaxExclusiveAmount'))); put('grossCents', cents(tag(totals, 'TaxInclusiveAmount')));
-    put('vatCents', cents(tag(block(xml.replace(/<(?:[A-Za-z0-9]+:)?InvoiceLine[\s\S]*$/, ''), 'TaxTotal'), 'TaxAmount')));
-    put('paymentReference', tag(block(xml, 'PaymentMeans'), 'PaymentID'), 0.9);
-    const warnings = [];
-    if (isCredit) warnings.push('SUPPLIER_CREDIT_NOTE_REVIEW_MANUALLY');
-    if (f.netCents && f.vatCents && f.grossCents && f.netCents.value + f.vatCents.value !== f.grossCents.value) { warnings.push('TOTALS_DO_NOT_ADD_UP'); for (const k of ['netCents', 'vatCents', 'grossCents']) f[k].confidence = 0.4; }
-    return { extractor: 'ubl', fields: f, warnings };
-  },
-};
+/**
+ * Deterministic reader for structured invoices and credit notes (Peppol BIS / UBL 2.1), see purchase-document.js.
+ * High confidence because the data is structured; still always human-reviewed.
+ */
+export const UblExtractor = { name: 'ubl', label: 'Facture structurée UBL / Peppol', async extract({ data }) { return readUblDocument(data); } };
 /** Chooses the extractor from the sniffed type. PDF / image extraction (OCR) is a replaceable boundary: none is configured, so those need manual entry. */
 export const defaultExtractor = { name: 'auto', label: 'UBL structuré ; PDF / image : saisie manuelle', async extract(file) { return file.contentType === 'application/xml' ? UblExtractor.extract(file) : NoExtractor.extract(file); } };
 
@@ -105,7 +85,12 @@ export function createSupabaseAttachmentStore({ url, serviceKey, bucket = 'finan
 }
 
 // ---------- service ----------
-const FIELD_KEYS = ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'issueDate', 'dueDate', 'netCents', 'vatCents', 'grossCents', 'currency', 'paymentReference'];
+const FIELD_KEYS = ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'issueDate', 'dueDate', 'netCents', 'vatCents', 'grossCents', 'currency', 'paymentReference',
+  'documentType', 'supplierEnterpriseNumber', 'supplierIban', 'orderReference', 'billingReference', 'vatBreakdown', 'lines'];
+/** Read from the document for the checks only (not stored as columns): kept in extraction.provenance with the value as read. */
+const REFERENCE_ONLY_KEYS = ['lineExtensionCents', 'payableCents'];
+/** What a person may correct during review. The VAT breakdown and the lines are the document's own and are not edited here. */
+const EDITABLE_KEYS = FIELD_KEYS.filter((k) => !['vatBreakdown', 'lines'].includes(k));
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 
 /** What still blocks validation. A person must fix these; nothing is guessed. */
@@ -121,8 +106,10 @@ export function validationErrors(r) {
   return e;
 }
 
-/** Validation rules for a record: a captured expense (receipt, ticket) uses the lighter expense rules; every other document keeps the full invoice rules. */
-export const validationErrorsFor = (r) => (isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r));
+/** Validation rules for a record: a captured expense (receipt, ticket) uses the lighter expense rules; every other document keeps the full invoice rules.
+ * Both also get the deterministic checks of the common document model (identifiers, document type). */
+export const validationErrorsFor = (r) => [...(isCapturedExpense(r) ? expenseValidationErrors(r) : validationErrors(r)), ...checkPurchaseDocument(purchaseModelOf(r)).errors];
+
 const baseOf = (n) => String(n ?? 'document').replace(/\.[A-Za-z0-9]{1,5}$/, '');
 
 /**
@@ -138,14 +125,21 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     await audit({ at: now(), action: `SUPPLIER_INVOICE_${to}`, itemId: r.id, from: r.status });
     return saved;
   };
-  const pick = (input) => { const out = {}; for (const k of FIELD_KEYS) if (k in input) out[k] = input[k]; return out; };
+  const pick = (input, keys = FIELD_KEYS) => { const out = {}; for (const k of keys) if (k in input) out[k] = input[k]; return out; };
   const clean = (p) => {
     const out = { ...p };
-    for (const k of ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'paymentReference']) if (k in out) out[k] = out[k] == null || out[k] === '' ? null : String(out[k]).trim().slice(0, 120);
+    for (const k of ['supplierName', 'supplierVatNumber', 'invoiceNumber', 'paymentReference', 'orderReference', 'billingReference', 'supplierEnterpriseNumber', 'supplierIban']) if (k in out) out[k] = out[k] == null || out[k] === '' ? null : String(out[k]).trim().slice(0, 120);
     if ('currency' in out && out.currency) out.currency = String(out.currency).toUpperCase();
     for (const k of ['issueDate', 'dueDate']) if (k in out && !out[k]) out[k] = null;
+    if (out.supplierIban) out.supplierIban = out.supplierIban.replace(/\s+/g, '').toUpperCase();
+    if (out.supplierEnterpriseNumber) { const n = normalizeBelgianNumber(out.supplierEnterpriseNumber); if (n.ok) out.supplierEnterpriseNumber = n.enterpriseNumber; }
+    if ('documentType' in out) { const t = String(out.documentType ?? '').trim().toUpperCase(); if (!t) delete out.documentType; else if (!DOCUMENT_TYPES.includes(t)) throw new FinanceError('DOCUMENT_TYPE_INVALID', t); else out.documentType = t; }
+    for (const k of ['vatBreakdown', 'lines']) if (k in out && !Array.isArray(out[k])) out[k] = null;
     return out;
   };
+  /** Where each field came from: { source, path, page, zone, confidence, value as read } for an extracted field. */
+  const provenanceOf = (ex) => Object.fromEntries(Object.entries(ex.fields ?? {}).map(([k, v]) => [k, { source: v.source ?? ex.extractor, path: v.path ?? null, page: v.page ?? null, zone: v.zone ?? null, confidence: v.confidence,
+    ...(Array.isArray(v.value) ? { count: v.value.length } : { value: v.value }) }]));
   return {
     /** Adapters call this with a file they were allowed to read. Idempotent by content hash. */
     async ingest({ source = 'upload', fileName, data, receivedAt, fromAddress = null, subject = null }) {
@@ -161,9 +155,11 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       await attachments.put(ref, data, { contentType });
       const ex = await extractor.extract({ fileName, contentType, data }).catch(() => ({ extractor: 'failed', fields: {}, warnings: ['EXTRACTION_FAILED'] }));
       const values = Object.fromEntries(Object.entries(ex.fields).map(([k, v]) => [k, v.value]));
+      let fieldsIn; try { fieldsIn = clean(pick(values)); } catch { fieldsIn = clean(pick(values, FIELD_KEYS.filter((k) => k !== 'documentType'))); } // an unknown type is never stored; the person chooses
       const row = await store.saveSupplierInvoice({
-        merchantId, source, status: 'RECEIVED', ...clean(pick(values)), currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
-        receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null, extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [] },
+        merchantId, source, status: 'RECEIVED', ...fieldsIn, currency: values.currency ?? null, fileName: safeName(fileName), contentType, sizeBytes: data.length, sha256, attachmentRef: ref,
+        receivedAt: receivedAt ?? now(), fromAddress, subject: subject ? String(subject).slice(0, 200) : null,
+        extraction: { extractor: ex.extractor, at: now(), fields: Object.fromEntries(Object.entries(ex.fields).filter(([k]) => !REFERENCE_ONLY_KEYS.includes(k)).map(([k, v]) => [k, v.confidence])), warnings: ex.warnings ?? [], provenance: provenanceOf(ex) },
       });
       await audit({ at: now(), action: 'INBOX_ITEM_RECEIVED', itemId: row.id, source, extractor: ex.extractor });
       return { item: await move(row, 'TO_REVIEW'), duplicate: false }; // extraction attempted: a person reviews next
@@ -197,7 +193,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       const capture = { kind: 'expense', origin, capturedAt: at, category: null, paymentMethod: null, note: null, eurAmountCents: null, eurAmountSource: null, vatRateBp: null, ...normalizeCaptureMeta(meta),
         original: { ref: originalRef, sha256, contentType, fileName: originalName, sizeBytes: data.length }, pdf: { ref: pdfRef, sha256: pdfSha, generated, sizeBytes: pdfSize } };
       const row = await store.saveSupplierInvoice({
-        merchantId, source: 'upload', status: 'RECEIVED', ...clean(pick(fields)), currency: (fields.currency ? String(fields.currency).toUpperCase() : null), fileName: pdfName, contentType: 'application/pdf', sizeBytes: pdfSize, sha256, attachmentRef: pdfRef,
+        merchantId, source: 'upload', status: 'RECEIVED', documentType: 'RECEIPT', ...clean(pick(fields, EDITABLE_KEYS)), currency: (fields.currency ? String(fields.currency).toUpperCase() : null), fileName: pdfName, contentType: 'application/pdf', sizeBytes: pdfSize, sha256, attachmentRef: pdfRef,
         receivedAt: at, fromAddress: null, subject: null, extraction: { extractor: 'manual', at: now(), fields: {}, warnings: [], capture },
       });
       await audit({ at: now(), action: 'EXPENSE_CAPTURED', itemId: row.id, origin, pdfGenerated: generated });
@@ -251,7 +247,7 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     },
     async createManual(input, actor) {
       merchantOnly(actor);
-      const row = await store.saveSupplierInvoice({ merchantId, source: 'manual', status: 'RECEIVED', ...clean(pick(input)), receivedAt: now(), extraction: { extractor: 'manual', at: now(), fields: {}, warnings: [] } });
+      const row = await store.saveSupplierInvoice({ merchantId, source: 'manual', status: 'RECEIVED', ...clean(pick(input, EDITABLE_KEYS)), receivedAt: now(), extraction: { extractor: 'manual', at: now(), fields: {}, warnings: [] } });
       return move(row, 'TO_REVIEW');
     },
     get: must,
@@ -260,20 +256,28 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     async update(id, input, actor) {
       merchantOnly(actor); const r = await must(id);
       if (!['RECEIVED', 'TO_REVIEW'].includes(r.status)) throw new FinanceError('ONLY_UNVALIDATED_ITEMS_CAN_BE_EDITED', r.status);
-      const saved = await store.updateSupplierInvoice(id, clean(pick(input)), r.status);
+      const patch = clean(pick(input, EDITABLE_KEYS));
+      const changed = Object.keys(patch).filter((k) => JSON.stringify(patch[k] ?? null) !== JSON.stringify(r[k] ?? null));
+      if (changed.length) {
+        const provenance = { ...(r.extraction?.provenance ?? {}) };
+        for (const k of changed) { const extracted = provenance[k]?.source === 'user' ? provenance[k].extracted : provenance[k]; provenance[k] = { source: 'user', at: now(), confidence: 1, ...(extracted ? { extracted } : {}) }; }
+        patch.extraction = { ...(r.extraction ?? { extractor: 'manual', at: now(), fields: {}, warnings: [] }), provenance };
+      }
+      const saved = await store.updateSupplierInvoice(id, patch, r.status);
       if (!saved) throw new FinanceError('CONCURRENT_MODIFICATION', id);
-      await audit({ at: now(), action: 'SUPPLIER_INVOICE_EDITED', itemId: id }); return saved;
+      await audit({ at: now(), action: 'SUPPLIER_INVOICE_EDITED', itemId: id, fields: changed }); return saved;
     },
     async validate(id, actor) {
       merchantOnly(actor); const r = await must(id);
       const errors = validationErrorsFor(r); if (errors.length) throw new FinanceError('NOT_READY_TO_VALIDATE', errors.join(', '));
-      const dup = (await store.listSupplierInvoices(merchantId)).find((x) => x.id !== id && x.invoiceNumber && x.invoiceNumber === r.invoiceNumber && (x.supplierVatNumber ? x.supplierVatNumber === r.supplierVatNumber : x.supplierName === r.supplierName) && ['VALIDATED', 'TO_PAY', 'PAID'].includes(x.status));
+      const dup = (await store.listSupplierInvoices(merchantId)).find((x) => x.id !== id && documentTypeOf(x) === documentTypeOf(r) && x.invoiceNumber && x.invoiceNumber === r.invoiceNumber && (x.supplierVatNumber ? x.supplierVatNumber === r.supplierVatNumber : x.supplierName === r.supplierName) && ['VALIDATED', 'TO_PAY', 'PAID'].includes(x.status));
       if (dup) throw new FinanceError('DUPLICATE_SUPPLIER_INVOICE', dup.id);
       return move(r, 'VALIDATED', { validatedAt: now() });
     },
-    async markToPay(id, actor) { merchantOnly(actor); return move(await must(id), 'TO_PAY'); },
+    async markToPay(id, actor) { merchantOnly(actor); const r = await must(id); if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id); return move(r, 'TO_PAY'); },
     async pay(id, { paidOn, amountCents, reference }, actor) {
       merchantOnly(actor); const r = await must(id);
+      if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id);
       if (!isDate(paidOn)) throw new FinanceError('PAID_ON_INVALID');
       if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
       if (amountCents !== r.grossCents) throw new FinanceError('PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET', `${amountCents} vs ${r.grossCents}`);

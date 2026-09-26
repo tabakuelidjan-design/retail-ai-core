@@ -16,6 +16,7 @@
 //   ready       COMPLETE and no warning
 
 import { REFUND_CSV_KEYS, refundCsvRows } from './refund-rows.js';
+import { documentTypeOf } from './purchase-document.js';
 import { createHash } from 'node:crypto';
 import { toCsv } from './export-csv.js';
 import { formatCents } from './money.js';
@@ -207,10 +208,12 @@ const partyOfPurchase = (r) => r.supplierName;
 export const originalOf = (r) => r.extraction?.capture?.original ?? r.extraction?.receipt?.original ?? null;
 export const pdfOf = (r) => r.extraction?.capture?.pdf ?? r.extraction?.receipt?.pdf ?? null;
 const eurOf = (r) => r.extraction?.capture?.eurAmountCents ?? '';
+// Amounts are always positive; type_document says whether the line is a cost or a supplier credit note (which reduces it).
+const TYPE_LABEL_FR = { INVOICE: 'Facture', CREDIT_NOTE: 'Note de crédit', RECEIPT: 'Ticket / reçu', EXPENSE: 'Dépense' };
 const purchaseRow = (r) => ({ fournisseur: r.supplierName ?? '', tva_fournisseur: r.supplierVatNumber ?? '', numero: r.invoiceNumber ?? '', date: r.issueDate ?? '', echeance: r.dueDate ?? '', devise_origine: r.currency ?? '',
   htva: r.netCents == null ? '' : formatCents(r.netCents), tva: r.vatCents == null ? '' : formatCents(r.vatCents), tvac: r.grossCents == null ? '' : formatCents(r.grossCents), montant_eur_saisi: eurOf(r) === '' ? '' : formatCents(eurOf(r)),
-  categorie: r.extraction?.capture?.category ?? '', moyen_paiement: r.extraction?.capture?.paymentMethod ?? '', note: r.extraction?.capture?.note ?? '', statut: r.status, source: r.source, piece: r.attachmentRef ? 'oui' : 'non', image_originale: originalOf(r) && pdfOf(r)?.generated ? 'oui' : 'non' });
-const PURCHASE_KEYS = ['fournisseur', 'tva_fournisseur', 'numero', 'date', 'echeance', 'devise_origine', 'htva', 'tva', 'tvac', 'montant_eur_saisi', 'categorie', 'moyen_paiement', 'note', 'statut', 'source', 'piece', 'image_originale'];
+  type_document: TYPE_LABEL_FR[documentTypeOf(r)], categorie: r.extraction?.capture?.category ?? '', moyen_paiement: r.extraction?.capture?.paymentMethod ?? '', note: r.extraction?.capture?.note ?? '', statut: r.status, source: r.source, piece: r.attachmentRef ? 'oui' : 'non', image_originale: originalOf(r) && pdfOf(r)?.generated ? 'oui' : 'non' });
+const PURCHASE_KEYS = ['fournisseur', 'tva_fournisseur', 'numero', 'date', 'echeance', 'devise_origine', 'htva', 'tva', 'tvac', 'montant_eur_saisi', 'type_document', 'categorie', 'moyen_paiement', 'note', 'statut', 'source', 'piece', 'image_originale'];
 const csvOf = (rows, keys) => Buffer.from(toCsv(rows, keys.map((k) => ({ key: k, header: k }))), 'utf8');
 const xlsxOf = (name, keys, rows) => buildXlsx([{ name, rows: [keys, ...rows.map((r) => keys.map((k) => r[k] ?? ''))] }]);
 

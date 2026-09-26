@@ -243,7 +243,10 @@ const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'suppli
   subject: 'subject', extraction: 'extraction', validatedAt: 'validated_at', paidAt: 'paid_at', paidAmountCents: 'paid_amount_cents', paidReference: 'paid_reference', rejectedReason: 'rejected_reason',
   // Phase 1 (Contact foundation): additive, nullable link to fin_companies - see 20260924090000_finance_supplier_company_link.
   // Naming follows the existing customer_company_id/companyId convention on fin_documents, not a new "contactId".
-  supplierCompanyId: 'supplier_company_id' };
+  supplierCompanyId: 'supplier_company_id',
+  // Document intelligence phase 1 - see 20260926160000_finance_purchase_document_model.
+  documentType: 'document_type', supplierEnterpriseNumber: 'supplier_enterprise_number', supplierIban: 'supplier_iban', orderReference: 'order_reference', billingReference: 'billing_reference',
+  vatBreakdown: 'vat_breakdown', lines: 'lines' };
 function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
 const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
 const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });

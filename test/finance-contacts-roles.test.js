@@ -121,7 +121,7 @@ test('UI: the form asks the role (required), person or company, and every field;
   assert.ok(call > 0 && ok > call, 'the success toast only after the API answered');
   assert.match(form, /location\.hash = target;/); assert.match(form, /#\/contacts\?open=\$\{r\.id\}/, 'the list reloads and the contact opens');
   assert.match(form, /e\.code === 'CONTACT_POSSIBLE_DUPLICATE'/); assert.match(form, /tt\('Create anyway'\)/); assert.match(form, /e\.code === 'ROLE_IN_USE'/);
-  assert.match(form, /else if \(e\.code === 'INPUT_INVALID' && e\.fields\) showFieldErrors\(e\.fields\);\n\s*else fail\(e, err\);/, 'field errors are listed with readable labels; any other API error is shown in the form, which stays open');
+  assert.match(form, /else if \(e\.code === 'INPUT_INVALID' && e\.fields\) showFieldErrors\(e\.fields\);\s*else fail\(e, err\);/, 'field errors are listed with readable labels; any other API error is shown in the form, which stays open');
   assert.match(form, /const drops = \(v\) => \(locked\.customer && v === 'supplier'\) \|\| \(locked\.supplier && v === 'customer'\);/, 'options that would drop a document-backed role are disabled');
 });
 

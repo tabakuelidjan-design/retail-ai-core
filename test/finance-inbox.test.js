@@ -126,9 +126,9 @@ test('the dedicated address and sender allow-list are merchant-local settings; e
   const src = readFileSync(new URL('../src/finance/inbox.js', import.meta.url), 'utf8');
   assert.ok(!/imap|pop3|gmail|outlook|nodemailer/i.test(src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')), 'no mailbox client exists in the finance code');
 });
-test('UBL reader: credit notes are flagged for manual review; garbage yields nothing rather than a guess', async () => {
+test('UBL reader: a credit note is read as CREDIT_NOTE with positive amounts; garbage yields nothing rather than a guess', async () => {
   const cn = await UblExtractor.extract({ data: Buffer.from(ubl().toString().replace(/<Invoice/, '<CreditNote').replace('</Invoice>', '</CreditNote>')) });
-  assert.ok(cn.warnings.includes('SUPPLIER_CREDIT_NOTE_REVIEW_MANUALLY'));
+  assert.equal(cn.fields.documentType.value, 'CREDIT_NOTE'); assert.equal(cn.fields.grossCents.value, 12100);
   assert.deepEqual((await UblExtractor.extract({ data: Buffer.from('<?xml version="1.0"?><nothing/>') })).fields, {});
   assert.deepEqual(validationErrors({ supplierName: 'X', invoiceNumber: '1', issueDate: '2026-09-01', netCents: 100, vatCents: 21, grossCents: 121, currency: 'EUR' }), []);
 });

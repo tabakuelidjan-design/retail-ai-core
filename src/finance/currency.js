@@ -5,15 +5,19 @@
 //     on the card statement) counts for that EUR amount - never for a computed one;
 //   - no exchange rate is ever invented or fetched.
 // Every aggregate that mixes documents goes through these helpers, so a total can never silently add EUR + USD + CNY.
+// Supplier documents are stored with POSITIVE amounts; a supplier credit note counts negatively through accountingSign (its type), never
+// through a negative stored amount.
+
+import { accountingSign } from './purchase-document.js';
 
 /** A sales document is summed only when it is in the Finance currency. */
 export const isNative = (doc, cur = 'EUR') => (doc.currency ?? cur) === cur;
 
-/** EUR cents a supplier document contributes to Finance totals, or null when it must be left out (foreign currency, no typed EUR amount). */
+/** EUR cents a supplier document contributes to Finance totals (negative for a supplier credit note), or null when it must be left out (foreign currency, no typed EUR amount). */
 export function eurOfSupplier(r, cur = 'EUR') {
-  if ((r.currency ?? cur) === cur) return r.grossCents ?? 0;
+  if ((r.currency ?? cur) === cur) return accountingSign(r) * (r.grossCents ?? 0);
   const typed = r.extraction?.capture?.eurAmountCents;
-  return cur === 'EUR' && Number.isInteger(typed) && typed > 0 ? typed : null;
+  return cur === 'EUR' && Number.isInteger(typed) && typed > 0 ? accountingSign(r) * typed : null;
 }
 
 /** EUR cents actually paid for a paid supplier document (null = left out). A typed EUR amount is what left the account. */
