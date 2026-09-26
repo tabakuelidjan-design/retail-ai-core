@@ -149,7 +149,8 @@ test('manual correction, then send: the CORRECTED text goes through the same POS
   assert.equal(d.fetches.length, 1);
   const { url, opts } = d.fetches[0]; assert.equal(url, '/api/ask'); assert.equal(opts.method, 'POST'); assert.equal(opts.headers['Content-Type'], 'application/json');
   const sent = JSON.parse(opts.body); assert.equal(sent.question, 'Quel est mon chiffre d’affaires des 30 derniers jours ?');
-  assert.deepEqual(Object.keys(sent).sort(), ['lang', 'period', 'question'], 'exactly the typed-question payload: no audio, no transcript metadata');
+  assert.deepEqual(Object.keys(sent).sort(), ['history', 'lang', 'period', 'question'], 'exactly the typed-question payload (+ the short text history of this open box): no audio, no transcript metadata');
+  assert.deepEqual(sent.history, [], 'the first question of a conversation carries no history');
 });
 
 test('Enter in the field after a dictation also goes through the normal path', async () => {

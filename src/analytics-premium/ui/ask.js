@@ -52,19 +52,137 @@ function askSelectedPeriod() {
   return { period: periodState.key, from: periodState.from, to: periodState.to };
 }
 
+// ---------- the conversation: the last 3 exchanges, in memory, for this open box only (closing the box forgets them) ----------
+const ASK_MAX_TURNS = 3;
+let askThread = []; // [{ q, text, node }] oldest first; `text` is what the follow-up questions may refer to
+
+/** What the server may use to understand a follow-up ("Et le mois dernier ?"): the last exchanges as plain text. Sent with each question, never stored. */
+function askHistory() {
+  return askThread.filter((x) => x.text).flatMap((x) => [{ role: 'user', text: x.q }, { role: 'assistant', text: x.text }]).slice(-2 * ASK_MAX_TURNS);
+}
+function askRenderThread(box, pending) {
+  box.textContent = '';
+  if (pending) box.appendChild(pending);
+  for (let i = askThread.length - 1; i >= 0; i -= 1) box.appendChild(askThread[i].node);
+}
+function askTurn(question, body) {
+  return h('div', { class: 'ask-turn' }, h('div', { class: 'ask-turn-q' }, question), body);
+}
+
+// ---------- the answer of the AI mode (mode: 'ai') ----------
+function askLocale() { return NORDLA_I18N.getLang() === 'nl' ? 'nl-BE' : NORDLA_I18N.getLang() === 'en' ? 'en-GB' : 'fr-BE'; }
+function askDate(iso) {
+  if (!iso) return t('common.dash');
+  try { const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00Z` : iso); return new Intl.DateTimeFormat(askLocale(), { dateStyle: 'medium', timeZone: /^\d{4}-\d{2}-\d{2}$/.test(iso) ? 'UTC' : undefined }).format(d); } catch (e) { return String(iso); }
+}
+function askDateTime(iso) {
+  try { return new Intl.DateTimeFormat(askLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch (e) { return String(iso); }
+}
+/** A fact / value with its unit: currency code -> money, ratio -> percent, count/days -> number, date -> localized date, text as is. */
+function askFmt(value, unit) {
+  if (value == null) return t('common.dash');
+  if (unit === 'ratio') { try { return new Intl.NumberFormat(askLocale(), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value); } catch (e) { return `${(value * 100).toFixed(1)} %`; } }
+  if (unit === 'count' || unit === 'days') { try { return new Intl.NumberFormat(askLocale()).format(value); } catch (e) { return String(value); } }
+  if (unit === 'date') return askDate(value);
+  if (unit === 'text') return String(value);
+  if (/^[A-Z]{3}$/.test(unit || '')) return askMoney(value, unit);
+  return String(value);
+}
+function askMetric(key) { const k = `ask.metric.${key}`; const v = t(k); return v === k ? String(key).replace(/_/g, ' ') : v; }
+function askTool(name) { const k = `ask.tool.${name}`; const v = t(k); return v === k ? String(name).replace(/^get_/, '').replace(/_/g, ' ') : v; }
+function askPeriodText(p) { return t('ask.period', askDate(p.from), askDate(p.to)); }
+
+/** One limitation of the data, in words. Codes and parameters come from Nordla; the wording is here. */
+function askLimitText(l) {
+  const p = l.params || {}; const k = `ask.lim.${l.code}`;
+  const arg = l.code === 'DATA_STALE' ? p.ageMinutes : l.code === 'CUSTOMERS_PARTIALLY_IDENTIFIED' ? (p.identifiedShare == null ? '' : `${Math.round(p.identifiedShare * 100)} %`) : l.code === 'COSTS_PARTIAL' ? '' : l.code === 'VALUE_MISSING' ? askMetric(p.metric) : p.historyStart ? askDate(p.historyStart) : '';
+  const s = t(k, arg);
+  return s === k ? t('ask.lim.GENERIC') : s;
+}
+function askLimits(list) {
+  const items = (list || []).filter((l, i, a) => a.findIndex((x) => x.code === l.code && x.callId === l.callId) === i);
+  if (!items.length) return null;
+  return h('ul', { class: 'ask-limits', 'aria-label': t('ask.lim.title') }, items.map((l) => h('li', { class: `ask-limit ${l.severity || 'warning'}` }, askLimitText(l))));
+}
+
+function askPart(p) {
+  return h('p', { class: `ask-part ${p.type}` },
+    p.type === 'comparison' || p.type === 'correlation' ? h('span', { class: 'ask-part-tag' }, t(`ask.kind.${p.type}`)) : null,
+    p.text,
+    (p.caveats || []).map((c) => h('span', { class: 'ask-caveat' }, askLimitText({ code: c, params: {} }))));
+}
+/** The clean, deterministic answer built from the tools' figures alone (no model text): used whenever the explanation is not shown. */
+function askDeterministic(summary) {
+  return h('div', { class: 'ask-answer ask-det', role: 'status' }, h('p', { class: 'ask-det-title' }, t('ask.det.title')),
+    (summary.calls || []).map((c) => h('div', { class: 'ask-call' },
+      h('div', { class: 'ask-call-title' }, askTool(c.tool)), h('div', { class: 'ask-meta' }, askPeriodText(c.period)),
+      c.values.length ? h('ul', { class: 'ask-figures' }, c.values.filter((v) => v.value != null).map((v) => h('li', null, h('span', null, askMetric(v.key)), h('strong', null, askFmt(v.value, v.unit))))) : null,
+      c.items.length ? h('ol', { class: 'ask-items' }, c.items.map((i) => h('li', null, h('span', null, i.label == null ? t('ask.item.none') : i.label), i.values[0] ? h('strong', null, askFmt(i.values[0].value, i.values[0].unit)) : null))) : null,
+      c.comparison && c.comparison.rows.length ? h('div', { class: 'ask-meta' }, t('ask.used.compared', askDate(c.comparison.reference && c.comparison.reference.from), askDate(c.comparison.reference && c.comparison.reference.to)),
+        c.comparison.rows.filter((r) => r.delta_pct != null).slice(0, 4).map((r) => h('span', { class: 'ask-delta' }, `${askMetric(r.key)} ${r.delta_pct > 0 ? '+' : ''}${askFmt(r.delta_pct, 'ratio')}`))) : null)));
+}
+function askFactLabel(ref, summary) {
+  let m;
+  if ((m = ref.match(/^c(\d+)\.period\.(from|to|days)$/))) return t(`ask.fact.period.${m[2]}`);
+  if ((m = ref.match(/^c(\d+)\.comparison\.reference\.(from|to)$/))) return t(`ask.fact.refperiod.${m[2]}`);
+  if ((m = ref.match(/^c(\d+)\.comparison\.(.+)\.(current|previous|delta_abs|delta_pct)$/))) return `${askMetric(m[2])} — ${t(`ask.fact.cmp.${m[3]}`)}`;
+  if ((m = ref.match(/^c(\d+)\.items\.(\d+)\.(.+)$/))) return `#${Number(m[2]) + 1} ${m[3] === 'label' ? t('ask.fact.label') : askMetric(m[3])}`;
+  if ((m = ref.match(/^c(\d+)\.values\.(.+)$/))) return askMetric(m[2]);
+  return ref;
+}
+/** "Données utilisées" (period, tools, comparison, freshness) and, inside it, "Voir les sources de l'analyse" (the detailed facts). Both closed by default. */
+function askUsed(d) {
+  const calls = (d.summary && d.summary.calls) || [];
+  if (!calls.length) return null;
+  const rows = calls.map((c) => h('li', null, h('strong', null, askTool(c.tool)), ' · ', askPeriodText(c.period),
+    c.comparison && c.comparison.reference ? h('div', { class: 'ask-meta' }, t('ask.used.compared', askDate(c.comparison.reference.from), askDate(c.comparison.reference.to))) : null,
+    h('div', { class: 'ask-meta' }, t('ask.used.fresh', askDateTime(c.freshness.dataAsOf)), c.completeness.status === 'PARTIAL' ? ` · ${t('ask.used.partial')}` : '')));
+  const facts = (d.facts || []).map((f) => { const m = f.ref.match(/^c(\d+)\./); const c = m && calls.find((x) => x.id === `c${m[1]}`); return h('tr', null, h('td', null, c ? h('span', { class: 'ask-src-tool' }, `${askTool(c.tool)} · `) : null, askFactLabel(f.ref)), h('td', { class: 'num' }, askFmt(f.value, f.unit))); });
+  return h('details', { class: 'ask-used' }, h('summary', null, t('ask.used.title')), h('ul', { class: 'ask-used-list' }, rows),
+    facts.length ? h('details', { class: 'ask-sources' }, h('summary', null, t('ask.sources.title')), h('div', { class: 'ask-sources-wrap' }, h('table', { class: 'ask-sources-table' }, h('tbody', null, facts)))) : null);
+}
+
+/** @returns {{ node, text }} node = what is displayed for this answer, text = a short plain-text version for the conversation memory */
+function askAiEntry(d) {
+  let main; let text = '';
+  if (d.status === 'OK' && d.answer && Array.isArray(d.answer.parts)) {
+    const plain = d.answer.parts.filter((p) => p.type !== 'hypothesis'); const hyps = d.answer.parts.filter((p) => p.type === 'hypothesis');
+    main = h('div', { class: 'ask-answer ask-ai', role: 'status' }, plain.map(askPart),
+      hyps.length ? h('div', { class: 'ask-hyps' }, h('div', { class: 'ask-hyps-title' }, t('ask.hyp.title')), h('ul', null, hyps.map((p) => h('li', null, p.text, h('span', { class: 'ask-conf' }, ` (${t(`ask.conf.${p.confidence}`)})`))))) : null);
+    text = String(d.answer.text || '').slice(0, 300);
+  } else if (d.status === 'CLARIFICATION' && d.clarification) {
+    main = h('div', { class: 'ask-answer ask-clarify', role: 'status' }, h('p', null, d.clarification.text), h('div', { class: 'ask-meta' }, t('ask.clarify.hint')));
+    text = String(d.clarification.text).slice(0, 300);
+  } else if (d.status === 'CANNOT_ANSWER') {
+    const gaps = (d.gaps || []).map((g) => t(`ask.gap.${g}`)); // the gap codes are a fixed set, all translated (dictionary coverage test)
+    main = h('div', { class: 'ask-answer ask-refusal', role: 'status' }, h('p', null, t('ask.cannot.title')), gaps.length ? h('p', { class: 'ask-meta' }, t('ask.cannot.missing', gaps.join(', '))) : null);
+    text = t('ask.cannot.title');
+  } else { // FACTS_ONLY (explanation rejected, unavailable or timed out): the figures, cleanly, with no technical detail
+    main = askDeterministic(d.summary || { calls: [] });
+    text = (d.summary && d.summary.calls && d.summary.calls[0]) ? `${askTool(d.summary.calls[0].tool)} ${askPeriodText(d.summary.calls[0].period)}` : '';
+  }
+  return { node: h('div', { class: 'ask-ai-result' }, main, askLimits(d.limitations), askUsed(d)), text };
+}
+
 async function askSubmit(input, box, btn) {
   const question = input.value.trim();
-  if (!question) { askRenderError(box, 'ask.err.EMPTY_QUESTION'); input.focus(); return; }
-  btn.disabled = true; box.textContent = ''; box.appendChild(h('div', { class: 'ask-loading', role: 'status' }, t('ask.loading')));
+  if (!question) { const err = h('div', { class: 'ask-turn-body' }); askRenderError(err, 'ask.err.EMPTY_QUESTION'); askRenderThread(box, err); input.focus(); return; }
+  btn.disabled = true; askRenderThread(box, askTurn(question, h('div', { class: 'ask-loading', role: 'status' }, t('ask.loading'))));
   const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), ASK_TIMEOUT_MS);
+  let entry = null; let failed = null;
   try {
-    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod() }), signal: ac.signal });
+    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod(), history: askHistory() }), signal: ac.signal });
     let data = null; try { data = await res.json(); } catch (e) { data = null; }
-    if (res.ok && data && Array.isArray(data.figures) && data.figures.length) askRenderAnswer(box, data);
-    else askRenderError(box, askErrorKey(data && data.error && data.error.code));
+    if (res.ok && data && data.mode === 'ai') entry = askAiEntry(data);
+    else if (res.ok && data && Array.isArray(data.figures) && data.figures.length) { const body = h('div', { class: 'ask-turn-body' }); askRenderAnswer(body, data); entry = { node: body, text: `${t(`ask.f.${data.figures[0].id}`)} : ${askFigureValue(data.figures[0], data.currency || 'EUR')}` }; }
+    else failed = askErrorKey(data && data.error && data.error.code);
   } catch (e) {
-    askRenderError(box, e && e.name === 'AbortError' ? 'ask.err.TIMEOUT' : 'ask.err.GENERIC');
+    failed = e && e.name === 'AbortError' ? 'ask.err.TIMEOUT' : 'ask.err.GENERIC';
   } finally { clearTimeout(timer); btn.disabled = false; }
+  if (failed) { const err = h('div', { class: 'ask-turn-body' }); askRenderError(err, failed); askRenderThread(box, askTurn(question, err)); return; }   // an error is not remembered; the question stays in the field
+  askThread.push({ q: question, text: entry.text, node: askTurn(question, entry.node) });
+  if (askThread.length > ASK_MAX_TURNS) askThread.shift();
+  askRenderThread(box, null); input.value = ''; input.focus();
 }
 
 /** The Nordla microphone icon (ui/assets, 96 px + 192 px for dense screens). Decorative: the button's text says what it does. */
@@ -72,7 +190,7 @@ function askMicIcon() {
   return h('img', { class: 'ask-mic-icon', src: '/assets/nordla-mic.png', srcset: '/assets/nordla-mic.png 1x, /assets/nordla-mic@2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
 }
 
-function closeAsk() { if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
+function closeAsk() { askThread = []; /* the conversation lives only while the box is open */ if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
 function askEsc(e) { if (e.key === 'Escape') { e.preventDefault(); closeAsk(); } }
 
 function openAsk() {

@@ -14,7 +14,7 @@ import { sanitize } from '../tools/contract.js';
 const CURRENCY = /^[A-Z]{3}$/;
 
 // How serious each limitation is for the reader, and which figures of its detail the message needs (aggregates only). The wording lives in the UI dictionary.
-const SEVERITY = { PERIOD_INCLUDES_TODAY: 'info', PRODUCT_PARTIAL: 'info', PRODUCT_HAS_NO_SALES_IN_PERIOD: 'info' };
+const SEVERITY = { PERIOD_INCLUDES_TODAY: 'info', PRODUCT_PARTIAL: 'info' };
 function paramsOf(reason) {
   const d = reason.detail; const p = {};
   if (reason.code === 'PERIOD_STARTS_BEFORE_HISTORY') p.historyStart = d?.historyStart ?? null;
