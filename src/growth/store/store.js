@@ -11,9 +11,11 @@
 //   - several store locations: always aggregated as "all stores", with a per-location breakdown; never a silent pick of one;
 //   - product guards: Produits Potentiels' own statuses (no second engine) - only push / topSeller / stable may be highlighted,
 //     restock -> "restock before any in-store animation", every other status blocks the highlight;
-//   - GROWTH V1 RULES (to become configurable): a weekday is "strong" when it holds at least twice an even share of the store's
-//     sales (2/7) on 30+ orders; a product "weighs more in store" when its share of store sales is at least twice its share of
-//     online sales (30+ orders on each side).
+//   - GROWTH V1 RULES (owner-validated 2026-09-28, to become configurable later - not universal truths):
+//       * strong weekday: its share of the store's sales >= 2/7 (twice an even split) over the 8-week window, on 30+ store orders;
+//       * product over-represented in store: share of store sales >= 2 x share of online sales, with 30+ orders on each side AND
+//         the product sold in at least customers.basket.minPairSupport (3) separate store orders - the customers engine's own
+//         minimum before a product pattern is reported. One sale, or several units in a single basket, never makes a signal.
 
 export const STORE_VERSION = 'growth-store.1';
 export const WEEKDAY_STRONG_SHARE = 2 / 7;
@@ -40,7 +42,14 @@ function channelFacts(orders) {
 }
 function productNet(orders) {
   const m = new Map();
-  for (const o of orders) for (const l of o.lines) if (l.productId) { const x = m.get(l.productId) ?? { net: 0, units: 0 }; x.net += l.net; x.units += l.units; m.set(l.productId, x); }
+  for (const o of orders) {
+    const seen = new Set();
+    for (const l of o.lines) if (l.productId) {
+      const x = m.get(l.productId) ?? { net: 0, units: 0, orders: 0 }; x.net += l.net; x.units += l.units;
+      if (!seen.has(l.productId)) { x.orders += 1; seen.add(l.productId); }
+      m.set(l.productId, x);
+    }
+  }
   return m;
 }
 
@@ -55,7 +64,7 @@ export function buildStore({ orders, products, locations, windows, historyStart,
   const base = {
     version: STORE_VERSION, currency,
     window: { start: start.toISOString(), end: end.toISOString(), weeks: windows.current.length, previousComparable: comparable },
-    thresholds: { minOrders: minN, weekdayStrongShare: round4(WEEKDAY_STRONG_SHARE), storeOverOnlineRatio: STORE_OVER_ONLINE_RATIO },
+    thresholds: { minOrders: minN, weekdayStrongShare: round4(WEEKDAY_STRONG_SHARE), storeOverOnlineRatio: STORE_OVER_ONLINE_RATIO, productMinStoreOrders: config.customers.basket.minPairSupport, rulesVersion: 'v1' },
     footfall: { connected: false }, futureSources: FUTURE_SOURCES,
   };
   const storeEver = orders.some((o) => o.channel === 'store');
@@ -113,7 +122,8 @@ export function buildStore({ orders, products, locations, windows, historyStart,
   let differences = null;
   if (sc.orders >= minN && oc.orders >= minN) {
     const pOn = productNet(onlineCur);
-    const gaps = [...pNow.entries()].map(([id, x]) => ({ id, title: products.get(id)?.title ?? null, storeShare: share(x.net, sc.net), onlineShare: share(pOn.get(id)?.net ?? 0, oc.net) }))
+    const minSupport = config.customers.basket.minPairSupport;
+    const gaps = [...pNow.entries()].filter(([, x]) => x.orders >= minSupport).map(([id, x]) => ({ id, title: products.get(id)?.title ?? null, storeOrders: x.orders, storeShare: share(x.net, sc.net), onlineShare: share(pOn.get(id)?.net ?? 0, oc.net) }))
       .filter((g) => g.storeShare > 0 && g.storeShare >= STORE_OVER_ONLINE_RATIO * g.onlineShare).sort((a, b) => (b.storeShare - b.onlineShare) - (a.storeShare - a.onlineShare) || String(a.id).localeCompare(String(b.id))).slice(0, 3);
     differences = { storeAov: sc.aov, onlineAov: oc.aov, products: gaps };
   }

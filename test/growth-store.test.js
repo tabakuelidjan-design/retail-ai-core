@@ -184,7 +184,7 @@ test('store UI: renders, nav entry active (desktop rail), footfall stated as not
   const { root, errors } = await growthDom('#/storeGrowth');
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Croissance magasin');
-  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Croissance magasin', '#/storeGrowth']]);
+  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Croissance magasin', '#/storeGrowth'], ['Plus', null]], 'Croissance magasin lives in the mobile "Plus" menu, which is active');
   assert.ok(text(root).includes('8 dernières semaines'));
   assert.ok(text(root).includes('Fréquentation non connectée'));
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
@@ -220,4 +220,45 @@ test('store UI: every icon used exists (official set or Growth pack) and none is
     if (n.startsWith('pack:')) assert.ok(pack.has(n.slice(5)), n);
     else if (!icons.has(n)) { assert.ok(!NI.DEFECTIVE[n], `defective ${n}`); assert.ok(NI.has(n), `unknown ${n}`); }
   }
+});
+
+// ---------- v1 rule: product over-represented in store needs a real sample (owner 2026-09-28) ----------
+/** FULL data where `storeOrders` store orders (and `onlineOrders` online orders) sell an extra product "px" instead. */
+function withExtraProduct(storeOrders, onlineOrders = 0) {
+  const data = makeStoreData(FULL);
+  data.products.push({ id: 's-px', title: 'Produit px', product_type: 'Cat X', source_status: 'ACTIVE', image_url: null, image_alt_text: null, source_id: 'gid-s-px' });
+  data.variants.push({ id: 's-px-v', product_id: 's-px', sku: 'PX', title: 'Default', source_id: 'gid-s-px-v' });
+  const inWindow = (o) => new Date(o.ordered_at) >= new Date('2026-07-27T00:00:00Z');
+  const store = data.orders.filter((o) => o.channel_handle === 'pos' && inWindow(o)).slice(0, storeOrders).map((o) => o.id);
+  const online = data.orders.filter((o) => o.channel_handle === 'online_store' && inWindow(o)).slice(0, onlineOrders).map((o) => o.id);
+  for (const l of data.orderLines) if (store.includes(l.order_id) || online.includes(l.order_id)) l.variant_id = 's-px-v';
+  return buildStore({ ...storeFacts({ data, now: NOW, timeZone: TZ, config: CONFIG }), potential: new Map(), config: CONFIG });
+}
+test('store v1 product rule: ratio >= 2x but an insignificant sample (fewer than 3 separate store orders) -> no signal', () => {
+  for (const n of [1, 2]) {
+    const p = withExtraProduct(n);
+    assert.equal(sig(p, 'productGap'), undefined, `${n} store order(s), no online sale: never over-represented`);
+    assert.ok(!p.differences.products.some((g) => g.id === 's-px'));
+  }
+  assert.equal(CONFIG.customers.basket.minPairSupport, 3, 'the reused existing observation minimum');
+});
+test('store v1 product rule: ratio >= 2x with a sufficient sample -> signal', () => {
+  const p = withExtraProduct(5);
+  const s = sig(p, 'productGap');
+  assert.equal(s.id, 's-px');
+  assert.equal(s.onlineShare, 0);
+  assert.ok(s.storeShare > 0);
+  assert.equal(p.differences.products[0].storeOrders, 5);
+});
+test('store v1 product rule: ratio below 2x with a sufficient sample -> no signal', () => {
+  const p = withExtraProduct(5, 3); // store 200 / 1920 = 10.4 %, online 180 / 2400 = 7.5 % -> ratio 1.4
+  assert.equal(sig(p, 'productGap'), undefined);
+  assert.ok(!p.differences.products.some((g) => g.id === 's-px'));
+});
+test('store v1 rules are documented as configurable-later Growth v1 rules and exposed in the payload', async () => {
+  const p = run(FULL);
+  assert.deepEqual(p.thresholds, { minOrders: 30, weekdayStrongShare: 0.2857, storeOverOnlineRatio: 2, productMinStoreOrders: 3, rulesVersion: 'v1' });
+  const src = await readFile(new URL('../src/growth/store/store.js', import.meta.url), 'utf8');
+  assert.match(src, /GROWTH V1 RULES/);
+  assert.match(src, /to become configurable later - not universal truths/);
 });

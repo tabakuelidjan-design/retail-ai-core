@@ -16,6 +16,8 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.nav.ai': 'Nordla AI',
   'gr.nav.settings': 'Paramètres',
   'gr.nav.soon': 'Bientôt disponible',
+  'gr.nav.more': 'Plus',
+  'gr.nav.moreTitle': 'Autres pages Growth',
   'gr.demo': 'Données de démonstration',
   'gr.demoShort': 'Démo',
   'gr.demoTitle': 'Aucune source Growth n’est encore connectée : tous les chiffres de cette page sont des exemples.',

@@ -73,7 +73,7 @@ test('opportunities UI: renders without error, sidebar marks Opportunités activ
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Opportunités');
   const nav = navState(root);
-  assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Expériences', 'Nordla AI', 'Paramètres']);
+  assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Expériences', 'Plus', 'Nordla AI', 'Paramètres']);
   assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Opportunités']);
   assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth'], ['Audience', '#/audience']]);
   assert.equal(nav.filter((n) => n.inert).length, 3, 'Expériences + Nordla AI + Paramètres stay disabled');

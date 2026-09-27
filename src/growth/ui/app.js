@@ -122,25 +122,26 @@ const icoBubble = (iconName) => h('span', { class: 'gr-ico' }, gi(iconName));
 // Growth is a standalone Nordla module: like Finance and Analytics it has its own navigation and needs no other module
 // to work. It shares the Nordla design system with them: same rail component and tokens (.sidebar/.nav-item,
 // --nordla-menu-*; <html data-module="growth"> selects Growth's menu colour). Built pages have an href (hash routes of
-// this module only); the others are visibly disabled ("coming soon"), never a dead link. `mobile: true` = one of the
-// entries of the mobile bottom bar (same density as Analytics); the others are desktop-only while they are not built.
+// this module only); the others are visibly disabled ("coming soon"), never a dead link.
+// Mobile (owner decision 2026-09-28): the bottom bar has 6 slots max - the 5 central pages (`mobile: true`) + "Plus", which
+// opens a panel with every other entry (`more: true`: built pages as links, the others disabled). No built page is ever
+// unreachable on mobile. The desktop rail is unchanged.
 const GROWTH_NAV = [
   { key: 'overview', icon: 'overview', href: '#/', mobile: true },
   { key: 'opportunities', icon: 'opportunities', href: '#/opportunities', mobile: true },
   { key: 'campaigns', icon: 'campaigns', href: '#/campaigns', mobile: true },
   // Produits Potentiels: official "produits" icon until a dedicated Growth pack icon exists.
   { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
-  { key: 'content', icon: 'content', href: '#/content', mobile: true },
-  // Croissance magasin: built, but not in the mobile bar (kept at 6 readable entries, owner rule) - reachable from the desktop rail.
-  { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth' },
+  { key: 'content', icon: 'content', href: '#/content', more: true },
+  { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth', more: true },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
-  { key: 'experiments', icon: 'experiments' },
+  { key: 'experiments', icon: 'experiments', more: true },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
-  // Nordla AI (not built yet, disabled) stays in the desktop rail; the mobile bar keeps its 6 slots for the built pages.
-  { key: 'ai', parle: true },
-  { key: 'settings', icon: 'settings' },
+  // Nordla AI and Paramètres (not built yet, disabled): desktop rail + the mobile "Plus" panel.
+  { key: 'ai', parle: true, more: true },
+  { key: 'settings', icon: 'settings', more: true },
 ];
 function navItem(n, active) {
   const ico = h('span', { class: 'ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : gi(n.icon, 'md'));
@@ -150,10 +151,47 @@ function navItem(n, active) {
     ? h('a', { class: cls, href: n.href, ...(on ? { 'aria-current': 'page' } : {}) }, ico, t(`gr.nav.${n.key}`))
     : h('span', { class: cls, title: t('gr.nav.soon'), 'aria-disabled': 'true' }, ico, t(`gr.nav.${n.key}`));
 }
+// ---- mobile "Plus" menu (only shown below 901px) ----
+let navMoreOpen = false;
+const MORE_ITEMS = () => [...GROWTH_NAV, ...GROWTH_NAV_FOOT].filter((n) => n.more);
+function moreDots() {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('width', '20'); s.setAttribute('height', '20'); s.setAttribute('aria-hidden', 'true');
+  for (const cx of [5, 12, 19]) { const c = document.createElementNS(s.namespaceURI, 'circle'); c.setAttribute('cx', cx); c.setAttribute('cy', '12'); c.setAttribute('r', '2.2'); c.setAttribute('fill', 'currentColor'); s.appendChild(c); }
+  return s;
+}
+function setMoreOpen(open, focusBack) {
+  navMoreOpen = open; render();
+  if (open) { const first = document.querySelector('.gr-more-panel a, .gr-more-panel .gr-more-close'); if (first && first.focus) first.focus(); }
+  else if (focusBack) { const b = document.querySelector('.gr-more-btn'); if (b && b.focus) b.focus(); }
+}
+function moreButton(active) {
+  const inMore = MORE_ITEMS().some((n) => n.key === active);
+  return h('button', { type: 'button', class: `nav-item gr-more-btn${inMore ? ' active' : ''}${navMoreOpen ? ' open' : ''}`, 'aria-haspopup': 'dialog', 'aria-expanded': navMoreOpen ? 'true' : 'false', 'aria-controls': 'gr-more-panel', ...(inMore ? { 'aria-current': 'page' } : {}), on: { click: () => setMoreOpen(!navMoreOpen) } },
+    h('span', { class: 'ico gr-more-ico' }, moreDots()), t('gr.nav.more'));
+}
+function morePanel(active) {
+  if (!navMoreOpen) return null;
+  const item = (n) => {
+    const on = n.key === active;
+    const ico = h('span', { class: 'gr-more-item-ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : gi(n.icon, 'md'));
+    return n.href
+      ? h('a', { class: `gr-more-item${on ? ' active' : ''}`, href: n.href, ...(on ? { 'aria-current': 'page' } : {}), on: { click: () => { navMoreOpen = false; } } }, ico, h('span', { class: 'gr-more-item-label' }, t(`gr.nav.${n.key}`)))
+      : h('span', { class: 'gr-more-item inert', 'aria-disabled': 'true' }, ico, h('span', { class: 'gr-more-item-label' }, t(`gr.nav.${n.key}`), h('span', { class: 'gr-more-soon' }, t('gr.nav.soon'))));
+  };
+  return h('div', { class: 'gr-more-wrap' },
+    h('div', { class: 'gr-more-backdrop', on: { click: () => setMoreOpen(false, true) } }),
+    h('div', { class: 'gr-more-panel', id: 'gr-more-panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('gr.nav.moreTitle') },
+      h('div', { class: 'gr-more-head' }, h('strong', null, t('gr.nav.moreTitle')), h('button', { type: 'button', class: 'gr-more-close', 'aria-label': t('gr.pp.close'), on: { click: () => setMoreOpen(false, true) } }, '×')),
+      h('div', { class: 'gr-more-list' }, MORE_ITEMS().map(item))));
+}
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && navMoreOpen) setMoreOpen(false, true); });
+}
 function sidebar(active) {
   return h('nav', { class: 'sidebar', 'aria-label': t('gr.nav.aria') },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('gr.brand'))),
-    h('div', { class: 'nav' }, GROWTH_NAV.map((n) => navItem(n, active))),
+    h('div', { class: 'nav' }, GROWTH_NAV.map((n) => navItem(n, active)), moreButton(active)),
     h('div', { class: 'nav gr-nav-foot' }, GROWTH_NAV_FOOT.map((n) => navItem(n, active))));
 }
 
@@ -394,7 +432,7 @@ function render() {
   document.documentElement.lang = NORDLA_I18N.getLang();
   const app = document.getElementById('app');
   const main = h('main', { class: 'main gr-main' });
-  app.replaceChildren(h('div', { class: 'shell' }, sidebar(key), main));
+  app.replaceChildren(h('div', { class: 'shell' }, sidebar(key), main, morePanel(key)));
   main.appendChild(topbar(d));
   main.appendChild(h('div', { class: 'ex-head' }, h('div', null, h('h1', { class: 'ex-title' }, t(page.title)), h('p', { class: 'ex-sub' }, t(page.subtitle)))));
   if (!d) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), loadFailed[key] ? t('gr.loadError') : ''))); return; }
@@ -404,6 +442,7 @@ function render() {
 }
 
 async function route() {
+  navMoreOpen = false; // a navigation always closes the mobile "Plus" menu
   const key = currentPage(); const page = PAGES[key];
   render();
   if (!page.get()) {

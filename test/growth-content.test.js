@@ -247,7 +247,7 @@ test('content UI: renders, nav entry active, filters work, a row opens the detai
   const { root, errors } = await growthDom('#/content');
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Contenu');
-  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Contenu', '#/content']]);
+  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Contenu', '#/content'], ['Plus', null]], 'Contenu lives in the mobile "Plus" menu, which is active');
   assert.ok(text(root).includes('8 dernières semaines'));
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
   const rows = () => all(root, (n) => hasClass(n, 'gr-ct-row'));
