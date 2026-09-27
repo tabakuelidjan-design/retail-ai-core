@@ -264,6 +264,7 @@ async function refreshSyncPill() {
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
     if (s && s.reason === 'NO_SALES_SOURCE') { text = tt('No sales source connected'); tone = 'mute'; }
+    else if (s && s.reason === 'SALES_SOURCE_NOT_CONFIGURED') { text = tt('Sales source not configured'); tone = 'mute'; }
     else if (!s || !s.available) { text = tt('Sales source sync unknown'); tone = 'warn'; }
     else if (s.latestFailed) { text = tt('Sales source sync failed · latest data {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
     else if (s.stale) { text = tt('Sales source out of date · {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }

@@ -14,6 +14,7 @@ import { createRuntime } from '../src/finance/runtime.js';
 import { createShopifyConnector, ShopifyConnectorStateError } from '../src/connectors/shopify.js';
 import { createConnectorRepository } from '../src/tenant/connectors.js';
 import { SHOP_QUERY } from '../src/shopify/queries.js';
+import { createShopifyClient as createShopifyClientReal } from '../src/shopify/client.js';
 
 const A = { id: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', name: 'Synthetic Merchant A', vertical: 'general_retail', source_system: 'shopify', source_id: 'gid://shopify/Shop/LEGACY-COLUMN-A', source_domain: null };
 const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchant B', vertical: 'bookstore', source_system: 'manual', source_id: 'nordla:B', source_domain: null };
@@ -139,9 +140,13 @@ test('legacy fallback with an unknown shop, or a hanging Shopify: clean refusal,
 });
 
 // ---------- the real server boot: port opened, zero Shopify ----------
+/** Adds an old successful sync run: it must NOT be what the pill shows when the source is absent or not configured. */
+const withSyncRun = (s) => { s._tables.set('sync_runs', [{ id: 1, merchant_id: A.id, mode: 'all', status: 'SUCCESS', started_at: '2026-09-20T08:00:00Z', finished_at: '2026-09-20T08:00:10Z', error: null, counts: {} }]); return s; };
 const freePort = () => new Promise((resolve) => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
 
-test('startFinanceServer: opens its port with NORDLA_MERCHANT_ID and no Shopify - zero Shopify call, zero network; pure routes and NOT_CONFIGURED states answer', async () => {
+// No sales connector at all -> "no sales source"; a Shopify connector in merchant_connectors but no Shopify credentials here ->
+// "sales source not configured" (never the old sync run shown as if the source were live).
+for (const [withConnector, reason] of [[false, 'NO_SALES_SOURCE'], [true, 'SALES_SOURCE_NOT_CONFIGURED']]) test(`startFinanceServer (${withConnector ? 'Shopify connector in DB, no credentials' : 'no sales connector'}): port opens with NORDLA_MERCHANT_ID - zero Shopify call, zero network; sync-status ${reason}, stock NOT_CONFIGURED`, async () => {
   const { startFinanceServer } = await import('../src/finance/server/index.js');
   const dir = mkdtempSync(join(tmpdir(), 'nordla-finance-boot-')); const cwd = process.cwd(); process.chdir(dir); // settings / sessions go to a temp dir
   const port = await freePort(); const token = 'synthetic-dashboard-token-0123456789';
@@ -151,7 +156,7 @@ test('startFinanceServer: opens its port with NORDLA_MERCHANT_ID and no Shopify 
   try {
     ({ server } = await startFinanceServer({
       env: { FINANCE_HOSTED: 'true', PORT: String(port), FINANCE_ALLOWED_HOSTS: `127.0.0.1:${port}`, FINANCE_TRUST_PROXY_HOPS: '0', FINANCE_DASHBOARD_TOKEN: token, NORDLA_MERCHANT_ID: A.id, SUPABASE_URL: 'https://synthetic.invalid', SUPABASE_SERVICE_ROLE_KEY: 'synthetic' },
-      runtimeDeps: { supabase: db({ withConnector: false }), createShopifyClient: t.factory }, log: quiet,
+      runtimeDeps: { supabase: withSyncRun(db({ withConnector })), createShopifyClient: t.factory }, log: quiet,
     }));
     const base = `http://127.0.0.1:${port}`;
     assert.equal((await realFetch(`${base}/api/session`)).status, 200, 'the port is open and serving');
@@ -159,7 +164,7 @@ test('startFinanceServer: opens its port with NORDLA_MERCHANT_ID and no Shopify 
     assert.equal(login.status, 200);
     const cookie = login.headers.get('set-cookie').split(';')[0];
     const get = async (p) => (await realFetch(base + p, { headers: { cookie } })).json();
-    assert.deepEqual((await get('/api/sync-status')).sync, { available: false, reason: 'NO_SALES_SOURCE' });
+    assert.deepEqual((await get('/api/sync-status')).sync, { available: false, reason });
     assert.equal((await get('/api/stock/status')).connector, 'NOT_CONFIGURED');
     assert.equal(t.calls.created, 0, 'no Shopify client was ever built'); assert.deepEqual(hits, [], 'no outbound request');
   } finally {
@@ -209,4 +214,69 @@ test('Shopify MISCONFIGURED or UNAVAILABLE: stock sync blocked with that state, 
       assert.equal((await c.post('/api/inbox/manual', { supplierName: 'Fournisseur Exemple SRL', invoiceNumber: `SYN-${state}`, issueDate: '2026-09-10', net: '10.00', vat: '2.10', gross: '12.10', currency: 'EUR' })).status, 201);
     } finally { await a.close(); }
   }
+});
+
+// ---------- connector lifecycle without restart: token invalidation, CONFIGURED TTL ----------
+/** A fake Shopify at the HTTP level (token exchange + GraphQL), used through the REAL Shopify client. */
+function fakeShopifyHttp() {
+  const st = { shopId: SHOP_A, tokens: new Set(), exchanges: 0, graphqlCalls: 0, n: 0 };
+  const res = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  st.fetch = async (url, opts) => {
+    if (String(url).endsWith('/admin/oauth/access_token')) { st.exchanges += 1; const t = `tok-${(st.n += 1)}`; st.tokens.add(t); return res(200, { access_token: t, expires_in: 86399 }); }
+    st.graphqlCalls += 1;
+    if (!st.tokens.has(opts.headers['X-Shopify-Access-Token'])) return res(401, { errors: 'Invalid API key or access token' });
+    return res(200, { data: String(JSON.parse(opts.body).query).includes('myshopifyDomain') ? { shop: { id: st.shopId, name: 'S', myshopifyDomain: 'x' } } : { nodes: [] } });
+  };
+  return st;
+}
+function lifecycleConnector(st, clock) {
+  const built = { n: 0 };
+  const createClient = (config, deps) => { built.n += 1; return createShopifyClientReal(config, deps); };
+  const c = createShopifyConnector({ env: SHOPIFY_ENV, merchantId: A.id, connectors: createConnectorRepository({ supabase: db() }), createClient, fetchImpl: st.fetch, nowMs: () => clock.now });
+  return { c, built };
+}
+const Q = 'query($ids:[ID!]!){ nodes(ids:$ids){ id } }';
+
+test('CONFIGURED -> token invalidated -> auth failure -> new token obtained -> CONFIGURED, without restart; one client for normal requests', async () => {
+  const st = fakeShopifyHttp(); const clock = { now: 0 }; const { c, built } = lifecycleConnector(st, clock);
+  for (let i = 0; i < 3; i += 1) await c.graphql(Q, { ids: [] });
+  assert.equal(await c.state(), 'CONFIGURED'); assert.equal(built.n, 1, 'normal requests reuse one client'); assert.equal(st.exchanges, 1, 'and one token');
+  st.tokens.clear(); // app reinstalled / secret rotated / Shopify restarted: the cached token is no longer accepted
+  await assert.rejects(c.graphql(Q, { ids: [] }));
+  assert.equal(await c.state(), 'UNAVAILABLE'); assert.equal(c.describe().reason, 'AUTH_FAILED');
+  const callsAtFailure = st.graphqlCalls;
+  clock.now += 30_000; await assert.rejects(c.graphql(Q, { ids: [] }), (e) => e.state === 'UNAVAILABLE', 'cool-down kept: no retry storm');
+  assert.equal(st.graphqlCalls, callsAtFailure, 'nothing sent to Shopify during the cool-down');
+  clock.now += 31_000; await c.graphql(Q, { ids: [] });
+  assert.equal(await c.state(), 'CONFIGURED'); assert.equal(st.exchanges, 2, 'a NEW token was acquired'); assert.equal(built.n, 2, 'by a new client');
+});
+
+test('an auth failure during verification (stale token) is AUTH_FAILED, then recovers with a new token, without restart', async () => {
+  const st = fakeShopifyHttp(); const clock = { now: 0 }; const { c } = lifecycleConnector(st, clock);
+  await c.state({ verify: true }); st.tokens.clear();
+  clock.now += 5 * 60_000; // CONFIGURED TTL elapsed: the next use re-verifies with the stale token
+  assert.equal(await c.state({ verify: true }), 'UNAVAILABLE'); assert.equal(c.describe().reason, 'AUTH_FAILED');
+  clock.now += 60_000; assert.equal(await c.state({ verify: true }), 'CONFIGURED'); assert.equal(st.exchanges, 2);
+});
+
+test('CONFIGURED is trusted for a TTL only: a wrong shop is detected and a corrected shop comes back, without restart and without polling', async () => {
+  const st = fakeShopifyHttp(); const clock = { now: 0 }; const { c } = lifecycleConnector(st, clock);
+  assert.equal(await c.state({ verify: true }), 'CONFIGURED');
+  st.shopId = 'gid://shopify/Shop/SOMEONE-ELSE';
+  clock.now += 60_000; assert.equal(await c.state({ verify: true }), 'CONFIGURED', 'within the TTL the verification is reused');
+  const before = st.graphqlCalls; clock.now += 10 * 60_000;
+  assert.equal(await c.state(), 'CONFIGURED'); assert.equal(st.graphqlCalls, before, 'no timer, no polling: nothing happens without a real use');
+  assert.equal(await c.state({ verify: true }), 'MISCONFIGURED', 'the next real use after the TTL detects the wrong shop');
+  await assert.rejects(c.graphql(Q, { ids: [] }), (e) => e.state === 'MISCONFIGURED');
+  st.shopId = SHOP_A; clock.now += 60_000;
+  assert.equal(await c.state({ verify: true }), 'CONFIGURED', 'back to the right shop: CONFIGURED again after the recheck delay');
+});
+
+test('sales source state: NONE without a sales connector, NOT_CONFIGURED with a Shopify connector but no credentials, ACTIVE with both - no Shopify call', async () => {
+  const t = trap();
+  const src = async (withConnector, env) => (await createRuntime({ env: { NORDLA_MERCHANT_ID: A.id, ...env }, supabase: db({ withConnector }), createShopifyClient: t.factory, log: quiet })).salesSource();
+  assert.equal(await src(false, {}), 'NONE');
+  assert.equal(await src(true, {}), 'NOT_CONFIGURED');
+  assert.equal(await src(true, SHOPIFY_ENV), 'ACTIVE');
+  assert.equal(t.calls.created, 0);
 });

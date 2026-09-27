@@ -54,7 +54,12 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
     stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },
     attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
     // No sales-source connector at all -> an honest "no source" instead of an unknown sync.
-    syncStatus: async () => ((await rt.hasSalesSource()) ? latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) }) : { available: false, reason: 'NO_SALES_SOURCE' }),
+    syncStatus: async () => {
+      const source = await rt.salesSource();
+      if (source === 'NONE') return { available: false, reason: 'NO_SALES_SOURCE' };
+      if (source === 'NOT_CONFIGURED') return { available: false, reason: 'SALES_SOURCE_NOT_CONFIGURED' }; // never an old sync run shown as live
+      return latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) });
+    },
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     settings: {
       load: () => loadSettings(),

@@ -393,6 +393,7 @@
     'Stock synchronisation': 'Synchronisation du stock',
     'The sales connector stays the source of truth': 'Le connecteur de ventes reste la source de vérité',
     'No sales source connected': 'Aucune source de ventes connectée',
+    'Sales source not configured': 'Source de ventes non configurée',
     'No sales connector is configured: stock is not synchronised.': 'Aucun connecteur de ventes configuré : le stock n’est pas synchronisé.',
     'The sales connector does not match this account: stock synchronisation is off.': 'Le connecteur de ventes ne correspond pas à ce compte : la synchronisation du stock est coupée.',
     'The sales connector cannot be reached right now: movements wait as pending.': 'Le connecteur de ventes est injoignable pour le moment : les mouvements restent en attente.',

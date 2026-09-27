@@ -65,7 +65,14 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
     return new Map(rows.map((r) => [r.id, String(r.source_id ?? '').split('/').pop()]));
   };
   /** True when the merchant has at least one sales-source connector (a Supabase read, no provider call). */
-  const hasSalesSource = async () => (await connectors.listForMerchant(merchant.id)).some((c) => SALES_CONNECTOR_KINDS.includes(c.kind));
+  // The tenant's sales source, as the sync pill shows it: NONE (no sales connector at all), NOT_CONFIGURED (only connectors that
+  // Finance runs itself and whose credentials are missing here - Shopify), ACTIVE otherwise.
+  const salesSource = async () => {
+    const kinds = new Set((await connectors.listForMerchant(merchant.id)).map((c) => c.kind).filter((k) => SALES_CONNECTOR_KINDS.includes(k)));
+    if (!kinds.size) return 'NONE';
+    return [...kinds].some((k) => (k === 'shopify' ? shopify.configured : true)) ? 'ACTIVE' : 'NOT_CONFIGURED';
+  };
+  const hasSalesSource = async () => (await salesSource()) !== 'NONE';
   const retail = createRetailAccess({ loadRetail, listOrderRefs });
-  return { shopify, supabase, merchant, tenant, connectors, hasSalesSource, retailConfig, timeZone, store, retail, loadRetail, listOrderRefs, retailHistory: () => readCoverage() };
+  return { shopify, supabase, merchant, tenant, connectors, salesSource, hasSalesSource, retailConfig, timeZone, store, retail, loadRetail, listOrderRefs, retailHistory: () => readCoverage() };
 }

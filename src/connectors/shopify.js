@@ -10,6 +10,9 @@ import { SHOP_QUERY } from '../shopify/queries.js';
 export const SHOPIFY_CREDENTIAL_ENV = Object.freeze(['SHOPIFY_SHOP_DOMAIN', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET']);
 export const DEFAULT_SHOPIFY_TIMEOUT_MS = 8_000;
 export const DEFAULT_RECHECK_AFTER_MS = 60_000;
+// A CONFIGURED verification is trusted this long, then re-checked on the next real use (lazy: no timer, no polling), so a
+// connector that changed (other shop behind the credentials, connector status) is detected without a restart.
+export const DEFAULT_CONFIGURED_TTL_MS = 5 * 60_000;
 
 /** True when the Shopify credentials are all present (they configure the connector; they never identify the tenant). */
 export const hasShopifyCredentials = (env = process.env) => SHOPIFY_CREDENTIAL_ENV.every((k) => typeof env[k] === 'string' && env[k].trim() !== '');
@@ -26,16 +29,25 @@ export const timeoutFetch = (ms, fetchImpl = fetch) => (url, opts = {}) => fetch
  * @param {{
  *   env?: Record<string, string|undefined>, merchantId: string,
  *   connectors: { listForMerchant(merchantId: string): Promise<Array<{kind: string, externalId: string|null, status: string}>> },
- *   createClient?: typeof createShopifyClient, timeoutMs?: number, recheckAfterMs?: number, nowMs?: () => number,
+ *   createClient?: typeof createShopifyClient, fetchImpl?: typeof fetch, timeoutMs?: number, recheckAfterMs?: number,
+ *   configuredTtlMs?: number, nowMs?: () => number,
  * }} options
  */
-export function createShopifyConnector({ env = process.env, merchantId, connectors, createClient = createShopifyClient, timeoutMs = DEFAULT_SHOPIFY_TIMEOUT_MS, recheckAfterMs = DEFAULT_RECHECK_AFTER_MS, nowMs = Date.now }) {
+export function createShopifyConnector({ env = process.env, merchantId, connectors, createClient = createShopifyClient, fetchImpl = fetch, timeoutMs = DEFAULT_SHOPIFY_TIMEOUT_MS, recheckAfterMs = DEFAULT_RECHECK_AFTER_MS, configuredTtlMs = DEFAULT_CONFIGURED_TTL_MS, nowMs = Date.now }) {
   const configured = hasShopifyCredentials(env);
-  let client = null; // built on first real use only
+  let client = null; // built on first real use only, then reused (it caches its access token)
+  let authFailed = false; // Shopify answered 401 to this client: its token (or the credentials) is no longer accepted
   let verified = null; // { state, reason, shopId?, at }
   let inFlight = null;
 
-  const getClient = () => { client ??= createClient(loadShopifyConfigFromEnv(env), { fetchImpl: timeoutFetch(timeoutMs) }); return client; };
+  // Every Shopify response goes through here: a 401 (token revoked, app reinstalled, secret rotated) condemns the current client.
+  const watchedFetch = (url, opts) => timeoutFetch(timeoutMs, fetchImpl)(url, opts).then((res) => { if (res?.status === 401) authFailed = true; return res; });
+  const getClient = () => { client ??= createClient(loadShopifyConfigFromEnv(env), { fetchImpl: watchedFetch }); return client; };
+  /** After an auth failure the client is dropped, so the next verification builds a new one and acquires a new token. */
+  const onFailure = (e) => {
+    if (authFailed) { client = null; authFailed = false; return { state: 'UNAVAILABLE', reason: 'AUTH_FAILED' }; }
+    return { state: 'UNAVAILABLE', reason: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : e instanceof TypeError ? 'SHOPIFY_UNREACHABLE' : 'SHOPIFY_ERROR' };
+  };
   const withTimeout = (p) => {
     let t;
     return Promise.race([p, new Promise((_, reject) => { t = setTimeout(() => reject(Object.assign(new Error('Shopify timeout'), { name: 'TimeoutError' })), timeoutMs); })]).finally(() => clearTimeout(t));
@@ -47,7 +59,7 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
     if (!shops.length) return { state: 'MISCONFIGURED', reason: 'NO_SHOPIFY_CONNECTOR_FOR_TENANT' };
     // 2. which shop the credentials open (bounded Shopify call)
     let shopId;
-    try { shopId = (await withTimeout(getClient().graphql(SHOP_QUERY)))?.shop?.id; } catch (e) { return { state: 'UNAVAILABLE', reason: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : 'SHOPIFY_ERROR' }; }
+    try { shopId = (await withTimeout(getClient().graphql(SHOP_QUERY)))?.shop?.id; } catch (e) { return onFailure(e); }
     const link = shops.find((c) => c.externalId === shopId);
     if (!link) return { state: 'MISCONFIGURED', reason: 'SHOP_NOT_LINKED_TO_TENANT' };
     if (link.status !== 'CONFIGURED') return { state: link.status, reason: 'CONNECTOR_STATUS', shopId };
@@ -57,7 +69,7 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
   /** Current state. With `verify`, runs (or refreshes) the verification when needed; without it, never contacts Shopify. */
   async function state({ verify: doVerify = false } = {}) {
     if (!configured) return 'NOT_CONFIGURED';
-    const stale = !verified || (verified.state !== 'CONFIGURED' && nowMs() - verified.at >= recheckAfterMs);
+    const stale = !verified || nowMs() - verified.at >= (verified.state === 'CONFIGURED' ? configuredTtlMs : recheckAfterMs);
     if (doVerify && stale) {
       inFlight ??= verify().then((v) => { verified = { ...v, at: nowMs() }; return verified; }).finally(() => { inFlight = null; });
       await inFlight;
@@ -65,14 +77,14 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
     return verified ? verified.state : 'CONFIGURED';
   }
 
-  /** Shopify GraphQL for a feature that needs it: refused unless CONFIGURED; a network failure marks the connector UNAVAILABLE. */
+  /** Shopify GraphQL for a feature that needs it: refused unless CONFIGURED; a network or auth failure marks it UNAVAILABLE. */
   async function graphql(query, variables) {
     const s = await state({ verify: true });
     if (s !== 'CONFIGURED') throw new ShopifyConnectorStateError(s, verified?.reason ?? null);
     try {
       return await withTimeout(getClient().graphql(query, variables));
     } catch (e) {
-      if (e?.name === 'TimeoutError' || e?.name === 'AbortError' || e instanceof TypeError) verified = { state: 'UNAVAILABLE', reason: 'SHOPIFY_UNREACHABLE', at: nowMs() };
+      if (authFailed || e?.name === 'TimeoutError' || e?.name === 'AbortError' || e instanceof TypeError) verified = { ...onFailure(e), at: nowMs() };
       throw e;
     }
   }

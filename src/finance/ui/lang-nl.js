@@ -369,6 +369,7 @@
     'Stock synchronisation': 'Voorraadsynchronisatie',
     'The sales connector stays the source of truth': 'De verkoopconnector blijft de bron van waarheid',
     'No sales source connected': 'Geen verkoopbron gekoppeld',
+    'Sales source not configured': 'Verkoopbron niet geconfigureerd',
     'No sales connector is configured: stock is not synchronised.': 'Geen verkoopconnector ingesteld: de voorraad wordt niet gesynchroniseerd.',
     'The sales connector does not match this account: stock synchronisation is off.': 'De verkoopconnector hoort niet bij dit account: voorraadsynchronisatie staat uit.',
     'The sales connector cannot be reached right now: movements wait as pending.': 'De verkoopconnector is momenteel niet bereikbaar: bewegingen blijven in afwachting.',
