@@ -456,3 +456,28 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-ct-selects .ex-select:last-child { grid-column: 1 / -1; }
   .gr-ct-prow { grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 36px; }
 }
+
+/* ================= Croissance magasin page ================= */
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-st { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; } }
+.gr-st-row { margin-bottom: 16px; }
+.gr-st-row > .ex-card { display: flex; flex-direction: column; min-width: 0; }
+.gr-st-perf .nc-wrap { margin-top: 4px; }
+.gr-st-dayrow { grid-template-columns: minmax(78px, 30%) minmax(0, 1fr) auto; }
+.gr-st-item { cursor: default; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: flex-start; }
+.gr-st-item:hover { background: transparent; }
+.gr-st-guard { margin-top: 3px; }
+.gr-st-guard .ex-chip { white-space: normal; }
+.gr-st-loctable { min-width: 0; }
+.gr-st-loctable td:first-child { overflow-wrap: anywhere; }
+.gr-st-src { grid-template-columns: minmax(0, 1fr) auto; }
+/* Pour aller plus loin: one full-width row, sources side by side from 901px. */
+@media (min-width: 901px) { .gr-st-future > .gr-pp-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; } .gr-st-future .gr-pp-item:last-child { border-bottom: 1px solid #eef0f3; } }
+@media (min-width: 1360px) { .gr-st-future > .gr-pp-items { grid-template-columns: repeat(4, minmax(0, 1fr)); } .gr-st-future .gr-pp-item { border-bottom: 0; align-items: flex-start; grid-template-columns: minmax(0, 1fr); } .gr-st-future .gr-pp-item-side { align-items: flex-start; } }
+.gr-st-loctable td:first-child { min-width: 90px; }
+.gr-st-empty { margin-bottom: 16px; }
+.gr-st-empty p { margin: 4px 0 0; }
+@media (max-width: 560px) {
+  .gr-st-dayrow { grid-template-columns: minmax(64px, 26%) minmax(0, 1fr) auto; }
+  .gr-st-perf .ex-card-head { flex-wrap: wrap; gap: 8px; }
+  .gr-st-perf .ex-card-head .ex-select { flex: 1 1 100%; width: 100%; }
+}

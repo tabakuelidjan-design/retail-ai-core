@@ -29,6 +29,7 @@ const STATIC = {
   '/potential.js': [UI, 'potential.js', JS],
   '/audience.js': [UI, 'audience.js', JS],
   '/content.js': [UI, 'content.js', JS],
+  '/store.js': [UI, 'store.js', JS],
   '/growth.css': [UI, 'growth.css', CSS],
   '/lang-fr.js': [UI, 'lang-fr.js', JS],
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
@@ -54,8 +55,8 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
-// audience / content: the tenant's Audience and Contenu sources (server/audience.js, server/content.js), same contract.
-export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null } = {}) {
+// audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
+export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null } = {}) {
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
@@ -84,6 +85,10 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
       if (url.pathname === '/api/growth/content') {
         if (!content) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
         try { return json(res, 200, await content()); } catch (e) { console.error('growth content failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+      }
+      if (url.pathname === '/api/growth/store') {
+        if (!store) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
+        try { return json(res, 200, await store()); } catch (e) { console.error('growth store failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       return json(res, 404, { error: { code: 'NOT_FOUND' } });
     } catch (e) {

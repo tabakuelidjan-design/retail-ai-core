@@ -131,7 +131,8 @@ const GROWTH_NAV = [
   // Produits Potentiels: official "produits" icon until a dedicated Growth pack icon exists.
   { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
   { key: 'content', icon: 'content', href: '#/content', mobile: true },
-  { key: 'storeGrowth', icon: 'storeGrowth' },
+  // Croissance magasin: built, but not in the mobile bar (kept at 6 readable entries, owner rule) - reachable from the desktop rail.
+  { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth' },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
   { key: 'experiments', icon: 'experiments' },
 ];
@@ -367,9 +368,9 @@ function experimentsCard(d) {
 }
 
 // ---------- pages + router ----------
-// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu. Each page's payload is fetched once
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; const loadFailed = {};
+let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; let stData = null; const loadFailed = {};
 const PAGES = {
   overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
   opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
@@ -377,6 +378,7 @@ const PAGES = {
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 
