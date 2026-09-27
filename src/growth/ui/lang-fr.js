@@ -397,5 +397,6 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.pp.blocked.reviewReturns': 'retours au-dessus de {0}',
   'gr.pp.blocked.watch': 'couverture de stock non calculable',
   'gr.pp.rule.TOP_SELLER': 'N°{0} des ventes de la période, sans nouveau signal de hausse : le garder disponible suffit.',
+  'gr.pp.rule.TOP_SELLER_RETURNS': 'Top vente, mais {0} des unités vendues ont été remboursées (au-delà de {1}) : comprendre ces retours avant tout réassort ou promotion.',
   'gr.pp.rule.NO_SIGNAL': 'Ventes régulières, sans signal de hausse, de baisse ni de risque.',
 });

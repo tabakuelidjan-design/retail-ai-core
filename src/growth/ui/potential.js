@@ -206,6 +206,7 @@ function ppWhy(r, d) {
     case 'RISING_DEMAND_COVERED_RELIABLE_MARGIN': return t('gr.pp.rule.PUSH', num(e.recentUnits), num(e.priorUnits), e.weeksEachSide);
     case 'RISING_DEMAND_BLOCKED': return t('gr.pp.rule.BLOCKED', num(e.recentUnits), num(e.priorUnits), e.weeksEachSide, t(`gr.pp.blocked.${r.action}`, ppPct(th.maxRefundRateToPush)));
     case 'TOP_SELLER': return t('gr.pp.rule.TOP_SELLER', r.topRank);
+    case 'TOP_SELLER_RETURNS': return t('gr.pp.rule.TOP_SELLER_RETURNS', ppPct(r.refunds.rate), ppPct(th.maxRefundRateToPush));
     default: return t('gr.pp.rule.NO_SIGNAL');
   }
 }
@@ -233,7 +234,7 @@ function ppDrawer(d) {
           r.reasons.length ? h('div', { class: 'gr-pp-reasons' }, r.reasons.map((x) => chip(t(`gr.pp.reason.${x}`), 'mute'))) : null),
         h('section', { class: 'gr-pp-sec' }, h('h3', null, t('gr.pp.d.evidence', d.window.weeks)),
           h('div', { class: 'gr-pp-stats' },
-            ppStat(t('gr.pp.ev.sales'), money(r.netSales), t('gr.pp.ev.salesNote', r.topRank)),
+            ppStat(t('gr.pp.ev.sales'), money(r.netSales), r.topRank != null ? t('gr.pp.ev.salesNote', r.topRank) : null),
             ppStat(t('gr.pp.ev.units'), num(r.units), e.velocityWeekly != null ? t('gr.pp.ev.velocity', new Intl.NumberFormat(tag(), { maximumFractionDigits: 1 }).format(e.velocityWeekly)) : null),
             ppStat(t('gr.pp.col.evolution'), ppEvolution(r), evoNote),
             ppStat(t('gr.pp.col.margin'), r.margin.tier === 'MISSING' || r.margin.pct == null ? t('gr.dash') : ppPct(r.margin.pct), t(`gr.pp.margin.${r.margin.tier}`)),

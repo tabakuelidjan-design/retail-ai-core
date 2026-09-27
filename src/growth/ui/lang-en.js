@@ -397,5 +397,6 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   'gr.pp.blocked.reviewReturns': 'returns above {0}',
   'gr.pp.blocked.watch': 'stock cover not computable',
   'gr.pp.rule.TOP_SELLER': 'No. {0} in sales over the period, with no new rising signal: keeping it available is enough.',
+  'gr.pp.rule.TOP_SELLER_RETURNS': 'Top seller, but {0} of the units sold were refunded (above {1}): understand these returns before any restock or promotion.',
   'gr.pp.rule.NO_SIGNAL': 'Regular sales, with no rising, falling or risk signal.',
 });

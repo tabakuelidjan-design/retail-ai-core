@@ -9,17 +9,35 @@
 //     refund rate.
 // Thresholds are the merchant configuration that already exists (src/metrics/config.js) - none is invented here:
 //   demand.minObservableWeeks, demand.cover.minUnits / lowWeeks, cashRisk.lowMarginPct, segments.highRefunds,
-//   candidate.maxRefundRate, hierarchy.topN. An unknown value is never turned into 0 (no cost != 0 % margin; no stock snapshot != out of stock).
+//   candidate.maxRefundRate. The only page-owned rule is the "Top vente" size (TOP_SELLER_RULE below, owner decision
+// 2026-09-27). An unknown value is never turned into 0 (no cost != 0 % margin; no stock snapshot != out of stock).
+//
+// Status priority (owner decision 2026-09-27; the first matching rule wins, so a restock / promotion advice is never given
+// to a product that already has a bigger quality, profitability or trend problem):
+//   1 insufficient  2 returns (returns / watch)  3 lowMargin (reliable cost only)  4 declining
+//   5 restock  6 push  7 watch  8 topSeller  9 stable
 
-export const POTENTIAL_VERSION = 'growth-potential.1';
+export const POTENTIAL_VERSION = 'growth-potential.2';
 export const STATUSES = ['push', 'restock', 'topSeller', 'watch', 'declining', 'lowMargin', 'returns', 'insufficient', 'stable'];
 /** Statuses counted as "À surveiller" (a risk or a contradiction the merchant should look at). */
 export const WATCH_GROUP = ['watch', 'declining', 'lowMargin', 'returns'];
 /** The page's filter pills, in display order. */
 export const FILTERS = ['all', 'push', 'growth', 'top', 'watch', 'restock', 'lowMargin', 'insufficient'];
-// "Meilleures ventes" = the existing top-products list size of the merchant configuration (hierarchy.topN, the same list
-// Analytics uses): a rank on net sales, not a sales threshold.
-const topSellers = (config) => config.hierarchy.topN;
+/**
+ * Top seller (status topSeller, filter "top") (owner decision 2026-09-27): relative to the catalogue actually selling, never a fixed top 10.
+ *   eligible  = products sold in the window AND sufficiently observed (not "Données insuffisantes")
+ *   topCount  = min(10, max(1, ceil(eligible * 20 %)))       15 -> 3, 30 -> 6, 50 -> 10, 100 -> 10
+ *   top       = eligible products whose net sales are >= the net sales of the topCount-th eligible product (and > 0).
+ * Ties at the boundary are all included (never cut by an arbitrary order), so the list can exceed topCount only when products
+ * have exactly the same net sales as the last one. Ranks are competition ranks (1, 2, 2, 4) on net sales.
+ */
+export const TOP_SELLER_RULE = { share: 0.2, min: 1, max: 10 };
+export function topSellerCount(eligible) {
+  if (!eligible) return 0;
+  return Math.min(TOP_SELLER_RULE.max, Math.max(TOP_SELLER_RULE.min, Math.ceil(eligible * TOP_SELLER_RULE.share - 1e-9)));
+}
+/** Enough evidence for any recommendation (same thresholds as rule 1). */
+export const isObserved = (f, config) => f.observableWeeks >= config.demand.minObservableWeeks && f.units >= config.demand.cover.minUnits;
 
 const STOCK_USABLE = ['UNVERIFIED', 'SUSPECT_ROUND_QUANTITY']; // Shopify-reported, recent enough (never physically verified)
 const round4 = (x) => Math.round(x * 10000) / 10000;
@@ -50,7 +68,7 @@ export function classifyProduct(f, config) {
   const marginPct = tier === 'MISSING' ? null : f.grossProfit.margin_pct;
   const up = f.trend?.direction === 'UP';
   const down = f.trend?.direction === 'DOWN';
-  const top = f.topRank != null && f.topRank <= topSellers(config);
+  const top = f.top === true; // decided once for the whole catalogue (buildProductPotential / TOP_SELLER_RULE)
   const favorable = up || top;
   const coverOk = stock.usable && f.cover?.status === 'CALCULATED' && f.cover.weeks >= cfg.lowWeeks;
   const coverLow = stock.usable && ((stock.units ?? 0) <= 0 || (f.cover?.status === 'CALCULATED' && f.cover.weeks < cfg.lowWeeks));
@@ -67,20 +85,21 @@ export function classifyProduct(f, config) {
   const out = (status, action, rule) => ({ status, action, rule, reasons, marginTier: tier, marginPct, stock, favorable, top, up });
   // 1. Not enough evidence for any recommendation (new product or too few units).
   if (f.observableWeeks < cfg.minObs || f.units < cfg.minUnits) return out('insufficient', 'none', f.observableWeeks < cfg.minObs ? 'NEW_PRODUCT' : 'THIN_SAMPLE');
-  // 2. Good demand but the stock cannot absorb a promotion: restock first, never "push".
-  if (favorable && coverLow) return out('restock', 'restockFirst', (stock.units ?? 0) <= 0 ? 'DEMAND_BUT_OUT_OF_STOCK' : 'DEMAND_BUT_LOW_COVER');
-  // 3. Abnormal refunds: contradictory with good demand -> watch; otherwise the product's own problem.
+  // 2. Abnormal refunds: contradictory with good demand -> watch; otherwise the product's own problem.
   if (highReturns) return favorable ? out('watch', 'reviewReturns', 'DEMAND_BUT_HIGH_RETURNS') : out('returns', 'doNotPromote', 'HIGH_RETURNS');
-  // 4. Margin too thin - only when the margin is reliable (verified costs covering all its revenue).
+  // 3. Margin too thin - only when the margin is reliable (verified costs covering all its revenue).
   if (tier === 'RELIABLE' && marginPct != null && marginPct < cfg.lowMargin) return out('lowMargin', 'doNotPromote', 'LOW_RELIABLE_MARGIN');
-  // 5. A real decline over the comparable period.
+  // 4. A real decline over the comparable period (the demand engine's DOWN trend: a significant, not a noise-level, drop).
   if (down) return out('declining', 'watch', 'TREND_DOWN');
+  // 5. Good demand, no blocking refund / margin / trend signal, but a KNOWN stock that cannot absorb a promotion: restock
+  //    first. Refunds above the push limit also block it (they are reviewed first, rule 7).
+  if (favorable && coverLow && !elevatedReturns) return out('restock', 'restockFirst', (stock.units ?? 0) <= 0 ? 'DEMAND_BUT_OUT_OF_STOCK' : 'DEMAND_BUT_LOW_COVER');
   // 6. Push: rising demand + enough cover + reliable margin + normal refunds.
   if (up && coverOk && tier === 'RELIABLE' && !elevatedReturns) return out('push', 'increaseVisibility', 'RISING_DEMAND_COVERED_RELIABLE_MARGIN');
-  // 7. Rising demand, but something blocks a push: say what to check first (a steady top seller is not promoted anyway).
-  if (up) {
-    const first = !stock.usable ? 'checkStock' : tier !== 'RELIABLE' ? 'checkCost' : elevatedReturns ? 'reviewReturns' : 'watch';
-    return out('watch', first, 'RISING_DEMAND_BLOCKED');
+  // 7. Good demand, but something blocks both a push and a restock advice: say what to check first.
+  if (up || (top && elevatedReturns)) {
+    const first = elevatedReturns ? 'reviewReturns' : !stock.usable ? 'checkStock' : tier !== 'RELIABLE' ? 'checkCost' : 'watch';
+    return out('watch', first, up ? 'RISING_DEMAND_BLOCKED' : 'TOP_SELLER_RETURNS');
   }
   // 8. A top seller without a new push signal: keep it available, no new promotion needed.
   if (top) return out('topSeller', 'keep', 'TOP_SELLER');
@@ -91,7 +110,7 @@ export function classifyProduct(f, config) {
 export function primarySignal(f, c) {
   if (c.status === 'insufficient') return { code: c.rule === 'NEW_PRODUCT' ? 'newProduct' : 'thinSample', units: f.units };
   if (c.status === 'restock') return (c.stock.units ?? 0) <= 0 ? { code: 'outOfStock' } : { code: 'coverDays', days: f.cover.days };
-  if (c.status === 'returns' || c.rule === 'DEMAND_BUT_HIGH_RETURNS') return { code: 'returnRate', rate: f.refundRate };
+  if (c.status === 'returns' || c.rule === 'DEMAND_BUT_HIGH_RETURNS' || c.rule === 'TOP_SELLER_RETURNS') return { code: 'returnRate', rate: f.refundRate };
   if (c.status === 'lowMargin') return { code: 'margin', pct: c.marginPct };
   if (f.evolution != null && (c.up || c.status === 'declining')) return { code: 'evolution', pct: f.evolution };
   if (c.top) return { code: 'topRank', rank: f.topRank };
@@ -104,8 +123,17 @@ export function primarySignal(f, c) {
  */
 export function buildProductPotential(facts, { config, currency, window, dataQuality }) {
   const active = facts.filter((f) => f.units > 0);
-  const ranked = [...active].sort((a, b) => b.netSales - a.netSales || a.key.localeCompare(b.key));
-  ranked.forEach((f, i) => { f.topRank = i + 1; });
+  // Display order: net sales, then units, then title and key (fully deterministic).
+  const ranked = [...active].sort((a, b) => b.netSales - a.netSales || b.units - a.units || String(a.title).localeCompare(String(b.title)) || a.key.localeCompare(b.key));
+  // Top sellers: competition rank among the sufficiently observed products; ties at the boundary all included.
+  const eligible = ranked.filter((f) => isObserved(f, config));
+  const topCount = topSellerCount(eligible.length);
+  const boundary = topCount ? eligible[topCount - 1].netSales : null;
+  for (const f of ranked) {
+    const ok = eligible.includes(f);
+    f.topRank = ok ? 1 + eligible.filter((g) => g.netSales > f.netSales).length : null;
+    f.top = ok && boundary != null && f.netSales > 0 && f.netSales >= boundary;
+  }
   const rows = ranked.map((f) => {
     const c = classifyProduct(f, config);
     return {
@@ -150,7 +178,8 @@ export function buildProductPotential(facts, { config, currency, window, dataQua
     totals: { netSales: Math.round(totalSales * 100) / 100, pushShare: totalSales > 0 ? round4(toPush.reduce((a, r) => a + r.netSales, 0) / totalSales) : null },
     thresholds: {
       minObservableWeeks: config.demand.minObservableWeeks, minUnits: config.demand.cover.minUnits, lowCoverWeeks: config.demand.cover.lowWeeks,
-      lowMarginPct: config.cashRisk.lowMarginPct, highRefunds: config.segments.highRefunds, maxRefundRateToPush: config.candidate.maxRefundRate, topSellers: topSellers(config),
+      lowMarginPct: config.cashRisk.lowMarginPct, highRefunds: config.segments.highRefunds, maxRefundRateToPush: config.candidate.maxRefundRate,
+      topSellers: { ...TOP_SELLER_RULE, eligible: eligible.length, count: topCount, selected: rows.filter((r) => r.top).length },
       trend: config.demand.trend,
     },
     dataQuality,

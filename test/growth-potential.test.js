@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { mergeConfig } from '../src/metrics/config.js';
-import { classifyProduct, buildProductPotential, marginTier, stockState, STATUSES, FILTERS, WATCH_GROUP } from '../src/growth/products/potential.js';
+import { classifyProduct, buildProductPotential, marginTier, stockState, topSellerCount, TOP_SELLER_RULE, STATUSES, FILTERS, WATCH_GROUP } from '../src/growth/products/potential.js';
 import { productPotentialFacts } from '../src/growth/products/facts.js';
 import { createProductPotentialSource } from '../src/growth/server/products.js';
 import { createGrowthApp } from '../src/growth/server/app.js';
@@ -47,7 +47,7 @@ test('potential case 2: strong growth (or a best seller) with a short cover -> R
   assert.equal(c.action, 'restockFirst');
   assert.equal(c.rule, 'DEMAND_BUT_LOW_COVER');
   // A best seller without a rising trend and ~5 days of stock: restock before any promotion as well.
-  const top = classify({ trend: { direction: 'FLAT', recent_units: 10, prior_units: 10, weeks_each_side: 4 }, evolution: 0, topRank: 1, cover: { status: 'CALCULATED', weeks: 0.7, days: 5 } });
+  const top = classify({ trend: { direction: 'FLAT', recent_units: 10, prior_units: 10, weeks_each_side: 4 }, evolution: 0, top: true, topRank: 1, cover: { status: 'CALCULATED', weeks: 0.7, days: 5 } });
   assert.equal(top.status, 'restock');
   // Known stock of 0 with good demand: out of stock, restock first.
   const out = classify({ inventory: { stock_quality: 'UNVERIFIED', stock_units: 0 }, cover: { status: 'NO_STOCK', weeks: null, days: null } });
@@ -57,7 +57,7 @@ test('potential case 2: strong growth (or a best seller) with a short cover -> R
 
 test('potential case 3: high sales with a reliable margin below the threshold -> Marge faible, not À pousser', () => {
   const thin = { status: 'CALCULATED', cost_confidence: 'VERIFIED', margin_pct: 0.08 };
-  const best = classify({ topRank: 1, netSales: 9000, units: 300, grossProfit: thin });
+  const best = classify({ top: true, topRank: 1, netSales: 9000, units: 300, grossProfit: thin });
   assert.equal(best.status, 'lowMargin');
   assert.equal(best.action, 'doNotPromote');
   assert.notEqual(classify({ grossProfit: thin }).status, 'push', 'rising demand does not override a thin reliable margin');
@@ -91,6 +91,88 @@ test('potential case 5: insufficient data -> no strong recommendation', () => {
   const p = build([fact({ units: 2 })]);
   assert.equal(p.kpis.push, 0);
   assert.equal(p.rows[0].opportunity, null);
+});
+
+// ---------- status priority (owner rule 2026-09-27): restock advice never masks a bigger problem ----------
+const flatTrend = { trend: { direction: 'FLAT', recent_units: 10, prior_units: 10, weeks_each_side: 4 }, evolution: 0 };
+const lowCover = { cover: { status: 'CALCULATED', weeks: 0.7, days: 5 } };
+test('priority: top seller + low stock + too many refunds -> not Réassort avant promotion', () => {
+  const high = classify({ ...flatTrend, top: true, ...lowCover, refundRate: 0.3, unitsRefunded: 6 });
+  assert.notEqual(high.status, 'restock');
+  assert.equal(high.status, 'watch');
+  assert.equal(high.action, 'reviewReturns');
+  // Refunds above the push limit (but below "high") also block the restock advice.
+  const elevated = classify({ ...flatTrend, top: true, ...lowCover, refundRate: 0.15, unitsRefunded: 3 });
+  assert.notEqual(elevated.status, 'restock');
+  assert.equal(elevated.action, 'reviewReturns');
+  assert.equal(elevated.rule, 'TOP_SELLER_RETURNS');
+  assert.notEqual(classify({ ...lowCover, refundRate: 0.15, unitsRefunded: 3 }).status, 'restock', 'rising demand + elevated refunds');
+});
+test('priority: top seller + low stock + low reliable margin -> Marge faible, not Réassort avant promotion', () => {
+  const c = classify({ ...flatTrend, top: true, ...lowCover, grossProfit: { status: 'CALCULATED', cost_confidence: 'VERIFIED', margin_pct: 0.05 } });
+  assert.equal(c.status, 'lowMargin');
+  assert.equal(c.action, 'doNotPromote');
+});
+test('priority: top seller + low stock + clearly falling trend -> En baisse, not Réassort avant promotion', () => {
+  const c = classify({ top: true, ...lowCover, trend: { direction: 'DOWN', recent_units: 3, prior_units: 12, weeks_each_side: 4 }, evolution: -0.75 });
+  assert.equal(c.status, 'declining');
+});
+test('priority: good demand + no blocking signal + known low stock -> Réassort avant promotion', () => {
+  assert.equal(classify({ ...flatTrend, top: true, ...lowCover }).status, 'restock', 'top seller');
+  assert.equal(classify({ ...lowCover }).status, 'restock', 'rising demand');
+  // Unverified cost is not a blocking signal for restocking (only a known thin margin is).
+  assert.equal(classify({ ...lowCover, grossProfit: { status: 'CALCULATED', cost_confidence: 'UNVERIFIED', margin_pct: 0.05 } }).status, 'restock');
+  // Not a good demand -> no restock advice, even with low stock.
+  assert.equal(classify({ ...flatTrend, ...lowCover }).status, 'stable');
+});
+test('priority: exact order insufficient > returns > lowMargin > declining > restock > push > watch > topSeller > stable', () => {
+  const thin = { grossProfit: { status: 'CALCULATED', cost_confidence: 'VERIFIED', margin_pct: 0.05 } };
+  const returns = { refundRate: 0.3, unitsRefunded: 6 };
+  const down = { trend: { direction: 'DOWN', recent_units: 3, prior_units: 12, weeks_each_side: 4 }, evolution: -0.75 };
+  const all = { top: true, ...lowCover, ...thin, ...returns, ...down };
+  assert.equal(classify({ ...all, observableWeeks: 1 }).status, 'insufficient');
+  assert.equal(classify({ ...all, top: false }).status, 'returns');
+  assert.equal(classify({ ...lowCover, ...thin, ...down, top: true }).status, 'lowMargin');
+  assert.equal(classify({ ...lowCover, ...down, top: true }).status, 'declining');
+  assert.equal(classify({ ...lowCover }).status, 'restock');
+  assert.equal(classify({}).status, 'push');
+  assert.equal(classify({ grossProfit: { status: 'PARTIAL', cost_confidence: 'VERIFIED', margin_pct: 0.5 } }).status, 'watch');
+  assert.equal(classify({ ...flatTrend, top: true }).status, 'topSeller');
+  assert.equal(classify({ ...flatTrend }).status, 'stable');
+});
+
+// ---------- Top vente: relative to the catalogue (owner rule 2026-09-27) ----------
+test('top sellers: topCount = min(10, max(1, ceil(eligible x 20 %)))', () => {
+  assert.deepEqual(TOP_SELLER_RULE, { share: 0.2, min: 1, max: 10 });
+  for (const [n, k] of [[15, 3], [30, 6], [50, 10], [100, 10], [1, 1], [4, 1], [5, 1], [6, 2], [0, 0]]) assert.equal(topSellerCount(n), k, `${n} eligible`);
+});
+const seller = (i, netSales, over = {}) => fact({ key: `k${String(i).padStart(3, '0')}`, title: `P${i}`, netSales, ...flatTrend, ...over });
+test('top sellers: only sufficiently observed products count and can be top; 15 eligible -> top 3; 50 -> top 10', () => {
+  const facts = Array.from({ length: 15 }, (_, i) => seller(i, 1000 - i * 10));
+  facts.push(seller(99, 99999, { observableWeeks: 1 }), seller(98, 88888, { units: 1 })); // biggest sales but insufficient data
+  const p = build(facts);
+  assert.deepEqual(p.rows.filter((r) => r.top).map((r) => r.id), ['k000', 'k001', 'k002']);
+  assert.equal(p.filters.top, 3);
+  assert.deepEqual(p.thresholds.topSellers, { share: 0.2, min: 1, max: 10, eligible: 15, count: 3, selected: 3 });
+  for (const id of ['k099', 'k098']) {
+    const r = p.rows.find((x) => x.id === id);
+    assert.equal(r.status, 'insufficient'); assert.equal(r.top, false); assert.equal(r.topRank, null);
+  }
+  assert.equal(p.rows.find((r) => r.id === 'k000').topRank, 1);
+  assert.equal(p.rows.filter((r) => r.status === 'topSeller').length, 3);
+  const fifty = build(Array.from({ length: 50 }, (_, i) => seller(i, 5000 - i)));
+  assert.equal(fifty.filters.top, 10);
+});
+test('top sellers: ties at the boundary are all included, same result whatever the input order (no random cut)', () => {
+  const sales = [900, 800, 700, 700, 600, 500, 400, 300, 200, 150, 140, 130, 120, 110, 100];
+  const facts = sales.map((v, i) => seller(i, v));
+  const a = build(facts);
+  assert.deepEqual(a.rows.filter((r) => r.top).map((r) => r.id).sort(), ['k000', 'k001', 'k002', 'k003'], 'both products at 700 are top');
+  assert.deepEqual([a.rows.find((r) => r.id === 'k002').topRank, a.rows.find((r) => r.id === 'k003').topRank, a.rows.find((r) => r.id === 'k004').topRank], [3, 3, 5]);
+  assert.equal(a.thresholds.topSellers.count, 3);
+  assert.equal(a.thresholds.topSellers.selected, 4);
+  const b = build(facts.slice().reverse());
+  assert.deepEqual(b.rows.map((r) => [r.id, r.top, r.topRank, r.status]), a.rows.map((r) => [r.id, r.top, r.topRank, r.status]));
 });
 
 // ---------- honest states: unknown is never 0 ----------
@@ -138,8 +220,8 @@ test('potential states: low stock, declining, top seller, stable, product withou
   assert.equal(down.status, 'declining');
   assert.equal(down.action, 'watch');
   const flat = { trend: { direction: 'FLAT', recent_units: 10, prior_units: 10, weeks_each_side: 4 }, evolution: 0 };
-  assert.equal(classify({ ...flat, topRank: 2 }).status, 'topSeller');
-  assert.equal(classify({ ...flat, topRank: 2 }).action, 'keep');
+  assert.equal(classify({ ...flat, top: true, topRank: 2 }).status, 'topSeller');
+  assert.equal(classify({ ...flat, top: true, topRank: 2 }).action, 'keep');
   assert.equal(classify(flat).status, 'stable');
   const p = build([fact({ key: 'img', imageUrl: null }), fact({ key: 'new', observableWeeks: 1, trend: { direction: 'INSUFFICIENT_DATA' }, evolution: null })]);
   assert.equal(p.rows.find((r) => r.id === 'img').imageUrl, null);
@@ -308,7 +390,7 @@ test('potential UI: renders the real payload, the nav entry is active, pills fil
   const rows = () => all(root, (n) => hasClass(n, 'gr-pp-row'));
   const pills = () => all(root, (n) => hasClass(n, 'gr-pp-filter'));
   assert.equal(rows().length, 7);
-  assert.deepEqual(pills().map((p) => text(p)), ['Tous7', 'À pousser0', 'Forte croissance2', 'Meilleures ventes7', 'À surveiller3', 'Réassort avant promotion1', 'Marge faible0', 'Données insuffisantes2']);
+  assert.deepEqual(pills().map((p) => text(p)), ['Tous7', 'À pousser0', 'Forte croissance2', 'Meilleures ventes4', 'À surveiller3', 'Réassort avant promotion1', 'Marge faible0', 'Données insuffisantes2']);
   pills()[5].listeners.click[0]();
   assert.deepEqual(rows().map((r) => text(r.children[0])), ['SpikeBeta · 6 unités vendues']);
   assert.ok(text(rows()[0]).includes('Réassort avant promotion'));
@@ -345,4 +427,14 @@ test('potential UI: empty dataset and missing tenant are explicit states, not er
   assert.deepEqual(b.errors, []);
   assert.equal(title(b.root), 'Produits Potentiels');
   assert.equal(all(b.root, (n) => hasClass(n, 'ex-kpi')).length, 0, 'no figure at all without a tenant (never demo data)');
+});
+
+test('potential naming: official page name locked (FR "Produits Potentiels", NL "Productpotentieel", EN "Product potential")', async () => {
+  const ctx = { window: {} };
+  for (const l of ['fr', 'nl', 'en']) vm.runInNewContext(await readFile(new URL(`lang-${l}.js`, UI), 'utf8'), ctx);
+  const D = ctx.window.NORDLA_DICTS;
+  for (const [l, name] of [['fr', 'Produits Potentiels'], ['nl', 'Productpotentieel'], ['en', 'Product potential']]) {
+    assert.equal(D[l]['gr.pp.title'], name);
+    assert.equal(D[l]['gr.nav.potential'], name);
+  }
 });

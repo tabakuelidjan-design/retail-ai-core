@@ -397,5 +397,6 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   'gr.pp.blocked.reviewReturns': 'retouren boven {0}',
   'gr.pp.blocked.watch': 'voorraaddekking niet berekenbaar',
   'gr.pp.rule.TOP_SELLER': 'Nr. {0} in verkoop over de periode, zonder nieuw stijgend signaal: beschikbaar houden volstaat.',
+  'gr.pp.rule.TOP_SELLER_RETURNS': 'Topverkoper, maar {0} van de verkochte eenheden werd terugbetaald (meer dan {1}): begrijp deze retouren vóór elke aanvulling of promotie.',
   'gr.pp.rule.NO_SIGNAL': 'Regelmatige verkoop, zonder signaal van stijging, daling of risico.',
 });
