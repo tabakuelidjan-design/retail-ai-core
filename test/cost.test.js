@@ -5,6 +5,14 @@ import { syncProductCosts } from '../src/sync/cost.js';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 import { FAKE_SHOP, FAKE_LOCATION, FAKE_PRODUCTS_PAGE, FAKE_INVENTORY_COST_PAGE } from './fixtures/shopify-sample.js';
 
+/** The Nordla tenant, seeded explicitly (the catalog sync no longer creates the merchant from Shopify - ADR 0003 step 5). */
+async function tenantOf(supabase) {
+  const existing = supabase._tables.get('merchants');
+  if (existing?.length) return existing[0].id;
+  const [m] = await supabase.insert('merchants', [{ name: 'Fake Shop', vertical: 'general_retail', source_system: 'shopify', source_id: FAKE_SHOP.id }]);
+  return m.id;
+}
+
 function fakeShopify(invPage = FAKE_INVENTORY_COST_PAGE) {
   return {
     async graphql(query) {
@@ -18,9 +26,9 @@ function fakeShopify(invPage = FAKE_INVENTORY_COST_PAGE) {
 }
 
 async function seedCatalog(supabase) {
-  await syncCatalog({ shopify: fakeShopify(), supabase });
-  const [merchant] = await supabase.select('merchants', { select: 'id', source_id: `eq.${FAKE_SHOP.id}` });
-  return merchant.id;
+  const merchantId = await tenantOf(supabase);
+  await syncCatalog({ shopify: fakeShopify(), supabase }, { merchantId });
+  return merchantId;
 }
 
 test('product without unitCost gets no product_costs row (UNCLASSIFIED)', async () => {

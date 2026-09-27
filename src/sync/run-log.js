@@ -54,14 +54,14 @@ export async function latestSyncStatus(supabase, merchantId, { now = new Date(),
 }
 
 /**
- * A sync that fails BEFORE it knows the merchant (for example Shopify rejects the credentials) still has to leave a trace, otherwise the modules
- * would keep showing the last good sync as if nothing happened. Single-tenant fallback: only when exactly one merchant exists.
+ * A sync that fails BEFORE its first data write (Shopify rejects the credentials, the connector is MISCONFIGURED or UNAVAILABLE) still has
+ * to leave a trace, otherwise the modules would keep showing the last good sync as if nothing happened. The merchant is the resolved tenant
+ * (NORDLA_MERCHANT_ID), never guessed: without it nothing is written (there is no "only merchant" fallback any more).
  */
-export async function recordStartupFailure(supabase, { mode, error, now = new Date() }) {
+export async function recordStartupFailure(supabase, { merchantId, mode, error, now = new Date() }) {
+  if (typeof merchantId !== 'string' || !merchantId) return null;
   try {
-    const merchants = await supabase.select('merchants', { select: 'id', limit: '2' });
-    if (merchants.length !== 1) return null;
-    const id = await startRun(supabase, { merchantId: merchants[0].id, mode, now });
+    const id = await startRun(supabase, { merchantId, mode, now });
     await finishRun(supabase, id, { ok: false, summaries: {}, error, now });
     return id;
   } catch { return null; }

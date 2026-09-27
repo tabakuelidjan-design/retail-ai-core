@@ -5,17 +5,6 @@
 import { normalizeOrderChannel } from '../marketing/adapters/shopify.js';
 import { pseudonymizeCustomerId } from '../customers/pseudonym.js';
 
-/** @param {{id: string, name: string, myshopifyDomain: string}} shop */
-export function normalizeMerchant(shop) {
-  return {
-    name: shop.name,
-    vertical: 'general_retail',
-    source_system: 'shopify',
-    source_id: shop.id,
-    source_domain: shop.myshopifyDomain,
-  };
-}
-
 /** @param {{id: string, name: string}} node */
 export function normalizeLocation(node, merchantId) {
   return {

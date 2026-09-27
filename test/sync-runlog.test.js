@@ -60,15 +60,18 @@ test('logging failures never break a sync', async () => {
   await finishRun(broken, null, { ok: true, summaries: {} });
 });
 
-test('a sync that fails before it knows the merchant (bad Shopify credentials) still leaves a FAILED trace and keeps the last good sync', async () => {
+test('a sync that fails before its first write (bad Shopify credentials) leaves a FAILED trace for the RESOLVED tenant and keeps the last good sync', async () => {
   const sb = createFakeSupabase();
   await sb.upsert('merchants', [{ source_system: 'shopify', source_id: 'gid://shop/1', name: 'M' }], { onConflict: 'source_system,source_id' });
   const merchant = sb._tables.get('merchants')[0].id;
   const ok = await startRun(sb, { merchantId: merchant, mode: 'all', now: at('2026-09-26T10:00:00Z') });
   await finishRun(sb, ok, { ok: true, summaries: {}, now: at('2026-09-26T10:01:00Z') });
-  assert.ok(await recordStartupFailure(sb, { mode: 'all', error: 'Shopify token exchange HTTP 400', now: at('2026-09-26T10:15:00Z') }));
+  assert.ok(await recordStartupFailure(sb, { merchantId: merchant, mode: 'all', error: 'Shopify token exchange HTTP 400', now: at('2026-09-26T10:15:00Z') }));
   const s = await latestSyncStatus(sb, merchant, { now: at('2026-09-26T10:16:00Z') });
   assert.equal(s.lastAttempt.status, 'FAILED'); assert.equal(s.latestFailed, true); assert.equal(s.lastSuccess.finishedAt, '2026-09-26T10:01:00.000Z');
-  // no merchant / several merchants: nothing is guessed
+  // no resolved tenant: nothing is written, even when exactly one merchant exists (no "only merchant" fallback)
+  const runsBefore = sb._tables.get('sync_runs').length;
+  assert.equal(await recordStartupFailure(sb, { mode: 'all', error: 'x' }), null);
+  assert.equal(sb._tables.get('sync_runs').length, runsBefore);
   assert.equal(await recordStartupFailure(createFakeSupabase(), { mode: 'all', error: 'x' }), null);
 });

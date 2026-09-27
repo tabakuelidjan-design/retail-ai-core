@@ -23,6 +23,9 @@ import { analyzeDimension } from '../src/metrics/hierarchy.js';
 import { buildSetupReport } from '../src/onboarding/wizard.js';
 import { createSupabaseFinanceStore } from '../src/finance/supabase-store.js';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
+import { guardSyncWrites, TenantWriteViolation } from '../src/sync/write-guard.js';
+import { syncCatalog } from '../src/sync/catalog.js';
+import { FAKE_LOCATION, FAKE_PRODUCTS_PAGE } from './fixtures/shopify-sample.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date();
@@ -346,4 +349,29 @@ test('Bank balances, cash counts and cash movements: merchant A\'s lists never i
   await storeA.insertCashMovement({ kind: 'CASH_IN', amountCents: 10, date: '2026-09-22', note: 'A' });
   await storeB.insertCashMovement({ kind: 'CASH_IN', amountCents: 20, date: '2026-09-22', note: 'B' });
   assert.deepEqual((await storeA.listCashMovements()).map((m) => m.note), ['A']);
+});
+
+// ---------- Core sync writes (ADR 0003 step 5): the central tenant write guard ----------
+
+const catalogShopify = { async graphql(q) { return q.includes('locations(') ? { locations: { edges: [{ node: FAKE_LOCATION }] } } : FAKE_PRODUCTS_PAGE; } };
+
+test('Core sync: a catalog sync guarded for merchant A but mis-parameterised with merchant B writes NOTHING (every write refused by the guard)', async () => {
+  const { supabase, merchantA, merchantB } = await seedTwoMerchants(createFakeSupabase());
+  const before = JSON.stringify([...supabase._tables]);
+  const guardedForA = guardSyncWrites(supabase, { merchantId: merchantA, connectorId: 'conn-a', externalId: 'gid://shopify/Shop/A' });
+  const summary = await syncCatalog({ shopify: catalogShopify, supabase: guardedForA }, { merchantId: merchantB });
+  assert.ok(summary.errors.length > 0 && summary.errors.every((e) => /Refused connector write/.test(e)), JSON.stringify(summary.errors));
+  assert.equal(JSON.stringify([...supabase._tables]), before, 'neither A nor B changed');
+});
+
+test('Core sync: the guarded catalog sync for merchant A only adds A rows and leaves every B row byte-for-byte unchanged', async () => {
+  const { supabase, merchantA, merchantB } = await seedTwoMerchants(createFakeSupabase());
+  const bRows = (t) => JSON.stringify((supabase._tables.get(t) ?? []).filter((r) => r.merchant_id === merchantB));
+  const tables = ['locations', 'products', 'variants', 'product_collections'];
+  const beforeB = Object.fromEntries(tables.map((t) => [t, bRows(t)]));
+  const summary = await syncCatalog({ shopify: catalogShopify, supabase: guardSyncWrites(supabase, { merchantId: merchantA, connectorId: 'conn-a', externalId: 'gid://shopify/Shop/A' }) }, { merchantId: merchantA });
+  assert.deepEqual(summary.errors, []);
+  for (const t of tables) assert.equal(bRows(t), beforeB[t], t);
+  assert.ok((supabase._tables.get('products') ?? []).some((r) => r.merchant_id === merchantA && r.title === 'Fixture Widget'));
+  await assert.rejects(guardSyncWrites(supabase, { merchantId: merchantA, connectorId: 'conn-a', externalId: 'x' }).update('products', { merchant_id: `eq.${merchantB}` }, { title: 'hijack' }), TenantWriteViolation);
 });

@@ -1,10 +1,12 @@
-// Catalog sync: merchant, locations, products, variants. Read-only against
+// Catalog sync: locations, products, variants, collection memberships. Read-only against
 // Shopify; idempotent upserts against Supabase, keyed on
 // (merchant_id, source_system, source_id) per table - never on name or sku.
+// The merchant is the Nordla tenant passed in (opts.merchantId, resolved from NORDLA_MERCHANT_ID and a validated Shopify connector):
+// the catalog sync never creates, updates or looks up a merchant from Shopify (ADR 0003).
 
-import { SHOP_QUERY, LOCATIONS_QUERY, PRODUCTS_PAGE_QUERY } from '../shopify/queries.js';
+import { LOCATIONS_QUERY, PRODUCTS_PAGE_QUERY } from '../shopify/queries.js';
 import {
-  normalizeMerchant, normalizeLocation, normalizeProduct, normalizeProductCollection, normalizeVariant,
+  normalizeLocation, normalizeProduct, normalizeProductCollection, normalizeVariant,
 } from './normalize.js';
 
 /**
@@ -21,15 +23,9 @@ export async function syncCatalog({ shopify, supabase }, opts = {}) {
     errors: [],
   };
 
-  let merchantId;
-  try {
-    const { shop } = await shopify.graphql(SHOP_QUERY);
-    const [merchant] = await supabase.upsert('merchants', [normalizeMerchant(shop)], {
-      onConflict: 'source_system,source_id',
-    });
-    merchantId = merchant.id;
-  } catch (err) {
-    summary.errors.push(`merchant: ${err.message}`);
+  const merchantId = opts.merchantId;
+  if (typeof merchantId !== 'string' || !merchantId) {
+    summary.errors.push('merchant: no tenant given (merchantId is required; the catalog sync never derives it from Shopify)');
     return summary;
   }
 
