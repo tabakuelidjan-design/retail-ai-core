@@ -37,16 +37,23 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
   const configured = hasShopifyCredentials(env);
   let client = null; // built on first real use only, then reused (it caches its access token)
   let authFailed = false; // Shopify answered 401 to this client: its token (or the credentials) is no longer accepted
+  let httpDown = false; // the last answer was a 5xx or a 404 (shop or gateway down), not a query-level error
   let verified = null; // { state, reason, shopId?, at }
   let inFlight = null;
 
   // Every Shopify response goes through here: a 401 (token revoked, app reinstalled, secret rotated) condemns the current client.
-  const watchedFetch = (url, opts) => timeoutFetch(timeoutMs, fetchImpl)(url, opts).then((res) => { if (res?.status === 401) authFailed = true; return res; });
+  const watchedFetch = (url, opts) => timeoutFetch(timeoutMs, fetchImpl)(url, opts).then((res) => {
+    if (res?.status === 401) authFailed = true;
+    httpDown = res?.status >= 500 || res?.status === 404;
+    return res;
+  });
   const getClient = () => { client ??= createClient(loadShopifyConfigFromEnv(env), { fetchImpl: watchedFetch }); return client; };
   /** After an auth failure the client is dropped, so the next verification builds a new one and acquires a new token. */
   const onFailure = (e) => {
     if (authFailed) { client = null; authFailed = false; return { state: 'UNAVAILABLE', reason: 'AUTH_FAILED' }; }
-    return { state: 'UNAVAILABLE', reason: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : e instanceof TypeError ? 'SHOPIFY_UNREACHABLE' : 'SHOPIFY_ERROR' };
+    const reason = e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : e instanceof TypeError || httpDown ? 'SHOPIFY_UNREACHABLE' : 'SHOPIFY_ERROR';
+    httpDown = false;
+    return { state: 'UNAVAILABLE', reason };
   };
   const withTimeout = (p) => {
     let t;
@@ -77,14 +84,14 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
     return verified ? verified.state : 'CONFIGURED';
   }
 
-  /** Shopify GraphQL for a feature that needs it: refused unless CONFIGURED; a network or auth failure marks it UNAVAILABLE. */
+  /** Shopify GraphQL for a feature that needs it: refused unless CONFIGURED; a network, HTTP 5xx/404 or auth failure marks it UNAVAILABLE. */
   async function graphql(query, variables) {
     const s = await state({ verify: true });
     if (s !== 'CONFIGURED') throw new ShopifyConnectorStateError(s, verified?.reason ?? null);
     try {
       return await withTimeout(getClient().graphql(query, variables));
     } catch (e) {
-      if (authFailed || e?.name === 'TimeoutError' || e?.name === 'AbortError' || e instanceof TypeError) verified = { ...onFailure(e), at: nowMs() };
+      if (authFailed || httpDown || e?.name === 'TimeoutError' || e?.name === 'AbortError' || e instanceof TypeError) verified = { ...onFailure(e), at: nowMs() };
       throw e;
     }
   }

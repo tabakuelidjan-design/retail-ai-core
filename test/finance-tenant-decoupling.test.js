@@ -219,11 +219,13 @@ test('Shopify MISCONFIGURED or UNAVAILABLE: stock sync blocked with that state, 
 // ---------- connector lifecycle without restart: token invalidation, CONFIGURED TTL ----------
 /** A fake Shopify at the HTTP level (token exchange + GraphQL), used through the REAL Shopify client. */
 function fakeShopifyHttp() {
-  const st = { shopId: SHOP_A, tokens: new Set(), exchanges: 0, graphqlCalls: 0, n: 0 };
+  const st = { shopId: SHOP_A, tokens: new Set(), exchanges: 0, graphqlCalls: 0, n: 0, down: null, gqlError: false };
   const res = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   st.fetch = async (url, opts) => {
     if (String(url).endsWith('/admin/oauth/access_token')) { st.exchanges += 1; const t = `tok-${(st.n += 1)}`; st.tokens.add(t); return res(200, { access_token: t, expires_in: 86399 }); }
     st.graphqlCalls += 1;
+    if (st.down) return new Response('<html>Application not found</html>', { status: st.down });
+    if (st.gqlError) return res(200, { errors: [{ message: 'Field does not exist' }] });
     if (!st.tokens.has(opts.headers['X-Shopify-Access-Token'])) return res(401, { errors: 'Invalid API key or access token' });
     return res(200, { data: String(JSON.parse(opts.body).query).includes('myshopifyDomain') ? { shop: { id: st.shopId, name: 'S', myshopifyDomain: 'x' } } : { nodes: [] } });
   };
@@ -279,4 +281,17 @@ test('sales source state: NONE without a sales connector, NOT_CONFIGURED with a 
   assert.equal(await src(true, {}), 'NOT_CONFIGURED');
   assert.equal(await src(true, SHOPIFY_ENV), 'ACTIVE');
   assert.equal(t.calls.created, 0);
+});
+
+test('Shopify down behind a gateway (HTTP 503 / 404) while CONFIGURED: UNAVAILABLE, same client and token kept, back to CONFIGURED after the cool-down; a query error changes nothing', async () => {
+  for (const status of [503, 404]) {
+    const st = fakeShopifyHttp(); const clock = { now: 0 }; const { c, built } = lifecycleConnector(st, clock);
+    await c.graphql(Q, { ids: [] });
+    st.gqlError = true; await assert.rejects(c.graphql(Q, { ids: [] })); st.gqlError = false;
+    assert.equal(await c.state(), 'CONFIGURED', 'a GraphQL error in a 200 is a query problem, not an outage');
+    st.down = status; await assert.rejects(c.graphql(Q, { ids: [] }));
+    assert.equal(await c.state(), 'UNAVAILABLE', String(status)); assert.equal(c.describe().reason, 'SHOPIFY_UNREACHABLE');
+    st.down = null; clock.now += 60_000; await c.graphql(Q, { ids: [] });
+    assert.equal(await c.state(), 'CONFIGURED'); assert.equal(st.exchanges, 1, 'no new token needed'); assert.equal(built.n, 1, 'same client');
+  }
 });
