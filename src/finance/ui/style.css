@@ -1455,6 +1455,7 @@ body:has(.modal-back) .contact-support { display: none; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok, #2f7d4f); flex: 0 0 auto; }
 .sync-dot.warn { background: #b7791f; }
 .sync-dot.bad { background: #b3261e; }
+.sync-dot.mute { background: #9aa3ad; }
 @media (max-width: 720px) { .tb-right .sync-pill { display: none; } }
 
 /* Bank CSV import: the native file input stays in the DOM (the button opens it) but is not shown. */

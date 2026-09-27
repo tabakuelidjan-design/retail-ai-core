@@ -3,12 +3,17 @@
 // Sources, in strict priority order:
 //   1. 'session'        - tenant bound to an authenticated session (future multi-tenant). Reserved: not implemented yet.
 //   2. 'env'            - NORDLA_MERCHANT_ID, for today's single-tenant services (Finance, Core, Analytics). Implemented.
-//   3. 'legacy_shopify' - migration-only fallback, only when NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP is explicitly enabled.
-//                         Contract defined below; not wired in this step (no Shopify request is ever made here).
+//   3. 'legacy_shopify' - migration-only fallback, only when NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP is explicitly enabled AND
+//                         NORDLA_MERCHANT_ID is not set. The caller injects a reader of its Shopify shop id (this module never
+//                         builds a Shopify client); the shop is mapped to its tenant through merchant_connectors only.
 //
 // Rules (ADR 0003 section 3): never picks "the first" or "the only" merchant, never creates a merchant, makes no Shopify
-// call, and the only I/O is one Supabase read of the requested merchant. Every failure is a TenantResolutionError
-// with a stable code; messages never contain secrets.
+// call of its own, and its only I/O is Supabase reads (the requested merchant; merchant_connectors in legacy mode). Every
+// failure is a TenantResolutionError with a stable code; messages never contain secrets.
+
+import { createConnectorRepository } from './connectors.js';
+
+export const DEFAULT_LEGACY_LOOKUP_TIMEOUT_MS = 10_000;
 
 export const MERCHANT_ID_ENV = 'NORDLA_MERCHANT_ID';
 export const LEGACY_SHOPIFY_LOOKUP_ENV = 'NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP';
@@ -55,10 +60,9 @@ export function readMerchantIdFromEnv(env = process.env) {
 export const isLegacyShopifyLookupEnabled = (env = process.env) => TRUTHY.test(String(env[LEGACY_SHOPIFY_LOOKUP_ENV] ?? '').trim());
 
 /**
- * Contract of the migration-only legacy source (ADR 0003, source 3). NOT wired in this step.
- * When implemented, it will map a Shopify shop id to its tenant through merchant_connectors
+ * Migration-only legacy source (ADR 0003, source 3): maps a Shopify shop id to its tenant through merchant_connectors
  * (kind = 'shopify', external_id = shop id) - never through merchants.source_id, never by creating a merchant.
- * @typedef {{ findShopId(): Promise<string> }} LegacyShopifyShopSource  the caller's connector, used only to read the shop id
+ * @typedef {{ findShopId(): Promise<string> }} LegacyShopifyShopSource  supplied by the caller, used only to read the shop id
  */
 
 /**
@@ -72,11 +76,14 @@ export const isLegacyShopifyLookupEnabled = (env = process.env) => TRUTHY.test(S
  *   supabase: { select(table: string, params: Record<string, string>): Promise<object[]> },
  *   env?: Record<string, string|undefined>,
  *   session?: unknown,
- * }} options  `session` is reserved for the future multi-tenant source; passing one today is refused.
+ *   legacyShopify?: LegacyShopifyShopSource,
+ *   legacyTimeoutMs?: number,
+ * }} options  `session` is reserved for the future multi-tenant source; passing one today is refused. `legacyShopify` is only
+ *   consulted when the legacy flag is on and NORDLA_MERCHANT_ID is not set.
  * @returns {Promise<ResolvedTenant>}
  * @throws {TenantResolutionError}
  */
-export async function resolveTenant({ supabase, env = process.env, session } = {}) {
+export async function resolveTenant({ supabase, env = process.env, session, legacyShopify, legacyTimeoutMs = DEFAULT_LEGACY_LOOKUP_TIMEOUT_MS } = {}) {
   if (session !== undefined && session !== null) {
     throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_SOURCE_NOT_AVAILABLE, 'Session-based tenant resolution is not available yet.', { source: 'session' });
   }
@@ -84,10 +91,37 @@ export async function resolveTenant({ supabase, env = process.env, session } = {
   const merchantId = readMerchantIdFromEnv(env);
   if (merchantId) return resolveMerchantById({ supabase, merchantId, source: 'env' });
 
-  if (isLegacyShopifyLookupEnabled(env)) {
-    throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_SOURCE_NOT_AVAILABLE, `The legacy Shopify tenant lookup is not available in this version; set ${MERCHANT_ID_ENV}.`, { source: 'legacy_shopify' });
-  }
+  if (isLegacyShopifyLookupEnabled(env)) return resolveLegacyShopify({ supabase, legacyShopify, timeoutMs: legacyTimeoutMs });
   throw new TenantResolutionError(TENANT_ERROR_CODES.MERCHANT_ID_MISSING, `${MERCHANT_ID_ENV} is not set; this service needs an explicit tenant.`, { variable: MERCHANT_ID_ENV });
+}
+
+/** Source 3: shop id (read by the caller, bounded by a timeout) -> merchant_connectors -> merchant. */
+async function resolveLegacyShopify({ supabase, legacyShopify, timeoutMs }) {
+  const source = 'legacy_shopify';
+  if (!legacyShopify || typeof legacyShopify.findShopId !== 'function') {
+    throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_SOURCE_NOT_AVAILABLE, `The legacy Shopify lookup is enabled but no Shopify connection is available; set ${MERCHANT_ID_ENV}.`, { source });
+  }
+  let timer;
+  let shopId;
+  try {
+    shopId = await Promise.race([
+      Promise.resolve().then(() => legacyShopify.findShopId()),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), timeoutMs); }),
+    ]);
+  } catch (e) {
+    throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_LOOKUP_FAILED, 'The Shopify shop could not be identified for the legacy tenant lookup.', { source, cause: e?.name === 'TimeoutError' ? 'TIMEOUT' : (e?.name ?? 'Error') });
+  } finally { clearTimeout(timer); }
+  if (typeof shopId !== 'string' || shopId.trim() === '') {
+    throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_LOOKUP_FAILED, 'The Shopify shop id is missing.', { source });
+  }
+  let owner;
+  try {
+    owner = await createConnectorRepository({ supabase }).findMerchantByExternal('shopify', shopId);
+  } catch (e) {
+    throw new TenantResolutionError(TENANT_ERROR_CODES.TENANT_LOOKUP_FAILED, 'merchant_connectors could not be read.', { source, cause: e?.code ?? e?.name ?? 'Error' });
+  }
+  if (!owner) throw new TenantResolutionError(TENANT_ERROR_CODES.MERCHANT_NOT_FOUND, 'This Shopify shop is not linked to any merchant.', { source, reason: 'SHOP_NOT_LINKED' });
+  return resolveMerchantById({ supabase, merchantId: owner.merchantId, source });
 }
 
 /**

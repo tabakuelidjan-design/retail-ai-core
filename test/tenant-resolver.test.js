@@ -100,9 +100,9 @@ test('no merchant is ever created or modified (only one select, table unchanged,
   assert.equal(rows().length, 1);
 });
 
-test('no Shopify: the module imports nothing from Shopify and never touches the network', () => noNetwork(async (hits) => {
+test('no Shopify: the module imports only ./connectors.js (nothing from Shopify) and never touches the network', () => noNetwork(async (hits) => {
   const src = readFileSync(new URL('../src/tenant/index.js', import.meta.url), 'utf8');
-  assert.equal([...src.matchAll(/^\s*import\s/gm)].length, 0, 'the resolver has no import at all');
+  assert.deepEqual([...src.matchAll(/^\s*import\s.*from\s+'([^']+)'/gm)].map((m) => m[1]), ['./connectors.js'], 'the resolver imports only the connectors layer');
   assert.doesNotMatch(src, /shopify\/client|shopify\/queries|SHOP_QUERY|graphql|fetch\(/);
   const { supabase } = spyDb(A);
   await resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [MERCHANT_ID_ENV]: A.id, [LEGACY_SHOPIFY_LOOKUP_ENV]: 'true' } });

@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createRuntime } from '../runtime.js';
 import { LOGO_DIR, SETTINGS_PATH, loadSettings, saveSettings } from '../settings.js';
 import { createShopifyPriceSource } from '../catalog.js';
@@ -21,10 +22,10 @@ import { HostingConfigError, resolveHosting } from './hosting.js';
 
 const AUDIT_LOG = 'data/local/finance/audit.log';
 
-async function ensureToken(hosting) {
+async function ensureToken(hosting, env = process.env) {
   // Hosted: the token comes from the platform variables only; nothing is read from or written to a .env file.
-  if (hosting.tokenRequired) return process.env.FINANCE_DASHBOARD_TOKEN;
-  if (process.env.FINANCE_DASHBOARD_TOKEN && process.env.FINANCE_DASHBOARD_TOKEN.length >= 24) return process.env.FINANCE_DASHBOARD_TOKEN;
+  if (hosting.tokenRequired) return env.FINANCE_DASHBOARD_TOKEN;
+  if (env.FINANCE_DASHBOARD_TOKEN && env.FINANCE_DASHBOARD_TOKEN.length >= 24) return env.FINANCE_DASHBOARD_TOKEN;
   if (existsSync('.env') && /^FINANCE_DASHBOARD_TOKEN=.{24,}/m.test(await readFile('.env', 'utf8'))) {
     const m = /^FINANCE_DASHBOARD_TOKEN=(.{24,})$/m.exec(await readFile('.env', 'utf8'));
     return m[1].trim();
@@ -35,15 +36,25 @@ async function ensureToken(hosting) {
   return t;
 }
 
-async function main() {
-  const hosting = resolveHosting(); // fails fast (before any network call) when a hosted deployment is misconfigured
-  const token = await ensureToken(hosting);
-  const rt = await createRuntime();
+/**
+ * Start the Finance dashboard. Exported for tests, which inject `runtimeDeps` (a Supabase stand-in, a Shopify client factory);
+ * production runs it with the process environment when this file is executed directly.
+ * The tenant comes from the shared resolver (NORDLA_MERCHANT_ID); Shopify is an optional connector, never contacted at boot.
+ * @returns {Promise<{ server: import('node:http').Server, runtime: object, hosting: object }>} resolves once the port is open
+ */
+export async function startFinanceServer({ env = process.env, runtimeDeps = {}, log = console.log } = {}) {
+  const hosting = resolveHosting(env); // fails fast (before any network call) when a hosted deployment is misconfigured
+  const token = await ensureToken(hosting, env);
+  const rt = await createRuntime({ env, log, ...runtimeDeps });
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
-    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), stockApplier: createShopifyStockApplier(rt.shopify), attachmentStore: createSupabaseAttachmentStore({ url: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
-    syncStatus: () => latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(process.env.SYNC_STALE_AFTER_MINUTES || 60) }),
+    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
+    // Shopify stock applier gated by the connector state: NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE block it explicitly.
+    stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },
+    attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
+    // No sales-source connector at all -> an honest "no source" instead of an unknown sync.
+    syncStatus: async () => ((await rt.hasSalesSource()) ? latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) }) : { available: false, reason: 'NO_SALES_SOURCE' }),
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     settings: {
       load: () => loadSettings(),
@@ -55,12 +66,16 @@ async function main() {
     sessionPersistence: createFileSessionPersistence('data/local/finance/sessions.json'),
   });
   const server = http.createServer(app.handler);
-  server.listen(hosting.port, hosting.host, () => {
-    if (hosting.hosted) console.log(`Finance dashboard (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only.`);
-    else {
-      console.log(`Finance dashboard: http://127.0.0.1:${hosting.port}   (loopback only)`);
-      console.log('Log in with the token stored in .env (FINANCE_DASHBOARD_TOKEN). Nothing is sent externally.');
-    }
-  });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(hosting.port, hosting.host, resolve); });
+  if (hosting.hosted) log(`Finance dashboard (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only.`);
+  else {
+    log(`Finance dashboard: http://127.0.0.1:${hosting.port}   (loopback only)`);
+    log('Log in with the token stored in .env (FINANCE_DASHBOARD_TOKEN). Nothing is sent externally.');
+  }
+  return { server, runtime: rt, hosting };
 }
-main().catch((e) => { console.error(e instanceof HostingConfigError ? `dashboard configuration error: ${e.message}` : `dashboard failed to start: ${e.message}`); process.exitCode = 1; });
+
+// Run only when executed directly (`node src/finance/server/index.js`), not when imported by a test.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startFinanceServer().catch((e) => { console.error(e instanceof HostingConfigError ? `dashboard configuration error: ${e.message}` : `dashboard failed to start: ${e.message}`); process.exitCode = 1; });
+}

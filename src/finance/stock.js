@@ -51,6 +51,8 @@ export function planMovements(doc, { invoice = null } = {}) {
  */
 export function createStockService({ store, merchantId, retail, applier = null, getSettings, now = () => new Date().toISOString(), audit = async () => {} }) {
   const settingsOf = async () => (await getSettings()).stock ?? { mode: 'off', locationId: null };
+  /** Sales-connector state: NOT_CONFIGURED without an applier; the applier's own state() when it has one (e.g. Shopify). */
+  const connectorState = async () => (!applier ? 'NOT_CONFIGURED' : typeof applier.state === 'function' ? applier.state() : 'CONFIGURED');
 
   async function resolveLocation(stockSettings) {
     const locations = (await retail?.listLocations?.()) ?? [];
@@ -88,7 +90,9 @@ export function createStockService({ store, merchantId, retail, applier = null, 
     const cfg = await settingsOf();
     const pending = (await store.listStockMovements({ merchantId, status: 'PENDING' }));
     if (cfg.mode === 'off') return { mode: 'off', applied: 0, pending: pending.length, results: [] };
-    if (!applier) return { mode: cfg.mode, applied: 0, pending: pending.length, results: [], blocked: 'NO_SHOPIFY_CONNECTION' };
+    // No usable sales connector (absent, misconfigured or unreachable): nothing is attempted, the movements stay pending.
+    const connector = await connectorState();
+    if (connector !== 'CONFIGURED') return { mode: cfg.mode, applied: 0, pending: pending.length, results: [], blocked: connector };
     if (cfg.mode === 'live' && !(await applier.hasScope())) return { mode: cfg.mode, applied: 0, pending: pending.length, results: [], blocked: 'SCOPE_MISSING_WRITE_INVENTORY' };
     const results = []; let applied = 0;
     for (const m of pending) {
@@ -147,8 +151,9 @@ export function createStockService({ store, merchantId, retail, applier = null, 
       const counts = Object.fromEntries(MOVEMENT_STATUSES.map((s) => [s, all.filter((m) => m.status === s).length]));
       const locations = ((await retail?.listLocations?.()) ?? []).map((l) => ({ id: l.id, name: l.name }));
       const loc = await resolveLocation(cfg);
-      let scope = 'UNKNOWN'; try { if (applier) scope = (await applier.hasScope()) ? 'OK' : 'MISSING'; } catch { scope = 'UNKNOWN'; }
-      return { mode: cfg.mode, locationId: loc?.id ?? null, locationName: loc?.name ?? null, locations, scope, counts };
+      const connector = await connectorState();
+      let scope = 'UNKNOWN'; try { if (connector === 'CONFIGURED') scope = (await applier.hasScope()) ? 'OK' : 'MISSING'; } catch { scope = 'UNKNOWN'; }
+      return { mode: cfg.mode, locationId: loc?.id ?? null, locationName: loc?.name ?? null, locations, scope, counts, connector };
     },
   };
 }

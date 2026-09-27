@@ -723,10 +723,17 @@ export function createFinanceApp(deps) {
 
   // ---------- product catalogue picker (Retail Core is read; nothing is stored or written here) ----------
   const picker = () => { if (!retail?.searchCatalog) throw new HttpError(503, 'RETAIL_UNAVAILABLE'); return createCatalogPicker({ retail, priceSource: deps.priceSource ?? null }); };
+  // State of the catalogue price source (the sales connector): NOT_CONFIGURED without one; prices are simply left out otherwise.
+  const priceSourceState = async () => {
+    if (!deps.priceSource) return 'NOT_CONFIGURED';
+    if (typeof deps.salesConnector?.state !== 'function') return 'CONFIGURED';
+    try { return await deps.salesConnector.state(); } catch { return 'UNAVAILABLE'; }
+  };
   on('GET', '/api/catalog/search', async (ctx) => {
     const q = sanitizeText(ctx.url.searchParams.get('q'), 80) ?? '';
     if (q.length < 2) return json(ctx.res, 200, { rows: [], message: 'Type at least 2 characters: a product name, variant or SKU.' });
-    json(ctx.res, 200, { rows: await picker().search(q) });
+    const rows = await picker().search(q);
+    json(ctx.res, 200, { rows, priceSource: await priceSourceState() });
   });
   on('POST', '/api/catalog/select', async (ctx) => {
     const { settings } = await servicesFor();
@@ -734,7 +741,7 @@ export function createFinanceApp(deps) {
     if (!id) fields([{ field: 'variantId', code: 'REQUIRED' }]);
     const r = await picker().select(id, { allowedRatesBp: settings.vat.allowedRatesBp });
     if (!r.found) throw new HttpError(404, 'PRODUCT_NOT_FOUND');
-    json(ctx.res, 200, r);
+    json(ctx.res, 200, { ...r, priceSource: await priceSourceState() });
   });
 
   // ---------- Bank & Treasury: READ ONLY. No route here can move money; the bank token never leaves the vault. ----------

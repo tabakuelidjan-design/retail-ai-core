@@ -247,7 +247,7 @@ function accountMenu(seller) {
   wrap.appendChild(h('div', { class: 'acct-menu', role: 'menu' }, logout));
   return wrap;
 }
-/** Shopify synchronisation health (the last sync of the sales data, NOT a report or pack generation). Refreshed on every page draw. */
+/** Sales-source synchronisation health (the last sync of the sales data, NOT a report or pack generation). Refreshed on every page draw. */
 function agoText(iso) {
   if (!iso) return '-';
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -263,10 +263,11 @@ async function refreshSyncPill() {
     const r = await api('GET', '/api/sync-status'); const s = r.sync;
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
-    if (!s || !s.available) { text = tt('Shopify sync unknown'); tone = 'warn'; }
-    else if (s.latestFailed) { text = tt('Shopify sync failed · latest data {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
-    else if (s.stale) { text = tt('Shopify sync out of date · {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }
-    else text = tt('Shopify sync {0}', agoText(s.lastSuccess.finishedAt));
+    if (s && s.reason === 'NO_SALES_SOURCE') { text = tt('No sales source connected'); tone = 'mute'; }
+    else if (!s || !s.available) { text = tt('Sales source sync unknown'); tone = 'warn'; }
+    else if (s.latestFailed) { text = tt('Sales source sync failed · latest data {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
+    else if (s.stale) { text = tt('Sales source out of date · {0}', agoText(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }
+    else text = tt('Sales source synced {0}', agoText(s.lastSuccess.finishedAt));
     label.textContent = text; dot.className = `sync-dot ${tone}`;
   } catch (e) { /* the pill keeps its neutral text */ }
 }
@@ -283,7 +284,7 @@ function layout(active, ...content) {
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Shopify sync unknown'))), langSwitch(), accountMenu(seller)));
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
   setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));

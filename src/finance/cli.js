@@ -12,9 +12,8 @@ import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { addDays } from '../metrics/windows.js';
-import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
-import { SHOP_QUERY } from '../shopify/queries.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
+import { resolveFinanceTenant } from './runtime.js';
 import { buildAccountantPack } from './accountant-pack.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from './company.js';
 import { orderTotalsFromLedger } from './linking.js';
@@ -58,11 +57,10 @@ const readJson = async (p) => JSON.parse(await readFile(p, 'utf8'));
 async function boot() {
   if (!existsSync(CONFIG_PATH)) throw new Error(`${CONFIG_PATH} not found. Run: finance init-config`);
   const local = await readJson(CONFIG_PATH);
-  const shopify = createShopifyClient(loadShopifyConfigFromEnv());
   const supabase = createSupabaseClient(loadSupabaseConfigFromEnv());
-  const { shop } = await shopify.graphql(SHOP_QUERY);
-  const [merchant] = await supabase.select('merchants', { select: 'id', source_system: 'eq.shopify', source_id: `eq.${shop.id}` });
-  if (!merchant) throw new Error('No merchant found - run the sync first.');
+  // Tenant from NORDLA_MERCHANT_ID (shared resolver, ADR 0003): no Shopify needed for purely financial commands.
+  const tenant = await resolveFinanceTenant({ supabase, log: (line) => process.stderr.write(`${line}\n`) });
+  const merchant = { id: tenant.merchantId };
   const retailConfig = mergeConfig(existsSync('data/local/marketing-policy.json') ? await readJson('data/local/marketing-policy.json') : {});
   const timeZone = process.env.MERCHANT_TIMEZONE || 'UTC';
   const store = createSupabaseFinanceStore(supabase, { merchantId: merchant.id });
