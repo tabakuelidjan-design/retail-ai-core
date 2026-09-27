@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { normalizeRefund, normalizeShipping } from '../src/sync/normalize.js';
 import { syncOrders } from '../src/sync/orders.js';
 import { buildLedger } from '../src/metrics/ledger.js';
@@ -119,3 +120,12 @@ test('order sync keeps shipping, refund shipping and the source reference, and i
   assert.equal(supabase._tables.get('orders').length, 1); assert.equal(supabase._tables.get('orders')[0].shipping_discount, 5); assert.equal(supabase._tables.get('orders')[0].shipping_tax, 0.35);
 });
 
+test('null category: exports use the same "Sans catégorie" label as the screen, never an empty or raw null label', () => {
+  const src = readFileSync(new URL('../src/analytics-premium/ui/explorer.js', import.meta.url), 'utf8');
+  assert.equal((src.match(/\?\? t\('ex\.uncategorised'\)/g) ?? []).length >= 5, true);
+  assert.doesNotMatch(src, /\['category', c\.name \?\? ''/);
+  assert.doesNotMatch(src, /row\('category', r\.name \?\? ''/);
+  const fr = readFileSync(new URL('../src/analytics-premium/ui/lang-fr.js', import.meta.url), 'utf8');
+  assert.match(fr, /'ex\.uncategorised': 'Sans catégorie'/);
+  assert.match(fr, /'cmp\.insufficientHistory': 'Données historiques insuffisantes'/);
+});

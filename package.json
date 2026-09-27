@@ -25,7 +25,8 @@
     "finance": "node --env-file=.env src/finance/cli.js",
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
     "finance:demo": "node src/finance/server/demo.js",
-    "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history"
+    "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
+    "analytics-premium": "node src/analytics-premium/server/serve.js"
   },
   "engines": {
     "node": ">=20"

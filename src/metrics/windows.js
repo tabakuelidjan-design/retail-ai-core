@@ -71,6 +71,40 @@ export function buildWeekBuckets(now, timeZone, weeks = 8) {
   return buckets;
 }
 
+/**
+ * `days` consecutive single-local-day buckets ending at today's local midnight (today itself
+ * excluded, same convention as last_30_days), oldest first. For real day-by-day series (e.g. a
+ * revenue sparkline) - never a fabricated or interpolated point, each bucket is a real half-open
+ * [start, end) instant range a caller can pass straight to windowFacts/computeSalesMetrics.
+ */
+export function buildDayBuckets(now, timeZone, days = 30) {
+  const today = localDateString(now, timeZone);
+  const buckets = [];
+  for (let i = days; i >= 1; i -= 1) {
+    const startStr = addDays(today, -i);
+    const endStr = addDays(today, -i + 1);
+    buckets.push({
+      key: startStr, label: startStr, timeZone,
+      localStart: startStr, localEnd: endStr,
+      start: localMidnight(startStr, timeZone), end: localMidnight(endStr, timeZone),
+    });
+  }
+  return buckets;
+}
+
+/**
+ * One bucket per local calendar day of an arbitrary window [localStart, localEnd) (same bucket shape as buildDayBuckets). The Explorer's series, weekly
+ * trends and day-by-day comparison are built from these, so they follow whatever period is asked for instead of a fixed 30 days.
+ */
+export function dayBucketsOfWindow(window) {
+  const out = [];
+  for (let d = window.localStart; d < window.localEnd; d = addDays(d, 1)) {
+    const next = addDays(d, 1);
+    out.push({ key: d, label: d, timeZone: window.timeZone, localStart: d, localEnd: next, start: localMidnight(d, window.timeZone), end: localMidnight(next, window.timeZone) });
+  }
+  return out;
+}
+
 export function inWindow(instant, window) {
   const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
   return t >= window.start.getTime() && t < window.end.getTime();

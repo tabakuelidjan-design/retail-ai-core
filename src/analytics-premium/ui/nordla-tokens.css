@@ -1,0 +1,92 @@
+/* Nordla shared typography tokens - the single source of truth for the two-font system used across
+   every Nordla module (Analytics Premium, Finance, and future modules).
+   KEEP THIS FILE BYTE-IDENTICAL to its copy in the other module(s) until they share one build/repo
+   and can import a single physical file. Do not fork the values per module.
+
+   - Editorial serif (Lora): page titles, hero headlines, large KPI values, major insight
+     headlines, section headings where the design calls for an editorial tone. Never small UI text.
+   - UI sans (Montserrat): navigation, buttons, labels, body text, tables, filters, helper text.
+     Never major editorial headlines. */
+:root {
+  --font-display: 'Lora', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --font-ui: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Shared Nordla chart palette (Nordla Visual System v1 - Chart System). Charts use ONLY these:
+   navy = primary analytical colour, terracotta = accent / emphasis / verified exception,
+   slate = neutral secondary data, soft gray = guides / backgrounds / inactive values.
+   Green/red are NOT chart-palette colours: use them only for a real, verified positive/negative
+   comparison. Never derive good/bad from a single series' first-vs-last point. */
+:root {
+  --chart-navy: #0F2747;
+  --chart-terracotta: #C75A3B;
+  --chart-slate: #64748B;
+  --chart-soft-gray: #E5E7EB;
+  --chart-surface: #FFFFFF;
+  /* Only for a genuine, verified positive / negative comparison or contribution (board: waterfall, deltas). */
+  --chart-positive: #1E9E62;
+  --chart-negative: #D9503F;
+}
+
+/* ---------- Nordla navigation colour system (locked) ----------
+   Each module has a soft, muted menu surface; all modules share ONE structure, icon treatment, active state and
+   terracotta accent. The module identity is declared once, on the root element: <html data-module="finance">.
+   Future modules: reuse the closest family below (no new colours without approval). Page backgrounds are NOT
+   affected - only navigation surfaces (rail / bottom bar) read --nordla-menu-bg. */
+:root {
+  --nordla-menu-analytics: #78879D;
+  --nordla-menu-finance: #526F78;
+  --nordla-menu-core: #5D6D7B;
+  --nordla-menu-approval: #687687;
+  --nordla-menu-decision-ledger: #5F7080;
+  --nordla-menu-governance: #606D7B;
+  --nordla-menu-security: #536B7B;
+  --nordla-menu-growth: #667D79;
+  --nordla-menu-buying: #607783;
+  --nordla-menu-compliance: #68737F;
+  --nordla-menu-after-sales: #6C7884;
+
+  --nordla-menu-icon-bg: #F4F6F8;
+  --nordla-menu-icon-bg-hover: #FFFFFF;
+  --nordla-menu-active: #C75A3B;
+  --nordla-menu-text-active: #FFFFFF;
+  --nordla-menu-text: rgba(255, 255, 255, .78);
+  --nordla-menu-text-secondary: rgba(255, 255, 255, .62);
+  --nordla-menu-active-row: rgba(255, 255, 255, .10);
+  --nordla-menu-mark-bg: rgba(255, 255, 255, .14);
+
+  --nordla-menu-bg: var(--nordla-menu-core);
+}
+/* Central module -> colour mapping (the only place to touch when a module is added). */
+[data-module="analytics"] { --nordla-menu-bg: var(--nordla-menu-analytics); }
+[data-module="finance"] { --nordla-menu-bg: var(--nordla-menu-finance); }
+[data-module="core"] { --nordla-menu-bg: var(--nordla-menu-core); }
+[data-module="approval"] { --nordla-menu-bg: var(--nordla-menu-approval); }
+[data-module="decision-ledger"] { --nordla-menu-bg: var(--nordla-menu-decision-ledger); }
+[data-module="governance"] { --nordla-menu-bg: var(--nordla-menu-governance); }
+[data-module="security"] { --nordla-menu-bg: var(--nordla-menu-security); }
+[data-module="growth"] { --nordla-menu-bg: var(--nordla-menu-growth); }
+[data-module="buying"] { --nordla-menu-bg: var(--nordla-menu-buying); }
+[data-module="compliance"] { --nordla-menu-bg: var(--nordla-menu-compliance); }
+[data-module="after-sales"] { --nordla-menu-bg: var(--nordla-menu-after-sales); }
+
+/* Navigation dimensions (one set for every Nordla module - only the surface colour differs per module). */
+:root {
+  --nordla-nav-width: 84px;
+  --nordla-nav-pad-y: 16px;
+  --nordla-nav-gap: 6px;
+  --nordla-nav-item-h: 54px;
+  --nordla-nav-tile: 32px;
+  --nordla-nav-icon: 22px;
+  --nordla-nav-label: 9px;
+  --nordla-nav-mark: 38px;
+  --nordla-nav-mark-gap: 14px;
+  --nordla-nav-radius: 12px;
+  --nordla-nav-tile-radius: 9px;
+  --nordla-nav-bottom-h: 68px;
+  --nordla-nav-bottom-tile: 30px;
+}
+
+/* One navigation system for every Nordla module: fixed dimensions at every viewport height (no compact mode).
+   When the window is shorter than the rail, the rail scrolls inside itself; nothing is shrunk or hidden. */
+:root { --nordla-nav-item-pad: 4px; --nordla-nav-item-gap: 4px; --nordla-nav-utility-gap: 6px; }
