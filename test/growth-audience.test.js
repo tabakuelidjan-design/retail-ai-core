@@ -292,3 +292,14 @@ test('audience UI: every icon used exists in the official set or the Growth pack
     else { assert.ok(!NI.DEFECTIVE[n], `defective official icon ${n}`); assert.ok(NI.has(n), `unknown official icon ${n}`); }
   }
 });
+
+test('audience v1 rules: 90-day inactivity and 30-customer minimum are documented v1 values, exposed in the payload', async () => {
+  const { AUDIENCE_RULES_V1 } = await import('../src/growth/audience/audience.js');
+  assert.deepEqual(AUDIENCE_RULES_V1, { version: 'v1', inactivityDays: 90, minCustomers: 30, configurable: false });
+  assert.equal(AUDIENCE_RULES_V1.minCustomers, CONFIG.customers.minCustomers);
+  assert.equal(AUDIENCE_RULES_V1.inactivityDays, CONFIG.customers.shortHistoryDays);
+  assert.deepEqual(run(FULL).thresholds.rules, AUDIENCE_RULES_V1);
+  const src = await readFile(new URL('../src/growth/audience/audience.js', import.meta.url), 'utf8');
+  assert.match(src, /GROWTH V1 RULES/);
+  assert.match(src, /NOT universal truths/);
+});

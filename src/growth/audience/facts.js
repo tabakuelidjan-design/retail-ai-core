@@ -9,8 +9,12 @@ import { buildLedger } from '../../metrics/ledger.js';
 import { aggregate } from '../../metrics/sales.js';
 import { addDays, localDateString, localMidnight } from '../../metrics/windows.js';
 import { orderGroup } from '../../customers/facts.js';
+import { isOnlineChannel, isPosChannel } from '../../metrics/channels.js';
 
-/** The page's fixed window: the last 90 complete days (customers.shortHistoryDays, Explorer's last recency cut-off). */
+/**
+ * Growth v1 rule: the page's window and inactivity horizon = the last 90 complete days (customers.shortHistoryDays, Explorer's
+ * last recency cut-off). A v1 value, not a universal one: meant to become merchant configuration (see AUDIENCE_RULES_V1).
+ */
 export const WINDOW_DAYS = 90;
 
 export function audienceWindow(now, timeZone, days = WINDOW_DAYS) {
@@ -27,8 +31,6 @@ export function audienceWindow(now, timeZone, days = WINDOW_DAYS) {
  */
 export function audienceFacts({ data, now, timeZone, config }) {
   const ledger = buildLedger(data, { config });
-  const online = new Set(config.marketing.onlineChannelHandles);
-  const pos = new Set(config.marketing.posChannelHandles);
   const raw = new Map(data.orders.map((o) => [o.id, o]));
   const linesByOrder = new Map();
   for (const l of ledger.lineFacts) (linesByOrder.get(l.orderId) ?? linesByOrder.set(l.orderId, []).get(l.orderId)).push(l);
@@ -46,7 +48,7 @@ export function audienceFacts({ data, now, timeZone, config }) {
       at: o.orderedAt,
       net: aggregate(lines, refundsByOrder.get(o.id) ?? [], config).net_sales_ex_tax,
       multiProduct: new Set(lines.map((l) => l.productId).filter(Boolean)).size >= 2,
-      group: orderGroup(r, { online: online.has(r.channel_handle), pos: pos.has(r.channel_handle) }),
+      group: orderGroup(r, { online: isOnlineChannel(r.channel_handle, config), pos: isPosChannel(r.channel_handle, config) }),
       key: r.customer_key || null,
       idx,
     });

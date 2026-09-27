@@ -18,10 +18,17 @@
 //   - proven new customer: first known order with a recorded index of 1 (orderGroup / classifyCustomerOrders)
 //   - sample gate: customers.minCustomers (30 identified customers) and customers.minOrdersPerGroup (30 per compared group)
 // No score, no prediction, no uplift, no future revenue.
+//
+// GROWTH V1 RULES (owner decision 2026-09-28): the inactivity horizon (90 days) and the minimum sample (30 customers) are the
+// v1 rules of this page, chosen from the existing engine values above. They are NOT universal truths: a store with a long
+// buying cycle (e.g. yearly gifts) or a very small customer base may need other values. They are meant to become merchant
+// configuration later; until then they are fixed, documented here and returned in payload.thresholds.rules.
 
 import { WINDOW_DAYS } from './facts.js';
 
 export const AUDIENCE_VERSION = 'growth-audience.1';
+/** The v1 rules of Audience (see the header): fixed for now, to become configurable per merchant. */
+export const AUDIENCE_RULES_V1 = Object.freeze({ version: 'v1', inactivityDays: WINDOW_DAYS, minCustomers: 30, configurable: false });
 /** Customer segments, mutually exclusive, assigned in this order (first match wins). */
 export const SEGMENTS = ['reactivate', 'loyal', 'newReturned', 'new', 'returning', 'occasional', 'unknown'];
 export const STATUSES = ['priority', 'activate', 'develop', 'watch', 'insufficient'];
@@ -111,7 +118,7 @@ export function buildAudience({ orders, window, historyStart, config, currency }
   const base = {
     version: AUDIENCE_VERSION, currency,
     window: { start: start.toISOString(), end: end.toISOString(), days: window.days, previousComparable: prevCovered, historyDays },
-    thresholds: { windowDays: WINDOW_DAYS, minCustomers: c.minCustomers, minGroup: c.minOrdersPerGroup, repeatOrders: 2, frequentOrders: 3 },
+    thresholds: { windowDays: WINDOW_DAYS, minCustomers: c.minCustomers, minGroup: c.minOrdersPerGroup, repeatOrders: 2, frequentOrders: 3, rules: AUDIENCE_RULES_V1 },
   };
   if (!orders.length || !cur.orders && !orders.some((o) => o.at < start)) {
     return { ...base, mode: 'empty', kpis: null, orderFacts: { current: cur, previous: prev }, segments: [], signals: [], actions: [], coverage: null };
