@@ -40,7 +40,7 @@ export function audiencePayload(data = makeAudienceData(AUDIENCE_FULL)) {
 
 /** Contenu payload from the synthetic catalog fixture. */
 export const CONTENT_SPECS = [
-  { id: 'a', title: 'Baskets', type: 'Chaussures', collection: true, units: 12 },
+  { id: 'a', title: 'Baskets', type: 'Chaussures', collection: true, units: 12, imageSynced: true },
   { id: 'b', title: 'Veste', type: 'Vêtements', image: 'https://cdn.shopify.com/b.jpg', collection: true, units: 5 },
   { id: 'c', title: 'Sac', image: 'https://cdn.shopify.com/c.jpg', alt: 'Sac', collection: true, units: 2 },
   { id: 'd', title: 'Gourde', type: 'Accessoires', image: 'https://cdn.shopify.com/d.jpg', alt: 'Gourde', collection: true, units: 1 },

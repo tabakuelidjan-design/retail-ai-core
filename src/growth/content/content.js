@@ -6,11 +6,19 @@
 // variants: sku; product_collections). Description, customer reviews, several images, SEO title / meta and product attributes
 // are NOT synced: they are reported as NOT_AVAILABLE capabilities, never as problems or as "correct".
 //
-// A check is only run when the merchant's data proves the field is synced (CAPABILITIES): Shopify writes image_url for every
-// product once the image sync ran, but a null can also mean "never synced" - so the image checks run only when at least one of
-// the merchant's products carries an image. Same for collections. An unverifiable check never turns a product "Correct".
+// VERIFIABILITY (owner rule 2026-09-28: an absent value is not a proven absence). A problem is reported only when Nordla holds a
+// proof FOR THAT PRODUCT - never because another product has the field:
+//   - image present (image_url set): its own proof -> "no alt text" can be checked (url and alt are written together by the sync);
+//   - image absent: "Sans image" only with an explicit per-product proof that the image field was synced and the source returned
+//     none (product.image_sync_confirmed === true). Without it the image is NOT VERIFIABLE -> "Données insuffisantes";
+//   - collection: a membership row proves "in a collection"; "Hors collection" needs product.collections_sync_confirmed === true.
+// TRACEABILITY DEBT: today's schema cannot hold that proof. The Core sync writes image_url = null both when Shopify explicitly
+// returns no featuredImage and when the column was never written, and only stores collection memberships that exist (a partial
+// or truncated sync leaves no trace per product). Until the sync records a per-product confirmation (e.g. an image / collection
+// sync timestamp on the product, or a per-run marker in sync_runs), no production product carries these flags and both
+// "absence" checks stay not verifiable. The flags are an input contract only; nothing writes them yet.
 
-export const CONTENT_VERSION = 'growth-content.1';
+export const CONTENT_VERSION = 'growth-content.2';
 /** Checks run by this engine, in display order. `major` problems make a product "Prioritaire" on their own. */
 export const CHECKS = [
   { code: 'noImage', major: true, capability: 'image' },
@@ -45,14 +53,30 @@ export function buildContent({ products, variants, collections, sales, window, c
   const titleCount = new Map();
   for (const p of scope) titleCount.set(normTitle(p.title), (titleCount.get(normTitle(p.title)) ?? 0) + 1);
 
+  const hasImageOf = (p) => !blank(p.image_url);
+  const imageAbsenceProven = (p) => p.image_sync_confirmed === true; // explicit per-product proof (see header), never inferred
+  const collectionAbsenceProven = (p) => p.collections_sync_confirmed === true;
+  // Per product: can each check run? (a value present is its own proof; an absence needs the product's own proof)
+  const runs = (p) => ({
+    noImage: !hasImageOf(p) && imageAbsenceProven(p),
+    noAltText: hasImageOf(p),
+    noType: true, // product_type is part of every catalog sync; an empty value is the source's own value
+    noCollection: !inCollection.has(p.id) && collectionAbsenceProven(p),
+    missingSku: (variantsBy.get(p.id) ?? []).length > 0,
+    duplicateTitle: true,
+  });
+  const verifiable = (p, code) => (code === 'noCollection' ? inCollection.has(p.id) || collectionAbsenceProven(p) : code === 'noImage' ? hasImageOf(p) || imageAbsenceProven(p) : code === 'noAltText' ? hasImageOf(p) || imageAbsenceProven(p) : true);
   const capabilities = {
-    image: products.some((p) => !blank(p.image_url)), // proof that the image field is synced for this merchant
-    type: true, // product_type is part of every catalog sync; an empty value is the source's own value
-    collections: collections.length > 0, // proof that collection memberships are synced
+    image: products.some(hasImageOf), // at least one image is synced for this merchant (banner only - never a proof for another product)
+    imageAbsenceProof: scope.some(imageAbsenceProven),
+    type: true,
+    collections: collections.length > 0,
+    collectionAbsenceProof: scope.some(collectionAbsenceProven),
     sku: variants.length > 0,
     title: true,
   };
-  const checks = CHECKS.map((c) => ({ ...c, available: capabilities[c.capability] }));
+  // A check is "available" (listed, counted in the KPIs) when it can run for at least one analysed product.
+  const checks = CHECKS.map((c) => ({ ...c, available: scope.some((p) => runs(p)[c.code]) }));
   const active = checks.filter((c) => c.available);
 
   const rows = scope.map((p) => {
@@ -67,19 +91,20 @@ export function buildContent({ products, variants, collections, sales, window, c
       missingSku: () => vs.length > 0 && vs.some((v) => blank(v.sku)),
       duplicateTitle: () => !blank(p.title) && (titleCount.get(normTitle(p.title)) ?? 0) > 1,
     };
-    for (const c of active) if (test[c.code]()) found.push(c.code);
+    const can = runs(p);
+    for (const c of CHECKS) if (can[c.code] && test[c.code]()) found.push(c.code);
     const facts = {
       variants: vs.length, variantsWithoutSku: vs.filter((v) => blank(v.sku)).length,
       sameTitle: (titleCount.get(normTitle(p.title)) ?? 1) - 1,
     };
     const major = found.some((code) => CHECKS.find((c) => c.code === code).major);
-    const unverified = checks.filter((c) => !c.available).map((c) => c.code);
+    const unverified = CHECKS.filter((c) => !verifiable(p, c.code)).map((c) => c.code);
     // ---- status: explicit rules, first match wins ----
     let status; let rule;
     if (major) { status = 'priority'; rule = 'MAJOR_PROBLEM'; }
     else if (found.length >= MANY_PROBLEMS) { status = 'priority'; rule = 'MANY_PROBLEMS'; }
     else if (found.length) { status = 'improve'; rule = 'MINOR_PROBLEMS'; }
-    else if (!capabilities.image) { status = 'insufficient'; rule = 'ESSENTIAL_CHECK_UNAVAILABLE'; } // the image cannot be verified
+    else if (!verifiable(p, 'noImage')) { status = 'insufficient'; rule = 'ESSENTIAL_CHECK_UNAVAILABLE'; } // this product's image cannot be verified
     else { status = 'correct'; rule = 'NO_DETECTABLE_PROBLEM'; }
     const s = sales.get(p.id) ?? { units: 0, netSales: 0 };
     return {

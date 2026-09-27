@@ -20,7 +20,7 @@ const COMPLETE = { type: 'Cat', image: 'https://cdn.shopify.com/x.jpg', alt: 'Al
 
 // ---------- mandatory business cases ----------
 test('content case 1: a product without image -> "Sans image" detected, Prioritaire', () => {
-  const p = run([{ id: 'a', ...COMPLETE, image: null, alt: null }]);
+  const p = run([{ id: 'a', ...COMPLETE, image: null, alt: null, imageSynced: true }]);
   assert.deepEqual(row(p, 'a').problems, ['noImage']);
   assert.equal(row(p, 'a').status, 'priority');
   assert.equal(row(p, 'a').rule, 'MAJOR_PROBLEM');
@@ -31,7 +31,7 @@ test('content case 2: an image without alt text -> a distinct problem ("Sans tex
   const p = run([{ id: 'a', ...COMPLETE, alt: null }, { id: 'b', ...COMPLETE, alt: '   ' }]);
   for (const id of ['a', 'b']) { assert.deepEqual(row(p, id).problems, ['noAltText']); assert.equal(row(p, id).status, 'improve'); }
   assert.equal(p.kpis.noAltText, 2);
-  assert.equal(p.kpis.noImage, 0);
+  assert.equal(p.kpis.noImage, null, 'no product carries a proof of absence: not verifiable, not 0');
 });
 
 test('content case 3: no product type (the category Core and Growth already use) -> "Sans catégorie"', () => {
@@ -45,7 +45,7 @@ test('content case 3: no product type (the category Core and Growth already use)
 test(`content case 4: several problems -> higher priority (${MANY_PROBLEMS}+ problems = Prioritaire, deterministic)`, () => {
   const p = run([
     { id: 'two', ...COMPLETE, type: null, alt: null },
-    { id: 'three', ...COMPLETE, type: null, alt: null, collection: false },
+    { id: 'three', ...COMPLETE, type: null, alt: null, collection: false, collectionsSynced: true },
     { id: 'dupA', ...COMPLETE, title: 'Même nom', type: null, alt: null, skus: [null] },
     { id: 'dupB', ...COMPLETE, title: 'même  NOM' },
   ]);
@@ -76,14 +76,70 @@ test('content case 6: fields not available for the merchant -> "Données insuffi
   assert.equal(p.kpis.noImage, null, 'unknown, not 0');
   assert.equal(p.kpis.noAltText, null);
   assert.equal(p.byStatus.find((s) => s.status === 'correct').count, 0);
-  // Collections never synced: the collection check does not run (nobody is flagged "Hors collection").
+  // Another product being in a collection proves nothing for this one: no "Hors collection" without the product's own proof.
   const noCol = run([{ id: 'a', ...COMPLETE, collection: false }]);
   assert.equal(noCol.capabilities.collections, true, 'the reference product has one');
+  assert.deepEqual(row(noCol, 'a').problems, []);
+  assert.ok(row(noCol, 'a').unverified.includes('noCollection'));
   const none = buildContent({ products: [{ id: 'a', title: 'A', product_type: 'T', image_url: 'https://x/y.jpg', image_alt_text: 'a', source_status: 'ACTIVE' }], variants: [], collections: [], sales: new Map(), window: {}, currency: 'EUR' });
   assert.equal(none.capabilities.collections, false);
   assert.deepEqual(none.rows[0].problems, []);
   assert.ok(none.rows[0].unverified.includes('noCollection'));
   assert.deepEqual(none.notAvailable, NOT_AVAILABLE);
+});
+
+// ---------- verifiability: an absent value is not a proven absence (owner rule 2026-09-28) ----------
+test('content verifiability: product A having an image never makes product B without image_url "Sans image"', () => {
+  const p = run([{ id: 'A', ...COMPLETE }, { id: 'B', ...COMPLETE, image: null, alt: null }]);
+  assert.equal(p.capabilities.image, true, 'the merchant does have synced images');
+  assert.deepEqual(row(p, 'B').problems, [], 'no "Sans image" inferred from another product');
+  assert.ok(row(p, 'B').unverified.includes('noImage') && row(p, 'B').unverified.includes('noAltText'));
+  assert.equal(row(p, 'A').status, 'correct');
+});
+
+test('content verifiability: no sync proof -> "Données insuffisantes" (and the KPI stays not verifiable, never 0)', () => {
+  const p = run([{ id: 'B', ...COMPLETE, image: null, alt: null }, { id: 'C', ...COMPLETE, image: null, alt: null, collection: false }]);
+  for (const id of ['B', 'C']) { assert.equal(row(p, id).status, 'insufficient'); assert.equal(row(p, id).rule, 'ESSENTIAL_CHECK_UNAVAILABLE'); }
+  assert.equal(p.kpis.noImage, null);
+  assert.equal(p.checks.find((c) => c.code === 'noImage').available, false);
+  assert.equal(p.checks.find((c) => c.code === 'noCollection').available, false);
+  assert.equal(p.capabilities.imageAbsenceProof, false);
+});
+
+test('content verifiability: explicit per-product proof of absence -> "Sans image" / "Hors collection"', () => {
+  const p = run([
+    { id: 'img', ...COMPLETE, image: null, alt: null, imageSynced: true },
+    { id: 'col', ...COMPLETE, collection: false, collectionsSynced: true },
+    { id: 'other', ...COMPLETE, image: null, alt: null, collection: false },
+  ]);
+  assert.deepEqual(row(p, 'img').problems, ['noImage']);
+  assert.equal(row(p, 'img').status, 'priority');
+  assert.deepEqual(row(p, 'col').problems, ['noCollection']);
+  assert.deepEqual(row(p, 'other').problems, [], 'the proof of one product never applies to another');
+  assert.equal(p.kpis.noImage, 1);
+  assert.equal(p.capabilities.imageAbsenceProof, true);
+  // A flag that is not exactly true is not a proof.
+  const q = buildContent({ products: [{ id: 'x', title: 'X', product_type: 'T', image_url: null, source_status: 'ACTIVE', image_sync_confirmed: 'yes' }], variants: [], collections: [], sales: new Map(), window: {}, currency: 'EUR' });
+  assert.deepEqual(q.rows[0].problems, []);
+  assert.equal(q.rows[0].status, 'insufficient');
+});
+
+test('content verifiability: no regression on the other checks (alt text, category, SKU, duplicate name)', () => {
+  const p = run([
+    { id: 'alt', ...COMPLETE, alt: null },
+    { id: 'type', ...COMPLETE, type: null },
+    { id: 'sku', ...COMPLETE, skus: ['S1', null] },
+    { id: 'd1', ...COMPLETE, title: 'Pareil' }, { id: 'd2', ...COMPLETE, title: 'pareil' },
+    { id: 'noimgType', ...COMPLETE, image: null, alt: null, type: null },
+  ]);
+  assert.deepEqual(row(p, 'alt').problems, ['noAltText']);
+  assert.deepEqual(row(p, 'type').problems, ['noType']);
+  assert.deepEqual(row(p, 'sku').problems, ['missingSku']);
+  assert.equal(row(p, 'sku').facts.variantsWithoutSku, 1);
+  assert.deepEqual(row(p, 'd1').problems, ['duplicateTitle']);
+  assert.deepEqual(row(p, 'noimgType').problems, ['noType'], 'a detectable problem is still reported when the image is not verifiable');
+  assert.equal(row(p, 'noimgType').status, 'improve');
+  for (const id of ['alt', 'type', 'sku', 'd1']) assert.equal(row(p, id).status, 'improve');
 });
 
 async function seedTwo() {
