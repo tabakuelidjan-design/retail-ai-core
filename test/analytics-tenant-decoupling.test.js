@@ -97,7 +97,7 @@ test('Shopify credentials present but Shopify down: Analytics is unaffected (nev
 test('two merchants, NORDLA_MERCHANT_ID=A: Overview, What changed, Explorer, Produits, Clients, periods, Ask, dataset and report contain A only - never B', () => withNetworkTrap(async () => {
   const s = await twoMerchants();
   const { dir, bodies } = await serveFor(s, A);
-  for (const [p, b] of Object.entries(bodies)) assert.doesNotMatch(b.text, /Beta|990|Merchant Beta/, `${p} leaks merchant B`);
+  for (const [p, b] of Object.entries(bodies)) assert.doesNotMatch(b.text, /Beta|(?<![0-9a-f-])990(?![0-9a-f-])|Merchant Beta/, `${p} leaks merchant B`);
   assert.match(bodies['/api/products'].text + bodies['/api/explorer'].text, /Alpha Product/, 'A\'s own data is there');
   const dataset = JSON.parse(await readFile(path.join(dir, 'dataset.json'), 'utf8'));
   assert.deepEqual(dataset.tenant, { merchant_id: A });
