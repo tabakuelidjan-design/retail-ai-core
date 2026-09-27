@@ -4,17 +4,21 @@
 // and writes reports/marketing-facts-<date>.json (gitignored). Files live in data/local/marketing/ (gitignored).
 // --validate  re-reads channel/visit fields from Shopify and compares them with what is stored.
 // --write-flags  persists the marketing data-quality issues as merchant-level data_quality_flags.
+// Tenant (ADR 0003, step 7): NORDLA_MERCHANT_ID through the shared resolver - Shopify never says which merchant this is. The facts
+// come from the data already synced into Nordla (+ the optional imported files); only --validate reads Shopify, through the tenant's
+// VERIFIED shopify connector, and reports NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE explicitly instead of guessing.
 
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { buildWindows } from '../metrics/windows.js';
 import { syncQualityFlags } from '../quality/flags.js';
-import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
-import { SHOP_QUERY } from '../shopify/queries.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
+import { openShopifyForTenant, resolveToolTenant } from '../tenant/tool-context.js';
 import { buildMarketingFacts } from './build.js';
 import { normalizeAds } from './paid.js';
 import { MARKETING_RULE_CODES, toQualityFlags } from './quality.js';
@@ -67,44 +71,46 @@ async function validateAgainstShopify(shopify, supabase, merchantId, range) {
   return compareOrders({ live: nodes, stored, attribution, range });
 }
 
-async function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  const now = new Date();
-  const timeZone = process.env.MERCHANT_TIMEZONE || 'UTC';
+export async function runMarketingReport({ argv = [], env = process.env, supabase: injectedSupabase = null, createClient = null, now = new Date(), outDir = 'reports', log = console.log, coverage = readCoverage } = {}) {
+  const opts = parseArgs(argv);
+  const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
   const policyPath = opts.policy ?? DEFAULTS.policy;
   const config = mergeConfig(existsSync(policyPath) ? JSON.parse(await readFile(policyPath, 'utf8')) : {});
-  const shopify = createShopifyClient(loadShopifyConfigFromEnv());
-  const supabase = createSupabaseClient(loadSupabaseConfigFromEnv());
-
-  const { shop } = await shopify.graphql(SHOP_QUERY);
-  const [merchant] = await supabase.select('merchants', { select: 'id', source_system: 'eq.shopify', source_id: `eq.${shop.id}` });
-  if (!merchant) throw new Error('No merchant found - run the sync first.');
+  const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
+  const tenant = await resolveToolTenant({ env, supabase, tool: 'marketing', log: (l) => log(l), createClient });
+  const merchantId = tenant.merchantId;
 
   const windows = buildWindows(now, timeZone);
-  const data = await loadDataset(supabase, merchant.id, { since: windows.available_window.start });
+  const data = await loadDataset(supabase, merchantId, { since: windows.available_window.start });
   const ledger = buildLedger(data, { config });
 
   const traffic = await optionalImport(opts.traffic ?? DEFAULTS.traffic, normalizeTraffic, 'traffic');
   const ads = await optionalImport(opts.ads ?? DEFAULTS.ads, normalizeAds, 'ads');
   const search = await optionalImport(opts.search ?? DEFAULTS.search, normalizeSearch, 'search');
 
-  const facts = buildMarketingFacts({ ledger, data, traffic, ads, search, now, timeZone, config, merchantId: merchant.id });
+  const facts = buildMarketingFacts({ ledger, data, traffic, ads, search, now, timeZone, config, merchantId });
+  let exitCode = 0;
   if (opts.validate) {
-    facts.validation = await validateAgainstShopify(shopify, supabase, merchant.id, validationRange({ availableStart: windows.available_window.start, coverage: await readCoverage() }));
-    console.log('validation:', JSON.stringify(facts.validation));
-    if (!facts.validation.ok) process.exitCode = 2;
+    const shop = await openShopifyForTenant({ env, supabase, merchantId, createClient });
+    if (shop.state === 'CONFIGURED') {
+      try { facts.validation = await validateAgainstShopify(shop.shopify, supabase, merchantId, validationRange({ availableStart: windows.available_window.start, coverage: await coverage() })); } catch { facts.validation = { ok: false, status: 'UNAVAILABLE' }; }
+    } else facts.validation = { ok: false, status: shop.state, reason: shop.reason };
+    log('validation:', JSON.stringify(facts.validation));
+    if (!facts.validation.ok) exitCode = 2;
   }
   if (opts['write-flags']) {
-    const summary = await syncQualityFlags({ supabase }, { merchantId: merchant.id, detected: toQualityFlags(facts.data_quality.issues, merchant.id), now, evaluatedRules: MARKETING_RULE_CODES });
-    console.log('marketing data-quality flags:', JSON.stringify(summary));
+    const summary = await syncQualityFlags({ supabase }, { merchantId, detected: toQualityFlags(facts.data_quality.issues, merchantId), now, evaluatedRules: MARKETING_RULE_CODES });
+    log('marketing data-quality flags:', JSON.stringify(summary));
   }
-  await mkdir('reports', { recursive: true });
-  const stamp = now.toISOString().slice(0, 10);
-  await writeFile(`reports/marketing-facts-${stamp}.json`, JSON.stringify(facts, null, 2));
-  console.log(`marketing facts written to reports/marketing-facts-${stamp}.json (traffic: ${traffic ? 'imported' : 'absent'}, ads: ${ads ? 'imported' : 'absent'}, search: ${search ? 'imported' : 'absent'})`);
+  await mkdir(outDir, { recursive: true });
+  const file = path.join(outDir, `marketing-facts-${now.toISOString().slice(0, 10)}.json`);
+  await writeFile(file, JSON.stringify({ tenant: { merchant_id: merchantId }, ...facts }, null, 2));
+  log(`marketing facts written to ${file} (traffic: ${traffic ? 'imported' : 'absent'}, ads: ${ads ? 'imported' : 'absent'}, search: ${search ? 'imported' : 'absent'})`);
+  return { merchantId, file, facts, exitCode };
 }
 
-main().catch((err) => {
-  console.error('marketing report failed:', err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runMarketingReport({ argv: process.argv.slice(2) })
+    .then((r) => { process.exitCode = r.exitCode; })
+    .catch((err) => { console.error('marketing report failed:', err?.message ?? err); process.exit(1); });
+}

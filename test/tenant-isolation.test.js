@@ -393,3 +393,21 @@ test('Analytics: a reports directory bound to merchant A never serves merchant B
     assert.equal(await loadBrief(dir), null, 'the latest file is B\'s: it is refused (rebuilt), never shown to A');
   } finally { unbindReportsTenant(dir); await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---------- command-line tools (ADR 0003 step 7): customers / marketing serve the resolved tenant only ----------
+test('CLI tools: customer and marketing facts for merchant A never contain merchant B\'s rows', async () => {
+  const { mkdtemp, readFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { runCustomerFacts } = await import('../src/customers/index.js');
+  const { runMarketingReport } = await import('../src/marketing/index.js');
+  const { supabase, merchantA } = await seedTwoMerchants(createFakeSupabase());
+  const env = { NORDLA_MERCHANT_ID: merchantA };
+  const c = await runCustomerFacts({ env, supabase, outDir: await mkdtemp(path.join(tmpdir(), 'iso-cli-')), log: () => {} });
+  const m = await runMarketingReport({ env, supabase, outDir: await mkdtemp(path.join(tmpdir(), 'iso-cli-')), log: () => {}, coverage: async () => null });
+  for (const file of [c.file, m.file]) {
+    const text = await readFile(file, 'utf8');
+    assert.doesNotMatch(text, /B Product|B line|B-SKU|B-o1/, `${file} leaks merchant B`);
+    assert.equal(JSON.parse(text).tenant.merchant_id, merchantA);
+  }
+});
