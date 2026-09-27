@@ -220,3 +220,130 @@
   .gr-search { max-width: none; flex-basis: 100%; }
   .gr-cp-new { margin-left: 0; flex: 1 1 100%; }
 }
+
+/* ================= Potentiel produits page ================= */
+/* The list toolbar, pill filters, product rows (cards below 1024px), thumbnails and the detail drawer are copies of
+   Analytics > Produits (src/analytics-premium/ui/products.css: same values, .gr-pp-* names), so Growth keeps the Nordla
+   visual language without depending on another module's stylesheet. */
+/* "En baisse / Marge faible / Trop de retours": negative token tint, next to the existing good / warn / info chips. */
+.ex-chip.gr-bad { background: color-mix(in srgb, var(--chart-negative) 10%, #fff); color: var(--chart-negative); }
+/* KPI row: four tiles (4 columns, 2 below 1100px, 1 on phones). */
+.ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.gr-pp-kpis > .ex-kpi, .gr-pp-kpis > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+@media (max-width: 1100px) { .ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-pp-kpis > .ex-kpi:last-child { grid-column: auto; } }
+@media (max-width: 560px) { .ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-pp { grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr); align-items: start; } }
+
+.gr-pp-sub { font-size: 11.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-pp-name { font-weight: 600; color: var(--chart-navy); overflow-wrap: anywhere; line-height: 1.35; }
+.gr-pp-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gr-pp-na { color: var(--chart-slate); font-weight: 500; font-size: 12px; }
+.gr-pp-warn { color: var(--chart-terracotta); }
+.gr-pp-thumb { width: 40px; height: 40px; border-radius: 9px; border: 1px solid var(--border); background: #F4F6F8; object-fit: cover; display: block; flex: 0 0 auto; }
+.gr-pp-thumb.lg { width: 56px; height: 56px; border-radius: 12px; }
+.gr-pp-thumb.sm { width: 32px; height: 32px; border-radius: 8px; }
+span.gr-pp-thumb { display: grid; place-items: center; }
+
+/* toolbar: pills on their own line, then search + selects */
+.gr-pp-toolbar { display: grid; grid-template-columns: minmax(200px, 320px) minmax(0, 1fr); grid-template-areas: 'filters filters' 'search selects'; gap: 12px 14px; align-items: center; margin-bottom: 10px; }
+.gr-pp-search { grid-area: search; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; background: #F7F8FA; border: 1px solid #E5E7EB; border-radius: 10px; min-width: 0; }
+.gr-pp-search:focus-within { border-color: var(--chart-slate); background: #fff; }
+.gr-pp-search-input { border: 0; outline: 0; background: transparent; font: 500 13px var(--font-ui); color: var(--chart-navy); flex: 1; min-width: 0; height: 100%; }
+.gr-pp-search-input::placeholder { color: #8A94A3; }
+.gr-pp-selects { grid-area: selects; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.gr-pp-selects .ex-select { background: #F7F8FA; border-color: #E5E7EB; max-width: 220px; height: 38px; font-size: 12.5px; }
+.gr-pp-filters { grid-area: filters; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.gr-pp-filter { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid #E5E7EB; background: #fff; border-radius: 999px; font: 500 12.5px var(--font-ui); color: var(--chart-slate); cursor: pointer; white-space: nowrap; }
+.gr-pp-filter:hover { color: var(--chart-navy); }
+.gr-pp-filter.on { border-color: var(--chart-terracotta); color: var(--chart-navy); font-weight: 600; box-shadow: inset 0 0 0 1px var(--chart-terracotta); }
+.gr-pp-filter-n { font-size: 11px; font-weight: 600; color: var(--chart-slate); background: #F4F6F8; border-radius: 999px; padding: 0 6px; line-height: 1.6; }
+
+/* list: header + one grid row per product */
+.gr-pp-table { display: flex; flex-direction: column; }
+.gr-pp-thead, .gr-pp-row { display: grid; grid-template-columns: minmax(170px, 2.2fr) minmax(64px, .7fr) minmax(66px, .7fr) minmax(104px, .9fr) minmax(48px, .5fr) minmax(84px, .7fr) minmax(150px, 1.5fr) 28px; gap: 10px 12px; align-items: center; }
+.gr-pp-thead { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--chart-slate); line-height: 1.3; }
+.gr-pp-thead .num { text-align: right; }
+.gr-pp-row { width: 100%; padding: 10px; border: 0; border-bottom: 1px solid #eef0f3; background: transparent; text-align: left; font: 500 13px var(--font-ui); color: var(--chart-navy); cursor: pointer; }
+.gr-pp-row:last-child { border-bottom: 0; }
+.gr-pp-row:hover { background: #F7F8FA; }
+.gr-pp-row.sel { background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); box-shadow: inset 3px 0 0 var(--chart-terracotta); }
+.gr-pp-row:focus-visible, .gr-pp-filter:focus-visible, .gr-pp-item:focus-visible, .gr-pp-close:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 1px; }
+.gr-pp-c { min-width: 0; }
+.gr-pp-c-name { display: flex; align-items: center; gap: 12px; }
+.gr-pp-c-num, .gr-pp-c-evo { text-align: right; font-variant-numeric: tabular-nums; }
+.gr-pp-c-num .gr-pp-name-wrap { align-items: flex-end; }
+.gr-pp-c-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.gr-pp-signal { font-size: 11.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-pp-c-more { display: flex; justify-content: flex-end; }
+.gr-pp-dots { border: 1px solid var(--border); background: #fff; color: var(--chart-slate); border-radius: 8px; width: 28px; height: 24px; display: inline-grid; place-items: center; }
+.gr-pp-row:hover .gr-pp-dots { color: var(--chart-navy); }
+.gr-pp-evo { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.gr-pp-evo.up { color: var(--chart-positive); }
+.gr-pp-evo.down { color: var(--chart-negative); }
+.gr-pp-evo.none { color: var(--chart-slate); font-weight: 500; }
+.gr-pp-empty { font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); padding: 10px 0; }
+.gr-pp-empty ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* status chart: Explorer's bars with a label column wide enough for the longest status chip */
+.ex-conc-row.wide.gr-pp-status-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 24px; }
+.gr-pp-status-row .ex-chip { white-space: nowrap; }
+.gr-pp-status-row .gr-status-val { align-items: flex-end; }
+
+/* right column: product lists (push / protect) */
+.gr-pp-items { display: flex; flex-direction: column; }
+.gr-pp-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 6px; margin: 0 -6px; border: 0; border-bottom: 1px solid #eef0f3; border-radius: 8px; background: transparent; text-align: left; font: 500 12.5px var(--font-ui); color: var(--chart-navy); cursor: pointer; }
+.gr-pp-item:last-child { border-bottom: 0; }
+.gr-pp-item:hover { background: #F7F8FA; }
+.gr-pp-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gr-pp-item-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* detail drawer (Analytics > Produits' drawer) */
+body.gr-pp-lock { overflow: hidden; }
+.gr-pp-drawer-wrap { position: fixed; inset: 0; z-index: 40; }
+.gr-pp-backdrop { position: absolute; inset: 0; background: rgba(15, 39, 71, .28); }
+.gr-pp-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(500px, 100%); background: #fff; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.gr-pp-drawer-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.gr-pp-drawer-id { flex: 1; min-width: 0; }
+.gr-pp-drawer-id h2 { font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.25; color: var(--chart-navy); margin: 0; overflow-wrap: anywhere; }
+.gr-pp-drawer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; }
+.gr-pp-drawer-meta .ex-chip { white-space: normal; }
+.gr-pp-close { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #E5E7EB; background: #F7F8FA; color: var(--chart-navy); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; align-self: flex-start; font-size: 20px; line-height: 1; }
+.gr-pp-drawer-body { flex: 1; overflow-y: auto; padding: 4px 20px 28px; overscroll-behavior: contain; }
+.gr-pp-sec { padding: 16px 0; border-bottom: 1px solid #eef0f3; }
+.gr-pp-sec:last-child { border-bottom: 0; }
+.gr-pp-sec h3 { font-size: 14px; font-weight: 650; color: var(--chart-navy); margin: 0 0 10px; }
+.gr-pp-why { font-size: 13px; line-height: 1.55; color: var(--chart-navy); margin: 0 0 10px; }
+.gr-pp-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-pp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gr-pp-stat { display: flex; flex-direction: column; gap: 4px; background: #F7F8FA; border: 1px solid #E5E7EB; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.gr-pp-stat-label { font-size: 11.5px; color: var(--chart-slate); }
+.gr-pp-stat-value { font-size: 16px; color: var(--chart-navy); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gr-pp-stat-note { font-size: 11.5px; line-height: 1.4; color: var(--chart-slate); }
+.gr-pp-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.gr-pp-action h3 { margin-bottom: 2px; }
+.gr-pp-action-text { font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); margin: 0; }
+.gr-pp-action .gr-action { margin-left: 0; }
+
+@media (max-width: 900px) { .gr-pp-drawer-wrap { z-index: 60; } }
+@media (max-width: 1023px) {
+  .gr-pp-thead { display: none; }
+  .gr-pp-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; padding: 14px 12px; border: 1px solid #eef0f3; border-radius: 12px; margin-bottom: 8px; }
+  .gr-pp-row:last-child { border-bottom: 1px solid #eef0f3; }
+  .gr-pp-c-name, .gr-pp-c-status { grid-column: 1 / -1; }
+  .gr-pp-c-status { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .gr-pp-c-more { display: none; }
+  .gr-pp-c-num, .gr-pp-c-evo { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+  .gr-pp-c-num .gr-pp-name-wrap { align-items: flex-start; }
+  .gr-pp-c-num::before, .gr-pp-c-evo::before { content: attr(data-k); font-size: 11px; font-weight: 500; color: var(--chart-slate); }
+}
+@media (max-width: 560px) {
+  .gr-pp-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-pp-toolbar { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'filters' 'search' 'selects'; }
+  .gr-pp-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
+  .gr-pp-filters::-webkit-scrollbar { display: none; }
+  .gr-pp-selects { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-pp-selects .ex-select { max-width: none; width: 100%; min-width: 0; }
+  .gr-pp-drawer { width: 100%; border-left: 0; }
+  .gr-pp-drawer-head { padding: 14px 16px; }
+  .gr-pp-drawer-body { padding: 4px 16px 24px; }
+}

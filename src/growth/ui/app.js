@@ -128,7 +128,10 @@ const GROWTH_NAV = [
   { key: 'overview', icon: 'overview', href: '#/', mobile: true },
   { key: 'opportunities', icon: 'opportunities', href: '#/opportunities', mobile: true },
   { key: 'campaigns', icon: 'campaigns', href: '#/campaigns', mobile: true },
-  { key: 'content', icon: 'content', mobile: true },
+  // Potentiel produits: official "produits" icon until a dedicated Growth pack icon exists. It takes the 4th mobile slot,
+  // previously held by the not-yet-built Contenu entry (still in the desktop rail).
+  { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
+  { key: 'content', icon: 'content' },
   { key: 'storeGrowth', icon: 'storeGrowth' },
   { key: 'audience', icon: 'audience' },
   { key: 'experiments', icon: 'experiments' },
@@ -164,7 +167,10 @@ function topbar(d) {
     h('div', { class: 'topbar-title' }, t('gr.brand')),
     h('div', { class: 'topbar-right' },
       d && d.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t('gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
-      h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed'))),
+      // A page that declares its own analysis window (d.window: Potentiel produits = complete weeks) shows it; the others keep the 30 days.
+      d && d.window && d.window.weeks
+        ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', d.window.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', d.window.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
+        : h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed'))),
       langSwitch()));
 }
 
@@ -359,13 +365,14 @@ function experimentsCard(d) {
 }
 
 // ---------- pages + router ----------
-// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes. Each page's payload is fetched once
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Potentiel produits. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; const loadFailed = {};
+let data = null; let oppData = null; let campData = null; let potData = null; const loadFailed = {};
 const PAGES = {
   overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
   opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
   campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
+  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 

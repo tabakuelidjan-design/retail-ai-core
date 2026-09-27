@@ -26,6 +26,7 @@ const STATIC = {
   '/app.js': [UI, 'app.js', JS],
   '/opportunities.js': [UI, 'opportunities.js', JS],
   '/campaigns.js': [UI, 'campaigns.js', JS],
+  '/potential.js': [UI, 'potential.js', JS],
   '/growth.css': [UI, 'growth.css', CSS],
   '/lang-fr.js': [UI, 'lang-fr.js', JS],
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
@@ -38,7 +39,7 @@ const STATIC = {
 // Same-origin only; images/fonts/scripts/styles are all served by this server. Inline style *attributes* are
 // never used by the UI (styles are set through the CSSOM), so no 'unsafe-inline' is needed.
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: https://cdn.shopify.com; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
 };
@@ -49,7 +50,9 @@ const GROWTH_ASSETS = new URL('../ui/assets/', import.meta.url);
 const GROWTH_ASSET = /^\/growth-assets\/(icons|channels)\/([a-z0-9-]+\.(svg|png|webp))$/;
 const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 
-export function createGrowthApp({ now = () => new Date() } = {}) {
+// productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
+// (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
+export function createGrowthApp({ now = () => new Date(), productPotential = null } = {}) {
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
@@ -67,6 +70,10 @@ export function createGrowthApp({ now = () => new Date() } = {}) {
       if (url.pathname === '/api/growth/overview') return json(res, 200, buildDemoOverview(now()));
       if (url.pathname === '/api/growth/opportunities') return json(res, 200, buildDemoOpportunities(now()));
       if (url.pathname === '/api/growth/campaigns') return json(res, 200, buildDemoCampaigns(now()));
+      if (url.pathname === '/api/growth/products') {
+        if (!productPotential) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
+        try { return json(res, 200, await productPotential()); } catch (e) { console.error('growth products failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+      }
       return json(res, 404, { error: { code: 'NOT_FOUND' } });
     } catch (e) {
       return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });

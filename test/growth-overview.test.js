@@ -62,10 +62,10 @@ test('growth UI: no demonstration value lives in the UI - the data source can be
   for (const x of [...d.insights, ...d.attention, ...d.opportunities]) assert.equal(x.icon, undefined, 'the data source never names icons');
 });
 
-test('growth UI: sidebar is Growth\'s own navigation (7 Growth pages + Nordla AI and Settings), no other Nordla module', async () => {
+test('growth UI: sidebar is Growth\'s own navigation (8 Growth pages + Nordla AI and Settings), no other Nordla module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'campaigns', 'content', 'storeGrowth', 'audience', 'experiments']);
+  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'campaigns', 'potential', 'content', 'storeGrowth', 'audience', 'experiments']);
   assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['ai', 'settings']);
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
