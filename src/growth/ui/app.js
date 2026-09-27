@@ -128,17 +128,17 @@ const GROWTH_NAV = [
   { key: 'overview', icon: 'overview', href: '#/', mobile: true },
   { key: 'opportunities', icon: 'opportunities', href: '#/opportunities', mobile: true },
   { key: 'campaigns', icon: 'campaigns', href: '#/campaigns', mobile: true },
-  // Potentiel produits: official "produits" icon until a dedicated Growth pack icon exists. It takes the 4th mobile slot,
-  // previously held by the not-yet-built Contenu entry (still in the desktop rail).
+  // Produits Potentiels: official "produits" icon until a dedicated Growth pack icon exists.
   { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
-  { key: 'content', icon: 'content' },
+  { key: 'content', icon: 'content', href: '#/content', mobile: true },
   { key: 'storeGrowth', icon: 'storeGrowth' },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
   { key: 'experiments', icon: 'experiments' },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
-  { key: 'ai', parle: true, mobile: true },
+  // Nordla AI (not built yet, disabled) stays in the desktop rail; the mobile bar keeps its 6 slots for the built pages.
+  { key: 'ai', parle: true },
   { key: 'settings', icon: 'settings' },
 ];
 function navItem(n, active) {
@@ -367,15 +367,16 @@ function experimentsCard(d) {
 }
 
 // ---------- pages + router ----------
-// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience. Each page's payload is fetched once
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; const loadFailed = {};
+let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; const loadFailed = {};
 const PAGES = {
   overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
   opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
   campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
+  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 

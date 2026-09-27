@@ -100,7 +100,7 @@
 .nav-item.gr-ai.inert .ico { opacity: 1; }
 /* Secondary zone (Nordla AI, Settings) at the bottom of the rail; in the mobile bottom bar it takes one slot of five. */
 @media (min-width: 901px) { .sidebar .nav.gr-nav-foot { margin-top: auto; } }
-@media (max-width: 900px) { .nav-item.gr-desktop-only { display: none; } .sidebar .nav.gr-nav-foot { flex: 0 0 20%; } }
+@media (max-width: 900px) { .nav-item.gr-desktop-only { display: none; } .sidebar .nav.gr-nav-foot { display: none; } }
 
 .gr-demo { white-space: nowrap; }
 /* Analytics' mobile topbar flattens .topbar-right (display: contents) and orders its children: keep the demo flag after the title. */
@@ -410,4 +410,49 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-au-prio-table { min-width: 0; }
   .gr-au-prio-table th:nth-child(3), .gr-au-prio-table td:nth-child(3), .gr-au-prio-table th:nth-child(5), .gr-au-prio-table td:nth-child(5) { display: none; }
   .gr-au-prio-table th:nth-child(1) { width: auto; } .gr-au-prio-table th:nth-child(2) { width: 56px; } .gr-au-prio-table th:nth-child(4) { width: 112px; }
+}
+
+/* ================= Contenu page ================= */
+/* KPI tiles: 2 per row on phones (the check tiles are short), the first one full width. */
+@media (max-width: 560px) { .ex-kpi-row.gr-kpi-row.gr-ct-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-ct-kpis > .ex-kpi:first-child { grid-column: 1 / -1; } .gr-ct-kpis > .ex-kpi:last-child { grid-column: auto; } .gr-ct-kpis .ex-kpi { padding: 14px 12px; } }
+.gr-ct-top { margin-bottom: 16px; }
+.gr-ct-top > .ex-card { display: flex; flex-direction: column; }
+.gr-ct-prow { grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) 40px; }
+.gr-ct-prow strong { text-align: right; font-size: 13px; color: var(--chart-navy); }
+.gr-ct-clear { margin-bottom: 16px; }
+.gr-ct-clear p { margin: 4px 0 0; }
+/* Toolbar: search + three selects (status, problem, category). */
+.gr-ct-toolbar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 10px; }
+.gr-ct-toolbar .gr-pp-search { flex: 1 1 240px; max-width: 360px; }
+.gr-ct-selects { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.gr-ct-selects .ex-select { background: #F7F8FA; border-color: #E5E7EB; height: 38px; font-size: 12.5px; max-width: 220px; }
+/* List: Produits Potentiels' rows with the Contenu columns. */
+.gr-pp-thead.gr-ct-thead, .gr-pp-row.gr-ct-row { grid-template-columns: minmax(180px, 2fr) minmax(90px, .85fr) minmax(170px, 1.8fr) minmax(104px, .8fr) minmax(64px, .5fr) minmax(184px, 1fr) 28px; }
+.gr-ct-cat { font-size: 12.5px; overflow-wrap: anywhere; line-height: 1.35; }
+.gr-ct-c-problems { display: flex; flex-wrap: wrap; gap: 4px; }
+.gr-ct-c-problems .ex-chip, .gr-ct-c-status .ex-chip { white-space: nowrap; }
+.gr-ct-act { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 12px; white-space: nowrap; border-radius: 8px; }
+.gr-ct-chev { font-size: 16px; line-height: 1; }
+/* Detail panel: one tinted box per detected problem, numbered recommendations. */
+.gr-ct-issues { display: flex; flex-direction: column; gap: 8px; }
+.gr-ct-issue { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.45; color: var(--chart-navy); background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); border: 1px solid color-mix(in srgb, var(--chart-terracotta) 25%, #fff); }
+.gr-ct-issue.major { background: color-mix(in srgb, var(--chart-negative) 7%, #fff); border-color: color-mix(in srgb, var(--chart-negative) 28%, #fff); }
+.gr-ct-issue strong { font-size: 13px; }
+.gr-ct-reco { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--chart-navy); }
+.gr-ct-reco li { line-height: 1.45; }
+.gr-ct-reco li > span { display: block; margin-top: 2px; }
+@media (max-width: 1023px) {
+  .gr-pp-row.gr-ct-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-ct-row .gr-ct-c-problems, .gr-ct-row .gr-ct-c-act { grid-column: 1 / -1; }
+  .gr-ct-row .gr-ct-c-act { display: none; }
+  .gr-ct-row .gr-ct-cat { display: flex; flex-direction: column; gap: 2px; }
+  .gr-ct-row .gr-ct-cat::before { content: attr(data-k); font-size: 11px; font-weight: 500; color: var(--chart-slate); }
+  .gr-ct-row .gr-pp-c-num { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+}
+@media (max-width: 560px) {
+  .gr-ct-toolbar .gr-pp-search { max-width: none; flex-basis: 100%; }
+  .gr-ct-selects { margin-left: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; }
+  .gr-ct-selects .ex-select { max-width: none; width: 100%; min-width: 0; }
+  .gr-ct-selects .ex-select:last-child { grid-column: 1 / -1; }
+  .gr-ct-prow { grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 36px; }
 }
