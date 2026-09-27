@@ -5,6 +5,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { servesTenant } from './tenant.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 
@@ -17,6 +18,7 @@ export async function loadExplorer(reportsDir, given = null) {
     const dated = entries.map((f) => ({ f, m: f.match(REPORT_NAME) })).filter((x) => x.m).sort((a, b) => (a.m[1] < b.m[1] ? 1 : -1));
     if (!dated.length) return null;
     report = JSON.parse(await readFile(path.join(reportsDir, dated[0].f), 'utf8'));
+    if (!servesTenant(reportsDir, report)) return null; // a file of another merchant (or unstamped) is never served
   }
   const e = report.explorer?.last_30_days;
   if (!e) return { generatedAt: report.generated_at, currency: report.currency ?? 'EUR', period: { key: 'last_30_days' }, available: false };

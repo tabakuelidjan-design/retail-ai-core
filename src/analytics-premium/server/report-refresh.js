@@ -11,9 +11,10 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 /** Last report generation attempt (a report is generated FROM the synced data; it is not a Shopify sync). */
 export const reportRefreshState = { lastAttemptAt: null, lastSuccessAt: null, lastStatus: null };
 
-export function runReportOnce({ spawnFn = spawn, cwd = ROOT, log = console.log } = {}) {
+// The child inherits the server's environment, so it builds the report for the SAME tenant (NORDLA_MERCHANT_ID) the server serves.
+export function runReportOnce({ spawnFn = spawn, cwd = ROOT, log = console.log, env = process.env } = {}) {
   return new Promise((resolve) => {
-    const child = spawnFn(process.execPath, ['src/report/index.js', 'report'], { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnFn(process.execPath, ['src/report/index.js', 'report'], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let err = '';
     reportRefreshState.lastAttemptAt = new Date().toISOString();
     child.stderr?.on('data', (d) => { err = (err + d).slice(-2000); });

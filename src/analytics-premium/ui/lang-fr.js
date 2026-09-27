@@ -435,6 +435,7 @@ window.NORDLA_DICTS.fr = {
   'topbar.syncFailed': 'Synchro Shopify en échec · dernières données {0}',
   'topbar.syncStale': 'Synchro Shopify ancienne · {0}',
   'topbar.syncUnknown': 'Synchro Shopify inconnue',
+  'topbar.noSalesSource': 'Aucune source de ventes connectée',
   'ask.title': 'Parle à Nordla',
   'ask.placeholder': 'Posez une question sur vos chiffres…',
   'ask.send': 'Demander',

@@ -10,6 +10,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { servesTenant } from './tenant.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 export const CUSTOMER_ID = /^[A-F0-9]{4,12}$/;
@@ -19,7 +20,8 @@ async function latestReport(reportsDir) {
   const entries = await readdir(reportsDir).catch(() => []);
   const dated = entries.map((f) => ({ f, m: f.match(REPORT_NAME) })).filter((x) => x.m).sort((a, b) => (a.m[1] < b.m[1] ? 1 : -1));
   if (!dated.length) return null;
-  return JSON.parse(await readFile(path.join(reportsDir, dated[0].f), 'utf8'));
+  const report = JSON.parse(await readFile(path.join(reportsDir, dated[0].f), 'utf8'));
+  return servesTenant(reportsDir, report) ? report : null; // a file of another merchant (or unstamped) is never served
 }
 
 export async function loadCustomers(reportsDir, given = null) {

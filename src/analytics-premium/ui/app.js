@@ -172,7 +172,8 @@ async function refreshSyncPill() {
     const s = (await r.json()).sync;
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
-    if (!s || !s.available) { text = t('topbar.syncUnknown'); tone = 'warn'; }
+    if (s && s.reason === 'NO_SALES_SOURCE') { text = t('topbar.noSalesSource'); tone = 'mute'; } // this merchant has no sales connector: neutral, not a failure
+    else if (!s || !s.available) { text = t('topbar.syncUnknown'); tone = 'warn'; }
     else if (s.latestFailed) { text = t('topbar.syncFailed', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
     else if (s.stale) { text = t('topbar.syncStale', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }
     else text = t('topbar.shopifySync', fmtAgo(s.lastSuccess.finishedAt));

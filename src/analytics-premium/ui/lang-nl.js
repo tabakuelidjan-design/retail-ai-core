@@ -435,6 +435,7 @@ window.NORDLA_DICTS.nl = {
   'topbar.syncFailed': 'Shopify-synchronisatie mislukt · laatste gegevens {0}',
   'topbar.syncStale': 'Shopify-synchronisatie verouderd · {0}',
   'topbar.syncUnknown': 'Shopify-synchronisatie onbekend',
+  'topbar.noSalesSource': 'Geen verkoopbron gekoppeld',
   'ask.title': 'Praat met Nordla',
   'ask.placeholder': 'Stel een vraag over uw cijfers…',
   'ask.send': 'Vragen',

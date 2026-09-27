@@ -375,3 +375,21 @@ test('Core sync: the guarded catalog sync for merchant A only adds A rows and le
   assert.ok((supabase._tables.get('products') ?? []).some((r) => r.merchant_id === merchantA && r.title === 'Fixture Widget'));
   await assert.rejects(guardSyncWrites(supabase, { merchantId: merchantA, connectorId: 'conn-a', externalId: 'x' }).update('products', { merchant_id: `eq.${merchantB}` }, { title: 'hijack' }), TenantWriteViolation);
 });
+
+// ---------- Analytics report files (ADR 0003 step 6): a directory bound to A never serves B's file ----------
+test('Analytics: a reports directory bound to merchant A never serves merchant B\'s report, even when B\'s report is newer', async () => {
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = await import('node:path');
+  const { bindReportsTenant, unbindReportsTenant } = await import('../src/analytics-premium/server/tenant.js');
+  const { loadBrief } = await import('../src/analytics-premium/server/brief.js');
+  const { merchantA, merchantB } = await seedTwoMerchants(createFakeSupabase());
+  const dir = await mkdtemp(path.join(tmpdir(), 'iso-reports-'));
+  const report = (merchantId, name) => JSON.stringify({ tenant: { merchant_id: merchantId }, generated_at: '2026-09-27T08:00:00Z', merchant_timezone: 'UTC', currency: 'EUR', sales: {}, marker: name });
+  await writeFile(path.join(dir, 'report-2026-09-26.json'), report(merchantA, 'A-report'));
+  await writeFile(path.join(dir, 'report-2026-09-27.json'), report(merchantB, 'B-report')); // newer, but B's
+  bindReportsTenant(dir, merchantA);
+  try {
+    assert.equal(await loadBrief(dir), null, 'the latest file is B\'s: it is refused (rebuilt), never shown to A');
+  } finally { unbindReportsTenant(dir); await rm(dir, { recursive: true, force: true }); }
+});

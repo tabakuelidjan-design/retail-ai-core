@@ -10,6 +10,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { servesTenant } from './tenant.js';
 import { buildLedger } from '../../metrics/ledger.js';
 import { mergeConfig } from '../../metrics/config.js';
 import { addDays, buildWindows, dayBucketsOfWindow, localDateString, localMidnight, previousEquivalentWindow } from '../../metrics/windows.js';
@@ -60,20 +61,22 @@ export function resolvePeriod({ period, from, to, days: nDays } = {}, { now = ne
   return { ok: true, key, localStart, localEnd, days, includesToday: localEnd > today, timeZone };
 }
 
-const cache = { mtime: null, snapshot: null, ledger: null, historyStart: null, results: new Map() };
+const cache = { file: null, mtime: null, snapshot: null, ledger: null, historyStart: null, results: new Map() };
 const RESULT_CACHE_MAX = 12;
 
 async function loadSnapshot(reportsDir) {
   reportsDir = reportsDir instanceof URL ? fileURLToPath(reportsDir) : reportsDir;
   const file = path.join(reportsDir, 'dataset.json');
   let st; try { st = await stat(file); } catch { return null; }
-  if (cache.mtime === st.mtimeMs && cache.snapshot) return cache;
+  // Cached per file AND re-checked against the bound tenant on every read (the cache never outlives a tenant change).
+  if (cache.file === file && cache.mtime === st.mtimeMs && cache.snapshot) return servesTenant(reportsDir, cache.snapshot) ? cache : null;
   let snapshot; try { snapshot = JSON.parse(await readFile(file, 'utf8')); } catch { return null; }
   if (!snapshot?.data?.orders) return null;
+  if (!servesTenant(reportsDir, snapshot)) return null; // a file of another merchant (or unstamped) is never served
   const config = mergeConfig();
   const ledger = buildLedger(snapshot.data, { config });
   const firstOrder = snapshot.data.firstOrderAt ?? (ledger.orders.length ? new Date(Math.min(...ledger.orders.map((o) => o.orderedAt))).toISOString() : null);
-  Object.assign(cache, { mtime: st.mtimeMs, snapshot, ledger, config, historyStart: firstOrder ? localDateString(new Date(firstOrder), snapshot.time_zone ?? 'UTC') : null, results: new Map() });
+  Object.assign(cache, { file, mtime: st.mtimeMs, snapshot, ledger, config, historyStart: firstOrder ? localDateString(new Date(firstOrder), snapshot.time_zone ?? 'UTC') : null, results: new Map() });
   return cache;
 }
 

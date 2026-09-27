@@ -20,6 +20,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { servesTenant } from './tenant.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 
@@ -39,6 +40,7 @@ export async function loadWhatChanged(reportsDir) {
   const file = await latestReportPath(reportsDir);
   if (!file) return null;
   const report = JSON.parse(await readFile(file, 'utf8'));
+  if (!servesTenant(reportsDir, report)) return null; // a file of another merchant (or unstamped) is never served
   const s = report.sales?.last_30_days;
   const currency = report.currency ?? 'EUR';
   if (!s) return { generatedAt: report.generated_at, currency, comparisonAvailable: false, insight: null, watch: [], otherChanges: [] };
