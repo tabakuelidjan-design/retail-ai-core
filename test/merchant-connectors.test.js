@@ -14,7 +14,8 @@ const M1 = { id: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', name: 'Synthetic Mercha
 const M2 = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchant B', vertical: 'bookstore', source_system: 'shopify', source_id: 'gid://shopify/Shop/SYN-B', source_domain: 'syn-b.myshopify.example' };
 const M3 = { id: '5c4b3a29-1807-46f5-a4b3-c2d1e0f9a8b7', name: 'Synthetic Merchant C (no e-commerce)', vertical: 'services', source_system: 'manual', source_id: 'nordla:SYN-C', source_domain: null };
 const SHOP_A = 'gid://shopify/Shop/SYN-A'; const SHOP_A2 = 'gid://shopify/Shop/SYN-A2';
-const MIGRATION = readFileSync(new URL('../supabase/migrations/20260927100000_merchant_connectors.sql', import.meta.url), 'utf8');
+// Line endings normalised first: a Windows checkout (core.autocrlf) turns the file into CRLF, and `.` does not match `\r`.
+const MIGRATION = readFileSync(new URL('../supabase/migrations/20260927100000_merchant_connectors.sql', import.meta.url), 'utf8').replace(/\r\n?/g, '\n');
 const SQL = MIGRATION.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n'); // code only, comments stripped
 
 /** In-memory Supabase with the M1 rules, recording every call. */
