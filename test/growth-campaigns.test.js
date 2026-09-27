@@ -108,7 +108,7 @@ test('campaigns UI: renders, sidebar marks Campagnes active, navigation to Overv
   assert.equal(title(root), 'Campagnes');
   const nav = navState(root);
   assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Campagnes']);
-  assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential']]);
+  assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Audience', '#/audience']]);
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 4);
   assert.match(text(root), /Campagnes \(12\)/);
   assert.equal(all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').length, 12);

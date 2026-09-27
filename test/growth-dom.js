@@ -7,6 +7,9 @@ import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
 import { productPotentialFacts } from '../src/growth/products/facts.js';
 import { buildProductPotential } from '../src/growth/products/potential.js';
 import { makeDemandData, NOW as DEMAND_NOW, TZ as DEMAND_TZ, CONFIG as DEMAND_CONFIG } from './fixtures/demand-sample.js';
+import { audienceFacts } from '../src/growth/audience/facts.js';
+import { buildAudience } from '../src/growth/audience/audience.js';
+import { makeAudienceData, FULL as AUDIENCE_FULL, NOW as AUDIENCE_NOW, TZ as AUDIENCE_TZ, CONFIG as AUDIENCE_CONFIG } from './fixtures/audience-sample.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
 const ANALYTICS_UI = new URL('../src/analytics-premium/ui/', import.meta.url);
@@ -26,23 +29,29 @@ export function potentialPayload(data = makeDemandData()) {
   return { generatedAt: DEMAND_NOW.toISOString(), ...buildProductPotential(f.facts, { config: DEMAND_CONFIG, currency: f.currency, window: f.window, dataQuality: f.dataQuality }) };
 }
 
-export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200 } = {}) {
+/** Audience payload from the synthetic customer fixture (the page has no demo data). */
+export function audiencePayload(data = makeAudienceData(AUDIENCE_FULL)) {
+  const f = audienceFacts({ data, now: AUDIENCE_NOW, timeZone: AUDIENCE_TZ, config: AUDIENCE_CONFIG });
+  return { generatedAt: AUDIENCE_NOW.toISOString(), ...buildAudience({ orders: f.orders, window: f.window, historyStart: f.historyStart, config: AUDIENCE_CONFIG, currency: f.currency }) };
+}
+
+export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200 } = {}) {
   const root = new Node('div');
   const errors = [];
   const listeners = {};
   const doc = { createElement: (t) => new Node(t), createElementNS: (_, t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: () => root, querySelector: () => null, documentElement: { lang: '' } };
-  const payloads = { '/api/growth/overview': buildDemoOverview(NOW), '/api/growth/opportunities': buildDemoOpportunities(NOW), '/api/growth/campaigns': buildDemoCampaigns(NOW), '/api/growth/products': products };
+  const payloads = { '/api/growth/overview': buildDemoOverview(NOW), '/api/growth/opportunities': buildDemoOpportunities(NOW), '/api/growth/campaigns': buildDemoCampaigns(NOW), '/api/growth/products': products, '/api/growth/audience': audience };
   const el = () => new Node('div');
   const ctx = {
     document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
     localStorage: { getItem: () => 'fr', setItem() {} }, Intl, Math, Date, JSON, Object, Array, Set, Number, String, Error, Promise, setTimeout,
-    fetch: async (u) => (u === '/api/growth/products' && productsStatus !== 200 ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[u])) }),
+    fetch: async (u) => ((u === '/api/growth/products' && productsStatus !== 200) || (u === '/api/growth/audience' && audienceStatus !== 200) ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[u])) }),
     NordlaIcon: { semantic: (n) => Object.assign(new Node('img'), { className: `nordla-icon official ${n}` }), parle: () => new Node('img') },
     NordlaCharts: { head: el, trendLines: el, trendLine: el, sparkline: el, insufficient: el, donut: el },
   };
   ctx.window = ctx; ctx.window.addEventListener = (e, f) => { listeners[e] = f; }; ctx.window.scrollTo = () => {};
   vm.createContext(ctx);
-  for (const f of [new URL('i18n.js', ANALYTICS_UI), new URL('lang-fr.js', UI), new URL('lang-nl.js', UI), new URL('lang-en.js', UI), new URL('opportunities.js', UI), new URL('campaigns.js', UI), new URL('potential.js', UI), new URL('app.js', UI)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
+  for (const f of [new URL('i18n.js', ANALYTICS_UI), new URL('lang-fr.js', UI), new URL('lang-nl.js', UI), new URL('lang-en.js', UI), new URL('opportunities.js', UI), new URL('campaigns.js', UI), new URL('potential.js', UI), new URL('audience.js', UI), new URL('app.js', UI)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
   await new Promise((r) => setTimeout(r, 20));
   const navigate = async (h) => { ctx.location.hash = h; await listeners.hashchange(); };
   return { root, errors, navigate, ctx };

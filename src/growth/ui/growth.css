@@ -347,3 +347,67 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-pp-drawer-head { padding: 14px 16px; }
   .gr-pp-drawer-body { padding: 4px 16px 24px; }
 }
+
+/* ================= Audience page ================= */
+/* Row 1: distribution, priority segments, signals (3 columns from 1360px, else distribution + priority side by side). */
+.gr-au-top { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-au-top > .ex-card { display: flex; flex-direction: column; min-width: 0; }
+@media (min-width: 901px) { .gr-au-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-au-top > .gr-au-signals { grid-column: 1 / -1; } }
+@media (min-width: 1360px) { .gr-au-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); } .gr-au-top > .gr-au-signals { grid-column: auto; } }
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-au { grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr); align-items: start; } }
+.gr-au-banner { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--chart-terracotta) 30%, #fff); background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); border-radius: 12px; font-size: 13px; line-height: 1.5; color: var(--chart-navy); }
+.gr-au-banner .nordla-icon { flex: 0 0 auto; margin-top: 1px; }
+
+/* Segment distribution: one stacked bar (segments are exclusive, they add up to 100 %) + legend. Nordla chart tokens only. */
+.gr-au-dist { display: flex; flex-direction: column; gap: 14px; }
+.gr-au-bar { display: flex; height: 44px; border-radius: 10px; overflow: hidden; background: var(--chart-soft-gray); }
+.gr-au-bar-seg { display: grid; place-items: center; min-width: 3px; flex-basis: 0; font: 600 12px var(--font-ui); color: #fff; white-space: nowrap; overflow: hidden; }
+.gr-au-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px 14px; }
+.gr-au-legend-item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.gr-au-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; }
+.gr-au-legend-text { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; color: var(--chart-navy); min-width: 0; line-height: 1.35; }
+.gr-au-legend-text strong { font-size: 12px; font-weight: 600; color: var(--chart-slate); }
+.gr-au-c-loyal { background: var(--chart-positive); }
+.gr-au-c-returning, .gr-au-c-o-returning { background: var(--chart-navy); }
+.gr-au-c-newReturned { background: color-mix(in srgb, var(--chart-navy) 60%, #fff); }
+.gr-au-c-new, .gr-au-c-o-new { background: var(--chart-slate); }
+.gr-au-c-reactivate { background: var(--chart-terracotta); }
+.gr-au-c-occasional { background: color-mix(in srgb, var(--chart-terracotta) 50%, #fff); }
+.gr-au-c-o-first_recorded_pos { background: color-mix(in srgb, var(--chart-slate) 45%, #fff); }
+.gr-au-c-unknown, .gr-au-c-o-unknown { background: color-mix(in srgb, var(--chart-slate) 25%, #fff); }
+.gr-au-bar .gr-au-c-unknown, .gr-au-bar .gr-au-c-o-unknown, .gr-au-bar .gr-au-c-o-first_recorded_pos { color: var(--chart-navy); }
+
+/* Priority segments: compact table with an arrow to the detail panel. */
+.gr-au-prio-table { min-width: 440px; table-layout: fixed; width: 100%; }
+.gr-au-prio-table th:nth-child(1) { width: 30%; } .gr-au-prio-table th:nth-child(2) { width: 10%; } .gr-au-prio-table th:nth-child(3) { width: 11%; }
+.gr-au-prio-table th:nth-child(4) { width: 23%; } .gr-au-prio-table th:nth-child(6) { width: 36px; }
+.ex-table.gr-au-prio-table th { white-space: normal; }
+.gr-au-prio-table td { white-space: normal; overflow-wrap: break-word; hyphens: auto; }
+.gr-au-prio-table .ex-chip { white-space: nowrap; }
+.gr-au-segcell { display: inline-flex; align-items: center; gap: 8px; line-height: 1.3; }
+.gr-au-segico { width: 30px; height: 30px; border-radius: 50%; background: #F4F6F8; display: grid; place-items: center; flex: 0 0 auto; }
+.gr-au-segico .nordla-icon { width: 18px; height: 18px; }
+.gr-au-actcell { font-size: 12.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-au-go { border: 0; background: transparent; color: var(--chart-slate); width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; cursor: pointer; }
+.gr-au-go:hover { background: #F4F6F8; color: var(--chart-navy); }
+.gr-au-go:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 1px; }
+
+/* Customer segments list: Produits Potentiels' rows with the Audience columns. */
+.gr-pp-thead.gr-au-thead, .gr-pp-row.gr-au-row { grid-template-columns: minmax(190px, 2.4fr) minmax(56px, .6fr) minmax(76px, .75fr) minmax(76px, .8fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(140px, 1.4fr) 28px; }
+.gr-au-row .gr-pp-c-name { gap: 10px; }
+.gr-au-list .ex-card-head .gr-action { margin-left: auto; }
+.gr-au-item { grid-template-columns: 36px minmax(0, 1fr) auto; align-items: flex-start; }
+.gr-au-item .gr-pp-item-main { gap: 3px; }
+.gr-au-item .gr-pp-item-side { flex-direction: row; align-items: center; color: var(--chart-slate); }
+.gr-au-static { cursor: default; }
+.gr-au-static:hover { background: transparent; }
+@media (max-width: 1023px) { .gr-pp-row.gr-au-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .gr-pp-row.gr-au-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-au-list .ex-card-head { flex-wrap: wrap; gap: 8px; }
+  .gr-au-legend { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* Priority table on phones: segment, size, status, open. Share of sales and action stay in the segment cards below. */
+  .gr-au-prio-table { min-width: 0; }
+  .gr-au-prio-table th:nth-child(3), .gr-au-prio-table td:nth-child(3), .gr-au-prio-table th:nth-child(5), .gr-au-prio-table td:nth-child(5) { display: none; }
+  .gr-au-prio-table th:nth-child(1) { width: auto; } .gr-au-prio-table th:nth-child(2) { width: 56px; } .gr-au-prio-table th:nth-child(4) { width: 112px; }
+}

@@ -75,8 +75,8 @@ test('opportunities UI: renders without error, sidebar marks Opportunités activ
   const nav = navState(root);
   assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Expériences', 'Nordla AI', 'Paramètres']);
   assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Opportunités']);
-  assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential']]);
-  assert.equal(nav.filter((n) => n.inert).length, 6, 'the 4 unbuilt pages + Nordla AI + Paramètres stay disabled');
+  assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Audience', '#/audience']]);
+  assert.equal(nav.filter((n) => n.inert).length, 5, 'the 3 unbuilt pages + Nordla AI + Paramètres stay disabled');
   // Page content: 5 KPIs, 12 pipeline rows, 3 approvals, the demo badge.
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
   assert.equal(all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').length, 12);

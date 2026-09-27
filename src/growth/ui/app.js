@@ -122,7 +122,7 @@ const icoBubble = (iconName) => h('span', { class: 'gr-ico' }, gi(iconName));
 // Growth is a standalone Nordla module: like Finance and Analytics it has its own navigation and needs no other module
 // to work. It shares the Nordla design system with them: same rail component and tokens (.sidebar/.nav-item,
 // --nordla-menu-*; <html data-module="growth"> selects Growth's menu colour). Built pages have an href (hash routes of
-// this module only); the others are visibly disabled ("coming soon"), never a dead link. `mobile: true` = one of the 5
+// this module only); the others are visibly disabled ("coming soon"), never a dead link. `mobile: true` = one of the
 // entries of the mobile bottom bar (same density as Analytics); the others are desktop-only while they are not built.
 const GROWTH_NAV = [
   { key: 'overview', icon: 'overview', href: '#/', mobile: true },
@@ -133,7 +133,7 @@ const GROWTH_NAV = [
   { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
   { key: 'content', icon: 'content' },
   { key: 'storeGrowth', icon: 'storeGrowth' },
-  { key: 'audience', icon: 'audience' },
+  { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
   { key: 'experiments', icon: 'experiments' },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
@@ -170,6 +170,8 @@ function topbar(d) {
       // A page that declares its own analysis window (d.window: Potentiel produits = complete weeks) shows it; the others keep the 30 days.
       d && d.window && d.window.weeks
         ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', d.window.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', d.window.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
+        : d && d.window && d.window.days
+        ? h('span', { class: 'period-pill locked', title: t('gr.period.daysNote', d.window.days), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastDays', d.window.days), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
         : h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed'))),
       langSwitch()));
 }
@@ -365,14 +367,15 @@ function experimentsCard(d) {
 }
 
 // ---------- pages + router ----------
-// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Potentiel produits. Each page's payload is fetched once
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; let potData = null; const loadFailed = {};
+let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; const loadFailed = {};
 const PAGES = {
   overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
   opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
   campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
+  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 
