@@ -44,6 +44,10 @@ export const PRODUCTS_PAGE_QUERY = /* GraphQL */ `
           productType
           createdAt
           status
+          featuredImage {
+            url
+            altText
+          }
           collections(first: 25) {
             edges {
               node {

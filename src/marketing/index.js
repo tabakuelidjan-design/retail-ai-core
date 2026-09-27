@@ -112,5 +112,5 @@ export async function runMarketingReport({ argv = [], env = process.env, supabas
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runMarketingReport({ argv: process.argv.slice(2) })
     .then((r) => { process.exitCode = r.exitCode; })
-    .catch((err) => { console.error('marketing report failed:', err?.message ?? err); process.exit(1); });
+    .catch((err) => { console.error('marketing report failed:', err?.message ?? err); process.exitCode = 1; });
 }

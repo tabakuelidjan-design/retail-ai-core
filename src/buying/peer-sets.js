@@ -65,5 +65,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('peer-set listing failed:', err);
-  process.exit(1);
+  process.exitCode = 1; // not process.exit(): let pending network handles close (Node on Windows aborts otherwise)
 });

@@ -50,7 +50,10 @@ export async function syncCatalog({ shopify, supabase }, opts = {}) {
       const productNodes = products.edges.map((e) => e.node);
       summary.productsFetched += productNodes.length;
 
-      const productRows = productNodes.map((n) => normalizeProduct(n, merchantId));
+      // One upsert per page needs the same columns on every row: if any node of the page lacks featuredImage, the page writes no
+      // image column at all (existing values are kept) rather than writing some rows with images and a batch with mismatched keys.
+      let productRows = productNodes.map((n) => normalizeProduct(n, merchantId));
+      if (!productRows.every((r) => 'image_url' in r)) productRows = productRows.map(({ image_url, image_alt_text, ...rest }) => rest);
       const upsertedProducts = await supabase.upsert('products', productRows, {
         onConflict: 'merchant_id,source_system,source_id',
       });

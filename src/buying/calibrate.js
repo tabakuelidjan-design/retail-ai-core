@@ -98,6 +98,6 @@ async function main() {
 if (process.argv[1] && process.argv[1].endsWith('calibrate.js')) {
   main().catch((err) => {
     console.error('calibration failed:', err);
-    process.exit(1);
+    process.exitCode = 1; // not process.exit(): let pending network handles close (Node on Windows aborts otherwise)
   });
 }

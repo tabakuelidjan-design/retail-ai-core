@@ -31,7 +31,24 @@ export function normalizeProduct(node, merchantId) {
     source_status: node.status ?? null,
     source_system: 'shopify',
     source_id: node.id,
+    ...normalizeProductImage(node),
   };
+}
+
+/**
+ * The product's primary image (Shopify featuredImage) - the rule, from Shopify's semantics:
+ *   - featuredImage PRESENT in the node (the field was requested and answered): it is the source's current truth. An object gives
+ *     { image_url: url, image_alt_text: altText ?? null }; an explicit null means the product has no image any more in Shopify, so both
+ *     columns become null (a deleted image's URL must not stay in Nordla). Never another product's image, never a placeholder.
+ *   - featuredImage ABSENT from the node (not requested, partial answer, a source without images): {} - the columns are not written at
+ *     all, so an existing valid value is kept.
+ * Same values as the historical Analytics-branch variant for every node that carries the field (test/fixtures/product-image-reference-e593475.js).
+ */
+export function normalizeProductImage(node) {
+  if (!node || !Object.prototype.hasOwnProperty.call(node, 'featuredImage')) return {};
+  const img = node.featuredImage;
+  const url = typeof img?.url === 'string' && img.url.trim() ? img.url : null;
+  return { image_url: url, image_alt_text: url && typeof img.altText === 'string' ? img.altText : null };
 }
 
 /** Collection membership; identity is the source collection id, never the title. */
