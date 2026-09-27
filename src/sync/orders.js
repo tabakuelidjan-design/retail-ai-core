@@ -21,6 +21,7 @@ import { historySearchQuery } from './history.js';
 import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY } from '../shopify/queries.js';
 import { normalizeOrderAttribution } from '../marketing/adapters/shopify.js';
 import { normalizeOrder, normalizeOrderLine, normalizeRefund, normalizeRefundLine } from './normalize.js';
+import { upsertInChunks } from './batch.js';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
@@ -73,75 +74,84 @@ export async function syncOrders({ shopify, supabase }, opts) {
     }
 
     const orderNodes = page.orders.edges.map((e) => e.node);
-    for (const orderNode of orderNodes) {
-      summary.ordersFetched += 1;
-
-      const locationId = orderNode.retailLocation
-        ? (locationIdBySourceId.get(orderNode.retailLocation.id) ?? null)
-        : null;
-      if (!locationId) summary.ordersWithoutLocation += 1;
-
-      const orderRow = normalizeOrder(orderNode, opts.merchantId, locationId, { customerKeySecret: opts.customerKeySecret });
-      const [order] = await supabase.upsert('orders', [orderRow], {
-        onConflict: 'merchant_id,source_system,source_id',
-      });
-
-      // Marketing attribution: 0-2 visit rows (host/path only, no customer identity). Idempotent per (order, touch).
-      const attributionRows = normalizeOrderAttribution(orderNode, order.id, opts.merchantId);
-      summary.attributionRowsFetched += attributionRows.length;
-      if (attributionRows.length > 0) {
-        await supabase.upsert('order_attribution', attributionRows, { onConflict: 'order_id,source_system,touch' });
-        summary.attributionRowsUpserted += attributionRows.length;
-      }
-
-      const lineItemNodes = orderNode.lineItems.edges.map((e) => e.node);
-      const orderLineIdBySourceId = new Map();
-
-      for (const lineItemNode of lineItemNodes) {
-        summary.orderLinesFetched += 1;
-        const variantId = lineItemNode.variant ? (variantIdBySourceId.get(lineItemNode.variant.id) ?? null) : null;
-        if (!variantId) summary.orderLinesWithoutVariant += 1;
-
-        const lineRow = normalizeOrderLine(lineItemNode, order.id, variantId, opts.merchantId);
-        const [orderLine] = await supabase.upsert('order_lines', [lineRow], {
-          onConflict: 'order_id,source_system,source_id',
-        });
-        orderLineIdBySourceId.set(lineItemNode.id, orderLine.id);
-        summary.orderLinesUpserted += 1;
-      }
-
-      for (const refundNode of orderNode.refunds) {
-        summary.refundsFetched += 1;
-        const refundRow = normalizeRefund(refundNode, order.id, opts.merchantId);
-        const [refund] = await supabase.upsert('refunds', [refundRow], {
-          onConflict: 'order_id,source_system,source_id',
-        });
-        summary.refundsUpserted += 1;
-
-        const refundLineNodes = refundNode.refundLineItems.edges.map((e) => e.node);
-        for (const refundLineNode of refundLineNodes) {
-          summary.refundLinesFetched += 1;
-          const orderLineId = orderLineIdBySourceId.get(refundLineNode.lineItem.id);
-          if (!orderLineId) {
-            summary.errors.push(
-              `refund line references order line ${refundLineNode.lineItem.id} not found in this sync pass for order ${orderNode.id}`,
-            );
-            continue;
-          }
-          const refundLineRow = normalizeRefundLine(refundLineNode, refund.id, orderLineId, orderNode.currencyCode, opts.merchantId);
-          await supabase.upsert('refund_lines', [refundLineRow], {
-            onConflict: 'refund_id,order_line_id',
-          });
-          summary.refundLinesUpserted += 1;
-        }
-      }
-
-      summary.ordersUpserted += 1;
-    }
+    await writeOrdersPage(supabase, orderNodes, { opts, summary, locationIdBySourceId, variantIdBySourceId });
 
     hasNextPage = page.orders.pageInfo.hasNextPage;
     cursor = page.orders.pageInfo.endCursor;
   }
 
   return summary;
+}
+
+// One Shopify page of orders (up to 25-50) is written with one upsert per table - orders, visits, lines,
+// refunds, refund lines - instead of one per row. Each table's rows need the local ids of the rows above them,
+// read back from the previous upsert by their natural keys. Pages are written one at a time so a full-history
+// backfill never holds more than a page in memory.
+async function writeOrdersPage(supabase, orderNodes, { opts, summary, locationIdBySourceId, variantIdBySourceId }) {
+  const byOrderAndSource = (row) => `${row.order_id}|${row.source_id}`;
+
+  const orderRows = orderNodes.map((orderNode) => {
+    summary.ordersFetched += 1;
+    const locationId = orderNode.retailLocation
+      ? (locationIdBySourceId.get(orderNode.retailLocation.id) ?? null)
+      : null;
+    if (!locationId) summary.ordersWithoutLocation += 1;
+    return normalizeOrder(orderNode, opts.merchantId, locationId, { customerKeySecret: opts.customerKeySecret });
+  });
+  const orders = await upsertInChunks(supabase, 'orders', orderRows, { onConflict: 'merchant_id,source_system,source_id' });
+  const orderIdBySourceId = new Map(orders.map((o) => [o.source_id, o.id]));
+
+  // Marketing attribution: 0-2 visit rows (host/path only, no customer identity). Idempotent per (order, touch).
+  const attributionRows = [];
+  const lineRows = [];
+  for (const orderNode of orderNodes) {
+    const orderId = orderIdBySourceId.get(orderNode.id);
+    const visits = normalizeOrderAttribution(orderNode, orderId, opts.merchantId);
+    summary.attributionRowsFetched += visits.length;
+    attributionRows.push(...visits);
+
+    for (const { node: lineItemNode } of orderNode.lineItems.edges) {
+      summary.orderLinesFetched += 1;
+      const variantId = lineItemNode.variant ? (variantIdBySourceId.get(lineItemNode.variant.id) ?? null) : null;
+      if (!variantId) summary.orderLinesWithoutVariant += 1;
+      lineRows.push(normalizeOrderLine(lineItemNode, orderId, variantId, opts.merchantId));
+    }
+  }
+  await upsertInChunks(supabase, 'order_attribution', attributionRows, { onConflict: 'order_id,source_system,touch' });
+  summary.attributionRowsUpserted += attributionRows.length;
+  const orderLines = await upsertInChunks(supabase, 'order_lines', lineRows, { onConflict: 'order_id,source_system,source_id' });
+  const orderLineIdByKey = new Map(orderLines.map((l) => [byOrderAndSource(l), l.id]));
+  summary.orderLinesUpserted += lineRows.length;
+
+  const refundRows = orderNodes.flatMap((orderNode) => orderNode.refunds.map((refundNode) => {
+    summary.refundsFetched += 1;
+    return normalizeRefund(refundNode, orderIdBySourceId.get(orderNode.id), opts.merchantId);
+  }));
+  const refunds = await upsertInChunks(supabase, 'refunds', refundRows, { onConflict: 'order_id,source_system,source_id' });
+  const refundIdByKey = new Map(refunds.map((r) => [byOrderAndSource(r), r.id]));
+  summary.refundsUpserted += refundRows.length;
+
+  const refundLineRows = [];
+  for (const orderNode of orderNodes) {
+    const orderId = orderIdBySourceId.get(orderNode.id);
+    for (const refundNode of orderNode.refunds) {
+      const refundId = refundIdByKey.get(`${orderId}|${refundNode.id}`);
+      for (const { node: refundLineNode } of refundNode.refundLineItems.edges) {
+        summary.refundLinesFetched += 1;
+        // Only this order's own lines, synced in this pass, can be referenced.
+        const orderLineId = orderLineIdByKey.get(`${orderId}|${refundLineNode.lineItem.id}`);
+        if (!orderLineId) {
+          summary.errors.push(
+            `refund line references order line ${refundLineNode.lineItem.id} not found in this sync pass for order ${orderNode.id}`,
+          );
+          continue;
+        }
+        refundLineRows.push(normalizeRefundLine(refundLineNode, refundId, orderLineId, orderNode.currencyCode, opts.merchantId));
+      }
+    }
+  }
+  await upsertInChunks(supabase, 'refund_lines', refundLineRows, { onConflict: 'refund_id,order_line_id' });
+  summary.refundLinesUpserted += refundLineRows.length;
+
+  summary.ordersUpserted += orderNodes.length;
 }

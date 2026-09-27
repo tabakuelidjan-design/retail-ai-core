@@ -2,9 +2,30 @@
 // Shopify unitCost gets no row at all (UNCLASSIFIED) - never a fabricated
 // zero or estimate. An unchanged cost writes nothing; a changed cost writes
 // exactly one new row, preparing the future COGS Drift view.
+//
+// Batched: the merchant's cost history is read once (not once per variant) and the new rows are inserted
+// together at the end, so a cycle costs a handful of requests instead of two per variant.
 
 import { VARIANT_INVENTORY_COST_PAGE_QUERY } from '../shopify/queries.js';
 import { normalizeProductCost, costHasChanged } from './normalize.js';
+import { insertInChunks } from './batch.js';
+
+/**
+ * The most recent product_costs row per variant (greatest effective_from), from the merchant's whole history.
+ * @returns {Map<string, {unit_cost: number, currency: string, source: string, validation_status: string}>}
+ */
+export async function loadLatestCosts(supabase, merchantId) {
+  const rows = await supabase.selectAll('product_costs', {
+    select: 'id,variant_id,unit_cost,currency,source,validation_status,effective_from',
+    merchant_id: `eq.${merchantId}`,
+  });
+  const latest = new Map();
+  for (const row of rows) {
+    const current = latest.get(row.variant_id);
+    if (!current || Date.parse(row.effective_from) > Date.parse(current.effective_from)) latest.set(row.variant_id, row);
+  }
+  return latest;
+}
 
 /**
  * @param {{graphql: Function}} shopify
@@ -23,6 +44,8 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
     merchant_id: `eq.${opts.merchantId}`,
   });
   const variantIdBySourceId = new Map(localVariants.map((v) => [v.source_id, v.id]));
+  const latestByVariantId = await loadLatestCosts(supabase, opts.merchantId);
+  const newRows = [];
 
   let cursor = null;
   let hasNextPage = true;
@@ -51,19 +74,14 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
       }
       summary.withCost += 1;
 
-      const [latest] = await supabase.select('product_costs', {
-        select: 'unit_cost,currency,source,validation_status',
-        variant_id: `eq.${variantId}`,
-        order: 'effective_from.desc',
-        limit: '1',
-      });
-
+      const latest = latestByVariantId.get(variantId);
       if (latest && !costHasChanged(latest, candidate)) {
         summary.unchangedSkipped += 1;
         continue;
       }
 
-      await supabase.insert('product_costs', [candidate]);
+      newRows.push(candidate);
+      latestByVariantId.set(variantId, candidate); // a variant seen twice in one run compares against this row, as before
       summary.newCostRows += 1;
     }
 
@@ -71,5 +89,7 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
     cursor = page.productVariants.pageInfo.endCursor;
   }
 
+  // Also after a failed page fetch: the rows decided before the failure are written, as they were one by one.
+  await insertInChunks(supabase, 'product_costs', newRows);
   return summary;
 }
