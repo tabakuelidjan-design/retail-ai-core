@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { buildDemoOpportunities } from './fixtures/growth-opportunities-sample.js';
 import { buildOpportunities } from '../src/growth/server/opportunities.js';
 import { growthDom, all, text, hasClass, navState, title } from './growth-dom.js';
+import { frozenViolations } from './frozen-modules.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
 const ANALYTICS_UI = new URL('../src/analytics-premium/ui/', import.meta.url);
@@ -112,7 +113,7 @@ test('opportunities UI (connected sample): renders without error, sidebar marks 
   // Back to the Overview through the sidebar route.
   await navigate('#/');
   assert.deepEqual(errors, []);
-  assert.equal(title(root), 'Growth');
+  assert.equal(title(root), 'Développement des ventes');
   assert.deepEqual(navState(root).filter((n) => n.active).map((n) => n.label), ['Vue d’ensemble']);
 });
 
@@ -137,8 +138,8 @@ test('opportunities UI (connected sample): pipeline filters and sort work on the
 
 // Base updated 2026-09-27: Growth now builds on the Nordla platform baseline (08619d7), not on the old e7c96c2 line.
 test('growth: no Finance, Analytics or shared file differs from the Nordla platform baseline', () => {
-  const out = execFileSync('git', ['diff', '--name-only', '08619d7', '--', 'src/finance', 'src/analytics-premium', 'src/shared'], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
-  assert.equal(out.trim(), '');
+  // Only exception: the fr-BE label pass (FR dictionary values + page titles, keys unchanged) - see test/frozen-modules.js.
+  assert.deepEqual(frozenViolations(), []);
 });
 
 test('opportunities UI: every source and segment has an icon (Growth pack or official), none invented', async () => {

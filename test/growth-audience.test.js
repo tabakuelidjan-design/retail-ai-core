@@ -255,7 +255,7 @@ test('audience UI: renders the customer mode, nav entry active, rows open the de
   assert.equal(newBtn.getAttribute('disabled'), 'disabled');
   rows.find((r) => text(r).includes('Clients à réactiver')).listeners.click[0]();
   const drawer = all(root, (n) => hasClass(n, 'gr-pp-drawer'))[0];
-  for (const s of ['Définition', 'Taille et valeur', 'Pourquoi Growth le signale', 'Action suggérée']) assert.ok(text(drawer).includes(s), s);
+  for (const s of ['Définition', 'Taille et valeur', 'Pourquoi Nordla le signale', 'Action suggérée']) assert.ok(text(drawer).includes(s), s);
   all(root, (n) => hasClass(n, 'gr-pp-close'))[0].listeners.click[0]();
   assert.equal(all(root, (n) => hasClass(n, 'gr-pp-drawer')).length, 0);
   assert.deepEqual(errors, []);

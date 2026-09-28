@@ -47,7 +47,7 @@ test('French and Dutch cover the same message ids (no orphan)', () => {
 });
 test('proper Belgian French terminology', () => {
   const fr = loadLang().fr.messages;
-  const expect = { Invoices: 'Factures', Quotes: 'Devis', Companies: 'Sociétés', Payments: 'Paiements', 'Accountant pack': 'Pack comptable', Draft: 'Brouillon', 'Ready for approval': 'À approuver', Issued: 'Émise', Sent: 'Envoyée', Paid: 'Payée', Overdue: 'En retard', 'Credit note': 'Avoir', 'excl. VAT': 'HTVA', 'incl. VAT': 'TVAC', 'Enterprise number': 'Numéro d\'entreprise', 'VAT number': 'Numéro de TVA' };
+  const expect = { Invoices: 'Factures', Quotes: 'Devis', Companies: 'Sociétés', Payments: 'Paiements', 'Accountant pack': 'Pack comptable', Draft: 'Brouillon', 'Ready for approval': 'À valider', Issued: 'Émise', Sent: 'Envoyée', Paid: 'Payée', Overdue: 'En retard', 'Credit note': 'Avoir', 'excl. VAT': 'HTVA', 'incl. VAT': 'TVAC', 'Enterprise number': 'Numéro d\'entreprise', 'VAT number': 'Numéro de TVA' };
   for (const [k, v] of Object.entries(expect)) assert.equal(fr[k], v);
 });
 test('runtime: French is the default, NL/EN can be chosen and the choice persists; parameters, whitespace, patterns and sentences translate', () => {

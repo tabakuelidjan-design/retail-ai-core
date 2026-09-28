@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createGrowthApp } from '../src/growth/server/app.js';
 import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
 import { growthDom, all, text, hasClass, navState, title, NOW } from './growth-dom.js';
+import { frozenViolations } from './frozen-modules.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
 const sum = (a, k) => a.reduce((x, c) => x + c[k], 0);
@@ -121,7 +122,7 @@ test('campaigns UI: renders, sidebar marks Campagnes active, navigation to Overv
   await navigate('#/opportunities');
   assert.equal(title(root), 'Opportunités');
   await navigate('#/');
-  assert.equal(title(root), 'Growth');
+  assert.equal(title(root), 'Développement des ventes');
   await navigate('#/campaigns');
   assert.equal(title(root), 'Campagnes');
   assert.deepEqual(errors, []);
@@ -150,8 +151,8 @@ test('campaigns UI: search (accent/case-insensitive), channel and status filters
 
 // Base updated 2026-09-27: Growth now builds on the Nordla platform baseline (08619d7), not on the old 3c5f473 line.
 test('campaigns: no Finance, Analytics or shared file differs from the Nordla platform baseline', () => {
-  const out = execFileSync('git', ['diff', '--name-only', '08619d7', '--', 'src/finance', 'src/analytics-premium', 'src/shared'], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
-  assert.equal(out.trim(), '');
+  // Only exception: the fr-BE label pass (FR dictionary values + page titles, keys unchanged) - see test/frozen-modules.js.
+  assert.deepEqual(frozenViolations(), []);
 });
 
 test('campaigns UI: budget / performance sort, dash for the campaign not launched, spend and ROAS per channel', async () => {
