@@ -16,7 +16,7 @@ function askMoney(v, cur) {
   try { return new Intl.NumberFormat(NORDLA_I18N.getLang() === 'nl' ? 'nl-BE' : NORDLA_I18N.getLang() === 'en' ? 'en-GB' : 'fr-BE', { style: 'currency', currency: cur || 'EUR' }).format(v); } catch (e) { return `${Number(v).toFixed(2)} ${cur || ''}`; }
 }
 function askFigureValue(f, currency) {
-  if (f.id === 'identified_share') return f.value == null ? t('common.dash') : `${(f.value * 100).toFixed(1)} %`;
+  if (f.id === 'identified_share') return f.value == null ? t('common.dash') : fmtPct(f.value, 1);
   if (f.id === 'top_product' || f.id === 'top_channel') return `${f.value} — ${askMoney(f.net_sales_ex_tax, currency)}`;
   if (f.currency) return askMoney(f.value, f.currency);
   return f.value == null ? t('common.dash') : String(f.value);

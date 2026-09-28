@@ -65,6 +65,7 @@ window.NORDLA_DICTS.en = {
   'app.noReport': 'No report snapshot found yet. Run `npm run metrics:report` to generate one.',
 
   'common.dash': '—',
+  'common.pp': '{0}pp',
   'common.and': 'and',
 
   'wc.title': 'What Changed',

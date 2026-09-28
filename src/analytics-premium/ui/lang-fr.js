@@ -65,6 +65,7 @@ window.NORDLA_DICTS.fr = {
   'app.noReport': 'Aucun instantané de rapport trouvé pour le moment. Exécutez `npm run metrics:report` pour en générer un.',
 
   'common.dash': '—',
+  'common.pp': '{0} pts',
   'common.and': 'et',
 
   'wc.title': 'Ce qui a changé',

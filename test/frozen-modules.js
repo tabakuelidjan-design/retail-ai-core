@@ -12,20 +12,36 @@ export const LABEL_FILES = ['src/analytics-premium/ui/index.html', 'src/analytic
 // Page-local stylesheet of Analyses > Produits: only an APPENDED rule is allowed (a longer fr-BE label must still fit at 320 px).
 export const APPEND_ONLY_FILES = ['src/analytics-premium/ui/products.css'];
 // Analyses amounts in fr-BE (owner decision 2026-09-28): in app.js only the money-formatter lines (and their comment) may differ.
-export const LINE_SCOPED_FILES = { 'src/analytics-premium/ui/app.js': /fmtMoney|^\s*\/\/ (Amounts use the same formatters|en-GB\): totals in whole euros)/ };
+// Analyses percentages / numbers / dates in the chosen locale (same decision): the percent, number and date formatter lines, and the
+// Parle à Nordla share line in ask.js.
+export const LINE_SCOPED_FILES = {
+  'src/analytics-premium/ui/app.js': /fmtMoney|fmtPct|fmtNum|fmtDate|fmtSignedPct|rank-share|wc\.bodyText|^\s*\/\/ (Amounts use the same formatters|en-GB\): totals in whole euros|Percentages, numbers and dates follow)/,
+  'src/analytics-premium/ui/ask.js': /identified_share/,
+};
+// Keys the fr-BE pass may ADD to the Analyses dictionaries (NL / EN: same output as before, e.g. "{0}pp"); every other key and every
+// NL / EN value stays exactly as on the baseline.
+export const ADDED_KEYS = ['common.pp'];
+export const KEY_ADD_ONLY_FILES = ['src/analytics-premium/ui/lang-nl.js', 'src/analytics-premium/ui/lang-en.js'];
 
-function frKeys(src, file) {
+function dictOf(src, file) {
   const ctx = { window: { FINANCE_LANG: {} } };
   vm.createContext(ctx);
   vm.runInContext(src, ctx, { filename: file });
-  const d = file.includes('/finance/') ? ctx.window.FINANCE_LANG.fr.messages : ctx.window.NORDLA_DICTS.fr;
-  return Object.keys(d).sort();
+  const lang = /lang-(\w+)\.js$/.exec(file)[1];
+  return file.includes('/finance/') ? ctx.window.FINANCE_LANG[lang].messages : ctx.window.NORDLA_DICTS[lang];
 }
+const frKeys = (src, file) => Object.keys(dictOf(src, file)).filter((k) => !ADDED_KEYS.includes(k)).sort();
 
 /** Returns the list of violations (empty = the freeze holds). */
 export function frozenViolations() {
   const changed = git(['diff', '--name-only', BASELINE, '--', 'src/finance', 'src/analytics-premium', 'src/shared']).trim().split('\n').filter(Boolean);
-  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f) && !LINE_SCOPED_FILES[f]).map((f) => `${f}: frozen file changed`);
+  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f) && !LINE_SCOPED_FILES[f] && !KEY_ADD_ONLY_FILES.includes(f)).map((f) => `${f}: frozen file changed`);
+  for (const f of changed.filter((x) => KEY_ADD_ONLY_FILES.includes(x))) {
+    const before = dictOf(git(['show', `${BASELINE}:${f}`]), f); const now = dictOf(readFileSync(new URL(f, ROOT), 'utf8'), f);
+    const extra = Object.keys(now).filter((k) => !(k in before) && !ADDED_KEYS.includes(k));
+    const changedValues = Object.keys(before).filter((k) => now[k] !== before[k]);
+    if (extra.length || changedValues.length) out.push(`${f}: only ${ADDED_KEYS.join(', ')} may be added (extra: ${extra.length}, changed: ${changedValues.length})`);
+  }
   const norm = (x) => x.replace(/\r\n/g, '\n');
   for (const f of changed.filter((x) => LINE_SCOPED_FILES[x])) {
     const lines = git(['diff', '-U0', '--ignore-cr-at-eol', BASELINE, '--', f]).split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).map((l) => l.slice(1));

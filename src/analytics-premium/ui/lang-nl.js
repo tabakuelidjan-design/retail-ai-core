@@ -65,6 +65,7 @@ window.NORDLA_DICTS.nl = {
   'app.noReport': 'Er is nog geen rapportmoment gevonden. Voer `npm run metrics:report` uit om er een te genereren.',
 
   'common.dash': '—',
+  'common.pp': '{0}pp',
   'common.and': 'en',
 
   'wc.title': 'Wat is veranderd',
