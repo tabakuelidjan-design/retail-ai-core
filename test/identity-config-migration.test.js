@@ -149,3 +149,45 @@ test('C1b migration: not applied, additive, HMAC subjects only (no e-mail / IP c
   assert.ok(lockE > 0 && lockI > lockE && reserve.indexOf('insert into public.identity_auth_reservations') > lockI, 'lock e-mail, then IP, then reserve');
   assert.ok(!/cron|schedule/i.test(RL), 'no clean-up job in C1b');
 });
+
+// ---------- C2 migration contract (merchant_members) ----------
+const MM_RAW = readFileSync(new URL('../supabase/migrations/20260928140000_identity_members.sql', import.meta.url), 'utf8').replace(/\r\n?/g, '\n');
+const MM = MM_RAW.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
+
+test('C2 migration: not applied, additive, one table; roles, statuses, suspended_at, one membership per merchant and user', () => {
+  assert.match(MM_RAW, /NOT APPLIED anywhere/);
+  assert.deepEqual([...MM.matchAll(/create table (\w+)/g)].map((m) => m[1]), ['merchant_members']);
+  assert.ok(!/\bdrop\b/i.test(MM) && !/alter table (?!merchant_members)\w+/.test(MM), 'no DROP, no change to an existing table');
+  const body = /create table merchant_members \(([\s\S]*?)\n\);/.exec(MM)[1];
+  assert.match(body, /role text not null check \(role in \('OWNER', 'ADMIN', 'COLLABORATOR', 'VIEWER', 'ACCOUNTANT'\)\)/);
+  assert.match(body, /status text not null check \(status in \('ACTIVE', 'SUSPENDED'\)\)/);
+  assert.match(body, /\(status = 'SUSPENDED'\) = \(suspended_at is not null\)/);
+  assert.match(body, /primary key \(merchant_id, user_id\)/);
+  assert.match(body, /merchant_id uuid not null references merchants\(id\) on delete restrict/);
+  assert.match(body, /user_id uuid not null references auth\.users\(id\) on delete restrict/);
+  const cols = body.split('\n').map((l) => l.trim().split(/\s+/)[0]).filter((c) => c && !/^(primary|constraint|\))/.test(c));
+  assert.deepEqual(cols, ['merchant_id', 'user_id', 'role', 'status', 'created_at', 'updated_at', 'suspended_at', 'created_by', 'updated_by']);
+  assert.ok(!cols.some((c) => /mail|name|phone|token/.test(c)), 'no personal data column');
+});
+
+test('C2 migration: writes only through two audited functions; last OWNER and no-delete guarded in the database; RLS without policy', () => {
+  assert.match(MM, /revoke insert, update, delete, truncate on table merchant_members from service_role;/);
+  assert.match(MM, /revoke all on table merchant_members from anon, authenticated;/);
+  assert.match(MM, /alter table merchant_members enable row level security;/);
+  assert.ok(!/create policy/i.test(MM) && !/\bgrant\b/i.test(MM));
+  for (const fn of ['identity_member_bootstrap_owner', 'identity_member_apply']) {
+    const start = MM.indexOf(`create function ${fn}(`);
+    const def = MM.slice(start, MM.indexOf('$$;', start) + 3);
+    assert.ok(start > 0 && def.length > 50, `${fn} defined`);
+    assert.match(def, /security definer set search_path = ''/, fn);
+    assert.ok(def.indexOf('identity_member_lock(p_merchant)') > 0, `${fn} takes the per-merchant lock`);
+    assert.ok(def.includes('insert into public.identity_events'), `${fn} journals in the same transaction`);
+    assert.ok(MM.split('\n').some((l) => l.startsWith(`revoke execute on function ${fn}(`) && l.trim().endsWith(') from public, anon, authenticated;')), `${fn} not executable by public / anon / authenticated`);
+  }
+  assert.match(MM, /revoke execute on function identity_member_lock\(uuid\) from public, anon, authenticated, service_role;/);
+  const guard = /create function merchant_members_guard\(\)[\s\S]*?\$\$;/.exec(MM)[0];
+  assert.ok(guard.includes("if tg_op = 'DELETE' then") && guard.includes('identity_member_lock(old.merchant_id)') && guard.includes('the last active owner'));
+  assert.match(MM, /before update or delete on merchant_members for each row execute function merchant_members_guard\(\)/);
+  assert.match(MM, /before truncate on merchant_members for each statement/);
+  assert.ok(!/app_sessions|module_entitlements|shopify|source_id/i.test(MM), 'no session, no module, no Shopify');
+});

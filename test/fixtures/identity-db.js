@@ -3,6 +3,7 @@
 // identity, last_seen_at never moving backwards, final revocations, append-only journal, no e-mail in the journal. Every call is
 // recorded so tests can count reads and writes exactly. Synthetic data only; the real SQL is checked by the contract tests.
 import { randomUUID } from 'node:crypto';
+import { roleRuleRefusal } from '../../src/identity/members.js';
 
 const ms = (v) => new Date(v).getTime();
 const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/i;
@@ -20,9 +21,10 @@ function matches(row, filters) {
   });
 }
 
-/** @param {{ merchants?: string[] }} [o] merchant ids that exist (foreign keys) */
-export function createIdentityDb({ merchants = [], latencyMs = 0 } = {}) {
-  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [], identity_auth_reservations: [] };
+/** @param {{ merchants?: string[], users?: string[], latencyMs?: number }} [o] merchant ids and auth.users ids that exist (foreign keys) */
+export function createIdentityDb({ merchants = [], users = [], latencyMs = 0 } = {}) {
+  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [], identity_auth_reservations: [], merchant_members: [] };
+  let failEvents = null; // simulates an identity_events insert failing INSIDE a membership function
   const calls = [];
   let failNext = null;
   let eventSeq = 0;
@@ -31,6 +33,53 @@ export function createIdentityDb({ merchants = [], latencyMs = 0 } = {}) {
   // statement / one function call in one transaction, with the rows it locks.
   const hop = () => new Promise((r) => (latencyMs ? setTimeout(r, latencyMs) : setImmediate(r)));
   const maybeFail = () => { if (failNext) { const e = failNext; failNext = null; throw e; } };
+
+  // Mirror of the C2 SQL functions (migration 20260928140000; verified for real in PGlite): one uninterrupted body = one transaction
+  // under the per-merchant lock. The membership change and its identity_events row are built first and committed together: if the
+  // event cannot be written, nothing changes.
+  function memberFn(fn, a) {
+    const members = tables.merchant_members;
+    if (!merchants.includes(a.p_merchant)) return { ok: false, code: 'MERCHANT_UNKNOWN' };
+    const event = (userId, type, outcome, target, detail) => ({ occurred_at: a.p_now, merchant_id: a.p_merchant, user_id: userId, session_id: null, module: a.p_module, event_type: type, outcome, correlation_id: a.p_correlation, entity_type: 'user', entity_id: target, detail });
+    const commit = (ev, change) => {
+      if (!/^[a-z][a-z0-9_-]{1,39}$/.test(ev.module)) throw dbError('check violation (identity_events.module)');
+      if (failEvents) { const e = failEvents; throw e; }
+      if (change) change();
+      eventSeq += 1; tables.identity_events.push({ id: eventSeq, ...ev });
+    };
+    const find = (u) => members.find((m) => m.merchant_id === a.p_merchant && m.user_id === u);
+    if (fn === 'identity_member_bootstrap_owner') {
+      if (members.some((m) => m.merchant_id === a.p_merchant)) { commit(event(null, 'MEMBER_ACTION_DENIED', 'DENIED', a.p_user, { action: 'BOOTSTRAP', code: 'ALREADY_INITIALIZED' })); return { ok: false, code: 'ALREADY_INITIALIZED' }; }
+      if (!users.includes(a.p_user)) return { ok: false, code: 'USER_UNKNOWN' };
+      commit(event(null, 'MEMBER_BOOTSTRAPPED', 'SUCCESS', a.p_user, { toRole: 'OWNER', toStatus: 'ACTIVE' }), () => members.push({ merchant_id: a.p_merchant, user_id: a.p_user, role: 'OWNER', status: 'ACTIVE', created_at: a.p_now, updated_at: a.p_now, suspended_at: null, created_by: null, updated_by: null }));
+      return { ok: true, code: 'BOOTSTRAPPED' };
+    }
+    const actor = find(a.p_actor); const target = find(a.p_target);
+    const ROLES = ['OWNER', 'ADMIN', 'COLLABORATOR', 'VIEWER', 'ACCOUNTANT'];
+    let deny = null;
+    if (!['ADD', 'CHANGE_ROLE', 'SUSPEND', 'REACTIVATE'].includes(a.p_action)) deny = 'ACTION_INVALID';
+    else if (['ADD', 'CHANGE_ROLE'].includes(a.p_action) && !ROLES.includes(a.p_role)) deny = 'ROLE_INVALID';
+    else if (!actor) deny = 'ACTOR_NOT_MEMBER';
+    else if (actor.status !== 'ACTIVE') deny = 'ACTOR_SUSPENDED';
+    else if (!['OWNER', 'ADMIN'].includes(actor.role)) deny = 'FORBIDDEN';
+    else if (a.p_action === 'ADD' && target) deny = 'TARGET_ALREADY_MEMBER';
+    else if (a.p_action === 'ADD' && !users.includes(a.p_target)) deny = 'USER_UNKNOWN';
+    else if (a.p_action !== 'ADD' && !target) deny = 'TARGET_NOT_MEMBER';
+    else deny = roleRuleRefusal({ actorRole: actor.role, targetRole: target ? target.role : null, newRole: a.p_role, action: a.p_action, self: a.p_actor === a.p_target });
+    if (!deny && a.p_action === 'SUSPEND' && target.status !== 'ACTIVE') deny = 'ALREADY_SUSPENDED';
+    if (!deny && a.p_action === 'REACTIVATE' && target.status !== 'SUSPENDED') deny = 'ALREADY_ACTIVE';
+    if (!deny && a.p_action === 'CHANGE_ROLE' && target.role === a.p_role) deny = 'NO_CHANGE';
+    if (!deny && target && target.role === 'OWNER' && target.status === 'ACTIVE' && (a.p_action === 'SUSPEND' || (a.p_action === 'CHANGE_ROLE' && a.p_role !== 'OWNER'))) {
+      if (!members.some((m) => m.merchant_id === a.p_merchant && m.role === 'OWNER' && m.status === 'ACTIVE' && m.user_id !== a.p_target)) deny = 'LAST_OWNER';
+    }
+    if (deny) { commit(event(a.p_actor, 'MEMBER_ACTION_DENIED', 'DENIED', a.p_target, { action: a.p_action, code: deny })); return { ok: false, code: deny }; }
+    const upd = (patch) => () => Object.assign(target, patch, { updated_at: a.p_now, updated_by: a.p_actor });
+    if (a.p_action === 'ADD') commit(event(a.p_actor, 'MEMBER_ADDED', 'SUCCESS', a.p_target, { toRole: a.p_role, toStatus: 'ACTIVE' }), () => members.push({ merchant_id: a.p_merchant, user_id: a.p_target, role: a.p_role, status: 'ACTIVE', created_at: a.p_now, updated_at: a.p_now, suspended_at: null, created_by: a.p_actor, updated_by: a.p_actor }));
+    else if (a.p_action === 'CHANGE_ROLE') commit(event(a.p_actor, 'MEMBER_ROLE_CHANGED', 'SUCCESS', a.p_target, { fromRole: target.role, toRole: a.p_role }), upd({ role: a.p_role }));
+    else if (a.p_action === 'SUSPEND') commit(event(a.p_actor, 'MEMBER_SUSPENDED', 'SUCCESS', a.p_target, { role: target.role, fromStatus: 'ACTIVE', toStatus: 'SUSPENDED' }), upd({ status: 'SUSPENDED', suspended_at: a.p_now }));
+    else commit(event(a.p_actor, 'MEMBER_REACTIVATED', 'SUCCESS', a.p_target, { role: target.role, fromStatus: 'SUSPENDED', toStatus: 'ACTIVE' }), upd({ status: 'ACTIVE', suspended_at: null }));
+    return { ok: true, code: { ADD: 'MEMBER_ADDED', CHANGE_ROLE: 'MEMBER_ROLE_CHANGED', SUSPEND: 'MEMBER_SUSPENDED', REACTIVATE: 'MEMBER_REACTIVATED' }[a.p_action] };
+  }
 
   const api = {
     async select(table, params) {
@@ -80,6 +129,7 @@ export function createIdentityDb({ merchants = [], latencyMs = 0 } = {}) {
     // body after hop() runs without interruption, like one function call in one transaction holding its row locks.
     async rpc(fn, a) {
       await hop(); calls.push({ op: 'rpc', fn }); maybeFail();
+      if (fn === 'identity_member_bootstrap_owner' || fn === 'identity_member_apply') return memberFn(fn, a);
       const hex = (v) => /^[0-9a-f]{64}$/.test(v);
       if (!(a.p_window_seconds >= 60 && a.p_window_seconds <= 86400 && a.p_max_email >= 1 && a.p_max_email <= 1000 && a.p_max_ip >= 1 && a.p_max_ip <= 1000 && a.p_block_seconds >= 60 && a.p_block_seconds <= 86400)) throw dbError('invalid limits');
       const now = ms(a.p_now);
@@ -136,5 +186,6 @@ export function createIdentityDb({ merchants = [], latencyMs = 0 } = {}) {
     writes: () => calls.filter((c) => c.op !== 'select').length,
     reset: () => { calls.length = 0; },
     failNextWith: (err) => { failNext = err; },
+    failEventsWith: (err) => { failEvents = err; },
   };
 }

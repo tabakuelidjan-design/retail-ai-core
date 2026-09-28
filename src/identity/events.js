@@ -16,6 +16,8 @@ export const EVENT_TYPES = Object.freeze([
   'MFA_ENROLLED', 'MFA_CHALLENGE_FAILED', 'RATE_LIMITED',
   // Core C1b - identity verification only (no Nordla session is created by these)
   'AUTH_SUCCEEDED', 'AUTH_FAILED', 'AUTH_RATE_LIMITED', 'AUTH_UNAVAILABLE',
+  // Core C2 - memberships (written by the database functions identity_member_*, in the same transaction as the change)
+  'MEMBER_BOOTSTRAPPED', 'MEMBER_ROLE_CHANGED', 'MEMBER_REACTIVATED', 'MEMBER_ACTION_DENIED',
 ]);
 export const OUTCOMES = Object.freeze(['SUCCESS', 'FAILURE', 'DENIED']);
 
