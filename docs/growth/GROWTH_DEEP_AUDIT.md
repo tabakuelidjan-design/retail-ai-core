@@ -543,3 +543,26 @@ Suite complète 1241 / 1241 (0 échec, 0 ignoré, tests navigateur inclus) ; tes
 
 ### Verdict post-fix
 **PRÊT POUR EXPÉRIENCES** — aucun P0, P1 ou P2 bloquant ouvert. Restent ouverts et non bloquants : P2-6, P2-7, P2-8 et les P3.
+
+---
+
+## Inventaire exact des pages (correction du 2026-09-28)
+
+Une entrée grisée « Bientôt disponible » n'est **pas** une page. Développement des ventes compte **7 pages construites**, dont 4 sur données réelles.
+
+| Élément | Page construite | Données réelles | Données démo | Simple entrée désactivée | Route / API |
+|---|---|---|---|---|---|
+| Vue d'ensemble | Oui | Oui (ventes magasin) | Oui (chiffres Campagnes, badge « Démo ») ; le reste « Source non connectée » | Non | `#/` · `GET /api/growth/overview` |
+| Opportunités | Oui | Non | Non (aucune source : « Source non connectée ») | Non | `#/opportunities` · `GET /api/growth/opportunities` |
+| Campagnes | Oui | Non | Oui (100 %, badge « Démo ») | Non | `#/campaigns` · `GET /api/growth/campaigns` |
+| Produits Potentiels | Oui | Oui | Non | Non | `#/potential` · `GET /api/growth/products` |
+| Audience | Oui | Oui | Non | Non | `#/audience` · `GET /api/growth/audience` |
+| Contenu | Oui | Oui | Non | Non | `#/content` · `GET /api/growth/content` |
+| Croissance magasin | Oui | Oui | Non | Non | `#/storeGrowth` · `GET /api/growth/store` |
+| Expériences | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/experiments` → 404) |
+| Nordla AI | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/ai` → 404) |
+| Paramètres | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/settings` → 404) |
+
+Pour Expériences, Nordla AI et Paramètres : aucun fichier de page, aucune définition dans `PAGES`, aucune route, aucun endpoint, aucun code métier. Seuls existent l'entrée de menu désactivée (`aria-disabled`, sans lien), son libellé et son icône de menu. Sur Vue d'ensemble, la tuile « Expériences en cours » et la carte « Expériences » affichent seulement « Bientôt disponible ». Test : `test/growth-unbuilt-entries.test.js`.
+
+Fonctions totalement absentes, prévues plus tard (boutons désactivés ou états « non connecté », aucun code) : moteur d'expériences, recommandations Nordla AI, paramètres Growth, circuit de validation des opportunités, création de campagne / segment / opportunité, attribution du CA influencé, fréquentation et conversion magasin, performance du contenu social, authentification de Développement des ventes.
