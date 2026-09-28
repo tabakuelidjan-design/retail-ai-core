@@ -201,17 +201,22 @@ function langSwitch() {
     NORDLA_I18N.SUPPORTED.map((l) => h('button', { type: 'button', class: NORDLA_I18N.getLang() === l ? 'on' : '', title: NAMES[l], on: { click: () => { NORDLA_I18N.setLang(l); render(); } } }, l.toUpperCase())));
 }
 
-function topbar(d) {
+/**
+ * Top bar. The period and the demo flag come from the PAGE definition (PAGES), not from the payload, so the pill is identical
+ * while loading, on an error, on an empty page and on a full page. Each page's period is the window its engine really uses.
+ */
+function topbar(page) {
+  const p = page.period;
+  const pill = p.weeks
+    ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', p.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', p.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
+    : p.days === 30
+      ? h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
+      : h('span', { class: 'period-pill locked', title: t('gr.period.daysNote', p.days), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastDays', p.days), h('span', { class: 'period-fixed' }, t('gr.period.fixed')));
   return h('div', { class: 'topbar' },
     h('div', { class: 'topbar-title' }, t('gr.brand')),
     h('div', { class: 'topbar-right' },
-      d && d.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t('gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
-      // A page that declares its own analysis window (d.window: Potentiel produits = complete weeks) shows it; the others keep the 30 days.
-      d && d.window && d.window.weeks
-        ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', d.window.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', d.window.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
-        : d && d.window && d.window.days
-        ? h('span', { class: 'period-pill locked', title: t('gr.period.daysNote', d.window.days), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastDays', d.window.days), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
-        : h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed'))),
+      page.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t('gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
+      pill,
       langSwitch()));
 }
 
@@ -229,7 +234,8 @@ function kpiRow(d) {
     kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), num(k.activeOpportunities.value), kpiNote(k.activeOpportunities.highPriority, t('gr.kpi.highPriority'), 'warn')),
     kpi('activeCampaigns', t('gr.kpi.activeCampaigns'), num(k.activeCampaigns.value), kpiNote(k.activeCampaigns.performingWell, t('gr.kpi.performingWell'), 'good')),
     kpi('roas', t('gr.kpi.roas'), roasFmt(k.roas.value), delta(k.roas.deltaPct)),
-    kpi('experimentsRunning', t('gr.kpi.experimentsRunning'), num(k.experimentsRunning.value), kpiNote(k.experimentsRunning.endingThisWeek, t('gr.kpi.endingThisWeek'))));
+    // Expériences is not built: no running-experiment figure (never a demo count).
+    kpi('experimentsRunning', t('gr.kpi.experimentsRunning'), k.experimentsRunning.value == null ? t('gr.dash') : num(k.experimentsRunning.value), h('div', { class: 'ex-kpi-note' }, t('gr.kpi.experimentsSoon'))));
 }
 
 // ---------- Growth Pulse (NordlaCharts.trendLines / trendLine, the Analytics/Finance chart components) ----------
@@ -241,8 +247,9 @@ function pulseCard(d) {
     ['revenue', 'traffic'].map((v) => h('option', { value: v, ...(v === pulseView ? { selected: 'selected' } : {}) }, t(`gr.pulse.${v}`))));
   let head; let chart;
   if (pulseView === 'traffic') {
-    head = NordlaCharts.head({ title: t('gr.pulse.visitors'), value: num(p.totals.storeVisitors), delta: Math.round(p.deltas.storeVisitors * 1000) / 10, good: p.deltas.storeVisitors >= 0, vs: t('gr.vsPrevious') });
-    chart = NordlaCharts.trendLine(p.storeVisitors.map((v, i) => ({ label: labels[i], value: v })), { format: compactNum, height: 230, label: t('gr.pulse.visitors') });
+    // Store footfall is not connected: stated, never drawn (no demo visitors).
+    head = null;
+    chart = NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText'));
   } else {
     head = NordlaCharts.head({ title: t('gr.pulse.influenced'), value: money(p.totals.influencedRevenue), delta: Math.round(p.deltas.influencedRevenue * 1000) / 10, good: p.deltas.influencedRevenue >= 0, vs: t('gr.vsPrevious') });
     chart = NordlaCharts.trendLines([
@@ -324,7 +331,7 @@ function channelCard(d) {
 const CAMP_TONE = { performing: 'gr-good', active: 'mute', watch: 'gr-warn' };
 function campaignsCard(d) {
   return h('div', { class: 'ex-card gr-camps' },
-    cardHead('campaigns', t('gr.camp.title'), chip(t('gr.camp.activeCount', d.campaigns.length), 'mute')),
+    cardHead('campaigns', t('gr.camp.title'), chip(t('gr.camp.activeCount', d.kpis.activeCampaigns.value), 'mute')),
     h('div', { class: 'ex-movers' }, d.campaigns.map((c) => {
       const pct = c.budget ? Math.min(100, Math.round((c.spend / c.budget) * 100)) : 0;
       return h('div', { class: 'ex-mover gr-row' },
@@ -336,7 +343,7 @@ function campaignsCard(d) {
             : h('div', { class: 'ex-mover-sub' }, t('gr.camp.noBudget'))),
         h('div', { class: 'gr-side' }, chip(t(`gr.camp.status.${c.status}`), CAMP_TONE[c.status]),
           h('strong', null, c.roas == null ? t('gr.dash') : t('gr.camp.roas', roasFmt(c.roas))),
-          h('span', { class: 'gr-muted' }, c.conversions == null ? t('gr.camp.actions', num(c.reach)) : t('gr.camp.conversions', num(c.conversions)))));
+          h('span', { class: 'gr-muted' }, t('gr.camp.newCustomers', num(c.newCustomers)))));
     })));
 }
 
@@ -357,23 +364,25 @@ function contentCard(d) {
 }
 
 // ---------- Store growth (NordlaCharts.sparkline = Analytics' KPI sparkline) ----------
-function storeMetric(label, value, deltaEl, series) {
+function storeMetric(label, value, deltaEl, series, note) {
   return h('div', { class: 'gr-store-metric' },
     h('div', { class: 'ex-kpi-label' }, label),
     h('div', { class: 'gr-store-value' }, value),
     deltaEl,
-    h('div', { class: 'kpi-spark' }, NordlaCharts.sparkline(series)));
+    note ? h('div', { class: 'ex-kpi-note' }, note) : null,
+    series ? h('div', { class: 'kpi-spark' }, NordlaCharts.sparkline(series)) : null);
 }
+// Store footfall and conversion are NOT connected (no source): stated as such. Store sales are REAL (Croissance magasin's engine,
+// its own 8-week window) or explicitly unavailable - never a demo value.
 function storeCard(d) {
-  const s = d.store;
-  const pp = s.conversion.deltaPp;
-  const ppLine = h('div', { class: `ex-delta ${pp >= 0 ? 'up' : 'down'}` }, arrow(pp >= 0 ? 'up' : 'down'), h('strong', null, t('gr.store.pts', `${pp >= 0 ? '+' : '−'}${new Intl.NumberFormat(tag(), { maximumFractionDigits: 1 }).format(Math.abs(pp))}`)), h('span', null, t('gr.vsPrevious')));
+  const r = (d.real && d.real.store) || { mode: 'unavailable' };
+  const notConnected = (label) => storeMetric(label, t('gr.store.notConnected'), null, null, t('gr.store.footfallNote'));
+  const revenue = r.mode === 'store'
+    ? storeMetric(t('gr.store.realRevenue', r.weeks), new Intl.NumberFormat(tag(), { style: 'currency', currency: r.currency || 'EUR', maximumFractionDigits: 0 }).format(r.net), r.change == null ? null : delta(r.change), r.weekly)
+    : storeMetric(t('gr.store.revenue'), t('gr.dash'), null, null, t(r.mode === 'noStore' ? 'gr.store.noStore' : 'gr.store.unavailable'));
   return h('div', { class: 'ex-card gr-store' },
-    cardHead('storeGrowth', t('gr.store.title')),
-    h('div', { class: 'gr-store-grid' },
-      storeMetric(t('gr.store.traffic'), num(s.traffic.value), delta(s.traffic.deltaPct), s.traffic.series),
-      storeMetric(t('gr.store.conversion'), pct1(s.conversion.value), ppLine, s.conversion.series),
-      storeMetric(t('gr.store.revenue'), money(s.revenue.value), delta(s.revenue.deltaPct), s.revenue.series)));
+    cardHead('storeGrowth', t('gr.store.title'), r.mode === 'store' ? chip(t('gr.store.realChip'), 'gr-good') : null),
+    h('div', { class: 'gr-store-grid' }, notConnected(t('gr.store.traffic')), notConnected(t('gr.store.conversion')), revenue));
 }
 
 // ---------- Top opportunities ----------
@@ -382,41 +391,39 @@ function opportunitiesCard(d) {
   return h('div', { class: 'ex-card gr-opps' },
     cardHead('topOpportunities', t('gr.opp.title')),
     h('div', { class: 'ex-movers' }, d.opportunities.map((o) => h('div', { class: 'ex-mover gr-row' },
-      icoBubble(kindIcon('opportunity', o.kind)),
+      icoBubble(kindIcon('src', o.source)),
       h('div', { class: 'ex-mover-main' },
         h('div', { class: 'ex-mover-name' }, loc(o.title)),
-        h('div', { class: 'ex-mover-sub' }, t('gr.opp.source', loc(o.source))),
-        h('div', { class: 'gr-att-meta' }, chip(t(`gr.opp.priority.${o.priority}`), PRIO_TONE[o.priority]), h('span', { class: 'gr-muted' }, t(`gr.opp.status.${o.status}`)))),
+        h('div', { class: 'ex-mover-sub' }, t('gr.opp.source', t(`gr.op.src.${o.source}`))),
+        h('div', { class: 'gr-att-meta' }, chip(t(`gr.opp.priority.${o.priority}`), PRIO_TONE[o.priority]), h('span', { class: 'gr-muted' }, t(`gr.op.status.${o.status}`)))),
       h('div', { class: 'gr-side' }, h('strong', { class: 'gr-pos' }, `+${money(o.estimate)}`), h('span', { class: 'gr-muted' }, t('gr.opp.estimate')))))),
     h('div', { class: 'ex-foot' }, t('gr.opp.foot')));
 }
 
 // ---------- Experiments ----------
-const EXP_TONE = { running: 'mute', endingSoon: 'gr-warn' };
-function experimentsCard(d) {
+// The Expériences page is not built yet: the card states it (same card, no demo experiment).
+function experimentsCard() {
   return h('div', { class: 'ex-card gr-exps' },
     cardHead('experiments', t('gr.exp.title')),
-    h('div', { class: 'ex-movers' }, d.experiments.map((x) => h('div', { class: 'ex-mover gr-row' },
-      icoBubble('experiments'),
-      h('div', { class: 'ex-mover-main' },
-        h('div', { class: 'ex-mover-name' }, loc(x.name)),
-        h('div', { class: 'ex-mover-sub' }, t('gr.exp.kpi', loc(x.kpi))),
-        h('div', { class: 'gr-att-meta' }, chip(t(`gr.exp.status.${x.status}`), EXP_TONE[x.status]), h('span', { class: 'gr-muted' }, t('gr.exp.duration', daysBetween(x.start, x.end))))),
-      h('div', { class: 'gr-side' }, h('span', { class: 'gr-muted' }, t('gr.exp.ends')), h('strong', null, dayFmt(x.end)))))));
+    h('div', { class: 'gr-pp-empty' }, t('gr.exp.soon')));
 }
 
 // ---------- pages + router ----------
 // Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; let stData = null; const loadFailed = {};
+let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; let stData = null;
+// Load state per page: undefined (not requested), 'loading', or { code } after a failed request (safe, known codes only).
+const loadState = {};
+const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
+// `period` = the window the page's engine really uses (the top bar shows it in every state); `demo` = demonstration page.
 const PAGES = {
-  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', get: () => data, set: (v) => { data = v; }, render: renderOverview },
-  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
-  campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
-  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
-  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
-  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
-  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', get: () => stData, set: (v) => { stData = v; }, render: renderStore },
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { days: 30 }, demo: true, get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { days: 30 }, demo: true, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
+  campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', period: { days: 30 }, demo: true, get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
+  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
+  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
+  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 
@@ -433,22 +440,82 @@ function render() {
   const app = document.getElementById('app');
   const main = h('main', { class: 'main gr-main' });
   app.replaceChildren(h('div', { class: 'shell' }, sidebar(key), main, morePanel(key)));
-  main.appendChild(topbar(d));
+  main.appendChild(topbar(page));
   main.appendChild(h('div', { class: 'ex-head' }, h('div', null, h('h1', { class: 'ex-title' }, t(page.title)), h('p', { class: 'ex-sub' }, t(page.subtitle)))));
-  if (!d) { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), loadFailed[key] ? t('gr.loadError') : ''))); return; }
+  if (!d) { main.appendChild(loadStateCard(key)); applyDialogFocus(); return; }
   // Each section is built on its own: a failing section is replaced by an empty state, the rest of the page still renders.
   const safe = (fn) => { try { return fn(d); } catch (e) { console.error('growth section failed', e); return h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), '')); } };
   page.render(main, safe);
+  applyDialogFocus();
+}
+
+// ---------- shared states: loading (never "unavailable") and error (safe category + retry). Empty / partial stay per page. ----------
+function loadStateCard(key) {
+  const s = loadState[key];
+  if (s && s !== 'loading') {
+    return h('div', { class: 'ex-card gr-state gr-state-error', role: 'alert' },
+      h('strong', { class: 'gr-state-title' }, t('gr.state.errorTitle')),
+      h('p', { class: 'gr-state-text' }, t(`gr.state.error.${s.code}`)),
+      h('button', { type: 'button', class: 'btn-outline gr-state-retry', on: { click: () => loadPage(key) } }, t('gr.state.retry')));
+  }
+  return h('div', { class: 'ex-card gr-state gr-state-loading', role: 'status', 'aria-live': 'polite' },
+    h('span', { class: 'gr-spinner', 'aria-hidden': 'true' }), h('span', { class: 'gr-state-text' }, t('gr.state.loading')));
+}
+async function loadPage(key) {
+  const page = PAGES[key];
+  loadState[key] = 'loading';
+  if (currentPage() === key) render();
+  try {
+    const r = await fetch(page.url);
+    if (r.ok) { page.set(await r.json()); delete loadState[key]; }
+    else {
+      let code = 'UNKNOWN';
+      try { const j = await r.json(); if (j && j.error && ERROR_CODES.includes(j.error.code)) code = j.error.code; } catch (e) { /* not JSON: stays UNKNOWN */ }
+      loadState[key] = { code };
+    }
+  } catch (e) { loadState[key] = { code: 'NETWORK' }; }
+  if (currentPage() === key) render();
+}
+
+// ---------- dialogs (detail panels + mobile "Plus"): focus moved in on open, Tab trapped inside, restored on close ----------
+// Pages call dialogOpened(trigger) / dialogClosed() and give their triggers a stable data-focus-id: a re-render replaces the DOM,
+// so the trigger is found again by that id to restore the focus.
+const dialogFocus = { restoreId: null, pending: null };
+function dialogOpened(trigger) { dialogFocus.restoreId = trigger && trigger.getAttribute ? trigger.getAttribute('data-focus-id') : null; dialogFocus.pending = 'in'; }
+function dialogClosed() { dialogFocus.pending = 'restore'; }
+function applyDialogFocus() {
+  if (typeof document.querySelector !== 'function') return;
+  if (dialogFocus.pending === 'in') {
+    const target = document.querySelector('.gr-pp-drawer .gr-pp-close');
+    if (target && target.focus) target.focus();
+  } else if (dialogFocus.pending === 'restore') {
+    const id = dialogFocus.restoreId;
+    const el = id && typeof document.querySelectorAll === 'function' ? [...document.querySelectorAll('[data-focus-id]')].find((x) => x.getAttribute('data-focus-id') === id) : null;
+    if (el && el.focus) el.focus();
+    dialogFocus.restoreId = null;
+  }
+  dialogFocus.pending = null;
+}
+const FOCUSABLE = 'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || typeof document.querySelector !== 'function') return;
+    const dlg = document.querySelector('.gr-pp-drawer') || (navMoreOpen ? document.querySelector('.gr-more-panel') : null);
+    if (!dlg) return;
+    const items = [...dlg.querySelectorAll(FOCUSABLE)].filter((x) => x.offsetParent !== null || x === document.activeElement);
+    if (!items.length) return;
+    const first = items[0]; const last = items[items.length - 1];
+    if (!dlg.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 }
 
 async function route() {
   navMoreOpen = false; // a navigation always closes the mobile "Plus" menu
   const key = currentPage(); const page = PAGES[key];
-  render();
-  if (!page.get()) {
-    try { const r = await fetch(page.url); if (r.ok) page.set(await r.json()); else loadFailed[key] = true; } catch (e) { loadFailed[key] = true; }
-    if (currentPage() === key) render();
-  }
+  if (!page.get() && loadState[key] !== 'loading') await loadPage(key);
+  else render();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);

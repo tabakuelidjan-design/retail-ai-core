@@ -86,7 +86,9 @@ const SEG_ORDER = ['loyal', 'returning', 'newReturned', 'new', 'unknown', 'react
 function auNoCustomerLevel() {
   return h('div', { class: 'gr-pp-empty' }, t('gr.au.noKey.text'), h('ul', null, ['loyal', 'reactivate', 'new', 'occasional'].map((k) => h('li', null, auSeg(k)))));
 }
-function auOpen(key) { auState.sel = key; render(); }
+// Detail panel: focus handled by the shell (dialogOpened / dialogClosed + data-focus-id on every trigger).
+function auOpen(key, trigger) { dialogOpened(trigger); auState.sel = key; render(); }
+function auClose() { auState.sel = null; dialogClosed(); render(); }
 function auPriorityCard(d) {
   const head = cardHead('pack:priorityHigh', t('gr.au.prio.title'));
   if (d.mode !== 'customer') return h('div', { class: 'ex-card gr-au-prio' }, head, auNoCustomerLevel());
@@ -100,7 +102,7 @@ function auPriorityCard(d) {
         h('td', { class: 'num' }, s.revenueShare == null ? auNA(t('gr.dash')) : auPct(s.revenueShare)),
         h('td', null, auStatus(s.status)),
         h('td', { class: 'gr-au-actcell' }, t(`gr.au.action.${s.action}`)),
-        h('td', { class: 'gr-op-act' }, h('button', { type: 'button', class: 'gr-au-go', 'aria-label': t('gr.au.openSegment', auSeg(s.key)), on: { click: () => auOpen(s.key) } }, arrowRight()))))))),
+        h('td', { class: 'gr-op-act' }, h('button', { type: 'button', class: 'gr-au-go', 'aria-label': t('gr.au.openSegment', auSeg(s.key)), 'data-focus-id': `au-go:${s.key}`, on: { click: (e) => auOpen(s.key, e && e.currentTarget) } }, arrowRight()))))))),
     h('div', { class: 'ex-foot' }, t('gr.au.prio.foot')));
 }
 function arrowRight() {
@@ -137,7 +139,7 @@ function auSignalsCard(d) {
 // ---------- Segments clients (main list; cards below 1024px) ----------
 function auSegRow(s) {
   const cell = (cls, k, ...c) => h('div', { class: `gr-pp-c ${cls}`, ...(k ? { 'data-k': k } : {}) }, ...c);
-  return h('button', { type: 'button', class: `gr-pp-row gr-au-row${auState.sel === s.key ? ' sel' : ''}`, 'aria-label': t('gr.au.openSegment', auSeg(s.key)), on: { click: () => auOpen(s.key) } },
+  return h('button', { type: 'button', class: `gr-pp-row gr-au-row${auState.sel === s.key ? ' sel' : ''}`, 'aria-label': t('gr.au.openSegment', auSeg(s.key)), 'data-focus-id': `au-row:${s.key}`, on: { click: (e) => auOpen(s.key, e && e.currentTarget) } },
     cell('gr-pp-c-name', null, auSegIcon(s.key), h('span', { class: 'gr-pp-name-wrap' }, h('span', { class: 'gr-pp-name' }, auSeg(s.key)), h('span', { class: 'gr-pp-sub' }, t(`gr.au.segDef.${s.key}`)))),
     cell('gr-pp-c-num', t('gr.au.col.customers'), h('strong', null, num(s.customers))),
     cell('gr-pp-c-num', t('gr.au.col.frequency'), s.ordersPerCustomer == null ? auNA(t('gr.dash')) : new Intl.NumberFormat(tag(), { maximumFractionDigits: 1 }).format(s.ordersPerCustomer)),
@@ -173,7 +175,7 @@ function auActionsCard(d) {
           h('span', { class: 'gr-pp-sub' }, s ? t('gr.au.act.target', auSeg(s.key), num(s.customers)) : t(`gr.au.actWhy.${a.code}`)),
           h('span', { class: 'gr-pp-sub' }, t(`gr.au.actBenefit.${a.code}`))];
         const inner = [icoBubble(AU_ACTION_ICON[a.code]), h('span', { class: 'gr-pp-item-main' }, body), h('span', { class: 'gr-pp-item-side' }, chip(t(a.status === 'insufficient' ? 'gr.au.act.prerequisite' : 'gr.au.act.toTest'), a.status === 'insufficient' ? 'mute' : 'gr-info'), s ? arrowRight() : null)];
-        return s ? h('button', { type: 'button', class: 'gr-pp-item gr-au-item', on: { click: () => auOpen(s.key) } }, inner) : h('div', { class: 'gr-pp-item gr-au-item gr-au-static' }, inner);
+        return s ? h('button', { type: 'button', class: 'gr-pp-item gr-au-item', 'data-focus-id': `au-act:${a.code}`, on: { click: (e) => auOpen(s.key, e && e.currentTarget) } }, inner) : h('div', { class: 'gr-pp-item gr-au-item gr-au-static' }, inner);
       }))
       : h('div', { class: 'gr-pp-empty' }, t('gr.au.act.none')),
     h('div', { class: 'ex-foot' }, t('gr.au.act.foot')));
@@ -186,7 +188,7 @@ function auStat(label, value, note) {
 function auDrawer(d) {
   const s = d.segments.find((x) => x.key === auState.sel);
   if (!s) return null;
-  const close = () => { auState.sel = null; render(); };
+  const close = () => auClose();
   const th = d.thresholds;
   const evo = s.previousCustomers == null ? t('gr.au.d.noPrevious') : s.customers === s.previousCustomers ? t('gr.au.d.same', num(s.previousCustomers)) : t('gr.au.d.previous', num(s.previousCustomers));
   return h('div', { class: 'gr-pp-drawer-wrap' },
@@ -215,7 +217,7 @@ function auDrawer(d) {
         h('section', { class: 'gr-pp-sec' }, h('p', { class: 'gr-pp-action-text' }, t('gr.au.d.method'))))));
 }
 if (typeof document !== 'undefined' && document.addEventListener) {
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && auState.sel && currentPage() === 'audience') { auState.sel = null; render(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && auState.sel && currentPage() === 'audience') auClose(); });
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('hashchange', () => { auState.sel = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });

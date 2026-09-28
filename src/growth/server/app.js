@@ -71,7 +71,22 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
       if (shared) return send(res, 200, shared.type, shared.body);
       const asset = GROWTH_ASSET.exec(url.pathname);
       if (asset) { try { return send(res, 200, IMG[asset[3]], await readFile(new URL(`${asset[1]}/${asset[2]}`, GROWTH_ASSETS))); } catch { return json(res, 404, { error: { code: 'NOT_FOUND' } }); } }
-      if (url.pathname === '/api/growth/overview') return json(res, 200, buildDemoOverview(now()));
+      if (url.pathname === '/api/growth/overview') {
+        // Demonstration page, except the store sales: the real figure of Croissance magasin's engine (same tenant, same window),
+        // or an explicit unavailable state - never a demo value that could contradict the real page.
+        const payload = buildDemoOverview(now());
+        let real = { mode: 'unavailable' };
+        if (store) {
+          try {
+            const s = await store();
+            real = s.mode === 'store'
+              ? { mode: 'store', net: s.kpis.storeNet.value, change: s.kpis.storeNet.change, orders: s.kpis.storeOrders.value, weekly: s.weekly.map((w) => w.storeNet), weeks: s.window.weeks, currency: s.currency }
+              : { mode: 'noStore' };
+          } catch (e) { console.error('growth overview store failed:', e?.message ?? e); }
+        }
+        payload.real = { store: real };
+        return json(res, 200, payload);
+      }
       if (url.pathname === '/api/growth/opportunities') return json(res, 200, buildDemoOpportunities(now()));
       if (url.pathname === '/api/growth/campaigns') return json(res, 200, buildDemoCampaigns(now()));
       if (url.pathname === '/api/growth/products') {

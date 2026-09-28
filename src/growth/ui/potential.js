@@ -118,10 +118,12 @@ function ppToolbar(d) {
       ppSelect(t('gr.pp.f.category'), ppState.cat, catOptions, (v) => { ppState.cat = v; render(); }),
       ppSelect(t('gr.pp.f.sort'), ppState.sort, PP_SORTS.map((s) => [s, t(`gr.pp.f.sort.${s}`)]), (v) => { ppState.sort = v; render(); })));
 }
-function ppOpen(id) { ppState.sel = id; render(); }
+// Detail panel: focus handled by the shell (dialogOpened / dialogClosed + data-focus-id on every trigger).
+function ppOpen(id, trigger) { dialogOpened(trigger); ppState.sel = id; render(); }
+function ppClose() { ppState.sel = null; dialogClosed(); render(); }
 function ppRow(r) {
   const cell = (cls, k, ...c) => h('div', { class: `gr-pp-c ${cls}`, ...(k ? { 'data-k': k } : {}) }, ...c);
-  return h('button', { type: 'button', class: `gr-pp-row${ppState.sel === r.id ? ' sel' : ''}`, 'aria-label': t('gr.pp.openDetail', r.title), on: { click: () => ppOpen(r.id) } },
+  return h('button', { type: 'button', class: `gr-pp-row${ppState.sel === r.id ? ' sel' : ''}`, 'aria-label': t('gr.pp.openDetail', r.title), 'data-focus-id': `pp-row:${r.id}`, on: { click: (e) => ppOpen(r.id, e && e.currentTarget) } },
     // The category sits under the name (and in the category filter) rather than in its own column: the list keeps room for
     // the decision columns next to the right-hand blocks.
     cell('gr-pp-c-name', null, ppThumb(r), h('span', { class: 'gr-pp-name-wrap' }, h('span', { class: 'gr-pp-name' }, r.title),
@@ -155,7 +157,7 @@ function ppListCard(d) {
 
 // ---------- right column: to push / to protect / by status ----------
 function ppItem(r, metric, action) {
-  return h('button', { type: 'button', class: 'gr-pp-item', on: { click: () => ppOpen(r.id) } },
+  return h('button', { type: 'button', class: 'gr-pp-item', 'data-focus-id': `pp-item:${r.id}`, on: { click: (e) => ppOpen(r.id, e && e.currentTarget) } },
     ppThumb(r, 'sm'),
     h('span', { class: 'gr-pp-item-main' }, h('span', { class: 'gr-pp-name' }, r.title), h('span', { class: 'gr-pp-sub' }, ppSignal(r))),
     h('span', { class: 'gr-pp-item-side' }, metric, action));
@@ -217,7 +219,7 @@ function ppDrawer(d) {
   const r = d.rows.find((x) => x.id === ppState.sel);
   if (!r) return null;
   const e = r.evidence;
-  const close = () => { ppState.sel = null; render(); };
+  const close = () => ppClose();
   const evoNote = e.recentUnits != null && e.priorUnits != null ? t('gr.pp.ev.evoNote', num(e.recentUnits), num(e.priorUnits), e.weeksEachSide) : t('gr.pp.ev.evoNone', d.thresholds.trend.minObservableWeeks);
   const stockNote = r.stock.usable ? (e.snapshotAt ? t('gr.pp.ev.snapshot', ppDate(e.snapshotAt)) : null) : e.snapshotAt ? t('gr.pp.ev.snapshotOld', ppDate(e.snapshotAt)) : t('gr.pp.ev.noSnapshot');
   const coverNote = r.cover.status === 'CALCULATED' ? t('gr.pp.ev.coverNote', d.thresholds.lowCoverWeeks) : t(`gr.pp.cover.${r.cover.status || 'UNKNOWN'}`);
@@ -249,7 +251,7 @@ function ppDrawer(d) {
 }
 // Escape closes the drawer (registered once, only acts while one is open).
 if (typeof document !== 'undefined' && document.addEventListener) {
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ppState.sel && currentPage() === 'potential') { ppState.sel = null; render(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ppState.sel && currentPage() === 'potential') ppClose(); });
 }
 
 function renderPotential(main, safe) {

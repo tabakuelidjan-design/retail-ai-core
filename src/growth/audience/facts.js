@@ -3,10 +3,11 @@
 //   { at, net, multiProduct, group, key, idx }
 // `key` is the pseudonymous customer key (keyed hash) or null; it stays inside the Growth engine (audience.js never outputs it).
 // `idx` is the source's customer order index, used only when the order is journey-ready (same rule as the Clients workspace).
-// `net` = the order's net sales ex tax minus the refunds of its own lines, dated by the order (observed value, not a prediction).
+// `net` = Nordla sales semantics A (metrics/net-sales.js): the order's net sales ex tax after every refund of its lines, dated by
+// the order - identical to every other Growth page (observed value, not a prediction).
 
 import { buildLedger } from '../../metrics/ledger.js';
-import { aggregate } from '../../metrics/sales.js';
+import { orderNetFacts } from '../../metrics/net-sales.js';
 import { addDays, localDateString, localMidnight } from '../../metrics/windows.js';
 import { orderGroup } from '../../customers/facts.js';
 import { isOnlineChannel, isPosChannel } from '../../metrics/channels.js';
@@ -34,9 +35,7 @@ export function audienceFacts({ data, now, timeZone, config }) {
   const raw = new Map(data.orders.map((o) => [o.id, o]));
   const linesByOrder = new Map();
   for (const l of ledger.lineFacts) (linesByOrder.get(l.orderId) ?? linesByOrder.set(l.orderId, []).get(l.orderId)).push(l);
-  const orderOfLine = new Map(ledger.lineFacts.map((l) => [l.orderLineId, l.orderId]));
-  const refundsByOrder = new Map();
-  for (const r of ledger.refundFacts) { const o = orderOfLine.get(r.orderLineId); if (o) (refundsByOrder.get(o) ?? refundsByOrder.set(o, []).get(o)).push(r); }
+  const netByOrder = orderNetFacts(ledger, config);
 
   const orders = [];
   for (const o of ledger.orders) {
@@ -46,7 +45,7 @@ export function audienceFacts({ data, now, timeZone, config }) {
     const idx = r.journey_ready === true && Number.isFinite(Number(r.customer_order_index)) && r.customer_order_index != null ? Number(r.customer_order_index) : null;
     orders.push({
       at: o.orderedAt,
-      net: aggregate(lines, refundsByOrder.get(o.id) ?? [], config).net_sales_ex_tax,
+      net: netByOrder.get(o.id).net,
       multiProduct: new Set(lines.map((l) => l.productId).filter(Boolean)).size >= 2,
       group: orderGroup(r, { online: isOnlineChannel(r.channel_handle, config), pos: isPosChannel(r.channel_handle, config) }),
       key: r.customer_key || null,

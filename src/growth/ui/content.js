@@ -88,10 +88,12 @@ function ctToolbar(d) {
       ctSelect(t('gr.ct.f.problem'), ctState.problem, [['all', t('gr.ct.f.allProblems')], ...f.problems.map((p) => [p, `${t(`gr.ct.problem.${p}`)} (${num(d.problems.find((x) => x.code === p)?.count ?? 0)})`])], (v) => { ctState.problem = v; render(); }),
       ctSelect(t('gr.ct.f.category'), ctState.cat, [['all', t('gr.ct.f.allCategories')], ...f.categories.map((c) => [c, c]), ...(f.uncategorised ? [['', t('gr.pp.noCategory')]] : [])], (v) => { ctState.cat = v; render(); })));
 }
-function ctOpen(id) { ctState.sel = id; render(); }
+// Detail panel: focus handled by the shell (dialogOpened / dialogClosed + data-focus-id on every trigger).
+function ctOpen(id, trigger) { dialogOpened(trigger); ctState.sel = id; render(); }
+function ctClose() { ctState.sel = null; dialogClosed(); render(); }
 function ctRow(r, weeks) {
   const cell = (cls, k, ...c) => h('div', { class: `gr-pp-c ${cls}`, ...(k ? { 'data-k': k } : {}) }, ...c);
-  return h('button', { type: 'button', class: `gr-pp-row gr-ct-row${ctState.sel === r.id ? ' sel' : ''}`, 'aria-label': t('gr.pp.openDetail', r.title), on: { click: () => ctOpen(r.id) } },
+  return h('button', { type: 'button', class: `gr-pp-row gr-ct-row${ctState.sel === r.id ? ' sel' : ''}`, 'aria-label': t('gr.pp.openDetail', r.title), 'data-focus-id': `ct-row:${r.id}`, on: { click: (e) => ctOpen(r.id, e && e.currentTarget) } },
     cell('gr-pp-c-name', null, ctThumb(r), h('span', { class: 'gr-pp-name-wrap' }, h('span', { class: 'gr-pp-name' }, r.title), h('span', { class: 'gr-pp-sub' }, r.skus.length ? r.skus.join(' · ') : t('gr.ct.noSku')))),
     cell('gr-pp-c-cat gr-ct-cat', t('gr.ct.col.category'), r.category ? h('span', null, r.category) : h('span', { class: 'gr-pp-na' }, t('gr.pp.noCategory'))),
     cell('gr-ct-c-problems', null, r.problems.length ? r.problems.map(ctProblem) : h('span', { class: 'gr-pp-na' }, t(r.status === 'insufficient' ? 'gr.ct.noProblemYet' : 'gr.ct.noProblem'))),
@@ -125,7 +127,7 @@ function ctAllClear(d) {
 function ctDrawer(d) {
   const r = d.rows.find((x) => x.id === ctState.sel);
   if (!r) return null;
-  const close = () => { ctState.sel = null; render(); };
+  const close = () => ctClose();
   const fact = (code) => ({
     noImage: t('gr.ct.fact.noImage'), noAltText: t('gr.ct.fact.noAltText'), noType: t('gr.ct.fact.noType'), noCollection: t('gr.ct.fact.noCollection'),
     missingSku: t('gr.ct.fact.missingSku', num(r.facts.variantsWithoutSku), num(r.facts.variants)), duplicateTitle: t('gr.ct.fact.duplicateTitle', num(r.facts.sameTitle)),
@@ -155,7 +157,7 @@ function ctDrawer(d) {
           h('p', { class: 'gr-pp-action-text' }, t('gr.ct.d.method'))))));
 }
 if (typeof document !== 'undefined' && document.addEventListener) {
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ctState.sel && currentPage() === 'content') { ctState.sel = null; render(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ctState.sel && currentPage() === 'content') ctClose(); });
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('hashchange', () => { ctState.sel = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });
