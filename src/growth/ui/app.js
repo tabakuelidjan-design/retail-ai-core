@@ -4,8 +4,8 @@
 // component (Analytics' ex-* cards/tabs/KPI tiles/tables, the shared rail, NordlaCharts, NordlaIcon); growth.css only adds the
 // Growth grid and the few list rows Analytics has no equivalent for. All copy goes through NORDLA_I18N.t() (lang-fr/nl/en.js).
 // Real data or honest states only (owner decision 2026-09-28): Vue d'ensemble shows the real store sales and the Opportunités
-// priorities; every figure no engine produces shows "Source non connectée". No demonstration data, no Campagnes page, and no
-// action button that performs no action.
+// priorities only - an indicator without a real source is not shown (no "Source non connectée" card). No demonstration data, no
+// Campagnes page, and no action button that performs no action.
 
 const t = NORDLA_I18N.t;
 
@@ -58,8 +58,7 @@ const GROWTH_ICONS = {
   overview: 'pack:overview', opportunities: 'pack:opportunities', content: 'pack:content',
   storeGrowth: 'pack:storeGrowth', audience: 'pack:audience', settings: 'pack:settings',
   // Vue d'ensemble
-  revenueInfluenced: 'chiffreAffaires', topOpportunities: 'pack:opportunities', aiInsights: 'pack:aiInsights',
-  needsAttention: 'pack:needsAttention', growthPulse: 'croissance', contentPerformance: 'meilleurProduit',
+  topOpportunities: 'pack:opportunities', needsAttention: 'pack:needsAttention',
   // shared by the pages
   pipelineStatus: 'pack:pipelineStatus', srcCost: 'prix',
 };
@@ -188,37 +187,15 @@ function kpi(iconName, label, value, line) {
     iconName ? h('span', { class: 'ex-kpi-ico' }, gi(iconName, 'lg')) : null,
     h('div', { class: 'ex-kpi-body' }, h('div', { class: 'ex-kpi-label' }, label), h('div', { class: 'ex-kpi-value' }, value), line));
 }
-// "Source non connectée": the honest state of a figure no Nordla source produces today (in a KPI note or inside a card).
-const ncNote = () => h('div', { class: 'ex-kpi-note' }, t('gr.src.notConnected'));
-const ncBody = (text) => h('div', { class: 'gr-pp-empty gr-nc' }, h('strong', { class: 'gr-ink' }, t('gr.src.notConnected')), h('span', null, text));
-const kpiNote = (count, text, tone) => h('div', { class: `ex-delta gr-kpi-note${tone ? ` ${tone}` : ''}` }, h('strong', null, String(count)), h('span', null, text));
 function kpiRow(d) {
   const k = d.kpis;
-  // 4 tiles (same layout as the other 4-tile Growth rows, gr-pp-kpis). Priorities = the Opportunités aggregator (real engines).
-  const note = (text) => h('div', { class: 'ex-kpi-note' }, text);
-  const pr = (key, icon, label, text) => (k[key] ? kpi(icon, label, num(k[key].value), note(text)) : kpi(icon, label, t('gr.dash'), note(t('gr.src.unavailable'))));
-  return h('div', { class: 'ex-kpi-row gr-kpi-row gr-pp-kpis' },
-    kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), t('gr.dash'), ncNote()),
-    pr('fix', 'needsAttention', t('gr.kpi.fix'), k.fix ? t('gr.kpi.fixNote', num(k.fix.elements)) : ''),
+  // 3 tiles, the same row as Opportunités (gr-pr-kpis). Source of each: the Opportunités aggregator (the four real engines).
+  const note = (...lines) => h('div', { class: 'ex-kpi-note' }, lines.filter(Boolean).map((l, i) => (i ? h('div', { class: 'gr-kpi-hint' }, l) : l)));
+  const pr = (key, icon, label, ...lines) => (k[key] ? kpi(icon, label, num(k[key].value), note(...lines)) : kpi(icon, label, t('gr.dash'), note(t('gr.src.unavailable'))));
+  return h('div', { class: 'ex-kpi-row gr-kpi-row gr-pr-kpis' },
+    pr('fix', 'needsAttention', t('gr.kpi.fix'), k.fix ? t('gr.kpi.fixNote', num(k.fix.corrections)) : '', t('gr.kpi.fixHint')),
     pr('commercial', 'topOpportunities', t('gr.kpi.commercial'), t('gr.kpi.commercialNote')),
     pr('watch', null, t('gr.kpi.watch'), t('gr.kpi.watchNote')));
-}
-
-// ---------- Sales pulse: revenue influenced by sales actions and store visitors have no source today (stated, nothing drawn) ----------
-// Revenue and store visitors have different units, so they would never share one axis: the selector switches the stated view.
-let pulseView = 'revenue';
-function pulseCard() {
-  const sel = h('select', { class: 'ex-select', 'aria-label': t('gr.pulse.metric'), on: { change: (e) => { pulseView = e.target.value; render(); } } },
-    ['revenue', 'traffic'].map((v) => h('option', { value: v, ...(v === pulseView ? { selected: 'selected' } : {}) }, t(`gr.pulse.${v}`))));
-  return h('div', { class: 'ex-card gr-pulse' }, cardHead('growthPulse', t('gr.pulse.title'), sel),
-    pulseView === 'traffic' ? NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText')) : NordlaCharts.insufficient(t('gr.src.notConnected'), t('gr.ov.nc.influenced')));
-}
-
-// ---------- AI insights: no Nordla engine produces them yet (stated, nothing invented) ----------
-function insightsCard() {
-  return h('div', { class: 'ex-card gr-ai' },
-    h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
-    ncBody(t('gr.ov.nc.ai')));
 }
 
 // ---------- Needs your attention = the first "À corriger maintenant" groups of Opportunités (real, grouped by problem) ----------
@@ -237,11 +214,6 @@ function attentionCard(d) {
     h('div', { class: 'ex-foot' }, ovLink()));
 }
 
-// ---------- Content performance: no social account is connected (stated, nothing invented) ----------
-function contentCard() {
-  return h('div', { class: 'ex-card gr-content' }, cardHead('contentPerformance', t('gr.content.title')), ncBody(t('gr.ov.nc.content')));
-}
-
 // ---------- Store growth (NordlaCharts.sparkline = Analytics' KPI sparkline) ----------
 function storeMetric(label, value, deltaEl, series, note) {
   return h('div', { class: 'gr-store-metric' },
@@ -251,17 +223,16 @@ function storeMetric(label, value, deltaEl, series, note) {
     note ? h('div', { class: 'ex-kpi-note' }, note) : null,
     series ? h('div', { class: 'kpi-spark' }, NordlaCharts.sparkline(series)) : null);
 }
-// Store footfall and conversion are NOT connected (no source): stated as such. Store sales are REAL (Croissance magasin's engine,
-// its own 8-week window) or explicitly unavailable - never a demo value.
+// Store sales only: REAL (Croissance magasin's engine, its own 8-week window) or explicitly unavailable - never a demo value.
+// Footfall and conversion have no source and are not shown on Vue d'ensemble (owner rule 2026-09-28).
 function storeCard(d) {
   const r = (d.real && d.real.store) || { mode: 'unavailable' };
-  const notConnected = (label) => storeMetric(label, t('gr.store.notConnected'), null, null, t('gr.store.footfallNote'));
   const revenue = r.mode === 'store'
     ? storeMetric(t('gr.store.realRevenue', r.weeks), new Intl.NumberFormat(tag(), { style: 'currency', currency: r.currency || 'EUR', maximumFractionDigits: 0 }).format(r.net), r.change == null ? null : delta(r.change), r.weekly)
     : storeMetric(t('gr.store.revenue'), t('gr.dash'), null, null, t(r.mode === 'noStore' ? 'gr.store.noStore' : 'gr.store.unavailable'));
   return h('div', { class: 'ex-card gr-store' },
     cardHead('storeGrowth', t('gr.store.title'), r.mode === 'store' ? chip(t('gr.store.realChip'), 'gr-good') : null),
-    h('div', { class: 'gr-store-grid' }, notConnected(t('gr.store.traffic')), notConnected(t('gr.store.conversion')), revenue));
+    h('div', { class: 'gr-store-grid' }, revenue));
 }
 
 // ---------- Commercial opportunities = Opportunités' validated section (may be empty: stated honestly) ----------
@@ -299,7 +270,6 @@ function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PA
 function renderOverview(main, safe) {
   main.appendChild(safe(kpiRow));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(attentionCard), safe(opportunitiesCard), safe(storeCard)));
-  main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(pulseCard), safe(insightsCard), safe(contentCard)));
 }
 
 function render() {

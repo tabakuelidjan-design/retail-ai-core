@@ -15,7 +15,7 @@ advertising actions, automated campaigns.
 ## Scope
 Built (6 pages): **Vue d'ensemble** (`#/`), **Opportunités** (`#/opportunities`), **Produits Potentiels** (`#/potential`),
 **Audience** (`#/audience`), **Contenu** (`#/content`), **Croissance magasin** (`#/storeGrowth`). Every page shows real data
-or an honest state (« Source non connectée », « Données insuffisantes »). There is **no demonstration data** anywhere.
+or an honest state (« Données insuffisantes », an empty section that says what is missing). There is **no demonstration data** anywhere.
 
 - **Campagnes** is out of the launch scope (removed 2026-09-28: no advertising connector, all its figures were demonstration
   data). No menu entry, no route, no script, no endpoint; a former `#/campaigns` link shows Vue d'ensemble. The previous work
@@ -53,8 +53,15 @@ Contract (per item): stable `id` (`fix:purchase-cost`, `fix:content:<problem>`, 
 `reliability` (`reliable` / `limited`), `entity`, `sourcePage`, `rankReason`, `dataBlocker`; product cards add `findings`,
 `missing`, `relatedPages`. The stable ids let a later status (to do / done / dismissed) attach without breaking existing items.
 
-Vue d'ensemble shows the same priorities (counts, first correction groups, commercial opportunities) and the real store sales
-of Croissance magasin; everything no engine produces stays « Source non connectée ».
+The « À corriger maintenant » total counts **corrections**, not products: one product may need several (cost, SKU, type, alt
+text), so the UI says « 213 corrections détectées — Un même produit peut nécessiter plusieurs corrections. »; each group keeps
+its own count.
+
+Vue d'ensemble keeps **only indicators with a real source**: the three priority counts, the first correction groups and the
+commercial opportunities (Opportunités aggregator), and the store sales of Croissance magasin. Removed for this beta because no
+real source exists (2026-09-28): CA influencé (no attribution), Pouls des ventes, Analyses Nordla AI, Performance du contenu
+(social accounts; the Contenu engine measures listing quality, already shown through the correction groups), store footfall and
+conversion. « Source non connectée » is never used as a decorative card.
 
 ## Dependencies still to be treated elsewhere (not in Développement des ventes)
 - **Purchase-cost verification** — Produits Potentiels only recommends « À pousser » and reports « Marge faible » on a verified

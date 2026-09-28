@@ -62,7 +62,7 @@ export function buildPriorities({ products = null, audience = null, store = null
     currency: (P && P.currency) || (S && S.currency) || (C && C.currency) || (A && A.currency) || 'EUR',
     window: { weeks: (P && P.window && P.window.weeks) || (S && S.window && S.window.weeks) || 8, audienceDays: (A && A.window && A.window.days) || null },
     sources,
-    counts: { fix: fix.length, commercial: commercial.length, watch: watch.length, fixElements: fix.reduce((a, g) => a + g.evidence.count, 0) },
+    counts: { fix: fix.length, commercial: commercial.length, watch: watch.length, fixCorrections: fix.reduce((a, g) => a + g.evidence.count, 0) },
     sections: { fix, commercial, watch },
     waiting: waiting(P, A, S),
   };

@@ -170,22 +170,16 @@ test('browser: mobile Plus menu - opens, focus inside and trapped, Escape closes
   } finally { await b.close(); await app.close(); }
 });
 
-test('browser: Overview shows no invented footfall / conversion and uses the real store sales', { skip, timeout: 60000 }, async () => {
+test('browser: Overview shows only sourced indicators - real store sales, no footfall / conversion / pulse / AI / content card', { skip, timeout: 60000 }, async () => {
   const app = await serve(sources()); const b = await browser();
   try {
     await b.open(`${app.base}/#/`, 1440);
-    const r = JSON.parse(await b.eval(`JSON.stringify({ card: document.querySelector('.gr-store')?.innerText, pulse: document.querySelector('.gr-pulse')?.innerText })`));
-    assert.match(r.card, /Non connecté[\s\S]*Non connecté/);
+    const r = JSON.parse(await b.eval(`JSON.stringify({ card: document.querySelector('.gr-store')?.innerText, main: document.querySelector('main').innerText, removed: document.querySelectorAll('.ex-card.gr-pulse, .ex-card.gr-ai, .ex-card.gr-content').length, kpis: document.querySelectorAll('.ex-kpi').length })`));
     assert.match(r.card, /Données réelles/);
-    assert.ok(!/4\s?860|21,4/.test(r.card), 'no demo visitors or conversion');
-    // Growth Pulse: no attribution source, no footfall source -> stated in the card, no curve, no figure (both views).
-    assert.match(r.pulse, /Source non connectée/);
-    assert.equal(await b.eval(`document.querySelectorAll('.gr-pulse svg path').length`), 0, 'no curve drawn');
-    await b.eval(`(() => { const s = document.querySelector('.gr-pulse select'); s.value = 'traffic'; s.dispatchEvent(new Event('change')); })()`);
-    await sleep(150);
-    const traffic = await b.eval(`document.querySelector('.gr-pulse').innerText`);
-    assert.match(traffic, /Non connecté|non connecté/i);
-    assert.doesNotMatch(traffic, /\d/, 'no visitor figure');
+    assert.doesNotMatch(r.card, /Non connecté|Trafic magasin|Taux de conversion/);
+    assert.doesNotMatch(r.main, /Source non connectée|Non connecté/);
+    assert.equal(r.removed, 0);
+    assert.equal(r.kpis, 3);
     const noTenant = await serve({});
     try {
       await b.open(`${noTenant.base}/#/`, 1440);

@@ -283,8 +283,6 @@ span.gr-pp-thumb { display: grid; place-items: center; }
 .gr-pp-evo.none { color: var(--chart-slate); font-weight: 500; }
 .gr-pp-empty { font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); padding: 10px 0; }
 .gr-pp-empty ul { margin: 6px 0 0; padding-left: 18px; }
-/* "Source non connectée": honest state inside an unchanged card (Vue d'ensemble, Opportunités). */
-.gr-nc { display: flex; flex-direction: column; gap: 3px; }
 
 /* status chart: Explorer's bars with a label column wide enough for the longest status chip */
 .ex-conc-row.wide.gr-pp-status-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 24px; }
@@ -550,3 +548,5 @@ body.gr-pp-lock { overflow: hidden; }
 .gr-op-link { display: inline-flex; align-items: center; min-height: 24px; font-size: 12.5px; font-weight: 600; color: var(--chart-navy); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .gr-op-link:hover { color: var(--chart-terracotta); }
 .gr-op-link:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 2px; border-radius: 3px; }
+/* KPI note second line: short explanation (e.g. one product may need several corrections) */
+.gr-kpi-hint { margin-top: 2px; opacity: .85; }

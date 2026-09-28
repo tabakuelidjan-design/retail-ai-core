@@ -27,7 +27,7 @@ test('priorities: aggregates the four real engines (synthetic fixtures) into the
   assert.ok(p.sections.commercial.length > 0, 'validated engine opportunities are reported');
   const kinds = new Set(p.sections.commercial.map((i) => i.kind));
   assert.ok(kinds.has('product') && kinds.has('segment'), 'product and audience opportunities both arrive');
-  assert.deepEqual(p.counts, { fix: p.sections.fix.length, commercial: p.sections.commercial.length, watch: p.sections.watch.length, fixElements: p.sections.fix.reduce((a, g) => a + g.evidence.count, 0) });
+  assert.deepEqual(p.counts, { fix: p.sections.fix.length, commercial: p.sections.commercial.length, watch: p.sections.watch.length, fixCorrections: p.sections.fix.reduce((a, g) => a + g.evidence.count, 0) });
   for (const i of [...p.sections.fix, ...p.sections.commercial, ...p.sections.watch]) {
     for (const k of ['id', 'category', 'title', 'explanation', 'evidence', 'reliability', 'entity', 'sourcePage', 'rankReason']) assert.ok(k in i, `${i.id}: contract field ${k}`);
     assert.ok('dataBlocker' in i, `${i.id}: contract field dataBlocker`);

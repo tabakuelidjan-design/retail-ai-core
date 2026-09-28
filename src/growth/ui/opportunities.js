@@ -28,12 +28,12 @@ function opPctRound(values) {
 }
 /** A real link to the page where the items can be examined (navigation only). */
 const opLink = (page) => h('a', { class: 'gr-op-link', href: OP_PAGE_HASH[page] }, t(`gr.op.link.${page}`));
-const opNote = (text) => h('div', { class: 'ex-kpi-note' }, text);
+const opNote = (text, hint) => h('div', { class: 'ex-kpi-note' }, text, hint ? h('div', { class: 'gr-kpi-hint' }, hint) : null);
 
 // ---------- KPI row: one tile per section ----------
 function opKpiRow(d) {
   return h('div', { class: 'ex-kpi-row gr-pr-kpis' },
-    kpi('needsAttention', t('gr.op.kpi.fix'), num(d.counts.fix), opNote(t('gr.op.kpi.fixNote', num(d.counts.fixElements)))),
+    kpi('needsAttention', t('gr.op.kpi.fix'), num(d.counts.fix), opNote(t('gr.op.kpi.fixNote', num(d.counts.fixCorrections)), t('gr.kpi.fixHint'))),
     kpi('opportunities', t('gr.op.kpi.commercial'), num(d.counts.commercial), opNote(t('gr.op.kpi.commercialNote'))),
     kpi(null, t('gr.op.kpi.watch'), num(d.counts.watch), opNote(t('gr.op.kpi.watchNote'))));
 }

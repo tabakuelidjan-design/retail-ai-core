@@ -40,7 +40,7 @@ test('growth server: serves the page, its assets and the shared design system; C
     // No tenant configured: Vue d'ensemble states it, Opportunités refuses with the known safe code.
     const d = await (await fetch(`${base}/api/growth/overview`)).json();
     assert.equal(d.demo, undefined, 'no demonstration flag: nothing on this page is demonstration data');
-    assert.deepEqual([d.kpis.revenueInfluenced, d.kpis.fix, d.kpis.commercial, d.kpis.watch, d.attention, d.opportunities], [null, null, null, null, null, null]);
+    assert.deepEqual([d.kpis.fix, d.kpis.commercial, d.kpis.watch, d.attention, d.opportunities], [null, null, null, null, null]);
     assert.deepEqual(d.real.store, { mode: 'unavailable' });
     const op = await fetch(`${base}/api/growth/opportunities`);
     assert.equal(op.status, 503);
@@ -58,7 +58,7 @@ test('growth server: with the engines configured, Vue d\'ensemble and Opportunit
     const ov = await (await fetch(`${base}/api/growth/overview`)).json();
     assert.equal(op.connected, undefined, 'no hard-coded { connected: false } any more');
     assert.deepEqual(op.sources, { products: 'ok', audience: 'ok', store: 'ok', content: 'ok' });
-    assert.deepEqual(ov.kpis.fix, { value: op.counts.fix, elements: op.counts.fixElements });
+    assert.deepEqual(ov.kpis.fix, { value: op.counts.fix, corrections: op.counts.fixCorrections });
     assert.equal(ov.kpis.commercial.value, op.counts.commercial);
     assert.equal(ov.kpis.watch.value, op.counts.watch);
     assert.deepEqual(ov.attention.map((g) => g.id), op.sections.fix.slice(0, 3).map((g) => g.id));
@@ -97,11 +97,14 @@ test('growth UI: sidebar is Growth\'s own navigation (6 built pages + disabled e
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance|campaigns)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
 
-test('Vue d\'ensemble payload: real sources only - store sales from Croissance magasin, priorities from Opportunités, the rest not connected', () => {
+test('Vue d\'ensemble payload: real sources only - store sales from Croissance magasin, priorities from Opportunités; nothing without a source', () => {
   const store = storePayload(); const priorities = prioritiesPayload();
   const d = buildOverview({ now: NOW, store, priorities });
-  assert.deepEqual(d.sources, { store: 'real', priorities: 'real', footfall: 'notConnected', attribution: 'notConnected', ai: 'notConnected', content: 'notConnected' });
-  assert.deepEqual([d.kpis.revenueInfluenced, d.pulse, d.insights, d.content], [null, null, null, null]);
+  assert.deepEqual(d.sources, { store: 'real', priorities: 'real' });
+  // Removed for this beta (owner rule 2026-09-28): no attribution, pulse, AI insights or social content source exists.
+  assert.deepEqual(Object.keys(d.kpis), ['fix', 'commercial', 'watch']);
+  assert.deepEqual(Object.keys(d).sort(), ['attention', 'currency', 'generatedAt', 'kpis', 'opportunities', 'real', 'sources', 'waiting']);
+  assert.equal(JSON.stringify(d).includes('notConnected'), false, 'no "not connected" source left');
   assert.equal(d.real.store.net, store.kpis.storeNet.value);
   assert.equal(d.real.store.orders, store.kpis.storeOrders.value);
   assert.equal(d.kpis.fix.value, priorities.counts.fix);
@@ -114,21 +117,42 @@ test('Vue d\'ensemble payload: real sources only - store sales from Croissance m
   assert.deepEqual(empty.real.store, { mode: 'unavailable' });
 });
 
-test('Vue d\'ensemble UI: real figures, honest states, links to Opportunités, no demo badge and no action button', async () => {
+test('Vue d\'ensemble UI: every KPI and card has a real source (no "Source non connectée" card), links to Opportunités, no demo, no action button', async () => {
   const { root, errors } = await growthDom('#/');
   assert.deepEqual(errors, []);
   const body = text(root);
   assert.ok(!/Démo|Données de démonstration|ROAS|Campagnes/.test(body), 'no demonstration badge, no campaign figure');
   assert.ok(body.includes('Nordla vérifie la qualité de vos fiches produit et de vos données'), 'the honest promise is shown');
   assert.ok(!/croissance mesurable|mesurables/i.test(body), 'no promise of measurable growth');
-  assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 4);
+  assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 3);
+  // Only the cards with a real source: priorities (attention, commercial opportunities) and Croissance magasin's store sales.
+  assert.deepEqual(all(root, (n) => hasClass(n, 'ex-card')).map((c) => ['gr-att', 'gr-opps', 'gr-store'].find((k) => hasClass(c, k)) || 'other'), ['gr-att', 'gr-opps', 'gr-store']);
+  for (const cls of ['gr-pulse', 'gr-ai', 'gr-content']) assert.equal(all(root, (n) => hasClass(n, 'ex-card') && hasClass(n, cls)).length, 0, `${cls} card removed`);
+  assert.ok(!/Source non connectée|Non connecté|CA influencé|Pouls des ventes|Analyses Nordla AI|Performance du contenu|Trafic magasin|Taux de conversion/.test(body), 'no unconnected indicator');
   const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link'));
   assert.ok(links.length >= 2 && links.every((a) => a.getAttribute('href') === '#/opportunities'));
   assert.equal(all(root, (n) => n.tagName === 'BUTTON' && n.getAttribute('disabled') != null).length, 0);
   assert.equal(all(root, (n) => hasClass(n, 'gr-demo')).length, 0);
-  // Store footfall / conversion stay "not connected" (no source), store sales are real.
-  assert.ok(body.includes('Non connecté'));
   assert.ok(body.includes('Données réelles'));
+});
+
+test('« À corriger maintenant » total: counted as corrections (one product may need several), in FR / NL / EN, on both pages', async () => {
+  const p = prioritiesPayload();
+  const total = p.sections.fix.reduce((a, g) => a + g.evidence.count, 0);
+  const want = {
+    fr: [`${total} corrections détectées`, 'Un même produit peut nécessiter plusieurs corrections.'],
+    nl: [`${total} correcties gevonden`, 'Eenzelfde product kan meerdere correcties nodig hebben.'],
+    en: [`${total} corrections detected`, 'The same product may need several corrections.'],
+  };
+  for (const [lang, [note, hint]] of Object.entries(want)) {
+    for (const h of ['#/', '#/opportunities']) {
+      const { root, errors } = await growthDom(h, { lang });
+      assert.deepEqual(errors, []);
+      const tile = text(all(root, (n) => hasClass(n, 'ex-kpi'))[0]);
+      assert.ok(tile.includes(note) && tile.includes(hint), `${lang} ${h}: ${tile}`);
+      assert.ok(!/éléments concernés|betrokken elementen|items affected/.test(text(root)), `${lang} ${h}: ambiguous wording`);
+    }
+  }
 });
 
 test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and every key the pages build exists', async () => {
@@ -154,7 +178,6 @@ test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and ever
     ...['push', 'restock'].flatMap((s) => [`gr.op.item.product.${s}.title`, `gr.op.item.product.${s}.why`]),
     ...SEGMENTS.map((s) => `gr.au.seg.${s}`),
     ...['potential', 'content', 'storeGrowth', 'audience'].map((p) => `gr.op.link.${p}`),
-    'gr.pulse.revenue', 'gr.pulse.traffic',
   ];
   for (const k of dyn) for (const l of ['fr', 'nl', 'en']) assert.ok(D[l][k], `missing ${l} key ${k}`);
   // No key of a removed feature is left.
