@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { buildDemoOpportunities } from '../src/growth/server/demo-opportunities.js';
+import { buildDemoOpportunities } from './fixtures/growth-opportunities-sample.js';
+import { buildOpportunities } from '../src/growth/server/opportunities.js';
 import { growthDom, all, text, hasClass, navState, title } from './growth-dom.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
@@ -11,7 +12,7 @@ const ANALYTICS_UI = new URL('../src/analytics-premium/ui/', import.meta.url);
 const NOW = new Date('2026-09-26T10:00:00Z');
 const sum = (a) => a.reduce((x, y) => x + y, 0);
 
-test('demo opportunities: every KPI is derived from the rows (no contradictory figures)', () => {
+test('opportunities sample (connected-mode fixture): every KPI is derived from the rows (no contradictory figures)', () => {
   const d = buildDemoOpportunities(NOW);
   const p = d.pipeline;
   assert.equal(d.demo, true);
@@ -68,8 +69,34 @@ test('opportunities UI: all labels exist in FR/NL/EN; no demo value hardcoded in
 
 
 
-test('opportunities UI: renders without error, sidebar marks Opportunités active, and Vue d\'ensemble leads back to the Overview', async () => {
-  const { root, errors, navigate } = await growthDom('#/opportunities');
+test('opportunities: no source is connected - the server sends no figure, the page states it card by card (no demo, no 0)', async () => {
+  const p = buildOpportunities(NOW);
+  assert.deepEqual(Object.keys(p).sort(), ['connected', 'currency', 'generatedAt']);
+  assert.equal(p.connected, false);
+  const { root, errors } = await growthDom('#/opportunities');
+  assert.deepEqual(errors, []);
+  assert.equal(title(root), 'Opportunités');
+  const body = text(root);
+  assert.ok(!body.includes('Données de démonstration'), 'nothing demo left on the page: no demo badge');
+  // Same five KPI tiles, each "—" + "Source non connectée"; never 0.
+  const kpis = all(root, (n) => hasClass(n, 'ex-kpi'));
+  assert.equal(kpis.length, 5);
+  for (const k of kpis) { assert.match(text(k), /—/u); assert.match(text(k), /Source non connectée/u); assert.doesNotMatch(text(k), /\d/u, 'no figure in a KPI tile'); }
+  // Same cards, same order, each with an honest body.
+  const cards = ['gr-pipeline', 'gr-ai', 'gr-op-status', 'gr-op-sources', 'gr-segments', 'gr-impact', 'gr-approvals', 'gr-wins-card'];
+  for (const c of cards) {
+    const el = all(root, (n) => hasClass(n, 'ex-card') && hasClass(n, c));
+    assert.equal(el.length, 1, c);
+    assert.match(text(el[0]), /Source non connectée/u, c);
+  }
+  assert.equal(all(root, (n) => n.tagName === 'TR').length, 0, 'no pipeline row');
+  assert.doesNotMatch(body, /€/u, 'no amount');
+  const sample = buildDemoOpportunities(NOW);
+  for (const v of [...sample.pipeline.map((o) => o.title.fr), ...sample.segments.map((s) => s.label.fr), ...sample.wins.map((w) => w.title.fr)]) assert.ok(!body.includes(v), `demo text shown: ${v}`);
+});
+
+test('opportunities UI (connected sample): renders without error, sidebar marks Opportunités active, and Vue d\'ensemble leads back to the Overview', async () => {
+  const { root, errors, navigate } = await growthDom('#/opportunities', { opportunities: buildDemoOpportunities(NOW) });
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Opportunités');
   const nav = navState(root);
@@ -77,11 +104,10 @@ test('opportunities UI: renders without error, sidebar marks Opportunités activ
   assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Opportunités']);
   assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth'], ['Audience', '#/audience']]);
   assert.equal(nav.filter((n) => n.inert).length, 3, 'Expériences + Nordla AI + Paramètres stay disabled');
-  // Page content: 5 KPIs, 12 pipeline rows, 3 approvals, the demo badge.
+  // Page content: 5 KPIs, 12 pipeline rows, 3 approvals.
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
   assert.equal(all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').length, 12);
   assert.equal(all(root, (n) => hasClass(n, 'gr-approvals'))[0] && all(all(root, (n) => hasClass(n, 'gr-approvals'))[0], (n) => n.tagName === 'BUTTON').length, 3);
-  assert.ok(text(root).includes('Données de démonstration'));
   assert.match(text(root), /14\s800\s€/u, 'potential revenue KPI rendered from the payload');
   // Back to the Overview through the sidebar route.
   await navigate('#/');
@@ -90,8 +116,8 @@ test('opportunities UI: renders without error, sidebar marks Opportunités activ
   assert.deepEqual(navState(root).filter((n) => n.active).map((n) => n.label), ['Vue d’ensemble']);
 });
 
-test('opportunities UI: pipeline filters and sort work on the loaded rows', async () => {
-  const { root, errors } = await growthDom('#/opportunities');
+test('opportunities UI (connected sample): pipeline filters and sort work on the loaded rows', async () => {
+  const { root, errors } = await growthDom('#/opportunities', { opportunities: buildDemoOpportunities(NOW) });
   const rowsNames = () => all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').map((r) => text(r.children[0]));
   const selects = () => all(all(root, (n) => hasClass(n, 'gr-filters'))[0], (n) => n.tagName === 'SELECT');
   const change = (i, value) => selects()[i].listeners.change[0]({ target: { value } });

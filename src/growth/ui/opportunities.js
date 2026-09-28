@@ -186,7 +186,35 @@ function statusCard(d) {
     h('div', { class: 'ex-foot' }, t('gr.op.byStatus.foot', d.byStatus.reduce((a, s) => a + s.count, 0), money(d.byStatus.reduce((a, s) => a + s.revenue, 0)))));
 }
 
+// No opportunity source is connected (server/opportunities.js): the same cards, in the same places, each state it - no demo
+// priority, potential revenue, confidence, effort, approval or win. The connected rendering below stays for when a source exists.
+function opNcCard(cls, iconName, title, text, right) {
+  return h('div', { class: `ex-card ${cls}` }, cardHead(iconName, title, right), ncBody(text));
+}
+function opNcKpiRow() {
+  const tile = (icon, key) => kpi(icon, t(key), t('gr.dash'), ncNote());
+  return h('div', { class: 'ex-kpi-row gr-kpi-row' },
+    tile('opportunities', 'gr.op.kpi.priority'), tile('potentialRevenue', 'gr.op.kpi.potential'), tile('approvals', 'gr.op.kpi.ready'),
+    tile('inProgress', 'gr.op.kpi.inProgress'), tile('wins', 'gr.op.kpi.wins'));
+}
+function renderOpportunitiesNotConnected(main) {
+  main.appendChild(opNcKpiRow());
+  main.appendChild(h('div', { class: 'gr-grid-pipe' },
+    h('div', { class: 'ex-card gr-pipeline' }, cardHead('opportunities', t('gr.op.pipe.title')), h('p', { class: 'gr-card-desc' }, t('gr.op.pipe.desc')), ncBody(t('gr.op.nc.pipeline'))),
+    h('div', { class: 'gr-stack' },
+      opNcCard('gr-ai', 'aiInsights', t('gr.op.ai.title'), t('gr.ov.nc.ai'), chip(t('gr.ai.badge'), 'mute')),
+      opNcCard('gr-op-status', 'pipelineStatus', t('gr.op.byStatus.title'), t('gr.op.nc.pipeline')))));
+  main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' },
+    opNcCard('gr-op-sources ex-cats', 'revenueBySource', t('gr.op.bySource.title'), t('gr.op.nc.revenue')),
+    opNcCard('gr-segments', 'segments', t('gr.op.seg.title'), t('gr.op.nc.segments')),
+    opNcCard('gr-impact', 'impactEffort', t('gr.op.mx.title'), t('gr.op.nc.effort'))));
+  main.appendChild(h('div', { class: 'ex-grid-2 even' },
+    opNcCard('gr-approvals', 'approvals', t('gr.op.appr.title'), t('gr.op.nc.approvals')),
+    opNcCard('gr-wins-card', 'wins', t('gr.op.wins.title'), t('gr.op.nc.wins'))));
+}
+
 function renderOpportunities(main, safe) {
+  if (PAGES.opportunities.get().connected === false) { renderOpportunitiesNotConnected(main); return; }
   main.appendChild(safe(opKpiRow));
   // 1. Pipeline + (Nordla AI recommendations, pipeline by status) side by side from 1360px.
   main.appendChild(h('div', { class: 'gr-grid-pipe' }, safe(pipelineCard), h('div', { class: 'gr-stack' }, safe(recommendationsCard), safe(statusCard))));

@@ -4,7 +4,8 @@
 // every visual is an existing Nordla component (Analytics' ex-* cards/tabs/KPI tiles/tables, the shared rail,
 // NordlaCharts, NordlaIcon); growth.css only adds the Growth grid and the few list rows Analytics has no
 // equivalent for. All copy goes through NORDLA_I18N.t() (lang-fr/nl/en.js); demo content carries its own
-// fr/nl/en strings. The data is DEMONSTRATION data (payload.demo === true) and the page always says so.
+// fr/nl/en strings. Vue d'ensemble: campaign figures come from Campagnes (demonstration data, badged), store sales are real,
+// every other figure shows "Source non connectée". Opportunités: no source connected yet, stated card by card.
 
 const t = NORDLA_I18N.t;
 
@@ -215,7 +216,7 @@ function topbar(page) {
   return h('div', { class: 'topbar' },
     h('div', { class: 'topbar-title' }, t('gr.brand')),
     h('div', { class: 'topbar-right' },
-      page.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t('gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
+      page.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t(page.demoTitle || 'gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
       pill,
       langSwitch()));
 }
@@ -226,25 +227,34 @@ function kpi(iconName, label, value, line) {
     iconName ? h('span', { class: 'ex-kpi-ico' }, gi(iconName, 'lg')) : null,
     h('div', { class: 'ex-kpi-body' }, h('div', { class: 'ex-kpi-label' }, label), h('div', { class: 'ex-kpi-value' }, value), line));
 }
+// "Source non connectée": the honest state of a figure no Nordla source produces today (in a KPI note or inside a card).
+const ncNote = () => h('div', { class: 'ex-kpi-note' }, t('gr.src.notConnected'));
+const ncBody = (text) => h('div', { class: 'gr-pp-empty gr-nc' }, h('strong', { class: 'gr-ink' }, t('gr.src.notConnected')), h('span', null, text));
 const kpiNote = (count, text, tone) => h('div', { class: `ex-delta gr-kpi-note${tone ? ` ${tone}` : ''}` }, h('strong', null, String(count)), h('span', null, text));
 function kpiRow(d) {
   const k = d.kpis;
   return h('div', { class: 'ex-kpi-row gr-kpi-row' },
-    kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), money(k.revenueInfluenced.value), delta(k.revenueInfluenced.deltaPct)),
-    kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), num(k.activeOpportunities.value), kpiNote(k.activeOpportunities.highPriority, t('gr.kpi.highPriority'), 'warn')),
+    k.revenueInfluenced ? kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), money(k.revenueInfluenced.value), delta(k.revenueInfluenced.deltaPct)) : kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), t('gr.dash'), ncNote()),
+    k.activeOpportunities ? kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), num(k.activeOpportunities.value), kpiNote(k.activeOpportunities.highPriority, t('gr.kpi.highPriority'), 'warn')) : kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), t('gr.dash'), ncNote()),
     kpi('activeCampaigns', t('gr.kpi.activeCampaigns'), num(k.activeCampaigns.value), kpiNote(k.activeCampaigns.performingWell, t('gr.kpi.performingWell'), 'good')),
     kpi('roas', t('gr.kpi.roas'), roasFmt(k.roas.value), delta(k.roas.deltaPct)),
     // Expériences is not built: no running-experiment figure (never a demo count).
-    kpi('experimentsRunning', t('gr.kpi.experimentsRunning'), k.experimentsRunning.value == null ? t('gr.dash') : num(k.experimentsRunning.value), h('div', { class: 'ex-kpi-note' }, t('gr.kpi.experimentsSoon'))));
+    kpi('experimentsRunning', t('gr.kpi.experimentsRunning'), k.experimentsRunning && k.experimentsRunning.value != null ? num(k.experimentsRunning.value) : t('gr.dash'), h('div', { class: 'ex-kpi-note' }, t('gr.kpi.experimentsSoon'))));
 }
 
 // ---------- Growth Pulse (NordlaCharts.trendLines / trendLine, the Analytics/Finance chart components) ----------
 // Revenue and store visitors have different units, so they are never drawn on one axis: a selector switches the view.
 let pulseView = 'revenue';
 function pulseCard(d) {
-  const p = d.pulse; const labels = p.dates.map((x) => dayFmt(x));
+  const p = d.pulse;
   const sel = h('select', { class: 'ex-select', 'aria-label': t('gr.pulse.metric'), on: { change: (e) => { pulseView = e.target.value; render(); } } },
     ['revenue', 'traffic'].map((v) => h('option', { value: v, ...(v === pulseView ? { selected: 'selected' } : {}) }, t(`gr.pulse.${v}`))));
+  // No attribution source (revenue influenced by Growth) and no footfall source: stated in the same card, nothing drawn.
+  if (!p) {
+    return h('div', { class: 'ex-card gr-pulse' }, cardHead('growthPulse', t('gr.pulse.title'), sel),
+      pulseView === 'traffic' ? NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText')) : NordlaCharts.insufficient(t('gr.src.notConnected'), t('gr.ov.nc.influenced')));
+  }
+  const labels = p.dates.map((x) => dayFmt(x));
   let head; let chart;
   if (pulseView === 'traffic') {
     // Store footfall is not connected: stated, never drawn (no demo visitors).
@@ -269,6 +279,11 @@ function pulseCard(d) {
 
 // ---------- AI insights (Nordla AI as an integrated layer, not a chat) ----------
 function insightsCard(d) {
+  if (!d.insights) {
+    return h('div', { class: 'ex-card gr-ai' },
+      h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
+      ncBody(t('gr.ov.nc.ai')));
+  }
   return h('div', { class: 'ex-card gr-ai' },
     h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
     h('div', { class: 'ex-movers' }, d.insights.map((i) => h('div', { class: 'ex-mover gr-row' },
@@ -281,6 +296,7 @@ function insightsCard(d) {
 // ---------- Needs your attention (actions become real with the Approvals page; disabled until then) ----------
 const ATT_TONE = { pending: '', new: 'mute', endingSoon: 'gr-warn' };
 function attentionCard(d) {
+  if (!d.attention) return h('div', { class: 'ex-card gr-att' }, cardHead('needsAttention', t('gr.att.title')), ncBody(t('gr.ov.nc.attention')));
   return h('div', { class: 'ex-card gr-att' },
     cardHead('needsAttention', t('gr.att.title'), chip(String(d.attention.length), '')),
     h('div', { class: 'ex-movers' }, d.attention.map((a) => h('div', { class: 'ex-mover gr-row gr-att-row' },
@@ -316,15 +332,15 @@ function channelCard(d) {
   const rows = d.channels.map((c) => h('tr', null,
     h('td', null, h('span', { class: 'gr-ch-cell' }, channelMark(c.id), h('span', null, c.name))),
     h('td', { class: 'num' }, h('strong', null, money(c.revenue))),
-    h('td', { class: 'num' }, compactNum(c.reach), h('span', { class: 'gr-unit' }, t(`gr.ch.unit.${c.reachKind}`))),
-    h('td', { class: 'num' }, c.conversion == null ? t('gr.dash') : pct1(c.conversion)),
+    h('td', { class: 'num' }, c.reach == null ? h('span', { class: 'gr-muted', title: t('gr.src.notConnected') }, t('gr.dash')) : [compactNum(c.reach), h('span', { class: 'gr-unit' }, t(`gr.ch.unit.${c.reachKind}`))]),
+    h('td', { class: 'num' }, c.conversion == null ? h('span', { class: 'gr-muted', title: t('gr.src.notConnected') }, t('gr.dash')) : pct1(c.conversion)),
     h('td', { class: 'num' }, c.roas == null ? h('span', { class: 'gr-muted' }, t('gr.ch.organic')) : h('strong', null, roasFmt(c.roas)))));
   return h('div', { class: 'ex-card gr-channels' },
-    cardHead('channelPerformance', t('gr.ch.title')),
+    cardHead('channelPerformance', t('gr.ch.title'), d.sources && d.sources.campaigns === 'demo' ? chip(t('gr.ov.fromCampaigns'), 'mute') : null),
     h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table' },
       h('thead', null, h('tr', null, h('th', null, t('gr.ch.channel')), h('th', { class: 'num' }, t('gr.ch.revenue')), h('th', { class: 'num' }, t('gr.ch.reach')), h('th', { class: 'num' }, t('gr.ch.conversion')), h('th', { class: 'num' }, t('gr.ch.roas')))),
       h('tbody', null, rows))),
-    h('div', { class: 'ex-foot' }, t('gr.ch.foot')));
+    h('div', { class: 'ex-foot' }, t(d.sources && d.sources.campaigns === 'demo' ? 'gr.ov.chFoot' : 'gr.ch.foot')));
 }
 
 // ---------- Campaigns ----------
@@ -350,6 +366,7 @@ function campaignsCard(d) {
 // ---------- Content performance ----------
 const PERF_TONE = { best: 'gr-good', good: 'mute', below: 'gr-warn' };
 function contentCard(d) {
+  if (!d.content) return h('div', { class: 'ex-card gr-content' }, cardHead('contentPerformance', t('gr.content.title')), ncBody(t('gr.ov.nc.content')));
   return h('div', { class: 'ex-card gr-content' },
     cardHead('contentPerformance', t('gr.content.title')),
     h('div', { class: 'ex-movers' }, d.content.map((c) => h('div', { class: 'ex-mover gr-row' },
@@ -388,6 +405,7 @@ function storeCard(d) {
 // ---------- Top opportunities ----------
 const PRIO_TONE = { high: '', medium: 'mute' };
 function opportunitiesCard(d) {
+  if (!d.opportunities) return h('div', { class: 'ex-card gr-opps' }, cardHead('topOpportunities', t('gr.opp.title')), ncBody(t('gr.ov.nc.opportunities')));
   return h('div', { class: 'ex-card gr-opps' },
     cardHead('topOpportunities', t('gr.opp.title')),
     h('div', { class: 'ex-movers' }, d.opportunities.map((o) => h('div', { class: 'ex-mover gr-row' },
@@ -417,8 +435,8 @@ const loadState = {};
 const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
 // `period` = the window the page's engine really uses (the top bar shows it in every state); `demo` = demonstration page.
 const PAGES = {
-  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { days: 30 }, demo: true, get: () => data, set: (v) => { data = v; }, render: renderOverview },
-  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { days: 30 }, demo: true, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { days: 30 }, demo: true, demoTitle: 'gr.ov.demoTitle', get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { days: 30 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
   campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', period: { days: 30 }, demo: true, get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },

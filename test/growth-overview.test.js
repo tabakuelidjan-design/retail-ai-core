@@ -5,9 +5,10 @@ import http from 'node:http';
 import vm from 'node:vm';
 import { readFile, access } from 'node:fs/promises';
 import { createGrowthApp } from '../src/growth/server/app.js';
-import { buildDemoOverview } from '../src/growth/server/demo-overview.js';
+import { buildOverview } from '../src/growth/server/overview.js';
+import { buildDemoOverview } from './fixtures/growth-overview-sample.js';
 import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
-import { buildDemoOpportunities } from '../src/growth/server/demo-opportunities.js';
+import { buildDemoOpportunities } from './fixtures/growth-opportunities-sample.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
 const SHARED = new URL('../src/shared/', import.meta.url);
@@ -32,7 +33,9 @@ test('growth server: serves the page, its own assets, the shared design system a
     // Reused Analytics stylesheet is served byte-identical (a reuse, not a fork).
     assert.equal(await (await fetch(`${base}/style.css`)).text(), await readFile(new URL('../src/analytics-premium/ui/style.css', import.meta.url), 'utf8'));
     const d = await (await fetch(`${base}/api/growth/overview`)).json();
-    assert.equal(d.demo, true, 'the overview must always be flagged as demonstration data');
+    assert.equal(d.demo, true, 'the overview still shows Campagnes demonstration figures: it stays badged');
+    assert.equal(d.revenueInfluenced, undefined);
+    assert.deepEqual([d.kpis.revenueInfluenced, d.kpis.activeOpportunities, d.pulse, d.insights, d.attention, d.content, d.opportunities], [null, null, null, null, null, null, null], 'served payload = server/overview.js, no fixture');
     assert.equal(d.modules, undefined, 'Growth does not route between services (no module links in the payload)');
     assert.equal(d.period.to, '2026-09-26');
     assert.equal((await fetch(`${base}/nope`)).status, 404);
@@ -88,7 +91,7 @@ test('growth UI: no TEMP_ICON left (the final Growth pack replaces them); channe
   assert.match(src, /const CHANNEL_FALLBACK = /);
 });
 
-test('demo overview: figures are internally consistent (no contradictory example numbers)', () => {
+test('overview sample (connected-mode fixture): figures are internally consistent (no contradictory example numbers)', () => {
   const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
   const sum = (a) => a.reduce((x, y) => x + y, 0);
   assert.equal(d.pulse.dates.length, 30);
@@ -167,7 +170,7 @@ test('growth UI: every icon it asks for is a Growth pack file on disk or a valid
   for (const [k, v] of Object.entries({ opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', experiments: 'pack:experiments', aiInsights: 'pack:aiInsights', needsAttention: 'pack:needsAttention' })) assert.equal(aliasMap[k], v, k);
 });
 
-test('demo overview: no store footfall, visitors, conversion or demo store sales (deep audit P1-2)', () => {
+test('overview sample: no store footfall, visitors, conversion or demo store sales (deep audit P1-2)', () => {
   const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
   assert.deepEqual(d.store, { footfallConnected: false });
   assert.equal(d.pulse.storeVisitors, undefined);
@@ -176,6 +179,6 @@ test('demo overview: no store footfall, visitors, conversion or demo store sales
   assert.ok(!/4860|4 860|21[.,]4/.test(json), 'no demo visitor or conversion figure left');
   for (const i of d.insights) assert.notEqual(i.kind, 'traffic');
   for (const a of d.attention) assert.notEqual(a.kind, 'experiment');
-  const src = readFileSync(new URL('../src/growth/server/demo-opportunities.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('./fixtures/growth-opportunities-sample.js', import.meta.url), 'utf8');
   assert.ok(!/trafic magasin détecté|store traffic issue detected/.test(src), 'no demo text claims a detected footfall problem');
 });

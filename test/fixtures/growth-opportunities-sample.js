@@ -1,3 +1,5 @@
+// TEST FIXTURE (moved from src/growth/server/demo-opportunities.js, 2026-09-28): a CONNECTED Opportunités payload example, used only
+// to test the page's rendering once a real opportunity source exists. Never served: the server returns server/opportunities.js.
 // Growth > Opportunités - DEMONSTRATION data only (`demo: true`). There is no detection engine yet: the rows below are
 // illustrative examples of the chain Signal -> Opportunité -> Impact estimé -> Confiance -> Effort -> Décision -> Résultat.
 // Deterministic, generic (no retailer name). Every KPI is DERIVED from the rows (never typed separately), so the page

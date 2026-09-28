@@ -6,14 +6,14 @@
 // uses exactly the same cards, tabs, KPI tiles, tables and rail instead of a copy. It never writes to them,
 // imports no Analytics/Finance server code, and neither of those modules depends on anything here.
 //
-// Data: the overview is DEMONSTRATION data (demo-overview.js), flagged `demo: true` in the payload and shown
-// as such on the page. No Growth data source (ads, social, store counters) is connected yet; nothing here
-// reads merchant data or pretends to.
+// Data: Vue d'ensemble = campaign figures derived from the Campagnes demonstration dataset (badged) + the real store sales +
+// explicit "source non connectée" states (server/overview.js). Opportunités = no source yet (server/opportunities.js).
+// Produits Potentiels / Audience / Contenu / Croissance magasin read the tenant's real synced data.
 
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
-import { buildDemoOverview } from './demo-overview.js';
-import { buildDemoOpportunities } from './demo-opportunities.js';
+import { buildOverview } from './overview.js';
+import { buildOpportunities } from './opportunities.js';
 import { buildDemoCampaigns } from './demo-campaigns.js';
 
 const UI = new URL('../ui/', import.meta.url);
@@ -72,9 +72,9 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
       const asset = GROWTH_ASSET.exec(url.pathname);
       if (asset) { try { return send(res, 200, IMG[asset[3]], await readFile(new URL(`${asset[1]}/${asset[2]}`, GROWTH_ASSETS))); } catch { return json(res, 404, { error: { code: 'NOT_FOUND' } }); } }
       if (url.pathname === '/api/growth/overview') {
-        // Demonstration page, except the store sales: the real figure of Croissance magasin's engine (same tenant, same window),
+        // server/overview.js (Campagnes-derived campaign figures + "non connectée" states) plus the store sales: the real figure of Croissance magasin's engine (same tenant, same window),
         // or an explicit unavailable state - never a demo value that could contradict the real page.
-        const payload = buildDemoOverview(now());
+        const payload = buildOverview(now());
         let real = { mode: 'unavailable' };
         if (store) {
           try {
@@ -87,7 +87,7 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
         payload.real = { store: real };
         return json(res, 200, payload);
       }
-      if (url.pathname === '/api/growth/opportunities') return json(res, 200, buildDemoOpportunities(now()));
+      if (url.pathname === '/api/growth/opportunities') return json(res, 200, buildOpportunities(now()));
       if (url.pathname === '/api/growth/campaigns') return json(res, 200, buildDemoCampaigns(now()));
       if (url.pathname === '/api/growth/products') {
         if (!productPotential) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });

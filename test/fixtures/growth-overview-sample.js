@@ -1,3 +1,5 @@
+// TEST FIXTURE (moved from src/growth/server/demo-overview.js, 2026-09-28): a CONNECTED Overview payload example, used only to test
+// that the Overview cards render correctly once real sources exist. Never served: the server builds server/overview.js.
 // Growth Overview - DEMONSTRATION data only (`demo: true`). No Growth source is connected yet (ad platforms,
 // social accounts, store counters, experiments), so every figure below is an illustrative example chosen to be
 // internally consistent (channel revenues add up to the influenced revenue, ROAS = paid revenue / spend, the
@@ -11,8 +13,8 @@
 //   - experiments: the Expériences page is not built - no running experiment is shown;
 //   - campaigns and opportunities: counts, ROAS and lists are DERIVED from the Campagnes / Opportunités demos (one source).
 
-import { buildDemoCampaigns } from './demo-campaigns.js';
-import { buildDemoOpportunities } from './demo-opportunities.js';
+import { buildDemoCampaigns } from '../../src/growth/server/demo-campaigns.js';
+import { buildDemoOpportunities } from './growth-opportunities-sample.js';
 
 const L = (fr, nl, en) => ({ fr, nl, en });
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };

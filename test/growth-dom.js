@@ -1,8 +1,8 @@
 // Test helper (not a test file): renders the Growth UI (router, sidebar, pages) in a minimal fake DOM with the demo payloads.
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { buildDemoOverview } from '../src/growth/server/demo-overview.js';
-import { buildDemoOpportunities } from '../src/growth/server/demo-opportunities.js';
+import { buildOverview } from '../src/growth/server/overview.js';
+import { buildOpportunities } from '../src/growth/server/opportunities.js';
 import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
 import { productPotentialFacts } from '../src/growth/products/facts.js';
 import { buildProductPotential } from '../src/growth/products/potential.js';
@@ -60,16 +60,21 @@ export function storePayload(data = makeStoreData(STORE_FULL), potential = new M
   return { generatedAt: STORE_NOW.toISOString(), ...buildStore({ ...f, potential, config: STORE_CONFIG }) };
 }
 
-export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200 } = {}) {
+// What the server sends for Vue d'ensemble (server/overview.js + `real.store`); `mode` picks the store-sales state.
+export function overviewPayload(real = { store: { mode: 'unavailable' } }) {
+  return { ...buildOverview(NOW), real };
+}
+
+export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200, overview = overviewPayload(), opportunities = buildOpportunities(NOW), lang = 'fr' } = {}) {
   const root = new Node('div');
   const errors = [];
   const listeners = {};
   const doc = { createElement: (t) => new Node(t), createElementNS: (_, t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: () => root, querySelector: () => null, documentElement: { lang: '' } };
-  const payloads = { '/api/growth/overview': buildDemoOverview(NOW), '/api/growth/opportunities': buildDemoOpportunities(NOW), '/api/growth/campaigns': buildDemoCampaigns(NOW), '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store };
+  const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/campaigns': buildDemoCampaigns(NOW), '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store };
   const el = () => new Node('div');
   const ctx = {
     document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
-    localStorage: { getItem: () => 'fr', setItem() {} }, Intl, Math, Date, JSON, Object, Array, Set, Number, String, Error, Promise, setTimeout,
+    localStorage: { getItem: () => lang, setItem() {} }, Intl, Math, Date, JSON, Object, Array, Set, Number, String, Error, Promise, setTimeout,
     fetch: async (u) => ((u === '/api/growth/products' && productsStatus !== 200) || (u === '/api/growth/audience' && audienceStatus !== 200) || (u === '/api/growth/content' && contentStatus !== 200) || (u === '/api/growth/store' && storeStatus !== 200) ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[u])) }),
     NordlaIcon: { semantic: (n) => Object.assign(new Node('img'), { className: `nordla-icon official ${n}` }), parle: () => new Node('img') },
     NordlaCharts: { head: el, trendLines: el, trendLine: el, sparkline: el, insufficient: el, donut: el, comparison: el },

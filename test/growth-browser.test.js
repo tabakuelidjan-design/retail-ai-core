@@ -172,6 +172,14 @@ test('browser: Overview shows no invented footfall / conversion and uses the rea
     assert.match(r.card, /Non connecté[\s\S]*Non connecté/);
     assert.match(r.card, /Données réelles/);
     assert.ok(!/4\s?860|21,4/.test(r.card), 'no demo visitors or conversion');
+    // Growth Pulse: no attribution source, no footfall source -> stated in the card, no curve, no figure (both views).
+    assert.match(r.pulse, /Source non connectée/);
+    assert.equal(await b.eval(`document.querySelectorAll('.gr-pulse svg path').length`), 0, 'no curve drawn');
+    await b.eval(`(() => { const s = document.querySelector('.gr-pulse select'); s.value = 'traffic'; s.dispatchEvent(new Event('change')); })()`);
+    await sleep(150);
+    const traffic = await b.eval(`document.querySelector('.gr-pulse').innerText`);
+    assert.match(traffic, /Non connecté|non connecté/i);
+    assert.doesNotMatch(traffic, /\d/, 'no visitor figure');
     const noTenant = await serve({});
     try {
       await b.open(`${noTenant.base}/#/`, 1440);
