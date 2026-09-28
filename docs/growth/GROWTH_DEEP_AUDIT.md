@@ -488,7 +488,7 @@ Points à corriger avant de commencer Expériences :
 |---|---|---|
 | P1-1 datation des remboursements | **Corrigé** | Sémantique commune `src/metrics/net-sales.js` (A : ventes datées par la commande, nettes de tous leurs remboursements ; B : activité de remboursement datée par le remboursement). Produits Potentiels, Contenu, Audience et Croissance magasin l'utilisent. Doc : `docs/growth/SALES_SEMANTICS.md`. Test transverse : `test/growth-sales-semantics.test.js` |
 | P1-2 démo : fréquentation, conversion | **Corrigé** | Vue d'ensemble : trafic et conversion « Non connecté », vue « Visiteurs magasin » = « Fréquentation non connectée », CA magasin = chiffre réel du moteur Croissance magasin (sinon « Donnée indisponible »), insight trafic retiré ; Opportunités : texte « problème de trafic détecté » reformulé |
-| P1-3 démo : comptages contradictoires | **Corrigé** | Vue d'ensemble dérive campagnes actives, ROAS, carte Campagnes, opportunités actives et top opportunités des démos Campagnes / Opportunités (une source) ; Expériences : aucune expérience affichée (« bientôt disponible ») |
+| P1-3 démo : comptages contradictoires | **Corrigé** | Mis à jour par `fc4f859` : Campagnes est la seule source des chiffres de campagnes (Vue d'ensemble les dérive, badge « Démo ») ; tout autre chiffre démo de Vue d'ensemble et Opportunités est remplacé par « Source non connectée » (générateurs démo déplacés dans `test/fixtures/`) ; Expériences : aucune expérience affichée (« bientôt disponible ») |
 | P2-1 Contenu à 1024 px | **Corrigé** | Entre 1024 et 1180 px, la colonne Action est masquée (la ligne ouvre le même panneau). Matrice permanente 1440/1280/1024/768/390 : `test/growth-browser.test.js` |
 | P2-2 chargement | **Corrigé** | État « Chargement des données… » distinct |
 | P2-3 erreur | **Corrigé** | Erreur typée sûre (boutique non configurée / données indisponibles / serveur injoignable / inattendue) + « Réessayer » |
@@ -496,3 +496,50 @@ Points à corriger avant de commencer Expériences :
 | P2-5 focus des panneaux | **Corrigé** | Focus déplacé dans le panneau, Tab / Maj+Tab piégés, Échap, retour du focus au déclencheur ; également pour le menu Plus (P3-7) |
 | P2-6 fraîcheur, P2-7 chargement 400 j, P2-8 pagination | Ouvert (PLUS TARD) | — |
 | P3 (pluriels, H2, utilitaires, icônes, etc.) | Ouvert, sauf P3-7 | — |
+
+---
+
+## Post-fix verification (2026-09-28)
+
+Vérification de l'état réel du code, pas des descriptions. Branche `feature/growth-platform`, base `fc4f859` (non poussé) + commit de vérification au-dessus.
+
+### Emplacement réel des corrections
+
+| Commit | Contenu |
+|---|---|
+| `3c7c2cd` | P1-1 (`src/metrics/net-sales.js`, les 4 `facts.js`, `SALES_SEMANTICS.md`, test transverse), P1-2 / P1-3 première passe, P2-1, P2-2 / P2-3 / P2-4 (états du shell, période dans `PAGES`), P2-5 (focus), test navigateur |
+| `a441cac` | Tests navigateur : attente de l'état prêt au lieu d'un délai fixe |
+| `fc4f859` | Pages démo : Vue d'ensemble / Opportunités honnêtes, Campagnes = source unique, preuves `test/growth-demo-honesty.test.js` |
+| commit de vérification | Garde-fou « aucune donnée démo sans badge Démo », garde statique « aucune définition concurrente des ventes nettes », tests navigateur post-fix |
+
+Le working tree était propre avant cette passe : aucune correction n'était restée non commitée.
+
+### Statut des anciens points
+
+| Point | Statut | Preuve |
+|---|---|---|
+| P0 | Aucun (inchangé) | — |
+| P1-1 datation des remboursements | **CORRIGÉ** | `src/metrics/net-sales.js` présent. Test transverse `test/growth-sales-semantics.test.js`, 4 cas (commande avant période + remboursement dans période ; commande et remboursement dans période ; remboursement après période ; aucun remboursement) : Produits Potentiels, Contenu et Croissance magasin donnent le même montant par produit (160 / 160 / 160 / 260 €, total 740 €) ; Audience = montant canonique exact sur sa fenêtre de 90 jours. Activité de remboursement (B) datée par le remboursement : 2 lignes, 200 € (A et B, pas C). Garde statique : aucun moteur Growth n'importe `metrics/sales.js` ni ne recalcule un net ou une datation de remboursement |
+| P1-2 démo : fréquentation, conversion | **CORRIGÉ** | Aucun champ visiteurs / fréquentation / trafic / conversion dans les données de Vue d'ensemble ; « Non connecté » pour trafic et conversion dans les 3 cas (ventes réelles, pas de magasin, indisponible) ; Growth Pulse vue trafic : ni chiffre ni courbe (navigateur réel) |
+| P1-3 démo : comptages contradictoires | **CORRIGÉ** | Un seul compteur : KPI « Campagnes actives » = puce de la carte Campagnes = lignes « En cours » de Campagnes = données Campagnes (8). Chaque nombre de Vue d'ensemble vient de Campagnes et lui est égal (liste blanche testée) ; Opportunités ne reçoit aucun nombre. **Garde-fou Démo** : le badge suit la définition de page ET tout payload `demo: true` (une page qui oublie son drapeau reçoit quand même le badge, testé par mutation) ; les générateurs démo ne sont importés que par les deux modules dont le payload est marqué `demo: true` |
+| P2-1 Contenu à 1024 px | **CORRIGÉ** | Navigateur réel 1440 / 1280 / 1180 / 1024 / 768 / 390 : `scrollWidth <= clientWidth` pour la page et la liste ; aucun contenu textuel rogné par `overflow: hidden` ; aucune zone de défilement interne cachée ; aucune cellule hors de la liste ; la ligne (focusable) ouvre le panneau là où la colonne Action est masquée. Vérifié aussi sur le snapshot staging (158 produits réels), FR / NL / EN × 6 largeurs |
+| P2-2 chargement | **CORRIGÉ** | Pour Produits Potentiels, Audience, Contenu et Croissance magasin : vrai état `role="status"`, distinct de l'erreur |
+| P2-3 erreur | **CORRIGÉ** | État `role="alert"` distinct, message sûr (aucun détail interne malgré une erreur contenant `token` / `stack`), bouton « Réessayer » qui relance réellement la requête (compteur d'appels +1), puis état vide rendu |
+| P2-4 période | **CORRIGÉ** | Même pastille dans les états chargement / erreur / vide / normal : 8 semaines (Produits Potentiels, Contenu, Croissance magasin), 90 jours (Audience), 30 jours déclarés (Vue d'ensemble, Opportunités, Campagnes) |
+| P2-5 focus des panneaux | **CORRIGÉ** | Produits Potentiels, Audience, Contenu (tous les panneaux du helper) : `role="dialog"`, `aria-modal="true"`, `aria-label` = titre du panneau ; focus entre à l'ouverture ; Tab et Maj+Tab piégés ; fermeture par Échap, bouton Fermer et clic sur le fond (contrat existant) ; focus rendu exactement au déclencheur ; 6 ouvertures / fermetures sans aucun écouteur `document` / `window` ajouté |
+| P2-6 fraîcheur des données | **TOUJOURS OUVERT**, non bloquant | Classé « Après, sans urgence » par l'audit ; hors périmètre de cette passe |
+| P2-7 chargement 400 j par source | **TOUJOURS OUVERT**, non bloquant | Idem (performance, sans erreur fonctionnelle) |
+| P2-8 pagination | **TOUJOURS OUVERT**, non bloquant | Idem (gros catalogues ; staging 158 produits OK) |
+| P3 | Non traités dans cette passe (P3-7 corrigé précédemment) | — |
+
+### Navigation Plus (390 px)
+FR / NL / EN : Contenu et Croissance magasin accessibles depuis Plus ; Plus actif (`aria-current="page"`) sur ces pages et inactif ailleurs ; focus dans le menu à l'ouverture ; Échap ferme et rend le focus à Plus ; retour navigateur Croissance magasin → Contenu → Vue d'ensemble correct ; pas de scroll horizontal.
+
+### Icônes / graphiques / assets
+Rien créé. Inventaire inchangé (§ 8, § 17) : 10 icônes manquantes, 4 icônes officielles à réexporter (`actionRecommandee`, `priorite`, `donneesPartielles`, `opportunite`), placeholders (menu Produits Potentiels, vignettes de contenu de Vue d'ensemble). Aucun graphique réellement manquant. Aucun nouvel asset cassé : 78 requêtes distinctes sur les 7 pages (1440 et 390, panneaux et menu Plus ouverts), aucune réponse ≥ 400 ni échec de chargement.
+
+### Tests
+Suite complète 1241 / 1241 (0 échec, 0 ignoré, tests navigateur inclus) ; tests navigateur 9 / 9 ; tests transverses 15 / 15 ; multi-tenant 114 / 114 + 13 tests tenant Growth.
+
+### Verdict post-fix
+**PRÊT POUR EXPÉRIENCES** — aucun P0, P1 ou P2 bloquant ouvert. Restent ouverts et non bloquants : P2-6, P2-7, P2-8 et les P3.

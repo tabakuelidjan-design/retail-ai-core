@@ -206,6 +206,13 @@ function langSwitch() {
  * Top bar. The period and the demo flag come from the PAGE definition (PAGES), not from the payload, so the pill is identical
  * while loading, on an error, on an empty page and on a full page. Each page's period is the window its engine really uses.
  */
+// Guard: demonstration data is NEVER shown without the "Démo" badge. The badge follows the page definition (so it is there while
+// loading / on an error) AND any loaded payload flagged `demo: true` - a page that forgets its flag still gets the badge.
+function isDemo(page) {
+  const d = page.get();
+  return page.demo === true || (d != null && typeof d === 'object' && d.demo === true);
+}
+
 function topbar(page) {
   const p = page.period;
   const pill = p.weeks
@@ -216,7 +223,7 @@ function topbar(page) {
   return h('div', { class: 'topbar' },
     h('div', { class: 'topbar-title' }, t('gr.brand')),
     h('div', { class: 'topbar-right' },
-      page.demo ? h('span', { class: 'wc-pill partial gr-demo', title: t(page.demoTitle || 'gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
+      isDemo(page) ? h('span', { class: 'wc-pill partial gr-demo', title: t(page.demoTitle || 'gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
       pill,
       langSwitch()));
 }

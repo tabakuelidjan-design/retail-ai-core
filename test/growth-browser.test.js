@@ -11,6 +11,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createGrowthApp } from '../src/growth/server/app.js';
 import { potentialPayload, audiencePayload, contentPayload, storePayload } from './growth-dom.js';
+import { makeDemandData } from './fixtures/demand-sample.js';
+import { makeAudienceData } from './fixtures/audience-sample.js';
+import { makeContentData } from './fixtures/content-sample.js';
+import { makeStoreData } from './fixtures/store-sample.js';
 
 const CANDIDATES = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean);
@@ -44,6 +48,7 @@ async function browser() {
   let b;
   b = {
     errors,
+    send,
     // Waits until the page left its loading state (polling, not a fixed delay: the suite runs files in parallel and a busy
     // machine must not make a test flaky). `ready: false` returns as soon as the shell is on screen (to observe loading).
     async open(url, width = 1440, height = 900, { ready = true } = {}) {
@@ -185,5 +190,155 @@ test('browser: Overview shows no invented footfall / conversion and uses the rea
       await b.open(`${noTenant.base}/#/`, 1440);
       assert.match(await b.eval(`document.querySelector('.gr-store').innerText`), /Donnée indisponible/);
     } finally { await noTenant.close(); }
+  } finally { await b.close(); await app.close(); }
+});
+
+// ================= Post-fix verification of the deep audit (2026-09-28) =================
+
+test('post-fix P2 Contenu: 1440 / 1280 / 1180 / 1024 / 768 / 390 - no page overflow, no clipped content, the list stays usable', { skip, timeout: 90000 }, async () => {
+  const app = await serve(sources()); const b = await browser();
+  try {
+    for (const w of [1440, 1280, 1180, 1024, 768, 390]) {
+      await b.open(`${app.base}/#/content`, w);
+      const r = JSON.parse(await b.eval(`JSON.stringify((() => {
+        const de = document.documentElement; const list = document.querySelector('.gr-ct-list');
+        const clipped = [...document.querySelectorAll('main *')].filter((el) => { const s = getComputedStyle(el); return !['IMG', 'SVG', 'svg', 'VIDEO', 'CANVAS'].includes(el.tagName) && (s.overflowX === 'hidden' || s.overflowX === 'clip') && el.scrollWidth > el.clientWidth + 1 && s.textOverflow !== 'ellipsis'; }).map((el) => el.className);
+        const scrollers = [...document.querySelectorAll('main *')].filter((el) => { const s = getComputedStyle(el); return el.scrollWidth > el.clientWidth + 1 && (s.overflowX === 'auto' || s.overflowX === 'scroll'); }).map((el) => el.className);
+        const lr = list.getBoundingClientRect();
+        const rowsOut = [...list.querySelectorAll('.gr-ct-row')].filter((row) => [...row.children].some((c) => { const b = c.getBoundingClientRect(); return b.width > 0 && (b.right > lr.right + 1 || b.left < lr.left - 1); })).length;
+        return { sw: de.scrollWidth, cw: de.clientWidth, listSw: list.scrollWidth, listCw: list.clientWidth, clipped, scrollers, rowsOut, rows: list.querySelectorAll('.gr-ct-row').length,
+          rowFocusable: list.querySelector('.gr-ct-row')?.tabIndex === 0 };
+      })())`));
+      assert.ok(r.sw <= r.cw, `@${w}: page scrollWidth ${r.sw} > clientWidth ${r.cw}`);
+      assert.ok(r.listSw <= r.listCw, `@${w}: Contenu list overflows (${r.listSw} > ${r.listCw})`);
+      assert.deepEqual(r.clipped, [], `@${w}: content clipped by overflow hidden`);
+      assert.deepEqual(r.scrollers, [], `@${w}: no hidden inner scroll area needed`);
+      assert.equal(r.rowsOut, 0, `@${w}: a row cell leaves the list`);
+      assert.ok(r.rows > 0 && r.rowFocusable, `@${w}: rows rendered and keyboard-reachable`);
+      // Where the Action column is hidden (1024-1180, < 1024 cards), the row itself opens the same panel.
+      await b.eval(`document.querySelector('.gr-ct-row').focus(); 1`);
+      await b.key('Enter');
+      assert.equal(await b.eval(`!!document.querySelector('.gr-pp-drawer')`), true, `@${w}: the row opens the detail panel`);
+      await b.key('Escape');
+    }
+  } finally { await b.close(); await app.close(); }
+});
+
+const PILL = { potential: /8 dernières semaines/, audience: /90 derniers jours/, content: /8 dernières semaines/, storeGrowth: /8 dernières semaines/, '': /30 derniers jours/, opportunities: /30 derniers jours/, campaigns: /30 derniers jours/ };
+const SOURCE_OF = { potential: 'productPotential', audience: 'audience', content: 'content', storeGrowth: 'store' };
+const EMPTY = { potential: () => potentialPayload({ ...makeDemandData(), orders: [], orderLines: [] }), audience: () => audiencePayload(makeAudienceData({})), content: () => contentPayload(makeContentData([])), storeGrowth: () => storePayload(makeStoreData({})) };
+
+test('post-fix P2 states: every real page - loading, error + safe message + Réessayer, retry refetches, empty, normal - one period per page', { skip, timeout: 180000 }, async () => {
+  const b = await browser();
+  try {
+    for (const pg of ['potential', 'audience', 'content', 'storeGrowth']) {
+      let mode = 'fail'; let calls = 0;
+      const full = sources()[SOURCE_OF[pg]];
+      const src = async () => { calls += 1; await sleep(1200); if (mode === 'fail') throw new Error('internal: token=abc stack'); return mode === 'empty' ? EMPTY[pg]() : full(); };
+      const app = await serve({ ...sources(), [SOURCE_OF[pg]]: src });
+      try {
+        const pill = () => b.eval(`document.querySelector('.period-pill').textContent`);
+        await b.open(`${app.base}/#/${pg}`, 1280, 900, { ready: false });
+        assert.equal(await b.eval(`!!document.querySelector('.gr-state-loading') && !document.querySelector('.gr-state-error')`), true, `${pg}: real loading state`);
+        assert.equal(await b.eval(`document.querySelector('.gr-state-loading').getAttribute('role')`), 'status');
+        assert.match(await pill(), PILL[pg], `${pg}: period while loading`);
+        for (let i = 0; i < 60 && !(await b.eval(`!!document.querySelector('.gr-state-error')`)); i += 1) await sleep(100);
+        const err = JSON.parse(await b.eval(`JSON.stringify({ role: document.querySelector('.gr-state-error')?.getAttribute('role'), text: document.querySelector('.gr-state-error')?.innerText || '', retry: document.querySelector('.gr-state-retry')?.innerText })`));
+        assert.equal(err.role, 'alert', `${pg}: distinct error state`);
+        assert.doesNotMatch(err.text, /token|abc|stack|internal/i, `${pg}: safe message`);
+        assert.match(err.retry, /Réessayer/, `${pg}: retry button`);
+        assert.match(await pill(), PILL[pg], `${pg}: period on error`);
+        mode = 'empty'; const before = calls;
+        await b.eval(`document.querySelector('.gr-state-retry').click(); 1`);
+        await sleep(200);
+        assert.equal(await b.eval(`!!document.querySelector('.gr-state-loading')`), true, `${pg}: retry shows loading`);
+        for (let i = 0; i < 60 && (await b.eval(`!!document.querySelector('.gr-state')`)); i += 1) await sleep(100);
+        assert.equal(calls, before + 1, `${pg}: retry really refetched`);
+        assert.equal(await b.eval(`!!document.querySelector('.gr-state')`), false, `${pg}: empty page rendered`);
+        assert.match(await pill(), PILL[pg], `${pg}: period on the empty page`);
+      } finally { await app.close(); }
+      // Normal state (fresh server).
+      const ok = await serve(sources());
+      try { await b.open(`${ok.base}/#/${pg}`, 1280); assert.match(await b.eval(`document.querySelector('.period-pill').textContent`), PILL[pg], `${pg}: period on the normal page`); } finally { await ok.close(); }
+    }
+    // Shell pages: their declared 30-day window in every state they have (loading + normal).
+    const app = await serve(sources());
+    try {
+      for (const pg of ['', 'opportunities', 'campaigns']) {
+        await b.open(`${app.base}/#/${pg}`, 1280, 900, { ready: false });
+        assert.match(await b.eval(`document.querySelector('.period-pill').textContent`), PILL[pg], `${pg || 'overview'}: period while loading`);
+        await b.open(`${app.base}/#/${pg}`, 1280);
+        assert.match(await b.eval(`document.querySelector('.period-pill').textContent`), PILL[pg], `${pg || 'overview'}: period`);
+      }
+    } finally { await app.close(); }
+  } finally { await b.close(); }
+});
+
+test('post-fix P2 drawers: aria contract, focus in / trapped / restored, Escape, close button, backdrop, no duplicated listeners', { skip, timeout: 120000 }, async () => {
+  const app = await serve(sources()); const b = await browser();
+  // Count listeners registered on document and window, from the first script on.
+  await b.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__lc = 0; for (const t of [Document.prototype, Window.prototype]) { const o = t.addEventListener; t.addEventListener = function (type, fn, opt) { window.__lc += 1; return o.call(this, type, fn, opt); }; }' });
+  try {
+    for (const [pg, row] of [['potential', '.gr-pp-row'], ['audience', '.gr-au-row'], ['content', '.gr-ct-row']]) {
+      await b.open(`${app.base}/#/${pg}`, 1440);
+      const listeners0 = await b.eval(`window.__lc`);
+      assert.ok(listeners0 > 0, 'listener counter installed');
+      const trigger = await b.eval(`(() => { const r = document.querySelector('${row}'); r.focus(); return r.getAttribute('data-focus-id'); })()`);
+      for (let round = 0; round < 6; round += 1) {
+        await b.key('Enter');
+        const a = JSON.parse(await b.eval(`JSON.stringify((() => { const d = document.querySelector('.gr-pp-drawer'); return { role: d?.getAttribute('role'), modal: d?.getAttribute('aria-modal'), label: d?.getAttribute('aria-label'), h2: d?.querySelector('h2')?.textContent, inside: !!document.activeElement.closest('.gr-pp-drawer'), n: document.querySelectorAll('.gr-pp-drawer').length }; })())`));
+        assert.deepEqual([a.role, a.modal, a.n, a.inside], ['dialog', 'true', 1, true], `${pg} round ${round}`);
+        assert.ok(a.label && a.label === a.h2, `${pg}: dialog labelled by its title`);
+        for (let i = 0; i < 15; i += 1) await b.key('Tab');
+        assert.equal(await b.eval(`!!document.activeElement.closest('.gr-pp-drawer')`), true, `${pg}: Tab trapped`);
+        for (let i = 0; i < 15; i += 1) await b.key('Tab', { shift: true });
+        assert.equal(await b.eval(`!!document.activeElement.closest('.gr-pp-drawer')`), true, `${pg}: Shift+Tab trapped`);
+        // The three closing paths, in turn.
+        if (round % 3 === 0) await b.key('Escape');
+        else if (round % 3 === 1) { await b.eval(`document.querySelector('.gr-pp-close').click(); 1`); await sleep(150); }
+        else { await b.eval(`document.querySelector('.gr-pp-backdrop').click(); 1`); await sleep(150); }
+        assert.equal(await b.eval(`document.querySelectorAll('.gr-pp-drawer').length`), 0, `${pg} round ${round}: closed`);
+        assert.equal(await b.eval(`document.activeElement.getAttribute('data-focus-id')`), trigger, `${pg} round ${round}: focus back on the exact trigger`);
+      }
+      assert.equal(await b.eval(`window.__lc`), listeners0, `${pg}: no document/window listener added by 6 open/close cycles`);
+    }
+    assert.deepEqual(b.errors, []);
+  } finally { await b.close(); await app.close(); }
+});
+
+test('post-fix navigation Plus @390: FR/NL/EN, Contenu and Croissance magasin reachable, Plus active, Escape, focus, browser back', { skip, timeout: 120000 }, async () => {
+  const app = await serve(sources()); const b = await browser();
+  try {
+    for (const lang of ['fr', 'nl', 'en']) {
+      await b.open(`${app.base}/#/`, 390, 844);
+      await b.eval(`localStorage.setItem('nordla_lang', '${lang}'); 1`);
+      await b.open(`${app.base}/#/`, 390, 844);
+      assert.equal(await b.eval(`document.documentElement.lang`), lang);
+      assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), false, `${lang}: Plus inactive on the overview`);
+      for (const hash of ['#/content', '#/storeGrowth']) {
+        await b.eval(`document.querySelector('.gr-more-btn').click(); 1`); await sleep(150);
+        assert.equal(await b.eval(`!!document.activeElement.closest('.gr-more-panel')`), true, `${lang}: focus in the menu`);
+        assert.equal(await b.eval(`!![...document.querySelectorAll('.gr-more-panel a')].find((x) => x.getAttribute('href') === '${hash}')`), true, `${lang}: ${hash} in the menu`);
+        await b.eval(`[...document.querySelectorAll('.gr-more-panel a')].find((x) => x.getAttribute('href') === '${hash}').click(); 1`);
+        for (let i = 0; i < 40 && (await b.eval(`location.hash`)) !== hash; i += 1) await sleep(50);
+        for (let i = 0; i < 60 && (await b.eval(`!!document.querySelector('.gr-state-loading')`)); i += 1) await sleep(100);
+        await sleep(150);
+        const st = JSON.parse(await b.eval(`JSON.stringify({ open: !!document.querySelector('.gr-more-panel'), active: document.querySelector('.gr-more-btn').classList.contains('active'), cur: document.querySelector('.gr-more-btn').getAttribute('aria-current'), title: document.querySelector('.ex-title')?.innerText, sw: document.documentElement.scrollWidth, w: innerWidth })`));
+        assert.deepEqual([st.open, st.active, st.cur], [false, true, 'page'], `${lang} ${hash}: menu closed, Plus active`);
+        assert.ok(st.title, `${lang} ${hash}: page rendered`);
+        assert.ok(st.sw <= st.w, `${lang} ${hash}: no horizontal scroll`);
+      }
+      // Escape closes and gives focus back to Plus.
+      await b.eval(`document.querySelector('.gr-more-btn').focus(); 1`); await b.key('Enter'); await b.key('Escape');
+      assert.equal(await b.eval(`!document.querySelector('.gr-more-panel') && document.activeElement.classList.contains('gr-more-btn')`), true, `${lang}: Escape`);
+      // Browser back: storeGrowth -> content (Plus still active) -> overview (Plus inactive).
+      await b.eval(`history.back(); 1`); await sleep(600);
+      assert.equal(await b.eval(`location.hash`), '#/content', `${lang}: back to Contenu`);
+      assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), true);
+      await b.eval(`history.back(); 1`); await sleep(600);
+      assert.equal(await b.eval(`location.hash`), '#/', `${lang}: back to the overview`);
+      assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), false, `${lang}: Plus inactive outside its pages`);
+    }
+    assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);
   } finally { await b.close(); await app.close(); }
 });

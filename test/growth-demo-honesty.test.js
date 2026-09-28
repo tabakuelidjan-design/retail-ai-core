@@ -7,6 +7,7 @@
 //   4. design unchanged: same cards, same classes, same order, same titles as the connected rendering.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { buildOverview } from '../src/growth/server/overview.js';
 import { buildOpportunities } from '../src/growth/server/opportunities.js';
 import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
@@ -23,6 +24,7 @@ function numbers(v, p = '', out = []) {
 }
 /** Text of the page content only (KPI row + card grids), without the shell (sidebar, period pill). */
 const cardsText = (root) => all(root, (n) => ['ex-kpi-row', 'gr-grid', 'gr-grid-pipe', 'ex-grid-2'].some((c) => hasClass(n, c))).map(text).join(' ');
+const vmGet = (ctx, expr) => vm.runInContext(expr, ctx);
 const kpiTile = (root, label) => all(root, (n) => hasClass(n, 'ex-kpi')).find((k) => text(k).includes(label));
 const kpiValue = (tile) => text(all(tile, (n) => hasClass(n, 'ex-kpi-value'))[0]);
 
@@ -140,4 +142,50 @@ test('proof 4 - design unchanged: same cards, classes, order and titles as the c
   const connectedOp = skeleton((await growthDom('#/opportunities', { opportunities: buildDemoOpportunities(NOW) })).root);
   const honestOp = skeleton((await growthDom('#/opportunities')).root);
   assert.deepEqual(honestOp, connectedOp);
+});
+
+// ---------- Guard: no demonstration data without the explicit "Démo" badge ----------
+const DEMO_BADGE = (root) => all(root, (n) => hasClass(n, 'gr-demo')).length === 1;
+
+test('demo guard - the badge is shown exactly on the pages whose payload is demonstration data (and nowhere else)', async () => {
+  const expectBadge = { '#/': true, '#/campaigns': true, '#/opportunities': false, '#/potential': false, '#/audience': false, '#/content': false, '#/storeGrowth': false };
+  for (const [hash, want] of Object.entries(expectBadge)) {
+    const { root, errors } = await growthDom(hash);
+    assert.deepEqual(errors, [], hash);
+    assert.equal(DEMO_BADGE(root), want, `${hash}: badge ${want ? 'missing' : 'unexpected'}`);
+  }
+});
+
+test('demo guard - a payload flagged demo: true gets the badge even on a page that does not declare itself demo', async () => {
+  const { potentialPayload, audiencePayload, contentPayload, storePayload } = await import('./growth-dom.js');
+  const cases = [['#/potential', { products: { ...potentialPayload(), demo: true } }], ['#/audience', { audience: { ...audiencePayload(), demo: true } }],
+    ['#/content', { content: { ...contentPayload(), demo: true } }], ['#/storeGrowth', { store: { ...storePayload(), demo: true } }],
+    ['#/opportunities', { opportunities: { ...buildDemoOpportunities(NOW), demo: true } }]];
+  for (const [hash, opts] of cases) {
+    const { root, errors, ctx } = await growthDom(hash, opts);
+    assert.deepEqual(errors, [], hash);
+    const key = hash.slice(2);
+    assert.notEqual(vmGet(ctx, `PAGES.${key}.demo`), true, `${hash} is not declared demo`);
+    assert.ok(DEMO_BADGE(root), `${hash}: demo payload shown without the Démo badge`);
+  }
+});
+
+test('demo guard - every served payload built from a demonstration builder is flagged demo: true; real routes never are', async () => {
+  const http = await import('node:http');
+  const { createGrowthApp } = await import('../src/growth/server/app.js');
+  const { potentialPayload, audiencePayload, contentPayload, storePayload } = await import('./growth-dom.js');
+  const server = http.createServer(createGrowthApp({ now: () => NOW, productPotential: async () => potentialPayload(), audience: async () => audiencePayload(), content: async () => contentPayload(), store: async () => storePayload() }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const get = async (p) => (await fetch(base + p)).json();
+    assert.equal((await get('/api/growth/campaigns')).demo, true, 'Campagnes = demonstration data, flagged');
+    assert.equal((await get('/api/growth/overview')).demo, true, 'Vue d\'ensemble shows Campagnes figures, flagged');
+    for (const p of ['/api/growth/opportunities', '/api/growth/products', '/api/growth/audience', '/api/growth/content', '/api/growth/store']) assert.notEqual((await get(p)).demo, true, p);
+  } finally { server.close(); }
+  // Static: the demonstration builders are imported only by the two modules whose payload is flagged above.
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]));
+  const importers = walk(new URL('../src', import.meta.url).pathname.replace(/^\/(\w:)/, '$1')).filter((f) => f.endsWith('.js') && /from '[^']*demo-[\w-]+\.js'/.test(readFileSync(f, 'utf8'))).map((f) => f.replace(/^.*\/src\//, 'src/'));
+  assert.deepEqual(importers.sort(), ['src/growth/server/app.js', 'src/growth/server/overview.js']);
 });

@@ -113,3 +113,17 @@ test('cross-page: refund rates follow the same order-dated rule (Produits Potent
   const store = buildStore({ ...storeFacts({ data, now: NOW, timeZone: TZ, config: CONFIG }), potential: new Map(), config: CONFIG });
   assert.equal(store.store.refundRate, Math.round((2 / 35) * 10000) / 10000, '2 refunded units out of the 35 sold in the window');
 });
+
+test('no competing definition: every Growth engine takes net sales from metrics/net-sales.js, none recomputes it', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const root = new URL('../src/growth/', import.meta.url);
+  const engines = ['products', 'content', 'store', 'audience'];
+  for (const e of engines) {
+    const dir = new URL(`${e}/`, root);
+    const src = readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, dir), 'utf8')).join('\n');
+    assert.match(src, /from '\.\.\/\.\.\/metrics\/net-sales\.js'/, `${e} reads net sales from the canonical module`);
+    assert.doesNotMatch(src, /from '\.\.\/\.\.\/metrics\/sales\.js'|\baggregate\(|net_sales_ex_tax|refundFacts|refundedAt|unit_price|discount_amount/, `${e} must not compute its own net sales / refund dating`);
+  }
+  // Refund activity (B, refund-dated) stays available only through the canonical module.
+  assert.equal(typeof refundActivity, 'function');
+});
