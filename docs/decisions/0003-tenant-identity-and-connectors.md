@@ -1,7 +1,8 @@
 # ADR 0003: Nordla tenant identity is independent of Shopify; Shopify becomes an optional connector
 
-- **Status:** Accepted (architecture only - no code, no migration yet)
-- **Date:** 2026-09-27
+- **Status:** Accepted. **Built** in code and tests; **deployed on staging only**; **production NOT switched** (verified
+  2026-09-28, see section 12 - the "no code, no migration yet" wording of the original status is out of date).
+- **Date:** 2026-09-27 (state updated 2026-09-28, Core phase C0)
 - **Baseline audited:** Finance `21dc924` (production), Core `b7973dd` (production), Analytics `e593475` (production), Growth `feature/growth-campaigns`
 
 ## Context
@@ -221,6 +222,68 @@ Every implementation step must keep these green (staging uses the synthetic Shop
 - The Supabase service-role key sees every tenant; isolation relies on `merchant_id` filters in code (already tested).
 - Real multi-tenant isolation (tenant from the session, per-tenant storage for these files, RLS policies per tenant) is a separate,
   later project. Resolver source 1 is reserved for it.
+
+## 12. Real state and remaining switch steps (verified 2026-09-28, Core phase C0)
+
+Verified read-only: Git, full test suite (1256/1256 on `4c34896`), Railway deployments and variable *names*, SQL reads on both
+Supabase projects. No secret value was displayed.
+
+### 12.1 Built vs deployed
+
+| Item | Built (code + tests) | Staging | Production |
+|---|---|---|---|
+| Resolver `src/tenant/index.js` (env source; session reserved) | yes (`tenant-resolver.test.js`) | yes | **no** |
+| M1 `merchant_connectors` + Shopify backfill | yes (`merchant-connectors.test.js`) | yes (1 `shopify` connector, `CONFIGURED`) | **no** (table absent) |
+| Finance boot from `NORDLA_MERCHANT_ID` (step 4 of the original plan) | yes (`finance-tenant-decoupling.test.js`) | yes | **no** |
+| Core sync: tenant from resolver, shop checked against its connector, no merchant creation (step 5) | yes (`core-tenant-decoupling.test.js`) | yes | **no** |
+| Analytics tenant, no "only merchant" (step 6) | yes (`analytics-tenant-decoupling.test.js`) | yes | **no** |
+| CLI tools (buying, customers, marketing) through the resolver (step 7) | yes (`remaining-tenant-decoupling.test.js`) | yes (run locally) | n/a (not deployed services) |
+| `NORDLA_SERVICE` start dispatcher | yes (`service-start.test.js`) | yes | **no** |
+
+Production (Railway `app.nordla.app`, environment `production`), verified 2026-09-28:
+- Finance `21dc924`: `src/finance/runtime.js` calls Shopify `SHOP_QUERY` at boot and selects `merchants` by `source_id = shop.id`.
+- Core `b7973dd`: `src/sync/index.js` finds the merchant with `SHOP_QUERY`; `src/sync/catalog.js` **upserts `merchants` from the shop**
+  (`normalizeMerchant`), i.e. Core still creates/updates the tenant from Shopify.
+- Analytics `e593475`: `src/report/index.js` uses `SHOP_QUERY`; `src/analytics-premium/server/serve.js` still has the
+  "exactly one merchant" rule (`MERCHANT_NOT_UNIQUE`).
+- None of the three production services has `NORDLA_MERCHANT_ID` or `NORDLA_SERVICE`. **Deploying the current code chain without
+  `NORDLA_SERVICE` makes the service refuse to start** (by design): both variables must be set before the switch deployment.
+- Production database: 22 of the 23 repository migrations applied (all except `merchant_connectors`); no RLS policy anywhere.
+
+### 12.2 Legacy Shopify fallback still in the code (not used anywhere today)
+
+The migration-only source 3 (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`) is present in four places: `src/finance/runtime.js`,
+`src/sync/tenant-context.js`, `src/analytics-premium/server/tenant.js`, `src/tenant/tool-context.js` (allow-listed by
+`test/remaining-tenant-decoupling.test.js`). No service sets the flag: staging uses `NORDLA_MERCHANT_ID`; production does not run this
+code yet. `SHOP_QUERY` is otherwise used only for the identity **check** (`src/sync/tenant-context.js`, `src/connectors/shopify.js`),
+never to choose the tenant.
+
+### 12.3 Remaining switch steps for HABB (Core phase C6)
+
+Status of the section 8 plan: steps 1-2 done on staging only; step 3 code built; steps 4-8 not done in production.
+
+1. Apply M1 (`merchant_connectors`) on production; verify the HABB `shopify` backfill row.
+2. Deploy the current chain to production Core, Finance and Analytics with `NORDLA_SERVICE` (`core` / `finance` / `analytics`) and
+   `NORDLA_MERCHANT_ID` (HABB's existing `merchants.id`) set **before** the deployment; one service at a time, rollback = redeploy the
+   previous commit.
+3. Validate: no identity `SHOP_QUERY` at boot, sync writes checked against the connector, Analytics without the single-merchant rule.
+4. Keep `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` unset (off); after a stable production period, remove the fallback code (own change).
+5. Prepare M2 (make `merchants.source_system` / `source_id` optional, deprecated, nothing dropped). **M2 must be finished before the
+   second external customer.**
+
+### 12.4 Ordering decision (owner, 2026-09-28)
+
+**C6 (this production switch) comes before C5 (public opening of Growth / Développement des ventes)**, including the internal HABB
+beta. The Core roadmap and the identity decisions are in ADR 0004 (sections 7, 11 and 12).
+
+### 12.5 Out-of-date documentation (flagged, cleanup in a separate small documentation commit)
+
+- Section 1.3, table row "Growth ... demonstration data only" and section 5.5 "No change today (demonstration data)": out of date.
+  Growth now reads the tenant's real synced data through the resolver (`src/growth/server/serve.js` + `resolveToolTenant`).
+- `src/growth/server/serve.js` header comment "Without it, the demonstration pages still work": out of date (code comment; not
+  changed in C0).
+- `supabase/migrations/20260926160000_finance_purchase_document_model.sql` header says "NOT APPLIED": it is applied on production and
+  staging (an applied migration is not rewritten; to be noted in the migration log instead).
 
 ## Consequences
 
