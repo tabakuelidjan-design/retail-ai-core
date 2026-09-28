@@ -55,7 +55,10 @@ function dotsIcon(size = 14) {
 }
 const icon = (name, size) => svg(ICONS[name] || ICONS.spark, size);
 
-const fmtMoney = (v, cur) => (v == null ? t('common.dash') : `€ ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`.replace('€', cur === 'EUR' ? '€' : cur || ''));
+// Amounts use the same formatters as Exploration / Clients / Produits (explorer.js, locale of the chosen language: fr-BE, nl-BE,
+// en-GB): totals in whole euros ("1 234 €"), per-order amounts such as the average basket with cents ("52,37 €").
+const fmtMoney = (v, cur) => (v == null ? t('common.dash') : exMoney(v, cur));
+const fmtMoneyCents = (v, cur) => (v == null ? t('common.dash') : exMoney2(v, cur));
 const fmtPct = (v) => (v == null ? t('common.dash') : `${(v * 100).toFixed(1)}%`);
 const fmtAgo = (iso) => {
   if (!iso) return t('common.dash');
@@ -211,7 +214,7 @@ function kpiRow(brief) {
   return h('div', { class: 'kpi-grid' },
     kpiCard(t('kpi.netRevenue'), fmtMoney(k.netRevenue.value, brief.currency), null, sr?.netRevenue),
     kpiCard(t('kpi.orders'), k.orders.value ?? t('common.dash'), null, sr?.orders),
-    kpiCard(t('kpi.aov'), fmtMoney(k.aov.value, brief.currency), null, sr?.aov),
+    kpiCard(t('kpi.aov'), fmtMoneyCents(k.aov.value, brief.currency), null, sr?.aov),
     // The margin is only shown as a plain figure when it rests on verified costs; otherwise it is flagged partial with its coverage.
     kpiCard(t('kpi.grossMargin'), fmtPct(k.grossMargin.value), k.grossMargin.costCertain ? null : t('kpi.partialCostCoverage'), sr?.grossMargin,
       k.grossMargin.costCertain ? null : t('kpi.costCoverageDetail', covPct(k.grossMargin.costCoverage), covPct(k.grossMargin.verifiedCostCoverage))));
@@ -249,7 +252,7 @@ function watchSection(brief) {
     h('div', { class: 'watch-grid' },
       h('div', { class: 'watch-card' },
         h('span', { class: 'watch-ico ok' }, icon('up', 16)),
-        h('div', { class: 'watch-body' }, h('div', { class: 'watch-title' }, t('watch.aovTitle')), h('div', { class: 'watch-text' }, brief.aovComparison ? t('watch.aovCompared', fmtMoney(brief.aovComparison.value, brief.currency), fmtMoney(brief.aovComparison.previous, brief.currency), fmtSignedPct(brief.aovComparison.pct)) : t('watch.aovText'))),
+        h('div', { class: 'watch-body' }, h('div', { class: 'watch-title' }, t('watch.aovTitle')), h('div', { class: 'watch-text' }, brief.aovComparison ? t('watch.aovCompared', fmtMoneyCents(brief.aovComparison.value, brief.currency), fmtMoneyCents(brief.aovComparison.previous, brief.currency), fmtSignedPct(brief.aovComparison.pct)) : t('watch.aovText'))),
         aovChart ? h('div', { class: 'watch-spark' }, aovChart) : null),
       h('div', { class: 'watch-card' },
         h('span', { class: 'watch-ico warn' }, NordlaIcon.semantic('clientDormant', 'lg')),
@@ -334,8 +337,8 @@ function wcWatchSection(data) {
         h('div', { class: 'wc-watch-top' }, h('span', { class: `watch-ico ${dir === 'up' ? 'ok' : 'bad'}` }, icon(dir, 16)), h('div', { class: 'wc-watch-top-right' }, watchPill('watchlist'), h('button', { class: 'wc-watch-menu', type: 'button', disabled: 'disabled', title: t('wc.dismissTitle') }, dotsIcon(14)))),
         h('div', { class: 'watch-body' },
           h('div', { class: 'watch-title' }, t(dir === 'up' ? 'wc.watchAovUp' : 'wc.watchAovDown', Math.abs(Math.round(w.pct * 100)))),
-          h('div', { class: 'watch-text' }, t('wc.watchAovDetail', fmtMoney(w.previousValue, w.currency), fmtMoney(w.value, w.currency)))),
-        NordlaCharts.head({ title: t('kpi.aov'), value: fmtMoney(w.value, w.currency), delta: Math.round(w.pct * 1000) / 10, good: dir === 'up', vs: t('wc.vsPreviousPeriod'), small: true }),
+          h('div', { class: 'watch-text' }, t('wc.watchAovDetail', fmtMoneyCents(w.previousValue, w.currency), fmtMoneyCents(w.value, w.currency)))),
+        NordlaCharts.head({ title: t('kpi.aov'), value: fmtMoneyCents(w.value, w.currency), delta: Math.round(w.pct * 1000) / 10, good: dir === 'up', vs: t('wc.vsPreviousPeriod'), small: true }),
         chart ? h('div', { class: 'watch-spark' }, chart) : null));
     } else if (w.kind === 'movers') {
       // Mirrors the main insight's real direction (never its own independent read) - the point of

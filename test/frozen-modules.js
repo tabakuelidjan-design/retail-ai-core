@@ -11,6 +11,8 @@ const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' })
 export const LABEL_FILES = ['src/analytics-premium/ui/index.html', 'src/analytics-premium/ui/lang-fr.js', 'src/finance/ui/index.html', 'src/finance/ui/lang-fr.js'];
 // Page-local stylesheet of Analyses > Produits: only an APPENDED rule is allowed (a longer fr-BE label must still fit at 320 px).
 export const APPEND_ONLY_FILES = ['src/analytics-premium/ui/products.css'];
+// Analyses amounts in fr-BE (owner decision 2026-09-28): in app.js only the money-formatter lines (and their comment) may differ.
+export const LINE_SCOPED_FILES = { 'src/analytics-premium/ui/app.js': /fmtMoney|^\s*\/\/ (Amounts use the same formatters|en-GB\): totals in whole euros)/ };
 
 function frKeys(src, file) {
   const ctx = { window: { FINANCE_LANG: {} } };
@@ -23,8 +25,13 @@ function frKeys(src, file) {
 /** Returns the list of violations (empty = the freeze holds). */
 export function frozenViolations() {
   const changed = git(['diff', '--name-only', BASELINE, '--', 'src/finance', 'src/analytics-premium', 'src/shared']).trim().split('\n').filter(Boolean);
-  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f)).map((f) => `${f}: frozen file changed`);
+  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f) && !LINE_SCOPED_FILES[f]).map((f) => `${f}: frozen file changed`);
   const norm = (x) => x.replace(/\r\n/g, '\n');
+  for (const f of changed.filter((x) => LINE_SCOPED_FILES[x])) {
+    const lines = git(['diff', '-U0', '--ignore-cr-at-eol', BASELINE, '--', f]).split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l)).map((l) => l.slice(1));
+    const foreign = lines.filter((l) => !LINE_SCOPED_FILES[f].test(l));
+    if (foreign.length) out.push(`${f}: lines outside the allowed scope changed (${foreign.length})`);
+  }
   for (const f of changed.filter((x) => APPEND_ONLY_FILES.includes(x))) {
     if (!norm(readFileSync(new URL(f, ROOT), 'utf8')).startsWith(norm(git(['show', `${BASELINE}:${f}`])))) out.push(`${f}: existing rules changed (append only)`);
   }
