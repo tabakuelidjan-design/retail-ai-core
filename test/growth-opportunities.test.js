@@ -1,182 +1,84 @@
+// Développement des ventes > Opportunités - the page (owner decisions 2026-09-28): three sections fed by the four real engines,
+// problems grouped by problem, one card per product, an honest empty commercial state, links to the source pages, no action button.
+// Synthetic payloads only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
-import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { buildDemoOpportunities } from './fixtures/growth-opportunities-sample.js';
-import { buildOpportunities } from '../src/growth/server/opportunities.js';
-import { growthDom, all, text, hasClass, navState, title } from './growth-dom.js';
+import { buildPriorities } from '../src/growth/priorities/priorities.js';
+import { growthDom, prioritiesPayload, all, text, hasClass, navState, title, NOW } from './growth-dom.js';
+import { smallStore } from './fixtures/growth-priorities-sample.js';
 import { frozenViolations } from './frozen-modules.js';
 
-const UI = new URL('../src/growth/ui/', import.meta.url);
-const ANALYTICS_UI = new URL('../src/analytics-premium/ui/', import.meta.url);
-const NOW = new Date('2026-09-26T10:00:00Z');
-const sum = (a) => a.reduce((x, y) => x + y, 0);
+const cards = (root) => all(root, (n) => hasClass(n, 'gr-pr-card'));
+const rowsOf = (card) => all(card, (n) => hasClass(n, 'gr-pr-row'));
+const section = (root, cls) => all(root, (n) => hasClass(n, cls))[0];
+const small = () => buildPriorities({ ...smallStore(), now: NOW });
 
-test('opportunities sample (connected-mode fixture): every KPI is derived from the rows (no contradictory figures)', () => {
-  const d = buildDemoOpportunities(NOW);
-  const p = d.pipeline;
-  assert.equal(d.demo, true);
-  assert.equal(d.kpis.potentialRevenue.value, sum(p.map((o) => o.revenue)), 'potential revenue = sum of the active pipeline');
-  assert.equal(d.kpis.potentialRevenue.active, p.length);
-  assert.equal(d.kpis.priority.value, p.filter((o) => o.priority !== 'low').length);
-  assert.equal(d.kpis.priority.high, p.filter((o) => o.priority === 'high').length);
-  assert.equal(d.kpis.readyToApprove.value, p.filter((o) => o.status === 'ready').length);
-  assert.equal(d.kpis.inProgress.value, p.filter((o) => o.status === 'inProgress').length);
-  const thisMonth = d.wins.filter((w) => w.date.startsWith('2026-09'));
-  assert.equal(d.kpis.winsThisMonth.value, thisMonth.length);
-  assert.equal(d.kpis.winsThisMonth.revenue, sum(thisMonth.map((w) => w.result)));
-  // The figures the brief fixed.
-  assert.deepEqual([d.kpis.priority.value, d.kpis.priority.value - d.kpis.priority.previous, d.kpis.priority.high], [8, 3, 4]);
-  assert.equal(Math.round((d.kpis.potentialRevenue.value / d.kpis.potentialRevenue.previous - 1) * 100), 45);
-  assert.deepEqual([d.kpis.potentialRevenue.active, d.kpis.readyToApprove.value, d.kpis.inProgress.value, d.kpis.winsThisMonth.value, d.kpis.winsThisMonth.revenue], [12, 3, 4, 2, 4300]);
-  // Cross references: recommendations and approvals point to real pipeline rows; approvals are exactly the "ready" rows.
-  const ids = new Set(p.map((o) => o.id));
-  for (const r of d.recommendations) assert.ok(ids.has(r.opportunityId), r.opportunityId);
-  assert.deepEqual(d.approvals.map((a) => a.opportunityId), p.filter((o) => o.status === 'ready').map((o) => o.id));
-  for (const a of d.approvals) assert.equal(a.expectedRevenue, p.find((o) => o.id === a.opportunityId).revenue);
-  for (const a of d.approvals) assert.ok(a.budget > 0 && a.budget < a.expectedRevenue);
-  // Enumerations the UI knows how to label.
-  for (const o of p) {
-    assert.ok(['high', 'medium', 'low'].includes(o.priority));
-    assert.ok(['low', 'medium', 'high'].includes(o.effort));
-    assert.ok(['high', 'low'].includes(o.impact));
-    assert.ok(['ready', 'inProgress', 'analysis', 'planned'].includes(o.status));
-    assert.ok(o.confidence > 0 && o.confidence <= 1);
-    assert.equal(o.budget, undefined, 'budget is only exposed through approvals');
-  }
-  assert.deepEqual(buildDemoOpportunities(new Date('2026-09-26T20:00:00Z')).pipeline, p, 'deterministic');
-});
-
-test('opportunities UI: all labels exist in FR/NL/EN; no demo value hardcoded in the page code', async () => {
-  const ctx = { window: {} };
-  for (const l of ['fr', 'nl', 'en']) vm.runInNewContext(await readFile(new URL(`lang-${l}.js`, UI), 'utf8'), ctx);
-  const D = ctx.window.NORDLA_DICTS;
-  const src = await readFile(new URL('opportunities.js', UI), 'utf8');
-  const d = buildDemoOpportunities(NOW);
-  const keys = [
-    ...[...src.matchAll(/\bt\('(gr\.[\w.]+)'/g)].map((m) => m[1]),
-    ...d.pipeline.flatMap((o) => [`gr.op.src.${o.source}`, `gr.op.status.${o.status}`, `gr.op.priority.${o.priority}`, `gr.op.effort.${o.effort}`]),
-    ...['name', 'source', 'priority', 'revenue', 'confidence', 'effort', 'status'].map((c) => `gr.op.col.${c}`),
-    ...['priority', 'revenue', 'confidence'].map((s) => `gr.op.f.sort.${s}`),
-    ...['highLow', 'highHigh', 'lowLow', 'lowHigh'].map((c) => `gr.op.mx.${c}`),
-    'gr.op.title', 'gr.op.subtitle',
-  ];
-  for (const k of keys) for (const l of ['fr', 'nl', 'en']) assert.ok(D[l][k], `missing ${l} key ${k}`);
-  for (const v of [...d.pipeline.map((o) => o.title.fr), ...d.recommendations.map((r) => r.title.fr), ...d.segments.map((s) => s.label.fr), ...d.wins.map((w) => w.title.fr), '14800', '14 800', '4300', "'EUR'"]) {
-    assert.ok(!src.includes(v), `demo value hardcoded in opportunities.js: ${v}`);
-  }
-});
-
-
-
-test('opportunities: no source is connected - the server sends no figure, the page states it card by card (no demo, no 0)', async () => {
-  const p = buildOpportunities(NOW);
-  assert.deepEqual(Object.keys(p).sort(), ['connected', 'currency', 'generatedAt']);
-  assert.equal(p.connected, false);
-  const { root, errors } = await growthDom('#/opportunities');
+test('opportunities UI: three sections in order, one row per item of the payload, Opportunités active in the menu', async () => {
+  const d = prioritiesPayload();
+  const { root, errors } = await growthDom('#/opportunities', { opportunities: d });
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Opportunités');
-  const body = text(root);
-  assert.ok(!body.includes('Données de démonstration'), 'nothing demo left on the page: no demo badge');
-  // Same five KPI tiles, each "—" + "Source non connectée"; never 0.
+  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Opportunités', '#/opportunities']]);
+  assert.deepEqual(cards(root).map((c) => ['gr-pr-fix', 'gr-pr-commercial', 'gr-pr-watch'].find((k) => hasClass(c, k))), ['gr-pr-fix', 'gr-pr-commercial', 'gr-pr-watch']);
+  assert.equal(rowsOf(section(root, 'gr-pr-fix')).length, d.sections.fix.length);
+  assert.equal(rowsOf(section(root, 'gr-pr-commercial')).length, d.sections.commercial.length);
+  assert.equal(rowsOf(section(root, 'gr-pr-watch')).length, d.sections.watch.length);
+  // Every rendered row carries the stable id of its priority (statuses can attach to it later).
+  assert.deepEqual(all(root, (n) => n.getAttribute && n.getAttribute('data-priority-id')).map((n) => n.getAttribute('data-priority-id')), [...d.sections.fix, ...d.sections.commercial, ...d.sections.watch].map((i) => i.id));
   const kpis = all(root, (n) => hasClass(n, 'ex-kpi'));
-  assert.equal(kpis.length, 5);
-  for (const k of kpis) { assert.match(text(k), /—/u); assert.match(text(k), /Source non connectée/u); assert.doesNotMatch(text(k), /\d/u, 'no figure in a KPI tile'); }
-  // Same cards, same order, each with an honest body.
-  const cards = ['gr-pipeline', 'gr-ai', 'gr-op-status', 'gr-op-sources', 'gr-segments', 'gr-impact', 'gr-approvals', 'gr-wins-card'];
-  for (const c of cards) {
-    const el = all(root, (n) => hasClass(n, 'ex-card') && hasClass(n, c));
-    assert.equal(el.length, 1, c);
-    assert.match(text(el[0]), /Source non connectée/u, c);
+  assert.equal(kpis.length, 3);
+  assert.ok(text(kpis[0]).includes(String(d.counts.fix)) && text(kpis[1]).includes(String(d.counts.commercial)) && text(kpis[2]).includes(String(d.counts.watch)));
+});
+
+test('opportunities UI: a small store sees grouped corrections, an HONEST empty commercial section and weak signals to watch', async () => {
+  const d = small();
+  const { root, errors } = await growthDom('#/opportunities', { opportunities: d });
+  assert.deepEqual(errors, []);
+  const fix = section(root, 'gr-pr-fix');
+  assert.equal(rowsOf(fix).length, 3, 'costs + two content problems: one row per problem, not one per product');
+  assert.ok(text(fix).includes('126 produits sans SKU'));
+  assert.ok(text(fix).includes('Coûts d’achat à vérifier : 16 produits vendus'));
+  assert.ok(text(fix).includes('La vérification des coûts d’achat n’est pas encore disponible dans Nordla.'), 'the dependency is stated, no validation button');
+  const com = section(root, 'gr-pr-commercial');
+  assert.equal(rowsOf(com).length, 0);
+  assert.ok(text(com).includes('Aucune opportunité commerciale fiable pour l’instant'));
+  for (const s of ['plus de clients identifiés : 18 sur les 30', 'des coûts d’achat vérifiés', 'plus de commandes en ligne : 6 sur les 30']) assert.ok(text(com).includes(s), s);
+  const watch = section(root, 'gr-pr-watch');
+  const w = rowsOf(watch);
+  assert.equal(w.length, 2, 'two products, one card each');
+  const second = w.find((r) => text(r).includes('Steady best seller'));
+  for (const s of ['4 ventes en 8 semaines', 'n° 2 du magasin', 'Suggéré en magasin, non recommandé', 'Coût d’achat non vérifié', 'Fiche produit incomplète', 'Signal faible', 'Il manque :', 'un coût d’achat vérifié']) assert.ok(text(second).includes(s), s);
+  const first = w.find((r) => text(r).includes('Rising product'));
+  assert.ok(text(first).includes('N° 1 du magasin, écarté de la mise en avant'));
+  assert.ok(text(first).includes('le coût d’achat n’est pas vérifié'));
+});
+
+test('opportunities UI: links open the source page (navigation only); no button except the shell\'s own (language, Plus)', async () => {
+  const { root } = await growthDom('#/opportunities', { opportunities: small() });
+  const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link'));
+  assert.ok(links.length >= 4);
+  assert.ok(links.every((a) => ['#/potential', '#/content', '#/storeGrowth', '#/audience'].includes(a.getAttribute('href'))));
+  const buttons = all(root, (n) => n.tagName === 'BUTTON');
+  assert.ok(buttons.every((b) => hasClass(b.parent || {}, 'langswitch') || /^(FR|NL|EN|Plus)$/.test(text(b)) || hasClass(b, 'gr-more-btn')), `unexpected button(s): ${buttons.map(text).join(', ')}`);
+  assert.equal(buttons.filter((b) => b.getAttribute('disabled') != null).length, 0);
+});
+
+test('opportunities UI: FR / NL / EN render without error and without a raw translation key', async () => {
+  for (const lang of ['fr', 'nl', 'en']) {
+    for (const d of [prioritiesPayload(), small()]) {
+      const { root, errors } = await growthDom('#/opportunities', { opportunities: d, lang });
+      assert.deepEqual(errors, [], lang);
+      assert.ok(!/\bgr\.[a-z]+\.[\w.]+/.test(text(root)), `${lang}: a key is shown instead of a text`);
+    }
   }
-  assert.equal(all(root, (n) => n.tagName === 'TR').length, 0, 'no pipeline row');
-  assert.doesNotMatch(body, /€/u, 'no amount');
-  const sample = buildDemoOpportunities(NOW);
-  for (const v of [...sample.pipeline.map((o) => o.title.fr), ...sample.segments.map((s) => s.label.fr), ...sample.wins.map((w) => w.title.fr)]) assert.ok(!body.includes(v), `demo text shown: ${v}`);
 });
 
-test('opportunities UI (connected sample): renders without error, sidebar marks Opportunités active, and Vue d\'ensemble leads back to the Overview', async () => {
-  const { root, errors, navigate } = await growthDom('#/opportunities', { opportunities: buildDemoOpportunities(NOW) });
-  assert.deepEqual(errors, []);
-  assert.equal(title(root), 'Opportunités');
-  const nav = navState(root);
-  assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Plus', 'Nordla AI', 'Paramètres']);
-  assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Opportunités']);
-  assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth'], ['Audience', '#/audience']]);
-  assert.equal(nav.filter((n) => n.inert).length, 2, 'Nordla AI + Paramètres stay disabled (Expériences is not in the menu)');
-  // Page content: 5 KPIs, 12 pipeline rows, 3 approvals.
-  assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
-  assert.equal(all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').length, 12);
-  assert.equal(all(root, (n) => hasClass(n, 'gr-approvals'))[0] && all(all(root, (n) => hasClass(n, 'gr-approvals'))[0], (n) => n.tagName === 'BUTTON').length, 3);
-  assert.match(text(root), /14\s800\s€/u, 'potential revenue KPI rendered from the payload');
-  // Back to the Overview through the sidebar route.
-  await navigate('#/');
-  assert.deepEqual(errors, []);
-  assert.equal(title(root), 'Développement des ventes');
-  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => n.label), ['Vue d’ensemble']);
+test('opportunities UI: a source that cannot be read is named, the other sources still count', async () => {
+  const d = buildPriorities({ ...smallStore(), audience: null, now: NOW });
+  const { root } = await growthDom('#/opportunities', { opportunities: d });
+  assert.ok(text(root).includes('Source indisponible pour le moment : Audience'));
 });
 
-test('opportunities UI (connected sample): pipeline filters and sort work on the loaded rows', async () => {
-  const { root, errors } = await growthDom('#/opportunities', { opportunities: buildDemoOpportunities(NOW) });
-  const rowsNames = () => all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').map((r) => text(r.children[0]));
-  const selects = () => all(all(root, (n) => hasClass(n, 'gr-filters'))[0], (n) => n.tagName === 'SELECT');
-  const change = (i, value) => selects()[i].listeners.change[0]({ target: { value } });
-  assert.equal(rowsNames()[0], 'Augmenter le trafic magasin', 'default sort: priority, then revenue');
-  change(1, 'ready');
-  assert.deepEqual(rowsNames(), ['Augmenter le trafic magasin', 'Offre étudiants', 'Bundle coque + support']);
-  change(0, 'customers');
-  assert.deepEqual(rowsNames(), [], 'no customer-behaviour opportunity is ready');
-  assert.ok(text(root).includes('Aucune opportunité ne correspond à ces filtres.'));
-  change(1, 'all');
-  assert.deepEqual(rowsNames(), ['Upsell boîte cadeau', 'Relance des clients inactifs', 'Carte de fidélité']);
-  change(0, 'all'); change(2, 'confidence');
-  const conf = buildDemoOpportunities(NOW).pipeline.slice().sort((a, b) => b.confidence - a.confidence).map((o) => o.title.fr);
-  assert.deepEqual(rowsNames(), conf);
-  assert.deepEqual(errors, []);
-});
-
-// Base updated 2026-09-27: Growth now builds on the Nordla platform baseline (08619d7), not on the old e7c96c2 line.
 test('growth: no Finance, Analytics or shared file differs from the Nordla platform baseline', () => {
-  // Only exception: the fr-BE label pass (FR dictionary values + page titles, keys unchanged) - see test/frozen-modules.js.
   assert.deepEqual(frozenViolations(), []);
-});
-
-test('opportunities UI: every source and segment has an icon (Growth pack or official), none invented', async () => {
-  const src = await readFile(new URL('app.js', UI), 'utf8');
-  const map = Object.fromEntries([...src.split('const GROWTH_ICONS = {')[1].split('};')[0].matchAll(/(\w+): '([\w:]+)'/g)].map((m) => [m[1], m[2]]));
-  const key = (g, k) => `${g}${k.charAt(0).toUpperCase()}${k.slice(1)}`;
-  const d = buildDemoOpportunities(NOW);
-  for (const s of new Set(d.pipeline.map((o) => o.source))) assert.ok(map[key('src', s)], `no icon for source ${s}`);
-  for (const s of d.segments) assert.ok(map[key('seg', s.id)], `no icon for segment ${s.id}`);
-  for (const k of ['priorityHigh', 'confidence', 'effort', 'impactEffort']) assert.match(map[k], /^pack:/, k);
-});
-
-test('opportunities charts: source / status breakdowns and 30-day series are exactly consistent with the pipeline and KPIs', () => {
-  const d = buildDemoOpportunities(NOW);
-  const s = (a) => a.reduce((x, y) => x + y, 0);
-  const total = s(d.pipeline.map((o) => o.revenue));
-  assert.equal(total, 14800);
-  // By source: every source present in the pipeline, nothing else; sums = pipeline.
-  assert.deepEqual(new Set(d.bySource.map((g) => g.source)), new Set(d.pipeline.map((o) => o.source)));
-  assert.equal(s(d.bySource.map((g) => g.revenue)), total);
-  assert.equal(s(d.bySource.map((g) => g.count)), d.pipeline.length);
-  for (const g of d.bySource) assert.equal(g.revenue, s(d.pipeline.filter((o) => o.source === g.source).map((o) => o.revenue)), g.source);
-  // By status: the four statuses, sums = pipeline, counts = KPIs.
-  assert.deepEqual(d.byStatus.map((g) => g.status), ['analysis', 'ready', 'inProgress', 'planned']);
-  assert.equal(s(d.byStatus.map((g) => g.revenue)), total);
-  assert.equal(s(d.byStatus.map((g) => g.count)), d.kpis.potentialRevenue.active);
-  assert.equal(d.byStatus.find((g) => g.status === 'ready').count, d.kpis.readyToApprove.value);
-  assert.equal(d.byStatus.find((g) => g.status === 'inProgress').count, d.kpis.inProgress.value);
-  // 30-day series: start at the previous period's value, end at today's KPI (so the curve and the variation agree).
-  assert.equal(d.history.dates.length, 30);
-  assert.equal(d.history.dates[29], '2026-09-26');
-  assert.deepEqual([d.history.potentialRevenue[0], d.history.potentialRevenue[29]], [d.kpis.potentialRevenue.previous, total]);
-  assert.deepEqual([d.history.priority[0], d.history.priority[29]], [d.kpis.priority.previous, d.kpis.priority.value]);
-  assert.ok(d.history.priority.every((v) => Number.isInteger(v) && v >= 0));
-  for (const k of ['readyToApprove', 'inProgress']) {
-    assert.equal(d.history[k].length, 30, k);
-    assert.deepEqual([d.history[k][0], d.history[k][29]], [d.kpis[k].previous, d.kpis[k].value], k);
-    assert.ok(d.history[k].every((v) => Number.isInteger(v) && v >= 0), k);
-  }
 });

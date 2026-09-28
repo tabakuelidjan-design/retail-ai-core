@@ -247,7 +247,7 @@ test('content UI: renders, nav entry active, filters work, a row opens the detai
   const { root, errors } = await growthDom('#/content');
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Contenu');
-  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Contenu', '#/content'], ['Plus', null]], 'Contenu lives in the mobile "Plus" menu, which is active');
+  assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Contenu', '#/content']], 'Contenu is in the mobile bar since Campagnes left the launch scope');
   assert.ok(text(root).includes('8 dernières semaines'));
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
   const rows = () => all(root, (n) => hasClass(n, 'gr-ct-row'));
@@ -260,8 +260,8 @@ test('content UI: renders, nav entry active, filters work, a row opens the detai
   rows()[0].listeners.click[0]();
   const drawer = all(root, (n) => hasClass(n, 'gr-pp-drawer'))[0];
   for (const s of ['Problèmes détectés', 'Aucune image principale n’est disponible pour ce produit.', 'Pourquoi c’est important', 'Recommandations', 'Ajouter une image produit de qualité.', 'Non vérifiable avec les données actuelles']) assert.ok(text(drawer).includes(s), s);
-  const improve = all(drawer, (n) => n.tagName === 'BUTTON' && text(n) === 'Améliorer ce produit')[0];
-  assert.equal(improve.getAttribute('disabled'), 'disabled');
+  // No action button that performs no action (owner rule 2026-09-28): the former disabled "Améliorer ce produit" is gone.
+  assert.equal(all(drawer, (n) => n.tagName === 'BUTTON' && /Améliorer/.test(text(n))).length, 0);
   assert.deepEqual(errors, []);
 });
 

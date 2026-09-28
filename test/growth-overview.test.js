@@ -1,17 +1,20 @@
+// Développement des ventes - server, shell and Vue d'ensemble (owner decisions 2026-09-28): real data or honest states only, no
+// demonstration data, no Campagnes, no action button that performs no action. Synthetic engine payloads only (never HABB's database).
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import vm from 'node:vm';
-import { readFile, access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { createGrowthApp } from '../src/growth/server/app.js';
 import { buildOverview } from '../src/growth/server/overview.js';
-import { buildDemoOverview } from './fixtures/growth-overview-sample.js';
-import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
-import { buildDemoOpportunities } from './fixtures/growth-opportunities-sample.js';
+import { CHECKS as CONTENT_CHECKS } from '../src/growth/content/content.js';
+import { STATUSES as POTENTIAL_STATUSES } from '../src/growth/products/potential.js';
+import { SEGMENTS } from '../src/growth/audience/audience.js';
+import { potentialPayload, audiencePayload, contentPayload, storePayload, prioritiesPayload, overviewPayload, growthDom, all, text, hasClass, NOW } from './growth-dom.js';
 
 const UI = new URL('../src/growth/ui/', import.meta.url);
 const SHARED = new URL('../src/shared/', import.meta.url);
+const sources = () => ({ productPotential: async () => potentialPayload(), audience: async () => audiencePayload(), content: async () => contentPayload(), store: async () => storePayload() });
 
 async function withServer(opts, fn) {
   const server = http.createServer(createGrowthApp(opts));
@@ -20,128 +23,142 @@ async function withServer(opts, fn) {
   try { await fn(base); } finally { server.close(); }
 }
 
-test('growth server: serves the page, its own assets, the shared design system and the demo overview', async () => {
-  await withServer({ now: () => new Date('2026-09-26T10:00:00Z') }, async (base) => {
+test('growth server: serves the page, its assets and the shared design system; Campagnes has no script and no endpoint', async () => {
+  await withServer({ now: () => NOW }, async (base) => {
     const page = await fetch(`${base}/`);
     assert.equal(page.status, 200);
     const html = await page.text();
     assert.match(html, /data-module="growth"/);
+    assert.doesNotMatch(html, /campaigns\.js/, 'the page loads no Campagnes script');
     assert.match(page.headers.get('content-security-policy'), /default-src 'self'/);
-    for (const p of ['/app.js', '/opportunities.js', '/campaigns.js', '/api/growth/campaigns', '/growth-assets/icons/opportunities.png', '/api/growth/opportunities', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/nordla-tokens.css', '/i18n.js', '/nordla-icon.js', '/nordla-charts.js', '/nordla-charts.css', '/nordla-fonts.css', '/nordla-assets/official-icons/01_navigation_modules_growth.png']) {
+    for (const p of ['/app.js', '/opportunities.js', '/growth-assets/icons/opportunities.png', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/nordla-tokens.css', '/i18n.js', '/nordla-icon.js', '/nordla-charts.js', '/nordla-charts.css', '/nordla-fonts.css', '/nordla-assets/official-icons/01_navigation_modules_growth.png']) {
       const r = await fetch(base + p); assert.equal(r.status, 200, p); await r.arrayBuffer();
     }
+    for (const p of ['/campaigns.js', '/api/growth/campaigns']) assert.equal((await fetch(base + p)).status, 404, `${p} no longer exists`);
     // Reused Analytics stylesheet is served byte-identical (a reuse, not a fork).
     assert.equal(await (await fetch(`${base}/style.css`)).text(), await readFile(new URL('../src/analytics-premium/ui/style.css', import.meta.url), 'utf8'));
+    // No tenant configured: Vue d'ensemble states it, Opportunités refuses with the known safe code.
     const d = await (await fetch(`${base}/api/growth/overview`)).json();
-    assert.equal(d.demo, true, 'the overview still shows Campagnes demonstration figures: it stays badged');
-    assert.equal(d.revenueInfluenced, undefined);
-    assert.deepEqual([d.kpis.revenueInfluenced, d.kpis.activeOpportunities, d.pulse, d.insights, d.attention, d.content, d.opportunities], [null, null, null, null, null, null, null], 'served payload = server/overview.js, no fixture');
-    assert.equal(d.modules, undefined, 'Growth does not route between services (no module links in the payload)');
-    assert.equal(d.period.to, '2026-09-26');
+    assert.equal(d.demo, undefined, 'no demonstration flag: nothing on this page is demonstration data');
+    assert.deepEqual([d.kpis.revenueInfluenced, d.kpis.fix, d.kpis.commercial, d.kpis.watch, d.attention, d.opportunities], [null, null, null, null, null, null]);
+    assert.deepEqual(d.real.store, { mode: 'unavailable' });
+    const op = await fetch(`${base}/api/growth/opportunities`);
+    assert.equal(op.status, 503);
+    assert.deepEqual(await op.json(), { error: { code: 'TENANT_NOT_CONFIGURED' } });
     assert.equal((await fetch(`${base}/nope`)).status, 404);
     assert.equal((await fetch(`${base}/api/growth/overview`, { method: 'POST' })).status, 405);
     assert.equal((await fetch(`${base}/nordla-assets/../package.json`)).status, 404);
-    // Channel logos are served; unknown files 404; traversal impossible.
-    assert.equal((await fetch(`${base}/growth-assets/channels/instagram.png`)).status, 200);
-    assert.equal((await fetch(`${base}/growth-assets/channels/instagram.svg`)).status, 404);
     assert.equal((await fetch(`${base}/growth-assets/channels/..%2F..%2Fserver%2Fapp.js`)).status, 404);
   });
 });
 
-test('growth UI: no demonstration value lives in the UI - the data source can be replaced without touching the page', async () => {
-  const src = await readFile(new URL('app.js', UI), 'utf8');
-  const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
-  // No demo figure, name or text from the payload is hardcoded in the UI.
-  const demoLiterals = [
-    ...d.channels.map((c) => c.name),
-    ...[...d.insights, ...d.attention, ...d.opportunities].map((x) => x.title.fr),
-    ...d.campaigns.map((c) => c.name.fr), ...d.content.map((c) => c.title.fr),
-    '12540', '12 540', '39600', '4860', '14380', '3.2', "'EUR'",
-  ];
-  for (const v of demoLiterals.filter((v) => v !== "'EUR'")) assert.ok(!src.includes(v), `demo value hardcoded in UI: ${v}`);
-  assert.equal((src.match(/currency: 'EUR'/g) || []).length, 0, 'currency must come from the payload');
-  assert.ok(!/GROWTH_(FINANCE|ANALYTICS)_URL|modules\[/.test(src), 'no inter-service routing in the UI');
-  // Every row kind the data uses has a UI icon mapping (presentation stays in the UI).
-  const map = src.split('const GROWTH_ICONS = {')[1].split('};')[0];
-  const key = (g, k) => `${g}${k.charAt(0).toUpperCase()}${k.slice(1)}`;
-  for (const k of [...d.insights.map((x) => key('insight', x.kind)), ...d.attention.map((x) => key('attention', x.kind)), ...d.opportunities.map((x) => key('src', x.source))]) assert.match(map, new RegExp(`\\b${k}:`), `no icon for ${k}`);
-  for (const x of [...d.insights, ...d.attention, ...d.opportunities]) assert.equal(x.icon, undefined, 'the data source never names icons');
+test('growth server: with the engines configured, Vue d\'ensemble and Opportunités are recomputed from them (same figures on both)', async () => {
+  await withServer({ now: () => NOW, ...sources() }, async (base) => {
+    const op = await (await fetch(`${base}/api/growth/opportunities`)).json();
+    const ov = await (await fetch(`${base}/api/growth/overview`)).json();
+    assert.equal(op.connected, undefined, 'no hard-coded { connected: false } any more');
+    assert.deepEqual(op.sources, { products: 'ok', audience: 'ok', store: 'ok', content: 'ok' });
+    assert.deepEqual(ov.kpis.fix, { value: op.counts.fix, elements: op.counts.fixElements });
+    assert.equal(ov.kpis.commercial.value, op.counts.commercial);
+    assert.equal(ov.kpis.watch.value, op.counts.watch);
+    assert.deepEqual(ov.attention.map((g) => g.id), op.sections.fix.slice(0, 3).map((g) => g.id));
+    assert.deepEqual(ov.opportunities.map((i) => i.id), op.sections.commercial.slice(0, 3).map((i) => i.id));
+    assert.equal(ov.real.store.mode, 'store');
+  });
 });
 
-test('growth UI: sidebar is Growth\'s own navigation (7 built pages + disabled entries Nordla AI, Paramètres), no other Nordla module', async () => {
+test('growth server: a failing engine is reported as unavailable, the others still count; nothing is written', async () => {
+  const calls = [];
+  const s = sources();
+  const opts = { now: () => NOW, ...s, audience: async () => { calls.push('audience'); throw new Error('db down: token=secret'); } };
+  await withServer(opts, async (base) => {
+    const op = await (await fetch(`${base}/api/growth/opportunities`)).json();
+    assert.equal(op.sources.audience, 'unavailable');
+    assert.equal(op.sources.products, 'ok');
+    assert.ok(!JSON.stringify(op).includes('secret'), 'no internal error detail in the payload');
+    assert.ok(op.sections.fix.length > 0);
+  });
+  assert.deepEqual(calls, ['audience']);
+});
+
+test('growth UI: no data value lives in the UI - every figure, name and text comes from the payload or the dictionaries', async () => {
+  const src = await readFile(new URL('app.js', UI), 'utf8') + await readFile(new URL('opportunities.js', UI), 'utf8');
+  for (const v of ['HABB', 'Namur', 'Écouteurs', 'Spike', 'Baskets', '126', "currency: 'EUR'"]) assert.ok(!src.includes(v), `hard-coded value in the UI: ${v}`);
+  assert.ok(!/GROWTH_(FINANCE|ANALYTICS)_URL|modules\[/.test(src), 'no inter-service routing in the UI');
+  assert.ok(!/isDemo|gr\.demo|demoTitle/.test(src), 'no demonstration badge logic left');
+  assert.ok(!/CHANNEL_LOGOS|campaignsCard|channelCard|renderCampaigns|roasFmt/.test(src), 'no Campagnes / channel code left');
+});
+
+test('growth UI: sidebar is Growth\'s own navigation (6 built pages + disabled entries Nordla AI, Paramètres), no Campagnes, no other module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'campaigns', 'potential', 'content', 'storeGrowth', 'audience']);
+  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience']);
   assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['ai', 'settings']);
-  assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
+  assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance|campaigns)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
 
-test('growth UI: no TEMP_ICON left (the final Growth pack replaces them); channel logos wired; thumbnails still marked as placeholders', async () => {
-  const src = await readFile(new URL('app.js', UI), 'utf8') + await readFile(new URL('opportunities.js', UI), 'utf8') + await readFile(new URL('campaigns.js', UI), 'utf8');
-  assert.ok(!src.includes('TEMP_ICON'), 'every TEMP_ICON has an official replacement in the final Growth pack');
-  assert.ok(!src.includes("NordlaIcon.parle('default'"), 'AI Insights uses its own pack icon, not the Parle à Nordla stand-in');
-  assert.match(src, /PLACEHOLDER thumbnail/);
-  // Channel logos: every channel of the demo payload has a wired, transparent logo file on disk (monogram = fallback only).
-  const logos = Object.fromEntries([...src.split('const CHANNEL_LOGOS = {')[1].split('};')[0].matchAll(/'?([\w-]+)'?: '([\w-]+\.png)'/g)].map((m) => [m[1], m[2]]));
-  for (const c of buildDemoOverview(new Date('2026-09-26T10:00:00Z')).channels) {
-    assert.ok(logos[c.id], `no logo wired for ${c.id}`);
-    const png = await readFile(new URL(`assets/channels/${logos[c.id]}`, UI));
-    assert.equal(png[25], 6, `${logos[c.id]} must be an RGBA PNG (transparent)`);
-  }
-  assert.match(src, /const CHANNEL_FALLBACK = /);
+test('Vue d\'ensemble payload: real sources only - store sales from Croissance magasin, priorities from Opportunités, the rest not connected', () => {
+  const store = storePayload(); const priorities = prioritiesPayload();
+  const d = buildOverview({ now: NOW, store, priorities });
+  assert.deepEqual(d.sources, { store: 'real', priorities: 'real', footfall: 'notConnected', attribution: 'notConnected', ai: 'notConnected', content: 'notConnected' });
+  assert.deepEqual([d.kpis.revenueInfluenced, d.pulse, d.insights, d.content], [null, null, null, null]);
+  assert.equal(d.real.store.net, store.kpis.storeNet.value);
+  assert.equal(d.real.store.orders, store.kpis.storeOrders.value);
+  assert.equal(d.kpis.fix.value, priorities.counts.fix);
+  assert.equal(d.kpis.commercial.value, priorities.counts.commercial);
+  assert.equal(d.attention.length, Math.min(3, priorities.sections.fix.length));
+  for (const k of ['campaigns', 'channels', 'roas', 'activeCampaigns', 'experiments', 'demo']) assert.equal(JSON.stringify(d).includes(`"${k}"`), false, `no ${k} field`);
+  // Unavailable sources stay unavailable (null), never 0.
+  const empty = buildOverview({ now: NOW });
+  assert.deepEqual([empty.kpis.fix, empty.kpis.commercial, empty.kpis.watch, empty.attention, empty.opportunities], [null, null, null, null, null]);
+  assert.deepEqual(empty.real.store, { mode: 'unavailable' });
 });
 
-test('overview sample (connected-mode fixture): figures are internally consistent (no contradictory example numbers)', () => {
-  const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
-  const sum = (a) => a.reduce((x, y) => x + y, 0);
-  assert.equal(d.pulse.dates.length, 30);
-  assert.equal(sum(d.pulse.influencedRevenue), d.kpis.revenueInfluenced.value);
-  assert.equal(sum(d.pulse.influencedRevenue), d.pulse.totals.influencedRevenue);
-  assert.equal(sum(d.pulse.totalRevenue), d.pulse.totals.totalRevenue);
-  assert.equal(sum(d.channels.map((c) => c.revenue)), d.kpis.revenueInfluenced.value, 'channel revenues add up to the influenced revenue');
-  assert.ok(d.pulse.totalRevenue.every((v, i) => v >= d.pulse.influencedRevenue[i]));
-  // One source of truth: campaign and opportunity figures are derived from the Campagnes / Opportunités demos (deep audit P1-3).
-  const camp = buildDemoCampaigns(new Date('2026-09-26T10:00:00Z'));
-  const opp = buildDemoOpportunities(new Date('2026-09-26T10:00:00Z'));
-  const running = camp.campaigns.filter((c) => c.status === 'running');
-  assert.equal(d.kpis.activeCampaigns.value, running.length, 'Overview active campaigns = campaigns "en cours" on Campagnes');
-  assert.equal(d.kpis.activeCampaigns.performingWell, running.filter((c) => c.performance >= 1).length);
-  assert.equal(d.kpis.roas.value, camp.kpis.roas.value, 'same ROAS on both pages');
-  assert.ok(d.campaigns.every((c) => running.some((r) => r.id === c.id && r.title === c.name && r.spend === c.spend && r.newCustomers === c.newCustomers)));
-  assert.equal(d.kpis.activeOpportunities.value, opp.pipeline.length, 'Overview active opportunities = the Opportunités pipeline');
-  assert.equal(d.kpis.activeOpportunities.highPriority, opp.pipeline.filter((o) => o.priority === 'high').length);
-  assert.ok(d.opportunities.every((o) => opp.pipeline.some((p) => p.id === o.id && p.revenue === o.estimate && p.status === o.status)));
-  // Expériences is not part of the product: no experiment field at all.
-  assert.equal('experiments' in d, false);
-  assert.equal('experimentsRunning' in d.kpis, false);
-  // Deterministic: same day, same payload.
-  assert.deepEqual(buildDemoOverview(new Date('2026-09-26T18:00:00Z')).pulse, d.pulse);
+test('Vue d\'ensemble UI: real figures, honest states, links to Opportunités, no demo badge and no action button', async () => {
+  const { root, errors } = await growthDom('#/');
+  assert.deepEqual(errors, []);
+  const body = text(root);
+  assert.ok(!/Démo|Données de démonstration|ROAS|Campagnes/.test(body), 'no demonstration badge, no campaign figure');
+  assert.ok(body.includes('Nordla vérifie la qualité de vos fiches produit et de vos données'), 'the honest promise is shown');
+  assert.ok(!/croissance mesurable|mesurables/i.test(body), 'no promise of measurable growth');
+  assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 4);
+  const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link'));
+  assert.ok(links.length >= 2 && links.every((a) => a.getAttribute('href') === '#/opportunities'));
+  assert.equal(all(root, (n) => n.tagName === 'BUTTON' && n.getAttribute('disabled') != null).length, 0);
+  assert.equal(all(root, (n) => hasClass(n, 'gr-demo')).length, 0);
+  // Store footfall / conversion stay "not connected" (no source), store sales are real.
+  assert.ok(body.includes('Non connecté'));
+  assert.ok(body.includes('Données réelles'));
 });
 
-test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and every key used by app.js exists', async () => {
+test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and every key the pages build exists', async () => {
   const ctx = { window: {} };
   for (const l of ['fr', 'nl', 'en']) vm.runInNewContext(await readFile(new URL(`lang-${l}.js`, UI), 'utf8'), ctx);
   const D = ctx.window.NORDLA_DICTS;
   const fr = Object.keys(D.fr).sort();
   assert.deepEqual(Object.keys(D.nl).sort(), fr);
   assert.deepEqual(Object.keys(D.en).sort(), fr);
-  const src = await readFile(new URL('app.js', UI), 'utf8');
-  const literal = [...src.matchAll(/\bt\('(gr\.[\w.]+)'/g)].map((m) => m[1]);
-  for (const k of literal) assert.ok(D.fr[k], `missing key ${k}`);
-  // Keys built from a prefix + data value (t(`gr.x.${v}`)) must exist for every value the demo payload uses.
-  const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
+  for (const f of ['app.js', 'opportunities.js']) {
+    const src = await readFile(new URL(f, UI), 'utf8');
+    for (const k of [...src.matchAll(/\bt\('(gr\.[\w.]+)'/g)].map((m) => m[1])) assert.ok(D.fr[k], `${f}: missing key ${k}`);
+  }
+  // Keys built from an engine value: every value an engine can emit has its text in the three languages.
   const dyn = [
-    ...['overview', 'opportunities', 'campaigns', 'content', 'storeGrowth', 'audience', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
-    ...d.attention.flatMap((a) => [`gr.att.status.${a.status}`, `gr.att.action.${a.action}`]),
-    ...d.channels.map((c) => `gr.ch.unit.${c.reachKind}`),
-    ...d.campaigns.map((c) => `gr.camp.status.${c.status}`),
-    ...d.content.flatMap((c) => [`gr.content.kind.${c.kind}`, `gr.content.perf.${c.performance}`]),
-    ...d.opportunities.flatMap((o) => [`gr.opp.priority.${o.priority}`, `gr.op.status.${o.status}`, `gr.op.src.${o.source}`]),
+    ...['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
+    ...CONTENT_CHECKS.flatMap((c) => [`gr.op.fix.content.${c.code}.title`, `gr.op.fix.content.${c.code}.why`]),
+    ...POTENTIAL_STATUSES.map((s) => `gr.op.f.potential.${s}`),
+    ...['risingBlocked', 'watch', 'declining', 'lowMargin', 'returns', 'storeSuggestionThin', 'notValidated', 'noProductEngine'].map((c) => `gr.op.why.${c}`),
+    ...['productSales', 'verifiedCosts', 'identifiedCustomers', 'storeHistory', 'onlineOrders', 'storeOrders'].map((c) => `gr.op.wait.${c}`),
+    ...['verifiedCost', 'moreWeeks', 'risingDemand', 'fewerReturns', 'productHistory'].map((c) => `gr.op.m.${c}`),
+    ...['storeTop', 'storeTopBlocked', 'storeSuggested', 'storeSuggestedNotRecommended', 'costUnverified', 'costMissing', 'contentIncomplete', 'risingDemand'].map((c) => `gr.op.f.${c}`),
+    ...['push', 'restock'].flatMap((s) => [`gr.op.item.product.${s}.title`, `gr.op.item.product.${s}.why`]),
+    ...SEGMENTS.map((s) => `gr.au.seg.${s}`),
+    ...['potential', 'content', 'storeGrowth', 'audience'].map((p) => `gr.op.link.${p}`),
     'gr.pulse.revenue', 'gr.pulse.traffic',
   ];
-  for (const k of dyn) assert.ok(D.fr[k], `missing key ${k}`);
-  // Demo content carries all three languages.
-  for (const i of [...d.insights, ...d.attention, ...d.opportunities]) for (const l of ['fr', 'nl', 'en']) assert.ok(i.title[l], `demo text missing ${l}`);
+  for (const k of dyn) for (const l of ['fr', 'nl', 'en']) assert.ok(D[l][k], `missing ${l} key ${k}`);
+  // No key of a removed feature is left.
+  assert.deepEqual(fr.filter((k) => /^gr\.(cp|camp|ch)\.|^gr\.demo|^gr\.nav\.campaigns$|opportunitySoon|improveSoon|newSegmentSoon/.test(k)), []);
 });
 
 test('growth UI: every icon it asks for is a Growth pack file on disk or a valid (non-defective) official Nordla icon', async () => {
@@ -149,6 +166,7 @@ test('growth UI: every icon it asks for is a Growth pack file on disk or a valid
   vm.runInNewContext(await readFile(new URL('nordla-icon.js', SHARED), 'utf8'), ctx);
   const { ICONS, DEFECTIVE } = ctx.window.NordlaIcon;
   const src = await readFile(new URL('app.js', UI), 'utf8');
+  const ops = await readFile(new URL('opportunities.js', UI), 'utf8');
   const pack = Object.fromEntries([...src.split('const GROWTH_PACK = {')[1].split('};')[0].matchAll(/(\w+): '([\w-]+)'/g)].map((m) => [m[1], m[2]]));
   for (const f of Object.values(pack)) {
     const png = await readFile(new URL(`assets/icons/${f}.png`, UI)); // throws if missing
@@ -160,25 +178,12 @@ test('growth UI: every icon it asks for is a Growth pack file on disk or a valid
   const aliasMap = Object.fromEntries([...src.split('const GROWTH_ICONS = {')[1].split('};')[0].matchAll(/(\w+): '([\w:]+)'/g)].map((m) => [m[1], m[2]]));
   const navSrc = src.split('const GROWTH_NAV = [')[1].split('function navItem')[0];
   const nav = [...navSrc.matchAll(/icon: '(\w+)'/g)].map((m) => aliasMap[m[1]] || m[1]);
-  const direct = [...src.matchAll(/NordlaIcon\.semantic\('(\w+)'/g)].map((m) => m[1]);
-  for (const name of [...Object.values(aliasMap), ...nav, ...direct]) {
+  const direct = [...(src + ops).matchAll(/NordlaIcon\.semantic\('(\w+)'/g)].map((m) => m[1]);
+  // Icons named by the Opportunités page (kpi / cardHead / icoBubble / OP_ITEM_ICON).
+  const opNames = [...ops.matchAll(/(?:kpi|cardHead|icoBubble)\('(\w+)'/g), ...ops.split('const OP_ITEM_ICON = {')[1].split('};')[0].matchAll(/: '(\w+)'/g)].map((m) => aliasMap[m[1]] || m[1]);
+  for (const name of [...Object.values(aliasMap), ...nav, ...direct, ...opNames]) {
     if (name.startsWith('pack:')) { assert.ok(pack[name.slice(5)], `${name} is not in GROWTH_PACK`); continue; }
     assert.ok(!DEFECTIVE[name], `${name} is a defective export and must not be rendered`);
     assert.ok(ICONS[name], `${name} is not an official Nordla icon`);
   }
-  // The five former TEMP_ICON concepts now use their own pack icons.
-  for (const [k, v] of Object.entries({ opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', aiInsights: 'pack:aiInsights', needsAttention: 'pack:needsAttention' })) assert.equal(aliasMap[k], v, k);
-});
-
-test('overview sample: no store footfall, visitors, conversion or demo store sales (deep audit P1-2)', () => {
-  const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
-  assert.deepEqual(d.store, { footfallConnected: false });
-  assert.equal(d.pulse.storeVisitors, undefined);
-  assert.ok(!('storeVisitors' in d.pulse.totals) && !('storeVisitors' in d.pulse.deltas));
-  const json = JSON.stringify(d);
-  assert.ok(!/4860|4 860|21[.,]4/.test(json), 'no demo visitor or conversion figure left');
-  for (const i of d.insights) assert.notEqual(i.kind, 'traffic');
-  for (const a of d.attention) assert.notEqual(a.kind, 'experiment');
-  const src = readFileSync(new URL('./fixtures/growth-opportunities-sample.js', import.meta.url), 'utf8');
-  assert.ok(!/trafic magasin détecté|store traffic issue detected/.test(src), 'no demo text claims a detected footfall problem');
 });

@@ -245,8 +245,7 @@ function ppDrawer(d) {
             ppStat(t('gr.pp.ev.refunds'), r.refunds.rate == null ? t('gr.dash') : ppPct(r.refunds.rate), refundNote),
             ppStat(t('gr.pp.ev.history'), t('gr.pp.ev.weeks', e.observableWeeks), e.observableWeeks < d.thresholds.minObservableWeeks ? t('gr.pp.reason.TREND_INSUFFICIENT') : null))),
         h('section', { class: 'gr-pp-sec gr-pp-action' }, h('h3', null, t('gr.pp.d.action')), ppActionChip(r),
-          h('p', { class: 'gr-pp-action-text' }, t(`gr.pp.actionText.${r.action}`)),
-          r.opportunity ? h('button', { type: 'button', class: 'btn-outline gr-action', disabled: 'disabled', title: t('gr.pp.d.opportunitySoon') }, t('gr.pp.d.opportunity')) : null),
+          h('p', { class: 'gr-pp-action-text' }, t(`gr.pp.actionText.${r.action}`))),
         h('section', { class: 'gr-pp-sec' }, h('p', { class: 'gr-pp-action-text' }, t('gr.pp.d.method'))))));
 }
 // Escape closes the drawer (registered once, only acts while one is open).

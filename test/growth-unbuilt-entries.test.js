@@ -12,12 +12,12 @@ import { createGrowthApp } from '../src/growth/server/app.js';
 import { growthDom, all, text, navState, title } from './growth-dom.js';
 
 const DISABLED = ['ai', 'settings'];
-const BUILT = ['overview', 'opportunities', 'campaigns', 'potential', 'audience', 'content', 'storeGrowth'];
-const HASH = { overview: '#/', opportunities: '#/opportunities', campaigns: '#/campaigns', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth' };
+const BUILT = ['overview', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
+const HASH = { overview: '#/', opportunities: '#/opportunities', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth' };
 const GROWTH = new URL('../src/growth/', import.meta.url);
 const EXPERIMENTS = /exp[ée]rience|experiment/i; // FR "Expériences", NL "Experimenten", EN "Experiments"
 
-test('the 7 built pages are exactly the PAGES definitions; Expériences, Nordla AI and Paramètres have none', async () => {
+test('the 6 built pages are exactly the PAGES definitions; Expériences, Nordla AI and Paramètres have none', async () => {
   const { ctx } = await growthDom('#/');
   assert.deepEqual(vm.runInContext('Object.keys(PAGES)', ctx), BUILT);
   for (const k of ['experiments', ...DISABLED]) assert.equal(vm.runInContext(`PAGES[${JSON.stringify(k)}]`, ctx), undefined, `${k} has no page definition`);
@@ -32,13 +32,12 @@ test('Expériences is totally absent from the interface: no menu entry, tile, ca
       assert.ok(!navState(root).some((n) => EXPERIMENTS.test(n.label)), `${lang} ${page}: menu entry`);
     }
   }
-  // No UI text for it either (the only remaining word is the dormant opportunity SOURCE type "Expérience magasin", shown only when
-  // an opportunity source is connected - none is today).
+  // No UI text for it either: the former dormant opportunity source label went away with the demonstration Opportunités page.
   const ctx = { window: {} }; vm.createContext(ctx);
   for (const l of ['fr', 'nl', 'en']) vm.runInContext(readFileSync(new URL(`ui/lang-${l}.js`, GROWTH), 'utf8'), ctx);
   for (const [l, d] of Object.entries(ctx.window.NORDLA_DICTS)) {
     const keys = Object.keys(d).filter((k) => /experiment|gr\.exp\./i.test(k));
-    assert.deepEqual(keys, ['gr.op.src.experiment'], `${l}: only the dormant opportunity source label remains`);
+    assert.deepEqual(keys, [], `${l}: no Expériences text left`);
   }
   const app = readFileSync(new URL('ui/app.js', GROWTH), 'utf8');
   assert.doesNotMatch(app, /key: 'experiments'|experimentsCard|experimentsRunning|gr\.exp\./);

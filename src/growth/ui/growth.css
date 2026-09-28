@@ -534,3 +534,19 @@ body.gr-pp-lock { overflow: hidden; }
 /* Contenu / Croissance magasin KPI tiles on very small phones: two tiles per row leave ~50px next to the icon, which cut the
    labels ("Commandes magasin") and pushed a note outside the page at 320px. The icon goes above the text there only. */
 @media (max-width: 360px) { .gr-ct-kpis .ex-kpi { flex-direction: column; align-items: flex-start; gap: 8px; } .gr-ct-kpis .ex-kpi-body { width: 100%; min-width: 0; } }
+
+/* ---------- Opportunités: priorities in three sections (À corriger maintenant / Opportunités commerciales / À surveiller) ---------- */
+.ex-kpi-row.gr-pr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .ex-kpi-row.gr-pr-kpis { grid-template-columns: minmax(0, 1fr); } }
+.gr-pr-sections { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-pr-card { display: flex; flex-direction: column; }
+.gr-pr-intro { margin: -4px 0 6px; font-size: 12.5px; }
+.gr-pr-row .ex-mover-sub + .ex-mover-sub { margin-top: 4px; }
+.gr-pr-examples, .gr-pr-findings { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; min-width: 0; }
+.gr-pr-examples .ex-chip, .gr-pr-findings .ex-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.gr-pr-empty { display: flex; flex-direction: column; gap: 4px; }
+.gr-pr-empty ul { margin: 4px 0 0; }
+.gr-pr-foot { margin: 0 0 16px; }
+.gr-op-link { display: inline-flex; align-items: center; min-height: 24px; font-size: 12.5px; font-weight: 600; color: var(--chart-navy); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.gr-op-link:hover { color: var(--chart-terracotta); }
+.gr-op-link:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 2px; border-radius: 3px; }

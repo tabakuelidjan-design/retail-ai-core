@@ -15,14 +15,15 @@ import { makeDemandData } from './fixtures/demand-sample.js';
 import { makeAudienceData } from './fixtures/audience-sample.js';
 import { makeContentData } from './fixtures/content-sample.js';
 import { makeStoreData } from './fixtures/store-sample.js';
+import { smallStore } from './fixtures/growth-priorities-sample.js';
 
 const CANDIDATES = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean);
 const CHROME = CANDIDATES.find((p) => existsSync(p));
 const skip = CHROME ? false : 'no Chrome/Chromium found (set CHROME_PATH)';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const WIDTHS = [1440, 1280, 1024, 768, 390];
-const PAGES = ['', 'opportunities', 'campaigns', 'potential', 'audience', 'content', 'storeGrowth'];
+const WIDTHS = [1440, 1280, 1024, 768, 390, 375, 320];
+const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
 
 async function serve(opts) {
   const server = http.createServer(createGrowthApp(opts));
@@ -78,7 +79,7 @@ const sources = () => ({
   content: async () => contentPayload(), store: async () => storePayload(),
 });
 
-test('browser: 7 pages x 1440 / 1280 / 1024 / 768 / 390 - no horizontal page scroll, no console error, data rendered', { skip, timeout: 240000 }, async () => {
+test('browser: 6 pages x 1440 / 1280 / 1024 / 768 / 390 / 375 / 320 - no horizontal page scroll, no console error, data rendered', { skip, timeout: 360000 }, async () => {
   const app = await serve(sources()); const b = await browser();
   try {
     for (const pg of PAGES) {
@@ -87,7 +88,7 @@ test('browser: 7 pages x 1440 / 1280 / 1024 / 768 / 390 - no horizontal page scr
         const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, w: innerWidth, state: !!document.querySelector('.gr-state'), kpis: document.querySelectorAll('.ex-kpi').length })`));
         assert.ok(r.sw <= r.w, `${pg || 'overview'} @${w}: page scrolls horizontally (${r.sw} > ${r.w})`);
         assert.equal(r.state, false, `${pg || 'overview'} @${w}: still in a loading / error state`);
-        assert.ok(r.kpis >= 4, `${pg || 'overview'} @${w}: page content rendered`);
+        assert.ok(r.kpis >= 3, `${pg || 'overview'} @${w}: page content rendered`);
       }
     }
     assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);
@@ -153,10 +154,10 @@ test('browser: detail panels - focus moved in on open, Tab / Shift+Tab trapped, 
   } finally { await b.close(); await app.close(); }
 });
 
-test('browser: mobile Plus menu - opens, focus inside and trapped, Escape closes and restores, active on Contenu', { skip, timeout: 60000 }, async () => {
+test('browser: mobile Plus menu - opens, focus inside and trapped, Escape closes and restores, active on Croissance magasin', { skip, timeout: 60000 }, async () => {
   const app = await serve(sources()); const b = await browser();
   try {
-    await b.open(`${app.base}/#/content`, 390, 844);
+    await b.open(`${app.base}/#/storeGrowth`, 390, 844);
     assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), true);
     await b.eval(`document.querySelector('.gr-more-btn').focus(); 1`);
     await b.key('Enter');
@@ -224,7 +225,7 @@ test('post-fix P2 Contenu: 1440 / 1280 / 1180 / 1024 / 768 / 390 - no page overf
   } finally { await b.close(); await app.close(); }
 });
 
-const PILL = { potential: /8 dernières semaines/, audience: /90 derniers jours/, content: /8 dernières semaines/, storeGrowth: /8 dernières semaines/, '': /30 derniers jours/, opportunities: /30 derniers jours/, campaigns: /30 derniers jours/ };
+const PILL = { potential: /8 dernières semaines/, audience: /90 derniers jours/, content: /8 dernières semaines/, storeGrowth: /8 dernières semaines/, '': /8 dernières semaines/, opportunities: /8 dernières semaines/ };
 const SOURCE_OF = { potential: 'productPotential', audience: 'audience', content: 'content', storeGrowth: 'store' };
 const EMPTY = { potential: () => potentialPayload({ ...makeDemandData(), orders: [], orderLines: [] }), audience: () => audiencePayload(makeAudienceData({})), content: () => contentPayload(makeContentData([])), storeGrowth: () => storePayload(makeStoreData({})) };
 
@@ -261,10 +262,10 @@ test('post-fix P2 states: every real page - loading, error + safe message + Rée
       const ok = await serve(sources());
       try { await b.open(`${ok.base}/#/${pg}`, 1280); assert.match(await b.eval(`document.querySelector('.period-pill').textContent`), PILL[pg], `${pg}: period on the normal page`); } finally { await ok.close(); }
     }
-    // Shell pages: their declared 30-day window in every state they have (loading + normal).
+    // Vue d'ensemble and Opportunités: the 8-week window of the engines they aggregate, in every state they have (loading + normal).
     const app = await serve(sources());
     try {
-      for (const pg of ['', 'opportunities', 'campaigns']) {
+      for (const pg of ['', 'opportunities']) {
         await b.open(`${app.base}/#/${pg}`, 1280, 900, { ready: false });
         assert.match(await b.eval(`document.querySelector('.period-pill').textContent`), PILL[pg], `${pg || 'overview'}: period while loading`);
         await b.open(`${app.base}/#/${pg}`, 1280);
@@ -306,7 +307,7 @@ test('post-fix P2 drawers: aria contract, focus in / trapped / restored, Escape,
   } finally { await b.close(); await app.close(); }
 });
 
-test('post-fix navigation Plus @390: FR/NL/EN, Contenu and Croissance magasin reachable, Plus active, Escape, focus, browser back', { skip, timeout: 120000 }, async () => {
+test('post-fix navigation Plus @390: FR/NL/EN, Croissance magasin reachable, Plus active, Escape, focus, browser back', { skip, timeout: 120000 }, async () => {
   const app = await serve(sources()); const b = await browser();
   try {
     for (const lang of ['fr', 'nl', 'en']) {
@@ -315,7 +316,7 @@ test('post-fix navigation Plus @390: FR/NL/EN, Contenu and Croissance magasin re
       await b.open(`${app.base}/#/`, 390, 844);
       assert.equal(await b.eval(`document.documentElement.lang`), lang);
       assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), false, `${lang}: Plus inactive on the overview`);
-      for (const hash of ['#/content', '#/storeGrowth']) {
+      for (const hash of ['#/storeGrowth']) {
         await b.eval(`document.querySelector('.gr-more-btn').click(); 1`); await sleep(150);
         assert.equal(await b.eval(`!!document.activeElement.closest('.gr-more-panel')`), true, `${lang}: focus in the menu`);
         assert.equal(await b.eval(`!![...document.querySelectorAll('.gr-more-panel a')].find((x) => x.getAttribute('href') === '${hash}')`), true, `${lang}: ${hash} in the menu`);
@@ -331,10 +332,8 @@ test('post-fix navigation Plus @390: FR/NL/EN, Contenu and Croissance magasin re
       // Escape closes and gives focus back to Plus.
       await b.eval(`document.querySelector('.gr-more-btn').focus(); 1`); await b.key('Enter'); await b.key('Escape');
       assert.equal(await b.eval(`!document.querySelector('.gr-more-panel') && document.activeElement.classList.contains('gr-more-btn')`), true, `${lang}: Escape`);
-      // Browser back: storeGrowth -> content (Plus still active) -> overview (Plus inactive).
-      await b.eval(`history.back(); 1`); await sleep(600);
-      assert.equal(await b.eval(`location.hash`), '#/content', `${lang}: back to Contenu`);
-      assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), true);
+      // Browser back: storeGrowth -> overview (Plus inactive). Contenu is in the bar since Campagnes left the launch scope.
+      assert.equal(await b.eval(`!![...document.querySelectorAll('.sidebar > .nav > a.nav-item')].find((x) => x.getAttribute('href') === '#/content' && getComputedStyle(x).display !== 'none')`), true, `${lang}: Contenu in the mobile bar`);
       await b.eval(`history.back(); 1`); await sleep(600);
       assert.equal(await b.eval(`location.hash`), '#/', `${lang}: back to the overview`);
       assert.equal(await b.eval(`document.querySelector('.gr-more-btn').classList.contains('active')`), false, `${lang}: Plus inactive outside its pages`);
@@ -365,5 +364,28 @@ test('mobile bar @320 / 375 / 390 in FR / NL / EN: no item overlaps or spills in
         }
       }
     }
+  } finally { await b.close(); await app.close(); }
+});
+
+test('Opportunités @1440 / 1024 / 768 / 390 / 375 / 320: long product names and many examples wrap - no page overflow, no clipped row', { skip, timeout: 120000 }, async () => {
+  // A small store with very long product titles (synthetic): the worst case for the grouped corrections and the watch cards.
+  const long = 'Écouteurs à conduction osseuse Bluetooth avec étui de recharge magnétique – édition très longue';
+  const data = smallStore();
+  for (const r of [...data.products.rows, ...data.content.rows, ...data.store.topProducts]) if (['p1', 'p2', 'c0', 'c1'].includes(r.id)) r.title = `${long} ${r.id}`;
+  const app = await serve({ productPotential: async () => data.products, audience: async () => data.audience, content: async () => data.content, store: async () => data.store });
+  const b = await browser();
+  try {
+    for (const w of [1440, 1024, 768, 390, 375, 320]) {
+      await b.open(`${app.base}/#/opportunities`, w, 900);
+      const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+        rows: document.querySelectorAll('.gr-pr-row').length,
+        clipped: [...document.querySelectorAll('.gr-pr-row, .gr-pr-card')].filter((e) => e.scrollWidth > e.clientWidth + 1).length,
+        empty: !!document.querySelector('.gr-pr-commercial .gr-pr-empty') })`));
+      assert.ok(r.sw <= r.cw, `@${w}: page overflow ${r.sw} > ${r.cw}`);
+      assert.equal(r.clipped, 0, `@${w}: a row or card is clipped`);
+      assert.equal(r.rows, 5, `@${w}: 3 correction groups + 2 product cards`);
+      assert.equal(r.empty, true, `@${w}: honest empty commercial section`);
+    }
+    assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);
   } finally { await b.close(); await app.close(); }
 });

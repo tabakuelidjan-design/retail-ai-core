@@ -1,11 +1,11 @@
 'use strict';
-// Nordla Growth - shell (navigation, top bar, router) + Growth Overview page; the Opportunités page lives in
-// opportunities.js and the Campagnes page in campaigns.js. Plain DOM, no framework, same conventions as Analytics Premium:
-// every visual is an existing Nordla component (Analytics' ex-* cards/tabs/KPI tiles/tables, the shared rail,
-// NordlaCharts, NordlaIcon); growth.css only adds the Growth grid and the few list rows Analytics has no
-// equivalent for. All copy goes through NORDLA_I18N.t() (lang-fr/nl/en.js); demo content carries its own
-// fr/nl/en strings. Vue d'ensemble: campaign figures come from Campagnes (demonstration data, badged), store sales are real,
-// every other figure shows "Source non connectée". Opportunités: no source connected yet, stated card by card.
+// Nordla Développement des ventes - shell (navigation, top bar, router) + Vue d'ensemble; the Opportunités page lives in
+// opportunities.js. Plain DOM, no framework, same conventions as Analytics Premium: every visual is an existing Nordla
+// component (Analytics' ex-* cards/tabs/KPI tiles/tables, the shared rail, NordlaCharts, NordlaIcon); growth.css only adds the
+// Growth grid and the few list rows Analytics has no equivalent for. All copy goes through NORDLA_I18N.t() (lang-fr/nl/en.js).
+// Real data or honest states only (owner decision 2026-09-28): Vue d'ensemble shows the real store sales and the Opportunités
+// priorities; every figure no engine produces shows "Source non connectée". No demonstration data, no Campagnes page, and no
+// action button that performs no action.
 
 const t = NORDLA_I18N.t;
 
@@ -37,16 +37,11 @@ function arrow(dir, size = 13) {
 //     cropped).
 //  2. The shared official Nordla icons (NordlaIcon.semantic) for generic business concepts (revenue, stock, ...).
 const GROWTH_PACK = {
-  overview: 'growth-overview', opportunities: 'opportunities', campaigns: 'campaigns', content: 'content',
-  storeGrowth: 'store-growth', audience: 'audience', experiments: 'experiments', settings: 'settings',
-  aiInsights: 'ai-insights', needsAttention: 'needs-attention', approvals: 'approvals',
-  // Opportunités detail icons (Nordla_Opportunities_Icons_Separate).
-  priorityHigh: 'priority-high', confidence: 'confidence', effort: 'effort', local: 'local', students: 'students',
-  gifts: 'gifts', business: 'business', returningCustomers: 'returning-customers', impactEffort: 'impact-effort',
-  pipelineStatus: 'pipeline-status', revenueBySource: 'revenue-by-source',
-  clicks: 'clicks', goalAwareness: 'goal-awareness', goalRecruitment: 'goal-recruitment',
-  collectionAutumn: 'collection-autumn', bundle: 'bundle', loyalty: 'loyalty', newArrivals: 'new-arrivals',
-  retargeting: 'retargeting', tutorial: 'tutorial',
+  overview: 'growth-overview', opportunities: 'opportunities', content: 'content', storeGrowth: 'store-growth', audience: 'audience',
+  settings: 'settings', aiInsights: 'ai-insights', needsAttention: 'needs-attention', pipelineStatus: 'pipeline-status',
+  // Used by Produits Potentiels, Audience and Croissance magasin ('pack:<key>' in those pages).
+  priorityHigh: 'priority-high', local: 'local', gifts: 'gifts', returningCustomers: 'returning-customers',
+  bundle: 'bundle', loyalty: 'loyalty', retargeting: 'retargeting',
 };
 const ICON_PX = { sm: 16, md: 20, lg: 28 };
 function packIcon(file, size) {
@@ -60,35 +55,14 @@ function packIcon(file, size) {
 // Growth concept -> 'pack:<key>' (Growth pack) or an official Nordla icon name.
 const GROWTH_ICONS = {
   // navigation
-  overview: 'pack:overview', opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', content: 'pack:content',
+  overview: 'pack:overview', opportunities: 'pack:opportunities', content: 'pack:content',
   storeGrowth: 'pack:storeGrowth', audience: 'pack:audience', settings: 'pack:settings',
-  // Overview page
-  revenueInfluenced: 'chiffreAffaires', activeOpportunities: 'pack:opportunities', topOpportunities: 'pack:opportunities',
-  activeCampaigns: 'pack:campaigns', roas: 'croissance', aiInsights: 'pack:aiInsights',
-  needsAttention: 'pack:needsAttention', growthPulse: 'croissance', channelPerformance: 'croissance', contentPerformance: 'meilleurProduit',
-  // Opportunités page
-  potentialRevenue: 'chiffreAffaires', approvals: 'pack:approvals', inProgress: 'synchronisation', wins: 'meilleurProduit',
-  impactEffort: 'pack:impactEffort', segments: 'pack:audience', priorityHigh: 'pack:priorityHigh', confidence: 'pack:confidence',
-  effort: 'pack:effort', pipelineStatus: 'pack:pipelineStatus', revenueBySource: 'pack:revenueBySource',
-  // Opportunity sources and segments, by the data item's id/kind (the data never names icons).
-  srcStore: 'pack:storeGrowth', srcStock: 'stock', srcMarket: 'croissance', srcAi: 'pack:aiInsights', srcCustomers: 'segmentClient',
-  srcExperiment: 'pack:experiments', srcSeasonality: 'calendrier', srcSales: 'ventes', srcLocal: 'pack:local', srcMargin: 'margeBrute',
-  segStudents: 'pack:students', segGifts: 'pack:gifts', segLocal: 'pack:local', segBusiness: 'pack:business', segReturning: 'pack:returningCustomers',
-  // Campagnes page
-  campaignRevenue: 'chiffreAffaires', newCustomers: 'nouveauClient', clicks: 'pack:clicks',
-  // Campaign thumbnail = the icon of what the campaign is about (its `theme`), one per real concept, until real campaign
-  // visuals come from the source. Never a generic icon repeated across unrelated campaigns.
-  themeCollection: 'pack:collectionAutumn', themeStudents: 'pack:students', themeChallenge: 'pack:goalAwareness',
-  themeGifts: 'pack:gifts', themeStoreOpening: 'pack:storeGrowth', themeBundle: 'pack:bundle', themeLoyalty: 'pack:loyalty',
-  themeRecruitment: 'pack:goalRecruitment', themeBrandSearch: 'recherche', themeNewArrivals: 'pack:newArrivals',
-  themeRetargeting: 'pack:retargeting', themeTutorial: 'pack:tutorial',
-  // Row icons, chosen from the data item's `kind` (the data source never names icons: presentation stays in the UI).
-  insightMomentum: 'produitEnHausse', insightCampaign: 'croissance', insightTraffic: 'ventes', insightStock: 'stock',
-  attentionApproval: 'approval', attentionOpportunity: 'stock', attentionExperiment: 'calendrier',
-  opportunityTraffic: 'ventes', opportunityStock: 'stock', opportunityCustomers: 'segmentClient',
-  recoStock: 'stock', recoCampaign: 'croissance', recoSegment: 'segmentClient', recoStore: 'pack:storeGrowth',
+  // Vue d'ensemble
+  revenueInfluenced: 'chiffreAffaires', topOpportunities: 'pack:opportunities', aiInsights: 'pack:aiInsights',
+  needsAttention: 'pack:needsAttention', growthPulse: 'croissance', contentPerformance: 'meilleurProduit',
+  // shared by the pages
+  pipelineStatus: 'pack:pipelineStatus', srcCost: 'prix',
 };
-const kindIcon = (group, kind) => `${group}${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
 function gi(name, size = 'md') {
   const v = GROWTH_ICONS[name] || name;
   return v.startsWith('pack:') ? packIcon(GROWTH_PACK[v.slice(5)], size) : NordlaIcon.semantic(v, size);
@@ -97,18 +71,13 @@ function gi(name, size = 'md') {
 // ---------- formatting (same rules as Analytics' Explorer: Intl per language, whole euros, "+28 %") ----------
 const LANG_TAG = { fr: 'fr-BE', nl: 'nl-BE', en: 'en-GB' };
 const tag = () => LANG_TAG[NORDLA_I18N.getLang()] || 'fr-BE';
-const loc = (o) => (o && typeof o === 'object' ? o[NORDLA_I18N.getLang()] ?? o.fr : o);
 // Currency comes from the current page's payload, never assumed by the UI.
 const cur = () => ((PAGES[currentPage()].get() || {}).currency) || 'EUR';
 const money = (v) => new Intl.NumberFormat(tag(), { style: 'currency', currency: cur(), maximumFractionDigits: 0 }).format(v);
 const compactMoney = (v) => new Intl.NumberFormat(tag(), { style: 'currency', currency: cur(), notation: 'compact', maximumFractionDigits: 1 }).format(v);
 const num = (v) => new Intl.NumberFormat(tag(), { maximumFractionDigits: 0 }).format(v);
-const compactNum = (v) => new Intl.NumberFormat(tag(), { notation: 'compact', maximumFractionDigits: 1 }).format(v);
-const pct1 = (v) => new Intl.NumberFormat(tag(), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v);
 const signedPct = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 100))} %`;
-const roasFmt = (v) => (v == null ? t('gr.dash') : `${new Intl.NumberFormat(tag(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v)}x`);
 const dayFmt = (isoDate, withYear) => new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(tag(), { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
-const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
 
 /** Delta line: same markup/classes as Analytics' exDelta() (a real comparison coloured, the rest neutral). */
 function delta(pct) {
@@ -126,14 +95,13 @@ const icoBubble = (iconName) => h('span', { class: 'gr-ico' }, gi(iconName));
 // this module only); the others are visibly disabled ("coming soon"), never a dead link.
 // Mobile (owner decision 2026-09-28): the bottom bar has 6 slots max - the 5 central pages (`mobile: true`) + "Plus", which
 // opens a panel with every other entry (`more: true`: built pages as links, the others disabled). No built page is ever
-// unreachable on mobile. The desktop rail is unchanged.
+// unreachable on mobile. Campagnes is not part of this version (no advertising connector): Contenu takes its slot.
 const GROWTH_NAV = [
   { key: 'overview', icon: 'overview', href: '#/', mobile: true },
   { key: 'opportunities', icon: 'opportunities', href: '#/opportunities', mobile: true },
-  { key: 'campaigns', icon: 'campaigns', href: '#/campaigns', mobile: true },
   // Produits Potentiels: official "produits" icon until a dedicated Growth pack icon exists.
   { key: 'potential', icon: 'produits', href: '#/potential', mobile: true },
-  { key: 'content', icon: 'content', href: '#/content', more: true },
+  { key: 'content', icon: 'content', href: '#/content', mobile: true },
   { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth', more: true },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
 ];
@@ -201,17 +169,7 @@ function langSwitch() {
     NORDLA_I18N.SUPPORTED.map((l) => h('button', { type: 'button', class: NORDLA_I18N.getLang() === l ? 'on' : '', title: NAMES[l], on: { click: () => { NORDLA_I18N.setLang(l); render(); } } }, l.toUpperCase())));
 }
 
-/**
- * Top bar. The period and the demo flag come from the PAGE definition (PAGES), not from the payload, so the pill is identical
- * while loading, on an error, on an empty page and on a full page. Each page's period is the window its engine really uses.
- */
-// Guard: demonstration data is NEVER shown without the "Démo" badge. The badge follows the page definition (so it is there while
-// loading / on an error) AND any loaded payload flagged `demo: true` - a page that forgets its flag still gets the badge.
-function isDemo(page) {
-  const d = page.get();
-  return page.demo === true || (d != null && typeof d === 'object' && d.demo === true);
-}
-
+/** Top bar. The period comes from the PAGE definition (PAGES), so the pill is identical in every state; it is the window the page's engines use. */
 function topbar(page) {
   const p = page.period;
   const pill = p.weeks
@@ -221,10 +179,7 @@ function topbar(page) {
       : h('span', { class: 'period-pill locked', title: t('gr.period.daysNote', p.days), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastDays', p.days), h('span', { class: 'period-fixed' }, t('gr.period.fixed')));
   return h('div', { class: 'topbar' },
     h('div', { class: 'topbar-title' }, t('gr.brand')),
-    h('div', { class: 'topbar-right' },
-      isDemo(page) ? h('span', { class: 'wc-pill partial gr-demo', title: t(page.demoTitle || 'gr.demoTitle') }, h('span', { class: 'gr-demo-long' }, t('gr.demo')), h('span', { class: 'gr-demo-short', 'aria-hidden': 'true' }, t('gr.demoShort'))) : null,
-      pill,
-      langSwitch()));
+    h('div', { class: 'topbar-right' }, pill, langSwitch()));
 }
 
 // ---------- KPI row (Analytics' ex-kpi tile) ----------
@@ -239,150 +194,52 @@ const ncBody = (text) => h('div', { class: 'gr-pp-empty gr-nc' }, h('strong', { 
 const kpiNote = (count, text, tone) => h('div', { class: `ex-delta gr-kpi-note${tone ? ` ${tone}` : ''}` }, h('strong', null, String(count)), h('span', null, text));
 function kpiRow(d) {
   const k = d.kpis;
-  // 4 tiles: same layout as the other 4-tile Growth rows (gr-pp-kpis).
+  // 4 tiles (same layout as the other 4-tile Growth rows, gr-pp-kpis). Priorities = the Opportunités aggregator (real engines).
+  const note = (text) => h('div', { class: 'ex-kpi-note' }, text);
+  const pr = (key, icon, label, text) => (k[key] ? kpi(icon, label, num(k[key].value), note(text)) : kpi(icon, label, t('gr.dash'), note(t('gr.src.unavailable'))));
   return h('div', { class: 'ex-kpi-row gr-kpi-row gr-pp-kpis' },
-    k.revenueInfluenced ? kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), money(k.revenueInfluenced.value), delta(k.revenueInfluenced.deltaPct)) : kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), t('gr.dash'), ncNote()),
-    k.activeOpportunities ? kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), num(k.activeOpportunities.value), kpiNote(k.activeOpportunities.highPriority, t('gr.kpi.highPriority'), 'warn')) : kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), t('gr.dash'), ncNote()),
-    kpi('activeCampaigns', t('gr.kpi.activeCampaigns'), num(k.activeCampaigns.value), kpiNote(k.activeCampaigns.performingWell, t('gr.kpi.performingWell'), 'good')),
-    kpi('roas', t('gr.kpi.roas'), roasFmt(k.roas.value), delta(k.roas.deltaPct)));
+    kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), t('gr.dash'), ncNote()),
+    pr('fix', 'needsAttention', t('gr.kpi.fix'), k.fix ? t('gr.kpi.fixNote', num(k.fix.elements)) : ''),
+    pr('commercial', 'topOpportunities', t('gr.kpi.commercial'), t('gr.kpi.commercialNote')),
+    pr('watch', null, t('gr.kpi.watch'), t('gr.kpi.watchNote')));
 }
 
-// ---------- Growth Pulse (NordlaCharts.trendLines / trendLine, the Analytics/Finance chart components) ----------
-// Revenue and store visitors have different units, so they are never drawn on one axis: a selector switches the view.
+// ---------- Sales pulse: revenue influenced by sales actions and store visitors have no source today (stated, nothing drawn) ----------
+// Revenue and store visitors have different units, so they would never share one axis: the selector switches the stated view.
 let pulseView = 'revenue';
-function pulseCard(d) {
-  const p = d.pulse;
+function pulseCard() {
   const sel = h('select', { class: 'ex-select', 'aria-label': t('gr.pulse.metric'), on: { change: (e) => { pulseView = e.target.value; render(); } } },
     ['revenue', 'traffic'].map((v) => h('option', { value: v, ...(v === pulseView ? { selected: 'selected' } : {}) }, t(`gr.pulse.${v}`))));
-  // No attribution source (revenue influenced by Growth) and no footfall source: stated in the same card, nothing drawn.
-  if (!p) {
-    return h('div', { class: 'ex-card gr-pulse' }, cardHead('growthPulse', t('gr.pulse.title'), sel),
-      pulseView === 'traffic' ? NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText')) : NordlaCharts.insufficient(t('gr.src.notConnected'), t('gr.ov.nc.influenced')));
-  }
-  const labels = p.dates.map((x) => dayFmt(x));
-  let head; let chart;
-  if (pulseView === 'traffic') {
-    // Store footfall is not connected: stated, never drawn (no demo visitors).
-    head = null;
-    chart = NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText'));
-  } else {
-    head = NordlaCharts.head({ title: t('gr.pulse.influenced'), value: money(p.totals.influencedRevenue), delta: Math.round(p.deltas.influencedRevenue * 1000) / 10, good: p.deltas.influencedRevenue >= 0, vs: t('gr.vsPrevious') });
-    chart = NordlaCharts.trendLines([
-      { name: t('gr.pulse.total'), cls: 'c1', values: p.totalRevenue },
-      { name: t('gr.pulse.influenced'), cls: 'c2', values: p.influencedRevenue },
-    ], labels, { format: compactMoney, height: 230, label: t('gr.pulse.title') });
-  }
-  const aside = pulseView === 'revenue'
-    ? h('div', { class: 'gr-pulse-aside' }, h('span', null, t('gr.pulse.total')), h('strong', null, money(p.totals.totalRevenue)), h('span', { class: 'gr-muted' }, t('gr.pulse.share', Math.round((p.totals.influencedRevenue / p.totals.totalRevenue) * 100))))
-    : null;
-  return h('div', { class: 'ex-card gr-pulse' },
-    cardHead('growthPulse', t('gr.pulse.title'), sel),
-    h('div', { class: 'gr-pulse-top' }, head, aside),
-    chart,
-    h('div', { class: 'ex-foot' }, t('gr.pulse.foot', dayFmt(d.period.from), dayFmt(d.period.to, true))));
+  return h('div', { class: 'ex-card gr-pulse' }, cardHead('growthPulse', t('gr.pulse.title'), sel),
+    pulseView === 'traffic' ? NordlaCharts.insufficient(t('gr.pulse.visitorsNotConnected'), t('gr.pulse.visitorsNotConnectedText')) : NordlaCharts.insufficient(t('gr.src.notConnected'), t('gr.ov.nc.influenced')));
 }
 
-// ---------- AI insights (Nordla AI as an integrated layer, not a chat) ----------
-function insightsCard(d) {
-  if (!d.insights) {
-    return h('div', { class: 'ex-card gr-ai' },
-      h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
-      ncBody(t('gr.ov.nc.ai')));
-  }
+// ---------- AI insights: no Nordla engine produces them yet (stated, nothing invented) ----------
+function insightsCard() {
   return h('div', { class: 'ex-card gr-ai' },
     h('div', { class: 'ex-card-head' }, h('h3', { class: 'gr-card-title' }, gi('aiInsights'), t('gr.ai.title')), chip(t('gr.ai.badge'), 'mute')),
-    h('div', { class: 'ex-movers' }, d.insights.map((i) => h('div', { class: 'ex-mover gr-row' },
-      icoBubble(kindIcon('insight', i.kind)),
-      h('div', { class: 'ex-mover-main' }, h('div', { class: 'ex-mover-name' }, loc(i.title)), h('div', { class: 'ex-mover-sub gr-wrap' }, loc(i.text))),
-      h('span', { class: `gr-dot ${i.tone}`, 'aria-hidden': 'true' })))),
-    h('div', { class: 'ex-foot' }, t('gr.ai.foot')));
+    ncBody(t('gr.ov.nc.ai')));
 }
 
-// ---------- Needs your attention (actions become real with the Approvals page; disabled until then) ----------
-const ATT_TONE = { pending: '', new: 'mute', endingSoon: 'gr-warn' };
+// ---------- Needs your attention = the first "À corriger maintenant" groups of Opportunités (real, grouped by problem) ----------
+const ovLink = () => h('a', { class: 'gr-op-link', href: '#/opportunities' }, t('gr.ov.toOpportunities'));
 function attentionCard(d) {
-  if (!d.attention) return h('div', { class: 'ex-card gr-att' }, cardHead('needsAttention', t('gr.att.title')), ncBody(t('gr.ov.nc.attention')));
+  if (!d.attention) return h('div', { class: 'ex-card gr-att' }, cardHead('needsAttention', t('gr.att.title')), h('div', { class: 'gr-pp-empty' }, t('gr.ov.prioritiesUnavailable')));
   return h('div', { class: 'ex-card gr-att' },
-    cardHead('needsAttention', t('gr.att.title'), chip(String(d.attention.length), '')),
-    h('div', { class: 'ex-movers' }, d.attention.map((a) => h('div', { class: 'ex-mover gr-row gr-att-row' },
-      icoBubble(kindIcon('attention', a.kind)),
-      h('div', { class: 'ex-mover-main' },
-        h('div', { class: 'ex-mover-name' }, loc(a.title)),
-        h('div', { class: 'ex-mover-sub' }, loc(a.sub)),
-        h('div', { class: 'gr-att-meta' }, chip(t(`gr.att.status.${a.status}`), ATT_TONE[a.status]), h('span', { class: 'gr-muted' }, dayFmt(a.date)),
-          h('button', { type: 'button', class: 'btn-outline gr-action', disabled: 'disabled', title: t('gr.att.soon') }, t(`gr.att.action.${a.action}`))))))));
-}
-
-// ---------- Channel performance (Analytics' ex-table) ----------
-// Channel logos: files of the Nordla Growth Icon Pack v2 (channels/), 128px transparent exports in
-// src/growth/ui/assets/channels/, served at /growth-assets/channels/<file>. Never redrawn, never downloaded.
-// CHANNEL_FALLBACK: the monogram shown only for a channel without a logo file or if its file fails to load.
-const CHANNEL_LOGOS = { 'google-search': 'google-search.png', instagram: 'instagram.png', tiktok: 'tiktok.png', facebook: 'facebook.png', 'google-business': 'google-business.png' };
-const CHANNEL_FALLBACK = { 'google-search': 'G', instagram: 'IG', tiktok: 'TT', facebook: 'FB', 'google-business': 'GB' };
-const fallbackMark = (id) => h('span', { class: 'gr-ch gr-ch-fallback', 'data-channel': id, 'aria-hidden': 'true' }, CHANNEL_FALLBACK[id] || '·');
-// Channel display names come from the payload (data.channels), not from the UI.
-const channelName = (id) => {
-  const pages = [PAGES[currentPage()].get(), data];
-  for (const p of pages) { const c = p && Array.isArray(p.channels) && p.channels.find((x) => x.id === id); if (c && c.name) return c.name; }
-  return id;
-};
-function channelMark(id) {
-  const file = CHANNEL_LOGOS[id];
-  if (!file) return fallbackMark(id);
-  const img = h('img', { class: 'gr-ch gr-ch-logo', src: `/growth-assets/channels/${file}`, alt: '', 'aria-hidden': 'true' });
-  img.addEventListener('error', () => img.replaceWith(fallbackMark(id)));
-  return img;
-}
-function channelCard(d) {
-  const rows = d.channels.map((c) => h('tr', null,
-    h('td', null, h('span', { class: 'gr-ch-cell' }, channelMark(c.id), h('span', null, c.name))),
-    h('td', { class: 'num' }, h('strong', null, money(c.revenue))),
-    h('td', { class: 'num' }, c.reach == null ? h('span', { class: 'gr-muted', title: t('gr.src.notConnected') }, t('gr.dash')) : [compactNum(c.reach), h('span', { class: 'gr-unit' }, t(`gr.ch.unit.${c.reachKind}`))]),
-    h('td', { class: 'num' }, c.conversion == null ? h('span', { class: 'gr-muted', title: t('gr.src.notConnected') }, t('gr.dash')) : pct1(c.conversion)),
-    h('td', { class: 'num' }, c.roas == null ? h('span', { class: 'gr-muted' }, t('gr.ch.organic')) : h('strong', null, roasFmt(c.roas)))));
-  return h('div', { class: 'ex-card gr-channels' },
-    cardHead('channelPerformance', t('gr.ch.title'), d.sources && d.sources.campaigns === 'demo' ? chip(t('gr.ov.fromCampaigns'), 'mute') : null),
-    h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table' },
-      h('thead', null, h('tr', null, h('th', null, t('gr.ch.channel')), h('th', { class: 'num' }, t('gr.ch.revenue')), h('th', { class: 'num' }, t('gr.ch.reach')), h('th', { class: 'num' }, t('gr.ch.conversion')), h('th', { class: 'num' }, t('gr.ch.roas')))),
-      h('tbody', null, rows))),
-    h('div', { class: 'ex-foot' }, t(d.sources && d.sources.campaigns === 'demo' ? 'gr.ov.chFoot' : 'gr.ch.foot')));
-}
-
-// ---------- Campaigns ----------
-const CAMP_TONE = { performing: 'gr-good', active: 'mute', watch: 'gr-warn' };
-function campaignsCard(d) {
-  return h('div', { class: 'ex-card gr-camps' },
-    cardHead('campaigns', t('gr.camp.title'), chip(t('gr.camp.activeCount', d.kpis.activeCampaigns.value), 'mute')),
-    h('div', { class: 'ex-movers' }, d.campaigns.map((c) => {
-      const pct = c.budget ? Math.min(100, Math.round((c.spend / c.budget) * 100)) : 0;
-      return h('div', { class: 'ex-mover gr-row' },
-        channelMark(c.channel),
+    cardHead('needsAttention', t('gr.att.title'), chip(num(d.kpis.fix ? d.kpis.fix.value : d.attention.length), d.attention.length ? '' : 'mute')),
+    d.attention.length
+      ? h('div', { class: 'ex-movers' }, d.attention.map((g) => h('div', { class: 'ex-mover gr-row', 'data-priority-id': g.id },
+        icoBubble(g.kind === 'purchaseCost' ? 'srcCost' : 'content'),
         h('div', { class: 'ex-mover-main' },
-          h('div', { class: 'ex-mover-name' }, loc(c.name)),
-          c.budget
-            ? h('div', null, h('div', { class: 'ex-bar gr-budget' }, h('i', { class: 'first', style: `width:${Math.max(3, pct)}%` })), h('div', { class: 'ex-mover-sub' }, t('gr.camp.spend', money(c.spend), money(c.budget))))
-            : h('div', { class: 'ex-mover-sub' }, t('gr.camp.noBudget'))),
-        h('div', { class: 'gr-side' }, chip(t(`gr.camp.status.${c.status}`), CAMP_TONE[c.status]),
-          h('strong', null, c.roas == null ? t('gr.dash') : t('gr.camp.roas', roasFmt(c.roas))),
-          h('span', { class: 'gr-muted' }, t('gr.camp.newCustomers', num(c.newCustomers)))));
-    })));
+          h('div', { class: 'ex-mover-name' }, opFixTitle(g)),
+          h('div', { class: 'ex-mover-sub gr-wrap' }, t(g.kind === 'purchaseCost' ? 'gr.op.fix.purchaseCost.why' : `gr.op.fix.content.${g.problem}.why`))))))
+      : h('div', { class: 'gr-pp-empty' }, t('gr.op.fix.empty')),
+    h('div', { class: 'ex-foot' }, ovLink()));
 }
 
-// ---------- Content performance ----------
-const PERF_TONE = { best: 'gr-good', good: 'mute', below: 'gr-warn' };
-function contentCard(d) {
-  if (!d.content) return h('div', { class: 'ex-card gr-content' }, cardHead('contentPerformance', t('gr.content.title')), ncBody(t('gr.ov.nc.content')));
-  return h('div', { class: 'ex-card gr-content' },
-    cardHead('contentPerformance', t('gr.content.title')),
-    h('div', { class: 'ex-movers' }, d.content.map((c) => h('div', { class: 'ex-mover gr-row' },
-      // PLACEHOLDER thumbnail: Analytics' neutral swatch + channel mark until real content thumbnails come from the data source
-      // (never a stock or look-alike image).
-      h('div', { class: 'rank-thumb gr-thumb' }, channelMark(c.channel)),
-      h('div', { class: 'ex-mover-main' }, h('div', { class: 'ex-mover-name' }, loc(c.title)), h('div', { class: 'ex-mover-sub' }, `${channelName(c.channel)} · ${t(`gr.content.kind.${c.kind}`)}`)),
-      h('div', { class: `ex-mover-delta ${c.deltaPct >= 0 ? 'up' : 'down'}` },
-        h('strong', { class: 'gr-ink' }, t('gr.content.views', compactNum(c.views))),
-        h('span', null, signedPct(c.deltaPct)),
-        chip(t(`gr.content.perf.${c.performance}`), PERF_TONE[c.performance]))))));
+// ---------- Content performance: no social account is connected (stated, nothing invented) ----------
+function contentCard() {
+  return h('div', { class: 'ex-card gr-content' }, cardHead('contentPerformance', t('gr.content.title')), ncBody(t('gr.ov.nc.content')));
 }
 
 // ---------- Store growth (NordlaCharts.sparkline = Analytics' KPI sparkline) ----------
@@ -407,34 +264,31 @@ function storeCard(d) {
     h('div', { class: 'gr-store-grid' }, notConnected(t('gr.store.traffic')), notConnected(t('gr.store.conversion')), revenue));
 }
 
-// ---------- Top opportunities ----------
-const PRIO_TONE = { high: '', medium: 'mute' };
+// ---------- Commercial opportunities = Opportunités' validated section (may be empty: stated honestly) ----------
 function opportunitiesCard(d) {
-  if (!d.opportunities) return h('div', { class: 'ex-card gr-opps' }, cardHead('topOpportunities', t('gr.opp.title')), ncBody(t('gr.ov.nc.opportunities')));
+  if (!d.opportunities) return h('div', { class: 'ex-card gr-opps' }, cardHead('topOpportunities', t('gr.opp.title')), h('div', { class: 'gr-pp-empty' }, t('gr.ov.prioritiesUnavailable')));
   return h('div', { class: 'ex-card gr-opps' },
-    cardHead('topOpportunities', t('gr.opp.title')),
-    h('div', { class: 'ex-movers' }, d.opportunities.map((o) => h('div', { class: 'ex-mover gr-row' },
-      icoBubble(kindIcon('src', o.source)),
-      h('div', { class: 'ex-mover-main' },
-        h('div', { class: 'ex-mover-name' }, loc(o.title)),
-        h('div', { class: 'ex-mover-sub' }, t('gr.opp.source', t(`gr.op.src.${o.source}`))),
-        h('div', { class: 'gr-att-meta' }, chip(t(`gr.opp.priority.${o.priority}`), PRIO_TONE[o.priority]), h('span', { class: 'gr-muted' }, t(`gr.op.status.${o.status}`)))),
-      h('div', { class: 'gr-side' }, h('strong', { class: 'gr-pos' }, `+${money(o.estimate)}`), h('span', { class: 'gr-muted' }, t('gr.opp.estimate')))))),
-    h('div', { class: 'ex-foot' }, t('gr.opp.foot')));
+    cardHead('topOpportunities', t('gr.opp.title'), chip(num(d.kpis.commercial ? d.kpis.commercial.value : d.opportunities.length), d.opportunities.length ? 'gr-good' : 'mute')),
+    d.opportunities.length
+      ? h('div', { class: 'ex-movers' }, d.opportunities.map((i) => h('div', { class: 'ex-mover gr-row', 'data-priority-id': i.id },
+        icoBubble(OP_ITEM_ICON[i.kind]),
+        h('div', { class: 'ex-mover-main' }, h('div', { class: 'ex-mover-name' }, opCommercialTitle(i)), h('div', { class: 'ex-mover-sub gr-wrap' }, opCommercialWhy(i))))))
+      : h('div', { class: 'gr-pp-empty gr-pr-empty' }, h('strong', { class: 'gr-ink' }, t('gr.op.com.emptyTitle')), h('span', null, t('gr.opp.emptyText'))),
+    h('div', { class: 'ex-foot' }, ovLink()));
 }
 
 // ---------- pages + router ----------
-// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Each page's payload is fetched once
-// and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let campData = null; let potData = null; let audData = null; let ctData = null; let stData = null;
+// Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/potential' = Produits Potentiels,
+// '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Any other hash (e.g. a former '#/campaigns'
+// link) shows Vue d'ensemble. Each page's payload is fetched once and cached; a language or filter change re-renders from the cache.
+let data = null; let oppData = null; let potData = null; let audData = null; let ctData = null; let stData = null;
 // Load state per page: undefined (not requested), 'loading', or { code } after a failed request (safe, known codes only).
 const loadState = {};
 const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
-// `period` = the window the page's engine really uses (the top bar shows it in every state); `demo` = demonstration page.
+// `period` = the window the page's engines really use (the top bar shows it in every state).
 const PAGES = {
-  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { days: 30 }, demo: true, demoTitle: 'gr.ov.demoTitle', get: () => data, set: (v) => { data = v; }, render: renderOverview },
-  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { days: 30 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
-  campaigns: { title: 'gr.cp.title', subtitle: 'gr.cp.subtitle', url: '/api/growth/campaigns', period: { days: 30 }, demo: true, get: () => campData, set: (v) => { campData = v; }, render: renderCampaigns },
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { weeks: 8 }, get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { weeks: 8 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
@@ -444,9 +298,8 @@ function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PA
 
 function renderOverview(main, safe) {
   main.appendChild(safe(kpiRow));
-  main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(pulseCard), safe(insightsCard), safe(attentionCard)));
-  main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(channelCard), safe(campaignsCard), safe(contentCard)));
-  main.appendChild(h('div', { class: 'ex-grid-2 even' }, safe(storeCard), safe(opportunitiesCard)));
+  main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(attentionCard), safe(opportunitiesCard), safe(storeCard)));
+  main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(pulseCard), safe(insightsCard), safe(contentCard)));
 }
 
 function render() {

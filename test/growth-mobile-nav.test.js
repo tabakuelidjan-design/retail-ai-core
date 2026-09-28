@@ -13,7 +13,7 @@ const panel = (root) => all(root, (n) => hasClass(n, 'gr-more-panel'))[0];
 test('mobile nav: the bar holds exactly 6 slots - 5 central pages + Plus', async () => {
   const { root, errors } = await growthDom('#/');
   assert.deepEqual(errors, []);
-  assert.deepEqual(barItems(root).map((n) => text(n)), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Audience', 'Plus']);
+  assert.deepEqual(barItems(root).map((n) => text(n)), ['Vue d’ensemble', 'Opportunités', 'Produits Potentiels', 'Contenu', 'Audience', 'Plus']);
   const b = moreBtn(root);
   assert.equal(b.tagName, 'BUTTON');
   assert.equal(b.getAttribute('type'), 'button', 'a native button: keyboard accessible (Enter / Space)');
@@ -23,26 +23,26 @@ test('mobile nav: the bar holds exactly 6 slots - 5 central pages + Plus', async
   assert.ok(!hasClass(b, 'active'));
 });
 
-test('mobile nav: Plus opens a panel with Contenu, Croissance magasin and the disabled entries; navigation closes it', async () => {
+test('mobile nav: Plus opens a panel with Croissance magasin and the disabled entries; navigation closes it', async () => {
   const { root, errors, navigate } = await growthDom('#/');
   moreBtn(root).listeners.click[0]();
   assert.equal(moreBtn(root).getAttribute('aria-expanded'), 'true');
   const p = panel(root);
   assert.equal(p.getAttribute('role'), 'dialog');
   const links = all(p, (n) => n.tagName === 'A').map((n) => [text(n), n.getAttribute('href')]);
-  assert.deepEqual(links, [['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth']]);
+  assert.deepEqual(links, [['Croissance magasin', '#/storeGrowth']], 'Contenu moved to the bar when Campagnes left the launch scope');
   const disabled = all(p, (n) => hasClass(n, 'gr-more-item') && hasClass(n, 'inert'));
   assert.deepEqual(disabled.map((n) => n.getAttribute('aria-disabled')), ['true', 'true']);
   assert.ok(text(disabled[0]).startsWith('Nordla AI') && text(disabled[1]).startsWith('Paramètres'), 'Expériences is no longer in the menu');
   assert.ok(text(disabled[0]).includes('Bientôt disponible'));
-  await navigate('#/content');
+  await navigate('#/storeGrowth');
   assert.equal(panel(root), undefined, 'the panel closes after navigation');
   assert.equal(moreBtn(root).getAttribute('aria-expanded'), 'false');
   assert.deepEqual(errors, []);
 });
 
-test('mobile nav: Plus is active on Contenu and Croissance magasin (and only there)', async () => {
-  for (const [hash, on] of [['#/content', true], ['#/storeGrowth', true], ['#/', false], ['#/opportunities', false], ['#/campaigns', false], ['#/potential', false], ['#/audience', false]]) {
+test('mobile nav: Plus is active on Croissance magasin (and only there)', async () => {
+  for (const [hash, on] of [['#/content', false], ['#/storeGrowth', true], ['#/', false], ['#/opportunities', false], ['#/campaigns', false], ['#/potential', false], ['#/audience', false]]) {
     const { root, errors } = await growthDom(hash);
     assert.deepEqual(errors, [], hash);
     assert.equal(hasClass(moreBtn(root), 'active'), on, hash);
@@ -50,13 +50,13 @@ test('mobile nav: Plus is active on Contenu and Croissance magasin (and only the
 });
 
 test('mobile nav: from every Growth page, every built page is reachable on mobile (bar or Plus)', async () => {
-  for (const hash of ['#/', '#/opportunities', '#/campaigns', '#/potential', '#/audience', '#/content', '#/storeGrowth']) {
+  for (const hash of ['#/', '#/opportunities', '#/potential', '#/audience', '#/content', '#/storeGrowth']) {
     const { root } = await growthDom(hash);
     const inBar = barItems(root).filter((n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     moreBtn(root).listeners.click[0]();
     const inMore = all(panel(root), (n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     const built = all(root, (n) => hasClass(n, 'nav-item') && n.tagName === 'A').map((n) => n.getAttribute('href'));
-    assert.equal(built.length, 7);
+    assert.equal(built.length, 6);
     for (const href of built) assert.ok(inBar.includes(href) || inMore.includes(href), `${hash}: ${href} unreachable on mobile`);
   }
 });

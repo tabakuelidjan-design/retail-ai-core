@@ -2,8 +2,7 @@
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { buildOverview } from '../src/growth/server/overview.js';
-import { buildOpportunities } from '../src/growth/server/opportunities.js';
-import { buildDemoCampaigns } from '../src/growth/server/demo-campaigns.js';
+import { buildPriorities } from '../src/growth/priorities/priorities.js';
 import { productPotentialFacts } from '../src/growth/products/facts.js';
 import { buildProductPotential } from '../src/growth/products/potential.js';
 import { makeDemandData, NOW as DEMAND_NOW, TZ as DEMAND_TZ, CONFIG as DEMAND_CONFIG } from './fixtures/demand-sample.js';
@@ -60,17 +59,22 @@ export function storePayload(data = makeStoreData(STORE_FULL), potential = new M
   return { generatedAt: STORE_NOW.toISOString(), ...buildStore({ ...f, potential, config: STORE_CONFIG }) };
 }
 
-// What the server sends for Vue d'ensemble (server/overview.js + `real.store`); `mode` picks the store-sales state.
-export function overviewPayload(real = { store: { mode: 'unavailable' } }) {
-  return { ...buildOverview(NOW), real };
+/** Opportunités payload: the priorities aggregated from the four synthetic engine payloads (no demonstration data). */
+export function prioritiesPayload({ products = potentialPayload(), audience = audiencePayload(), content = contentPayload(), store = storePayload() } = {}) {
+  return buildPriorities({ products, audience, content, store, now: NOW });
 }
 
-export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200, overview = overviewPayload(), opportunities = buildOpportunities(NOW), lang = 'fr' } = {}) {
+/** What the server sends for Vue d'ensemble (server/overview.js): real store sales + the priorities; null = unavailable. */
+export function overviewPayload({ store = storePayload(), priorities = prioritiesPayload() } = {}) {
+  return buildOverview({ now: NOW, store, priorities });
+}
+
+export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200, overview = overviewPayload(), opportunities = prioritiesPayload(), lang = 'fr' } = {}) {
   const root = new Node('div');
   const errors = [];
   const listeners = {};
   const doc = { createElement: (t) => new Node(t), createElementNS: (_, t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: () => root, querySelector: () => null, documentElement: { lang: '' } };
-  const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/campaigns': buildDemoCampaigns(NOW), '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store };
+  const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store };
   const el = () => new Node('div');
   const ctx = {
     document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
@@ -81,7 +85,7 @@ export async function growthDom(hash, { products = potentialPayload(), productsS
   };
   ctx.window = ctx; ctx.window.addEventListener = (e, f) => { listeners[e] = f; }; ctx.window.scrollTo = () => {};
   vm.createContext(ctx);
-  for (const f of [new URL('i18n.js', ANALYTICS_UI), new URL('lang-fr.js', UI), new URL('lang-nl.js', UI), new URL('lang-en.js', UI), new URL('opportunities.js', UI), new URL('campaigns.js', UI), new URL('potential.js', UI), new URL('audience.js', UI), new URL('content.js', UI), new URL('store.js', UI), new URL('app.js', UI)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
+  for (const f of [new URL('i18n.js', ANALYTICS_UI), new URL('lang-fr.js', UI), new URL('lang-nl.js', UI), new URL('lang-en.js', UI), new URL('opportunities.js', UI), new URL('potential.js', UI), new URL('audience.js', UI), new URL('content.js', UI), new URL('store.js', UI), new URL('app.js', UI)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
   await new Promise((r) => setTimeout(r, 20));
   const navigate = async (h) => { ctx.location.hash = h; await listeners.hashchange(); };
   return { root, errors, navigate, ctx };

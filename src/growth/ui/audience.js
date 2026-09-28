@@ -151,8 +151,7 @@ function auSegRow(s) {
 }
 function auSegmentsCard(d) {
   const segs = d.mode === 'customer' ? d.segments.filter((s) => s.customers > 0) : [];
-  const head = cardHead('clients', t('gr.au.list.title', segs.length),
-    h('button', { type: 'button', class: 'btn-outline gr-action', disabled: 'disabled', title: t('gr.au.newSegmentSoon') }, t('gr.au.newSegment')));
+  const head = cardHead('clients', t('gr.au.list.title', segs.length));
   if (d.mode !== 'customer') return h('div', { class: 'ex-card gr-au-list' }, head, auNoCustomerLevel());
   const cols = ['segment', 'customers', 'frequency', 'revenue', 'aov', 'recency', 'statusAction'];
   return h('div', { class: 'ex-card gr-au-list' }, head,
@@ -212,8 +211,7 @@ function auDrawer(d) {
           h('p', { class: 'gr-pp-why' }, t(`gr.au.rule.${s.rule}`, auPct(s.revenueShare ?? 0), auPct(s.activeShare ?? 0), num(s.previousCustomers ?? 0), th.minGroup)),
           s.reasons.length ? h('div', { class: 'gr-pp-reasons' }, s.reasons.map((r) => chip(t(`gr.au.reason.${r}`, th.minCustomers, th.minGroup), 'mute'))) : null),
         h('section', { class: 'gr-pp-sec gr-pp-action' }, h('h3', null, t('gr.au.d.action')), chip(t(`gr.au.action.${s.action}`), s.action === 'none' ? 'mute' : 'gr-info'),
-          h('p', { class: 'gr-pp-action-text' }, t(`gr.au.actionText.${s.action}`)),
-          s.opportunity ? h('button', { type: 'button', class: 'btn-outline gr-action', disabled: 'disabled', title: t('gr.pp.d.opportunitySoon') }, t('gr.pp.d.opportunity')) : null),
+          h('p', { class: 'gr-pp-action-text' }, t(`gr.au.actionText.${s.action}`))),
         h('section', { class: 'gr-pp-sec' }, h('p', { class: 'gr-pp-action-text' }, t('gr.au.d.method'))))));
 }
 if (typeof document !== 'undefined' && document.addEventListener) {

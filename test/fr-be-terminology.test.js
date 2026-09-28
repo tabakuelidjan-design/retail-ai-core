@@ -1,6 +1,6 @@
 // fr-BE customer-facing terminology (owner decisions 2026-09-28): the words for the different "approval" actions must stay distinct.
 //   sales document becoming official -> ÉMETTRE ; supplier invoice checked -> VALIDER LA FACTURE ;
-//   decision proposed by Nordla -> Valider (or Refuser) ; shared system -> Validations ; Analyses' « définition approuvée » unchanged.
+//   Développement des ventes: no approval action (removed 2026-09-28) ; Analyses' « définition approuvée » unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -35,10 +35,11 @@ test('Finances: checking a supplier invoice is "Valider la facture"', () => {
   assert.match(fr['{0} supplier invoice(s) require validation'], /valider/iu);
 });
 
-test('Nordla decisions are "Valider", the shared system is "Validations"; Analyses keeps « définition approuvée »', () => {
+test('Développement des ventes has no approval button (removed 2026-09-28) and never says "approuver"; Analyses keeps « définition approuvée »', () => {
   const gr = dict('src/growth/ui/lang-fr.js');
-  assert.equal(gr['gr.op.appr.approve'], 'Valider');
-  assert.match(gr['gr.att.soon'], /page Validations/u);
+  assert.equal(gr['gr.op.appr.approve'], undefined);
+  assert.equal(gr['gr.att.soon'], undefined);
+  assert.ok(Object.values(gr).every((v) => typeof v !== 'string' || !/approuv|approbation/iu.test(v)));
   const an = dict('src/analytics-premium/ui/lang-fr.js');
   const approuvee = Object.values(an).filter((v) => typeof v === 'string' && /approuvée/u.test(v));
   assert.equal(approuvee.length, 3, 'the three « définition / règle approuvée » texts stay unchanged');

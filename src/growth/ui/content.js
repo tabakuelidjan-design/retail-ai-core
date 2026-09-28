@@ -152,8 +152,7 @@ function ctDrawer(d) {
         r.problems.length ? h('section', { class: 'gr-pp-sec' }, h('h3', null, t('gr.ct.d.reco')),
           h('ol', { class: 'gr-ct-reco' }, r.problems.map((code) => h('li', null, h('strong', null, t(`gr.ct.reco.${code}`)), h('span', { class: 'gr-pp-sub' }, t(`gr.ct.recoHow.${code}`)))))) : null,
         h('section', { class: 'gr-pp-sec' }, h('h3', null, t('gr.ct.d.unverified')), h('p', { class: 'gr-pp-action-text' }, unverified.join(', '))),
-        h('section', { class: 'gr-pp-sec gr-pp-action' },
-          h('button', { type: 'button', class: 'btn-outline gr-action', disabled: 'disabled', title: t('gr.ct.d.improveSoon') }, t('gr.ct.d.improve')),
+        h('section', { class: 'gr-pp-sec' },
           h('p', { class: 'gr-pp-action-text' }, t('gr.ct.d.method'))))));
 }
 if (typeof document !== 'undefined' && document.addEventListener) {
