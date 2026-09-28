@@ -41,13 +41,18 @@ async function browser() {
   await send('Page.enable'); await send('Runtime.enable');
   const errors = [];
   ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value ?? a.description).join(' ')); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.text); });
-  const b = {
+  let b;
+  b = {
     errors,
-    async open(url, width = 1440, height = 900) {
+    // Waits until the page left its loading state (polling, not a fixed delay: the suite runs files in parallel and a busy
+    // machine must not make a test flaky). `ready: false` returns as soon as the shell is on screen (to observe loading).
+    async open(url, width = 1440, height = 900, { ready = true } = {}) {
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768 });
       await send('Page.navigate', { url: 'about:blank' });
       await send('Page.navigate', { url });
-      await sleep(700);
+      const cond = ready ? `!!document.querySelector('.ex-title') && !document.querySelector('.gr-state-loading')` : `!!document.querySelector('.ex-title')`;
+      for (let i = 0; i < 100; i += 1) { if (await b.eval(cond)) break; await sleep(100); }
+      await sleep(150);
     },
     async eval(expr) { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result?.result?.value; },
     async key(key, { shift = false } = {}) {
@@ -90,13 +95,13 @@ test('browser: loading is distinct from error; error is typed and safe; Réessay
   const app = await serve({ ...sources(), productPotential: slow, audience: null });
   const b = await browser();
   try {
-    await b.open(`${app.base}/#/potential`, 1280);
+    await b.open(`${app.base}/#/potential`, 1280, 900, { ready: false });
     const loading = JSON.parse(await b.eval(`JSON.stringify({ loading: !!document.querySelector('.gr-state-loading'), error: !!document.querySelector('.gr-state-error'), text: document.querySelector('main').innerText, pill: document.querySelector('.period-pill').textContent })`));
     assert.equal(loading.loading, true, 'a real loading state');
     assert.equal(loading.error, false);
     assert.ok(!/Données indisponibles/.test(loading.text), 'loading never says "unavailable"');
     assert.match(loading.pill, /8 dernières semaines/);
-    await sleep(1600);
+    for (let i = 0; i < 60 && !(await b.eval(`!!document.querySelector('.gr-state-error')`)); i += 1) await sleep(100);
     const err = JSON.parse(await b.eval(`JSON.stringify({ error: !!document.querySelector('.gr-state-error'), role: document.querySelector('.gr-state-error')?.getAttribute('role'), text: document.querySelector('.gr-state-error')?.innerText, retry: !!document.querySelector('.gr-state-retry'), pill: document.querySelector('.period-pill').textContent })`));
     assert.equal(err.error, true);
     assert.equal(err.role, 'alert');
@@ -108,7 +113,7 @@ test('browser: loading is distinct from error; error is typed and safe; Réessay
     await b.eval(`document.querySelector('.gr-state-retry').click(); 1`);
     await sleep(300);
     assert.equal(await b.eval(`!!document.querySelector('.gr-state-loading')`), true, 'retry shows loading again');
-    await sleep(1600);
+    for (let i = 0; i < 60 && !(await b.eval(`document.querySelectorAll('.gr-pp-row').length > 0`)); i += 1) await sleep(100);
     assert.ok(await b.eval(`document.querySelectorAll('.gr-pp-row').length`) > 0, 'retry loaded the data');
     assert.equal(calls, 2);
     // Tenant not configured: its own safe message; Audience keeps its 90-day period in the error state.
