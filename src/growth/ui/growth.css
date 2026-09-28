@@ -525,3 +525,12 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-pp-thead.gr-ct-thead, .gr-pp-row.gr-ct-row { grid-template-columns: minmax(170px, 2fr) minmax(84px, .8fr) minmax(160px, 1.8fr) minmax(100px, .8fr) minmax(60px, .5fr) 28px; }
   .gr-pp-thead.gr-ct-thead > span:nth-child(6), .gr-ct-row .gr-ct-c-act { display: none; }
 }
+
+/* Mobile bar (2026-09-28): an item is never narrower than its longest word, so "Opportunités" / NL "Productpotentieel" no longer
+   run into the next item; items stay equal whenever there is room. Very small phones (<= 360px) get slightly tighter bar
+   margins so the widest language still fits without shrinking the labels or cutting a word. */
+@media (max-width: 900px) { .sidebar .nav-item { min-width: auto; } }
+@media (max-width: 360px) { .sidebar { padding-left: 2px; padding-right: 2px; } .sidebar .nav-item { padding-left: 1px; padding-right: 1px; } }
+/* Contenu / Croissance magasin KPI tiles on very small phones: two tiles per row leave ~50px next to the icon, which cut the
+   labels ("Commandes magasin") and pushed a note outside the page at 320px. The icon goes above the text there only. */
+@media (max-width: 360px) { .gr-ct-kpis .ex-kpi { flex-direction: column; align-items: flex-start; gap: 8px; } .gr-ct-kpis .ex-kpi-body { width: 100%; min-width: 0; } }

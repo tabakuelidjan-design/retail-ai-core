@@ -342,3 +342,28 @@ test('post-fix navigation Plus @390: FR/NL/EN, Contenu and Croissance magasin re
     assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);
   } finally { await b.close(); await app.close(); }
 });
+
+test('mobile bar @320 / 375 / 390 in FR / NL / EN: no item overlaps or spills into its neighbour; no page overflow (Croissance magasin @320)', { skip, timeout: 120000 }, async () => {
+  const app = await serve(sources()); const b = await browser();
+  try {
+    for (const w of [320, 375, 390]) {
+      for (const pg of ['', 'storeGrowth']) {
+        await b.open(`${app.base}/#/${pg}`, w, 844);
+        for (const lang of ['FR', 'NL', 'EN']) {
+          const r = JSON.parse(await b.eval(`(async () => {
+            const btn = [...document.querySelectorAll('button')].find((x) => x.innerText.trim() === '${lang}'); if (btn) { btn.click(); await new Promise((s) => setTimeout(s, 300)); }
+            const items = [...document.querySelectorAll('.sidebar .nav-item')].filter((e) => e.getBoundingClientRect().width > 0);
+            const rs = items.map((e) => e.getBoundingClientRect());
+            const spill = items.filter((e) => { const r = e.getBoundingClientRect(); const tw = document.createTreeWalker(e, NodeFilter.SHOW_TEXT); let n; while ((n = tw.nextNode())) { if (!n.textContent.trim()) continue; const g = document.createRange(); g.selectNodeContents(n); for (const q of g.getClientRects()) if (q.left < r.left - 0.5 || q.right > r.right + 0.5) return true; } return false; }).map((e) => e.innerText);
+            return JSON.stringify({ n: items.length, overlap: rs.some((r, i) => i && r.left < rs[i - 1].right - 0.5), spill, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth });
+          })()`));
+          const at = `${pg || 'overview'} @${w} ${lang}`;
+          assert.equal(r.n, 6, `${at}: 6 bar items`);
+          assert.equal(r.overlap, false, `${at}: items overlap`);
+          assert.deepEqual(r.spill, [], `${at}: label spills out of its item`);
+          assert.ok(r.sw <= r.cw, `${at}: page overflow ${r.sw} > ${r.cw}`);
+        }
+      }
+    }
+  } finally { await b.close(); await app.close(); }
+});
