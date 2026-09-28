@@ -108,3 +108,28 @@ test('migration: RLS enabled on both tables, no policy, no privilege for anon / 
   assert.match(SQL, /revoke all on table identity_events from anon, authenticated;/);
   assert.ok(!/\bgrant\b/i.test(SQL), 'nothing is granted');
 });
+
+// ---------- C1b migration contract (identity_rate_limits) ----------
+const RL_FILE = '20260928130000_identity_rate_limits.sql';
+const RL_RAW = readFileSync(new URL(`../supabase/migrations/${RL_FILE}`, import.meta.url), 'utf8').replace(/\r\n?/g, '\n');
+const RL = RL_RAW.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
+
+test('C1b migration: not applied, additive, HMAC subjects only (no e-mail / IP column), RLS without policy', () => {
+  assert.match(RL_RAW, /NOT APPLIED anywhere/);
+  assert.deepEqual([...RL.matchAll(/create table (\w+)/g)].map((m) => m[1]), ['identity_rate_limits']);
+  assert.ok(!/\bdrop\b/i.test(RL) && !/\binsert\s+into\s+(?!public\.identity_rate_limits)/i.test(RL), 'no DROP, no write outside its own table');
+  const body = /create table identity_rate_limits \(([\s\S]*?)\n\);/.exec(RL)[1];
+  const columns = body.split('\n').map((l) => l.trim().split(/\s+/)[0]).filter((c) => c && !/^(primary|\))/.test(c));
+  assert.deepEqual(columns, ['dimension', 'subject_hmac', 'window_started_at', 'failures', 'blocked_until', 'updated_at']);
+  assert.match(body, /subject_hmac ~ '\^\[0-9a-f\]\{64\}\$'/);
+  assert.match(body, /dimension in \('email', 'ip'\)/);
+  assert.match(body, /primary key \(dimension, subject_hmac\)/);
+  assert.match(RL, /create index identity_rate_limits_updated_idx on identity_rate_limits \(updated_at\);/);
+  assert.match(RL, /create index identity_rate_limits_blocked_idx on identity_rate_limits \(blocked_until\) where blocked_until is not null;/);
+  assert.match(RL, /alter table identity_rate_limits enable row level security;/);
+  assert.ok(!/create policy/i.test(RL) && !/\bgrant\b/i.test(RL));
+  assert.match(RL, /revoke all on table identity_rate_limits from anon, authenticated;/);
+  assert.match(RL, /revoke execute on function identity_rate_limit_record_failure\([^)]*\) from public, anon, authenticated;/);
+  assert.match(RL, /security invoker set search_path = ''/);
+  assert.ok(!/cron|schedule/i.test(RL), 'no clean-up job in C1b');
+});

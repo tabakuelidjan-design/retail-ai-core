@@ -12,6 +12,8 @@ function matches(row, filters) {
   return Object.entries(filters).every(([k, v]) => {
     if (['select', 'order', 'limit', 'offset'].includes(k)) return true;
     if (v === 'is.null') return row[k] === null || row[k] === undefined;
+    const inList = /^in\.\((.*)\)$/.exec(v);
+    if (inList) return inList[1].split(',').includes(String(row[k]));
     const m = /^eq\.(.*)$/.exec(v);
     if (!m) throw new Error(`fake identity db: unsupported filter ${k}=${v}`);
     return String(row[k]) === m[1];
@@ -20,7 +22,7 @@ function matches(row, filters) {
 
 /** @param {{ merchants?: string[] }} [o] merchant ids that exist (foreign keys) */
 export function createIdentityDb({ merchants = [] } = {}) {
-  const tables = { app_sessions: [], identity_events: [] };
+  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [] };
   const calls = [];
   let failNext = null;
   let eventSeq = 0;
@@ -70,6 +72,24 @@ export function createIdentityDb({ merchants = [] } = {}) {
       }
       for (const r of hit) Object.assign(r, patch);
       return hit.map(copy);
+    },
+    // Same rule as the SQL function identity_rate_limit_record_failure (C1b migration; verified for real in PGlite).
+    async rpc(fn, a) {
+      calls.push({ op: 'rpc', fn }); maybeFail();
+      if (fn !== 'identity_rate_limit_record_failure') throw new Error(`fake identity db: unknown function ${fn}`);
+      if (!['email', 'ip'].includes(a.p_dimension) || !/^[0-9a-f]{64}$/.test(a.p_subject)) throw dbError('check violation (identity_rate_limits)');
+      if (!(a.p_window_seconds >= 60 && a.p_window_seconds <= 86400 && a.p_max_failures >= 1 && a.p_max_failures <= 1000 && a.p_block_seconds >= 60 && a.p_block_seconds <= 86400)) throw dbError('invalid limits');
+      const now = ms(a.p_now);
+      let r = tables.identity_rate_limits.find((x) => x.dimension === a.p_dimension && x.subject_hmac === a.p_subject);
+      if (!r) { r = { dimension: a.p_dimension, subject_hmac: a.p_subject, window_started_at: a.p_now, failures: 1, blocked_until: null, updated_at: a.p_now }; tables.identity_rate_limits.push(r); }
+      else {
+        const expired = ms(r.window_started_at) <= now - a.p_window_seconds * 1000;
+        r.failures = expired ? 1 : r.failures + 1;
+        if (expired) r.window_started_at = a.p_now;
+        r.updated_at = new Date(Math.max(ms(r.updated_at), now)).toISOString();
+      }
+      if (r.failures >= a.p_max_failures) r.blocked_until = new Date(Math.max(r.blocked_until ? ms(r.blocked_until) : now, now + a.p_block_seconds * 1000)).toISOString();
+      return r.blocked_until && ms(r.blocked_until) > now ? r.blocked_until : null;
     },
     async delete(table) {
       calls.push({ op: 'delete', table }); maybeFail();
