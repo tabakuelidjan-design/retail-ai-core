@@ -44,8 +44,10 @@ test('proof 1 - Vue d\'ensemble payload: every number comes from Campagnes (and 
     assert.deepEqual([c.name, c.spend, c.budget, c.newCustomers], [r.title, r.spend, r.budget, r.newCustomers]);
   }
   // Unavailable = null (never 0, never a former demo value).
-  for (const k of ['revenueInfluenced', 'activeOpportunities', 'experimentsRunning']) assert.equal(d.kpis[k], null, k);
-  for (const k of ['pulse', 'insights', 'attention', 'content', 'opportunities', 'experiments']) assert.equal(d[k], null, k);
+  for (const k of ['revenueInfluenced', 'activeOpportunities']) assert.equal(d.kpis[k], null, k);
+  for (const k of ['pulse', 'insights', 'attention', 'content', 'opportunities']) assert.equal(d[k], null, k);
+  assert.equal('experimentsRunning' in d.kpis, false, 'Expériences is not part of the product');
+  assert.equal('experiments' in d, false);
   for (const c of d.channels) assert.deepEqual([c.reach, c.reachKind, c.conversion], [null, null, null], c.id);
 });
 

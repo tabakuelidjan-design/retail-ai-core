@@ -6,7 +6,7 @@
 //   - store sales: the real figure of Croissance magasin's engine, added by the server as `real.store`;
 //   - store footfall / visitors / conversion: NOT CONNECTED (no source exists);
 //   - everything else (revenue influenced by Growth, opportunities, Nordla AI insights, items needing attention, social content
-//     performance, channel reach / conversion, experiments): no Nordla engine produces it today -> `null` = "source non connectée".
+//     performance, channel reach / conversion): no Nordla engine produces it today -> `null` = "source non connectée".
 // An unavailable figure is null - never 0, never a former demo value.
 
 import { buildDemoCampaigns } from './demo-campaigns.js';
@@ -20,13 +20,12 @@ export function buildOverview(now = new Date()) {
     currency: camp.currency,
     generatedAt: now.toISOString(),
     period: camp.period,
-    sources: { campaigns: 'demo', store: 'real', footfall: 'notConnected', attribution: 'notConnected', opportunities: 'notConnected', ai: 'notConnected', content: 'notConnected', experiments: 'notBuilt' },
+    sources: { campaigns: 'demo', store: 'real', footfall: 'notConnected', attribution: 'notConnected', opportunities: 'notConnected', ai: 'notConnected', content: 'notConnected' },
     kpis: {
       revenueInfluenced: null,
       activeOpportunities: null,
       activeCampaigns: { value: running.length, performingWell: running.filter((c) => c.performance >= 1).length },
       roas: { value: camp.kpis.roas.value, deltaPct: Math.round((camp.kpis.roas.value / camp.kpis.roas.previous - 1) * 1000) / 1000 },
-      experimentsRunning: null,
     },
     pulse: null,
     insights: null,
@@ -41,6 +40,5 @@ export function buildOverview(now = new Date()) {
     content: null,
     store: { footfallConnected: false },
     opportunities: null,
-    experiments: null,
   };
 }

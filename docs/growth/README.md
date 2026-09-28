@@ -4,6 +4,10 @@ Run locally: `npm run growth` → http://127.0.0.1:4413 (loopback only, no hoste
 
 Reference captures (demonstration data, FR): `growth-overview-desktop-1440.png`, `growth-overview-mobile-375.png`.
 
+## Feuille de route (idées futures, non prioritaires)
+- **Expériences** : suivre des tests commerciaux (offre, vitrine, prix) et leur résultat. Idée future, non prioritaire, non planifiée ;
+  aucun code, aucune route, aucun écran, aucune entrée de menu. À rouvrir seulement sur décision du propriétaire.
+
 ## Architecture
 Finance, Analytics and Growth are **separate Nordla modules**, each usable and sellable on its own. Each keeps its own
 navigation; they share the Nordla design system and reuse compatible components. Growth does not depend on Finance or
@@ -11,16 +15,18 @@ Analytics to work: it imports none of their code and calls none of their service
 the shared design-system files (`src/shared`) and Analytics' stylesheet/tokens/i18n runtime (see "Reuse").
 
 ## Scope
-Built: **Growth Overview** (`#/`), **Opportunités** (`#/opportunities`) and **Campagnes** (`#/campaigns`). Content,
-Store Growth, Audience and Experiments are not started.
+Built (7 pages, customer-facing name « Développement des ventes »): **Vue d'ensemble** (`#/`), **Opportunités**
+(`#/opportunities`), **Campagnes** (`#/campaigns`), **Produits Potentiels** (`#/potential`), **Audience** (`#/audience`),
+**Contenu** (`#/content`), **Croissance magasin** (`#/storeGrowth`). Exact data status per page:
+`GROWTH_DEEP_AUDIT.md` « Inventaire exact des pages ».
 
 ## Navigation (Growth's own)
-- Rail: Overview · Opportunities · Campaigns · Content · Store Growth · Audience · Experiments — then, in the bottom
-  zone: Nordla AI · Settings. Overview, Opportunities and Campaigns are links (the current one is active); the others are disabled
-  ("Bientôt disponible"), never dead links. Routing is internal to Growth (hash routes, one payload per page, cached).
-- Mobile bottom bar (5 slots, same density as Analytics): Overview · Opportunities · Campaigns · Content · Nordla AI.
-  Store Growth, Audience, Experiments and Settings are desktop-only while they are not built; when they are, the bar
-  will need a "More" entry (Finance's pattern).
+- Rail: Vue d'ensemble · Opportunités · Campagnes · Produits Potentiels · Contenu · Croissance magasin · Audience — then, in
+  the bottom zone: Nordla AI · Paramètres, which are disabled entries only (« Bientôt disponible », no page, no route, no API).
+  Routing is internal to Growth (hash routes, one payload per page, cached).
+- Mobile bottom bar: Vue d'ensemble · Opportunités · Campagnes · Produits Potentiels · Audience · Plus; the « Plus » panel holds
+  Contenu, Croissance magasin and the two disabled entries.
+- Expériences is **not** in the product (removed from the menu, the Overview tiles and cards on 2026-09-28): see « Feuille de route ».
 - Approvals and Decision Ledger are not exposed; they may be added later as dedicated pages.
 
 ## Reuse (no new visual system)

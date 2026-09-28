@@ -55,7 +55,7 @@ test('growth UI: no demonstration value lives in the UI - the data source can be
   const demoLiterals = [
     ...d.channels.map((c) => c.name),
     ...[...d.insights, ...d.attention, ...d.opportunities].map((x) => x.title.fr),
-    ...d.campaigns.map((c) => c.name.fr), ...d.content.map((c) => c.title.fr), ...d.experiments.map((x) => x.name.fr),
+    ...d.campaigns.map((c) => c.name.fr), ...d.content.map((c) => c.title.fr),
     '12540', '12 540', '39600', '4860', '14380', '3.2', "'EUR'",
   ];
   for (const v of demoLiterals.filter((v) => v !== "'EUR'")) assert.ok(!src.includes(v), `demo value hardcoded in UI: ${v}`);
@@ -68,10 +68,10 @@ test('growth UI: no demonstration value lives in the UI - the data source can be
   for (const x of [...d.insights, ...d.attention, ...d.opportunities]) assert.equal(x.icon, undefined, 'the data source never names icons');
 });
 
-test('growth UI: sidebar is Growth\'s own navigation (7 built pages + disabled entries Expériences, Nordla AI, Paramètres), no other Nordla module', async () => {
+test('growth UI: sidebar is Growth\'s own navigation (7 built pages + disabled entries Nordla AI, Paramètres), no other Nordla module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'campaigns', 'potential', 'content', 'storeGrowth', 'audience', 'experiments']);
+  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'campaigns', 'potential', 'content', 'storeGrowth', 'audience']);
   assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['ai', 'settings']);
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
@@ -111,9 +111,9 @@ test('overview sample (connected-mode fixture): figures are internally consisten
   assert.equal(d.kpis.activeOpportunities.value, opp.pipeline.length, 'Overview active opportunities = the Opportunités pipeline');
   assert.equal(d.kpis.activeOpportunities.highPriority, opp.pipeline.filter((o) => o.priority === 'high').length);
   assert.ok(d.opportunities.every((o) => opp.pipeline.some((p) => p.id === o.id && p.revenue === o.estimate && p.status === o.status)));
-  // Expériences is not built: no running experiment anywhere.
-  assert.deepEqual(d.experiments, []);
-  assert.equal(d.kpis.experimentsRunning.value, null);
+  // Expériences is not part of the product: no experiment field at all.
+  assert.equal('experiments' in d, false);
+  assert.equal('experimentsRunning' in d.kpis, false);
   // Deterministic: same day, same payload.
   assert.deepEqual(buildDemoOverview(new Date('2026-09-26T18:00:00Z')).pulse, d.pulse);
 });
@@ -131,7 +131,7 @@ test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and ever
   // Keys built from a prefix + data value (t(`gr.x.${v}`)) must exist for every value the demo payload uses.
   const d = buildDemoOverview(new Date('2026-09-26T10:00:00Z'));
   const dyn = [
-    ...['overview', 'opportunities', 'campaigns', 'content', 'storeGrowth', 'audience', 'experiments', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
+    ...['overview', 'opportunities', 'campaigns', 'content', 'storeGrowth', 'audience', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
     ...d.attention.flatMap((a) => [`gr.att.status.${a.status}`, `gr.att.action.${a.action}`]),
     ...d.channels.map((c) => `gr.ch.unit.${c.reachKind}`),
     ...d.campaigns.map((c) => `gr.camp.status.${c.status}`),
@@ -167,7 +167,7 @@ test('growth UI: every icon it asks for is a Growth pack file on disk or a valid
     assert.ok(ICONS[name], `${name} is not an official Nordla icon`);
   }
   // The five former TEMP_ICON concepts now use their own pack icons.
-  for (const [k, v] of Object.entries({ opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', experiments: 'pack:experiments', aiInsights: 'pack:aiInsights', needsAttention: 'pack:needsAttention' })) assert.equal(aliasMap[k], v, k);
+  for (const [k, v] of Object.entries({ opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', aiInsights: 'pack:aiInsights', needsAttention: 'pack:needsAttention' })) assert.equal(aliasMap[k], v, k);
 });
 
 test('overview sample: no store footfall, visitors, conversion or demo store sales (deep audit P1-2)', () => {

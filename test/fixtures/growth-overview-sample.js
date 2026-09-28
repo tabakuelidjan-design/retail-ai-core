@@ -1,7 +1,7 @@
 // TEST FIXTURE (moved from src/growth/server/demo-overview.js, 2026-09-28): a CONNECTED Overview payload example, used only to test
 // that the Overview cards render correctly once real sources exist. Never served: the server builds server/overview.js.
 // Growth Overview - DEMONSTRATION data only (`demo: true`). No Growth source is connected yet (ad platforms,
-// social accounts, store counters, experiments), so every figure below is an illustrative example chosen to be
+// social accounts, store counters), so every figure below is an illustrative example chosen to be
 // internally consistent (channel revenues add up to the influenced revenue, ROAS = paid revenue / spend, the
 // daily series add up to the 30-day totals). It is deterministic (no randomness) and generic: no retailer name.
 // When real sources exist, this file is replaced by a deterministic builder over synced data - the payload
@@ -10,7 +10,6 @@
 // Deep audit 2026-09-28 (P1-2 / P1-3): no demo value may contradict a real Growth page or show a capability Nordla does not have.
 //   - store footfall, store visitors and store conversion: NOT CONNECTED (no source exists) - no value at all;
 //   - store sales: never a demo value - the server adds the real figure (`real.store`, Croissance magasin's own engine);
-//   - experiments: the Expériences page is not built - no running experiment is shown;
 //   - campaigns and opportunities: counts, ROAS and lists are DERIVED from the Campagnes / Opportunités demos (one source).
 
 import { buildDemoCampaigns } from '../../src/growth/server/demo-campaigns.js';
@@ -56,7 +55,6 @@ export function buildDemoOverview(now = new Date()) {
       activeOpportunities: { value: opp.kpis.potentialRevenue.active, highPriority: opp.kpis.priority.high },
       activeCampaigns: { value: running.length, performingWell: running.filter((c) => c.performance >= 1).length },
       roas: { value: camp.kpis.roas.value, deltaPct: Math.round((camp.kpis.roas.value / camp.kpis.roas.previous - 1) * 1000) / 1000 },
-      experimentsRunning: { value: null, available: false },
     },
     pulse: {
       dates,
@@ -97,7 +95,5 @@ export function buildDemoOverview(now = new Date()) {
     store: { footfallConnected: false },
     opportunities: opp.pipeline.slice().sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || b.revenue - a.revenue).slice(0, 3)
       .map((o) => ({ id: o.id, source: o.source, title: o.title, priority: o.priority, estimate: o.revenue, status: o.status })),
-    // The Expériences page is not built: no experiment is listed.
-    experiments: [],
   };
 }

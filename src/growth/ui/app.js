@@ -61,10 +61,10 @@ function packIcon(file, size) {
 const GROWTH_ICONS = {
   // navigation
   overview: 'pack:overview', opportunities: 'pack:opportunities', campaigns: 'pack:campaigns', content: 'pack:content',
-  storeGrowth: 'pack:storeGrowth', audience: 'pack:audience', experiments: 'pack:experiments', settings: 'pack:settings',
+  storeGrowth: 'pack:storeGrowth', audience: 'pack:audience', settings: 'pack:settings',
   // Overview page
   revenueInfluenced: 'chiffreAffaires', activeOpportunities: 'pack:opportunities', topOpportunities: 'pack:opportunities',
-  activeCampaigns: 'pack:campaigns', roas: 'croissance', experimentsRunning: 'pack:experiments', aiInsights: 'pack:aiInsights',
+  activeCampaigns: 'pack:campaigns', roas: 'croissance', aiInsights: 'pack:aiInsights',
   needsAttention: 'pack:needsAttention', growthPulse: 'croissance', channelPerformance: 'croissance', contentPerformance: 'meilleurProduit',
   // Opportunités page
   potentialRevenue: 'chiffreAffaires', approvals: 'pack:approvals', inProgress: 'synchronisation', wins: 'meilleurProduit',
@@ -136,7 +136,6 @@ const GROWTH_NAV = [
   { key: 'content', icon: 'content', href: '#/content', more: true },
   { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth', more: true },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
-  { key: 'experiments', icon: 'experiments', more: true },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
@@ -240,13 +239,12 @@ const ncBody = (text) => h('div', { class: 'gr-pp-empty gr-nc' }, h('strong', { 
 const kpiNote = (count, text, tone) => h('div', { class: `ex-delta gr-kpi-note${tone ? ` ${tone}` : ''}` }, h('strong', null, String(count)), h('span', null, text));
 function kpiRow(d) {
   const k = d.kpis;
-  return h('div', { class: 'ex-kpi-row gr-kpi-row' },
+  // 4 tiles: same layout as the other 4-tile Growth rows (gr-pp-kpis).
+  return h('div', { class: 'ex-kpi-row gr-kpi-row gr-pp-kpis' },
     k.revenueInfluenced ? kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), money(k.revenueInfluenced.value), delta(k.revenueInfluenced.deltaPct)) : kpi('revenueInfluenced', t('gr.kpi.revenueInfluenced'), t('gr.dash'), ncNote()),
     k.activeOpportunities ? kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), num(k.activeOpportunities.value), kpiNote(k.activeOpportunities.highPriority, t('gr.kpi.highPriority'), 'warn')) : kpi('activeOpportunities', t('gr.kpi.activeOpportunities'), t('gr.dash'), ncNote()),
     kpi('activeCampaigns', t('gr.kpi.activeCampaigns'), num(k.activeCampaigns.value), kpiNote(k.activeCampaigns.performingWell, t('gr.kpi.performingWell'), 'good')),
-    kpi('roas', t('gr.kpi.roas'), roasFmt(k.roas.value), delta(k.roas.deltaPct)),
-    // Expériences is not built: no running-experiment figure (never a demo count).
-    kpi('experimentsRunning', t('gr.kpi.experimentsRunning'), k.experimentsRunning && k.experimentsRunning.value != null ? num(k.experimentsRunning.value) : t('gr.dash'), h('div', { class: 'ex-kpi-note' }, t('gr.kpi.experimentsSoon'))));
+    kpi('roas', t('gr.kpi.roas'), roasFmt(k.roas.value), delta(k.roas.deltaPct)));
 }
 
 // ---------- Growth Pulse (NordlaCharts.trendLines / trendLine, the Analytics/Finance chart components) ----------
@@ -425,14 +423,6 @@ function opportunitiesCard(d) {
     h('div', { class: 'ex-foot' }, t('gr.opp.foot')));
 }
 
-// ---------- Experiments ----------
-// The Expériences page is not built yet: the card states it (same card, no demo experiment).
-function experimentsCard() {
-  return h('div', { class: 'ex-card gr-exps' },
-    cardHead('experiments', t('gr.exp.title')),
-    h('div', { class: 'gr-pp-empty' }, t('gr.exp.soon')));
-}
-
 // ---------- pages + router ----------
 // Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/campaigns' = Campagnes, '#/potential' = Produits Potentiels, '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Each page's payload is fetched once
 // and cached; a language or filter change re-renders from the cache.
@@ -456,7 +446,7 @@ function renderOverview(main, safe) {
   main.appendChild(safe(kpiRow));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(pulseCard), safe(insightsCard), safe(attentionCard)));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(channelCard), safe(campaignsCard), safe(contentCard)));
-  main.appendChild(h('div', { class: 'gr-grid gr-grid-wide' }, safe(storeCard), safe(opportunitiesCard), safe(experimentsCard)));
+  main.appendChild(h('div', { class: 'ex-grid-2 even' }, safe(storeCard), safe(opportunitiesCard)));
 }
 
 function render() {

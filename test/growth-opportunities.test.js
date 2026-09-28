@@ -101,10 +101,10 @@ test('opportunities UI (connected sample): renders without error, sidebar marks 
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Opportunités');
   const nav = navState(root);
-  assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Expériences', 'Plus', 'Nordla AI', 'Paramètres']);
+  assert.deepEqual(nav.map((n) => n.label), ['Vue d’ensemble', 'Opportunités', 'Campagnes', 'Produits Potentiels', 'Contenu', 'Croissance magasin', 'Audience', 'Plus', 'Nordla AI', 'Paramètres']);
   assert.deepEqual(nav.filter((n) => n.active).map((n) => n.label), ['Opportunités']);
   assert.deepEqual(nav.filter((n) => n.href).map((n) => [n.label, n.href]), [['Vue d’ensemble', '#/'], ['Opportunités', '#/opportunities'], ['Campagnes', '#/campaigns'], ['Produits Potentiels', '#/potential'], ['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth'], ['Audience', '#/audience']]);
-  assert.equal(nav.filter((n) => n.inert).length, 3, 'Expériences + Nordla AI + Paramètres stay disabled');
+  assert.equal(nav.filter((n) => n.inert).length, 2, 'Nordla AI + Paramètres stay disabled (Expériences is not in the menu)');
   // Page content: 5 KPIs, 12 pipeline rows, 3 approvals.
   assert.equal(all(root, (n) => hasClass(n, 'ex-kpi')).length, 5);
   assert.equal(all(root, (n) => n.tagName === 'TR' && n.children.length === 8 && n.children[0].tagName === 'TD').length, 12);

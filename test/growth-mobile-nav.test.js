@@ -32,8 +32,8 @@ test('mobile nav: Plus opens a panel with Contenu, Croissance magasin and the di
   const links = all(p, (n) => n.tagName === 'A').map((n) => [text(n), n.getAttribute('href')]);
   assert.deepEqual(links, [['Contenu', '#/content'], ['Croissance magasin', '#/storeGrowth']]);
   const disabled = all(p, (n) => hasClass(n, 'gr-more-item') && hasClass(n, 'inert'));
-  assert.deepEqual(disabled.map((n) => n.getAttribute('aria-disabled')), ['true', 'true', 'true']);
-  assert.ok(text(disabled[0]).startsWith('Expériences') && text(disabled[1]).startsWith('Nordla AI') && text(disabled[2]).startsWith('Paramètres'));
+  assert.deepEqual(disabled.map((n) => n.getAttribute('aria-disabled')), ['true', 'true']);
+  assert.ok(text(disabled[0]).startsWith('Nordla AI') && text(disabled[1]).startsWith('Paramètres'), 'Expériences is no longer in the menu');
   assert.ok(text(disabled[0]).includes('Bientôt disponible'));
   await navigate('#/content');
   assert.equal(panel(root), undefined, 'the panel closes after navigation');

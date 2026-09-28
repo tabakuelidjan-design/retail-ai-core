@@ -559,10 +559,10 @@ Une entrée grisée « Bientôt disponible » n'est **pas** une page. Développe
 | Audience | Oui | Oui | Non | Non | `#/audience` · `GET /api/growth/audience` |
 | Contenu | Oui | Oui | Non | Non | `#/content` · `GET /api/growth/content` |
 | Croissance magasin | Oui | Oui | Non | Non | `#/storeGrowth` · `GET /api/growth/store` |
-| Expériences | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/experiments` → 404) |
+| Expériences | **Non** | — | — | **Non : retirée de l'interface** (2026-09-28) | Aucune (URL directe → Vue d'ensemble ; `/api/growth/experiments` → 404) |
 | Nordla AI | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/ai` → 404) |
 | Paramètres | **Non** | — | — | **Oui** | Aucune (URL directe → Vue d'ensemble ; `/api/growth/settings` → 404) |
 
-Pour Expériences, Nordla AI et Paramètres : aucun fichier de page, aucune définition dans `PAGES`, aucune route, aucun endpoint, aucun code métier. Seuls existent l'entrée de menu désactivée (`aria-disabled`, sans lien), son libellé et son icône de menu. Sur Vue d'ensemble, la tuile « Expériences en cours » et la carte « Expériences » affichent seulement « Bientôt disponible ». Test : `test/growth-unbuilt-entries.test.js`.
+Mise à jour 2026-09-28 : **Expériences est retirée de l'interface** (entrée de menu, tuile « Expériences en cours », carte « Bientôt disponible », textes FR / NL / EN) et reste seulement une idée future non prioritaire (`README.md`, « Feuille de route ») ; Nordla AI et Paramètres restent des entrées désactivées. Pour ces trois éléments : aucun fichier de page, aucune définition dans `PAGES`, aucune route, aucun endpoint, aucun code métier. Seuls existent l'entrée de menu désactivée (`aria-disabled`, sans lien), son libellé et son icône de menu. Sur Vue d'ensemble, la tuile « Expériences en cours » et la carte « Expériences » affichent seulement « Bientôt disponible ». Test : `test/growth-unbuilt-entries.test.js`.
 
 Fonctions totalement absentes, prévues plus tard (boutons désactivés ou états « non connecté », aucun code) : moteur d'expériences, recommandations Nordla AI, paramètres Growth, circuit de validation des opportunités, création de campagne / segment / opportunité, attribution du CA influencé, fréquentation et conversion magasin, performance du contenu social, authentification de Développement des ventes.
