@@ -118,7 +118,8 @@ for (const [mode, reason] of [['timeout', 'TIMEOUT'], ['network', 'NETWORK'], ['
     if (mode === 'timeout') assert.ok(Date.now() - started < 2000, 'the timeout aborts the request');
     const [e] = events(s.db);
     assert.equal(e.event_type, 'AUTH_UNAVAILABLE'); assert.deepEqual(e.detail, { reason });
-    assert.equal(s.db.table('identity_rate_limits').length, 0);
+    assert.ok(s.db.table('identity_rate_limits').every((r) => r.failures === 0), 'an outage is never counted as a failure');
+    assert.equal(s.db.table('identity_auth_reservations').length, 0, 'the reservation is released');
     for (const t of s.auth.issued) assert.ok(!s.everything().includes(t));
   });
 }
@@ -184,7 +185,7 @@ test('limits are configurable within safe bounds', async () => {
   for (const bad of [{ NORDLA_LOGIN_MAX_EMAIL_FAILURES: '1' }, { NORDLA_LOGIN_MAX_IP_FAILURES: '999' }, { NORDLA_LOGIN_WINDOW_MINUTES: '2' }, { NORDLA_LOGIN_BLOCK_MINUTES: 'forever' }, { NORDLA_LOGIN_MAX_EMAIL_FAILURES: '10', NORDLA_LOGIN_MAX_IP_FAILURES: '6' }]) {
     assert.throws(() => loadRateLimitConfig(bad), (e) => e.code === 'IDENTITY_CONFIG_INVALID' && !e.message.includes('forever'));
   }
-  assert.deepEqual({ ...loadRateLimitConfig({}) }, { maxEmailFailures: 5, maxIpFailures: 20, windowMinutes: 15, blockMinutes: 15, windowSeconds: 900, blockSeconds: 900 });
+  assert.deepEqual({ ...loadRateLimitConfig({}) }, { maxEmailFailures: 5, maxIpFailures: 20, windowMinutes: 15, blockMinutes: 15, reservationSeconds: 30, windowSeconds: 900, blockSeconds: 900 });
 });
 
 test('if the attempt store cannot be read, verification fails closed (UNAVAILABLE) without calling Supabase', async () => {

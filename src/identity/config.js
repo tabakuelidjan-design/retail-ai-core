@@ -66,6 +66,8 @@ export function loadIdentityConfig(env = process.env) {
 //   NORDLA_LOGIN_MAX_IP_FAILURES      failures per client address in one window    default 20  (5..200)
 //   NORDLA_LOGIN_WINDOW_MINUTES       counting window                              default 15  (5..60)
 //   NORDLA_LOGIN_BLOCK_MINUTES        block once a maximum is reached              default 15  (5..60)
+//   NORDLA_LOGIN_RESERVATION_SECONDS  lease of an attempt in flight (abandoned ones expire) default 30 (15..120; longer than the
+//                                     Supabase Auth timeouts, 8 s + 3 s)
 // Same rules as above: blank = default, whole numbers inside the bounds only, otherwise start-up is refused.
 // The HMAC key (NORDLA_IDENTITY_RATE_LIMIT_KEY) is a secret and is NOT read here: see src/identity/rate-limit.js.
 
@@ -74,13 +76,15 @@ export const RATE_LIMIT_ENV = Object.freeze({
   maxIpFailures: 'NORDLA_LOGIN_MAX_IP_FAILURES',
   windowMinutes: 'NORDLA_LOGIN_WINDOW_MINUTES',
   blockMinutes: 'NORDLA_LOGIN_BLOCK_MINUTES',
+  reservationSeconds: 'NORDLA_LOGIN_RESERVATION_SECONDS',
 });
-export const RATE_LIMIT_DEFAULTS = Object.freeze({ maxEmailFailures: 5, maxIpFailures: 20, windowMinutes: 15, blockMinutes: 15 });
+export const RATE_LIMIT_DEFAULTS = Object.freeze({ maxEmailFailures: 5, maxIpFailures: 20, windowMinutes: 15, blockMinutes: 15, reservationSeconds: 30 });
 export const RATE_LIMIT_BOUNDS = Object.freeze({
   maxEmailFailures: Object.freeze({ min: 3, max: 20 }),
   maxIpFailures: Object.freeze({ min: 5, max: 200 }),
   windowMinutes: Object.freeze({ min: 5, max: 60 }),
   blockMinutes: Object.freeze({ min: 5, max: 60 }),
+  reservationSeconds: Object.freeze({ min: 15, max: 120 }),
 });
 
 function readBounded(env, variable, bounds, fallback) {
@@ -96,7 +100,7 @@ function readBounded(env, variable, bounds, fallback) {
 
 /**
  * The limits applied to failed identity verifications, validated. Call it once at start-up.
- * @returns {Readonly<{ maxEmailFailures: number, maxIpFailures: number, windowMinutes: number, blockMinutes: number, windowSeconds: number, blockSeconds: number }>}
+ * @returns {Readonly<{ maxEmailFailures: number, maxIpFailures: number, windowMinutes: number, blockMinutes: number, reservationSeconds: number, windowSeconds: number, blockSeconds: number }>}
  */
 export function loadRateLimitConfig(env = process.env) {
   const out = {};

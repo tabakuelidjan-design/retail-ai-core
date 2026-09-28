@@ -27,7 +27,7 @@ const ref = (hmac) => hmac.slice(0, 16);
 /**
  * @param {{
  *   gotrue: { verifyPassword(email: string, password: string): Promise<object> },
- *   limiter: { subjects: Function, isBlocked: Function, recordFailure: Function },
+ *   limiter: { subjects: Function, reserve: Function, settle: Function },
  *   events: { record: Function },
  *   service: { merchantId: string, module: string },   the calling service's own tenant (resolver) and name - journal context only
  *   newId?: () => string,
@@ -52,33 +52,43 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
     const s = limiter.subjects({ email, ip });
     const refs = { subjectRef: ref(s.email), sourceRef: ref(s.ip) };
 
-    let blocked;
-    try { blocked = await limiter.isBlocked(s); } catch {
+    // 1. reserve the attempt in the database BEFORE Supabase is called (atomic across processes and instances)
+    let reservation;
+    try { reservation = await limiter.reserve(s); } catch {
       await quietly(journal('AUTH_UNAVAILABLE', 'FAILURE', correlationId, { detail: { reason: 'RATE_LIMIT_STORE' } }));
       return { ok: false, error: 'UNAVAILABLE' };
     }
-    if (blocked) {
+    if (!reservation) {
       await quietly(journal('AUTH_RATE_LIMITED', 'DENIED', correlationId, { detail: refs }));
       return { ok: false, error: 'RATE_LIMITED' };
     }
 
-    const normalized = normalizeEmail(email);
-    const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '') : { ok: false, kind: 'INVALID' };
+    // 2. verify, then 3. settle the reservation exactly once (an unexpected exception releases it; a crash lets it expire)
+    let settled = false;
+    const settle = async (outcome) => { settled = true; return limiter.settle(reservation, outcome); };
+    try {
+      const normalized = normalizeEmail(email);
+      const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '') : { ok: false, kind: 'INVALID' };
 
-    if (result.ok) {
-      try {
-        await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout } });
-      } catch { return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
-      return { ok: true, identity: Object.freeze({ userId: result.userId }) };
+      if (result.ok) {
+        await quietly(settle('SUCCESS')); // releases the reservation and resets this address's failures (never the IP's)
+        try {
+          await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout } });
+        } catch { return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
+        return { ok: true, identity: Object.freeze({ userId: result.userId }) };
+      }
+      if (result.kind === 'UNAVAILABLE') {
+        await quietly(settle('RELEASE')); // not the person's fault: nothing is counted
+        await quietly(journal('AUTH_UNAVAILABLE', 'FAILURE', correlationId, { detail: { reason: result.reason } }));
+        return { ok: false, error: 'UNAVAILABLE' };
+      }
+      let blockedNow = false;
+      try { blockedNow = (await settle('FAILURE')).blocked; } catch { /* still a refusal; an unsettled reservation keeps counting until it expires */ }
+      await quietly(journal('AUTH_FAILED', 'FAILURE', correlationId, { detail: { ...refs, blockedNow } }));
+      return { ok: false, error: 'INVALID_CREDENTIALS' };
+    } finally {
+      if (!settled) await quietly(limiter.settle(reservation, 'RELEASE'));
     }
-    if (result.kind === 'UNAVAILABLE') {
-      await quietly(journal('AUTH_UNAVAILABLE', 'FAILURE', correlationId, { detail: { reason: result.reason } }));
-      return { ok: false, error: 'UNAVAILABLE' };
-    }
-    let blockedNow = false;
-    try { blockedNow = (await limiter.recordFailure(s)).blocked; } catch { /* still a refusal; the next check fails closed if the store is down */ }
-    await quietly(journal('AUTH_FAILED', 'FAILURE', correlationId, { detail: { ...refs, blockedNow } }));
-    return { ok: false, error: 'INVALID_CREDENTIALS' };
   }
 
   return Object.freeze({ verify });

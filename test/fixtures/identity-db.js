@@ -21,23 +21,26 @@ function matches(row, filters) {
 }
 
 /** @param {{ merchants?: string[] }} [o] merchant ids that exist (foreign keys) */
-export function createIdentityDb({ merchants = [] } = {}) {
-  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [] };
+export function createIdentityDb({ merchants = [], latencyMs = 0 } = {}) {
+  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [], identity_auth_reservations: [] };
   const calls = [];
   let failNext = null;
   let eventSeq = 0;
   const copy = (r) => JSON.parse(JSON.stringify(r));
+  // Each call first waits (a network round trip), then runs its body without interruption - like one PostgREST request = one
+  // statement / one function call in one transaction, with the rows it locks.
+  const hop = () => new Promise((r) => (latencyMs ? setTimeout(r, latencyMs) : setImmediate(r)));
   const maybeFail = () => { if (failNext) { const e = failNext; failNext = null; throw e; } };
 
   const api = {
     async select(table, params) {
-      calls.push({ op: 'select', table }); maybeFail();
+      await hop(); calls.push({ op: 'select', table }); maybeFail();
       let rows = (tables[table] ?? []).filter((r) => matches(r, params));
       if (params.limit) rows = rows.slice(0, Number(params.limit));
       return rows.map(copy);
     },
     async insert(table, rows) {
-      calls.push({ op: 'insert', table, count: rows.length }); maybeFail();
+      await hop(); calls.push({ op: 'insert', table, count: rows.length }); maybeFail();
       const out = [];
       for (const r of rows) {
         if (!merchants.includes(r.merchant_id)) throw dbError('foreign key violation (merchant_id)');
@@ -60,7 +63,7 @@ export function createIdentityDb({ merchants = [] } = {}) {
       return out;
     },
     async update(table, filters, patch) {
-      calls.push({ op: 'update', table, keys: Object.keys(patch) }); maybeFail();
+      await hop(); calls.push({ op: 'update', table, keys: Object.keys(patch) }); maybeFail();
       if (table === 'identity_events') throw dbError('identity_events is append-only: UPDATE is not allowed');
       const hit = tables[table].filter((r) => matches(r, filters));
       for (const r of hit) {
@@ -73,26 +76,55 @@ export function createIdentityDb({ merchants = [] } = {}) {
       for (const r of hit) Object.assign(r, patch);
       return hit.map(copy);
     },
-    // Same rule as the SQL function identity_rate_limit_record_failure (C1b migration; verified for real in PGlite).
+    // Same rules as the SQL functions identity_auth_reserve / identity_auth_settle (C1b migration, verified for real in PGlite). The
+    // body after hop() runs without interruption, like one function call in one transaction holding its row locks.
     async rpc(fn, a) {
-      calls.push({ op: 'rpc', fn }); maybeFail();
-      if (fn !== 'identity_rate_limit_record_failure') throw new Error(`fake identity db: unknown function ${fn}`);
-      if (!['email', 'ip'].includes(a.p_dimension) || !/^[0-9a-f]{64}$/.test(a.p_subject)) throw dbError('check violation (identity_rate_limits)');
-      if (!(a.p_window_seconds >= 60 && a.p_window_seconds <= 86400 && a.p_max_failures >= 1 && a.p_max_failures <= 1000 && a.p_block_seconds >= 60 && a.p_block_seconds <= 86400)) throw dbError('invalid limits');
+      await hop(); calls.push({ op: 'rpc', fn }); maybeFail();
+      const hex = (v) => /^[0-9a-f]{64}$/.test(v);
+      if (!(a.p_window_seconds >= 60 && a.p_window_seconds <= 86400 && a.p_max_email >= 1 && a.p_max_email <= 1000 && a.p_max_ip >= 1 && a.p_max_ip <= 1000 && a.p_block_seconds >= 60 && a.p_block_seconds <= 86400)) throw dbError('invalid limits');
       const now = ms(a.p_now);
-      let r = tables.identity_rate_limits.find((x) => x.dimension === a.p_dimension && x.subject_hmac === a.p_subject);
-      if (!r) { r = { dimension: a.p_dimension, subject_hmac: a.p_subject, window_started_at: a.p_now, failures: 1, blocked_until: null, updated_at: a.p_now }; tables.identity_rate_limits.push(r); }
-      else {
-        const expired = ms(r.window_started_at) <= now - a.p_window_seconds * 1000;
-        r.failures = expired ? 1 : r.failures + 1;
-        if (expired) r.window_started_at = a.p_now;
-        r.updated_at = new Date(Math.max(ms(r.updated_at), now)).toISOString();
+      const counter = (dimension, subject) => {
+        let r = tables.identity_rate_limits.find((x) => x.dimension === dimension && x.subject_hmac === subject);
+        if (!r) { r = { dimension, subject_hmac: subject, window_started_at: a.p_now, failures: 0, blocked_until: null, updated_at: a.p_now }; tables.identity_rate_limits.push(r); }
+        return r;
+      };
+      const windowExpired = (r) => ms(r.window_started_at) <= now - a.p_window_seconds * 1000;
+      if (fn === 'identity_auth_reserve') {
+        if (!hex(a.p_email_subject) || !hex(a.p_ip_subject)) throw dbError('check violation (subject)');
+        if (!(a.p_lease_seconds >= 5 && a.p_lease_seconds <= 300)) throw dbError('invalid lease');
+        const e = counter('email', a.p_email_subject); const i = counter('ip', a.p_ip_subject);
+        for (const c of [e, i]) if (c.blocked_until && ms(c.blocked_until) <= now) { c.failures = 0; c.window_started_at = a.p_now; c.blocked_until = null; c.updated_at = new Date(Math.max(ms(c.updated_at), now)).toISOString(); }
+        tables.identity_auth_reservations = tables.identity_auth_reservations.filter((x) => !(ms(x.expires_at) <= now && (x.email_subject === a.p_email_subject || x.ip_subject === a.p_ip_subject)));
+        if ((e.blocked_until && ms(e.blocked_until) > now) || (i.blocked_until && ms(i.blocked_until) > now)) return null;
+        const live = tables.identity_auth_reservations.filter((x) => ms(x.expires_at) > now);
+        const flightE = live.filter((x) => x.email_subject === a.p_email_subject).length;
+        const flightI = live.filter((x) => x.ip_subject === a.p_ip_subject).length;
+        if ((windowExpired(e) ? 0 : e.failures) + flightE >= a.p_max_email || (windowExpired(i) ? 0 : i.failures) + flightI >= a.p_max_ip) return null;
+        const id = randomUUID();
+        tables.identity_auth_reservations.push({ id, email_subject: a.p_email_subject, ip_subject: a.p_ip_subject, reserved_at: a.p_now, expires_at: new Date(now + a.p_lease_seconds * 1000).toISOString() });
+        return id;
       }
-      if (r.failures >= a.p_max_failures) r.blocked_until = new Date(Math.max(r.blocked_until ? ms(r.blocked_until) : now, now + a.p_block_seconds * 1000)).toISOString();
-      return r.blocked_until && ms(r.blocked_until) > now ? r.blocked_until : null;
+      if (fn === 'identity_auth_settle') {
+        if (!['FAILURE', 'SUCCESS', 'RELEASE'].includes(a.p_outcome)) throw dbError('invalid outcome');
+        const idx = tables.identity_auth_reservations.findIndex((x) => x.id === a.p_reservation);
+        if (idx < 0) return null;
+        const [r] = tables.identity_auth_reservations.splice(idx, 1);
+        if (a.p_outcome === 'RELEASE') return null;
+        const e = counter('email', r.email_subject); const i = counter('ip', r.ip_subject);
+        const bump = (c) => { c.updated_at = new Date(Math.max(ms(c.updated_at), now)).toISOString(); };
+        if (a.p_outcome === 'SUCCESS') { e.failures = 0; e.window_started_at = a.p_now; e.blocked_until = null; bump(e); return null; }
+        for (const [c, max] of [[e, a.p_max_email], [i, a.p_max_ip]]) {
+          if (windowExpired(c)) { c.failures = 1; c.window_started_at = a.p_now; } else c.failures += 1;
+          bump(c);
+          if (c.failures >= max) c.blocked_until = new Date(Math.max(c.blocked_until ? ms(c.blocked_until) : now, now + a.p_block_seconds * 1000)).toISOString();
+        }
+        const until = [e, i].map((c) => (c.blocked_until && ms(c.blocked_until) > now ? ms(c.blocked_until) : 0));
+        return Math.max(...until) ? new Date(Math.max(...until)).toISOString() : null;
+      }
+      throw new Error(`fake identity db: unknown function ${fn}`);
     },
     async delete(table) {
-      calls.push({ op: 'delete', table }); maybeFail();
+      await hop(); calls.push({ op: 'delete', table }); maybeFail();
       if (table === 'identity_events') throw dbError('identity_events is append-only: DELETE is not allowed');
       throw new Error('fake identity db: delete not used in C1a');
     },

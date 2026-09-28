@@ -116,8 +116,8 @@ const RL = RL_RAW.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
 
 test('C1b migration: not applied, additive, HMAC subjects only (no e-mail / IP column), RLS without policy', () => {
   assert.match(RL_RAW, /NOT APPLIED anywhere/);
-  assert.deepEqual([...RL.matchAll(/create table (\w+)/g)].map((m) => m[1]), ['identity_rate_limits']);
-  assert.ok(!/\bdrop\b/i.test(RL) && !/\binsert\s+into\s+(?!public\.identity_rate_limits)/i.test(RL), 'no DROP, no write outside its own table');
+  assert.deepEqual([...RL.matchAll(/create table (\w+)/g)].map((m) => m[1]), ['identity_rate_limits', 'identity_auth_reservations']);
+  assert.ok(!/\bdrop\b/i.test(RL) && !/\binsert\s+into\s+(?!public\.identity_(rate_limits|auth_reservations))/i.test(RL), 'no DROP, no write outside its own tables');
   const body = /create table identity_rate_limits \(([\s\S]*?)\n\);/.exec(RL)[1];
   const columns = body.split('\n').map((l) => l.trim().split(/\s+/)[0]).filter((c) => c && !/^(primary|\))/.test(c));
   assert.deepEqual(columns, ['dimension', 'subject_hmac', 'window_started_at', 'failures', 'blocked_until', 'updated_at']);
@@ -126,10 +126,26 @@ test('C1b migration: not applied, additive, HMAC subjects only (no e-mail / IP c
   assert.match(body, /primary key \(dimension, subject_hmac\)/);
   assert.match(RL, /create index identity_rate_limits_updated_idx on identity_rate_limits \(updated_at\);/);
   assert.match(RL, /create index identity_rate_limits_blocked_idx on identity_rate_limits \(blocked_until\) where blocked_until is not null;/);
-  assert.match(RL, /alter table identity_rate_limits enable row level security;/);
+  const res = /create table identity_auth_reservations \(([\s\S]*?)\n\);/.exec(RL)[1];
+  const resCols = res.split('\n').map((l) => l.trim().split(/\s+/)[0]).filter((c) => c && !/^(constraint|\))/.test(c));
+  assert.deepEqual(resCols, ['id', 'email_subject', 'ip_subject', 'reserved_at', 'expires_at']);
+  assert.match(res, /email_subject ~ '\^\[0-9a-f\]\{64\}\$'/);
+  assert.match(res, /expires_at <= reserved_at \+ interval '5 minutes'/);
+  for (const idx of ['identity_auth_reservations_email_idx', 'identity_auth_reservations_ip_idx', 'identity_auth_reservations_expires_idx']) assert.ok(RL.includes(`create index ${idx}`), idx);
+  for (const t of ['identity_rate_limits', 'identity_auth_reservations']) {
+    assert.match(RL, new RegExp(`alter table ${t} enable row level security;`));
+    assert.match(RL, new RegExp(`revoke all on table ${t} from anon, authenticated;`));
+  }
   assert.ok(!/create policy/i.test(RL) && !/\bgrant\b/i.test(RL));
-  assert.match(RL, /revoke all on table identity_rate_limits from anon, authenticated;/);
-  assert.match(RL, /revoke execute on function identity_rate_limit_record_failure\([^)]*\) from public, anon, authenticated;/);
-  assert.match(RL, /security invoker set search_path = ''/);
+  for (const fn of ['identity_rate_limit_check_args', 'identity_auth_reserve', 'identity_auth_settle']) {
+    assert.match(RL, new RegExp(`revoke execute on function ${fn}\\([^)]*\\) from public, anon, authenticated;`), fn);
+  }
+  assert.ok(!/identity_rate_limit_record_failure/.test(RL), 'the non-atomic check-then-count function is gone');
+  assert.equal((RL.match(/security invoker set search_path = ''/g) ?? []).length, 2);
+  // atomicity: both counter rows are locked, always e-mail before IP (no deadlock), before counting and reserving
+  const reserve = /create function identity_auth_reserve\([\s\S]*?\$\$;/.exec(RL)[0];
+  const lockE = reserve.indexOf("where dimension = 'email' and subject_hmac = p_email_subject for update");
+  const lockI = reserve.indexOf("where dimension = 'ip' and subject_hmac = p_ip_subject for update");
+  assert.ok(lockE > 0 && lockI > lockE && reserve.indexOf('insert into public.identity_auth_reservations') > lockI, 'lock e-mail, then IP, then reserve');
   assert.ok(!/cron|schedule/i.test(RL), 'no clean-up job in C1b');
 });

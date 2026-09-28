@@ -4,9 +4,10 @@ import { randomBytes } from 'node:crypto';
 
 /**
  * @param {{ users?: Array<{ id: string, email: string, password: string, banned?: boolean }>, mode?: string }} o
+ *   latencyMs: delay of the token endpoint (concurrency tests)
  *   mode: 'normal' | 'timeout' | 'network' | 'http500' | 'http429' | 'invalid200' | 'logoutFails'
  */
-export function createFakeGoTrue({ users = [], mode = 'normal' } = {}) {
+export function createFakeGoTrue({ users = [], mode = 'normal', latencyMs = 0 } = {}) {
   const requests = [];
   const issued = []; // every access / refresh token handed out, to prove none leaks
   const state = { mode };
@@ -20,6 +21,7 @@ export function createFakeGoTrue({ users = [], mode = 'normal' } = {}) {
       return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
     }
     if (u.pathname === '/auth/v1/token') {
+      if (latencyMs) await new Promise((r) => setTimeout(r, latencyMs)); // a real round trip: lets concurrent attempts overlap
       if (state.mode === 'http500') return reply(500, { msg: 'down' });
       if (state.mode === 'http429') return reply(429, { error_code: 'over_request_rate_limit' });
       const { email, password } = JSON.parse(init.body);

@@ -1,6 +1,8 @@
 // Nordla identity - limitation of repeated failed identity verifications (ADR 0004, Core C1b; table identity_rate_limits).
 //
-// Two independent dimensions, each counted in a fixed window and blocked for a fixed time once its maximum is reached:
+// Two independent dimensions, each counted in a fixed window and blocked for a fixed time once its maximum is reached. Every attempt
+// is RESERVED atomically in the database before Supabase is called and settled afterwards (see the migration), so simultaneous
+// attempts - in one process or across instances - can never exceed a maximum. No in-memory lock is used or needed.
 //   'email'  the normalised e-mail address        (default 5 failures / 15 min)
 //   'ip'     the normalised client address, IPv6 grouped by /64   (default 20 failures / 15 min)
 // A subject is stored ONLY as HMAC-SHA-256(key, "<dimension>:<normalised value>"). The key is NORDLA_IDENTITY_RATE_LIMIT_KEY:
@@ -12,7 +14,9 @@ import { isIP } from 'node:net';
 import { loadRateLimitConfig } from './config.js';
 
 export const TABLE = 'identity_rate_limits';
-export const RECORD_FAILURE_FN = 'identity_rate_limit_record_failure';
+export const RESERVE_FN = 'identity_auth_reserve';
+export const SETTLE_FN = 'identity_auth_settle';
+export const SETTLE_OUTCOMES = Object.freeze(['FAILURE', 'SUCCESS', 'RELEASE']);
 export const RATE_LIMIT_KEY_ENV = 'NORDLA_IDENTITY_RATE_LIMIT_KEY';
 export const MIN_KEY_BYTES = 32;
 export const DIMENSIONS = Object.freeze(['email', 'ip']);
@@ -58,10 +62,10 @@ export function normalizeIp(raw) {
 }
 
 /**
- * @param {{ supabase: { select: Function, rpc: Function }, key: string|Buffer, config?: ReturnType<typeof loadRateLimitConfig>, now?: () => Date }} deps
+ * @param {{ supabase: { rpc: Function }, key: string|Buffer, config?: ReturnType<typeof loadRateLimitConfig>, now?: () => Date }} deps
  */
 export function createRateLimiter({ supabase, key, config = loadRateLimitConfig(), now = () => new Date() } = {}) {
-  if (!supabase || typeof supabase.select !== 'function' || typeof supabase.rpc !== 'function') throw new TypeError('createRateLimiter needs a Supabase client with select() and rpc()');
+  if (!supabase || typeof supabase.rpc !== 'function') throw new TypeError('createRateLimiter needs a Supabase client with rpc()');
   const secret = parseRateLimitKey(key);
   const hmac = (dimension, value) => createHmac('sha256', secret).update(`${dimension}:${value}`, 'utf8').digest('hex');
 
@@ -74,28 +78,34 @@ export function createRateLimiter({ supabase, key, config = loadRateLimitConfig(
     });
   }
 
-  /** True when either dimension is blocked now. One read (primary-key lookups). A read failure throws (callers fail closed). */
-  async function isBlocked(s) {
-    let rows;
+  const limits = () => ({
+    p_now: now().toISOString(), p_window_seconds: config.windowSeconds, p_max_email: config.maxEmailFailures, p_max_ip: config.maxIpFailures,
+    p_block_seconds: config.blockSeconds,
+  });
+
+  /**
+   * Reserves one attempt in the database BEFORE Supabase is called (atomic, shared by every process and instance). Returns the
+   * reservation id, or null when the attempt must be refused (blocked, or failures + attempts in flight at a maximum). A store
+   * failure throws (callers fail closed).
+   */
+  async function reserve(s) {
     try {
-      rows = await supabase.select(TABLE, { select: 'dimension,subject_hmac,blocked_until', subject_hmac: `in.(${s.email},${s.ip})` });
-    } catch (e) { throw new RateLimitError('RATE_LIMIT_STORE_FAILED', 'The attempt limits could not be read.'); }
-    const t = now().getTime();
-    return (rows ?? []).some((r) => ((r.dimension === 'email' && r.subject_hmac === s.email) || (r.dimension === 'ip' && r.subject_hmac === s.ip))
-      && r.blocked_until && new Date(r.blocked_until).getTime() > t);
+      const id = await supabase.rpc(RESERVE_FN, { p_email_subject: s.email, p_ip_subject: s.ip, ...limits(), p_lease_seconds: config.reservationSeconds });
+      return typeof id === 'string' && id ? id : null;
+    } catch { throw new RateLimitError('RATE_LIMIT_STORE_FAILED', 'The attempt limits could not be checked.'); }
   }
 
-  /** Records one failed verification on both dimensions (atomic per dimension, in the database). Returns whether either is now blocked. */
-  async function recordFailure(s) {
-    const at = now().toISOString();
-    const call = (dimension, subject, max) => supabase.rpc(RECORD_FAILURE_FN, {
-      p_dimension: dimension, p_subject: subject, p_now: at, p_window_seconds: config.windowSeconds, p_max_failures: max, p_block_seconds: config.blockSeconds,
-    });
+  /**
+   * Settles a reservation: 'FAILURE' (counted on both dimensions), 'SUCCESS' (released; e-mail failures reset, IP untouched) or
+   * 'RELEASE' (released, nothing counted). Idempotent in the database. Returns whether a subject is now blocked.
+   */
+  async function settle(reservationId, outcome) {
+    if (!SETTLE_OUTCOMES.includes(outcome)) throw new RateLimitError('RATE_LIMIT_OUTCOME_INVALID', 'Unknown settlement outcome.');
     try {
-      const [e, i] = await Promise.all([call('email', s.email, config.maxEmailFailures), call('ip', s.ip, config.maxIpFailures)]);
-      return { blocked: Boolean(e) || Boolean(i) };
+      const blockedUntil = await supabase.rpc(SETTLE_FN, { p_reservation: reservationId, p_outcome: outcome, ...limits() });
+      return { blocked: Boolean(blockedUntil) };
     } catch { throw new RateLimitError('RATE_LIMIT_STORE_FAILED', 'The attempt limits could not be written.'); }
   }
 
-  return Object.freeze({ subjects, isBlocked, recordFailure });
+  return Object.freeze({ subjects, reserve, settle });
 }
