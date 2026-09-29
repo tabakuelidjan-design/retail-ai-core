@@ -125,15 +125,15 @@ auth.users                      géré par Supabase Auth (e-mail, mot de passe h
 merchants (existant)            id, name, vertical, created_at, source_system, source_id, source_domain
                                 + à terme (D-merchants) : status ('active' | 'suspended'), updated_at. Pas de migration en C0.
 
-merchant_members                qui appartient à quelle entreprise, avec quel rôle
-  id            uuid pk
+merchant_members                qui appartient à quelle entreprise, avec quel rôle (construit en C2, migration 20260928140000)
   merchant_id   uuid not null  -> merchants(id) on delete restrict
-  user_id       uuid not null  -> auth.users(id) on delete cascade
-  role          text not null  check (role in ('owner','admin','collaborator','viewer','accountant'))   -- D3
-  status        text not null  check (status in ('active','suspended'))
-  created_at, updated_at, created_by (uuid null), suspended_at, suspended_reason
-  unique (merchant_id, user_id)                -- plusieurs utilisateurs par entreprise, plusieurs entreprises par utilisateur
-  -- au moins un 'owner' actif par marchand : vérifié par le code (et un test), pas par une contrainte différée
+  user_id       uuid not null  -> auth.users(id) on delete restrict
+  role          text not null  check (role in ('OWNER','ADMIN','COLLABORATOR','VIEWER','ACCOUNTANT'))   -- D3
+  status        text not null  check (status in ('ACTIVE','SUSPENDED'))   -- suspended_at renseigné si et seulement si SUSPENDED
+  created_at, updated_at, suspended_at, created_by (uuid null), updated_by (uuid null)
+  primary key (merchant_id, user_id)          -- plusieurs utilisateurs par entreprise, plusieurs entreprises par utilisateur
+  -- au moins un OWNER actif par entreprise : garanti EN BASE (fonctions + déclencheur sous verrou par entreprise), jamais
+  -- supprimée physiquement (on quitte une entreprise en étant suspendu)
 
 merchant_invitations            PAS en v1 (D7) ; esquisse conservée pour plus tard
   id, merchant_id -> merchants, email (citext), role, token_hash (sha256), status ('pending','accepted','revoked','expired'),
@@ -170,18 +170,27 @@ Raisons :
 
 ### 2.3 Rôles (D3 accepté)
 
-| Rôle (affiché) | Code interne | Intention |
-|---|---|---|
-| Propriétaire | `owner` | tout, y compris membres, rôles, modules et paramètres de l'entreprise |
-| Administrateur | `admin` | tout sauf retirer ou rétrograder un propriétaire |
-| Collaborateur | `collaborator` | travail quotidien dans les modules activés, sans gestion des membres ni des paramètres de l'entreprise |
-| Lecture seule | `viewer` | consultation uniquement, aucune action |
-| Comptable | `accountant` | Finances (lecture, pack comptable, pièces) ; pas de Développement des ventes par défaut |
+Rôles définitifs (validés et construits en C2). Ils sont définis **par entreprise** : une même personne peut avoir un rôle différent
+dans chaque entreprise.
 
-- La **matrice détaillée des permissions** est dans le code (`src/identity/permissions.js`, versionnée), **testée** et documentée
-  (`docs/security/identity.md`). Pas de table de permissions fines en v1.
-- **Il reste toujours au moins un Propriétaire actif** par entreprise : toute suspension, suppression ou rétrogradation qui violerait
-  cette règle est refusée (code + test), et une procédure de secours (service role) est documentée.
+| Rôle (affiché) | Code interne | Gestion des membres |
+|---|---|---|
+| Propriétaire | `OWNER` | tous les rôles, y compris d'autres OWNER et les ADMIN |
+| Administrateur | `ADMIN` | seulement COLLABORATOR, VIEWER et ACCOUNTANT ; jamais un OWNER, un ADMIN ni lui-même |
+| Collaborateur | `COLLABORATOR` | aucune |
+| Lecture seule | `VIEWER` | aucune |
+| Comptable | `ACCOUNTANT` | aucune |
+
+- Une appartenance est `ACTIVE` ou `SUSPENDED`. Une personne quitte une entreprise en étant suspendue ; aucune appartenance n'est
+  supprimée physiquement.
+- **Aucun rôle ne contourne l'activation d'un module** : l'accès à un module exige une appartenance ACTIVE **et** le module activé pour
+  l'entreprise. **ACCOUNTANT ne donne pas automatiquement accès à Finances.** Les permissions détaillées à l'intérieur des modules
+  viendront avec chaque module.
+- La **matrice de gestion des membres** est dans le code (`src/identity/members.js`, `MEMBER_RULES`), testée, et appliquée à
+  l'identique par les fonctions SQL (accord vérifié sur 215 cas).
+- **Il reste toujours au moins un OWNER actif** par entreprise, **garanti en base** : les fonctions de modification et un déclencheur,
+  sous un verrou par entreprise, refusent toute suspension, rétrogradation ou suppression qui violerait cette règle, même en
+  concurrence. Pour partir, un OWNER nomme d'abord un autre OWNER. Une procédure de secours (service role) sera documentée.
 - Les libellés affichés sont en français simple ; les codes anglais restent internes.
 
 ### 2.4 RLS (D8 accepté)
@@ -192,7 +201,7 @@ Raisons :
 - **Bêta HABB** : fonctionnement serveur actuel conservé.
 - **Obligatoire avant l'ajout d'un deuxième client réel** (phase C14) : lectures métier exécutées avec le JWT de l'utilisateur (rôle
   `authenticated`) et politiques par entreprise du type
-  `using (exists (select 1 from merchant_members m where m.merchant_id = <table>.merchant_id and m.user_id = auth.uid() and m.status = 'active'))`.
+  `using (exists (select 1 from merchant_members m where m.merchant_id = <table>.merchant_id and m.user_id = auth.uid() and m.status = 'ACTIVE'))`.
 - Inventaire préalable exigé par D8 : **fait le 2026-09-28** (§ 1.3) — aucune politique en base, rien à rapatrier ; toute politique
   future sera créée **uniquement** par une migration versionnée du dépôt.
 
@@ -279,7 +288,7 @@ mauvais mot de passe / non membre (pas d'énumération) ; HSTS, CSP stricte, `X-
 
 ## 4. Comptes (D2, D7, D10 acceptés)
 
-- **Deux comptes personnels distincts pour HABB** : le propriétaire (`owner`) et l'épouse du propriétaire (rôle choisi à la
+- **Deux comptes personnels distincts pour HABB** : le propriétaire (`OWNER`) et l'épouse du propriétaire (rôle choisi à la
   création). Les adresses e-mail exactes seront communiquées au moment de la création. **Aucun compte partagé entre plusieurs
   personnes.** Aucun compte n'est créé en C0.
 - **Bêta HABB : comptes créés manuellement** par un script administratif côté serveur (API d'administration Supabase, jamais depuis
@@ -384,7 +393,7 @@ Existantes réutilisées : `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NORDLA_
 |---|---|---|
 | **D1** | Fournisseur d'identité : **Supabase Auth**, côté serveur uniquement | Accepté ; à faire (C1) |
 | **D2** | Deux comptes personnels HABB distincts (propriétaire ; épouse du propriétaire) ; e-mails fournis à la création ; aucun compte partagé | Accepté ; aucun compte créé |
-| **D3** | Rôles Propriétaire, Administrateur, Collaborateur, Lecture seule, Comptable ; matrice dans le code, testée et documentée ; toujours au moins un Propriétaire actif | Accepté ; à faire (C2) |
+| **D3** | Rôles par entreprise `OWNER` (Propriétaire), `ADMIN` (Administrateur), `COLLABORATOR` (Collaborateur), `VIEWER` (Lecture seule), `ACCOUNTANT` (Comptable) ; appartenance `ACTIVE` ou `SUSPENDED` ; matrice dans le code, testée et documentée ; toujours au moins un OWNER actif, garanti en base ; aucun rôle ne contourne l'activation d'un module (ACCOUNTANT n'ouvre pas Finances automatiquement) ; comptes créés manuellement en v1 (D7) | Accepté ; construit en C2 (local, non appliqué) |
 | **D4** | v1 : une identité, même e-mail / mot de passe, une session par module, aucun cookie partagé sur les domaines Railway ; SSO central `nordla.app` plus tard | Accepté ; à faire (C1, C14) |
 | **D5** | 12 h maximum, 2 h d'inactivité ; cookies `Secure`, `HttpOnly`, limités à l'hôte du module ; SameSite recommandé `Lax` (§ 3.2) | Accepté ; SameSite confirmé en C1 |
 | **D6** | Aucun jeton Supabase dans le navigateur ni conservé comme session ; session serveur Nordla révocable | Accepté ; à faire (C1) |
