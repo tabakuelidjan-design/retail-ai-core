@@ -12,6 +12,8 @@
 //     loginTiming?: { minMs: 900, jitterMs: 100 },   bounds 200..5000 / 0..500
 //     bodyLimitBytes?: 16384,                   1024..65536
 //     sessionMaxAgeSeconds?: 43200,             60..43200 (never longer than the 12 h session)
+//     csp?: { imgSources?, connectSources?, frameSources?, objectSources? },   typed exceptions (headers.js); none by default
+//     permissions?: { microphone?: ['self'], ... },                            Permissions-Policy grants; all disabled by default
 //   })
 //
 // Returns a frozen object: request context, origin check, guards (read / login / authenticated mutation), cookie jar, CSRF,
@@ -23,13 +25,13 @@ import { isModuleCode } from '../identity/modules.js';
 import { requestContext, checkOrigin, normalizeHost, normalizeOrigin, SAFE_METHODS } from './request.js';
 import { createCookieJar } from './cookies.js';
 import { createCsrf, CSRF_HEADER } from './csrf.js';
-import { securityHeaders } from './headers.js';
+import { securityHeaders, normalizeCspOptions, normalizePermissions } from './headers.js';
 import { createLoginTiming } from './timing.js';
 import { readJsonBody, readLoginBody } from './body.js';
 import { redact, requestLogEntry, publicError, PUBLIC_ERRORS, HttpSecurityError } from './redact.js';
 
 export const CSRF_KEY_ENV = 'NORDLA_CSRF_KEY';
-const KEYS = Object.freeze(['environment', 'proxy', 'allowedHosts', 'allowedOrigins', 'moduleCode', 'csrfKey', 'rateLimitKey', 'loginTiming', 'bodyLimitBytes', 'sessionMaxAgeSeconds', 'imgSources', 'now', 'sleep', 'randomInt', 'newId']);
+const KEYS = Object.freeze(['environment', 'proxy', 'allowedHosts', 'allowedOrigins', 'moduleCode', 'csrfKey', 'rateLimitKey', 'loginTiming', 'bodyLimitBytes', 'sessionMaxAgeSeconds', 'csp', 'permissions', 'now', 'sleep', 'randomInt', 'newId']);
 const LOOPBACK = (hostname) => hostname === 'localhost' || hostname === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) || hostname.endsWith('.localhost');
 
 export class HttpSecurityConfigError extends Error {
@@ -93,8 +95,10 @@ export function createHttpSecurity(config = {}) {
   const jitterMs = bounded(loginTiming.jitterMs, 100, 0, 500, 'loginTiming.jitterMs');
   const bodyLimitBytes = bounded(config.bodyLimitBytes, 16 * 1024, 1024, 64 * 1024, 'bodyLimitBytes');
   const sessionMaxAgeSeconds = bounded(config.sessionMaxAgeSeconds, 12 * 3600, 60, 12 * 3600, 'sessionMaxAgeSeconds');
-  const imgSources = Object.freeze([...(config.imgSources ?? [])]);
-  securityHeaders({ hosted, imgSources }); // validates imgSources now
+  // CSP / Permissions-Policy exceptions: typed lists, validated ONCE, frozen (headers.js); closed when absent
+  let csp; let permissions;
+  try { csp = normalizeCspOptions(config.csp ?? {}, { hosted }); } catch (e) { bad('csp', e.message); }
+  try { permissions = normalizePermissions(config.permissions ?? {}); } catch (e) { bad('permissions', e.message); }
 
   const newId = config.newId ?? randomUUID;
   const cfg = Object.freeze({ hosted, proxy, allowedHosts: Object.freeze(allowedHosts), allowedOrigins: Object.freeze(allowedOrigins) });
@@ -154,7 +158,12 @@ export function createHttpSecurity(config = {}) {
     context, checkOrigin: (ctx, o) => checkOrigin(ctx, cfg, o),
     guardRead, guardLogin, guardMutation,
     cookies, csrfTokenFor: csrf.tokenFor,
-    headers: (o = {}) => securityHeaders({ hosted, imgSources, ...o }),
+    csp, permissions,
+    /** Per-response options only (nonce, authentication): the policy exceptions are fixed by the configuration. */
+    headers: ({ nonce = null, authentication = false, ...rest } = {}) => {
+      if (Object.keys(rest).length) throw new TypeError('headers() accepts only { nonce, authentication }: policy exceptions belong to the configuration');
+      return securityHeaders({ hosted, nonce, authentication, csp, permissions });
+    },
     normalizeLogin: timing.normalize, loginTiming: Object.freeze({ minMs, jitterMs }),
     readLoginBody: (req) => readLoginBody(req, { maxBytes: bodyLimitBytes }),
     readJsonBody,

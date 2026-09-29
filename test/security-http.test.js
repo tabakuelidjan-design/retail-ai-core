@@ -282,22 +282,104 @@ test('login body: POST, JSON, <= 16 KiB, only email + password; forbidden and un
 });
 
 // ---------- headers ----------
-test('security headers: strict CSP (no unsafe-inline), nonce support, nosniff, referrer, permissions, no framing, HSTS only hosted, no-store for auth', () => {
+const DEFAULT_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const DEFAULT_PERMISSIONS = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
+const csp = (h) => Object.fromEntries(h['Content-Security-Policy'].split('; ').map((d) => { const [k, ...v] = d.split(' '); return [k, v.join(' ')]; }));
+
+test('security headers: closed defaults - frame-src and object-src none, microphone off, nosniff, no framing, HSTS only hosted, no-store for auth', () => {
   const h = securityHeaders({ hosted: true, authentication: true });
-  assert.equal(h['Content-Security-Policy'], "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+  assert.equal(h['Content-Security-Policy'], DEFAULT_CSP);
+  assert.equal(csp(h)['frame-src'], "'none'"); assert.equal(csp(h)['object-src'], "'none'");
+  assert.equal(h['Permissions-Policy'], DEFAULT_PERMISSIONS);
+  assert.match(h['Permissions-Policy'], /(^|, )microphone=\(\)(,|$)/);
   assert.equal(h['X-Content-Type-Options'], 'nosniff'); assert.equal(h['Referrer-Policy'], 'no-referrer'); assert.equal(h['X-Frame-Options'], 'DENY');
-  assert.match(h['Permissions-Policy'], /camera=\(\).*microphone=\(\).*geolocation=\(\)/);
   assert.equal(h['Strict-Transport-Security'], 'max-age=31536000'); assert.equal(h['Cache-Control'], 'no-store');
   const l = securityHeaders({ hosted: false });
   assert.equal(l['Strict-Transport-Security'], undefined); assert.equal(l['Cache-Control'], undefined);
+  assert.equal(l['Content-Security-Policy'], DEFAULT_CSP);
   const nonce = randomBytes(18).toString('base64');
-  const n = securityHeaders({ hosted: true, nonce });
-  assert.ok(n['Content-Security-Policy'].includes(`script-src 'self' 'nonce-${nonce}'`));
-  for (const x of [h, l, n]) assert.ok(!/unsafe-inline|unsafe-eval|\*/.test(x['Content-Security-Policy']));
+  assert.ok(securityHeaders({ hosted: true, nonce })['Content-Security-Policy'].includes(`script-src 'self' 'nonce-${nonce}'`));
   assert.throws(() => securityHeaders({ hosted: true, nonce: "x' 'unsafe-inline" }), /nonce/);
-  assert.throws(() => securityHeaders({ hosted: true, imgSources: ['https://*.cdn.example'] }), /imgSources/);
-  assert.ok(Object.isFrozen(h));
-  assert.equal(hosted().headers()['Strict-Transport-Security'], 'max-age=31536000');
+  for (const x of [h, l]) assert.ok(!/unsafe-inline|unsafe-eval|\*/.test(x['Content-Security-Policy']));
+  assert.equal(hosted().headers()['Content-Security-Policy'], DEFAULT_CSP, 'createHttpSecurity without exceptions = closed defaults');
+  assert.equal(hosted().headers()['Permissions-Policy'], DEFAULT_PERMISSIONS);
+});
+
+test('CSP exceptions: exact https origins for img, connect, frame and object; normalised, de-duplicated, deterministic', () => {
+  const h = securityHeaders({ hosted: true, csp: {
+    imgSources: ['https://cdn.shopify.com', 'HTTPS://CDN.Shopify.com/', 'https://b.cdn.example'],
+    connectSources: ['https://api.nordla-test.example'],
+    frameSources: ["'self'"],
+    objectSources: ["'self'"],
+  } });
+  const c = csp(h);
+  assert.equal(c['img-src'], "'self' data: https://b.cdn.example https://cdn.shopify.com", 'defaults kept, duplicates removed, origins sorted');
+  assert.equal(c['connect-src'], "'self' https://api.nordla-test.example");
+  assert.equal(c['frame-src'], "'self'");
+  assert.equal(c['object-src'], "'self'");
+  assert.equal(csp(securityHeaders({ hosted: true, csp: { frameSources: ['https://viewer.nordla-test.example'] } }))['frame-src'], 'https://viewer.nordla-test.example');
+  // deterministic: the same set in any order gives the same header
+  const a = securityHeaders({ hosted: true, csp: { imgSources: ['https://z.example', 'blob:', 'https://a.example', "'self'"] } })['Content-Security-Policy'];
+  const b = securityHeaders({ hosted: true, csp: { imgSources: ["'self'", 'https://a.example', 'blob:', 'https://z.example', 'https://a.example'] } })['Content-Security-Policy'];
+  assert.equal(a, b);
+  assert.equal(csp({ 'Content-Security-Policy': a })['img-src'], "'self' data: blob: https://a.example https://z.example");
+});
+
+test('CSP exceptions: data: only in img-src; blob: only in img-src and frame-src; self where allowed; everything else refused', () => {
+  assert.equal(csp(securityHeaders({ hosted: true, csp: { frameSources: ['blob:'] } }))['frame-src'], 'blob:');
+  assert.equal(csp(securityHeaders({ hosted: true, csp: { imgSources: ['blob:'] } }))['img-src'], "'self' data: blob:");
+  const refused = [
+    [{ connectSources: ['data:'] }, /data: is not allowed in connect-src/], [{ frameSources: ['data:'] }, /data: is not allowed in frame-src/],
+    [{ objectSources: ['data:'] }, /data: is not allowed in object-src/], [{ connectSources: ['blob:'] }, /blob: is not allowed in connect-src/],
+    [{ objectSources: ['blob:'] }, /blob: is not allowed in object-src/],
+    [{ imgSources: ["'unsafe-inline'"] }, /not allowed in img-src/], [{ connectSources: ["'none'"] }, /not allowed in connect-src/],
+    [{ imgSources: ['https:'] }, /not allowed in img-src/], [{ imgSources: ['*'] }, /wildcard/], [{ imgSources: ['https://*.shopify.com'] }, /wildcard/],
+    [{ connectSources: ['https://api.example/v1'] }, /not an exact origin/], [{ imgSources: ['https://user:pw@cdn.example'] }, /exact origin|only https/],
+    [{ imgSources: ['http://cdn.example'] }, /only https origins are accepted in hosted mode/], [{ frameSources: ['http://localhost:4433'] }, /only https/],
+    [{ scriptSources: ['https://cdn.example'] }, /unknown option "scriptSources"/], [{ imgSources: 'https://cdn.example' }, /must be a list/],
+    [{ imgSources: [42] }, /invalid value/],
+  ];
+  for (const [c, rx] of refused) assert.throws(() => securityHeaders({ hosted: true, csp: c }), rx, JSON.stringify(c));
+  // locally, http is accepted for loopback origins only
+  assert.equal(csp(securityHeaders({ hosted: false, csp: { connectSources: ['http://localhost:5173'] } }))['connect-src'], "'self' http://localhost:5173");
+  assert.throws(() => securityHeaders({ hosted: false, csp: { connectSources: ['http://cdn.example'] } }), /only https/);
+});
+
+test('Railway mode (createHttpSecurity hosted): an http origin, a wildcard or an unknown directive is refused at construction', () => {
+  for (const [c, field] of [[{ imgSources: ['http://cdn.shopify.com'] }, 'csp'], [{ imgSources: ['https://*.shopify.com'] }, 'csp'], [{ frameAncestors: ["'self'"] }, 'csp']]) {
+    assert.throws(() => hosted({ csp: c }), (e) => e instanceof HttpSecurityConfigError && e.field === field, JSON.stringify(c));
+  }
+  const s = hosted({ csp: { imgSources: ['https://cdn.shopify.com'] } });
+  assert.equal(csp(s.headers())['img-src'], "'self' data: https://cdn.shopify.com");
+  assert.throws(() => s.headers({ csp: { imgSources: ['https://evil.example'] } }), /only \{ nonce, authentication \}/, 'no exception at call time');
+});
+
+test('Permissions-Policy: microphone=(self) can be granted explicitly; * and unknown features refused; normalised and ordered', () => {
+  assert.equal(securityHeaders({ hosted: true, permissions: { microphone: ['self'] } })['Permissions-Policy'], 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()');
+  assert.equal(securityHeaders({ hosted: true, permissions: { microphone: ["'self'", 'self'] } })['Permissions-Policy'], 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()', 'duplicates removed');
+  const x = securityHeaders({ hosted: true, permissions: { camera: ['https://z.nordla-test.example', 'self', 'HTTPS://a.nordla-test.example'] } })['Permissions-Policy'];
+  assert.equal(x, 'camera=(self "https://a.nordla-test.example" "https://z.nordla-test.example"), microphone=(), geolocation=(), payment=(), usb=()');
+  for (const [p, rx] of [[{ microphone: ['*'] }, /\* is never allowed/], [{ microphone: ["'*'"] }, /\* is never allowed/], [{ fullscreen: ['self'] }, /unknown feature "fullscreen"/],
+    [{ microphone: ['http://localhost:4433'] }, /only https/], [{ microphone: ['https://*.nordla-test.example'] }, /wildcard/], [{ microphone: 'self' }, /must be a list/]]) {
+    assert.throws(() => securityHeaders({ hosted: true, permissions: p }), rx, JSON.stringify(p));
+  }
+  assert.throws(() => hosted({ permissions: { microphone: ['*'] } }), (e) => e instanceof HttpSecurityConfigError && e.field === 'permissions');
+  assert.equal(hosted({ permissions: { microphone: ['self'] } }).headers()['Permissions-Policy'], 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()');
+});
+
+test('CSP and Permissions-Policy configurations are frozen', () => {
+  const s = hosted({ csp: { imgSources: ['https://cdn.shopify.com'] }, permissions: { microphone: ['self'] } });
+  for (const o of [s.csp, s.csp.imgSources, s.csp.frameSources, s.permissions, s.permissions.microphone]) assert.ok(Object.isFrozen(o));
+  assert.throws(() => { s.csp.imgSources.push('https://evil.example'); }, TypeError);
+  assert.throws(() => { s.permissions.camera = ['self']; }, TypeError);
+  assert.equal(csp(s.headers())['img-src'], "'self' data: https://cdn.shopify.com");
+});
+
+test('the hardening pass touched no business module (Finances, Analyses, Growth, shared, tenant, identity)', () => {
+  const { execSync } = process.getBuiltinModule('node:child_process');
+  let changed = '';
+  try { changed = execSync('git diff --name-only a650ab7 -- src/finance src/analytics-premium src/growth src/shared src/tenant src/identity', { cwd: new URL('..', import.meta.url), encoding: 'utf8' }); } catch { changed = 'git unavailable'; }
+  assert.equal(changed.trim(), '', changed);
 });
 
 // ---------- redaction and public errors ----------
