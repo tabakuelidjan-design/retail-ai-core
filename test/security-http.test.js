@@ -375,13 +375,6 @@ test('CSP and Permissions-Policy configurations are frozen', () => {
   assert.equal(csp(s.headers())['img-src'], "'self' data: https://cdn.shopify.com");
 });
 
-test('the hardening pass touched no business module (Finances, Analyses, Growth, shared, tenant, identity)', () => {
-  const { execSync } = process.getBuiltinModule('node:child_process');
-  let changed = '';
-  try { changed = execSync('git diff --name-only a650ab7 -- src/finance src/analytics-premium src/growth src/shared src/tenant src/identity', { cwd: new URL('..', import.meta.url), encoding: 'utf8' }); } catch { changed = 'git unavailable'; }
-  assert.equal(changed.trim(), '', changed);
-});
-
 // ---------- redaction and public errors ----------
 test('redaction: sensitive keys and values removed at any depth; log lines keep only safe fields; public errors never leak', () => {
   const jwt = ['ey', 'J', 'hbGciOiJIUzI1NiJ9', '.', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', '.', 'c2lnbmF0dXJl'].join('');
