@@ -18,6 +18,8 @@ export const EVENT_TYPES = Object.freeze([
   'AUTH_SUCCEEDED', 'AUTH_FAILED', 'AUTH_RATE_LIMITED', 'AUTH_UNAVAILABLE',
   // Core C2 - memberships (written by the database functions identity_member_*, in the same transaction as the change)
   'MEMBER_BOOTSTRAPPED', 'MEMBER_ROLE_CHANGED', 'MEMBER_REACTIVATED', 'MEMBER_ACTION_DENIED',
+  // Core C3 - modules and sessions (MODULE_ENABLED already listed above)
+  'MODULE_SUSPENDED', 'MODULE_ACCESS_DENIED', 'SESSION_OPENED', 'SESSION_ACCESS_DENIED',
 ]);
 export const OUTCOMES = Object.freeze(['SUCCESS', 'FAILURE', 'DENIED']);
 

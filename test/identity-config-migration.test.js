@@ -191,3 +191,46 @@ test('C2 migration: writes only through two audited functions; last OWNER and no
   assert.match(MM, /before truncate on merchant_members for each statement/);
   assert.ok(!/app_sessions|module_entitlements|shopify|source_id/i.test(MM), 'no session, no module, no Shopify');
 });
+
+// ---------- C3 migration contract (module_entitlements, identity_open_session) ----------
+const ME_RAW = readFileSync(new URL('../supabase/migrations/20260928150000_identity_modules_sessions.sql', import.meta.url), 'utf8').replace(/\r\n?/g, '\n');
+const ME = ME_RAW.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n');
+const fnDef = (sql, name) => { const s = sql.indexOf(`create function ${name}(`); return s < 0 ? '' : sql.slice(s, sql.indexOf('$$;', s) + 3); };
+
+test('C3 migration: not applied; module_entitlements with a closed registry, coherent dates, provenance, never deleted', () => {
+  assert.match(ME_RAW, /NOT APPLIED anywhere/);
+  assert.deepEqual([...ME.matchAll(/create table (\w+)/g)].map((m) => m[1]), ['module_entitlements']);
+  assert.ok(!/\bdrop\b/i.test(ME) && !/alter table (?!module_entitlements)\w+/.test(ME), 'no DROP, no ALTER of another table');
+  const body = /create table module_entitlements \(([\s\S]*?)\n\);/.exec(ME)[1];
+  const cols = body.split('\n').map((l) => l.trim().split(/\s+/)[0]).filter((c) => c && !/^(primary|constraint|\))/.test(c));
+  assert.deepEqual(cols, ['merchant_id', 'module_code', 'status', 'enabled_at', 'suspended_at', 'created_at', 'updated_at', 'source', 'last_operation_id']);
+  assert.match(body, /module_code text not null check \(module_code in \('finance', 'analytics', 'growth'\)\)/);
+  assert.match(body, /status text not null check \(status in \('ACTIVE', 'SUSPENDED'\)\)/);
+  assert.match(body, /\(status = 'SUSPENDED'\) = \(suspended_at is not null\)/);
+  assert.match(body, /primary key \(merchant_id, module_code\)/);
+  assert.match(ME, /before update or delete on module_entitlements for each row execute function module_entitlements_guard\(\)/);
+  assert.match(ME, /before truncate on module_entitlements for each statement/);
+  assert.match(ME, /alter table module_entitlements enable row level security;/);
+  assert.match(ME, /revoke all on table module_entitlements from anon, authenticated;/);
+  assert.match(ME, /revoke insert, update, delete, truncate on table module_entitlements from service_role;/);
+  assert.ok(!/create policy/i.test(ME) && !/\bgrant\b/i.test(ME));
+});
+
+test('C3 migration: provisioning has no actor; sessions open only through identity_open_session (checks + journal in one transaction)', () => {
+  const set = fnDef(ME, 'identity_module_set');
+  assert.ok(set && !/actor|p_user/.test(set), 'provisioning takes no merchant actor');
+  assert.ok(set.includes('identity_member_lock(p_merchant)') && set.includes('insert into public.identity_events'));
+  const open = fnDef(ME, 'identity_open_session');
+  const i = (s) => open.indexOf(s);
+  assert.ok(i('identity_member_lock(p_merchant)') > 0, 'same per-merchant lock as memberships');
+  assert.ok(i("m.status <> 'ACTIVE'") > 0 && i("e.status <> 'ACTIVE'") > 0, 'ACTIVE membership and ACTIVE module required');
+  assert.ok(i('insert into public.app_sessions') > i("e.status <> 'ACTIVE'"), 'the session row is inserted only after the checks');
+  assert.ok(i("'SESSION_OPENED'") > i('insert into public.app_sessions'), 'SESSION_OPENED written in the same transaction');
+  assert.ok(!/p_token\b|token text/.test(open) && open.includes('p_token_hash'), 'only the token hash reaches the database');
+  for (const f of ['identity_module_set', 'identity_open_session']) {
+    assert.match(fnDef(ME, f), /security definer set search_path = ''/);
+    assert.ok(ME.split('\n').some((l) => l.startsWith(`revoke execute on function ${f}(`) && l.trim().endsWith(') from public, anon, authenticated;')), f);
+  }
+  assert.match(ME, /revoke insert on table app_sessions from service_role;/);
+  assert.ok(!/shopify|source_id|source_system/i.test(ME), 'Shopify plays no part');
+});

@@ -23,7 +23,7 @@ function matches(row, filters) {
 
 /** @param {{ merchants?: string[], users?: string[], latencyMs?: number }} [o] merchant ids and auth.users ids that exist (foreign keys) */
 export function createIdentityDb({ merchants = [], users = [], latencyMs = 0 } = {}) {
-  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [], identity_auth_reservations: [], merchant_members: [] };
+  const tables = { app_sessions: [], identity_events: [], identity_rate_limits: [], identity_auth_reservations: [], merchant_members: [], module_entitlements: [] };
   let failEvents = null; // simulates an identity_events insert failing INSIDE a membership function
   const calls = [];
   let failNext = null;
@@ -81,6 +81,55 @@ export function createIdentityDb({ merchants = [], users = [], latencyMs = 0 } =
     return { ok: true, code: { ADD: 'MEMBER_ADDED', CHANGE_ROLE: 'MEMBER_ROLE_CHANGED', SUSPEND: 'MEMBER_SUSPENDED', REACTIVATE: 'MEMBER_REACTIVATED' }[a.p_action] };
   }
 
+  // Mirror of the C3 SQL functions (migration 20260928150000; verified for real in PGlite): one uninterrupted body = one
+  // transaction under the per-merchant lock; the change and its journal entry are committed together or not at all.
+  const MODULE_CODES = ['finance', 'analytics', 'growth'];
+  function accessFn(fn, a) {
+    const commitAll = (events, change) => {
+      for (const ev of events) if (!/^[a-z][a-z0-9_-]{1,39}$/.test(ev.module)) throw dbError('check violation (identity_events.module)');
+      if (failEvents) { const e = failEvents; throw e; }
+      if (change) change();
+      for (const ev of events) { eventSeq += 1; tables.identity_events.push({ id: eventSeq, ...ev }); }
+    };
+    if (fn === 'identity_module_set') {
+      if (!MODULE_CODES.includes(a.p_module)) return { ok: false, code: 'MODULE_UNKNOWN' };
+      if (!['ACTIVE', 'SUSPENDED'].includes(a.p_status)) return { ok: false, code: 'STATUS_INVALID' };
+      if (!merchants.includes(a.p_merchant)) return { ok: false, code: 'MERCHANT_UNKNOWN' };
+      if (!/^[a-z][a-z0-9_]{1,31}:[a-z0-9_-]{1,64}$/.test(a.p_source)) throw dbError('check violation (source)');
+      const cur = tables.module_entitlements.find((e) => e.merchant_id === a.p_merchant && e.module_code === a.p_module);
+      if (!cur && a.p_status === 'SUSPENDED') return { ok: false, code: 'NOT_ENABLED' };
+      if (cur && cur.status === a.p_status) return { ok: false, code: 'NO_CHANGE' };
+      const kind = a.p_status === 'ACTIVE' ? 'MODULE_ENABLED' : 'MODULE_SUSPENDED';
+      const ev = { occurred_at: a.p_now, merchant_id: a.p_merchant, user_id: null, session_id: null, module: 'core', event_type: kind, outcome: 'SUCCESS', correlation_id: a.p_correlation, entity_type: 'module', entity_id: a.p_module, detail: { fromStatus: cur ? cur.status : 'NONE', toStatus: a.p_status, source: a.p_source } };
+      commitAll([ev], () => {
+        if (!cur) tables.module_entitlements.push({ merchant_id: a.p_merchant, module_code: a.p_module, status: 'ACTIVE', enabled_at: a.p_now, suspended_at: null, created_at: a.p_now, updated_at: a.p_now, source: a.p_source, last_operation_id: a.p_correlation });
+        else Object.assign(cur, { status: a.p_status, suspended_at: a.p_status === 'SUSPENDED' ? a.p_now : null, updated_at: a.p_now, source: a.p_source, last_operation_id: a.p_correlation });
+      });
+      return { ok: true, code: kind };
+    }
+    // identity_open_session
+    if (!MODULE_CODES.includes(a.p_module)) return { ok: false, code: 'MODULE_UNKNOWN' };
+    if (!merchants.includes(a.p_merchant)) return { ok: false, code: 'MERCHANT_UNKNOWN' };
+    const m = tables.merchant_members.find((x) => x.merchant_id === a.p_merchant && x.user_id === a.p_user);
+    const e = tables.module_entitlements.find((x) => x.merchant_id === a.p_merchant && x.module_code === a.p_module);
+    let deny = null; let kind = null;
+    if (!m) { deny = 'NOT_MEMBER'; kind = 'SESSION_ACCESS_DENIED'; }
+    else if (m.status !== 'ACTIVE') { deny = 'MEMBER_SUSPENDED'; kind = 'SESSION_ACCESS_DENIED'; }
+    else if (!e) { deny = 'MODULE_NOT_ENABLED'; kind = 'MODULE_ACCESS_DENIED'; }
+    else if (e.status !== 'ACTIVE') { deny = 'MODULE_SUSPENDED'; kind = 'MODULE_ACCESS_DENIED'; }
+    if (deny) {
+      commitAll([{ occurred_at: a.p_now, merchant_id: a.p_merchant, user_id: a.p_user, session_id: null, module: a.p_module, event_type: kind, outcome: 'DENIED', correlation_id: a.p_correlation, entity_type: 'module', entity_id: a.p_module, detail: { code: deny } }]);
+      return { ok: false, code: deny };
+    }
+    if (!/^[0-9a-f]{64}$/.test(a.p_token_hash)) throw dbError('check violation (token_hash)');
+    if (tables.app_sessions.some((s) => s.token_hash === a.p_token_hash)) throw dbError('unique violation (token_hash)');
+    if (!(ms(a.p_expires_at) > ms(a.p_now) && ms(a.p_expires_at) <= ms(a.p_now) + 12 * 3_600_000)) throw dbError('check violation (expiry)');
+    const sid = randomUUID();
+    commitAll([{ occurred_at: a.p_now, merchant_id: a.p_merchant, user_id: a.p_user, session_id: sid, module: a.p_module, event_type: 'SESSION_OPENED', outcome: 'SUCCESS', correlation_id: a.p_correlation, entity_type: 'session', entity_id: sid, detail: { role: m.role } }],
+      () => tables.app_sessions.push({ id: sid, merchant_id: a.p_merchant, user_id: a.p_user, module: a.p_module, token_hash: a.p_token_hash, created_at: a.p_now, last_seen_at: a.p_now, expires_at: a.p_expires_at, revoked_at: null, revoked_reason: null }));
+    return { ok: true, code: 'SESSION_OPENED', session_id: sid, role: m.role };
+  }
+
   const api = {
     async select(table, params) {
       await hop(); calls.push({ op: 'select', table }); maybeFail();
@@ -130,6 +179,7 @@ export function createIdentityDb({ merchants = [], users = [], latencyMs = 0 } =
     async rpc(fn, a) {
       await hop(); calls.push({ op: 'rpc', fn }); maybeFail();
       if (fn === 'identity_member_bootstrap_owner' || fn === 'identity_member_apply') return memberFn(fn, a);
+      if (fn === 'identity_module_set' || fn === 'identity_open_session') return accessFn(fn, a);
       const hex = (v) => /^[0-9a-f]{64}$/.test(v);
       if (!(a.p_window_seconds >= 60 && a.p_window_seconds <= 86400 && a.p_max_email >= 1 && a.p_max_email <= 1000 && a.p_max_ip >= 1 && a.p_max_ip <= 1000 && a.p_block_seconds >= 60 && a.p_block_seconds <= 86400)) throw dbError('invalid limits');
       const now = ms(a.p_now);

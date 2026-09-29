@@ -85,7 +85,10 @@ export function createSessionStore({ supabase, config = loadIdentityConfig(), no
   };
 
   /**
-   * Opens a session. Returns the token ONCE (the caller hands it to the browser later, C1b) and a view of the session.
+   * Low-level insert of a session row (C1a). Since C3 the database refuses a direct INSERT on app_sessions to the service role: a
+   * real session is opened only by src/identity/access.js through identity_open_session, which re-checks the membership and the
+   * module and journals SESSION_OPENED in the same transaction. Kept for the C1a unit tests of the session rules.
+   * Returns the token ONCE and a view of the session.
    * @param {{ userId: string, merchantId: string, module: string }} p
    */
   async function create({ userId, merchantId, module } = {}) {
