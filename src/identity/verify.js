@@ -44,8 +44,12 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
 
   /**
    * @param {{ email: string, password: string, ip?: string, correlationId?: string }} input
+   * @param {{ authorize?: (userId: string, correlationId: string) => Promise<{ ok: true, value?: any } | { ok: false, unavailable?: boolean }> }} [hooks]
+   *   authorize (C3): runs AFTER a correct password and BEFORE the attempt is settled. A refusal is settled as a FAILURE (it counts
+   *   against the limits exactly like a wrong password, so a correct password without access can never be told apart by the
+   *   limiter's behaviour) and answered { ok: false, error: 'ACCESS_DENIED' } (internal; the public layer merges it).
    */
-  async function verify(input = {}) {
+  async function verify(input = {}, { authorize = null } = {}) {
     for (const k of Object.keys(input)) if (!ALLOWED_INPUT.has(k)) throw new TypeError(`verify() does not accept "${k}"`);
     const { email, password, ip } = input;
     const correlationId = UUID.test(String(input.correlationId ?? '')) ? input.correlationId : newId();
@@ -71,11 +75,21 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
       const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '') : { ok: false, kind: 'INVALID' };
 
       if (result.ok) {
-        await quietly(settle('SUCCESS')); // releases the reservation and resets this address's failures (never the IP's)
         try {
           await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout } });
-        } catch { return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
-        return { ok: true, identity: Object.freeze({ userId: result.userId }) };
+        } catch { await quietly(settle('RELEASE')); return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
+        let authz = { ok: true, value: undefined };
+        if (authorize) { try { authz = await authorize(result.userId, correlationId); } catch { authz = { ok: false, unavailable: true }; } }
+        if (!authz || !authz.ok) {
+          if (authz?.unavailable) { await quietly(settle('RELEASE')); return { ok: false, error: 'UNAVAILABLE' }; }
+          let blockedNow = false;
+          try { blockedNow = (await settle('FAILURE')).blocked; } catch { /* still a refusal */ }
+          await quietly(journal('AUTH_FAILED', 'FAILURE', correlationId, { detail: { ...refs, blockedNow, reason: 'ACCESS_DENIED' } }));
+          return { ok: false, error: 'ACCESS_DENIED' };
+        }
+        await quietly(settle('SUCCESS')); // releases the reservation and resets this address's failures (never the IP's)
+        const identity = Object.freeze({ userId: result.userId });
+        return authorize ? { ok: true, identity, authorization: authz.value } : { ok: true, identity };
       }
       if (result.kind === 'UNAVAILABLE') {
         await quietly(settle('RELEASE')); // not the person's fault: nothing is counted
@@ -91,5 +105,6 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
     }
   }
 
-  return Object.freeze({ verify });
+  // `context` lets a consumer (the C3 access service) refuse to be assembled with a verifier of another merchant or module.
+  return Object.freeze({ verify, context });
 }

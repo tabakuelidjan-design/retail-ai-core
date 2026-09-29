@@ -139,11 +139,16 @@ merchant_invitations            PAS en v1 (D7) ; esquisse conservée pour plus t
   id, merchant_id -> merchants, email (citext), role, token_hash (sha256), status ('pending','accepted','revoked','expired'),
   expires_at, invited_by, accepted_by, created_at, updated_at ; unique (merchant_id, email) where status = 'pending'
 
-module_entitlements             modules activés par entreprise
-  merchant_id -> merchants, module text not null check (module ~ '^[a-z][a-z0-9_]{1,39}$'),   -- format ouvert (comme merchant_connectors) ;
-                                                                                               -- la liste connue est dans le code et testée
-  status check (status in ('enabled','disabled')), enabled_at, disabled_at, updated_by, created_at, updated_at
-  primary key (merchant_id, module)
+module_entitlements             modules activés par entreprise (construit en C3, migration 20260928150000)
+  merchant_id  -> merchants (on delete restrict)
+  module_code  check (module_code in ('finance','analytics','growth'))   -- registre FERMÉ, identique à src/identity/modules.js ;
+                                                                         -- Core n'est pas un module et n'a jamais d'entitlement
+  status       check (status in ('ACTIVE','SUSPENDED')), enabled_at, suspended_at (si et seulement si SUSPENDED),
+  created_at, updated_at, source (provenance, ex. provisioning:manual), last_operation_id (corrélation)
+  primary key (merchant_id, module_code) -- jamais supprimée physiquement ; écriture directe refusée au rôle serveur
+  -- activation / suspension : UNIQUEMENT par l'opération interne Nordla de provisioning ou de facturation (fonction
+  -- identity_module_set, sans acteur, non exposée au client), journalisée ATOMIQUEMENT (MODULE_ENABLED / MODULE_SUSPENDED).
+  -- Un OWNER ou un ADMIN ne peut jamais activer lui-même un module ; aucun rôle ne contourne un module absent ou suspendu.
 
 app_sessions                    sessions de l'application (une par connexion à un module)
   id uuid pk, token_hash text unique (sha256 du cookie), user_id -> auth.users, merchant_id -> merchants,
@@ -163,8 +168,9 @@ identity_events                 journal de sécurité, en ajout seul
 Raisons :
 - `merchant_members` sépare **qui** (Supabase) de **où et avec quel rôle** (Nordla) ; l'unicité `(merchant_id, user_id)` permet
   plusieurs personnes par entreprise et une personne dans plusieurs entreprises, sans rien changer plus tard.
-- `module_entitlements` au niveau entreprise : l'accès à un module = membre actif **et** module activé **et** rôle autorisé. Format
-  ouvert (et non liste SQL figée) pour être cohérent avec `merchant_connectors` : un nouveau module ne demande pas de migration.
+- `module_entitlements` au niveau entreprise : l'accès à un module = appartenance ACTIVE **et** module ACTIVE pour l'entreprise ;
+  aucun rôle ne remplace l'activation. Registre **fermé** (liste SQL et code, testés ensemble) : un nouveau module est ajouté
+  délibérément, par une migration et une modification du code.
 - `app_sessions` en base (et non en fichier local comme Finances) : survit aux redéploiements, partagée entre instances, et permet la
   **révocation depuis n'importe quel module** (déconnexion commune sans cookie commun, voir § 3).
 
