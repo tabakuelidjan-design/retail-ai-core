@@ -83,7 +83,7 @@ button { font-family: inherit; }
 .nordla-icon-lg { width: 28px; height: 28px; }
 
 /* ---------- kpi row ---------- */
-.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
 .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px 24px 20px; min-height: 178px; display: flex; flex-direction: column; justify-content: space-between; }
 .kpi-label { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .kpi-info { display: inline-flex; color: var(--muted); opacity: .7; }
