@@ -1,85 +1,65 @@
-# M2 - removal of the legacy merchant identity (runbook)
+# M2 - legacy merchant identity made optional and deprecated (runbook)
 
-Migration: `supabase/migrations/20260929170000_merchants_drop_legacy_identity.sql`. Companion files: `m2-preflight.sql` (read only),
-`m2-rollback.sql`. Decision: ADR 0003 section 7 (owner decision 2026-09-29: M2 drops the columns instead of only relaxing them).
+Migration: `supabase/migrations/20260929170000_merchants_deprecate_legacy_identity.sql`. Companion files: `m2-preflight.sql` (read
+only), `m2-rollback.sql`. Decision: ADR 0003 section 7 - **no column is dropped in M2**.
 
 **Status: prepared locally, applied nowhere.** Nothing in this runbook is to be run without the owner's explicit approval.
 
-## What M2 removes, and only that
+## What M2 changes, and only that
 
-| Object | Created by | After M2 |
+| Object | Before M2 | After M2 |
 |---|---|---|
-| `merchants.source_system` (text, NOT NULL) | `20260920132500_phase1_merchant_identity.sql` | dropped |
-| `merchants.source_id` (text, NOT NULL, column comment) | same | dropped |
-| `merchants.source_domain` (text, nullable, column comment) | same | dropped |
-| `merchants_source_unique` UNIQUE (source_system, source_id) + its index | same | dropped |
+| `merchants.source_system` (text) | NOT NULL | **nullable**, kept, values unchanged, comment `DEPRECATED` |
+| `merchants.source_id` (text) | NOT NULL | **nullable**, kept, values unchanged, comment `DEPRECATED` |
+| `merchants.source_domain` (text) | nullable | unchanged (nullable), values unchanged, comment `DEPRECATED` |
+| `merchants_source_unique` UNIQUE (source_system, source_id) + index | present | **kept, unchanged** |
 
-Kept: `merchants.id / name / vertical / created_at` (no UUID changes), every `merchant_connectors` row (M1, unchanged), every business
-table - their own `source_system / source_id` columns identify synced rows (products, orders, ...), not the merchant.
-Verified on the real schemas (read-only, 2026-09-29): production `xbtzjabbseclmqfozjeo` and staging `fvhiammdskpcnfodsnrc` have exactly
-these objects; no view, trigger, policy, publication or function depends on the three columns; each has one merchant with exactly one
-matching `shopify` connector and the same domain.
+Effect: a Nordla merchant can be created with no external identity (the three values NULL); several such merchants are accepted
+(NULLs are distinct in a PostgreSQL unique constraint) while two identical non-null external identities are still refused. No row of
+any table is written, no merchant UUID changes, `merchant_connectors` and business tables are untouched. Dropping the columns is not
+part of M2: it would be a separate, later migration after a much longer stable period and a new explicit decision.
 
-## Prerequisites (all required, in this order)
+Verified on the real schemas (read-only, 2026-09-29): production `xbtzjabbseclmqfozjeo` and staging `fvhiammdskpcnfodsnrc` have
+exactly the expected starting state (source_system / source_id NOT NULL, source_domain nullable, `merchants_source_unique` =
+`UNIQUE (source_system, source_id)`), one merchant each with its exact `shopify` connector.
 
-1. **C6-F deployed** on Core, Finance and Analytics in production and stable: no running code reads or writes `merchants.source_*`.
-   Production today still runs Finance `21dc924` and Analytics `e593475`, which identify the merchant through `merchants.source_id`:
-   M2 before their switch **breaks them**.
-2. **No old code can come back**: the production services are still linked to GitHub branches whose heads are pre-C6 code
-   (`feature/core-sync-cron` = b7973dd, `feature/finance-shipping-vat-fix` = 21dc924, `feature/explorer-period-selector` = e593475).
-   After M2 a push / "Deploy latest commit" / "Redeploy" of one of them would **crash** that service (old Core upserts
-   `merchants.source_*`; old Finance / Analytics select by `source_id`). Disconnect or re-point those sources first (owner decision).
-3. **Staging first**, with the same procedure, then production.
-4. `scripts/finance-db-concurrency-check.mjs` (staging tool, kept, never run on production) inserts a scratch merchant with
-   `source_system / source_id`: after M2 on staging it must insert `{ name }` only (one-line change, owner approval) before its next use.
+## Prerequisites
+
+1. **C6-F deployed** on Core, Finance and Analytics in production and stable. Old code (Finance `21dc924`, Analytics `e593475`,
+   Core `b7973dd`) keeps working with nullable columns as long as the existing values are there (M2 changes none), but only C6-F code is
+   ready for a merchant **without** external identity - so no such merchant is created before the switch.
+2. **Staging first**, same procedure, then production, between two Core sync cycles (lock timeout 5 s).
 
 ## Pre-application check
 
-1. Run `docs/runbooks/m2-preflight.sql` (selects only): it must return **no row**. Each row is a blocker M2 itself would raise on:
-   `CONNECTOR_OF_ANOTHER_MERCHANT`, `NO_MATCHING_CONNECTOR`, `SEVERAL_CONNECTORS_OF_IDENTITY_KIND`, `DUPLICATED_LEGACY_IDENTITY`,
-   `DOMAIN_NOT_REBUILDABLE`, `NON_REBUILDABLE_LEGACY_VALUE`, `OTHER_DEPENDENT_OBJECT`, `FUNCTION_MAY_USE_LEGACY_COLUMNS`.
-2. The migration list shows M1 once and no M2.
-3. The latest Core sync finished (apply between two cycles; the lock timeout is 5 s).
+Run `docs/runbooks/m2-preflight.sql` (selects only): it must return **no row**. Blockers (M2 raises on the same): `M1_MISSING`,
+`UNEXPECTED_COLUMN_STATE` (e.g. M2 already applied), `UNEXPECTED_UNIQUE_CONSTRAINT`, `CONNECTOR_OF_ANOTHER_MERCHANT`,
+`NO_MATCHING_CONNECTOR`. The migration list must show M1 once and no M2.
 
-## Proofs to keep before applying (outside the repository, with a sha256 of each file)
+## Proofs to keep before applying
 
-- `select id, name, vertical, created_at, source_system, source_id, source_domain from public.merchants order by id` (full export - the
-  only exact source for the rollback of a merchant whose connectors changed after M2);
-- the full `merchant_connectors` export (all columns);
-- a content fingerprint of every public table (row count + md5 of the rows, as used for M1 / C6-C);
-- the `merchants` schema (columns, constraints, indexes, comments) and the migration list;
-- the sha256 of the M2 file actually applied.
+The `merchants` export (all columns), the `merchant_connectors` export, the content fingerprint of every public table, the `merchants`
+schema (columns, nullability, constraints, indexes, comments) and the migration list; the sha256 of the M2 file actually applied.
 
 ## Behaviour on an anomaly
 
-M2 is one transaction. Every check runs before the first drop; any anomaly raises `P0001` with an explicit message naming the merchant
-id(s) (never an external value, never a secret), and **nothing is changed** - no partial state. It never picks a connector or a merchant.
-The drop is RESTRICT: an unknown dependent object also aborts everything. A second run is refused ("not in the expected state").
+One transaction; every check runs before the first ALTER; any anomaly raises `P0001` naming merchant ids only (never an external
+value, never a secret) and **nothing is changed**. It never picks a connector or a merchant. A second run is refused (the columns are
+no longer NOT NULL: "not in the expected state").
 
 ## Rollback (`docs/runbooks/m2-rollback.sql`, owner approval only)
 
-Restores the three columns, their NOT NULL, `merchants_source_unique` and the column comments, in one transaction, without touching
-`merchant_connectors`, any business table or any merchant id. Values come, per merchant, from:
-
-1. **the pre-M2 proof** if it is loaded first into the temporary table `m2_proof` (same session) - exact by definition;
-2. otherwise **merchant_connectors**: the single connector of a kind with a natural id (`shopify`, `woocommerce`, `prestashop`, `odoo`)
-   -> `(kind, external_id, external_domain)`;
-3. otherwise the canonical placeholder `('nordla', 'nordla:' || id, null)`.
-
-Exact automatically: every merchant that existed before M2 whose connectors did not change since (M2 only ran when each merchant was
-exactly case 2 or case 3). **Ambiguous - the proof is required:**
-- a merchant that gained a second external connector after M2 -> the rollback **refuses** without the proof;
-- a merchant whose identity connector was deleted after M2 -> it would silently become the placeholder: load the proof;
-- a merchant created after M2 has no legacy value by definition -> it gets the placeholder (correct for a merchant without Shopify).
-
-After a rollback, M2 can be re-applied as is. The rollback only serves pre-C6 code; C6-F code does not need the columns.
+Restores the two NOT NULL constraints, nothing else. It first checks that no merchant has a NULL `source_system` or `source_id`; if
+one does (typically a merchant created without Shopify after M2), it **refuses** with an explicit message naming those merchants and
+changes nothing - it never chooses a connector and never invents or rebuilds an identity; such a merchant needs an explicit owner
+decision first. Values, `merchants_source_unique`, `merchant_connectors` and business tables are untouched. After a rollback M2 can be
+applied again as is.
 
 ## Validation (local, throwaway PostgreSQL 18 - PGlite)
 
-All 27 migrations before M2, then M2, on synthetic data, both as one implicit transaction and inside an explicit BEGIN/COMMIT (44/44
-each): normal migration, merchant without Shopify intact, three merchants isolated, refusals (missing connector, connector of another
-merchant, ambiguity, domain, non-rebuildable value, dependent view / index / function), nothing changed after a refusal, preflight
-reports each blocker, UUIDs / connectors / business tables byte-identical, exact disappearance of the columns / constraint / index,
-exact rollback (with and without proof), rollback refusal on ambiguity, re-application after rollback. 14 SQL mutants (each check
-disabled, CASCADE, data writes, rollback weakened) are all killed. PostgreSQL 18 records NOT NULL as constraints: M2 accepts them
-(they are the columns' own); production (older) does not have them.
+All 27 migrations before M2, then M2, on synthetic data, as one implicit transaction and inside an explicit BEGIN/COMMIT: the three
+columns remain, source_system / source_id nullable, source_domain unchanged, `merchants_source_unique` unchanged, every value, UUID,
+connector and business row identical, DEPRECATED comments, merchants with the three values NULL accepted (several), identical non-null
+identities refused, refusals (missing connector, connector of another merchant, unexpected schema or constraint, second run) with
+nothing changed and reported by the preflight, rollback success without NULL and explicit refusal with a NULL, re-application after
+rollback. SQL mutants (each check disabled, destructive or data-writing variants, rollback weakened) are all killed.

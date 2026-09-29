@@ -1,10 +1,10 @@
-// M2 (ADR 0003): the static contract of the migration that removes merchants' legacy external identity (source_system, source_id,
-// source_domain, merchants_source_unique), of its read-only preflight and of its rollback - and the proof that src/ no longer reads
-// those columns. Hermetic: file contents only (no git, no database). The SQL behaviour itself is exercised in a throwaway PostgreSQL
-// before any application (see docs/runbooks/m2-merchants-legacy-identity.md, "Validation").
+// M2 (ADR 0003): the static contract of the NON-DESTRUCTIVE migration that makes merchants' legacy external identity optional and
+// deprecated (source_system / source_id lose NOT NULL; source_domain unchanged; the three columns and merchants_source_unique KEPT),
+// of its read-only preflight and of its rollback - and the proof that src/ does not read those columns. Hermetic: file contents only
+// (no git, no database). The SQL behaviour is exercised in a throwaway PostgreSQL before any application (runbook, "Validation").
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,69 +15,79 @@ const read = (rel) => lf(readFileSync(path.join(ROOT, rel), 'utf8'));
 const fp = (s) => createHash('sha256').update(s).digest('hex').slice(0, 32); // 128-bit fingerprint (a full digest trips the secret scan)
 const code = (sql) => sql.split('\n').map((l) => l.replace(/--.*$/, '')).join('\n'); // comments stripped
 
-const M2_FILE = '20260929170000_merchants_drop_legacy_identity.sql';
-const M2 = read(`supabase/migrations/${M2_FILE}`); const M2_CODE = code(M2);
-const PREFLIGHT = read('docs/runbooks/m2-preflight.sql'); const ROLLBACK = read('docs/runbooks/m2-rollback.sql');
+const MIGRATIONS = 'supabase/migrations';
+const M2_FILE = '20260929170000_merchants_deprecate_legacy_identity.sql';
+const M2 = read(`${MIGRATIONS}/${M2_FILE}`); const M2_CODE = code(M2);
+const PREFLIGHT = read('docs/runbooks/m2-preflight.sql'); const ROLLBACK = read('docs/runbooks/m2-rollback.sql'); const ROLLBACK_CODE = code(ROLLBACK);
 
-test('M1 and every migration before M2 are untouched (content fingerprints of the applied files)', () => {
-  assert.equal(fp(read('supabase/migrations/20260927100000_merchant_connectors.sql')), 'd60dd3b61f27bb9c791e46ac28a7f761', 'M1 = the file applied in production');
-  const files = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql') && f < M2_FILE).sort();
-  assert.equal(files.length, 27);
-  assert.equal(fp(files.map((f) => `${f}\n${read(`supabase/migrations/${f}`)}`).join('\n')), '530550cd8181628a8939c8dd1a9338b3');
-  assert.equal(readdirSync(path.join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql')).sort().at(-1), M2_FILE, 'M2 is the latest migration');
+test('M1 and every migration before M2 are untouched; M2 is the latest; no destructive M2 file exists', () => {
+  assert.equal(fp(read(`${MIGRATIONS}/20260927100000_merchant_connectors.sql`)), 'd60dd3b61f27bb9c791e46ac28a7f761', 'M1 = the file applied in production');
+  const all = readdirSync(path.join(ROOT, MIGRATIONS)).filter((f) => f.endsWith('.sql')).sort();
+  const before = all.filter((f) => f < M2_FILE);
+  assert.equal(before.length, 27);
+  assert.equal(fp(before.map((f) => `${f}\n${read(`${MIGRATIONS}/${f}`)}`).join('\n')), '530550cd8181628a8939c8dd1a9338b3');
+  assert.equal(all.at(-1), M2_FILE, 'M2 is the latest migration');
+  assert.equal(existsSync(path.join(ROOT, MIGRATIONS, '20260929170000_merchants_drop_legacy_identity.sql')), false, 'the destructive draft is gone');
 });
 
-test('M2 removes exactly the legacy identity of merchants: one constraint, three columns, RESTRICT (no CASCADE)', () => {
-  assert.match(M2_CODE, /alter table public\.merchants drop constraint merchants_source_unique;/);
-  assert.match(M2_CODE, /alter table public\.merchants drop column source_domain, drop column source_id, drop column source_system;/);
-  assert.doesNotMatch(M2_CODE, /cascade/i);
-  const alters = [...M2_CODE.matchAll(/alter table\s+([\w.]+)/gi)].map((m) => m[1]);
-  assert.deepEqual([...new Set(alters)], ['public.merchants'], 'no other table is altered');
-  assert.doesNotMatch(M2_CODE, /\b(create|drop)\s+(table|view|function|trigger|index|policy)\b/i);
-  assert.doesNotMatch(M2_CODE, /\bdrop\s+column\s+(?!source_(domain|id|system)\b)/i);
+test('no migration ever drops a merchants legacy column or merchants_source_unique', () => {
+  for (const f of readdirSync(path.join(ROOT, MIGRATIONS)).filter((x) => x.endsWith('.sql'))) {
+    const statements = code(read(`${MIGRATIONS}/${f}`)).split(';').map((s) => s.replace(/\s+/g, ' ').trim().toLowerCase());
+    for (const s of statements.filter((x) => /^alter table (public\.)?merchants\b/.test(x))) {
+      assert.doesNotMatch(s, /drop column (if exists )?source_(system|id|domain)\b/, `${f}: ${s}`);
+      assert.doesNotMatch(s, /drop constraint (if exists )?merchants_source_unique\b/, `${f}: ${s}`);
+    }
+    assert.doesNotMatch(statements.join(';'), /drop index (if exists )?(public\.)?merchants_source_unique\b/, f);
+  }
 });
 
-test('M2 writes no data: no insert / update / delete / truncate / merge, merchants UUIDs and connectors untouched', () => {
+test('M2 is non-destructive: no DROP COLUMN / CONSTRAINT / INDEX / TABLE, no CASCADE, no data written', () => {
+  assert.doesNotMatch(M2_CODE, /\bdrop\s+(column|constraint|index|table|view|function|trigger|policy)\b/i);
+  assert.doesNotMatch(M2_CODE, /\bcascade\b/i);
   assert.doesNotMatch(M2_CODE, /\b(insert\s+into|update\s+[\w.]+\s+set|delete\s+from|truncate|merge\s+into)\b/i);
-  assert.match(M2_CODE, /lock table public\.merchants in access exclusive mode;/);
+  assert.doesNotMatch(M2_CODE, /\b(create|rename)\b/i);
+});
+
+test('M2 changes exactly two nullabilities and three comments on merchants, nothing on source_domain but its comment', () => {
+  const alters = [...M2_CODE.matchAll(/alter table\s+[^;]+;/gi)].map((m) => m[0].replace(/\s+/g, ' ').trim());
+  assert.deepEqual(alters, ['alter table public.merchants alter column source_system drop not null, alter column source_id drop not null;']);
+  assert.doesNotMatch(M2_CODE, /alter\s+column\s+source_domain/i);
+  for (const col of ['source_system', 'source_id', 'source_domain']) assert.match(M2, new RegExp(`comment on column public\\.merchants\\.${col} is\\n  'DEPRECATED \\(M2, ADR 0003\\)`), col);
+  assert.equal([...M2_CODE.matchAll(/comment on column/gi)].length, 3);
   assert.match(M2_CODE, /lock table public\.merchant_connectors in share mode;/, 'connectors are read-locked, never written');
   assert.match(M2_CODE, /set local lock_timeout = '5s';/);
 });
 
-test('M2 checks everything BEFORE the first drop, each refusal is explicit, and a postcondition closes it', () => {
-  const firstDrop = M2_CODE.indexOf('drop constraint');
-  const refusals = ['merchant_connectors (M1) is missing', 'not in the expected state', 'linked to a connector of another merchant', 'no matching connector',
-    'ambiguous identity', 'duplicated legacy identity', 'differs from its connector external_domain', 'cannot be rebuilt', 'other object(s) depend', 'may use the legacy columns'];
-  for (const r of refusals) {
-    const at = M2_CODE.indexOf(r);
-    assert.ok(at > 0, `refusal present: ${r}`); assert.ok(at < firstDrop, `checked before any drop: ${r}`);
+test('M2 checks the expected schema and the consistency with merchant_connectors BEFORE its ALTER, then a postcondition', () => {
+  const alterAt = M2_CODE.indexOf('alter table public.merchants alter column');
+  for (const r of ['merchant_connectors (M1) is missing', 'not in the expected state', "is_nullable = 'NO'", "column_name = 'source_domain' and is_nullable = 'YES'",
+    "pg_get_constraintdef(oid) = 'UNIQUE (source_system, source_id)'", 'connector of another merchant', 'no matching connector']) {
+    const at = M2_CODE.indexOf(r); assert.ok(at > 0 && at < alterAt, `before the ALTER: ${r}`);
   }
   assert.ok(M2_CODE.indexOf('connector of another merchant') < M2_CODE.indexOf('no matching connector'), 'the most specific diagnosis first');
-  assert.ok(M2_CODE.indexOf('postcondition failed') > firstDrop);
-  assert.match(M2_CODE, /array\['shopify', 'woocommerce', 'prestashop', 'odoo'\]/, 'the kinds with a natural external id');
-  assert.match(M2_CODE, /'nordla:' \|\| m\.id::text/, 'the only accepted value without an external identity: the canonical placeholder');
+  const post = M2_CODE.slice(M2_CODE.indexOf('$m2check$'));
+  assert.match(post, /is_nullable = 'YES'\) <> 3/); assert.match(post, /merchants_source_unique/);
 });
 
 test('the identity kinds of M2 are exactly the connector kinds that require an external id', async () => {
   const { KINDS_REQUIRING_EXTERNAL_ID } = await import('../src/tenant/connectors.js');
-  for (const sql of [M2_CODE, code(ROLLBACK)]) assert.ok(sql.includes(`array[${KINDS_REQUIRING_EXTERNAL_ID.map((k) => `'${k}'`).join(', ')}]`));
+  assert.ok(M2_CODE.includes(`array[${KINDS_REQUIRING_EXTERNAL_ID.map((k) => `'${k}'`).join(', ')}]`));
+  assert.ok(code(PREFLIGHT).includes(`values ${KINDS_REQUIRING_EXTERNAL_ID.map((k) => `('${k}')`).join(', ')}`));
 });
 
 test('the preflight is read-only and reports every blocker M2 refuses on', () => {
   const sql = code(PREFLIGHT);
   assert.doesNotMatch(sql, /\b(insert|update|delete|truncate|alter|drop|create|grant|revoke|lock|merge|comment)\b/i);
-  for (const b of ['CONNECTOR_OF_ANOTHER_MERCHANT', 'NO_MATCHING_CONNECTOR', 'SEVERAL_CONNECTORS_OF_IDENTITY_KIND', 'DUPLICATED_LEGACY_IDENTITY', 'DOMAIN_NOT_REBUILDABLE',
-    'NON_REBUILDABLE_LEGACY_VALUE', 'OTHER_DEPENDENT_OBJECT', 'FUNCTION_MAY_USE_LEGACY_COLUMNS']) assert.ok(sql.includes(`'${b}'`), b);
+  for (const b of ['M1_MISSING', 'UNEXPECTED_COLUMN_STATE', 'UNEXPECTED_UNIQUE_CONSTRAINT', 'CONNECTOR_OF_ANOTHER_MERCHANT', 'NO_MATCHING_CONNECTOR']) assert.ok(sql.includes(`'${b}'`), b);
 });
 
-test('the rollback never writes a connector or a business table, never changes an id, and refuses to choose', () => {
-  const sql = code(ROLLBACK);
-  assert.doesNotMatch(sql, /(insert\s+into|update|delete\s+from|truncate)\s+public\.(?!merchants\b)/i);
-  assert.doesNotMatch(sql, /set\s+id\s*=|\bid\s*=\s*gen_random_uuid/i);
-  assert.match(sql, /M2 rollback refused: .* several external connectors and no proof row/);
-  assert.match(sql, /pg_temp\.m2_proof/, 'the pre-M2 proof, when loaded, wins over any rebuild');
-  assert.match(sql, /add constraint merchants_source_unique unique \(source_system, source_id\);/);
-  assert.match(sql, /alter column source_system set not null;[\s\S]*alter column source_id set not null;/);
+test('the rollback only restores the two NOT NULL, refuses on a NULL value, never invents an identity nor touches anything else', () => {
+  const alters = [...ROLLBACK_CODE.matchAll(/alter table\s+[^;]+;/gi)].map((m) => m[0].replace(/\s+/g, ' ').trim());
+  assert.deepEqual(alters, ['alter table public.merchants alter column source_system set not null, alter column source_id set not null;']);
+  assert.match(ROLLBACK_CODE, /where source_system is null or source_id is null/);
+  assert.match(ROLLBACK_CODE, /M2 rollback refused: % merchant\(s\) have a NULL source_system or source_id/);
+  assert.ok(ROLLBACK_CODE.indexOf('M2 rollback refused') < ROLLBACK_CODE.indexOf('alter table'), 'the refusal comes before the ALTER');
+  assert.doesNotMatch(ROLLBACK_CODE, /\b(insert\s+into|update\s+[\w.]+\s+set|delete\s+from|truncate|drop|cascade|merchant_connectors|nordla:)\b/i);
 });
 
 test('src/ reads no legacy merchant identity: merchants is only ever selected by id, for id / name / vertical', () => {

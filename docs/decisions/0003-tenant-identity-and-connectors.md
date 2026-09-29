@@ -176,13 +176,14 @@ No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-enviro
 - **M1 - additive, part of the first switch:** create `merchant_connectors`; backfill one `shopify` connector per existing merchant with
   `source_system = 'shopify'` (`external_id = source_id`, `external_domain = source_domain`, `status = 'CONFIGURED'`).
   No existing merchant UUID changes, no business table changes, nothing deleted.
-- **M2 - much later, never part of the first switch:** originally "make `merchants.source_system` / `source_id` optional, nothing
-  dropped". **Owner decision 2026-09-29: M2 removes the legacy identity** - `merchants.source_system`, `source_id`, `source_domain`
-  and `merchants_source_unique` are dropped (`20260929170000_merchants_drop_legacy_identity.sql`); external identities live only in
-  `merchant_connectors`. It refuses, before any drop and without changing anything, unless every legacy value can be rebuilt exactly
-  from `merchant_connectors` (or is the canonical `nordla` placeholder) and nothing else depends on the columns; UUIDs, connectors and
-  business tables are untouched. Applied only after C6-F runs in production for Core, Finance and Analytics and no old code can be
-  redeployed; staging first. Procedure, proofs and exact rollback: `docs/runbooks/m2-merchants-legacy-identity.md`.
+- **M2 - much later, never part of the first switch:** make `merchants.source_system` / `source_id` optional and mark them deprecated,
+  only after every service uses the resolver and the fallback is removed. **No column is dropped in M2.**
+  `20260929170000_merchants_deprecate_legacy_identity.sql` keeps the three columns (`source_system`, `source_id`, `source_domain`) and
+  every existing value, drops only the NOT NULL of `source_system` / `source_id` (`source_domain` was already optional), keeps
+  `merchants_source_unique` (identical non-null identities still refused; several merchants with both values NULL accepted) and marks
+  the three columns `DEPRECATED`. The columns are kept temporarily for compatibility and a simple rollback (restore the two NOT NULL,
+  refused if a NULL exists - never an invented identity). Their eventual removal belongs to a separate, future migration, after a much
+  longer stable period and a new explicit owner decision. Procedure: `docs/runbooks/m2-merchants-legacy-identity.md`.
 
 ## 8. HABB switch order (exact)
 
@@ -278,8 +279,8 @@ Status of the section 8 plan: steps 1-2 done on staging only; step 3 code built;
 3. Validate: no identity `SHOP_QUERY` at boot, sync writes checked against the connector, Analytics without the single-merchant rule.
 4. Keep `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` unset (off); after a stable production period, remove the fallback code (own change:
    C6-F, prepared locally, deployed only after the Finance and Analytics switches).
-5. Prepare M2 (now: drop the legacy identity columns - section 7; prepared locally on `feature/core-merchant-cleanup-m2`, applied
-   nowhere). **M2 must be finished before the
+5. Prepare M2 (make `merchants.source_system` / `source_id` optional, deprecated, nothing dropped - section 7; prepared locally on
+   `feature/core-merchant-cleanup-m2`, applied nowhere). **M2 must be finished before the
    second external customer.**
 
 ### 12.4 Ordering decision (owner, 2026-09-28)
