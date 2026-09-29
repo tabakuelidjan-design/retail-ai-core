@@ -189,14 +189,15 @@ test('no "only merchant" logic left: one merchant + no NORDLA_MERCHANT_ID is ref
   }
 });
 
-test('legacy fallback (ADR): off -> refused; explicitly on and no NORDLA_MERCHANT_ID -> tenant via merchant_connectors (not merchants.source_id), logged', async () => {
+test('C6-F: no NORDLA_MERCHANT_ID -> refused whatever the old switch says; the shop linked to B never selects B (Shopify not even asked)', async () => {
   const s = await twoMerchants(); const dir = await tmp();
-  await assert.rejects(runReport({ mode: 'report', env: { ...SHOPIFY_ENV }, supabase: s, outDir: dir, log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
-  const lines = [];
-  const shopB = () => ({ graphql: async () => ({ shop: { id: 'gid://shopify/Shop/SYN-B' } }) });
-  const r = await runReport({ mode: 'report', env: { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, supabase: s, outDir: dir, log: (l) => lines.push(l), createClient: shopB });
-  assert.equal(r.merchantId, B);
-  assert.ok(lines.some((l) => /tenant source = legacy_shopify/.test(l)) && lines.some((l) => /WARNING/.test(l)));
+  let asked = 0; const lines = [];
+  const shopB = () => ({ graphql: async () => { asked += 1; return { shop: { id: 'gid://shopify/Shop/SYN-B' } }; } });
+  for (const env of [{ ...SHOPIFY_ENV }, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'on' }]) {
+    await assert.rejects(runReport({ mode: 'report', env, supabase: s, outDir: dir, log: (l) => lines.push(l), createClient: shopB }), (e) => e.code === T.MERCHANT_ID_MISSING);
+  }
+  assert.equal(asked, 0);
+  assert.ok(!lines.some((l) => /legacy_shopify|WARNING/.test(l)));
 });
 
 test('the Shopify-comparison modes say so explicitly when Shopify is not configured; "report" never needs it', async () => {

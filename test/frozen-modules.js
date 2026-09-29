@@ -1,9 +1,11 @@
 // Test helper (not a test file): Finance, Analytics and shared code are frozen on the Nordla platform baseline (08619d7).
-// The only allowed exception is the fr-BE customer-facing label pass (owner decision 2026-09-28): the FR dictionaries and the
-// page titles may change their VISIBLE TEXT, never their keys, and no other Finance / Analytics / shared file may change.
+// The allowed exceptions: the fr-BE customer-facing label pass (owner decision 2026-09-28): the FR dictionaries and the page titles
+// may change their VISIBLE TEXT, never their keys; and the C6-F removal of the Shopify identity lookup (owner decision 2026-09-29),
+// pinned file by file (PINNED_FILES). No other Finance / Analytics / shared file may change.
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const BASELINE = '08619d7';
 const ROOT = new URL('..', import.meta.url);
@@ -22,6 +24,14 @@ export const LINE_SCOPED_FILES = {
 // NL / EN value stays exactly as on the baseline.
 export const ADDED_KEYS = ['common.pp'];
 export const KEY_ADD_ONLY_FILES = ['src/analytics-premium/ui/lang-nl.js', 'src/analytics-premium/ui/lang-en.js'];
+// C6-F (owner decision 2026-09-29): the Shopify lookup of the MERCHANT IDENTITY is removed from the Finance runtime and the Analytics
+// tenant module. These two files may differ from the baseline only by that reviewed change: each is pinned to the first 128 bits
+// (32 hex) of the sha256 of its reviewed content (LF) - not a full 64-hex digest, which the repository secret scan rightly refuses.
+// Any other edit breaks the freeze again.
+export const PINNED_FILES = {
+  'src/finance/runtime.js': 'fb7f5cb43320e8675d9908032419e2de',
+  'src/analytics-premium/server/tenant.js': '4af54b6de7d88fbd3c4e704659864970',
+};
 
 function dictOf(src, file) {
   const ctx = { window: { FINANCE_LANG: {} } };
@@ -35,7 +45,11 @@ const frKeys = (src, file) => Object.keys(dictOf(src, file)).filter((k) => !ADDE
 /** Returns the list of violations (empty = the freeze holds). */
 export function frozenViolations() {
   const changed = git(['diff', '--name-only', BASELINE, '--', 'src/finance', 'src/analytics-premium', 'src/shared']).trim().split('\n').filter(Boolean);
-  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f) && !LINE_SCOPED_FILES[f] && !KEY_ADD_ONLY_FILES.includes(f)).map((f) => `${f}: frozen file changed`);
+  const out = changed.filter((f) => !LABEL_FILES.includes(f) && !APPEND_ONLY_FILES.includes(f) && !LINE_SCOPED_FILES[f] && !KEY_ADD_ONLY_FILES.includes(f) && !PINNED_FILES[f]).map((f) => `${f}: frozen file changed`);
+  for (const f of changed.filter((x) => PINNED_FILES[x])) {
+    const sha = createHash('sha256').update(readFileSync(new URL(f, ROOT), 'utf8').replace(/\r\n/g, '\n')).digest('hex').slice(0, 32);
+    if (sha !== PINNED_FILES[f]) out.push(`${f}: differs from its reviewed C6-F content`);
+  }
   for (const f of changed.filter((x) => KEY_ADD_ONLY_FILES.includes(x))) {
     const before = dictOf(git(['show', `${BASELINE}:${f}`]), f); const now = dictOf(readFileSync(new URL(f, ROOT), 'utf8'), f);
     const extra = Object.keys(now).filter((k) => !(k in before) && !ADDED_KEYS.includes(k));

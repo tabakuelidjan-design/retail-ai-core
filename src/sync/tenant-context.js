@@ -6,7 +6,7 @@
 
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
 import { SHOP_QUERY } from '../shopify/queries.js';
-import { resolveTenant, readMerchantIdFromEnv, isLegacyShopifyLookupEnabled } from '../tenant/index.js';
+import { resolveTenant } from '../tenant/index.js';
 import { createConnectorRepository } from '../tenant/connectors.js';
 import { hasShopifyCredentials, timeoutFetch } from '../connectors/shopify.js';
 
@@ -22,17 +22,12 @@ export class SyncConnectorError extends Error {
 }
 
 /**
- * The Core tenant. NORDLA_MERCHANT_ID is the normal path; the legacy Shopify lookup is offered to the resolver only when it is explicitly
- * enabled (NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP) and no merchant id is set - and it resolves through merchant_connectors, never
- * merchants.source_id. Refused (TenantResolutionError) before any write when the tenant cannot be resolved.
+ * The Core tenant: NORDLA_MERCHANT_ID through the shared resolver, nothing else - Shopify credentials never select a merchant (C6-F).
+ * Refused (TenantResolutionError) before any Shopify call and any write when the tenant cannot be resolved.
  */
-export async function resolveSyncTenant({ env = process.env, supabase, createClient = createShopifyClient, timeoutMs = DEFAULT_SYNC_SHOPIFY_TIMEOUT_MS, log = console.log }) {
-  const legacyShopify = !readMerchantIdFromEnv(env) && isLegacyShopifyLookupEnabled(env) && hasShopifyCredentials(env)
-    ? { findShopId: async () => (await createClient(loadShopifyConfigFromEnv(env), { fetchImpl: timeoutFetch(timeoutMs) }).graphql(SHOP_QUERY))?.shop?.id }
-    : undefined;
-  const tenant = await resolveTenant({ supabase, env, legacyShopify, legacyTimeoutMs: timeoutMs });
+export async function resolveSyncTenant({ env = process.env, supabase, log = console.log }) {
+  const tenant = await resolveTenant({ supabase, env });
   log(`Core tenant: ${tenant.merchant.name} (tenant source = ${tenant.source})`);
-  if (tenant.source === 'legacy_shopify') log('WARNING: tenant resolved through the legacy Shopify lookup (migration only) - set NORDLA_MERCHANT_ID.');
   return tenant;
 }
 

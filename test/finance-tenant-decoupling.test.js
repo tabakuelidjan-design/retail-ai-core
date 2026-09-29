@@ -1,6 +1,6 @@
 // Step 4 (ADR 0003): Finance starts and works from NORDLA_MERCHANT_ID with no Shopify at all; Shopify is an optional connector
-// (NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE); the legacy Shopify lookup is used only when explicitly enabled and resolves
-// through merchant_connectors. Synthetic data only; every network path is trapped.
+// (NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE); since C6-F there is no Shopify lookup of the tenant at all, whatever the flags.
+// Synthetic data only; every network path is trapped.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -109,7 +109,7 @@ test('two merchants: only the explicit NORDLA_MERCHANT_ID is served', async () =
   assert.equal((await createRuntime({ env: { NORDLA_MERCHANT_ID: A.id }, supabase: db(), log: quiet })).merchant.name, A.name);
 });
 
-// ---------- legacy Shopify fallback ----------
+// ---------- removed legacy Shopify fallback (C6-F) ----------
 test('legacy fallback disabled: never used (no Shopify call), even with Shopify credentials and no NORDLA_MERCHANT_ID', () => noNetwork(async () => {
   const t = trap();
   await assert.rejects(createRuntime({ env: { ...SHOPIFY_ENV }, supabase: db(), createShopifyClient: t.factory, log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
@@ -123,20 +123,21 @@ test('legacy fallback on + NORDLA_MERCHANT_ID set: the explicit id wins, Shopify
   assert.equal(rt.tenant.source, 'env'); assert.equal(rt.merchant.id, B.id); assert.equal(t.calls.created, 0);
 });
 
-test('legacy fallback explicitly on: shop -> merchant_connectors -> merchant (not merchants.source_id), logged as legacy_shopify', async () => {
+test('C6-F: the removed legacy switch re-enables nothing - Shopify credentials whose shop IS linked to A never select A (no client, no call)', () => noNetwork(async () => {
   const s = shopifyFactory(); const lines = [];
-  const rt = await createRuntime({ env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true', ...SHOPIFY_ENV }, supabase: db(), createShopifyClient: s.factory, log: (l) => lines.push(l) });
-  assert.equal(rt.merchant.id, A.id); assert.equal(rt.tenant.source, 'legacy_shopify');
-  assert.notEqual(A.source_id, SHOP_A, 'the legacy merchants.source_id column is NOT what matched');
-  assert.ok(lines.some((l) => /tenant source = legacy_shopify/.test(l)) && lines.some((l) => /WARNING/.test(l)));
-});
+  for (const on of ['true', '1', 'on']) {
+    await assert.rejects(createRuntime({ env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: on, ...SHOPIFY_ENV }, supabase: db(), createShopifyClient: s.factory, log: (l) => lines.push(l) }), (e) => e.code === T.MERCHANT_ID_MISSING);
+  }
+  assert.equal(s.calls.created, 0); assert.deepEqual(s.calls.queries, []);
+  assert.ok(!lines.some((l) => /legacy_shopify|WARNING/.test(l)));
+}));
 
-test('legacy fallback with an unknown shop, or a hanging Shopify: clean refusal, no merchant created', async () => {
+test('C6-F: neither merchants.source_id nor the shop domain selects a merchant; nothing created', async () => {
   const s = db(); const before = JSON.stringify(s._tables.get('merchants'));
-  await assert.rejects(createRuntime({ env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: '1', ...SHOPIFY_ENV }, supabase: s, createShopifyClient: shopifyFactory({ shop: 'gid://shopify/Shop/NOBODY' }).factory, log: quiet }), (e) => e.code === T.MERCHANT_NOT_FOUND && e.detail.reason === 'SHOP_NOT_LINKED');
-  await assert.rejects(createRuntime({ env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: '1', ...SHOPIFY_ENV }, supabase: s, createShopifyClient: shopifyFactory({ hang: true }).factory, log: quiet, shopifyTimeoutMs: 50 }), (e) => e.code === T.TENANT_LOOKUP_FAILED && e.detail.cause === 'TIMEOUT');
+  // SHOPIFY_SHOP_DOMAIN equals A's connector domain and A.source_id is a Shopify id: still refused without NORDLA_MERCHANT_ID.
+  await assert.rejects(createRuntime({ env: { ...SHOPIFY_ENV, SHOPIFY_SHOP_DOMAIN: 'synthetic-a.myshopify.example' }, supabase: s, createShopifyClient: shopifyFactory({ shop: A.source_id }).factory, log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
   assert.equal(JSON.stringify(s._tables.get('merchants')), before);
-  await assert.rejects(resolveTenant({ supabase: s, env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'on' } }), (e) => e.code === T.TENANT_SOURCE_NOT_AVAILABLE, 'flag on but no Shopify connection offered');
+  await assert.rejects(resolveTenant({ supabase: s, env: { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'on' } }), (e) => e.code === T.MERCHANT_ID_MISSING);
 });
 
 // ---------- the real server boot: port opened, zero Shopify ----------

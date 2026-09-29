@@ -78,8 +78,9 @@ A single module (planned: `src/tenant/`) is the only place any service obtains i
 1. **Authenticated session tenant** - future multi-tenant architecture: the tenant bound to the authenticated session or user.
    Not implemented now; the resolver interface must allow it without changing the modules.
 2. **`NORDLA_MERCHANT_ID`** - current single-tenant services (Finance, Core, Analytics): the explicit UUID of `merchants.id`.
-3. **Legacy Shopify lookup** - migration only, and only when `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` is explicitly enabled:
-   shop id -> `merchant_connectors (kind = 'shopify', external_id = shop id)` -> `merchant_id`. Logs a deprecation warning at every boot.
+3. ~~**Legacy Shopify lookup**~~ - **removed in C6-F.** It was migration only (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`, shop id ->
+   `merchant_connectors` -> `merchant_id`). Since C6-F the variable is not read, re-enables nothing, and the resolver refuses any
+   extra option (such as a shop reader) with a `TypeError`: Shopify can no longer discover or identify a merchant.
 
 There is **no implicit fallback**: never "the first merchant", never "the only merchant in the database".
 
@@ -89,8 +90,8 @@ There is **no implicit fallback**: never "the first merchant", never "the only m
 - Never selects a merchant automatically, never creates a merchant.
 - Fails cleanly with an explicit error when the id is missing, malformed or unknown and the mode requires it; it never falls back to
   another merchant.
-- Makes **no Shopify call** to determine identity (source 3 only during migration, behind the flag).
-- Returns `{ merchantId, source }` where `source` is `session | env | legacy_shopify`, so tests and logs can prove which path was used.
+- Makes **no Shopify call** to determine identity (since C6-F there is no Shopify path at all).
+- Returns `{ merchantId, source }` where `source` is `session | env`, so tests and logs can prove which path was used.
 
 ## 4. Connector contract
 
@@ -166,7 +167,7 @@ No change today (demonstration data). It uses the resolver as soon as it reads r
 |---|---|---|
 | `NORDLA_MERCHANT_ID` | UUID of `merchants.id` for a single-tenant service (Finance, Core, Analytics) | new; required once the switch is complete; not a secret |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` | Shopify connector configuration | optional for Finance/Analytics; required only by Core's Shopify sync |
-| `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` | enables resolver source 3 | transitional; off by default once the switch is done, then removed |
+| `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` | formerly enabled resolver source 3 | **removed in C6-F**: not read by any code; setting it has no effect |
 
 No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-environment configuration.
 
@@ -187,17 +188,19 @@ No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-enviro
 5. Validate on staging (with the synthetic Shopify stub).
 6. Validate in production.
 7. Disable the Shopify fallback (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` off).
-8. Remove the fallback code - only later, in its own change.
+8. Remove the fallback code - only later, in its own change (C6-F: prepared locally on `feature/core-merchant-id-c6f`; deployed
+   only after Finance and Analytics run on `NORDLA_MERCHANT_ID` in production).
 
 ## 9. Rollback strategy
 
-- **M1:** additive; rollback = stop using the table (code falls back to the legacy flag); dropping it is optional because nothing else
-  references it.
+- **M1:** additive; rollback = stop using the table (before C6-F: code falls back to the legacy flag; after C6-F the Shopify
+  connector reports MISCONFIGURED without its row, identity is unaffected); dropping it is optional because nothing else references it.
 - **Code:** each step is its own branch and deployment; rollback = redeploy the previous known-good deployment on Railway
   (no force push), as for every Finance release.
 - **Configuration:** with the legacy flag still on, removing `NORDLA_MERCHANT_ID` returns a service to today's behaviour.
 - **Fallback removal (step 8)** is only done once production has run on `NORDLA_MERCHANT_ID` without the flag; until then every step
-  stays reversible.
+  stays reversible. After C6-F, a service without `NORDLA_MERCHANT_ID` refuses to start (no Shopify path left); rolling C6-F back
+  = redeploying the previous known-good code (`7fb9079`), whose fallback is off as long as the flag is unset.
 
 ## 10. Mandatory tests
 
@@ -250,13 +253,14 @@ Production (Railway `app.nordla.app`, environment `production`), verified 2026-0
   `NORDLA_SERVICE` makes the service refuse to start** (by design): both variables must be set before the switch deployment.
 - Production database: 22 of the 23 repository migrations applied (all except `merchant_connectors`); no RLS policy anywhere.
 
-### 12.2 Legacy Shopify fallback still in the code (not used anywhere today)
+### 12.2 Legacy Shopify fallback - removed in C6-F
 
-The migration-only source 3 (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`) is present in four places: `src/finance/runtime.js`,
-`src/sync/tenant-context.js`, `src/analytics-premium/server/tenant.js`, `src/tenant/tool-context.js` (allow-listed by
-`test/remaining-tenant-decoupling.test.js`). No service sets the flag: staging uses `NORDLA_MERCHANT_ID`; production does not run this
-code yet. `SHOP_QUERY` is otherwise used only for the identity **check** (`src/sync/tenant-context.js`, `src/connectors/shopify.js`),
-never to choose the tenant.
+The migration-only source 3 (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`) was present in four places: `src/finance/runtime.js`,
+`src/sync/tenant-context.js`, `src/analytics-premium/server/tenant.js`, `src/tenant/tool-context.js`. C6-F removes it from the resolver
+and from all four callers; `test/c6f-merchant-identity.test.js` proves it for every entry point. `SHOP_QUERY` remains used only for the
+**connector** check of an already resolved merchant (`src/sync/tenant-context.js`, `src/connectors/shopify.js`), never to choose the
+tenant; `findMerchantByExternal` remains only to refuse linking one shop to two merchants and to explain a refused sync
+(`SHOP_LINKED_TO_ANOTHER_MERCHANT`), never to switch tenant.
 
 ### 12.3 Remaining switch steps for HABB (Core phase C6)
 
@@ -267,7 +271,8 @@ Status of the section 8 plan: steps 1-2 done on staging only; step 3 code built;
    `NORDLA_MERCHANT_ID` (HABB's existing `merchants.id`) set **before** the deployment; one service at a time, rollback = redeploy the
    previous commit.
 3. Validate: no identity `SHOP_QUERY` at boot, sync writes checked against the connector, Analytics without the single-merchant rule.
-4. Keep `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` unset (off); after a stable production period, remove the fallback code (own change).
+4. Keep `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` unset (off); after a stable production period, remove the fallback code (own change:
+   C6-F, prepared locally, deployed only after the Finance and Analytics switches).
 5. Prepare M2 (make `merchants.source_system` / `source_id` optional, deprecated, nothing dropped). **M2 must be finished before the
    second external customer.**
 

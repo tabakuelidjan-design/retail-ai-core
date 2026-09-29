@@ -5,9 +5,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 import {
-  resolveTenant, resolveMerchantById, readMerchantIdFromEnv, isLegacyShopifyLookupEnabled, isUuid,
-  TenantResolutionError, TENANT_ERROR_CODES, TENANT_SOURCES, MERCHANT_ID_ENV, LEGACY_SHOPIFY_LOOKUP_ENV,
+  resolveTenant, resolveMerchantById, readMerchantIdFromEnv, isUuid,
+  TenantResolutionError, TENANT_ERROR_CODES, TENANT_SOURCES, MERCHANT_ID_ENV,
 } from '../src/tenant/index.js';
+import * as resolverModule from '../src/tenant/index.js';
+
+// The removed migration switch (C6-F): set on purpose below to prove it re-enables nothing.
+const LEGACY_FLAG = 'NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP';
 
 const A = { id: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', name: 'Synthetic Merchant A', vertical: 'general_retail', source_system: 'shopify', source_id: 'gid://shopify/Shop/SYN-A' };
 const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchant B', vertical: 'bookstore', source_system: 'shopify', source_id: 'gid://shopify/Shop/SYN-B' };
@@ -100,29 +104,36 @@ test('no merchant is ever created or modified (only one select, table unchanged,
   assert.equal(rows().length, 1);
 });
 
-test('no Shopify: the module imports only ./connectors.js (nothing from Shopify) and never touches the network', () => noNetwork(async (hits) => {
+test('no Shopify: the module imports nothing (not even the connectors layer) and never touches the network', () => noNetwork(async (hits) => {
   const src = readFileSync(new URL('../src/tenant/index.js', import.meta.url), 'utf8');
-  assert.deepEqual([...src.matchAll(/^\s*import\s.*from\s+'([^']+)'/gm)].map((m) => m[1]), ['./connectors.js'], 'the resolver imports only the connectors layer');
-  assert.doesNotMatch(src, /shopify\/client|shopify\/queries|SHOP_QUERY|graphql|fetch\(/);
+  assert.deepEqual([...src.matchAll(/^\s*import\s.*from\s+'([^']+)'/gm)].map((m) => m[1]), [], 'the resolver has no import at all');
+  assert.doesNotMatch(src, /shopify\/client|shopify\/queries|SHOP_QUERY|graphql|fetch\(|findMerchantByExternal|source_id|source_system/);
   const { supabase } = spyDb(A);
-  await resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [MERCHANT_ID_ENV]: A.id, [LEGACY_SHOPIFY_LOOKUP_ENV]: 'true' } });
-  await resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [LEGACY_SHOPIFY_LOOKUP_ENV]: 'true' } }).catch(() => {});
+  await resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [MERCHANT_ID_ENV]: A.id, [LEGACY_FLAG]: 'true' } });
+  await resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [LEGACY_FLAG]: 'true' } }).catch(() => {});
   assert.equal(hits.length, 0);
 }));
 
-test('priority: NORDLA_MERCHANT_ID wins even when the legacy flag is on; the legacy source is reserved (not wired)', async () => {
-  const { supabase, calls } = spyDb(A);
-  const t = await resolveTenant({ supabase, env: { [MERCHANT_ID_ENV]: A.id, [LEGACY_SHOPIFY_LOOKUP_ENV]: '1' } });
-  assert.equal(t.source, 'env');
-  const before = calls.length;
-  const err = await resolveTenant({ supabase, env: { [LEGACY_SHOPIFY_LOOKUP_ENV]: 'yes' } }).catch((e) => e);
-  assert.equal(err.code, TENANT_ERROR_CODES.TENANT_SOURCE_NOT_AVAILABLE); assert.equal(err.detail.source, 'legacy_shopify');
-  assert.equal(calls.length, before, 'no read on the unavailable legacy path');
-});
+test('C6-F: the removed legacy switch re-enables nothing - with Shopify credentials and any truthy spelling, still MERCHANT_ID_MISSING, no read', () => noNetwork(async (hits) => {
+  for (const on of ['1', 'true', 'TRUE', 'yes', 'on', ' on ']) {
+    const { supabase, calls } = spyDb(A);
+    await rejectsWith(resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [LEGACY_FLAG]: on } }), TENANT_ERROR_CODES.MERCHANT_ID_MISSING);
+    assert.equal(calls.length, 0, `no read of merchants nor merchant_connectors (flag ${on})`);
+  }
+  const { supabase } = spyDb(A);
+  assert.equal((await resolveTenant({ supabase, env: { [MERCHANT_ID_ENV]: A.id, [LEGACY_FLAG]: '1' } })).source, 'env');
+  assert.equal(hits.length, 0);
+}));
 
-test('the legacy flag is on only when explicitly enabled', () => {
-  for (const on of ['1', 'true', 'TRUE', 'yes', 'on', ' on ']) assert.equal(isLegacyShopifyLookupEnabled({ [LEGACY_SHOPIFY_LOOKUP_ENV]: on }), true, on);
-  for (const off of [undefined, '', '0', 'false', 'no', 'off', 'enabled?']) assert.equal(isLegacyShopifyLookupEnabled({ [LEGACY_SHOPIFY_LOOKUP_ENV]: off }), false, String(off));
+test('C6-F: no legacy export survives, and no caller can plug a Shopify shop reader back in (unknown option -> TypeError, before any read)', async () => {
+  for (const gone of ['isLegacyShopifyLookupEnabled', 'LEGACY_SHOPIFY_LOOKUP_ENV', 'DEFAULT_LEGACY_LOOKUP_TIMEOUT_MS']) assert.equal(gone in resolverModule, false, gone);
+  const { supabase, calls } = spyDb(A);
+  let asked = 0;
+  const reader = { findShopId: async () => { asked += 1; return A.source_id; } };
+  for (const extra of [{ legacyShopify: reader }, { legacyTimeoutMs: 10 }, { shopDomain: 'synthetic-shop.myshopify.example' }, { merchantId: A.id }]) {
+    await assert.rejects(resolveTenant({ supabase, env: { ...SHOPIFY_ENV, [LEGACY_FLAG]: 'true' }, ...extra }), TypeError, Object.keys(extra)[0]);
+  }
+  assert.equal(asked, 0, 'the shop reader is never called'); assert.equal(calls.length, 0);
 });
 
 test('session source is reserved: passing a session today is refused, nothing is read', async () => {
@@ -130,7 +141,7 @@ test('session source is reserved: passing a session today is refused, nothing is
   const err = await resolveTenant({ supabase, env: { [MERCHANT_ID_ENV]: A.id }, session: { merchantId: A.id } }).catch((e) => e);
   assert.equal(err.code, TENANT_ERROR_CODES.TENANT_SOURCE_NOT_AVAILABLE); assert.equal(err.detail.source, 'session');
   assert.equal(calls.length, 0);
-  assert.deepEqual(TENANT_SOURCES, ['session', 'env', 'legacy_shopify']);
+  assert.deepEqual(TENANT_SOURCES, ['session', 'env']);
 });
 
 test('a failing database read is a structured TENANT_LOOKUP_FAILED whose message carries no secret', async () => {
