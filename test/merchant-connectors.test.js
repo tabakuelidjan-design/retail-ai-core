@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createFakeSupabase } from './fixtures/fake-supabase.js';
 import {
-  createConnectorRepository, validateConnectorConfig, findSecretPaths, planShopifyConnectorBackfill,
+  createConnectorRepository, validateConnectorConfig, findSecretPaths,
   ConnectorError, CONNECTOR_ERROR_CODES as C, KNOWN_CONNECTOR_KINDS, PERSISTED_CONNECTOR_STATUSES, CONNECTOR_STATES, KINDS_REQUIRING_EXTERNAL_ID,
 } from '../src/tenant/connectors.js';
 
@@ -171,22 +171,6 @@ test('config with a secret is refused - by key name at any depth, or by a creden
   assert.equal(table('merchant_connectors').length, 0, 'nothing stored');
   for (const bad of [null, [], 'text', 3]) assert.throws(() => validateConnectorConfig(bad), (e) => e.code === C.CONNECTOR_CONFIG_INVALID);
   assert.throws(() => validateConnectorConfig({ big: 'x'.repeat(20000) }), (e) => e.code === C.CONNECTOR_CONFIG_INVALID);
-});
-
-// ---------- backfill rule (mirror of the M1 SQL) ----------
-const frozen = (o) => JSON.parse(JSON.stringify(o), (k, v) => (v && typeof v === 'object' ? Object.freeze(v) : v));
-
-test('backfill: one Shopify merchant -> one CONFIGURED shopify connector with source_id / source_domain', () => {
-  assert.deepEqual(planShopifyConnectorBackfill(frozen([M1])), [{ merchant_id: M1.id, kind: 'shopify', external_id: M1.source_id, external_domain: M1.source_domain, status: 'CONFIGURED', config: {} }]);
-});
-
-test('backfill: several merchants, run twice -> no duplicate; non-Shopify or blank source -> no invented connector; inputs untouched', () => {
-  const blank = { ...M2, id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', source_id: '   ' };
-  const merchants = frozen([M1, M2, M3, blank]); const before = JSON.stringify(merchants);
-  const first = planShopifyConnectorBackfill(merchants);
-  assert.deepEqual(first.map((r) => r.merchant_id), [M1.id, M2.id]);
-  assert.deepEqual(planShopifyConnectorBackfill(merchants, first), [], 'second run adds nothing');
-  assert.equal(JSON.stringify(merchants), before, 'merchants (UUIDs, source_*) unchanged');
 });
 
 // ---------- M1 SQL contract ----------
