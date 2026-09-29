@@ -3,14 +3,25 @@
    shared tokens; this file adds the Growth grid, a few list-row details and small tone variants of existing
    chips. Every selector is namespaced .gr-* (or scoped under one) so nothing here can leak into another module. */
 
-/* ---- grids (same 16px gaps and 900/560 breakpoints as Explorer; 2 columns from 901px, 3 from 1360px) ---- */
+/* ---- grids (same 16px gaps and 900/560 breakpoints as Explorer; 2 columns from 901px) ---- */
 .gr-grid { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
 .gr-grid > .ex-card { display: flex; flex-direction: column; }
 @media (min-width: 901px) {
   .gr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gr-grid > :first-child { grid-column: 1 / -1; }
 }
-@media (min-width: 1360px) {
+/* The 3rd column (.gr-grid-main / .gr-grid-wide) depends on the width really available INSIDE <main> - not the browser
+   viewport. A viewport media query here was wrong: <main>'s own max-width (1360px, style.css) and the sidebar (84px)
+   sit between the viewport and this grid, so a "min-width: 1360px" *viewport* query only let 3 columns appear once the
+   viewport was already ~1460px+, well past where <main> itself had enough room. A container query measures <main>'s
+   own rendered width directly, so it reacts correctly to any sidebar width, OS display scaling or browser zoom -
+   including the very common case of a 15" 1920x1080 laptop at 100% zoom with Windows set to 150% scaling (effective
+   viewport ~1280px), which never reached the old 1360px viewport threshold. 1050px is the content width (inside
+   <main>'s own 36px side padding) below which the narrower two columns of .gr-grid-main (1fr) drop under ~290px,
+   the floor before numbers/labels start crowding their icon; verified live at 1224-1280px viewport (real laptop
+   range) in FR (longest running text), NL and EN, with no overflow, crowding, or truncated text. */
+.gr-main { container-type: inline-size; container-name: gr-main; }
+@container gr-main (min-width: 1050px) {
   .gr-grid-main { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); }
   .gr-grid-wide { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
   .gr-grid > :first-child { grid-column: auto; }
