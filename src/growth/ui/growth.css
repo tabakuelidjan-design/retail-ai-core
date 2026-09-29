@@ -546,7 +546,12 @@ body.gr-pp-lock { overflow: hidden; }
 
 /* ---------- Opportunités: priorities in three sections (À corriger maintenant / Opportunités commerciales / À surveiller) ---------- */
 .ex-kpi-row.gr-pr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* These 3 tiles also carry .gr-kpi-row (the 5/6-column Explorer-style system), whose unconditional ".gr-kpi-row > .ex-kpi
+   { grid-column: span 2 }" (above) would make each tile span 2 of this row's 3 columns - forcing them one per line below
+   1360px, since it only got reset to "auto" by that breakpoint's own override. Reset it here instead, at every width:
+   this row's own column count (3, or 1 below 900px) decides the layout, never a span meant for a different tile count. */
 @media (max-width: 900px) { .ex-kpi-row.gr-pr-kpis { grid-template-columns: minmax(0, 1fr); } }
+.gr-pr-kpis > .ex-kpi { grid-column: auto; }
 .gr-pr-sections { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
 .gr-pr-card { display: flex; flex-direction: column; }
 .gr-pr-intro { margin: -4px 0 6px; font-size: 12.5px; }
