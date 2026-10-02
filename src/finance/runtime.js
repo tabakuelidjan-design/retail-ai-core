@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
-import { addDays } from '../metrics/windows.js';
+import { localMidnight } from '../metrics/windows.js';
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
 import { SHOP_QUERY } from '../shopify/queries.js';
 import { readCoverage } from '../sync/history.js';
@@ -56,7 +56,8 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
   const store = createSupabaseFinanceStore(supabase, { merchantId: merchant.id });
 
   const loadRetail = async (sinceDate) => {
-    const since = new Date(`${sinceDate ?? addDays(new Date().toISOString().slice(0, 10), -400)}T00:00:00Z`);
+    // Lower bound of the load: the start of the merchant's first day (local midnight), else an instant 400 days back (a technical look-back, not a business date).
+    const since = sinceDate ? localMidnight(sinceDate, timeZone) : new Date(Date.now() - 400 * 86_400_000);
     const data = await loadDataset(supabase, merchant.id, { since });
     return { data, ledger: buildLedger(data, { config: retailConfig }) };
   };
@@ -73,6 +74,6 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
     return [...kinds].some((k) => (k === 'shopify' ? shopify.configured : true)) ? 'ACTIVE' : 'NOT_CONFIGURED';
   };
   const hasSalesSource = async () => (await salesSource()) !== 'NONE';
-  const retail = createRetailAccess({ loadRetail, listOrderRefs });
+  const retail = createRetailAccess({ loadRetail, listOrderRefs, timeZone });
   return { shopify, supabase, merchant, tenant, connectors, salesSource, hasSalesSource, retailConfig, timeZone, store, retail, loadRetail, listOrderRefs, retailHistory: () => readCoverage() };
 }

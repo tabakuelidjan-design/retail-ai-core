@@ -33,8 +33,8 @@
 
   // ---------- period ----------
   function defaultSpec() {
-    const n = new Date(); let y = n.getFullYear(); let q = Math.floor(n.getMonth() / 3); if (q === 0) { y -= 1; q = 4; }
-    return { kind: 'quarter', year: y, quarter: q, month: n.getMonth() + 1, from: `${y}-01-01`, to: n.toISOString().slice(0, 10) };
+    const today = civilToday(state.timeZone); let y = Number(today.slice(0, 4)); const mo = Number(today.slice(5, 7)); let q = Math.floor((mo - 1) / 3); if (q === 0) { y -= 1; q = 4; }
+    return { kind: 'quarter', year: y, quarter: q, month: mo, from: `${y}-01-01`, to: today };
   }
   const specBody = (s) => (s.kind === 'custom' ? { kind: 'custom', from: s.from, to: s.to } : s.kind === 'year' ? { kind: 'year', year: s.year } : s.kind === 'month' ? { kind: 'month', year: s.year, month: s.month } : { kind: 'quarter', year: s.year, quarter: s.quarter });
   const specQuery = (s) => new URLSearchParams(Object.entries(specBody(s)).map(([k, v]) => [k, String(v)])).toString();
@@ -89,7 +89,7 @@
   function openExpenseCapture(done) {
     let file = null; let origin = 'image'; let previewUrl = null; let b64 = '';
     const stage = h('div', { class: 'pk-cap' }); const err = h('div');
-    const f = { supplierName: '', issueDate: new Date().toISOString().slice(0, 10), gross: '', currency: 'EUR', vat: '', vatRate: '', category: '', paymentMethod: '', eur: '', note: '', invoiceNumber: '', supplierVatNumber: '' };
+    const f = { supplierName: '', issueDate: civilToday(state.timeZone), gross: '', currency: 'EUR', vat: '', vatRate: '', category: '', paymentMethod: '', eur: '', note: '', invoiceNumber: '', supplierVatNumber: '' };
     function choose(kind) {
       if (kind === 'camera') pickFile('image/*', (x) => got(x, 'camera'), { camera: true });
       else if (kind === 'image') pickFile('image/jpeg,image/png', (x) => got(x, 'image'));

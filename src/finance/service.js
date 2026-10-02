@@ -6,6 +6,7 @@ import {
   FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
   markSent, rejectQuote, sendQuote, settledStatus, settlement, submitForApproval, updateDraft, validateForIssue, verifyIntegrity,
 } from './document.js';
+import { requireClock } from './civil-date.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
 import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
 
@@ -14,8 +15,8 @@ import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
  * config: { merchantId, seller, numbering?, vat: { allowedRatesBp[] }, defaults?: { currency, language, paymentTermsDays, paymentTerms }, linking?: { dupWindowDays, toleranceCents } }
  */
 export function createFinanceService({ store, config, clock, ledgerProvider = async () => null, hooks = {} }) {
-  const now = clock?.now ?? (() => new Date().toISOString());
-  const today = clock?.today ?? (() => new Date().toISOString().slice(0, 10));
+  requireClock(clock, 'createFinanceService');
+  const { now, today } = clock;
   const vatConfig = config.vat ?? { allowedRatesBp: [] };
   const numbering = { ...DEFAULT_NUMBERING, ...(config.numbering ?? {}) };
   const ctx = { vatConfig };

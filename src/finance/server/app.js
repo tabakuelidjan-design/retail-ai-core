@@ -18,6 +18,7 @@ import { createStaticAssets } from './static-assets.js';
 import { createRequestReadCache } from './request-read-cache.js';
 import { createSessionStore } from './session-store.js';
 import { buildAccountantPack } from '../accountant-pack.js';
+import { createMerchantClock } from '../civil-date.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
 import { createStockService } from '../stock.js';
@@ -30,7 +31,7 @@ import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
 import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
-import { civilDateIn, dueViewOf } from '../payables/index.js';
+import { dueViewOf } from '../payables/index.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
 import { DOCUMENT_TYPES, accountingSign, checkPurchaseDocument, documentTypeOf, purchaseModelOf } from '../purchase-document.js';
 import { refundRows } from '../refund-rows.js';
@@ -51,7 +52,7 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/bank-connect.js': ['bank-connect.js', 'text/javascript; charset=utf-8'], '/bank-csv.js': ['bank-csv.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/bank-connect.js': ['bank-connect.js', 'text/javascript; charset=utf-8'], '/bank-csv.js': ['bank-csv.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/civil-date.js': ['civil-date.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
@@ -73,7 +74,8 @@ export function createFinanceApp(deps) {
   const readCache = createRequestReadCache();
   const store = readCache.wrap(deps.store);
   if (!token || String(token).length < 24) throw new Error('FINANCE_DASHBOARD_TOKEN must be set (at least 24 characters)');
-  const clock = deps.clock ?? { now: () => new Date().toISOString(), today: () => new Date().toISOString().slice(0, 10) };
+  // ONE clock: `now` is a UTC instant, `today` the merchant's civil date at that instant (../civil-date.js). Every business date below comes from it.
+  const clock = createMerchantClock({ now: deps.clock?.now, timeZone });
   const audit = deps.audit ?? (async () => {});
   // Same get/set/has/delete as before; persisted (hashed ids) when the launcher gives a persistence, so a redeploy keeps people signed in.
   const sessions = createSessionStore({ persistence: deps.sessionPersistence ?? null });
@@ -620,7 +622,7 @@ export function createFinanceApp(deps) {
     const q = (ctx.url.searchParams.get('q') ?? '').trim().toLowerCase();
     const m = (c) => money(c, settings.defaults.language);
     const [companies, salesDocs, supplierInvoices] = await Promise.all([svc.listCompanies(), loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m, today: clock.today() });
+    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m, today: clock.today(), timeZone });
     if (role === 'archived') rows = rows.filter((r) => r.archived);
     else {
       rows = rows.filter((r) => !r.archived);
@@ -638,7 +640,7 @@ export function createFinanceApp(deps) {
     const c = await svc.getCompany(idParam(ctx.m[1])); // throws COMPANY_NOT_FOUND - same tenant check as /api/companies/:id
     const m = (c2) => money(c2, settings.defaults.language);
     const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today() }));
+    json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today(), timeZone }));
   });
   // Contacts V1: archive/restore - never a destructive delete, and never touches any other field or any
   // linked document. Reuses the same tenant-scoped svc.getCompany() check every other company route uses.
@@ -749,7 +751,7 @@ export function createFinanceApp(deps) {
   const bankFor = async () => {
     const { svc } = await servicesFor();
     const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
-    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock: { ...clock, today: merchantToday }, audit,
+    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
       finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, c.payment, a); } } });
   };
   const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
@@ -873,9 +875,8 @@ export function createFinanceApp(deps) {
   const ownIdentity = async () => { const s = (await settingsIo.load()).seller ?? {}; return { vatNumbers: [s.vatNumber].filter(Boolean), enterpriseNumbers: [s.enterpriseNumber].filter(Boolean), ibans: [s.iban].filter(Boolean), names: [s.name].filter(Boolean) }; };
   const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
   // the merchant's civil date (their configured time zone), for every day-based reading of a due date; never the server's zone
-  const merchantToday = () => civilDateIn(new Date(clock.now()), timeZone);
   // `today` = the merchant's civil date, computed once per request by a list (not once per purchase: each computation builds an Intl formatter)
-  const itemView = (raw, today = merchantToday()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
+  const itemView = (raw, today = clock.today()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
@@ -917,7 +918,7 @@ export function createFinanceApp(deps) {
     const st = ctx.url.searchParams.get('scope');
     const f = st === 'purchases' ? { statuses: ['VALIDATED', 'TO_PAY', 'PAID'] } : st === 'inbox' ? { statuses: ['RECEIVED', 'TO_REVIEW', 'REJECTED'] } : {};
     const status = ctx.url.searchParams.get('status'); if (status && INBOX_STATUSES.includes(status)) f.status = status;
-    const today = merchantToday(); json(ctx.res, 200, { rows: (await inboxFor().list(f)).map((raw) => itemView(raw, today)) });
+    const today = clock.today(); json(ctx.res, 200, { rows: (await inboxFor().list(f)).map((raw) => itemView(raw, today)) });
   });
   // Upload as JSON (base64): sniffed, size-limited, stored privately, extracted, then left TO_REVIEW for a person. Same file twice = same record.
   on('POST', '/api/inbox/upload', async (ctx) => {
@@ -999,7 +1000,7 @@ export function createFinanceApp(deps) {
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
       .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const supplierInvoices = ((await store.listSupplierInvoices?.()) ?? []).filter((s) => inRange(s.issue_date ?? s.issueDate, period.start, period.end)).map((s) => ({ supplierName: s.supplier_name ?? s.supplierName, supplierVatNumber: s.supplier_vat_number ?? s.supplierVatNumber, invoiceNumber: s.invoice_number ?? s.invoiceNumber, issueDate: s.issue_date ?? s.issueDate, dueDate: s.due_date ?? s.dueDate, netCents: Number(s.net_cents ?? s.netCents), vatCents: Number(s.vat_cents ?? s.vatCents), grossCents: Number(s.gross_cents ?? s.grossCents), status: s.status ?? s.payment_status ?? s.paymentStatus, source: s.source, attachmentRef: s.attachment_ref ?? s.attachmentRef }));
     const acc = settings.accountant;
     const built = await buildAccountantPackage({ pack, period, docs, refunds, supplierInvoices, merchantName: settings.seller.name ?? '', filePrefix: 'Comptabilite', namePrefix: acc.packageName || undefined, branding: settings.branding, generatedAt: clock.now() });
@@ -1054,7 +1055,7 @@ export function createFinanceApp(deps) {
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
       .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const rows = (await store.listSupplierInvoices(merchantId)).filter((r) => r.status !== 'REJECTED');
     const purchases = rows.filter((r) => inRange(r.issueDate, period.start, period.end)).map((r) => ({ ...r }));
     if (withFiles) {
@@ -1228,7 +1229,7 @@ export function createFinanceApp(deps) {
 
   // ---------- settings ----------
   const publicSettings = (s) => ({ ...s, branding: { ...s.branding, logoPath: undefined, hasLogo: !!s.branding.logoPath }, peppol: { ...s.peppol, provider: null, status: 'NOT_CONFIGURED' } });
-  async function settingsPayload() { const s = await settingsIo.load(); return { settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }; }
+  async function settingsPayload() { const s = await settingsIo.load(); return { timeZone, settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }; }
   on('GET', '/api/settings', async (ctx) => json(ctx.res, 200, await settingsPayload()));
   on('PUT', '/api/settings', async (ctx) => {
     const cur = await settingsIo.load();

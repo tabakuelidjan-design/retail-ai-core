@@ -181,7 +181,7 @@ function activityRow(e) {
     h('span', { class: 'activity-time' }, when));
 }
 /** Days from today to a YYYY-MM-DD date (display only: how late / how soon). */
-function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; const n = new Date(); return Math.round((d - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 86400000); }
+function daysFromToday(iso) { if (!iso) return null; const d = Date.parse(`${iso}T00:00:00Z`); if (Number.isNaN(d)) return null; return Math.round((d - Date.parse(`${civilToday(state.timeZone)}T00:00:00Z`)) / 86400000); }
 const dueChip = (iso, remainingCents) => { if (!iso || remainingCents === 0) return null; const n = daysFromToday(iso); if (n === null) return null; return n < 0 ? h('span', { class: 'chip bad' }, tt(n === -1 ? '{0} day late' : '{0} days late', -n)) : n === 0 ? h('span', { class: 'chip warn' }, 'Due today') : n <= 7 ? h('span', { class: 'chip warn' }, tt(n === 1 ? 'Due in {0} day' : 'Due in {0} days', n)) : h('span', { class: 'chip mute' }, tt('Due in {0} days', n)); };
 
 // Unified Finance module navigation (2026-09-24): the 7 approved sections. `primary: true` is one of
@@ -294,7 +294,7 @@ function layout(active, ...content) {
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
 /** @param {object} [pre] a /api/settings payload already received (startup: /api/session?include=settings) */
-async function loadSettings(pre) { const r = pre ?? await api('GET', '/api/settings'); state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
+async function loadSettings(pre) { const r = pre ?? await api('GET', '/api/settings'); state.timeZone = r.timeZone; state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
 
 // ---------- login ----------
 function renderLogin() {
@@ -776,7 +776,7 @@ async function viewForm(kind, editId) {
     name: D ? D.customer.name : (PF ? PF.name : ''), vatNumber: D ? (D.customer.vatNumber || '') : (PF ? (PF.vatNumber || '') : ''), enterpriseNumber: D ? (D.customer.enterpriseNumber || '') : (PF ? (PF.enterpriseNumber || '') : ''),
     csource: (D && D.customer.companyId) || PF ? 'directory' : 'manual', cverified: false, dirty: false,
     street: D ? D.customer.address.street : (PF ? (PF.address.street || '') : ''), postalCode: D ? D.customer.address.postalCode : (PF ? (PF.address.postalCode || '') : ''), city: D ? D.customer.address.city : (PF ? (PF.address.city || '') : ''), countryCode: D ? D.customer.address.countryCode : (PF ? (PF.address.countryCode || 'BE') : 'BE'), email: D ? (D.customer.email || '') : (PF ? (PF.email || '') : ''),
-    issueDate: D ? D.issueDate : new Date().toISOString().slice(0, 10), dueDate: D ? (D.dueDate || '') : '', paymentTermsDays: D ? (D.paymentTermsDays ?? '') : s.defaults.paymentTermsDays, paymentTerms: D ? (D.paymentTerms || '') : (s.defaults.paymentTerms || ''),
+    issueDate: D ? D.issueDate : civilToday(state.timeZone), dueDate: D ? (D.dueDate || '') : '', paymentTermsDays: D ? (D.paymentTermsDays ?? '') : s.defaults.paymentTermsDays, paymentTerms: D ? (D.paymentTerms || '') : (s.defaults.paymentTerms || ''),
     validUntil: D ? (D.validUntil || '') : '', currency: D ? D.currency : s.defaults.currency, language: D ? D.language : s.defaults.language, notes: D ? (D.notes || '') : '',
     regime: D ? D.vat.regime : 'domestic', confirmed: D ? D.vat.confirmed : false, mention: D ? (D.vat.mention || '') : '',
     _collapsed: !!D || !!PF, basis: D ? D.revenueBasis : (isQuote ? null : 'standalone_b2b'), sourceOrderId: D ? D.sourceOrderId : null, sourceLabel: null, ack: D ? !!D.acknowledgedNotDuplicate : false, saveCompany: true,
@@ -1129,7 +1129,7 @@ async function viewDoc(id) {
 }
 function confirmModal(title, text, label, onYes) { modal(title, h('p', null, text), (close) => [h('button', { class: 'primary', on: { click: () => { close(); onYes(); } } }, label), h('button', { on: { click: close } }, 'Cancel')]); }
 function paymentModal(d, reload) {
-  const amt = h('input', { inputmode: 'decimal', placeholder: d.remaining }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
+  const amt = h('input', { inputmode: 'decimal', placeholder: d.remaining }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
   const method = h('select', null, [['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['other', 'Other']].map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const note = h('input', { placeholder: 'Note (optional)' }); const err = h('div');
   modal('Add a payment', h('div', null, h('p', { class: 'muted' }, tt('Still due: {0} {1}', d.remaining, d.currency)), err, h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref)), h('div', { class: 'field' }, h('label', null, 'Note'), note)),
     (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/payments`, { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, note: note.value || undefined }); close(); toast('Payment recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record payment'), h('button', { on: { click: close } }, 'Cancel')]);

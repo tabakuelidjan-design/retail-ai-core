@@ -9,7 +9,7 @@
 // printed date stays and the difference is reported (never hidden).
 
 import { addDays, daysBetween } from '../document.js';
-import { localDateString } from '../../metrics/windows.js';
+import { civilDateIn } from '../civil-date.js';
 import { parsePaymentTerms } from './payment-terms.js';
 
 export const DUE_ORIGINS = ['MANUAL', 'PRINTED', 'COMPUTED_FROM_TERMS', 'UNKNOWN'];
@@ -112,16 +112,9 @@ export function refreshDueAfterIssueDateChange(row, newIssueDate) {
 /** Jours restants = échéance - aujourd'hui (negative = overdue). Same convention as receivables.js (daysOverdue = today - due). */
 export const daysRemaining = (dueDate, today) => (isIsoDate(dueDate) && isIsoDate(today) ? daysBetween(today, dueDate) : null);
 
-/**
- * The merchant's CIVIL date for an instant. The time zone is always a parameter (the merchant's setting): the result never depends on the machine or the server zone.
- * Every calculation of days remaining / due today / overdue receives this date; once resolved, those calculations are pure.
- * @param {Date|string|number} instant @param {string} timeZone IANA name, e.g. the merchant's configured zone
- */
-export function civilDateIn(instant, timeZone) {
-  const d = instant instanceof Date ? instant : new Date(instant);
-  if (Number.isNaN(d.getTime())) throw new RangeError('civilDateIn: invalid instant');
-  return localDateString(d, timeZone);
-}
+// The merchant's CIVIL date for an instant lives in ../civil-date.js (the single implementation); re-exported here for the payables API.
+// Every calculation of days remaining / due today / overdue receives that date; once resolved, those calculations are pure.
+export { civilDateIn };
 
 // ---------- printed / computed conflict and its acknowledgement ----------
 export const DUE_CONFLICT_ERROR = 'DUE_DATE_CONFLICT_NOT_ACKNOWLEDGED';

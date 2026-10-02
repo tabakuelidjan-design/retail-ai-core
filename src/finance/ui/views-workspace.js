@@ -78,7 +78,7 @@ const dueNote = (it, acknowledge) => {
   if (conflictShown) {
     const ok = cf.state === 'ACKNOWLEDGED';
     rows.push(h('div', { class: `banner ${ok ? 'ok' : 'warn'} small due-conflict`, style: 'margin:8px 0' }, h('div', null, tt('Printed due date: {0}', cf.printed)), h('div', null, tt('Due date given by the payment terms: {0}', cf.computed)),
-      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', String(cf.acknowledgedAt || '').slice(0, 10)))
+      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', cf.acknowledgedAt ? civilDateIn(cf.acknowledgedAt, state.timeZone) : ''))
         : h('div', null, h('div', { style: 'margin:6px 0' }, tt('The printed date stays the due date. You must acknowledge the difference before validating.')), acknowledge ? h('button', { type: 'button', class: 'tool due-ack', style: 'height:auto;min-height:34px;padding:6px 11px;white-space:normal;text-align:left', on: { click: acknowledge } }, tt('Acknowledge the difference')) : null)));
   }
   if (d.divergence && !conflictShown) rows.push(h('div', { class: 'banner info small', style: 'margin:8px 0' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
@@ -286,7 +286,7 @@ function renderInboxDetail(host, id, opts = {}) {
       act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
     } else if (it.status === 'VALIDATED') { if (it.documentType !== 'CREDIT_NOTE') act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
     else if (it.status === 'TO_PAY') {
-      act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
+      act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: civilToday(state.timeZone) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
       act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction')));
     } else if (it.status === 'PAID') act.appendChild(h('span', { class: 'muted' }, tt('Paid on {0}', it.paidAt || '')));
     body.appendChild(act);
@@ -352,7 +352,7 @@ const SALES_TYPE_OF = { invoices: 'invoice', quotes: 'quote', credit_notes: 'cre
 /** from/to (YYYY-MM-DD) for a named period, computed client-side purely to build query params - the server
  * remains the only authority on which documents actually fall in that range. */
 function periodRange(kind, custom) {
-  const now = new Date(); const y = now.getFullYear(); const m = now.getMonth();
+  const today = civilToday(state.timeZone); const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7)) - 1; // the merchant's month, not the browser's
   const iso = (d) => d.toISOString().slice(0, 10);
   const first = (yy, mm) => new Date(Date.UTC(yy, mm, 1));
   const last = (yy, mm) => new Date(Date.UTC(yy, mm + 1, 0));
@@ -981,7 +981,7 @@ async function viewBank() {
     const connCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
     connCard.appendChild(h('div', { class: 'banner info small' }, tt('Read-only access only. This connection can never initiate a payment, a transfer or change a beneficiary.')));
     if (st.state === 'ACTIVE') {
-      connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, String(st.grantedAt).slice(0, 10))));
+      connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, (st.grantedAt ? civilDateIn(st.grantedAt, state.timeZone) : ''))));
       connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' },
         h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
         h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
@@ -992,7 +992,7 @@ async function viewBank() {
     }
     box.appendChild(connCard);
     const cashCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
-    const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
+    const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
     cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
       h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
     box.appendChild(cashCard);

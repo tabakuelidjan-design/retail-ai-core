@@ -8,15 +8,17 @@ import { suggest } from './reconcile.js';
 import { buildTreasury } from './treasury.js';
 import { eurOfSupplier } from './currency.js';
 import { dueForProjection } from './payables/index.js';
+import { requireClock } from './civil-date.js';
 
 const CSV_ACCOUNT = 'csv-import'; // every CSV statement lands in this pseudo-account (idempotence key: account + transaction id)
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 
 /**
  * @param {{store: object, merchantId: string, adapter?: object, vault?: object, finance: {listInvoices: Function, recordPayment: Function}, inbox: {list: Function, pay: Function},
- *          clock?: {now: Function, today: Function}, audit?: Function}} d
+ *          clock: {now: Function, today: Function}, audit?: Function}} d
  */
-export function createBankService({ store, merchantId, adapter = NoBankAdapter, vault, finance, inbox, clock = { now: () => new Date().toISOString(), today: () => new Date().toISOString().slice(0, 10) }, audit = async () => {} }) {
+export function createBankService({ store, merchantId, adapter = NoBankAdapter, vault, finance, inbox, clock, audit = async () => {} }) {
+  requireClock(clock, 'createBankService');
   if (adapter !== NoBankAdapter) assertReadOnlyAdapter(adapter);
   const merchantOnly = (actor) => { if (actor?.type !== 'merchant') throw new FinanceError('THIS_STEP_REQUIRES_A_MERCHANT_ACTOR'); };
   const openInvoices = async () => {

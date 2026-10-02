@@ -77,7 +77,7 @@ test('Pack summary lines: product, shipping and total figures are labelled apart
 test('Refund file: product refund, shipping refund and total refund are separate columns, with the source order reference', () => {
   const d = dataWithShipping();
   d.refundLines = d.refundLines ?? [];
-  const rows = refundRows(d, () => true);
+  const rows = refundRows(d, () => true, 'UTC');
   assert.equal(rows.length, 1);
   const r = rows[0];
   assert.equal(r.orderRef, '#1001', 'the source order reference is kept');
@@ -88,12 +88,12 @@ test('Refund file: product refund, shipping refund and total refund are separate
   assert.equal(csv.commande, '#1001'); assert.equal(csv.livraison_renseignee, 'oui');
   // shipping not captured on the refund: the shipping column is EMPTY (unknown), not 0, and the flag says so
   const legacy = makeData(); legacy.orders.find((o) => o.id === 'o1').order_name = '#1001';
-  const [old] = refundCsvRows(refundRows(legacy, () => true));
+  const [old] = refundCsvRows(refundRows(legacy, () => true, 'UTC'));
   assert.equal(old.remboursement_livraison, ''); assert.equal(old.livraison_renseignee, 'non'); assert.equal(old.remboursement_total, '25');
 });
 
 test('version change detection notices a new Shopify sync that only changes shipping, VAT or a refund', () => {
-  const build = (d) => { const p = pack(d); return fingerprintOf({ invoices: [], creditNotes: [], purchases: [], bank: { transactions: [] }, pack: p, refunds: refundRows(d, () => true) }); };
+  const build = (d) => { const p = pack(d); return fingerprintOf({ invoices: [], creditNotes: [], purchases: [], bank: { transactions: [] }, pack: p, refunds: refundRows(d, () => true, 'UTC') }); };
   const a = build(dataWithShipping());
   assert.equal(changesSince(a, build(dataWithShipping())), null, 'the same data is not a change');
   const moreShipping = dataWithShipping(); moreShipping.orders.find((o) => o.id === 'o2').shipping_price = 7; moreShipping.orders.find((o) => o.id === 'o2').shipping_tax = 1.21; moreShipping.orders.find((o) => o.id === 'o2').shipping_tax_rate_bp = 2100;

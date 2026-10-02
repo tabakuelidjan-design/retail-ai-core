@@ -25,6 +25,7 @@
 //                the same rule validatePeppolReadiness() already enforces per document).
 //   archived (V1) = company.archivedAt is set. Archiving never deletes the contact or its documents.
 
+import { civilDateIn } from './civil-date.js';
 import { effectiveStatus, settlement } from './document.js';
 import { endpointOf } from './peppol.js';
 
@@ -158,7 +159,8 @@ function projectContact(company, { salesByCompany, supplierByCompany, m }) {
  * (money() from pdf.js), matching every other finance projection in this codebase. `today` (YYYY-MM-DD) is
  * required to derive the OVERDUE subset via the same effectiveStatus() every other page uses.
  */
-export function buildContacts({ companies, salesDocs, supplierInvoices, m, today }) {
+export function buildContacts({ companies, salesDocs, supplierInvoices, m, today, timeZone }) {
+  if (!timeZone) throw new TypeError('buildContacts: the merchant time zone is required (a received instant is dated in the merchant day)');
   const salesByCompany = new Map();
   for (const { doc, payments, creditNotes } of salesDocs) {
     const cid = doc.customer?.companyId; if (!cid) continue;
@@ -180,7 +182,7 @@ export function buildContacts({ companies, salesDocs, supplierInvoices, m, today
     const cid = inv.supplierCompanyId; if (!cid) continue;
     const cur = supplierByCompany.get(cid) ?? { count: 0, payableCents: 0, lastActivity: null };
     cur.count += 1;
-    cur.lastActivity = [cur.lastActivity, inv.receivedAt?.slice(0, 10), inv.issueDate].filter(Boolean).sort().at(-1) ?? null;
+    cur.lastActivity = [cur.lastActivity, inv.receivedAt ? civilDateIn(inv.receivedAt, timeZone) : null, inv.issueDate].filter(Boolean).sort().at(-1) ?? null;
     if (inv.status === 'TO_PAY') cur.payableCents += inv.grossCents ?? 0;
     supplierByCompany.set(cid, cur);
   }
