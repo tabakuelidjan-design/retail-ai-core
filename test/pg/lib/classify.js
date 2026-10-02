@@ -16,6 +16,10 @@ async function run(id, kind, fn) {
   let res;
   try { res = await fn(); } catch (e) { log({ id, kind, tag: 'INFRA FAILURE', evidence: String(e.message).split('\n')[0] }); throw e; }
   const { holds, evidence } = res; // holds = the protection holds / the defect is absent
+  if (kind === 'legacy') {
+    if (!holds) { log({ id, kind, tag: 'KNOWN LEGACY GAP', evidence }); return; }
+    log({ id, kind, tag: 'UNEXPECTED: LEGACY GAP CLOSED', evidence }); throw new Error(`${id}: legacy gap no longer present - turn it into a control - ${evidence}`);
+  }
   if (kind === 'p0') {
     if (!holds) { log({ id, kind, tag: 'EXPECTED P0 REPRODUCTION', evidence }); return; }
     log({ id, kind, tag: 'UNEXPECTED: DEFECT ABSENT', evidence }); throw new Error(`${id}: documented defect not reproduced - ${evidence}`);
@@ -26,6 +30,8 @@ async function run(id, kind, fn) {
 
 /** A documented P0: fn resolves { holds, evidence }; holds === false means the defect is reproduced. */
 export const expectedP0 = (id, fn) => test(id, () => run(id, 'p0', fn));
+/** A known defect of the frozen legacy table fin_payments: documented, not fixed (the application no longer writes it; the cutover freezes it). */
+export const legacyGap = (id, fn) => test(id, () => run(id, 'legacy', fn));
 /** A protection that must hold today. */
 export const control = (id, fn) => test(id, () => run(id, 'control', fn));
 export { after };

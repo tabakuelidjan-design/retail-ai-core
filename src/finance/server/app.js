@@ -57,8 +57,8 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
-const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
+const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND', 'TARGET_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'ALLOCATION_NOT_FOUND'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED', 'PAYMENT_OVER_ALLOCATED', 'REVERSAL_EXCEEDS_ALLOCATION', 'REVERSAL_EXCEEDS_PAYMENT', 'CORRECTION_EXCEEDS_PAID', 'CURRENCY_MISSING', 'CREDIT_CURRENCY_MISMATCH'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -528,6 +528,8 @@ export function createFinanceApp(deps) {
     const id = idParam(ctx.m[1]);
     const { payment, errors, note } = cleanPaymentInput(ctx.body);
     if (errors.length) fields(errors);
+    const headerKey = String(ctx.req.headers['idempotency-key'] ?? ''); // the Idempotency-Key header wins over the body field
+    if (/^[A-Za-z0-9_.:-]{8,120}$/.test(headerKey)) payment.idempotencyKey = headerKey;
     const { svc, settings } = await servicesFor();
     const saved = await svc.recordPayment(id, payment, actor);
     if (note) await store.appendEvent({ documentId: id, merchantId, actor, action: 'PAYMENT_NOTE', fromStatus: null, toStatus: null, detail: { paymentId: saved.id, note }, at: clock.now() });
@@ -752,7 +754,7 @@ export function createFinanceApp(deps) {
     const { svc } = await servicesFor();
     const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
     return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
-      finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, c.payment, a); } } });
+      finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, { ...c.payment, idempotencyKey: payment.idempotencyKey }, a); } } });
   };
   const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
   on('GET', '/api/bank/status', async (ctx) => json(ctx.res, 200, await (await bankFor()).status()));
@@ -973,7 +975,7 @@ export function createFinanceApp(deps) {
   inboxAct('reopen', (i, id) => i.reopen(id, actor));
   inboxAct('acknowledge-due-conflict', (i, id) => i.acknowledgeDueConflict(id, actor));
   inboxAct('reject', (i, id, b) => i.reject(id, sanitizeText(b.reason, 300), actor));
-  inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100) }, actor); });
+  inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); const k = typeof b.idempotencyKey === 'string' && /^[A-Za-z0-9_.:-]{8,120}$/.test(b.idempotencyKey) ? b.idempotencyKey : undefined; return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100), idempotencyKey: k }, actor); });
   // Phase 1 (Contact foundation): link/unlink a supplier invoice to a fin_companies contact. { contactId: "<uuid>" }
   // links; { contactId: null } (or omitted) unlinks. The tenant check on the contact happens here (via the same
   // svc.getCompany() every other company lookup uses) because inbox.js's service has no access to the company store.

@@ -1,6 +1,6 @@
 // Real-PostgreSQL helpers: clean databases, migration replay from zero, template-based reset, many simultaneous connections, catalog fingerprint.
 import { readFileSync, readdirSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { assertSafeServer, safeDbName, testUrl } from './safety.js';
@@ -8,7 +8,10 @@ import { assertSafeServer, safeDbName, testUrl } from './safety.js';
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
 export const MIGRATIONS_DIR = `${REPO}supabase/migrations`;
 export const PROD_CATALOG = fileURLToPath(new URL('../fixtures/prod-catalog.txt', import.meta.url));
-const TEMPLATE = 'finance_test_template';
+// the template is keyed by the content of the migrations: a changed or added migration can never be served from a stale template
+const normalised = (f) => readFileSync(`${MIGRATIONS_DIR}/${f}`, 'utf8').split('\r\n').join('\n');
+const migrationsHash = () => createHash('sha1').update(readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort().map((f) => `${f}\n${normalised(f)}`).join('\n')).digest('hex').slice(0, 10);
+const templateName = () => `finance_test_template_${migrationsHash()}`;
 
 // What Supabase provides around the repository migrations (roles, auth/storage schemas, pgcrypto in "extensions"). Nothing here is a production secret.
 const SUPABASE_STUBS = `
@@ -41,9 +44,9 @@ export async function adminClient() { return clientFor('postgres'); }
 export function migrationFiles() { return readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort(); }
 
 /** Replays every repository migration, in filename order, into an EMPTY database. CRLF working copies are normalised (the same SQL on any checkout). */
-export async function replayMigrations(client) {
+export async function replayMigrations(client, { upTo = null } = {}) {
   await client.query(SUPABASE_STUBS);
-  const files = migrationFiles();
+  const files = migrationFiles().filter((f) => !upTo || f.slice(0, 14) <= upTo);
   for (const f of files) {
     try { await client.query(readFileSync(`${MIGRATIONS_DIR}/${f}`, 'utf8').split('\r\n').join('\n')); } catch (e) { throw new Error(`migration ${f} failed: ${e.message}`); }
   }
@@ -58,23 +61,25 @@ async function createEmpty(admin, name, template) {
 
 /** Builds (once per run) the migrated template; every test database is then a cheap copy of it = "reset". */
 export async function ensureTemplate() {
-  const admin = await adminClient();
+  const TEMPLATE = templateName(); const admin = await adminClient();
   try {
     const exists = (await admin.query('select 1 from pg_database where datname=$1', [TEMPLATE])).rowCount;
-    if (exists) return;
-    await createEmpty(admin, TEMPLATE);
-    const c = await clientFor(TEMPLATE);
-    try { await replayMigrations(c); } finally { await c.end(); }
-    await admin.query(`alter database ${TEMPLATE} is_template true`);
+    if (!exists) {
+      await createEmpty(admin, TEMPLATE);
+      const c = await clientFor(TEMPLATE);
+      try { await replayMigrations(c); } finally { await c.end(); }
+      await admin.query(`alter database ${TEMPLATE} is_template true`);
+    }
   } finally { await admin.end(); }
+  return TEMPLATE;
 }
 
-export async function freshDatabase({ fromZero = false } = {}) {
+export async function freshDatabase({ fromZero = false, upTo = null } = {}) {
   const name = `finance_test_${randomBytes(5).toString('hex')}`;
   const admin = await adminClient();
   try {
-    if (fromZero) { await createEmpty(admin, name); const c = await clientFor(name); try { await replayMigrations(c); } finally { await c.end(); } }
-    else { await ensureTemplate(); await createEmpty(admin, name, TEMPLATE); }
+    if (fromZero) { await createEmpty(admin, name); const c = await clientFor(name); try { await replayMigrations(c, { upTo }); } finally { await c.end(); } }
+    else { const template = await ensureTemplate(); await createEmpty(admin, name, template); }
   } finally { await admin.end(); }
   const open = async () => clientFor(name);
   const drop = async () => { const a = await adminClient(); try { await a.query(`drop database if exists ${name} with (force)`); } finally { await a.end(); } };
@@ -139,3 +144,26 @@ export const issueSql = 'select fin_issue_document($1,$2,$3,$4,$5,$6,$7,$8,$9,$1
 export const issueArgs = (merchantId, doc, { prefix = 'FACT', year = 2026 } = {}) => [merchantId, doc.id, doc.version ?? 1, 'ISSUED', prefix, 4, '{prefix}-{year}-{seq}', year,
   `{"id":"${doc.id}","number":"${PLACEHOLDER}","gross":${doc.gross_cents}}`, PLACEHOLDER, '2026-09-30T10:00:00Z', JSON.stringify({ actor: { type: 'merchant' }, action: 'ISSUED', detail: { n: PLACEHOLDER } })];
 export async function issueDocument(c, merchantId, doc, opts) { return (await c.query(issueSql, issueArgs(merchantId, doc, opts))).rows[0].r; }
+
+// ---------- Phase 1 helpers: invoices, supplier invoices and the payment RPCs ----------
+export async function issuedInvoice(c, merchantId = MERCHANT_A, gross = 12100) { const d = await insertDraft(c, merchantId, { gross }); return issueDocument(c, merchantId, d); }
+export async function insertSupplier(c, merchantId = MERCHANT_A, { gross = 12100, status = 'TO_PAY', currency = 'EUR', documentType = 'INVOICE', number } = {}) {
+  const net = Math.round(gross / 1.21);
+  return (await c.query(`insert into fin_supplier_invoices (merchant_id, supplier_name, invoice_number, issue_date, net_cents, vat_cents, gross_cents, currency, status, document_type)
+    values ($1,'Fournisseur',$2,'2026-09-01',$3,$4,$5,$6,$7,$8) returning *`, [merchantId, number ?? `F-${Math.random().toString(36).slice(2, 9)}`, net, gross - net, gross, currency, status, documentType])).rows[0];
+}
+const ACTOR = JSON.stringify({ type: 'merchant', id: 'owner' });
+export const recordSql = 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) r';
+export const recordArgs = (merchantId, key, { direction = 'IN', amount, currency = 'EUR', paidOn = '2026-09-30', method = 'bank_transfer', reference = null, allocations = [] }) =>
+  [merchantId, key, direction, amount, currency, paidOn, method, reference, ACTOR, JSON.stringify(allocations)];
+export const record = async (c, merchantId, key, o) => (await c.query(recordSql, recordArgs(merchantId, key, o))).rows[0].r;
+export const reverseAllocations = async (c, merchantId, key, items, reason = 'test') => (await c.query('select fin_reverse_allocations($1,$2,$3,$4,$5) r', [merchantId, key, JSON.stringify(items), reason, ACTOR])).rows[0].r;
+export const voidPayment = async (c, merchantId, key, paymentId, reason = 'mistake') => (await c.query('select fin_void_payment($1,$2,$3,$4,$5,$6) r', [merchantId, key, paymentId, '2026-10-01', reason, ACTOR])).rows[0].r;
+export const num = async (c, sql, p = []) => Number((await c.query(sql, p)).rows[0].s);
+export const netPaidOfInvoice = (c, id) => num(c, 'select coalesce(sum(amount_cents),0) s from fin_payment_allocations where customer_document_id=$1', [id]);
+export const netPaidOfSupplier = (c, id) => num(c, 'select coalesce(sum(amount_cents),0) s from fin_payment_allocations where supplier_invoice_id=$1', [id]);
+/** Runs a statement and reports whether it was refused and with which FIN_ code (or constraint). */
+export async function attempt(c, sql, params) {
+  try { await c.query(sql, params); return { ok: true }; } catch (e) { return { ok: false, code: /FIN_[A-Z_]+/.exec(e.message)?.[0] ?? e.constraint ?? e.code ?? e.message.slice(0, 60), message: e.message }; }
+}
+export const codeOf = (settled) => (settled.status === 'rejected' ? (/FIN_[A-Z_]+/.exec(settled.reason.message)?.[0] ?? settled.reason.message.slice(0, 60)) : 'OK');

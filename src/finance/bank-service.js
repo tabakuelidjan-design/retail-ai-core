@@ -114,7 +114,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
         if (cents > inv.remainingCents) throw new FinanceError('PAYMENT_EXCEEDS_REMAINING', `${cents} > ${inv.remainingCents}`);
         // claim first (compare-and-set): a second confirmation of the same transaction can never record a second payment
         if (!(await store.updateBankTransaction(txId, { status: 'MATCHED', matchedKind: 'INVOICE', matchedDocumentId: documentId, matchedAt: clock.now(), matchedAmountCents: cents }, 'NEW'))) throw new FinanceError('BANK_TRANSACTION_ALREADY_HANDLED');
-        const pay = await finance.recordPayment(documentId, { amount: formatCents(cents), paidOn: tx.date, method: 'bank_transfer', reference: `bank:${tx.providerTxId}`.slice(0, 100) }, actor);
+        const pay = await finance.recordPayment(documentId, { amount: formatCents(cents), paidOn: tx.date, method: 'bank_transfer', reference: `bank:${tx.providerTxId}`.slice(0, 100), idempotencyKey: `bank:${txId}` }, actor); // the key is the bank transaction: it can never settle twice
         await store.updateBankTransaction(txId, { matchedPaymentId: pay?.id ?? null }, 'MATCHED');
         await audit({ at: clock.now(), action: 'BANK_PAYMENT_RECONCILED', transactionId: txId, documentId, amountCents: cents });
         return { status: 'MATCHED', documentId, amountCents: cents, surplusCents: tx.amountCents - cents };
@@ -123,7 +123,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       if (abs !== item.grossCents) throw new FinanceError('PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET');
       if (!(await store.updateBankTransaction(txId, { status: 'MATCHED', matchedKind: 'SUPPLIER_INVOICE', matchedDocumentId: itemId, matchedAt: clock.now(), matchedAmountCents: abs }, 'NEW'))) throw new FinanceError('BANK_TRANSACTION_ALREADY_HANDLED');
       if (item.status === 'VALIDATED') await inbox.markToPay(item.itemId, actor);
-      await inbox.pay(item.itemId, { paidOn: tx.date, amountCents: abs, reference: `bank:${tx.providerTxId}` }, actor);
+      await inbox.pay(item.itemId, { paidOn: tx.date, amountCents: abs, reference: `bank:${tx.providerTxId}`, idempotencyKey: `bank:${txId}` }, actor);
       await audit({ at: clock.now(), action: 'BANK_SUPPLIER_PAYMENT_RECONCILED', transactionId: txId, itemId });
       return { status: 'MATCHED', itemId, amountCents: abs };
     },

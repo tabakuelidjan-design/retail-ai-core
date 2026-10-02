@@ -8,7 +8,7 @@
 //   - Extraction never decides: every field carries a confidence and the source document stays attached; a person validates.
 //   - No bookkeeping classification. Amounts are integer cents and net + VAT must equal the total before a document can be validated.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { eurOfSupplier } from './currency.js';
 import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf, isCapturedExpense, normalizeCaptureMeta } from './expense-capture.js';
@@ -368,13 +368,24 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
       await audit({ at: now(), action: 'SUPPLIER_INVOICE_DUE_CONFLICT_ACKNOWLEDGED', itemId: id }); return saved;
     },
     async markToPay(id, actor) { merchantOnly(actor); const r = await must(id); if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id); return move(r, 'TO_PAY'); },
-    async pay(id, { paidOn, amountCents, reference }, actor) {
+    /**
+     * Pay a supplier document. PAID is never written: the payment is recorded in the registry and allocated to this document (one database transaction), and the
+     * database derives PAID from the allocations. A retry with the same idempotencyKey returns the operation that already committed. Full payments only for now (partial = Phase 3).
+     */
+    async pay(id, { paidOn, amountCents, reference, idempotencyKey }, actor) {
       merchantOnly(actor); const r = await must(id);
       if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id);
       if (!isDate(paidOn)) throw new FinanceError('PAID_ON_INVALID');
       if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
       if (amountCents !== r.grossCents) throw new FinanceError('PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET', `${amountCents} vs ${r.grossCents}`);
-      return move(r, 'PAID', { paidAt: paidOn, paidAmountCents: amountCents, paidReference: reference ? String(reference).slice(0, 100) : null });
+      const key = idempotencyKey ?? randomUUID();
+      const done = await store.getPaymentByKey(merchantId, key);
+      if (done) { const standing = done.allocations.filter((x) => x.amountCents > 0); if (standing.length !== 1 || standing[0].supplierInvoiceId !== id || done.payment.amountCents !== amountCents) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); return must(id); }
+      if (!INBOX_TRANSITIONS[r.status].includes('PAID')) throw new FinanceError('INVALID_TRANSITION', `${r.status} -> PAID`);
+      if (!r.currency) throw new FinanceError('CURRENCY_MISSING', id);
+      await store.recordPayment({ merchantId, key, direction: 'OUT', amountCents, currency: r.currency, paidOn, method: 'unspecified', reference: reference ? String(reference).slice(0, 100) : null, actor, at: now(), allocations: [{ supplierInvoiceId: id, amountCents }] });
+      await audit({ at: now(), action: 'SUPPLIER_INVOICE_PAID', itemId: id, from: r.status });
+      return must(id);
     },
     async reject(id, reason, actor) { merchantOnly(actor); const r = await must(id); if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED'); return move(r, 'REJECTED', { rejectedReason: String(reason).slice(0, 300) }); },
     async reopen(id, actor) { merchantOnly(actor); const r = await must(id); return move(r, 'TO_REVIEW', { validatedAt: null }); },

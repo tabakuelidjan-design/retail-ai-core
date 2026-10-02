@@ -25,7 +25,9 @@ const isCents = (x) => Number.isInteger(x) && x >= 0;
 export function settlementOf(row, { allocations = null } = {}) {
   if (!row || row.status === 'REJECTED' || documentTypeOf(row) === 'CREDIT_NOTE') return { state: 'NOT_PAYABLE', paidCents: 0, remainingCents: null, overpaidCents: 0 };
   if (!isCents(row.grossCents)) return { state: 'UNKNOWN', paidCents: 0, remainingCents: null, overpaidCents: 0 };
+  // the truth is the allocations: an explicit list wins, then the net allocated carried by the record (always present from the stores), and only a record read from an old source falls back to the legacy single payment
   const paidCents = Array.isArray(allocations) ? allocations.reduce((a, x) => a + (isCents(x?.amountCents) ? x.amountCents : 0), 0)
+    : isCents(row.allocatedCents) ? row.allocatedCents
     : row.status === 'PAID' && isCents(row.paidAmountCents) ? row.paidAmountCents : 0;
   const remainingCents = Math.max(0, row.grossCents - paidCents); const overpaidCents = Math.max(0, paidCents - row.grossCents);
   const state = row.grossCents > 0 && paidCents >= row.grossCents ? 'PAID' : paidCents > 0 ? 'PARTIALLY_PAID' : 'UNPAID';

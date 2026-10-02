@@ -37,6 +37,10 @@ export function translateDbError(err) {
   if (m.includes('fin_supplier_invoice_type_uq') || m.includes('fin_supplier_invoice_uq')) return new FinanceError('DUPLICATE_SUPPLIER_INVOICE');
   if (m.includes('FIN_CONCURRENT_MODIFICATION')) return new FinanceError('CONCURRENT_MODIFICATION', 'document changed or was already issued');
   if (m.includes('FIN_NOT_FOUND')) return new FinanceError('DOCUMENT_NOT_FOUND');
+  // rules enforced by the P0 integrity triggers (migration 20261003090000): the message starts with FIN_<CODE>; the domain code is the same without the prefix
+  const fin = /\bFIN_([A-Z_]+)\b/.exec(m);
+  if (fin) { const RENAMED = { ALLOCATION_EXCEEDS_REMAINING: 'PAYMENT_EXCEEDS_REMAINING', BANK_TX_ALREADY_CLAIMED: 'BANK_TRANSACTION_ALREADY_CLAIMED' }; return new FinanceError(RENAMED[fin[1]] ?? fin[1], m.slice(m.indexOf(fin[0]) + fin[0].length).replace(/^:\s*/, '').split('"')[0].slice(0, 200)); }
+  if (/_same_merchant_fk|fin_payment_allocations_(payment|customer|supplier|reverses)_fk|fin_payment_registry_reversal_fk/.test(m)) return new FinanceError('CROSS_MERCHANT_REFERENCE', 'refused by the database');
   if (m.includes('is immutable') || m.includes('cannot be deleted')) return new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', 'refused by the database');
   if (m.includes('append-only')) return new FinanceError('APPEND_ONLY_TABLE', 'refused by the database');
   return err;
@@ -45,6 +49,23 @@ export function translateDbError(err) {
 export function createSupabaseFinanceStore(supabase, { merchantId }) {
   const guard = async (fn) => { try { return await fn(); } catch (e) { throw translateDbError(e); } };
   const eq = (v) => `eq.${v}`;
+  // allocations joined with the registry rows they belong to (two reads, joined here: PostgREST embedding of a composite key is not relied upon)
+  const joinPayments = async (allocRows) => {
+    if (!allocRows.length) return [];
+    const ids = [...new Set(allocRows.map((a) => a.payment_id))];
+    const regs = []; for (let i = 0; i < ids.length; i += 100) regs.push(...await supabase.select('fin_payment_registry', { select: '*', merchant_id: eq(merchantId), id: `in.(${ids.slice(i, i + 100).join(',')})` }));
+    const byId = new Map(regs.map((r) => [r.id, r]));
+    return allocRows.map((a) => { const p = byId.get(a.payment_id); return { ...allocFromRow(a), paidOn: p.paid_on, method: p.method, reference: p.reference, direction: p.direction }; });
+  };
+  const paymentsView = (rows) => rows.map((a) => ({ id: a.paymentId, allocationId: a.id, documentId: a.customerDocumentId, merchantId: a.merchantId, amountCents: a.amountCents, paidOn: a.paidOn, method: a.method, reference: a.amountCents < 0 ? (a.reason ?? a.reference) : a.reference }));
+  // the derived net allocated of supplier invoices (the only financial truth of "paid"); the row's own columns are a mirror kept by the database
+  const withAllocated = async (rows) => {
+    if (!rows.length) return rows;
+    const al = rows.length === 1 ? await supabase.select('fin_payment_allocations', { select: 'supplier_invoice_id,amount_cents', merchant_id: eq(merchantId), supplier_invoice_id: eq(rows[0].id) })
+      : await supabase.selectAll('fin_payment_allocations', { select: 'id,supplier_invoice_id,amount_cents', merchant_id: eq(merchantId), supplier_invoice_id: 'not.is.null' });
+    const net = new Map(); for (const a of al) net.set(a.supplier_invoice_id, (net.get(a.supplier_invoice_id) ?? 0) + Number(a.amount_cents));
+    return rows.map((r) => ({ ...r, allocatedCents: net.get(r.id) ?? 0 }));
+  };
 
   return {
     newId: () => randomUUID(),
@@ -91,18 +112,43 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, at: r.at, actor: r.actor, action: r.action, fromStatus: r.from_status, toStatus: r.to_status, detail: r.detail }));
     },
 
-    async addPayment(p) {
-      const [r] = await guard(() => supabase.insert('fin_payments', [{ merchant_id: p.merchantId ?? merchantId, document_id: p.documentId, amount_cents: p.amountCents, paid_on: p.paidOn, method: p.method, reference: p.reference ?? null, actor: p.actor ?? null }]));
-      return { id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference };
+    // ---- payment registry: every operation is ONE rpc = ONE database transaction. The idempotency key makes a retry after an ambiguous network result safe,
+    // so these rpcs (and only these) opt in to the client's transient-failure retry. fin_payments (legacy) is no longer read or written by the application. ----
+    async getPaymentByKey(_m, key) {
+      const [p] = await supabase.select('fin_payment_registry', { select: '*', merchant_id: eq(merchantId), idempotency_key: eq(key) });
+      if (!p) return null;
+      const rows = await supabase.select('fin_payment_allocations', { select: '*', merchant_id: eq(merchantId), payment_id: eq(p.id), order: 'created_at.asc,id.asc' });
+      return { payment: payFromRow(p), allocations: rows.map(allocFromRow) };
     },
+    async recordPayment({ key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations = [], at = null }) {
+      const r = await guard(() => supabase.rpc('fin_record_payment', { p_merchant: merchantId, p_key: key, p_direction: direction, p_amount: amountCents, p_currency: currency, p_paid_on: paidOn, p_method: method, p_reference: reference, p_actor: actor,
+        p_allocations: allocations.map((a) => ({ customerDocumentId: a.customerDocumentId ?? undefined, supplierInvoiceId: a.supplierInvoiceId ?? undefined, amountCents: a.amountCents })), p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, payment: payFromRow(r.payment), allocations: (r.allocations ?? []).map(allocFromRow) };
+    },
+    async reverseAllocations({ key, items, reason = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_reverse_allocations', { p_merchant: merchantId, p_key: key, p_items: items.map((i) => ({ allocationId: i.allocationId, amountCents: i.amountCents ?? null })), p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, reversals: (r.reversals ?? []).map(allocFromRow) };
+    },
+    async voidPayment({ key, paymentId, on, reason = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_void_payment', { p_merchant: merchantId, p_key: key, p_payment_id: paymentId, p_on: on, p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, reversal: payFromRow(r.reversal) };
+    },
+    async listAllocations({ customerDocumentId, supplierInvoiceId } = {}) {
+      const p = { select: '*', merchant_id: eq(merchantId), order: 'created_at.asc,id.asc' };
+      if (customerDocumentId) p.customer_document_id = eq(customerDocumentId);
+      if (supplierInvoiceId) p.supplier_invoice_id = eq(supplierInvoiceId);
+      const rows = (await supabase.selectAll('fin_payment_allocations', { ...p, order: 'id.asc' })).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
+      return joinPayments(rows);
+    },
+    async listRegistry() { return (await supabase.selectAll('fin_payment_registry', { select: '*', merchant_id: eq(merchantId) })).map(payFromRow); },
+    /** Customer-invoice payments as the rest of the application reads them: one entry per allocation (negative = a reversal), derived from the registry. */
     async listPayments(documentId) {
-      // merchant_id added as defense-in-depth, same rationale as listEvents above.
-      const rows = await supabase.select('fin_payments', { select: '*', document_id: eq(documentId), merchant_id: eq(merchantId), order: 'paid_on.asc,created_at.asc' });
-      return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference }));
+      const rows = await supabase.select('fin_payment_allocations', { select: '*', customer_document_id: eq(documentId), merchant_id: eq(merchantId), order: 'created_at.asc,id.asc' });
+      return paymentsView(await joinPayments(rows));
     },
     async listPaymentsForMerchant() {
-      const rows = await supabase.selectAll('fin_payments', { select: '*', merchant_id: eq(merchantId) });
-      return rows.map((r) => ({ id: r.id, documentId: r.document_id, merchantId: r.merchant_id, amountCents: Number(r.amount_cents), paidOn: r.paid_on, method: r.method, reference: r.reference }));
+      const rows = await supabase.selectAll('fin_payment_allocations', { select: '*', merchant_id: eq(merchantId), customer_document_id: 'not.is.null' });
+      return paymentsView(await joinPayments(rows));
     },
 
     /** ATOMIC issue through the fin_issue_document() RPC: number allocation, lock, hash and audit event in one DB transaction. */
@@ -151,22 +197,21 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
     },
     async saveSupplierInvoice(s) {
       const [r] = await guard(() => supabase.insert('fin_supplier_invoices', [supplierToRow(s)]));
-      return supplierFromRow(r);
+      return { ...supplierFromRow(r), allocatedCents: 0 };
     },
-    async getSupplierInvoice(id) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? supplierFromRow(r) : null; },
-    async findSupplierInvoiceBySha(_m, sha) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', sha256: eq(sha), merchant_id: eq(merchantId) }); return r ? supplierFromRow(r) : null; },
+    async getSupplierInvoice(id) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? (await withAllocated([supplierFromRow(r)]))[0] : null; },
+    async findSupplierInvoiceBySha(_m, sha) { const [r] = await supabase.select('fin_supplier_invoices', { select: '*', sha256: eq(sha), merchant_id: eq(merchantId) }); return r ? (await withAllocated([supplierFromRow(r)]))[0] : null; },
     async updateSupplierInvoice(id, patch, expectedStatus) {
-      const body = supplierToRow(patch, true);
-      if ('status' in patch) body.payment_status = patch.status === 'PAID' ? 'paid' : 'unpaid';
+      const body = supplierToRow(patch, true); // payment_status is never written: the database derives it from the allocations (and refuses status PAID without them)
       const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body));
-      return r && r.length ? supplierFromRow(r[0]) : null;
+      return r && r.length ? (await withAllocated([supplierFromRow(r[0])]))[0] : null;
     },
     /** Phase 1: link/unlink a supplier invoice to a fin_companies contact. Deliberately NOT gated by
      * status (unlike updateSupplierInvoice) - linking a contact is a separate concern from the review
      * workflow and must remain possible at any status, including after payment. contactId=null unlinks. */
     async setSupplierInvoiceContact(id, contactId) {
       const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId) }, { supplier_company_id: contactId }));
-      return r && r.length ? supplierFromRow(r[0]) : null;
+      return r && r.length ? (await withAllocated([supplierFromRow(r[0])]))[0] : null;
     },
     // ---- Bank & Treasury (read only) ----
     async saveBankConnection(c) {
@@ -207,9 +252,9 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
     /** Attach a first document to a record that has none (the filter makes it a no-op when one exists). */
     async setSupplierInvoiceAttachment(id, patch) {
       const r = await guard(() => supabase.update('fin_supplier_invoices', { id: eq(id), merchant_id: eq(merchantId), attachment_ref: 'is.null' }, supplierToRow(patch, true)));
-      return r && r.length ? supplierFromRow(r[0]) : null;
+      return r && r.length ? (await withAllocated([supplierFromRow(r[0])]))[0] : null;
     },
-    async listSupplierInvoices() { return (await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow); },
+    async listSupplierInvoices() { return withAllocated((await supabase.selectAll('fin_supplier_invoices', { select: '*', merchant_id: eq(merchantId) })).map(supplierFromRow)); },
 
     // ---- Stock movement ledger (append-only; see stock.js) ----
     // stockToRow/stockFromRow already existed below, unused - the store side of this feature was never wired up
@@ -251,6 +296,8 @@ const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'suppli
   vatBreakdown: 'vat_breakdown', lines: 'lines' };
 function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
 const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
+const payFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, direction: r.direction, amountCents: Number(r.amount_cents), currency: r.currency, paidOn: r.paid_on, method: r.method, reference: r.reference, reversalOfId: r.reversal_of_id ?? null, idempotencyKey: r.idempotency_key, actor: r.actor ?? null, createdAt: r.created_at });
+const allocFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, paymentId: r.payment_id, customerDocumentId: r.customer_document_id ?? null, supplierInvoiceId: r.supplier_invoice_id ?? null, amountCents: Number(r.amount_cents), currency: r.currency, reversesAllocationId: r.reverses_allocation_id ?? null, idempotencyKey: r.idempotency_key, reason: r.reason ?? null, actor: r.actor ?? null, createdAt: r.created_at });
 const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });
 const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId, provider_tx_id: t.providerTxId, date: t.date, amount_cents: t.amountCents, currency: t.currency, counterparty_name: t.counterpartyName, reference: t.reference, structured_reference: t.structuredReference, source: t.source, status: t.status });
 const bankTxFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, accountId: r.account_id, providerTxId: r.provider_tx_id, date: r.date, amountCents: Number(r.amount_cents), currency: r.currency, counterpartyName: r.counterparty_name, reference: r.reference, structuredReference: r.structured_reference, source: r.source, status: r.status, matchedKind: r.matched_kind, matchedDocumentId: r.matched_document_id, matchedPaymentId: r.matched_payment_id, matchedAmountCents: r.matched_amount_cents == null ? null : Number(r.matched_amount_cents), matchedAt: r.matched_at, importedAt: r.imported_at });

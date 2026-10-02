@@ -1,0 +1,161 @@
+{
+ "customer payments: partial, remaining, over-payment refused, paid, closed, audit events": [
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 3000,
+   "remaining": 4190,
+   "credited": 0
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0
+  },
+  "INVOICE_NOT_OPEN_FOR_PAYMENT",
+  2
+ ],
+ "idempotency: a retry returns the committed payment, even once the invoice is PAID; a different request under the same key is refused": [
+  false,
+  true,
+  true,
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0
+  },
+  "IDEMPOTENCY_KEY_REUSED",
+  1
+ ],
+ "corrections: a negative payment reverses the most recent allocations, is bounded by what was paid, and a retry does not correct twice": [
+  false,
+  true,
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 2000,
+   "remaining": 5190,
+   "credited": 0
+  },
+  "CORRECTION_EXCEEDS_PAID"
+ ],
+ "reversal and void: statuses are re-derived, reversals are idempotent and bounded, the history is kept": [
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0
+  },
+  true,
+  true,
+  false,
+  true,
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 5190,
+   "remaining": 2000,
+   "credited": 0
+  },
+  "REVERSAL_EXCEEDS_ALLOCATION",
+  false,
+  true,
+  {
+   "status": "SENT",
+   "paid": 0,
+   "remaining": 7190,
+   "credited": 0
+  },
+  "PAYMENT_ALREADY_REVERSED",
+  [
+   7190,
+   -2000,
+   -5190
+  ]
+ ],
+ "credit ceiling: the second full credit note cannot be issued, nor a third drafted; the invoice becomes CREDITED": [
+  "OK",
+  "CREDIT_EXCEEDS_INVOICE",
+  "CREDIT_EXCEEDS_INVOICE",
+  "CREDITED"
+ ],
+ "merchant isolation: B can neither pay, reverse, reference nor annotate what belongs to A": [
+  "TARGET_NOT_FOUND",
+  "ALLOCATION_NOT_FOUND",
+  "CROSS_MERCHANT_REFERENCE",
+  "CROSS_MERCHANT_REFERENCE",
+  true
+ ],
+ "supplier truth: PAID is derived (unpaid -> partially paid -> paid -> back), never written, nothing financial changes under payments": [
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "unpaid",
+   "allocated": 0,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAID_REQUIRES_ALLOCATIONS",
+  "PAID_REQUIRES_ALLOCATIONS",
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "part-2"
+  },
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 9100,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "INVOICE_HAS_PAYMENTS",
+  "INVOICE_HAS_PAYMENTS",
+  [
+   9100
+  ]
+ ],
+ "supplier payment through the inbox service: full payment derives PAID, a retry is the same operation, partial/duplicate refused": [
+  "PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET",
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "virement"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "virement"
+  },
+  "INVALID_TRANSITION",
+  1
+ ],
+ "bank transaction claim: one claim wins, the loser gets nothing, a handled transaction is frozen": [
+  "MATCHED",
+  null,
+  "BANK_TRANSACTION_ALREADY_CLAIMED",
+  "BANK_TRANSACTION_ALREADY_CLAIMED",
+  true,
+  "BANK_TRANSACTION_ALREADY_CLAIMED",
+  "BANK_MATCH_EXCEEDS_TRANSACTION"
+ ]
+}

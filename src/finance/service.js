@@ -6,7 +6,10 @@ import {
   FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
   markSent, rejectQuote, sendQuote, settledStatus, settlement, submitForApproval, updateDraft, validateForIssue, verifyIntegrity,
 } from './document.js';
+import { randomUUID } from 'node:crypto';
 import { requireClock } from './civil-date.js';
+import { toCents } from './money.js';
+import { standingAllocations } from './payment-ledger.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
 import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
 
@@ -31,6 +34,17 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     return seal(saved);
   };
   const relatedCreditNotes = async (invoice) => (await store.listDocuments({ merchantId: config.merchantId, type: 'credit_note', relatedDocumentId: invoice.id }));
+
+  /** A negative payment is a correction: reverse the most recent standing allocations up to the amount (all or nothing, one atomic call, idempotent per key). */
+  async function correct(invoice, p, key, actor) {
+    const already = (await store.listAllocations({ merchantId: config.merchantId, customerDocumentId: invoice.id })).filter((a) => a.amountCents < 0 && a.idempotencyKey.startsWith(`${key}:`));
+    if (already.length) return { id: already[0].paymentId, documentId: invoice.id, merchantId: invoice.merchantId, amountCents: already.reduce((s, a) => s + a.amountCents, 0), paidOn: p.paidOn, method: p.method, reference: p.reference, duplicate: true };
+    let need = -p.amountCents; const items = [];
+    for (const a of standingAllocations(await store.listAllocations({ merchantId: config.merchantId, customerDocumentId: invoice.id }), { customerDocumentId: invoice.id })) { if (need <= 0) break; const take = Math.min(need, a.remainingCents); items.push({ allocationId: a.id, amountCents: take }); need -= take; }
+    if (need > 0) throw new FinanceError('CORRECTION_EXCEEDS_PAID', `${-p.amountCents} > paid`);
+    const r = await store.reverseAllocations({ merchantId: config.merchantId, key, items, reason: p.reference, actor, at: now() });
+    return { id: r.reversals[0].paymentId, documentId: invoice.id, merchantId: invoice.merchantId, amountCents: p.amountCents, paidOn: p.paidOn, method: p.method, reference: p.reference, duplicate: r.duplicate };
+  }
 
   async function linkage(doc) {
     const ledger = await ledgerProvider();
@@ -132,14 +146,48 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     },
 
     // ---- payments / status ----
+    /**
+     * Record a customer payment. The DATABASE is the authority (ceiling under a row lock, idempotency, atomic registry + allocation + audit event);
+     * the checks below only give early, friendly errors. IDEMPOTENCY: the caller's key (or a fresh one) identifies the operation; a retry with the same key
+     * returns the operation that already committed (duplicate: true), even if the invoice has meanwhile become PAID. A negative amount is a correction:
+     * it reverses the most recent standing allocations (the registry is append-only, nothing is ever deleted).
+     */
     async recordPayment(invoiceId, payment, actor) {
       const invoice = await must(invoiceId);
+      const key = payment.idempotencyKey ?? randomUUID();
+      const shape = (r) => ({ id: r.payment.id, documentId: invoiceId, merchantId: invoice.merchantId, amountCents: r.payment.amountCents, paidOn: r.payment.paidOn, method: r.payment.method, reference: r.payment.reference, duplicate: r.duplicate === true });
+      const done = await store.getPaymentByKey(config.merchantId, key);
+      if (done) { // an operation with this key already committed: same request => the same result, a different request => refused
+        const standing = done.allocations.filter((x) => x.amountCents > 0); const a = standing[0]; const cents = toCents(payment.amount); // reversals appended later do not change what the request was
+        if (standing.length !== 1 || a.customerDocumentId !== invoiceId || done.payment.amountCents !== cents || done.payment.paidOn !== payment.paidOn) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key);
+        await this.resettle(invoiceId, actor);
+        return shape({ payment: done.payment, duplicate: true });
+      }
       const [payments, credits] = [await store.listPayments(invoiceId), await relatedCreditNotes(invoice)];
-      const p = makePayment(invoice, payments, credits, { ...payment, actor });
-      const saved = await store.addPayment(p);
-      await store.appendEvent({ documentId: invoiceId, merchantId: invoice.merchantId, actor, action: 'RECORD_PAYMENT', fromStatus: invoice.status, toStatus: invoice.status, detail: { amountCents: p.amountCents, method: p.method, paidOn: p.paidOn }, at: now() });
+      const p = makePayment(invoice, payments, credits, { ...payment, actor }); // validation + friendly errors (negative = correction, see below)
+      if (p.amountCents < 0) { const out = await correct(invoice, p, key, actor); await this.resettle(invoiceId, actor); return out; }
+      const r = await store.recordPayment({ merchantId: invoice.merchantId, key, direction: 'IN', amountCents: p.amountCents, currency: invoice.currency, paidOn: p.paidOn, method: p.method, reference: p.reference, actor, at: now(),
+        allocations: [{ customerDocumentId: invoiceId, amountCents: p.amountCents }] });
       await this.resettle(invoiceId, actor);
-      return saved;
+      return shape(r);
+    },
+
+    /** Take back (all or part of) one allocation of an invoice. Idempotent per key; nothing is deleted: a negative allocation linked to the original is appended. */
+    async reversePayment(invoiceId, { allocationId, amountCents = null, reason, idempotencyKey }, actor) {
+      await must(invoiceId);
+      if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED');
+      const r = await store.reverseAllocations({ merchantId: config.merchantId, key: idempotencyKey ?? randomUUID(), items: [{ allocationId, amountCents }], reason: String(reason).slice(0, 300), actor, at: now() });
+      await this.resettle(invoiceId, actor);
+      return r;
+    },
+
+    /** A payment entered by mistake: every allocation still standing is reversed and the payment itself is reversed (it stays in the history). */
+    async voidPayment(paymentId, { reason, idempotencyKey }, actor) {
+      if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED');
+      const touched = [...new Set((await store.listAllocations({ merchantId: config.merchantId })).filter((a) => a.paymentId === paymentId && a.customerDocumentId).map((a) => a.customerDocumentId))];
+      const r = await store.voidPayment({ merchantId: config.merchantId, key: idempotencyKey ?? randomUUID(), paymentId, on: today(), reason: String(reason).slice(0, 300), actor, at: now() });
+      for (const id of touched) await this.resettle(id, actor);
+      return r;
     },
 
     /** Re-derive the stored lifecycle status from payments and credit notes (call after either changes). */

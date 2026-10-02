@@ -114,9 +114,10 @@ export function createSupabaseClient(config) {
     },
 
     /** Call a Postgres function (RPC), e.g. rpc('fin_next_number', { p_merchant, p_type, p_year }). */
-    async rpc(fn, args) {
-      // Never retried: a function may have run before the response was lost (e.g. fin_next_number would burn a number).
-      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}), retry: false });
+    async rpc(fn, args, { retry = false } = {}) {
+      // Never retried unless the caller opts in with { retry: true }: a function may have run before the response was lost (e.g. fin_next_number would burn a number).
+      // Only rpcs made idempotent by an explicit key (fin_record_payment, fin_reverse_allocations, fin_void_payment) opt in.
+      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}), retry });
     },
 
     /** DELETE rows matching raw PostgREST filters. Database triggers may refuse (e.g. locked finance documents). */
