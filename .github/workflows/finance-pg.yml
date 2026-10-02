@@ -1,0 +1,18 @@
+name: finance-pg
+# Real PostgreSQL 17 bench for Finance. No secret, no production access: the database is a throw-away container on the runner.
+on:
+  pull_request:
+    paths: ['supabase/migrations/**', 'src/finance/**', 'test/pg/**']
+  workflow_dispatch: {}
+jobs:
+  pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --prefix test/pg
+      - run: node test/pg/run.mjs
+      - if: always()
+        run: node test/pg/pgctl.mjs down

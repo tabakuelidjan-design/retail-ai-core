@@ -1,0 +1,7 @@
+{
+  "name": "finance-pg-test-harness",
+  "private": true,
+  "type": "module",
+  "description": "Real PostgreSQL 17 test harness for Nordla Finance (test-only, never shipped, never connects to Supabase).",
+  "dependencies": { "pg": "8.13.1" }
+}
