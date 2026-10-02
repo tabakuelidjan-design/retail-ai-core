@@ -38,7 +38,7 @@ import { refundRows } from '../refund-rows.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
-import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
+import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentCommand, cleanPaymentFollowUp, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
@@ -58,7 +58,7 @@ const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
 const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND', 'TARGET_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'ALLOCATION_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED', 'PAYMENT_OVER_ALLOCATED', 'REVERSAL_EXCEEDS_ALLOCATION', 'REVERSAL_EXCEEDS_PAYMENT', 'CORRECTION_EXCEEDS_PAID', 'CURRENCY_MISSING', 'CREDIT_CURRENCY_MISMATCH'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED', 'PAYMENT_OVER_ALLOCATED', 'REVERSAL_EXCEEDS_ALLOCATION', 'REVERSAL_EXCEEDS_PAYMENT', 'CORRECTION_EXCEEDS_PAID', 'CURRENCY_MISSING', 'CREDIT_CURRENCY_MISMATCH', 'PAYMENT_METHOD_INVALID', 'PAYMENT_SOURCE_INVALID', 'IDEMPOTENCY_KEY_INVALID', 'REFUND_EXCEEDS_CREDIT_NOTE', 'REFUND_EXCEEDS_REFUNDABLE', 'REFUND_EXCEEDS_PAYMENT', 'REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE', 'ALLOCATION_DUPLICATE_TARGET', 'CURRENCY_MISMATCH'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -191,12 +191,16 @@ export function createFinanceApp(deps) {
     const source = doc.sourceOrderId && retail ? await retail.getOrder(doc.sourceOrderId, await invoicedMap()).catch(() => null) : null;
     return {
       ...rowOf(doc, v.settlement ?? null, today), doc, totals: totalsView(doc), settlement: v.settlement ?? null, integrity: v.integrity,
-      settlementView: v.settlement ? { gross: disp(v.settlement.grossCents, doc), credited: disp(v.settlement.creditedCents, doc), paid: disp(v.settlement.paidCents, doc), remaining: disp(v.settlement.remainingCents, doc) } : null,
+      settlementView: v.settlement ? { gross: disp(v.settlement.grossCents, doc), credited: disp(v.settlement.creditedCents, doc), paid: disp(v.settlement.paidCents, doc), remaining: disp(v.settlement.remainingCents, doc),
+        effectiveDue: disp(v.settlement.effectiveDueCents, doc), refunded: disp(v.settlement.refundedCents, doc), retained: disp(v.settlement.retainedCents, doc), refundable: disp(v.settlement.refundableCents, doc) } : null,
+      // the credit note's own refund truth (what can still be handed back) and the refunds already made for an invoice: derived by the service, never rebuilt by the interface
+      refund: v.refund ? { ...v.refund, max: disp(v.refund.maxCents, doc), refunded: disp(v.refund.refundedCents, doc), payments: v.refund.payments.map((p) => ({ ...p, amount: disp(p.amountCents, doc) })) } : null,
+      refunds: (v.refunds ?? []).map((p) => ({ ...p, amount: disp(p.amountCents, doc) })),
       stockMovements, hadStockMovements: soldMovements.some((m) => m.kind === 'SALE_DECREMENT' && m.status !== 'SKIPPED'),
       readiness, events, payments: payments.map((p) => ({ ...p, amount: disp(p.amountCents, doc) })), creditNotes: creditNotes.map((c) => rowOf(c, null, today)),
       related: related ? { id: related.id, type: related.type, number: related.number } : null,
       convertedInvoice: doc.convertedInvoiceId ? (() => { const i = all.find((d) => d.id === doc.convertedInvoiceId); return i ? { id: i.id, number: i.number, status: i.status } : null; })() : null,
-      sourceOrder: source, actions: actionsFor(doc, v.settlement ?? null, credited),
+      sourceOrder: source, actions: [...actionsFor(doc, v.settlement ?? null, credited), ...(v.refund?.maxCents > 0 ? ['refund'] : [])],
       nextNumber: !doc.lockedAt && doc.status !== 'CANCELLED' ? await svc.peekNextNumber(doc.type, doc.issueDate ?? today).catch(() => null) : null,
       revenueNote: doc.revenueBasis === 'linked_source_order' ? 'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.' : doc.revenueBasis === 'standalone_b2b' ? 'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.' : null,
       peppol: { ...(peppolStateOf(events) ?? { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SENT', 'DELIVERED'].includes(peppolStateOf(events)?.status), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
@@ -259,7 +263,7 @@ export function createFinanceApp(deps) {
     // not a period aggregate. `rec.invoices` only holds OPEN ones (buildReceivables drops paid invoices
     // entirely), so "paid" is derived separately here the same way buildReceivables derives status.
     const lockedInvoices = nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED');
-    const paidInvoices = lockedInvoices.filter(({ doc, payments: pays, creditNotes }) => effectiveStatus(doc, settlement(doc, pays, creditNotes), today) === 'PAID');
+    const paidInvoices = lockedInvoices.filter(({ doc, payments: pays, creditNotes, refunds }) => effectiveStatus(doc, settlement(doc, pays, creditNotes, refunds), today) === 'PAID');
     const paidCents = paidInvoices.reduce((a, { doc }) => a + doc.totals.grossCents, 0);
     const invoiceStatus = {
       paid: { count: paidInvoices.length, cents: paidCents, amount: m(paidCents) },
@@ -463,7 +467,7 @@ export function createFinanceApp(deps) {
     const status = q.get('status');
     const today = clock.today();
     const docs = await loadDocsForReports(store, merchantId);
-    let rows = docs.filter(({ doc }) => (!type || doc.type === type)).map(({ doc, payments, creditNotes }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null, today));
+    let rows = docs.filter(({ doc }) => (!type || doc.type === type)).map(({ doc, payments, creditNotes, refunds }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null, today));
     if (status) rows = rows.filter((r) => (status === 'OVERDUE' ? r.effectiveStatus === 'OVERDUE' : r.status === status));
     const text = (q.get('q') ?? '').trim().toLowerCase();
     if (text) rows = rows.filter((r) => `${r.number ?? ''} ${r.customer ?? ''}`.toLowerCase().includes(text));
@@ -536,6 +540,37 @@ export function createFinanceApp(deps) {
     json(ctx.res, 201, await detail(svc, settings, id));
   });
 
+  // ---------- payments: commands that EXPRESS AN INTENTION (receive, pay, allocate, reverse, void, refund). The interface never writes a financial field: it sends the intention,
+  // the service + database decide, and the answer carries the derived truth (status, allocated, unallocated, every allocation and reversal). ----------
+  const keyFrom = (ctx, command) => { const h = String(ctx.req.headers['idempotency-key'] ?? ''); if (/^[A-Za-z0-9_.:-]{8,120}$/.test(h)) command.idempotencyKey = h; return command; }; // the header wins over the body field
+  const paymentView = async (p) => {
+    const lang = (await settingsIo.load()).defaults?.language ?? 'fr'; const fm = (c) => money(c, lang); // the merchant's own number format, like every other amount of the interface
+    const docs = new Map((await store.listDocuments({ merchantId })).map((d) => [d.id, d]));
+    const sups = p.direction === 'OUT' ? new Map((await store.listSupplierInvoices(merchantId)).map((s) => [s.id, s])) : new Map();
+    const target = (a) => { const d = a.customerDocumentId ? docs.get(a.customerDocumentId) : null; const s = a.supplierInvoiceId ? sups.get(a.supplierInvoiceId) : null;
+      return { documentId: a.customerDocumentId, supplierInvoiceId: a.supplierInvoiceId, number: d?.number ?? s?.invoiceNumber ?? null, documentType: d?.type ?? null, party: d?.customer?.name ?? s?.supplierName ?? null }; };
+    return { id: p.id, direction: p.direction, kind: p.direction === 'IN' ? 'RECEIPT' : p.allocations.some((a) => a.customerDocumentId) || p.refundOfPaymentId ? 'REFUND' : 'SUPPLIER_PAYMENT', status: p.status,
+      amountCents: p.amountCents, amount: fm(p.amountCents), currency: p.currency, paidOn: p.paidOn, method: p.method, reference: p.reference, source: p.source, externalReference: p.externalReference, structuredReference: p.structuredReference, bankReference: p.bankReference,
+      refundOfPaymentId: p.refundOfPaymentId, allocatedCents: p.allocatedCents, allocated: fm(p.allocatedCents), unallocatedCents: p.unallocatedCents, unallocated: fm(p.unallocatedCents), reversedCents: p.reversedCents,
+      allocations: p.allocations.map((a) => ({ id: a.id, amountCents: a.amountCents, amount: fm(a.amountCents), reversesAllocationId: a.reversesAllocationId, reason: a.reason, createdAt: a.createdAt, ...target(a) })),
+      reversals: p.reversals.map((r) => ({ id: r.id, amountCents: r.amountCents, amount: fm(r.amountCents), paidOn: r.paidOn, reason: r.reference, createdAt: r.createdAt })),
+      createdAt: p.createdAt, actor: p.actor ? { type: p.actor.type, id: p.actor.id ?? null } : null, idempotencyKey: p.idempotencyKey,
+      canAllocate: p.status === 'UNALLOCATED' || p.status === 'PARTIALLY_ALLOCATED', canVoid: p.status !== 'REVERSED' && !p.reversalOfId };
+  };
+  const answer = async (ctx, status, r) => json(ctx.res, status, { duplicate: r.duplicate === true, payment: await paymentView(r.payment) });
+  on('GET', '/api/payments', async (ctx) => {
+    const { svc } = await servicesFor(); const q = ctx.url.searchParams; const direction = ['IN', 'OUT'].includes(q.get('direction')) ? q.get('direction') : undefined;
+    const rows = await svc.payments.list({ direction, unallocated: q.get('unallocated') === '1' });
+    json(ctx.res, 200, { rows: await Promise.all(rows.map(paymentView)) });
+  });
+  on('GET', `/api/payments/${P}`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, { payment: await paymentView(await svc.payments.get(idParam(ctx.m[1]))) }); });
+  on('POST', '/api/payments', async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 201, await svc.payments.receive(keyFrom(ctx, command), actor)); });
+  on('POST', '/api/supplier-payments', async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 201, await svc.payments.pay(keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payments/${P}/allocate`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsAllocations: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.allocate(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payments/${P}/void`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsReason: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.voidPayment(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payment-allocations/${P}/reverse`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsReason: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.reverseAllocation(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/documents/${P}/refund`, async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body, { allocations: false }); if (errors.length) fields(errors); const { svc, settings } = await servicesFor(); const id = idParam(ctx.m[1]); const r = await svc.payments.refund(id, keyFrom(ctx, command), actor); json(ctx.res, 201, { duplicate: r.duplicate === true, payment: await paymentView(r.payment), document: await detail(svc, settings, id) }); });
+
   on('GET', `/api/documents/${P}/pdf`, async (ctx) => {
     const { svc, settings } = await servicesFor();
     const v = await svc.view(idParam(ctx.m[1]));
@@ -605,7 +640,7 @@ export function createFinanceApp(deps) {
     const pays = docs.flatMap(({ payments }) => payments);
     json(ctx.res, 200, {
       company: c,
-      documents: docs.map(({ doc, payments, creditNotes }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null, today)).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate))),
+      documents: docs.map(({ doc, payments, creditNotes, refunds }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null, today)).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate))),
       outstandingCents: rec.unpaid.outstandingCents, overdueCents: rec.overdue.outstandingCents,
       payments: { count: pays.filter((p) => p.amountCents > 0).length, totalPaidCents: pays.reduce((a, p) => a + p.amountCents, 0), lastPaidOn: pays.map((p) => p.paidOn).sort().at(-1) ?? null },
       credit: { scoring: 'NOT_IMPLEMENTED', note: 'No credit-risk or solvency scoring exists in this module.' },
@@ -882,6 +917,8 @@ export function createFinanceApp(deps) {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
+    // the payment truth of a supplier document: derived from its allocations (paymentStatus / allocatedCents / remainingCents), never an input; paidAt/paidReference only mirror a full payment
+    paymentStatus: r.paymentStatus, allocatedCents: r.allocatedCents ?? 0, remainingCents: r.grossCents == null ? null : Math.max(0, r.grossCents - (r.allocatedCents ?? 0)),
     due: dueViewOf(raw, { today }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
@@ -1001,7 +1038,7 @@ export function createFinanceApp(deps) {
     const all = await loadDocsForReports(store, merchantId);
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
-      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+      .map(({ doc, payments, creditNotes, refunds }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes, refunds) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
     const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const supplierInvoices = ((await store.listSupplierInvoices?.()) ?? []).filter((s) => inRange(s.issue_date ?? s.issueDate, period.start, period.end)).map((s) => ({ supplierName: s.supplier_name ?? s.supplierName, supplierVatNumber: s.supplier_vat_number ?? s.supplierVatNumber, invoiceNumber: s.invoice_number ?? s.invoiceNumber, issueDate: s.issue_date ?? s.issueDate, dueDate: s.due_date ?? s.dueDate, netCents: Number(s.net_cents ?? s.netCents), vatCents: Number(s.vat_cents ?? s.vatCents), grossCents: Number(s.gross_cents ?? s.grossCents), status: s.status ?? s.payment_status ?? s.paymentStatus, source: s.source, attachmentRef: s.attachment_ref ?? s.attachmentRef }));
     const acc = settings.accountant;
@@ -1056,7 +1093,7 @@ export function createFinanceApp(deps) {
     const all = await loadDocsForReports(store, merchantId);
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
-      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+      .map(({ doc, payments, creditNotes, refunds }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes, refunds) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
     const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const rows = (await store.listSupplierInvoices(merchantId)).filter((r) => r.status !== 'REJECTED');
     const purchases = rows.filter((r) => inRange(r.issueDate, period.start, period.end)).map((r) => ({ ...r }));

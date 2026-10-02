@@ -12,7 +12,7 @@
 //                the same bar `revenue` uses elsewhere in overview() (doc.lockedAt && status !== CANCELLED).
 //   isSupplier = the company has at least one supplier invoice linked via supplierCompanyId (any status -
 //                even a RECEIVED, not-yet-reviewed document is a real, if unconfirmed, supplier relationship).
-//   amountReceivable = sum of settlement(doc, payments, creditNotes).remainingCents over that company's
+//   amountReceivable = sum of settlement(doc, payments, creditNotes, refunds).remainingCents over that company's
 //                OPEN invoices (ISSUED/SENT/PARTIALLY_PAID) - the exact definition receivables.js already
 //                uses for "outstanding", not a new parallel one.
 //   amountOverdue = the subset of amountReceivable whose effectiveStatus() is OVERDUE - same authority
@@ -162,14 +162,14 @@ function projectContact(company, { salesByCompany, supplierByCompany, m }) {
 export function buildContacts({ companies, salesDocs, supplierInvoices, m, today, timeZone }) {
   if (!timeZone) throw new TypeError('buildContacts: the merchant time zone is required (a received instant is dated in the merchant day)');
   const salesByCompany = new Map();
-  for (const { doc, payments, creditNotes } of salesDocs) {
+  for (const { doc, payments, creditNotes, refunds } of salesDocs) {
     const cid = doc.customer?.companyId; if (!cid) continue;
     if (!doc.lockedAt || doc.status === 'CANCELLED') continue; // a draft alone is not "real" sales activity
     const cur = salesByCompany.get(cid) ?? { count: 0, receivableCents: 0, overdueCents: 0, overdueCount: 0, lastActivity: null };
     cur.count += 1;
     cur.lastActivity = [cur.lastActivity, doc.issueDate].filter(Boolean).sort().at(-1) ?? null;
     if (doc.type === 'invoice') {
-      const s = settlement(doc, payments, creditNotes);
+      const s = settlement(doc, payments, creditNotes, refunds);
       if (['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(doc.status) && s.remainingCents > 0) {
         cur.receivableCents += s.remainingCents;
         if (today && effectiveStatus(doc, s, today) === 'OVERDUE') { cur.overdueCents += s.remainingCents; cur.overdueCount += 1; }
@@ -195,15 +195,15 @@ export function buildContacts({ companies, salesDocs, supplierInvoices, m, today
 export function contactDetail(company, { salesDocs, supplierInvoices, m, today }) {
   const linkedSales = salesDocs.filter(({ doc }) => doc.customer?.companyId === company.id && doc.lockedAt && doc.status !== 'CANCELLED');
   const linkedSupplier = supplierInvoices.filter((inv) => inv.supplierCompanyId === company.id);
-  const salesRows = linkedSales.map(({ doc, payments, creditNotes }) => {
-    const s = doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null;
+  const salesRows = linkedSales.map(({ doc, payments, creditNotes, refunds }) => {
+    const s = doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null;
     return { id: doc.id, type: doc.type, number: doc.number, issueDate: doc.issueDate, status: s ? effectiveStatus(doc, s, today) : doc.status, gross: m(doc.totals?.grossCents ?? 0), remaining: s ? m(s.remainingCents) : null };
   });
   const supplierRows = linkedSupplier.map((inv) => ({ id: inv.id, invoiceNumber: inv.invoiceNumber, issueDate: inv.issueDate, status: inv.status, gross: m(inv.grossCents ?? 0) }));
   const openInvoices = linkedSales.filter(({ doc }) => doc.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(doc.status));
-  const receivableCents = openInvoices.reduce((a, { doc, payments, creditNotes }) => a + settlement(doc, payments, creditNotes).remainingCents, 0);
-  const overdue = openInvoices.filter(({ doc, payments, creditNotes }) => effectiveStatus(doc, settlement(doc, payments, creditNotes), today) === 'OVERDUE');
-  const overdueCents = overdue.reduce((a, { doc, payments, creditNotes }) => a + settlement(doc, payments, creditNotes).remainingCents, 0);
+  const receivableCents = openInvoices.reduce((a, { doc, payments, creditNotes, refunds }) => a + settlement(doc, payments, creditNotes, refunds).remainingCents, 0);
+  const overdue = openInvoices.filter(({ doc, payments, creditNotes, refunds }) => effectiveStatus(doc, settlement(doc, payments, creditNotes, refunds), today) === 'OVERDUE');
+  const overdueCents = overdue.reduce((a, { doc, payments, creditNotes, refunds }) => a + settlement(doc, payments, creditNotes, refunds).remainingCents, 0);
   const payableCents = linkedSupplier.filter((inv) => inv.status === 'TO_PAY').reduce((a, inv) => a + (inv.grossCents ?? 0), 0);
   const peppol = peppolReadiness(company);
   const roles = contactRoles(company, { customerDocuments: salesRows.length, supplierDocuments: supplierRows.length });

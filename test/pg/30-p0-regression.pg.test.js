@@ -154,7 +154,7 @@ control('P0-2 unallocated amounts are represented: advance, partial allocation, 
   } finally { await c.end(); }
 }));
 
-control('P0-2 direction, currency and target rules: IN cannot pay a supplier, currency must match, a credit note or a draft cannot be paid', withDb(async (d) => {
+control('P0-2 direction, currency and target rules: IN cannot pay a supplier, currency must match, a draft cannot be paid, an IN payment cannot settle a credit note (credit notes are refunded by OUT)', withDb(async (d) => {
   const c = await d.open(); const inv = await issuedInvoice(c); const sup = await insertSupplier(c); const draft = await insertDraft(c, A); const out = [];
   try {
     out.push((await attempt(c, 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [A, 'd1', 'IN', 100, 'EUR', '2026-09-30', 'cash', null, '{}', JSON.stringify([salloc(sup.id, 100)])])).code);
@@ -163,7 +163,7 @@ control('P0-2 direction, currency and target rules: IN cannot pay a supplier, cu
     out.push((await attempt(c, 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [A, 'd4', 'IN', 100, 'EUR', '2026-09-30', 'cash', null, '{}', JSON.stringify([alloc(draft.id, 100)])])).code);
     const cn = await credit(c, inv, 100); await issueCredit(c, cn);
     out.push((await attempt(c, 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [A, 'd5', 'IN', 100, 'EUR', '2026-09-30', 'cash', null, '{}', JSON.stringify([alloc(cn.id, 100)])])).code);
-    return { holds: out.join() === 'FIN_DIRECTION_MISMATCH,FIN_DIRECTION_MISMATCH,FIN_CURRENCY_MISMATCH,FIN_TARGET_NOT_OPEN,FIN_TARGET_NOT_OPEN', evidence: out.join(' / ') };
+    return { holds: out.join() === 'FIN_DIRECTION_MISMATCH,FIN_DIRECTION_MISMATCH,FIN_CURRENCY_MISMATCH,FIN_TARGET_NOT_OPEN,FIN_DIRECTION_MISMATCH', evidence: out.join(' / ') };
   } finally { await c.end(); }
 }));
 

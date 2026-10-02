@@ -153,9 +153,9 @@ export async function insertSupplier(c, merchantId = MERCHANT_A, { gross = 12100
     values ($1,'Fournisseur',$2,'2026-09-01',$3,$4,$5,$6,$7,$8) returning *`, [merchantId, number ?? `F-${Math.random().toString(36).slice(2, 9)}`, net, gross - net, gross, currency, status, documentType])).rows[0];
 }
 const ACTOR = JSON.stringify({ type: 'merchant', id: 'owner' });
-export const recordSql = 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) r';
-export const recordArgs = (merchantId, key, { direction = 'IN', amount, currency = 'EUR', paidOn = '2026-09-30', method = 'bank_transfer', reference = null, allocations = [] }) =>
-  [merchantId, key, direction, amount, currency, paidOn, method, reference, ACTOR, JSON.stringify(allocations)];
+export const recordSql = 'select fin_record_payment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,null,$11) r';
+export const recordArgs = (merchantId, key, { direction = 'IN', amount, currency = 'EUR', paidOn = '2026-09-30', method = 'bank_transfer', reference = null, allocations = [], meta = null }) =>
+  [merchantId, key, direction, amount, currency, paidOn, method, reference, ACTOR, JSON.stringify(allocations), meta ? JSON.stringify(meta) : null];
 export const record = async (c, merchantId, key, o) => (await c.query(recordSql, recordArgs(merchantId, key, o))).rows[0].r;
 export const reverseAllocations = async (c, merchantId, key, items, reason = 'test') => (await c.query('select fin_reverse_allocations($1,$2,$3,$4,$5) r', [merchantId, key, JSON.stringify(items), reason, ACTOR])).rows[0].r;
 export const voidPayment = async (c, merchantId, key, paymentId, reason = 'mistake') => (await c.query('select fin_void_payment($1,$2,$3,$4,$5,$6) r', [merchantId, key, paymentId, '2026-10-01', reason, ACTOR])).rows[0].r;
@@ -167,3 +167,7 @@ export async function attempt(c, sql, params) {
   try { await c.query(sql, params); return { ok: true }; } catch (e) { return { ok: false, code: /FIN_[A-Z_]+/.exec(e.message)?.[0] ?? e.constraint ?? e.code ?? e.message.slice(0, 60), message: e.message }; }
 }
 export const codeOf = (settled) => (settled.status === 'rejected' ? (/FIN_[A-Z_]+/.exec(settled.reason.message)?.[0] ?? settled.reason.message.slice(0, 60)) : 'OK');
+
+export const allocateSql = 'select fin_allocate_payment($1,$2,$3,$4,$5) r';
+export const allocateLater = async (c, merchantId, key, paymentId, allocations) => (await c.query(allocateSql, [merchantId, key, paymentId, JSON.stringify(allocations), ACTOR])).rows[0].r;
+export const amountsOf = async (c, merchantId, invoiceId) => (await c.query('select fin_invoice_amounts($1,$2) a', [merchantId, invoiceId])).rows[0].a;

@@ -23,9 +23,9 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
   const merchantOnly = (actor) => { if (actor?.type !== 'merchant') throw new FinanceError('THIS_STEP_REQUIRES_A_MERCHANT_ACTOR'); };
   const openInvoices = async () => {
     const out = [];
-    for (const { doc, payments, creditNotes } of await finance.listInvoices()) {
+    for (const { doc, payments, creditNotes, refunds } of await finance.listInvoices()) {
       if (doc.type !== 'invoice' || !['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(doc.status)) continue;
-      const s = settlement(doc, payments, creditNotes); if (s.remainingCents > 0) out.push({ documentId: doc.id, number: doc.number, customer: doc.customer.name, remainingCents: s.remainingCents, dueDate: doc.dueDate, currency: doc.currency });
+      const s = settlement(doc, payments, creditNotes, refunds); if (s.remainingCents > 0) out.push({ documentId: doc.id, number: doc.number, customer: doc.customer.name, remainingCents: s.remainingCents, dueDate: doc.dueDate, currency: doc.currency });
     }
     return out;
   };

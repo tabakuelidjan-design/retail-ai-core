@@ -3,13 +3,14 @@
 // merchant action and is refused for a non-merchant actor. Nothing here contacts an external system.
 
 import {
-  FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
+  FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment, payableOf,
   markSent, rejectQuote, sendQuote, settledStatus, settlement, submitForApproval, updateDraft, validateForIssue, verifyIntegrity,
 } from './document.js';
 import { randomUUID } from 'node:crypto';
 import { requireClock } from './civil-date.js';
 import { toCents } from './money.js';
 import { standingAllocations } from './payment-ledger.js';
+import { createPayments } from './payments.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
 import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
 
@@ -34,6 +35,8 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     return seal(saved);
   };
   const relatedCreditNotes = async (invoice) => (await store.listDocuments({ merchantId: config.merchantId, type: 'credit_note', relatedDocumentId: invoice.id }));
+  /** Money handed back for the credit notes of an invoice: the allocations to those credit notes (negative = a reversed refund). */
+  const refundsOf = async (creditNotes) => { const out = []; for (const c of creditNotes) out.push(...(await store.listPayments(c.id))); return out; };
 
   /** A negative payment is a correction: reverse the most recent standing allocations up to the amount (all or nothing, one atomic call, idempotent per key). */
   async function correct(invoice, p, key, actor) {
@@ -61,7 +64,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     return { ready: errors.length === 0 && l.errors.length === 0, errors: [...errors, ...l.errors], warnings: l.warnings, checks: l.checks };
   }
 
-  return {
+  const service = {
     readiness,
 
     async create(input, actor) {
@@ -164,7 +167,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
         return shape({ payment: done.payment, duplicate: true });
       }
       const [payments, credits] = [await store.listPayments(invoiceId), await relatedCreditNotes(invoice)];
-      const p = makePayment(invoice, payments, credits, { ...payment, actor }); // validation + friendly errors (negative = correction, see below)
+      const p = makePayment(invoice, payments, credits, { ...payment, actor, refunds: await refundsOf(credits) }); // validation + friendly errors (negative = correction, see below)
       if (p.amountCents < 0) { const out = await correct(invoice, p, key, actor); await this.resettle(invoiceId, actor); return out; }
       const r = await store.recordPayment({ merchantId: invoice.merchantId, key, direction: 'IN', amountCents: p.amountCents, currency: invoice.currency, paidOn: p.paidOn, method: p.method, reference: p.reference, actor, at: now(),
         allocations: [{ customerDocumentId: invoiceId, amountCents: p.amountCents }] });
@@ -194,7 +197,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     async resettle(invoiceId, actor) {
       const prev = await must(invoiceId);
       if (prev.type !== 'invoice' || !prev.lockedAt) return prev;
-      const s = settlement(prev, await store.listPayments(invoiceId), await relatedCreditNotes(prev));
+      const credits = await relatedCreditNotes(prev); const s = settlement(prev, await store.listPayments(invoiceId), credits, await refundsOf(credits));
       const status = settledStatus(prev, s);
       if (status === prev.status) return prev;
       const { doc, event } = applyStatus(prev, status, { actor, at: now(), reason: 'settlement' });
@@ -203,9 +206,14 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
 
     async view(id) {
       const doc = await must(id);
+      if (doc.type === 'credit_note' && doc.lockedAt && doc.relatedDocumentId) { // what can still be handed back for this credit note (the interface never recomputes it)
+        const invoice = await must(doc.relatedDocumentId); const credits = await relatedCreditNotes(invoice); const refunds = await refundsOf(credits);
+        const s = settlement(invoice, await store.listPayments(invoice.id), credits, refunds); const done = refunds.filter((r) => r.documentId === doc.id).reduce((a, r) => a + r.amountCents, 0);
+        return { doc, integrity: verifyIntegrity(doc), refund: { invoiceId: invoice.id, creditNoteCents: payableOf(doc.totals), refundedCents: done, remainingOnCreditNoteCents: payableOf(doc.totals) - done, refundableOnInvoiceCents: s.refundableCents, maxCents: Math.max(0, Math.min(payableOf(doc.totals) - done, s.refundableCents)), payments: refunds.filter((r) => r.documentId === doc.id) } };
+      }
       if (doc.type !== 'invoice') return { doc, integrity: verifyIntegrity(doc) };
-      const s = settlement(doc, await store.listPayments(id), await relatedCreditNotes(doc));
-      return { doc, settlement: s, effectiveStatus: effectiveStatus(doc, s, today()), integrity: verifyIntegrity(doc) };
+      const credits = await relatedCreditNotes(doc); const refunds = await refundsOf(credits); const s = settlement(doc, await store.listPayments(id), credits, refunds);
+      return { doc, settlement: s, refunds, effectiveStatus: effectiveStatus(doc, s, today()), integrity: verifyIntegrity(doc) };
     },
     // ---- company directory (merchant-scoped) ----
     listCompanies: () => store.listCompanies(config.merchantId),
@@ -246,4 +254,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     get: must,
     ctx,
   };
+  // the payment commands (receive, allocate, reverse, void, refund, list): one business API for the interface; invoice statuses are re-derived after every money movement
+  service.payments = createPayments({ store, merchantId: config.merchantId, now, today, defaultCurrency: config.defaults?.currency ?? 'EUR', settleInvoices: async (ids, actor) => { for (const id of ids) await service.resettle(id, actor); } });
+  return service;
 }

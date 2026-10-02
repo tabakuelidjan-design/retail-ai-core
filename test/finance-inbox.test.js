@@ -57,9 +57,12 @@ test('WORKFLOW: TO_REVIEW -> VALIDATED -> TO_PAY -> PAID, only by the merchant, 
   let r = await h.c.post(`/api/inbox/${id}/validate`, {}); assert.equal(r.status, 200); assert.equal(r.data.status, 'VALIDATED'); assert.ok(r.data.validatedAt);
   assert.equal((await h.c.put(`/api/inbox/${id}`, { supplierName: 'Changed' })).status, 409, 'a validated item is not edited in place');
   r = await h.c.post(`/api/inbox/${id}/to-pay`, {}); assert.equal(r.data.status, 'TO_PAY');
-  assert.equal((await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-25', amount: '100.00' })).status, 409, 'partial supplier payments are not supported yet');
+  r = await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-24', amount: '100.00', idempotencyKey: 'inbox-part-0001' }); assert.equal(r.status, 200, 'a partial supplier payment is accepted');
+  assert.equal(r.data.status, 'TO_PAY', 'a partial payment never makes a document PAID'); assert.equal(r.data.paymentStatus, 'partially_paid'); assert.equal(r.data.allocatedCents, 10000);
+  assert.equal((await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-24', amount: '100.00', idempotencyKey: 'inbox-part-0001' })).data.allocatedCents, 10000, 'the same key is the same payment, not a second one');
+  assert.equal((await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-25', amount: '50.00' })).status, 422, 'more than what is left is refused');
   assert.equal((await h.c.post(`/api/inbox/${id}/pay`, { amount: '121.00' })).status, 422);
-  r = await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-25', amount: '121.00', reference: 'Virement 25/09' }); assert.equal(r.data.status, 'PAID'); assert.equal(r.data.paidAt, '2026-09-25');
+  r = await h.c.post(`/api/inbox/${id}/pay`, { paidOn: '2026-09-25', amount: '21.00', reference: 'Virement 25/09' }); assert.equal(r.data.status, 'PAID'); assert.equal(r.data.paidAt, '2026-09-25'); assert.equal(r.data.allocatedCents, 12100);
   assert.equal((await h.c.post(`/api/inbox/${id}/reopen`, {})).status, 409, 'PAID is final');
   assert.equal((await h.c.get('/api/inbox?scope=purchases')).data.rows.length, 1); assert.equal((await h.c.get('/api/inbox?scope=inbox')).data.rows.length, 0);
   assert.equal((await h.c.get('/api/inbox/status')).data.counts.PAID, 1);

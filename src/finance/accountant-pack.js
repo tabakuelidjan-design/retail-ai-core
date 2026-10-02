@@ -141,8 +141,8 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
   // ---- payment status of B2B invoices issued in the period ----
   const invoicesInPeriod = sameCurrency.filter(({ doc }) => doc.type === 'invoice');
   const pay = { paid: { count: 0, cents: 0 }, partially_paid: { count: 0, cents: 0 }, unpaid: { count: 0, cents: 0 }, credited: { count: 0, cents: 0 } };
-  for (const { doc, payments, creditNotes } of invoicesInPeriod) {
-    const s = settlement(doc, payments, creditNotes);
+  for (const { doc, payments, creditNotes, refunds } of invoicesInPeriod) {
+    const s = settlement(doc, payments, creditNotes, refunds);
     const k = s.creditedCents >= s.grossCents ? 'credited' : s.payableCents > 0 && s.remainingCents === 0 ? 'paid' : s.paidCents > 0 ? 'partially_paid' : 'unpaid';
     pay[k].count += 1; pay[k].cents += k === 'paid' || k === 'credited' ? s.payableCents || s.grossCents : s.remainingCents;
   }
@@ -206,8 +206,8 @@ export function buildAccountantPack({ ledger, rawOrders, docs, period, timeZone,
     },
     quotes_in_period: { count: quotesInPeriod, counted_as_revenue: false },
     anomalies,
-    documents: sameCurrency.map(({ doc, payments, creditNotes }) => {
-      const s = doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null;
+    documents: sameCurrency.map(({ doc, payments, creditNotes, refunds }) => {
+      const s = doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null;
       return { number: doc.number, type: doc.type, issueDate: doc.issueDate, dueDate: doc.dueDate, customer: doc.customer.name, customerVat: doc.customer.vatNumber ?? '', revenueBasis: doc.revenueBasis, status: doc.status, net: formatCents(doc.totals.netCents), vat: formatCents(doc.totals.vatCents), gross: formatCents(doc.totals.grossCents), paid: s ? formatCents(s.paidCents) : '', remaining: s ? formatCents(s.remainingCents) : '', additive: doc.revenueBasis === 'standalone_b2b' ? 'yes' : 'no (documents an existing shop/POS sale)' };
     }),
   };

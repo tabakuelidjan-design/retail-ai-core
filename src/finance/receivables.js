@@ -13,9 +13,9 @@ export const bucketOf = (daysOverdue) => (daysOverdue < 0 ? 'not_due' : daysOver
  */
 export function buildReceivables(invoices, { today, dueSoonDays = 7 }) {
   const open = [];
-  for (const { doc, payments, creditNotes } of invoices) {
+  for (const { doc, payments, creditNotes, refunds } of invoices) {
     if (doc.type !== 'invoice' || !['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(doc.status)) continue;
-    const s = settlement(doc, payments, creditNotes);
+    const s = settlement(doc, payments, creditNotes, refunds);
     if (s.remainingCents <= 0) continue;
     const daysOverdue = daysBetween(doc.dueDate, today);
     open.push({

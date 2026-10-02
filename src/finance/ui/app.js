@@ -65,7 +65,7 @@ const TXT = {
   DATE_INVALID: 'Invalid date', AMOUNT_INVALID: 'Enter an amount like 12.34', EMAIL_INVALID: 'Invalid email address', IBAN_INVALID: 'Invalid IBAN', COUNTRY_CODE_INVALID: 'Use a 2-letter country code',
   AT_LEAST_ONE_LINE_REQUIRED: 'Add at least one line', NOT_READY_FOR_APPROVAL: 'Fix the items listed below first', NOT_READY_TO_ISSUE: 'Fix the items listed below first', INVALID_TRANSITION: 'This action is not allowed in the current status',
   SOURCE_ORDER_ALREADY_INVOICED: 'This shop/POS order already has an active invoice', CONCURRENT_MODIFICATION: 'The document changed meanwhile: reload and retry', DOCUMENT_LOCKED: 'Issued documents cannot be edited: create a credit note instead',
-  PAYMENT_EXCEEDS_REMAINING: 'The payment is higher than the amount still due', CREDIT_EXCEEDS_INVOICE: 'The credit is higher than what can still be credited', COMPANY_ALREADY_EXISTS: 'This company is already in the directory',
+  PAYMENT_EXCEEDS_REMAINING: 'The payment is higher than the amount still due', REFUND_EXCEEDS_CREDIT_NOTE: 'The refund is higher than what is left of this credit note', REFUND_EXCEEDS_REFUNDABLE: 'The customer has not paid that much beyond what is due: nothing more can be refunded', REFUND_EXCEEDS_PAYMENT: 'The refund is higher than the payment it gives back', PAYMENT_OVER_ALLOCATED: 'The amount is higher than what is still unallocated on this payment', REVERSAL_BREAKS_REFUND: 'Part of this money was already refunded: reverse the refund first', REVERSAL_EXCEEDS_ALLOCATION: 'The reversal is higher than what is still allocated', IDEMPOTENCY_KEY_REUSED: 'This operation was already recorded with different details: reload and check', PAYMENT_METHOD_INVALID: 'Choose one of the payment methods offered', TARGET_NOT_OPEN: 'This document is not open for payment', CURRENCY_MISMATCH: 'The currency of the payment and of the document differ', REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE: 'A refund needs an issued credit note', PAYMENT_ALREADY_REVERSED: 'This payment is already reversed', CORRECTION_EXCEEDS_PAID: 'The correction is higher than what was paid', CREDIT_EXCEEDS_INVOICE: 'The credit is higher than what can still be credited', COMPANY_ALREADY_EXISTS: 'This company is already in the directory',
   INVALID_TOKEN: 'Wrong access token', TOO_MANY_ATTEMPTS: 'Too many attempts. Wait a few minutes.', AUTHENTICATION_REQUIRED: 'Please log in again',
   VAT_TREATMENT_NOT_CONFIRMED_BY_MERCHANT: 'Confirm the VAT treatment', REVENUE_BASIS_NOT_DECLARED: 'Choose whether this invoice is linked to a shop order or a new B2B sale',
   CUSTOMER_COMPANY_NUMBER_MISSING: 'Enter the customer VAT or enterprise number', SELLER_NAME_MISSING: 'Complete your company details in Settings', SELLER_VAT_NUMBER_MISSING: 'Add your VAT number in Settings',
@@ -156,8 +156,9 @@ function activityRow(e) {
     CREATE_CREDIT_NOTE: () => tt('{0} created', typeLabel), ACCEPT_QUOTE: () => tt('{0} accepted', typeLabel), REJECT_QUOTE: () => tt('{0} rejected', typeLabel),
     SUBMIT_FOR_APPROVAL: () => tt('{0} submitted for approval', typeLabel), CANCEL: () => tt('{0} cancelled', typeLabel), REJECT: () => tt('{0} rejected', typeLabel),
     MODIFY: () => tt('{0} returned to draft', typeLabel), STATUS_CHANGE: () => tt('{0} status updated', typeLabel),
+    RECORD_REFUND: () => tt('Refund paid out'), REVERSE_PAYMENT_ALLOCATION: () => tt('Payment reversed'), VOID_PAYMENT: () => tt('Payment reversed'), ALLOCATE_PAYMENT: () => tt('Payment allocated'), RECORD_SUPPLIER_PAYMENT: () => tt('Supplier payment recorded'),
   };
-  const tone = { APPROVE_AND_ISSUE: 'ok', RECORD_PAYMENT: 'ok', CREATE_CREDIT_NOTE: 'warm', CANCEL: 'warm', REJECT: 'warm', REJECT_QUOTE: 'warm' }[e.action] || 'info';
+  const tone = { APPROVE_AND_ISSUE: 'ok', RECORD_PAYMENT: 'ok', RECORD_REFUND: 'warm', CREATE_CREDIT_NOTE: 'warm', CANCEL: 'warm', REJECT: 'warm', REJECT_QUOTE: 'warm' }[e.action] || 'info';
   // One icon per real event type (reference-matched: each activity gets its own icon in a coloured circle,
   // not just an undifferentiated dot) - kept to the existing SVG icon set, never a Unicode glyph downgrade.
   const ICON = { APPROVE_AND_ISSUE: 'doc', MARK_SENT: 'arrow', SEND_QUOTE: 'arrow', RECORD_PAYMENT: 'building', CREATE_CREDIT_NOTE: 'doc', ACCEPT_QUOTE: 'check', REJECT_QUOTE: 'alert', SUBMIT_FOR_APPROVAL: 'clock', CANCEL: 'alert', REJECT: 'alert', MODIFY: 'edit', STATUS_CHANGE: 'doc' };
@@ -1053,6 +1054,7 @@ async function viewDoc(id) {
       has('mark_sent') ? h('button', { on: { click: () => confirmModal('Mark as sent', 'Record that you have sent this document to your customer. The system does not send anything.', 'Mark sent', call('mark-sent', {}, 'Marked as sent')) } }, 'Mark sent') : null,
       has('add_payment') ? h('button', { class: 'primary', on: { click: () => paymentModal(d, reload) } }, 'Add payment') : null,
       has('credit_note') ? h('button', { on: { click: () => creditModal(d) } }, 'Create credit note') : null,
+      has('refund') ? h('button', { class: 'primary', on: { click: () => refundModal(d, reload) } }, 'Record a refund') : null,
       has('cancel') ? h('button', { class: 'danger', on: { click: () => confirmModal('Cancel draft', 'This draft will be cancelled. No number is used.', 'Cancel draft', call('cancel', {}, 'Draft cancelled')) } }, 'Cancel draft') : null,
       h('a', { class: 'btn', href: `/api/documents/${id}/pdf?download=1` }, 'Download PDF'),
       has('ubl') ? h('a', { class: 'btn', href: `/api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
@@ -1102,7 +1104,7 @@ async function viewDoc(id) {
         h('div', { class: 'impact-item lead' }, h('div', { class: 'l' }, tt('Effect on balance')), h('div', { class: 'v' }, d.related ? tt('{0} owed on {1}', `-${d.totals.gross} ${cur}`, d.related.number || tt('(draft)')) : tt('Pending'))),
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('VAT impact')), h('div', { class: 'v' }, tt('{0} VAT reversed', `-${d.totals.vat} ${cur}`))),
         h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Restock decision')), h('div', { class: 'v' }, restockLabel)),
-        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Refund')), h('div', { class: 'v' }, tt('Not tracked separately - deducts from what the customer owes')))),
+        h('div', { class: 'impact-item' }, h('div', { class: 'l' }, tt('Refund')), h('div', { class: 'v' }, tt('A credit note moves no money: record the refund separately, only when you hand it back')))),
       d.doc.creditReason ? h('div', { class: 'fin-secondary', style: 'margin-top:10px' }, tt('Reason: {0}', d.doc.creditReason)) : null,
       !d.doc.lockedAt ? h('div', { class: 'fin-secondary', style: 'margin-top:6px' }, tt('Draft - this impact applies once the credit note is approved and issued.')) : null));
   }
@@ -1115,11 +1117,14 @@ async function viewDoc(id) {
     h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Total incl. VAT'), h('span', { class: 'fin-value' }, `${t.gross} ${cur}`)),
     !isQ && d.settlementView ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Paid'), h('span', { class: 'fin-value' }, `${d.settlementView.paid} ${cur}`)) : null,
     !isQ && d.settlementView && d.settlement.creditedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Credited'), h('span', { class: 'fin-value' }, `${d.settlementView.credited} ${cur}`)) : null,
+    !isQ && d.settlementView && d.settlement.refundedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Refunded'), h('span', { class: 'fin-value' }, `${d.settlementView.refunded} ${cur}`)) : null,
+    !isQ && d.settlementView && d.settlement.refundableCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'To refund'), h('span', { class: 'fin-value', style: 'color:var(--warn,#b45309)' }, `${d.settlementView.refundable} ${cur}`)) : null,
     !isQ && d.settlementView ? h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Amount due'), h('span', { class: `fin-primary ${d.settlement.remainingCents > 0 ? 'due' : 'settled'}`, style: 'font-size:20px' }, `${d.settlementView.remaining} ${cur}`)) : null,
   ].filter(Boolean);
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),
     h('div', { class: 'card emphasis' }, h('h2', null, 'Totals'), ...finRows)));
-  if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference'].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''))))));
+  if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
+  if (d.refund && d.refund.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Refunds made for this credit note'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.refund.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
   const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
   box.appendChild(pdfWrap);
@@ -1131,9 +1136,46 @@ function confirmModal(title, text, label, onYes) { modal(title, h('p', null, tex
 function paymentModal(d, reload) {
   const idempotencyKey = (globalThis.crypto?.randomUUID?.() ?? ('pay-' + Date.now() + '-' + Math.random().toString(36).slice(2))); // one key per opened form: a double click or a retry is the same payment
   const amt = h('input', { inputmode: 'decimal', placeholder: d.remaining }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
-  const method = h('select', null, [['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['other', 'Other']].map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const note = h('input', { placeholder: 'Note (optional)' }); const err = h('div');
+  const method = h('select', null, METHOD_OPTIONS.map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const note = h('input', { placeholder: 'Note (optional)' }); const err = h('div');
   modal('Add a payment', h('div', null, h('p', { class: 'muted' }, tt('Still due: {0} {1}', d.remaining, d.currency)), err, h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref)), h('div', { class: 'field' }, h('label', null, 'Note'), note)),
     (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/payments`, { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, note: note.value || undefined, idempotencyKey }); close(); toast('Payment recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record payment'), h('button', { on: { click: close } }, 'Cancel')]);
+}
+const METHOD_OPTIONS = [['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['bancontact', 'Bancontact'], ['direct_debit', 'Direct debit'], ['other', 'Other']];
+const newKey = (p) => (globalThis.crypto?.randomUUID?.() ?? (p + '-' + Date.now() + '-' + Math.random().toString(36).slice(2))); // one key per opened form: a double click or a retry is the same operation
+/** Refund: money handed back FOR a credit note. The service tells how much is possible (d.refund.maxCents); the form never computes it. */
+function refundModal(d, reload) {
+  const idempotencyKey = newKey('rf'); const cur = d.currency;
+  const amt = h('input', { inputmode: 'decimal', value: (d.refund.maxCents / 100).toFixed(2) }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
+  const method = h('select', null, METHOD_OPTIONS.map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const err = h('div');
+  modal('Record a refund', h('div', null, h('p', { class: 'muted' }, tt('Refundable: {0} {1}', d.refund.max, cur)), err,
+    h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)),
+    h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref))),
+  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', '/api/documents/' + d.id + '/refund', { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, idempotencyKey }); close(); toast('Refund recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record a refund'), h('button', { on: { click: close } }, 'Cancel')]);
+}
+/** Reverse one allocation: a reason is required, nothing is deleted, the amount becomes unallocated again. */
+function reverseModal(allocationId, reload) {
+  const idempotencyKey = newKey('rv'); const reason = h('input', { placeholder: 'Reason (required)' }); const err = h('div');
+  modal('Reverse this payment', h('div', null, h('p', { class: 'muted' }, 'The payment stays in the history; the amount becomes unallocated again.'), err, h('div', { class: 'field' }, h('label', null, 'Reason (required)'), reason)),
+  (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', '/api/payment-allocations/' + allocationId + '/reverse', { reason: reason.value, idempotencyKey }); close(); toast('Payment reversed', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Reverse'), h('button', { on: { click: close } }, 'Cancel')]);
+}
+const ALLOC_STATUS = { UNALLOCATED: 'Unallocated', PARTIALLY_ALLOCATED: 'Partly allocated', ALLOCATED: 'Allocated', REVERSED: 'Reversed' };
+/** Money received or paid that is not applied to a document yet. Never applied by itself: a person chooses the invoice. */
+async function unallocatedPaymentsCard(box) {
+  let rows = []; try { rows = (await api('GET', '/api/payments?unallocated=1')).rows; } catch { return; } // a failure here must never break the page
+  if (!rows.length) return;
+  const reload = () => route();
+  box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Unallocated payments'), h('p', { class: 'muted small' }, 'Money received or paid that is not yet applied to a document. It is never applied by itself.'),
+    h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', 'Status', 'Unallocated', ''].map((x) => h('th', null, x))),
+      rows.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, p.amount + ' ' + p.currency), h('td', null, p.method), h('td', null, (p.direction === 'IN' ? tr('Received') : tr('Paid out')) + (p.reference ? ' - ' + p.reference : '')), h('td', null, tr(ALLOC_STATUS[p.status] || p.status)), h('td', null, p.unallocated + ' ' + p.currency),
+        h('td', null, p.canAllocate && p.direction === 'IN' ? h('button', { class: 'small', on: { click: () => allocateModal(p, reload) } }, 'Allocate') : null))))));
+}
+async function allocateModal(p, reload) {
+  const idempotencyKey = newKey('al'); const err = h('div'); let open = [];
+  try { open = (await api('GET', '/api/documents?type=invoice')).rows.filter((r) => ['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(r.status) && r.remainingCents > 0 && r.currency === p.currency); } catch (e) { return fail(e); }
+  if (!open.length) return modal('Allocate this payment', h('p', { class: 'muted' }, 'No open invoice to allocate to'), (close) => [h('button', { on: { click: close } }, 'Cancel')]);
+  const sel = h('select', null, open.map((r) => h('option', { value: r.id }, (r.number || '') + ' - ' + (r.customer || '') + ' - ' + r.remaining + ' ' + r.currency))); const amt = h('input', { inputmode: 'decimal', value: (Math.min(p.unallocatedCents, open[0].remainingCents) / 100).toFixed(2) });
+  modal('Allocate this payment', h('div', null, h('p', { class: 'muted' }, tt('Still to allocate: {0} {1}', p.unallocated, p.currency)), err, h('div', { class: 'field' }, h('label', null, 'Invoice'), sel), h('div', { class: 'field' }, h('label', null, 'Amount'), amt)),
+  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', '/api/payments/' + p.id + '/allocate', { allocations: [{ documentId: sel.value, amount: amt.value }], idempotencyKey }); close(); toast('Payment allocated', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Allocate'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 function creditModal(d) {
   const reason = h('input', { placeholder: 'Reason (required)' }); const err = h('div'); const full = h('input', { type: 'checkbox', checked: true });
@@ -1262,6 +1304,7 @@ async function viewReceivables() {
     mount(box, foreignNote(r.foreignDocuments));
     box.appendChild(h('div', { class: 'grid cards' }, [['Unpaid', r.unpaid.count, r.unpaid.outstanding, ''], ['Due soon', r.due_soon.count, r.due_soon.outstanding, 'warn'], ['Overdue', r.overdue.count, r.overdue.outstanding, r.overdue.count ? 'bad' : '']].map(([l, n, a, cls]) => h('div', { class: `card stat ${cls}` }, h('div', { class: 'n' }, `${a}`), h('div', { class: 'l' }, tt('{0}: {1} invoice(s) ({2})', tr(l), n, cur))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Ageing (days past due)'), h('table', null, h('tr', null, ['Not yet due', '0-7', '8-30', '31-60', '60+'].map((x) => h('th', { class: 'num' }, x))), h('tr', null, ['not_due', '0_7', '8_30', '31_60', '60_plus'].map((k) => h('td', { class: 'num' }, `${r.aging[k].outstanding} (${r.aging[k].count})`))))));
+    await unallocatedPaymentsCard(box);
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Open invoices'), r.invoices.length ? h('table', null, h('tr', null, ['Invoice', 'Customer', 'Due', 'Days late', 'Total', 'Still due', 'Status'].map((x, i) => h('th', { class: i >= 3 && i < 6 ? 'num' : '' }, x))), r.invoices.map((i) => h('tr', null, h('td', null, i.number), h('td', null, i.customer), h('td', null, i.dueDate), h('td', { class: 'num' }, i.daysOverdue > 0 ? String(i.daysOverdue) : ''), h('td', { class: 'num' }, i.gross), h('td', { class: 'num' }, i.remaining), h('td', null, badge(i.effectiveStatus))))) : h('div', { class: 'muted' }, 'No open invoices.'), h('p', { class: 'small muted' }, 'Open an invoice from the Invoices page to register a payment.')));
   } catch (e) { fail(e, box); }
 }

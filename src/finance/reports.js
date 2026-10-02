@@ -15,7 +15,7 @@ export async function loadDocsForReports(store, merchantId) {
   const [docs, payments] = await Promise.all([store.listDocuments({ merchantId }), store.listPaymentsForMerchant(merchantId)]);
   const byDoc = new Map();
   for (const p of payments) (byDoc.get(p.documentId) ?? byDoc.set(p.documentId, []).get(p.documentId)).push(p);
-  return docs.map((doc) => ({ doc, payments: byDoc.get(doc.id) ?? [], creditNotes: docs.filter((d) => d.type === 'credit_note' && d.relatedDocumentId === doc.id) }));
+  return docs.map((doc) => { const creditNotes = docs.filter((d) => d.type === 'credit_note' && d.relatedDocumentId === doc.id); return { doc, payments: byDoc.get(doc.id) ?? [], creditNotes, refunds: creditNotes.flatMap((c) => byDoc.get(c.id) ?? []) }; }); // refunds = money handed back for the credit notes
 }
 
 const DOC_COLUMNS = ['number', 'type', 'issueDate', 'dueDate', 'customer', 'customerVat', 'revenueBasis', 'status', 'net', 'vat', 'gross', 'paid', 'remaining', 'additive'];

@@ -40,6 +40,8 @@ export function translateDbError(err) {
   // rules enforced by the P0 integrity triggers (migration 20261003090000): the message starts with FIN_<CODE>; the domain code is the same without the prefix
   const fin = /\bFIN_([A-Z_]+)\b/.exec(m);
   if (fin) { const RENAMED = { ALLOCATION_EXCEEDS_REMAINING: 'PAYMENT_EXCEEDS_REMAINING', BANK_TX_ALREADY_CLAIMED: 'BANK_TRANSACTION_ALREADY_CLAIMED' }; return new FinanceError(RENAMED[fin[1]] ?? fin[1], m.slice(m.indexOf(fin[0]) + fin[0].length).replace(/^:\s*/, '').split('"')[0].slice(0, 200)); }
+  if (/fin_payment_registry_method_chk/.test(m)) return new FinanceError('PAYMENT_METHOD_INVALID', 'refused by the database');
+  if (/fin_payment_registry_source_check|source_check/.test(m)) return new FinanceError('PAYMENT_SOURCE_INVALID', 'refused by the database');
   if (/_same_merchant_fk|fin_payment_allocations_(payment|customer|supplier|reverses)_fk|fin_payment_registry_reversal_fk/.test(m)) return new FinanceError('CROSS_MERCHANT_REFERENCE', 'refused by the database');
   if (m.includes('is immutable') || m.includes('cannot be deleted')) return new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', 'refused by the database');
   if (m.includes('append-only')) return new FinanceError('APPEND_ONLY_TABLE', 'refused by the database');
@@ -120,10 +122,16 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const rows = await supabase.select('fin_payment_allocations', { select: '*', merchant_id: eq(merchantId), payment_id: eq(p.id), order: 'created_at.asc,id.asc' });
       return { payment: payFromRow(p), allocations: rows.map(allocFromRow) };
     },
-    async recordPayment({ key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations = [], at = null }) {
+    async recordPayment({ key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations = [], at = null, meta = {} }) {
       const r = await guard(() => supabase.rpc('fin_record_payment', { p_merchant: merchantId, p_key: key, p_direction: direction, p_amount: amountCents, p_currency: currency, p_paid_on: paidOn, p_method: method, p_reference: reference, p_actor: actor,
-        p_allocations: allocations.map((a) => ({ customerDocumentId: a.customerDocumentId ?? undefined, supplierInvoiceId: a.supplierInvoiceId ?? undefined, amountCents: a.amountCents })), p_at: at }, { retry: true }));
+        p_allocations: allocations.map((a) => ({ customerDocumentId: a.customerDocumentId ?? undefined, supplierInvoiceId: a.supplierInvoiceId ?? undefined, amountCents: a.amountCents })), p_at: at,
+        p_meta: { source: meta.source ?? undefined, externalReference: meta.externalReference ?? undefined, structuredReference: meta.structuredReference ?? undefined, bankReference: meta.bankReference ?? undefined, refundOfPaymentId: meta.refundOfPaymentId ?? undefined } }, { retry: true }));
       return { duplicate: r.duplicate === true, payment: payFromRow(r.payment), allocations: (r.allocations ?? []).map(allocFromRow) };
+    },
+    async allocatePayment({ key, paymentId, allocations, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_allocate_payment', { p_merchant: merchantId, p_key: key, p_payment_id: paymentId, p_actor: actor, p_at: at,
+        p_allocations: allocations.map((a) => ({ customerDocumentId: a.customerDocumentId ?? undefined, supplierInvoiceId: a.supplierInvoiceId ?? undefined, amountCents: a.amountCents })) }, { retry: true }));
+      return { duplicate: r.duplicate === true, allocations: (r.allocations ?? []).map(allocFromRow) };
     },
     async reverseAllocations({ key, items, reason = null, actor = null, at = null }) {
       const r = await guard(() => supabase.rpc('fin_reverse_allocations', { p_merchant: merchantId, p_key: key, p_items: items.map((i) => ({ allocationId: i.allocationId, amountCents: i.amountCents ?? null })), p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
@@ -133,7 +141,8 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const r = await guard(() => supabase.rpc('fin_void_payment', { p_merchant: merchantId, p_key: key, p_payment_id: paymentId, p_on: on, p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
       return { duplicate: r.duplicate === true, reversal: payFromRow(r.reversal) };
     },
-    async listAllocations({ customerDocumentId, supplierInvoiceId } = {}) {
+    async listAllocations({ customerDocumentId, supplierInvoiceId, keyPrefix } = {}) {
+      if (keyPrefix) return joinPayments((await supabase.selectAll('fin_payment_allocations', { select: '*', merchant_id: eq(merchantId), idempotency_key: `like.${keyPrefix}*` })).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))));
       const p = { select: '*', merchant_id: eq(merchantId), order: 'created_at.asc,id.asc' };
       if (customerDocumentId) p.customer_document_id = eq(customerDocumentId);
       if (supplierInvoiceId) p.supplier_invoice_id = eq(supplierInvoiceId);
@@ -141,6 +150,12 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       return joinPayments(rows);
     },
     async listRegistry() { return (await supabase.selectAll('fin_payment_registry', { select: '*', merchant_id: eq(merchantId) })).map(payFromRow); },
+    async getPayment(_m, id) {
+      const [p] = await supabase.select('fin_payment_registry', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); if (!p) return null;
+      const reversals = await supabase.select('fin_payment_registry', { select: '*', reversal_of_id: eq(id), merchant_id: eq(merchantId) });
+      const allocs = await supabase.select('fin_payment_allocations', { select: '*', payment_id: eq(id), merchant_id: eq(merchantId), order: 'created_at.asc,id.asc' });
+      return { payment: payFromRow(p), reversals: reversals.map(payFromRow), allocations: allocs.map(allocFromRow) };
+    },
     /** Customer-invoice payments as the rest of the application reads them: one entry per allocation (negative = a reversal), derived from the registry. */
     async listPayments(documentId) {
       const rows = await supabase.select('fin_payment_allocations', { select: '*', customer_document_id: eq(documentId), merchant_id: eq(merchantId), order: 'created_at.asc,id.asc' });
@@ -296,7 +311,8 @@ const SUPPLIER_MAP = { supplierName: 'supplier_name', supplierVatNumber: 'suppli
   vatBreakdown: 'vat_breakdown', lines: 'lines' };
 function supplierToRow(s, partial = false) { const r = {}; for (const [k, col] of Object.entries(SUPPLIER_MAP)) if (k in s) r[col] = s[k]; if (!partial) r.merchant_id = s.merchantId; return r; }
 const supplierFromRow = (r) => { const s = { id: r.id, merchantId: r.merchant_id, paymentStatus: r.payment_status }; for (const [k, col] of Object.entries(SUPPLIER_MAP)) s[k] = r[col] ?? null; for (const k of ['netCents', 'vatCents', 'grossCents', 'paidAmountCents']) if (s[k] !== null) s[k] = Number(s[k]); return s; };
-const payFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, direction: r.direction, amountCents: Number(r.amount_cents), currency: r.currency, paidOn: r.paid_on, method: r.method, reference: r.reference, reversalOfId: r.reversal_of_id ?? null, idempotencyKey: r.idempotency_key, actor: r.actor ?? null, createdAt: r.created_at });
+const payFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, direction: r.direction, amountCents: Number(r.amount_cents), currency: r.currency, paidOn: r.paid_on, method: r.method, reference: r.reference, reversalOfId: r.reversal_of_id ?? null, idempotencyKey: r.idempotency_key, actor: r.actor ?? null, createdAt: r.created_at,
+  source: r.source ?? 'manual', externalReference: r.external_reference ?? null, structuredReference: r.structured_reference ?? null, bankReference: r.bank_reference ?? null, refundOfPaymentId: r.refund_of_payment_id ?? null });
 const allocFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, paymentId: r.payment_id, customerDocumentId: r.customer_document_id ?? null, supplierInvoiceId: r.supplier_invoice_id ?? null, amountCents: Number(r.amount_cents), currency: r.currency, reversesAllocationId: r.reverses_allocation_id ?? null, idempotencyKey: r.idempotency_key, reason: r.reason ?? null, actor: r.actor ?? null, createdAt: r.created_at });
 const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });
 const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId, provider_tx_id: t.providerTxId, date: t.date, amount_cents: t.amountCents, currency: t.currency, counterparty_name: t.counterpartyName, reference: t.reference, structured_reference: t.structuredReference, source: t.source, status: t.status });

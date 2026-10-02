@@ -20,6 +20,7 @@ export async function createPgRestClient(database) {
       if (['select', 'order', 'limit', 'offset', 'on_conflict'].includes(k)) continue;
       const c = ident(k); const s = String(v);
       if (s.startsWith('eq.')) { params.push(s.slice(3)); parts.push(`${c}::text = $${params.length}`); }
+      else if (s.startsWith('like.')) { params.push(s.slice(5).replace(/[%_\\]/g, (x) => `\\${x}`).replace(/\*/g, '%')); parts.push(`${c}::text like $${params.length}`); }
       else if (s === 'is.null') parts.push(`${c} is null`);
       else if (s === 'not.is.null') parts.push(`${c} is not null`);
       else if (s.startsWith('in.(')) { const list = s.slice(4, -1).split(','); params.push(list); parts.push(`${c}::text = any($${params.length}::text[])`); }

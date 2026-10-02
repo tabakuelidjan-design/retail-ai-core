@@ -370,21 +370,22 @@ export function createInboxService({ store, attachments, extractor = defaultExtr
     async markToPay(id, actor) { merchantOnly(actor); const r = await must(id); if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id); return move(r, 'TO_PAY'); },
     /**
      * Pay a supplier document. PAID is never written: the payment is recorded in the registry and allocated to this document (one database transaction), and the
-     * database derives PAID from the allocations. A retry with the same idempotencyKey returns the operation that already committed. Full payments only for now (partial = Phase 3).
+     * database derives PAID from the allocations (partial and repeated payments leave it TO_PAY with a derived PARTIALLY_PAID). A retry with the same idempotencyKey returns the operation that already committed.
      */
-    async pay(id, { paidOn, amountCents, reference, idempotencyKey }, actor) {
+    async pay(id, { paidOn, amountCents, reference, idempotencyKey, method, source, externalReference }, actor) {
       merchantOnly(actor); const r = await must(id);
       if (documentTypeOf(r) === 'CREDIT_NOTE') throw new FinanceError('CREDIT_NOTE_IS_NOT_PAYABLE', id);
       if (!isDate(paidOn)) throw new FinanceError('PAID_ON_INVALID');
       if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
-      if (amountCents !== r.grossCents) throw new FinanceError('PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET', `${amountCents} vs ${r.grossCents}`);
+      const remaining = (r.grossCents ?? 0) - (r.allocatedCents ?? 0); // partial and repeated payments are normal: PAID is only what the allocations add up to
       const key = idempotencyKey ?? randomUUID();
       const done = await store.getPaymentByKey(merchantId, key);
       if (done) { const standing = done.allocations.filter((x) => x.amountCents > 0); if (standing.length !== 1 || standing[0].supplierInvoiceId !== id || done.payment.amountCents !== amountCents) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); return must(id); }
-      if (!INBOX_TRANSITIONS[r.status].includes('PAID')) throw new FinanceError('INVALID_TRANSITION', `${r.status} -> PAID`);
+      if (amountCents > remaining) throw new FinanceError('PAYMENT_EXCEEDS_REMAINING', `${amountCents} > ${remaining} (cents)`);
+      if (r.status !== 'TO_PAY') throw new FinanceError('INVALID_TRANSITION', `${r.status} -> PAID`); // a document is paid once it is approved for payment (TO_PAY); a PAID one has nothing left
       if (!r.currency) throw new FinanceError('CURRENCY_MISSING', id);
-      await store.recordPayment({ merchantId, key, direction: 'OUT', amountCents, currency: r.currency, paidOn, method: 'unspecified', reference: reference ? String(reference).slice(0, 100) : null, actor, at: now(), allocations: [{ supplierInvoiceId: id, amountCents }] });
-      await audit({ at: now(), action: 'SUPPLIER_INVOICE_PAID', itemId: id, from: r.status });
+      await store.recordPayment({ merchantId, key, direction: 'OUT', amountCents, currency: r.currency, paidOn, method: method ?? 'unspecified', reference: reference ? String(reference).slice(0, 100) : null, actor, at: now(), allocations: [{ supplierInvoiceId: id, amountCents }], meta: { source: source ?? 'manual', externalReference: externalReference ?? null } });
+      await audit({ at: now(), action: amountCents < remaining ? 'SUPPLIER_INVOICE_PART_PAID' : 'SUPPLIER_INVOICE_PAID', itemId: id, from: r.status });
       return must(id);
     },
     async reject(id, reason, actor) { merchantOnly(actor); const r = await must(id); if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED'); return move(r, 'REJECTED', { rejectedReason: String(reason).slice(0, 300) }); },

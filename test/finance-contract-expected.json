@@ -4,14 +4,22 @@
    "status": "PARTIALLY_PAID",
    "paid": 3000,
    "remaining": 4190,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 3000,
+   "refundable": 0
   },
   "PAYMENT_EXCEEDS_REMAINING",
   {
    "status": "PAID",
    "paid": 7190,
    "remaining": 0,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
   },
   "INVOICE_NOT_OPEN_FOR_PAYMENT",
   2
@@ -24,7 +32,11 @@
    "status": "PAID",
    "paid": 7190,
    "remaining": 0,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
   },
   "IDEMPOTENCY_KEY_REUSED",
   1
@@ -36,7 +48,11 @@
    "status": "PARTIALLY_PAID",
    "paid": 2000,
    "remaining": 5190,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 2000,
+   "refundable": 0
   },
   "CORRECTION_EXCEEDS_PAID"
  ],
@@ -45,7 +61,11 @@
    "status": "PAID",
    "paid": 7190,
    "remaining": 0,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
   },
   true,
   true,
@@ -55,7 +75,11 @@
    "status": "PARTIALLY_PAID",
    "paid": 5190,
    "remaining": 2000,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 5190,
+   "refundable": 0
   },
   "REVERSAL_EXCEEDS_ALLOCATION",
   false,
@@ -64,7 +88,11 @@
    "status": "SENT",
    "paid": 0,
    "remaining": 7190,
-   "credited": 0
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 0,
+   "refundable": 0
   },
   "PAYMENT_ALREADY_REVERSED",
   [
@@ -128,8 +156,16 @@
    9100
   ]
  ],
- "supplier payment through the inbox service: full payment derives PAID, a retry is the same operation, partial/duplicate refused": [
-  "PARTIAL_SUPPLIER_PAYMENTS_NOT_SUPPORTED_YET",
+ "supplier payment through the inbox service: partial then full derives PAID, a retry is the same operation, nothing left to pay afterwards": [
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
   {
    "status": "PAID",
    "paymentStatus": "paid",
@@ -146,8 +182,224 @@
    "paidAmount": 12100,
    "paidReference": "virement"
   },
-  "INVALID_TRANSITION",
+  "PAYMENT_EXCEEDS_REMAINING",
+  2
+ ],
+ "customer: one payment across several invoices, the surplus stays unallocated, later allocation, over-allocation refused, several payments to one invoice, currency": [
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 25000,
+   "allocated": 19380,
+   "unallocated": 5620,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  [
+   "PAID",
+   "PAID",
+   "PARTIALLY_PAID"
+  ],
+  true,
+  true,
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 25000,
+   "allocated": 21570,
+   "unallocated": 3430,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  true,
+  "PAID",
+  "PAYMENT_OVER_ALLOCATED",
+  {
+   "status": "ALLOCATED",
+   "amount": 25000,
+   "allocated": 25000,
+   "unallocated": 0,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  "PARTIALLY_PAID",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
+  },
+  "CURRENCY_MISMATCH",
+  "PAYMENT_METHOD_INVALID",
+  0,
+  {
+   "status": "UNALLOCATED",
+   "amount": 4000,
+   "allocated": 0,
+   "unallocated": 4000,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  "provider:sumup",
+  "SU-123",
+  "bancontact",
   1
+ ],
+ "credit notes and refunds: credit before payment, after partial payment, after full payment, partial refund, bounded refunds, retry, reversal interaction": [
+  {
+   "status": "ISSUED",
+   "paid": 0,
+   "remaining": 5980,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 0,
+   "refundable": 0
+  },
+  {
+   "status": "PAID",
+   "paid": 5980,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 5980,
+   "refundable": 0
+  },
+  "TARGET_NOT_OPEN",
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 3000,
+   "remaining": 2980,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 3000,
+   "refundable": 0
+  },
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 1210
+  },
+  1210,
+  false,
+  true,
+  true,
+  true,
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 1000,
+   "retained": 6190,
+   "refundable": 210
+  },
+  "REFUND_EXCEEDS_CREDIT_NOTE",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 1210,
+   "retained": 5980,
+   "refundable": 0
+  },
+  "REFUND_EXCEEDS_CREDIT_NOTE",
+  0,
+  "REVERSAL_BREAKS_REFUND",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 210,
+   "retained": 6980,
+   "refundable": 1000
+  },
+  1000,
+  "REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE"
+ ],
+ "supplier: one payment across several invoices, surplus unallocated, later allocation, partial and multiple payments, reversal, retry": [
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 17100,
+   "unallocated": 2900,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-01",
+   "paidAmount": 12100,
+   "paidReference": null
+  },
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 18150,
+   "unallocated": 1850,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 6050,
+   "paidAt": "2026-10-01",
+   "paidAmount": 6050,
+   "paidReference": null
+  },
+  "PAYMENT_OVER_ALLOCATED",
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 17100,
+   "unallocated": 2900,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  true,
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "DOCUMENT_NOT_FOUND"
  ],
  "bank transaction claim: one claim wins, the loser gets nothing, a handled transaction is frozen": [
   "MATCHED",

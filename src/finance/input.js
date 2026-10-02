@@ -157,4 +157,48 @@ export function cleanPaymentInput(b) {
   return { errors, payment: { amount: amount ?? String(p.amount ?? '').trim(), paidOn: p.paidOn, method: method ?? 'other', reference: sanitizeText(p.reference, 100) ?? undefined, idempotencyKey }, note: sanitizeText(p.note, 300) };
 }
 
+
+const KEY = /^[A-Za-z0-9_.:-]{8,120}$/;
+const METHODS_V1 = ['cash', 'bank_transfer', 'card', 'bancontact', 'direct_debit', 'other'];
+const SOURCE = /^[a-z][a-z0-9_:.-]{0,39}$/;
+
+/** Shape validation of a payment COMMAND (receive, pay, refund). Only whitelisted keys survive; amounts are strict decimals; identifiers must look like identifiers. The service and the database stay the authority. */
+export function cleanPaymentCommand(b, { allocations: wantsAllocations = true } = {}) {
+  const errors = []; const p = plain(b) ? b : {};
+  const amount = decimal(p.amount, MONEY); if (amount === null || Number(amount) <= 0) errors.push({ field: 'amount', code: 'AMOUNT_INVALID' });
+  if (!isDate(p.paidOn)) errors.push({ field: 'paidOn', code: 'DATE_INVALID' });
+  const method = p.method == null || p.method === '' ? 'other' : sanitizeText(p.method, 40); if (!METHODS_V1.includes(method)) errors.push({ field: 'method', code: 'METHOD_INVALID' });
+  const source = p.source == null || p.source === '' ? 'manual' : String(p.source); if (!SOURCE.test(source)) errors.push({ field: 'source', code: 'SOURCE_INVALID' });
+  const idempotencyKey = p.idempotencyKey == null || p.idempotencyKey === '' ? undefined : String(p.idempotencyKey); if (idempotencyKey !== undefined && !KEY.test(idempotencyKey)) errors.push({ field: 'idempotencyKey', code: 'KEY_INVALID' });
+  const refundOfPaymentId = p.refundOfPaymentId == null || p.refundOfPaymentId === '' ? undefined : String(p.refundOfPaymentId); if (refundOfPaymentId !== undefined && !UUIDISH.test(refundOfPaymentId)) errors.push({ field: 'refundOfPaymentId', code: 'ID_INVALID' });
+  const allocations = [];
+  if (wantsAllocations && p.allocations !== undefined) {
+    if (!Array.isArray(p.allocations) || p.allocations.length > 50) errors.push({ field: 'allocations', code: 'ALLOCATIONS_INVALID' });
+    else p.allocations.forEach((a, i) => {
+      const id = plain(a) ? (a.documentId ?? a.supplierInvoiceId) : null; const cents = plain(a) ? decimal(a.amount, MONEY) : null;
+      if (typeof id !== 'string' || !UUIDISH.test(id)) errors.push({ field: 'allocations[' + i + '].documentId', code: 'ID_INVALID' });
+      if (cents === null || Number(cents) <= 0) errors.push({ field: 'allocations[' + i + '].amount', code: 'AMOUNT_INVALID' });
+      allocations.push(plain(a) && a.supplierInvoiceId ? { supplierInvoiceId: id, amount: cents } : { documentId: id, amount: cents });
+    });
+  }
+  return { errors, command: { amount: amount ?? '', paidOn: p.paidOn, method, source, reference: sanitizeText(p.reference, 100) ?? undefined, externalReference: sanitizeText(p.externalReference, 200) ?? undefined,
+    structuredReference: sanitizeText(p.structuredReference, 40) ?? undefined, bankReference: sanitizeText(p.bankReference, 200) ?? undefined, idempotencyKey, refundOfPaymentId, allocations } };
+}
+
+/** Shape validation of an allocate / reverse / void command. */
+export function cleanPaymentFollowUp(b, { needsAllocations = false, needsReason = false } = {}) {
+  const errors = []; const p = plain(b) ? b : {};
+  const idempotencyKey = p.idempotencyKey == null || p.idempotencyKey === '' ? undefined : String(p.idempotencyKey); if (idempotencyKey !== undefined && !KEY.test(idempotencyKey)) errors.push({ field: 'idempotencyKey', code: 'KEY_INVALID' });
+  const reason = sanitizeText(p.reason, 300); if (needsReason && !reason) errors.push({ field: 'reason', code: 'REQUIRED' });
+  let amountCents = null; if (p.amount !== undefined && p.amount !== null && p.amount !== '') { const d = decimal(p.amount, MONEY); if (d === null || Number(d) <= 0) errors.push({ field: 'amount', code: 'AMOUNT_INVALID' }); else amountCents = Math.round(Number(d) * 100); }
+  const allocations = [];
+  if (needsAllocations) {
+    if (!Array.isArray(p.allocations) || !p.allocations.length || p.allocations.length > 50) errors.push({ field: 'allocations', code: 'ALLOCATIONS_INVALID' });
+    else p.allocations.forEach((a, i) => { const id = plain(a) ? (a.documentId ?? a.supplierInvoiceId) : null; const cents = plain(a) ? decimal(a.amount, MONEY) : null;
+      if (typeof id !== 'string' || !UUIDISH.test(id)) errors.push({ field: 'allocations[' + i + '].documentId', code: 'ID_INVALID' }); if (cents === null || Number(cents) <= 0) errors.push({ field: 'allocations[' + i + '].amount', code: 'AMOUNT_INVALID' });
+      allocations.push(plain(a) && a.supplierInvoiceId ? { supplierInvoiceId: id, amount: cents } : { documentId: id, amount: cents }); });
+  }
+  return { errors, command: { idempotencyKey, reason: reason ?? undefined, amountCents, allocations } };
+}
+
 export { isDate };

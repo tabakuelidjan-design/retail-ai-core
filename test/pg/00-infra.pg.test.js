@@ -14,6 +14,7 @@ const PENDING_DELTA = [
   'ONLY IN MIGRATIONS: fn|fin_credit_ceiling_guard()', 'ONLY IN MIGRATIONS: fn|fin_payable_cents(d fin_documents)', 'ONLY IN MIGRATIONS: fn|fin_payment_allocation_guard()', 'ONLY IN MIGRATIONS: fn|fin_payment_registry_guard()',
   'ONLY IN MIGRATIONS: fn|fin_record_payment(p_merchant uuid, p_key text, p_direction text, p_amount bigint, p_currency text, p_paid_on date, p_method text, p_reference text, p_actor jsonb, p_allocations jsonb, p_at timestamp with time zone)',
   'ONLY IN MIGRATIONS: fn|fin_reverse_allocations(p_merchant uuid, p_key text, p_items jsonb, p_reason text, p_actor jsonb, p_at timestamp with time zone)',
+  'ONLY IN MIGRATIONS: fn|fin_allocate_payment(p_merchant uuid, p_key text, p_payment_id uuid, p_allocations jsonb, p_actor jsonb, p_at timestamp with time zone)', 'ONLY IN MIGRATIONS: fn|fin_invoice_amounts(p_merchant uuid, p_invoice uuid)',
   'ONLY IN MIGRATIONS: fn|fin_supplier_invoice_mirror()', 'ONLY IN MIGRATIONS: fn|fin_supplier_invoice_truth_guard()',
   'ONLY IN MIGRATIONS: fn|fin_void_payment(p_merchant uuid, p_key text, p_payment_id uuid, p_on date, p_reason text, p_actor jsonb, p_at timestamp with time zone)',
   'ONLY IN MIGRATIONS: idx|fin_payment_allocations', 'ONLY IN MIGRATIONS: idx|fin_payment_registry', 'ONLY IN MIGRATIONS: rls|fin_payment_allocations', 'ONLY IN MIGRATIONS: rls|fin_payment_registry',
@@ -40,7 +41,7 @@ test('server is PostgreSQL 17 and carries the sentinel', async () => {
 
 test('migrations replay from zero, in order, on a database created empty', async () => {
   const files = migrationFiles();
-  assert.equal(files.length, 24); assert.deepEqual(files, [...files].sort());
+  assert.equal(files.length, 25); assert.deepEqual(files, [...files].sort());
   const db = await freshDatabase({ fromZero: true });
   try {
     const c = await db.open();
@@ -87,7 +88,7 @@ test('objects present: RPCs, triggers, constraints can be inspected', async () =
   const db = await freshDatabase(); const c = await db.open();
   try {
     const fns = (await c.query("select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname like 'fin\\_%' order by 1")).rows.map((r) => r.proname);
-    assert.deepEqual(fns, ['fin_append_only', 'fin_bank_tx_guard', 'fin_credit_ceiling_guard', 'fin_documents_guard', 'fin_issue_document', 'fin_next_number', 'fin_payable_cents', 'fin_payment_allocation_guard',
+    assert.deepEqual(fns, ['fin_allocate_payment', 'fin_append_only', 'fin_bank_tx_guard', 'fin_credit_ceiling_guard', 'fin_documents_guard', 'fin_invoice_amounts', 'fin_issue_document', 'fin_next_number', 'fin_payable_cents', 'fin_payment_allocation_guard',
       'fin_payment_registry_guard', 'fin_record_payment', 'fin_reverse_allocations', 'fin_stock_movements_guard', 'fin_supplier_invoice_mirror', 'fin_supplier_invoice_truth_guard', 'fin_void_payment']);
     const rls = (await c.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relrowsecurity")).rows[0].n; assert.equal(rls, 29);
     const sd = (await c.query("select count(*)::int n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef")).rows[0].n; assert.equal(sd, 0, 'no SECURITY DEFINER function');

@@ -7,7 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { formatNumber } from './numbering.js';
-import { allocationRemaining, checkAllocation, checkPaymentReversal, creditedOfInvoice, netAllocated, paymentUnallocatedCents, requestFingerprint, standingAllocations, supplierTruth } from './payment-ledger.js';
+import { allocationRemaining, checkAllocation, checkPaymentReversal, checkRefundLink, creditedOfInvoice, netAllocated, paymentUnallocatedCents, requestFingerprint, standingAllocations, supplierTruth } from './payment-ledger.js';
+import { DEFAULT_SOURCE, isPaymentMethod, isPaymentSource } from './payment-methods.js';
 
 const clone = (o) => structuredClone(o);
 
@@ -96,17 +97,21 @@ export function createMemoryStore() {
       const p = registry.find((x) => x.merchantId === merchantId && x.idempotencyKey === key); if (!p) return null;
       return { payment: clone(p), allocations: allocations.filter((a) => a.paymentId === p.id).map(clone), fingerprint: fingerprints.get(p.id) };
     },
-    async recordPayment({ merchantId, key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations: wanted = [], at = null }) {
+    async recordPayment({ merchantId, key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations: wanted = [], at = null, meta = {} }) {
       if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
       if (!['IN', 'OUT'].includes(direction)) throw new FinanceError('DIRECTION_INVALID');
       if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
-      const fp = requestFingerprint({ direction, amountCents, currency, paidOn, method, reference, allocations: wanted });
+      if (!isPaymentMethod(method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(method));
+      if (meta.source != null && !isPaymentSource(meta.source)) throw new FinanceError('PAYMENT_SOURCE_INVALID', String(meta.source));
+      const fp = requestFingerprint({ direction, amountCents, currency, paidOn, method, reference, allocations: wanted, meta });
       const prior = registry.find((x) => x.merchantId === merchantId && x.idempotencyKey === key);
       if (prior) {
         if (fingerprints.get(prior.id) !== fp) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key);
         return { duplicate: true, payment: clone(prior), allocations: allocations.filter((a) => a.paymentId === prior.id).map(clone) };
       }
-      const payment = { id: randomUUID(), merchantId, direction, amountCents, currency, paidOn, method, reference, reversalOfId: null, idempotencyKey: key, actor: clone(actor), createdAt: at ?? new Date().toISOString(), seq: ++seq };
+      const payment = { id: randomUUID(), merchantId, direction, amountCents, currency, paidOn, method, reference, reversalOfId: null, idempotencyKey: key, actor: clone(actor), createdAt: at ?? new Date().toISOString(), seq: ++seq,
+        source: meta.source ?? DEFAULT_SOURCE, externalReference: meta.externalReference ?? null, structuredReference: meta.structuredReference ?? null, bankReference: meta.bankReference ?? null, refundOfPaymentId: meta.refundOfPaymentId ?? null };
+      checkRefundLink({ payment, registry });
       const staged = []; const reg = [...registry, payment]; const plan = [...wanted].sort((a, b) => String(a.customerDocumentId ?? a.supplierInvoiceId).localeCompare(String(b.customerDocumentId ?? b.supplierInvoiceId)));
       const docList = [...docs.values()];
       for (const w of plan) {
@@ -119,10 +124,29 @@ export function createMemoryStore() {
       // ---- commit point: nothing above wrote anything ----
       registry.push(payment); fingerprints.set(payment.id, fp); allocations.push(...staged);
       const customerIds = [...new Set(staged.map((a) => a.customerDocumentId).filter(Boolean))]; const doc = customerIds.length === 1 ? docs.get(customerIds[0]) : null;
-      events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: doc?.id ?? null, at: at ?? payment.createdAt, actor: clone(actor), action: direction === 'IN' ? 'RECORD_PAYMENT' : 'RECORD_SUPPLIER_PAYMENT', fromStatus: doc?.status ?? null, toStatus: doc?.status ?? null,
-        detail: { paymentId: payment.id, amountCents, currency, method, paidOn, direction, allocations: clone(wanted) } }));
+      events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: doc?.id ?? null, at: at ?? payment.createdAt, actor: clone(actor), action: direction === 'IN' ? 'RECORD_PAYMENT' : customerIds.length ? 'RECORD_REFUND' : 'RECORD_SUPPLIER_PAYMENT', fromStatus: doc?.status ?? null, toStatus: doc?.status ?? null,
+        detail: { paymentId: payment.id, amountCents, currency, method, paidOn, direction, source: payment.source, externalReference: payment.externalReference, allocations: clone(wanted) } }));
       refreshSuppliers(staged);
       return { duplicate: false, payment: clone(payment), allocations: staged.map(clone) };
+    },
+    /** Apply the unallocated part of an existing payment to documents, later (mirror of fin_allocate_payment). The caller names every target; nothing is ever allocated automatically. */
+    async allocatePayment({ merchantId, key, paymentId, allocations: wanted, actor = null, at = null }) {
+      if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
+      if (!Array.isArray(wanted) || !wanted.length) throw new FinanceError('AMOUNT_INVALID', 'nothing to allocate');
+      const pay = registry.find((p) => p.id === paymentId && p.merchantId === merchantId); if (!pay || pay.reversalOfId) throw new FinanceError('PAYMENT_NOT_FOUND');
+      const staged = []; const out = []; let duplicate = false; const docList = [...docs.values()];
+      for (const w of [...wanted].sort((a, b) => String(a.customerDocumentId ?? a.supplierInvoiceId).localeCompare(String(b.customerDocumentId ?? b.supplierInvoiceId)))) {
+        const targetId = w.customerDocumentId ?? w.supplierInvoiceId; const idem = `${key}:${targetId}`; const prior = allocations.find((a) => a.merchantId === merchantId && a.idempotencyKey === idem);
+        if (prior) { if (prior.paymentId !== pay.id || prior.amountCents !== w.amountCents) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); duplicate = true; out.push(clone(prior)); continue; }
+        const kind = w.customerDocumentId ? 'customer' : 'supplier'; const target = kind === 'customer' ? docs.get(targetId) : supplierInvoices.find((x) => x.id === targetId);
+        const row = { id: randomUUID(), merchantId, paymentId: pay.id, customerDocumentId: w.customerDocumentId ?? null, supplierInvoiceId: w.supplierInvoiceId ?? null, amountCents: w.amountCents, currency: pay.currency, reversesAllocationId: null, idempotencyKey: idem, reason: null, actor: clone(actor), createdAt: at ?? new Date().toISOString(), seq: ++seq };
+        checkAllocation({ merchantId, payment: pay, registry, allocations: [...allocations, ...staged], docs: docList, target, kind, allocation: row });
+        staged.push(row); out.push(row);
+      }
+      allocations.push(...staged);
+      for (const r of staged) events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: r.customerDocumentId, at: r.createdAt, actor: clone(actor), action: 'ALLOCATE_PAYMENT', fromStatus: null, toStatus: null, detail: { paymentId: pay.id, allocationId: r.id, amountCents: r.amountCents, supplierInvoiceId: r.supplierInvoiceId } }));
+      refreshSuppliers(staged);
+      return { duplicate: duplicate && staged.length === 0, allocations: out.map(clone) };
     },
     /** Take back (all or part of) allocations: appends negative rows linked to the originals; idempotent per (key, allocation). */
     async reverseAllocations({ merchantId, key, items, reason = null, actor = null, at = null }) {
@@ -168,11 +192,17 @@ export function createMemoryStore() {
         return { duplicate: false, reversal: clone(row) };
       } catch (e) { allocations.length = saveAlloc; events.length = saveEvents; refreshSuppliers(standing); throw e; }
     },
-    async listAllocations({ merchantId, customerDocumentId, supplierInvoiceId } = {}) {
+    async listAllocations({ merchantId, customerDocumentId, supplierInvoiceId, keyPrefix } = {}) {
+      if (keyPrefix) return allocations.filter((a) => (!merchantId || a.merchantId === merchantId) && a.idempotencyKey.startsWith(keyPrefix)).map((a) => { const p = registry.find((x) => x.id === a.paymentId); return clone({ ...a, paidOn: p.paidOn, method: p.method, reference: p.reference, direction: p.direction }); });
       return allocations.filter((a) => (!merchantId || a.merchantId === merchantId) && (!customerDocumentId || a.customerDocumentId === customerDocumentId) && (!supplierInvoiceId || a.supplierInvoiceId === supplierInvoiceId))
         .map((a) => { const p = registry.find((x) => x.id === a.paymentId); return clone({ ...a, paidOn: p.paidOn, method: p.method, reference: p.reference, direction: p.direction }); });
     },
     async listRegistry(merchantId) { return registry.filter((p) => p.merchantId === merchantId).map(clone); },
+    /** One payment with its reversals and allocations (the audit view of a monetary operation). */
+    async getPayment(merchantId, id) {
+      const p = registry.find((x) => x.id === id && x.merchantId === merchantId); if (!p) return null;
+      return { payment: clone(p), reversals: registry.filter((r) => r.reversalOfId === id && r.merchantId === merchantId).map(clone), allocations: allocations.filter((a) => a.paymentId === id && a.merchantId === merchantId).map(clone) };
+    },
     /** Customer-invoice payments as the rest of the application reads them: one entry per allocation (negative = a reversal), derived, never stored separately. */
     async listPayments(documentId) {
       return allocations.filter((a) => a.customerDocumentId === documentId).map((a) => { const p = registry.find((x) => x.id === a.paymentId); return { id: a.paymentId, allocationId: a.id, documentId, merchantId: a.merchantId, amountCents: a.amountCents, paidOn: p.paidOn, method: p.method, reference: a.amountCents < 0 ? (a.reason ?? p.reference) : p.reference }; });
@@ -309,6 +339,7 @@ export function createMemoryStore() {
       // the database refuses the same things (trigger fin_supplier_invoice_truth_guard): PAID only through allocations, nothing financial changes under payments
       const net = supplierNet(id); const next = { ...r, ...patch };
       if (next.status === 'PAID' && !supplierTruth(next, net).paid) throw new FinanceError('PAID_REQUIRES_ALLOCATIONS', `allocated ${net} of ${next.grossCents ?? 0} (cents)`);
+      if (supplierTruth(next, net).paid && next.status !== 'PAID') throw new FinanceError('INVOICE_HAS_PAYMENTS', 'fully allocated, so PAID until a reversal says otherwise');
       if (net !== 0 && (('grossCents' in patch && patch.grossCents !== r.grossCents) || ('currency' in patch && patch.currency !== r.currency) || ['RECEIVED', 'TO_REVIEW', 'REJECTED'].includes(next.status))) throw new FinanceError('INVOICE_HAS_PAYMENTS', id);
       Object.assign(r, patch); r.paymentStatus = supplierTruth(r, net).paymentStatus; return withTruth(r);
     },
