@@ -197,13 +197,17 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
 
     /** Re-derive the stored lifecycle status from payments and credit notes (call after either changes). */
     async resettle(invoiceId, actor) {
-      const prev = await must(invoiceId);
-      if (prev.type !== 'invoice' || !prev.lockedAt) return prev;
-      const credits = await relatedCreditNotes(prev); const s = settlement(prev, await store.listPayments(invoiceId), credits, await refundsOf(credits));
-      const status = settledStatus(prev, s);
-      if (status === prev.status) return prev;
-      const { doc, event } = applyStatus(prev, status, { actor, at: now(), reason: 'settlement' });
-      return persist(doc, prev, event);
+      // The stored status is only a mirror of the payment truth and is re-derived idempotently. Money has ALREADY been committed when this runs, so a lost race on the mirror
+      // (another payment re-derived it first) must never surface as a failure of that payment: re-read, re-derive, and try again.
+      for (let attempt = 0; ; attempt += 1) {
+        const prev = await must(invoiceId);
+        if (prev.type !== 'invoice' || !prev.lockedAt) return prev;
+        const credits = await relatedCreditNotes(prev); const s = settlement(prev, await store.listPayments(invoiceId), credits, await refundsOf(credits));
+        const status = settledStatus(prev, s);
+        if (status === prev.status) return prev;
+        const { doc, event } = applyStatus(prev, status, { actor, at: now(), reason: 'settlement' });
+        try { return await persist(doc, prev, event); } catch (e) { if (e?.code !== 'CONCURRENT_MODIFICATION' || attempt >= 12) throw e; }
+      }
     },
 
     async view(id) {

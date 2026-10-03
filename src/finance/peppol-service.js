@@ -134,7 +134,9 @@ export function createPeppolService({ store, merchantId, provider, legal, storag
       // 2. exact original into durable storage first (content-addressed: storing twice is harmless), then the message row decides whether it is new
       const ref = `${merchantId}/legal/inbound/${hash}`; try { await storage.put(ref, bytes, { contentType: 'application/xml' }); } catch (e) { await ev(null, 'ARTIFACT_STORAGE_FAILED', { kind: 'INBOUND', error: String(e.message).slice(0, 120) }); throw new FinanceError('ARTIFACT_STORAGE_FAILED', 'nothing was registered; the provider will resend'); }
       const reg = await store.registerInboundPeppol({ merchantId, provider: provider.name, providerMessageId: providerMessageId ?? `h-${hash.slice(0, 40)}`, key: `peppol-in:${provider.name}:${providerMessageId ?? hash.slice(0, 40)}`.slice(0, 200), sha256: hash, sender: senderKey, receiver: receiver ?? customerKey, businessKey: business, at: receivedAt ?? clock.now() });
-      if (reg.duplicate) {
+      // a message registered by an earlier attempt that never finished (process killed between registration and the TO_REVIEW / VALIDATION_FAILED transition) is COMPLETED by the provider's resend: every step below is idempotent (content-addressed storage, one artifact per message, supplier invoices deduplicated by hash)
+      const resumed = reg.duplicate && reg.message.state === 'RECEIVED' && reg.message.documentSha256 === hash;
+      if (reg.duplicate && !resumed) {
         await ev(null, 'PEPPOL_INBOUND_DUPLICATE_IGNORED', { messageId: reg.message.id, firstMessageId: reg.first?.id ?? null });
         // the same business document in DIFFERENT bytes is kept as evidence (a conflicting duplicate may be a corrected resend): archived under its own message, never turned into a second supplier invoice
         if (reg.first && reg.first.documentSha256 !== hash && reg.message.state === 'DUPLICATE') {
@@ -143,7 +145,7 @@ export function createPeppolService({ store, merchantId, provider, legal, storag
         }
         return { duplicate: true, message: reg.message, first: reg.first ?? null };
       }
-      const m = reg.message;
+      const m = reg.message; if (resumed) await ev(null, 'PEPPOL_INBOUND_RESUMED', { messageId: m.id, sha256: hash });
       const original = (await store.archiveArtifact({ merchantId, kind: 'INBOUND_ORIGINAL', classification: 'ORIGINAL', peppolMessageId: m.id, storageRef: ref, sha256: hash, sizeBytes: bytes.length, mediaType: 'application/xml', fileName: `${String(ids?.id ?? 'invoice').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80)}.xml`, retentionClass: DEFAULT_RETENTION.INBOUND_ORIGINAL,
         provenance: { provider: provider.name, providerMessageId: providerMessageId ?? null, sender: senderKey, receiver: receiver ?? customerKey, receivedAt: m.receivedAt, syntax: 'UBL 2.1' }, createdAt: clock.now() })).artifact;
       await ev(null, 'PEPPOL_INBOUND_RECEIVED', { messageId: m.id, sha256: hash, sender: senderKey, artifactId: original.id });
