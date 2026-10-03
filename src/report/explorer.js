@@ -67,6 +67,9 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
 
   const cur = summarize(win);
   const prev = prevWin ? summarize(prevWin) : null;
+  // A customer is ACTIVE in a window only if they ORDERED in it. A refund issued in the window on an earlier order creates a customer slot (the money
+  // belongs to the period) but that customer is not active and has no order of the window.
+  const activeCount = (sum) => [...sum.customers.values()].filter((c) => c.orders.size > 0).length;
 
   // Shipping is reported beside the product KPIs, never folded into them (product KPIs intentionally represent product lines only).
   const curFacts = windowFacts(ledger, win);
@@ -82,10 +85,10 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
     order_count: cur.orders.length,
     units_sold: cur.total.units_sold,
     aov_ex_tax: cur.orders.length ? round2(cur.total.net_sales_ex_tax / cur.orders.length) : null,
-    active_customers: cur.customers.size,
+    active_customers: activeCount(cur),
     identified_orders: cur.identifiedOrderCount,
     identified_share: cur.orders.length ? round4(cur.identifiedOrderCount / cur.orders.length) : null,
-    previous: prev ? { net_sales_ex_tax: prev.total.net_sales_ex_tax, order_count: prev.orders.length, units_sold: prev.total.units_sold, aov_ex_tax: prev.orders.length ? round2(prev.total.net_sales_ex_tax / prev.orders.length) : null, active_customers: prev.customers.size } : null,
+    previous: prev ? { net_sales_ex_tax: prev.total.net_sales_ex_tax, order_count: prev.orders.length, units_sold: prev.total.units_sold, aov_ex_tax: prev.orders.length ? round2(prev.total.net_sales_ex_tax / prev.orders.length) : null, active_customers: activeCount(prev) } : null,
   };
   kpis.delta = prev ? {
     net_sales_ex_tax_pct: pct(kpis.net_sales_ex_tax, kpis.previous.net_sales_ex_tax),
@@ -121,11 +124,11 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   });
 
   // ---- top customers (pseudonymous labels only) ----
-  const customerRows = [...cur.customers.entries()].map(([key, c]) => {
+  const customerRows = [...cur.customers.entries()].filter(([, c]) => c.orders.size > 0).map(([key, c]) => {
     const a = aggregate(c.lines, c.refunds, config);
     return { label: `#${key.slice(0, 4).toUpperCase()}`, net_sales_ex_tax: a.net_sales_ex_tax, order_count: c.orders.size };
   }).sort((a, b) => b.net_sales_ex_tax - a.net_sales_ex_tax || b.order_count - a.order_count).slice(0, 5);
-  const top_customers = { status: cur.customers.size ? 'OK' : 'UNAVAILABLE', identified_share: kpis.identified_share, rows: customerRows };
+  const top_customers = { status: activeCount(cur) ? 'OK' : 'UNAVAILABLE', identified_share: kpis.identified_share, rows: customerRows };
 
   const daily = (dailySeries ?? []).map((d) => ({ date: d.date, net_sales_ex_tax: d.net_sales_ex_tax, order_count: d.order_count }));
 
@@ -294,20 +297,23 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
   const median = (arr) => { if (!arr.length) return null; const x = [...arr].sort((a, b) => a - b); const m = x.length >> 1; return round2(x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2); };
 
   function segments(sum) {
-    const list = [...sum.customers.entries()].map(([key, cust]) => ({ key, cust, type: classify(cust) }));
+    const everyone = [...sum.customers.entries()].map(([key, cust]) => ({ key, cust, type: classify(cust) }));
+    const list = everyone.filter((x) => x.cust.orders.size > 0); // ACTIVE customers: they ordered in the window
+    const refundOnlyRows = everyone.filter((x) => x.cust.orders.size === 0); // refund on an earlier order only: money of the period, not an active customer
     const group = (type) => {
       const rows = list.filter((x) => x.type === type);
       const lines = rows.flatMap((x) => x.cust.lines); const refunds = rows.flatMap((x) => x.cust.refunds);
       return { customers: rows.length, orders: rows.reduce((a, x) => a + x.cust.orders.size, 0), net_sales_ex_tax: aggregate(lines, refunds, config).net_sales_ex_tax };
     };
-    const allLines = list.flatMap((x) => x.cust.lines); const allRefunds = list.flatMap((x) => x.cust.refunds);
+    const allLines = everyone.flatMap((x) => x.cust.lines); const allRefunds = everyone.flatMap((x) => x.cust.refunds);
+    const refund_only = { customers: refundOnlyRows.length, net_sales_ex_tax: aggregate(refundOnlyRows.flatMap((x) => x.cust.lines), refundOnlyRows.flatMap((x) => x.cust.refunds), config).net_sales_ex_tax };
     return {
       active: list.length,
       identified_orders: sum.identifiedOrderCount,
       order_count: sum.orders.length,
       identified_share: sum.orders.length ? round4(sum.identifiedOrderCount / sum.orders.length) : null,
       identified_net_sales_ex_tax: aggregate(allLines, allRefunds, config).net_sales_ex_tax,
-      new: group('new'), returning: group('returning'), unknown: group('unknown'), list,
+      new: group('new'), returning: group('returning'), unknown: group('unknown'), refund_only, list,
     };
   }
   const curSeg = segments(cur);
@@ -373,7 +379,7 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
 
   return {
     coverage: { identified_orders: curSeg.identified_orders, orders: curSeg.order_count, identified_share: curSeg.identified_share, previous_identified_share: previous?.identified_share ?? null },
-    kpis: { active: curSeg.active, new: curSeg.new.customers, returning: curSeg.returning.customers, unknown: curSeg.unknown.customers, identified_net_sales_ex_tax: curSeg.identified_net_sales_ex_tax, previous, delta },
+    kpis: { active: curSeg.active, new: curSeg.new.customers, returning: curSeg.returning.customers, unknown: curSeg.unknown.customers, refund_only: curSeg.refund_only, identified_net_sales_ex_tax: curSeg.identified_net_sales_ex_tax, previous, delta },
     segments: { new: strip(curSeg.new), returning: strip(curSeg.returning), unknown: strip(curSeg.unknown) },
     top, frequency: dist, value, recency, weekly, cohort,
   };
