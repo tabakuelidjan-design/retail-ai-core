@@ -49,6 +49,9 @@ const TEMPLATES = {
   doc: { en: 'Please send the {docEn} for model {model}{refs}.', zh: '请提供型号 {model} 的{docZh}{refsZh}。' },
   doc_fix: { en: 'The {docEn} you sent does not match model {model}: please send the correct document for model {model}.', zh: '您发来的{docZh}与型号 {model} 不一致:请提供型号 {model} 对应的正确文件。' },
   own_brand_docs: { en: 'If we sell this under our own brand we need the full technical file, test reports in our name or covering our model, and your agreement to supply updated documents. Is that possible?', zh: '如果我们以自有品牌销售,需要完整的技术文件、涵盖我们型号的检测报告,并且需要贵司同意持续提供更新文件。能否做到?' },
+  modification_effect: { en: 'If we modify the product (design, materials, firmware, battery, accessories), which changes could affect its safety or conformity? Please give the design details and the documents we would need to update.', zh: '如果我们对产品进行修改(设计、材料、固件、电池、配件),哪些改动可能影响其安全性或合规性?请提供设计资料以及我们需要更新的文件。' },
+  label_change: { en: 'We plan to change the labels or instructions. Which safety information, warnings and markings must stay unchanged, and who approves the new text?', zh: '我们计划更改标签或说明书。哪些安全信息、警告和标识必须保持不变?新文本由谁批准?' },
+  repackage_name: { en: 'We plan to repack the product. May the original markings, model number and manufacturer details remain visible on the new packaging?', zh: '我们计划重新包装该产品。新包装上能否保留原有标识、型号和制造商信息?' },
   quality_inspection: { en: 'Do you accept a third-party pre-shipment inspection before final payment?', zh: '尾款支付前,是否接受第三方出货前检验?' },
 };
 
@@ -71,7 +74,8 @@ export function buildQuestions({ identity, role, rules, docs, landed, quote, cha
   for (const t of unresolved) if (traitQ[t]) add(Q(traitQ[t], 'P1', 'Identity', `"${t}" is not established: the rules that depend on it cannot be decided`, ['IDENTITY', 'IMPORT']));
   const mains = effective(identity, 'electrical.mainsConnected');
   if (effective(identity, 'electrical.present').value === true && !mains.known) add(Q('mains', 'P2', 'Identity', 'mains connection decides whether the Low Voltage Directive applies', ['IMPORT']));
-  for (const u of role.unresolved ?? []) add(Q(u.code === 'OWN_BRAND_UNKNOWN' ? 'brand' : 'eu_party', 'P1', 'Role', u.question, ['IMPORT']));
+  const ROLE_Q = { OWN_BRAND_UNKNOWN: 'brand', EU_PARTY_UNKNOWN: 'eu_party', MODIFICATION_EFFECT_UNKNOWN: 'modification_effect', SAFETY_INFORMATION_CHANGED: 'label_change', LABEL_CHANGE_SCOPE_UNKNOWN: 'label_change', REPACKAGE_NAME_UNKNOWN: 'repackage_name' };
+  for (const u of role.unresolved ?? []) add(Q(ROLE_Q[u.code] ?? 'eu_party', 'P1', 'Role', u.question, ['IMPORT']));
   if (role.ownBrand === true) add(Q('own_brand_docs', 'P1', 'Role', 'Own brand makes you the manufacturer: you need the technical file', ['IMPORT', 'AMAZON']));
   // commercial
   const unk = new Set(landed?.criticalUnknown ?? []);

@@ -38,8 +38,11 @@ export function contradictions(rules, docs) {
 }
 
 export const REVIEW_BLOCKING = Object.freeze(['NEEDS_EXPERT_REVIEW', 'INCOMPLETE', 'UNVERIFIED']);
-/** Rules that APPLY but whose text was not verified well enough: they can never support an unconditional green verdict. */
-export const unreviewedRules = (rules) => (rules.results ?? []).filter((r) => r.status === 'APPLIES' && r.jurisdiction !== 'AMAZON' && REVIEW_BLOCKING.includes(r.review?.status ?? 'UNVERIFIED'));
+const effectiveReview = (r) => { const s = r.review?.status ?? 'UNVERIFIED'; return REVIEW_BLOCKING.includes(s) ? s : r.reviewFreshness?.status === 'STALE' ? 'STALE_REVIEW' : null; };
+/** Applicable rules MATERIAL to the product whose text was not verified well enough (or whose review is stale): they can never support an unconditional green. Operator / administrative and channel rules do not cap the product verdict. */
+export const unreviewedRules = (rules) => (rules.results ?? []).filter((r) => r.status === 'APPLIES' && (r.materiality ?? 'PRODUCT_COMPLIANCE') === 'PRODUCT_COMPLIANCE' && effectiveReview(r)).map((r) => ({ ...r, review: { ...r.review, status: effectiveReview(r) } }));
+/** Applicable operator / administrative obligations: shown to the owner (what to register, with the review status of the text), never a cap on the verdict. */
+export const adminObligations = (rules) => (rules.results ?? []).filter((r) => r.status === 'APPLIES' && r.materiality === 'OPERATOR_ADMIN').map((r) => ({ ruleId: r.ruleId, title: r.title, layer: r.layer, materiality: r.materiality, reviewStatus: effectiveReview(r) ?? r.review.status, uncertainty: r.review.uncertainty }));
 function marketabilityOf({ identityConf, rules, gaps, contra, safety }) {
   if (['EXACT_MATCH', 'PROBABLE_MATCH'].includes(safety.status) || contra.length) return TRAFFIC.RED;
   if ((rules.results ?? []).some((r) => r.ruleId === 'eu.medical_boundary' && r.status === 'APPLIES')) return TRAFFIC.RED;
@@ -94,6 +97,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   if (econ && econ.contributionMinor !== null && econ.contributionMinor < 0) B(BLOCKER.NEGATIVE_UNIT_ECONOMICS, 'HARD', `contribution per unit is ${fmt(econ.contributionMinor)}${econ.contributionIsUpperBound ? ' even before the unknown fees' : ''}`);
   if (landed && landed.status === 'INFORMATION_INSUFFICIENT') B(BLOCKER.CRITICAL_COST_UNKNOWN, 'HARD', `critical cost input(s) unknown: ${landed.criticalUnknown.join(', ')}`);
   if ((rules.results ?? []).some((r) => r.ruleId === 'eu.medical_boundary' && r.status === 'APPLIES')) B(BLOCKER.LEGAL_REQUIREMENT_UNRESOLVED, 'HARD', 'a medical purpose is claimed: Nordla does not assess medical devices - get an expert classification before any purchase');
+  if (role.status === 'UNRESOLVED' && role.ownBrand === null && (role.unresolved ?? []).some((u) => u.code !== 'EU_PARTY_UNKNOWN')) B(BLOCKER.ROLE_UNRESOLVED, 'CONDITION', 'whether you carry the manufacturer obligations is not decided yet (own brand, modification, repackaging or label changes): answer the role questions');
   if (role.ownBrand === true) B(BLOCKER.OWN_BRAND_MANUFACTURER_DUTIES, 'CONDITION', 'selling under your own brand: you carry the manufacturer duties (technical file, conformity assessment, DoC, traceability)');
 
   const has = (c) => blockers.some((b) => b.code === c && b.severity !== 'CHANNEL');
@@ -136,7 +140,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   return {
     verdict, canCommitMoney: verdict === VERDICT.GO, dimensions: { identification: identityConf.level, marketability, amazonReadiness: amazonRequested ? amazon.readiness.status : 'NOT_REQUESTED', economics, supplierEvidence: evidence, safetyRisk },
     hardBlockers: blockers.filter((b) => b.severity === 'HARD'), conditionBlockers: blockers.filter((b) => b.severity !== 'HARD'), conditions, why,
-    rulebookReview: { unreviewedApplicable: unrev.map((r) => ({ ruleId: r.ruleId, status: r.review.status })), allApplicableReviewed: unrev.length === 0 }, blocksImport, blocksAmazon, gaps, contradictions: contra, nextAction, maxPurchasePrice: maxPrice ?? null,
+    adminObligations: adminObligations(rules), rulebookReview: { unreviewedApplicable: unrev.map((r) => ({ ruleId: r.ruleId, status: r.review.status })), allApplicableReviewed: unrev.length === 0 }, blocksImport, blocksAmazon, gaps, contradictions: contra, nextAction, maxPurchasePrice: maxPrice ?? null,
     note: 'Decision support only. Nordla is not a lawyer, customs authority, laboratory, certification body or Amazon approval authority.',
   };
 }

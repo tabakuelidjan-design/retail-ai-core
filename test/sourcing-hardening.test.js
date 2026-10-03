@@ -20,26 +20,19 @@ const SRC = join(HERE, '..', 'src', 'sourcing');
 const chargerBase = [...ident({ name: 'USB-C charger 65W', category: 'usb_charger', model: 'PD-65' }), ...traits({ 'electrical.present': true }), ...extraTraits({ 'electrical.mainsConnected': true, 'electrical.maxVoltageAc': 230 }), ...importer, ...commercial({ price: 24.99 })];
 
 // ---- rulebook review ----------------------------------------------------------------------------------------------------------------------------------------------------
-test('rulebook review: every existing rule has a status, none is VERIFIED_CURRENT (no consolidated text was opened), counts are pinned', () => {
-  const counts = Object.fromEntries(REVIEW_STATUSES.map((s) => [s, 0]));
-  for (const r of RULEBOOK) { assert.ok(r.review && REVIEW_STATUSES.includes(r.review.status), r.id); assert.ok(r.review.basis.length > 20, r.id); counts[r.review.status] += 1; }
+test('rulebook review: every existing rule keeps a review record (statuses and counts are pinned in sourcing-regulatory.test.js)', () => {
   assert.equal(RULEBOOK.length, 31, 'no rule was added');
   assert.deepEqual(Object.keys(REVIEW).sort(), RULEBOOK.map((r) => r.id).sort());
-  assert.deepEqual(counts, { VERIFIED_CURRENT: 0, VERIFIED_PRIMARY_TEXT_ONLY: 13, NEEDS_EXPERT_REVIEW: 6, INCOMPLETE: 2, UNVERIFIED: 10 });
+  for (const r of RULEBOOK) { assert.ok(REVIEW_STATUSES.includes(r.review.status), r.id); assert.ok(r.review.interpretation.length > 40, r.id); }
 });
 
-test('a rule that is not verified can never give an unconditional green: marketability stays AMBER and the verdict conditional, even with perfect documents', () => {
+test('a MATERIAL applicable rule that is not verified keeps the verdict conditional; with verified material rules a complete charger can be GO on the real rulebook', () => {
   const full = run(build([...chargerBase, ...docsFor.charger('PD-65')]));
   assert.equal(full.decision.dimensions.supplierEvidence, 'COMPLETE');
-  assert.notEqual(full.decision.dimensions.marketability, 'GREEN');
-  assert.equal(full.decision.verdict, 'CONDITIONAL_GO');
-  assert.ok(full.decision.rulebookReview.unreviewedApplicable.length > 0);
-  assert.ok(full.decision.conditions.some((c) => /rulebook not yet verified for \d+ applicable regime/.test(c)));
-  const reviewed = run(build([...chargerBase, ...docsFor.charger('PD-65')]), undefined, { rulebook: REVIEWED_RULEBOOK });
-  assert.equal(reviewed.decision.verdict, 'GO'); assert.equal(reviewed.decision.rulebookReview.allApplicableReviewed, true);
-  // one NEEDS_EXPERT_REVIEW rule among reviewed ones is enough to hold it back
-  const oneBad = REVIEWED_RULEBOOK.map((r) => (r.id === 'eu.rohs' ? { ...r, review: { status: 'NEEDS_EXPERT_REVIEW' } } : r));
-  assert.equal(run(build([...chargerBase, ...docsFor.charger('PD-65')]), undefined, { rulebook: oneBad }).decision.verdict, 'CONDITIONAL_GO');
+  assert.equal(full.decision.rulebookReview.allApplicableReviewed, true); assert.equal(full.decision.dimensions.marketability, 'GREEN'); assert.equal(full.decision.verdict, 'GO');
+  const oneBad = REVIEWED_RULEBOOK.map((r) => (r.id === 'eu.rohs' ? { ...r, review: { ...r.review, status: 'NEEDS_EXPERT_REVIEW' } } : r));
+  const held = run(build([...chargerBase, ...docsFor.charger('PD-65')]), undefined, { rulebook: oneBad });
+  assert.equal(held.decision.verdict, 'CONDITIONAL_GO'); assert.notEqual(held.decision.dimensions.marketability, 'GREEN'); assert.ok(held.decision.conditions.some((c) => /rulebook not yet verified/.test(c)));
 });
 
 test('Amazon readiness cannot be READY while the Amazon rules themselves are unverified', () => {

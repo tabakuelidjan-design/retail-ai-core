@@ -48,6 +48,7 @@ export const BLOCKER = Object.freeze({
   CRITICAL_COST_UNKNOWN: 'CRITICAL_COST_UNKNOWN',
   DOCUMENT_CONTRADICTS_CASE: 'DOCUMENT_CONTRADICTS_CASE',
   OWN_BRAND_MANUFACTURER_DUTIES: 'OWN_BRAND_MANUFACTURER_DUTIES',
+  ROLE_UNRESOLVED: 'ROLE_UNRESOLVED',
 });
 
 /** Document findings. Wording is deliberate: nothing here says "fake" - only what the evidence shows. */

@@ -6,6 +6,7 @@ import { evaluate, readsOf } from './predicate.js';
 import { traitEnv } from './identity.js';
 import { RULE_STATUS, REQUIREMENT } from './levels.js';
 import { STANDARD_FAMILIES } from './docinspect.js';
+import { REVIEW_MAX_AGE_DAYS } from './rulebook/review.js';
 
 const DAY = 86400000;
 
@@ -14,6 +15,12 @@ export function sourceFreshness(src, now, maxAgeDays = 180) {
   if (!src.checkedAt) return { status: 'UNCHECKED', ageDays: null };
   const age = Math.floor((now.getTime() - Date.parse(src.checkedAt)) / DAY);
   return { status: age > (src.maxAgeDays ?? maxAgeDays) ? 'STALE' : 'FRESH', ageDays: age };
+}
+/** The review of a rule is itself a dated source: older than REVIEW_MAX_AGE_DAYS it is STALE and no longer current. */
+export function reviewFreshness(review, now) {
+  if (!review?.checkedAt) return { status: 'UNCHECKED', ageDays: null };
+  const ageDays = Math.floor((now.getTime() - Date.parse(review.checkedAt)) / DAY);
+  return { status: ageDays > REVIEW_MAX_AGE_DAYS ? 'STALE' : 'FRESH', ageDays };
 }
 export const VERIFICATION_RANK = Object.freeze({ OPENED_OFFICIAL: 3, SECONDARY_OFFICIAL: 2, SEEN_IN_SEARCH_SNIPPET: 1, NOT_OPENED_ELI: 1, BACKGROUND_KNOWLEDGE: 0, PENDING_RESEARCH: 0 });
 
@@ -61,7 +68,7 @@ export function evaluateRules({ identity, context, rulebook, docs = [], now = ne
       ruleId: rule.id, family: rule.family, jurisdiction: rule.jurisdiction, title: rule.title, status, why: applies === true ? rule.whyApplies : applies === false ? rule.whyNot ?? 'the identity facts established so far exclude it' : `cannot be decided yet: ${unknownReads.join(', ')} unknown`,
       unknownReads, requiredEvidence, missingEvidence: missing, sources, ruleVersion: rule.ruleVersion, instrumentRefs: rule.instrumentRefs ?? [], standardFamily: rule.standardFamily ?? null,
       requiresAuthorityConfirmation: rule.requiresAuthorityConfirmation === true, sourceVerification: weakest >= 3 ? 'VERIFIED_ON_OFFICIAL_PAGE' : weakest >= 1 ? 'PARTLY_VERIFIED' : 'UNVERIFIED_EXPERT_CHECK_NEEDED',
-      freshness: sources.some((s) => s.freshness.status !== 'FRESH') ? (sources.some((s) => s.freshness.status === 'UNCHECKED') ? 'UNCHECKED' : 'STALE') : 'FRESH', notes: rule.notes ?? null, severity: rule.severity ?? 'NORMAL', review: rule.review ?? { status: 'UNVERIFIED', basis: 'no review recorded' },
+      freshness: sources.some((s) => s.freshness.status !== 'FRESH') ? (sources.some((s) => s.freshness.status === 'UNCHECKED') ? 'UNCHECKED' : 'STALE') : 'FRESH', notes: rule.notes ?? null, severity: rule.severity ?? 'NORMAL', review: rule.review ?? { status: 'UNVERIFIED', basis: 'no review recorded', instruments: [], applicationDates: [], interpretation: '', uncertainty: 'no review recorded' }, reviewFreshness: reviewFreshness(rule.review, now), scope: rule.scope ?? 'CATEGORY', materiality: rule.materiality ?? 'PRODUCT_COMPLIANCE', layer: rule.layer ?? rule.jurisdiction,
     };
   }).filter((r) => !r.skipped && r.ruleId);
 

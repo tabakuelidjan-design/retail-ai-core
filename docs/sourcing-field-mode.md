@@ -94,21 +94,21 @@ Cases are stored locally on the phone first and synced when the server is reacha
 
 V0 stores one JSON file per case (`data/local/sourcing/cases`) and, in the browser, local storage. **No table, no migration.** The case JSON already carries `supplier` (identity, contact, market, booth, link), `quotes` (unit price, currency, quantity, MOQ, Incoterm, lead time, carton), `documents` (extraction + inspection) and an append-only `events` / `decisions` log. The planned additive tables, to be created only after validation, are `sourcing_cases`, `sourcing_evidence` (append-only), `sourcing_documents` and `sourcing_decisions` (append-only), each tenant-scoped like the rest of Nordla.
 
-## Rule review status (field hardening, 2026-10-03)
+## Rule review status (regulatory closure, 2026-10-03)
 
-Every one of the 31 existing rules carries a review status (`src/sourcing/core/rulebook/review.js`); no rule was added. **No rule is VERIFIED_CURRENT**: EUR-Lex pages and consolidated texts could not be opened by the research tool, so consolidated versions, corrigenda and several application dates were not checked.
+Every one of the 31 existing rules carries a review record (`src/sourcing/core/rulebook/review.js`; the full per-rule table with instrument, article, consolidated version, application dates, interpretation and uncertainty is in `docs/sourcing-regulatory-closure.md`). No rule was added. The EU acts were verified against their CONSOLIDATED texts from the Publications Office; a rule is VERIFIED_CURRENT only if no amending act and no corrigendum is dated after the consolidation.
 
-| Status | Count | Rules |
-|---|---|---|
-| VERIFIED_CURRENT | 0 | none |
-| VERIFIED_PRIMARY_TEXT_ONLY | 13 | GPSR, LVD, EMC, RED, RED cybersecurity, common charger, toys, PPE; Belgium: language, Recupel, Bebat, BIPT, FASFC. (EU acts: original Official Journal text read, amendments listed from the Publications Office metadata; Belgian items: the authority's own page was read, the legal text was not.) |
-| NEEDS_EXPERT_REVIEW | 6 | Reg. 2019/1020 Art. 4 operator duties (Art. 4(5) replaced by Reg. 2024/1252; a "European product act" is pending), CE framework, RoHS (about 120 amending acts), Batteries (labelling date unresolved, due diligence postponed to 18 Aug 2027), PPWR, customs / EORI |
-| INCOMPLETE | 2 | medical-device boundary, Belgian packaging (Fost Plus / Valipac) |
-| UNVERIFIED | 10 | UN 38.3 / lithium transport, WEEE, REACH, CLP, food contact, textiles, cosmetics, Amazon (3 rules) |
+| Status | Before | After | Rules (after) |
+|---|---|---|---|
+| VERIFIED_CURRENT | 0 | 13 | GPSR, operator duties (Reg. 2019/1020 Art. 4), CE framework, EMC, RED, common charger, RoHS, REACH, CLP, PPE, WEEE, medical-device boundary, Belgian language |
+| PRIMARY_TEXT_ONLY | 13 | 12 | LVD, RED cybersecurity / CRA, toys, food contact, textiles, cosmetics, PPWR, customs / EORI, Recupel, Bebat, BIPT, FASFC (a corrigendum after the consolidation, no consolidated text, or an authority page instead of the legal text) |
+| NEEDS_EXPERT_REVIEW | 6 | 1 | Batteries (the labelling date depends on an implementing act that was not found; whether a power bank is a "battery" or a product incorporating one is an interpretation) |
+| INCOMPLETE | 2 | 2 | Belgian packaging (schemes only), Amazon GPSR listing information |
+| UNVERIFIED | 10 | 3 | UN 38.3 / lithium transport (UNECE refused the request), Amazon category documents, Amazon dangerous goods |
 
-**Consequence in the engine**: a rule that APPLIES to the case and is NEEDS_EXPERT_REVIEW / INCOMPLETE / UNVERIFIED keeps marketability at AMBER at best and the verdict at CONDITIONAL_GO at best (condition "rulebook not yet verified for N applicable regime(s)"). REACH, packaging and customs apply to every product, so today **no case can reach an unconditional GO**; the tests show GO is reachable once an expert has reviewed the rules (`REVIEWED_RULEBOOK`, test-only). Amazon readiness is never READY while the Amazon rules are unverified, and V0 cannot see the steps only you can do.
+**Consequence in the engine**: only applicable rules that are MATERIAL to the product (`PRODUCT_COMPLIANCE`) and NEEDS_EXPERT_REVIEW / INCOMPLETE / UNVERIFIED (or whose review is older than 180 days) keep marketability at AMBER at best and the verdict at CONDITIONAL_GO at best. Operator / administrative obligations (registrations, producer responsibility, customs administration) are listed with their review status but never cap the product verdict, and Amazon rules only affect Amazon readiness. So a plain household product or a documented mains charger can reach GO, while a power bank cannot until an expert has reviewed the Batteries rules.
 
-Corrections applied from the verification: GPSR Arts. 9, 11, 13, 16 do **not** apply to CE-harmonised products (the sector law does); own brand on a harmonised product is covered by `nlf.own_brand`; Bebat registration is regional and joining Bebat is optional; Recupel applies to online and foreign sellers (authorised representative possible); Belgian language rule is the linguistic region (CDE art. VI.8), German explicit only for radio.
+**What changed in the rules (each correction has a test)**: GPSR Arts. 9-18 do not apply to CE-harmonised products; the own-name = manufacturer rule is now explicit (sector acts, GPSR Art. 13, Blue Guide 3.1) with modification / repackaging / label-change cases and an UNRESOLVED state that asks a question instead of assuming an importer; REACH notification needs 0.1 % w/w AND one tonne per year (Art. 7(2)-(3)) and Art. 33 information; the common-charger rule applies only to RADIO equipment (RED Art. 3(4), Annex Ia); batteries are a CE regime; toys: EN 71 gives a presumption of conformity, it is not itself mandatory; food contact: bisphenol rules since 2026-07-20; customs: UCC replaced by Reg. 2026/2108 from 2027-09-21, a temporary EUR 3 duty on low-value distance sales since 2026-07-01; Belgian rules now separate the LEGAL obligation (regional) from the SCHEME service (Recupel, Fost Plus / Valipac) and the OPTIONAL service (Bebat membership).
 
 ## Photo input and document photos (field hardening)
 
@@ -125,7 +125,7 @@ The built-in browser could not register a service worker (even a trivial script 
 
 ## Known limitations (read before relying on it)
 
-1. **Rule texts**: several regulations were read from the Publications Office *original* text, not the consolidated version; the CRA text, MDR, the measuring-instruments directive and some article-level obligations were not opened. Every rule shows its verification level; rules that need an expert say so. Have a compliance expert review the rulebook before relying on it for a large order.
+1. **Rule texts**: 13 rules match the current consolidated text; 12 are PRIMARY_TEXT_ONLY (a corrigendum after the consolidation, or the Belgian authority page instead of the legal text, was not read); Batteries stay NEEDS_EXPERT_REVIEW; 2 are INCOMPLETE and 3 UNVERIFIED (UN 38.3, two Amazon rules). Corrigenda cannot be read as text through the Publications Office route. An expert must still review the rulebook for any regulated product.
 2. **Standard families** used for UNRELATED_STANDARD, the 3-year test-report age, and the HS candidates (heading level) are **heuristics**, labelled as such.
 3. **No OCR**: a scanned PDF or an image document is INSUFFICIENT_EVIDENCE unless the text is pasted or an AI reader is configured.
 4. **Safety Gate**: only the ingested weekly reports (12 by default) are searched; many alerts lack brand, model or barcode. No match is not safe. Matching on short model numbers (under 5 characters) is deliberately not done on its own.

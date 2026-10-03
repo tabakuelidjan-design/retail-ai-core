@@ -5,7 +5,7 @@ Read `docs/sourcing-field-mode.md` first for what the tool is. This is the exact
 ## What you can and cannot rely on (short version)
 
 - **Rely on**: the arithmetic (landed cost, maximum purchase price, what-if), the questions to ask, the document comparison (model / manufacturer / pages / dates / standards), the Safety Gate matching **of the weeks downloaded**, and the case being kept on the phone.
-- **Do NOT rely on as legal fact**: any "GREEN"/compliance statement. **No rule is VERIFIED_CURRENT**: the consolidated legal texts could not be opened, so the verdict is at best CONDITIONAL_GO and `canCommitMoney` stays false. An expert must review the rules before a deposit.
+- **Do NOT rely on as legal fact**: any "GREEN"/compliance statement for your product. 13 of the 31 rules now match the current consolidated EU text (VERIFIED_CURRENT), but that is about the rules, not your product; power banks and other batteries stay CONDITIONAL_GO at best until an expert reviews the Batteries rules (`docs/sourcing-regulatory-closure.md`). An expert must still review the rulebook before a deposit on a regulated product.
 - **Never**: a photographed paper is only a machine reading until you check it against the paper; "NO MATCH FOUND" in the Safety Gate does not prove safety; an HS/CN code is a candidate until your customs broker confirms it; Amazon fees and category restrictions are only what you type.
 
 ## A. At home, before leaving (30 minutes)

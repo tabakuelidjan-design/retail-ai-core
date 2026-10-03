@@ -17,8 +17,8 @@ for (const def of CASES) {
     assert.equal(live.dataMode, 'LIVE_VERIFIED'); assert.ok(live.safety.status);
     assert.equal(live.identity.confidence.level === 'LOW', false, 'identification is not LOW once the owner confirmed it');
     // never an unconditional GO while rules are unreviewed
-    assert.notEqual(live.decision.verdict, 'GO'); assert.equal(live.decision.canCommitMoney, false);
-    assert.ok(live.decision.conditions.some((c) => /rulebook not yet verified/.test(c)));
+    if (def.id === 'case-1') { assert.equal(live.decision.verdict, 'GO'); assert.equal(live.decision.canCommitMoney, true); assert.ok(live.decision.adminObligations.length > 0); }
+    else { assert.notEqual(live.decision.verdict, 'GO'); assert.equal(live.decision.canCommitMoney, false); }
     // evidence classes are separate: no fact in two classes, nothing OCR / typed is ever VERIFIED
     const k = classes(live); const all = Object.entries(k).flatMap(([cls, items]) => items.map((i) => `${cls}|${i}`));
     const names = all.map((x) => x.split('|')[1]); const dup = names.filter((n, i) => names.indexOf(n) !== i && !/^(eu|be|amazon|transport|customs)\./.test(n));
@@ -41,6 +41,7 @@ test('realistic cases differ for the right reasons', () => {
   // case 1: no required third-party documents, only unreviewed rules / own actions hold it at conditional
   assert.equal(r['case-1'].live.decision.gaps.missingDocs.length, 0);
   assert.equal(r['case-1'].live.economics.priceBasis, 'OBSERVED');
+  assert.ok(r['case-2'].live.decision.conditions.some((c) => /rulebook not yet verified/.test(c)), 'Batteries is NEEDS_EXPERT_REVIEW and material');
   // case 2: battery documents incomplete (UN 38.3 missing), similar Safety Gate alert, higher-risk regime
   assert.ok(r['case-2'].live.decision.gaps.missingDocs.some((m) => m.docType === 'UN383'));
   assert.equal(r['case-2'].live.safety.status, 'SIMILAR_PRODUCT_RISK');

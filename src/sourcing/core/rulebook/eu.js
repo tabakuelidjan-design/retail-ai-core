@@ -9,7 +9,8 @@ const R = (r) => ({ jurisdiction: 'EU', ruleVersion: RULE_VERSION, instrumentRef
 const doc = (id, label, docType, requirement = 'REQUIRED', extra = {}) => ({ id, label, docType, requirement, ...extra });
 const own = (id, label, requirement = 'REQUIRED', extra = {}) => ({ id, label, docType: 'COMPANY_RECORD', requirement, ...extra });
 
-const HARMONISED_ANY = { any: [{ trait: 'electrical.present', is: true }, { trait: 'radio.present', is: true }, { trait: 'toy', is: true }, { trait: 'ppe', is: true }] };
+// CE-regime candidates modelled by Nordla V0: electrical / electronic (LVD, EMC, RoHS), radio (RED), toys, PPE and batteries (Batteries Regulation 2023/1542: CE marking, Reg. 2019/1020 Art. 4(5)).
+const HARMONISED_ANY = { any: [{ trait: 'electrical.present', is: true }, { trait: 'radio.present', is: true }, { trait: 'toy', is: true }, { trait: 'ppe', is: true }, { trait: 'battery.present', is: true }] };
 
 export const EU_RULES = [
   R({
@@ -88,8 +89,8 @@ export const EU_RULES = [
   }),
   R({
     id: 'eu.charger', family: 'COMMON_CHARGER', title: 'Common charger Directive (EU) 2022/2380 (USB Type-C)',
-    appliesWhen: { all: [{ trait: 'category', in: ['bluetooth_speaker', 'bluetooth_earbuds'] }, { trait: 'battery.present', is: true }] },
-    whyApplies: 'rechargeable portable speakers, headphones and earbuds must use USB Type-C for wired charging (applies since 28 December 2024), and the box must carry the charger-included pictogram information',
+    appliesWhen: { all: [{ trait: 'category', in: ['bluetooth_speaker', 'bluetooth_earbuds'] }, { trait: 'battery.present', is: true }, { trait: 'radio.present', is: true }] },
+    whyApplies: 'RADIO equipment in the listed categories (portable speakers, headphones, headsets, earbuds...) that can be recharged by wired charging must have a USB Type-C receptacle (EN IEC 62680-1-3) and USB Power Delivery above 5 V / 3 A / 15 W, with charging information (RED Art. 3(4), Annex Ia Part I); applies since 28 December 2024',
     whyNot: 'not a listed device category',
     requiredEvidence: [doc('charger.label', 'Packaging showing USB Type-C and the charger-included pictogram', 'PACKAGING_ARTWORK', 'CONDITIONAL')],
     sources: [SRC.CHARGER], instrumentRefs: ['2022/2380'],
@@ -107,7 +108,7 @@ export const EU_RULES = [
   R({
     id: 'eu.batteries', family: 'BATTERIES', title: 'Batteries Regulation (EU) 2023/1542',
     appliesWhen: { trait: 'battery.present', is: true },
-    whyApplies: 'the product contains or is a battery: the importer of an imported battery has the manufacturer-type responsibilities (conformity, labelling, due diligence, extended producer responsibility)',
+    whyApplies: 'the product contains or is a battery: the importer of a battery may place on the market only a compliant battery and must verify the EU declaration of conformity, technical documentation, CE marking and labelling; an importer or distributor selling under its own name or modifying the battery is the manufacturer. Products incorporating portable batteries must have them readily removable and replaceable by the end-user from 2027-02-18 (derogations in Art. 11(2)-(3)). Extended producer responsibility applies since 2025-08-18',
     whyNot: 'no battery established',
     standardFamily: 'BATTERIES', instrumentRefs: ['2023/1542'],
     requiredEvidence: [doc('batt.doc', 'Battery conformity and safety evidence (EN 62133 / IEC 62619 / UN 38.3) for the exact battery', 'BATTERY_DOC'), doc('batt.label', 'Battery labelling (capacity, separate-collection symbol, chemical symbols where required)', 'LABEL_ARTWORK', 'CONDITIONAL')],
@@ -129,13 +130,13 @@ export const EU_RULES = [
     appliesWhen: { trait: 'electrical.present', is: true },
     whyApplies: 'electrical and electronic equipment: the producer or importer must register in each Member State where it sells and finance take-back and recycling',
     whyNot: 'no electrical or electronic function established',
-    requiredEvidence: [own('weee.registration', 'WEEE producer registration in each sales country (in Belgium: Recupel)', 'REQUIRED')],
+    requiredEvidence: [own('weee.registration', 'WEEE producer registration in each sales country, through an authorised representative where you are not established there (Belgium: regional rules; Recupel is the scheme)', 'REQUIRED')],
     sources: [SRC.WEEE_PAGE, SRC.WEEE_FAQ],
   }),
   R({
     id: 'eu.reach', family: 'REACH', title: 'REACH Regulation (EC) 1907/2006 (restricted substances in articles)',
     appliesWhen: { always: true },
-    whyApplies: 'every article placed on the EU market must respect REACH restrictions (Annex XVII) and the importer must handle substances of very high concern (SVHC) above 0.1% by weight, including notification and information to customers',
+    whyApplies: 'a substance or article for which Annex XVII contains a restriction may not be placed on the market unless it complies (Art. 67). An importer of articles must notify ECHA only if a candidate-list (SVHC) substance is present above 0.1 % w/w AND above one tonne per importer per year, unless exposure can be excluded (Art. 7(2)-(3)); any supplier of an article containing such a substance above 0.1 % w/w must give the recipient the information needed for safe use (Art. 33(1)) and a consumer on request within 45 days (Art. 33(2)). No document is legally mandatory for an article',
     requiredEvidence: [{ id: 'reach.evidence', label: 'REACH / SVHC test evidence or supplier declaration for the exact product', docType: 'REACH_EVIDENCE', docTypes: ['REACH_EVIDENCE', 'TEST_REPORT', 'MATERIAL_DECL'], requirement: 'RECOMMENDED' }],
     sources: [SRC.REACH_PAGE, SRC.REACH], requiresAuthorityConfirmation: true,
     notes: 'Higher scrutiny for products worn, mouthed or used by children, jewellery, textiles and plastics. No single document proves REACH compliance: a supplier statement is only a claim.',
@@ -151,17 +152,17 @@ export const EU_RULES = [
   R({
     id: 'eu.toys', family: 'TOYS', title: 'Toy Safety Directive 2009/48/EC (Regulation (EU) 2025/2509 from 1 August 2030)',
     appliesWhen: { trait: 'toy', is: true },
-    whyApplies: 'a product designed or intended, exclusively or not, for play by children under 14: CE marking, EN 71 testing, warnings, age grading and a safety assessment (chemical, physical, flammability, electrical) are required. The Toy Safety Regulation replaces the Directive from 1 August 2030 (digital product passport, new chemical rules)',
+    whyApplies: 'a product designed or intended, exclusively or not, for play by children under 14 (Annex I products are not toys): the manufacturer must carry out a safety assessment (chemical, physical, mechanical, electrical, flammability, hygiene, radioactivity; Art. 18), apply the required warnings (Art. 11), use a conformity assessment procedure, draw up the EU DoC and technical documentation and affix the CE marking. Harmonised standards (the EN 71 series, cited in the Official Journal) give a presumption of conformity but are not themselves mandatory. The Toy Safety Regulation (EU) 2025/2509 replaces the Directive from 1 August 2030; its Arts 28-44 and 49-55 already apply',
     whyNot: 'not established as a toy',
     standardFamily: 'TOYS', instrumentRefs: ['2009/48'],
-    requiredEvidence: [doc('toys.doc', 'EU declaration of conformity citing Directive 2009/48/EC', 'EU_DOC'), doc('toys.test', 'EN 71 test reports (mechanical, flammability, chemical) for the exact model', 'TEST_REPORT'), doc('toys.label', 'Packaging with age warnings, CE marking and manufacturer/importer details', 'PACKAGING_ARTWORK', 'CONDITIONAL')],
+    requiredEvidence: [doc('toys.doc', 'EU declaration of conformity citing Directive 2009/48/EC', 'EU_DOC'), doc('toys.test', 'Test reports for the exact model, normally to the EN 71 series (harmonised standards: presumption of conformity)', 'TEST_REPORT'), doc('toys.label', 'Packaging with age warnings, CE marking and manufacturer/importer details', 'PACKAGING_ARTWORK', 'CONDITIONAL')],
     sources: [SRC.TOYS, SRC.TOYS_REG, SRC.TOYS_BE], requiresAuthorityConfirmation: true, severity: 'HIGH',
     notes: 'Toys are among the products most often found dangerous: expect a third-party laboratory report, not a supplier statement. Regulation 2025/2509: Arts. 28-44 and 49-55 (notified bodies, market surveillance) already apply since 1 Jan 2026.',
   }),
   R({
     id: 'eu.fcm', family: 'FCM', title: 'Food-contact materials (Regulation (EC) 1935/2004 and specific measures)',
     appliesWhen: { trait: 'foodContact', is: true },
-    whyApplies: 'material intended to touch food or drink: it must be safe, traceable and accompanied by a declaration of compliance; plastics follow Regulation (EU) 10/2011 and bisphenol restrictions apply (Regulation (EU) 2024/3190)',
+    whyApplies: 'material intended to touch food or drink: it must be safe, traceable and accompanied by a declaration of compliance; plastics follow Regulation (EU) 10/2011; since 20 July 2026 the bisphenol restrictions of Regulation (EU) 2024/3190 apply to food-contact articles first placed on the market (longer transition to 20 January 2028 for some single-use and professional repeat-use articles)',
     whyNot: 'not intended to touch food or drink',
     standardFamily: 'FCM',
     requiredEvidence: [doc('fcm.doc', 'Declaration of compliance for food contact for the exact product', 'FCM_DOC'), doc('fcm.test', 'Migration / material test report (e.g. specific and overall migration) from a laboratory', 'TEST_REPORT'), { id: 'fcm.material', label: 'Material declaration (material, additives, intended temperature and food types)', docType: 'MATERIAL_DECL', requirement: 'CONDITIONAL' }],
@@ -171,7 +172,7 @@ export const EU_RULES = [
   R({
     id: 'eu.textiles', family: 'TEXTILES', title: 'Textile fibre labelling (Regulation (EU) 1007/2011) and children\'s textile safety',
     appliesWhen: { trait: 'textile', is: true },
-    whyApplies: 'textile products must carry a fibre-composition label in the language of the market; children\'s clothing has extra safety requirements (drawstrings, small parts); REACH restrictions (azo dyes, formaldehyde, nickel on metal parts) apply. Textiles are not CE products unless PPE or toy law applies',
+    whyApplies: 'textile products must carry a fibre-composition label in the language of the market; children\'s clothing has extra safety requirements (drawstrings, small parts); REACH Annex XVII restrictions (for example azocolourants, entry 43, and nickel in articles in prolonged skin contact, entry 27) apply. Textiles are not CE products unless PPE or toy law applies',
     whyNot: 'not a textile product',
     standardFamily: 'TEXTILES',
     requiredEvidence: [doc('text.label', 'Label artwork with fibre composition (and care) in the market language', 'LABEL_ARTWORK'), doc('text.test', 'Chemical / safety test report (azo, formaldehyde; drawstrings for children)', 'TEST_REPORT', 'CONDITIONAL', { when: { trait: 'childrenUse', is: true } })],
@@ -217,7 +218,7 @@ export const EU_RULES = [
   R({
     id: 'customs.eori', family: 'CUSTOMS', title: 'EORI number and customs import declaration',
     appliesWhen: { always: true },
-    whyApplies: 'importing goods from China needs an EORI number, a customs declaration and a tariff classification; low-value consignments have no duty exemption for customs purposes: confirm the current rules with your customs broker',
+    whyApplies: 'economic operators established in the Union register with customs (EORI; Union Customs Code Art. 9), goods released for free circulation need a customs declaration, a tariff classification and the applicable duties and measures. The Union Customs Code is replaced by Regulation (EU) 2026/2108 from 21 September 2027; a temporary EUR 3 duty applies since 1 July 2026 to low-value distance-sale consignments (not to bulk B2B imports)',
     requiredEvidence: [own('customs.eori', 'EORI number and customs broker or forwarder arrangement', 'REQUIRED')],
     sources: [SRC.EORI, SRC.LOW_VALUE, SRC.TARIC, SRC.EBTI], requiresAuthorityConfirmation: true,
   }),
