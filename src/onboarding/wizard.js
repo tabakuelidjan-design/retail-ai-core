@@ -260,7 +260,7 @@ function computeGates(allChecks, data) {
  * @param {{ledger: object, data: object, enrichment: object|null, company: object|null, connectors?: object,
  *           now?: Date, timeZone?: string, window?: object, config: object}} input
  */
-export function buildSetupReport({ ledger, data, enrichment = null, company = null, connectors = {}, now = new Date(), timeZone = 'UTC', window, config }) {
+export function buildSetupReport({ ledger, data, enrichment = null, company = null, connectors = {}, now = new Date(), timeZone, window, config }) {
   const win = window ?? buildWindows(now, timeZone).available_window;
   const flags = detectQualityFlags(data, ledger, { merchantId: null, now, config });
 

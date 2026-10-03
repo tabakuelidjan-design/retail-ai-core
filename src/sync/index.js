@@ -11,6 +11,7 @@
 //   - MISCONFIGURED / UNAVAILABLE     -> no data write; a FAILED sync_runs row for the tenant (exit 1); the next cycle retries
 
 import { pathToFileURL } from 'node:url';
+import { resolveBusinessProfile } from '../metrics/profile.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
 import { syncCatalog } from './catalog.js';
 import { syncInventory } from './inventory.js';
@@ -71,10 +72,9 @@ export async function runSync({
     }
 
     if (mode === 'inventory' || mode === 'all') {
-      // Merchant-local timezone for the one-snapshot-per-day rule. This is
-      // merchant config, not architecture - HABB's value goes in .env, never
-      // hardcoded here. Defaults to UTC for any merchant that hasn't set one.
-      const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
+      // Merchant-local timezone for the one-snapshot-per-day rule: from the Business Profile (or the explicit MERCHANT_TIMEZONE fallback).
+      // There is NO default: an unconfigured merchant fails closed instead of silently snapshotting on UTC days.
+      const timeZone = (await resolveBusinessProfile({ supabase: db, merchantId, env })).timezone;
       const summary = await syncInventory({ shopify, supabase: db }, { merchantId, timeZone });
       log('inventory sync summary:', JSON.stringify(summary, null, 2));
       record('inventory', summary);

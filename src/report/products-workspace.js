@@ -23,6 +23,7 @@
 // (best seller, weak product, at risk, to delete...).
 
 import { createHash } from 'node:crypto';
+import { requireTimeZone } from '../metrics/profile.js';
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
 import { dayBucketsOfWindow, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
@@ -43,7 +44,7 @@ export function productIdOf(key) {
 export function buildProductsWorkspace({ ledger, data, windows, now, config, timeZone }) {
   const win = windows.last_30_days;
   const prevWin = previousEquivalentWindow(win);
-  const tz = timeZone || win.timeZone || 'UTC';
+  const tz = requireTimeZone(timeZone || win.timeZone, 'products workspace');
   const catalogue = new Map(data.products.map((p) => [p.id, p]));
   const rawOrder = new Map(data.orders.map((o) => [o.id, o]));
 

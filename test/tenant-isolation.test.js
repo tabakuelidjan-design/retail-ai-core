@@ -243,7 +243,7 @@ test('Wizard: buildSetupReport for merchant A only reports merchant A\'s facts (
   const testNow = new Date(Date.now() + 1000); // strictly after any just-inserted timestamp - window.end is exclusive (see windows.js)
   const dataA = await loadDataset(supabase, merchantA, { since: new Date(0) });
   const ledgerA = buildLedger(dataA, { config: CONFIG });
-  const reportA = buildSetupReport({ ledger: ledgerA, data: dataA, enrichment: null, company: null, now: testNow, config: CONFIG });
+  const reportA = buildSetupReport({ ledger: ledgerA, data: dataA, enrichment: null, company: null, now: testNow, timeZone: 'UTC', config: CONFIG });
 
   assert.equal(reportA.checks.find((c) => c.id === 'missing_cost').count, 0, 'must not see B\'s missing cost');
   assert.equal(reportA.checks.find((c) => c.id === 'missing_sku').count, 0, 'must not see B\'s missing SKU');
@@ -403,7 +403,7 @@ test('CLI tools: customer and marketing facts for merchant A never contain merch
   const { runCustomerFacts } = await import('../src/customers/index.js');
   const { runMarketingReport } = await import('../src/marketing/index.js');
   const { supabase, merchantA } = await seedTwoMerchants(createFakeSupabase());
-  const env = { NORDLA_MERCHANT_ID: merchantA };
+  const env = { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: merchantA };
   const c = await runCustomerFacts({ env, supabase, outDir: await mkdtemp(path.join(tmpdir(), 'iso-cli-')), log: () => {} });
   const m = await runMarketingReport({ env, supabase, outDir: await mkdtemp(path.join(tmpdir(), 'iso-cli-')), log: () => {}, coverage: async () => null });
   for (const file of [c.file, m.file]) {

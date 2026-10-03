@@ -35,7 +35,7 @@ test('inventory sync writes one snapshot per tracked variant on first run', asyn
   const supabase = createFakeSupabase();
   const merchantId = await seedCatalog(supabase);
 
-  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-01T08:00:00Z') });
+  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-01T08:00:00Z') });
 
   assert.equal(summary.snapshotsWritten, 3); // 3 variants in the fixture, all have an inventory level
   assert.equal(supabase._tables.get('inventory_snapshots').length, 3);
@@ -45,8 +45,8 @@ test('inventory sync: a same-day retry does not distort history (0 new rows)', a
   const supabase = createFakeSupabase();
   const merchantId = await seedCatalog(supabase);
 
-  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-01T08:00:00Z') });
-  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-01T20:00:00Z') });
+  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-01T08:00:00Z') });
+  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-01T20:00:00Z') });
 
   assert.equal(summary.snapshotsWritten, 0);
   assert.equal(summary.snapshotsSkippedSameDay, 3);
@@ -57,8 +57,8 @@ test('inventory sync: a run on the next UTC day writes a fresh snapshot', async 
   const supabase = createFakeSupabase();
   const merchantId = await seedCatalog(supabase);
 
-  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-01T08:00:00Z') });
-  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-02T08:00:00Z') });
+  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-01T08:00:00Z') });
+  const summary = await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-02T08:00:00Z') });
 
   assert.equal(summary.snapshotsWritten, 3);
   assert.equal(supabase._tables.get('inventory_snapshots').length, 6);
@@ -67,7 +67,7 @@ test('inventory sync: a run on the next UTC day writes a fresh snapshot', async 
 test('zero stock is recorded as quantity 0, not skipped or treated as missing', async () => {
   const supabase = createFakeSupabase();
   const merchantId = await seedCatalog(supabase);
-  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, now: new Date('2026-01-01T08:00:00Z') });
+  await syncInventory({ shopify: fakeShopify(), supabase }, { merchantId, timeZone: 'UTC', now: new Date('2026-01-01T08:00:00Z') });
 
   const [variant3] = await supabase.select('variants', { select: 'id', source_id: 'eq.gid://shopify/ProductVariant/3' });
   const snapshot = supabase._tables.get('inventory_snapshots').find((s) => s.variant_id === variant3.id);

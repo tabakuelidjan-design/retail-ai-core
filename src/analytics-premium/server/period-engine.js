@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { servesTenant } from './tenant.js';
 import { buildLedger } from '../../metrics/ledger.js';
 import { mergeConfig } from '../../metrics/config.js';
+import { applyProfileToConfig, isIanaTimeZone, requireTimeZone } from '../../metrics/profile.js';
 import { addDays, buildWindows, dayBucketsOfWindow, localDateString, localMidnight, previousEquivalentWindow } from '../../metrics/windows.js';
 import { computeSalesMetrics } from '../../metrics/sales.js';
 import { buildExplorer } from '../../report/explorer.js';
@@ -34,7 +35,7 @@ const mondayOf = (d) => { const t = new Date(`${d}T00:00:00Z`); return new Date(
  *   previous_month the whole previous calendar month
  *   custom        from..to inclusive, real dates, from <= to, to not in the future, at most MAX_SPAN_DAYS days
  */
-export function resolvePeriod({ period, from, to, days: nDays } = {}, { now = new Date(), timeZone = 'UTC' } = {}) {
+export function resolvePeriod({ period, from, to, days: nDays } = {}, { now = new Date(), timeZone } = {}) {
   const key = period || 'last_30_days';
   if (!PERIODS.includes(key)) return { ok: false, code: 'INVALID_PERIOD' };
   const today = localDateString(now, timeZone);
@@ -72,18 +73,21 @@ async function loadSnapshot(reportsDir) {
   if (cache.file === file && cache.mtime === st.mtimeMs && cache.snapshot) return servesTenant(reportsDir, cache.snapshot) ? cache : null;
   let snapshot; try { snapshot = JSON.parse(await readFile(file, 'utf8')); } catch { return null; }
   if (!snapshot?.data?.orders) return null;
+  // A snapshot without a valid merchant time zone (written before the zone was mandatory) is never served and never read on an assumed UTC day:
+  // it counts as unavailable, which triggers a rebuild that itself fails closed when no zone is configured.
+  if (!isIanaTimeZone(snapshot.time_zone)) return null;
   if (!servesTenant(reportsDir, snapshot)) return null; // a file of another merchant (or unstamped) is never served
-  const config = mergeConfig();
-  const ledger = buildLedger(snapshot.data, { config });
+  const config = applyProfileToConfig(mergeConfig(), snapshot.business_profile ?? null);
+  const ledger = buildLedger(snapshot.data, { config, currency: snapshot.currency ?? undefined });
   const firstOrder = snapshot.data.firstOrderAt ?? (ledger.orders.length ? new Date(Math.min(...ledger.orders.map((o) => o.orderedAt))).toISOString() : null);
-  Object.assign(cache, { file, mtime: st.mtimeMs, snapshot, ledger, config, historyStart: firstOrder ? localDateString(new Date(firstOrder), snapshot.time_zone ?? 'UTC') : null, results: new Map() });
+  Object.assign(cache, { file, mtime: st.mtimeMs, snapshot, ledger, config, historyStart: firstOrder ? localDateString(new Date(firstOrder), requireTimeZone(snapshot.time_zone, 'dataset snapshot')) : null, results: new Map() });
   return cache;
 }
 
 /** The report-shaped object the existing read layers (explorer.js / products.js / customers.js) already understand, for one period. */
 function buildForPeriod(c, r, now) {
   const { snapshot, ledger, config, historyStart } = c;
-  const tz = snapshot.time_zone ?? 'UTC';
+  const tz = requireTimeZone(snapshot.time_zone, 'dataset snapshot');
   const win = { key: 'last_30_days', label: r.key, timeZone: tz, start: localMidnight(r.localStart, tz), end: localMidnight(r.localEnd, tz), localStart: r.localStart, localEnd: r.localEnd, historyStart };
   const historyDays = historyStart ? Math.max(60, daysBetween(historyStart, localDateString(now, tz)) + 2) : 60;
   const windows = { ...buildWindows(now, tz, { availableDays: historyDays, historyStart }), last_30_days: win };
@@ -110,7 +114,7 @@ function buildForPeriod(c, r, now) {
 export async function periodReport(reportsDir, query, { now = new Date() } = {}) {
   const c = await loadSnapshot(reportsDir);
   if (!c) return { ok: false, status: 404, code: 'DATASET_UNAVAILABLE' };
-  const r = resolvePeriod(query, { now, timeZone: c.snapshot.time_zone ?? 'UTC' });
+  const r = resolvePeriod(query, { now, timeZone: requireTimeZone(c.snapshot.time_zone, 'dataset snapshot') });
   if (!r.ok) return { ok: false, status: r.code === 'PERIOD_TOO_LONG' || r.code === 'PERIOD_IN_FUTURE' ? 422 : 400, code: r.code };
   const k = `${r.localStart}|${r.localEnd}|${r.includesToday ? localDateString(now, r.timeZone) : ''}`;
   if (!cache.results.has(k)) {

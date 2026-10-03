@@ -9,6 +9,7 @@
 //  - Categories are the catalogue's own `product_type`; an empty type is reported as name = null ("uncategorised").
 
 import { aggregate, aggregateShipping, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
+import { requireTimeZone } from '../metrics/profile.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
 import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 
@@ -399,7 +400,7 @@ const TIME_BUCKETS = [
 ];
 
 function localHour(date, timeZone) {
-  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: timeZone || 'UTC', hour: '2-digit', hourCycle: 'h23' }).format(date));
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: requireTimeZone(timeZone, 'explorer'), hour: '2-digit', hourCycle: 'h23' }).format(date));
 }
 
 function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, lineById }) {
@@ -446,7 +447,8 @@ function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, line
   const { orders, lines, refunds } = windowFacts(ledger, win);
   const bucketOfOrder = new Map();
   const slots = new Map(TIME_BUCKETS.map((b) => [b.key, { lines: [], refunds: [], orders: 0 }]));
-  for (const o of orders) {
+  // No time zone given = time of day is UNAVAILABLE (reported as such); it is never computed on an assumed UTC day.
+  for (const o of timeZone ? orders : []) {
     const at = new Date(o.orderedAt);
     if (Number.isNaN(at.getTime())) continue;
     const h = localHour(at, timeZone);
@@ -458,7 +460,8 @@ function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, line
   for (const r of refunds) { const ln = lineById.get(r.orderLineId); const k = ln ? bucketOfOrder.get(ln.orderId) : null; if (k) slots.get(k).refunds.push(r); }
   const timed = [...bucketOfOrder.keys()].length;
   const time_of_day = {
-    time_zone: timeZone || 'UTC',
+    time_zone: timeZone ? requireTimeZone(timeZone, 'explorer') : null,
+    ...(timeZone ? {} : { available: false, reason: 'TIMEZONE_NOT_PROVIDED' }),
     timed_orders: timed,
     total_orders: orders.length,
     buckets: TIME_BUCKETS.map((b) => ({ key: b.key, from_hour: b.from, to_hour: b.to, order_count: slots.get(b.key).orders, net_sales_ex_tax: aggregate(slots.get(b.key).lines, slots.get(b.key).refunds, config).net_sales_ex_tax })),

@@ -17,6 +17,7 @@
 // Deliberately absent (no approved definition in Nordla): loyalty, risk, churn, dormancy, CLV / predicted value, cohorts.
 
 import { aggregate, windowFacts } from '../metrics/sales.js';
+import { requireTimeZone } from '../metrics/profile.js';
 import { productKeyOf } from '../metrics/products.js';
 import { inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
 import { classifyCustomerOrders } from './explorer.js';
@@ -48,7 +49,7 @@ export function buildCustomersWorkspace({ ledger, data, windows, now, config, ti
   const win = windows.last_30_days;
   const prevWin = previousEquivalentWindow(win);
   const hist = windows.available_window;
-  const tz = timeZone || win.timeZone || 'UTC';
+  const tz = requireTimeZone(timeZone || win.timeZone, 'customers workspace');
   const rawOrder = new Map(data.orders.map((o) => [o.id, o]));
   const keyOf = (orderId) => rawOrder.get(orderId)?.customer_key || null;
   const idxOf = (raw) => (raw?.journey_ready === true && Number.isFinite(Number(raw.customer_order_index)) ? Number(raw.customer_order_index) : null);

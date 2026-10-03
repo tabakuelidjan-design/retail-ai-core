@@ -17,6 +17,7 @@
 //   analyzeDimension(ledger, enrichment, { dimension: 'variant', window, filter: { productId: '<the chosen product>' } })
 
 import { HIERARCHY_VERSION } from './config.js';
+import { requireTimeZone } from './profile.js';
 import { buildProductPerformance, productKeyOf, stockValue } from './products.js';
 import { aggregate } from './sales.js';
 import { buildMonthBuckets, inWindow, previousEquivalentWindow } from './windows.js';
@@ -128,7 +129,8 @@ function productBreakdownForNode(ledger, window, now, nodeProductKeys, topN) {
  * @param {{dimension: string, window: object, filter?: object|null, now?: Date, timeZone?: string, config?: object}} opts
  */
 export function analyzeDimension(ledger, enrichment, opts) {
-  const { dimension, window, filter = null, now = new Date(), timeZone = 'UTC' } = opts;
+  const { dimension, window, filter = null, now = new Date(), timeZone } = opts;
+  requireTimeZone(timeZone, 'hierarchy');
   if (!DIMENSIONS.includes(dimension)) throw new Error(`unknown dimension: ${dimension}`);
   const cfg = { ...DEFAULT_HIERARCHY_CONFIG, ...(ledger.config?.hierarchy ?? {}), ...(opts.config ?? {}) };
   const label = buildLabelIndex(ledger, enrichment);

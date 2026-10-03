@@ -8,6 +8,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { buildDemandFacts } from '../demand/build.js';
+import { resolveBusinessProfile } from '../metrics/profile.js';
 import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
@@ -35,11 +36,11 @@ export function parseArgs(argv, valueFlags = ['policy', 'stock-verification']) {
 }
 
 export async function loadBuyingContext({ policyPath = DEFAULT_PATHS.policy, verificationPath = DEFAULT_PATHS.verification, env = process.env, supabase: injectedSupabase = null, createClient = null, now = new Date(), log = console.error } = {}) {
-  const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
   const policy = existsSync(policyPath) ? await readJson(policyPath) : {};
   const config = mergeConfig(policy);
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveToolTenant({ env, supabase, tool: 'buying', log, createClient });
+  const timeZone = (await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env })).timezone;
 
   const windows = buildWindows(now, timeZone);
   const data = await loadDataset(supabase, tenant.merchantId, { since: windows.available_window.start });

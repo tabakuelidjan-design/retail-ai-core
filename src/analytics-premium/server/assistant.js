@@ -10,6 +10,7 @@
 // explanation status is honestly NOT_CONFIGURED (or UNKNOWN_PROVIDER when a name is set that has no adapter).
 
 import { readdir, readFile } from 'node:fs/promises';
+import { requireTimeZone } from '../../metrics/profile.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { servesTenant } from './tenant.js';
@@ -142,7 +143,7 @@ export function createAssistant({ reportsDir, provider = null, providerStatus = 
     const rep = { file: report.__file ?? String(report.generated_at ?? '').slice(0, 10), report };
     const pi = rep.report.period_info;
     const w = rep.report.sales[periodKey].window;
-    const tz = w?.timeZone ?? rep.report.merchant_timezone ?? 'UTC';
+    const tz = requireTimeZone(w?.timeZone ?? rep.report.merchant_timezone, 'ask');
     const period = pi ? { key: pi.key, start: pi.start, end: pi.end, days: pi.days, timeZone: pi.timeZone } : w ? { key: periodKey, start: localDateString(new Date(w.start), tz), end: localDateString(dayBefore(w.end), tz), timeZone: tz } : { key: periodKey };
     const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? 'EUR', sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
 

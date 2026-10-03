@@ -1,8 +1,10 @@
 // Merchant-timezone-aware reporting windows. The timezone is always a
 // parameter (merchant config); nothing here knows any specific merchant's zone.
 // Every window is a half-open interval [start, end) of UTC instants.
+import { requireTimeZone } from './profile.js';
 
 export function localDateString(instant, timeZone) {
+  requireTimeZone(timeZone, 'localDateString');
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
 }
 
@@ -23,6 +25,7 @@ function offsetMs(instant, timeZone) {
 
 /** The UTC instant at which local calendar date `dateStr` starts (00:00) in `timeZone`. DST-safe. */
 export function localMidnight(dateStr, timeZone) {
+  requireTimeZone(timeZone, 'localMidnight');
   const [y, m, d] = dateStr.split('-').map(Number);
   const guess = Date.UTC(y, m - 1, d);
   const first = guess - offsetMs(new Date(guess), timeZone);

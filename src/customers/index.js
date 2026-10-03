@@ -12,17 +12,18 @@ import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { buildWindows } from '../metrics/windows.js';
+import { resolveBusinessProfile } from '../metrics/profile.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
 import { resolveToolTenant } from '../tenant/tool-context.js';
 import { buildCustomerFacts } from './facts.js';
 
 export async function runCustomerFacts({ argv = [], env = process.env, supabase: injectedSupabase = null, now = new Date(), outDir = 'reports', log = console.log, createClient = null } = {}) {
-  const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
   const i = argv.indexOf('--policy');
   const policyPath = i > -1 ? argv[i + 1] : 'data/local/marketing-policy.json';
   const config = mergeConfig(existsSync(policyPath) ? JSON.parse(await readFile(policyPath, 'utf8')) : {});
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveToolTenant({ env, supabase, tool: 'customers', log: (l) => log(l), createClient });
+  const timeZone = (await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env })).timezone;
   const windows = buildWindows(now, timeZone);
   const data = await loadDataset(supabase, tenant.merchantId, { since: windows.available_window.start });
   const facts = buildCustomerFacts({ ledger: buildLedger(data, { config }), data, now, config });
