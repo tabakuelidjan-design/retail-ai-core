@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { vcsGenerate, vcsCanonicalize, vcsValid, vcsFormat, vcsForInvoiceNumber, determineInvoiceRoute, routingContextOf, RULES, ROUTES, STRUCTURED_ROUTES } from '../src/finance/belgium-compliance.js';
 import { structuredCommunication, PDF_RENDERER_VERSION } from '../src/finance/pdf.js';
 import { readPdfText } from '../src/finance/pdf-text.js';
+import { structuredInvariants } from '../src/finance/legal-artifacts.js';
 import { buildUbl, validatePeppolReadiness, CUSTOMIZATION_ID, PROFILE_ID, MAX_ATTACHMENT_BYTES, safeFileName } from '../src/finance/peppol.js';
 import { validateStructured, parseSvrl, CURRENT_PEPPOL_VERSION, PEPPOL_RULESETS, rulesetFor, artifactsFor } from '../src/finance/peppol-validation.js';
 import { legalWorld, MERCHANT_ACTOR, CUSTOMER, LINES, VAT_OK } from './finance-legal-helpers.js';
@@ -122,7 +123,7 @@ test('G / H / I. ISSUE ARCHIVE: the exact PDF bytes and their hash are recoverab
   const xml = s.data.toString('utf8'); const cents = (n) => (n / 100).toFixed(2); const pay = doc.totals.grossCents + (doc.totals.roundingCents ?? 0);
   assert.ok(xml.includes(`<cbc:ID>${doc.number}</cbc:ID>`) && xml.includes(`TaxInclusiveAmount currencyID="EUR">${cents(doc.totals.grossCents)}<`) && xml.includes(`PayableAmount currencyID="EUR">${cents(pay)}<`) && xml.includes(`<cac:TaxTotal><cbc:TaxAmount currencyID="EUR">${cents(doc.totals.vatCents)}<`));
   for (const g of doc.totals.vatBreakdown) assert.ok(xml.includes(`TaxableAmount currencyID="EUR">${cents(g.taxableCents)}<`) && xml.includes(`<cbc:Percent>${(g.vatRateBp / 100).toFixed(2)}</cbc:Percent>`));
-  const printed = vcsFormat(comp.paymentReference); assert.equal(comp.paymentReference, vcsForInvoiceNumber(doc.number)); assert.ok(xml.includes(`<cbc:PaymentID>${printed}</cbc:PaymentID>`)); assert.equal(comp.structured.provenance.paymentReference, comp.paymentReference);
+  const printed = vcsFormat(comp.paymentReference); assert.equal(comp.paymentReference, vcsForInvoiceNumber(doc.number)); assert.ok(xml.includes(`<cbc:PaymentID>${comp.paymentReference}</cbc:PaymentID>`)); assert.equal(comp.structured.provenance.paymentReference, comp.paymentReference);
   const text = (await readPdfText(o.data)).pages.flatMap((p) => p.lines.map((l) => l.text)).join(' '); assert.ok(text.replace(/\s+/g, '').includes(printed.replace(/\s+/g, '')), `the reference printed in the PDF is the stored one: ${printed}`); assert.ok(text.includes(doc.number));
   assert.equal(comp.routing.route, 'PEPPOL_REQUIRED'); const ev = (await w.store.listEventsForMerchant({ merchantId: w.merchantId, limit: 100 })).map((e) => e.action); for (const a of ['ARTIFACT_ARCHIVED', 'COMPLIANCE_VALIDATED', 'ISSUE_COMPLIANCE_RECORDED']) assert.ok(ev.includes(a), a);
   const again = await w.legal.archiveIssued(doc, { atIssue: true }); assert.equal(again.duplicate, true); assert.equal((await w.store.listArtifacts({ merchantId: w.merchantId, documentId: doc.id })).length, 2, 'archiving twice stores nothing twice (an original never changes)');
@@ -160,4 +161,21 @@ test('K. an invoice whose structured document fails the official validation is n
   await assert.rejects(() => w.peppol.queue(doc, { actor: MERCHANT_ACTOR }), (e) => e.code === 'PEPPOL_NOT_READY' && e.errors.includes('BR-FAKE'));
   const msgs = await w.store.listPeppolMessages({ merchantId: w.merchantId, documentId: doc.id }); assert.deepEqual(msgs.map((m) => m.state), ['VALIDATION_FAILED']); assert.equal(w.provider.calls.submit, 0); const dispatch = await w.peppol.dispatch(msgs[0].id); assert.deepEqual([dispatch.state, dispatch.sent], ['VALIDATION_FAILED', false]);
   await assert.rejects(() => w.store.transitionPeppol({ merchantId: w.merchantId, id: msgs[0].id, from: ['VALIDATION_FAILED'], to: 'QUEUED' }), (e) => e.code === 'PEPPOL_INVALID_TRANSITION');
+});
+
+// ===================================================== BT-83 (Payment identifier) - final verification
+// Official sources read on 2026-10-03: (1) Peppol BIS Billing 3.0.21, cbc:PaymentID = BT-83 "Payment identifier": "A textual value used to establish a link between the payment and the Invoice,
+// issued by the Seller", cardinality 0..1, type Text, its examples are plain values (432948234234234, 93274234, payref2); it carries the "Remittance information" of a credit transfer. The BIS
+// states NO Belgian-specific format. (2) Febelfin / EPC "AOS1 OGM-VCS" (27/7/2017): "Electronic: 12 digits (010806817183); Visual: +++ 3 digits / 4 digits / 5 digits +++"; in SEPA electronic
+// messages the structured creditor reference <CdtrRefInf> (Tp SCOR, Issr BBA) carries "Reference: 12 digits". DECISION: BT-83 is the machine channel that feeds the buyer's payment instruction,
+// so it carries the ELECTRONIC form (12 canonical digits); the human PDF keeps the visual +++xxx/xxxx/xxxxx+++ form; the stored canonical value is the same everywhere.
+test('BT-83: the UBL payment identifier carries the Febelfin ELECTRONIC form (12 canonical digits), the PDF the visual form, the stored reference is the canonical one', async () => {
+  const w = legalWorld(); const inv = await w.issue({}); const doc = await w.store.getDocument(inv.id); const comp = await w.legal.compliance(doc.id); const xml = (await w.legal.structuredOriginal(doc.id)).data.toString('utf8');
+  assert.match(comp.paymentReference, /^\d{12}$/); assert.ok(vcsValid(comp.paymentReference));
+  assert.ok(xml.includes(`<cbc:PaymentID>${comp.paymentReference}</cbc:PaymentID>`), 'BT-83 = 12 electronic digits'); assert.ok(!xml.includes('+++'), 'no visual form in the structured document');
+  const text = (await readPdfText((await w.legal.originalPdf(doc.id)).data)).pages.flatMap((p) => p.lines.map((l) => l.text)).join(' '); assert.ok(text.replace(/\s+/g, '').includes(vcsFormat(comp.paymentReference)), 'the human PDF prints the visual form of the same number');
+  assert.equal(comp.structured.provenance.paymentReference, comp.paymentReference); assert.ok(RULES.some((r) => r.id === 'PEPPOL-BT83-PAYMENT-ID' && r.url.startsWith('https://docs.peppol.eu/')) && RULES.some((r) => r.id === 'FEBELFIN-OGM-VCS'));
+  // a UBL whose BT-83 is not the stored reference is refused by the Nordla invariant
+  const bad = xml.replace(`<cbc:PaymentID>${comp.paymentReference}</cbc:PaymentID>`, '<cbc:PaymentID>+++000/0000/00000+++</cbc:PaymentID>');
+  assert.equal(structuredInvariants(doc, Buffer.from(bad), { paymentReference: comp.paymentReference }).find((i) => i.id === 'NORDLA-SNAPSHOT-PAYMENT-REFERENCE').ok, false); assert.ok(structuredInvariants(doc, Buffer.from(xml), { paymentReference: comp.paymentReference }).every((i) => i.ok));
 });

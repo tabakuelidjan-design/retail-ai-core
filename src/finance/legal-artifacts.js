@@ -91,11 +91,11 @@ export function createLegalArtifacts({ store, merchantId, storage, clock, render
       const existing = (await store.listArtifacts({ merchantId, documentId: doc.id, kind: 'STRUCTURED_ORIGINAL' }))[0]; if (existing) return { structured: existing, validation: existing.provenance?.validation ?? null, duplicate: true, route: existing.provenance?.routing ?? route };
       route ??= await api.routeOf(doc); if (reference === null && doc.type === 'invoice') { reference = vcsForInvoiceNumber(doc.number); } if (printed === null && reference) printed = vcsFormat(reference);
       const at = clock.now(); let structured = null; let validation = null;
-      const opts = { originalNumber, defaultBuyerReference, paymentReference: printed, attachments };
+      const opts = { originalNumber, defaultBuyerReference, paymentReference: reference, attachments }; // BT-83 = Febelfin ELECTRONIC form (12 digits); the printed +++...+++ form is for the human PDF only
       const readiness = validatePeppolReadiness(doc, opts);
       if (readiness.length) { validation = { ok: false, stage: 'READINESS', errors: readiness, at }; await event(doc, 'COMPLIANCE_FAILED', { stage: 'READINESS', errors: readiness }, actor ?? undefined); return { structured, validation, duplicate: false, route }; }
       const xml = Buffer.from(buildUbl(doc, opts), 'utf8');
-      const result = await validate(xml, { version: peppolVersion, at, expectedType: doc.type === 'credit_note' ? 'CreditNote' : 'Invoice', invariants: structuredInvariants(doc, xml) });
+      const result = await validate(xml, { version: peppolVersion, at, expectedType: doc.type === 'credit_note' ? 'CreditNote' : 'Invoice', invariants: structuredInvariants(doc, xml, { paymentReference: reference }) });
       validation = summarize(result);
       if (!result.ok) { await event(doc, 'COMPLIANCE_FAILED', { stage: 'VALIDATION', bis: peppolVersion, fatal: validation.fatal, firstRules: validation.findings.slice(0, 5).map((f) => f.ruleId), documentSha256: result.documentSha256 }, actor ?? undefined); return { structured, validation, duplicate: false, route }; }
       const sref = await putBytes(doc.id, 'ubl', xml); const rs = rulesetFor(peppolVersion);
@@ -119,11 +119,13 @@ export function createLegalArtifacts({ store, merchantId, storage, clock, render
 }
 
 /** Nordla business invariants on the structured document (NOT Peppol rules): the amounts in the XML are exactly the issue snapshot's. */
-export function structuredInvariants(doc, xml) {
+export function structuredInvariants(doc, xml, { paymentReference = null } = {}) {
   const text = xml.toString('utf8'); const cents = (n) => (n / 100).toFixed(2);
   const has = (tag, value) => new RegExp(`<cbc:${tag}[^>]*>${value}</cbc:${tag}>`).test(text);
   const payable = doc.totals.grossCents + (doc.totals.roundingCents ?? 0);
+  const ref = paymentReference && doc.type !== 'credit_note' ? [{ id: 'NORDLA-SNAPSHOT-PAYMENT-REFERENCE', ok: has('PaymentID', paymentReference), message: 'BT-83 differs from the stored structured payment reference' }] : [];
   return [
+    ...ref,
     { id: 'NORDLA-SNAPSHOT-NUMBER', ok: has('ID', doc.number.replace(/&/g, '&amp;')), message: 'document number differs from the issue snapshot' },
     { id: 'NORDLA-SNAPSHOT-NET', ok: has('LineExtensionAmount currencyID="' + doc.currency + '"', cents(doc.totals.netCents)) || new RegExp(`LineExtensionAmount currencyID="${doc.currency}">${cents(doc.totals.netCents)}<`).test(text), message: 'net total differs from the issue snapshot' },
     { id: 'NORDLA-SNAPSHOT-GROSS', ok: new RegExp(`TaxInclusiveAmount currencyID="${doc.currency}">${cents(doc.totals.grossCents)}<`).test(text), message: 'gross total differs from the issue snapshot' },

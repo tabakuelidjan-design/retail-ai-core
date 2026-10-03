@@ -91,8 +91,8 @@ export function buildAccountantExport(i) {
   const pdfStatusOf = (kind, id) => artifacts[kind]?.get(id)?.status ?? 'MISSING';
   const compliance = i.compliance ?? new Map();
   const structuredStatus = (doc) => { const a = artifacts.structured?.get(doc.id); if (a) return a.status; const c = compliance.get(doc.id); return c && STRUCTURED_ROUTES.includes(c.route) ? 'MISSING' : c ? 'NOT_REQUIRED' : 'UNKNOWN'; };
-  const pdfMissing = (type, doc, kind) => { const st = pdfStatusOf(kind, doc.id); if (st !== 'ARCHIVED_ORIGINAL') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'PDF_ARCHIVED_ORIGINAL', status: 'MISSING', reason: 'NOT_ARCHIVED_AT_ISSUANCE', alternative_provided: st === 'REGENERATED_COPY' ? 'REGENERATED_COPY' : 'NONE' }); };
-  const structuredMissing = (type, doc) => { if (structuredStatus(doc) === 'MISSING') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'STRUCTURED_ORIGINAL', status: 'MISSING', reason: compliance.get(doc.id)?.validationOk === false ? 'VALIDATION_FAILED' : 'NOT_PRODUCED', alternative_provided: 'NONE' }); };
+  const pdfMissing = (type, doc, kind) => { const st = pdfStatusOf(kind, doc.id); if (st !== 'ARCHIVED_ORIGINAL') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'PDF_ARCHIVED_ORIGINAL', status: 'MISSING', reason: artifacts[kind]?.get(doc.id)?.reason ?? 'NOT_ARCHIVED_AT_ISSUANCE', alternative_provided: st === 'REGENERATED_COPY' ? 'REGENERATED_COPY' : 'NONE' }); };
+  const structuredMissing = (type, doc) => { if (structuredStatus(doc) === 'MISSING') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'STRUCTURED_ORIGINAL', status: 'MISSING', reason: artifacts.structured?.get(doc.id)?.reason ?? (compliance.get(doc.id)?.validationOk === false ? 'VALIDATION_FAILED' : 'NOT_PRODUCED'), alternative_provided: 'NONE' }); };
   const ref = (doc) => { const c = compliance.get(doc.id); return { payment_reference: c?.paymentReference ?? '', routing: c?.route ?? '' }; };
   const integrityBad = [];
 

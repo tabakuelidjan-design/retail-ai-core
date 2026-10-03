@@ -33,16 +33,24 @@ export function createAccountantExportService({ store, merchantId, finance, inbo
     const byDoc = new Map(); for (const a of f.legalArtifacts ?? []) if (a.documentId) (byDoc.get(a.documentId) ?? byDoc.set(a.documentId, []).get(a.documentId)).push(a);
     const messageOfSupplier = new Map((f.peppolMessages ?? []).filter((m) => m.direction === 'IN' && m.supplierInvoiceId && m.state !== 'DUPLICATE').map((m) => [m.supplierInvoiceId, m]));
     const inboundOf = new Map((f.legalArtifacts ?? []).filter((a) => a.kind === 'INBOUND_ORIGINAL').map((a) => [a.peppolMessageId, a]));
-    const read = async (a) => { if (!includeDocuments || !storage) return null; const file = await storage.get(a.storageRef).catch(() => null); return file && createHash('sha256').update(file.data).digest('hex') === a.sha256 ? file.data : null; };
+    // With documents requested, the stored bytes are READ BACK and hash-verified: an original that cannot be read or does not match its recorded SHA-256 is reported MISSING with the reason, never claimed as archived. (Preview stays metadata-only.)
+    const entry = async (a, extra = {}) => {
+      const base = { fileName: a.fileName, sha256: a.sha256, ...extra };
+      if (!includeDocuments || !storage) return { status: 'ARCHIVED_ORIGINAL', data: null, ...base };
+      const file = await storage.get(a.storageRef).catch(() => null);
+      if (!file) return { status: 'MISSING', reason: 'ARTIFACT_BYTES_NOT_FOUND', data: null, ...base };
+      if (createHash('sha256').update(file.data).digest('hex') !== a.sha256) return { status: 'MISSING', reason: 'ARTIFACT_HASH_MISMATCH', data: null, ...base };
+      return { status: 'ARCHIVED_ORIGINAL', data: file.data, ...base };
+    };
     for (const x of f.documents) {
       const { doc } = x; if (!doc.lockedAt || !['invoice', 'credit_note'].includes(doc.type) || !inRange(doc.issueDate, period.start, period.end)) continue;
       const arts = byDoc.get(doc.id) ?? []; const pdf = arts.find((a) => a.kind === 'PDF_ORIGINAL'); const st = arts.find((a) => a.kind === 'STRUCTURED_ORIGINAL'); const kind = doc.type === 'invoice' ? 'sales' : 'credit_notes';
-      if (pdf) { out[kind].set(doc.id, { status: 'ARCHIVED_ORIGINAL', data: await read(pdf), fileName: pdf.fileName, sha256: pdf.sha256 }); compliance.set(doc.id, { route: pdf.provenance?.routing?.route ?? null, paymentReference: pdf.paymentReference, validationOk: st ? true : null }); }
-      if (st) { out.structured.set(doc.id, { status: 'ARCHIVED_ORIGINAL', data: await read(st), fileName: st.fileName, sha256: st.sha256 }); if (!pdf) compliance.set(doc.id, { route: st.provenance?.routing?.route ?? null, paymentReference: st.provenance?.paymentReference ?? null, validationOk: true }); }
+      if (pdf) { out[kind].set(doc.id, await entry(pdf)); compliance.set(doc.id, { route: pdf.provenance?.routing?.route ?? null, paymentReference: pdf.paymentReference, validationOk: st ? true : null }); }
+      if (st) { out.structured.set(doc.id, await entry(st)); if (!pdf) compliance.set(doc.id, { route: st.provenance?.routing?.route ?? null, paymentReference: st.provenance?.paymentReference ?? null, validationOk: true }); }
       if (!pdf && includeDocuments && renderPdf) { const data = await renderPdf(doc, x); const name = documentFileName({ date: doc.issueDate, party: doc.customer?.name, number: doc.number, grossCents: doc.totals?.grossCents, currency: doc.currency, ext: 'pdf' }).replace(/\.pdf$/, '_REGENERATED-COPY.pdf'); out[kind].set(doc.id, { status: 'REGENERATED_COPY', data, fileName: name }); }
     }
-    for (const r of f.suppliers) { const m = messageOfSupplier.get(r.id); const a = m ? inboundOf.get(m.id) : null; if (a && inRange(r.issueDate, period.start, period.end)) { out.inbound.set(r.id, { status: 'ARCHIVED_ORIGINAL', data: await read(a), fileName: `${r.id.slice(0, 8)}_${a.fileName}`, sha256: a.sha256, messageId: m.id });
-      for (const att of (f.legalArtifacts ?? []).filter((x) => x.kind === 'ATTACHMENT' && x.peppolMessageId === m.id)) out.extra.push({ status: 'ARCHIVED_ORIGINAL', data: await read(att), fileName: `${r.id.slice(0, 8)}_${att.fileName}`, sha256: att.sha256, sourceId: r.id }); } }
+    for (const r of f.suppliers) { const m = messageOfSupplier.get(r.id); const a = m ? inboundOf.get(m.id) : null; if (a && inRange(r.issueDate, period.start, period.end)) { out.inbound.set(r.id, await entry(a, { fileName: `${r.id.slice(0, 8)}_${a.fileName}`, messageId: m.id }));
+      for (const att of (f.legalArtifacts ?? []).filter((x) => x.kind === 'ATTACHMENT' && x.peppolMessageId === m.id)) out.extra.push(await entry(att, { fileName: `${r.id.slice(0, 8)}_${att.fileName}`, sourceId: r.id })); } }
     out.compliance = compliance; if (!includeDocuments) return out;
     if (attachments) {
       const rows = f.suppliers.filter((r) => r.attachmentRef && !out.inbound.has(r.id) && inRange(r.issueDate, period.start, period.end));
