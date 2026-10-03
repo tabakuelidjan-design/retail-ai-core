@@ -610,5 +610,107 @@
   -500000,
   false,
   3
+ ],
+ "accountant export: package content from real store facts (invoices, payments, supplier, bank, cash)": [
+  {
+   "sales.csv": 1,
+   "credit-notes.csv": 0,
+   "purchases.csv": 1,
+   "payments.csv": 3,
+   "payment-allocations.csv": 2,
+   "refunds-reversals.csv": 0,
+   "bank-accounts.csv": 1,
+   "bank-transactions.csv": 2,
+   "bank-reconciliations.csv": 1,
+   "cash.csv": 2,
+   "vat-summary.csv": 3,
+   "missing-artifacts.csv": 2
+  },
+  [
+   [
+    "INV-2026-0001",
+    "71.90",
+    "40.00",
+    "31.90",
+    "PARTIALLY_PAID"
+   ]
+  ],
+  [
+   [
+    "121.00",
+    "50.00",
+    "71.00",
+    "PARTIALLY_PAID"
+   ]
+  ],
+  [
+   [
+    "ae-t1",
+    "100.00",
+    "PARTIALLY_RECONCILED",
+    "30.00",
+    "70.00"
+   ],
+   [
+    "ae-t2",
+    "7.00",
+    "UNRECONCILED",
+    "0.00",
+    "7.00"
+   ]
+  ],
+  [
+   [
+    "IN",
+    "30.00",
+    "0.00",
+    "30.00",
+    "30.00"
+   ],
+   [
+    "IN",
+    "40.00",
+    "40.00",
+    "0.00",
+    "0.00"
+   ],
+   [
+    "OUT",
+    "-50.00",
+    "50.00",
+    "0.00",
+    "0.00"
+   ]
+  ],
+  [
+   [
+    "COUNT",
+    "CONFIRMED_COUNT",
+    "350.00"
+   ],
+   [
+    "MOVEMENT",
+    "CASH_IN",
+    "10.00"
+   ]
+  ],
+  [
+   [
+    "PDF_NOT_ARCHIVED_AT_ISSUANCE",
+    1
+   ],
+   [
+    "PURCHASES_WITHOUT_VAT_RATE",
+    1
+   ],
+   [
+    "SOURCE_DOCUMENT_MISSING",
+    1
+   ],
+   [
+    "UNRECONCILED_BANK_TRANSACTIONS",
+    2
+   ]
+  ]
  ]
 }

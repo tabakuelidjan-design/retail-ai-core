@@ -27,6 +27,8 @@ import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js'
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
 import { buildActions } from '../actions.js';
 import { createTreasuryService } from '../treasury-service.js';
+import { createAccountantExportService } from '../accountant-export-service.js';
+import { verifyExportPackage } from '../accountant-export.js';
 import { TreasuryError } from '../treasury-engine.js';
 import { createBankService } from '../bank-service.js';
 import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
@@ -1109,6 +1111,22 @@ export function createFinanceApp(deps) {
     await audit({ at: clock.now(), action: 'ACCOUNTANT_PACKAGE_SENT', detail: { period: p.preview.period.label, sha256: p.preview.sha256, messageId: r.messageId ?? null } });
     json(ctx.res, 200, { status: 'SENT', messageId: r.messageId ?? null, sentAt: p.sentAt });
   });
+
+  // ---------- Accountant export (data package): CSV + manifest + SHA-256 + README + missing-artifacts. Read-only on the truths; the package is in memory only and expires. ----------
+  const exportsMem = new Map();
+  const exportFor = async () => { const settings = await settingsIo.load(); return createAccountantExportService({ store, merchantId, clock, merchant: { name: settings.seller?.name ?? null }, attachments: attachmentStore, inbox: inboxFor(), sourceSchemaVersion: '20261005090000',
+    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, renderPdf: async (doc, x) => renderDocumentPdf(doc, { settlement: x.settlement ?? null, branding: settings.branding }), cashCurrency: settings.defaults.currency }); };
+  const periodSpec = (src) => { const g = (k) => (src instanceof URLSearchParams ? src.get(k) : src?.[k]); return { kind: g('kind'), year: g('year'), month: g('month'), quarter: g('quarter'), from: g('from'), to: g('to') }; };
+  const exportPeriodGuard = async (fn) => { try { return await fn(); } catch (e) { if (e?.code === 'PERIOD_INVALID') fields([{ field: 'period', code: 'PERIOD_INVALID' }]); throw e; } };
+  on('GET', '/api/accountant-export/preview', async (ctx) => json(ctx.res, 200, await exportPeriodGuard(async () => (await exportFor()).preview(periodSpec(ctx.url.searchParams)))));
+  on('GET', '/api/accountant-export/history', async (ctx) => json(ctx.res, 200, { rows: await (await exportFor()).history() }));
+  on('POST', '/api/accountant-export/generate', async (ctx) => {
+    for (const [k, v] of exportsMem) if (v.expires < Date.now()) exportsMem.delete(k);
+    const r = await exportPeriodGuard(async () => (await exportFor()).generate(periodSpec(ctx.body), { includeDocuments: ctx.body?.includeDocuments !== false, actor }));
+    exportsMem.set(r.record.exportId, { zip: r.zip, fileName: r.fileName, expires: Date.now() + 30 * 60_000 });
+    json(ctx.res, 200, { ...r.summary, exportId: r.record.exportId, fileName: r.fileName, sha256: r.sha256, size: r.size, verified: verifyExportPackage(r.zip).ok, downloadUrl: `/api/accountant-export/${r.record.exportId}/download` });
+  }, { bodyLimit: 100_000 });
+  on('GET', `/api/accountant-export/${P}/download`, async (ctx) => { const p = exportsMem.get(idParam(ctx.m[1])); if (!p || p.expires < Date.now()) throw new HttpError(404, 'PACKAGE_NOT_FOUND'); send(ctx.res, 200, p.zip, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${p.fileName}"`, 'Cache-Control': 'no-store' }); });
 
   // ---------- Pack comptable v1: prepare -> control -> complete -> download (complete pack or one category at a time) ----------
   const periodFromQuery = (q) => ({ kind: q.get('kind'), year: Number(q.get('year')), quarter: Number(q.get('quarter')), month: Number(q.get('month')), from: q.get('from'), to: q.get('to') });

@@ -8,6 +8,7 @@ import { createInboxService, createMemoryAttachmentStore } from '../src/finance/
 import { CONFIG, MERCHANT_ACTOR, issueInvoice } from './finance-fixtures.js';
 import { createTreasuryService } from '../src/finance/treasury-service.js';
 import { loadDocsForReports } from '../src/finance/reports.js';
+import { createAccountantExportService } from '../src/finance/accountant-export-service.js';
 
 export const A = '11111111-1111-1111-1111-111111111111';
 export const B = '22222222-2222-2222-2222-222222222222';
@@ -212,5 +213,19 @@ export const SCENARIOS = {
     return [model.position.EUR.observed.totalCents, model.position.EUR.calculated.totalCents, model.position.EUR.freshness, model.position.EUR.components.map((c) => [c.kind, c.amountCents]), model.position.EUR.warnings.map((x) => x.code),
       model.items.map((x) => [nm(x.id), x.amountCents, x.date, x.certainty, x.included, x.evidence.paidCents]).sort((p, q) => p[0].localeCompare(q[0])), // ids are random uuids: sort by number [7, 30, 90].map((d) => [fc.horizons[d].projectedCents, fc.horizons[d].receipts.committedCents, fc.horizons[d].excluded.overdueReceivablesCents]), fc.risk.negative, fc.risk.minimumCents,
       sc.delta.EUR.horizons[30].projectedDeltaCents, sc.persisted, (await st.listBankTransactions({ merchantId: A })).length];
+  },
+  // Accountant export: the same store facts must give the same package content on either store (ids are random, so only business columns are compared).
+  async 'accountant export: package content from real store facts (invoices, payments, supplier, bank, cash)'(w) {
+    const st = w.storeFor(A); const at = '2026-10-03T10:00:00.000Z'; const P = w.svc.payments;
+    const inv = await issueInvoice(w.svc); await P.receive({ amountCents: 4000, paidOn: '2026-09-22', method: 'bank_transfer', idempotencyKey: 'ae-contract-1', allocations: [{ documentId: inv.id, amountCents: 4000 }] }, MERCHANT_ACTOR);
+    const sup = await st.saveSupplierInvoice(supplier({ issueDate: '2026-09-02' })); await P.pay({ amountCents: 5000, paidOn: '2026-09-25', method: 'bank_transfer', idempotencyKey: 'ae-contract-2', allocations: [{ supplierInvoiceId: sup.id, amountCents: 5000 }] }, MERCHANT_ACTOR);
+    await st.insertBankTransactionsBatch([{ merchantId: A, accountId: 'acc-1', providerTxId: 'ae-t1', date: '2026-09-15', amountCents: 10000, currency: 'EUR', source: 'bank', status: 'NEW' }, { merchantId: A, accountId: 'acc-1', providerTxId: 'ae-t2', date: '2026-09-16', amountCents: 700, currency: 'EUR', source: 'bank', status: 'NEW' }]);
+    const t1 = (await st.listBankTransactions({ merchantId: A })).find((t) => t.providerTxId === 'ae-t1'); await st.reconcileAndPay({ merchantId: A, key: 'ae-contract-3', transactionId: t1.id, actor: MERCHANT_ACTOR, at, payment: { amountCents: 3000, method: 'bank_transfer', allocations: [] } });
+    await st.insertCashCount({ merchantId: A, amountCents: 35000, countedOn: '2026-09-10', note: null, createdAt: at }); await st.insertCashMovement({ merchantId: A, kind: 'CASH_IN', amountCents: 1000, date: '2026-09-11', note: null, createdAt: at });
+    const svc = createAccountantExportService({ store: st, merchantId: A, clock: { now: () => at, today: () => '2026-10-03', timeZone: 'Europe/Brussels' }, merchant: { name: 'X' }, finance: { listInvoices: () => loadDocsForReports(st, A) }, inbox: { list: () => st.listSupplierInvoices(A) } });
+    const pkg = await svc.generate({ kind: 'custom', from: '2026-09-01', to: '2026-09-30' }, { includeDocuments: false });
+    const rows = (n) => { const lines = pkg.files.get(n).toString('utf8').replace(/^﻿/, '').split('\r\n').filter(Boolean); const h = lines[0].split(','); return lines.slice(1).map((l) => Object.fromEntries(l.split(',').map((v, i) => [h[i], v]))); };
+    const pick = (n, keys) => rows(n).map((r) => keys.map((k) => r[k])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    return [pkg.rowCounts, pick('sales.csv', ['number', 'gross', 'allocated', 'remaining', 'payment_status']), pick('purchases.csv', ['gross', 'allocated', 'remaining', 'payment_state']), pick('bank-transactions.csv', ['provider_tx_id', 'amount', 'reconciliation_status', 'reconciled', 'remaining']), pick('payments.csv', ['direction', 'amount', 'allocated', 'unallocated', 'bank_reconciled']), pick('cash.csv', ['record_type', 'kind', 'amount']), pkg.warnings.map((x) => [x.code, x.count])];
   },
 };

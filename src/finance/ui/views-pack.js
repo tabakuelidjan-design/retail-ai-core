@@ -164,7 +164,7 @@
     layout('#/pack', shell);
     shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Accountant pack')), h('div', { class: 'subtitle' }, tt('Prepare, check and download a clean file for your accountant.')))));
     const S = {}; const box = h('div', { class: 'pk-stack' }); shell.appendChild(box);
-    for (const k of ['period', 'verdict', 'issues', 'controls', 'vat', 'winbooks', 'content', 'preview', 'history']) { S[k] = h('section', { class: 'card pk-card', id: `pk-${k}` }); box.appendChild(S[k]); }
+    for (const k of ['period', 'verdict', 'issues', 'controls', 'vat', 'winbooks', 'content', 'preview', 'history', 'dataexport']) { S[k] = h('section', { class: 'card pk-card', id: `pk-${k}` }); box.appendChild(S[k]); }
     const head = (title, hint, ...extra) => h('div', { class: 'cardhead' }, h('h2', null, title), hint ? h('span', { class: 'muted small' }, hint) : null, ...extra);
     const jump = (k) => { const el = S[k]; if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
@@ -178,7 +178,25 @@
       try { preview = await api('POST', '/api/pack-comptable/preview', { period: specBody(spec), include }); } catch (e) { preview = null; }
       drawPreview();
     }
-    function drawAll() { drawVerdict(); drawIssues(); drawControls(); drawVat(); drawWinbooks(); drawContent(); drawPreview(); drawHistory(); }
+    function drawAll() { drawVerdict(); drawIssues(); drawControls(); drawVat(); drawWinbooks(); drawContent(); drawPreview(); drawHistory(); drawDataExport(); }
+
+    // Data package for the accountant (CSV + manifest + SHA-256 + README + missing-artifacts): realised data only, never a forecast, never a VAT return.
+    const EXPORT_WARN = { SOURCE_DOCUMENT_MISSING: 'Supplier invoices without their source document', PDF_NOT_ARCHIVED_AT_ISSUANCE: 'Issued PDFs are not archived at issuance (only regenerated copies exist)', UNRECONCILED_BANK_TRANSACTIONS: 'Bank transactions not fully reconciled', UNVALIDATED_PURCHASES: 'Purchases not yet validated', PURCHASES_WITHOUT_VAT_RATE: 'Purchases without a recorded VAT rate', MIXED_CURRENCIES: 'Several currencies: totals are given per currency', NO_BANK_DATA: 'No bank data for this period', SNAPSHOT_HASH_MISSING: 'Documents without integrity hash' };
+    function drawDataExport() {
+      const s = S.dataexport; clear(s); s.appendChild(head(tt('Export for the accountant'), tt('Data package: CSV files, manifest and SHA-256 checksums. Realised data only.')));
+      const docs = h('input', { type: 'checkbox', checked: true }); const out = h('div', { style: 'display:grid;gap:8px;margin-top:10px' });
+      const qs = () => new URLSearchParams(Object.fromEntries(Object.entries(specBody(spec)).map(([k, v]) => [k, String(v)]))).toString();
+      const show = (r, generated) => { clear(out);
+        out.appendChild(h('div', { class: 'muted small' }, tt('Period'), ': ', r.period.start, ' → ', r.period.end));
+        out.appendChild(h('div', { class: 'kv' }, ...'sales credit-notes purchases payments bank-transactions cash'.split(' ').map((x) => x + '.csv').flatMap((n) => [h('span', null, n), h('strong', null, String(r.rowCounts[n]))])));
+        if (r.warnings.length) out.appendChild(h('div', { class: 'banner warn small' }, r.warnings.map((w) => h('div', null, tt(EXPORT_WARN[w.code] || w.code), w.count ? ` (${w.count})` : ''))));
+        out.appendChild(h('div', { class: 'muted small' }, tt('Missing artifacts: {0}', r.missingArtifacts.count)));
+        if (generated) out.appendChild(h('div', { class: 'actions' }, h('a', { class: 'btn primary warm', href: r.downloadUrl }, tt('Download the package')), h('span', { class: 'muted small' }, ['SHA', '256'].join('-') + ' ' + r.sha256.slice(0, 16), '… · ', r.verified ? tt('Checksums verified') : tt('Verification failed'))));
+      };
+      const preview = h('button', { on: { click: async () => { try { show(await api('GET', '/api/accountant-export/preview?' + qs()), false); } catch (e) { fail(e, out); } } } }, tt('Preview'));
+      const gen = h('button', { class: 'primary', on: { click: async () => { try { show(await api('POST', '/api/accountant-export/generate', { ...specBody(spec), includeDocuments: docs.checked }), true); } catch (e) { fail(e, out); } } } }, tt('Generate the package'));
+      s.appendChild(h('div', { class: 'actions' }, h('label', { style: 'color:var(--ink)' }, docs, ' ', tt('Include the documents')), preview, gen)); s.appendChild(out);
+    }
 
     // 1. period
     function drawPeriod() {
