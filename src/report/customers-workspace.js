@@ -33,15 +33,26 @@ export const RECENCY_BUCKETS = [
 ];
 const recencyBucket = (days) => RECENCY_BUCKETS.find((b) => days <= b.max).key;
 
-/** Shortest unique upper-case prefix (>= LABEL_MIN_CHARS) per key. Returns Map(key -> id). */
+/**
+ * Shortest unique upper-case prefix (>= LABEL_MIN_CHARS, <= LABEL_MAX_CHARS) per key. Returns Map(key -> id).
+ * A key needs one character more than the longest prefix it shares (case-insensitively) with ANY other key; two keys that differ only by case share
+ * everything. The longest shared prefix of a key is always reached by a neighbour in sorted order, so one sort replaces the former
+ * every-key-against-every-key scan (cubic: 8 s for 6 000 customers). The result is identical (pinned against the previous implementation in tests).
+ */
 export function safeCustomerIds(keys) {
-  const out = new Map();
   const list = [...new Set(keys)];
-  for (const k of list) {
-    let n = LABEL_MIN_CHARS;
-    while (n < LABEL_MAX_CHARS && list.some((o) => o !== k && o.slice(0, n).toUpperCase() === k.slice(0, n).toUpperCase())) n += 1;
-    out.set(k, k.slice(0, n).toUpperCase());
+  const ups = list.map((k) => k.toUpperCase());
+  const order = list.map((_, i) => i).sort((x, y) => (ups[x] < ups[y] ? -1 : ups[x] > ups[y] ? 1 : 0));
+  const lcp = (x, y) => { const m = Math.min(x.length, y.length); let i = 0; while (i < m && x[i] === y[i]) i += 1; return i; };
+  const shared = new Array(list.length).fill(0);
+  for (let i = 0; i + 1 < order.length; i += 1) {
+    const x = order[i]; const y = order[i + 1];
+    const m = ups[x] === ups[y] ? Infinity : lcp(ups[x], ups[y]);
+    if (m > shared[x]) shared[x] = m;
+    if (m > shared[y]) shared[y] = m;
   }
+  const out = new Map();
+  list.forEach((k, i) => out.set(k, k.slice(0, Math.min(LABEL_MAX_CHARS, Math.max(LABEL_MIN_CHARS, shared[i] + 1))).toUpperCase()));
   return out;
 }
 

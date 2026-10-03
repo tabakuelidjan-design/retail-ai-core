@@ -11,11 +11,13 @@ export class ProfileError extends Error {
 }
 
 /** An IANA zone name (Europe/Brussels) or UTC. Abbreviations (EST), POSIX strings (UTC+1) and unknown names are refused. */
+const validZones = new Set(['UTC']); // zones already proven valid (validation builds a formatter: done once per zone)
 export function isIanaTimeZone(tz) {
   if (typeof tz !== 'string' || !tz.trim() || tz !== tz.trim()) return false;
-  if (tz === 'UTC') return true;
+  if (validZones.has(tz)) return true;
   if (!tz.includes('/')) return false;
   try { new Intl.DateTimeFormat('en', { timeZone: tz }); } catch { return false; }
+  validZones.add(tz);
   return true;
 }
 

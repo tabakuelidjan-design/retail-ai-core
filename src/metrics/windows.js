@@ -3,9 +3,14 @@
 // Every window is a half-open interval [start, end) of UTC instants.
 import { requireTimeZone } from './profile.js';
 
+// Intl.DateTimeFormat construction costs ~100 microseconds: one formatter per zone is built once and reused (pure memoization, same output).
+const dayFormatters = new Map(); const offsetFormatters = new Map();
+const dayFormatter = (timeZone) => { let f = dayFormatters.get(timeZone); if (!f) { f = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }); dayFormatters.set(timeZone, f); } return f; };
+const offsetFormatter = (timeZone) => { let f = offsetFormatters.get(timeZone); if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); offsetFormatters.set(timeZone, f); } return f; };
+
 export function localDateString(instant, timeZone) {
   requireTimeZone(timeZone, 'localDateString');
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+  return dayFormatter(timeZone).format(instant);
 }
 
 export function addDays(dateStr, days) {
@@ -14,10 +19,7 @@ export function addDays(dateStr, days) {
 }
 
 function offsetMs(instant, timeZone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(instant);
+  const parts = offsetFormatter(timeZone).formatToParts(instant);
   const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
   const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
