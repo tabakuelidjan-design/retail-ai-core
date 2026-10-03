@@ -67,13 +67,15 @@ export async function loadDataset(supabase, merchantId, { since }) {
   // merchant's snapshot rows are ever fetched into this process at all.
   const [newest] = await supabase.select('inventory_snapshots', { select: 'synced_at', ...eq, order: 'synced_at.desc', limit: '1' });
   let snapshots = [];
+  let inventoryWindow = null; // exposed so the ledger can say which variants this read does NOT cover (never read as zero stock)
   if (newest) {
     const from = new Date(new Date(newest.synced_at).getTime() - 2 * DAY_MS).toISOString();
+    inventoryWindow = { newestSyncedAt: new Date(newest.synced_at).toISOString(), from };
     snapshots = await supabase.selectAll('inventory_snapshots', { select: 'id,variant_id,location_id,quantity,synced_at', ...eq, synced_at: `gte.${from}` });
   }
 
   // The first real (non-test) order of the business: comparisons need it to know whether a period had any business history.
   const [first] = await supabase.select('orders', { select: 'ordered_at', ...eq, is_test: 'eq.false', order: 'ordered_at.asc', limit: '1' });
 
-  return { products, variants, orders, orderLines, refunds: [...refunds, ...extraRefunds], refundLines: [...refundLines, ...extraRefundLines], refundContext: { orders: contextOrders, orderLines: contextLines }, costs, snapshots, collections, orderAttribution, locations, firstOrderAt: first?.ordered_at ?? null };
+  return { products, variants, orders, orderLines, refunds: [...refunds, ...extraRefunds], refundLines: [...refundLines, ...extraRefundLines], refundContext: { orders: contextOrders, orderLines: contextLines }, costs, snapshots, inventoryWindow, collections, orderAttribution, locations, firstOrderAt: first?.ordered_at ?? null };
 }

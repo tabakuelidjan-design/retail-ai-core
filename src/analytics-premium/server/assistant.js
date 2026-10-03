@@ -86,7 +86,7 @@ const dayBefore = (iso) => new Date(new Date(iso).getTime() - 1);
 export function figuresFor(intent, periodKey, report) {
   const s = report.sales?.[periodKey];
   if (!s) return { unavailable: 'PERIOD_NOT_IN_REPORT' };
-  const cur = report.currency ?? 'EUR';
+  const cur = report.currency ?? null;
   const num = (id, value, extra = {}) => ({ id, value, ...extra });
   if (intent === 'revenue') {
     const f = [num('net_sales_ex_tax', s.net_sales_ex_tax, { currency: cur }), num('net_sales_incl_tax', s.net_sales, { currency: cur })];
@@ -145,7 +145,7 @@ export function createAssistant({ reportsDir, provider = null, providerStatus = 
     const w = rep.report.sales[periodKey].window;
     const tz = requireTimeZone(w?.timeZone ?? rep.report.merchant_timezone, 'ask');
     const period = pi ? { key: pi.key, start: pi.start, end: pi.end, days: pi.days, timeZone: pi.timeZone } : w ? { key: periodKey, start: localDateString(new Date(w.start), tz), end: localDateString(dayBefore(w.end), tz), timeZone: tz } : { key: periodKey };
-    const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? 'EUR', sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
+    const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? null, sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
 
     if (provider && providerStatus === 'OK') {
       const ac = new AbortController(); let timer;

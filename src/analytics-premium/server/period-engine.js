@@ -99,7 +99,7 @@ function buildForPeriod(c, r, now) {
   const prev = previousEquivalentWindow(win);
   const totals = computeSalesMetrics(ledger, win);
   return {
-    generated_at: snapshot.generated_at, currency: snapshot.currency ?? 'EUR', merchant_timezone: tz,
+    generated_at: snapshot.generated_at, currency: c.ledger.currency ?? snapshot.currency ?? null, merchant_timezone: tz,
     period_info: { key: r.key, start: r.localStart, end: addDays(r.localEnd, -1), days: r.days, includesToday: r.includesToday, timeZone: tz,
       previous: prev ? { start: prev.localStart, end: addDays(prev.localEnd, -1) } : null, coverage: explorer.comparison_coverage ?? null, dataAsOf: snapshot.generated_at },
     sales: { last_30_days: { ...totals, comparison: { previous_window: prev ? { localStart: prev.localStart, localEnd: prev.localEnd } : null } } },

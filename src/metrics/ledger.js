@@ -171,8 +171,11 @@ export function buildLedger(data, { config, currency } = {}) {
     stockByVariant.set(s.variant_id, cur);
   }
 
+  // Stock coverage: which variants have a snapshot inside the read window. A variant WITHOUT one has UNKNOWN stock (not zero): it is counted, never invented.
+  const stockCoverage = { variants: data.variants.length, withSnapshot: stockByVariant.size, withoutSnapshot: Math.max(0, data.variants.length - stockByVariant.size), newestSnapshotAt: data.inventoryWindow?.newestSyncedAt ?? (latest.size ? [...latest.values()].map((x) => new Date(x.synced_at)).sort((a, b) => b - a)[0].toISOString() : null), windowFrom: data.inventoryWindow?.from ?? null };
+
   return {
     currency: ledgerCurrency, config, orders, lineFacts, refundFacts, refundTotals, shippingFacts, shippingRefundFacts, shippingCoverage,
-    variantById, productById, costsByVariant, stockByVariant, excluded, completeness,
+    variantById, productById, costsByVariant, stockByVariant, stockCoverage, excluded, completeness,
   };
 }

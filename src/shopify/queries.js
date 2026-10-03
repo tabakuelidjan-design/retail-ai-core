@@ -278,6 +278,7 @@ export const ORDER_TOTALS_PAGE_QUERY = /* GraphQL */ `
           id
           createdAt
           test
+          cancelledAt
           displayFinancialStatus
           subtotalPriceSet { shopMoney { amount } }
           currentSubtotalPriceSet { shopMoney { amount } }

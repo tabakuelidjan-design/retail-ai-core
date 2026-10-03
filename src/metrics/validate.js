@@ -30,7 +30,7 @@ export async function fetchShopifyOrderTotals(shopify, since) {
 
 export function compareWindow(ledger, shopifyOrders, window) {
   const excluded = ledger.config.excludedOrderStatuses;
-  const sOrders = shopifyOrders.filter((o) => inWindow(o.createdAt, window) && !o.test && !excluded.includes(o.displayFinancialStatus));
+  const sOrders = shopifyOrders.filter((o) => inWindow(o.createdAt, window) && !o.test && !excluded.includes(o.displayFinancialStatus) && !(ledger.config.excludeCancelledOrders && o.cancelledAt));
   const orderIds = new Set(ledger.orders.filter((o) => inWindow(o.orderedAt, window)).map((o) => o.id));
 
   const lines = ledger.lineFacts.filter((l) => orderIds.has(l.orderId));
