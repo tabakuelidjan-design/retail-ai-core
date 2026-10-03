@@ -32,6 +32,21 @@ export function sixtyDayWindowQuery(now = new Date()) {
 }
 
 /**
+ * Catch-up search (Analyses Phase 0, defect A): orders UPDATED inside the 60-day window but CREATED before it. A refund issued later on an older order
+ * only shows up here. Without the read_all_orders scope Shopify exposes no order older than 60 days, so this pass is simply empty; with it, the refund
+ * is ingested instead of being frozen at the last in-window sync. Behaviour against live Shopify is not verified by the offline tests.
+ */
+export function refundCatchUpQuery(now = new Date()) {
+  const cutoff = new Date(now.getTime() - SIXTY_DAYS_MS).toISOString().slice(0, 10);
+  return `updated_at:>=${cutoff} AND created_at:<${cutoff}`;
+}
+
+const emptyCounters = () => ({
+  ordersFetched: 0, ordersUpserted: 0, attributionRowsFetched: 0, attributionRowsUpserted: 0, orderLinesFetched: 0, orderLinesUpserted: 0,
+  refundsFetched: 0, refundsUpserted: 0, refundLinesFetched: 0, refundLinesUpserted: 0, orderLinesWithoutVariant: 0, ordersWithoutLocation: 0, errors: [],
+});
+
+/**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
  * @param {{merchantId: string, now?: Date, customerKeySecret?: string|null, since?: string|null}} opts  customerKeySecret: when set, orders carry a keyed hash of the customer id
@@ -61,23 +76,32 @@ export async function syncOrders({ shopify, supabase }, opts) {
 
   // opts.since (YYYY-MM-DD) widens the window for a backfill; the caller has already verified the read_all_orders scope (planOrdersSync).
   const searchQuery = opts.since ? historySearchQuery(opts.since) : sixtyDayWindowQuery(now);
-  let cursor = null;
-  let hasNextPage = true;
+  const ctx = { opts, locationIdBySourceId, variantIdBySourceId };
 
-  while (hasNextPage) {
-    let page;
-    try {
-      page = await shopify.graphql(opts.customerKeySecret ? ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY : ORDERS_PAGE_QUERY, { cursor, searchQuery });
-    } catch (err) {
-      summary.errors.push(`fetch: ${err.message}`);
-      break;
+  async function pass(query, counters, errorPrefix) {
+    let cursor = null;
+    let hasNextPage = true;
+    while (hasNextPage) {
+      let page;
+      try {
+        page = await shopify.graphql(opts.customerKeySecret ? ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY : ORDERS_PAGE_QUERY, { cursor, searchQuery: query });
+      } catch (err) {
+        summary.errors.push(`${errorPrefix}${err.message}`);
+        return;
+      }
+      await writeOrdersPage(supabase, page.orders.edges.map((e) => e.node), { ...ctx, summary: counters });
+      hasNextPage = page.orders.pageInfo.hasNextPage;
+      cursor = page.orders.pageInfo.endCursor;
     }
+  }
 
-    const orderNodes = page.orders.edges.map((e) => e.node);
-    await writeOrdersPage(supabase, orderNodes, { opts, summary, locationIdBySourceId, variantIdBySourceId });
+  await pass(searchQuery, summary, 'fetch: ');
 
-    hasNextPage = page.orders.pageInfo.hasNextPage;
-    cursor = page.orders.pageInfo.endCursor;
+  // Refund catch-up: opt-in per call (the production runner turns it on), only in the default (recent) mode. Its counters are separate so the main-pass figures keep their meaning.
+  summary.catchUp = emptyCounters();
+  if (!opts.since && opts.refundCatchUp === true) {
+    await pass(refundCatchUpQuery(now), summary.catchUp, 'catch-up: ');
+    for (const e of summary.catchUp.errors) summary.errors.push(`catch-up: ${e}`);
   }
 
   return summary;
