@@ -18,7 +18,7 @@
 // - not implemented now, to avoid over-engineering for 45 rows.
 
 import { historySearchQuery } from './history.js';
-import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY } from '../shopify/queries.js';
+import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY, NESTED_PAGE_QUERIES } from '../shopify/queries.js';
 import { normalizeOrderAttribution } from '../marketing/adapters/shopify.js';
 import { normalizeOrder, normalizeOrderLine, normalizeRefund, normalizeRefundLine } from './normalize.js';
 import { upsertInChunks } from './batch.js';
@@ -89,7 +89,9 @@ export async function syncOrders({ shopify, supabase }, opts) {
         summary.errors.push(`${errorPrefix}${err.message}`);
         return;
       }
-      await writeOrdersPage(supabase, page.orders.edges.map((e) => e.node), { ...ctx, summary: counters });
+      const nodes = page.orders.edges.map((e) => e.node);
+      for (const node of nodes) await completeNestedConnections(shopify, node, counters);
+      await writeOrdersPage(supabase, nodes, { ...ctx, summary: counters });
       hasNextPage = page.orders.pageInfo.hasNextPage;
       cursor = page.orders.pageInfo.endCursor;
     }
@@ -98,8 +100,8 @@ export async function syncOrders({ shopify, supabase }, opts) {
   await pass(searchQuery, summary, 'fetch: ');
 
   // Refund catch-up: opt-in per call (the production runner turns it on), only in the default (recent) mode. Its counters are separate so the main-pass figures keep their meaning.
-  summary.catchUp = emptyCounters();
   if (!opts.since && opts.refundCatchUp === true) {
+    summary.catchUp = emptyCounters();
     await pass(refundCatchUpQuery(now), summary.catchUp, 'catch-up: ');
     for (const e of summary.catchUp.errors) summary.errors.push(`catch-up: ${e}`);
   }
@@ -178,4 +180,36 @@ async function writeOrdersPage(supabase, orderNodes, { opts, summary, locationId
   summary.refundLinesUpserted += refundLineRows.length;
 
   summary.ordersUpserted += orderNodes.length;
+}
+
+/**
+ * Completes every nested connection of an order node that Shopify cut at its first page (lineItems 50, shippingLines 10, refundLineItems 50,
+ * refundShippingLines 10). Nodes without pageInfo (older payloads) are left as they are. A page that cannot be read is NEVER ignored: the order is
+ * flagged `linesTruncated` (stored as lines_truncated), counted in the summary and reported in its errors, so Data Health can lower confidence.
+ */
+export async function completeNestedConnections(shopify, orderNode, summary) {
+  let truncated = false;
+  async function complete(connection, parentId, kind) {
+    let info = connection?.pageInfo;
+    while (info?.hasNextPage) {
+      try {
+        const page = await shopify.graphql(NESTED_PAGE_QUERIES[kind], { id: parentId, cursor: info.endCursor });
+        const next = (page.order ?? page.node)?.[kind];
+        if (!next) throw new Error('empty page');
+        connection.edges.push(...next.edges);
+        info = next.pageInfo; connection.pageInfo = info;
+      } catch (err) {
+        summary.errors.push(`truncated: ${kind} of ${parentId} incomplete (${err.message})`);
+        truncated = true;
+        return;
+      }
+    }
+  }
+  await complete(orderNode.lineItems, orderNode.id, 'lineItems');
+  await complete(orderNode.shippingLines, orderNode.id, 'shippingLines');
+  for (const refund of orderNode.refunds ?? []) {
+    await complete(refund.refundLineItems, refund.id, 'refundLineItems');
+    await complete(refund.refundShippingLines, refund.id, 'refundShippingLines');
+  }
+  if (truncated) { orderNode.linesTruncated = true; summary.ordersTruncated = (summary.ordersTruncated ?? 0) + 1; }
 }

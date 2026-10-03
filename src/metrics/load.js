@@ -19,7 +19,7 @@ async function selectByIds(supabase, table, column, ids, select, extra = {}) {
   return rows;
 }
 
-const ORDER_COLUMNS = 'id,customer_key,ordered_at,status,currency,taxes_included,location_id,is_test,source_name,channel_handle,channel_name,sub_channel_name,customer_order_index,journey_ready,days_to_conversion,order_name,shipping_price,shipping_discount,shipping_tax,shipping_tax_rate_bp';
+const ORDER_COLUMNS = 'id,customer_key,ordered_at,status,currency,taxes_included,location_id,is_test,source_name,channel_handle,channel_name,sub_channel_name,customer_order_index,journey_ready,days_to_conversion,order_name,shipping_price,shipping_discount,shipping_tax,shipping_tax_rate_bp,cancelled_at,closed_at,lines_truncated';
 const LINE_COLUMNS = 'id,order_id,variant_id,title_snapshot,sku_snapshot,quantity,unit_price,discount_amount,tax_amount,tax_rate_bp';
 const REFUND_COLUMNS = 'id,order_id,amount,refunded_at,shipping_subtotal,shipping_tax';
 const REFUND_LINE_COLUMNS = 'id,refund_id,order_line_id,quantity,amount,tax_amount';

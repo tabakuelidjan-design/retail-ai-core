@@ -100,6 +100,9 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
           currencyCode
           taxesIncluded
           displayFinancialStatus
+          cancelledAt
+          closedAt
+          cancelReason
           sourceName
           channelInformation {
             channelDefinition {
@@ -126,6 +129,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                 taxLines { rate priceSet { shopMoney { amount } } }
               }
             }
+            pageInfo { hasNextPage endCursor }
           }
           lineItems(first: 50) {
             edges {
@@ -159,6 +163,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                 }
               }
             }
+            pageInfo { hasNextPage endCursor }
           }
           refunds {
             id
@@ -175,6 +180,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                   taxAmountSet { shopMoney { amount } }
                 }
               }
+              pageInfo { hasNextPage endCursor }
             }
             refundLineItems(first: 50) {
               edges {
@@ -195,6 +201,7 @@ export const ORDERS_PAGE_QUERY = /* GraphQL */ `
                   }
                 }
               }
+              pageInfo { hasNextPage endCursor }
             }
           }
         }
@@ -312,3 +319,17 @@ export const PAYMENT_TRANSACTIONS_PAGE_QUERY = /* GraphQL */ `
 // Opt-in variant: identical selection plus the customer's opaque id (needs the read_customers scope).
 // Used only when a local hash secret is configured; the id is hashed in normalizeOrder and never stored.
 export const ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY = ORDERS_PAGE_QUERY.replace(/(\n\s*sourceName\n)/, '$1          customer { id }\n');
+
+// Follow-up pages for the nested connections of ONE order or refund (Analyses Phase 0). The orders page asks for the first 50 lines, 10 shipping lines,
+// 50 refund lines and 10 refund shipping lines; when pageInfo says there is more, the rest is read here so nothing is silently dropped.
+// The node selections below must stay identical to the ones in ORDERS_PAGE_QUERY (a test pins that).
+const LINE_NODE = `id title sku quantity variant { id } originalUnitPriceSet { shopMoney { amount } } discountAllocations { allocatedAmountSet { shopMoney { amount } } } taxLines { rate priceSet { shopMoney { amount } } }`;
+const SHIPPING_NODE = `originalPriceSet { shopMoney { amount } } discountedPriceSet { shopMoney { amount } } taxLines { rate priceSet { shopMoney { amount } } }`;
+const REFUND_LINE_NODE = `quantity subtotalSet { shopMoney { amount } } totalTaxSet { shopMoney { amount } } lineItem { id }`;
+const REFUND_SHIPPING_NODE = `subtotalAmountSet { shopMoney { amount } } taxAmountSet { shopMoney { amount } }`;
+export const NESTED_PAGE_QUERIES = {
+  lineItems: `query ($id: ID!, $cursor: String) { order(id: $id) { lineItems(first: 50, after: $cursor) { edges { node { ${LINE_NODE} } } pageInfo { hasNextPage endCursor } } } }`,
+  shippingLines: `query ($id: ID!, $cursor: String) { order(id: $id) { shippingLines(first: 10, after: $cursor) { edges { node { ${SHIPPING_NODE} } } pageInfo { hasNextPage endCursor } } } }`,
+  refundLineItems: `query ($id: ID!, $cursor: String) { node(id: $id) { ... on Refund { refundLineItems(first: 50, after: $cursor) { edges { node { ${REFUND_LINE_NODE} } } pageInfo { hasNextPage endCursor } } } } }`,
+  refundShippingLines: `query ($id: ID!, $cursor: String) { node(id: $id) { ... on Refund { refundShippingLines(first: 10, after: $cursor) { edges { node { ${REFUND_SHIPPING_NODE} } } pageInfo { hasNextPage endCursor } } } } }`,
+};

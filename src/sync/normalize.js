@@ -242,6 +242,11 @@ export function normalizeOrder(node, merchantId, locationId, { customerKeySecret
     taxes_included: node.taxesIncluded,
     is_test: node.test === true,
     order_name: node.name ?? null,
+    // cancellation as the source reports it (null = not cancelled); a cancelled order is not a sale (ledger). lines_truncated = a nested page could not be completed.
+    cancelled_at: node.cancelledAt ?? null,
+    closed_at: node.closedAt ?? null,
+    cancel_reason: node.cancelReason ?? null,
+    lines_truncated: node.linesTruncated === true,
     ...normalizeShipping(node),
     ...normalizeOrderChannel(node),
     // Only present when customer keys are enabled: a keyed hash of the customer id (never the id itself).

@@ -101,7 +101,7 @@ export async function runSync({
       if (!plan.ok) throw Object.assign(new Error(JSON.stringify(plan)), { planRefused: true });
       const summary = await syncOrders({ shopify, supabase: db }, { merchantId, customerKeySecret: customerKeySecret(), since, refundCatchUp: true });
       log('orders sync summary:', JSON.stringify(summary, null, 2));
-      record('orders', summary);
+      record('orders', { ordersTruncated: 0, ...summary });
       if (summary.errors.length === 0) await coverage.write(nextCoverage(await coverage.read(), { plan, now: now(), storeCreatedOn }));
     }
 

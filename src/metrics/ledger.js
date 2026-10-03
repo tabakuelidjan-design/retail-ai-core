@@ -18,7 +18,9 @@ function mostCommon(values) {
  * @param {{config: object, currency?: string}} opts
  */
 export function buildLedger(data, { config, currency } = {}) {
-  const ledgerCurrency = currency ?? mostCommon(data.orders.map((o) => o.currency));
+  // The currency is decided among COUNTABLE orders only: test, voided/expired and cancelled orders never decide it (a profile currency, when given, wins).
+  const countable = (o) => !o.is_test && !config.excludedOrderStatuses.includes(o.status) && !(config.excludeCancelledOrders && o.cancelled_at);
+  const ledgerCurrency = currency ?? mostCommon(data.orders.filter(countable).map((o) => o.currency)) ?? mostCommon(data.orders.map((o) => o.currency));
   const variantById = new Map(data.variants.map((v) => [v.id, v]));
   const productById = new Map(data.products.map((p) => [p.id, p]));
 
@@ -28,14 +30,17 @@ export function buildLedger(data, { config, currency } = {}) {
     costsByVariant.get(c.variant_id).push(c);
   }
 
-  const excluded = { test: 0, status: 0, otherCurrency: 0, refundsOnExcludedOrders: 0 };
+  const excluded = { test: 0, status: 0, cancelled: 0, otherCurrency: 0, refundsOnExcludedOrders: 0 };
+  const completeness = { ordersTruncated: 0 };
   const excludedOrderIds = new Set();
   const orders = [];
   const orderById = new Map();
   for (const o of data.orders) {
     if (o.is_test) { excluded.test += 1; excludedOrderIds.add(o.id); continue; }
     if (config.excludedOrderStatuses.includes(o.status)) { excluded.status += 1; excludedOrderIds.add(o.id); continue; }
+    if (config.excludeCancelledOrders && o.cancelled_at) { excluded.cancelled += 1; excludedOrderIds.add(o.id); continue; }
     if (o.currency !== ledgerCurrency) { excluded.otherCurrency += 1; excludedOrderIds.add(o.id); continue; }
+    if (o.lines_truncated === true) completeness.ordersTruncated += 1;
     const order = { id: o.id, name: o.order_name ?? null, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included };
     orders.push(order);
     orderById.set(o.id, order);
@@ -71,7 +76,7 @@ export function buildLedger(data, { config, currency } = {}) {
   const contextOrderById = new Map();
   for (const o of data.refundContext?.orders ?? []) {
     if (orderById.has(o.id) || contextOrderById.has(o.id)) continue;
-    if (o.is_test || config.excludedOrderStatuses.includes(o.status) || o.currency !== ledgerCurrency) { excludedOrderIds.add(o.id); continue; }
+    if (o.is_test || config.excludedOrderStatuses.includes(o.status) || (config.excludeCancelledOrders && o.cancelled_at) || o.currency !== ledgerCurrency) { excludedOrderIds.add(o.id); continue; }
     contextOrderById.set(o.id, { id: o.id, name: o.order_name ?? null, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included });
   }
   const contextLineFactById = new Map();
@@ -168,6 +173,6 @@ export function buildLedger(data, { config, currency } = {}) {
 
   return {
     currency: ledgerCurrency, config, orders, lineFacts, refundFacts, refundTotals, shippingFacts, shippingRefundFacts, shippingCoverage,
-    variantById, productById, costsByVariant, stockByVariant, excluded,
+    variantById, productById, costsByVariant, stockByVariant, excluded, completeness,
   };
 }
