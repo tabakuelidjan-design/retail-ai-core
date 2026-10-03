@@ -11,7 +11,7 @@
 import { aggregate, aggregateShipping, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
 import { requireTimeZone } from '../metrics/profile.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
+import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow, dayIndexer } from '../metrics/windows.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
@@ -20,11 +20,13 @@ export const pct = (now, before) => (before > 0 ? round4((now - before) / before
 export const absDelta = (c, p) => (c == null || p == null ? null : round2(c - p));
 const DAY = 86400000;
 
-function mondayOf(dateStr) {
+const mondayCache = new Map();
+function mondayOfUncached(dateStr) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   const back = (d.getUTCDay() + 6) % 7; // Monday = 0
   return new Date(d.getTime() - back * DAY).toISOString().slice(0, 10);
 }
+function mondayOf(dateStr) { let m = mondayCache.get(dateStr); if (m === undefined) { m = mondayOfUncached(dateStr); mondayCache.set(dateStr, m); } return m; }
 
 /** Weekly buckets summed from the real daily series (Monday-based weeks; `days` = how many days of that week are in the window). */
 export function weeklySeries(daily) {
@@ -366,9 +368,10 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
   for (const b of dayBuckets) {
     const wk = mondayOf(b.localStart);
     if (!weeks.has(wk)) weeks.set(wk, { week_start: wk, days: 0, active: new Set(), fresh: new Set() });
-    const w = weeks.get(wk); w.days += 1;
-    for (const x of curSeg.list) for (const m of x.cust.meta) if (inWindow(m.at, b)) { w.active.add(x.key); if (m.idx === 1) w.fresh.add(x.key); }
+    weeks.get(wk).days += 1;
   }
+  const customerDay = dayIndexer(dayBuckets); // one pass over the customers' orders instead of days x customers x orders
+  for (const x of curSeg.list) for (const m of x.cust.meta) { const i = customerDay(m.at); if (i < 0) continue; const w = weeks.get(mondayOf(dayBuckets[i].localStart)); w.active.add(x.key); if (m.idx === 1) w.fresh.add(x.key); }
   const weekly = [...weeks.values()].map((w) => ({ week_start: w.week_start, days: w.days, active: w.active.size, new: w.fresh.size }));
 
   const cohort = {
@@ -407,8 +410,12 @@ const TIME_BUCKETS = [
   { key: 'evening', from: 18, to: 24 },  // 18:00-23:59
 ];
 
+const hourFormatters = new Map();
 function localHour(date, timeZone) {
-  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: requireTimeZone(timeZone, 'explorer'), hour: '2-digit', hourCycle: 'h23' }).format(date));
+  requireTimeZone(timeZone, 'explorer');
+  let f = hourFormatters.get(timeZone);
+  if (!f) { f = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }); hourFormatters.set(timeZone, f); }
+  return Number(f.format(date));
 }
 
 function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, lineById }) {
@@ -623,16 +630,19 @@ function buildChannelsBlock({ ledger, data, windows, now, config, timeZone, win,
   const dayBuckets = dayBucketsOfWindow(win);
   const weekOf = (b) => mondayOf(b.localStart);
   const weekKeys = []; for (const b of dayBuckets) { const w = weekOf(b); if (!weekKeys.includes(w)) weekKeys.push(w); }
-  const daysInWeek = (w) => dayBuckets.filter((b) => weekOf(b) === w).length;
-  const weeklyOf = (c) => weekKeys.map((w) => {
-    const bs = dayBuckets.filter((b) => weekOf(b) === w);
-    let net = 0; let n = 0;
-    for (const b of bs) {
-      const lines = c.lines.filter((l) => inWindow(l.orderedAt, b)); const refunds = c.refunds.filter((r) => inWindow(r.refundedAt, b));
-      net += aggregate(lines, refunds, config).net_sales_ex_tax; n += c.orders.filter((o) => inWindow(o.orderedAt, b)).length;
-    }
-    return { week_start: w, days: daysInWeek(w), net_sales_ex_tax: round2(net), order_count: n };
-  });
+  const daysPerWeek = new Map(); for (const b of dayBuckets) daysPerWeek.set(weekOf(b), (daysPerWeek.get(weekOf(b)) ?? 0) + 1);
+  const daysInWeek = (w) => daysPerWeek.get(w) ?? 0;
+  const bucketOf = dayIndexer(dayBuckets);
+  // one pass over the channel's rows (binary search to their day) instead of days x rows; the per-day aggregate and its order are unchanged
+  const weeklyOf = (c) => {
+    const perDay = dayBuckets.map(() => ({ lines: [], refunds: [], orders: 0 }));
+    for (const l of c.lines) { const i = bucketOf(l.orderedAt); if (i >= 0) perDay[i].lines.push(l); }
+    for (const r of c.refunds) { const i = bucketOf(r.refundedAt); if (i >= 0) perDay[i].refunds.push(r); }
+    for (const o of c.orders) { const i = bucketOf(o.orderedAt); if (i >= 0) perDay[i].orders += 1; }
+    const netOfWeek = new Map(); const ordersOfWeek = new Map();
+    dayBuckets.forEach((b, i) => { const w = weekOf(b); netOfWeek.set(w, (netOfWeek.get(w) ?? 0) + aggregate(perDay[i].lines, perDay[i].refunds, config).net_sales_ex_tax); ordersOfWeek.set(w, (ordersOfWeek.get(w) ?? 0) + perDay[i].orders); });
+    return weekKeys.map((w) => ({ week_start: w, days: daysPerWeek.get(w), net_sales_ex_tax: round2(netOfWeek.get(w) ?? 0), order_count: ordersOfWeek.get(w) ?? 0 }));
+  };
 
   // classification of identified customers (same definitions as the Clients tab)
   const classify = (meta) => (meta.some((m) => m.idx === 1) ? 'new' : meta.some((m) => m.idx != null && m.idx > 1) || meta.length >= 2 ? 'returning' : 'unknown');

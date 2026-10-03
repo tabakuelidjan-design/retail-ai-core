@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 import { requireTimeZone } from '../metrics/profile.js';
 import { aggregate, windowFacts } from '../metrics/sales.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { dayBucketsOfWindow, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
+import { dayBucketsOfWindow, inWindow, localDateString, comparisonCoverage, previousEquivalentWindow, dayIndexer } from '../metrics/windows.js';
 import { productEvolutionStatus } from './explorer.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -143,11 +143,15 @@ export function buildProductsWorkspace({ ledger, data, windows, now, config, tim
 
   const totalDelta = prev ? round2(totalRevenue - prevTotal) : null;
   const details = {};
+  const dayOf = dayIndexer(days);
   for (const r of rows) {
     const key = keyOfId.get(r.id);
     const wl = winLinesByKey.get(key) ?? []; const wr = winRefundsByKey.get(key) ?? [];
-    const daily = days.map((d) => {
-      const a = aggregate(wl.filter((l) => inWindow(l.orderedAt, d)), wr.filter((x) => inWindow(x.refundedAt, d)), config);
+    const perDay = days.map(() => ({ lines: [], refunds: [] }));
+    for (const l of wl) { const i = dayOf(l.orderedAt); if (i >= 0) perDay[i].lines.push(l); }
+    for (const x of wr) { const i = dayOf(x.refundedAt); if (i >= 0) perDay[i].refunds.push(x); }
+    const daily = days.map((d, i) => {
+      const a = aggregate(perDay[i].lines, perDay[i].refunds, config);
       return { date: d.localStart, net_sales_ex_tax: a.net_sales_ex_tax, units_sold: a.units_sold };
     });
     const recent = [...(linesByKey.get(key) ?? [])].sort((a, b) => b.orderedAt - a.orderedAt).slice(0, RECENT_SALES).map((l) => {

@@ -181,3 +181,19 @@ export function previousEquivalentWindow(window) {
     localStart: prevStart, localEnd: prevEnd,
   };
 }
+
+/**
+ * Maps an instant to the index of the day bucket that contains it (half-open [start, end)), or -1. `buckets` are consecutive day windows in
+ * ascending order (dayBucketsOfWindow). Binary search: replaces "for every day, filter every row" loops (days x rows) by one pass over the rows.
+ */
+export function dayIndexer(buckets) {
+  const starts = buckets.map((b) => b.start.getTime());
+  return (instant) => {
+    const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
+    if (Number.isNaN(t) || !buckets.length) return -1;
+    let lo = 0; let hi = starts.length;
+    while (lo < hi) { const mid = (lo + hi) >>> 1; if (starts[mid] <= t) lo = mid + 1; else hi = mid; }
+    const i = lo - 1;
+    return i >= 0 && t < buckets[i].end.getTime() ? i : -1;
+  };
+}
