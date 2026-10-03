@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14263f">
+<meta name="referrer" content="no-referrer">
+<title>Nordla - Sourcing terrain</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="top">
+  <button class="ghost" id="btn-cases" aria-label="Cases">&#9776;</button>
+  <div class="title"><strong id="case-name">New case</strong><span id="case-sub" class="muted"></span></div>
+  <span id="mode" class="badge"></span>
+</header>
+<main id="screen" tabindex="-1"></main>
+<nav class="tabs" id="tabs" aria-label="Screens"></nav>
+<div id="overlay" hidden></div>
+<noscript>This tool needs JavaScript.</noscript>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
