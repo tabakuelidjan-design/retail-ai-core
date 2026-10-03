@@ -28,13 +28,14 @@ export function buildLedger(data, { config, currency } = {}) {
     costsByVariant.get(c.variant_id).push(c);
   }
 
-  const excluded = { test: 0, status: 0, otherCurrency: 0 };
+  const excluded = { test: 0, status: 0, otherCurrency: 0, refundsOnExcludedOrders: 0 };
+  const excludedOrderIds = new Set();
   const orders = [];
   const orderById = new Map();
   for (const o of data.orders) {
-    if (o.is_test) { excluded.test += 1; continue; }
-    if (config.excludedOrderStatuses.includes(o.status)) { excluded.status += 1; continue; }
-    if (o.currency !== ledgerCurrency) { excluded.otherCurrency += 1; continue; }
+    if (o.is_test) { excluded.test += 1; excludedOrderIds.add(o.id); continue; }
+    if (config.excludedOrderStatuses.includes(o.status)) { excluded.status += 1; excludedOrderIds.add(o.id); continue; }
+    if (o.currency !== ledgerCurrency) { excluded.otherCurrency += 1; excludedOrderIds.add(o.id); continue; }
     const order = { id: o.id, name: o.order_name ?? null, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included };
     orders.push(order);
     orderById.set(o.id, order);
@@ -65,6 +66,24 @@ export function buildLedger(data, { config, currency } = {}) {
     lineFactById.set(l.id, fact);
   }
 
+  // CONTEXT orders (defect A): orders older than the load window whose refunds fall inside it. They map and classify those refunds only; they are
+  // not in `orders`, `lineFacts` or any sales aggregate. The same exclusion rules apply, and a refund on an excluded order is counted, not hidden.
+  const contextOrderById = new Map();
+  for (const o of data.refundContext?.orders ?? []) {
+    if (orderById.has(o.id) || contextOrderById.has(o.id)) continue;
+    if (o.is_test || config.excludedOrderStatuses.includes(o.status) || o.currency !== ledgerCurrency) { excludedOrderIds.add(o.id); continue; }
+    contextOrderById.set(o.id, { id: o.id, name: o.order_name ?? null, orderedAt: new Date(o.ordered_at), status: o.status, taxesIncluded: o.taxes_included });
+  }
+  const contextLineFactById = new Map();
+  for (const l of data.refundContext?.orderLines ?? []) {
+    const order = contextOrderById.get(l.order_id);
+    if (!order) continue;
+    const qty = num(l.quantity); const gross = qty * num(l.unit_price); const discount = num(l.discount_amount); const tax = num(l.tax_amount);
+    const variant = l.variant_id ? variantById.get(l.variant_id) : null;
+    const cost = l.variant_id ? resolveUnitCost(costsByVariant.get(l.variant_id), order.orderedAt, ledgerCurrency) : { status: COST_STATUS.MISSING, unit_cost: null, currency: null, source: null, basis: 'NONE', reason: 'NO_VARIANT' };
+    contextLineFactById.set(l.id, { orderLineId: l.id, orderId: l.order_id, orderedAt: order.orderedAt, taxesIncluded: order.taxesIncluded, variantId: l.variant_id ?? null, productId: variant?.product_id ?? null, title: l.title_snapshot, sku: l.sku_snapshot ?? variant?.sku ?? null, qty, gross, discount, tax, taxRateBp: l.tax_rate_bp ?? null, exTaxBeforeRefund: order.taxesIncluded ? gross - discount - tax : gross - discount, cost });
+  }
+
   // Shipping charged per order, exactly as the source reported it. NULL columns = not captured (counted, never treated as zero).
   const shippingFacts = [];
   const shippingCoverage = { orders: 0, captured: 0, uncaptured: 0 };
@@ -90,12 +109,13 @@ export function buildLedger(data, { config, currency } = {}) {
   const linesByRefund = new Map();
   for (const rl of data.refundLines) {
     const refund = refundById.get(rl.refund_id);
-    const line = lineFactById.get(rl.order_line_id);
+    const line = lineFactById.get(rl.order_line_id) ?? contextLineFactById.get(rl.order_line_id);
     if (!refund || !line) continue;
     const amount = num(rl.amount);
     const tax = num(rl.tax_amount);
     const fact = {
       refundId: rl.refund_id, orderLineId: rl.order_line_id, refundedAt: new Date(refund.refunded_at),
+      orderId: line.orderId, outsideWindowOrder: !lineFactById.has(rl.order_line_id),
       variantId: line.variantId, productId: line.productId, qty: num(rl.quantity), amount, tax,
       exTax: line.taxesIncluded ? amount - tax : amount,
       cost: line.cost,
@@ -109,8 +129,10 @@ export function buildLedger(data, { config, currency } = {}) {
   // reported, but not part of product net sales.
   const refundTotals = [];
   const shippingRefundFacts = [];
+  const orderOf = (id) => orderById.get(id) ?? contextOrderById.get(id);
   for (const r of data.refunds) {
-    if (!orderById.has(r.order_id)) continue;
+    if (excludedOrderIds.has(r.order_id)) { excluded.refundsOnExcludedOrders += 1; continue; }
+    if (!orderOf(r.order_id)) continue;
     const mapped = (linesByRefund.get(r.id) ?? []).reduce(
       (a, { fact, line }) => a + fact.amount + (line.taxesIncluded ? 0 : fact.tax), 0);
     const shippingCaptured = r.shipping_subtotal !== null && r.shipping_subtotal !== undefined;
@@ -118,10 +140,10 @@ export function buildLedger(data, { config, currency } = {}) {
     const shipTax = shippingCaptured ? num(r.shipping_tax) : 0;
     const shippingAmount = shipSub + shipTax; // shipping refunded, incl. VAT
     if (shippingCaptured && (shipSub !== 0 || shipTax !== 0)) {
-      shippingRefundFacts.push({ refundId: r.id, orderId: r.order_id, orderName: orderById.get(r.order_id).name, refundedAt: new Date(r.refunded_at), subtotal: shipSub, tax: shipTax, exTax: shipSub, inclTax: shippingAmount });
+      shippingRefundFacts.push({ refundId: r.id, orderId: r.order_id, orderName: orderOf(r.order_id).name, refundedAt: new Date(r.refunded_at), subtotal: shipSub, tax: shipTax, exTax: shipSub, inclTax: shippingAmount });
     }
     refundTotals.push({
-      refundId: r.id, orderId: r.order_id, orderName: orderById.get(r.order_id).name, refundedAt: new Date(r.refunded_at),
+      refundId: r.id, orderId: r.order_id, orderName: orderOf(r.order_id).name, refundedAt: new Date(r.refunded_at),
       amount: num(r.amount), productAmount: mapped, shippingAmount, shippingCaptured,
       // refund money that is neither a mapped product line nor (captured) shipping: manual adjustments and, when shipping was not captured, shipping
       otherAmount: num(r.amount) - mapped - shippingAmount, lineCount: (linesByRefund.get(r.id) ?? []).length,
