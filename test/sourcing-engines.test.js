@@ -61,9 +61,9 @@ test('Safety Gate matching: barcode and brand+model exact, model-only probable, 
   assert.equal(matchSafetyGate({ identity: id, alerts: [{ caseNumber: 'A', brand: 'ACME', model: 'pb 1000' }], source: src }).status, 'EXACT_MATCH');
   assert.equal(matchSafetyGate({ identity: id, alerts: [{ caseNumber: 'A', brand: 'Other', model: 'PB-1000' }], source: src }).status, 'PROBABLE_MATCH');
   const none = matchSafetyGate({ identity: id, alerts: [{ caseNumber: 'A', brand: 'Other', model: 'Z', category: 'Toys', product: 'Doll' }], source: src });
-  assert.equal(none.status, 'NO_MATCH_FOUND'); assert.match(none.note, /does NOT mean the product is safe/);
+  assert.equal(none.status, 'NO_MATCH_FOUND'); assert.match(none.note, /NO MATCH FOUND does not prove safety/);
   const off = matchSafetyGate({ identity: id, alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED' } });
-  assert.equal(off.status, 'NOT_CHECKED'); assert.match(off.note, /not a clean result/);
+  assert.equal(off.status, 'NOT_CHECKED'); assert.match(off.note, /not a clean result and does not prove safety/);
 });
 
 test('customs: candidates are hints, no duty is invented, the cheapest heading is never picked, a BTI makes it binding', () => {

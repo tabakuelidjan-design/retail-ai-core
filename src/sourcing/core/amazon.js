@@ -13,8 +13,9 @@ export function normalizeObservation(o, now = new Date()) {
   const marketplace = String(o.marketplace ?? '').toLowerCase();
   const priceMinor = o.price === undefined || o.price === null || o.price === '' ? null : toMinor(o.price);
   const kind = o.kind === 'ESTIMATE' ? 'ESTIMATE' : 'OBSERVED';
+  const packQty = Math.max(1, Math.floor(Number(o.packQty) || 1)); // price of a multi-pack is compared per unit
   return {
-    id: o.id ?? null, marketplace, marketplaceKnown: MARKETPLACES.includes(marketplace), kind, priceMinor, currency: 'EUR', title: o.title ?? null, url: o.url ?? null, asin: o.asin ?? null,
+    id: o.id ?? null, marketplace, marketplaceKnown: MARKETPLACES.includes(marketplace), kind, priceMinor, packQty, unitMinor: priceMinor === null ? null : Math.round(priceMinor / packQty), notes: o.notes ?? null, currency: 'EUR', title: o.title ?? null, url: o.url ?? null, asin: o.asin ? String(o.asin).trim().toUpperCase() : null,
     rating: o.rating ?? null, reviews: o.reviews ?? null, sellerCount: o.sellerCount ?? null, rank: o.rank ?? null, amazonIsSeller: o.amazonIsSeller ?? null,
     observedAt: o.observedAt ?? now.toISOString(), source: o.source ?? 'MANUAL', status: priceMinor === null ? 'UNAVAILABLE' : kind === 'ESTIMATE' ? 'ESTIMATED' : 'OBSERVED',
     factClass: kind === 'ESTIMATE' ? FACT_CLASS.ESTIMATE : FACT_CLASS.OBSERVED_MARKET_DATA,
@@ -24,14 +25,14 @@ export function normalizeObservation(o, now = new Date()) {
 export function summarizeMarket(observations = [], now = new Date(), staleDays = 14) {
   const norm = observations.map((o) => (o.factClass ? o : normalizeObservation(o, now)));
   const byMarketplace = MARKETPLACES.map((m) => {
-    const list = norm.filter((o) => o.marketplace === m && o.priceMinor !== null);
+    const list = norm.filter((o) => o.marketplace === m && o.priceMinor !== null).map((o) => ({ ...o, priceMinor: o.unitMinor ?? o.priceMinor })); // per-unit prices
     if (!list.length) return { marketplace: m, status: 'UNAVAILABLE', count: 0, reason: 'no observation entered for this marketplace' };
     const prices = list.map((o) => o.priceMinor); const newest = Math.max(...list.map((o) => Date.parse(o.observedAt)));
     const age = Math.floor((now.getTime() - newest) / DAY); const onlyEstimates = list.every((o) => o.kind === 'ESTIMATE');
     return { marketplace: m, status: onlyEstimates ? 'ESTIMATED' : 'OBSERVED', count: list.length, minMinor: Math.min(...prices), medianMinor: median(prices), maxMinor: Math.max(...prices), newestObservedAt: new Date(newest).toISOString(), ageDays: age, freshness: age > staleDays ? 'STALE' : 'FRESH' };
   });
   const seen = byMarketplace.filter((m) => m.status !== 'UNAVAILABLE');
-  const all = norm.filter((o) => o.priceMinor !== null && o.kind === 'OBSERVED').map((o) => o.priceMinor);
+  const all = norm.filter((o) => o.priceMinor !== null && o.kind === 'OBSERVED').map((o) => o.unitMinor ?? o.priceMinor);
   return {
     byMarketplace, observationCount: norm.length,
     referencePriceMinor: all.length ? median(all) : null, referenceBasis: all.length ? 'median of the OBSERVED listings entered (similar listings are NOT evidence that this product may be sold)' : null,
@@ -50,12 +51,16 @@ export function amazonReadiness({ rules, channels, marketability, restricted }) 
   const items = az.flatMap((r) => (r.requiredEvidence ?? []).filter((e) => e.requirement !== 'NOT_APPLICABLE').map((e) => ({ ruleId: r.ruleId, id: e.id, label: e.label, requirement: e.requirement, coverage: e.coverage.status })));
   const open = items.filter((i) => ['MISSING', 'DOES_NOT_COVER_THIS_REGULATION', 'PRESENT_WITH_CONCERNS', 'OWN_ACTION'].includes(i.coverage));
   const notes = ['READY never means Amazon approval: Seller Central decides, category by category and listing by listing'];
+  const unreviewed = az.some((r) => r.status === 'APPLIES' && ['NEEDS_EXPERT_REVIEW', 'INCOMPLETE', 'UNVERIFIED'].includes(r.review?.status ?? 'UNVERIFIED'));
+  if (unreviewed) notes.push('what Amazon asks sellers to hold is UNVERIFIED here (no Seller Central help page could be opened): check it in Seller Central; readiness cannot be READY until the Amazon rules are reviewed');
   let status;
   if (restricted === true) status = 'NOT_READY';
   else if (marketability === 'RED') status = 'NOT_READY';
   else if (marketability === 'UNKNOWN') status = 'UNKNOWN';
-  else if (open.length === 0 && marketability === 'GREEN' && restricted === false) status = 'READY';
+  else if (open.length === 0 && marketability === 'GREEN' && restricted === false && !unreviewed) status = 'READY';
   else status = 'CONDITIONALLY_READY';
+  const own = open.filter((i) => i.coverage === 'OWN_ACTION');
+  if (own.length) notes.push(`steps only you can do and V0 cannot see (so READY is not reachable yet): ${own.map((i) => i.label).join('; ')}`);
   if (restricted === null || restricted === undefined) notes.push('category / brand restriction NOT checked: open Seller Central and check "Add a product" for the category before relying on this');
   if (restricted === true) notes.push('the category is restricted or gated for you: AMAZON_CATEGORY_RESTRICTION');
   return { requested: true, status, items, open, notes };

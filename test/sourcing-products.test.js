@@ -1,19 +1,24 @@
 // The fifteen synthetic test products (A-O). Expected results are NOT always GO: the engine must refuse where evidence is missing, contradictory or the economics fail.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { build, run, ident, traits, extraTraits, importer, ownBrand, commercial, docsFor, doc, eudoc, testReport, NOW, LIVE_CLEAN } from './sourcing-fixtures.js';
+import { REVIEWED_RULEBOOK, build, run, ident, traits, extraTraits, importer, ownBrand, commercial, docsFor, doc, eudoc, testReport, NOW, LIVE_CLEAN } from './sourcing-fixtures.js';
 
 const codes = (a) => a.decision.hardBlockers.map((b) => b.code);
 const asked = (a) => a.questions.map((q) => q.id);
 
-test('A. simple non-electrical household product -> GO (nothing regulated beyond GPSR, economics fine)', () => {
-  const a = run(build([...ident({ name: 'Plastic-free storage basket', category: 'household_general', model: 'SB-12' }), ...traits({}), ...importer, ...commercial({ price: 14.99, duty: 6.5, code: '4602.19' })]));
+test('A. simple non-electrical household product -> CONDITIONAL_GO today (unreviewed rules apply); GO once an expert has reviewed the rules', () => {
+  const events = [...ident({ name: 'Plastic-free storage basket', category: 'household_general', model: 'SB-12' }), ...traits({}), ...importer, ...commercial({ price: 14.99, duty: 6.5, code: '4602.19' })];
+  const a = run(build(events), undefined, { rulebook: REVIEWED_RULEBOOK }); const today = run(build(events));
   assert.equal(a.rules.ce.status, 'CE_NOT_APPLICABLE');
   assert.equal(a.decision.dimensions.identification, 'HIGH');
   assert.equal(a.decision.dimensions.marketability, 'GREEN');
   assert.equal(a.decision.dimensions.economics, 'ATTRACTIVE');
   assert.equal(a.decision.verdict, 'GO');
   assert.equal(a.decision.canCommitMoney, true);
+  assert.equal(today.decision.verdict, 'CONDITIONAL_GO', 'REACH, packaging and customs apply and are not verified: no unconditional green');
+  assert.notEqual(today.decision.dimensions.marketability, 'GREEN');
+  assert.ok(today.decision.conditions.some((c) => /rulebook not yet verified/.test(c)));
+  assert.equal(today.decision.canCommitMoney, false);
   assert.ok(a.maxPurchasePrice.maxUnitPriceMinor > 420, 'the max price must exceed the quote when the product is attractive');
 });
 
@@ -25,10 +30,12 @@ test('B. USB charger: no documents -> CONDITIONAL_GO with the missing documents 
   assert.ok(codes(none).includes('REQUIRED_DOCUMENT_MISSING'));
   assert.equal(none.decision.canCommitMoney, false);
   assert.ok(asked(none).some((i) => i.startsWith('doc:EU_DOC')) && asked(none).includes('doc:TEST_REPORT'));
-  const full = run(build([...base, ...docsFor.charger('PD-65')]));
+  const full = run(build([...base, ...docsFor.charger('PD-65')]), undefined, { rulebook: REVIEWED_RULEBOOK });
   assert.deepEqual(codes(full), [], JSON.stringify(full.decision.hardBlockers));
   assert.equal(full.decision.dimensions.supplierEvidence, 'COMPLETE');
   assert.equal(full.decision.verdict, 'GO');
+  const realReview = run(build([...base, ...docsFor.charger('PD-65')]));
+  assert.equal(realReview.decision.verdict, 'CONDITIONAL_GO', 'with the current review statuses even a complete document set is not an unconditional GO');
 });
 
 test('C. power bank: lithium + higher-risk regime -> never a plain GO; documents set clears the document blocker but keeps the expert condition', () => {
@@ -84,7 +91,9 @@ test('G. textile item: label with fibre composition is required; with it the pro
   assert.ok(none.decision.gaps.missingDocs.some((m) => m.docType === 'LABEL_ARTWORK'));
   const label = run(build([...base, doc('Label artwork: 100% cotton, size M, care: machine wash 30C. Made in China. Importer: Example BV, Rue Test 1, 5000 Namur, Belgium', { id: 'lab', docType: 'LABEL_ARTWORK' })]));
   assert.ok(!label.decision.gaps.missingDocs.some((m) => m.docType === 'LABEL_ARTWORK'));
-  assert.equal(label.decision.verdict, 'GO', JSON.stringify(label.decision.conditions));
+  assert.equal(label.decision.verdict, 'CONDITIONAL_GO', JSON.stringify(label.decision.conditions));
+  const reviewed = run(build([...base, doc('Label artwork: 100% cotton, size M, care: machine wash 30C. Made in China. Importer: Example BV, Rue Test 1, 5000 Namur, Belgium', { id: 'lab', docType: 'LABEL_ARTWORK' })]), undefined, { rulebook: REVIEWED_RULEBOOK });
+  assert.equal(reviewed.decision.verdict, 'GO', JSON.stringify(reviewed.decision.conditions));
 });
 
 test('H. cosmetic-like product: regulated, never GO from documents alone; a medical claim makes it INFORMATION_INSUFFICIENT', () => {

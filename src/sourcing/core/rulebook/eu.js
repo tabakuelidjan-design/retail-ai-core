@@ -15,10 +15,10 @@ export const EU_RULES = [
   R({
     id: 'eu.gpsr', family: 'GPSR', title: 'General Product Safety Regulation (EU) 2023/988',
     appliesWhen: { all: [{ ctx: 'consumerSales', is: true }, { not: { trait: 'medical', is: true } }] },
-    whyApplies: 'consumer product offered to EU consumers: GPSR applies in full to non-harmonised products and for the risks/aspects that sector law does not cover; for harmonised products the distance-sales, accident and online information duties still apply (Art. 2, 19-21)',
+    whyApplies: 'consumer product offered to EU consumers: GPSR applies in full to non-harmonised products. For products under Union harmonisation law (CE products) the manufacturer / importer / responsible-person articles (9-18) do NOT apply (the sector law and Reg. 2019/1020 Art. 4 do); the distance-sales information (Art. 19), accidents (Art. 20), digital information (Art. 21) and marketplace (Art. 22) duties still do',
     whyNot: 'not a consumer product, or medical (separate regime)',
     requiredEvidence: [
-      own('gpsr.risk_analysis', 'Internal risk analysis and technical documentation (kept 10 years)', 'REQUIRED', { when: { ctx: 'ownBrand', is: true } }),
+      own('gpsr.risk_analysis', 'Internal risk analysis and technical documentation (kept 10 years) - GPSR Arts. 9 and 13 apply only to products NOT under Union harmonisation law', 'REQUIRED', { when: { all: [{ ctx: 'ownBrand', is: true }, { not: HARMONISED_ANY }] } }),
       doc('gpsr.manual', 'Instructions and safety information in the consumer language of each target market', 'MANUAL', 'CONDITIONAL'),
       doc('gpsr.label', 'Label / packaging artwork showing manufacturer and responsible-person name and address, type or batch identifier', 'LABEL_ARTWORK', 'CONDITIONAL'),
       doc('gpsr.test', 'Safety test evidence supporting the risk analysis', 'TEST_REPORT', 'RECOMMENDED'),
@@ -32,11 +32,12 @@ export const EU_RULES = [
     whyApplies: 'the product falls under at least one Union harmonisation act: an EU-established economic operator (EU manufacturer, importer, authorised representative or EU fulfilment provider) must be named and verify that the EU declaration of conformity and the technical documentation exist; its details must be on the product, packaging or accompanying document and present at customs',
     whyNot: 'no harmonisation-act trait established',
     requiredEvidence: [
+      own('nlf.own_brand', 'Own name or brand: you are the MANUFACTURER of this harmonised product - conformity assessment, technical documentation, EU declaration of conformity and CE marking are yours (each sector act repeats this rule)', 'REQUIRED', { when: { ctx: 'ownBrand', is: true } }),
       own('nlf.eu_operator', 'Name an EU-established economic operator and have its name and address on the product / packaging / document', 'REQUIRED'),
       own('nlf.records', 'Keep a copy of the EU declaration of conformity and the technical documentation available for 10 years', 'REQUIRED'),
     ],
     sources: [SRC.MSR, SRC.NLF, SRC.BLUE_GUIDE], instrumentRefs: ['2019/1020'],
-    notes: 'The Blue Guide (section 3.6) says the Art. 4 operator details must be present when the product is declared for free circulation at customs.',
+    notes: 'The Blue Guide (section 3.6) says the Art. 4 operator details must be present when the product is declared for free circulation at customs. Art. 4(5) was replaced by Reg. 2024/1252 (still lists LVD, EMC, RED, RoHS, PPE, Toys). A "European product act" reviewing 765/2008, 768/2008 and 2019/1020 is pending: an expert must confirm whether it changes importer or private-label duties.',
   }),
   R({
     id: 'eu.ce', family: 'CE', title: 'CE marking',
@@ -83,7 +84,7 @@ export const EU_RULES = [
     standardFamily: 'RED', instrumentRefs: ['2014/53'],
     requiredEvidence: [doc('redcyber.test', 'Cybersecurity assessment evidence (e.g. EN 18031 series) for the exact model', 'TEST_REPORT', 'CONDITIONAL')],
     sources: [SRC.RED_CYBER, SRC.CRA_NEWS], requiresAuthorityConfirmation: true,
-    notes: 'Delegated Regulation 2026/339 repeals 2022/30 from 11 December 2027, when the Cyber Resilience Act applies in full (reporting duties from 11 September 2026). The CRA text itself was not opened: confirm with an expert.',
+    notes: 'Delegated Regulation 2022/30 applies since 1 Aug 2025 and is repealed from 11 Dec 2027 (2026/339), when the Cyber Resilience Act applies in full; CRA Art. 14 reporting duties apply from 11 Sep 2026 (also for products already on the market), Chapter IV (notified bodies) from 11 Jun 2026. Products placed on the market before 11 Dec 2027 are caught by the CRA only if substantially modified. How the two regimes interact needs an expert.',
   }),
   R({
     id: 'eu.charger', family: 'COMMON_CHARGER', title: 'Common charger Directive (EU) 2022/2380 (USB Type-C)',
@@ -111,7 +112,7 @@ export const EU_RULES = [
     standardFamily: 'BATTERIES', instrumentRefs: ['2023/1542'],
     requiredEvidence: [doc('batt.doc', 'Battery conformity and safety evidence (EN 62133 / IEC 62619 / UN 38.3) for the exact battery', 'BATTERY_DOC'), doc('batt.label', 'Battery labelling (capacity, separate-collection symbol, chemical symbols where required)', 'LABEL_ARTWORK', 'CONDITIONAL')],
     sources: [SRC.BATT_PAGE, SRC.BATT_FAQ, SRC.BATT], requiresAuthorityConfirmation: true, severity: 'HIGH',
-    notes: 'The application dates of several obligations (CE marking, labelling, due diligence, battery passport) are staggered: confirm the obligations that apply on the date of import.',
+    notes: 'Staggered application dates: general 18 Feb 2024; economic-operator obligations / CE marking 18 Aug 2024 (leads); extended producer responsibility 18 Aug 2025; due diligence postponed to 18 Aug 2027 (Reg. 2025/1561, lead); QR code, battery passport and removability 18 Feb 2027. The LABELLING date is unresolved between sources. An expert must confirm which apply on the date of import.',
   }),
   R({
     id: 'transport.lithium', family: 'BATTERIES', title: 'Lithium battery transport tests and dangerous-goods rules (UN 38.3)',
@@ -155,7 +156,7 @@ export const EU_RULES = [
     standardFamily: 'TOYS', instrumentRefs: ['2009/48'],
     requiredEvidence: [doc('toys.doc', 'EU declaration of conformity citing Directive 2009/48/EC', 'EU_DOC'), doc('toys.test', 'EN 71 test reports (mechanical, flammability, chemical) for the exact model', 'TEST_REPORT'), doc('toys.label', 'Packaging with age warnings, CE marking and manufacturer/importer details', 'PACKAGING_ARTWORK', 'CONDITIONAL')],
     sources: [SRC.TOYS, SRC.TOYS_REG, SRC.TOYS_BE], requiresAuthorityConfirmation: true, severity: 'HIGH',
-    notes: 'Toys are among the products most often found dangerous: expect a third-party laboratory report, not a supplier statement.',
+    notes: 'Toys are among the products most often found dangerous: expect a third-party laboratory report, not a supplier statement. Regulation 2025/2509: Arts. 28-44 and 49-55 (notified bodies, market surveillance) already apply since 1 Jan 2026.',
   }),
   R({
     id: 'eu.fcm', family: 'FCM', title: 'Food-contact materials (Regulation (EC) 1935/2004 and specific measures)',

@@ -1,5 +1,6 @@
 // Synthetic fixtures for the China-sourcing tests. Everything here is INVENTED (names, models, documents, alerts): no real supplier, lab or product.
 import { newCase, dispatch, assess } from '../src/sourcing/core/case.js';
+import { RULEBOOK } from '../src/sourcing/core/rulebook/index.js';
 import { KEY_TRAITS } from '../src/sourcing/core/taxonomy.js';
 
 export const NOW = new Date('2026-10-03T12:00:00Z');
@@ -12,7 +13,9 @@ export function build(events, { name = '' } = {}) {
   for (const e of events) c = dispatch(c, e, NOW);
   return c;
 }
-export const run = (c, externals = { safety: LIVE_CLEAN }) => assess(c, { now: NOW, externals });
+export const run = (c, externals = { safety: LIVE_CLEAN }, extra = {}) => assess(c, { now: NOW, externals, ...extra });
+/** TEST ONLY: what the rulebook would look like once an expert had reviewed every rule. Proves GO stays reachable, and that today's honest statuses are what hold it back. */
+export const REVIEWED_RULEBOOK = RULEBOOK.map((r) => ({ ...r, review: { status: 'VERIFIED_PRIMARY_TEXT_ONLY', basis: 'test override' } }));
 
 // ---- events ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 export const ident = ({ name, category, model = 'X-100', brand = 'Brightway', manufacturer = MFR }) => [

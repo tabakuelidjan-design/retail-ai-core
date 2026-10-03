@@ -13,7 +13,15 @@ const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
 
 const TABS = [['decision', 'Decision'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
-const S = { cases: ls.get('nordla.sourcing.cases', {}), currentId: ls.get('nordla.sourcing.current', null), tab: 'decision', token: ls.get('nordla.sourcing.token', ''), online: false, busy: '', flash: '', whatIf: null, A: null, error: null };
+const S = { cases: ls.get('nordla.sourcing.cases', {}), currentId: ls.get('nordla.sourcing.current', null), tab: 'decision', token: ls.get('nordla.sourcing.token', ''), offlineChoice: ls.get('nordla.sourcing.offlineChoice', false), authFailed: false, online: false, busy: '', flash: '', whatIf: null, A: null, error: null, suggestions: [], ai: null };
+
+/** The Safety Gate cache kept ON THE PHONE (matched locally, offline). LIVE only if the server said so within the last 24 h; otherwise CACHED. */
+function externals() {
+  const c = ls.get('nordla.sourcing.safety', null); if (!c || !c.alerts) return {};
+  const fresh = S.online && c.source?.mode === 'LIVE_VERIFIED' && Date.now() - Date.parse(c.phoneFetchedAt ?? 0) < 24 * 3600 * 1000; // live only while the server is reachable NOW
+  return { safety: { alerts: c.alerts, source: { ...c.source, mode: fresh ? 'LIVE_VERIFIED' : 'CACHED' } } };
+}
+const run = (state, extra = {}) => assess(state, { now: new Date(), externals: externals(), ...extra });
 
 const cur = () => S.cases[S.currentId];
 function persist() { if (!ls.set('nordla.sourcing.cases', S.cases)) S.flash = 'Local storage is full: export the case (menu) before adding more photos.'; ls.set('nordla.sourcing.current', S.currentId); }
@@ -22,26 +30,47 @@ function ensureCase() { if (!cur()) { const c = newCase({}); S.cases[c.id] = c; 
 /** Every change goes through here: event -> new state -> saved locally -> synced when a server is reachable. */
 function commit(event) {
   S.cases[S.currentId] = dispatch(cur(), event, new Date()); S.whatIf = null;
-  try { const a = assess(cur(), { now: new Date() }); S.cases[S.currentId] = recordDecision(cur(), a, new Date()); } catch { /* shown by render */ }
+  try { const a = run(cur()); S.cases[S.currentId] = recordDecision(cur(), a, new Date()); } catch { /* shown by render */ }
   persist(); render(); queueSync();
 }
 
 // ---- optional server -------------------------------------------------------------------------------------------------------------------------------------------------------
 const api = async (path, opts = {}) => { const r = await fetch(path, { ...opts, headers: { 'x-sourcing-token': S.token, 'content-type': 'application/json', ...(opts.headers ?? {}) } }); const body = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(body.error ?? r.status), { status: r.status, body }); return body; };
-async function ping() { if (!S.token) { S.online = false; return; } try { await api('/api/health'); S.online = true; } catch { S.online = false; } paintHeader(); }
+async function ping() {
+  if (!S.token) { S.online = false; return; }
+  const was = S.online;
+  try { await api('/api/health'); S.online = true; S.authFailed = false; } catch (e) { S.online = false; S.authFailed = e.status === 401 || e.status === 429; if (e.status === 429) S.flash = 'Too many wrong attempts: wait a minute.'; }
+  paintHeader(); if (S.authFailed || was !== S.online) render(); if (S.online) { refreshAi(); if (!was || dirty.size) sync(); }
+}
+async function refreshAi() { try { S.ai = await api('/api/ai/status'); } catch { S.ai = null; } }
 let syncTimer = null;
 function queueSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 800); }
+const dirty = new Set(ls.get('nordla.sourcing.dirty', []));
+const markDirty = (id) => { dirty.add(id); ls.set('nordla.sourcing.dirty', [...dirty]); };
+/** Pushes every case changed while offline (and the current one). A case changed elsewhere is never overwritten: it is reported. */
 async function sync() {
   if (!S.token || !cur()) return;
-  try { const saved = await api(`/api/cases/${cur().id}`, { method: 'PUT', body: JSON.stringify(cur()) }); S.cases[saved.id] = saved; persist(); S.online = true; }
-  catch (e) { if (e.status === 409) { S.flash = 'This case was changed on another device. Your copy is kept here; open the menu to take the server copy.'; S.conflict = e.body?.server ?? null; } else S.online = false; }
-  paintHeader();
+  markDirty(cur().id);
+  for (const id of [...dirty]) {
+    const c = S.cases[id]; if (!c) { dirty.delete(id); continue; }
+    try { const saved = await api(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(c) }); S.cases[saved.id] = saved; dirty.delete(id); S.online = true; }
+    catch (e) { if (e.status === 409) { S.flash = 'This case was changed on another device. Your copy is kept here; open the menu to take the server copy.'; S.conflict = e.body?.server ?? null; dirty.delete(id); } else { S.online = false; break; } }
+  }
+  ls.set('nordla.sourcing.dirty', [...dirty]); persist(); paintHeader();
 }
 async function checkSafety() {
-  const facts = safetyFacts(cur()); S.busy = 'safety'; render();
-  try { const r = await api('/api/safety/check', { method: 'POST', body: JSON.stringify({ identity: facts }) }); S.flash = ''; commit({ type: 'SAFETY_SNAPSHOT', snapshot: { ...r, identityKey: safetyKey(facts), checkedAt: new Date().toISOString() }, summary: `Safety Gate: ${r.status}` }); }
-  catch (e) { S.flash = e.status === 401 ? 'Wrong or missing access token (menu).' : 'The Safety Gate could not be reached: OFFLINE - VERIFICATION REQUIRED. This is not a clean result.'; }
+  S.busy = 'safety'; render();
+  try {
+    const r = await api('/api/safety/alerts');
+    if (!r.alerts) { S.flash = 'The server has no Safety Gate data yet (it downloads it at start). Still OFFLINE - VERIFICATION REQUIRED.'; }
+    else { ls.set('nordla.sourcing.safety', { alerts: r.alerts, source: r.source, phoneFetchedAt: new Date().toISOString() }); S.flash = ''; }
+  } catch (e) { S.flash = e.status === 401 ? 'Wrong or missing access token (menu).' : 'The Safety Gate could not be reached: the result stays what it was (CACHED or OFFLINE - VERIFICATION REQUIRED). This is not a clean result.'; }
   S.busy = ''; render();
+}
+async function fetchFx() {
+  const q = quoteOf(cur()); if (!S.token) { S.flash = 'Add the access token (menu) to fetch the ECB rate, or type the rate.'; return render(); }
+  try { const fx = await api(`/api/fx?currency=${encodeURIComponent(q.currency ?? 'USD')}`); commit({ type: 'COSTS', costs: { fx: { rate: String(fx.rate), date: fx.date, source: fx.source }, costs: cur().costs.costs, importVat: cur().costs.importVat } }); }
+  catch { S.flash = 'The rate could not be fetched: type it by hand.'; render(); }
 }
 
 // ---- helpers ----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -88,7 +117,8 @@ function caseScreen(A, c) {
     ${selectOf('category', 'Category (probable - you confirm)', [['', cat.known ? '(keep)' : '- choose -'], ...Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])], '')}<button class="btn" style="margin-top:10px">Save product</button></form>
     ${sugg.length ? `<p class="small muted">From the name, probably: ${sugg.map((s) => `<button type="button" class="btn sec" data-act="cat" data-key="${esc(s.id)}" style="min-height:36px;padding:4px 10px;margin:2px">${esc(s.label)}</button>`).join('')}</p>` : ''}
     <p class="small">Category now: <b>${esc(cat.known ? (CATEGORIES[cat.value]?.label ?? cat.value) : 'not set')}</b> <span class="muted">(${esc(cat.known ? cat.level.toLowerCase().replace(/_/g, ' ') : 'unknown')})</span></p>
-    <label>Photo of the product / label / packaging</label><input type="file" accept="image/*" capture="environment" data-act="photo"><div style="margin-top:6px">${photos}</div></div>
+    ${S.suggestions.length ? `<div class="note"><b>AI SUGGESTED</b> (not a fact until you confirm)${S.suggestions.map((x) => `<div style="margin-top:6px">${esc(CATEGORIES[x.categoryId]?.label ?? x.categoryId)} <span class="muted small">(${esc(x.confidence)}${x.why ? `: ${esc(x.why)}` : ''})</span><br><button type="button" class="btn sec" data-act="cat-confirm" data-key="${esc(x.categoryId)}" style="min-height:36px;padding:4px 10px">Yes, it is this</button> <button type="button" class="btn sec" data-act="cat-guess" data-key="${esc(x.categoryId)}" style="min-height:36px;padding:4px 10px">Keep as an unconfirmed guess</button></div>`).join('')}</div>` : ''}
+    <label>Photo of the product / label / packaging (kept as evidence)</label><input type="file" accept="image/*" capture="environment" data-act="photo"><div style="margin-top:6px">${photos}</div></div>
   <div class="card"><h2>WHAT IS IT, FOR REAL?</h2><p class="small muted">Each answer is stronger than the category guess. Unknown stays unknown.</p>
     ${TRAITS.map(([t, l]) => `<div class="trait"><div><div class="nm">${esc(l)}</div><div class="lv">${esc(level(t))}</div></div>${seg('trait', t, effective(id, t).known ? effective(id, t).value : null)}</div>`).join('')}
     ${radioOn ? `<div class="trait"><div><div class="nm">Connects to the internet / app</div><div class="lv">${esc(level('radio.internetConnected'))}</div></div>${seg('trait', 'radio.internetConnected', effective(id, 'radio.internetConnected').known ? effective(id, 'radio.internetConnected').value : null)}</div><div class="trait"><div><div class="nm">Handles personal data (account, voice, location)</div><div class="lv">${esc(level('radio.processesPersonalData'))}</div></div>${seg('trait', 'radio.processesPersonalData', effective(id, 'radio.processesPersonalData').known ? effective(id, 'radio.processesPersonalData').value : null)}</div>` : ''}
@@ -115,10 +145,22 @@ function negotiation(A) {
 }
 
 function docsScreen(A, c) {
-  return `<div class="card"><h2>ADD A SUPPLIER DOCUMENT</h2><p class="small muted">Declaration of conformity, test report, certificate, safety data sheet, manual, label... Nordla reads the text, then compares it with the case. It never says "fake": only what the evidence shows.</p>
-  <form data-form="doc"><label>File (PDF with text, or .txt)<input type="file" name="file" accept=".pdf,.txt,text/plain,application/pdf"></label><label>Or paste the text<textarea name="text" placeholder="Paste the text of the document"></textarea></label>${selectOf('claimed', 'The supplier calls it', [['', '(not stated)'], ['EU_DOC', 'EU Declaration of Conformity'], ['TEST_REPORT', 'Test report'], ['CERTIFICATE', 'Certificate'], ['SDS', 'Safety data sheet'], ['UN383', 'UN 38.3 report'], ['FCM_DOC', 'Food-contact declaration'], ['MANUAL', 'Manual']])}
-  <button class="btn" style="margin-top:10px" ${S.busy === 'doc' ? 'disabled' : ''}>${S.busy === 'doc' ? 'Reading...' : 'Inspect document'}</button></form></div>
-  ${A.documents.length ? A.documents.map((d) => `<div class="card"><h2>${esc(d.fileName ?? d.id)} <span class="muted small">${esc(d.docType)}</span></h2>${chip('Consistency', d.consistency, d.consistency === 'NO_ISSUE_FOUND' ? 'GREEN' : d.consistency === 'UNVERIFIED' || d.consistency === 'INSUFFICIENT_EVIDENCE' ? 'AMBER' : 'RED')}${d.findings.length ? list(d.findings.map((f) => `<b>${esc(f.code.replace(/_/g, ' '))}</b> (${esc(f.severity)}) - ${esc(f.detail)}`)) : ''}${d.note ? `<p class="note">${esc(d.note)}</p>` : ''}<p class="small muted">Models: ${esc(d.models.join(', ') || '-')} - Standards: ${esc(d.standards.slice(0, 5).join(', ') || '-')}</p></div>`).join('') : '<p class="muted">No document yet.</p>'}
+  const docCard = (d) => {
+    const photo = ls.get(`nordla.sourcing.docphoto.${c.id}.${d.id}`, null);
+    const src = { NATIVE: 'text layer of a PDF', PASTED: 'pasted text', TRANSCRIBED: 'typed by you from the paper', OCR: 'read from a photo by an AI reader', PHOTO_ONLY: 'photo only (not read)' }[d.textSource] ?? d.textSource;
+    const ocrPending = d.textSource === 'OCR' && !d.confirmed;
+    return `<div class="card"><h2>${esc(d.fileName ?? d.id)} <span class="muted small">${esc(d.docType)}</span></h2><p class="small muted">Source: ${esc(src)}${d.textSource === 'OCR' ? (d.confirmed ? ' - confirmed by you' : ' - UNVERIFIED until you confirm') : ''}</p>${photo ? `<img src="${esc(photo)}" alt="photo of the document" style="max-width:100%;max-height:220px;border-radius:8px">` : ''}
+    ${chip('Consistency', d.consistency, d.consistency === 'NO_ISSUE_FOUND' ? 'GREEN' : d.consistency === 'UNVERIFIED' || d.consistency === 'INSUFFICIENT_EVIDENCE' ? 'AMBER' : 'RED')}${d.findings.length ? list(d.findings.map((f) => `<b>${esc(f.code.replace(/_/g, ' '))}</b> (${esc(f.severity)}) - ${esc(f.detail)}`)) : ''}${d.note ? `<p class="note">${esc(d.note)}</p>` : ''}
+    <p class="small muted">Models: ${esc(d.models.join(', ') || '-')} - Standards: ${esc(d.standards.slice(0, 5).join(', ') || '-')}</p>
+    ${d.textSource === 'OCR' || d.textSource === 'PHOTO_ONLY' ? `<details ${ocrPending || d.textSource === 'PHOTO_ONLY' ? 'open' : ''}><summary>${d.textSource === 'PHOTO_ONLY' ? 'Type what the paper says' : 'Text read from the photo (fix it while looking at the paper)'}</summary><form data-form="doc-correct" data-id="${esc(d.id)}"><textarea name="text">${esc(d.ocrText ?? '')}</textarea><button class="btn sec" style="margin-top:6px">Save corrections</button></form>${ocrPending ? `<button class="btn" data-act="doc-confirm" data-key="${esc(d.id)}" style="margin-top:8px">I checked the fields against the paper: confirm</button>` : ''}</details>` : ''}</div>`;
+  };
+  return `<div class="card"><h2>ADD A SUPPLIER DOCUMENT</h2><p class="small muted">PDF with text, photo of a paper document, pasted text, or typed from the paper. A photographed document is only a MACHINE READING until you check it against the paper. Nordla never says "fake": only what the evidence shows.</p>
+  <form data-form="doc"><label>PDF, .txt or photo (camera)<input type="file" name="file" accept=".pdf,.txt,text/plain,application/pdf,image/*"></label><label>Or paste the text<textarea name="text" placeholder="Paste the text of the document"></textarea></label>${selectOf('claimed', 'The supplier calls it', [['', '(not stated)'], ['EU_DOC', 'EU Declaration of Conformity'], ['TEST_REPORT', 'Test report'], ['CERTIFICATE', 'Certificate'], ['SDS', 'Safety data sheet'], ['UN383', 'UN 38.3 report'], ['FCM_DOC', 'Food-contact declaration'], ['MANUAL', 'Manual']])}
+  <button class="btn" style="margin-top:10px" ${S.busy === 'doc' ? 'disabled' : ''}>${S.busy === 'doc' ? 'Reading...' : 'Inspect document'}</button></form>
+  <p class="small muted">Photo reading uses an AI reader ${S.ai?.enabled ? `(${esc(S.ai.provider)}, ${esc(S.ai.region)}): you are asked before each image is sent` : 'only if one is configured (none now): the photo is kept as evidence and you type what the paper says'}.</p></div>
+  <div class="card"><h2>TYPE FROM THE PAPER</h2><p class="small muted">Works offline and with no reader. Key fields only: it can show a model or standard mismatch, not whether the original is complete.</p>
+  <form data-form="doc-typed">${selectOf('docType', 'Document', [['EU_DOC', 'EU Declaration of Conformity'], ['TEST_REPORT', 'Test report'], ['CERTIFICATE', 'Certificate'], ['SDS', 'Safety data sheet'], ['UN383', 'UN 38.3 report'], ['FCM_DOC', 'Food-contact declaration'], ['MANUAL', 'Manual']])}<div class="row">${field('model', 'Model on the paper')}${field('date', 'Date of issue (YYYY-MM-DD)')}</div>${field('manufacturer', 'Manufacturer / applicant on the paper')}${field('directives', 'Directives / regulations cited (e.g. 2014/35/EU, 2014/30/EU)')}${field('standards', 'Standards cited (e.g. EN 62368-1, EN 55032)')}<div class="row">${field('lab', 'Laboratory (reports)')}${field('pages', 'Page x of y (e.g. 1 of 4)')}</div><button class="btn sec" style="margin-top:8px">Add typed document</button></form></div>
+  ${A.documents.length ? A.documents.map(docCard).join('') : '<p class="muted">No document yet.</p>'}
   ${A.crossChecks.length ? `<div class="card"><h2>BETWEEN DOCUMENTS</h2>${list(A.crossChecks.map((f) => esc(f.detail)))}</div>` : ''}`;
 }
 
@@ -126,24 +168,25 @@ function rulesScreen(A, c) {
   const rs = A.rules.results; const order = { APPLIES: 0, UNRESOLVED: 1, NOT_APPLICABLE: 2 };
   const sorted = [...rs].sort((a, b) => order[a.status] - order[b.status] || (b.severity === 'HIGH') - (a.severity === 'HIGH'));
   const s = A.safety; const cu = A.customs;
-  const one = (r) => `<details ${r.status === 'APPLIES' && r.severity === 'HIGH' ? 'open' : ''}><summary>${esc(r.title)} <span class="chip t-${r.status === 'APPLIES' ? 'AMBER' : r.status === 'UNRESOLVED' ? 'UNKNOWN' : 'GREEN'}">${esc(r.status.replace(/_/g, ' '))}</span> ${r.jurisdiction !== 'EU' ? `<span class="chip">${esc(r.jurisdiction)}</span>` : ''}</summary>
+  const one = (r) => `<details ${r.status === 'APPLIES' && r.severity === 'HIGH' ? 'open' : ''}><summary>${esc(r.title)} <span class="chip t-${r.status === 'APPLIES' ? 'AMBER' : r.status === 'UNRESOLVED' ? 'UNKNOWN' : 'GREEN'}">${esc(r.status.replace(/_/g, ' '))}</span> ${r.jurisdiction !== 'EU' ? `<span class="chip">${esc(r.jurisdiction)}</span>` : ''} <span class="chip t-${r.review.status === 'VERIFIED_CURRENT' ? 'GREEN' : r.review.status === 'VERIFIED_PRIMARY_TEXT_ONLY' ? 'AMBER' : 'RED'}" title="${esc(r.review.basis)}">rule review <b>${esc(r.review.status.replace(/_/g, ' '))}</b></span></summary><p class="small"><b>Rule review:</b> ${esc(r.review.status.replace(/_/g, ' '))} - ${esc(r.review.basis)}${r.review.needsExpert ? ` Expert: ${esc(r.review.needsExpert)}.` : ''}</p>
     <p>${esc(r.why)}</p>${r.requiredEvidence.length && r.status !== 'NOT_APPLICABLE' ? `<table>${r.requiredEvidence.map((e) => `<tr><td>${esc(e.label)}<br><span class="muted small">${esc(e.requirement)}</span></td><td class="n"><span class="chip t-${e.coverage.status === 'PRESENT' ? 'GREEN' : e.coverage.status === 'OWN_ACTION' ? 'UNKNOWN' : 'RED'}">${esc(e.coverage.status.replace(/_/g, ' '))}</span></td></tr>`).join('')}</table>` : ''}
     <p class="small muted">Sources: ${r.sources.map((x) => `${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>` : esc(x.title)} [${esc(x.verification.replace(/_/g, ' '))}]`).join('; ') || 'none'}<br>${esc(r.sourceVerification.replace(/_/g, ' '))} - ${esc(r.freshness)} - rule ${esc(r.ruleVersion)}${r.requiresAuthorityConfirmation ? ' - REQUIRES EXPERT / AUTHORITY CONFIRMATION' : ''}</p>${r.notes ? `<p class="note">${esc(r.notes)}</p>` : ''}</details>`;
   return `<div class="card"><h2>CE MARKING</h2>${chip('', A.rules.ce?.status ?? 'CE_APPLICABILITY_UNRESOLVED', A.rules.ce?.status === 'CE_REQUIRED' ? 'AMBER' : A.rules.ce?.status === 'CE_NOT_APPLICABLE' ? 'GREEN' : 'UNKNOWN')}<p>${esc(A.rules.ce?.why ?? '')}</p><p class="small muted">A CE logo on a product or a listing proves nothing; the EU declaration of conformity and its evidence do.</p></div>
   <div class="card"><h2>EU SAFETY GATE</h2>${chip('', s.status, s.status === 'EXACT_MATCH' || s.status === 'PROBABLE_MATCH' ? 'RED' : s.status === 'SIMILAR_PRODUCT_RISK' ? 'AMBER' : s.status === 'NO_MATCH_FOUND' ? 'GREEN' : 'UNKNOWN')} ${chip('Data', A.dataMode.replace(/_/g, ' '), A.dataMode === 'LIVE_VERIFIED' ? 'GREEN' : A.dataMode === 'CACHED' ? 'AMBER' : 'RED')}
     ${s.note ? `<p>${esc(s.note)}</p>` : ''}${s.matches?.length ? list(s.matches.slice(0, 5).map((m) => `<b>${esc(m.basis.replace(/_/g, ' '))}</b> ${esc(m.alertNumber ?? '')} - ${esc(m.name ?? '')} ${esc(m.brand ?? '')} - ${esc((m.hazards ?? []).join(', '))}`)) : ''}<p class="small muted">${esc(s.source?.coverage ?? '')} ${esc(s.source?.attribution ?? '')}</p>
-    <button class="btn" data-act="safety" ${S.busy === 'safety' || !S.token ? 'disabled' : ''}>${S.busy === 'safety' ? 'Checking...' : 'Check the Safety Gate now'}</button>${S.token ? '' : '<p class="small muted">Add the access token (menu) to use the Safety Gate cache.</p>'}</div>
-  <div class="card"><h2>CUSTOMS</h2><p class="warn">CUSTOMS CLASSIFICATION REQUIRES CONFIRMATION - candidates are hints, not a classification.</p>${list(cu.candidates.map((h) => `<b>${esc(h.code)}</b> ${esc(h.desc)} <span class="muted">(${esc(h.confidence)})</span>`))}
-    <form data-form="customs"><div class="row">${field('code', 'Code you choose', cu.chosenCode ?? '')}${field('rate', 'Duty rate % (from your broker / TARIC)', cu.duty?.ratePct ?? '', 'inputmode="decimal"')}</div><button class="btn sec" style="margin-top:8px">Save customs</button></form>${cu.notes.length ? list(cu.notes.map(esc)) : ''}</div>
+    <button class="btn" data-act="safety" ${S.busy === 'safety' || !S.token ? 'disabled' : ''}>${S.busy === 'safety' ? 'Checking...' : 'Refresh live evidence (Safety Gate)'}</button>${S.token ? `<p class="small muted">The cache is kept on this phone and matched here, so it also works offline (shown as CACHED).${S.A.safety.source?.newestPublication ? ` Newest weekly report ingested: ${esc(S.A.safety.source.newestPublication)}.` : ''}</p>` : '<p class="small muted">Add the access token (menu) to download the Safety Gate cache to this phone.</p>'}</div>
+  <div class="card"><h2>CUSTOMS</h2><p class="warn">CUSTOMS CLASSIFICATION REQUIRES CONFIRMATION. The codes below are <b>HS/CN CANDIDATES</b>, not a classification. ${esc(cu.limitation)}</p><p><b>${esc(cu.codeLabel)}</b></p>${list(cu.candidates.map((h) => `HS/CN CANDIDATE <b>${esc(h.code)}</b> ${esc(h.desc)} <span class="muted">(${esc(h.confidence)})</span>`))}
+    <form data-form="customs"><div class="row">${field('code', 'Candidate code you choose (stays unconfirmed)', cu.chosenCode ?? '')}${field('rate', 'Duty rate % (from your broker / TARIC)', cu.duty?.ratePct ?? '', 'inputmode="decimal"')}</div><button class="btn sec" style="margin-top:8px">Save customs</button></form>${cu.notes.length ? list(cu.notes.map(esc)) : ''}</div>
   <div class="card"><h2>RULES (${A.rules.summary.applies} apply, ${A.rules.summary.unresolved} unresolved)</h2>${sorted.map(one).join('')}</div>
   <div class="card"><h2>FRESHNESS</h2>${list(A.freshness.map((f) => `${esc(f.name)}: <b>${esc(f.status)}</b>${f.checkedAt ? ` (${esc(String(f.checkedAt).slice(0, 10))})` : ''}${f.mode ? ` - ${esc(f.mode.replace(/_/g, ' '))}` : ''}`))}</div>`;
 }
 
 function marketScreen(A, c) {
-  const m = A.market; const az = c.context.channels.includes('amazon');
-  return `<div class="card"><h2>AMAZON - WHAT YOU SAW</h2><p class="small muted">Nordla does not scrape Amazon. Enter listings you looked at (consumer price incl. VAT). A similar listing is NOT proof that you may sell this product.</p>
-  <form data-form="obs">${selectOf('marketplace', 'Marketplace', MARKETPLACES.map((x) => [x, x]))}<div class="row">${field('price', 'Price EUR', '', 'inputmode="decimal" required')}${field('reviews', 'Reviews', '', 'inputmode="numeric"')}</div>${field('title', 'Listing title')}${field('url', 'Link')}<button class="btn" style="margin-top:8px">Add observation</button></form></div>
-  <div class="card"><h2>PRICES SEEN</h2><table><tr><th>Marketplace</th><th class="n">Min</th><th class="n">Median</th><th class="n">Max</th></tr>${m.byMarketplace.map((x) => `<tr><td>${esc(x.marketplace)}<br><span class="muted small">${esc(x.status)}${x.freshness ? ` - ${esc(x.freshness)}` : ''}</span></td><td class="n">${esc(money(x.minMinor))}</td><td class="n">${esc(money(x.medianMinor))}</td><td class="n">${esc(money(x.maxMinor))}</td></tr>`).join('')}</table>${m.referencePriceMinor ? `<p>Reference (median observed): <b>${esc(money(m.referencePriceMinor))}</b> <button class="btn sec" data-act="useprice" data-key="${m.referencePriceMinor}" style="min-height:36px;padding:4px 10px">Use as my selling price</button></p>` : ''}${list(m.caveats.map(esc))}</div>
+  const m = A.market; const az = c.context.channels.includes('amazon'); const last = c.amazon.observations.at(-1);
+  return `<div class="card"><h2>AMAZON - WHAT YOU SAW</h2><p class="small muted">Nordla does not scrape Amazon. Type the listings you looked at (consumer price incl. VAT). A similar listing is NOT proof that you may sell this product.</p>
+  <form data-form="obs">${selectOf('marketplace', 'Marketplace', MARKETPLACES.map((x) => [x, x.replace('amazon.', 'Amazon ').toUpperCase().replace('AMAZON ', 'Amazon ')]), last?.marketplace ?? 'amazon.be')}<div class="row">${field('price', 'Price shown (EUR)', '', 'inputmode="decimal" required')}${field('packQty', 'Pack of (units)', 1, 'inputmode="numeric"')}</div><div class="row">${field('asin', 'ASIN (if known)', '', 'autocapitalize="characters"')}${field('reviews', 'Reviews', '', 'inputmode="numeric"')}</div><div class="row">${field('rating', 'Rating (0-5)', '', 'inputmode="decimal"')}${field('title', 'Title / seller')}</div>${field('notes', 'Notes')}<button class="btn" style="margin-top:8px">Add and next</button></form></div>
+  <div class="card"><h2>PRICES SEEN (per unit)</h2><table><tr><th>Marketplace</th><th class="n">Min</th><th class="n">Median</th><th class="n">Max</th></tr>${m.byMarketplace.map((x) => `<tr><td>${esc(x.marketplace)}<br><span class="muted small">${esc(x.status)}${x.freshness ? ` - ${esc(x.freshness)}` : ''}</span></td><td class="n">${esc(money(x.minMinor))}</td><td class="n">${esc(money(x.medianMinor))}</td><td class="n">${esc(money(x.maxMinor))}</td></tr>`).join('')}</table>${m.referencePriceMinor ? `<p>Median of observed listings: <b>${esc(money(m.referencePriceMinor))}</b> <button class="btn sec" data-act="useprice" data-key="${m.referencePriceMinor}" style="min-height:36px;padding:4px 10px">Use as selling price (OBSERVED)</button></p>` : ''}${list(m.caveats.map(esc))}
+  ${c.amazon.observations.length ? `<h3>Entered</h3><table>${c.amazon.observations.map((o, i) => `<tr><td>${esc(o.marketplace)} ${esc(money(o.priceMinor))}${o.packQty > 1 ? ` /${o.packQty}` : ''}<br><span class="muted small">${esc([o.asin, o.reviews != null ? `${o.reviews} reviews` : null, o.rating != null ? `${o.rating}*` : null, o.notes].filter(Boolean).join(' - '))}</span></td><td class="n"><button class="btn danger" data-act="obs-remove" data-key="${i}" style="min-height:34px;padding:2px 8px">Remove</button></td></tr>`).join('')}</table>` : ''}</div>
   <div class="card"><h2>AMAZON READINESS</h2>${az ? `${chip('', A.amazon.status, A.amazon.status === 'READY' ? 'GREEN' : A.amazon.status === 'NOT_READY' ? 'RED' : A.amazon.status === 'UNKNOWN' ? 'UNKNOWN' : 'AMBER')}<div class="trait" style="margin-top:8px"><div class="nm">Category restricted / gated for you (checked in Seller Central)</div>${seg('amz', 'restricted', c.amazon.restricted ?? null)}</div>${list(A.amazon.notes.map(esc))}${A.amazon.items.length ? `<table>${A.amazon.items.map((i) => `<tr><td>${esc(i.label)}</td><td class="n"><span class="chip t-${i.coverage === 'PRESENT' ? 'GREEN' : i.coverage === 'OWN_ACTION' ? 'UNKNOWN' : 'RED'}">${esc(i.coverage.replace(/_/g, ' '))}</span></td></tr>`).join('')}</table>` : ''}` : '<p class="muted">Amazon is not a target channel: turn it on in Case.</p>'}</div>`;
 }
 
@@ -151,8 +194,8 @@ function moneyScreen(A, c) {
   const q = quoteOf(c); const co = c.costs.costs ?? {}; const fx = c.costs.fx ?? {}; const iv = c.costs.importVat ?? {}; const sl = c.sale ?? {}; const sa = c.saleAmazon ?? {}; const L = A.landed; const E = A.economics;
   const lineOf = (k) => co[k]?.total ?? co[k]?.perUnit ?? '';
   return `<div class="card"><h2>SUPPLIER QUOTE</h2><form data-form="quote"><div class="row">${field('unitPrice', 'Unit price', q.unitPrice ?? '', 'inputmode="decimal"')}${selectOf('currency', 'Currency', [['USD', 'USD'], ['CNY', 'CNY'], ['EUR', 'EUR']], q.currency ?? 'USD')}</div><div class="row">${field('qty', 'Quantity I would buy', q.qty ?? '', 'inputmode="numeric"')}${field('moq', 'Supplier MOQ', q.moq ?? '', 'inputmode="numeric"')}</div>${selectOf('incoterm', 'Incoterm', [['', '(not stated)'], ...Object.keys(INCOTERMS).map((k) => [k, k])], q.incoterm ?? '')}<div class="row">${field('leadTimeDays', 'Lead time (days)', q.leadTimeDays ?? '', 'inputmode="numeric"')}${field('carton', 'Carton (cm / kg / units)', q.carton ?? '')}</div><button class="btn" style="margin-top:8px">Save quote</button></form></div>
-  <div class="card"><h2>IMPORT COSTS (EUR, whole order)</h2><p class="small muted">Leave blank = UNKNOWN. Nothing is assumed: an unknown critical cost gives INFORMATION INSUFFICIENT.</p><form data-form="costs"><div class="row">${field('fxRate', 'FX: EUR per 1 unit of currency', fx.rate ?? '', 'inputmode="decimal"')}${field('fxDate', 'FX date', fx.date ?? '')}</div><div class="row">${field('freight', 'Freight (total)', lineOf('freight'), 'inputmode="decimal"')}${field('insurance', 'Insurance (total)', lineOf('insurance'), 'inputmode="decimal"')}</div><div class="row">${field('originCharges', 'Origin charges', lineOf('originCharges'), 'inputmode="decimal"')}${field('brokerage', 'Customs broker', lineOf('brokerage'), 'inputmode="decimal"')}</div><div class="row">${field('testing', 'Lab testing', lineOf('testing'), 'inputmode="decimal"')}${field('inspection', 'Inspection', lineOf('inspection'), 'inputmode="decimal"')}</div><div class="row">${field('labelling', 'Labelling / translation', lineOf('labelling'), 'inputmode="decimal"')}${field('epr', 'Recupel / Bebat / packaging', lineOf('epr'), 'inputmode="decimal"')}</div><div class="row">${field('inboundLogistics', 'Delivery to your shop / FBA', lineOf('inboundLogistics'), 'inputmode="decimal"')}${field('importVat', 'Import VAT %', iv.ratePct ?? '', 'inputmode="decimal"')}</div><label><input type="checkbox" name="vatRecoverable" ${iv.recoverable === false ? '' : 'checked'} style="width:auto;min-height:0"> import VAT is recoverable</label><p class="small muted">Amounts are treated as estimates (not quotes).</p><button class="btn" style="margin-top:8px">Save costs</button></form></div>
-  <div class="card"><h2>SELLING SIDE</h2><form data-form="sale"><div class="row">${field('price', 'My selling price (incl. VAT)', sl.sellingPriceGross ?? '', 'inputmode="decimal"')}${field('vat', 'VAT %', sl.vatRatePct ?? 21, 'inputmode="decimal"')}</div>${field('target', 'Target margin (% of price without VAT)', sl.targetContributionPct ?? '', 'inputmode="decimal"')}<button class="btn" style="margin-top:8px">Save</button></form>
+  <div class="card"><h2>IMPORT COSTS (EUR, whole order)</h2><p class="small muted">Leave blank = UNKNOWN. Nothing is assumed: an unknown critical cost gives INFORMATION INSUFFICIENT.</p><form data-form="costs"><div class="row">${field('fxRate', 'FX: EUR per 1 unit of currency', fx.rate ?? '', 'inputmode="decimal"')}${field('fxDate', 'FX date', fx.date ?? '')}</div><button type="button" class="btn sec" data-act="fx" style="min-height:36px;padding:4px 10px">Fetch today's ECB rate</button><div class="row">${field('freight', 'Freight (total)', lineOf('freight'), 'inputmode="decimal"')}${field('insurance', 'Insurance (total)', lineOf('insurance'), 'inputmode="decimal"')}</div><div class="row">${field('originCharges', 'Origin charges', lineOf('originCharges'), 'inputmode="decimal"')}${field('brokerage', 'Customs broker', lineOf('brokerage'), 'inputmode="decimal"')}</div><div class="row">${field('testing', 'Lab testing', lineOf('testing'), 'inputmode="decimal"')}${field('inspection', 'Inspection', lineOf('inspection'), 'inputmode="decimal"')}</div><div class="row">${field('labelling', 'Labelling / translation', lineOf('labelling'), 'inputmode="decimal"')}${field('epr', 'Recupel / Bebat / packaging', lineOf('epr'), 'inputmode="decimal"')}</div><div class="row">${field('inboundLogistics', 'Delivery to your shop / FBA', lineOf('inboundLogistics'), 'inputmode="decimal"')}${field('importVat', 'Import VAT %', iv.ratePct ?? '', 'inputmode="decimal"')}</div><label><input type="checkbox" name="vatRecoverable" ${iv.recoverable === false ? '' : 'checked'} style="width:auto;min-height:0"> import VAT is recoverable</label><p class="small muted">Amounts are treated as estimates (not quotes).</p><button class="btn" style="margin-top:8px">Save costs</button></form></div>
+  <div class="card"><h2>SELLING SIDE</h2><form data-form="sale"><div class="row">${field('price', 'Selling price (incl. VAT)', sl.sellingPriceGross ?? '', 'inputmode="decimal"')}${field('vat', 'VAT %', sl.vatRatePct ?? 21, 'inputmode="decimal"')}</div>${selectOf('basis', 'This price is', [['TARGET', 'TARGET: the price I intend to charge'], ['OBSERVED', 'OBSERVED: a listing I saw'], ['ASSUMED', 'ASSUMED: a placeholder']], sl.priceBasis ?? 'TARGET')}${field('target', 'Target margin (% of price without VAT)', sl.targetContributionPct ?? '', 'inputmode="decimal"')}<button class="btn" style="margin-top:8px">Save</button></form>
   ${c.context.channels.includes('amazon') ? `<h3>Amazon fees (from Seller Central - never guessed)</h3><form data-form="amazon-sale"><div class="row">${field('aprice', 'Amazon price (incl. VAT)', sa.sellingPriceGross ?? '', 'inputmode="decimal"')}${field('avat', 'VAT %', sa.vatRatePct ?? 21, 'inputmode="decimal"')}</div><div class="row">${field('referral', 'Referral fee %', sa.lines?.find((l) => l.key === 'referral')?.value ?? '', 'inputmode="decimal"')}${field('fulfilment', 'FBA fee / unit EUR', sa.lines?.find((l) => l.key === 'fulfilment')?.value ?? '', 'inputmode="decimal"')}</div><button class="btn sec" style="margin-top:8px">Save Amazon</button></form>${A.economicsAmazon ? `<p class="small">Amazon: <b>${esc(A.economicsAmazon.status)}</b>${A.economicsAmazon.contributionMinor != null ? ` - contribution ${esc(money(A.economicsAmazon.contributionMinor))}${A.economicsAmazon.contributionIsUpperBound ? ' (UPPER BOUND)' : ''}` : ''}</p>` : ''}` : ''}</div>
   <div class="card"><h2>LANDED COST</h2>${chip('', L.status, L.status === 'COMPLETE' ? 'GREEN' : L.status === 'RANGE' ? 'AMBER' : 'RED')}${L.status === 'INFORMATION_INSUFFICIENT' ? `<p class="warn">Critical unknown: ${esc((L.criticalUnknown ?? []).join(', '))}</p>` : `<div class="big">${esc(money(L.totals.landedPerUnitEurMinor))}<span class="muted small"> per unit${L.totals.rangeEurMinor ? ` (range ${esc(money(L.totals.rangeEurMinor.perUnit.min))} - ${esc(money(L.totals.rangeEurMinor.perUnit.max))})` : ''}</span></div>`}
   <table>${(L.lines ?? []).map((l) => `<tr><td>${esc(l.key)}</td><td class="n"><span class="muted small">${esc(l.status)}</span> ${esc(money(l.totalMinor))}</td></tr>`).join('')}</table>${L.warnings?.length ? list(L.warnings.map(esc)) : ''}${E.contributionMinor != null ? `<h3>Per unit</h3><p>Contribution <b>${esc(money(E.contributionMinor))}</b>${E.contributionPct != null ? ` = ${(E.contributionPct * 100).toFixed(1)}% of net revenue` : ''}${E.breakEvenGrossMinor ? `; break-even selling price ${esc(money(E.breakEvenGrossMinor))}` : ''}</p>` : `<p class="muted">${esc(E.reason ?? '')}</p>`}</div>`;
@@ -168,10 +211,14 @@ function paintHeader() {
   el.className = `badge ${mode === 'LIVE_VERIFIED' ? 'b-live' : mode === 'CACHED' ? 'b-cached' : 'b-off'}`;
   el.textContent = mode === 'LIVE_VERIFIED' ? 'LIVE VERIFIED' : mode === 'CACHED' ? 'CACHED' : 'OFFLINE - VERIFY'; el.title = `${S.online ? 'server reachable' : 'server not reachable (the case works offline)'}`;
 }
+function gate() {
+  return `<div class="card"><h2>SIGN IN</h2><p class="small muted">Enter the access token of your Nordla server to keep cases on it and use the Safety Gate cache. Or work on this phone only: everything except live checks works offline.</p>${S.authFailed ? '<p class="warn">The token was refused.</p>' : ''}<label>Access token<input id="gate-tok" type="password" autocomplete="off"></label><button class="btn" data-act="gate-save" style="margin-top:10px">Sign in</button><button class="btn sec" data-act="gate-offline" style="margin-top:8px">Work on this phone only</button></div>`;
+}
 function render() {
   ensureCase(); const c = cur();
+  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
   $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
-  try { S.A = assess(c, { now: new Date() }); S.error = null; } catch (e) { S.error = e; console.error(e); }
+  try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
   paintHeader();
   const main = $('#screen');
   main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : SCREENS[S.tab](S.A, c)}`;
@@ -203,26 +250,41 @@ async function onSubmit(ev) {
     const costs = {}; for (const k of ['freight', 'insurance', 'originCharges', 'brokerage', 'testing', 'inspection', 'labelling', 'epr', 'inboundLogistics']) { const s = lineSpec(d[k]); if (s) costs[k] = s; }
     return commit({ type: 'COSTS', costs: { fx: num(d.fxRate) ? { rate: num(d.fxRate), date: d.fxDate || new Date().toISOString().slice(0, 10), source: 'USER_ENTERED' } : undefined, costs, importVat: num(d.importVat) ? { ratePct: num(d.importVat), recoverable: d.vatRecoverable === 'on' } : undefined } });
   }
-  if (name === 'sale') return commit({ type: 'SALE', sale: { sellingPriceGross: num(d.price), vatRatePct: num(d.vat), targetContributionPct: num(d.target) } });
+  if (name === 'sale') return commit({ type: 'SALE', sale: { sellingPriceGross: num(d.price), vatRatePct: num(d.vat), targetContributionPct: num(d.target), priceBasis: d.basis || 'TARGET' } });
   if (name === 'amazon-sale') { const lines = []; if (num(d.referral)) lines.push({ key: 'referral', kind: 'pct_of_gross', value: num(d.referral), status: 'KNOWN', source: 'Seller Central (entered)' }); else lines.push({ key: 'referral', kind: 'pct_of_gross', status: 'UNKNOWN' }); if (num(d.fulfilment)) lines.push({ key: 'fulfilment', kind: 'per_unit', value: num(d.fulfilment), status: 'KNOWN', source: 'Seller Central (entered)' }); else lines.push({ key: 'fulfilment', kind: 'per_unit', status: 'UNKNOWN' }); return commit({ type: 'SALE_AMAZON', sale: { sellingPriceGross: num(d.aprice), vatRatePct: num(d.avat), lines } }); }
   if (name === 'customs') return commit({ type: 'CUSTOMS', customs: { chosenCode: d.code || null, duty: num(d.rate) ? { ratePct: num(d.rate), kind: 'USER_ENTERED', source: 'entered by the owner' } : cur().customs?.duty } });
-  if (name === 'obs') return commit({ type: 'AMAZON_OBS', observation: { marketplace: d.marketplace, price: num(d.price), reviews: num(d.reviews), title: d.title, url: d.url, source: 'MANUAL' } });
-  if (name === 'whatif') { if (num(d.unitPrice) === null) return; try { S.whatIf = whatIf(cur(), { unitPrice: num(d.unitPrice), currency: quoteOf(cur()).currency ?? 'USD' }, { now: new Date() }); } catch (e) { S.flash = `Could not compute: ${e.message}`; } return render(); }
+  if (name === 'obs') return commit({ type: 'AMAZON_OBS', observation: { marketplace: d.marketplace, price: num(d.price), packQty: num(d.packQty), asin: d.asin, reviews: num(d.reviews), rating: num(d.rating), title: d.title, notes: d.notes, source: 'MANUAL' } });
+  if (name === 'whatif') { if (num(d.unitPrice) === null) return; try { S.whatIf = whatIf(cur(), { unitPrice: num(d.unitPrice), currency: quoteOf(cur()).currency ?? 'USD' }, { now: new Date(), externals: externals() }); } catch (e) { S.flash = `Could not compute: ${e.message}`; } return render(); }
   if (name === 'doc') return addDocument(f, d);
+  if (name === 'doc-correct') return commit({ type: 'DOCUMENT_CORRECT', id: f.dataset.id, text: d.text ?? '' });
+  if (name === 'doc-typed') {
+    const lines = [{ EU_DOC: 'EU DECLARATION OF CONFORMITY', TEST_REPORT: 'TEST REPORT', CERTIFICATE: 'CERTIFICATE', SDS: 'SAFETY DATA SHEET', UN383: 'UN 38.3 test summary', FCM_DOC: 'Declaration of Compliance - food contact', MANUAL: 'USER MANUAL' }[d.docType] ?? 'DOCUMENT', d.manufacturer && `Manufacturer: ${d.manufacturer}`, d.model && `Model: ${d.model}`, d.directives && `Union legislation: ${d.directives}`, d.standards && `Standards: ${d.standards}`, d.lab && `Testing laboratory: ${d.lab}`, d.date && `Date of issue: ${d.date}`, d.pages && `Page ${d.pages.replace(/\s*of\s*/i, ' of ')}`].filter(Boolean);
+    return commit({ type: 'DOCUMENT', fileName: 'typed from the paper', text: lines.join('\n'), textSource: 'TRANSCRIBED', docType: d.docType, summary: 'document typed from the paper' });
+  }
 }
 
+const downscale = async (file, max, q) => { const bmp = await createImageBitmap(file); const k = Math.min(1, max / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); return cv.toDataURL('image/jpeg', q); };
 async function addDocument(form, d) {
-  const file = form.elements.file.files[0]; let text = d.text ?? ''; let pages = null; let note = '';
+  const file = form.elements.file.files[0]; let text = d.text ?? ''; let pages = null; let note = ''; let textSource = 'PASTED'; let photoRef = null; let ocrProvider = null; const id = `doc-${cur().documents.length + 1}`;
   S.busy = 'doc'; render();
   try {
     if (file && !text) {
-      if (/\.txt$/i.test(file.name) || file.type.startsWith('text/')) text = await file.text();
-      else if (S.token) { const buf = new Uint8Array(await file.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000)); const r = await api('/api/documents/extract', { method: 'POST', body: JSON.stringify({ fileName: file.name, mime: file.type, dataBase64: btoa(bin) }) }); text = r.text ?? ''; pages = r.pages ?? null; note = r.note ?? ''; }
-      else note = 'Reading a PDF needs the server (add the access token, menu). Paste the text instead.';
+      if (file.type.startsWith('image/')) {
+        const url = await downscale(file, 1600, 0.8); photoRef = `docphoto-${id}`; ls.set(`nordla.sourcing.docphoto.${cur().id}.${id}`, url);
+        textSource = 'PHOTO_ONLY'; note = 'The photo is kept as evidence but could not be read: type what the paper says (below, in the document card).';
+        if (S.token && S.online && S.ai?.enabled) {
+          if (window.confirm(`Send this image of the document to ${S.ai.provider} (${S.ai.region}) to be read? Supplier documents are confidential. Choose Cancel to keep the photo only.`)) {
+            try { const r = await api('/api/documents/extract', { method: 'POST', body: JSON.stringify({ fileName: file.name, mime: 'image/jpeg', dataBase64: url.split(',')[1], consent: true }) }); text = r.text ?? ''; textSource = 'OCR'; ocrProvider = r.provider ?? null; note = r.note ?? ''; }
+            catch (e) { note = `The reader failed (${e.message}). The photo is kept: type what the paper says.`; }
+          } else note = 'Photo kept, not sent. Type what the paper says.';
+        }
+      } else if (/\.txt$/i.test(file.name) || file.type.startsWith('text/')) { text = await file.text(); }
+      else if (S.token) { const buf = new Uint8Array(await file.arrayBuffer()); let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000)); const r = await api('/api/documents/extract', { method: 'POST', body: JSON.stringify({ fileName: file.name, mime: file.type, dataBase64: btoa(bin) }) }); text = r.text ?? ''; pages = r.pages ?? null; note = r.note ?? ''; textSource = r.textSource ?? 'PHOTO_ONLY'; }
+      else note = 'Reading a PDF needs the server (add the access token, menu). Paste or type the text instead.';
     }
     S.flash = note;
-    commit({ type: 'DOCUMENT', fileName: file?.name ?? 'pasted text', text, pages, claimedType: d.claimed || null, summary: 'document added' });
-  } catch (e) { S.flash = `The document could not be read (${e.message}). Paste its text instead.`; }
+    commit({ type: 'DOCUMENT', id, fileName: file?.name ?? 'pasted text', text, pages, claimedType: d.claimed || null, textSource: text ? textSource : (textSource === 'OCR' ? 'OCR' : textSource), photoRef, ocrProvider, summary: 'document added' });
+  } catch (e) { S.flash = `The document could not be read (${e.message}). Paste or type its text instead.`; }
   S.busy = ''; render();
 }
 
@@ -236,7 +298,7 @@ async function onClick(ev) {
   if (act === 'amz') return commit({ type: 'AMAZON', amazon: { restricted: val } });
   if (act === 'cat') return commit({ type: 'CATEGORY', category: key });
   if (act === 'safety') return checkSafety();
-  if (act === 'useprice') return commit({ type: 'SALE', sale: { sellingPriceGross: String(Number(key) / 100), vatRatePct: cur().sale?.vatRatePct ?? '21' } });
+  if (act === 'useprice') return commit({ type: 'SALE', sale: { sellingPriceGross: String(Number(key) / 100), vatRatePct: cur().sale?.vatRatePct ?? '21', priceBasis: 'OBSERVED' } });
   if (act === 'show-sup') return showSupplier();
   if (act === 'copy-sup') { try { await navigator.clipboard.writeText(supplierText(S.A)); S.flash = 'Copied.'; } catch { S.flash = 'Copy is not available here: use "Show to supplier".'; } return render(); }
   if (act === 'close-overlay') { $('#overlay').hidden = true; $('#overlay').className = ''; return; }
@@ -244,6 +306,13 @@ async function onClick(ev) {
   if (act === 'opencase') { S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); return render(); }
   if (act === 'server-copy') { if (S.conflict) { S.cases[S.conflict.id] = S.conflict; S.conflict = null; S.flash = ''; persist(); closeOverlay(); render(); } return; }
   if (act === 'export') { const blob = new Blob([JSON.stringify(cur(), null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${cur().id}.json`; a.click(); return; }
+  if (act === 'gate-save') { S.token = $('#gate-tok').value.trim(); ls.set('nordla.sourcing.token', S.token); S.authFailed = false; await ping(); if (!S.authFailed) { await checkSafety(); queueSync(); } return render(); }
+  if (act === 'gate-offline') { S.offlineChoice = true; ls.set('nordla.sourcing.offlineChoice', true); return render(); }
+  if (act === 'fx') return fetchFx();
+  if (act === 'cat-confirm') { S.suggestions = []; return commit({ type: 'CATEGORY', category: key }); }
+  if (act === 'cat-guess') { S.suggestions = []; return commit({ type: 'CATEGORY', category: key, level: 'AI_SUGGESTED' }); }
+  if (act === 'doc-confirm') return commit({ type: 'DOCUMENT_CONFIRM', id: key });
+  if (act === 'obs-remove') return commit({ type: 'AMAZON_OBS_REMOVE', index: Number(key) });
   if (act === 'savetoken') { S.token = $('#tok').value.trim(); ls.set('nordla.sourcing.token', S.token); await ping(); closeOverlay(); queueSync(); return render(); }
 }
 const closeOverlay = () => { const o = $('#overlay'); o.hidden = true; o.className = ''; };
@@ -260,16 +329,22 @@ function openMenu() {
 async function onPhoto(ev) {
   const t = ev.target.closest('input[data-act="photo"]'); if (!t || !t.files[0]) return; const file = t.files[0]; const c = cur();
   try {
-    const bmp = await createImageBitmap(file); const k = Math.min(1, 640 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
-    const url = cv.toDataURL('image/jpeg', 0.7); const n = c.identity.photos.length; if (!ls.set(`nordla.sourcing.photo.${c.id}.${n}`, url)) S.flash = 'Photo too large for local storage: it was not saved.';
+    const url = await downscale(file, 640, 0.7); const n = c.identity.photos.length; if (!ls.set(`nordla.sourcing.photo.${c.id}.${n}`, url)) S.flash = 'Photo too large for local storage: it was not saved.';
     commit({ type: 'PHOTO', ref: `photo-${n}`, note: file.name });
-    if (S.token && S.online) { try { const r = await api('/api/ai/describe', { method: 'POST', body: JSON.stringify({ imageBase64: url.split(',')[1], imageMime: 'image/jpeg' }) }); if (r.status === 'DISABLED') { S.flash = r.note; render(); } } catch { /* optional */ } }
-    else { S.flash = 'Photo saved. No AI reader is available offline: type what it is, then pick the category.'; render(); }
+    S.flash = 'Photo saved as EVIDENCE. Nordla does not recognise products by itself: choose what it is below (or in the category list) to confirm it.';
+    if (S.token && S.online && S.ai?.enabled) {
+      if (window.confirm(`Send this photo to ${S.ai.provider} (${S.ai.region}) to get a category SUGGESTION? Only the photo is sent. Cancel keeps it on this phone.`)) {
+        try { const r = await api('/api/ai/describe', { method: 'POST', body: JSON.stringify({ imageBase64: url.split(',')[1], imageMime: 'image/jpeg', consent: true }) }); S.suggestions = r.suggestions ?? []; S.flash = S.suggestions.length ? 'AI SUGGESTED categories below: not a fact until you confirm.' : 'The reader could not tell what it is: choose the category yourself.'; } catch { S.flash = 'The reader could not be reached: choose the category yourself.'; }
+      }
+    }
+    render();
   } catch { S.flash = 'This photo could not be read.'; render(); }
 }
 
 document.addEventListener('click', onClick); document.addEventListener('submit', onSubmit); document.addEventListener('change', onPhoto);
 $('#btn-cases').addEventListener('click', openMenu);
-window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; paintHeader(); });
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; render(); });
+setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
+window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token }) };
 render(); ping();

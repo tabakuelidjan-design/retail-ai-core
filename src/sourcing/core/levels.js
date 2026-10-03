@@ -15,13 +15,14 @@ export const FACT_CLASS = Object.freeze({
 
 /** How a product-identity attribute is known. Ordered by strength (see IDENTITY_RANK). */
 export const IDENTITY_LEVEL = Object.freeze({
-  PROBABLE: 'PROBABLE', // inferred from a photo / text / category (AI or keyword)
+  PROBABLE: 'PROBABLE', // inferred from a category profile or keywords
+  AI_SUGGESTED: 'AI_SUGGESTED', // suggested by an AI model from a photo or label: never a fact until the owner or a document confirms it
   SUPPLIER_CLAIMED: 'SUPPLIER_CLAIMED', // the supplier says so (verbally, in a listing, on a quote)
   USER_STATED: 'USER_STATED', // the owner typed it after looking at the product
   VERIFIED_BY_SUPPLIER_DOCUMENT: 'VERIFIED_BY_SUPPLIER_DOCUMENT', // stated consistently in a supplier document that was inspected
   VERIFIED_OFFICIAL: 'VERIFIED_OFFICIAL', // confirmed by an official source / authority record
 });
-export const IDENTITY_RANK = Object.freeze({ PROBABLE: 1, SUPPLIER_CLAIMED: 2, USER_STATED: 3, VERIFIED_BY_SUPPLIER_DOCUMENT: 4, VERIFIED_OFFICIAL: 5 });
+export const IDENTITY_RANK = Object.freeze({ PROBABLE: 1, AI_SUGGESTED: 1.5, SUPPLIER_CLAIMED: 2, USER_STATED: 3, VERIFIED_BY_SUPPLIER_DOCUMENT: 4, VERIFIED_OFFICIAL: 5 });
 
 /** Where a piece of external data came from, and how fresh it is. Cached data is never presented as live. */
 export const DATA_MODE = Object.freeze({ LIVE_VERIFIED: 'LIVE_VERIFIED', CACHED: 'CACHED', OFFLINE_VERIFICATION_REQUIRED: 'OFFLINE_VERIFICATION_REQUIRED', MANUAL: 'MANUAL' });
@@ -53,6 +54,6 @@ export const BLOCKER = Object.freeze({
 export const DOC_FINDING = Object.freeze({
   MODEL_MISMATCH: 'MODEL_MISMATCH', MANUFACTURER_MISMATCH: 'MANUFACTURER_MISMATCH', PRODUCT_MISMATCH: 'PRODUCT_MISMATCH', MISSING_PAGES: 'MISSING_PAGES',
   EXPIRED_OR_DATE_CONCERN: 'EXPIRED_OR_DATE_CONCERN', UNRELATED_STANDARD: 'UNRELATED_STANDARD', INCOMPLETE_DECLARATION: 'INCOMPLETE_DECLARATION', UNKNOWN_LAB: 'UNKNOWN_LAB',
-  DOCUMENT_TYPE_MISREPRESENTED: 'DOCUMENT_TYPE_MISREPRESENTED', INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  DOCUMENT_TYPE_MISREPRESENTED: 'DOCUMENT_TYPE_MISREPRESENTED', INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE', OCR_UNCONFIRMED: 'OCR_UNCONFIRMED',
 });
 export const DOC_CONSISTENCY = Object.freeze({ NO_ISSUE_FOUND: 'NO_ISSUE_FOUND', INCONSISTENT: 'INCONSISTENT', SUSPICIOUS: 'SUSPICIOUS', UNVERIFIED: 'UNVERIFIED', INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE' });

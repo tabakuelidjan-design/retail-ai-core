@@ -37,6 +37,9 @@ export function parseWeeklyReport(xml, reportRef = null) {
  * Local cache + refresh. `fetchImpl(url)` must return { ok, text() }. Modes: LIVE_VERIFIED (refreshed in this process within `liveWithinMs`), CACHED (disk only),
  * OFFLINE_VERIFICATION_REQUIRED (nothing cached). A failed refresh NEVER erases the cache and never turns a cache into "live".
  */
+/** The fields matching needs, shortened: a few hundred KB for half a year, small enough to keep on the phone and match offline. */
+export const compactAlert = (a) => ({ caseNumber: a.caseNumber, category: a.category, product: a.product, brand: a.brand, name: a.name, model: a.model, barcode: a.barcode, riskType: a.riskType, danger: a.danger?.slice(0, 220) ?? null, description: a.description?.slice(0, 120) ?? null, countryOfOrigin: a.countryOfOrigin, level: a.level, URLrecall: a.URLrecall, reportRef: a.reportRef });
+
 export function createSafetyGateAdapter({ cacheDir, fetchImpl = (u) => fetch(u, { headers: { 'user-agent': 'nordla-sourcing/0 (+local)' } }), now = () => new Date(), liveWithinMs = 24 * 3600 * 1000 } = {}) {
   let lastRefresh = null; let lastError = null;
   const fileOf = (ref) => join(cacheDir, `${ref}.json`);
@@ -63,7 +66,9 @@ export function createSafetyGateAdapter({ cacheDir, fetchImpl = (u) => fetch(u, 
       const live = lastRefresh && now().getTime() - lastRefresh.getTime() <= liveWithinMs;
       if (!reports.length) return { alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED', fetchedAt: null, coverage: 'no Safety Gate report ingested yet', error: lastError } };
       const newest = reports.map((r) => r.fetchedAt).sort().at(-1);
-      return { alerts, source: { mode: live ? 'LIVE_VERIFIED' : 'CACHED', fetchedAt: live ? lastRefresh.toISOString() : newest, coverage: `${reports.length} weekly report(s) ${reports[0].reference} to ${reports.at(-1).reference}, ${alerts.length} alerts; older alerts are NOT ingested`, attribution: `EU Safety Gate (European Commission), weekly reports, English version, extracted ${newest?.slice(0, 10)}`, error: lastError } };
+      const pubs = reports.map((r) => /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(r.publicationDate ?? '')).filter(Boolean).map((m) => `${m[3]}-${m[2]}-${m[1]}`).sort(); const newestPublication = pubs.at(-1) ?? null;
+      const reportAgeDays = newestPublication ? Math.floor((now().getTime() - Date.parse(newestPublication)) / 86400000) : null;
+      return { alerts, source: { mode: live ? 'LIVE_VERIFIED' : 'CACHED', fetchedAt: live ? lastRefresh.toISOString() : newest, coverage: `${reports.length} weekly report(s) ${reports[0].reference} to ${reports.at(-1).reference}, ${alerts.length} alerts; older alerts are NOT ingested`, attribution: `EU Safety Gate (European Commission), weekly reports, English version, extracted ${newest?.slice(0, 10)}`, newestPublication, reportAgeDays, error: lastError } };
     },
   };
 }

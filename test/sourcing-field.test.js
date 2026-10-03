@@ -118,11 +118,11 @@ test('FIELD E2E: photo -> category -> price + MOQ -> questions -> documents insp
   const s = await startApp({ ai: createFakeProvider({ region: 'EU', describe: { suggestions: [{ categoryId: 'power_bank', confidence: 'MEDIUM' }] } }) });
   try {
     // 1. a photo: the AI only SUGGESTS a probable category
-    const d = await s.call('/api/ai/describe', { method: 'POST', body: { imageBase64: 'aGk=', imageMime: 'image/jpeg' } });
+    const d = await s.call('/api/ai/describe', { method: 'POST', body: { imageBase64: 'aGk=', imageMime: 'image/jpeg', consent: true } });
     assert.equal(d.body.suggestions[0].categoryId, 'power_bank');
     let c = newCase({ id: 'field-1', name: 'Power bank 10000mAh (photo)', now: NOW });
     c = dispatch(c, { type: 'PHOTO', ref: 'photo-0' }, NOW);
-    c = dispatch(c, { type: 'CATEGORY', category: d.body.suggestions[0].categoryId, level: 'PROBABLE' }, NOW);
+    c = dispatch(c, { type: 'CATEGORY', category: d.body.suggestions[0].categoryId, level: 'AI_SUGGESTED' }, NOW);
     assert.ok(suggestCategories('power bank 10000mAh').some((x) => x.id === 'power_bank'));
     let a = assess(c, { now: NOW });
     assert.equal(a.identity.confidence.level, 'LOW', 'a photo-based guess is not an identification');

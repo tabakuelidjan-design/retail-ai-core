@@ -61,7 +61,7 @@ export function evaluateRules({ identity, context, rulebook, docs = [], now = ne
       ruleId: rule.id, family: rule.family, jurisdiction: rule.jurisdiction, title: rule.title, status, why: applies === true ? rule.whyApplies : applies === false ? rule.whyNot ?? 'the identity facts established so far exclude it' : `cannot be decided yet: ${unknownReads.join(', ')} unknown`,
       unknownReads, requiredEvidence, missingEvidence: missing, sources, ruleVersion: rule.ruleVersion, instrumentRefs: rule.instrumentRefs ?? [], standardFamily: rule.standardFamily ?? null,
       requiresAuthorityConfirmation: rule.requiresAuthorityConfirmation === true, sourceVerification: weakest >= 3 ? 'VERIFIED_ON_OFFICIAL_PAGE' : weakest >= 1 ? 'PARTLY_VERIFIED' : 'UNVERIFIED_EXPERT_CHECK_NEEDED',
-      freshness: sources.some((s) => s.freshness.status !== 'FRESH') ? (sources.some((s) => s.freshness.status === 'UNCHECKED') ? 'UNCHECKED' : 'STALE') : 'FRESH', notes: rule.notes ?? null, severity: rule.severity ?? 'NORMAL',
+      freshness: sources.some((s) => s.freshness.status !== 'FRESH') ? (sources.some((s) => s.freshness.status === 'UNCHECKED') ? 'UNCHECKED' : 'STALE') : 'FRESH', notes: rule.notes ?? null, severity: rule.severity ?? 'NORMAL', review: rule.review ?? { status: 'UNVERIFIED', basis: 'no review recorded' },
     };
   }).filter((r) => !r.skipped && r.ruleId);
 

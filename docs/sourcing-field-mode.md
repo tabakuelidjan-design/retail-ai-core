@@ -94,6 +94,35 @@ Cases are stored locally on the phone first and synced when the server is reacha
 
 V0 stores one JSON file per case (`data/local/sourcing/cases`) and, in the browser, local storage. **No table, no migration.** The case JSON already carries `supplier` (identity, contact, market, booth, link), `quotes` (unit price, currency, quantity, MOQ, Incoterm, lead time, carton), `documents` (extraction + inspection) and an append-only `events` / `decisions` log. The planned additive tables, to be created only after validation, are `sourcing_cases`, `sourcing_evidence` (append-only), `sourcing_documents` and `sourcing_decisions` (append-only), each tenant-scoped like the rest of Nordla.
 
+## Rule review status (field hardening, 2026-10-03)
+
+Every one of the 31 existing rules carries a review status (`src/sourcing/core/rulebook/review.js`); no rule was added. **No rule is VERIFIED_CURRENT**: EUR-Lex pages and consolidated texts could not be opened by the research tool, so consolidated versions, corrigenda and several application dates were not checked.
+
+| Status | Count | Rules |
+|---|---|---|
+| VERIFIED_CURRENT | 0 | none |
+| VERIFIED_PRIMARY_TEXT_ONLY | 13 | GPSR, LVD, EMC, RED, RED cybersecurity, common charger, toys, PPE; Belgium: language, Recupel, Bebat, BIPT, FASFC. (EU acts: original Official Journal text read, amendments listed from the Publications Office metadata; Belgian items: the authority's own page was read, the legal text was not.) |
+| NEEDS_EXPERT_REVIEW | 6 | Reg. 2019/1020 Art. 4 operator duties (Art. 4(5) replaced by Reg. 2024/1252; a "European product act" is pending), CE framework, RoHS (about 120 amending acts), Batteries (labelling date unresolved, due diligence postponed to 18 Aug 2027), PPWR, customs / EORI |
+| INCOMPLETE | 2 | medical-device boundary, Belgian packaging (Fost Plus / Valipac) |
+| UNVERIFIED | 10 | UN 38.3 / lithium transport, WEEE, REACH, CLP, food contact, textiles, cosmetics, Amazon (3 rules) |
+
+**Consequence in the engine**: a rule that APPLIES to the case and is NEEDS_EXPERT_REVIEW / INCOMPLETE / UNVERIFIED keeps marketability at AMBER at best and the verdict at CONDITIONAL_GO at best (condition "rulebook not yet verified for N applicable regime(s)"). REACH, packaging and customs apply to every product, so today **no case can reach an unconditional GO**; the tests show GO is reachable once an expert has reviewed the rules (`REVIEWED_RULEBOOK`, test-only). Amazon readiness is never READY while the Amazon rules are unverified, and V0 cannot see the steps only you can do.
+
+Corrections applied from the verification: GPSR Arts. 9, 11, 13, 16 do **not** apply to CE-harmonised products (the sector law does); own brand on a harmonised product is covered by `nlf.own_brand`; Bebat registration is regional and joining Bebat is optional; Recupel applies to online and foreign sellers (authorised representative possible); Belgian language rule is the linguistic region (CDE art. VI.8), German explicit only for radio.
+
+## Photo input and document photos (field hardening)
+
+- **Product photo**: kept as evidence only. Nordla does not recognise products by itself. An optional replaceable vision provider can SUGGEST a category: only the downscaled image is sent, only after the owner taps OK for that image, the answer is validated against Nordla's own category list and marked **AI_SUGGESTED** (identification stays LOW until the owner confirms it). The adapter is exercised with a mock fetch only (no key in this repository): **not tested against the live API**.
+- **Document photo / scanned paper**: native text PDF -> deterministic extraction. Photo -> an AI reader (same consent and region rules) or the owner **types the key fields from the paper** (works offline). OCR text is **UNVERIFIED** (finding `OCR_UNCONFIRMED`) and never counts as present until the owner corrects it and confirms it against the paper; even then it is a supplier document (SUPPLIER_CLAIM), never VERIFIED_FACT. No OCR runs locally.
+
+## Server hardening
+
+Token on every `/api` route; 8 wrong tokens per minute per address locks the address for a minute (429); Host allow-list (`SOURCING_ALLOWED_HOSTS`, 421); CSP `default-src 'self'`, `frame-ancestors 'none'`, `nosniff`, no referrer; static files whitelisted; images sent to a provider only with `consent: true` per request (428 otherwise) and never to a China-hosted provider for confidential data. The offline shell is pre-cached from `/shell-manifest.json` (a test checks that every module `app.js` imports is in it).
+
+## Not verified in this environment
+
+The built-in browser could not register a service worker (even a trivial script failed with "unknown error fetching the script"), so a **cold start of the page with no network was not tested**. What was tested: the case, the decision engine and the Safety Gate copy keep working in the open page after the server is stopped, cases reopen offline, edits made offline are pushed on reconnect. Run the offline rehearsal on the real phone (see `docs/sourcing-china-procedure.md`).
+
 ## Known limitations (read before relying on it)
 
 1. **Rule texts**: several regulations were read from the Publications Office *original* text, not the consolidated version; the CRA text, MDR, the measuring-instruments directive and some article-level obligations were not opened. Every rule shows its verification level; rules that need an expert say so. Have a compliance expert review the rulebook before relying on it for a large order.

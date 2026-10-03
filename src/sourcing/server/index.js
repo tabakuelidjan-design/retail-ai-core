@@ -11,7 +11,7 @@ import { createSourcingApp } from './app.js';
 import { createFileStore } from '../store/file-store.js';
 import { createSafetyGateAdapter } from '../adapters/safety-gate.js';
 import { fetchEcb } from '../adapters/fx.js';
-import { createDisabledProvider } from '../adapters/ai-provider.js';
+import { createDisabledProvider, createVisionProvider } from '../adapters/ai-provider.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -28,7 +28,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   await mkdir(dir, { recursive: true });
   const token = await ensureToken(env, dir);
   const safety = createSafetyGateAdapter({ cacheDir: join(dir, 'safety-gate'), ...(fetchImpl ? { fetchImpl } : {}) });
-  const app = createSourcingApp({ token, store: createFileStore(join(dir, 'cases')), safety, ecb, ai: createDisabledProvider(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ token, store: createFileStore(join(dir, 'cases')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
@@ -39,5 +39,5 @@ export async function startSourcingServer({ env = process.env, log = console.log
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const { safety } = await startSourcingServer();
-  safety.refresh({ maxReports: 12 }).then((r) => console.log(r.ok ? `Safety Gate cache refreshed (${r.added} new report(s)).` : `Safety Gate refresh failed (${r.error}): cached data, if any, stays CACHED - never shown as live.`));
+  safety.refresh({ maxReports: Number(process.env.SOURCING_SAFETY_REPORTS || 26) }).then((r) => console.log(r.ok ? `Safety Gate cache refreshed (${r.added} new report(s)).` : `Safety Gate refresh failed (${r.error}): cached data, if any, stays CACHED - never shown as live.`));
 }

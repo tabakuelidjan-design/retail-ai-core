@@ -6,8 +6,8 @@ import { FACT_CLASS } from './levels.js';
 
 export function hsCandidates(identity) {
   const cat = identity.evidence?.category?.at(-1)?.value; const profile = cat ? CATEGORIES[cat] : null;
-  const list = (profile?.hs ?? []).map((h) => ({ ...h, basis: 'CATEGORY_HINT', factClass: FACT_CLASS.ESTIMATE }));
-  const user = (identity.hsCandidates ?? []).map((h) => ({ code: h.code, desc: h.desc ?? 'entered by the user', confidence: h.confidence ?? 'USER', basis: h.basis ?? 'USER_ENTERED', factClass: FACT_CLASS.ESTIMATE }));
+  const list = (profile?.hs ?? []).map((h) => ({ ...h, label: 'HS/CN CANDIDATE', basis: 'CATEGORY_HINT', factClass: FACT_CLASS.ESTIMATE }));
+  const user = (identity.hsCandidates ?? []).map((h) => ({ code: h.code, desc: h.desc ?? 'entered by the user', confidence: h.confidence ?? 'USER', label: 'HS/CN CANDIDATE', basis: h.basis ?? 'USER_ENTERED', factClass: FACT_CLASS.ESTIMATE }));
   return [...user, ...list.filter((h) => !user.some((u) => u.code === h.code))];
 }
 
@@ -22,6 +22,9 @@ export function customsAssessment({ candidates, chosenCode = null, duty = null, 
   const measures = duty?.measures ?? []; const tradeDefence = measures.filter((m) => /anti-?dumping|countervailing|safeguard|prohibition|restriction|quota|surveillance/i.test(String(m.type ?? m.description ?? '')));
   return {
     status, requiresConfirmation: !btiValid, candidates, chosenCode: chosenCode ?? null,
+    // wording: a code is a CANDIDATE until a binding tariff information (or the customs authority) supports it; Nordla never says "confirmed HS" without that
+    codeLabel: !chosenCode ? 'NO HS/CN CODE CHOSEN' : btiValid ? `HS/CN ${chosenCode} (binding tariff information ${bti.number})` : `HS/CN CANDIDATE ${chosenCode} (not a classification)`,
+    lookup: 'NOT_INTEGRATED', limitation: 'No official TARIC / Access2Markets lookup is integrated: the duty rate and any trade-defence measure are typed in or taken from your customs broker.',
     duty: duty && duty.ratePct !== undefined && duty.ratePct !== null ? { ratePct: Number(duty.ratePct), source: duty.source ?? null, kind: duty.kind ?? 'USER_ENTERED', checkedAt: duty.checkedAt ?? null, origin: duty.origin ?? null, factClass: duty.kind === 'TAXUD_LOOKUP' ? FACT_CLASS.VERIFIED_FACT : FACT_CLASS.ESTIMATE } : { ratePct: null, factClass: FACT_CLASS.UNKNOWN },
     tradeMeasures: tradeDefence, tradeMeasureWarning: tradeDefence.length > 0,
     notes: [

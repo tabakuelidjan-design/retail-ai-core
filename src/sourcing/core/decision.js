@@ -37,12 +37,15 @@ export function contradictions(rules, docs) {
   return out.filter((x, i) => out.findIndex((y) => y.requirement === x.requirement) === i);
 }
 
+export const REVIEW_BLOCKING = Object.freeze(['NEEDS_EXPERT_REVIEW', 'INCOMPLETE', 'UNVERIFIED']);
+/** Rules that APPLY but whose text was not verified well enough: they can never support an unconditional green verdict. */
+export const unreviewedRules = (rules) => (rules.results ?? []).filter((r) => r.status === 'APPLIES' && r.jurisdiction !== 'AMAZON' && REVIEW_BLOCKING.includes(r.review?.status ?? 'UNVERIFIED'));
 function marketabilityOf({ identityConf, rules, gaps, contra, safety }) {
   if (['EXACT_MATCH', 'PROBABLE_MATCH'].includes(safety.status) || contra.length) return TRAFFIC.RED;
   if ((rules.results ?? []).some((r) => r.ruleId === 'eu.medical_boundary' && r.status === 'APPLIES')) return TRAFFIC.RED;
   if (identityConf.level === 'LOW' || rules.ce?.status === 'CE_APPLICABILITY_UNRESOLVED') return TRAFFIC.UNKNOWN;
   const unresolved = (rules.results ?? []).filter((r) => r.status === 'UNRESOLVED' && r.jurisdiction !== 'AMAZON');
-  if (unresolved.length || gaps.missingDocs.length || gaps.concerns.length) return TRAFFIC.AMBER;
+  if (unresolved.length || gaps.missingDocs.length || gaps.concerns.length || unreviewedRules(rules).length) return TRAFFIC.AMBER; // an unreviewed rule never yields an unconditional GREEN
   return TRAFFIC.GREEN;
 }
 function safetyRiskOf({ safety, rules }) {
@@ -104,6 +107,8 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   if (safetyRisk === 'MEDIUM' && safety.status === 'SIMILAR_PRODUCT_RISK') conditions.push('similar products were notified in the Safety Gate: ask the supplier how their design avoids that hazard');
   const expert = (rules.results ?? []).filter((r) => r.status === 'APPLIES' && r.severity === 'HIGH' && r.requiresAuthorityConfirmation && r.jurisdiction !== 'AMAZON');
   if (expert.length) conditions.push(`expert or authority confirmation recommended before a deposit: ${expert.map((r) => r.family).join(', ')} (higher-risk regimes: documents alone are not enough)`);
+  const unrev = unreviewedRules(rules);
+  if (unrev.length) conditions.push(`rulebook not yet verified for ${unrev.length} applicable regime(s) (${[...new Set(unrev.map((r) => `${r.family}: ${r.review.status}`))].slice(0, 6).join('; ')}): an expert must confirm them before this is relied on`);
   if (customs && customs.status === 'CLASSIFICATION_REQUIRES_CONFIRMATION') conditions.push('choose and confirm the customs classification (binding tariff information or your customs broker)');
   if (role.ownBrand === true) conditions.push('own brand: technical file and conformity assessment are yours');
   if (amazonRequested && !['READY'].includes(amazon.readiness.status) && amazon.restricted !== true) conditions.push(`Amazon readiness is ${amazon.readiness.status}`);
@@ -131,7 +136,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   return {
     verdict, canCommitMoney: verdict === VERDICT.GO, dimensions: { identification: identityConf.level, marketability, amazonReadiness: amazonRequested ? amazon.readiness.status : 'NOT_REQUESTED', economics, supplierEvidence: evidence, safetyRisk },
     hardBlockers: blockers.filter((b) => b.severity === 'HARD'), conditionBlockers: blockers.filter((b) => b.severity !== 'HARD'), conditions, why,
-    blocksImport, blocksAmazon, gaps, contradictions: contra, nextAction, maxPurchasePrice: maxPrice ?? null,
+    rulebookReview: { unreviewedApplicable: unrev.map((r) => ({ ruleId: r.ruleId, status: r.review.status })), allApplicableReviewed: unrev.length === 0 }, blocksImport, blocksAmazon, gaps, contradictions: contra, nextAction, maxPurchasePrice: maxPrice ?? null,
     note: 'Decision support only. Nordla is not a lawyer, customs authority, laboratory, certification body or Amazon approval authority.',
   };
 }

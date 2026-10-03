@@ -45,17 +45,26 @@ export function dispatch(state, event, now = new Date()) {
     case 'SUPPLIER': s.supplier = { ...s.supplier, ...event.supplier }; break;
     case 'QUOTE': s.quotes.push({ ...event.quote, at }); break;
     case 'COSTS': s.costs = { ...s.costs, ...event.costs }; break;
-    case 'SALE': s.sale = { ...(s.sale ?? {}), ...event.sale }; break;
+    case 'SALE': s.sale = { ...(s.sale ?? {}), ...event.sale, priceBasis: event.sale.priceBasis ?? s.sale?.priceBasis ?? 'TARGET' }; break;
     case 'SALE_AMAZON': s.saleAmazon = { ...(s.saleAmazon ?? {}), ...event.sale }; break;
     case 'DOCUMENT': {
       const ex = extractDocument({ text: event.text ?? '', pages: event.pages ?? null, fileName: event.fileName ?? '', claimedType: event.claimedType ?? null });
       if (event.docType) ex.docType = event.docType;
-      s.documents.push({ id: event.id ?? `doc-${s.documents.length + 1}`, fileName: event.fileName ?? null, addedAt: at, claimedType: event.claimedType ?? null, docType: ex.docType, extraction: ex, ref: event.ref ?? null });
+      // textSource: NATIVE (text layer of a PDF) | PASTED | TRANSCRIBED (the owner typed what the paper says) | OCR (read from a photo by an AI reader). OCR output is a MACHINE READING:
+      // it stays UNVERIFIED until the owner confirms it against the paper, and it can never become a verified fact.
+      const textSource = event.textSource ?? 'PASTED';
+      s.documents.push({ id: event.id ?? `doc-${s.documents.length + 1}`, fileName: event.fileName ?? null, addedAt: at, claimedType: event.claimedType ?? null, docType: ex.docType, extraction: ex, ref: event.ref ?? null, photoRef: event.photoRef ?? null, textSource, confirmed: textSource !== 'OCR', ocrProvider: event.ocrProvider ?? null, text: textSource === 'OCR' ? String(event.text ?? '').slice(0, 20000) : undefined });
       break;
     }
+    case 'DOCUMENT_CORRECT': { // the owner fixes the OCR text while looking at the paper; the extraction is redone; it still needs a confirmation
+      const d = s.documents.find((x) => x.id === event.id); if (!d) throw new Error(`unknown document: ${event.id}`);
+      const ex = extractDocument({ text: event.text ?? '', fileName: d.fileName ?? '', claimedType: d.claimedType }); if (d.docType !== 'OTHER' && ex.docType === 'OTHER') ex.docType = d.docType; d.extraction = ex; d.docType = ex.docType; d.text = String(event.text ?? '').slice(0, 20000); if (d.textSource === 'PHOTO_ONLY') d.textSource = 'TRANSCRIBED'; d.confirmed = d.textSource === 'TRANSCRIBED'; d.correctedAt = at; break; // typed by the owner while looking at the paper = his transcription; corrected OCR text still needs his explicit confirmation
+    }
+    case 'DOCUMENT_CONFIRM': { const d = s.documents.find((x) => x.id === event.id); if (!d) throw new Error(`unknown document: ${event.id}`); d.confirmed = true; d.confirmedAt = at; break; }
     case 'SAFETY_SNAPSHOT': s.safetySnapshot = event.snapshot; break;
     case 'CUSTOMS': s.customs = { ...s.customs, ...event.customs }; break;
     case 'AMAZON_OBS': s.amazon.observations.push(normalizeObservation(event.observation, now)); break;
+    case 'AMAZON_OBS_REMOVE': s.amazon.observations.splice(event.index, 1); break;
     case 'AMAZON': s.amazon = { ...s.amazon, ...event.amazon, observations: s.amazon.observations }; break;
     case 'NOTE': s.notes.push({ at, text: String(event.text ?? '') }); break;
     case 'DECISION_RECORDED': s.decisions.push(event.entry); break;
@@ -99,6 +108,18 @@ function safetyOf(s, externals, identityForSafety, now) {
   return matchSafetyGate({ identity: identityForSafety, alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED', fetchedAt: null } });
 }
 
+/** An OCR / AI reading of a photo is never evidence by itself: until the owner confirms it against the paper it can be at best UNVERIFIED. */
+function ocrGuard(d, insp) {
+  if (d.textSource === 'TRANSCRIBED') { // the owner typed the key fields from the paper: completeness of the original (signature, address...) cannot be judged from a transcription
+    const findings = insp.findings.filter((f) => f.code !== 'INCOMPLETE_DECLARATION'); const severe = findings.filter((f) => f.severity === 'INCONSISTENT' || f.severity === 'SUSPICIOUS'); const concerns = findings.filter((f) => f.severity === 'CONCERN');
+    const consistency = new Set(severe.map((f) => f.code)).size >= 2 ? 'SUSPICIOUS' : severe.length ? 'INCONSISTENT' : concerns.length ? 'UNVERIFIED' : 'NO_ISSUE_FOUND';
+    return { ...insp, consistency, findings, note: 'Transcribed by you from the paper: key fields only, completeness of the original (signature, address, pages) is NOT assessed. It is a supplier document, not a verified fact.' };
+  }
+  if (d.textSource !== 'OCR' || d.confirmed) return d.textSource === 'OCR' ? { ...insp, note: `${insp.note ? `${insp.note} ` : ''}Text read by an AI reader from a photo and confirmed by you against the paper. It is still a supplier document, not a verified fact.` } : insp;
+  const worse = ['NO_ISSUE_FOUND'].includes(insp.consistency) ? 'UNVERIFIED' : insp.consistency;
+  return { ...insp, consistency: worse, findings: [...insp.findings, { code: 'OCR_UNCONFIRMED', severity: 'CONCERN', detail: 'this text was read by OCR / an AI reader from a photo: every field is UNVERIFIED until you check it against the paper and confirm it' }], note: 'UNVERIFIED machine reading of a photo.' };
+}
+
 export function assess(state, { now = new Date(), externals = {}, rulebook = RULEBOOK, policy = DEFAULT_POLICY, quoteOverride = null } = {}) {
   const s = state; const id = s.identity;
   const idConf = identificationConfidence(id);
@@ -109,7 +130,7 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   // pass 1: which families apply -> what standards a document should cite; pass 2: documents inspected -> evidence coverage
   const pre = evaluateRules({ identity: id, context, rulebook, docs: [], now });
   const families = pre.expectedStandardFamilies;
-  const docs = s.documents.map((d) => ({ ...d, extraction: d.extraction, inspection: inspectDocument({ extraction: d.extraction, identity: { model: identityFacts.model, manufacturer: identityFacts.manufacturer, category: identityFacts.category }, now, expectedFamilies: families }) }));
+  const docs = s.documents.map((d) => ({ ...d, extraction: d.extraction, inspection: ocrGuard(d, inspectDocument({ extraction: d.extraction, identity: { model: identityFacts.model, manufacturer: identityFacts.manufacturer, category: identityFacts.category }, now, expectedFamilies: families })) }));
   const crossChecks = crossCheckDocuments(docs);
   const rules = evaluateRules({ identity: id, context, rulebook, docs, now });
 
@@ -121,6 +142,8 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   let landed; try { landed = landedCost(landedInput); } catch (e) { if (e instanceof MoneyError) landed = { status: 'INFORMATION_INSUFFICIENT', criticalUnknown: [e.code], unknown: [e.code], lines: [], totals: { landedPerUnitEurMinor: null }, warnings: [] }; else throw e; }
   const target = s.sale?.targetContributionPct ?? null;
   const econ = economicsOf(s.sale, landed, target);
+  // the selling price is one of: OBSERVED (a listing you saw), TARGET (the price you intend), ASSUMED (a placeholder): they are never merged
+  const basisRaw = s.sale?.priceBasis ?? 'TARGET'; const priceBasis = basisRaw === 'OBSERVED' && !s.amazon.observations.some((o) => o.priceMinor !== null && o.kind === 'OBSERVED') ? 'ASSUMED' : basisRaw; econ.priceBasis = priceBasis;
   const channels = s.context.channels ?? [];
   const market = summarizeMarket(s.amazon.observations, now);
   const econAmazon = channels.includes('amazon') ? economicsOf(s.saleAmazon ?? null, landed, s.saleAmazon?.targetContributionPct ?? target) : null;
@@ -136,13 +159,16 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   const readiness = amazonReadiness({ rules, channels, marketability: preDecision.dimensions.marketability, restricted: s.amazon.restricted });
   const questions = buildQuestions({ identity: id, role, rules, docs, landed, quote: { ...(currentQuote(s) ?? {}), ...(quoteOverride ?? {}) }, customs, channels });
   const decision = decide({ identityConf: idConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon: { restricted: s.amazon.restricted, readiness, economics: econAmazon }, role, quote: currentQuote(s), channels, questions, policy });
+  const sgAge = safety.source?.newestPublication ? Math.floor((now.getTime() - Date.parse(safety.source.newestPublication)) / DAY) : null;
+  if (priceBasis === 'ASSUMED' && econ.status !== 'INFORMATION_INSUFFICIENT') decision.conditions.push('the selling price is ASSUMED (no observed listing and not your target): the margin is only as good as that assumption');
+  if (sgAge !== null && sgAge > 10) decision.conditions.push(`the newest Safety Gate weekly report ingested is ${sgAge} days old: refresh the cache`);
   if (safety.source?.mode === 'CACHED') decision.conditions.push(`the Safety Gate result is CACHED (${safety.source.fetchedAt ?? 'date unknown'}): re-verify online`);
   const brief = negotiationBrief({ maxPrice, quote: { ...(currentQuote(s) ?? {}), ...(quoteOverride ?? {}) }, rules, role, currency: landedInput.supplier.currency });
 
   const out = {
     caseId: s.id, asOf: now.toISOString(), ruleBookVersion: rules.ruleBookVersion ?? RULE_VERSION,
     identity: { workingName: id.workingName, ...identityFacts, confidence: idConf, countryOfOrigin: id.countryOfOrigin, photos: id.photos.length },
-    role, rules, documents: docs.map((d) => ({ id: d.id, fileName: d.fileName, docType: d.docType, claimedType: d.claimedType, consistency: d.inspection.consistency, findings: d.inspection.findings, note: d.inspection.note, models: d.extraction.models, standards: d.extraction.standards, dates: d.extraction.dates })), crossChecks,
+    role, rules, documents: docs.map((d) => ({ id: d.id, fileName: d.fileName, docType: d.docType, claimedType: d.claimedType, textSource: d.textSource, confirmed: d.confirmed, photoRef: d.photoRef, ocrText: d.textSource === 'OCR' ? d.text : undefined, consistency: d.inspection.consistency, findings: d.inspection.findings, note: d.inspection.note, models: d.extraction.models, standards: d.extraction.standards, dates: d.extraction.dates })), crossChecks,
     safety, customs, landed, economics: econ, economicsAmazon: econAmazon, maxPurchasePrice: maxPrice, market, amazon: { ...readiness, restricted: s.amazon.restricted }, questions, supplierSheet: supplierSheet(questions), negotiation: brief, decision,
   };
   out.evidence = evidenceLedger(s, out); out.freshness = freshnessOf(s, out, now); out.dataMode = dataModeOf(out);
@@ -163,7 +189,7 @@ export function recordDecision(state, a, now = new Date()) {
   return dispatch(state, { type: 'DECISION_RECORDED', entry: { at: now.toISOString(), verdict: a.decision.verdict, dimensions: a.decision.dimensions, hardBlockers: a.decision.hardBlockers.map((b) => b.code), ruleBookVersion: a.ruleBookVersion, quote: currentQuote(state)?.unitPrice ?? null, maxPurchasePrice: a.maxPurchasePrice?.maxUnitPriceMinor ?? null } }, now);
 }
 
-const LEVEL_CLASS = { PROBABLE: FACT_CLASS.ESTIMATE, SUPPLIER_CLAIMED: FACT_CLASS.SUPPLIER_CLAIM, USER_STATED: FACT_CLASS.SUPPLIER_CLAIM, VERIFIED_BY_SUPPLIER_DOCUMENT: FACT_CLASS.SUPPLIER_CLAIM, VERIFIED_OFFICIAL: FACT_CLASS.VERIFIED_FACT };
+const LEVEL_CLASS = { PROBABLE: FACT_CLASS.ESTIMATE, AI_SUGGESTED: FACT_CLASS.ESTIMATE, SUPPLIER_CLAIMED: FACT_CLASS.SUPPLIER_CLAIM, USER_STATED: FACT_CLASS.SUPPLIER_CLAIM, VERIFIED_BY_SUPPLIER_DOCUMENT: FACT_CLASS.SUPPLIER_CLAIM, VERIFIED_OFFICIAL: FACT_CLASS.VERIFIED_FACT };
 
 /** Evidence classes kept SEPARATE: what is verified, observed, claimed, calculated, estimated, assumed, unknown, or needs an expert. */
 function evidenceLedger(s, a) {
@@ -172,17 +198,18 @@ function evidenceLedger(s, a) {
     const e = effective(s.identity, t);
     if (!e.known) { L.unknown.push({ item: t, note: e.contradiction ? 'CONTRADICTORY evidence: treated as unknown' : 'not established' }); continue; }
     const rank = IDENTITY_RANK[e.level]; const rec = { item: t, value: e.value, level: e.level };
-    if (e.level === 'PROBABLE') L.assumed.push({ ...rec, note: 'inferred (category profile / photo / text), not observed' });
+    if (e.level === 'PROBABLE' || e.level === 'AI_SUGGESTED') L.assumed.push({ ...rec, note: e.level === 'AI_SUGGESTED' ? 'AI SUGGESTED from a photo: not confirmed by you or a document' : 'inferred (category profile / keywords), not observed' });
     else if (rank >= IDENTITY_RANK.VERIFIED_OFFICIAL) L.verified.push(rec); else L.supplierClaims.push({ ...rec, factClass: LEVEL_CLASS[e.level] });
   }
   const q = s.quotes.at(-1); if (q) L.supplierClaims.push({ item: 'supplier quote', value: { unitPrice: q.unitPrice, currency: q.currency, moq: q.moq, incoterm: q.incoterm }, level: 'SUPPLIER_CLAIMED' });
-  for (const d of a.documents) L.supplierClaims.push({ item: `document ${d.id} (${d.docType})`, value: d.consistency, note: 'supplied by the supplier: the existence of a document is not proof of compliance' });
+  for (const d of a.documents) L.supplierClaims.push({ item: `document ${d.id} (${d.docType})`, value: d.consistency, note: d.textSource === 'OCR' && !d.confirmed ? 'UNVERIFIED machine reading of a photo' : 'supplied by the supplier: the existence of a document is not proof of compliance' });
   if (['EXACT_MATCH', 'PROBABLE_MATCH', 'SIMILAR_PRODUCT_RISK', 'NO_MATCH_FOUND'].includes(a.safety.status)) (a.safety.source?.mode === 'LIVE_VERIFIED' ? L.verified : L.observed).push({ item: 'EU Safety Gate check', value: a.safety.status, mode: a.safety.source?.mode, fetchedAt: a.safety.source?.fetchedAt ?? null, note: a.safety.note });
   else L.unknown.push({ item: 'EU Safety Gate check', note: 'OFFLINE - VERIFICATION REQUIRED' });
   for (const o of s.amazon.observations) L.observed.push({ item: `${o.marketplace} listing`, priceMinor: o.priceMinor, observedAt: o.observedAt, source: o.source });
   if (a.landed.status !== 'INFORMATION_INSUFFICIENT') L.calculated.push({ item: 'landed cost per unit', valueMinor: a.landed.totals.landedPerUnitEurMinor, status: a.landed.status });
   else L.unknown.push({ item: 'landed cost', note: `missing: ${a.landed.criticalUnknown.join(', ')}` });
   if (a.economics.contributionMinor != null) L.calculated.push({ item: 'contribution per unit', valueMinor: a.economics.contributionMinor, upperBound: a.economics.contributionIsUpperBound === true });
+  if (a.economics.sellingPriceGrossMinor != null) ({ OBSERVED: L.observed, TARGET: L.estimated, ASSUMED: L.assumed }[a.economics.priceBasis ?? 'TARGET']).push({ item: `selling price (${a.economics.priceBasis ?? 'TARGET'})`, valueMinor: a.economics.sellingPriceGrossMinor, note: a.economics.priceBasis === 'OBSERVED' ? 'a listing you saw: not permission to sell' : a.economics.priceBasis === 'ASSUMED' ? 'placeholder assumption' : 'the price you intend to charge' });
   if (a.maxPurchasePrice?.maxUnitPriceMinor != null) L.calculated.push({ item: 'maximum purchase price', valueMinor: a.maxPurchasePrice.maxUnitPriceMinor, currency: a.maxPurchasePrice.currency, upperBound: a.maxPurchasePrice.upperBound === true });
   if (a.customs.duty?.ratePct != null) L.estimated.push({ item: 'customs duty rate', value: a.customs.duty.ratePct, note: a.customs.duty.factClass === FACT_CLASS.VERIFIED_FACT ? 'from an official lookup' : 'entered by the user: verify for the exact code, origin and date' });
   else L.unknown.push({ item: 'customs duty rate', note: 'CUSTOMS CLASSIFICATION REQUIRES CONFIRMATION' });
@@ -194,7 +221,8 @@ function freshnessOf(s, a, now) {
   const out = []; const rs = a.rules.results.flatMap((r) => r.sources);
   const oldest = rs.length ? rs.map((x) => x.checkedAt).sort()[0] : null; const worst = rs.some((x) => x.freshness.status === 'STALE') ? 'STALE' : rs.some((x) => x.freshness.status === 'UNCHECKED') ? 'UNCHECKED' : 'FRESH';
   out.push({ name: 'regulatory rulebook', version: a.ruleBookVersion, checkedAt: oldest, status: worst, note: 'rules are re-checked against official sources; STALE means re-check before relying on them' });
-  const sf = a.safety.source ?? {}; out.push({ name: 'EU Safety Gate', mode: sf.mode ?? 'OFFLINE_VERIFICATION_REQUIRED', checkedAt: sf.fetchedAt ?? null, status: sf.mode === 'LIVE_VERIFIED' ? 'FRESH' : sf.mode === 'CACHED' ? 'STALE' : 'UNCHECKED' });
+  const sf = a.safety.source ?? {}; const ageDays = sf.newestPublication ? Math.floor((now.getTime() - Date.parse(sf.newestPublication)) / DAY) : (sf.reportAgeDays ?? null); const reportsOld = ageDays !== null && ageDays > 10;
+  out.push({ name: 'EU Safety Gate', mode: sf.mode ?? 'OFFLINE_VERIFICATION_REQUIRED', checkedAt: sf.fetchedAt ?? null, status: sf.mode === 'LIVE_VERIFIED' && !reportsOld ? 'FRESH' : sf.mode === 'OFFLINE_VERIFICATION_REQUIRED' || !sf.mode ? 'UNCHECKED' : 'STALE', note: ageDays !== null ? `newest ingested weekly report is ${ageDays} day(s) old${reportsOld ? ' (weekly reports: older than expected)' : ''}` : null });
   const fx = s.costs?.fx; out.push({ name: 'FX rate', checkedAt: fx?.date ?? null, status: fx?.rate ? ((now.getTime() - Date.parse(fx.date ?? 0)) / DAY > 7 ? 'STALE' : 'FRESH') : 'UNCHECKED', source: fx?.source ?? null });
   out.push({ name: 'Amazon observations', checkedAt: a.market.byMarketplace.map((m) => m.newestObservedAt).filter(Boolean).sort().at(-1) ?? null, status: a.market.byMarketplace.some((m) => m.freshness === 'STALE') ? 'STALE' : a.market.observationCount ? 'FRESH' : 'UNCHECKED' });
   return out;

@@ -24,7 +24,7 @@ const GROUPS = {
  *           source: { mode: 'LIVE_VERIFIED'|'CACHED'|'OFFLINE_VERIFICATION_REQUIRED'|'MANUAL', fetchedAt?: string|null, coverage?: string|null } }} args
  */
 export function matchSafetyGate({ identity, alerts, source }) {
-  if (!alerts || source.mode === 'OFFLINE_VERIFICATION_REQUIRED') return { status: 'NOT_CHECKED', matches: [], hazards: [], source, note: 'The Safety Gate could not be consulted: OFFLINE - VERIFICATION REQUIRED. This is not a clean result.' };
+  if (!alerts || source.mode === 'OFFLINE_VERIFICATION_REQUIRED') return { status: 'NOT_CHECKED', matches: [], hazards: [], source, note: 'The Safety Gate could not be consulted: OFFLINE - VERIFICATION REQUIRED. This is not a clean result and does not prove safety.' };
   const gtin = String(identity.gtin ?? '').replace(/\D/g, ''); const brand = norm(identity.brand); const model = norm(identity.model);
   const nameWords = new Set(words(identity.name).filter((w) => !STOP.has(w))); const group = GROUPS[identity.category] ?? [];
   const exact = []; const probable = []; const similar = [];
@@ -42,5 +42,5 @@ export function matchSafetyGate({ identity, alerts, source }) {
   const status = exact.length ? 'EXACT_MATCH' : probable.length ? 'PROBABLE_MATCH' : similar.length ? 'SIMILAR_PRODUCT_RISK' : 'NO_MATCH_FOUND';
   const matches = [...exact, ...probable, ...similar.slice(0, 8)];
   const hazards = [...new Set(matches.flatMap((m) => m.hazards))];
-  return { status, matches, hazards, similarCount: similar.length, source, note: status === 'NO_MATCH_FOUND' ? 'No alert matched. This does NOT mean the product is safe: only products notified by authorities appear, and many alerts lack brand, model or barcode.' : status === 'SIMILAR_PRODUCT_RISK' ? 'Similar products were notified. This is a risk signal for this TYPE of product, not a finding about this exact product.' : null };
+  return { status, matches, hazards, similarCount: similar.length, source, note: status === 'NO_MATCH_FOUND' ? 'NO MATCH FOUND does not prove safety. Only products notified by authorities appear in the Safety Gate, many alerts lack brand, model or barcode, and only the weeks ingested were searched.' : status === 'SIMILAR_PRODUCT_RISK' ? 'Similar products were notified. This is a risk signal for this TYPE of product, not a finding about this exact product.' : null };
 }

@@ -9,7 +9,7 @@ export const BE_RULES = [
   R({
     id: 'be.language', family: 'LANGUAGE', title: 'Language of instructions, labels and safety information (Belgium)',
     appliesWhen: { ctx: 'consumerSales', is: true },
-    whyApplies: 'instructions and safety information must be in a language easily understood by consumers, set by the Member State; in Belgium that means the language of the language area (Dutch, French or German): for a Belgian-wide offer, plan Dutch AND French',
+    whyApplies: 'label, instructions and safety information must be in a language understandable to the average consumer, taking the linguistic region into account (Code de droit economique art. VI.8): Dutch in Flanders, French in Wallonia, both in Brussels. For a Belgium-wide offer plan Dutch AND French (conservative reading); German is explicit only for radio equipment (BIPT)',
     requiredEvidence: [{ id: 'be.lang.manual', label: 'Manual, safety information and packaging text in French and Dutch (German where sold in the German-speaking area)', docType: 'MANUAL', requirement: 'CONDITIONAL' }],
     sources: [SRC.BE_LANG, SRC.BE_GENERAL], requiresAuthorityConfirmation: true,
     notes: 'Languages for FR, DE and NL Amazon marketplaces follow each Member State: not verified here.',
@@ -17,7 +17,7 @@ export const BE_RULES = [
   R({
     id: 'be.recupel', family: 'WEEE', title: 'Recupel registration (electrical and electronic equipment, Belgium)',
     appliesWhen: { trait: 'electrical.present', is: true },
-    whyApplies: 'the first party placing electrical equipment on the Belgian market, including online sellers, must join Recupel and the visible recycling contribution is charged on sale',
+    whyApplies: 'anyone selling electrical equipment in Belgium, physical or online (including from abroad), must register with Recupel or file an individual waste-management plan; a non-Belgian seller can appoint Recupel as authorised representative; online marketplaces must verify this since 29 Mar 2025',
     whyNot: 'no electrical or electronic function established',
     requiredEvidence: [own('be.recupel.reg', 'Recupel registration (producer or importer)', 'REQUIRED')],
     sources: [SRC.BE_RECUPEL, SRC.BE_RECUPEL_RETAIL],
@@ -25,9 +25,9 @@ export const BE_RULES = [
   R({
     id: 'be.bebat', family: 'BATTERIES', title: 'Bebat registration (batteries, Belgium)',
     appliesWhen: { trait: 'battery.present', is: true },
-    whyApplies: 'importers of batteries, including batteries inside devices, must register with the Belgian producer responsibility organisation Bebat and declare quantities',
+    whyApplies: 'producers and importers of batteries, including batteries inside devices, are responsible for them in Belgium: they register with the three regional governments and declare batteries first placed on the market; joining Bebat is optional (individually or via Bebat). Foreign distance sellers must appoint a Belgian authorised representative',
     whyNot: 'no battery established',
-    requiredEvidence: [own('be.bebat.reg', 'Bebat registration', 'REQUIRED')],
+    requiredEvidence: [own('be.bebat.reg', 'Regional battery registration and declaration (directly or through Bebat), Belgian authorised representative for distance sales', 'REQUIRED')],
     sources: [SRC.BE_BEBAT, SRC.BATT_BE],
   }),
   R({
