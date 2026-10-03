@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const git = (args) => execSync(`git ${args}`, { cwd: ROOT, encoding: 'utf8' });
 const files = git('ls-files --cached --others --exclude-standard').split('\n').filter(Boolean);
-const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?)$/i.test(f) && !f.endsWith('package-lock.json'));
+// vendor/ = third-party OFFICIAL artifacts kept verbatim (OpenPeppol / CEN Schematron, ISO Schematron, compiled validators, their published SHA-256): public files, not ours to rewrite; their integrity is recorded in vendor/*/ARTIFACTS.json
+const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?)$/i.test(f) && !f.endsWith('package-lock.json') && !f.startsWith('vendor/'));
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const contents = new Map(textFiles.map((f) => [f, read(f)]));
 

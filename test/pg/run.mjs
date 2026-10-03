@@ -8,7 +8,7 @@ const here = fileURLToPath(new URL('./', import.meta.url));
 const results = `${here}.results/results.jsonl`;
 if (existsSync(results)) rmSync(results);
 up();
-const r = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...['00-infra', '10-concurrency-infra', '20-controls', '30-p0-regression', '35-legacy-gaps', '40-contract', '50-essential-payments', '60-cutover', '70-bank'].map((n) => `${here}${n}.pg.test.js`)], { stdio: 'inherit' });
+const r = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...['00-infra', '10-concurrency-infra', '20-controls', '30-p0-regression', '35-legacy-gaps', '40-contract', '50-essential-payments', '60-cutover', '70-bank', '80-legal'].map((n) => `${here}${n}.pg.test.js`)], { stdio: 'inherit' });
 if (existsSync(results)) {
   const rows = readFileSync(results, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const by = {}; for (const x of rows) (by[x.tag] ??= []).push(x.id);

@@ -2,6 +2,7 @@
 // Layout only: every number printed is taken from the document's deterministic totals. Branding (logo, footer, bank
 // details, language) is merchant configuration passed in, never hardcoded here. Unissued documents carry a DRAFT mark.
 
+import { vcsForInvoiceNumber, vcsFormat } from './belgium-compliance.js';
 import { existsSync, readFileSync } from 'node:fs';
 import PDFDocument from 'pdfkit';
 import { fromScaled, formatCents } from './money.js';
@@ -23,13 +24,9 @@ export const labels = (lang) => L[lang] ?? L.fr;
 
 /** Belgian structured communication (+++xxx/xxxx/xxxxx+++): 10 base digits + 2 check digits (mod 97). */
 export function structuredCommunication(number) {
-  const digits = String(number).replace(/\D/g, '');
+  const digits = String(number).replace(/D/g, '');
   if (!digits) return null;
-  const base = digits.slice(-10).padStart(10, '0');
-  const rem = Number(BigInt(base) % 97n);
-  const check = String(rem === 0 ? 97 : rem).padStart(2, '0');
-  const all = base + check;
-  return `+++${all.slice(0, 3)}/${all.slice(3, 7)}/${all.slice(7)}+++`;
+  return vcsFormat(vcsForInvoiceNumber(number)); // one implementation of the Febelfin rule (belgium-compliance.js)
 }
 
 export const money = (cents, lang = 'fr') => {
@@ -63,7 +60,9 @@ function footerAndPages(pdf, footerText, t) {
  * branding: { logoPath?, footer?, accent?, structuredCommunication?: boolean, paymentInstructions? }
  * @returns {Promise<Buffer>}
  */
-export async function renderDocumentPdf(doc, { settlement = null, originalNumber = null, branding = {} } = {}) {
+/** Version of the layout that produced a PDF; recorded with every archived original. */
+export const PDF_RENDERER_VERSION = 'nordla-pdf/1';
+export async function renderDocumentPdf(doc, { settlement = null, originalNumber = null, branding = {}, paymentReference = null } = {}) {
   const lang = doc.language ?? 'fr';
   const t = labels(lang);
   const accent = branding.accent ?? '#183247';
@@ -130,7 +129,8 @@ export async function renderDocumentPdf(doc, { settlement = null, originalNumber
     pdf.font('Helvetica-Bold').fontSize(8).fillColor(accent).text(t.pay, 50, y); y += 12;
     pdf.font('Helvetica').fontSize(8.5).fillColor('#111111');
     if (s.iban) pdf.text(`${t.iban}: ${s.iban}${s.bic ? `   ${t.bic}: ${s.bic}` : ''}`, 50, y);
-    if (branding.structuredCommunication && doc.number && doc.type === 'invoice') pdf.text(`${t.ref}: ${structuredCommunication(doc.number)}`);
+    if (paymentReference && doc.type === 'invoice') pdf.text(`${t.ref}: ${paymentReference}`); // the reference stored at issuance: printed as is, never recomputed
+    else if (branding.structuredCommunication && doc.number && doc.type === 'invoice') pdf.text(`${t.ref}: ${structuredCommunication(doc.number)}`);
     else if (doc.number && doc.type === 'invoice') pdf.text(`${t.ref}: ${doc.number}`);
     if (doc.paymentTerms) pdf.text(`${t.terms}: ${doc.paymentTerms}`, { width: 495 });
     if (branding.paymentInstructions) pdf.text(branding.paymentInstructions, { width: 495 });

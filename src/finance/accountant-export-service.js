@@ -15,27 +15,37 @@ const inRange = (d, a, b) => typeof d === 'string' && d >= a && d <= b;
  * @param {{store: object, merchantId: string, finance: {listInvoices: Function}, inbox: {list: Function}, attachments?: {get: Function}, clock: {now: Function, today: Function, timeZone: string},
  *   merchant: {name?: string}, renderPdf?: (doc: object, ctx: object) => Promise<Buffer>, sourceSchemaVersion?: string, cashCurrency?: string}} d
  */
-export function createAccountantExportService({ store, merchantId, finance, inbox, attachments = null, clock, merchant = {}, renderPdf = null, sourceSchemaVersion = null, cashCurrency = 'EUR' }) {
+export function createAccountantExportService({ store, merchantId, finance, inbox, attachments = null, storage = attachments, clock, merchant = {}, renderPdf = null, sourceSchemaVersion = null, cashCurrency = 'EUR' }) {
   requireClock(clock, 'createAccountantExportService');
   if (!clock.timeZone) throw new TypeError('createAccountantExportService: the clock must expose the merchant timeZone');
 
   async function facts() {
-    const [documents, suppliers, registry, allocations, bankAccounts, bankTransactions, reconciliations, cashCounts, cashMovements] = await Promise.all([
-      finance.listInvoices(), inbox.list(), store.listRegistry(merchantId), store.listAllocations({ merchantId }), store.listBankAccounts(merchantId), store.listBankTransactions({ merchantId }), store.listReconciliations({ merchantId }), store.listCashCounts(merchantId), store.listCashMovements(merchantId)]);
-    return { documents, suppliers, registry, allocations, bankAccounts, bankTransactions, reconciliations, cashCounts, cashMovements };
+    const [documents, suppliers, registry, allocations, bankAccounts, bankTransactions, reconciliations, cashCounts, cashMovements, legalArtifacts, peppolMessages] = await Promise.all([
+      finance.listInvoices(), inbox.list(), store.listRegistry(merchantId), store.listAllocations({ merchantId }), store.listBankAccounts(merchantId), store.listBankTransactions({ merchantId }), store.listReconciliations({ merchantId }), store.listCashCounts(merchantId), store.listCashMovements(merchantId),
+      store.listArtifacts({ merchantId }), store.listPeppolMessages({ merchantId })]);
+    return { documents, suppliers, registry, allocations, bankAccounts, bankTransactions, reconciliations, cashCounts, cashMovements, legalArtifacts, peppolMessages };
   }
 
   /** Documents actually present, never fabricated: regenerated copies of issued PDFs (labelled as such) and the stored source files of purchases. */
   async function artifactsFor(f, period, includeDocuments) {
-    const out = { sales: new Map(), credit_notes: new Map(), purchases: new Map() }; if (!includeDocuments) return out;
-    const used = new Set(); const unique = (n) => { let x = n; let k = 2; while (used.has(x)) x = n.replace(/(\.[^.]+)$/, `_${k++}$1`); used.add(x); return x; };
-    if (renderPdf) for (const x of f.documents) {
+    const out = { sales: new Map(), credit_notes: new Map(), purchases: new Map(), structured: new Map(), inbound: new Map(), extra: [] }; const compliance = new Map();
+    // what the legal archive really holds (durable metadata in fin_artifacts): originals are ORIGINALS, nothing else is relabelled
+    const byDoc = new Map(); for (const a of f.legalArtifacts ?? []) if (a.documentId) (byDoc.get(a.documentId) ?? byDoc.set(a.documentId, []).get(a.documentId)).push(a);
+    const messageOfSupplier = new Map((f.peppolMessages ?? []).filter((m) => m.direction === 'IN' && m.supplierInvoiceId && m.state !== 'DUPLICATE').map((m) => [m.supplierInvoiceId, m]));
+    const inboundOf = new Map((f.legalArtifacts ?? []).filter((a) => a.kind === 'INBOUND_ORIGINAL').map((a) => [a.peppolMessageId, a]));
+    const read = async (a) => { if (!includeDocuments || !storage) return null; const file = await storage.get(a.storageRef).catch(() => null); return file && createHash('sha256').update(file.data).digest('hex') === a.sha256 ? file.data : null; };
+    for (const x of f.documents) {
       const { doc } = x; if (!doc.lockedAt || !['invoice', 'credit_note'].includes(doc.type) || !inRange(doc.issueDate, period.start, period.end)) continue;
-      const data = await renderPdf(doc, x); const name = documentFileName({ date: doc.issueDate, party: doc.customer?.name, number: doc.number, grossCents: doc.totals?.grossCents, currency: doc.currency, ext: 'pdf' }).replace(/\.pdf$/, '_REGENERATED-COPY.pdf');
-      out[doc.type === 'invoice' ? 'sales' : 'credit_notes'].set(doc.id, { status: 'REGENERATED_COPY', data, fileName: unique(name) });
+      const arts = byDoc.get(doc.id) ?? []; const pdf = arts.find((a) => a.kind === 'PDF_ORIGINAL'); const st = arts.find((a) => a.kind === 'STRUCTURED_ORIGINAL'); const kind = doc.type === 'invoice' ? 'sales' : 'credit_notes';
+      if (pdf) { out[kind].set(doc.id, { status: 'ARCHIVED_ORIGINAL', data: await read(pdf), fileName: pdf.fileName, sha256: pdf.sha256 }); compliance.set(doc.id, { route: pdf.provenance?.routing?.route ?? null, paymentReference: pdf.paymentReference, validationOk: st ? true : null }); }
+      if (st) { out.structured.set(doc.id, { status: 'ARCHIVED_ORIGINAL', data: await read(st), fileName: st.fileName, sha256: st.sha256 }); if (!pdf) compliance.set(doc.id, { route: st.provenance?.routing?.route ?? null, paymentReference: st.provenance?.paymentReference ?? null, validationOk: true }); }
+      if (!pdf && includeDocuments && renderPdf) { const data = await renderPdf(doc, x); const name = documentFileName({ date: doc.issueDate, party: doc.customer?.name, number: doc.number, grossCents: doc.totals?.grossCents, currency: doc.currency, ext: 'pdf' }).replace(/\.pdf$/, '_REGENERATED-COPY.pdf'); out[kind].set(doc.id, { status: 'REGENERATED_COPY', data, fileName: name }); }
     }
+    for (const r of f.suppliers) { const m = messageOfSupplier.get(r.id); const a = m ? inboundOf.get(m.id) : null; if (a && inRange(r.issueDate, period.start, period.end)) { out.inbound.set(r.id, { status: 'ARCHIVED_ORIGINAL', data: await read(a), fileName: `${r.id.slice(0, 8)}_${a.fileName}`, sha256: a.sha256, messageId: m.id });
+      for (const att of (f.legalArtifacts ?? []).filter((x) => x.kind === 'ATTACHMENT' && x.peppolMessageId === m.id)) out.extra.push({ status: 'ARCHIVED_ORIGINAL', data: await read(att), fileName: `${r.id.slice(0, 8)}_${att.fileName}`, sha256: att.sha256, sourceId: r.id }); } }
+    out.compliance = compliance; if (!includeDocuments) return out;
     if (attachments) {
-      const rows = f.suppliers.filter((r) => r.attachmentRef && inRange(r.issueDate, period.start, period.end));
+      const rows = f.suppliers.filter((r) => r.attachmentRef && !out.inbound.has(r.id) && inRange(r.issueDate, period.start, period.end));
       for (let i = 0; i < rows.length; i += 8) await Promise.all(rows.slice(i, i + 8).map(async (r) => {
         const file = await attachments.get(r.attachmentRef).catch(() => null);
         if (!file) return out.purchases.set(r.id, { status: 'MISSING', reason: 'ATTACHMENT_FILE_NOT_FOUND' });
@@ -49,7 +59,7 @@ export function createAccountantExportService({ store, merchantId, finance, inbo
   const periodOf = (spec) => resolvePeriod(spec);
   async function build(spec, { includeDocuments = false } = {}) {
     const period = periodOf(spec); const f = await facts(); const artifacts = await artifactsFor(f, period, includeDocuments);
-    return buildAccountantExport({ merchant: { id: merchantId, name: merchant.name ?? null }, period, timeZone: clock.timeZone, generatedAt: clock.now(), ...f, artifacts, sourceSchemaVersion, cashCurrency });
+    return buildAccountantExport({ merchant: { id: merchantId, name: merchant.name ?? null }, period, timeZone: clock.timeZone, generatedAt: clock.now(), ...f, artifacts, compliance: artifacts.compliance, reconciliations: f.reconciliations, sourceSchemaVersion, cashCurrency });
   }
   const summary = (b) => ({ period: b.manifest.period, rowCounts: b.rowCounts, warnings: b.warnings, missingArtifacts: b.manifest.missingArtifacts, pdfArchive: b.manifest.pdfArchive, currencies: b.manifest.currencies, totalsByCurrency: b.manifest.totalsByCurrency, contentFingerprint: b.contentFingerprint, files: b.manifest.files.map((x) => ({ path: x.path, rows: x.rows })) });
 

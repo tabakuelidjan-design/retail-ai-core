@@ -9,6 +9,8 @@ import { CONFIG, MERCHANT_ACTOR, issueInvoice } from './finance-fixtures.js';
 import { createTreasuryService } from '../src/finance/treasury-service.js';
 import { loadDocsForReports } from '../src/finance/reports.js';
 import { createAccountantExportService } from '../src/finance/accountant-export-service.js';
+import { createHash } from 'node:crypto';
+import { vcsGenerate } from '../src/finance/belgium-compliance.js';
 
 export const A = '11111111-1111-1111-1111-111111111111';
 export const B = '22222222-2222-2222-2222-222222222222';
@@ -227,5 +229,37 @@ export const SCENARIOS = {
     const rows = (n) => { const lines = pkg.files.get(n).toString('utf8').replace(/^﻿/, '').split('\r\n').filter(Boolean); const h = lines[0].split(','); return lines.slice(1).map((l) => Object.fromEntries(l.split(',').map((v, i) => [h[i], v]))); };
     const pick = (n, keys) => rows(n).map((r) => keys.map((k) => r[k])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     return [pkg.rowCounts, pick('sales.csv', ['number', 'gross', 'allocated', 'remaining', 'payment_status']), pick('purchases.csv', ['gross', 'allocated', 'remaining', 'payment_state']), pick('bank-transactions.csv', ['provider_tx_id', 'amount', 'reconciliation_status', 'reconciled', 'remaining']), pick('payments.csv', ['direction', 'amount', 'allocated', 'unallocated', 'bank_reconciled']), pick('cash.csv', ['record_type', 'kind', 'amount']), pkg.warnings.map((x) => [x.code, x.count])];
+  },
+  // Legal artifacts, seller profile versions and Peppol messages: the same rules and error codes on the memory store and on PostgreSQL.
+  async 'legal: artifacts (original per document, immutable classification, VCS), seller versions, Peppol messages (idempotency, compare-and-set, inbound dedup), isolation'(w) {
+    const st = w.storeFor(A); const sb = w.storeFor(B); const out = []; const at = '2026-10-03T10:00:00.000Z'; const h = (s) => createHash('sha256').update(s).digest('hex');
+    const inv = await issueInvoice(w.svc); const inv2 = await issueInvoice(w.svc); const art = (o) => ({ merchantId: A, kind: 'PDF_ORIGINAL', classification: 'ORIGINAL', documentId: inv.id, storageRef: 'ref/1', sha256: h('pdf-1'), sizeBytes: 10, mediaType: 'application/pdf', fileName: 'a.pdf', provenance: { x: 1 }, createdAt: at, ...o });
+    const vcs = vcsGenerate('2026000001'); const a1 = await st.archiveArtifact(art({ paymentReference: vcs })); const a1b = await st.archiveArtifact(art({ paymentReference: vcs }));
+    out.push([a1.duplicate, a1b.duplicate, a1.artifact.id === a1b.artifact.id, a1.artifact.retentionClass, a1.artifact.legalHold]);
+    out.push(await code(() => st.archiveArtifact(art({ sha256: h('other-bytes'), paymentReference: vcs }))), await code(() => st.archiveArtifact(art({ documentId: inv2.id, sha256: h('p2'), paymentReference: vcs }))), await code(() => st.archiveArtifact(art({ documentId: inv2.id, sha256: h('p3'), paymentReference: '090933755494' }))));
+    out.push(await code(() => st.archiveArtifact(art({ documentId: inv2.id, sha256: h('p4'), classification: 'REGENERATED' }))), await code(() => st.archiveArtifact(art({ documentId: inv2.id, sha256: h('p5'), kind: 'STRUCTURED_ORIGINAL', paymentReference: vcsGenerate('2026000002') }))), await code(() => st.archiveArtifact(art({ documentId: inv2.id, sha256: 'nothex' }))));
+    const x1 = await st.archiveArtifact(art({ documentId: inv2.id, kind: 'STRUCTURED_ORIGINAL', sha256: h('xml-2'), mediaType: 'application/xml', fileName: 'b.xml' })); const x2 = await st.archiveArtifact(art({ documentId: inv2.id, kind: 'STRUCTURED_ORIGINAL', sha256: h('xml-2'), mediaType: 'application/xml' }));
+    out.push([x1.duplicate, x2.duplicate], await code(() => st.archiveArtifact(art({ documentId: inv2.id, kind: 'STRUCTURED_ORIGINAL', sha256: h('xml-other') }))), (await st.listArtifacts({ merchantId: A, documentId: inv.id })).map((a) => [a.kind, a.classification]), (await st.listArtifacts({ merchantId: A, documentId: inv2.id })).map((a) => a.kind).sort());
+    out.push(await code(() => sb.archiveArtifact(art({ merchantId: B }))), (await sb.listArtifacts({ merchantId: B, documentId: inv.id })).length);
+    // seller profile versions
+    const v1 = await st.recordSellerProfile({ merchantId: A, profile: { name: 'S1' }, sha256: h('s1'), at }); const v1b = await st.recordSellerProfile({ merchantId: A, profile: { name: 'S1' }, sha256: h('s1'), at }); const v2 = await st.recordSellerProfile({ merchantId: A, profile: { name: 'S2' }, sha256: h('s2'), at }); const vb = await sb.recordSellerProfile({ merchantId: B, profile: { name: 'S1' }, sha256: h('s1'), at });
+    out.push([v1.version.version, v1b.duplicate, v2.version.version, vb.version.version], (await st.listSellerProfileVersions(A)).map((v) => v.version));
+    // Peppol outbound
+    const q = await st.enqueuePeppol({ merchantId: A, documentId: inv.id, key: `peppol-out:${inv.id}`, sha256: h('ubl-1'), provider: 'fake', state: 'QUEUED', sender: '0208:1', receiver: '0208:2', at }); const qb = await st.enqueuePeppol({ merchantId: A, documentId: inv.id, key: `peppol-out:${inv.id}`, sha256: h('ubl-1'), provider: 'fake', state: 'QUEUED', at });
+    out.push([q.duplicate, qb.duplicate, q.message.state, q.message.attempts], await code(() => st.enqueuePeppol({ merchantId: A, documentId: inv.id, key: 'peppol-out:other-key', sha256: h('ubl-2'), provider: 'fake', at })), await code(() => st.enqueuePeppol({ merchantId: A, documentId: inv2.id, key: 'peppol-out:ok-2', sha256: h('u'), provider: 'fake', state: 'DELIVERED', at })), await code(() => sb.enqueuePeppol({ merchantId: B, documentId: inv.id, key: 'peppol-out:b-1', sha256: h('u'), provider: 'fake', at })));
+    const id = q.message.id; const c1 = await st.transitionPeppol({ merchantId: A, id, from: ['QUEUED'], to: 'SUBMITTING', at }); const c2 = await st.transitionPeppol({ merchantId: A, id, from: ['QUEUED'], to: 'SUBMITTING', at });
+    out.push([c1.changed, c2.changed, c1.message.attempts, c2.message.state], await code(() => st.transitionPeppol({ merchantId: A, id, from: ['SUBMITTING'], to: 'DELIVERED', at })), await code(() => sb.transitionPeppol({ merchantId: B, id, from: ['SUBMITTING'], to: 'SUBMITTED', at })));
+    const s1 = await st.transitionPeppol({ merchantId: A, id, from: ['SUBMITTING'], to: 'SUBMITTED', patch: { providerMessageId: 'pm-1' }, at }); const d1 = await st.transitionPeppol({ merchantId: A, id, from: ['SUBMITTED'], to: 'DELIVERED', at });
+    out.push([s1.changed, s1.message.providerMessageId, d1.message.state, d1.message.deliveredAt !== null], await code(() => st.transitionPeppol({ merchantId: A, id, from: ['DELIVERED'], to: 'QUEUED', at })));
+    const vf = await st.enqueuePeppol({ merchantId: A, documentId: inv2.id, key: 'peppol-out:vf-1', sha256: h('bad'), provider: 'fake', state: 'VALIDATION_FAILED', validation: { ok: false }, errorCode: 'VALIDATION_FAILED', at }); out.push([vf.message.state, vf.message.errorCode, vf.message.queuedAt], await code(() => st.transitionPeppol({ merchantId: A, id: vf.message.id, from: ['VALIDATION_FAILED'], to: 'QUEUED', at })));
+    // inbound
+    const r1 = await st.registerInboundPeppol({ merchantId: A, provider: 'fake', providerMessageId: 'p-1', key: 'peppol-in:fake:p-1', sha256: h('xml-in'), sender: 's', receiver: 'r', businessKey: 'S|F-1|2026-09-01', at });
+    const r1b = await st.registerInboundPeppol({ merchantId: A, provider: 'fake', providerMessageId: 'p-1', key: 'peppol-in:fake:p-1', sha256: h('xml-in'), at }); const r2 = await st.registerInboundPeppol({ merchantId: A, provider: 'fake', providerMessageId: 'p-2', key: 'peppol-in:fake:p-2', sha256: h('xml-in'), at });
+    const r3 = await st.registerInboundPeppol({ merchantId: A, provider: 'fake', providerMessageId: 'p-3', key: 'peppol-in:fake:p-3', sha256: h('xml-in-other'), businessKey: 'S|F-1|2026-09-01', at }); const r4 = await st.registerInboundPeppol({ merchantId: A, provider: 'fake', providerMessageId: 'p-4', key: 'peppol-in:fake:p-4', sha256: h('xml-in-3'), businessKey: 'S|F-2|2026-09-01', at });
+    const rb = await sb.registerInboundPeppol({ merchantId: B, provider: 'fake', providerMessageId: 'p-1', key: 'peppol-in:fake:p-1', sha256: h('xml-in'), at });
+    out.push([r1.duplicate, r1b.duplicate, r2.duplicate, r2.message.state, r3.duplicate, r3.message.duplicateOf === r1.message.id, r4.duplicate, rb.duplicate], (await st.listPeppolMessages({ merchantId: A, direction: 'IN' })).map((m) => m.state).sort(), (await sb.listPeppolMessages({ merchantId: B, direction: 'IN' })).length);
+    const rv = await st.transitionPeppol({ merchantId: A, id: r1.message.id, from: ['RECEIVED'], to: 'TO_REVIEW', patch: { validation: { ok: true } }, at }); const acc = await st.transitionPeppol({ merchantId: A, id: r1.message.id, from: ['TO_REVIEW'], to: 'ACCEPTED', at });
+    out.push([rv.message.state, acc.message.state, acc.message.validation.ok], await code(() => st.transitionPeppol({ merchantId: A, id: r1.message.id, from: ['ACCEPTED'], to: 'TO_REVIEW', at })));
+    return out;
   },
 };

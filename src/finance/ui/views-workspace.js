@@ -685,6 +685,7 @@ async function viewInbox() {
   // sources
   const st = await api('GET', '/api/inbox/status');
   const SRC = { upload: 'File upload', email: 'Dedicated finance mailbox', peppol: 'Peppol invoices received' };
+  await peppolInboundCard(box);
   box.appendChild(h('div', { class: 'sources' }, st.adapters.map((a) => h('div', { class: `source ${a.configured ? 'on' : ''}` }, h('span', { class: 'dot2' }), h('span', null, tt(SRC[a.name] || a.name)), h('span', { class: 'chip mute' }, tt(a.configured ? 'Active' : 'NOT CONFIGURED'))))));
   // drop zone
   const input = h('input', { type: 'file', accept: '.pdf,.png,.jpg,.jpeg,.xml', multiple: true, style: 'display:none' });
@@ -803,16 +804,50 @@ function stockMovementsCard(d) {
 }
 function peppolCard(d, reload) {
   if (!d.peppol || !['invoice', 'credit_note'].includes(d.type) || !d.doc.lockedAt) return null;
-  const p = d.peppol; const STAT = { NOT_CONFIGURED: 'NOT CONFIGURED', NOT_SENT: 'Not sent', SENT: 'Sent', DELIVERED: 'Delivered', REJECTED: 'Rejected', FAILED: 'Failed', PREPARED: 'Prepared' };
-  const steps = ['NOT_SENT', 'SENT', 'DELIVERED']; const idx = Math.max(0, steps.indexOf(p.status === 'NOT_CONFIGURED' ? 'NOT_SENT' : p.status));
-  const bad = p.status === 'REJECTED' || p.status === 'FAILED';
+  // The labels say what is TRUE: "accepted by the provider" is not "delivered". Nothing here ever says "Sent" for a message that is only submitted.
+  const p = d.peppol; const STAT = { NOT_CONFIGURED: 'NOT CONFIGURED', NOT_SENT: 'Not sent', QUEUED: 'Queued', SUBMITTING: 'Sending...', SUBMITTED: 'Accepted by the Peppol provider (not yet delivered)', DELIVERED: 'Delivered', VALIDATION_FAILED: 'Invalid structured invoice: not sent', SUBMISSION_FAILED: 'Sending failed', DELIVERY_FAILED: 'Delivery failed' };
+  const STEP = { NOT_SENT: 'Not sent', QUEUED: 'Queued', SUBMITTED: 'Accepted by the provider', DELIVERED: 'Delivered' };
+  const steps = ['QUEUED', 'SUBMITTED', 'DELIVERED']; const at = p.status === 'SUBMITTING' ? 0 : steps.indexOf(p.status); const bad = ['VALIDATION_FAILED', 'SUBMISSION_FAILED', 'DELIVERY_FAILED'].includes(p.status);
+  const compliance = h('div', { class: 'compliance', style: 'margin-top:10px' });
+  loadCompliance(d, compliance, reload);
   return h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Peppol'), h('span', { class: `chip ${p.status === 'DELIVERED' ? 'ok' : bad ? 'bad' : 'mute'}` }, tt(STAT[p.status] || p.status))),
-    h('ol', { class: 'stepper mini' }, steps.map((k, i) => h('li', { class: i < idx || (i === idx && p.status === 'DELIVERED') ? 'done' : i === idx ? 'current' : '' }, h('span', { class: 'sdot' }, String(i + 1)), h('span', null, tt(STAT[k]))))),
-    bad ? h('div', { class: 'banner warn small' }, tt('The Access Point reported a problem: {0}', p.detail || p.status)) : null,
+    h('ol', { class: 'stepper mini' }, steps.map((k, i) => h('li', { class: i < at || (i === at && p.status === 'DELIVERED') ? 'done' : i === at ? 'current' : '' }, h('span', { class: 'sdot' }, String(i + 1)), h('span', null, tt(STEP[k]))))),
+    bad ? h('div', { class: 'banner warn small' }, tt('The Peppol provider reported a problem: {0}', p.detail || p.status)) : null,
     p.note ? h('p', { class: 'muted small' }, tt(p.note)) : null,
     !p.topologyConfirmed && p.configured ? h('p', { class: 'muted small' }, tt('Confirm the Peppol topology in Settings before sending.')) : null,
-    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted, on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol Access Point. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast('Sent via Peppol', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
+    compliance,
+    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
       p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
+}
+// Belgian compliance of an issued document: the route decision (with its reason), the payment reference, the archived originals (exact bytes, hash) and the official validation result.
+const ROUTE_TEXT = { PEPPOL_REQUIRED: 'Structured invoice required (Peppol)', PEPPOL_PREFERRED: 'Peppol possible (voluntary)', B2G_STRUCTURED: 'Public authority: structured invoice', NON_STRUCTURED_ALLOWED: 'No structured invoice required', ALTERNATIVE_EN16931_AGREED: 'Alternative format agreed with the customer', MANUAL_REVIEW_REQUIRED: 'To review: facts are missing', COMPLIANCE_BLOCKED: 'Blocked: facts are missing' };
+const ARCHIVE_TEXT = { ORIGINAL: 'Original archived', REGENERATED: 'Regenerated copy (not the original)' };
+function loadCompliance(d, box, reload) {
+  api('GET', `/api/documents/${d.id}/compliance`).then((c) => {
+    clear(box); const kv = (k, v) => h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v));
+    if (c.routing) box.appendChild(kv(tt('Invoicing route'), tt(ROUTE_TEXT[c.routing.route] || c.routing.route)));
+    if (c.paymentReference) box.appendChild(kv(tt('Payment reference'), (() => { const x = c.paymentReference; return `+++${x.slice(0, 3)}/${x.slice(3, 7)}/${x.slice(7)}+++`; })()));
+    if (c.pdf) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('PDF')), h('span', null, h('span', { class: `chip ${c.pdf.classification === 'ORIGINAL' ? 'ok' : 'warn'}` }, tt(ARCHIVE_TEXT[c.pdf.classification])), ' ', h('a', { href: `/api/documents/${d.id}/original-pdf` }, tt('Download')))));
+    if (c.structured) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('Structured invoice')), h('span', null, h('span', { class: 'chip ok' }, tt('Original archived')), ' ', h('span', { class: 'muted small' }, c.structured.fileName), ' ', h('a', { href: `/api/documents/${d.id}/structured-original` }, tt('Download')))));
+    if (c.validation && c.validation.ok === false) box.appendChild(h('div', { class: 'banner warn small' }, h('strong', null, tt('The structured invoice did not pass the official checks')), h('ul', { class: 'plain' }, (c.validation.findings || c.validation.errors || []).slice(0, 5).map((f) => h('li', null, typeof f === 'string' ? f : `${f.ruleId}: ${f.message}`)))));
+    if (!c.archived) box.appendChild(h('div', { class: 'actions' }, h('span', { class: 'muted small' }, tt('No original is archived for this document.')), h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/archive`, {}); toast(tt('Archived (regenerated copy)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Archive now'))));
+  }).catch(() => {});
+}
+// Invoices received through Peppol: archived original, validation, duplicate status, review state. Receiving never validates anything: a person accepts or rejects.
+async function peppolInboundCard(box) {
+  let r; try { r = await api('GET', '/api/peppol/inbound'); } catch (e) { return; }
+  if (!r.rows.length) return;
+  const STATE = { RECEIVED: 'Received', TO_REVIEW: 'To review', ACCEPTED: 'Accepted', REJECTED: 'Rejected', VALIDATION_FAILED: 'Failed the official checks', DUPLICATE: 'Duplicate (ignored)' };
+  const card = h('div', { class: 'card', style: 'margin-top:14px;padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Invoices received through Peppol')));
+  const reload = () => { const parent = card.parentNode; peppolInboundCard(parent).then(() => card.remove()); };
+  r.rows.forEach((m) => card.appendChild(h('div', { class: 'kv', style: 'flex-wrap:wrap;gap:8px' },
+    h('span', null, [m.supplier || m.sender || '—', m.number, m.date].filter(Boolean).join(' · ')), h('strong', null, m.grossCents == null ? '' : fmtMoney(m.grossCents, m.currency)),
+    h('span', { class: `chip ${m.state === 'ACCEPTED' ? 'ok' : ['VALIDATION_FAILED', 'REJECTED'].includes(m.state) ? 'bad' : 'warn'}` }, tt(STATE[m.state] || m.state)),
+    m.state === 'VALIDATION_FAILED' && m.validation ? h('span', { class: 'muted small' }, (m.validation.findings || []).slice(0, 2).map((f) => f.ruleId).join(', ')) : null,
+    m.state === 'TO_REVIEW' ? h('span', { class: 'actions' }, h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/accept`, {}); toast(tt('Accepted'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Accept')),
+      h('button', { on: { click: () => { const reason = h('input', { placeholder: tr('Reason') }); modal(tt('Reject'), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason), (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/reject`, { reason: reason.value.trim() }); close(); reload(); } catch (e) { fail(e); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject'))) : null,
+    m.state === 'VALIDATION_FAILED' ? h('button', { on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/review`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Send to review anyway')) : null)));
+  box.appendChild(card);
 }
 
 // ---------- Bank & Treasury (strictly READ ONLY: balances and transactions only, never a payment or transfer) ----------

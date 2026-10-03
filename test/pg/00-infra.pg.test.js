@@ -64,6 +64,29 @@ const PENDING_DELTA = [
   'ONLY IN MIGRATIONS: fn|fin_supplier_invoice_mirror()',
   'ONLY IN MIGRATIONS: fn|fin_supplier_invoice_truth_guard()',
   'ONLY IN MIGRATIONS: fn|fin_void_payment(p_merchant uuid, p_key text, p_payment_id uuid, p_on date, p_reason text, p_actor jsonb, p_at timestamp with time zone)',
+  'ONLY IN MIGRATIONS: cols|fin_artifacts',
+  'ONLY IN MIGRATIONS: cols|fin_peppol_messages',
+  'ONLY IN MIGRATIONS: cols|fin_seller_profile_versions',
+  'ONLY IN MIGRATIONS: cons|fin_artifacts',
+  'ONLY IN MIGRATIONS: cons|fin_peppol_messages',
+  'ONLY IN MIGRATIONS: cons|fin_seller_profile_versions',
+  'ONLY IN MIGRATIONS: fn|fin_artifacts_guard()',
+  'ONLY IN MIGRATIONS: fn|fin_peppol_enqueue(p_merchant uuid, p_document uuid, p_key text',
+  'ONLY IN MIGRATIONS: fn|fin_peppol_inbound_register(p_merchant uuid, p_provider text, p',
+  'ONLY IN MIGRATIONS: fn|fin_peppol_messages_guard()',
+  'ONLY IN MIGRATIONS: fn|fin_seller_profile_record(p_merchant uuid, p_profile jsonb, p_s',
+  'ONLY IN MIGRATIONS: fn|fin_seller_profile_versions_guard()',
+  'ONLY IN MIGRATIONS: fn|fin_vcs_valid(p text)',
+  'ONLY IN MIGRATIONS: idx|fin_artifacts',
+  'ONLY IN MIGRATIONS: idx|fin_peppol_messages',
+  'ONLY IN MIGRATIONS: idx|fin_seller_profile_versions',
+  'ONLY IN MIGRATIONS: rls|fin_artifacts',
+  'ONLY IN MIGRATIONS: rls|fin_peppol_messages',
+  'ONLY IN MIGRATIONS: rls|fin_seller_profile_versions',
+  'ONLY IN MIGRATIONS: trg|fin_artifacts',
+  'ONLY IN MIGRATIONS: trg|fin_peppol_messages',
+  'ONLY IN MIGRATIONS: trg|fin_seller_profile_versions',
+  'ONLY IN MIGRATIONS: fn|fin_peppol_transition(p_merchant uuid, p_id uuid, p_from jsonb,',
 ].map((x) => x.replace(/(fn\|)(.*)$/, (m, p, sig) => p + sig.slice(0, 63))).sort(); // the fingerprint key is a Postgres name (63 characters): long signatures are cut, their source hash is not
 
 test('guard: production-looking or remote URLs are refused before any connection', () => {
@@ -86,13 +109,13 @@ test('server is PostgreSQL 17 and carries the sentinel', async () => {
 
 test('migrations replay from zero, in order, on a database created empty', async () => {
   const files = migrationFiles();
-  assert.equal(files.length, 26); assert.deepEqual(files, [...files].sort());
+  assert.equal(files.length, 27); assert.deepEqual(files, [...files].sort());
   const db = await freshDatabase({ fromZero: true });
   try {
     const c = await db.open();
     try {
       const tables = (await c.query("select count(*)::int n from pg_tables where schemaname='public'")).rows[0].n;
-      console.log(`  replayed ${files.length} migrations -> ${tables} public tables`); assert.equal(tables, 31);
+      console.log(`  replayed ${files.length} migrations -> ${tables} public tables`); assert.equal(tables, 34);
     } finally { await c.end(); }
   } finally { await db.drop(); }
 });
@@ -133,9 +156,8 @@ test('objects present: RPCs, triggers, constraints can be inspected', async () =
   const db = await freshDatabase(); const c = await db.open();
   try {
     const fns = (await c.query("select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname like 'fin\\_%' order by 1")).rows.map((r) => r.proname);
-    assert.deepEqual(fns, ['fin_allocate_payment', 'fin_append_only', 'fin_bank_account_link', 'fin_bank_ignore', 'fin_bank_reconcile', 'fin_bank_reconcile_and_pay', 'fin_bank_reconciliation_guard', 'fin_bank_reconciliation_mirror', 'fin_bank_tx_amounts', 'fin_bank_tx_guard', 'fin_bank_unreconcile', 'fin_credit_ceiling_guard', 'fin_documents_guard', 'fin_invoice_amounts', 'fin_issue_document', 'fin_next_number', 'fin_payable_cents', 'fin_payment_allocation_guard',
-      'fin_payment_registry_guard', 'fin_record_payment', 'fin_reverse_allocations', 'fin_stock_movements_guard', 'fin_supplier_invoice_mirror', 'fin_supplier_invoice_truth_guard', 'fin_void_payment']);
-    const rls = (await c.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relrowsecurity")).rows[0].n; assert.equal(rls, 31);
+    assert.deepEqual(fns, ['fin_allocate_payment', 'fin_append_only', 'fin_artifacts_guard', 'fin_bank_account_link', 'fin_bank_ignore', 'fin_bank_reconcile', 'fin_bank_reconcile_and_pay', 'fin_bank_reconciliation_guard', 'fin_bank_reconciliation_mirror', 'fin_bank_tx_amounts', 'fin_bank_tx_guard', 'fin_bank_unreconcile', 'fin_credit_ceiling_guard', 'fin_documents_guard', 'fin_invoice_amounts', 'fin_issue_document', 'fin_next_number', 'fin_payable_cents', 'fin_payment_allocation_guard', 'fin_payment_registry_guard', 'fin_peppol_enqueue', 'fin_peppol_inbound_register', 'fin_peppol_messages_guard', 'fin_peppol_transition', 'fin_record_payment', 'fin_reverse_allocations', 'fin_seller_profile_record', 'fin_seller_profile_versions_guard', 'fin_stock_movements_guard', 'fin_supplier_invoice_mirror', 'fin_supplier_invoice_truth_guard', 'fin_vcs_valid', 'fin_void_payment']);
+    const rls = (await c.query("select count(*)::int n from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relrowsecurity")).rows[0].n; assert.equal(rls, 34);
     const sd = (await c.query("select count(*)::int n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prosecdef")).rows[0].n; assert.equal(sd, 0, 'no SECURITY DEFINER function');
   } finally { await c.end(); await db.drop(); }
 });

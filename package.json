@@ -33,6 +33,10 @@
   },
   "dependencies": {
     "pdfjs-dist": "4.10.38",
-    "pdfkit": "^0.20.2"
+    "pdfkit": "^0.20.2",
+    "saxon-js": "2.7.0"
+  },
+  "devDependencies": {
+    "xslt3": "2.7.0"
   }
 }

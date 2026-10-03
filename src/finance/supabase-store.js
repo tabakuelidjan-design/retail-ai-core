@@ -1,6 +1,7 @@
 // Supabase-backed finance store: same interface as the in-memory store. The database triggers and unique indexes in
 // migration 20260921200000 are the last line of defence; errors they raise are translated into FinanceError codes.
 
+import { legalStoreMethods } from './supabase-store-legal.js';
 import { randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { txAmounts } from './bank-ledger.js';
@@ -41,6 +42,10 @@ export function translateDbError(err) {
   // rules enforced by the P0 integrity triggers (migration 20261003090000): the message starts with FIN_<CODE>; the domain code is the same without the prefix
   const fin = /\bFIN_([A-Z_]+)\b/.exec(m);
   if (fin) { const RENAMED = { ALLOCATION_EXCEEDS_REMAINING: 'PAYMENT_EXCEEDS_REMAINING', BANK_TX_ALREADY_CLAIMED: 'BANK_TRANSACTION_ALREADY_CLAIMED' }; return new FinanceError(RENAMED[fin[1]] ?? fin[1], m.slice(m.indexOf(fin[0]) + fin[0].length).replace(/^:\s*/, '').split('"')[0].slice(0, 200)); }
+  // legal artifacts / Peppol messages (migration 20261006090000)
+  if (/fin_artifacts_payment_reference_uq/.test(m)) return new FinanceError('PAYMENT_REFERENCE_NOT_UNIQUE');
+  if (/fin_artifacts_vcs_valid/.test(m)) return new FinanceError('PAYMENT_REFERENCE_INVALID', 'refused by the database');
+  if (/fin_artifacts_(document|supplier|parent|message)_fk|fin_peppol_messages_(document|supplier|duplicate)_fk/.test(m)) return new FinanceError('CROSS_MERCHANT_REFERENCE', 'refused by the database');
   if (/fin_bank_tx_amount_nonzero_chk|fin_bank_tx_currency_chk/.test(m)) return new FinanceError('BANK_TRANSACTION_INVALID', 'refused by the database');
   if (/fin_payment_registry_method_chk/.test(m)) return new FinanceError('PAYMENT_METHOD_INVALID', 'refused by the database');
   if (/fin_payment_registry_source_check|source_check/.test(m)) return new FinanceError('PAYMENT_SOURCE_INVALID', 'refused by the database');
@@ -79,6 +84,7 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
 
   return {
     newId: () => randomUUID(),
+    ...legalStoreMethods(supabase, { merchantId, guard, eq }),
 
     async getDocument(id) {
       const rows = await supabase.select('fin_documents', { select: '*', id: eq(id), merchant_id: eq(merchantId) });

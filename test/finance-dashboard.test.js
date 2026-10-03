@@ -539,7 +539,8 @@ test('AUDIT: every lifecycle action is recorded with actor, transition and time'
   await c.post(`/api/documents/${d.id}/mark-sent`, {});
   await c.post(`/api/documents/${d.id}/payments`, { amount: '71.90', paidOn: '2026-09-22', method: 'cash', note: 'paid in shop' });
   const events = (await c.get(`/api/documents/${d.id}`)).data.events;
-  assert.deepEqual(events.map((e) => e.action).filter((x) => x !== 'PAYMENT_NOTE'), ['CREATE_DRAFT', 'SUBMIT_FOR_APPROVAL', 'APPROVE_AND_ISSUE', 'MARK_SENT', 'RECORD_PAYMENT', 'STATUS_CHANGE']);
+  // issuing also records the legal archive (PDF original, structured original, compliance record) in the same history
+  assert.deepEqual(events.map((e) => e.action).filter((x) => x !== 'PAYMENT_NOTE'), ['CREATE_DRAFT', 'SUBMIT_FOR_APPROVAL', 'APPROVE_AND_ISSUE', 'ARTIFACT_ARCHIVED', 'ARTIFACT_ARCHIVED', 'COMPLIANCE_VALIDATED', 'ISSUE_COMPLIANCE_RECORDED', 'MARK_SENT', 'RECORD_PAYMENT', 'STATUS_CHANGE']);
   assert.ok(events.every((e) => e.actor && e.actor.type && e.at));
   assert.ok(events.filter((e) => ['APPROVE_AND_ISSUE', 'MARK_SENT'].includes(e.action)).every((e) => e.actor.type === 'merchant'));
 }));

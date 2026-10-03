@@ -2,6 +2,7 @@
 // rules the database triggers enforce (locked documents cannot change commercially, audit events and payments are
 // append-only, one active invoice per source order, gapless per-year numbering), so tests exercise real invariants.
 
+import { createLegalMemory } from './memory-store-legal.js';
 import { TRANSITIONS as STOCK_TRANSITIONS } from './stock.js';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
@@ -152,8 +153,14 @@ function recordPaymentSync({ merchantId, key, direction, amountCents, currency, 
     return { duplicate: false, reconciliation: clone(row), transaction: txAmounts(tx, bankRecs) };
   }
 
+  const legal = createLegalMemory({ docs, supplierInvoices });
   return {
     newId: () => randomUUID(),
+    // legal artifacts, seller profile versions, Peppol messages (the same contract as migration 20261006090000)
+    async archiveArtifact(row) { return legal.archiveArtifact(row); }, async listArtifacts(f) { return legal.listArtifacts(f); }, async getArtifact(m, id) { return legal.getArtifact(m, id); }, async setLegalHold(m, id, on) { return legal.setLegalHold(m, id, on); },
+    async recordSellerProfile(a) { return legal.recordSellerProfile(a); }, async listSellerProfileVersions(m) { return legal.listSellerProfileVersions(m); },
+    async enqueuePeppol(a) { return legal.enqueuePeppol(a); }, async transitionPeppol(a) { return legal.transitionPeppol(a); }, async registerInboundPeppol(a) { return legal.registerInboundPeppol(a); },
+    async getPeppolMessage(m, id) { return legal.getPeppolMessage(m, id); }, async listPeppolMessages(f) { return legal.listPeppolMessages(f); },
 
     async getDocument(id) { const d = docs.get(id); return d ? clone(d) : null; },
 

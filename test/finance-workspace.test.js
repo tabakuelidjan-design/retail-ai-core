@@ -55,7 +55,7 @@ test('Peppol UX is provider-neutral: no Access Point -> NOT CONFIGURED, nothing 
     const r = await c.post(`/api/documents/${d.id}/peppol/send`, { approve: true }); assert.equal(r.status, 409); assert.equal(r.data.error.code, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
   } finally { await a.close(); }
 });
-test('Peppol outgoing lifecycle behind the adapter: approve -> SENT -> DELIVERED / REJECTED; refused while the topology is undecided; never twice', async () => {
+test('Peppol outgoing lifecycle behind the adapter: approve -> SUBMITTED (accepted by the provider, not delivered) -> DELIVERED; refused while the topology is undecided; never twice', async () => {
   const sent = [];
   const ap = { name: 'fake-ap', status: 'DELIVERED', async submit(m) { sent.push(m); return { providerMessageId: `pm-${sent.length}` }; }, async fetchStatus() { return { status: this.status, at: '2026-09-26T10:00:00Z' }; } };
   const s = baseSettings(); s.seller.enterpriseNumber = '0000.000.097'; s.seller.peppolId = undefined;
@@ -66,8 +66,8 @@ test('Peppol outgoing lifecycle behind the adapter: approve -> SENT -> DELIVERED
     assert.equal((await c.post(`/api/documents/${d.id}/peppol/send`, { approve: true })).data.error.code, 'PEPPOL_TOPOLOGY_NOT_CONFIRMED'); assert.equal(sent.length, 0);
     const st = a.getSettings(); st.peppol.topology = { receiverAccessPoint: 'codabox', mode: 'send_only', confirmedWith: 'Comptable', confirmedOn: '2026-09-30', note: '' }; a.setSettings(st);
     assert.equal((await c.get(`/api/documents/${d.id}`)).data.peppol.canSend, true);
-    const r = await c.post(`/api/documents/${d.id}/peppol/send`, { approve: true }); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.status, 'SENT'); assert.equal(sent.length, 1); assert.match(sent[0].payloadXml, /<Invoice/);
-    assert.equal((await c.get(`/api/documents/${d.id}`)).data.peppol.status, 'SENT');
+    const r = await c.post(`/api/documents/${d.id}/peppol/send`, { approve: true }); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.status, 'SUBMITTED'); assert.equal(sent.length, 1); assert.match(sent[0].payloadXml, /<Invoice/);
+    assert.equal((await c.get(`/api/documents/${d.id}`)).data.peppol.status, 'SUBMITTED');
     assert.equal((await c.post(`/api/documents/${d.id}/peppol/send`, { approve: true })).status, 409, 'not twice'); assert.equal(sent.length, 1);
     assert.equal((await c.post(`/api/documents/${d.id}/peppol/refresh`, {})).data.status, 'DELIVERED'); assert.equal((await c.get(`/api/documents/${d.id}`)).data.peppol.status, 'DELIVERED');
   } finally { await a.close(); }

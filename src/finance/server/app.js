@@ -27,13 +27,18 @@ import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js'
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
 import { buildActions } from '../actions.js';
 import { createTreasuryService } from '../treasury-service.js';
+import { createLegalArtifacts } from '../legal-artifacts.js';
+import { createPeppolService } from '../peppol-service.js';
+import { NoPeppolProvider, legacyAdapterAsProvider } from '../peppol-provider.js';
+import { endpointOf } from '../peppol.js';
 import { createAccountantExportService } from '../accountant-export-service.js';
 import { verifyExportPackage } from '../accountant-export.js';
 import { TreasuryError } from '../treasury-engine.js';
 import { createBankService } from '../bank-service.js';
 import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
-import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
+import { NullAccessPointAdapter, prepareTransmission } from '../peppol.js';
+import { OUT_STATES } from '../legal-ledger.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
 import { dueViewOf } from '../payables/index.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
@@ -117,6 +122,10 @@ export function createFinanceApp(deps) {
     const ledgerProvider = async () => (retail ? (await retail.ledgerData()).ledger : null);
     const stock = stockFor(settings);
     const hooks = {
+      onIssued: async (doc) => {
+        const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await store.getDocument(doc.relatedDocumentId).catch(() => null))?.number ?? null : null;
+        await legalServices(settings).legal.archiveIssued(doc, { atIssue: true, originalNumber: original, branding: settings.branding });
+      },
       restockDecisionNeeded: (doc, inv) => (settings.stock?.mode === 'off' ? false : stock.restockDecisionNeeded(doc, inv)),
       afterIssue: async (doc) => {
         if (!settings.stock || settings.stock.mode === 'off') return; // stock sync is off: no ledger writes (enabling it later reconciles already issued documents)
@@ -127,6 +136,14 @@ export function createFinanceApp(deps) {
     };
     return { settings, stock, svc: createFinanceService({ store, config, clock: { now: clock.now, today: clock.today }, ledgerProvider, hooks }) };
   }
+  // Legal artifacts and Peppol, behind the provider contract (no provider selected: the null provider transmits nothing and pretends nothing)
+  const peppolProvider = () => deps.peppolProvider ?? (deps.accessPoint ? legacyAdapterAsProvider(deps.accessPoint) : NoPeppolProvider);
+  const legalServices = (settings) => {
+    const legal = createLegalArtifacts({ store, merchantId, storage: attachmentStore, clock, renderPdf: renderDocumentPdf, audit, defaultBuyerReference: settings.peppol?.defaultBuyerReference ?? 'document_number' });
+    const own = endpointOf({ address: { countryCode: 'BE' }, enterpriseNumber: settings.seller?.enterpriseNumber, vatNumber: settings.seller?.vatNumber });
+    const peppol = createPeppolService({ store, merchantId, provider: peppolProvider(), legal, storage: attachmentStore, inbox: inboxFor(), clock, ownEndpoints: own ? [`${own.scheme}:${own.id}`] : [] });
+    return { legal, peppol };
+  };
   const stockFor = (settings) => createStockService({ store, merchantId, retail, applier: deps.stockApplier ?? null, getSettings: async () => settings, now: clock.now, audit });
 
   const fields = (errors) => { throw new HttpError(422, 'INPUT_INVALID', { fields: errors }); };
@@ -187,6 +204,7 @@ export function createFinanceApp(deps) {
     const payments = doc.type === 'invoice' ? await store.listPayments(doc.id) : [];
     const readiness = !doc.lockedAt ? await svc.readiness(doc) : null;
     const events = await svc.events(id);
+    const peppolMsg = (await store.listPeppolMessages({ merchantId, documentId: id }))[0] ?? null;
     const safeMoves = async (documentId) => { try { return await store.listStockMovements({ merchantId, documentId }); } catch { return []; } }; // the ledger may not exist yet
     const stockMovements = ['invoice', 'credit_note'].includes(doc.type) && doc.lockedAt ? await safeMoves(doc.id) : [];
     const stockInvoice = doc.type === 'invoice' ? doc : null;
@@ -207,7 +225,7 @@ export function createFinanceApp(deps) {
       sourceOrder: source, actions: [...actionsFor(doc, v.settlement ?? null, credited), ...(v.refund?.maxCents > 0 ? ['refund'] : [])],
       nextNumber: !doc.lockedAt && doc.status !== 'CANCELLED' ? await svc.peekNextNumber(doc.type, doc.issueDate ?? today).catch(() => null) : null,
       revenueNote: doc.revenueBasis === 'linked_source_order' ? 'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.' : doc.revenueBasis === 'standalone_b2b' ? 'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.' : null,
-      peppol: { ...(peppolStateOf(events) ?? { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SENT', 'DELIVERED'].includes(peppolStateOf(events)?.status), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
+      peppol: { ...(peppolMsg ? { status: peppolMsg.state, at: peppolMsg.submittedAt ?? peppolMsg.queuedAt, providerMessageId: peppolMsg.providerMessageId, detail: peppolMsg.errorCode } : { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SUBMITTED', 'DELIVERED'].includes(peppolMsg?.state), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
       sellerReady: missingForInvoicing(settings).length === 0,
     };
   }
@@ -579,18 +597,58 @@ export function createFinanceApp(deps) {
     const { svc, settings } = await servicesFor();
     const v = await svc.view(idParam(ctx.m[1]));
     const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
-    const buf = await renderDocumentPdf(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding });
+    let buf = null; let archived = null;
+    if (v.doc.lockedAt) { const o = await legalServices(settings).legal.originalPdf(v.doc.id).catch(() => null); if (o?.verified) { buf = o.data; archived = o.artifact.classification; } }
+    buf ??= await renderDocumentPdf(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding });
     const name = safeName(`${v.doc.type}_${v.doc.number ?? 'draft'}`);
-    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store' });
+    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': archived ?? 'REGENERATED_ON_DEMAND' });
   });
+
+  // ---------- Belgian compliance, legal artifacts, Peppol ----------
+  const messageView = (m) => (m ? { id: m.id, state: m.state, attempts: m.attempts, provider: m.provider, receiver: m.receiverEndpoint, queuedAt: m.queuedAt, submittedAt: m.submittedAt, deliveredAt: m.deliveredAt, errorCode: m.errorCode } : null);
+  const artView = (a) => (a ? { id: a.id, kind: a.kind, classification: a.classification, sha256: a.sha256, sizeBytes: a.sizeBytes, mediaType: a.mediaType, fileName: a.fileName, createdAt: a.createdAt, retentionClass: a.retentionClass } : null);
+  on('GET', `/api/documents/${P}/compliance`, async (ctx) => {
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const c = v.doc.lockedAt ? await legal.compliance(v.doc.id) : null; const messages = await store.listPeppolMessages({ merchantId, documentId: v.doc.id });
+    json(ctx.res, 200, { documentId: v.doc.id, issued: !!v.doc.lockedAt, archived: !!c, routing: c?.routing ?? null, paymentReference: c?.paymentReference ?? null, sellerProfileVersion: c?.sellerProfileVersion ?? null, pdf: artView(c?.pdf), structured: artView(c?.structured), validation: c?.validation ?? null, peppol: messageView(messages[0]) });
+  });
+  const download = (kind) => async (ctx) => {
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const o = await (kind === 'xml' ? legal.structuredOriginal(v.doc.id) : legal.originalPdf(v.doc.id)); if (!o.verified) throw new HttpError(409, 'ARTIFACT_INTEGRITY_FAILED', { problem: o.problem });
+    send(ctx.res, 200, o.data, { 'Content-Type': kind === 'xml' ? 'application/xml; charset=utf-8' : 'application/pdf', 'Content-Disposition': `attachment; filename="${o.artifact.fileName}"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': o.artifact.classification, 'X-Nordla-Sha256': o.artifact.sha256 });
+  };
+  on('GET', `/api/documents/${P}/original-pdf`, download('pdf'));
+  on('GET', `/api/documents/${P}/structured-original`, download('xml'));
+  on('POST', `/api/documents/${P}/archive`, async (ctx) => { // repair for a document issued before archiving existed: the PDF is then a REGENERATED_COPY and no structured "original" is invented
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
+    const r = await legal.archiveIssued(v.doc, { atIssue: false, originalNumber: original, settlement: v.settlement ?? null, branding: settings.branding, actor }); json(ctx.res, 200, { archived: true, duplicate: r.duplicate, pdf: artView(r.pdf) });
+  });
+  on('POST', '/api/peppol/dispatch', async (ctx) => { const { settings } = await servicesFor(); json(ctx.res, 200, await legalServices(settings).peppol.dispatchQueued({})); });
+  on('POST', `/api/peppol/messages/${P}/refresh`, async (ctx) => { const { settings } = await servicesFor(); json(ctx.res, 200, await legalServices(settings).peppol.refreshStatus(idParam(ctx.m[1]))); });
+  on('POST', `/api/peppol/messages/${P}/retry`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.retry(idParam(ctx.m[1])); json(ctx.res, 200, { state: r.state, requeued: r.requeued }); });
+  on('GET', '/api/peppol/inbound', async (ctx) => {
+    const { settings } = await servicesFor(); const rows = await store.listPeppolMessages({ merchantId, direction: 'IN' }); const inboxRows = new Map((await store.listSupplierInvoices(merchantId)).map((r) => [r.id, r])); void settings;
+    json(ctx.res, 200, { rows: rows.map((m) => { const s = m.supplierInvoiceId ? inboxRows.get(m.supplierInvoiceId) : null; return { id: m.id, state: m.state, receivedAt: m.receivedAt, sender: m.senderEndpoint, duplicateOf: m.duplicateOf, validation: m.validation ? { ok: m.validation.ok, fatal: m.validation.fatal, warnings: m.validation.warnings, findings: (m.validation.findings ?? []).slice(0, 10) } : null, supplierInvoiceId: m.supplierInvoiceId,
+      supplier: s?.supplierName ?? null, number: s?.invoiceNumber ?? null, date: s?.issueDate ?? null, grossCents: s?.grossCents ?? null, currency: s?.currency ?? null }; }) });
+  });
+  on('POST', `/api/peppol/inbound/${P}/accept`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.accept(idParam(ctx.m[1]), actor); json(ctx.res, 200, { state: r.message.state }); });
+  on('POST', `/api/peppol/inbound/${P}/review`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.moveToReview(idParam(ctx.m[1]), actor); json(ctx.res, 200, { state: r.message.state }); });
+  on('POST', `/api/peppol/inbound/${P}/reject`, async (ctx) => { const reason = sanitizeText(ctx.body?.reason, 300); if (!reason) fields([{ field: 'reason', code: 'REQUIRED' }]); const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.reject(idParam(ctx.m[1]), reason, actor); json(ctx.res, 200, { state: r.message.state }); });
+  // the provider calls this itself: no session, no CSRF; its OWN authentication is verified by the adapter before anything is read
+  on('POST', '/api/peppol/webhook', async (ctx) => { const { settings } = await servicesFor(); const raw = ctx.rawBody ?? Buffer.from(typeof ctx.body?.payload === 'string' ? ctx.body.payload : ''); const r = await legalServices(settings).peppol.handleWebhook({ headers: ctx.req.headers, body: raw, providerMessageId: ctx.body?.providerMessageId, sender: ctx.body?.sender, receiver: ctx.body?.receiver }); json(ctx.res, 200, { duplicate: r.duplicate }); }, { public: true, bodyLimit: 6_000_000 });
+
 
   on('GET', `/api/documents/${P}/ubl`, async (ctx) => {
     const { svc, settings } = await servicesFor();
     const doc = await svc.get(idParam(ctx.m[1]));
     const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await svc.get(doc.relatedDocumentId).catch(() => null))?.number : null;
+    // the archived structured ORIGINAL when there is one (exact bytes); otherwise a preview built from the snapshot, labelled as such
+    const o = doc.lockedAt ? await legalServices(settings).legal.structuredOriginal(doc.id).catch(() => null) : null;
+    if (o?.verified) return send(ctx.res, 200, o.data, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'X-Nordla-Artifact': o.artifact.classification, 'Cache-Control': 'no-store' });
     const r = prepareTransmission(doc, { originalNumber: original, defaultBuyerReference: settings.peppol.defaultBuyerReference });
     if (!r.payloadXml) throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: r.errors, transmitted: false });
-    send(ctx.res, 200, r.payloadXml, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'Cache-Control': 'no-store' });
+    send(ctx.res, 200, r.payloadXml, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'X-Nordla-Artifact': 'PREVIEW', 'Cache-Control': 'no-store' });
   });
 
   // ---------- companies ----------
@@ -900,40 +958,41 @@ export function createFinanceApp(deps) {
 
   // ---------- Peppol: provider-neutral states and topology. Nothing is transmitted without a configured Access Point AND the merchant's approval. ----------
   const accessPoint = () => deps.accessPoint ?? NullAccessPointAdapter;
-  const apConfigured = () => accessPoint().name !== 'none';
+  const apConfigured = () => peppolProvider().name !== 'none';
+  const PEPPOL_STATES = OUT_STATES;
   const peppolStateOf = (events) => { const last = [...events].reverse().find((e) => /^PEPPOL_/.test(e.action)); return last ? { status: last.action.replace('PEPPOL_', ''), at: last.at, providerMessageId: last.detail?.providerMessageId ?? null, detail: last.detail?.detail ?? null } : null; };
   on('GET', '/api/peppol/status', async (ctx) => {
-    const settings = await settingsIo.load();
+    const settings = await settingsIo.load(); const queue = apConfigured() ? await legalServices(settings).peppol.observability() : null;
     json(ctx.res, 200, {
-      outgoing: { configured: apConfigured(), adapter: accessPoint().name }, incoming: { configured: false, note: 'RECEIVING_DEPENDS_ON_CONFIRMED_TOPOLOGY' }, states: PEPPOL_STATUSES, topology: settings.peppol.topology,
+      outgoing: { configured: apConfigured(), adapter: peppolProvider().name }, incoming: { configured: apConfigured(), note: 'RECEIVING_DEPENDS_ON_CONFIRMED_TOPOLOGY' }, states: PEPPOL_STATES, topology: settings.peppol.topology, queue,
       questions: ['WHO_OWNS_THE_RECEIVING_REGISTRATION', 'IS_CODABOX_VOILA_THE_RECEIVER', 'DOES_IT_EXPOSE_AN_EXPORT_OR_API', 'SEND_ONLY_OR_INTEGRATE_EXISTING'],
       warning: 'DO_NOT_REGISTER_A_SECOND_RECEIVING_ACCESS_POINT_BEFORE_THE_TOPOLOGY_IS_CONFIRMED', decided: settings.peppol.topology.mode !== 'undecided',
     });
   });
   const peppolDoc = async (ctx) => { const { svc, settings } = await servicesFor(); const doc = await svc.get(idParam(ctx.m[1])); return { svc, settings, doc }; };
+  // The send: approval, a configured provider and a confirmed topology are still required. The document that travels is the archived STRUCTURED ORIGINAL (official validation passed);
+  // one logical document = one message (never twice); "accepted by the provider" is SUBMITTED, not delivered.
   on('POST', `/api/documents/${P}/peppol/send`, async (ctx) => {
     const { svc, settings, doc } = await peppolDoc(ctx);
     if (ctx.body?.approve !== true) throw new HttpError(422, 'APPROVAL_REQUIRED');
     if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
     if (settings.peppol.topology.mode === 'undecided') throw new HttpError(409, 'PEPPOL_TOPOLOGY_NOT_CONFIRMED');
     if (!doc.lockedAt || !['invoice', 'credit_note'].includes(doc.type)) throw new HttpError(409, 'ONLY_ISSUED_INVOICES_AND_CREDIT_NOTES_CAN_BE_SENT');
-    const events = await svc.events(doc.id);
-    if (peppolStateOf(events) && ['SENT', 'DELIVERED'].includes(peppolStateOf(events).status)) throw new HttpError(409, 'ALREADY_SENT_VIA_PEPPOL');
+    const { peppol } = legalServices(settings);
+    const prior = (await store.listPeppolMessages({ merchantId, documentId: doc.id }))[0];
+    if (prior && ['QUEUED', 'SUBMITTING', 'SUBMITTED', 'DELIVERED'].includes(prior.state)) throw new HttpError(409, 'ALREADY_SENT_VIA_PEPPOL');
     const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await svc.get(doc.relatedDocumentId).catch(() => null))?.number : null;
-    const prepared = prepareTransmission(doc, { originalNumber: original, defaultBuyerReference: settings.peppol.defaultBuyerReference });
-    if (prepared.status !== 'PREPARED') throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: prepared.errors, transmitted: false });
     await audit({ at: clock.now(), action: 'PEPPOL_SEND_APPROVED', detail: { documentId: doc.id, number: doc.number } });
-    let r; try { r = await accessPoint().submit({ payloadXml: prepared.payloadXml, sender: prepared.sender, receiver: prepared.receiver, documentNumber: doc.number }); } catch (e) { await store.appendEvent({ ...transmissionEvent(doc.id, merchantId, { status: 'FAILED', at: clock.now(), detail: String(e.message).slice(0, 120) }) }); throw new HttpError(502, 'PEPPOL_SEND_FAILED'); }
-    await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: 'SENT', at: clock.now(), providerMessageId: r.providerMessageId ?? null }));
-    json(ctx.res, 200, { status: 'SENT', providerMessageId: r.providerMessageId ?? null });
+    let q; try { q = await peppol.queue(doc, { actor, originalNumber: original }); } catch (e) { if (e instanceof FinanceError && e.code === 'PEPPOL_NOT_READY') throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: e.errors ?? [], transmitted: false }); throw e; }
+    const d = await peppol.dispatch(q.message.id);
+    if (d.state === 'SUBMISSION_FAILED') throw new HttpError(502, 'PEPPOL_SUBMISSION_FAILED', { code: d.message.errorCode, transmitted: false });
+    json(ctx.res, 200, { status: d.state, state: d.state, providerMessageId: d.message.providerMessageId ?? null, unknownOutcome: d.unknown === true, transmitted: ['SUBMITTED', 'DELIVERED'].includes(d.state) });
   });
   on('POST', `/api/documents/${P}/peppol/refresh`, async (ctx) => {
-    const { svc, doc } = await peppolDoc(ctx);
+    const { settings, doc } = await peppolDoc(ctx);
     if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
-    const cur = peppolStateOf(await svc.events(doc.id)); if (!cur?.providerMessageId) throw new HttpError(409, 'NOTHING_SENT_YET');
-    const s = await accessPoint().fetchStatus(cur.providerMessageId);
-    if (PEPPOL_STATUSES.includes(s.status) && s.status !== cur.status) await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: s.status, at: s.at ?? clock.now(), providerMessageId: cur.providerMessageId, detail: s.detail ?? null }));
-    json(ctx.res, 200, { status: s.status });
+    const m = (await store.listPeppolMessages({ merchantId, documentId: doc.id }))[0]; if (!m || !m.providerMessageId) throw new HttpError(409, 'NOTHING_SENT_YET');
+    const r = await legalServices(settings).peppol.refreshStatus(m.id); json(ctx.res, 200, { status: r.state, changed: r.changed });
   });
 
   // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------

@@ -111,6 +111,8 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       if (saved.type === 'credit_note' && saved.relatedDocumentId) await this.resettle(saved.relatedDocumentId, actor);
       // stock: recorded once per document line (idempotent); a failure never undoes an issued document, it is audited and can be reconciled
       if (hooks.afterIssue) { try { await hooks.afterIssue(saved); } catch (e) { await store.appendEvent({ documentId: saved.id, merchantId: config.merchantId, actor, action: 'STOCK_HOOK_FAILED', fromStatus: saved.status, toStatus: saved.status, detail: { error: String(e.code ?? e.message).slice(0, 120) }, at: now() }); } }
+      // legal archive (PDF original, structured original, compliance record): a failure never undoes an issued document, it is audited and the archive can be repeated (idempotent)
+      if (hooks.onIssued) { try { await hooks.onIssued(saved, { actor }); } catch (e) { await store.appendEvent({ documentId: saved.id, merchantId: config.merchantId, actor, action: 'ARCHIVE_HOOK_FAILED', fromStatus: saved.status, toStatus: saved.status, detail: { error: String(e?.message ?? e).slice(0, 200) }, at: now() }); } }
       return saved;
     },
 

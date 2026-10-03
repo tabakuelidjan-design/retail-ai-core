@@ -12,9 +12,12 @@ import { computeTotals, payableOf } from './document.js';
 import { normalizeBelgianNumber } from './company.js';
 import { divRound, formatCents, fromScaled } from './money.js';
 import { vatCategoryCode } from './vat.js';
+import { PEPPOL_RULESETS, CURRENT_PEPPOL_VERSION } from './peppol-validation.js';
 
-export const CUSTOMIZATION_ID = 'urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0';
-export const PROFILE_ID = 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0';
+// ONE source for the supported release: peppol-validation.js (PEPPOL_RULESETS). Re-exported here for the builders that already import them.
+export const CUSTOMIZATION_ID = PEPPOL_RULESETS[CURRENT_PEPPOL_VERSION].customizationId;
+export const PROFILE_ID = PEPPOL_RULESETS[CURRENT_PEPPOL_VERSION].profileId;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // Nordla limit (not a Peppol rule): attachments travel inside the invoice
 export const PEPPOL_STATUSES = ['PREPARED', 'SENT', 'DELIVERED', 'REJECTED', 'FAILED'];
 
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -29,6 +32,8 @@ const ublUnitPrice = (l) => {
   return fromScaled(v, 8).replace(/(\.\d{2}\d*?)0+$/, '$1');
 };
 const pct = (bp) => fromScaled(bp, 2);
+/** A plain file name: no path, no control characters, bounded. Anything else is refused, never rewritten. */
+export const safeFileName = (n) => typeof n === 'string' && n.length > 0 && n.length <= 120 && !/[\\/\x00-\x1f]|^\.+$/.test(n);
 
 /** { scheme, id } for a party, or null. Belgian parties derive 0208 from the enterprise/VAT number; others need an explicit peppolId "scheme:id". */
 export function endpointOf(party) {
@@ -41,7 +46,7 @@ export function endpointOf(party) {
 }
 
 /** Local structural validation of what a Peppol BIS 3.0 invoice needs. Returns error codes; empty = payload can be built. */
-export function validatePeppolReadiness(doc, { originalNumber = null, defaultBuyerReference = null } = {}) {
+export function validatePeppolReadiness(doc, { originalNumber = null, defaultBuyerReference = null, attachments = [] } = {}) {
   const e = [];
   if (doc.type === 'quote') return ['QUOTES_ARE_NOT_E_INVOICES'];
   if (!doc.number || !doc.lockedAt) e.push('DOCUMENT_NOT_ISSUED');
@@ -53,6 +58,10 @@ export function validatePeppolReadiness(doc, { originalNumber = null, defaultBuy
   if (!doc.seller.vatNumber) e.push('SELLER_VAT_NUMBER_MISSING');
   if (!/^[A-Z]{3}$/.test(doc.currency ?? '')) e.push('CURRENCY_INVALID');
   if (doc.type === 'credit_note' && !originalNumber) e.push('CREDIT_NOTE_ORIGINAL_INVOICE_NUMBER_REQUIRED');
+  // intra-EU supplies (category K) need delivery facts (date / country, EN 16931 BR-IC-11/12) that the document model does not carry yet: never invented
+  if (doc.vat?.regime === 'intra_eu_b2b_exempt') e.push('INTRA_EU_DELIVERY_FACTS_REQUIRED');
+  const allowed = PEPPOL_RULESETS[CURRENT_PEPPOL_VERSION].attachmentMediaTypes;
+  for (const a of attachments) { if (!allowed.includes(a.mediaType)) e.push('ATTACHMENT_MEDIA_TYPE_NOT_ALLOWED'); if (!a.data || a.data.length === 0 || a.data.length > MAX_ATTACHMENT_BYTES) e.push('ATTACHMENT_SIZE_INVALID'); if (!safeFileName(a.fileName)) e.push('ATTACHMENT_FILE_NAME_INVALID'); }
   const nonStandard = doc.totals?.lines?.some((l) => vatCategoryCode(doc.vat.regime, l.vatRateBp) !== 'S' && vatCategoryCode(doc.vat.regime, l.vatRateBp) !== 'Z');
   if (nonStandard && !doc.vat.mention) e.push('VAT_EXEMPTION_REASON_REQUIRED');
   try {
@@ -75,7 +84,7 @@ const party = (p, tag) => {
 };
 
 /** Build the UBL 2.1 document (Invoice or CreditNote). Call validatePeppolReadiness first; this does not repair anything. */
-export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = null, unitCode = 'C62' } = {}) {
+export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = null, unitCode = 'C62', paymentReference = null, attachments = [] } = {}) {
   const cn = doc.type === 'credit_note';
   const root = cn ? 'CreditNote' : 'Invoice';
   const ns = cn ? 'urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2' : 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2';
@@ -90,7 +99,8 @@ export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = n
   const lines = doc.totals.lines.map((l) => {
     const c = taxCat(doc.vat.regime, l.vatRateBp);
     return `<cac:${lineTag}><cbc:ID>${l.position}</cbc:ID><cbc:${qtyTag} unitCode="${unitCode}">${fromScaled(l.qtyMilli, 3)}</cbc:${qtyTag}><cbc:LineExtensionAmount currencyID="${cur}">${amt(l.netCents)}</cbc:LineExtensionAmount>`
-      + (l.discountCents > 0 ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:Amount currencyID="${cur}">${amt(l.discountCents)}</cbc:Amount><cbc:BaseAmount currencyID="${cur}">${amt(l.grossCents)}</cbc:BaseAmount></cac:AllowanceCharge>` : '')
+      // a discount is an allowance with a reason (BT-139) and, when it is a percentage, its percentage (BT-138) next to the base (BT-137); a fixed amount carries no base
+      + (l.discountCents > 0 ? `<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:AllowanceChargeReasonCode>95</cbc:AllowanceChargeReasonCode><cbc:AllowanceChargeReason>Discount</cbc:AllowanceChargeReason>${l.discountBp > 0 ? `<cbc:MultiplierFactorNumeric>${pct(l.discountBp)}</cbc:MultiplierFactorNumeric>` : ''}<cbc:Amount currencyID="${cur}">${amt(l.discountCents)}</cbc:Amount>${l.discountBp > 0 ? `<cbc:BaseAmount currencyID="${cur}">${amt(l.grossCents)}</cbc:BaseAmount>` : ''}</cac:AllowanceCharge>` : '')
       + `<cac:Item><cbc:Name>${esc(l.description)}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${c.code}</cbc:ID><cbc:Percent>${c.percent}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>`
       + `<cac:Price><cbc:PriceAmount currencyID="${cur}">${ublUnitPrice(l)}</cbc:PriceAmount></cac:Price></cac:${lineTag}>`;
   }).join('\n  ');
@@ -108,9 +118,10 @@ export function buildUbl(doc, { originalNumber = null, defaultBuyerReference = n
   <cbc:DocumentCurrencyCode>${cur}</cbc:DocumentCurrencyCode>
   <cbc:BuyerReference>${esc(buyerRef)}</cbc:BuyerReference>
   ${cn ? `<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${esc(originalNumber)}</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>` : ''}
+  ${attachments.map((a, i) => `<cac:AdditionalDocumentReference><cbc:ID>ATT-${i + 1}</cbc:ID><cbc:DocumentDescription>${esc(a.fileName)}</cbc:DocumentDescription><cac:Attachment><cbc:EmbeddedDocumentBinaryObject mimeCode="${esc(a.mediaType)}" filename="${esc(a.fileName)}">${Buffer.from(a.data).toString('base64')}</cbc:EmbeddedDocumentBinaryObject></cac:Attachment></cac:AdditionalDocumentReference>`).join('\n  ')}
   ${party(doc.seller, 'AccountingSupplierParty')}
   ${party(doc.customer, 'AccountingCustomerParty')}
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>${cn ? `<cbc:PaymentDueDate>${doc.dueDate}</cbc:PaymentDueDate>` : ''}<cac:PayeeFinancialAccount><cbc:ID>${esc(String(doc.seller.iban).replace(/\s/g, ''))}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
+  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>${cn ? `<cbc:PaymentDueDate>${doc.dueDate}</cbc:PaymentDueDate>` : ''}${paymentReference && !cn ? `<cbc:PaymentID>${esc(paymentReference)}</cbc:PaymentID>` : ''}<cac:PayeeFinancialAccount><cbc:ID>${esc(String(doc.seller.iban).replace(/\s/g, ''))}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
   ${doc.paymentTerms ? `<cac:PaymentTerms><cbc:Note>${esc(doc.paymentTerms)}</cbc:Note></cac:PaymentTerms>` : ''}
   <cac:TaxTotal><cbc:TaxAmount currencyID="${cur}">${amt(doc.totals.vatCents)}</cbc:TaxAmount>${subtotals}</cac:TaxTotal>
   <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="${cur}">${amt(doc.totals.netCents)}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="${cur}">${amt(doc.totals.grossCents)}</cbc:TaxInclusiveAmount>${doc.totals.roundingCents ? `<cbc:PayableRoundingAmount currencyID="${cur}">${amt(doc.totals.roundingCents)}</cbc:PayableRoundingAmount>` : ''}<cbc:PayableAmount currencyID="${cur}">${amt(payableOf(doc.totals))}</cbc:PayableAmount></cac:LegalMonetaryTotal>

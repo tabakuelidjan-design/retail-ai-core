@@ -21,6 +21,7 @@ import { toCsv } from './export-csv.js';
 import { txAmounts } from './bank-ledger.js';
 import { maskIban } from './bank.js';
 import { unzip, zip } from './xlsx.js';
+import { STRUCTURED_ROUTES } from './belgium-compliance.js';
 
 export const EXPORT_VERSION = '1.0';
 export const EXPORT_SCHEMA = 'nordla.accountant-export/1';
@@ -39,9 +40,9 @@ const col = (...keys) => keys.map((k) => ({ key: k, header: k }));
 
 // ---------------------------------------------------------------- file layouts (fixed: columns never depend on the data)
 export const LAYOUT = {
-  'sales.csv': col('document_id', 'number', 'issue_date', 'due_date', 'document_status', 'payment_status', 'currency', 'customer_name', 'customer_vat_number', 'net', 'vat', 'rounding', 'gross', 'credited', 'effective_due', 'allocated', 'refunded', 'retained', 'remaining', 'revenue_basis', 'payment_ids', 'payment_references', 'source_snapshot_sha256', 'pdf_status'),
-  'credit-notes.csv': col('document_id', 'number', 'issue_date', 'document_status', 'currency', 'customer_name', 'customer_vat_number', 'original_invoice_id', 'original_invoice_number', 'net', 'vat', 'rounding', 'gross', 'refunded', 'refund_payment_ids', 'source_snapshot_sha256', 'pdf_status'),
-  'purchases.csv': col('purchase_id', 'document_type', 'validation_status', 'supplier_name', 'supplier_vat_number', 'supplier_iban', 'invoice_number', 'issue_date', 'due_date', 'due_origin', 'currency', 'net', 'vat', 'gross', 'accounting_sign', 'allocated', 'remaining', 'payment_state', 'payment_reference', 'source_document_status', 'source_document_sha256', 'source_document_file'),
+  'sales.csv': col('document_id', 'number', 'issue_date', 'due_date', 'document_status', 'payment_status', 'currency', 'customer_name', 'customer_vat_number', 'net', 'vat', 'rounding', 'gross', 'credited', 'effective_due', 'allocated', 'refunded', 'retained', 'remaining', 'revenue_basis', 'payment_ids', 'payment_references', 'payment_reference', 'routing', 'source_snapshot_sha256', 'pdf_status', 'structured_status'),
+  'credit-notes.csv': col('document_id', 'number', 'issue_date', 'document_status', 'currency', 'customer_name', 'customer_vat_number', 'original_invoice_id', 'original_invoice_number', 'net', 'vat', 'rounding', 'gross', 'refunded', 'refund_payment_ids', 'routing', 'source_snapshot_sha256', 'pdf_status', 'structured_status'),
+  'purchases.csv': col('purchase_id', 'document_type', 'validation_status', 'supplier_name', 'supplier_vat_number', 'supplier_iban', 'invoice_number', 'issue_date', 'due_date', 'due_origin', 'currency', 'net', 'vat', 'gross', 'accounting_sign', 'allocated', 'remaining', 'payment_state', 'payment_reference', 'source_document_status', 'source_document_sha256', 'source_document_file', 'peppol_message_id', 'inbound_original_sha256'),
   'payments.csv': col('payment_id', 'direction', 'paid_on', 'amount', 'currency', 'method', 'reference', 'source', 'bank_reference', 'structured_reference', 'external_reference', 'refund_of_payment_id', 'reversal_of_payment_id', 'allocated', 'unallocated', 'bank_reconciled', 'created_at'),
   'payment-allocations.csv': col('allocation_id', 'payment_id', 'target_type', 'target_id', 'target_number', 'amount', 'currency', 'reverses_allocation_id', 'reason', 'allocation_date', 'created_at'),
   'refunds-reversals.csv': col('kind', 'record_id', 'date', 'amount', 'currency', 'direction', 'linked_document_number', 'reverses_id', 'refund_of_payment_id', 'reason', 'explanation'),
@@ -70,7 +71,8 @@ const dueOriginOf = (r) => (!r.dueDate ? 'UNKNOWN' : r.extraction?.provenance?.d
  * @param {{id: string, name?: string}} i.merchant @param {{kind: string, start: string, end: string, label: string}} i.period @param {string} i.timeZone @param {string} i.generatedAt ISO instant
  * @param {Array} i.documents [{doc, payments, creditNotes, refunds}]  @param {Array} i.suppliers  @param {Array} i.registry  @param {Array} i.allocations
  * @param {Array} i.bankAccounts @param {Array} i.bankTransactions (with derived reconciliation fields) @param {Array} i.reconciliations @param {Array} i.cashCounts @param {Array} i.cashMovements
- * @param {{sales?: Map, credit_notes?: Map, purchases?: Map}} [i.artifacts] per source id: { status, data?, fileName?, sha256?, reason? }
+ * @param {{sales?: Map, credit_notes?: Map, purchases?: Map, structured?: Map, inbound?: Map, extra?: Array}} [i.artifacts] per source id: { status, data?, fileName?, sha256?, reason? }; `structured` = structured originals by document id; `inbound` = Peppol inbound originals by supplier invoice id; `extra` = attachments
+ * @param {Map} [i.compliance] per document id: { route, paymentReference, validationOk } read back from the archive (never recomputed)
  * @param {string} [i.sourceSchemaVersion]
  */
 export function buildAccountantExport(i) {
@@ -87,6 +89,11 @@ export function buildAccountantExport(i) {
   const put = (name, list) => { rows[name] = list.length; files.set(name, Buffer.from(toCsv(list, LAYOUT[name]), 'utf8')); };
   const payRefs = (docId) => { const ps = (allocByDoc.get(docId) ?? []).map((a) => payById.get(a.paymentId)).filter(Boolean); return { ids: joinIds(ps.map((p) => p.id)), refs: joinIds(ps.map((p) => p.reference ?? p.bankReference ?? p.structuredReference)) }; };
   const pdfStatusOf = (kind, id) => artifacts[kind]?.get(id)?.status ?? 'MISSING';
+  const compliance = i.compliance ?? new Map();
+  const structuredStatus = (doc) => { const a = artifacts.structured?.get(doc.id); if (a) return a.status; const c = compliance.get(doc.id); return c && STRUCTURED_ROUTES.includes(c.route) ? 'MISSING' : c ? 'NOT_REQUIRED' : 'UNKNOWN'; };
+  const pdfMissing = (type, doc, kind) => { const st = pdfStatusOf(kind, doc.id); if (st !== 'ARCHIVED_ORIGINAL') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'PDF_ARCHIVED_ORIGINAL', status: 'MISSING', reason: 'NOT_ARCHIVED_AT_ISSUANCE', alternative_provided: st === 'REGENERATED_COPY' ? 'REGENERATED_COPY' : 'NONE' }); };
+  const structuredMissing = (type, doc) => { if (structuredStatus(doc) === 'MISSING') missing.push({ type, source_id: doc.id, document_number: doc.number, expected_artifact: 'STRUCTURED_ORIGINAL', status: 'MISSING', reason: compliance.get(doc.id)?.validationOk === false ? 'VALIDATION_FAILED' : 'NOT_PRODUCED', alternative_provided: 'NONE' }); };
+  const ref = (doc) => { const c = compliance.get(doc.id); return { payment_reference: c?.paymentReference ?? '', routing: c?.route ?? '' }; };
   const integrityBad = [];
 
   // ---- SALES + CREDIT NOTES
@@ -97,13 +104,13 @@ export function buildAccountantExport(i) {
     if (doc.type === 'invoice') {
       const s = settlement(doc, payments ?? [], creditNotes ?? [], refunds ?? []); const pr = payRefs(doc.id);
       sales.push({ document_id: doc.id, number: doc.number, issue_date: doc.issueDate, due_date: doc.dueDate ?? '', document_status: doc.status, payment_status: paymentStatusOf(s), currency: doc.currency, customer_name: doc.customer?.name ?? '', customer_vat_number: doc.customer?.vatNumber ?? '', net: money(t.netCents), vat: money(t.vatCents), rounding: money(t.roundingCents ?? 0), gross: money(s.grossCents),
-        credited: money(s.creditedCents), effective_due: money(s.effectiveDueCents), allocated: money(s.allocatedCents), refunded: money(s.refundedCents), retained: money(s.retainedCents), remaining: money(s.remainingCents), revenue_basis: doc.revenueBasis ?? '', payment_ids: pr.ids, payment_references: pr.refs, source_snapshot_sha256: doc.snapshotHash ?? '', pdf_status: pdfStatusOf('sales', doc.id) });
-      missing.push({ type: 'CUSTOMER_INVOICE', source_id: doc.id, document_number: doc.number, expected_artifact: 'PDF_ARCHIVED_ORIGINAL', status: 'MISSING', reason: 'NOT_ARCHIVED_AT_ISSUANCE', alternative_provided: pdfStatusOf('sales', doc.id) === 'REGENERATED_COPY' ? 'REGENERATED_COPY' : 'NONE' });
+        credited: money(s.creditedCents), effective_due: money(s.effectiveDueCents), allocated: money(s.allocatedCents), refunded: money(s.refundedCents), retained: money(s.retainedCents), remaining: money(s.remainingCents), revenue_basis: doc.revenueBasis ?? '', payment_ids: pr.ids, payment_references: pr.refs, ...ref(doc), source_snapshot_sha256: doc.snapshotHash ?? '', pdf_status: pdfStatusOf('sales', doc.id), structured_status: structuredStatus(doc) });
+      pdfMissing('CUSTOMER_INVOICE', doc, 'sales'); structuredMissing('CUSTOMER_INVOICE', doc);
     } else {
       const orig = docById.get(doc.relatedDocumentId); const refundAllocs = (allocByDoc.get(doc.id) ?? []); const refunded = sum(refundAllocs, (a) => a.amountCents);
       credits.push({ document_id: doc.id, number: doc.number, issue_date: doc.issueDate, document_status: doc.status, currency: doc.currency, customer_name: doc.customer?.name ?? '', customer_vat_number: doc.customer?.vatNumber ?? '', original_invoice_id: doc.relatedDocumentId ?? '', original_invoice_number: orig?.number ?? '', net: money(t.netCents), vat: money(t.vatCents), rounding: money(t.roundingCents ?? 0), gross: money(t.grossCents),
-        refunded: money(refunded), refund_payment_ids: joinIds(refundAllocs.map((a) => a.paymentId)), source_snapshot_sha256: doc.snapshotHash ?? '', pdf_status: pdfStatusOf('credit_notes', doc.id) });
-      missing.push({ type: 'CREDIT_NOTE', source_id: doc.id, document_number: doc.number, expected_artifact: 'PDF_ARCHIVED_ORIGINAL', status: 'MISSING', reason: 'NOT_ARCHIVED_AT_ISSUANCE', alternative_provided: pdfStatusOf('credit_notes', doc.id) === 'REGENERATED_COPY' ? 'REGENERATED_COPY' : 'NONE' });
+        refunded: money(refunded), refund_payment_ids: joinIds(refundAllocs.map((a) => a.paymentId)), routing: ref(doc).routing, source_snapshot_sha256: doc.snapshotHash ?? '', pdf_status: pdfStatusOf('credit_notes', doc.id), structured_status: structuredStatus(doc) });
+      pdfMissing('CREDIT_NOTE', doc, 'credit_notes'); structuredMissing('CREDIT_NOTE', doc);
     }
   }
   put('sales.csv', sales); put('credit-notes.csv', credits);
@@ -111,10 +118,10 @@ export function buildAccountantExport(i) {
   // ---- PURCHASES
   const purchases = []; const purchaseSrc = suppliers.filter((r) => inRange(r.issueDate, period.start, period.end)).sort(byKey('issueDate', 'invoiceNumber', 'id'));
   for (const r of purchaseSrc) {
-    const s = settlementOf(r); const type = docTypeOfPurchase(r); const art = artifacts.purchases?.get(r.id); const hasRef = !!r.attachmentRef;
+    const s = settlementOf(r); const type = docTypeOfPurchase(r); const art = artifacts.purchases?.get(r.id); const inbound = artifacts.inbound?.get(r.id) ?? null; const hasRef = !!r.attachmentRef || !!inbound;
     const srcStatus = art ? art.status : hasRef ? 'ARCHIVED_ORIGINAL' : 'MISSING';
     purchases.push({ purchase_id: r.id, document_type: type, validation_status: r.status, supplier_name: r.supplierName ?? '', supplier_vat_number: r.supplierVatNumber ?? '', supplier_iban: r.supplierIban ?? '', invoice_number: r.invoiceNumber ?? '', issue_date: r.issueDate ?? '', due_date: r.dueDate ?? '', due_origin: dueOriginOf(r), currency: r.currency ?? '',
-      net: money(r.netCents), vat: money(r.vatCents), gross: money(r.grossCents), accounting_sign: type === 'CREDIT_NOTE' ? -1 : 1, allocated: money(s.paidCents), remaining: s.remainingCents === null ? '' : money(s.remainingCents), payment_state: SUPPLIER_STATES[s.state] ?? s.state, payment_reference: r.paymentReference ?? '', source_document_status: srcStatus, source_document_sha256: r.sha256 ?? art?.sha256 ?? '', source_document_file: art?.fileName ?? r.fileName ?? '' });
+      net: money(r.netCents), vat: money(r.vatCents), gross: money(r.grossCents), accounting_sign: type === 'CREDIT_NOTE' ? -1 : 1, allocated: money(s.paidCents), remaining: s.remainingCents === null ? '' : money(s.remainingCents), payment_state: SUPPLIER_STATES[s.state] ?? s.state, payment_reference: r.paymentReference ?? '', source_document_status: srcStatus, source_document_sha256: r.sha256 ?? art?.sha256 ?? '', source_document_file: art?.fileName ?? r.fileName ?? '', peppol_message_id: inbound?.messageId ?? '', inbound_original_sha256: inbound?.sha256 ?? '' });
     if (['VALIDATED', 'TO_PAY', 'PAID'].includes(r.status) && srcStatus === 'MISSING') missing.push({ type: 'SUPPLIER_INVOICE', source_id: r.id, document_number: r.invoiceNumber ?? '', expected_artifact: 'SOURCE_DOCUMENT', status: 'MISSING', reason: art?.reason ?? (hasRef ? 'ATTACHMENT_FILE_NOT_FOUND' : 'NO_ATTACHMENT'), alternative_provided: 'NONE' });
   }
   put('purchases.csv', purchases);
@@ -172,8 +179,8 @@ export function buildAccountantExport(i) {
   // ---- missing artifacts, warnings, totals
   put('missing-artifacts.csv', missing.sort(byKey('type', 'document_number', 'source_id')));
   const w = (code, count, detail) => { if (count) warnings.push({ code, count, ...(detail ? { detail } : {}) }); };
-  const realMissing = missing.filter((m) => m.type === 'SUPPLIER_INVOICE').length;
-  w('SOURCE_DOCUMENT_MISSING', realMissing); w('PDF_NOT_ARCHIVED_AT_ISSUANCE', missing.filter((m) => m.type !== 'SUPPLIER_INVOICE').length, 'issued PDFs are not archived at issuance in this version: only regenerated copies can be provided, they are not the historical originals');
+  const realMissing = missing.filter((m) => m.type === 'SUPPLIER_INVOICE').length; const pdfRows = missing.filter((m) => m.expected_artifact === 'PDF_ARCHIVED_ORIGINAL');
+  w('SOURCE_DOCUMENT_MISSING', realMissing); w('PDF_NOT_ARCHIVED_AT_ISSUANCE', missing.filter((m) => m.expected_artifact === 'PDF_ARCHIVED_ORIGINAL').length, 'these issued PDFs have no archived original (issued before archiving existed, or archiving failed): only regenerated copies can be provided, they are not the historical originals'); w('STRUCTURED_ORIGINAL_MISSING', missing.filter((m) => m.expected_artifact === 'STRUCTURED_ORIGINAL').length, 'the route requires a structured invoice and none is archived');
   const unrec = txRows.filter((t) => t.reconciliation_status !== 'RECONCILED' && t.reconciliation_status !== 'IGNORED'); w('UNRECONCILED_BANK_TRANSACTIONS', unrec.length, `${unrec.filter((t) => t.reconciliation_status === 'PARTIALLY_RECONCILED').length} partially reconciled`);
   w('UNVALIDATED_PURCHASES', purchaseSrc.filter((r) => !['VALIDATED', 'TO_PAY', 'PAID'].includes(r.status)).length, 'received or to review: not included in the VAT summary');
   w('PURCHASES_WITHOUT_VAT_RATE', vatRows.filter((v) => v.treatment === 'RATE_NOT_RECORDED').reduce((a, v) => a + v.documents, 0));
@@ -188,16 +195,17 @@ export function buildAccountantExport(i) {
 
   // ---- documents (copies/originals actually present; nothing is fabricated)
   const docEntries = [];
-  for (const [kind, folder] of [['sales', 'documents/sales'], ['credit_notes', 'documents/credit-notes'], ['purchases', 'documents/purchases']]) {
+  for (const [kind, folder] of [['sales', 'documents/sales'], ['credit_notes', 'documents/credit-notes'], ['purchases', 'documents/purchases'], ['structured', 'documents/structured'], ['inbound', 'documents/inbound']]) {
     for (const [id, a] of [...(artifacts[kind] ?? new Map())].sort(([x], [y]) => (x < y ? -1 : 1))) if (a.data) docEntries.push({ path: `${folder}/${a.fileName}`, data: Buffer.isBuffer(a.data) ? a.data : Buffer.from(a.data), status: a.status, sourceId: id, kind });
   }
+  for (const x of artifacts.extra ?? []) if (x.data) docEntries.push({ path: `documents/attachments/${x.fileName}`, data: Buffer.isBuffer(x.data) ? x.data : Buffer.from(x.data), status: x.status, sourceId: x.sourceId, kind: 'attachments' });
   const documents = docEntries.map((d) => ({ path: d.path, sourceId: d.sourceId, category: d.kind, status: d.status, bytes: d.data.length, sha256: sha(d.data) }));
   for (const d of docEntries) files.set(d.path, d.data);
 
   // ---- manifest + sums + README
   const csvNames = Object.keys(LAYOUT);
   const contentFingerprint = sha(csvNames.map((n) => `${n}:${sha(files.get(n))}`).join('\n')); // business content only: identical data + period => identical value
-  const pdfArchive = { archivedOriginal: documents.filter((d) => d.status === 'ARCHIVED_ORIGINAL' && d.category !== 'purchases').length, regeneratedCopy: documents.filter((d) => d.status === 'REGENERATED_COPY').length, missing: missing.filter((m) => m.type !== 'SUPPLIER_INVOICE' && m.alternative_provided === 'NONE').length, note: 'issued invoice and credit note PDFs are regenerated on demand; no original is archived at issuance in this version' };
+  const issuedCount = sales.length + credits.length; const pdfArchive = { archivedOriginal: issuedCount - pdfRows.length, regeneratedCopy: pdfRows.filter((m) => m.alternative_provided === 'REGENERATED_COPY').length, missing: pdfRows.filter((m) => m.alternative_provided === 'NONE').length, note: 'an ARCHIVED_ORIGINAL is the exact PDF kept at issuance; a REGENERATED_COPY is produced later and is never the historical original' };
   const fileEntry = (name, data) => ({ path: name, bytes: data.length, rows: rows[name] ?? null, sha256: sha(data), description: DESCRIPTION[name] ?? null });
   const readme = Buffer.from(buildReadme({ merchant: i.merchant, period, timeZone, generatedAt: i.generatedAt, rows, warnings, vatRows: rows['vat-summary.csv'], documents, contentFingerprint, totalsByCurrency, pdfArchive }), 'utf8'); files.set('README.txt', readme);
   const sums = Buffer.from([...files.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([n, d]) => `${sha(d)}  ${n}`).join('\n') + '\n', 'utf8'); files.set('SHA256SUMS.txt', sums);
@@ -207,7 +215,7 @@ export function buildAccountantExport(i) {
     merchant: { id: mid, name: i.merchant.name ?? null }, period: { kind: period.kind, start: period.start, end: period.end, label: period.label }, timeZone, generatedAt: i.generatedAt,
     realisedDataOnly: true, treasuryForecastIncluded: false, formats: FORMATS, contentFingerprint,
     files: [...listed.map(([n, d]) => fileEntry(n, d)), { path: 'SHA256SUMS.txt', bytes: sums.length, rows: null, sha256: sha(sums), description: DESCRIPTION['SHA256SUMS.txt'] }].sort(byKey('path')),
-    rowCounts: rows, documents, missingArtifacts: { count: missing.length, supplierSourceDocuments: realMissing, issuedPdfNotArchived: missing.length - realMissing, file: 'missing-artifacts.csv' }, pdfArchive,
+    rowCounts: rows, documents, missingArtifacts: { count: missing.length, supplierSourceDocuments: realMissing, issuedPdfNotArchived: pdfRows.length, structuredOriginalMissing: missing.filter((m) => m.expected_artifact === 'STRUCTURED_ORIGINAL').length, file: 'missing-artifacts.csv' }, pdfArchive,
     vat: { label: VAT_LABEL, official: false }, currencies, totalsByCurrency, warnings,
   };
   const manifestBuf = Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8'); files.set('manifest.json', manifestBuf);
@@ -243,8 +251,8 @@ TVA — ${VAT_LABEL}
   Ce n'est PAS une déclaration TVA, aucune règle fiscale (déductibilité, régime) n'y est appliquée. Un achat sans ventilation de TVA est signalé « RATE_NOT_RECORDED ».
 
 PIÈCES
-  Les PDF des factures et notes de crédit émises sont régénérés à la demande : ${pdfArchive.note}.
-  ${pdfArchive.regeneratedCopy} copie(s) régénérée(s) incluse(s) (REGENERATED_COPY) ; elles ne sont pas les originaux historiques.
+  PDF des factures et notes de crédit émises : ${pdfArchive.archivedOriginal} original(aux) archivé(s) à l'émission (ARCHIVED_ORIGINAL, octets exacts, empreinte SHA-256), ${pdfArchive.regeneratedCopy} copie(s) régénérée(s) (REGENERATED_COPY), ${pdfArchive.missing} manquant(s).
+  Une copie régénérée n'est jamais l'original historique. Les factures structurées (UBL / Peppol BIS) archivées sont dans documents/structured/, les originaux reçus par Peppol dans documents/inbound/.
   Les pièces attendues mais absentes sont listées dans missing-artifacts.csv.
 
 AVERTISSEMENTS (${warnings.length})
