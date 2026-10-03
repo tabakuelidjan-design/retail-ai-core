@@ -14,7 +14,9 @@ const files = git('ls-files --cached --others --exclude-standard').split('\n').f
 // vendor/ = third-party OFFICIAL artifacts kept verbatim (OpenPeppol / CEN Schematron, ISO Schematron, compiled validators, their published SHA-256): public files, not ours to rewrite; their integrity is recorded in vendor/*/ARTIFACTS.json
 const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?)$/i.test(f) && !f.endsWith('package-lock.json') && !f.startsWith('vendor/'));
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
-const contents = new Map(textFiles.map((f) => [f, read(f)]));
+// The ONLY 64-hex strings allowed outside vendor/ are public integrity pins of official artifacts (not secrets): the pinned hash of vendor/MANIFEST.json and the hash of the OASIS UBL 2.1 archive. Anything else is still refused.
+const PUBLIC_PINS = ['7eef9d66aea8f94c0fbe9ecad7b94396b1432319a27e8b52df78f3c00910076b', '60b80d76394a8a2add90723ecb8e0e2e9d826775de9749df37a72d60703f86ed'];
+const contents = new Map(textFiles.map((f) => [f, PUBLIC_PINS.reduce((t, p) => t.split(p).join('<public-pin>'), read(f))]));
 
 const PATTERNS = {
   'a 64-character hex string (hash or key)': /\b[0-9a-f]{64}\b/,

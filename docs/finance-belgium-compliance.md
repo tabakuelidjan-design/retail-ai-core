@@ -10,9 +10,12 @@ Peppol BIS Billing 3.0, **May 2026 release, version 3.0.21** (docs.peppol.eu; th
 
 ## Official validation pipeline
 
-`UBL → syntax → EN 16931 Schematron → Peppol Schematron → Nordla invariants → provider`.
-The two Schematron layers are the OFFICIAL `CEN-EN16931-UBL.sch` and `PEPPOL-EN16931-UBL.sch` from docs.peppol.eu, kept verbatim under `vendor/peppol-bis-3.0.21/src`, compiled by `scripts/build-peppol-validators.mjs` (ISO Schematron reference implementation → XSLT → Saxon-JS SEF) and executed with Saxon-JS 2.7.0 (npm `saxon-js`, build tool `xslt3`). Nothing is re-implemented. Findings are structured (layer, ruleset + version + artifact hash, rule id, severity, message, location, timestamp, document hash).
-Limitations, stated: (1) the official UBL **XSD** is not executed (Saxon-JS is not schema-aware): layer 1 is Nordla's secure structural check, and the CEN Schematron covers most structure; (2) validation costs about 0.35 s per document (interpreted SEF) — the known bottleneck, archiving at issuance is therefore synchronous and a bulk back-fill is slow.
+`secure XML checks → official UBL 2.1 XSD → official EN 16931 Schematron → official Peppol Schematron → Nordla invariants → provider`.
+- **XSD**: the official OASIS UBL 2.1 `UBL-Invoice-2.1.xsd` / `UBL-CreditNote-2.1.xsd` (with the whole `common/` set, unchanged from `UBL-2.1.zip`), executed by libxml2 compiled to WebAssembly (`xmllint-wasm`, MIT, no native build). The root element selects the schema; an XSD failure yields structured `UBL-XSD` findings (line, message), skips the Schematron layers (they would judge a document that is not valid UBL) and the document is never archived as valid, never queued, never sent.
+- **Schematron**: the OFFICIAL `CEN-EN16931-UBL.sch` and `PEPPOL-EN16931-UBL.sch` from docs.peppol.eu, compiled by `scripts/build-peppol-validators.mjs` (ISO Schematron reference implementation → XSLT → Saxon-JS SEF) and executed with Saxon-JS 2.7.0.
+- Nothing is re-implemented. Findings are structured (layer, ruleset + version + artifact hash, rule id, severity, message, location, timestamp, document hash).
+- **Integrity (fail closed)**: `vendor/MANIFEST.json` is the single immutable record of every artifact (source URL, version, retrieval date, SHA-256, size); its own hash is pinned in `src/finance/validation-artifacts.js`. Before any official layer runs, the bytes that will be used are hashed against it; a missing, modified, truncated, wrong-version or replaced-manifest artifact gives `VALIDATION-ARTIFACTS-UNVERIFIED` and no official layer starts (the build script refuses the same way). `.gitattributes` marks `vendor/**` as `-text -diff`: Git never converts line endings of the vendored files. Adopting a release is a deliberate act: re-run `scripts/pin-validation-artifacts.mjs` and update the pinned manifest hash in the same commit. The compiled SEF files are not byte-reproducible (Saxon embeds build-specific data): the committed bytes are what is pinned.
+- Cost: about 0.7 s for the XSD plus 0.35 s for the Schematron per document; archiving at issuance is synchronous (asynchronous archiving is backlog).
 
 ## Route decision (`determineInvoiceRoute`)
 
@@ -57,6 +60,8 @@ From facts only; returns the route, the reasons, the rule ids, the missing facts
 ### NORDLA INVARIANT
 | id | rule | official source | URL / legal reference | verified on | Nordla component |
 |---|---|---|---|---|---|
+| `NORDLA-UBL-XSD` | A structured document is validated against the official OASIS UBL 2.1 XSD (Invoice and CreditNote) before the Schematron layers; an XSD failure is never archived as valid, queued or sent. | OASIS UBL 2.1 (os-UBL-2.1) schemas | <https://docs.oasis-open.org/ubl/os-UBL-2.1/UBL-2.1.zip> | 2026-10-03 | peppol-validation.js (xmllint-wasm) |
+| `NORDLA-ARTIFACT-INTEGRITY` | Every official validation artifact is pinned by SHA-256 in vendor/MANIFEST.json (whose own hash is pinned in code) and verified before validators are built or run; a missing, modified or wrong-version artifact fails closed. | Nordla architecture | — | — | validation-artifacts.js, scripts/pin-validation-artifacts.mjs |
 | `NORDLA-IMMUTABLE-ISSUE` | An issued document, its seller/buyer snapshot, its archived PDF and structured original never change; corrections are credit notes. | Nordla architecture | — | — | fin_documents guard, fin_artifacts immutability |
 | `NORDLA-ONE-SNAPSHOT` | PDF and UBL are produced from the SAME immutable issue snapshot; there is one financial calculator. | Nordla architecture | — | — | legal-artifacts.js |
 | `NORDLA-NO-SILENT-FALLBACK` | A structured document that fails validation is never SENT/DELIVERED, and Nordla never falls back silently to a PDF by e-mail. | Nordla architecture | — | — | peppol-service.js |
@@ -97,4 +102,4 @@ EN 16931 categories used: `S` standard (21 %, 12 %, 6 % when allowed by the merc
 
 ## Known unsupported cases
 
-Intra-EU / export structured invoices (delivery facts), VAT categories O/L/M, self-billing, e-reporting, attachments as XML (only by agreement), B2G thresholds, official UBL XSD execution, a real network sandbox (**blocked by provider selection**).
+Intra-EU / export structured invoices (delivery facts), VAT categories O/L/M, self-billing, e-reporting, attachments as XML (only by agreement), B2G thresholds, a real network sandbox (**blocked by provider selection**).

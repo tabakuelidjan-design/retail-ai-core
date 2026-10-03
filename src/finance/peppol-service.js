@@ -148,7 +148,7 @@ export function createPeppolService({ store, merchantId, provider, legal, storag
         provenance: { provider: provider.name, providerMessageId: providerMessageId ?? null, sender: senderKey, receiver: receiver ?? customerKey, receivedAt: m.receivedAt, syntax: 'UBL 2.1' }, createdAt: clock.now() })).artifact;
       await ev(null, 'PEPPOL_INBOUND_RECEIVED', { messageId: m.id, sha256: hash, sender: senderKey, artifactId: original.id });
       // 3. validation (official artifacts), recorded
-      const result = validate(bytes, { version: peppolVersion, at: clock.now() }); const summary = summarize(result);
+      const result = await validate(bytes, { version: peppolVersion, at: clock.now() }); const summary = summarize(result);
       // 4. attachments (whitelisted, bounded, archived); the invoice itself becomes a supplier-invoice CANDIDATE, never an accepted one
       const attachments = tree ? await archiveAttachments(m, tree, original) : [];
       let supplierInvoiceId = null;

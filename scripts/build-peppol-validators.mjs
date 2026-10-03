@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { verifiedArtifacts } from '../src/finance/validation-artifacts.js';
 import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -15,6 +16,8 @@ const SaxonJS = require('saxon-js');
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = process.argv[2] ?? '3.0.21'; const dir = join(root, 'vendor', `peppol-bis-${VERSION}`); const iso = join(root, 'vendor', 'iso-schematron'); const tmp = join(root, '.tmp-build');
 const sha = (b) => createHash('sha256').update(b).digest('hex');
+// FAIL CLOSED: the official sources this build starts from are verified against the pinned manifest first (a modified or missing source stops the build).
+verifiedArtifacts({ vendorDir: join(root, 'vendor') + '/', version: VERSION });
 mkdirSync(tmp, { recursive: true });
 const xslt3 = (xsl, out) => { const r = spawnSync(process.execPath, [require.resolve('xslt3'), `-xsl:${xsl}`, `-export:${out}`, '-nogo'], { encoding: 'utf8' }); if (r.status !== 0) throw new Error(`xslt3 failed for ${xsl}: ${r.stderr || r.stdout}`); };
 const run = (sef, sourceFileName) => SaxonJS.transform({ stylesheetFileName: sef, sourceFileName, destination: 'serialized' }, 'sync').principalResult;
@@ -28,6 +31,8 @@ for (const f of readdirSync(join(dir, 'src')).filter((x) => x.endsWith('.sch')))
   STEPS.filter((n) => needsInclude || n !== 'iso_dsdl_include').forEach((n, i) => { const xml = run(compiled[n], current); current = join(tmp, `${name}.${i}.xml`); writeFileSync(current, xml); });
   const finalSef = join(dir, `${name}.sef.json`); xslt3(current, finalSef); outputs[`${name}.sef.json`] = sha(readFileSync(finalSef));
 }
-writeFileSync(join(dir, 'ARTIFACTS.json'), JSON.stringify({ bisVersion: VERSION, source: 'https://docs.peppol.eu/poacc/billing/3.0/files/', schematronSources: sources, compiled: outputs, isoSchematron: Object.fromEntries(readdirSync(iso).map((f) => [f, sha(readFileSync(join(iso, f)))])), compiledWith: { 'saxon-js': require('saxon-js/package.json').version, xslt3: require('xslt3/package.json').version } }, null, 2) + '\n');
+// The compiled stylesheets are NOT byte-reproducible (Saxon embeds build-specific data): the committed bytes are what is pinned. After a deliberate rebuild run scripts/pin-validation-artifacts.mjs
+// and update PINNED_MANIFEST_SHA256 in src/finance/validation-artifacts.js in the same commit.
+void sources; void outputs;
 rmSync(tmp, { recursive: true, force: true });
 console.log('built', Object.keys(outputs).join(', '));
