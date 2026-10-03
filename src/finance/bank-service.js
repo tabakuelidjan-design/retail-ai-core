@@ -9,7 +9,6 @@ import { FinanceError, settlement } from './document.js';
 import { toCents } from './money.js';
 import { NoBankAdapter, assertReadOnlyAdapter, maskIban, observedBalance, parseBankCsv } from './bank.js';
 import { suggest } from './reconcile.js';
-import { buildTreasury } from './treasury.js';
 import { eurOfSupplier } from './currency.js';
 import { dueForProjection } from './payables/index.js';
 import { requireClock } from './civil-date.js';
@@ -227,18 +226,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       merchantOnly(actor); if (!['CASH_IN', 'CASH_OUT', 'DEPOSIT_TO_BANK'].includes(kind)) throw new FinanceError('CASH_KIND_INVALID'); if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('CASH_AMOUNT_INVALID'); if (!isDate(date)) throw new FinanceError('CASH_DATE_INVALID');
       return store.insertCashMovement({ merchantId, kind, amountCents, date, note: note ? String(note).slice(0, 200) : null, createdAt: clock.now() });
     },
-    async treasury({ horizonDays = 7, currency = 'EUR' } = {}) {
-      const today = clock.today();
-      // The five sources are independent reads: fetched in parallel (each is a database round trip), then combined as before.
-      const [balancesAll, recvAll, allP, cashCount, cashMovements] = await Promise.all([store.listBankBalances(merchantId), openInvoices(), payablesAll(), store.latestCashCount(merchantId), store.listCashMovements(merchantId)]);
-      const balances = balancesAll.filter((b) => (b.currency ?? currency) === currency); // an account in another currency is never added to the EUR position
-      const recvNative = recvAll.filter((i) => (i.currency ?? currency) === currency);
-      const recv = recvNative.map((i) => ({ number: i.number, dueDate: i.dueDate, remainingCents: i.remainingCents }));
-      const payNative = allP.map((r) => toPayable(r, currency)).filter((p) => p.grossCents !== null);
-      const pay = payNative.map((p) => ({ invoiceNumber: p.invoiceNumber, supplierName: p.supplierName, dueDate: p.dueDate, dueOrigin: p.dueOrigin, grossCents: p.grossCents }));
-      const t = buildTreasury({ asOf: today, horizonDays, currency, bank: balances.length ? balances : null, cashCount, cashMovements, receivables: recv, payables: pay });
-      return { ...t, excluded: { foreignReceivables: recvAll.length - recvNative.length, foreignPayables: allP.length - payNative.length, foreignBankAccounts: balancesAll.length - balances.length } };
-    },
+    // Treasury (position, forecast, scenarios) lives in treasury-service.js: a read model that DERIVES from Payments, Bank and cash. The bank service no longer computes one.
   };
   return api;
 }

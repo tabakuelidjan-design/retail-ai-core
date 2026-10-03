@@ -6,6 +6,8 @@ import { createMemoryStore } from '../src/finance/memory-store.js';
 import { createFinanceService } from '../src/finance/service.js';
 import { createInboxService, createMemoryAttachmentStore } from '../src/finance/inbox.js';
 import { CONFIG, MERCHANT_ACTOR, issueInvoice } from './finance-fixtures.js';
+import { createTreasuryService } from '../src/finance/treasury-service.js';
+import { loadDocsForReports } from '../src/finance/reports.js';
 
 export const A = '11111111-1111-1111-1111-111111111111';
 export const B = '22222222-2222-2222-2222-222222222222';
@@ -196,5 +198,19 @@ export const SCENARIOS = {
     out.push(await code(() => st.updateBankTransaction(t6.id, { status: 'NEW' }, 'MATCHED')), (await st.getBankTransaction(t6.id)).status);
     return out;
   },
+  // Treasury is a read model: the SAME facts read from either store must give the SAME position, forecast and risk (balances, later transactions, cash, remaining_due after real payments).
+  async 'treasury: position, forecast 7/30/90 and risk from real store facts (bank, cash, invoices with partial payments)'(w) {
+    const st = w.storeFor(A); const at = '2026-10-03T10:00:00.000Z';
+    await st.upsertBankBalance({ merchantId: A, accountId: 'acc-1', iban: 'BE68539007547034', balanceCents: 842000, currency: 'EUR', asOf: '2026-10-02T08:00:00.000Z' });
+    await st.insertBankTransactionsBatch([{ merchantId: A, accountId: 'acc-1', providerTxId: 'tr-old', date: '2026-10-01', amountCents: 999, currency: 'EUR', source: 'bank', status: 'NEW' }, { merchantId: A, accountId: 'acc-1', providerTxId: 'tr-same', date: '2026-10-02', amountCents: 777, currency: 'EUR', source: 'bank', status: 'NEW' }, { merchantId: A, accountId: 'acc-1', providerTxId: 'tr-later', date: '2026-10-03', amountCents: -12000, currency: 'EUR', source: 'bank', status: 'NEW' }]);
+    await st.insertCashCount({ merchantId: A, amountCents: 35000, countedOn: '2026-10-01', note: null, createdAt: at }); await st.insertCashMovement({ merchantId: A, kind: 'CASH_OUT', amountCents: 5000, date: '2026-10-02', note: null, createdAt: at });
+    const inv1 = await issueInvoice(w.svc); const inv2 = await issueInvoice(w.svc);
+    await st.recordPayment({ merchantId: A, key: 'tr-pay1', direction: 'IN', amountCents: 4000, currency: 'EUR', paidOn: '2026-10-01', method: 'bank_transfer', actor: MERCHANT_ACTOR, allocations: [{ customerDocumentId: inv1.id, amountCents: 4000 }], at });
+    const svc = createTreasuryService({ store: st, merchantId: A, clock: { now: () => at, today: () => '2026-10-03', timeZone: 'Europe/Brussels' }, currency: 'EUR', finance: { listInvoices: () => loadDocsForReports(st, A) }, inbox: { list: async () => [] } });
+    const model = await svc.model(); const num = new Map([[inv1.id, 'INV1'], [inv2.id, 'INV2']]); const nm = (id) => id.replace(/CUSTOMER_INVOICE:([^#]+)/, (_, x) => `CUSTOMER_INVOICE:${num.get(x) ?? x}`);
+    const fc = model.forecast.EUR; const sc = await svc.scenario([{ type: 'ADD_EXPENSE', amountCents: 500000, date: '2026-10-20', label: 'Machine' }]);
+    return [model.position.EUR.observed.totalCents, model.position.EUR.calculated.totalCents, model.position.EUR.freshness, model.position.EUR.components.map((c) => [c.kind, c.amountCents]), model.position.EUR.warnings.map((x) => x.code),
+      model.items.map((x) => [nm(x.id), x.amountCents, x.date, x.certainty, x.included, x.evidence.paidCents]).sort((p, q) => p[0].localeCompare(q[0])), // ids are random uuids: sort by number [7, 30, 90].map((d) => [fc.horizons[d].projectedCents, fc.horizons[d].receipts.committedCents, fc.horizons[d].excluded.overdueReceivablesCents]), fc.risk.negative, fc.risk.minimumCents,
+      sc.delta.EUR.horizons[30].projectedDeltaCents, sc.persisted, (await st.listBankTransactions({ merchantId: A })).length];
+  },
 };
-

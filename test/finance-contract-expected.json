@@ -562,5 +562,53 @@
   0,
   "BANK_STATUS_IS_DERIVED",
   "MATCHED"
+ ],
+ "treasury: position, forecast 7/30/90 and risk from real store facts (bank, cash, invoices with partial payments)": [
+  877000,
+  860000,
+  "FRESH",
+  [
+   [
+    "BANK_BALANCE",
+    842000
+   ],
+   [
+    "BANK_LATER_TRANSACTIONS",
+    -12000
+   ],
+   [
+    "CASH_COUNT",
+    35000
+   ],
+   [
+    "CASH_LATER_MOVEMENTS",
+    -5000
+   ]
+  ],
+  [
+   "SAME_DAY_TRANSACTIONS_NOT_COUNTED",
+   "UNRECONCILED_LATER_TRANSACTIONS"
+  ],
+  [
+   [
+    "CUSTOMER_INVOICE:INV1",
+    3190,
+    "2026-10-21",
+    "COMMITTED",
+    true,
+    4000
+   ],
+   [
+    "CUSTOMER_INVOICE:INV2",
+    7190,
+    "2026-10-21",
+    "COMMITTED",
+    true,
+    0
+   ]
+  ],
+  -500000,
+  false,
+  3
  ]
 }

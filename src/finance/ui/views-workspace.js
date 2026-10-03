@@ -1114,64 +1114,99 @@ async function viewBank() {
   draw();
 }
 
+// ---------- Treasury V1: ONE derived read model (observed -> calculated -> forecast -> scenario). The page only displays what /api/treasury/* computed: it never recomputes a figure. ----------
+const T_CERTAINTY = { COMMITTED: 'Committed', EXPECTED: 'Expected', SCENARIO: 'Scenario' };
+const T_TREATMENT = { DUE_ON_DATE: '', OVERDUE_RECEIVABLE_NOT_IN_PROJECTION: 'Overdue receivable (not in the projection)', OVERDUE_PAYABLE_ASSUMED_PAID_TODAY: 'Overdue payable (counted today)', NO_DUE_DATE_NOT_IN_FORECAST: 'No due date (not in the forecast)', SCENARIO_HYPOTHESIS: 'Scenario hypothesis', OVERDUE_RECEIVABLE_COLLECTED_IN_SCENARIO: 'Overdue receivable collected in the scenario' };
+const T_SOURCE = { CUSTOMER_INVOICE: 'Customer invoice', SUPPLIER_INVOICE: 'Supplier invoice', MANUAL_SCENARIO: 'Scenario hypothesis', BANK: 'Bank', CASH: 'Cash' };
+const tchip = (kind, text) => h('span', { class: 'chip t-' + kind.toLowerCase() + ' ' + (kind === 'OBSERVED' ? 'ok' : kind === 'CALCULATED' ? 'mute' : kind === 'SCENARIO' ? 'warn' : '') }, text);
+const centsOfInput = (v) => { const n = Number(String(v).trim().replace(',', '.')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+function explainModal(id) {
+  api('GET', '/api/treasury/explain?id=' + encodeURIComponent(id)).then((x) => {
+    const ev = x.evidence; const cur = x.currency;
+    const rows = [[tt('Source'), tt(T_SOURCE[x.source.type] || x.source.type) + (x.source.label ? ' ' + x.source.label : '')], [tt('Counterparty'), x.source.counterparty || '—'], [tt('Due date'), x.dueDate || '—'], [tt('Amount'), fmtMoney(x.direction === 'OUT' ? -x.amountCents : x.amountCents, cur)]];
+    if (ev) { if (ev.grossCents != null) rows.push([tt('Document total'), fmtMoney(ev.grossCents, cur)]); if (ev.creditedCents) rows.push([tt('Credited'), fmtMoney(ev.creditedCents, cur)]); if (ev.paidCents) rows.push([tt('Already paid'), fmtMoney(ev.paidCents, cur)]); rows.push([tt('Remaining due'), fmtMoney(ev.remainingCents, cur)]); }
+    if (x.certainty) rows.push([tt('Certainty'), tt(T_CERTAINTY[x.certainty])]); if (T_TREATMENT[x.treatment]) rows.push([tt('Treatment'), tt(T_TREATMENT[x.treatment]) + (x.overdueDays ? ' · ' + tt('{0} day(s) overdue', x.overdueDays) : '')]);
+    modal(tt('Why this figure?'), h('div', { style: 'display:grid;gap:6px' }, rows.map(([k, v]) => h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v)))), (close) => [h('button', { on: { click: close } }, tt('Close'))]);
+  }).catch((e) => fail(e));
+}
+async function drawTreasuryV1(root) {
+  clear(root); root.appendChild(h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })));
+  let f; try { f = await api('GET', '/api/treasury/forecast'); } catch (e) { return fail(e, root); }
+  clear(root);
+  const warn = (w) => ({ STALE_BANK_BALANCE: 'Starting position is not fresh: the figures below rely on an old balance.', STARTING_POSITION_NOT_FRESH: null, STALE_CASH_COUNT: 'The last cash count is old.', NO_OBSERVED_CASH: 'No bank balance or cash count: there is no starting position, only flows.', ACCOUNT_WITHOUT_BALANCE: 'A bank account has no observed balance.', SAME_DAY_TRANSACTIONS_NOT_COUNTED: 'Transactions dated the day of the balance are not added (they may already be in it).', UNRECONCILED_LATER_TRANSACTIONS: 'Some recent bank transactions are not reconciled: a matching invoice may still look open.', CURRENCIES_NOT_CONSOLIDATED: 'Currencies are shown separately: no exchange rate is applied.', BANK_BALANCE_TIME_UNKNOWN: 'A bank balance has no observation time.' })[w.code];
+  const seen = new Set(); const notes = f.warnings.map((w) => warn(w)).filter((x) => x && !seen.has(x) && seen.add(x));
+  if (notes.length) root.appendChild(h('div', { class: 'banner warn small' }, notes.map((n) => h('div', null, tt(n)))));
+  const multi = f.currencies.length > 1;
+  f.currencies.forEach((cur) => {
+    const p = f.position[cur]; const fc = f.forecast[cur]; const sec = h('div', { class: 'card', style: 'padding:16px 18px;display:grid;gap:12px' }); root.appendChild(sec);
+    if (multi) sec.appendChild(h('h2', { class: 'section-title' }, cur));
+    const total = p?.calculated.totalCents ?? null;
+    sec.appendChild(h('div', { class: 'tmetric main' }, h('span', null, tt('Today'), ' ', tchip('CALCULATED', tt('Calculated'))), h('strong', null, total === null ? '—' : fmtMoney(total, cur)),
+      h('small', { class: 'muted' }, p ? (p.observed.totalCents === null ? '' : tt('Observed') + ' ' + fmtMoney(p.observed.totalCents, cur) + ' · ') + tt(FRESHNESS_TEXT[p.freshness]) : tt('No balance observed'))));
+    if (p) sec.appendChild(h('div', { class: 'muted small' }, p.components.map((c) => h('div', null, c.kind === 'BANK_BALANCE' ? tt('Bank {0}', c.sourceId) : c.kind === 'CASH_COUNT' ? tt('Cash counted {0}', c.countedOn) : c.kind === 'BANK_LATER_TRANSACTIONS' ? tt('Later bank transactions ({0})', c.count) : tt('Later cash movements ({0})', c.count), ': ', c.amountCents === null ? '—' : fmtMoney(c.amountCents, cur), ' ', tchip(c.basis === 'OBSERVED' ? 'OBSERVED' : 'CALCULATED', c.basis === 'OBSERVED' ? tt('Observed') : tt('Calculated')), c.ageHours != null ? h('span', null, ' · ', tt('{0} h ago', c.ageHours)) : null))));
+    sec.appendChild(h('div', { class: 'muted small' }, tt('Calculated = observed + later transactions. It is not a new bank balance.')));
+    const grid = h('div', { class: 'treasury-grid' }); sec.appendChild(grid);
+    [7, 30, 90].forEach((d) => { const x = fc.horizons[d]; const inC = x.receipts.committedCents + x.receipts.expectedCents + x.receipts.scenarioCents; const outC = x.payments.committedCents + x.payments.expectedCents + x.payments.scenarioCents;
+      grid.appendChild(h('div', { class: 'tmetric' }, h('span', null, tt('In {0} days', d), ' ', tchip('FORECAST', tt('Forecast'))), h('strong', null, x.projectedCents === null ? '—' : fmtMoney(x.projectedCents, cur)),
+        h('small', { class: 'muted' }, '+ ' + fmtMoney(inC, cur) + ' · − ' + fmtMoney(outC, cur)))); });
+    const r = fc.risk;
+    if (r.computable === false) sec.appendChild(h('div', { class: 'muted small' }, tt('Risk cannot be computed without a starting position.')));
+    else if (r.negative) sec.appendChild(h('div', { class: 'banner bad small' }, h('strong', null, tt('Cash risk')), h('div', null, tt('Negative from {0}: low point {1} on {2}, shortfall {3}.', r.firstNegativeDate, fmtMoney(r.minimumCents, cur), r.minimumDate, fmtMoney(r.deficitCents, cur))), r.causes.count ? h('div', null, tt('Main causes: {0} supplier payment(s) totalling {1}.', r.causes.count, fmtMoney(r.causes.totalCents, cur))) : null, r.recoveryDate ? h('div', null, tt('Back above zero on {0}.', r.recoveryDate)) : null));
+    else sec.appendChild(h('div', { class: 'muted small' }, tt('No negative position expected within 90 days.')));
+    const h90 = fc.horizons[90]; if (h90.excluded.count) sec.appendChild(h('div', { class: 'muted small' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(h90.excluded.overdueReceivablesCents, cur))));
+    if (h90.undated.count) sec.appendChild(h('div', { class: 'muted small' }, tt('{0} of supplier invoices have no due date and are not in the forecast.', fmtMoney(h90.undated.payablesCents, cur))));
+  });
+  // provenance: what explains the figures (click for the facts)
+  const items = f.items.filter((x) => x.sourceType !== 'MANUAL_SCENARIO'); const prov = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('What explains these figures')));
+  if (!items.length) prov.appendChild(h('div', { class: 'muted small' }, tt('Nothing is expected: no open invoice with a due date.')));
+  items.slice(0, 40).forEach((x) => prov.appendChild(h('div', { class: 'kv', style: 'cursor:pointer;flex-wrap:wrap;gap:6px', on: { click: () => explainModal(x.id) } }, h('span', null, x.date, ' · ', x.counterparty || x.label || '—', ' · ', tt(T_SOURCE[x.sourceType])), h('strong', null, fmtMoney(x.direction === 'OUT' ? -x.amountCents : x.amountCents, x.currency)),
+    h('span', { class: 'chip ' + (x.certainty === 'COMMITTED' ? 'ok' : 'warn') }, tt(T_CERTAINTY[x.certainty])), T_TREATMENT[x.treatment] ? h('span', { class: 'muted small' }, tt(T_TREATMENT[x.treatment])) : null)));
+  if (items.length > 40) prov.appendChild(h('div', { class: 'muted small' }, tt('{0} more items', items.length - 40)));
+  root.appendChild(prov);
+  root.appendChild(scenarioPanel(f));
+}
+function scenarioPanel(f) {
+  const card = h('div', { class: 'card', style: 'padding:16px 18px;display:grid;gap:10px' }, h('h2', { class: 'section-title' }, tt('What if?'), ' ', tchip('SCENARIO', tt('Scenario'))), h('div', { class: 'muted small' }, tt('Nothing is saved: this is a simulation. No payment, invoice or bank transaction is created.')));
+  const type = h('select', null, [['ADD_EXPENSE', 'I make a purchase'], ['DELAY_RECEIVABLE', 'A customer pays later'], ['DELAY_PAYABLE', 'I postpone a supplier invoice'], ['REDUCE_INFLOW', 'My expected inflows drop']].map(([v, l]) => h('option', { value: v }, tt(l))));
+  const amount = h('input', { placeholder: tr('Amount'), inputmode: 'decimal' }); const date = h('input', { type: 'date' }); const days = h('input', { type: 'number', value: '10', style: 'width:90px' }); const pct = h('input', { type: 'number', value: '20', style: 'width:90px' });
+  const pick = h('select', null); const out = h('div', null); const fields = h('div', { class: 'row r3', style: 'align-items:end' });
+  const opts = (dir) => f.items.filter((x) => x.direction === dir && x.sourceType !== 'MANUAL_SCENARIO').map((x) => h('option', { value: x.id }, `${x.counterparty || x.label || x.id} · ${x.date} · ${fmtMoney(x.amountCents, x.currency)}`));
+  const field = (label, el) => h('div', { class: 'field' }, h('label', null, label), el);
+  function drawFields() { clear(fields); const t = type.value; clear(pick);
+    if (t === 'ADD_EXPENSE') fields.append(field(tt('Amount'), amount), field(tt('Date'), date));
+    else if (t === 'REDUCE_INFLOW') fields.append(field(tt('Reduction (%)'), pct));
+    else { opts(t === 'DELAY_RECEIVABLE' ? 'IN' : 'OUT').forEach((o) => pick.appendChild(o)); fields.append(field(tt('Item'), pick), field(tt('Days later'), days)); } }
+  type.addEventListener('change', drawFields); drawFields();
+  const run = async () => {
+    const t = type.value; let hyp;
+    if (t === 'ADD_EXPENSE') hyp = { type: t, amountCents: centsOfInput(amount.value), date: date.value, label: tt('Purchase') };
+    else if (t === 'REDUCE_INFLOW') hyp = { type: t, percentBp: Math.round(Number(pct.value) * 100) };
+    else hyp = { type: t, id: pick.value, days: Number(days.value) };
+    try {
+      const r = await api('POST', '/api/treasury/scenario', { hypotheses: [hyp] }); clear(out);
+      f.currencies.forEach((cur) => { const b = r.baseline.forecast[cur]; const s = r.scenario.forecast[cur]; const d = r.delta[cur];
+        out.appendChild(h('div', { class: 'card', style: 'padding:12px 14px;margin-top:8px' }, f.currencies.length > 1 ? h('strong', null, cur) : null,
+          [7, 30, 90].map((n) => h('div', { class: 'kv' }, h('span', null, tt('In {0} days', n)), h('span', null, b.horizons[n].projectedCents === null ? '—' : fmtMoney(b.horizons[n].projectedCents, cur), ' → ', s.horizons[n].projectedCents === null ? '—' : fmtMoney(s.horizons[n].projectedCents, cur)), h('strong', null, d.horizons[n].projectedDeltaCents === null ? '' : (d.horizons[n].projectedDeltaCents > 0 ? '+ ' : '') + fmtMoney(d.horizons[n].projectedDeltaCents, cur)))),
+          d.risk.scenarioNegative ? h('div', { class: 'banner bad small' }, tt('With this hypothesis the position becomes negative on {0}.', d.risk.firstNegativeDate.scenario)) : h('div', { class: 'muted small' }, tt('No negative position in this scenario.')))); });
+    } catch (e) { fail(e, out); }
+  };
+  card.append(h('div', { class: 'row r2' }, field(tt('Hypothesis'), type)), fields, h('div', { class: 'actions' }, h('button', { class: 'primary', on: { click: run } }, tt('Run the scenario'))), out);
+  return card;
+}
+
 // ---------- Trésorerie: its own page, separate from Banque & Caisse - same real /api/treasury +
 // /api/overview/cashflow data the combined page used to show, split out per the mandate's own architecture. ----------
-const TREASURY_HORIZONS = [[30, '30 days'], [60, '60 days'], [90, '90 days']];
 async function viewTreasury() {
-  let horizon = 30;
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/treasury', shell);
-  const hzRow = h('div', { class: 'tabsrow' });
-  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.'))), hzRow));
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
-  const metricsRow = h('div', { class: 'treasury-grid' }); const warnBox = h('div', null); const workspace = h('div', { class: 'card treasury-workspace' });
-  metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
-  box.appendChild(metricsRow); box.appendChild(warnBox); box.appendChild(workspace);
-
-  function drawHzRow() {
-    clear(hzRow);
-    TREASURY_HORIZONS.forEach(([days, label]) => hzRow.appendChild(h('button', { type: 'button', class: `tab2 ${horizon === days ? 'on' : ''}`, on: { click: () => { if (horizon === days) return; horizon = days; drawHzRow(); loadHorizon(); } } }, tt(label))));
-  }
-  drawHzRow();
+  const v1 = h('div', { style: 'display:grid;gap:14px' }); const workspace = h('div', { class: 'card treasury-workspace' });
+  box.appendChild(v1); box.appendChild(workspace);
 
   const chartWrap = h('div', { class: 'tchart-wrap' },
     h('div', { class: 'section-head' }, h('div', null, h('h3', { class: 'section-title' }, 'Treasury position'), h('div', { class: 'section-sub' }, tt('Realised documented balance, last 12 months')))));
-  const projection = h('div', { class: 'projection' });
-  workspace.appendChild(chartWrap); workspace.appendChild(projection);
-
-  async function loadHorizon() {
-    metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
-    clear(warnBox);
-    try {
-      const treasury = await api('GET', `/api/treasury?horizon=${horizon}`);
-      const tmetric = (label, value, cls) => h('div', { class: `tmetric ${cls || ''}` }, h('span', null, label), h('strong', null, value ?? '—'));
-      const withCurTreasury = (v) => (v == null ? null : `${v} ${treasury.currency}`);
-      metricsRow.replaceChildren(
-        tmetric(tt('Available today'), withCurTreasury(treasury.display.liquid), 'main'),
-        tmetric(tt('Receivable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.incoming)),
-        tmetric(tt('Payable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.outgoing)),
-        tmetric(tt('Projection'), withCurTreasury(treasury.display.projection)));
-      if (treasury.warnings?.length) warnBox.appendChild(h('div', { class: 'banner warn small' }, treasury.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
-      clear(projection);
-      projection.appendChild(h('h3', { class: 'section-title', style: 'font-size:16px' }, tt('Projection')));
-      const proj = (label, note, amount, cls) => h('div', { class: 'proj' }, h('strong', null, label), h('span', null, h('em', null, note), h('b', { class: cls }, amount)));
-      try {
-        // Both figures come straight from /api/treasury's own `expected` block, which buildTreasury() already
-        // scopes to the selected horizonDays server-side - not a separate, fixed-window fetch. This is what
-        // makes the projection panel actually move when the 30/60/90-day toggle changes, instead of always
-        // showing the same fixed "due soon" window regardless of the selected horizon.
-        const cur = treasury.currency;
-        projection.appendChild(proj(tt('Expected customer invoices'), tt('{0} document(s)', treasury.expected.incomingCount), `+ ${treasury.display.incoming ?? fmtMoney(0, cur)}`, 'in'));
-        projection.appendChild(proj(tt('Supplier invoices to pay'), tt('{0} document(s)', treasury.expected.outgoingCount), `− ${treasury.display.outgoing ?? fmtMoney(0, cur)}`, 'out'));
-        if (treasury.assumed?.overdueReceivablesCents) projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(treasury.assumed.overdueReceivablesCents, cur))));
-        // VAT is deliberately not provisioned here: this product has no running VAT-due estimate outside the
-        // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
-        // parallel VAT figure the mandate explicitly asks not to invent.
-        projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
-        mount(projection, foreignNote(foreignCount(treasury.excluded)));
-      } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
-    } catch (e) { fail(e, metricsRow); }
-  }
+  workspace.appendChild(chartWrap);
 
   // The 12-month realised-flow chart is deliberately independent of the horizon toggle: it always shows the
   // same real, already-closed months (from /api/overview/cashflow), never a projection - so it is fetched
@@ -1189,5 +1224,5 @@ async function viewTreasury() {
         card(tt('What moved the balance'), tt('Net change per month'), cashWaterfallChart(cf.rows, cf.currency), 'span2')));
     }
   } catch (e) { chartWrap.appendChild(h('div', { class: 'muted small' }, tt('Chart unavailable.'))); }
-  await loadHorizon();
+  await drawTreasuryV1(v1);
 }

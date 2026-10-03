@@ -28,7 +28,7 @@ export function civilDateIn(instant, timeZone) {
  */
 export function createMerchantClock({ now = () => new Date().toISOString(), timeZone }) {
   if (!timeZone || typeof timeZone !== 'string') throw new TypeError('createMerchantClock: a time zone is required');
-  return { now, today: () => civilDateIn(new Date(now()), timeZone) };
+  return { now, timeZone, today: () => civilDateIn(new Date(now()), timeZone) };
 }
 
 /** A service that needs "today" must be given a clock; there is no silent UTC default. */

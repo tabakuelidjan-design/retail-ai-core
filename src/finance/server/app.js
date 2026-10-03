@@ -26,6 +26,8 @@ import { settlement as settlementOf } from '../document.js';
 import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js';
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
 import { buildActions } from '../actions.js';
+import { createTreasuryService } from '../treasury-service.js';
+import { TreasuryError } from '../treasury-engine.js';
 import { createBankService } from '../bank-service.js';
 import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
@@ -791,6 +793,9 @@ export function createFinanceApp(deps) {
     return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
       finance: { listInvoices: () => loadDocsForReports(store, merchantId), settleInvoices: async (ids, a) => { for (const id of ids) await svc.resettle(id, a); } } }); // the bank never writes a payment itself: it reconciles through the store's atomic RPC, then the invoice statuses are re-derived
   };
+  // Treasury is READ-ONLY and DERIVED: the same sources the other engines own, computed in treasury-engine.js. The UI never recomputes a figure.
+  const treasuryFor = async () => { const { settings } = await servicesFor(); return createTreasuryService({ store, merchantId, clock, currency: settings.defaults.currency,
+    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, inbox: inboxFor() }); };
   const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents,
     // the DERIVED truth (the legacy status/matched_* above are only a mirror): what is reconciled, set aside, left; the account; the bank's own references
     direction: t.direction ?? (t.amountCents >= 0 ? 'IN' : 'OUT'), reconciliationStatus: t.reconciliationStatus ?? null, reconciledCents: t.reconciledCents ?? 0, ignoredCents: t.ignoredCents ?? 0, remainingCents: t.remainingCents ?? Math.abs(t.amountCents), remaining: formatCents(t.remainingCents ?? Math.abs(t.amountCents)),
@@ -840,11 +845,15 @@ export function createFinanceApp(deps) {
   on('POST', '/api/bank/disconnect', async (ctx) => json(ctx.res, 200, await (await bankFor()).disconnect(actor)));
   on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
+  on('GET', '/api/treasury/position', async (ctx) => json(ctx.res, 200, await (await treasuryFor()).position()));
+  on('GET', '/api/treasury/forecast', async (ctx) => { const h = ctx.url.searchParams.get('horizon'); json(ctx.res, 200, await (await treasuryFor()).forecast({ horizonDays: h ? Number(h) : undefined })); });
+  on('GET', '/api/treasury/explain', async (ctx) => { const id = ctx.url.searchParams.get('id'); if (!id) fields([{ field: 'id', code: 'REQUIRED' }]); json(ctx.res, 200, await (await treasuryFor()).explainItem(id)); });
+  on('POST', '/api/treasury/scenario', async (ctx) => json(ctx.res, 200, await (await treasuryFor()).scenario(ctx.body?.hypotheses))); // pure computation: nothing is written, whatever the body says
   on('GET', '/api/treasury', async (ctx) => {
     const { settings } = await servicesFor(); const bank = await bankFor();
     const horizonDays = [30, 60, 90].includes(Number(ctx.url.searchParams.get('horizon'))) ? Number(ctx.url.searchParams.get('horizon')) : 7;
     // Treasury, bank status and per-account balances are independent reads: fetched in parallel.
-    const [t, status, balances] = await Promise.all([bank.treasury({ currency: settings.defaults.currency, horizonDays }), bank.status().catch(() => null), store.listBankBalances(merchantId).catch(() => [])]);
+    const [t, status, balances] = await Promise.all([(await treasuryFor()).legacyView({ currency: settings.defaults.currency, horizonDays }), bank.status().catch(() => null), store.listBankBalances(merchantId).catch(() => [])]);
     const m = (c) => (c == null ? null : money(c, settings.defaults.language));
     // Per-account balances for the dashboard's "Comptes bancaires" list - real rows from fin_bank_balances,
     // never fabricated placeholder accounts. Empty when nothing is connected (the UI shows a proper empty state).
@@ -1322,6 +1331,7 @@ export function createFinanceApp(deps) {
       const status = NOT_FOUND_CODES.includes(e.code) ? 404 : UNPROCESSABLE.includes(e.code) ? 422 : e.code === 'BANK_IMPORT_FAILED_NOTHING_SAVED' ? 503 : 409;
       return json(res, status, { error: { code: e.code, message: e.detail ?? null, ...(e.existing ? { existing: e.existing } : {}) } }); // existing: the document a refused duplicate would repeat
     }
+    if (e instanceof TreasuryError) return json(res, /NOT_FOUND$/.test(e.code) ? 404 : 422, { error: { code: e.code, message: e.detail ?? null } });
     console.error('finance dashboard internal error:', e?.message);
     return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
   }
