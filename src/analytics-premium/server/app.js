@@ -17,6 +17,7 @@ const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/ask.js': ['ask.js', 'text/javascript; charset=utf-8'],
+  '/speech.js': ['speech.js', 'text/javascript; charset=utf-8'],
   '/period.js': ['period.js', 'text/javascript; charset=utf-8'],
   '/health-state.js': ['health-state.js', 'text/javascript; charset=utf-8'],
   '/explorer.js': ['explorer.js', 'text/javascript; charset=utf-8'],
@@ -27,6 +28,8 @@ const STATIC = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
+  '/assets/nordla-mic.png': ['assets/nordla-mic.png', 'image/png'],
+  '/assets/nordla-mic-2x.png': ['assets/nordla-mic-2x.png', 'image/png'],
   '/account-menu.js': ['account-menu.js', 'text/javascript; charset=utf-8'],
   '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'],
   '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'],
@@ -72,7 +75,7 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
         for await (const c of req) { size += c.length; if (size > 4096) return json(413, { error: { code: 'BODY_TOO_LARGE' } }); chunks.push(c); }
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: { code: 'INVALID_JSON' } }); }
         const sel = body?.period && typeof body.period === 'object' ? { period: String(body.period.period ?? '').slice(0, 30), from: typeof body.period.from === 'string' ? body.period.from.slice(0, 10) : undefined, to: typeof body.period.to === 'string' ? body.period.to.slice(0, 10) : undefined } : null;
-        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr', selected: sel });
+        const r = await ask({ question: body?.question, lang: ['fr', 'nl', 'en'].includes(body?.lang) ? body.lang : 'fr', selected: sel, history: Array.isArray(body?.history) ? body.history.slice(-6).map((h) => ({ role: h?.role, text: typeof h?.text === 'string' ? h.text.slice(0, 300) : '' })) : [] });
         return json(r.status, r.body);
       }
       if (req.method === 'GET' && url.pathname === '/api/sync-status') {

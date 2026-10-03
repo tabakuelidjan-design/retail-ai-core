@@ -181,7 +181,9 @@ test('no merchant is ever created or changed by Analytics (report + serving are 
 test('no "only merchant" logic left: one merchant + no NORDLA_MERCHANT_ID is refused; the source has no single-merchant or Shopify identity path', async () => {
   const one = createFakeSupabase(); await one.insert('merchants', [{ id: A, name: 'Only' }]);
   await assert.rejects(startAnalyticsServer({ env: { ANALYTICS_PREMIUM_PORT: String(await freePort()) }, supabase: one, reportsDir: await tmp(), log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
-  const files = ['src/report/index.js', ...readdirSync(new URL('../src/analytics-premium/server/', import.meta.url)).map((f) => `src/analytics-premium/server/${f}`)];
+  // every source file of the Analytics server, subfolders included (ai/, tools/ appeared with the Ask work)
+  const walk = (rel) => readdirSync(new URL(`../${rel}/`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${rel}/${e.name}`) : e.name.endsWith('.js') ? [`${rel}/${e.name}`] : []));
+  const files = ['src/report/index.js', ...walk('src/analytics-premium/server')];
   for (const f of files) {
     const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /MERCHANT_NOT_UNIQUE|limit: '2'|merchants\[0\]|source_system: 'eq\.shopify'/, `${f}: single-merchant / Shopify identity logic`);

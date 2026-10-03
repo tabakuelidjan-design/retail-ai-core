@@ -1,0 +1,14 @@
+{
+  "_comment": "Copy to openai.local.json (git-ignored) and fill the pricing from the provider's official price page. Contains the NAME of the environment variable that holds the key - never the key.",
+  "model": "gpt-6-sol",
+  "reasoningEffort": "high",
+  "apiKeyEnv": "OPENAI_API_KEY",
+  "today": "2026-09-26",
+  "timeZone": "Europe/Brussels",
+  "maxOutputTokens": 32000,
+  "timeoutMs": 120000,
+  "maxRetries": 2,
+  "maxFormatRetries": 1,
+  "pricing": { "inputPerMTok": null, "cachedInputPerMTok": null, "cacheWriteInputPerMTok": null, "outputPerMTok": null },
+  "params": {}
+}

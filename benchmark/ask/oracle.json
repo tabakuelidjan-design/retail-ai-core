@@ -1,0 +1,43 @@
+{
+  "_comment": "Scripted plans of the ORACLE, a stand-in that answers each case the way a perfect provider would. It is NOT a real provider: it exists only to prove that the expectations of cases.json are achievable through the real orchestrator (an oracle run must score 100 %), and, with deliberate degradations, that the sub-scores really separate. One entry per case, one plan per turn.",
+  "S01": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "S02": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_7_days" } } } ] } ],
+  "S03": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "S04": [ { "premises": [], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "this_month" }, "limit": 3 } } ] } ],
+  "Q01": [ { "premises": [], "toolCalls": [ { "tool": "get_discounts", "args": { "period": { "period": "previous_month" } } } ] } ],
+  "Q02": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "Q03": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "Q04": [ { "premises": [], "toolCalls": [ { "tool": "get_refunds", "args": { "period": { "period": "previous_month" } } } ] } ],
+  "M01": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "this_week" } } }, { "tool": "get_top_products", "args": { "period": { "period": "this_week" }, "limit": 3 } } ] } ],
+  "M02": [ { "premises": [], "toolCalls": [ { "tool": "compare_sales", "args": { "periodA": { "period": "this_month" }, "periodB": { "period": "custom", "from": "2026-07-01", "to": "2026-07-31" } } } ] } ],
+  "M03": [ { "premises": [], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "this_month" }, "limit": 3 } }, { "tool": "get_channels", "args": { "period": { "period": "this_month" } } } ] } ],
+  "M04": [ { "premises": [], "toolCalls": [ { "tool": "get_discounts", "args": { "period": { "period": "previous_month" } } }, { "tool": "get_refunds", "args": { "period": { "period": "previous_month" } } }, { "tool": "get_sales_metrics", "args": { "period": { "period": "previous_month" } } } ] } ],
+  "P01": [ { "premises": [ { "kind": "trend", "metric": "sales", "direction": "decrease", "period": { "period": "last_30_days" } } ], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 3 } }, { "tool": "get_channels", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "P02": [ { "premises": [ { "kind": "trend", "metric": "refunds", "direction": "increase", "period": { "period": "last_30_days" } } ], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 3 } } ] } ],
+  "P03": [ { "premises": [ { "kind": "ranking", "scope": "product", "subject": "Fixture Gadget", "period": { "period": "this_month" } } ], "toolCalls": [ { "tool": "get_channels", "args": { "period": { "period": "this_month" } } } ] } ],
+  "P04": [ { "premises": [ { "kind": "level", "metric": "sales", "level": "zero", "period": { "period": "last_30_days" } } ], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 3 } } ] } ],
+  "P05": [ { "premises": [ { "kind": "trend", "metric": "sales", "direction": "decrease", "period": { "period": "last_7_days" } } ], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_7_days" } } }, { "tool": "get_top_products", "args": { "period": { "period": "last_7_days" }, "limit": 3 } } ] } ],
+  "P06": [ { "premises": [ { "kind": "trend", "metric": "sales", "direction": "decrease", "period": { "period": "custom", "from": "2026-05-01", "to": "2026-05-31" } } ], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "custom", "from": "2026-05-01", "to": "2026-05-31" }, "limit": 3 } } ] } ],
+  "C01": [ { "premises": [], "clarification": { "text": "Quels chiffres voulez-vous, et sur quelle période ?" } } ],
+  "C02": [ { "premises": [], "clarification": { "text": "De quel produit parlez-vous, et sur quelle période ?" } } ],
+  "C03": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": {} } ] } ],
+  "V01": [
+    { "premises": [], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 1 } } ] },
+    { "premises": [], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "previous_month" }, "limit": 1 } } ] }
+  ],
+  "V02": [
+    { "premises": [], "clarification": { "text": "Quels chiffres voulez-vous, et sur quelle période ?" } },
+    { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] },
+    { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] }
+  ],
+  "V03": [
+    { "premises": [ { "kind": "trend", "metric": "sales", "direction": "decrease", "period": { "period": "last_30_days" } } ], "toolCalls": [ { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 3 } } ] },
+    { "premises": [ { "kind": "trend", "metric": "sales", "direction": "increase", "period": { "period": "last_30_days" } } ], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } }, { "tool": "get_top_products", "args": { "period": { "period": "last_30_days" }, "limit": 3 } } ] }
+  ],
+  "R01": [ { "premises": [], "cannotAnswer": { "gaps": ["traffic"] } } ],
+  "R02": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "custom", "from": "2026-01-01", "to": "2026-01-31" } } } ] } ],
+  "R03": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "T01": [ { "premises": [], "cannotAnswer": { "gaps": ["traffic"] } } ],
+  "T02": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "last_30_days" } } } ] } ],
+  "T03": [ { "premises": [], "toolCalls": [ { "tool": "get_sales_metrics", "args": { "period": { "period": "this_month" } } } ] } ]
+}
