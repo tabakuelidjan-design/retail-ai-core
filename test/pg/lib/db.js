@@ -171,3 +171,12 @@ export const codeOf = (settled) => (settled.status === 'rejected' ? (/FIN_[A-Z_]
 export const allocateSql = 'select fin_allocate_payment($1,$2,$3,$4,$5) r';
 export const allocateLater = async (c, merchantId, key, paymentId, allocations) => (await c.query(allocateSql, [merchantId, key, paymentId, JSON.stringify(allocations), ACTOR])).rows[0].r;
 export const amountsOf = async (c, merchantId, invoiceId) => (await c.query('select fin_invoice_amounts($1,$2) a', [merchantId, invoiceId])).rows[0].a;
+
+// ---------- Essential Bank helpers ----------
+export const bankTx = async (c, merchantId, { tag = 'tx-1', amount = -1210, currency = 'EUR', account = 'csv-import', date = '2026-09-01', ref = null, structured = null, source = 'csv' } = {}) =>
+  (await c.query(`insert into fin_bank_transactions (merchant_id, account_id, provider_tx_id, date, amount_cents, currency, reference, structured_reference, source) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`, [merchantId, account, tag, date, amount, currency, ref, structured, source])).rows[0];
+export const bankReconcile = async (c, merchantId, key, tx, items, suggestion = null) => (await c.query('select fin_bank_reconcile($1,$2,$3,$4,$5,$6) r', [merchantId, key, tx, JSON.stringify(items), suggestion ? JSON.stringify(suggestion) : null, ACTOR])).rows[0].r;
+export const bankReconcileAndPay = async (c, merchantId, key, tx, payment, suggestion = null) => (await c.query('select fin_bank_reconcile_and_pay($1,$2,$3,$4,$5,$6) r', [merchantId, key, tx, JSON.stringify(payment), suggestion ? JSON.stringify(suggestion) : null, ACTOR])).rows[0].r;
+export const bankUnreconcile = async (c, merchantId, key, items, reason = 'test') => (await c.query('select fin_bank_unreconcile($1,$2,$3,$4,$5) r', [merchantId, key, JSON.stringify(items), reason, ACTOR])).rows[0].r;
+export const bankIgnore = async (c, merchantId, key, tx, amount = null, reason = 'bank fee') => (await c.query('select fin_bank_ignore($1,$2,$3,$4,$5,$6) r', [merchantId, key, tx, amount, reason, ACTOR])).rows[0].r;
+export const bankAmounts = async (c, merchantId, tx) => (await c.query('select fin_bank_tx_amounts($1,$2) a', [merchantId, tx])).rows[0].a;

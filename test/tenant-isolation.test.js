@@ -325,7 +325,8 @@ test('Bank transactions: merchant A cannot read or update merchant B\'s transact
   await supabase.insert('fin_bank_transactions', [{ id: bId, merchant_id: merchantB, account_id: 'acc-1', provider_tx_id: 'tx-1', date: '2026-09-22', amount_cents: 1000, currency: 'EUR', source: 'bank', status: 'NEW' }]);
   const storeA = createSupabaseFinanceStore(supabase, { merchantId: merchantA });
   assert.equal(await storeA.getBankTransaction(bId), null);
-  const updated = await storeA.updateBankTransaction(bId, { status: 'IGNORED' }, 'NEW');
+  // A hand-written status is refused outright now (the status is derived from reconciliations); whichever way A's attempt ends, it must not change B's row.
+  const updated = await storeA.updateBankTransaction(bId, { status: 'IGNORED' }, 'NEW').catch((e) => { assert.match(e.message, /BANK_STATUS_IS_DERIVED/); return null; });
   assert.equal(updated, null);
   const stillB = await supabase.select('fin_bank_transactions', { select: '*', id: `eq.${bId}` });
   assert.equal(stillB[0].status, 'NEW', 'B\'s transaction must be unchanged after A\'s attempted update');

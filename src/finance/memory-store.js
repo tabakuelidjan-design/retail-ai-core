@@ -9,6 +9,7 @@ import { FinanceError } from './document.js';
 import { formatNumber } from './numbering.js';
 import { allocationRemaining, checkAllocation, checkPaymentReversal, checkRefundLink, creditedOfInvoice, netAllocated, paymentUnallocatedCents, requestFingerprint, standingAllocations, supplierTruth } from './payment-ledger.js';
 import { DEFAULT_SOURCE, isPaymentMethod, isPaymentSource } from './payment-methods.js';
+import { checkReconciliation, isCents as isBankCents, legacyStatusOf, paymentReconciledCents, txAmounts } from './bank-ledger.js';
 
 const clone = (o) => structuredClone(o);
 
@@ -41,8 +42,115 @@ export function createMemoryStore() {
     }
   }
   const stockMovements = [];
+  const bankAccounts = new Map(); const bankRecs = []; // fin_bank_accounts / fin_bank_reconciliations (append-only)
   const bankConnections = new Map(); const bankTx = []; const bankBalances = new Map(); const cashCounts = []; const cashMovements = [];
   const hooks = { beforeCommit: null }; // failure injection for crash tests: throw to simulate a crash inside the transaction
+
+function recordPaymentSync({ merchantId, key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations: wanted = [], at = null, meta = {} }) {
+      if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
+      if (!['IN', 'OUT'].includes(direction)) throw new FinanceError('DIRECTION_INVALID');
+      if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
+      if (!isPaymentMethod(method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(method));
+      if (meta.source != null && !isPaymentSource(meta.source)) throw new FinanceError('PAYMENT_SOURCE_INVALID', String(meta.source));
+      const fp = requestFingerprint({ direction, amountCents, currency, paidOn, method, reference, allocations: wanted, meta });
+      const prior = registry.find((x) => x.merchantId === merchantId && x.idempotencyKey === key);
+      if (prior) {
+        if (fingerprints.get(prior.id) !== fp) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key);
+        return { duplicate: true, payment: clone(prior), allocations: allocations.filter((a) => a.paymentId === prior.id).map(clone) };
+      }
+      const payment = { id: randomUUID(), merchantId, direction, amountCents, currency, paidOn, method, reference, reversalOfId: null, idempotencyKey: key, actor: clone(actor), createdAt: at ?? new Date().toISOString(), seq: ++seq,
+        source: meta.source ?? DEFAULT_SOURCE, externalReference: meta.externalReference ?? null, structuredReference: meta.structuredReference ?? null, bankReference: meta.bankReference ?? null, refundOfPaymentId: meta.refundOfPaymentId ?? null };
+      checkRefundLink({ payment, registry });
+      const staged = []; const reg = [...registry, payment]; const plan = [...wanted].sort((a, b) => String(a.customerDocumentId ?? a.supplierInvoiceId).localeCompare(String(b.customerDocumentId ?? b.supplierInvoiceId)));
+      const docList = [...docs.values()];
+      for (const w of plan) {
+        const kind = w.customerDocumentId ? 'customer' : 'supplier'; const targetId = w.customerDocumentId ?? w.supplierInvoiceId;
+        const target = kind === 'customer' ? docs.get(targetId) : supplierInvoices.find((x) => x.id === targetId);
+        const row = { id: randomUUID(), merchantId, paymentId: payment.id, customerDocumentId: w.customerDocumentId ?? null, supplierInvoiceId: w.supplierInvoiceId ?? null, amountCents: w.amountCents, currency, reversesAllocationId: null, idempotencyKey: `${key}:${targetId}`, reason: null, actor: clone(actor), createdAt: payment.createdAt, seq: ++seq };
+        checkAllocation({ merchantId, payment, registry: reg, allocations: [...allocations, ...staged], docs: docList, target, kind, allocation: row });
+        staged.push(row);
+      }
+      // ---- commit point: nothing above wrote anything ----
+      registry.push(payment); fingerprints.set(payment.id, fp); allocations.push(...staged);
+      const customerIds = [...new Set(staged.map((a) => a.customerDocumentId).filter(Boolean))]; const doc = customerIds.length === 1 ? docs.get(customerIds[0]) : null;
+      events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: doc?.id ?? null, at: at ?? payment.createdAt, actor: clone(actor), action: direction === 'IN' ? 'RECORD_PAYMENT' : customerIds.length ? 'RECORD_REFUND' : 'RECORD_SUPPLIER_PAYMENT', fromStatus: doc?.status ?? null, toStatus: doc?.status ?? null,
+        detail: { paymentId: payment.id, amountCents, currency, method, paidOn, direction, source: payment.source, externalReference: payment.externalReference, allocations: clone(wanted) } }));
+      refreshSuppliers(staged);
+      return { duplicate: false, payment: clone(payment), allocations: staged.map(clone) };
+  }
+
+
+  // ---------- bank helpers: every function is synchronous = atomic (checks first, commit last, no await in between) ----------
+  function accountFor(merchantId, externalId, { origin = 'PROVIDER', currency = 'EUR', provider = null, displayName = null, ibanMasked = null, at = null } = {}) {
+    const k = `${merchantId}|${externalId}`; let a = bankAccounts.get(k);
+    if (!a) { a = { id: randomUUID(), merchantId, externalId, origin, provider, displayName, ibanMasked, currency, status: 'ACTIVE', createdAt: at ?? new Date().toISOString(), closedAt: null }; bankAccounts.set(k, a); }
+    return a;
+  }
+  function withBankTruth(t) { const a = txAmounts(t, bankRecs); return { ...t, reconciledCents: a.matched, ignoredCents: a.ignored, remainingCents: a.remaining, reconciliationStatus: a.status }; }
+  function mirrorBank(tx) { const a = txAmounts(tx, bankRecs); tx.status = legacyStatusOf(a.status); tx.matchedAmountCents = a.matched || null; tx.matchedAt = tx.status === 'NEW' ? null : a.lastAt; }
+  const bankEvent = (merchantId, action, at, actor, detail) => events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: null, at, actor: clone(actor), action, fromStatus: null, toStatus: null, detail: clone(detail) }));
+  const mustTx = (merchantId, id) => { const t = bankTx.find((x) => x.id === id && x.merchantId === merchantId); if (!t) throw new FinanceError('BANK_TX_NOT_FOUND', String(id)); return t; };
+  const recRow = (o) => ({ id: randomUUID(), payment: null, reversesId: null, method: 'MANUAL', suggestion: null, reason: null, seq: ++seq, ...o });
+  function doReconcile({ merchantId, key, transactionId, items, suggestion = null, actor = null, at = null }) {
+    if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
+    if (!Array.isArray(items) || !items.length) throw new FinanceError('AMOUNT_INVALID', 'nothing to reconcile');
+    const tx = mustTx(merchantId, transactionId); const staged = []; const out = []; let duplicate = false; const when = at ?? new Date().toISOString();
+    for (const it of [...items].sort((x, y) => String(x.paymentId).localeCompare(String(y.paymentId)))) {
+      if (!isBankCents(it.amountCents) || it.amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
+      const idem = `${key}:${it.paymentId}`; const prior = bankRecs.find((r) => r.merchantId === merchantId && r.idempotencyKey === idem);
+      if (prior) { if (prior.bankTransactionId !== transactionId || prior.amountCents !== it.amountCents) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); duplicate = true; out.push(prior); continue; }
+      const row = recRow({ merchantId, bankTransactionId: transactionId, paymentId: it.paymentId, kind: 'MATCH', amountCents: it.amountCents, currency: tx.currency, method: suggestion ? 'SUGGESTION_CONFIRMED' : 'MANUAL', suggestion: clone(suggestion), idempotencyKey: idem, actor: clone(actor), createdAt: when });
+      checkReconciliation({ tx, payment: registry.find((p) => p.id === it.paymentId && p.merchantId === merchantId), registry, reconciliations: [...bankRecs, ...staged], row });
+      staged.push(row); out.push(row);
+    }
+    bankRecs.push(...staged); for (const r of staged) bankEvent(merchantId, 'BANK_RECONCILE', when, actor, { transactionId, paymentId: r.paymentId, reconciliationId: r.id, amountCents: r.amountCents, method: r.method, suggestion });
+    if (staged.length) mirrorBank(tx);
+    return { duplicate: duplicate && staged.length === 0, reconciliations: clone(out), transaction: txAmounts(tx, bankRecs) };
+  }
+  function doReconcileAndPay({ merchantId, key, transactionId, payment: spec, suggestion = null, actor = null, at = null }) {
+    if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
+    const tx = mustTx(merchantId, transactionId); const cents = spec?.amountCents; if (!isBankCents(cents) || cents <= 0) throw new FinanceError('AMOUNT_INVALID');
+    const snap = { reg: registry.length, al: allocations.length, ev: events.length }; const when = at ?? new Date().toISOString();
+    try {
+      const pay = recordPaymentSync({ merchantId, key, direction: tx.amountCents > 0 ? 'IN' : 'OUT', amountCents: cents, currency: tx.currency, paidOn: tx.date, method: spec.method ?? 'bank_transfer', reference: spec.reference ?? null, actor, at,
+        allocations: spec.allocations ?? [], meta: { ...(spec.meta ?? {}), source: 'bank', bankReference: tx.providerTxId, structuredReference: tx.structuredReference ?? null } });
+      const idem = `${key}:${pay.payment.id}`; const prior = bankRecs.find((r) => r.merchantId === merchantId && r.idempotencyKey === idem);
+      if (prior) { if (prior.bankTransactionId !== transactionId) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); return { duplicate: true, payment: pay.payment, allocations: pay.allocations, reconciliation: clone(prior), transaction: txAmounts(tx, bankRecs) }; }
+      const row = recRow({ merchantId, bankTransactionId: transactionId, paymentId: pay.payment.id, kind: 'MATCH', amountCents: cents, currency: tx.currency, method: suggestion ? 'SUGGESTION_CONFIRMED' : 'MANUAL', suggestion: clone(suggestion), idempotencyKey: idem, actor: clone(actor), createdAt: when });
+      checkReconciliation({ tx, payment: registry.find((p) => p.id === pay.payment.id), registry, reconciliations: bankRecs, row });
+      bankRecs.push(row); bankEvent(merchantId, 'BANK_RECONCILE', when, actor, { transactionId, paymentId: pay.payment.id, reconciliationId: row.id, amountCents: cents, method: row.method, suggestion, createdPayment: true }); mirrorBank(tx);
+      return { duplicate: false, payment: pay.payment, allocations: pay.allocations, reconciliation: clone(row), transaction: txAmounts(tx, bankRecs) };
+    } catch (e) { // the payment and the reconciliation are ONE unit: nothing of this call survives a refusal
+      const removedAl = allocations.splice(snap.al); for (const p of registry.splice(snap.reg)) fingerprints.delete(p.id); events.length = snap.ev; refreshSuppliers(removedAl); throw e;
+    }
+  }
+  function doUnreconcile({ merchantId, key, items, reason = null, actor = null, at = null }) {
+    if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
+    const staged = []; const out = []; let duplicate = false; const when = at ?? new Date().toISOString(); const touched = new Set();
+    for (const it of [...items].sort((x, y) => String(bankRecs.find((r) => r.id === x.reconciliationId)?.paymentId ?? '~').localeCompare(String(bankRecs.find((r) => r.id === y.reconciliationId)?.paymentId ?? '~')))) {
+      const orig = bankRecs.find((r) => r.id === it.reconciliationId && r.merchantId === merchantId); if (!orig || orig.amountCents <= 0) throw new FinanceError('BANK_RECONCILIATION_NOT_FOUND');
+      const idem = `${key}:${orig.id}`; const prior = bankRecs.find((r) => r.merchantId === merchantId && r.idempotencyKey === idem); touched.add(orig.bankTransactionId);
+      if (prior) { if (it.amountCents != null && -prior.amountCents !== it.amountCents) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); duplicate = true; out.push(prior); continue; }
+      const left = orig.amountCents + [...bankRecs, ...staged].filter((r) => r.reversesId === orig.id).reduce((a, r) => a + r.amountCents, 0); const amt = it.amountCents ?? left;
+      if (!isBankCents(amt) || amt <= 0 || amt > left) throw new FinanceError('BANK_UNRECONCILE_EXCEEDS', `${amt} > still reconciled ${left} (cents)`);
+      const row = recRow({ merchantId, bankTransactionId: orig.bankTransactionId, paymentId: orig.paymentId, kind: orig.kind, amountCents: -amt, currency: orig.currency, reversesId: orig.id, idempotencyKey: idem, reason, actor: clone(actor), createdAt: when });
+      checkReconciliation({ tx: bankTx.find((t) => t.id === orig.bankTransactionId), payment: orig.paymentId ? registry.find((p) => p.id === orig.paymentId) : null, registry, reconciliations: [...bankRecs, ...staged], row });
+      staged.push(row); out.push(row);
+    }
+    bankRecs.push(...staged);
+    for (const r of staged) { const o = bankRecs.find((x) => x.id === r.reversesId); bankEvent(merchantId, o.kind === 'IGNORE' ? 'BANK_UNIGNORE' : 'BANK_UNRECONCILE', when, actor, { transactionId: r.bankTransactionId, paymentId: r.paymentId, reconciliationId: o.id, reversalId: r.id, amountCents: -r.amountCents, reason }); }
+    for (const id of touched) mirrorBank(bankTx.find((t) => t.id === id));
+    const last = [...touched][0]; return { duplicate: duplicate && staged.length === 0, reversals: clone(out), transaction: last ? txAmounts(bankTx.find((t) => t.id === last), bankRecs) : null };
+  }
+  function doIgnore({ merchantId, key, transactionId, amountCents = null, reason = null, actor = null, at = null }) {
+    if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED'); const when = at ?? new Date().toISOString();
+    const prior = bankRecs.find((r) => r.merchantId === merchantId && r.idempotencyKey === key);
+    if (prior) { if (prior.bankTransactionId !== transactionId || prior.kind !== 'IGNORE' || (amountCents != null && prior.amountCents !== amountCents)) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key); return { duplicate: true, reconciliation: clone(prior), transaction: txAmounts(mustTx(merchantId, transactionId), bankRecs) }; }
+    const tx = mustTx(merchantId, transactionId); const a = txAmounts(tx, bankRecs); const amt = amountCents ?? a.remaining; if (!isBankCents(amt) || amt <= 0) throw new FinanceError('BANK_OVER_RECONCILED', 'nothing left to set aside');
+    const row = recRow({ merchantId, bankTransactionId: transactionId, paymentId: null, kind: 'IGNORE', amountCents: amt, currency: tx.currency, idempotencyKey: key, reason, actor: clone(actor), createdAt: when });
+    checkReconciliation({ tx, payment: null, registry, reconciliations: bankRecs, row }); bankRecs.push(row); bankEvent(merchantId, 'BANK_IGNORE', when, actor, { transactionId, reconciliationId: row.id, amountCents: amt, reason }); mirrorBank(tx);
+    return { duplicate: false, reconciliation: clone(row), transaction: txAmounts(tx, bankRecs) };
+  }
 
   return {
     newId: () => randomUUID(),
@@ -97,38 +205,7 @@ export function createMemoryStore() {
       const p = registry.find((x) => x.merchantId === merchantId && x.idempotencyKey === key); if (!p) return null;
       return { payment: clone(p), allocations: allocations.filter((a) => a.paymentId === p.id).map(clone), fingerprint: fingerprints.get(p.id) };
     },
-    async recordPayment({ merchantId, key, direction, amountCents, currency, paidOn, method = 'unspecified', reference = null, actor = null, allocations: wanted = [], at = null, meta = {} }) {
-      if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
-      if (!['IN', 'OUT'].includes(direction)) throw new FinanceError('DIRECTION_INVALID');
-      if (!Number.isInteger(amountCents) || amountCents <= 0) throw new FinanceError('AMOUNT_INVALID');
-      if (!isPaymentMethod(method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(method));
-      if (meta.source != null && !isPaymentSource(meta.source)) throw new FinanceError('PAYMENT_SOURCE_INVALID', String(meta.source));
-      const fp = requestFingerprint({ direction, amountCents, currency, paidOn, method, reference, allocations: wanted, meta });
-      const prior = registry.find((x) => x.merchantId === merchantId && x.idempotencyKey === key);
-      if (prior) {
-        if (fingerprints.get(prior.id) !== fp) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key);
-        return { duplicate: true, payment: clone(prior), allocations: allocations.filter((a) => a.paymentId === prior.id).map(clone) };
-      }
-      const payment = { id: randomUUID(), merchantId, direction, amountCents, currency, paidOn, method, reference, reversalOfId: null, idempotencyKey: key, actor: clone(actor), createdAt: at ?? new Date().toISOString(), seq: ++seq,
-        source: meta.source ?? DEFAULT_SOURCE, externalReference: meta.externalReference ?? null, structuredReference: meta.structuredReference ?? null, bankReference: meta.bankReference ?? null, refundOfPaymentId: meta.refundOfPaymentId ?? null };
-      checkRefundLink({ payment, registry });
-      const staged = []; const reg = [...registry, payment]; const plan = [...wanted].sort((a, b) => String(a.customerDocumentId ?? a.supplierInvoiceId).localeCompare(String(b.customerDocumentId ?? b.supplierInvoiceId)));
-      const docList = [...docs.values()];
-      for (const w of plan) {
-        const kind = w.customerDocumentId ? 'customer' : 'supplier'; const targetId = w.customerDocumentId ?? w.supplierInvoiceId;
-        const target = kind === 'customer' ? docs.get(targetId) : supplierInvoices.find((x) => x.id === targetId);
-        const row = { id: randomUUID(), merchantId, paymentId: payment.id, customerDocumentId: w.customerDocumentId ?? null, supplierInvoiceId: w.supplierInvoiceId ?? null, amountCents: w.amountCents, currency, reversesAllocationId: null, idempotencyKey: `${key}:${targetId}`, reason: null, actor: clone(actor), createdAt: payment.createdAt, seq: ++seq };
-        checkAllocation({ merchantId, payment, registry: reg, allocations: [...allocations, ...staged], docs: docList, target, kind, allocation: row });
-        staged.push(row);
-      }
-      // ---- commit point: nothing above wrote anything ----
-      registry.push(payment); fingerprints.set(payment.id, fp); allocations.push(...staged);
-      const customerIds = [...new Set(staged.map((a) => a.customerDocumentId).filter(Boolean))]; const doc = customerIds.length === 1 ? docs.get(customerIds[0]) : null;
-      events.push(Object.freeze({ id: randomUUID(), merchantId, documentId: doc?.id ?? null, at: at ?? payment.createdAt, actor: clone(actor), action: direction === 'IN' ? 'RECORD_PAYMENT' : customerIds.length ? 'RECORD_REFUND' : 'RECORD_SUPPLIER_PAYMENT', fromStatus: doc?.status ?? null, toStatus: doc?.status ?? null,
-        detail: { paymentId: payment.id, amountCents, currency, method, paidOn, direction, source: payment.source, externalReference: payment.externalReference, allocations: clone(wanted) } }));
-      refreshSuppliers(staged);
-      return { duplicate: false, payment: clone(payment), allocations: staged.map(clone) };
-    },
+    async recordPayment(args) { return recordPaymentSync(args); }, // the body is synchronous: every check, then the commit, with no await in between
     /** Apply the unallocated part of an existing payment to documents, later (mirror of fin_allocate_payment). The caller names every target; nothing is ever allocated automatically. */
     async allocatePayment({ merchantId, key, paymentId, allocations: wanted, actor = null, at = null }) {
       if (!key) throw new FinanceError('IDEMPOTENCY_KEY_REQUIRED');
@@ -181,6 +258,7 @@ export function createMemoryStore() {
       const reversed = registry.filter((p) => p.reversalOfId === pay.id).reduce((a, p) => a + p.amountCents, 0); const leftCents = pay.amountCents - reversed;
       const standing = allocations.filter((a) => a.paymentId === pay.id && a.amountCents > 0 && allocationRemaining(allocations, a.id) > 0);
       if (leftCents <= 0) throw new FinanceError('PAYMENT_ALREADY_REVERSED');
+      if (paymentReconciledCents(bankRecs, pay.id) > 0) throw new FinanceError('REVERSAL_PAYMENT_RECONCILED', `${paymentReconciledCents(bankRecs, pay.id)} cents are reconciled with the bank; unreconcile first`);
       // dry run on copies first so a refusal leaves nothing behind
       const saveAlloc = allocations.length; const saveEvents = events.length;
       try {
@@ -212,42 +290,64 @@ export function createMemoryStore() {
     async getBankConnection(merchantId) { const c = bankConnections.get(merchantId); return c ? clone(c) : null; },
     async touchBankConnection(merchantId, at) { const c = bankConnections.get(merchantId); if (c) c.lastUsedAt = at; },
     async revokeBankConnection(merchantId, at) { const c = bankConnections.get(merchantId); if (c) { c.revokedAt = at; c.tokenCipher = null; } },
+    // ---- bank accounts, transactions, reconciliations (mirror of migration 20261005090000) ----
+    /** Register / refresh an account (metadata only: name, masked identifier). Currency and identity never change. */
+    async ensureBankAccount({ merchantId, externalId, origin, provider = null, displayName = null, ibanMasked = null, currency = 'EUR', at = null }) {
+      const a = accountFor(merchantId, externalId, { origin, provider, displayName, ibanMasked, currency, at });
+      if (a.currency !== currency) throw new FinanceError('BANK_CURRENCY_MISMATCH', `account ${a.currency}, given ${currency}`);
+      if (displayName) a.displayName = displayName; if (ibanMasked) a.ibanMasked = ibanMasked; if (provider) a.provider = provider;
+      return clone(a);
+    },
+    async listBankAccounts(merchantId) { return [...bankAccounts.values()].filter((a) => a.merchantId === merchantId).map(clone); },
     async insertBankTransaction(row) {
       const dup = bankTx.find((t) => t.merchantId === row.merchantId && t.accountId === row.accountId && t.providerTxId === row.providerTxId);
-      if (dup) return { created: false, row: clone(dup) };
-      const t = { id: randomUUID(), ...clone(row) }; bankTx.push(t); return { created: true, row: clone(t) };
+      if (dup) return { created: false, row: clone(withBankTruth(dup)) };
+      const r = (await this.insertBankTransactionsBatch([row])); return { created: r.created === 1, row: clone(withBankTruth(bankTx.find((t) => t.merchantId === row.merchantId && t.accountId === row.accountId && t.providerTxId === row.providerTxId))) };
     },
     /**
-     * ATOMIC batch: every row is validated and de-duplicated first (against the stored transactions and inside the batch); the rows are then added in one
+     * ATOMIC batch: every row is validated and de-duplicated first (against the stored transactions and inside the batch); the rows (and their accounts) are then added in one
      * step. Any problem throws BEFORE anything is stored, so a batch is saved completely or not at all. Returns { created, duplicates }.
      */
     async insertBankTransactionsBatch(rows) {
-      const fresh = []; const seen = new Set(bankTx.map((t) => `${t.merchantId}|${t.accountId}|${t.providerTxId}`));
+      const fresh = []; const seen = new Set(bankTx.map((t) => `${t.merchantId}|${t.accountId}|${t.providerTxId}`)); const pending = new Map();
       for (const row of rows) {
-        if (!Number.isInteger(row.amountCents) || !row.date || !row.providerTxId) throw new FinanceError('BANK_TRANSACTION_INVALID', String(row.providerTxId ?? ''));
+        const currency = row.currency ?? 'EUR';
+        if (!Number.isInteger(row.amountCents) || row.amountCents === 0 || !row.date || !row.providerTxId || !/^[A-Z]{3}$/.test(currency)) throw new FinanceError('BANK_TRANSACTION_INVALID', String(row.providerTxId ?? ''));
         const k = `${row.merchantId}|${row.accountId}|${row.providerTxId}`; if (seen.has(k)) continue; seen.add(k);
-        fresh.push({ id: randomUUID(), ...clone(row) });
+        const ak = `${row.merchantId}|${row.accountId}`; const known = bankAccounts.get(ak) ?? pending.get(ak);
+        if (known && known.currency !== currency) throw new FinanceError('BANK_CURRENCY_MISMATCH', `account ${known.currency}, row ${currency}`);
+        if (!known) pending.set(ak, { currency, origin: row.source === 'csv' ? 'CSV' : 'PROVIDER', merchantId: row.merchantId, externalId: row.accountId });
+        fresh.push({ row, currency });
       }
-      bankTx.push(...fresh);
+      for (const p of pending.values()) accountFor(p.merchantId, p.externalId, { origin: p.origin, currency: p.currency });
+      for (const { row, currency } of fresh) {
+        const acc = bankAccounts.get(`${row.merchantId}|${row.accountId}`);
+        bankTx.push({ id: randomUUID(), ...clone(row), currency, bankAccountId: acc.id, direction: row.amountCents >= 0 ? 'IN' : 'OUT', status: 'NEW', matchedKind: null, matchedDocumentId: null, matchedPaymentId: null, matchedAmountCents: null, matchedAt: null, valueDate: row.valueDate ?? null, fingerprint: row.fingerprint ?? null, bankReference: row.bankReference ?? null, counterpartyAccountMasked: row.counterpartyAccountMasked ?? null });
+      }
       return { created: fresh.length, duplicates: rows.length - fresh.length };
     },
-    async getBankTransaction(id) { const t = bankTx.find((x) => x.id === id); return t ? clone(t) : null; },
-    async updateBankTransaction(id, patch, expectedStatus) {
-      const t = bankTx.find((x) => x.id === id); if (!t || t.status !== expectedStatus) return null;
-      for (const k of Object.keys(patch)) if (!['status', 'matchedKind', 'matchedDocumentId', 'matchedPaymentId', 'matchedAmountCents', 'matchedAt'].includes(k)) throw new FinanceError('BANK_TRANSACTION_IS_IMMUTABLE', k);
-      // a handled transaction is claimed once: matched_* are frozen (the only later write is attaching the payment id once)
-      if (t.status !== 'NEW') for (const k of ['matchedKind', 'matchedDocumentId', 'matchedAmountCents', 'matchedAt']) if (k in patch && patch[k] !== t[k]) throw new FinanceError('BANK_TRANSACTION_ALREADY_CLAIMED', k);
-      if (t.status !== 'NEW' && 'matchedPaymentId' in patch && t.matchedPaymentId && patch.matchedPaymentId !== t.matchedPaymentId) throw new FinanceError('BANK_TRANSACTION_ALREADY_CLAIMED', 'matchedPaymentId');
-      if ('matchedAmountCents' in patch && patch.matchedAmountCents != null && (patch.matchedAmountCents < 0 || patch.matchedAmountCents > Math.abs(t.amountCents))) throw new FinanceError('BANK_MATCH_EXCEEDS_TRANSACTION', String(patch.matchedAmountCents));
-      if (patch.matchedDocumentId && patch.matchedDocumentId !== t.matchedDocumentId) {
-        const ok = patch.matchedKind === 'INVOICE' ? docs.get(patch.matchedDocumentId)?.merchantId === t.merchantId : patch.matchedKind === 'SUPPLIER_INVOICE' ? supplierInvoices.find((x) => x.id === patch.matchedDocumentId)?.merchantId === t.merchantId : true;
-        if (!ok) throw new FinanceError('BANK_MATCH_TARGET_NOT_FOUND', patch.matchedDocumentId);
+    async getBankTransaction(id) { const t = bankTx.find((x) => x.id === id); return t ? clone(withBankTruth(t)) : null; },
+    /** The status and matched_* of a bank transaction are DERIVED from its reconciliations: nothing can write them (mirror of fin_bank_tx_guard). */
+    async updateBankTransaction(id, patch) {
+      const t = bankTx.find((x) => x.id === id); if (!t) return null;
+      for (const k of Object.keys(patch)) {
+        if (['status', 'matchedKind', 'matchedDocumentId', 'matchedPaymentId', 'matchedAmountCents', 'matchedAt'].includes(k)) throw new FinanceError('BANK_STATUS_IS_DERIVED', 'the status of a bank transaction follows its reconciliations; use reconcile / unreconcile / ignore');
+        throw new FinanceError('BANK_TRANSACTION_IS_IMMUTABLE', k);
       }
-      if (patch.matchedPaymentId && patch.matchedPaymentId !== t.matchedPaymentId && registry.find((p) => p.id === patch.matchedPaymentId)?.merchantId !== t.merchantId) throw new FinanceError('BANK_MATCH_PAYMENT_NOT_FOUND', patch.matchedPaymentId);
-      Object.assign(t, patch); return clone(t);
+      return clone(withBankTruth(t));
     },
-    async listBankTransactions(f = {}) { return bankTx.filter((t) => (!f.merchantId || t.merchantId === f.merchantId) && (!f.status || t.status === f.status)).map(clone); },
-    async upsertBankBalance(row) { bankBalances.set(`${row.merchantId}|${row.accountId}`, clone(row)); },
+    async listBankTransactions(f = {}) { return bankTx.filter((t) => (!f.merchantId || t.merchantId === f.merchantId) && (!f.status || t.status === f.status) && (!f.bankAccountId || t.bankAccountId === f.bankAccountId)).map((t) => clone(withBankTruth(t))); },
+    async listReconciliations({ merchantId, bankTransactionId, paymentId } = {}) { return bankRecs.filter((r) => (!merchantId || r.merchantId === merchantId) && (!bankTransactionId || r.bankTransactionId === bankTransactionId) && (!paymentId || r.paymentId === paymentId)).map(clone); },
+    async bankTxAmounts(merchantId, txId) { const t = bankTx.find((x) => x.id === txId && x.merchantId === merchantId); return t ? txAmounts(t, bankRecs) : null; },
+    async reconcileBank(args) { return doReconcile(args); },
+    async reconcileAndPay(args) { return doReconcileAndPay(args); },
+    async unreconcileBank(args) { return doUnreconcile(args); },
+    async ignoreBank(args) { return doIgnore(args); },
+    async upsertBankBalance(row) {
+      const cur = row.currency ?? 'EUR'; const acc = accountFor(row.merchantId, row.accountId, { origin: 'PROVIDER', currency: cur, ibanMasked: row.iban ?? null });
+      if (acc.currency !== cur) throw new FinanceError('BANK_CURRENCY_MISMATCH', `account ${acc.currency}, row ${cur}`);
+      bankBalances.set(`${row.merchantId}|${row.accountId}`, { ...clone(row), bankAccountId: acc.id, source: row.source ?? 'provider' });
+    },
     async listBankBalances(merchantId) { return [...bankBalances.values()].filter((b) => b.merchantId === merchantId).map(clone); },
     async insertCashCount(row) { const r = { id: randomUUID(), ...clone(row) }; cashCounts.push(r); return clone(r); },
     async latestCashCount(merchantId) { const l = cashCounts.filter((c) => c.merchantId === merchantId).sort((a, b) => String(b.countedOn).localeCompare(String(a.countedOn)) || String(b.createdAt).localeCompare(String(a.createdAt)))[0]; return l ? clone(l) : null; },

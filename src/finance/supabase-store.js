@@ -3,6 +3,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
+import { txAmounts } from './bank-ledger.js';
 
 const BODY_KEYS = ['language', 'validUntil', 'paymentTermsDays', 'paymentTerms', 'notes', 'customer', 'seller', 'lines', 'vat', 'acknowledgedNotDuplicate', 'creditReason', 'totals', 'stockReturn'];
 
@@ -40,9 +41,10 @@ export function translateDbError(err) {
   // rules enforced by the P0 integrity triggers (migration 20261003090000): the message starts with FIN_<CODE>; the domain code is the same without the prefix
   const fin = /\bFIN_([A-Z_]+)\b/.exec(m);
   if (fin) { const RENAMED = { ALLOCATION_EXCEEDS_REMAINING: 'PAYMENT_EXCEEDS_REMAINING', BANK_TX_ALREADY_CLAIMED: 'BANK_TRANSACTION_ALREADY_CLAIMED' }; return new FinanceError(RENAMED[fin[1]] ?? fin[1], m.slice(m.indexOf(fin[0]) + fin[0].length).replace(/^:\s*/, '').split('"')[0].slice(0, 200)); }
+  if (/fin_bank_tx_amount_nonzero_chk|fin_bank_tx_currency_chk/.test(m)) return new FinanceError('BANK_TRANSACTION_INVALID', 'refused by the database');
   if (/fin_payment_registry_method_chk/.test(m)) return new FinanceError('PAYMENT_METHOD_INVALID', 'refused by the database');
   if (/fin_payment_registry_source_check|source_check/.test(m)) return new FinanceError('PAYMENT_SOURCE_INVALID', 'refused by the database');
-  if (/_same_merchant_fk|fin_payment_allocations_(payment|customer|supplier|reverses)_fk|fin_payment_registry_reversal_fk/.test(m)) return new FinanceError('CROSS_MERCHANT_REFERENCE', 'refused by the database');
+  if (/_same_merchant_fk|fin_payment_allocations_(payment|customer|supplier|reverses)_fk|fin_payment_registry_reversal_fk|fin_bank_reconciliations_(tx|payment|reverses)_fk|fin_bank_tx_account_fk|fin_bank_balances_account_fk/.test(m)) return new FinanceError('CROSS_MERCHANT_REFERENCE', 'refused by the database');
   if (m.includes('is immutable') || m.includes('cannot be deleted')) return new FinanceError('LOCKED_DOCUMENT_CANNOT_CHANGE', 'refused by the database');
   if (m.includes('append-only')) return new FinanceError('APPEND_ONLY_TABLE', 'refused by the database');
   return err;
@@ -51,6 +53,12 @@ export function translateDbError(err) {
 export function createSupabaseFinanceStore(supabase, { merchantId }) {
   const guard = async (fn) => { try { return await fn(); } catch (e) { throw translateDbError(e); } };
   const eq = (v) => `eq.${v}`;
+  // the reconciled / ignored / remaining amounts and the status of a bank transaction, derived from its reconciliation rows (never read from the legacy status column)
+  const withBankTruth = async (txs, onlyId = null) => {
+    if (!txs.length) return txs;
+    const recs = (await supabase.selectAll('fin_bank_reconciliations', { select: 'id,bank_transaction_id,kind,amount_cents,created_at', merchant_id: eq(merchantId), ...(onlyId ? { bank_transaction_id: eq(onlyId) } : {}) })).map((r) => ({ id: r.id, bankTransactionId: r.bank_transaction_id, kind: r.kind, amountCents: Number(r.amount_cents), createdAt: r.created_at }));
+    return txs.map((t) => { const a = txAmounts(t, recs); return { ...t, reconciledCents: a.matched, ignoredCents: a.ignored, remainingCents: a.remaining, reconciliationStatus: a.status }; });
+  };
   // allocations joined with the registry rows they belong to (two reads, joined here: PostgREST embedding of a composite key is not relied upon)
   const joinPayments = async (allocRows) => {
     if (!allocRows.length) return [];
@@ -248,18 +256,53 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
       const inserted = await guard(() => supabase.insertIgnoringDuplicates('fin_bank_transactions', rows.map(bankTxToRow), { onConflict: 'merchant_id,account_id,provider_tx_id' }));
       return { created: inserted.length, duplicates: rows.length - inserted.length };
     },
-    async getBankTransaction(id) { const [r] = await supabase.select('fin_bank_transactions', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? bankTxFromRow(r) : null; },
-    async updateBankTransaction(id, patch, expectedStatus) {
-      const map = { status: 'status', matchedKind: 'matched_kind', matchedDocumentId: 'matched_document_id', matchedPaymentId: 'matched_payment_id', matchedAmountCents: 'matched_amount_cents', matchedAt: 'matched_at' };
-      const body = {}; for (const [k, v] of Object.entries(patch)) body[map[k]] = v;
-      const r = await guard(() => supabase.update('fin_bank_transactions', { id: eq(id), merchant_id: eq(merchantId), status: eq(expectedStatus) }, body)); return r && r.length ? bankTxFromRow(r[0]) : null;
+    async getBankTransaction(id) { const [r] = await supabase.select('fin_bank_transactions', { select: '*', id: eq(id), merchant_id: eq(merchantId) }); return r ? (await withBankTruth([bankTxFromRow(r)], id))[0] : null; },
+    /** The status and matched_* of a bank transaction are DERIVED from its reconciliations: nothing can write them (the database refuses too: fin_bank_tx_guard). */
+    async updateBankTransaction(id, patch) {
+      for (const k of Object.keys(patch)) {
+        if (['status', 'matchedKind', 'matchedDocumentId', 'matchedPaymentId', 'matchedAmountCents', 'matchedAt'].includes(k)) throw new FinanceError('BANK_STATUS_IS_DERIVED', 'the status of a bank transaction follows its reconciliations; use reconcile / unreconcile / ignore');
+        throw new FinanceError('BANK_TRANSACTION_IS_IMMUTABLE', k);
+      }
+      return this.getBankTransaction(id);
     },
-    async listBankTransactions(f = {}) { const p = { select: '*', merchant_id: eq(merchantId) }; if (f.status) p.status = eq(f.status); return (await supabase.selectAll('fin_bank_transactions', p)).map(bankTxFromRow); },
-    async upsertBankBalance(b) { await supabase.upsert('fin_bank_balances', [{ merchant_id: merchantId, account_id: b.accountId, iban: b.iban, balance_cents: b.balanceCents, currency: b.currency, as_of: b.asOf }], { onConflict: 'merchant_id,account_id' }); },
+    async listBankTransactions(f = {}) { const p = { select: '*', merchant_id: eq(merchantId) }; if (f.status) p.status = eq(f.status); if (f.bankAccountId) p.bank_account_id = eq(f.bankAccountId); return withBankTruth((await supabase.selectAll('fin_bank_transactions', p)).map(bankTxFromRow)); },
+    async upsertBankBalance(b) { await supabase.upsert('fin_bank_balances', [{ merchant_id: merchantId, account_id: b.accountId, iban: b.iban, balance_cents: b.balanceCents, currency: b.currency, as_of: b.asOf, source: b.source ?? 'provider' }], { onConflict: 'merchant_id,account_id' }); },
     // fin_bank_balances has no `id` column (its primary key is the composite merchant_id/account_id, by design -
     // one current balance row per account), so selectAll's default `order: 'id.asc'` pagination sort must be
     // overridden here or every call 400s with "column fin_bank_balances.id does not exist".
-    async listBankBalances() { return (await supabase.selectAll('fin_bank_balances', { select: '*', merchant_id: eq(merchantId), order: 'account_id.asc' })).map((r) => ({ merchantId, accountId: r.account_id, iban: r.iban, balanceCents: Number(r.balance_cents), currency: r.currency, asOf: r.as_of })); },
+    async listBankBalances() { return (await supabase.selectAll('fin_bank_balances', { select: '*', merchant_id: eq(merchantId), order: 'account_id.asc' })).map((r) => ({ merchantId, accountId: r.account_id, iban: r.iban, balanceCents: Number(r.balance_cents), currency: r.currency, asOf: r.as_of, source: r.source ?? 'provider', bankAccountId: r.bank_account_id ?? null }));
+    },
+    // ---- bank accounts and reconciliations (migration 20261005090000): one operation = one rpc = one database transaction; the rpcs are idempotent, so they opt in to the client's transient-failure retry ----
+    async ensureBankAccount({ externalId, origin, provider = null, displayName = null, ibanMasked = null, currency = 'EUR' }) {
+      await guard(() => supabase.insertIgnoringDuplicates('fin_bank_accounts', [{ merchant_id: merchantId, external_id: externalId, origin, provider, display_name: displayName, iban_masked: ibanMasked, currency }], { onConflict: 'merchant_id,external_id' }));
+      const [a] = await supabase.select('fin_bank_accounts', { select: '*', merchant_id: eq(merchantId), external_id: eq(externalId) });
+      if (a.currency !== currency) throw new FinanceError('BANK_CURRENCY_MISMATCH', `account ${a.currency}, given ${currency}`);
+      const patch = {}; if (displayName && displayName !== a.display_name) patch.display_name = displayName; if (ibanMasked && ibanMasked !== a.iban_masked) patch.iban_masked = ibanMasked; if (provider && provider !== a.provider) patch.provider = provider;
+      if (Object.keys(patch).length) { const [u] = await guard(() => supabase.update('fin_bank_accounts', { id: eq(a.id), merchant_id: eq(merchantId) }, patch)); return accFromRow(u); }
+      return accFromRow(a);
+    },
+    async listBankAccounts() { return (await supabase.selectAll('fin_bank_accounts', { select: '*', merchant_id: eq(merchantId) })).map(accFromRow); },
+    async listReconciliations({ bankTransactionId, paymentId } = {}) {
+      const p = { select: '*', merchant_id: eq(merchantId) }; if (bankTransactionId) p.bank_transaction_id = eq(bankTransactionId); if (paymentId) p.payment_id = eq(paymentId);
+      return (await supabase.selectAll('fin_bank_reconciliations', p)).sort((x, y) => String(x.created_at).localeCompare(String(y.created_at)) || String(x.id).localeCompare(String(y.id))).map(recFromRow);
+    },
+    async bankTxAmounts(_m, txId) { const a = await supabase.rpc('fin_bank_tx_amounts', { p_merchant: merchantId, p_tx: txId }); return a ? amountsFromJson(a) : null; },
+    async reconcileBank({ key, transactionId, items, suggestion = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_bank_reconcile', { p_merchant: merchantId, p_key: key, p_tx: transactionId, p_items: items.map((i) => ({ paymentId: i.paymentId, amountCents: i.amountCents })), p_suggestion: suggestion, p_actor: actor, p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, reconciliations: r.reconciliations.map(recFromRow), transaction: amountsFromJson(r.transaction) };
+    },
+    async reconcileAndPay({ key, transactionId, payment, suggestion = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_bank_reconcile_and_pay', { p_merchant: merchantId, p_key: key, p_tx: transactionId, p_actor: actor, p_at: at, p_suggestion: suggestion,
+        p_payment: { amountCents: payment.amountCents, method: payment.method, reference: payment.reference, allocations: (payment.allocations ?? []).map((a) => ({ customerDocumentId: a.customerDocumentId ?? undefined, supplierInvoiceId: a.supplierInvoiceId ?? undefined, amountCents: a.amountCents })), meta: payment.meta ?? {} } }, { retry: true }));
+      return { duplicate: r.duplicate === true, payment: payFromRow(r.payment), allocations: (r.allocations ?? []).map(allocFromRow), reconciliation: recFromRow(r.reconciliation), transaction: amountsFromJson(r.transaction) };
+    },
+    async unreconcileBank({ key, items, reason = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_bank_unreconcile', { p_merchant: merchantId, p_key: key, p_items: items.map((i) => ({ reconciliationId: i.reconciliationId, amountCents: i.amountCents ?? null })), p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, reversals: r.reversals.map(recFromRow), transaction: r.transaction ? amountsFromJson(r.transaction) : null };
+    },
+    async ignoreBank({ key, transactionId, amountCents = null, reason = null, actor = null, at = null }) {
+      const r = await guard(() => supabase.rpc('fin_bank_ignore', { p_merchant: merchantId, p_key: key, p_tx: transactionId, p_amount: amountCents, p_reason: reason, p_actor: actor, p_at: at }, { retry: true }));
+      return { duplicate: r.duplicate === true, reconciliation: recFromRow(r.reconciliation), transaction: amountsFromJson(r.transaction) }; },
     async insertCashCount(c) { const [r] = await guard(() => supabase.insert('fin_cash_counts', [{ merchant_id: merchantId, amount_cents: c.amountCents, counted_on: c.countedOn, note: c.note }])); return { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at }; },
     async latestCashCount() { const [r] = await supabase.select('fin_cash_counts', { select: '*', merchant_id: eq(merchantId), order: 'counted_on.desc,created_at.desc', limit: '1' }); return r ? { id: r.id, merchantId, amountCents: Number(r.amount_cents), countedOn: r.counted_on, note: r.note, createdAt: r.created_at } : null; },
     async insertCashMovement(m) { const [r] = await guard(() => supabase.insert('fin_cash_movements', [{ merchant_id: merchantId, kind: m.kind, amount_cents: m.amountCents, date: m.date, note: m.note }])); return { id: r.id, merchantId, kind: r.kind, amountCents: Number(r.amount_cents), date: r.date, note: r.note, createdAt: r.created_at }; },
@@ -315,8 +358,13 @@ const payFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, direction: r.d
   source: r.source ?? 'manual', externalReference: r.external_reference ?? null, structuredReference: r.structured_reference ?? null, bankReference: r.bank_reference ?? null, refundOfPaymentId: r.refund_of_payment_id ?? null });
 const allocFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, paymentId: r.payment_id, customerDocumentId: r.customer_document_id ?? null, supplierInvoiceId: r.supplier_invoice_id ?? null, amountCents: Number(r.amount_cents), currency: r.currency, reversesAllocationId: r.reverses_allocation_id ?? null, idempotencyKey: r.idempotency_key, reason: r.reason ?? null, actor: r.actor ?? null, createdAt: r.created_at });
 const bankConnFromRow = (r) => ({ merchantId: r.merchant_id, provider: r.provider, tokenCipher: r.token_ciphertext || null, tokenFingerprint: r.token_fingerprint, scopes: r.scopes, accountIds: r.account_ids, grantedAt: r.granted_at, expiresAt: r.expires_at, revokedAt: r.revoked_at, lastUsedAt: r.last_used_at });
-const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId, provider_tx_id: t.providerTxId, date: t.date, amount_cents: t.amountCents, currency: t.currency, counterparty_name: t.counterpartyName, reference: t.reference, structured_reference: t.structuredReference, source: t.source, status: t.status });
-const bankTxFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, accountId: r.account_id, providerTxId: r.provider_tx_id, date: r.date, amountCents: Number(r.amount_cents), currency: r.currency, counterpartyName: r.counterparty_name, reference: r.reference, structuredReference: r.structured_reference, source: r.source, status: r.status, matchedKind: r.matched_kind, matchedDocumentId: r.matched_document_id, matchedPaymentId: r.matched_payment_id, matchedAmountCents: r.matched_amount_cents == null ? null : Number(r.matched_amount_cents), matchedAt: r.matched_at, importedAt: r.imported_at });
+const bankTxToRow = (t) => ({ merchant_id: t.merchantId, account_id: t.accountId, provider_tx_id: t.providerTxId, date: t.date, amount_cents: t.amountCents, currency: t.currency, counterparty_name: t.counterpartyName, reference: t.reference, structured_reference: t.structuredReference, source: t.source, status: t.status,
+  value_date: t.valueDate ?? null, fingerprint: t.fingerprint ?? null, bank_reference: t.bankReference ?? null, counterparty_account_masked: t.counterpartyAccountMasked ?? null });
+const accFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, externalId: r.external_id, origin: r.origin, provider: r.provider ?? null, displayName: r.display_name ?? null, ibanMasked: r.iban_masked ?? null, currency: r.currency, status: r.status, createdAt: r.created_at, closedAt: r.closed_at ?? null });
+const recFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, bankTransactionId: r.bank_transaction_id, paymentId: r.payment_id ?? null, kind: r.kind, amountCents: Number(r.amount_cents), currency: r.currency, reversesId: r.reverses_id ?? null, method: r.method, suggestion: r.suggestion ?? null, idempotencyKey: r.idempotency_key, reason: r.reason ?? null, actor: r.actor ?? null, createdAt: r.created_at });
+const amountsFromJson = (a) => ({ amount: Number(a.amount), matched: Number(a.matched), ignored: Number(a.ignored), remaining: Number(a.remaining), status: a.status, lastAt: a.last_at ?? null });
+const bankTxFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, accountId: r.account_id, providerTxId: r.provider_tx_id, date: r.date, amountCents: Number(r.amount_cents), currency: r.currency, counterpartyName: r.counterparty_name, reference: r.reference, structuredReference: r.structured_reference, source: r.source, status: r.status, matchedKind: r.matched_kind, matchedDocumentId: r.matched_document_id, matchedPaymentId: r.matched_payment_id, matchedAmountCents: r.matched_amount_cents == null ? null : Number(r.matched_amount_cents), matchedAt: r.matched_at, importedAt: r.imported_at,
+  bankAccountId: r.bank_account_id ?? null, valueDate: r.value_date ?? null, fingerprint: r.fingerprint ?? null, bankReference: r.bank_reference ?? null, counterpartyAccountMasked: r.counterparty_account_masked ?? null, direction: r.direction });
 const stockToRow = (m) => ({ merchant_id: m.merchantId, document_id: m.documentId, document_number: m.documentNumber, document_type: m.documentType, line_position: m.linePosition, kind: m.kind, variant_id: m.variantId, variant_source_id: m.variantSourceId, sku: m.sku, location_id: m.locationId, location_source_id: m.locationSourceId, quantity: m.quantity, delta: m.delta, status: m.status, error: m.error, idempotency_key: m.idempotencyKey });
 const stockFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, documentId: r.document_id, documentNumber: r.document_number, documentType: r.document_type, linePosition: r.line_position, kind: r.kind, variantId: r.variant_id, variantSourceId: r.variant_source_id, sku: r.sku, locationId: r.location_id, locationSourceId: r.location_source_id, quantity: r.quantity, delta: r.delta, status: r.status, error: r.error, idempotencyKey: r.idempotency_key, shopifyAdjustmentId: r.shopify_adjustment_id, createdAt: r.created_at, appliedAt: r.applied_at });
 export const companyFromRow = (r) => ({ id: r.id, merchantId: r.merchant_id, kind: r.kind, name: r.name, enterpriseNumber: r.enterprise_number, vatNumber: r.vat_number, legalForm: r.legal_form,

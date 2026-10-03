@@ -201,4 +201,23 @@ export function cleanPaymentFollowUp(b, { needsAllocations = false, needsReason 
   return { errors, command: { idempotencyKey, reason: reason ?? undefined, amountCents, allocations } };
 }
 
+/** Shape validation of a bank reconciliation command. The suggestion evidence is NEVER taken from the client (fromSuggestion only asks the server to attach its own scoring). */
+export function cleanBankReconcile(b) {
+  const errors = []; const p = plain(b) ? b : {};
+  const idempotencyKey = p.idempotencyKey == null || p.idempotencyKey === '' ? undefined : String(p.idempotencyKey); if (idempotencyKey !== undefined && !/^[A-Za-z0-9_.:-]{8,200}$/.test(idempotencyKey)) errors.push({ field: 'idempotencyKey', code: 'KEY_INVALID' });
+  const out = { idempotencyKey, fromSuggestion: p.fromSuggestion === true };
+  const alloc = (a, i, base) => { const id = plain(a) ? (a.documentId ?? a.supplierInvoiceId) : null; const c = plain(a) ? decimal(a.amount, MONEY) : null;
+    if (typeof id !== 'string' || !UUIDISH.test(id)) errors.push({ field: base + '[' + i + '].id', code: 'ID_INVALID' }); if (c === null || Number(c) <= 0) errors.push({ field: base + '[' + i + '].amount', code: 'AMOUNT_INVALID' });
+    return plain(a) && a.supplierInvoiceId ? { supplierInvoiceId: id, amount: c } : { documentId: id, amount: c }; };
+  if (Array.isArray(p.payments)) { if (!p.payments.length || p.payments.length > 50) errors.push({ field: 'payments', code: 'PAYMENTS_INVALID' }); out.payments = p.payments.map((a, i) => { const id = plain(a) ? a.paymentId : null; const c = plain(a) ? decimal(a.amount, MONEY) : null;
+    if (typeof id !== 'string' || !UUIDISH.test(id)) errors.push({ field: 'payments[' + i + '].paymentId', code: 'ID_INVALID' }); if (c === null || Number(c) <= 0) errors.push({ field: 'payments[' + i + '].amount', code: 'AMOUNT_INVALID' }); return { paymentId: id, amount: c }; }); }
+  else if (plain(p.create)) {
+    const c = p.create; const amount = decimal(c.amount, MONEY); if (amount === null || Number(amount) <= 0) errors.push({ field: 'create.amount', code: 'AMOUNT_INVALID' });
+    const method = c.method == null || c.method === '' ? 'bank_transfer' : sanitizeText(c.method, 40); if (!METHODS_V1.includes(method)) errors.push({ field: 'create.method', code: 'METHOD_INVALID' });
+    const allocations = Array.isArray(c.allocations) ? c.allocations.slice(0, 50).map((a, i) => alloc(a, i, 'create.allocations')) : [];
+    out.create = { amount: amount ?? '', method, reference: sanitizeText(c.reference, 100) ?? undefined, externalReference: sanitizeText(c.externalReference, 200) ?? undefined, allocations };
+  } else errors.push({ field: 'payments', code: 'REQUIRED' });
+  return { errors, command: out };
+}
+
 export { isDate };

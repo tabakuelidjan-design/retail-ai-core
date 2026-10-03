@@ -103,6 +103,33 @@ export function createConsentVault({ store, merchantId, key, now = () => new Dat
  * Every data line becomes either a row or an error (line number + reason): nothing is dropped silently. `id` comes from the file's
  * id column only when its values are present and unique across the file; otherwise a content hash (date|amount|reference|counterparty).
  */
+/** A masked account identifier: country + check digits + last 4 ("BE68 **** **** 7034"). A full IBAN is never kept in the bank domain tables. */
+export function maskIban(value) {
+  const s = String(value ?? '').replace(/\s+/g, '').toUpperCase(); if (!/^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(s)) return null;
+  return `${s.slice(0, 4)} **** **** ${s.slice(-4)}`;
+}
+
+/**
+ * What the bank SAID, with its age. Never "the balance": a balance is an observation (amount, currency, observed_at, source) and its freshness is part of it.
+ * freshness: FRESH (observed within freshHours) | STALE | UNKNOWN (no observation time). The Finance cash position is a different thing (see bankPosition).
+ */
+export function observedBalance(b, now, { freshHours = 36 } = {}) {
+  const at = b?.asOf ? Date.parse(b.asOf) : NaN; const t = Date.parse(now);
+  const ageHours = Number.isFinite(at) && Number.isFinite(t) ? Math.max(0, Math.round(((t - at) / 3_600_000) * 10) / 10) : null;
+  return { accountId: b.accountId, amountCents: b.balanceCents, currency: b.currency, observedAt: b.asOf ?? null, source: b.source ?? 'provider', ageHours, freshness: ageHours === null ? 'UNKNOWN' : ageHours <= freshHours ? 'FRESH' : 'STALE' };
+}
+
+/**
+ * The CALCULATED position of an account: the last observed balance plus the transactions dated after the observation day. It is labelled CALCULATED, carries the
+ * observation it starts from (with its age), and is never presented as what the bank says now.
+ */
+export function bankPosition({ balance, transactions = [], now, freshHours }) {
+  const observed = observedBalance(balance, now, { freshHours }); const day = (balance.asOf ?? '').slice(0, 10);
+  const later = day ? transactions.filter((t) => t.accountId === balance.accountId && t.currency === balance.currency && t.date > day) : [];
+  const movement = later.reduce((s, t) => s + t.amountCents, 0);
+  return { observed, calculated: { basis: 'OBSERVED_PLUS_LATER_TRANSACTIONS', amountCents: balance.balanceCents + movement, movementSinceCents: movement, transactionsCounted: later.length, startsFrom: observed.observedAt, startsFromFreshness: observed.freshness } };
+}
+
 export function parseBankCsv(text, { delimiter, columns } = {}) {
   const raw = String(text ?? '').replace(/^\uFEFF/, '');
   if (raw.includes('\uFFFD')) throw new FinanceError('BANK_CSV_ENCODING_INVALID');
@@ -114,7 +141,7 @@ export function parseBankCsv(text, { delimiter, columns } = {}) {
   const cells = (l) => { const out = []; let cur = ''; let q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === delim && !q) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()); };
   const headRaw = cells(headLine); const head = headRaw.map((h) => h.toLowerCase());
   const pick = (names) => head.findIndex((h) => names.some((n) => h.includes(n)));
-  const map = { date: columns?.date ?? pick(['date', 'datum', 'valeur']), amount: columns?.amount ?? pick(['amount', 'montant', 'bedrag']), ref: columns?.reference ?? pick(['communication', 'mededeling', 'reference', 'référence', 'message']), name: columns?.counterparty ?? pick(['counterparty', 'contrepartie', 'tegenpartij', 'name', 'nom', 'naam']), id: columns?.id ?? pick(['id', 'transaction', 'number', 'numéro', 'nummer']) };
+  const map = { cur: columns?.currency ?? pick(['currency', 'devise', 'munt', 'valuta']), acct: columns?.counterpartyAccount ?? pick(['iban']), date: columns?.date ?? pick(['date', 'datum', 'valeur']), amount: columns?.amount ?? pick(['amount', 'montant', 'bedrag']), ref: columns?.reference ?? pick(['communication', 'mededeling', 'reference', 'référence', 'message']), name: columns?.counterparty ?? pick(['counterparty', 'contrepartie', 'tegenpartij', 'name', 'nom', 'naam']), id: columns?.id ?? pick(['id', 'transaction', 'number', 'numéro', 'nummer']) };
   if (map.date < 0 || map.amount < 0) throw new FinanceError('BANK_CSV_COLUMNS_NOT_FOUND');
   const toIso = (d) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d) ?? /^(\d{2})[/.-](\d{2})[/.-](\d{4})$/.exec(d); if (!m) return null;
@@ -135,12 +162,24 @@ export function parseBankCsv(text, { delimiter, columns } = {}) {
     const c = cells(l); const date = toIso(c[map.date] ?? ''); const amountCents = toCents(c[map.amount] ?? '');
     if (!date || amountCents === null) { errors.push({ line: n, code: 'ROW_INVALID', reason: !date ? 'DATE_INVALID' : 'AMOUNT_INVALID' }); continue; }
     const reference = map.ref >= 0 ? (c[map.ref] ?? '') : ''; const counterpartyName = map.name >= 0 ? (c[map.name] ?? '') : '';
-    parsed.push({ line: n, fileId: map.id >= 0 ? (c[map.id] ?? '') : '', date, amountCents, currency: 'EUR', counterpartyName, reference, structuredReference: (/\+\+\+\s*(\d{3})\s*\/\s*(\d{4})\s*\/\s*(\d{5})\s*\+\+\+/.exec(reference) ?? []).slice(1).join('') || null });
+    const currency = map.cur >= 0 && (c[map.cur] ?? '') !== '' ? String(c[map.cur]).trim().toUpperCase() : 'EUR';
+    if (!/^[A-Z]{3}$/.test(currency)) { errors.push({ line: n, code: 'ROW_INVALID', reason: 'CURRENCY_INVALID' }); continue; }
+    const acct = map.acct >= 0 ? maskIban(c[map.acct] ?? '') : null;
+    parsed.push({ line: n, fileId: map.id >= 0 ? (c[map.id] ?? '') : '', date, amountCents, currency, counterpartyAccountMasked: acct, counterpartyName, reference, structuredReference: (/\+\+\+\s*(\d{3})\s*\/\s*(\d{4})\s*\/\s*(\d{5})\s*\+\+\+/.exec(reference) ?? []).slice(1).join('') || null });
   }
   // The file's own id column is only trusted when every row has a distinct value (a "Type de transaction" column would otherwise merge rows).
   const fileIds = parsed.map((r) => r.fileId);
   const idsUsable = map.id >= 0 && fileIds.every(Boolean) && new Set(fileIds).size === fileIds.length;
-  const rows = parsed.map(({ line, fileId, ...r }) => ({ id: idsUsable ? fileId : createHash('sha256').update(`${r.date}|${r.amountCents}|${r.reference}|${r.counterpartyName}`).digest('hex').slice(0, 24), line, ...r }));
+  // IDENTITY. fingerprint = sha256(date|amount|reference|counterparty[|currency if not EUR]), 24 hex (the formula of the first version: ids already stored stay valid).
+  // Without a usable id column, the id is the fingerprint, plus "#n" for the n-th IDENTICAL line of the file: two genuinely distinct lines that look the same are two
+  // transactions (never merged arbitrarily), and importing the same file again gives the same ids (nothing duplicated). An overlapping later export that contains
+  // k of the n identical lines matches the first k only. Documented limit: two identical lines in one export cannot be told apart from a re-export that repeats them.
+  const seenFp = new Map();
+  const rows = parsed.map(({ line, fileId, ...r }) => {
+    const fingerprint = createHash('sha256').update(`${r.date}|${r.amountCents}|${r.reference}|${r.counterpartyName}${r.currency === 'EUR' ? '' : `|${r.currency}`}`).digest('hex').slice(0, 24);
+    const nth = (seenFp.get(fingerprint) ?? 0) + 1; seenFp.set(fingerprint, nth);
+    return { id: idsUsable ? fileId : (nth > 1 ? `${fingerprint}#${nth}` : fingerprint), fingerprint, line, ...r };
+  });
   const dates = rows.map((r) => r.date).sort();
   const colName = (i) => (i >= 0 ? headRaw[i] : null);
   return {

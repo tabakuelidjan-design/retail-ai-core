@@ -38,7 +38,7 @@ import { refundRows } from '../refund-rows.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
-import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentCommand, cleanPaymentFollowUp, cleanPaymentInput, cleanVat, isDate } from '../input.js';
+import { cleanBankReconcile, cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentCommand, cleanPaymentFollowUp, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
@@ -789,20 +789,39 @@ export function createFinanceApp(deps) {
     const { svc } = await servicesFor();
     const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
     return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
-      finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, { ...c.payment, idempotencyKey: payment.idempotencyKey }, a); } } });
+      finance: { listInvoices: () => loadDocsForReports(store, merchantId), settleInvoices: async (ids, a) => { for (const id of ids) await svc.resettle(id, a); } } }); // the bank never writes a payment itself: it reconciles through the store's atomic RPC, then the invoice statuses are re-derived
   };
-  const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
+  const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents,
+    // the DERIVED truth (the legacy status/matched_* above are only a mirror): what is reconciled, set aside, left; the account; the bank's own references
+    direction: t.direction ?? (t.amountCents >= 0 ? 'IN' : 'OUT'), reconciliationStatus: t.reconciliationStatus ?? null, reconciledCents: t.reconciledCents ?? 0, ignoredCents: t.ignoredCents ?? 0, remainingCents: t.remainingCents ?? Math.abs(t.amountCents), remaining: formatCents(t.remainingCents ?? Math.abs(t.amountCents)),
+    bankAccountId: t.bankAccountId ?? null, bankReference: t.bankReference ?? null, counterpartyAccountMasked: t.counterpartyAccountMasked ?? null, valueDate: t.valueDate ?? null, reconciliations: t.reconciliations ?? undefined });
   on('GET', '/api/bank/status', async (ctx) => json(ctx.res, 200, await (await bankFor()).status()));
   on('GET', '/api/bank/transactions', async (ctx) => { const st = ctx.url.searchParams.get('status'); json(ctx.res, 200, { rows: (await (await bankFor()).transactions(['NEW', 'MATCHED', 'IGNORED'].includes(st) ? { status: st } : {})).map(txView) }); });
+  on('GET', '/api/bank/accounts', async (ctx) => json(ctx.res, 200, { rows: await (await bankFor()).accounts() }));
+  on('GET', `/api/bank/transactions/${P}`, async (ctx) => json(ctx.res, 200, { transaction: txView(await (await bankFor()).transaction(idParam(ctx.m[1]))) }));
   on('GET', '/api/bank/suggestions', async (ctx) => json(ctx.res, 200, { rows: (await (await bankFor()).suggestions()).map((s) => ({ ...s, transaction: txView(s.transaction) })) }));
   on('POST', '/api/bank/sync', async (ctx) => json(ctx.res, 200, await (await bankFor()).sync({})));
   on('POST', '/api/bank/import-csv/preview', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text.trim()) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).previewCsv(text)); }, { bodyLimit: 4_000_000 });
-  on('POST', '/api/bank/import-csv', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).importCsv(text)); }, { bodyLimit: 4_000_000 });
+  on('POST', '/api/bank/import-csv', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).importCsv(text, { allowPartial: ctx.body?.allowPartial === true })); }, { bodyLimit: 4_000_000 });
   on('POST', `/api/bank/transactions/${P}/confirm`, async (ctx) => {
     const b = ctx.body ?? {}; const cents = b.amount === undefined || b.amount === '' ? undefined : toCents(String(b.amount));
-    json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined }, actor));
+    json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined, idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined, suggestion: b.fromSuggestion === true ? true : undefined }, actor));
   });
-  on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => json(ctx.res, 200, txView(await (await bankFor()).ignore(idParam(ctx.m[1]), actor))));
+  // explicit reconciliation commands: link existing payments, or create the payment AND link it in one transaction; take back; set aside. Every one is idempotent per key.
+  on('POST', `/api/bank/transactions/${P}/reconcile`, async (ctx) => {
+    const { command, errors } = cleanBankReconcile(ctx.body); if (errors.length) fields(errors);
+    const h = String(ctx.req.headers['idempotency-key'] ?? ''); if (/^[A-Za-z0-9_.:-]{8,200}$/.test(h)) command.idempotencyKey = h;
+    const r = await (await bankFor()).reconcile(idParam(ctx.m[1]), command, actor); json(ctx.res, 200, { duplicate: r.duplicate, transaction: txView(r.transaction), paymentId: r.payment?.id ?? null });
+  });
+  on('POST', `/api/bank/transactions/${P}/unreconcile`, async (ctx) => {
+    const b = ctx.body ?? {}; const reason = sanitizeText(b.reason, 300); if (!reason) fields([{ field: 'reason', code: 'REQUIRED' }]);
+    const ids = Array.isArray(b.reconciliationIds) ? b.reconciliationIds.filter((x) => typeof x === 'string' && ID.test(x)).slice(0, 50) : undefined;
+    const r = await (await bankFor()).unreconcile(idParam(ctx.m[1]), { reconciliationIds: ids, reason, idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined }, actor); json(ctx.res, 200, { duplicate: r.duplicate, transaction: txView(r.transaction) });
+  });
+  on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => {
+    const b = ctx.body ?? {}; const c = b.amount === undefined || b.amount === '' ? null : toCents(String(b.amount));
+    const r = await (await bankFor()).ignore(idParam(ctx.m[1]), { amountCents: Number.isInteger(c) ? c : null, reason: sanitizeText(b.reason, 300), idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined }, actor); json(ctx.res, 200, txView(r));
+  });
   // The provider sends the user back to the app root with ?code&state (or ?error): an OAuth redirect URI cannot carry a #fragment. The scheme is https
   // whenever the app runs behind HTTPS (hosted). Only a well-formed https authorization URL is ever returned to the browser; the state is returned so
   // the browser can check it on return. No token ever leaves the vault.

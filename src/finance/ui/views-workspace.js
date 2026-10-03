@@ -832,6 +832,18 @@ function treasuryCard(t) {
 // POST /api/bank/transactions/:id/confirm|ignore calls used before, now feeding the ledger's detail pane
 // instead of a flat inline row.
 const TX_STATUS_TEXT = { NEW: 'Unresolved', MATCHED: 'Justified', IGNORED: 'Ignored' };
+// The reconciliation state is DERIVED server-side from the reconciliation rows (never typed in): these are only its labels.
+const RECON_TEXT = { UNRECONCILED: 'Unreconciled', PARTIALLY_RECONCILED: 'Partially reconciled', RECONCILED: 'Reconciled', IGNORED: 'Set aside' };
+const FRESHNESS_TEXT = { FRESH: 'Up to date', STALE: 'Outdated', UNKNOWN: 'Unknown date' };
+const reconText = (t) => tt(RECON_TEXT[t.reconciliationStatus] || TX_STATUS_TEXT[t.status] || t.status);
+const fromCents = (c) => (c / 100).toFixed(2);
+/** One reason, one explicit action, one request (idempotent: a double click replays the same key). */
+function reasonModal(title, intro, { withAmount = null, needReason = true }, send) {
+  const key = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `k-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const reason = h('input', { placeholder: tr('Reason') }); const amount = withAmount == null ? null : h('input', { inputmode: 'decimal', value: fromCents(withAmount) });
+  modal(title, h('div', { style: 'display:grid;gap:10px' }, h('p', { class: 'muted small' }, intro), amount ? h('div', { class: 'field' }, h('label', null, tt('Amount')), amount) : null, needReason ? h('div', { class: 'field' }, h('label', null, tt('Reason')), reason) : null),
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await send({ key, reason: reason.value.trim(), amount: amount ? amount.value.trim() : null }); close(); } catch (e) { fail(e); } } } }, title), h('button', { on: { click: close } }, tt('Cancel'))]);
+}
 const MATCH_STATUS_TONE = { EXACT: 'ok', PROBABLE: 'ok', PARTIAL: 'warn', OVERPAYMENT: 'warn', AMBIGUOUS: 'warn', NO_MATCH: 'mute' };
 const MATCH_STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PARTIAL: 'Partial payment', OVERPAYMENT: 'Overpayment', AMBIGUOUS: 'Several candidates', NO_MATCH: 'No match' };
 function matchActions(s, reload) {
@@ -848,6 +860,22 @@ function matchActions(s, reload) {
   // choice would promise something it does not do.
   acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
   return acts;
+}
+/** Reconciliation panel of one transaction: derived amounts, the linked payments (with Unreconcile), and the two explicit commands. A suggestion never reconciles. */
+function reconBlock(t, reload) {
+  const box = h('div', { class: 'block' }, h('h3', null, tt('Reconciliation')),
+    h('div', { class: 'kv' }, h('span', null, tt('Reconciled amount')), h('strong', null, fmtMoney(t.reconciledCents || 0, t.currency))),
+    h('div', { class: 'kv' }, h('span', null, tt('Remaining to reconcile')), h('strong', null, fmtMoney(t.remainingCents ?? Math.abs(t.amountCents), t.currency))));
+  const list = h('div', { class: 'recon-list' }); box.appendChild(list);
+  api('GET', `/api/bank/transactions/${t.id}`).then((r) => {
+    const recs = r.transaction.reconciliations || []; const left = (x) => x.amountCents + recs.filter((y) => y.reversesId === x.id).reduce((a, y) => a + y.amountCents, 0);
+    recs.filter((x) => x.amountCents > 0 && left(x) > 0).forEach((x) => list.appendChild(h('div', { class: 'kv' }, h('span', null, x.kind === 'IGNORE' ? tt('Set aside on purpose') : tt('Reconciled with a payment')), h('strong', null, fmtMoney(left(x), t.currency)),
+      h('button', { class: 'small', on: { click: () => reasonModal(tt('Unreconcile'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { if (!v.reason) throw Object.assign(new Error('REQUIRED'), { code: 'REQUIRED' }); await api('POST', `/api/bank/transactions/${t.id}/unreconcile`, { reconciliationIds: [x.id], reason: v.reason, idempotencyKey: v.key }); toast(tt('Reconciliation cancelled.'), 'ok'); reload(); }) } }, tt('Unreconcile')))));
+  }).catch(() => {});
+  if ((t.remainingCents ?? 0) > 0) box.appendChild(h('div', { class: 'actions' },
+    h('button', { class: 'primary', on: { click: () => reasonModal(tt('Record the payment and reconcile'), tt('The payment is created and linked in one step. Nothing is allocated to an invoice here.'), { withAmount: t.remainingCents, needReason: false }, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/reconcile`, { create: { amount: v.amount, allocations: [] }, idempotencyKey: v.key }); toast(tt('Reconciled.'), 'ok'); reload(); }) } }, tt('Reconcile')),
+    h('button', { on: { click: () => reasonModal(tt('Set aside'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/ignore`, { reason: v.reason || undefined, idempotencyKey: v.key }); toast(tt('Set aside.'), 'ok'); reload(); }) } }, tt('Set aside'))));
+  return box;
 }
 /** "Connect a bank": always opens a real workflow - the automatic connection when a provider is configured, the CSV statement import otherwise. Never simulates a connection. */
 function openBankConnectModal(st, getCsvImporter) {
@@ -999,6 +1027,13 @@ async function viewBank() {
     // Real transaction ledger (index(4).html alignment) - shown regardless of a live bank connection (a CSV
     // import needs no connection at all, and its transactions still need reconciling). Replaces the previous
     // flat "suggestions only" list: every real transaction is browsable here, not only the unresolved ones.
+    const accountsCard = h('div', { class: 'card', style: 'padding:16px 18px;display:none' }); box.appendChild(accountsCard);
+    api('GET', '/api/bank/accounts').then((r) => { if (!r.rows.length) return; accountsCard.style.display = ''; accountsCard.appendChild(h('h2', { class: 'section-title' }, tt('Bank accounts')));
+      r.rows.forEach((a) => accountsCard.appendChild(h('div', { class: 'kv', style: 'flex-wrap:wrap;gap:6px' }, h('span', null, `${a.displayName || a.externalId}${a.ibanMasked ? ' · ' + a.ibanMasked : ''}`),
+        h('strong', null, a.balance ? fmtMoney(a.balance.amountCents, a.balance.currency) : tt('No balance observed')),
+        a.balance ? h('span', { class: `chip ${a.balance.freshness === 'FRESH' ? 'ok' : 'warn'}` }, `${tt('Balance observed {0}', a.balance.observedAt ? civilDateIn(a.balance.observedAt, state.timeZone) : tt('Unknown date'))} · ${tt(FRESHNESS_TEXT[a.balance.freshness])}`) : null,
+        a.toReconcile ? h('span', { class: 'muted small' }, tt('{0} to reconcile', a.toReconcile)) : null)));
+    }).catch(() => {});
     const ledgerCard = h('div', { class: 'card workspace-card' });
     box.appendChild(ledgerCard);
     let ledgerTab = 'to_justify'; let ledgerText = ''; let selectedTxId = null; let periodFrom = null; let periodTo = null;
@@ -1016,7 +1051,7 @@ async function viewBank() {
       if (kind === 'to_justify') return allTx.filter((t) => suggestionsById.has(t.id));
       if (kind === 'in') return allTx.filter((t) => t.amountCents >= 0);
       if (kind === 'out') return allTx.filter((t) => t.amountCents < 0);
-      if (kind === 'matched') return allTx.filter((t) => t.status === 'MATCHED');
+      if (kind === 'matched') return allTx.filter((t) => t.reconciliationStatus === 'RECONCILED');
       return allTx;
     }
     function drawLedgerTabs() {
@@ -1031,12 +1066,13 @@ async function viewBank() {
       txDetail.appendChild(h('div', { class: 'detail-head' }, h('div', null, h('h2', null, fmtMoney(t.amountCents, t.currency)), h('p', null, `${t.source ? tt(SOURCE_BADGE[t.source] || t.source) + ' · ' : ''}${t.date}`), h('p', null, t.counterpartyName || tt('Unknown')))));
       txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Details')),
         h('div', { class: 'kv' }, h('span', null, tt('Reference')), h('strong', null, t.reference || t.structuredReference || '—')),
-        h('div', { class: 'kv' }, h('span', null, tt('Status')), h('strong', null, tt(TX_STATUS_TEXT[t.status] || t.status)))));
+        h('div', { class: 'kv' }, h('span', null, tt('Status')), h('strong', null, reconText(t)))));
+      txDetail.appendChild(reconBlock(t, () => draw()));
       if (sug) {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')),
           h('div', { class: 'muted small', style: 'margin-bottom:8px' }, h('span', { class: `chip ${MATCH_STATUS_TONE[sug.status] || 'mute'}` }, tt(MATCH_STATUS_TEXT[sug.status] || sug.status))),
           matchActions(sug, () => draw())));
-      } else if (t.status === 'MATCHED') {
+      } else if (t.reconciliationStatus === 'RECONCILED') {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('This transaction is already justified.'))));
       } else {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('No match suggestion is available for this transaction yet.'))));
@@ -1054,7 +1090,7 @@ async function viewBank() {
       rows.forEach((t) => {
         if (t.date !== lastDay) { txList.appendChild(h('div', { class: 'day' }, t.date)); lastDay = t.date; }
         txList.appendChild(h('div', { class: `tx ${t.id === selectedTxId ? 'selected' : ''}`, on: { click: () => selectTx(t.id) } },
-          h('div', null, h('strong', null, t.counterpartyName || tt('Unknown')), h('small', null, [t.reference, suggestionsById.has(t.id) ? tt('To justify') : tt(TX_STATUS_TEXT[t.status] || t.status)].filter(Boolean).join(' · '))),
+          h('div', null, h('strong', null, t.counterpartyName || tt('Unknown')), h('small', null, [t.reference, suggestionsById.has(t.id) ? tt('To justify') : (t.reconciliationStatus === 'PARTIALLY_RECONCILED' ? `${reconText(t)} · ${tt('Remaining')} ${fmtMoney(t.remainingCents, t.currency)}` : reconText(t))].filter(Boolean).join(' · '))),
           h('div', { class: `amount ${t.amountCents >= 0 ? 'in' : ''}` }, `${t.amountCents >= 0 ? '+ ' : ''}${fmtMoney(t.amountCents, t.currency)}`)));
       });
     }

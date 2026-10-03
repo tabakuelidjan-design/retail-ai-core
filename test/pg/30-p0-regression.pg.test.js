@@ -1,7 +1,7 @@
 // Phase 1 - P0 FINANCIAL INTEGRITY, as non-regression tests on a real PostgreSQL 17 with real concurrent connections.
 // Every test here is the transformation of a Phase 0 reproducer (see 35-legacy-gaps for the ones aimed at the frozen legacy table) or a new proof of a guarantee that
 // the database itself now provides. A failure means money integrity regressed. Classification of each guarantee (SERVICE / POSTGRES / BOTH): src/finance/payment-ledger.js GUARANTEES.
-import { openMany, race, seedMerchants, insertDraft, issueDocument, issueSql, issueArgs, issuedInvoice, insertSupplier, record, reverseAllocations, voidPayment, num, netPaidOfInvoice, netPaidOfSupplier, attempt, codeOf,
+import { bankReconcile, openMany, race, seedMerchants, insertDraft, issueDocument, issueSql, issueArgs, issuedInvoice, insertSupplier, record, reverseAllocations, voidPayment, num, netPaidOfInvoice, netPaidOfSupplier, attempt, codeOf,
   freshDatabase, MERCHANT_A, MERCHANT_B } from './lib/db.js';
 import { control } from './lib/classify.js';
 
@@ -330,28 +330,26 @@ control('P0-4 merchant-consistent references everywhere: event, related document
 const claim = "update fin_bank_transactions set status='MATCHED', matched_kind='INVOICE', matched_document_id=$2, matched_amount_cents=1210, matched_at='2026-09-30T10:00:00Z' where id=$1";
 const bankTx = async (c, tag = 'tx-1', amount = -1210) => (await c.query("insert into fin_bank_transactions (merchant_id, account_id, provider_tx_id, date, amount_cents, currency, source) values ($1,'csv-import',$2,'2026-09-01',$3,'EUR','csv') returning id", [A, tag, amount])).rows[0].id;
 
-control('RECONCILIATION corruption closed: two simultaneous claims of one bank transaction -> exactly one wins, the other is told, nothing is overwritten', withDb(async (d) => {
+// Since Essential Bank the status and matched_* of a bank transaction are DERIVED from fin_bank_reconciliations (migration 20261005090000): the hand-written claim that used to be the
+// last-writer-wins hazard is refused outright, whoever races. The positive proofs (one wins, retries, partial, N<->M, unreconcile) are in 70-bank.pg.test.js.
+control('RECONCILIATION corruption closed: two simultaneous hand-written claims of one bank transaction -> NEITHER is accepted, nothing is overwritten', withDb(async (d) => {
   const s = await d.open(); const i1 = await issuedInvoice(s); const i2 = await issuedInvoice(s); const tx = await bankTx(s); await s.end(); const { clients, closeAll } = await openMany(d.name, 2); const ids = [i1.id, i2.id];
   try {
-    const res = await race(clients, (c, i) => c.query(claim, [tx, ids[i]])); const winner = res.findIndex((r) => r.status === 'fulfilled'); const owner = (await clients[0].query('select matched_document_id from fin_bank_transactions where id=$1', [tx])).rows[0].matched_document_id;
-    return { holds: res.filter((r) => r.status === 'fulfilled').length === 1 && owner === ids[winner] && res.some((r) => has(r, 'FIN_BANK_TX_ALREADY_CLAIMED')), evidence: `accepted=${res.filter((r) => r.status === 'fulfilled').length} of 2; owner is the winner's invoice=${owner === ids[winner]}; loser: ${res.map(codeOf).join(' / ')}` };
+    const res = await race(clients, (c, i) => c.query(claim, [tx, ids[i]])); const row = (await clients[0].query('select status, matched_document_id, matched_amount_cents from fin_bank_transactions where id=$1', [tx])).rows[0];
+    return { holds: res.every((r) => has(r, 'FIN_BANK_STATUS_IS_DERIVED')) && row.status === 'NEW' && row.matched_document_id === null && row.matched_amount_cents === null, evidence: `accepted=${res.filter((r) => r.status === 'fulfilled').length} of 2 (${res.map(codeOf).join(' / ')}); the transaction stays ${row.status} with no owner` };
   } finally { await closeAll(); }
 }));
 
-control('RECONCILIATION: a handled transaction is frozen (re-claim, amount, target of another merchant, payment attached once)', withDb(async (d) => {
-  const c = await d.open(); const i1 = await issuedInvoice(c); const i2 = await issuedInvoice(c); const other = await issuedInvoice(c, B); const tx = await bankTx(c); const tx2 = await bankTx(c, 'tx-2'); const out = [];
+control('RECONCILIATION: even after a real reconciliation, status and matched_* cannot be written by hand (reopen, other amount, other target, attach a payment)', withDb(async (d) => {
+  const c = await d.open(); const inv = await issuedInvoice(c); const other = await issuedInvoice(c); const tx = await bankTx(c, 'tx-f', -1210); const pay = await record(c, A, 'frz-pay', { direction: 'OUT', amount: 1210 }); const out = [];
   try {
-    out.push((await attempt(c, claim, [tx2, other.id])).code); // merchant-consistent target
-    out.push((await attempt(c, "update fin_bank_transactions set status='MATCHED', matched_kind='INVOICE', matched_document_id=$2, matched_amount_cents=9999 where id=$1", [tx2, i1.id])).code); // more than the transaction
-    out.push((await attempt(c, claim, [tx, i1.id])).ok ? 'claimed' : 'x');
-    out.push((await attempt(c, claim, [tx, i2.id])).code); // another invoice
-    out.push((await attempt(c, "update fin_bank_transactions set matched_amount_cents=100 where id=$1", [tx])).code); // another amount
-    out.push((await attempt(c, claim, [tx, i1.id])).ok ? 'same-claim-repeat-ok' : 'x'); // an identical repeat is harmless
-    const p1 = await record(c, A, 'bank-p1', { amount: 1210, allocations: [alloc(i1.id, 1210)] }); const p2 = await record(c, A, 'bank-p2', { amount: 100 });
-    out.push((await attempt(c, 'update fin_bank_transactions set matched_payment_id=$2 where id=$1', [tx, p1.payment.id])).ok ? 'payment-attached' : 'x');
-    out.push((await attempt(c, 'update fin_bank_transactions set matched_payment_id=$2 where id=$1', [tx, p2.payment.id])).code);
-    out.push((await attempt(c, "update fin_bank_transactions set status='NEW' where id=$1", [tx])).ok ? 'REOPENED' : 'cannot-reopen');
-    return { holds: out.join() === 'FIN_BANK_MATCH_TARGET_NOT_FOUND,FIN_BANK_MATCH_EXCEEDS_TRANSACTION,claimed,FIN_BANK_TX_ALREADY_CLAIMED,FIN_BANK_TX_ALREADY_CLAIMED,same-claim-repeat-ok,payment-attached,FIN_BANK_TX_ALREADY_CLAIMED,cannot-reopen', evidence: out.join(' / ') };
+    await bankReconcile(c, A, 'frz-rec', tx, [{ paymentId: pay.payment.id, amountCents: 1210 }]);
+    const row = (await c.query('select status, matched_amount_cents from fin_bank_transactions where id=$1', [tx])).rows[0];
+    out.push((await attempt(c, "update fin_bank_transactions set status='NEW' where id=$1", [tx])).code);
+    out.push((await attempt(c, 'update fin_bank_transactions set matched_amount_cents=100 where id=$1', [tx])).code);
+    out.push((await attempt(c, "update fin_bank_transactions set matched_kind='INVOICE', matched_document_id=$2 where id=$1", [tx, other.id])).code);
+    out.push((await attempt(c, 'update fin_bank_transactions set matched_payment_id=$2 where id=$1', [tx, pay.payment.id])).code);
+    return { holds: row.status === 'MATCHED' && Number(row.matched_amount_cents) === 1210 && out.every((x) => x === 'FIN_BANK_STATUS_IS_DERIVED') && inv.id !== other.id, evidence: `mirror after the reconciliation: ${row.status}/${row.matched_amount_cents}; by hand: ${out.join(' / ')}` };
   } finally { await c.end(); }
 }));
 

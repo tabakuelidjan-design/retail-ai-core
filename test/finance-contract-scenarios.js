@@ -148,16 +148,52 @@ export const SCENARIOS = {
     out.push(pay(rv.payment), rvb.duplicate, await of(s2), await code(() => P.receive({ amountCents: 100, paidOn: '2026-10-03', idempotencyKey: 'contract-sup-dir', allocations: [{ documentId: s1.id, amountCents: 100 }] }, MERCHANT_ACTOR)));
     return out;
   },
-  async 'bank transaction claim: one claim wins, the loser gets nothing, a handled transaction is frozen'(w) {
-    const st = w.storeFor(A); const target = await st.saveSupplierInvoice(supplier()); const other = await st.saveSupplierInvoice(supplier());
-    const { row: tx } = await st.insertBankTransaction({ merchantId: A, accountId: 'csv-import', providerTxId: 'contract-t1', date: '2026-09-01', amountCents: -12100, currency: 'EUR', source: 'csv', status: 'NEW' });
-    const claim = (id) => ({ status: 'MATCHED', matchedKind: 'SUPPLIER_INVOICE', matchedDocumentId: id, matchedAmountCents: 12100, matchedAt: '2026-09-30T10:00:00.000Z' });
-    const out = [(await st.updateBankTransaction(tx.id, claim(target.id), 'NEW'))?.status, await st.updateBankTransaction(tx.id, claim(other.id), 'NEW')];
-    out.push(await code(() => st.updateBankTransaction(tx.id, { matchedDocumentId: other.id }, 'MATCHED')), await code(() => st.updateBankTransaction(tx.id, { matchedAmountCents: 100 }, 'MATCHED')));
-    const p = await st.recordPayment({ merchantId: A, key: 'bank:contract-t1', direction: 'OUT', amountCents: 12100, currency: 'EUR', paidOn: '2026-09-01', actor: MERCHANT_ACTOR, allocations: [{ supplierInvoiceId: target.id, amountCents: 12100 }] });
-    out.push((await st.updateBankTransaction(tx.id, { matchedPaymentId: p.payment.id }, 'MATCHED'))?.matchedPaymentId === p.payment.id, await code(() => st.updateBankTransaction(tx.id, { matchedPaymentId: other.id }, 'MATCHED')));
-    const { row: tx2 } = await st.insertBankTransaction({ merchantId: A, accountId: 'csv-import', providerTxId: 'contract-t2', date: '2026-09-02', amountCents: -100, currency: 'EUR', source: 'csv', status: 'NEW' });
-    out.push(await code(() => st.updateBankTransaction(tx2.id, { ...claim(target.id), matchedAmountCents: 999 }, 'NEW')));
+  async 'bank: accounts, identity, 1->1, 1->N, N->1, partial, unreconcile, ignore, ceilings, direction, currency, retries'(w) {
+    const st = w.storeFor(A); const sb = w.storeFor(B); const out = []; const at = '2026-10-03T10:00:00.000Z';
+    const row = (tag, amountCents, extra = {}) => ({ merchantId: A, accountId: 'csv-import', providerTxId: tag, date: '2026-09-01', amountCents, currency: 'EUR', source: 'csv', status: 'NEW', counterpartyName: 'Client', reference: tag, ...extra });
+    const batch = await st.insertBankTransactionsBatch([row('t1', 10000), row('t2', 30000), row('t3a', 10000), row('t3b', 5000), row('t3c', 15000), row('t4', 50000), row('t5', -500), row('t6', 20000), row('t7', -700)]);
+    const again = await st.insertBankTransactionsBatch([row('t1', 10000), row('t2', 30000)]); out.push([batch.created, again.created, again.duplicates]);
+    out.push(await code(() => st.insertBankTransactionsBatch([row('tx-usd', 100, { currency: 'USD' })])), await code(() => st.insertBankTransactionsBatch([row('tx-zero', 0)])));
+    const accounts = await st.listBankAccounts(A); out.push(accounts.map((x) => [x.externalId, x.origin, x.currency, x.status]));
+    const tx = async (tag) => (await st.listBankTransactions({ merchantId: A })).find((t) => t.providerTxId === tag); const am = async (tag) => { const t = await tx(tag); return [t.reconciliationStatus, t.reconciledCents, t.ignoredCents, t.remainingCents, t.status]; };
+    const pay = async (key, cents, direction = 'IN', extra = {}) => (await st.recordPayment({ merchantId: A, key, direction, amountCents: cents, currency: 'EUR', paidOn: '2026-09-02', method: 'bank_transfer', actor: MERCHANT_ACTOR, allocations: [], at, ...extra })).payment;
+    const rec = (key, tag, items) => tx(tag).then((t) => st.reconcileBank({ merchantId: A, key, transactionId: t.id, items, actor: MERCHANT_ACTOR, at }));
+    // 1 -> 1, and the retry is the same operation
+    const p1 = await pay('bk-p1', 10000); const r1 = await rec('bk-r1', 't1', [{ paymentId: p1.id, amountCents: 10000 }]); const r1b = await rec('bk-r1', 't1', [{ paymentId: p1.id, amountCents: 10000 }]); out.push([r1.duplicate, r1b.duplicate, r1.reconciliations[0].id === r1b.reconciliations[0].id], await am('t1'));
+    out.push(await code(() => rec('bk-r1', 't1', [{ paymentId: p1.id, amountCents: 9000 }])));
+    // 1 -> N
+    const p2a = await pay('bk-p2a', 10000); const p2b = await pay('bk-p2b', 20000); await rec('bk-r2', 't2', [{ paymentId: p2a.id, amountCents: 10000 }, { paymentId: p2b.id, amountCents: 20000 }]); out.push(await am('t2'));
+    // N -> 1 (three bank movements fund one payment), then one cent more than the payment is refused
+    const p3 = await pay('bk-p3', 30000); await rec('bk-r3a', 't3a', [{ paymentId: p3.id, amountCents: 10000 }]); await rec('bk-r3b', 't3b', [{ paymentId: p3.id, amountCents: 5000 }]); await rec('bk-r3c', 't3c', [{ paymentId: p3.id, amountCents: 15000 }]); out.push([await am('t3a'), await am('t3b'), await am('t3c')], await code(() => rec('bk-r3x', 't4', [{ paymentId: p3.id, amountCents: 1 }])));
+    // partial, remaining stays visible, later completion, nothing beyond the transaction
+    const p4 = await pay('bk-p4', 30000); await rec('bk-r4', 't4', [{ paymentId: p4.id, amountCents: 30000 }]); out.push(await am('t4'));
+    const p4b = await pay('bk-p4b', 20000); await rec('bk-r4b', 't4', [{ paymentId: p4b.id, amountCents: 20000 }]); out.push(await am('t4'), await code(() => rec('bk-r4c', 't4', [{ paymentId: p4.id, amountCents: 1 }])));
+    // unreconcile: explicit, bounded, idempotent, history kept, the payment itself untouched; a reconciled payment cannot be voided until it is unreconciled
+    const recs1 = await st.listReconciliations({ bankTransactionId: (await tx('t1')).id }); const un = (key, t, items) => st.unreconcileBank({ merchantId: A, key, items, reason: 'wrong match', actor: MERCHANT_ACTOR, at });
+    out.push(await code(() => st.voidPayment({ merchantId: A, key: 'bk-void1', paymentId: p1.id, on: '2026-10-03', reason: 'mistake', actor: MERCHANT_ACTOR, at })));
+    const u1 = await un('bk-u1', 't1', [{ reconciliationId: recs1[0].id, amountCents: 4000 }]); out.push(await am('t1'), await code(() => un('bk-u2', 't1', [{ reconciliationId: recs1[0].id, amountCents: 6001 }])));
+    const u1b = await un('bk-u1', 't1', [{ reconciliationId: recs1[0].id, amountCents: 4000 }]); out.push([u1.duplicate, u1b.duplicate], await am('t1'));
+    await un('bk-u3', 't1', [{ reconciliationId: recs1[0].id, amountCents: null }]); out.push(await am('t1'), (await st.listReconciliations({ bankTransactionId: (await tx('t1')).id })).map((r) => r.amountCents).sort((x, y) => x - y));
+    out.push((await st.voidPayment({ merchantId: A, key: 'bk-void2', paymentId: p1.id, on: '2026-10-03', reason: 'now fine', actor: MERCHANT_ACTOR, at })).duplicate);
+    // ignore (reversible)
+    const ig = await st.ignoreBank({ merchantId: A, key: 'bk-ig1', transactionId: (await tx('t5')).id, reason: 'bank fee booked elsewhere', actor: MERCHANT_ACTOR, at }); const igb = await st.ignoreBank({ merchantId: A, key: 'bk-ig1', transactionId: (await tx('t5')).id, reason: 'bank fee booked elsewhere', actor: MERCHANT_ACTOR, at });
+    out.push([ig.duplicate, igb.duplicate], await am('t5'), await code(async () => st.ignoreBank({ merchantId: A, key: 'bk-ig2', transactionId: (await tx('t5')).id, actor: MERCHANT_ACTOR, at })));
+    await un('bk-ig-undo', 't5', [{ reconciliationId: ig.reconciliation.id, amountCents: null }]); out.push(await am('t5'));
+    // direction and currency
+    const pOut = await pay('bk-pout', 700, 'OUT'); out.push(await code(() => rec('bk-dir', 't1', [{ paymentId: pOut.id, amountCents: 700 }])), await code(() => rec('bk-dir2', 't7', [{ paymentId: p3.id, amountCents: 700 }])));
+    const pUsd = await pay('bk-pusd', 500, 'IN', { currency: 'USD' }); out.push(await code(() => rec('bk-ccy', 't1', [{ paymentId: pUsd.id, amountCents: 500 }])));
+    // ATOMICITY: payment + reconciliation are one unit. A refused payment leaves the bank transaction untouched (the gap of the previous phase).
+    const inv = await issueInvoice(w.svc); const t6 = await tx('t6'); const regBefore = (await st.listRegistry(A)).length;
+    out.push(await code(() => st.reconcileAndPay({ merchantId: A, key: 'bk-atom-bad', transactionId: t6.id, actor: MERCHANT_ACTOR, at, payment: { amountCents: 20000, allocations: [{ customerDocumentId: inv.id, amountCents: 9999 }] } })), (await st.listRegistry(A)).length - regBefore, await am('t6'));
+    const good = await st.reconcileAndPay({ merchantId: A, key: 'bk-atom-ok', transactionId: t6.id, actor: MERCHANT_ACTOR, at, payment: { amountCents: 20000, method: 'bancontact', allocations: [{ customerDocumentId: inv.id, amountCents: 7190 }] } });
+    const goodb = await st.reconcileAndPay({ merchantId: A, key: 'bk-atom-ok', transactionId: t6.id, actor: MERCHANT_ACTOR, at, payment: { amountCents: 20000, method: 'bancontact', allocations: [{ customerDocumentId: inv.id, amountCents: 7190 }] } });
+    out.push([good.duplicate, goodb.duplicate, good.payment.id === goodb.payment.id, good.payment.source, good.payment.bankReference, good.payment.direction], await am('t6'), (await st.listRegistry(A)).length - regBefore);
+    const sameKeyOtherTx = await code(async () => st.reconcileAndPay({ merchantId: A, key: 'bk-atom-ok', transactionId: (await tx('t7')).id, actor: MERCHANT_ACTOR, at, payment: { amountCents: 20000, method: 'bancontact', allocations: [{ customerDocumentId: inv.id, amountCents: 7190 }] } })); out.push(sameKeyOtherTx);
+    // merchant isolation
+    const pB = (await sb.recordPayment({ merchantId: B, key: 'bk-pb', direction: 'IN', amountCents: 100, currency: 'EUR', paidOn: '2026-09-02', allocations: [], at })).payment;
+    out.push(await code(() => sb.reconcileBank({ merchantId: B, key: 'bk-xa', transactionId: t6.id, items: [{ paymentId: pB.id, amountCents: 100 }], at })), await code(() => rec('bk-xb', 't4', [{ paymentId: pB.id, amountCents: 1 }])), (await sb.listBankTransactions({ merchantId: B })).length);
+    // the legacy status cannot be written
+    out.push(await code(() => st.updateBankTransaction(t6.id, { status: 'NEW' }, 'MATCHED')), (await st.getBankTransaction(t6.id)).status);
     return out;
   },
 };

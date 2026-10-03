@@ -45,13 +45,15 @@ export async function createPgRestClient(database) {
     },
     async insertIgnoringDuplicates(table, rows, { onConflict }) {
       if (!rows.length) return [];
-      try { return (await client.query(`insert into ${ident(table)} select * from json_populate_recordset(null::${ident(table)}, $1) on conflict (${onConflict.split(',').map(ident).join(',')}) do nothing returning *`, [JSON.stringify(rows)])).rows; } catch (e) { throw fail('POST', `/${table}`, e); }
+      const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))].map(ident).join(', '); // like PostgREST: only the given columns (generated and defaulted ones stay out)
+      try { return (await client.query(`insert into ${ident(table)} (${keys}) select ${keys} from json_populate_recordset(null::${ident(table)}, $1) on conflict (${onConflict.split(',').map(ident).join(',')}) do nothing returning *`, [JSON.stringify(rows)])).rows; } catch (e) { throw fail('POST', `/${table}`, e); }
     },
     async upsert(table, rows, { onConflict }) {
       if (!rows.length) return [];
       const keys = Object.keys(rows[0]); const conflict = onConflict.split(',');
       const set = keys.filter((k) => !conflict.includes(k)).map((k) => `${ident(k)} = excluded.${ident(k)}`).join(', ');
-      try { return (await client.query(`insert into ${ident(table)} select * from json_populate_recordset(null::${ident(table)}, $1) on conflict (${conflict.map(ident).join(',')}) do update set ${set} returning *`, [JSON.stringify(rows)])).rows; } catch (e) { throw fail('POST', `/${table}`, e); }
+      const cols = keys.map(ident).join(', ');
+      try { return (await client.query(`insert into ${ident(table)} (${cols}) select ${cols} from json_populate_recordset(null::${ident(table)}, $1) on conflict (${conflict.map(ident).join(',')}) do update set ${set} returning *`, [JSON.stringify(rows)])).rows; } catch (e) { throw fail('POST', `/${table}`, e); }
     },
     async update(table, filters, patch) {
       const keys = Object.keys(patch); if (!keys.length) return [];

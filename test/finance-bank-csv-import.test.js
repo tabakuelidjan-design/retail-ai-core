@@ -51,9 +51,12 @@ test('duplicates: the same statement twice creates nothing the second time, and 
   const again = (await c.post('/api/bank/import-csv', { csv: VALID })).data;
   assert.equal(again.created, 0); assert.equal(again.duplicates, 2);
   assert.equal(await txCount(c), 2);
-  // the same line twice inside one file is reported, and stored once
+  // two lines that LOOK the same inside one file are two real movements (e.g. two identical 10,00 payments): never merged. They are told apart by their occurrence number,
+  // so importing the same file again still creates nothing.
   const twice = 'Date;Montant;Contrepartie\n12/09/2026;10,00;Client C\n12/09/2026;10,00;Client C\n';
-  assert.equal((await c.post('/api/bank/import-csv/preview', { csv: twice })).data.duplicates.inFile, 1);
+  const pv2 = (await c.post('/api/bank/import-csv/preview', { csv: twice })).data; assert.equal(pv2.identicalInFile, 1); assert.equal(pv2.importable, 2);
+  assert.equal((await c.post('/api/bank/import-csv', { csv: twice })).data.created, 2); assert.equal(await txCount(c), 4);
+  const again2 = (await c.post('/api/bank/import-csv', { csv: twice })).data; assert.equal(again2.created, 0); assert.equal(again2.duplicates, 2); assert.equal(await txCount(c), 4);
 }));
 
 test('any invalid line: NOTHING is imported (no silent partial import), the lines and reasons are reported', () => withApp(async (c) => {
