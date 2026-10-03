@@ -58,3 +58,11 @@ test('E4. the report currency comes from the countable orders, never from a sile
     assert.equal(r.report.currency, 'USD');
   } finally { unbindReportsTenant(dir); resetPeriodCache(); }
 });
+
+test('E5. the report carries every exclusion, the truncation count and the stock coverage (nothing unavailable is hidden)', async () => {
+  const { buildReport } = await import('../src/report/build.js');
+  const data = makeData(); data.orders[1].cancelled_at = '2026-09-13T08:00:00Z'; data.orders[0].lines_truncated = true;
+  const ledger = buildLedger(data, { config }); const { report } = buildReport({ ledger, now: new Date('2026-09-26T09:00:00Z'), timeZone: 'Europe/Brussels', config, data });
+  assert.equal(report.order_history.orders_excluded.cancelled, 1); assert.equal(report.order_history.completeness.ordersTruncated, 1);
+  assert.deepEqual([report.order_history.stock_coverage.variants, report.order_history.stock_coverage.withSnapshot], [4, 4]);
+});
