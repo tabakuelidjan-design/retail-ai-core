@@ -163,6 +163,7 @@ function langSwitch(onChange) {
 }
 
 /** Shopify synchronisation health (NOT the report generation shown next to it): last successful sync, or a factual failed/stale state. */
+let cachedSync = null;
 async function refreshSyncPill() {
   const el = document.querySelector('[data-sync-pill]');
   if (!el) return;
@@ -170,6 +171,8 @@ async function refreshSyncPill() {
     const r = await fetch('/api/sync-status');
     if (!r.ok) return;
     const s = (await r.json()).sync;
+    cachedSync = s;
+    const card = document.querySelector('[data-health-state]'); if (card) { const hs = NordlaHealth.healthState(s); card.textContent = t(hs.valueKey, hs.since ? fmtAgo(hs.since) : t('common.dash')); card.setAttribute('data-health-state', hs.state); const box = card.closest('.health-card'); if (box) box.className = `health-card health-${hs.tone}`; }
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
     if (s && s.reason === 'NO_SALES_SOURCE') { text = t('topbar.noSalesSource'); tone = 'mute'; } // this merchant has no sales connector: neutral, not a failure
@@ -257,14 +260,18 @@ function watchSection(brief) {
 }
 
 function healthCard(brief) {
-  return h('div', { class: 'health-card' },
+  // The card states only what is proven: the real sync status (/api/sync-status) and the exclusion counters of the report. Never "up to date".
+  const hs = NordlaHealth.healthState(cachedSync);
+  const notes = NordlaHealth.exclusionNotes(brief && brief.dataNotes ? brief.dataNotes.exclusions : null);
+  const valueText = t(hs.valueKey, hs.since ? fmtAgo(hs.since) : t('common.dash'));
+  return h('div', { class: `health-card health-${hs.tone}` },
     h('div', { class: 'health-left' },
       h('span', { class: 'health-ico' }, NordlaIcon.semantic('dataHealth', 'lg')),
-      h('div', null, h('div', { class: 'health-title' }, t('health.title')), h('div', { class: 'health-value' }, t('health.upToDate'))),
+      h('div', null, h('div', { class: 'health-title' }, t('health.title')), h('div', { class: 'health-value', 'data-health-state': hs.state }, valueText)),
     ),
     h('div', { class: 'health-right' },
-      h('div', { class: 'health-sync' }, t('health.lastGenerated'), h('br'), brief.generatedAt ? fmtAgo(brief.generatedAt) : t('common.dash')),
-      h('button', { class: 'btn-outline', type: 'button' }, NordlaIcon.semantic('dataHealth', 'sm'), t('health.viewSources'))));
+      h('div', { class: 'health-sync' }, t('health.lastGenerated'), h('br'), brief && brief.generatedAt ? fmtAgo(brief.generatedAt) : t('common.dash')),
+      notes.known && notes.items.length ? h('div', { class: 'health-excluded' }, h('strong', null, t('health.excludedTitle')), ...notes.items.map((i) => h('div', null, t(i.labelKey, i.count)))) : null));
 }
 
 // ---------- "Ce qui a changé" (What Changed) page - Step 2 ----------
@@ -316,7 +323,7 @@ function wcInsightCard(data) {
       chart ? h('div', { class: 'wc-area-chart' }, chart) : null),
     h('div', { class: 'rank-title' }, h('span', null, t('wc.contributorsTitle')), h('span', null, data.currency)),
     contributors.length ? NordlaCharts.contributionBars(contributors.map((m) => ({ label: m.title, value: m.delta })), { format: (v) => fmtCompactMoney(v, data.currency) }) : h('div', { class: 'empty-note' }, t('insight.noProducts')),
-    h('div', { class: 'insight-confidence' }, NordlaIcon.semantic('dataHealth', 'sm'), t('wc.dataReliable')));
+    h('div', { class: 'insight-confidence' }, NordlaIcon.semantic('dataHealth', 'sm'), t('wc.dataBasis')));
   return h('div', { class: 'insight-card' }, left, right);
 }
 
