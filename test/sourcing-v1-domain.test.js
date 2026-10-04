@@ -220,3 +220,12 @@ test('extra: trait-related and unrelated candidates (colours, carton) go to the 
   const carton = s.ledger.find((e) => e.key === 'carton.dimensions'); assert.deepEqual(carton.value, { l: '52', w: '38', h: '30', unit: 'cm' });
   assert.ok(extraTraits && s.events.length >= eventsBefore);
 });
+
+test('a quote form that still shows an earlier tier price (stale after a quantity change) does not silently drop the tiers; a genuinely different price does', () => {
+  const tiers = [{ minQty: '100', unitPrice: '7.20' }, { minQty: '300', unitPrice: '6.80' }, { minQty: '500', unitPrice: '6.40' }];
+  let s = build([{ type: 'QUOTE', quote: { currency: 'USD', qty: 300, moq: 100, tiers } }]);
+  s = dispatch(s, { type: 'QUOTE', quote: { unitPrice: '6.80', currency: 'USD', qty: 500, moq: 100 } }, at(1)); assert.equal(s.quotes.at(-1).tiers.length, 3, 'qty changed to 500: the form still shows 6.80');
+  assert.equal(effectiveQuote(s.quotes.at(-1)).unitPrice, '6.40', 'the 500 tier applies'); assert.equal(run(s).landed.goods.unitPriceMinor, 640);
+  s = dispatch(s, { type: 'QUOTE', quote: { unitPrice: '6.80', currency: 'USD', qty: 500, moq: 100, incoterm: 'FOB' } }, at(2)); assert.equal(s.quotes.at(-1).tiers.length, 3, 'a second form save with the same stale price keeps the tiers');
+  const manual = dispatch(s, { type: 'QUOTE', quote: { unitPrice: '5.90', currency: 'USD', qty: 500, moq: 100 } }, at(3)); assert.equal(manual.quotes.at(-1).tiers, undefined, 'a price that matches no quoted tier is an explicit override');
+});

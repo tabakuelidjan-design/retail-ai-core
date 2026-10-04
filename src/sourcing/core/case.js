@@ -59,7 +59,10 @@ function reduceInPlace(s, event, at) {
     case 'QUOTE': { // V1 fields (port, payment, price tiers) survive a V0 form save; typing a DIFFERENT unit price replaces the tiers (an explicit single price wins)
       const prev = s.quotes.at(-1); const nq = { ...event.quote };
       if (prev) for (const k of ['port', 'payment', 'tiers']) if (nq[k] === undefined && prev[k] !== undefined) {
-        if (k === 'tiers' && nq.unitPrice !== undefined && nq.unitPrice !== '' && normalizeTiers(prev.tiers).length && Number(String(nq.unitPrice).replace(',', '.')) !== Number(String(effectiveQuote(prev).unitPrice).replace(',', '.'))) continue;
+        if (k === 'tiers' && nq.unitPrice !== undefined && nq.unitPrice !== '' && normalizeTiers(prev.tiers).length) { // the form may still show an earlier tier price (stale after a quantity change): a price equal to ANY quoted tier price is not an explicit override
+          const typed = Number(String(nq.unitPrice).replace(',', '.')); const known = [Number(String(effectiveQuote(prev).unitPrice).replace(',', '.')), ...normalizeTiers(prev.tiers).map((t) => Number(t.unitPrice))];
+          if (!known.includes(typed)) continue;
+        }
         nq[k] = prev[k];
       }
       s.quotes.push({ ...nq, at }); break;
