@@ -22,9 +22,12 @@ import { docsScreen } from './screens/docs.js';
 import { rulesScreen } from './screens/rules.js';
 import { marketScreen } from './screens/market.js';
 import { moneyScreen } from './screens/money.js';
+import { fieldScreen } from './screens/field.js';
+import { validateCorrection } from '/core/candidate-view.js';
+import { userQuestionView } from '/core/conversation.js';
 
 
-const TABS = [['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
+const TABS = [['field', 'Field'], ['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
 
 /** What the phone holds. */
 function safetyCopy() { const c = getBlob('safety'); return c?.alerts ? { present: true, fetchedAt: Date.parse(c.phoneFetchedAt ?? 0) || 0, serverMode: c.source?.mode } : { present: false }; }
@@ -126,7 +129,7 @@ async function fetchFx() {
 
 
 
-const SCREENS = { quick: quickScreen, decision: decisionScreen, case: caseScreen, ask: askScreen, docs: docsScreen, compliance: rulesScreen, market: marketScreen, money: moneyScreen };
+const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScreen, case: caseScreen, ask: askScreen, docs: docsScreen, compliance: rulesScreen, market: marketScreen, money: moneyScreen };
 
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function paintHeader() {
@@ -164,6 +167,23 @@ const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 
 // what was typed is submitted into the case: the next screen shows the case, not the old draft
 async function onSubmit(ev) {
   const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); if (!S.quiet) discardDrafts = true; const name = f.dataset.form; const c = cur();
+  if (name === 'capture') { // the supplier's words: stored as the ORIGINAL; facts are only PROPOSED (nothing reaches the case until the owner confirms)
+    const conv = (c.conversations ?? []).find((x) => x.status === 'OPEN'); const text = String(d.text ?? '');
+    if (!conv) { S.flash = 'Start a conversation first.'; discardDrafts = false; return render(); }
+    if (!text.trim()) { S.flash = 'Type or paste what the supplier said first.'; discardDrafts = false; return render(); }
+    const prev = S.captureDraft?.[c.id] ?? ''; (S.captureDraft ??= {})[c.id] = ''; ls.set('nordla.sourcing.capdraft', S.captureDraft);
+    try { return commit({ type: 'CONVERSATION_ITEM', convId: conv.id, speaker: d.speaker === 'me' ? 'me' : 'supplier', lang: d.lang || 'auto', text }); }
+    catch (e) { S.captureDraft[c.id] = prev; ls.set('nordla.sourcing.capdraft', S.captureDraft); throw e; }
+  }
+  if (name === 'free-question') {
+    if (!String(d.text ?? '').trim()) { S.flash = 'Type your question first.'; discardDrafts = false; return render(); }
+    return commit({ type: 'QUESTION_ADD', text: d.text, lang: d.lang || 'en' });
+  }
+  if (name === 'cand-correct') {
+    const cand = (c.candidates ?? []).find((x) => x.id === f.dataset.id); if (!cand) return render();
+    const v = validateCorrection(cand.key, d.value); if (!v.ok) { S.flash = v.error; discardDrafts = false; return render(); }
+    S.correcting = null; return commit({ type: 'CANDIDATE_CORRECT', id: cand.id, value: v.value });
+  }
   if (name === 'product') {
     const e = (event) => { S.cases[S.currentId] = dispatch(cur(), event, new Date()); };
     if (d.name !== c.identity.workingName) e({ type: 'NAME', name: d.name });
@@ -236,8 +256,24 @@ async function addDocument(form, d) {
 }
 
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
+const FRIENDLY = [[/needs a correction/i, 'This one needs a correction first: use "Correct".'], [/already rejected/i, 'This one was already rejected.'], [/conflict/i, 'This one contradicts something already in the case: clarify it first.'], [/finished/i, 'This conversation is finished: start a new one.']];
+/** Business rules in the engine speak in sentences; the phone shows them as a plain message and keeps everything the owner typed. */
+function guarded(fn) { try { return fn(); } catch (e) { S.flash = (FRIENDLY.find(([rx]) => rx.test(e.message)) ?? [null, `This could not be done (${e.message}).`])[1]; return render(); } }
+function showUserQuestion(id) {
+  const q = (cur().userQuestions ?? []).find((x) => x.id === id); if (!q) return; const v = userQuestionView(q); const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><div class="show-sup" style="margin-top:16px"><p lang="${esc(q.lang === 'zh' ? 'zh-Hans' : q.lang)}">${esc(v.original)}</p>${v.zh && q.lang !== 'zh' ? `<p class="zh" lang="zh-Hans">${esc(v.zh)}</p>` : ''}</div>${v.zh ? '' : `<p class="small muted">${esc(v.zhNote)}</p>`}`;
+}
 async function onClick(ev) {
   const t = ev.target.closest('[data-act]'); if (!t) return; const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined;
+  if (act === 'fstep') { S.fstep = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
+  if (act === 'conv-start') return commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' });
+  if (act === 'conv-finish') return commit({ type: 'CONVERSATION_FINISH', convId: key });
+  if (act === 'cand-correct-open') { S.correcting = S.correcting === key ? null : key; return render(); }
+  if (act === 'cand-confirm') return guarded(() => commit({ type: 'CANDIDATE_CONFIRM', id: key }));
+  if (act === 'cand-reject') return guarded(() => commit({ type: 'CANDIDATE_REJECT', id: key }));
+  if (act === 'conflict-resolve') return guarded(() => commit({ type: 'CONFLICT_RESOLVE', id: key, choice: val }));
+  if (act === 'uq-state') return commit({ type: 'QUESTION_STATE', id: key, state: val });
+  if (act === 'show-uq') return showUserQuestion(key);
   if (act === 'tab') { S.tab = key; S.flash = ''; render(); $('#screen').focus({ preventScroll: true }); window.scrollTo(0, 0); return; }
   if (act === 'trait') return commit({ type: 'TRAIT', trait: key, value: val });
   if (act === 'place') return commit({ type: 'PLACING', placing: { [key]: val } });
@@ -306,6 +342,7 @@ async function onPhoto(ev) {
 }
 
 (function pairingLink() { const m = /[#&]t=([A-Za-z0-9_-]{24,})/.exec(location.hash); if (!m) return; S.token = m[1]; ls.set('nordla.sourcing.token', S.token); S.authFailed = false; history.replaceState(null, '', location.pathname + location.search); })();
+document.addEventListener('input', (ev) => { const t = ev.target; if (t?.matches?.('textarea[data-draft="capture"]') && cur()) { (S.captureDraft ??= {})[cur().id] = t.value; ls.set('nordla.sourcing.capdraft', S.captureDraft); } });
 document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);

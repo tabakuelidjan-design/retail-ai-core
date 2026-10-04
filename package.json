@@ -29,6 +29,7 @@
     "sourcing:phone": "node src/sourcing/server/phone.js",
     "sourcing:e2e": "node test/e2e/sourcing-pwa.e2e.js",
     "sourcing:e2e:tunnel": "node test/e2e/real-tunnel.e2e.js",
+    "sourcing:e2e:v1": "node test/e2e/sourcing-v1-field.e2e.js",
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
     "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
     "benchmark:ask": "node benchmark/ask/run.js"

@@ -169,7 +169,7 @@ await check('16. layout: every screen fits 375 / 390 / 430 wide, portrait and la
   const bad = [];
   for (const [w, h] of [[375, 812], [390, 844], [430, 932], [844, 390], [932, 430]]) {
     await tab.resize(w, h); await sleep(300);
-    for (const key of ['quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money']) {
+    for (const key of ['field', 'quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money']) {
       const r = await tab.run(`__t.click('[data-act="tab"][data-key="${key}"]'); await __t.sleep(250);
         const over = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).length;
         const small = [...document.querySelectorAll('#screen button.btn, #screen .seg button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 36 || r.width < 36); }).length;
