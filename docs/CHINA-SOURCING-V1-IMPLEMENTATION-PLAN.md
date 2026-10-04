@@ -254,3 +254,15 @@ The shell itself now exists from P3.5 (below); P15 is only the finalisation once
 
 P0 (done) -> P1 -> P2 -> P3 -> **P3.5 Field workflow shell v0 + FIELD-UX CHECKPOINT 1** -> P4 (first thing the owner can touch in the field) -> P5 -> P6 -> P7 -> P8 -> P9 -> (P10, P11, P12, P13 in the order the field rehearsal shows to matter) -> P14 -> P15.
 Each arrow is an owner approval and, where marked, a physical-phone check. No phase is bundled with another into one commit.
+
+---
+
+## Progress log (updated 2026-10-05, after the overnight build)
+
+Done and tested (details in `docs/CHINA-SOURCING-V1-OVERNIGHT-REPORT.md`): **P2** (deterministic EN + narrow ZH extractor), **P1** (provenance ledger, candidates, conflicts, price tiers, schema 2, conversation sessions, free questions), **P3** (UI split into modules), **P3.5** (Field workflow shell) and the **P4 foundation** (text capture, candidate review, conflicts, finish summary; no audio, no AI). Learnings that adjust the plan:
+
+- **P4 (full)** is now only the *audio* part: record on the phone (browser default format, ogg/opus on the owner's Firefox 157, about 950 KB per minute, so cap the bitrate), keep the original, chunk every second into IndexedDB, request persistent storage, assume a repeated microphone prompt, tell the owner to keep the screen on (background/lock-screen recording is UNTESTED). The review flow it plugs into already exists.
+- **P5 (adaptive Ask)** is the next visible gap: the Talk step still shows the static V0 list; the ledger already knows which facts were confirmed, so questions can resolve themselves.
+- **P6 (offers)** is cheaper than planned: pasted quotations and PDF text can go through the same extractor and review flow; tiers are already in the quote.
+- **P3.5 FIELD-UX CHECKPOINT 1** (physical phone) is the gate before P5-P9: the rehearsal script is in the overnight report, section 14.
+- The business decision stays "NOT AVAILABLE YET" until P9; the Field shell says so on screen.
