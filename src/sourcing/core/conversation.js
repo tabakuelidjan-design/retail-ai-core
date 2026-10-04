@@ -114,6 +114,8 @@ export function userQuestionView(q) {
 }
 
 // ---- finish-conversation summary ---------------------------------------------------------------------------------------------------------------------------------------------
+export const conflictText = (x) => (x.type === 'MODEL_MISMATCH' ? `Model: the case says ${show(x.entries[0].value)}, the supplier says ${show(x.entries[1].value)}` : `${label(x.key, x.context)}: ${show(x.entries[0].value)} earlier, ${show(x.entries[1].value)} now`);
+export const documentConflictText = (d) => `Document ${d.fileName ?? d.docId} names ${d.docModels.join(' / ')}, the case says ${d.caseModel}${d.result === 'FORMAT_VARIANT' ? ' (same characters, different format: please confirm)' : ''}`;
 const friendly = (e) => `${label(e.key, e.context)}: ${show(e.value)}`;
 /** WHAT WE LEARNED / STILL MISSING / CONTRADICTIONS for one conversation. `assessment` is the output of assess() (its questions say what is still missing). */
 export function summarizeConversation(s, convId, assessment) {
@@ -124,10 +126,7 @@ export function summarizeConversation(s, convId, assessment) {
   const p1 = (assessment?.questions ?? []).filter((q) => q.priority === 'P1');
   const docClaims = s.documentLedger.filter((d) => ['CLAIMED', 'PROMISED'].includes(d.status) && cands.some((c) => c.id === d.source?.candidateId))
     .map((d) => ({ claim: d.claim, status: d.status, stillNotReceived: ['CLAIMED', 'PROMISED'].includes(documentStatusOf(s, d.claim).status) })).filter((d) => d.stillNotReceived);
-  const contradictions = [
-    ...openConflicts.map((x) => ({ kind: x.type, text: x.type === 'MODEL_MISMATCH' ? `Model: the case says ${show(x.entries[0].value)}, the supplier says ${show(x.entries[1].value)}` : `${label(x.key, x.context)}: ${show(x.entries[0].value)} earlier, ${show(x.entries[1].value)} now` })),
-    ...documentModelConflicts(s).map((d) => ({ kind: 'DOCUMENT_MODEL', text: `Document ${d.fileName ?? d.docId} names ${d.docModels.join(' / ')}, the case says ${d.caseModel}${d.result === 'FORMAT_VARIANT' ? ' (same characters, different format: please confirm)' : ''}` })),
-  ];
+  const contradictions = [...openConflicts.map((x) => ({ kind: x.type, text: conflictText(x) })), ...documentModelConflicts(s).map((d) => ({ kind: 'DOCUMENT_MODEL', text: documentConflictText(d) }))];
   return { convId, factsFound: cands.length, confirmed: confirmedIds.size, rejected: n(CANDIDATE_STATE.REJECTED), conflicts: openConflicts.length, stillToReview: n(CANDIDATE_STATE.PROPOSED), needCorrection: cands.filter((c) => c.state === CANDIDATE_STATE.PROPOSED && c.needsCorrection).length,
     learned, missingImportant: p1.length, missing: p1.slice(0, 6).map((q) => ({ id: q.id, topic: q.topic, en: q.en })), documentClaimsNotReceived: docClaims, contradictions };
 }
