@@ -13,6 +13,9 @@ Date of investigation: 2026-10-04. Scope: verify legal/technical availability of
 
 Where search-engine summaries and official pages disagreed, I say so. Third-party blog figures are marked as such and are never used as a legal basis.
 
+
+> **Update (P0b, 2026-10-04):** sections 10 and 11 at the end of this document refine and, where they differ, supersede the TARIC and Eurostat statements in sections 2.4, 2.6 and 8. Short version: TARIC automated retrieval is **not** cleared (robots.txt disallows the consultation and daily-publication paths; CIRCABC anonymity unverified): V1 keeps manual duty input. Eurostat Comext stays a V1 candidate **as trade-activity context only, never as demand**.
+
 ## 1. The machine and the environments
 
 **PC (MEASURED):** Intel Core i5-8350U (4 cores / 8 threads, 1.7 GHz base), 15.9 GB RAM, Intel UHD 620 (1 GB, no discrete GPU), 220 GB free disk, Windows 11 Pro, Node 24.19, Python 3.14.7, `cloudflared` present. **Not installed:** ffmpeg, tesseract, any whisper/ASR or MT software.
@@ -85,7 +88,7 @@ Where search-engine summaries and official pages disagreed, I say so. Third-part
 
 | Source | Facts | Verdict |
 |---|---|---|
-| **TARIC** (EU customs tariff, DG TAXUD) | **MEASURED (metadata query):** the official dataset record on data.europa.eu carries the licence "European Commission reuse notice" (Decision 2011/833/EU: reuse including commercial, with acknowledgement and no distortion of meaning: SOURCE for what that notice allows); its distributions are a CIRCABC group page and the TARIC Consultation web page (both HTML). A third-party GitHub project mirrors TARIC data (not a basis to rely on). **Whether an anonymous machine-readable snapshot download is possible on CIRCABC, its size, and its update cadence are UNVERIFIED.** The consultation website is a human interface; its automated-use terms were not found. | **V1: candidate behind the existing customs contract**, subject to P0b (verify an anonymous snapshot download and its size). Until then duty stays USER PROVIDED. |
+| **TARIC** (EU customs tariff, DG TAXUD) | **MEASURED (metadata query):** the official dataset record on data.europa.eu carries the licence "European Commission reuse notice" (Decision 2011/833/EU: reuse including commercial, with acknowledgement and no distortion of meaning: SOURCE for what that notice allows); its distributions are a CIRCABC group page and the TARIC Consultation web page (both HTML). A third-party GitHub project mirrors TARIC data (not a basis to rely on). **Whether an anonymous machine-readable snapshot download is possible on CIRCABC, its size, and its update cadence are UNVERIFIED.** The consultation website is a human interface; its automated-use terms were not found. | **V1: manual duty input only** (see section 10: no cleared automated route yet). |
 | **Access2Markets** | the portal's own "Sources and copyright" page (SOURCE, read directly): content is licensed by a publisher (Mendel Verlag) and **may not be used for resale, consultancy, redistribution, building of databases, storage, or any purpose other than reference use**; use is restricted to users located in the EU and a list of countries; **no API or bulk download is mentioned**. | **NOT usable as an automated source.** Human reference and a deep link only. This corrects the earlier gap analysis, which named it as a candidate. |
 | EU Safety Gate | existing adapter uses the public weekly-report XML endpoint (works, MEASURED in earlier phases). Reuse terms not re-read in this phase (UNVERIFIED). | already in V0 |
 | ECB reference rates | existing | already in V0 |
@@ -172,7 +175,7 @@ Principles: the product must work with every provider UNAVAILABLE; originals are
 | Document/label OCR (Chinese) | PP-OCR mobile via onnxruntime on the PC (or Windows OCR zh pack if approved) | Yes | PC local | PC | Best free for Chinese (SOURCE); needs photo benchmark | accuracy on photos untested; result stays UNVERIFIED until confirmed | Apache-2.0 / MIT | V1 optional (P14) |
 | Product recognition from photo | Manual identification (existing); existing consent-gated cloud provider optional | Yes (manual) | Yes | Phone | Owner-confirmed | no local VLM on this PC | Cloud provider = consent | V1 manual; AI V2 |
 | Fact extraction from text | Deterministic EN/ZH rules, then optional AI second pass | Yes | Yes | Phone | Predictable; precision to be measured on corpora | Chinese patterns hard; never auto-applied | None | V1 (P2) |
-| EU import statistics | Eurostat Comext (SDMX/JSON), cached | Yes | Cached only | PC server | Official, CN8, recent (MEASURED) | trend/size only, not demand; rate limits undocumented | CC BY 4.0, attribution | V1 (P10) |
+| EU import statistics | Eurostat Comext (SDMX/JSON), cached, per member state (not the EU27 aggregate until the Austria point is settled) | Yes | Cached only | PC server | Official, CN8, 24 months, about 6 weeks lag (MEASURED) | **trade activity only: not demand, not sales**; transit effect; fair-use throttling | CC BY 4.0, attribution; Austrian CN8 restriction question | V1 context signal (P10) |
 | Search demand | Manual Google Trends entry (human), dated | Yes | Yes | Phone | Directional | manual; no automation | Automated access prohibited; manual use fine | V1 manual; API V2 |
 | Amazon EU signals | Manual observations (existing); ranges only | Yes | Yes | Phone | Observed listings only | no sales data; no scraping | Scraping prohibited; official APIs gated | V1 manual; paid V2 |
 | bol.com signals | Manual observations | Yes | Yes | Phone | Observed listings only | Retailer API is seller-only | API terms; no research API | V1 manual; API V2 |
@@ -180,7 +183,7 @@ Principles: the product must work with every provider UNAVAILABLE; originals are
 | Chinese registry check | Guided manual lookup (GSXT) by the owner or a helper | Yes | No | Human | Official | captcha, real-name, access issues | Automation would bypass a captcha: no | V1 manual |
 | Certificate registries | Manual verify links: IAF CertSearch, NANDO | Yes (free account for IAF) | No | Human | Official | daily quotas; management-system certs only | Terms of each site | V1 manual |
 | Paid KYB / trade data | none | n/a | n/a | n/a | n/a | n/a | n/a | V2 |
-| Customs duty / measures | Existing user-provided duty; TARIC snapshot import if P0b proves anonymous access | Yes | Cached | PC server | Official if verified | access, size, cadence unverified | Commission reuse notice | V1 conditional (P13) |
+| Customs duty / measures | Existing user-provided duty (V1); TARIC snapshot import only after DG TAXUD confirms a supported retrieval route in writing | Yes | Manual / cached | Phone / PC server | Official if imported; indicative only | robots.txt disallows the consultation and daily-publication paths; CIRCABC anonymity unverified; derivation 2-4 weeks | Commission reuse notice (CC BY 4.0) but automated retrieval not cleared | V1 manual; import V1.5 conditional (P13) |
 | Access2Markets | not integrated; deep link for human reference | n/a | No | Human | Official | reuse terms forbid storage/databases; no API | **High if automated** | Excluded |
 | Safety Gate | existing adapter | Yes | Cached | PC server + phone cache | Official | weekly cadence | existing | V1 (done) |
 | FX | ECB (existing) | Yes | Cached | PC server | Official | daily | existing | V1 (done) |
@@ -211,3 +214,87 @@ Principles: the product must work with every provider UNAVAILABLE; originals are
 - GSXT access guides: https://fdichina.com/blog/gsxt-access-outside-china/ ; https://chinesecheck.com/blog/national-enterprise-credit-information-system
 - IAF CertSearch: https://www.iafcertsearch.org/verify-certificates ; NANDO: https://economie.fgov.be/en/themes/commercial-policy/technical-barriers/database-notified-bodies-nando ; EPREL public API terms: https://ec.europa.eu/assets/move-ener/eprel/EPREL%20Public/Public%20API%20Term%20and%20Conditions/API_TERMS_AND_CONDITIONS_EN.pdf
 - Safety Gate download endpoint (existing adapter): https://ec.europa.eu/safety-gate-alerts/api/download/weeklyReport/list/xml/en ; OECD GlobalRecalls: https://www.oecd.org/en/publications/oecd-globalrecalls-portal_d8b0d605-en.html
+
+---
+
+# P0b - Findings (second pass)
+
+Date: 2026-10-04. Same labels as above (MEASURED / SOURCE / ESTIMATE / UNVERIFIED). Research for sections 10 and 11 was done by a research agent working under strict rules (no logins, no downloads beyond small API JSON and one public PDF, at most about 10 requests per host, no circumvention); the robots.txt finding was re-checked by me.
+
+## 10. TARIC - is there a legal, stable, zero-cost, machine-readable route?
+
+**Verdict: (2) a route exists, but with conditions and uncertainty. V1 keeps manual duty input as the primary and only supported path until DG TAXUD confirms a supported retrieval route in writing.**
+
+### 10.1 What exists
+
+| # | Route | What I found | Usable by Nordla? |
+|---|---|---|---|
+| 1 | TARIC consultation website (DG TAXUD), human interface | MEASURED: anonymous HTTP 200, HTML only (about 156-294 KB per page), no EU Login. **MEASURED (re-checked by me): `https://ec.europa.eu/robots.txt` contains `Disallow: /taxation_customs/dds2/taric/` for all crawlers.** No published terms on automated queries or rate limits found. | **No.** It would be scraping a human UI against the site's own crawler rules. |
+| 2 | Daily TARIC update files ("daily publications") | MEASURED: the listing page answers anonymously ("Last TARIC update: 02-10-2026"), one zip per working day (about 19:15 CET), deltas of about 20-190 KB, XML. The page is under the same robots-disallowed path. Whether the zip files themselves are anonymous or encrypted was **not** tested (UNVERIFIED; a search snippet claims PGP-encrypted). | **Not without written confirmation.** |
+| 3 | Monthly/full TARIC extractions on CIRCABC (Excel) | SOURCE: the Commission's TARIC page says raw data is "freely available in Excel format" and links the CIRCABC library. MEASURED: the library URL redirects to a single-page application; I could not list or download files without driving the interface, and I did not try to bypass anything. One CIRCABC document (the 37-page "Explanation for the Taric database extractions") was publicly readable by direct link, so some content is anonymous. | **Probably, but unverified** (anonymous bulk download, stable URLs, cadence). |
+| 4 | TARIC3 web service (SOAP) | UNVERIFIED and likely not public: described as an internal DG TAXUD application used by national administrations. No public endpoint or registration route found. | No |
+| 5 | EU Open Data Portal record | MEASURED: metadata only; the two distributions are HTML pointers (CIRCABC group, consultation page); the record's modified date is 2018-12-14; no licence field on the record I queried. | Pointer only |
+| 6 | Access2Markets | Human portal; reuse terms forbid storage and databases (section 2.6). No official API. | No |
+| 7 | National customs services (Belgian Tarbel, Dutch) | Not tested. A third-party mirror says it scrapes them. National terms apply (UNVERIFIED). | Not evaluated |
+| 8 | Third-party mirror `rousseauxy/taric-opendata` (GitHub) | MEASURED via the GitHub API: created 2026-06-27, 2 stars, single maintainer, code MIT; release `eu-2026-10` (2026-10-01) has 35 assets: a 27.8 MB monthly XLSX bundle (nomenclature, duties, measures, geographical areas) and daily delta zips. It says it auto-syncs from CIRCABC and the DDS2 daily portal and that it is "not an authentic source of tariff law". | **No as a system of record.** It automates the very pulls that robots.txt disallows, and it is a continuity risk. At most a cross-check. |
+| 9 | EBTI (binding tariff information) | MEASURED: public database answers anonymously but is robots-disallowed; the Commission says all BTIs are public; no API or bulk download described. | Human lookup only |
+| 10 | UK Trade Tariff API | MEASURED: anonymous, fast, JSON. **It is the UK tariff, not the EU's.** | **No.** Never a proxy for EU duty. |
+
+### 10.2 Licence and legal value
+- SOURCE (Commission legal notice): the Commission's reuse policy implements Decision 2011/833/EU, default licence CC BY 4.0 (credit, indicate changes); third-party content, logos and software excluded.
+- SOURCE: the Commission accepts no liability for the accuracy of its information, and only the Official Journal is authentic. TARIC itself "does not have the status of a legal instrument" (EUR-Lex 52002XC0430(02), found via search, not read in full).
+- **Consequence:** commercial caching with attribution is probably permitted (inference, UNVERIFIED for TARIC specifically), but Nordla must present any TARIC-derived duty as **indicative, tied to a snapshot date**, never as a binding classification or duty.
+
+### 10.3 Derivation complexity (SOURCE-based; not tested on real files)
+Deriving "duty for CN8 X from China on date D" needs the 10-digit TARIC code, measure validity dates, geographical-area membership (China, erga omnes and groups), measure types (third-country duty vs preference, suspension, quota, anti-dumping, countervailing, prohibitions/licences), duty expressions (ad valorem, specific, minima/maxima, Meursing for agricultural goods), additional codes (company-specific anti-dumping) and conditions/footnotes; the nomenclature also changes every 1 January. ESTIMATE: 2-4 weeks for a correct third-country-duty and anti-dumping resolver; quotas and conditional measures more. A first release should show **raw measures with dates**, not a single computed duty.
+
+### 10.4 Decision for V1
+1. **Manual duty input stays the V1 path** (user-provided, flagged USER PROVIDED, already built).
+2. **One question to DG TAXUD in writing** (customs helpdesk / TARIC team): may a private company automatically retrieve the CIRCABC extractions and the daily files, and which URL is the supported one? That single answer settles the open points. I can draft the message for the owner to send.
+3. If the answer is yes: import the monthly snapshot plus dailies into a cache, with attribution and a visible snapshot date; show raw measures first.
+4. Do not scrape the consultation site or the daily-publication pages; do not rely on the mirror.
+
+## 11. Eurostat Comext - what it can and cannot prove
+
+Dataset `DS-045409` ("EU trade since 1988 by HS2-4-6 and CN8"; dimensions freq, reporter, partner, product, flow, indicators, time). All queries below were anonymous HTTP 200; dataset `updated` = 2026-09-15.
+
+### 11.1 Measured
+| Query (monthly, imports, CN8 85076000 = lithium-ion accumulators, partner China) | Response | Time |
+|---|---|---|
+| Belgium, value in euros, since 2024-08 | 3.0 KB | 1.44 s |
+| EU27 (2020), value in euros | 3.2 KB | 1.23 s |
+| EU27, quantity in 100 kg | 3.2 KB | 1.09 s |
+| Belgium, all three indicators (value, quantity in 100 kg, supplementary quantity) | 3.8 KB | 1.15 s |
+
+- **Latest month available: 2026-07** (2026-08 onward null; about 6 weeks after month-end).
+- Example of what the data shows (EU27, imports from China, this code): value rose from about EUR 1.63 billion in 2024-08 to about EUR 2.72 billion in 2026-07, with 24 populated months; Belgium about 2-4% of the EU27 value, with visible month-to-month volatility (for example EUR 44.7 million in 2025-08 against EUR 100.9 million in 2025-09; the cause is unknown).
+- No rate-limit or `Retry-After` headers were returned. SOURCE (Eurostat guidelines): sync below 500,000 cells, async above, HTTP 413 above 5 million; fair-use throttling by concurrent requests, frequency and cumulative cost; Comext complete-dataset downloads are disabled through the API. **Design:** always filter by reporter, partner, product and flow; one request at a time; cache for a month; store the dataset update date.
+
+### 11.2 Licence and attribution
+SOURCE (Eurostat copyright notice): reuse, including commercial, is authorised with acknowledgement of the source (CC BY 4.0; cite the dataset DOI and access date). Non-commercial-only restrictions are listed for: data from non-EU countries (including China), third-party material, Liechtenstein and Switzerland trade data under some classifications, and **Austrian trade data at CN 8-digit level**. EU-reported imports from China are not "data from China", so they are not in that exclusion. **Open point (UNVERIFIED):** the `EU27_2020` aggregate includes Austria; whether the Austrian CN8 restriction reaches the aggregate is unclear. Safe V1 choice: use individual reporters (Belgium first, then NL, FR, DE) rather than the EU27 aggregate, or ask Eurostat. The DOI of DS-045409 was not found and must be looked up before publication.
+
+### 11.3 What Comext CAN show (with caveats)
+- Whether a product code is imported from China at scale into the EU or a member state, and its value and weight.
+- Direction, seasonality and growth over 24 months or more.
+- Implied unit value (value / quantity) as a rough price-level signal (CIF basis).
+- A feasibility filter (does meaningful trade exist for this code?), and which member states import.
+- A citable, reproducible public benchmark with a stated update date.
+
+### 11.4 What Comext CANNOT prove (and the app must say so)
+**EU import activity is not consumer demand, and not marketplace sales.** Specifically it cannot show:
+- consumer demand, retail sell-through, Amazon / bol.com / marketplace sales;
+- where goods are consumed: goods declared in Belgium or the Netherlands include transit-style flows (the Antwerp/Rotterdam effect), so a Belgian figure can overstate Belgian demand;
+- margins, landed cost or duty paid (the value is CIF and excludes duty);
+- competitors or importers (no company-level data);
+- anything finer than CN8 (one code mixes very different products, for example cells and finished packs, and the CN changes each 1 January: store the code with its year);
+- current conditions (about 6 weeks of lag; recent months can be revised);
+- origin certainty where a member state compiles on a consignment basis, or anything about quality, brand or compliance.
+
+Further caveats (SOURCE: Eurostat methodology): imports valued CIF; partner = country of origin in the standard but not uniformly; confidentiality can suppress small CN8 cells; small traders below thresholds may be missing; exports include re-exports.
+
+### 11.5 Rule for the product (binding for Market and Verdict)
+1. A Comext figure is stored and displayed as **"EU customs-declared import activity for CN8 code X from China, member state Y, period P, dataset updated D. Not consumer demand."**
+2. It is a signal of kind `TRADE_ACTIVITY`, separate from `DEMAND_SIGNAL`, `OBSERVED_LISTING`, `ESTIMATE` and `CONFIRMED_SALES`. It may never feed `businessDecision` as demand, may never be converted into a unit-sales estimate, and may never raise a verdict by itself.
+3. It may only appear as context ("this category is actively imported"), a trend arrow with its period, and an implied unit-value range.
+4. A test must assert that no code path maps a `TRADE_ACTIVITY` signal into a demand field.
+5. Attribution line and dataset update date are always shown; the Austria/aggregate question is settled before any EU27 aggregate is used.

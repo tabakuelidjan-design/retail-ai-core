@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nordla phone probe</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fbf8f3; --fg:#183247; --card:#fff; --line:#d9d2c7; --ok:#1d7a46; --bad:#b3261e; --warn:#8a5a00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14202b; --fg:#eee9e0; --card:#1d2d3b; --line:#35485a; --ok:#58c98a; --bad:#ff8a80; --warn:#ffcc66; } }
+  * { box-sizing: border-box; } body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, sans-serif; padding:12px 16px 80px; }
+  h1 { font-size:20px; margin:4px 0; } h2 { font-size:16px; margin:0 0 6px; } .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin:10px 0; }
+  button { font:inherit; min-height:44px; padding:8px 14px; margin:4px 4px 4px 0; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); }
+  button.primary { background:var(--fg); color:var(--bg); } button.stop { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .muted { opacity:.75; font-size:14px; } .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); } code, pre { font:13px/1.35 ui-monospace, monospace; } pre { white-space:pre-wrap; word-break:break-word; margin:6px 0 0; max-height:220px; overflow:auto; }
+  select { font:inherit; min-height:44px; max-width:100%; } table { border-collapse:collapse; width:100%; font-size:14px; } td { padding:3px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+</style>
+</head>
+<body>
+<h1>Nordla phone probe <span class="muted">(temporary)</span></h1>
+<p class="muted">Tests what THIS phone browser can do with audio. Recordings stay inside this browser. Only small results (no audio) are sent to the PC, and only when the PC is reachable.</p>
+<main id="app"></main>
+<section class="card" id="playerCard"><h2>Playback</h2><div id="player" class="muted">Nothing loaded yet.</div></section>
+<script src="/probe.js"></script>
+</body>
+</html>
