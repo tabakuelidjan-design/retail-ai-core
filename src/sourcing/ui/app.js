@@ -310,22 +310,46 @@ function paintHeader() {
 function gate() {
   return `<div class="card"><h2>SIGN IN</h2><p class="small muted">Enter the access token of your Nordla server to keep cases on it and use the Safety Gate cache. Or work on this phone only: everything except live checks works offline.</p>${S.authFailed ? '<p class="warn">The token was refused.</p>' : ''}<label>Access token<input id="gate-tok" type="password" autocomplete="off"></label><button class="btn" data-act="gate-save" style="margin-top:10px">Sign in</button><button class="btn sec" data-act="gate-offline" style="margin-top:8px">Work on this phone only</button></div>`;
 }
+/** Whatever the owner has typed but not yet submitted must survive ANY re-render (a connection blip, the status check, the Safety Gate download all re-render by themselves).
+ *  Only fields that differ from what was rendered are kept; they are put back into the same form of the same case and tab. */
+const formKey = (f) => `${f.dataset.form}:${f.dataset.id ?? ''}`;
+function captureDrafts(root) {
+  const out = {};
+  for (const f of root.querySelectorAll('form[data-form]')) for (const el of f.elements) {
+    if (!el.name || ['file', 'password', 'submit', 'button'].includes(el.type)) continue;
+    const dirtyField = el.tagName === 'SELECT' ? [...el.options].some((o) => o.selected !== o.defaultSelected) : (el.type === 'checkbox' || el.type === 'radio') ? el.checked !== el.defaultChecked : el.value !== el.defaultValue;
+    if (dirtyField) ((out[formKey(f)] ??= {})[el.name] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value);
+  }
+  return out;
+}
+function restoreDrafts(root, drafts, focus) {
+  for (const f of root.querySelectorAll('form[data-form]')) {
+    const d = drafts[formKey(f)]; if (!d) continue;
+    for (const [name, v] of Object.entries(d)) { const el = f.elements[name]; if (!el || el.length !== undefined && !el.tagName) continue; if (el.type === 'checkbox' || el.type === 'radio') el.checked = v; else el.value = v; }
+  }
+  if (focus) { const f = [...root.querySelectorAll('form[data-form]')].find((x) => formKey(x) === focus.form); const el = f?.elements[focus.name]; if (el?.focus) { try { el.focus({ preventScroll: true }); if (focus.pos != null && el.setSelectionRange) el.setSelectionRange(focus.pos, focus.pos); } catch { /* not focusable */ } } }
+}
+let lastRenderKey = null; let discardDrafts = false;
 function render() {
   ensureCase(); const c = cur();
   if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
   $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
   paintHeader();
-  const main = $('#screen');
+  const main = $('#screen'); const key = `${S.currentId}|${S.tab}`;
+  const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
+  const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
   main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : SCREENS[S.tab](S.A, c)}`;
+  if (keep) restoreDrafts(main, drafts, focus);
 }
 
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.'));
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
 
+// what was typed is submitted into the case: the next screen shows the case, not the old draft
 async function onSubmit(ev) {
-  const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); const name = f.dataset.form; const c = cur();
+  const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); if (!S.quiet) discardDrafts = true; const name = f.dataset.form; const c = cur();
   if (name === 'product') {
     const e = (event) => { S.cases[S.currentId] = dispatch(cur(), event, new Date()); };
     if (d.name !== c.identity.workingName) e({ type: 'NAME', name: d.name });
@@ -415,8 +439,8 @@ async function onClick(ev) {
   if (act === 'what-works') return showCapabilities();
   if (act === 'copy-sup') { try { await navigator.clipboard.writeText(supplierText(S.A)); S.flash = 'Copied.'; } catch { S.flash = 'Copy is not available here: use "Show to supplier".'; } return render(); }
   if (act === 'close-overlay') { $('#overlay').hidden = true; $('#overlay').className = ''; return; }
-  if (act === 'newcase') { const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; S.tab = 'case'; persist(); closeOverlay(); return render(); }
-  if (act === 'opencase') { S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); return render(); }
+  if (act === 'newcase') { discardDrafts = true; const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; S.tab = 'case'; persist(); closeOverlay(); return render(); }
+  if (act === 'opencase') { discardDrafts = true; S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); return render(); }
   if (act === 'server-copy') { const sv = (S.conflicts ?? {})[key]; if (sv) { S.cases[sv.id] = sv; delete S.conflicts[key]; S.flash = ''; persist(); closeOverlay(); render(); } return; }
   if (act === 'keep-both') { const sv = (S.conflicts ?? {})[key]; const mine = S.cases[key]; if (sv && mine) { const copyId = `${key}-mine-${Date.now().toString(36)}`; const copy = { ...JSON.parse(JSON.stringify(mine)), id: copyId, rev: 0, identity: { ...mine.identity, workingName: `${mine.identity.workingName || 'Case'} (my copy)` } }; S.cases[copyId] = copy; S.cases[sv.id] = sv; delete S.conflicts[key]; markDirty(copyId); S.flash = 'Both copies are kept: the server copy under the original name and yours as "(my copy)".'; persist(); closeOverlay(); render(); queueSync(); } return; }
   if (act === 'export') { const blob = new Blob([JSON.stringify(cur(), null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${cur().id}.json`; a.click(); return; }
@@ -468,7 +492,7 @@ async function onPhoto(ev) {
 }
 
 (function pairingLink() { const m = /[#&]t=([A-Za-z0-9_-]{24,})/.exec(location.hash); if (!m) return; S.token = m[1]; ls.set('nordla.sourcing.token', S.token); S.authFailed = false; history.replaceState(null, '', location.pathname + location.search); })();
-document.addEventListener('click', onClick); document.addEventListener('submit', onSubmit); document.addEventListener('change', onPhoto);
+document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
 window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });

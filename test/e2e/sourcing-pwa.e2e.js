@@ -203,6 +203,37 @@ await check('17. REGRESSION (physical phone): through a Cloudflare-like HTTPS pr
   } finally { await b2.close(); await new Promise((r) => proxy.close(r)); proxy.closeAllConnections?.(); await new Promise((r) => srv2.server.close(r)); rmSync(dir2, { recursive: true, force: true }); }
 });
 
+await check('18. REGRESSION (physical phone, Firefox): a NEW case typed into Quick survives background re-renders; blank freight/duty/FX/Incoterm stay UNKNOWN; a refused server save is visible and loses nothing', async () => {
+  const dir3 = mkdtempSync(join(tmpdir(), 'nordla-e2e-quick-')); const TOKEN3 = 'quick-field-token-0123456789-abcdef-x'; const errs = [];
+  const srv3 = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN3 }, log: () => {}, port: 0, dir: dir3, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-04', perEur: { USD: 1.08 } }) });
+  const b3 = await new Browser(exe).launch(); b3.listeners.push((d) => { if (d.method === 'Runtime.exceptionThrown') errs.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text); });
+  try {
+    const t = await b3.tab(`http://127.0.0.1:${srv3.port}/#t=${TOKEN3}`); await ready(t); await t.waitFor('window.nordlaSourcing?.state().server === "VERIFIED"', 20000);
+    const QUICK = { name: 'Power bank', category: 'power_bank', unitPrice: '8', currency: 'USD', moq: '100', qty: '100', price: '21', target: '30', dest: 'own', freight: '', duty: '', fxRate: '', incoterm: '' };
+    const typed = `const f = document.querySelector('form[data-form="quick"]'); for (const [k, v] of Object.entries(${JSON.stringify(QUICK)})) f.elements[k].value = v;`;
+    const values = () => t.eval(`JSON.stringify(Object.fromEntries([...document.querySelector('form[data-form="quick"]').elements].filter((e) => e.name).map((e) => [e.name, e.value])))`);
+    await t.run(`document.querySelector('#btn-cases').click(); await __t.sleep(300); __t.click('[data-act="newcase"]'); await __t.sleep(300); __t.click('[data-act="tab"][data-key="quick"]'); await __t.sleep(300); ${typed} 'ok'`);
+    // what happens by itself on a phone while the owner is typing: a connection blip (offline/online events), a status re-check, the Safety Gate download
+    await t.run(`window.dispatchEvent(new Event('offline')); await __t.sleep(200); window.dispatchEvent(new Event('online')); await __t.sleep(1500); 'ok'`);
+    await t.eval(`document.querySelector('[data-act="safety"]')?.click(); 'ok'`); await new Promise((r) => setTimeout(r, 1500));
+    const kept = JSON.parse(await values()); for (const [k, v] of Object.entries(QUICK)) ok(kept[k] === v, `typed field "${k}" was wiped by a background re-render: "${kept[k]}" instead of "${v}"`);
+    // submit: the case is kept, the verdict is fail-closed, nothing is invented
+    await t.run(`document.querySelector('form[data-form="quick"] button.btn').click(); await __t.sleep(1200); 'ok'`);
+    const head = await text(t, '#case-name'); ok(head === 'Power bank', `case name after submit: "${head}"`);
+    const v = await text(t, '.verdict'); ok(/INSUFFICIENT INFORMATION/.test(v) && /Max purchase price: UNKNOWN/.test(v) && /landed UNKNOWN/.test(v), `verdict: ${v.slice(0, 200)}`);
+    const after = JSON.parse(await values()); ok(after.name === 'Power bank' && after.unitPrice === '8' && after.moq === '100' && after.price === '21' && after.freight === '' && after.duty === '' && after.fxRate === '' && after.incoterm === '', `form after submit: ${JSON.stringify(after)}`);
+    const saved = await t.eval(`(() => { const all = JSON.parse(localStorage.getItem('nordla.sourcing.cases')); const c = Object.values(all).find((x) => x.identity.workingName === 'Power bank'); return JSON.stringify({ q: c.quotes.at(-1), freight: c.costs.costs?.freight ?? null, duty: c.customs?.duty ?? null, fx: c.costs.fx ?? null }); })()`);
+    const sv = JSON.parse(saved); ok(sv.q.unitPrice === '8' && sv.q.incoterm === null && sv.freight === null && sv.duty === null && sv.fx === null, `stored case: ${saved}`);
+    // the server REFUSES the save: the case stays on the phone, the screen does not reset
+    await t.eval(`(() => { const of = window.fetch; window.fetch = (u, o) => (String(u).includes('/api/cases/') && o?.method === 'PUT') ? Promise.resolve(new Response(JSON.stringify({ error: 'refused' }), { status: 500 })) : of(u, o); })(); 'ok'`);
+    await t.run(`const f = document.querySelector('form[data-form="quick"]'); f.elements.unitPrice.value = '7.5'; f.elements.name.value = 'Power bank v2'; f.querySelector('button.btn').click(); await __t.sleep(2500); 'ok'`);
+    ok((await text(t, '#case-name')) === 'Power bank v2', 'the case must stay on screen when the server refuses the save');
+    ok(JSON.parse(await values()).unitPrice === '7.5', 'the entered price must survive a refused server save');
+    ok(await t.eval(`Object.values(JSON.parse(localStorage.getItem('nordla.sourcing.cases'))).some((x) => x.identity.workingName === 'Power bank v2' && x.quotes.at(-1).unitPrice === '7.5')`), 'the edit must be kept on the phone');
+    ok(errs.length === 0, `uncaught client errors: ${errs.join(' | ')}`);
+  } finally { await b3.close(); await new Promise((r) => srv3.server.close(r)); rmSync(dir3, { recursive: true, force: true }); }
+});
+
 await tab.close(); await browser.close(); if (server) await stopServer(); rmSync(dir, { recursive: true, force: true });
 const failed = results.filter(([, r]) => r !== 'PASS'); console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `; FAILED: ${failed.map(([n]) => n.split('.')[0]).join(', ')}` : ''}`);
 process.exit(failed.length ? 1 : 0);
