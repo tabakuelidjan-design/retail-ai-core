@@ -2,6 +2,7 @@
 import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from '../dom.js';
 import { S } from '../state.js';
 import { getBlob } from '../storage.js';
+import { documentStatusOf } from '/core/provenance.js';
 
 export function docsScreen(A, c) {
   const docCard = (d) => {
@@ -19,6 +20,7 @@ export function docsScreen(A, c) {
   <p class="small muted">Photo reading uses an AI reader ${S.ai?.enabled ? `(${esc(S.ai.provider)}, ${esc(S.ai.region)}): you are asked before each image is sent` : 'only if one is configured (none now): the photo is kept as evidence and you type what the paper says'}.</p></div>
   <div class="card"><h2>TYPE FROM THE PAPER</h2><p class="small muted">Works offline and with no reader. Key fields only: it can show a model or standard mismatch, not whether the original is complete.</p>
   <form data-form="doc-typed">${selectOf('docType', 'Document', [['EU_DOC', 'EU Declaration of Conformity'], ['TEST_REPORT', 'Test report'], ['CERTIFICATE', 'Certificate'], ['SDS', 'Safety data sheet'], ['UN383', 'UN 38.3 report'], ['FCM_DOC', 'Food-contact declaration'], ['MANUAL', 'Manual']])}<div class="row">${field('model', 'Model on the paper')}${field('date', 'Date of issue (YYYY-MM-DD)')}</div>${field('manufacturer', 'Manufacturer / applicant on the paper')}${field('directives', 'Directives / regulations cited (e.g. 2014/35/EU, 2014/30/EU)')}${field('standards', 'Standards cited (e.g. EN 62368-1, EN 55032)')}<div class="row">${field('lab', 'Laboratory (reports)')}${field('pages', 'Page x of y (e.g. 1 of 4)')}</div><button class="btn sec" style="margin-top:8px">Add typed document</button></form></div>
+  ${(c.documentLedger ?? []).length ? `<div class="card"><h2>WHAT THE SUPPLIER SAYS ABOUT DOCUMENTS</h2><p class="small muted">Statements, not documents: nothing below counts as received until you add the document itself.</p>${list([...new Set((c.documentLedger ?? []).map((d) => d.claim))].map((k) => { const st = documentStatusOf(c, k); const t = { CLAIMED: 'the supplier says they have it - NOT RECEIVED', PROMISED: 'the supplier says they will send it - NOT RECEIVED', NOT_AVAILABLE: 'the supplier says they do not have it', DOCUMENT_RECEIVED: 'a document was received (check it below)', DOCUMENT_MATCHED: 'a document was received and names the same model as the case (still a supplier document, not verification)', MISMATCH: 'a document was received but it names ANOTHER model' }[st.status] ?? st.status; return `<b>${esc(k === 'UN383' ? 'UN 38.3' : k)}</b>: ${esc(t)}`; }))}</div>` : ''}
   ${A.documents.length ? A.documents.map(docCard).join('') : '<p class="muted">No document yet.</p>'}
   ${A.crossChecks.length ? `<div class="card"><h2>BETWEEN DOCUMENTS</h2>${list(A.crossChecks.map((f) => esc(f.detail)))}</div>` : ''}`;
 }

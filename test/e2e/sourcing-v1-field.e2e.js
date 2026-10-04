@@ -66,6 +66,7 @@ await check('4. CONFIRM turns candidates into the existing quote fields; a suppl
   const q = c.quotes.at(-1); ok(q.incoterm === 'FOB' && q.currency === 'USD' && q.port === 'Shenzhen' && q.moq === 100 && q.tiers.length === 1 && q.tiers[0].unitPrice === '6.80', JSON.stringify(q));
   ok(c.identity.identifiers.model === 'PB-X200', 'model'); ok(c.documents.length === 0, 'no document was received'); ok(c.documentLedger.some((d) => d.claim === 'UN383' && d.status === 'CLAIMED'), 'the claim is recorded as a claim');
   ok(c.ledger.every((e) => e.status === 'SUPPLIER_CLAIM' && e.userConfirmed === true), 'every confirmed supplier statement stays a claim');
+  await t.run(`__t.click('[data-act="tab"][data-key="docs"]'); await __t.sleep(300); return 1;`); const docsText = await text(t); ok(/WHAT THE SUPPLIER SAYS ABOUT DOCUMENTS/.test(docsText) && /NOT RECEIVED/.test(docsText) && /No document yet/.test(docsText), 'Docs shows the claim as NOT RECEIVED and still no document');
   await t.run(`__t.click('[data-act="tab"][data-key="money"]'); await __t.sleep(300); return 1;`);
   const price = await t.eval(`document.querySelector('form[data-form="quote"] [name="unitPrice"]').value`); ok(price === '6.80', `the quote form shows the tier price for the quantity: ${price}`);
   await t.run(`__t.click('[data-act="tab"][data-key="field"]'); await __t.sleep(300); return 1;`);
@@ -81,7 +82,9 @@ await check('5. REJECT changes nothing; a custom-logo MOQ is kept apart from the
 await check('6. an ambiguous number must be corrected (not guessed); a bad correction is refused and keeps what was typed; a good one applies', async () => {
   await t.run(`__t.set('form[data-form="capture"] textarea', 'price USD 6,8 per piece'); __t.submit('form[data-form="capture"]'); await __t.sleep(500); return 1;`);
   let c = await kase(t); const amb = c.candidates.find((x) => x.key === 'quote.unitPrice' && x.needsCorrection); ok(amb && amb.value === null, 'ambiguous candidate'); ok(!(await t.eval(`!!document.querySelector('[data-act="cand-confirm"][data-key="${amb.id}"]')`)), 'no Confirm button for it');
-  await act(t, 'cand-correct-open', amb.id); await t.run(`__t.set('form[data-form="cand-correct"] input', '6,8'); __t.submit('form[data-form="cand-correct"]'); await __t.sleep(300); return 1;`);
+  await act(t, 'cand-correct-open', amb.id); await t.run(`__t.set('form[data-form="cand-correct"] input', '6,8'); window.dispatchEvent(new Event('offline')); await __t.sleep(200); window.dispatchEvent(new Event('online')); await __t.sleep(1200); return 1;`);
+  ok((await t.eval(`document.querySelector('form[data-form="cand-correct"] input').value`)) === '6,8', 'an open correction survives a background re-render');
+  await t.run(`__t.submit('form[data-form="cand-correct"]'); await __t.sleep(300); return 1;`);
   ok(/dot/i.test(await text(t)), 'the comma is refused with a clear message'); ok((await t.eval(`document.querySelector('form[data-form="cand-correct"] input').value`)) === '6,8', 'the typed value is still in the field');
   await t.run(`__t.set('form[data-form="cand-correct"] input', '6.80'); __t.submit('form[data-form="cand-correct"]'); await __t.sleep(400); return 1;`);
   c = await kase(t); const done = c.candidates.find((x) => x.id === amb.id); ok(done.state === 'CORRECTED' && done.original.value === null && done.correctedValue === '6.80', 'corrected, original kept'); ok(c.ledger.some((e) => e.key === 'quote.unitPrice' && e.value === '6.80' && e.status === 'USER_PROVIDED' && e.corrected === true && e.original.value === null), 'recorded as the owner own value, with the original proposal kept'); ok(c.quotes.at(-1).tiers.length === 1, 'the same price as the tier changes nothing');

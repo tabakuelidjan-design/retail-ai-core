@@ -159,3 +159,10 @@ test('extraction never touches case data and never calls the network (static gua
   const dir = new URL('../src/sourcing/core/extract/', import.meta.url);
   for (const f of readdirSync(dir)) { const src = readFileSync(new URL(f, dir), 'utf8'); assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|navigator\.|localStorage|indexedDB|require\(|node:/.test(src.replace(/\/\/.*$/gm, '')), `${f} must be pure and isomorphic`); }
 });
+
+test('number safety in running text: 6.8, 6.80, 680, $6.80, 6.80 USD and ¥6.80 keep exactly the digits the supplier wrote', () => {
+  const val = (text) => by(extractFacts({ text }), 'quote.unitPrice').map((c) => c.value);
+  assert.deepEqual(val('USD 6.8'), ['6.8']); assert.deepEqual(val('USD 6.80'), ['6.80']); assert.deepEqual(val('USD 680'), ['680']); assert.deepEqual(val('$6.80'), ['6.80']); assert.deepEqual(val('6.80 USD'), ['6.80']); assert.deepEqual(val('¥6.80'), ['6.80']);
+  assert.equal(by(extractFacts({ text: 'USD 6,80' }), 'quote.unitPrice')[0].needsCorrection, true); assert.equal(by(extractFacts({ text: 'USD 6,80' }), 'quote.unitPrice')[0].value, null);
+  assert.notEqual(val('USD 6.8')[0], val('USD 680')[0]);
+});
