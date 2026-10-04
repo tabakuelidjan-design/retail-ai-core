@@ -22,7 +22,7 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 5. **Open Nordla from that icon** (not from the browser). Tap the menu (three lines, top left), then **"What works right now"**.
    You should see: a line saying your server is reachable. Close it.
 6. Tap **Rules**, scroll to "EU SAFETY GATE", tap **"Refresh live evidence (Safety Gate)"**. Wait about 10 seconds.
-   You should see: "Data LIVE VERIFIED" and the date of the newest weekly report.
+   You should see: header "SERVER VERIFIED" and, on the line below, "SAFETY GATE LIVE" (it downloads by itself in a few seconds).
 7. **Create a test product:** tap **Quick**. Type "Test product", choose a category, supplier price `4.20`, MOQ `500`, "I would buy" `1000`, selling price `19.99`, margin `30`, freight `600`, duty `2.7`, exchange rate `0.92`. Tap **"Get the preliminary answer"**.
    You should see: a verdict (probably "CONDITIONAL GO" or "NOT ENOUGH INFORMATION") and a maximum purchase price.
 
@@ -31,7 +31,7 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 1. Switch the phone to **airplane mode** and make sure Wi-Fi is off too.
 2. **Close Nordla completely** (swipe it away from the list of open apps).
 3. **Open Nordla from the home-screen icon.**
-   You should see: the app opens; your "Test product" is there; the top right says **CACHED - NO SERVER** (never "LIVE").
+   You should see: the app opens; your "Test product" is there; the header says **NO SERVER** and the line below says **SAFETY GATE CACHED** (never "LIVE").
    *If you see a browser error page ("no internet"), write FAIL and go to section F.*
 4. Tap **Money**. Change the supplier price to `3.60` and tap outside the box.
    You should see: the numbers at the top change at once, without pressing anything else.
@@ -42,7 +42,7 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 7. Menu, then **"What works right now"**.
    You should see: most lines "works now"; "PDF", "AI" and "sync" lines say they need your computer.
 8. Switch airplane mode **off**. Wait one minute.
-   You should see: the top right becomes **LIVE VERIFIED**. (If your computer is off or the tunnel window was closed, it stays CACHED: that is correct.)
+   You should see: the header becomes **SERVER VERIFIED** and the line below **SAFETY GATE LIVE**. (If your computer is off or the tunnel window was closed, it stays CACHED: that is correct.)
 9. On your computer, nothing to do. On the phone, menu, open your Test product again.
    You should see: the price `3.60` you typed offline is still there.
 
@@ -60,7 +60,7 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 
 ## E. WHEN THE INTERNET RETURNS
 
-1. Open Nordla. Wait a minute. The top right should say **LIVE VERIFIED** again.
+1. Open Nordla. Wait a minute. The header should say **SERVER VERIFIED** and the line below **SAFETY GATE LIVE** again.
 2. Menu: if a yellow box says **"Conflict"**, it means the same product was changed on two devices. Nothing was lost. Tap **"Keep both copies"**.
 3. Rules, then **"Refresh live evidence (Safety Gate)"** once more.
 
@@ -89,4 +89,16 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 | B9 the offline change is still there | | |
 | C2 "Show to supplier" readable | | |
 
-Until you send this list, the status stays **REAL PHONE: REHEARSAL READY / HUMAN TEST REQUIRED**. Nobody, including me, can mark it PASS on your behalf.
+## Recorded result: PHYSICAL PHONE REHEARSAL - PASS (core scenario)
+
+Performed personally by the owner on a physical Android phone, through the Cloudflare HTTPS tunnel, on build `5562b8b` (reported by the owner on 2026-10-04; recorded here from that report, not re-observed by the engineers). Observed sequence:
+
+1. ONLINE: header **SERVER VERIFIED**, line **SAFETY GATE LIVE**.
+2. AIRPLANE MODE: header **NO SERVER**, line **SAFETY GATE CACHED**; the existing case and its verdict stayed accessible.
+3. While offline the supplier price was changed from 8.00 USD to 7.50 USD.
+4. Connectivity restored.
+5. AFTER RECONNECTION: **SERVER VERIFIED** and **SAFETY GATE LIVE** returned; the supplier price remained 7.50 USD.
+
+Therefore ONLINE -> OFFLINE -> LOCAL EDIT -> ONLINE passed on a real phone without losing the edit.
+
+**Not covered by this result** (not reported as physically tested, so still open): install-as-icon and cold start with the app closed, photo capture, "Show to supplier", new case created offline, several cases, document photos, conflict between two devices, server restart mid-use, wrong token on the phone. The earlier defect (header "OFFLINE - VERIFY" with a working tunnel) is the one fixed in `5562b8b`; this pass confirms the fix on the same phone.
