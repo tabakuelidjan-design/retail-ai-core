@@ -16,6 +16,9 @@ import { summarizeMarket, amazonReadiness, normalizeObservation } from './amazon
 import { decide, DEFAULT_POLICY } from './decision.js';
 import { IDENTITY_LEVEL, FACT_CLASS, IDENTITY_RANK } from './levels.js';
 import { readsOf } from './predicate.js';
+import { upgradeCase, CASE_SCHEMA } from './upgrade.js';
+import { effectiveQuote, normalizeTiers } from './offers.js';
+import * as conv from './conversation.js';
 
 const DAY = 86400000;
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
@@ -23,16 +26,26 @@ const ruleById = new Map(RULEBOOK.map((r) => [r.id, r]));
 
 export function newCase({ id, name = '', now = new Date() } = {}) {
   return {
-    schema: 1, id: id ?? `case-${now.getTime().toString(36)}`, createdAt: now.toISOString(), updatedAt: now.toISOString(),
+    schema: CASE_SCHEMA, id: id ?? `case-${now.getTime().toString(36)}`, createdAt: now.toISOString(), updatedAt: now.toISOString(),
     identity: createIdentity({ workingName: name }), placing: {}, context: { market: 'EU-BE', channels: ['own_site'], consumerSales: true },
     supplier: {}, quotes: [], costs: {}, sale: null, saleAmazon: null, documents: [], safetySnapshot: null, customs: {}, amazon: { observations: [], restricted: null }, notes: [], decisions: [], events: [],
+    // V1 (schema 2): supplier conversations, candidate facts, the confirmed-fact ledger, conflicts, supplier document statements, the owner's own questions
+    conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [],
   };
 }
 
 /** Applies ONE event, immutably. Unknown event types are refused (never silently ignored). */
 export function dispatch(state, event, now = new Date()) {
-  const s = clone(state); const at = now.toISOString();
+  const s = upgradeCase(clone(state)); const at = now.toISOString();
+  reduceInPlace(s, event, at);
+  s.updatedAt = at; s.events.push({ at, type: event.type, summary: event.summary ?? null });
+  return s;
+}
+
+/** The reducer proper: mutates the (already cloned) draft state. Candidate confirmation compiles into the SAME events below, applied through `sub` and logged one by one. */
+function reduceInPlace(s, event, at) {
   const lvl = event.level ?? IDENTITY_LEVEL.USER_STATED;
+  const sub = (ev) => { reduceInPlace(s, ev, at); s.events.push({ at, type: ev.type, summary: ev.summary ?? null }); };
   switch (event.type) {
     case 'NAME': s.identity.workingName = String(event.name ?? ''); break;
     case 'CATEGORY': s.identity = applyCategory(s.identity, event.category, { level: lvl, source: event.source ?? { kind: 'user' } }); break;
@@ -43,7 +56,14 @@ export function dispatch(state, event, now = new Date()) {
     case 'PLACING': s.placing = { ...s.placing, ...event.placing }; break;
     case 'CONTEXT': s.context = { ...s.context, ...event.context }; break;
     case 'SUPPLIER': s.supplier = { ...s.supplier, ...event.supplier }; break;
-    case 'QUOTE': s.quotes.push({ ...event.quote, at }); break;
+    case 'QUOTE': { // V1 fields (port, payment, price tiers) survive a V0 form save; typing a DIFFERENT unit price replaces the tiers (an explicit single price wins)
+      const prev = s.quotes.at(-1); const nq = { ...event.quote };
+      if (prev) for (const k of ['port', 'payment', 'tiers']) if (nq[k] === undefined && prev[k] !== undefined) {
+        if (k === 'tiers' && nq.unitPrice !== undefined && nq.unitPrice !== '' && normalizeTiers(prev.tiers).length && Number(String(nq.unitPrice).replace(',', '.')) !== Number(String(effectiveQuote(prev).unitPrice).replace(',', '.'))) continue;
+        nq[k] = prev[k];
+      }
+      s.quotes.push({ ...nq, at }); break;
+    }
     case 'COSTS': s.costs = { ...s.costs, ...event.costs }; break;
     case 'SALE': s.sale = { ...(s.sale ?? {}), ...event.sale, priceBasis: event.sale.priceBasis ?? s.sale?.priceBasis ?? 'TARGET' }; break;
     case 'SALE_AMAZON': s.saleAmazon = { ...(s.saleAmazon ?? {}), ...event.sale }; break;
@@ -63,15 +83,23 @@ export function dispatch(state, event, now = new Date()) {
     case 'DOCUMENT_CONFIRM': { const d = s.documents.find((x) => x.id === event.id); if (!d) throw new Error(`unknown document: ${event.id}`); d.confirmed = true; d.confirmedAt = at; break; }
     case 'SAFETY_SNAPSHOT': s.safetySnapshot = event.snapshot; break;
     case 'CUSTOMS': s.customs = { ...s.customs, ...event.customs }; break;
-    case 'AMAZON_OBS': s.amazon.observations.push(normalizeObservation(event.observation, now)); break;
+    case 'AMAZON_OBS': s.amazon.observations.push(normalizeObservation(event.observation, new Date(at))); break;
     case 'AMAZON_OBS_REMOVE': s.amazon.observations.splice(event.index, 1); break;
     case 'AMAZON': s.amazon = { ...s.amazon, ...event.amazon, observations: s.amazon.observations }; break;
     case 'NOTE': s.notes.push({ at, text: String(event.text ?? '') }); break;
     case 'DECISION_RECORDED': s.decisions.push(event.entry); break;
+    case 'CONVERSATION_START': conv.start(s, event, at); break;
+    case 'CONVERSATION_ITEM': conv.addItem(s, event, at); break;
+    case 'CONVERSATION_FINISH': conv.finish(s, event, at); break;
+    case 'CANDIDATE_CONFIRM': conv.confirm(s, event, at, sub); break;
+    case 'CANDIDATE_CORRECT': conv.correct(s, event, at, sub); break;
+    case 'CANDIDATE_REJECT': conv.reject(s, event, at); break;
+    case 'CONFLICT_RESOLVE': conv.resolve(s, event, at, sub); break;
+    case 'QUESTION_ADD': conv.addQuestion(s, event, at); break;
+    case 'QUESTION_STATE': conv.questionState(s, event); break;
+    case 'DOC_CLAIM': s.documentLedger.push({ id: `dc-${s.documentLedger.length + 1}`, claim: event.claim, status: event.status, source: event.source ?? null, at }); break; // a supplier STATEMENT about a document: never a received document
     default: throw new Error(`unknown case event: ${event.type}`);
   }
-  s.updatedAt = at; s.events.push({ at, type: event.type, summary: event.summary ?? null });
-  return s;
 }
 
 /** A first look from free text (photo caption, label text, supplier listing): PROBABLE category only; the owner confirms. */
@@ -80,7 +108,7 @@ export function suggestCategories(text) { return inferCategories(text).slice(0, 
 const currentQuote = (s) => s.quotes.at(-1) ?? null;
 
 function landedInputOf(s, quoteOverride) {
-  const q = { ...(currentQuote(s) ?? {}), ...(quoteOverride ?? {}) };
+  const q = effectiveQuote({ ...(currentQuote(s) ?? {}), ...(quoteOverride ?? {}) }); // with price tiers: the unit price for the quantity considered; a V0 quote is untouched
   const qty = Number(q.qty ?? q.moq ?? 1) || 1;
   const duty = s.customs?.duty; const costs = { ...(s.costs?.costs ?? {}) };
   if (duty && duty.ratePct !== undefined && duty.ratePct !== null) costs.customsDuty = { ratePct: duty.ratePct, status: duty.kind === 'TAXUD_LOOKUP' ? 'KNOWN' : 'ESTIMATED', source: duty.source ?? 'USER_ENTERED' };
