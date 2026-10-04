@@ -110,7 +110,7 @@ export function extractEn(text, lang) {
   if (due) { const i = due.index + due[0].toLowerCase().lastIndexOf(due[1].toLowerCase()); out.push(mk(text, lang, 'payment.balanceDue', due[1].toLowerCase().replace(/\s+/g, ' ').replace('b/l', 'B/L').replace('bl', 'B/L'), i, i + due[1].length, { reason: 'when the balance is due' })); }
 
   // ---- lead time ----
-  const lt = /(?:lead\s?time|production(?:\s+(?:time|period|cycle))?|delivery(?:\s+time)?|ready in|ready within|ship(?:ped|ment)?(?:\s+(?:in|within))?|within)\s*(?:is|of|:|=)?\s*(?:about|around|approx\.?)?\s*(\d{1,3})(?:\s?(?:-|–|to)\s?(\d{1,3}))?\s*(?:(?:working|business|calendar)\s+)?(days?|weeks?)/i.exec(text);
+  const lt = /(?:lead\s?time|production(?:\s+(?:time|period|cycle))?|delivery(?:\s+time)?|ready in|ready within|ship(?:ped|ment)?(?:\s+(?:in|within))?|within)\s*(?:is|of|:|=)?\s*(?:about|around|approx\.?)?\s*(\d{1,3})(?:\s?(?:-|–|to)\s?(\d{1,3}))?\s*(?:(?:working|business|calendar)\s+)?(days?|weeks?)/i.exec(text) ?? /(\d{1,3})(?:\s?(?:-|–|to)\s?(\d{1,3}))?\s*(?:(?:working|business|calendar)\s+)?(days?|weeks?)\s+(?:of\s+)?(?:lead\s?time|production|delivery)/i.exec(text);
   if (lt) { const wk = /^w/i.test(lt[3]); const lo = Number(lt[1]) * (wk ? 7 : 1); const hi = Number(lt[2] ?? lt[1]) * (wk ? 7 : 1); out.push(mk(text, lang, 'quote.leadTime', { min: String(lo), max: String(hi), unit: 'days' }, lt.index, lt.index + lt[0].length, { flags: wk ? ['WEEKS_CONVERTED'] : [], reason: 'lead time' })); }
 
   // ---- colours ----
