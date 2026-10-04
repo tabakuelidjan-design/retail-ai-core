@@ -300,3 +300,28 @@ Further caveats (SOURCE: Eurostat methodology): imports valued CIF; partner = co
 3. It may only appear as context ("this category is actively imported"), a trend arrow with its period, and an implied unit-value range.
 4. A test must assert that no code path maps a `TRADE_ACTIVITY` signal into a demand field.
 5. Attribution line and dataset update date are always shown; the Austria/aggregate question is settled before any EU27 aggregate is used.
+
+---
+
+## 12. Physical-phone capability probe - RESULTS (Firefox 157, Android 16)
+
+Run by the owner on the real phone through the temporary tunnel (28 reports received; the probe was stopped afterwards; the folder `tools/phone-probe` stays as a disabled tool). Evidence level for this section: **PHYSICAL PHONE (reports received from the device)**. Audio never left the phone; only metadata reports crossed the tunnel.
+
+| Question | Result |
+|---|---|
+| Browser | Firefox 157 on Android 16 (`Linux armv81`), language fr-FR, 8 cores, secure context yes |
+| Microphone | `getUserMedia` works; permission granted; mono track; echo cancellation, noise suppression and auto gain **on by default**. The Permissions API reports `prompt` even after a grant, so **expect Firefox to ask again in later sessions** (design the UI for a re-prompt). |
+| `MediaRecorder` | available. **Default format chosen by the browser: `audio/ogg; codecs=opus`** (Firefox lists ogg/opus and webm/opus as supported; mp4 is not). |
+| Recording, start/stop, 30-60 s | clean: 46 s, 46 chunks, **largest gap 1.0 s (the 1-second chunk interval, i.e. no loss)**; repeated 4 times |
+| Size | about **950 KB per minute** with the default encoder settings (about 127 kbit/s). A 30-minute conversation would be about 28 MB. This is high for speech: a lower `audioBitsPerSecond` should be tested before the voice feature is built (**UNMEASURED**). |
+| Playback | owner confirmed "I heard my voice" |
+| Persistence, reload | recordings stayed in IndexedDB across reloads; the first recording was played back after a reload (storage use rose steadily 0.02 -> 0.95 -> 1.75 MB per probe session before the test data) |
+| Recording while offline | works: two offline recordings (35 s and 33 s), clean, no gaps |
+| Recovery after reconnect | the queued reports (written while offline) were all delivered when the network returned (flagged `online=false` at creation, received after reconnect) |
+| Re-render while recording | **no effect**: a recording made during a re-render storm (88 renders during the recording, 478 in the session) was clean with no gap. Design rule confirmed: recorder state outside the DOM. |
+| Storage quota | estimate 10 GB before, **243 GB after `persist()`**; the browser **granted persistent storage** (`persisted: true`). 5 MB writes about 70-90 ms, a 25 MB write 371 ms. No error. |
+| Web Speech API | **absent** in this Firefox (`webSpeech: false`), as the research said |
+
+**Not covered by this run (still unknown, to be tested later):** recording while the app is in the background or the screen is locked (all recordings had `hiddenDuringRecording = 0`); an explicit airplane-mode **page reload** from the cache (the page was usable offline and recorded, but a reload while offline was not separately reported); the "recordings are here after reload" report buttons were not pressed (persistence is shown indirectly by the playback after reload); other formats and Chrome.
+
+**Design consequences for P4:** use the browser default format and store the container type with each recording; request persistent storage; cap the bitrate (test); keep recorder state outside the screen rendering; chunk every second into IndexedDB (as the probe did) so an interrupted recording is recoverable; treat a repeated mic permission prompt as normal; treat background/lock-screen recording as **unsupported until tested** and tell the owner to keep the screen on while recording.
