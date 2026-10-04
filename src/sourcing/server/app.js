@@ -13,6 +13,7 @@ import { StoreError } from '../store/file-store.js';
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
 const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract)\/)?[a-z0-9-]+\.js)$/;
 
 const sameToken = (a, b) => { const x = Buffer.from(String(a ?? '')); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
@@ -43,7 +44,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
   async function shellManifest() {
     if (shellCache) return shellCache;
     const walk = async (dir, prefix) => { const out = []; for (const e of await readdir(dir, { withFileTypes: true })) { if (e.isDirectory()) out.push(...await walk(join(dir, e.name), `${prefix}${e.name}/`)); else if (/\.js$/.test(e.name)) out.push(`${prefix}${e.name}`); } return out; };
-    return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(coreDir, '/core/'))])].sort() });
+    return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(uiDir, '/')), ...(await walk(coreDir, '/core/'))])].sort() });
   }
   async function serveStatic(res, file, dir) {
     try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...SEC }); res.end(data); }
@@ -104,6 +105,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
+      if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);
       return json(res, 404, { error: 'NOT_FOUND' });
     } catch (e) { const status = e.status ?? 500; json(res, status, { error: status === 500 ? 'INTERNAL' : String(e.message) }); if (status === 500) console.error('[sourcing]', e); }

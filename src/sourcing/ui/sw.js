@@ -1,6 +1,6 @@
 // Offline shell: on install the WHOLE app (page, script, style, every decision-engine module) is cached from /shell-manifest.json, so a case can be opened and worked with no
 // connection even if the first visit loaded modules before this worker took control. /api is never cached: live data stays live (the phone keeps its own Safety Gate copy).
-const CACHE = 'nordla-sourcing-v0-5';
+const CACHE = 'nordla-sourcing-v0-6';
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);

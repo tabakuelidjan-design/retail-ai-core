@@ -1,0 +1,33 @@
+// decision screen (extracted from app.js, no behaviour change).
+import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from '../dom.js';
+import { S } from '../state.js';
+import { numbersInner } from '../numbers.js';
+
+export function decisionScreen(A, c) {
+  const d = A.decision; const [en, fr] = VERDICT_TEXT[d.verdict]; const dim = d.dimensions; const mp = A.maxPurchasePrice; const q = quoteOf(c);
+  const cur = q.currency ?? 'USD';
+  const wi = S.whatIf;
+  return `<section class="verdict v-${d.verdict}" aria-live="polite"><p class="q">SHOULD I CONTINUE WITH THIS PRODUCT?</p><div class="v">${esc(d.verdict.replace(/_/g, ' '))}</div><p class="a">${esc(en)} <span class="muted small">/ ${esc(fr)}</span></p><p style="margin:0">${esc(d.nextAction)}</p></section>
+  <div class="chips">${chip('Identification', dim.identification, dim.identification === 'HIGH' ? 'GREEN' : dim.identification === 'MEDIUM' ? 'AMBER' : 'RED')}${chip('EU / BE', dim.marketability)}${chip('Amazon', dim.amazonReadiness)}${chip('Economics', dim.economics)}${chip('Supplier evidence', dim.supplierEvidence)}${chip('Safety risk', dim.safetyRisk)}</div>
+  ${(dim.supplierEvidence !== 'COMPLETE' || dim.identification !== 'HIGH') && d.verdict !== 'NO_GO' ? `<p class="note"><b>PRELIMINARY answer.</b> ${esc(dim.identification !== 'HIGH' ? 'The product is not fully identified yet. ' : '')}${esc(dim.supplierEvidence !== 'COMPLETE' ? 'Supplier documents are not complete or not checked yet: add them in Docs to firm it up.' : '')}</p>` : ''}
+  <div class="card"><h2>AT A GLANCE</h2>${numbersInner(A, c)}
+    <h3>Missing supplier documents</h3>${d.gaps.missingDocs.length ? list(d.gaps.missingDocs.slice(0, 4).map((m) => esc(m.label.replace(/\s*\(.*$/, '')))) : '<p class="muted small">none required that is missing</p>'}
+    <h3>Safety Gate</h3><p class="small">${chip('', A.safety.status, A.safety.status === 'EXACT_MATCH' || A.safety.status === 'PROBABLE_MATCH' ? 'RED' : A.safety.status === 'SIMILAR_PRODUCT_RISK' ? 'AMBER' : A.safety.status === 'NO_MATCH_FOUND' ? 'GREEN' : 'UNKNOWN')} ${chip('Data', A.dataMode.replace(/_/g, ' '), A.dataMode === 'LIVE_VERIFIED' ? 'GREEN' : A.dataMode === 'CACHED' ? 'AMBER' : 'RED')}${A.safety.status === 'NO_MATCH_FOUND' ? ' <span class="muted">no match does not prove safety</span>' : ''}</p>
+    <h3>Regulatory uncertainty</h3>${d.rulebookReview.unreviewedApplicable.length ? list(d.rulebookReview.unreviewedApplicable.slice(0, 4).map((r) => esc(`${r.ruleId}: ${r.status.replace(/_/g, ' ')}`))) : '<p class="muted small">every applicable material rule is verified at least from its primary text (an expert still confirms your product)</p>'}
+    <h3>Amazon (separate from EU legal marketability)</h3><p class="small">${chip('Amazon readiness', dim.amazonReadiness)} ${chip('EU / BE marketability', dim.marketability)}</p></div>
+  ${d.hardBlockers.length ? `<div class="warn"><strong>Hard blockers</strong>${list(d.hardBlockers.map((b) => `<b>${esc(b.code.replace(/_/g, ' '))}</b> - ${esc(b.detail)}`))}</div>` : ''}
+  ${A.role.warnings.map((w) => `<div class="warn"><strong>${esc(w.code.replace(/_/g, ' '))}</strong> - ${esc(w.message)}</div>`).join('')}
+  <div class="card"><h2>MAXIMUM PURCHASE PRICE</h2>${mp?.maxUnitPriceMinor != null ? `<div class="big">${esc(money(mp.maxUnitPriceMinor, mp.currency))}<span class="muted small"> / unit${mp.upperBound ? ' - UPPER BOUND (some fees unknown)' : ''}</span></div>${mp.maxUnitPriceMinor === 0 ? '<p class="warn">Even a tiny price misses your target margin.</p>' : ''}` : `<p><b>INFORMATION INSUFFICIENT</b> - ${esc(mp?.reason ?? 'selling price, margin target or a cost is missing')}</p>`}
+    <form data-form="whatif" class="row" style="align-items:end"><label>Supplier says (${esc(cur)})<input name="unitPrice" inputmode="decimal" placeholder="4.20" value="${esc(wi?.change?.unitPrice ?? '')}"></label><button class="btn" style="flex:0 0 auto">What if</button></form>
+    ${wi ? `<div class="note"><b>At ${esc(wi.change.unitPrice)} ${esc(cur)}:</b> landed ${esc(money(wi.whatIf.landedPerUnitMinor))}/unit, contribution ${esc(money(wi.whatIf.contributionMinor))}${wi.whatIf.contributionPct != null ? ` (${(wi.whatIf.contributionPct * 100).toFixed(1)}%)` : ''}, economics ${esc(wi.whatIf.economics)}, verdict <b>${esc(wi.whatIf.verdict.replace(/_/g, ' '))}</b>${wi.withinMaxPrice === false ? ' - ABOVE your maximum price' : wi.withinMaxPrice ? ' - within your maximum price' : ''}</div>` : ''}</div>
+  <div class="card"><h2>WHY</h2>${list(d.why.map(esc))}${d.conditions.length ? `<h3>Conditions</h3>${list(d.conditions.map(esc))}` : ''}</div>
+  <div class="card"><h2>VERIFIED / ESTIMATED / MISSING</h2><details open><summary>Verified (${A.evidence.verified.length}) - official source or inspected</summary>${list(A.evidence.verified.map((e) => esc(`${e.item}: ${e.value ?? ''}`)))}</details>
+  <details><summary>Supplier claims (${A.evidence.supplierClaims.length}) - not proof</summary>${list(A.evidence.supplierClaims.map((e) => esc(`${e.item}: ${typeof e.value === 'object' ? JSON.stringify(e.value) : e.value ?? ''}`)))}</details>
+  <details><summary>Calculated (${A.evidence.calculated.length})</summary>${list(A.evidence.calculated.map((e) => esc(`${e.item}: ${e.valueMinor != null ? money(e.valueMinor, e.currency) : ''}${e.upperBound ? ' (upper bound)' : ''}`)))}</details>
+  <details><summary>Estimated / assumed (${A.evidence.estimated.length + A.evidence.assumed.length})</summary>${list([...A.evidence.estimated, ...A.evidence.assumed].map((e) => esc(`${e.item}${e.value !== undefined ? ` = ${e.value}` : ''} - ${e.note ?? e.level ?? ''}`)))}</details>
+  <details open><summary>Missing / unknown (${A.evidence.unknown.length})</summary>${list(A.evidence.unknown.map((e) => esc(`${e.item}${e.note ? ` - ${e.note}` : ''}`)))}</details>
+  <details><summary>Needs an expert or authority (${A.evidence.needsExpert.length})</summary>${list(A.evidence.needsExpert.map((e) => esc(e.title)))}</details></div>
+  ${d.adminObligations.length ? `<div class="card"><h2>REGISTRATIONS AND OBLIGATIONS (not part of the verdict)</h2>${list(d.adminObligations.map((o) => `${esc(o.title)} <span class="chip">${esc(o.layer)}</span> <span class="muted small">review: ${esc(String(o.reviewStatus).replace(/_/g, ' '))}</span>`))}<p class="small muted">Legal obligations, scheme services and optional services are different things: see Rules.</p></div>` : ''}
+  <div class="card"><h2>COULD BLOCK</h2><h3>Import</h3>${list(d.blocksImport.map((x) => esc(x.replace(/_/g, ' '))))}<h3>Amazon</h3>${list(d.blocksAmazon.map((x) => esc(x.replace(/_/g, ' '))))}</div>
+  <p class="note">${esc(d.note)}</p>`;
+}
