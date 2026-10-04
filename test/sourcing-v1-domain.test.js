@@ -229,3 +229,13 @@ test('a quote form that still shows an earlier tier price (stale after a quantit
   s = dispatch(s, { type: 'QUOTE', quote: { unitPrice: '6.80', currency: 'USD', qty: 500, moq: 100, incoterm: 'FOB' } }, at(2)); assert.equal(s.quotes.at(-1).tiers.length, 3, 'a second form save with the same stale price keeps the tiers');
   const manual = dispatch(s, { type: 'QUOTE', quote: { unitPrice: '5.90', currency: 'USD', qty: 500, moq: 100 } }, at(3)); assert.equal(manual.quotes.at(-1).tiers, undefined, 'a price that matches no quoted tier is an explicit override');
 });
+
+test('supplier statements about a document: promised -> claimed is recorded as progress; "we have it" vs "we do not have it" is a conflict, never a silent overwrite', () => {
+  let s = build([{ type: 'NAME', name: 'Power bank' }]); s = start(s); s = say(s, 'We can send the UN38.3 report.'); s = confirm(s, cand(s, 'docClaim.UN383'));
+  assert.equal(documentStatusOf(s, 'UN383').status, 'PROMISED');
+  s = say(s, 'We have UN38.3.', { n: 5 }); s = confirm(s, s.candidates.filter((c) => c.key === 'docClaim.UN383').at(-1), 6); assert.equal(s.documentLedger.length, 2, 'both statements are recorded'); assert.equal(documentStatusOf(s, 'UN383').status, 'CLAIMED'); assert.equal(s.conflicts.length, 0);
+  s = say(s, 'Sorry, we do not have UN38.3.', { n: 8 }); const flip = s.candidates.filter((c) => c.key === 'docClaim.UN383').at(-1); assert.equal(flip.value, 'NOT_AVAILABLE'); s = confirm(s, flip, 9);
+  assert.equal(documentStatusOf(s, 'UN383').status, 'CLAIMED', 'not overwritten'); const cf = s.conflicts.find((x) => x.state === 'OPEN'); assert.ok(cf); assert.match(describeText(cf), /UN 38\.3/);
+  const taken = dispatch(s, { type: 'CONFLICT_RESOLVE', id: cf.id, choice: 'NEW' }, at(10)); assert.equal(documentStatusOf(taken, 'UN383').status, 'NOT_AVAILABLE'); assert.equal(taken.documents.length, 0);
+});
+function describeText(cf) { return JSON.stringify(cf.question) + cf.key; }

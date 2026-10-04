@@ -36,14 +36,16 @@ export function existingValue(state, key, context = 'product') {
     case 'quote.unitPrice': return eq?.unitPrice ?? null; case 'quote.currency': return q?.currency ?? null; case 'quote.incoterm': return q?.incoterm ?? null; case 'quote.port': return q?.port ?? null;
     case 'quote.moq': return context === 'product' ? (q?.moq ?? null) : lastLedger(state, key, context); case 'quote.tiers': return q?.tiers ?? null;
     case 'quote.leadTime': return q?.leadTimeDays ?? null; case 'payment.depositPct': return q?.payment?.depositPct ?? null; case 'payment.balancePct': return q?.payment?.balancePct ?? null;
-    default: return lastLedger(state, key, context);
+    default: return key.startsWith('docClaim.') ? ((state.documentLedger ?? []).filter((d) => d.claim === key.slice(9)).at(-1)?.status ?? null) : lastLedger(state, key, context);
   }
 }
 const lastLedger = (state, key, context) => (state.ledger ?? []).filter((e) => e.key === key && e.context === context).at(-1)?.value ?? null;
 
 /** @returns {null | { type: 'MODEL_MISMATCH'|'VALUE', key: string, existing: any }} */
 export function findCandidateConflict(state, cand, value) {
-  if (cand.key.startsWith('docClaim.')) return null; // claims are statements; a changed statement is recorded, the document ledger keeps the latest
+  if (cand.key.startsWith('docClaim.')) { // a statement that flips between "we have it" and "we do not have it" contradicts itself; claimed -> promised -> claimed is just progress
+    const was = existingValue(state, cand.key); return was && (was === 'NOT_AVAILABLE') !== (value === 'NOT_AVAILABLE') ? { type: 'VALUE', key: cand.key, existing: was } : null;
+  }
   const have = existingValue(state, cand.key, cand.context);
   if (have === null || have === undefined || have === '') return null;
   const incoming = cand.key === 'quote.leadTime' && value && typeof value === 'object' ? value.max : value;

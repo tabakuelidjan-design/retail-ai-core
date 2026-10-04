@@ -51,13 +51,13 @@ function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDec
   const status = confirmedStatus({ speaker: c.speaker, corrected });
   const level = corrected || c.speaker === SPEAKER.ME || ownerDecided ? 'USER_STATED' : 'SUPPLIER_CLAIMED';
   const source = { kind: 'conversation', convId: c.convId, itemId: c.itemId, candidateId: c.id };
-  const same = !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only
+  const same = !c.key.startsWith('docClaim.') && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
   if (!same) for (const e of compile(s, c, value, level, source)) reduce(e);
   s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}) });
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 
-const label = (key, ctx) => ({ 'quote.moq': `minimum order${ctx && ctx !== 'product' ? ` (${ctx.replace(/_/g, ' ')})` : ''}`, 'quote.unitPrice': 'unit price', 'quote.currency': 'currency', 'quote.incoterm': 'Incoterm', 'quote.port': 'port', 'quote.leadTime': 'lead time', 'quote.tiers': 'price tiers', 'identifier.model': 'model', 'identifier.brand': 'brand', 'identifier.manufacturer': 'manufacturer', 'payment.depositPct': 'deposit %', 'payment.balancePct': 'balance %' }[key] ?? key);
+const label = (key, ctx) => (key.startsWith('docClaim.') ? `document statement (${key.slice(9) === 'UN383' ? 'UN 38.3' : key.slice(9)})` : null) ?? ({ 'quote.moq': `minimum order${ctx && ctx !== 'product' ? ` (${ctx.replace(/_/g, ' ')})` : ''}`, 'quote.unitPrice': 'unit price', 'quote.currency': 'currency', 'quote.incoterm': 'Incoterm', 'quote.port': 'port', 'quote.leadTime': 'lead time', 'quote.tiers': 'price tiers', 'identifier.model': 'model', 'identifier.brand': 'brand', 'identifier.manufacturer': 'manufacturer', 'payment.depositPct': 'deposit %', 'payment.balancePct': 'balance %' }[key] ?? key);
 const show = (v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v));
 
 function raiseConflict(s, c, value, found, at) {
