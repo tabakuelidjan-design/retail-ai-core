@@ -108,6 +108,14 @@ function safetyOf(s, externals, identityForSafety, now) {
   return matchSafetyGate({ identity: identityForSafety, alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED', fetchedAt: null } });
 }
 
+/** SUPPLIER_CLAIM (a supplier file or pasted text, inspected) / UNVERIFIED (a machine reading or a photo nobody has read) / CONFIRMED_AGAINST_DOCUMENT (you checked or typed it from the paper). A supplier document is never VERIFIED (that word is reserved for official sources). */
+export function documentEvidenceState(d) {
+  if (d.textSource === 'PHOTO_ONLY') return 'UNVERIFIED';
+  if (d.textSource === 'OCR') return d.confirmed ? 'CONFIRMED_AGAINST_DOCUMENT' : 'UNVERIFIED';
+  if (d.textSource === 'TRANSCRIBED') return 'CONFIRMED_AGAINST_DOCUMENT';
+  return 'SUPPLIER_CLAIM';
+}
+
 /** An OCR / AI reading of a photo is never evidence by itself: until the owner confirms it against the paper it can be at best UNVERIFIED. */
 function ocrGuard(d, insp) {
   if (d.textSource === 'TRANSCRIBED') { // the owner typed the key fields from the paper: completeness of the original (signature, address...) cannot be judged from a transcription
@@ -168,7 +176,7 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   const out = {
     caseId: s.id, asOf: now.toISOString(), ruleBookVersion: rules.ruleBookVersion ?? RULE_VERSION,
     identity: { workingName: id.workingName, ...identityFacts, confidence: idConf, countryOfOrigin: id.countryOfOrigin, photos: id.photos.length },
-    role, rules, documents: docs.map((d) => ({ id: d.id, fileName: d.fileName, docType: d.docType, claimedType: d.claimedType, textSource: d.textSource, confirmed: d.confirmed, photoRef: d.photoRef, ocrText: d.textSource === 'OCR' ? d.text : undefined, consistency: d.inspection.consistency, findings: d.inspection.findings, note: d.inspection.note, models: d.extraction.models, standards: d.extraction.standards, dates: d.extraction.dates })), crossChecks,
+    role, rules, documents: docs.map((d) => ({ id: d.id, fileName: d.fileName, docType: d.docType, claimedType: d.claimedType, textSource: d.textSource, confirmed: d.confirmed, evidenceState: documentEvidenceState(d), photoRef: d.photoRef, ocrText: d.textSource === 'OCR' ? d.text : undefined, consistency: d.inspection.consistency, findings: d.inspection.findings, note: d.inspection.note, models: d.extraction.models, standards: d.extraction.standards, dates: d.extraction.dates })), crossChecks,
     safety, customs, landed, economics: econ, economicsAmazon: econAmazon, maxPurchasePrice: maxPrice, market, amazon: { ...readiness, restricted: s.amazon.restricted }, questions, supplierSheet: supplierSheet(questions), negotiation: brief, decision,
   };
   out.evidence = evidenceLedger(s, out); out.freshness = freshnessOf(s, out, now); out.dataMode = dataModeOf(out);

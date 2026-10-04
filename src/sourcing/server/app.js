@@ -10,9 +10,9 @@ import { fxFor } from '../adapters/fx.js';
 import { callProvider, DATA_CLASS, ProviderPolicyError } from '../adapters/ai-provider.js';
 import { StoreError } from '../store/file-store.js';
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
-const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg' };
+const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
 const CORE_FILE = /^\/core\/((?:rulebook\/)?[a-z0-9-]+\.js)$/;
 
 const sameToken = (a, b) => { const x = Buffer.from(String(a ?? '')); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
@@ -25,14 +25,16 @@ async function readBody(req) {
   try { return JSON.parse(raw); } catch { throw Object.assign(new Error('invalid JSON'), { status: 400 }); }
 }
 
+/** Behind the local tunnel every request comes from 127.0.0.1: the proxy's own header (trusted ONLY from a loopback peer) tells the real client apart, so one attacker cannot lock the owner out. */
+const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; const loop = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer); const fwd = loop ? String(req.headers['cf-connecting-ip'] ?? '').trim() : ''; return /^[0-9a-f.:]{3,45}$/i.test(fwd) ? fwd : peer; };
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
 export function createSourcingApp({ token, store, safety = null, ecb = null, ai = null, uiDir, coreDir, allowedHosts = null, now = () => new Date() }) {
   if (!token || String(token).length < 24) throw new Error('a token of at least 24 characters is required');
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
-  const hosts = allowedHosts && allowedHosts.length ? allowedHosts.map((h) => h.toLowerCase()) : null;
-  const hostOk = (req) => { const h = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, ''); return hosts ? hosts.includes(h) || LOOPBACK_HOSTS.includes(h) : true; };
+  // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
+  const hostOk = (req) => { const hosts = (allowedHosts ?? []).map((h) => String(h).toLowerCase()); const h = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, ''); return hosts.length ? hosts.includes(h) || LOOPBACK_HOSTS.includes(h) : true; };
   // failed token attempts per client address: too many in a minute -> 429 (guessing is slow; a valid token never counts)
   const fails = new Map();
   const blocked = (ip) => { const f = (fails.get(ip) ?? []).filter((t) => now().getTime() - t < FAIL_WINDOW_MS); fails.set(ip, f); return f.length >= FAIL_LIMIT; };
@@ -48,7 +50,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
     catch { json(res, 404, { error: 'NOT_FOUND' }); }
   }
   async function api(req, res, url) {
-    const ip = req.socket.remoteAddress ?? 'unknown';
+    const ip = clientIp(req);
     if (blocked(ip)) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
     if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     const p = url.pathname; const m = req.method;

@@ -8,6 +8,8 @@ Read `docs/sourcing-field-mode.md` first for what the tool is. This is the exact
 - **Do NOT rely on as legal fact**: any "GREEN"/compliance statement for your product. 13 of the 31 rules now match the current consolidated EU text (VERIFIED_CURRENT), but that is about the rules, not your product; power banks and other batteries stay CONDITIONAL_GO at best until an expert reviews the Batteries rules (`docs/sourcing-regulatory-closure.md`). An expert must still review the rulebook before a deposit on a regulated product.
 - **Never**: a photographed paper is only a machine reading until you check it against the paper; "NO MATCH FOUND" in the Safety Gate does not prove safety; an HS/CN code is a candidate until your customs broker confirms it; Amazon fees and category restrictions are only what you type.
 
+**Simplest path: follow `docs/sourcing-phone-rehearsal.md` (written for a non-developer, with a PASS / FAIL list).** The sections below are the technical version of the same procedure.
+
 ## A. At home, before leaving (30 minutes)
 
 1. **Start the server** on the machine that keeps your cases: `npm run sourcing`. It writes the access token to `data/local/sourcing/token.txt` (never printed) and downloads the Safety Gate weekly reports (26 weeks by default; `SOURCING_SAFETY_REPORTS=52` for a year). Wait for "Safety Gate cache refreshed".

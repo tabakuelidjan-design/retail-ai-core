@@ -1,0 +1,186 @@
+// REAL-BROWSER end-to-end of the field application, driven through the DevTools Protocol against a real Edge / Chrome engine (Service Worker, Cache Storage, IndexedDB):
+//   install online -> app shell cached -> app CLOSED -> network gone (server stopped AND browser offline) -> browser RESTARTED (cold start) -> installed entry opens ->
+//   existing case, calculations, rulebook and Safety Gate copy are there -> edit offline -> network returns -> sync -> server and phone converge; durability and conflicts.
+// This is an engine-level proof. It is NOT a physical phone: no touch, camera, install prompt or mobile OS. Run:  npm run sourcing:e2e
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { startSourcingServer } from '../../src/sourcing/server/index.js';
+import { Browser, findBrowser, freePort } from './cdp.js';
+
+const exe = findBrowser();
+if (!exe) { console.log('NO BROWSER FOUND (Edge / Chrome / Chromium): set SOURCING_E2E_BROWSER. The offline cold-start test was NOT run.'); process.exit(2); }
+const TOKEN = 'e2e-field-token-0123456789-abcdef-xyz';
+const results = []; const check = async (name, fn) => { try { await fn(); results.push([name, 'PASS']); console.log(`PASS  ${name}`); } catch (e) { results.push([name, `FAIL: ${e.message}`]); console.log(`FAIL  ${name}\n      ${e.message}`); } };
+const ok = (c, m) => { if (!c) throw new Error(m ?? 'assertion failed'); };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const IDX = '<?xml version="1.0"?><Safety-Gate><weeklyReport><reference>Report-2026-39</reference><publicationDate>02/10/2026</publicationDate><URL>https://x.test/api/download/weeklyReport/detail/xml/10000325?language=en,</URL></weeklyReport></Safety-Gate>';
+const REP = '<?xml version="1.0"?><alerts><alert><caseNumber>SR/00001/26</caseNumber><category>Electrical appliances</category><product>Power bank</product><brand>Voltix</brand><name>Portable battery charger</name><type_numberOfModel>VX-10K</type_numberOfModel><riskType>Fire</riskType><danger>The lithium battery can overheat.</danger><countryOfOrigin>China</countryOfOrigin><level>Serious risk</level></alert></alerts>';
+const fakeFetch = async (u) => ({ ok: true, status: 200, text: async () => (/list\/xml/.test(u) ? IDX : REP) });
+
+const dir = mkdtempSync(join(tmpdir(), 'nordla-e2e-data-')); const port = await freePort(); const base = `http://127.0.0.1:${port}`;
+let server = null;
+const startServer = async () => { server = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, port, dir, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-02', perEur: { USD: 1.08 } }) }); await server.safety.refresh({ maxReports: 3 }); };
+const stopServer = async () => { await new Promise((r) => server.server.close(r)); server.server.closeAllConnections?.(); server = null; };
+const api = async (path, opts = {}) => { const r = await fetch(base + path, { ...opts, headers: { 'x-sourcing-token': TOKEN, 'content-type': 'application/json' } }); return { status: r.status, body: await r.json().catch(() => null) }; };
+const cases = async () => (await api('/api/cases')).body.cases;
+
+// in-page helpers (re-installed after every navigation)
+const HELPERS = `window.__t = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)), click: (sel) => { const e = document.querySelector(sel); if (!e) throw new Error('missing ' + sel); e.click(); },
+  fill: (form, vals) => { const f = document.querySelector('form[data-form="' + form + '"]'); if (!f) throw new Error('no form ' + form); for (const [k, v] of Object.entries(vals)) f.elements[k].value = v; f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); },
+  auto: (form, vals) => { const f = document.querySelector('form[data-form="' + form + '"]'); let last; for (const [k, v] of Object.entries(vals)) { f.elements[k].value = v; last = f.elements[k]; } last.dispatchEvent(new Event('change', { bubbles: true })); },
+  idb: (key) => new Promise((res, rej) => { const r = indexedDB.open('nordla-sourcing', 1); r.onsuccess = () => { const q = r.result.transaction('blobs').objectStore('blobs').get(key); q.onsuccess = () => res(q.result ?? null); q.onerror = () => rej(q.error); }; r.onerror = () => rej(r.error); }) };
+  'ok'`;
+const ready = async (t) => { await t.waitFor("document.readyState === 'complete' && !!document.querySelector('#tabs') && document.querySelector('#tabs').children.length > 0", 20000); await t.eval(HELPERS); };
+const openCase = (t, id) => t.run(`document.querySelector('#btn-cases').click(); await __t.sleep(250); document.querySelector('[data-act="opencase"][data-key="${id}"]').click(); await __t.sleep(400); __t.click('[data-act="tab"][data-key="money"]'); await __t.sleep(300);`);
+const text = (t, sel = '#screen') => t.eval(`document.querySelector(${JSON.stringify(sel)})?.innerText ?? ''`);
+
+console.log(`Browser engine: ${exe}`);
+await startServer();
+let browser = await new Browser(exe).launch(); console.log(`Browser version: ${browser.version}\n`);
+const profile = browser.profile; let tab;
+let caseName = 'Power bank 10000mAh E2E'; let caseId = null;
+
+await check('1. online install through the pairing link: token taken from the URL fragment, fragment cleared, server reachable', async () => {
+  tab = await browser.tab(`${base}/#t=${TOKEN}`); await ready(tab);
+  await tab.waitFor('window.nordlaSourcing?.state().online === true', 15000);
+  ok(await tab.eval("location.hash === ''"), 'the token must not stay in the address bar');
+  ok(await tab.eval("JSON.parse(localStorage.getItem('nordla.sourcing.token')).length >= 24"), 'token stored');
+});
+
+await check('2. service worker installed and the whole app shell + every decision-engine module is in the cache', async () => {
+  await tab.waitFor("navigator.serviceWorker.ready.then(() => true)", 20000);
+  const m = await (await fetch(`${base}/shell-manifest.json`)).json();
+  const n = await tab.waitFor(`caches.keys().then(async (ks) => { let n = 0; for (const k of ks) n += (await (await caches.open(k)).keys()).length; return n >= ${m.files.length} ? n : 0; })`, 20000);
+  ok(n >= m.files.length, `cached ${n} of ${m.files.length}`); ok(m.files.includes('/core/rulebook/review.js') && m.files.includes('/storage.js') && m.files.includes('/icon-192.png'), 'manifest completeness');
+});
+
+await check('3. manifest + icons are installable (id, scope, standalone, 192/512/maskable PNG) and respond', async () => {
+  const mf = await (await fetch(`${base}/manifest.webmanifest`)).json();
+  ok(mf.display === 'standalone' && mf.scope === '/' && mf.start_url && mf.id, 'manifest fields');
+  const sizes = mf.icons.map((i) => `${i.sizes}/${i.purpose}`); ok(sizes.includes('192x192/any') && sizes.includes('512x512/any') && sizes.includes('512x512/maskable'), sizes.join());
+  for (const i of mf.icons) { const r = await fetch(base + i.src); ok(r.status === 200, `${i.src} -> ${r.status}`); if (i.type === 'image/png') ok(Buffer.from(await r.arrayBuffer()).subarray(1, 4).toString() === 'PNG', 'PNG signature'); }
+});
+
+await check('4. quick answer: six fields give a preliminary verdict from the SAME engine; the case is created and saved on the phone', async () => {
+  await tab.run(`__t.click('[data-act="tab"][data-key="quick"]'); await __t.sleep(200);
+    __t.fill('quick', { name: ${JSON.stringify(caseName)}, category: 'power_bank', unitPrice: '4.20', currency: 'USD', moq: '500', qty: '1000', price: '19.99', target: '30', dest: 'own', freight: '600', duty: '2.7', fxRate: '0.92', incoterm: 'FOB' }); await __t.sleep(300); 'ok'`);
+  const v = await tab.waitFor("document.querySelector('.verdict .v')?.innerText || ''", 8000); ok(/GO|INFORMATION|INSUFFICIENT/.test(v), `verdict shown: ${v}`);
+  const st = JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.cases')")); const c = Object.values(st)[0]; caseId = c.id; ok(c.quotes.length === 1 && c.sale?.sellingPriceGross, 'quote and sale stored');
+});
+
+await check('5. large phone photo (4000x3000) is kept as evidence, downscaled, in IndexedDB (not in localStorage)', async () => {
+  await tab.run(`__t.click('[data-act="tab"][data-key="case"]'); await __t.sleep(250);
+    const cv = document.createElement('canvas'); cv.width = 4000; cv.height = 3000; const g = cv.getContext('2d'); for (let i = 0; i < 300; i++) { g.fillStyle = 'hsl(' + (i * 7 % 360) + ',60%,50%)'; g.fillRect(Math.random() * 4000, Math.random() * 3000, 400, 300); }
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.95)); window.__bigBytes = blob.size; const file = new File([blob], 'camera.jpg', { type: 'image/jpeg' });
+    const inp = document.querySelector('input[data-act="photo"]'); const dt = new DataTransfer(); dt.items.add(file); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true })); 'ok'`);
+  const url = await tab.waitFor(`__t.idb(${JSON.stringify(`photo:${caseId}.0`)})`, 15000);
+  const dims = await tab.eval(`new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.src = ${JSON.stringify(url)}; })`);
+  ok(Math.max(...dims) <= 640, `downscaled to ${dims}`); ok(url.length < 250000, `stored size ${url.length}`);
+  ok(!(await tab.eval("Object.keys(localStorage).some((k) => /photo/.test(k))")), 'no photo in localStorage');
+  ok(await tab.eval('window.__bigBytes') > 200000, 'the source photo was large');
+  const flash = await text(tab); ok(/EVIDENCE/.test(flash) && !/AI SUGGESTED/.test(flash), 'a photo is evidence, never an identification');
+});
+
+await check('6. Safety Gate copy downloaded to the phone (IndexedDB) and matched locally', async () => {
+  await tab.run(`__t.click('[data-act="tab"][data-key="compliance"]'); await __t.sleep(250); __t.click('[data-act="safety"]'); 'ok'`);
+  const blob = await tab.waitFor("__t.idb('safety').then((b) => (b && b.alerts && b.alerts.length ? b.alerts.length : 0))", 15000); ok(blob >= 1, 'alerts stored');
+  const t = await text(tab); ok(/EU SAFETY GATE/.test(t) && /LIVE VERIFIED/.test(t), 'live while the server is reachable');
+});
+
+await check('7. the case reached the server (sync online)', async () => { const t0 = Date.now(); let l; while (Date.now() - t0 < 12000) { l = await cases(); if (l.length === 1 && l[0].name === caseName) break; await sleep(300); } ok(l.length === 1 && l[0].name === caseName, JSON.stringify(l)); });
+
+// ---- the cold start ---------------------------------------------------------------------------------------------------------------------------------------------------------
+await check('8. APP CLOSED, SERVER STOPPED, BROWSER RESTARTED: the installed entry opens and shows the case (true cold start)', async () => {
+  await tab.close(); await browser.close({ keepProfile: true }); await stopServer();
+  let down = false; try { await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2000) }); } catch { down = true; } ok(down, 'the server must really be down');
+  browser = await new Browser(exe, profile).launch();
+  tab = await browser.tab('about:blank'); await tab.offline(true); await tab.goto(`${base}/?source=pwa`); await ready(tab);
+  const name = await text(tab, '#case-name'); ok(name === caseName, `case name after cold start: "${name}"`);
+  ok(await tab.eval("!!navigator.serviceWorker.controller"), 'the page is controlled by the service worker');
+  ok(!(await tab.eval("document.body.innerText.includes('ERR_') || document.title === ''")), 'a browser error page was shown');
+});
+
+await check('9. offline: calculations, verdict, rulebook (with review dates) and the cached Safety Gate are all accessible; nothing shows LIVE', async () => {
+  await tab.run(`__t.click('[data-act="tab"][data-key="decision"]'); await __t.sleep(300); 'ok'`);
+  const d = await text(tab); ok(/MAXIMUM PURCHASE PRICE/.test(d) && /AT A GLANCE/.test(d), 'verdict screen'); ok(/CONDITIONAL GO|GO|INFORMATION/.test(d), 'a verdict');
+  const badge = await text(tab, '#mode'); ok(/CACHED/.test(badge) && /NO SERVER/.test(badge) && !/LIVE/.test(badge), `badge: ${badge}`);
+  await tab.run(`__t.click('[data-act="tab"][data-key="compliance"]'); await __t.sleep(300); 'ok'`);
+  const r = await text(tab); ok(/Data\s+CACHED/i.test(r) && !/LIVE VERIFIED/.test(r), 'Safety Gate shown as CACHED'); ok(/rule review/i.test(r), 'rulebook review is visible');
+  ok(await tab.eval("[...document.querySelectorAll('#screen details')].some((x) => /consolidated/.test(x.innerText) || /Instruments:/.test(x.innerHTML))"), 'rule instruments and consolidation dates');
+  const mx = await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(200); document.querySelector('[data-act="what-works"]').click(); await __t.sleep(200); return document.querySelector('#overlay').innerText;`);
+  ok(/What works right now/.test(mx) && /NOT reachable/.test(mx) && /AVAILABLE OFFLINE/.test(mx) && /REQUIRES SERVER/.test(mx), 'capability matrix explains the state');
+  await tab.eval("document.querySelector('#overlay [data-act=\"close-overlay\"]').click(); 'ok'");
+});
+
+await check('10. edit offline: the price changes, the results update in place, the change stays local and is marked as waiting to sync', async () => {
+  await tab.run(`__t.click('[data-act="tab"][data-key="money"]'); await __t.sleep(250); 'ok'`);
+  const before = await text(tab, '#money-live');
+  await tab.run(`__t.auto('quote', { unitPrice: '3.60' }); await __t.sleep(400); 'ok'`);
+  const after = await text(tab, '#money-live'); ok(after !== before, 'results strip must change with the supplier price'); ok(/3\.60/.test(after), `strip shows the new price: ${after.slice(0, 120)}`);
+  const dirty = JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.dirty')")); ok(dirty.includes(caseId), 'case waiting to sync');
+  ok((await tab.eval("document.querySelector('#screen form[data-form=\"quote\"] [name=\"unitPrice\"]').value")) === '3.60', 'the field kept its value (no re-render)');
+});
+
+await check('11. a case CREATED offline exists and is editable', async () => {
+  await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(200); document.querySelector('[data-act="newcase"]').click(); await __t.sleep(400);
+    __t.click('[data-act="tab"][data-key="quick"]'); await __t.sleep(200); __t.fill('quick', { name: 'Offline case E2E', category: 'household_general', unitPrice: '1.50', currency: 'USD', moq: '1000', qty: '1000', price: '9.99', target: '30', dest: 'own', freight: '300', duty: '3', fxRate: '0.92', incoterm: 'FOB' }); await __t.sleep(300); 'ok'`);
+  const st = JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(Object.values(st).some((c) => c.identity.workingName === 'Offline case E2E'), 'created offline');
+});
+
+await check('12. NETWORK RETURNS: both changes sync, server and phone converge, nothing lost, no duplicate', async () => {
+  await startServer(); await tab.offline(false);
+  for (let i = 0; i < 3; i++) { await tab.eval("window.dispatchEvent(new Event('online')); 'ok'"); await sleep(150); } // repeated reconnects / duplicate sync triggers
+  const t0 = Date.now(); let l; while (Date.now() - t0 < 20000) { l = await cases(); if (l.length === 2) break; await sleep(400); } ok(l.length === 2, `cases on the server: ${l.length}`);
+  const srv = (await api(`/api/cases/${caseId}`)).body; ok(srv.quotes.at(-1).unitPrice === '3.60', `server has the offline edit: ${srv.quotes.at(-1).unitPrice}`);
+  await tab.waitFor("JSON.parse(localStorage.getItem('nordla.sourcing.dirty') || '[]').length === 0", 15000);
+  const local = JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(local[caseId].quotes.at(-1).unitPrice === '3.60' && local[caseId].quotes.length === srv.quotes.length, 'phone and server converge');
+  ok(/LIVE VERIFIED/.test(await text(tab, '#mode')), 'LIVE again once the server is reachable and the copy is fresh');
+});
+
+await check('13. server RESTART mid-use does not lose the case; an interrupted sync is retried', async () => {
+  await stopServer(); await sleep(400); await openCase(tab, caseId); await tab.run(`__t.auto('quote', { unitPrice: '3.55' }); await __t.sleep(100); 'ok'`); await tab.eval("window.dispatchEvent(new Event('online')); 'ok'"); await sleep(1500);
+  ok(JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.dirty')")).includes(caseId), 'the change waits while the server is down');
+  await startServer(); await tab.eval("window.dispatchEvent(new Event('online')); 'ok'");
+  const t0 = Date.now(); let q; while (Date.now() - t0 < 20000) { q = (await api(`/api/cases/${caseId}`)).body?.quotes?.at(-1)?.unitPrice; if (q === '3.55') break; await sleep(400); } ok(q === '3.55', `server quote after restart: ${q}`);
+});
+
+await check('14. CONFLICT: a case changed on another device is never overwritten; both copies can be kept', async () => {
+  const srv = (await api(`/api/cases/${caseId}`)).body; srv.notes.push({ at: new Date().toISOString(), text: 'edited on the other device' });
+  const put = await api(`/api/cases/${caseId}`, { method: 'PUT', body: JSON.stringify(srv) }); ok(put.status === 200, 'other device saved');
+  await openCase(tab, caseId); await tab.run(`__t.auto('quote', { unitPrice: '3.40' }); await __t.sleep(1800); 'ok'`);
+  const menu = await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(300); return document.querySelector('#overlay').innerText;`); ok(/Conflict:/.test(menu) && /Nothing was overwritten/.test(menu), 'conflict reported');
+  const s2 = (await api(`/api/cases/${caseId}`)).body; ok(s2.notes.some((n) => n.text === 'edited on the other device') && s2.quotes.at(-1).unitPrice !== '3.40', 'the other device\'s evidence is intact on the server');
+  await tab.run(`document.querySelector('[data-act="keep-both"]').click(); await __t.sleep(2500);`);
+  const l = await cases(); ok(l.length === 3 && l.some((c) => /\(my copy\)/.test(c.name)), `both copies on the server: ${l.map((c) => c.name).join(' | ')}`);
+  const mine = (await api(`/api/cases/${l.find((c) => /\(my copy\)/.test(c.name)).id}`)).body; ok(mine.quotes.at(-1).unitPrice === '3.40', 'my edit is preserved in my copy');
+});
+
+await check('15. nothing sensitive leaks: no server path or token in any API response; the phone stores only field data (no analytics keys)', async () => {
+  const bodies = []; for (const p of ['/api/health', '/api/cases', `/api/cases/${caseId}`, '/api/safety/alerts', '/api/ai/status', '/shell-manifest.json']) bodies.push(JSON.stringify((await api(p)).body));
+  const all = bodies.join('\n'); ok(!all.includes(TOKEN) && !all.includes(dir) && !/[A-Z]:\\\\Users/.test(all) && !/node_modules/.test(all), 'a path or secret appeared in a response');
+  ok((await fetch(`${base}/api/health`)).status === 401, 'no token = refused (fail closed)'); ok((await fetch(`${base}/src/sourcing/server/app.js`)).status === 404, 'source files are not served');
+  const keys = await tab.eval("Object.keys(localStorage)"); ok(keys.every((k) => k.startsWith('nordla.sourcing.')), keys.join()); ok(!(await tab.eval("document.documentElement.innerHTML.includes('google-analytics') || document.querySelectorAll('script[src^=\"http\"]').length > 0")), 'no third-party script');
+});
+
+await check('16. layout: every screen fits 375 / 390 / 430 wide, portrait and landscape: no sideways scrolling, tab bar reachable, tap targets large enough', async () => {
+  await openCase(tab, caseId);
+  const bad = [];
+  for (const [w, h] of [[375, 812], [390, 844], [430, 932], [844, 390], [932, 430]]) {
+    await tab.resize(w, h); await sleep(300);
+    for (const key of ['quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money']) {
+      const r = await tab.run(`__t.click('[data-act="tab"][data-key="${key}"]'); await __t.sleep(250);
+        const over = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).length;
+        const small = [...document.querySelectorAll('#screen button.btn, #screen .seg button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 36 || r.width < 36); }).length;
+        const bar = document.querySelector('#tabs').getBoundingClientRect(); const tabsVisible = bar.bottom <= window.innerHeight + 1 && bar.height > 30;
+        return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, small, tabsVisible };`);
+      if (r.sideways || r.over || r.small || !r.tabsVisible) bad.push(`${w}x${h} ${key}: ${JSON.stringify(r)}`);
+    }
+  }
+  await tab.resize(390, 844); ok(bad.length === 0, bad.slice(0, 6).join(' | '));
+});
+
+await tab.close(); await browser.close(); if (server) await stopServer(); rmSync(dir, { recursive: true, force: true });
+const failed = results.filter(([, r]) => r !== 'PASS'); console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `; FAILED: ${failed.map(([n]) => n.split('.')[0]).join(', ')}` : ''}`);
+process.exit(failed.length ? 1 : 0);

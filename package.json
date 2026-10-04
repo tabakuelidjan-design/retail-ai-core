@@ -26,6 +26,8 @@
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
     "finance:demo": "node src/finance/server/demo.js",
     "sourcing": "node src/sourcing/server/index.js",
+    "sourcing:phone": "node src/sourcing/server/phone.js",
+    "sourcing:e2e": "node test/e2e/sourcing-pwa.e2e.js",
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
     "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
     "benchmark:ask": "node benchmark/ask/run.js"
