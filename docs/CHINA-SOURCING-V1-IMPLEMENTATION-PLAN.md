@@ -218,7 +218,10 @@ Result: `docs/CHINA-SOURCING-V1-PROVIDER-SPIKES.md`. The remaining P0 items that
 - **Tests first:** contract validation; candidate never becomes verified without an adapter result that says so; unavailable -> UNKNOWN; cached result shows its time; offline -> CACHED/UNKNOWN.
 - **Rollback:** revert. **Dependencies:** P0, P1. **Physical phone:** no.
 
-## P14 - Local speech / translation / OCR providers (only those P0 proved workable)
+## P14 - Local speech / translation / OCR providers (only those P0/P0b cleared)
+
+**P0b outcome:** in scope = PP-OCRv6 small (OCR) and whisper.cpp base (English/French transcription), each only after the owner approves its exact download. **Out of scope for V1:** SenseVoice-Small (rejected: weights licence not clearly commercial) and Opus-MT (on hold: CC-BY-NC-SA training data). Mandarin speech and free-text translation stay manual in V1 (see `docs/CHINA-SOURCING-V1-MODEL-APPROVALS.md`).
+
 
 - **Goal:** fill the provider interfaces with zero-cost local implementations running on the owner's PC as asynchronous jobs.
 - **Files:** `providers/{speech,translation,vision}.js`, server routes `/api/transcribe`, `/api/translate`, `/api/ocr` (LOCAL region), job queue, capability rows.

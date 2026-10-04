@@ -14,6 +14,8 @@ Date of investigation: 2026-10-04. Scope: verify legal/technical availability of
 Where search-engine summaries and official pages disagreed, I say so. Third-party blog figures are marked as such and are never used as a legal basis.
 
 
+> **Model approvals (P0b):** the exact approval tables are in `docs/CHINA-SOURCING-V1-MODEL-APPROVALS.md`. Outcome: PP-OCRv6 small and whisper.cpp base are approvable for a spike; **SenseVoice-Small is rejected for V1** (weights licence not clearly established for commercial use); **Opus-MT is on hold** (training data is CC-BY-NC-SA). The "recommended" entries for Mandarin speech and free-text translation in sections 2.1, 2.2 and 8 are superseded by that document: V1 has no approved local Mandarin ASR or MT.
+>
 > **Update (P0b, 2026-10-04):** sections 10 and 11 at the end of this document refine and, where they differ, supersede the TARIC and Eurostat statements in sections 2.4, 2.6 and 8. Short version: TARIC automated retrieval is **not** cleared (robots.txt disallows the consultation and daily-publication paths; CIRCABC anonymity unverified): V1 keeps manual duty input. Eurostat Comext stays a V1 candidate **as trade-activity context only, never as demand**.
 
 ## 1. The machine and the environments
@@ -165,11 +167,11 @@ Principles: the product must work with every provider UNAVAILABLE; originals are
 |---|---|---|---|---|---|---|---|---|
 | Voice capture | MediaRecorder, original stored on the phone | Yes | Yes | Phone | Original = perfect | Android format/quota unverified until the probe; storage size | None (local) | V1 |
 | Speech to text (English) | whisper.cpp base on the PC, async, after an optional explicit copy | Yes | Yes (PC local) | PC | Good for clear English (SOURCE-level, unmeasured here) | Not real time on this CPU (ESTIMATE); needs the copy step | MIT | V1 optional (P14) |
-| Speech to text (Mandarin) | SenseVoice-Small on the PC, async (benchmark first) ; fallback: owner pastes WeChat voice-to-text | Yes | Yes (PC local) | PC | Best free candidate; whisper tiny/base too weak (SOURCE) | weights licence to read; unmeasured here | Licence check pending | V1 optional (P14) |
+| Speech to text (Mandarin) | **No approved local provider in V1.** Owner pastes WeChat's own voice-to-text or types it; original recording kept; whisper small is a weak optional baseline | Yes | Manual | Phone | Manual = exact; whisper CER about 22-31% (SOURCE) | SenseVoice rejected (licence unclear); no local Mandarin ASR | SenseVoice: licence owner has not confirmed commercial use | V1 manual; local ASR only after legal clearance |
 | Live/in-room transcription | none | n/a | n/a | n/a | n/a | not feasible on this hardware | n/a | V2 |
 | Web Speech API (phone browser) | not used | n/a | No | Phone | n/a | cloud in Chrome; absent in Firefox Android | Privacy rule violation | Rejected |
 | EN<->ZH supplier questions | Fixed phrasebook + composable templates (existing) | Yes | Yes | Phone | High for covered sentences; reviewed | covers only known sentences; native review still pending | None | V1 |
-| EN->ZH / ZH->EN free text | Opus-MT on the PC, labelled MACHINE; English-only fallback with a copy button | Yes | PC local | PC | Gist-level (ESTIMATE); protected tokens required | ~300 MB per direction (SOURCE); not on phone | CC BY 4.0 (attribution) | V1 optional (P14) |
+| EN->ZH / ZH->EN free text | **Opus-MT on hold.** V1: English-only display with a copy button; the owner's own translator app | Yes | Manual | Phone | Phrasebook sentences exact; free text not translated | no machine translation in V1 | Opus-MT training data is CC-BY-NC-SA: unclear for commercial use | V1 manual; Opus-MT V1.5 after legal clarity |
 | Chrome/Edge Translator API | not used | n/a | desktop only | PC | n/a | no mobile support (SOURCE) | n/a | Rejected |
 | NLLB | not used | n/a | n/a | n/a | n/a | CC BY-NC | Non-commercial licence | Excluded |
 | Document/label OCR (Chinese) | PP-OCR mobile via onnxruntime on the PC (or Windows OCR zh pack if approved) | Yes | PC local | PC | Best free for Chinese (SOURCE); needs photo benchmark | accuracy on photos untested; result stays UNVERIFIED until confirmed | Apache-2.0 / MIT | V1 optional (P14) |
