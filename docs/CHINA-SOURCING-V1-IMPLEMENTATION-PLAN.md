@@ -1,6 +1,8 @@
 # China Sourcing Intelligence V1 - Implementation Plan
 
-Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been built. Each phase is one small, reversible, separately committed unit on its own branch off `feature/china-sourcing-field-mode`. **No phase starts without the owner's approval of that phase. No push, merge, deploy or production change in any phase.**
+Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md` and `docs/CHINA-SOURCING-V1-PROVIDER-SPIKES.md`. Nothing here has been built.
+
+**Revision 2 (after Phase 0).** P0 is done (investigation only). Owner decisions are recorded in the section "Owner decisions". The workflow shell is now built EARLY as **P3.5** so the field UX can be validated on the physical phone before the deep layers exist. Provider choices changed in light of the P0 findings (see the spikes document): Access2Markets is not usable as a data source; Chrome/Edge speech and translation APIs are not an acceptable privacy path. Each phase is one small, reversible, separately committed unit on its own branch off `feature/china-sourcing-field-mode`. **No phase starts without the owner's approval of that phase. No push, merge, deploy or production change in any phase.**
 
 ## Rules that apply to every phase
 
@@ -26,7 +28,7 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 
 **Cost vs cash (integer minor units).**
 `economicCost = goods + chinaDomestic + consolidation + freight + insurance + originCharges + duty + brokerage + inspection + testing + compliance + labelling + epr + finalDelivery + otherNonRecoverable + (importVat if NOT recoverable)`.
-`cashRequired = economicCost + importVatToAdvance` where `importVatToAdvance = importVat if the owner marks "VAT must be advanced" else 0` (an explicit per-order flag, default UNKNOWN -> shown as unknown, never assumed either way). `recoverableVat` is reported separately. Example target output: landed ex VAT 1,215 / import VAT to advance 255 / cash required 1,470 / recoverable 255.
+`cashRequired = economicCost + importVatToAdvance`. The VAT treatment is a configurable per-business setting (overridable per order) with four values plus unknown: `ADVANCED_RECOVERABLE` (cash out now, economic cost zero, recovered later), `DEFERRED_NOT_ADVANCED` (no import-VAT cash at the border; economic cost zero), `NON_RECOVERABLE` (VAT is a real cost AND a cash item), `UNKNOWN` (default until the owner confirms the real treatment: VAT lines are shown as UNKNOWN and cash becomes a lower bound; nothing is assumed either way). `recoverableVat` is reported separately. Example target output: landed ex VAT 1,215 / import VAT to advance 255 / cash required 1,470 / recoverable 255.
 `peakCash` = maximum of the running balance over the payment timeline (deposit, balance, freight, customs, VAT, final delivery), each item dated or ordered; unknown dates keep the item as UNSCHEDULED and make the peak a lower bound.
 
 **Allocation of shared costs.** Largest-remainder method on integers over the chosen basis (weight, CBM, value, units, manual), so allocated parts always sum exactly to the shared total; a missing basis value for any SKU makes the allocation UNKNOWN (never a silent equal split).
@@ -39,7 +41,9 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 
 ---
 
-## P0 - Baseline and provider spikes (no product code)
+## P0 - Baseline and provider spikes (no product code) - DONE (documentation only)
+
+Result: `docs/CHINA-SOURCING-V1-PROVIDER-SPIKES.md`. The remaining P0 items that need a human or an approval are listed there as P0b (phone capability probe, first model download approval). The original scope of P0 follows for reference.
 
 - **Goal:** settle the "honest unknowns" before designing against them.
 - **Files/modules:** `docs/CHINA-SOURCING-V1-PROVIDER-SPIKES.md` only; throw-away scripts outside the repo.
@@ -87,6 +91,26 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 - **Dependencies:** none (can run before P1).
 - **Physical phone:** yes (smoke): install, offline, edit, reconnect - the same scenario that passed.
 
+## P3.5 - Field workflow shell v0 and FIELD-UX CHECKPOINT 1 (new, early)
+
+- **Purpose:** validate on the physical phone, in real use in front of a supplier, whether the path Discover -> Talk -> Capture -> Complete -> Analyze -> Decide -> Negotiate is understandable and fast, BEFORE the deep layers are built. What is learned here may reshape P4-P9.
+- **Scope (thin, honest, reuses V0 engines only):** a new default entry "Field" above the existing eight tabs (which move into a "Specialist" drawer, unchanged). A stepper with one primary action per step and a visible "next best step":
+  - **Discover:** existing Quick / identification (photo, name, category, traits); shows what is known vs unknown.
+  - **Talk:** existing Ask content (P1/P2 questions, EN + 中文, single / Show-all) presented as the Supplier Assistant: "N missing, M block an order" from the existing question list. A free question can be typed and shown to the supplier; with no translation provider it is shown in English only, labelled "no Chinese available for this question" (never fake Chinese).
+  - **Capture:** the supplier's answer is typed or pasted and stored as an original note (and, if the P0b probe passes, an optional voice note stored on the phone only). At this stage it is NOT parsed: a "Not extracted yet - type it into the field it belongs to" hand-off to the existing forms. Extraction and candidate review (P2/P4) plug into this same step later.
+  - **Complete:** what is still missing (existing evidence gaps, questions, missing costs) with deep links.
+  - **Analyze:** a button that runs the existing `assess()`; engines not built yet (market, supplier intelligence, customs official lookup, purchase plan) appear as "NOT AVAILABLE YET", neither hidden nor faked.
+  - **Decide:** the existing verdict (GO / CONDITIONAL GO / NO GO / INFORMATION INSUFFICIENT) labelled as compliance + economics; the business decision (BUY / NEGOTIATE / WAIT / PASS) shows "BUSINESS PROFILE NOT SET" until P9.
+  - **Negotiate:** the existing walk-away / target price and negotiation brief.
+- **Files/modules:** `ui/screens/field.js` (new, after P3's split), `ui/app.js` shell routing, `ui/app.css`; no change to `core/*` except optionally one pure helper that only *summarises* existing outputs (`core/field-progress.js`: step status from the `assess()` output). No new events, no schema change.
+- **Data changes:** none (UI state only: current step, kept in UI storage, not in engine state).
+- **Tests first:** pure `field-progress` unit tests (each step status derived deterministically; a blocker is never hidden by the stepper; unavailable engines are labelled); e2e: shell reachable offline, all eight Specialist tabs unchanged and reachable, layout at 375/390/430 portrait and landscape, draft preservation inside the shell, no console errors, step state survives re-render and reload.
+- **Acceptance:** an existing case opens in the shell with correct step statuses; the shell never states more than the engines know; the old UI path is one tap away; the 18 existing e2e checks are unchanged.
+- **Regression:** full suite + e2e.
+- **Rollback:** revert one commit, or a flag that makes the V0 tab bar the default again.
+- **Dependencies:** P3 (modular UI). Independent of P1/P2 (it needs no extraction), so it can start right after P3.
+- **Physical phone:** **REQUIRED - FIELD-UX CHECKPOINT 1.** A scripted human rehearsal on the phone: new case from a product photo, work through the seven steps with a real or role-played supplier, online and offline, in Firefox (and Chrome if available). The owner reports where they hesitated, which step name or button was unclear, what they expected next, what was too slow. Findings are written into this plan before P4 starts. No deep layer is built until the owner has seen this shell.
+
 ## P4 - Capture, Review, Finish conversation (first visible V1 surface)
 
 - **Goal:** record or paste what the supplier said, see candidates, confirm, finish with a summary.
@@ -97,6 +121,7 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 - **Regression:** full + e2e (new checks).
 - **Rollback:** revert; stored sources are inert data.
 - **Dependencies:** P1, P2, P3.
+- **Audio policy (owner decision):** the original recording is kept ON THE PHONE. Nothing is uploaded automatically and nothing goes to an external provider. An explicit, optional "Copy this recording to my Nordla PC for local processing" action may exist; it names the path it will use (same Wi-Fi vs Cloudflare tunnel) before sending, and shows what was sent. Default = phone only.
 - **Physical phone:** **required** (microphone, Firefox/Chrome, airplane mode).
 
 ## P5 - Adaptive Ask / Supplier Assistant
@@ -150,6 +175,7 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 ## P9 - Business decision, negotiation bands, next best action, Analyze
 
 - **Goal:** the single answer for THIS business and what to do next.
+- **Business profile (owner decision):** target margin, minimum acceptable margin, risk limits, budget and reserve are **business-profile settings entered by the owner**. Nordla ships NO default that can influence BUY / NEGOTIATE / WAIT / PASS. If the profile is missing the layer returns `PROFILE_REQUIRED` (listing exactly which settings are missing, with a one-screen form) and the existing compliance/economics verdict is still shown; it never falls back to an invented margin. (The 30% prefilled in Quick is a V0 form value for that case, not a default of the decision layer.)
 - **Files:** `core/business-decision.js`, `core/negotiation.js` (extends `negotiationBrief`), `core/analyze.js` (orchestrator: runs engines and providers, collects UNKNOWN), `ui/screens/{decide,negotiate}.js`.
 - **Data changes:** business context on the session (channels, markets, target margin, risk limits).
 - **Tests first:** the mapping table above, case by case (including "never BUY over a hard blocker"); every result has why / verified / estimated / unknown / couldChange / nextBestActions; bands derived from the money engine and UNKNOWN when inputs are UNKNOWN; analysis completes with every optional provider UNAVAILABLE; next-action list for the PB-X200 example ("obtain correct UN38.3, negotiate toward $X, confirm carton dimensions"); "make the question" produces the bilingual question.
@@ -203,25 +229,25 @@ Companion to `docs/CHINA-SOURCING-V1-GAP-ANALYSIS.md`. Nothing here has been bui
 
 ## P15 - Field workflow shell (stepper) and Specialist drawer
 
-- **Goal:** the owner sees one simple path Discover -> Talk -> Capture -> Complete -> Analyze -> Decide -> Negotiate with a single next action; old tabs under "Specialist".
+- **Goal:** finalise the workflow shell started in P3.5: every step backed by its real engine, honest states for anything still missing, old tabs under "Specialist".
 - **Files:** `ui/screens/product.js`, `ui/app.js` shell, CSS; capability matrix wording.
 - **Tests first:** the old eight tabs stay reachable and unchanged; layout at 375/390/430 portrait and landscape; no horizontal scroll; tap targets; the stepper never hides unresolved blockers.
 - **Rollback:** revert (flag to restore the V0 tab bar as default).
 - **Dependencies:** P4-P9. **Physical phone:** **required** (the final field rehearsal: create session, talk, capture, import offer, analyze, decide, negotiate, offline then reconnect).
 
-The shell is introduced incrementally (a thin "Field" entry from P4); P15 finalises it. If the owner prefers, P15 can move earlier: its content has no logic dependencies beyond the screens it links to.
+The shell itself now exists from P3.5 (below); P15 is only the finalisation once the deep layers exist.
 
 ---
 
-## Decisions needed from the owner before the phases that depend on them
+## Owner decisions (received after the analysis)
 
-1. **P4:** may audio notes stay on the phone only (default) or be copied to the PC? Over the Cloudflare tunnel audio would transit Cloudflare's edge.
-2. **P7/P8:** how does the company actually treat import VAT (advance and reclaim, or deferral)? Ask the accountant/customs broker; until then the product shows it as UNKNOWN.
-3. **P9:** minimum acceptable margin and risk limits (the product will not invent them).
-4. **P0:** approval (with sizes stated) to try any local model.
-5. **P14/P10:** approval of any specific free external source after its terms are read.
+1. **Audio:** phone-first. Original audio preserved locally on the phone; no automatic cloud or external-provider upload. An explicit optional copy to the owner's Nordla PC for local processing may be supported; any transfer path must be visible to the user (P4, P14).
+2. **Import VAT:** configurable, UNKNOWN until the business's treatment is confirmed. Must support advanced-and-recoverable, deferred/not-advanced, non-recoverable, unknown. Nothing is assumed (P7, P8).
+3. **Margins and risk limits:** business-profile settings entered by the owner. No invented defaults that affect BUY/NEGOTIATE/WAIT/PASS (P9).
+4. **Models and free sources:** exploration approved; before ANY substantial download Nordla reports exact model/version, licence, size, expected RAM/disk, expected performance on this machine and the V1 capability it provides, then waits for approval (P0b, P14).
+5. **Plan adjustment:** an early minimal workflow shell for field-UX validation (P3.5 below).
 
 ## Suggested order of delivery and first slice
 
-P0 -> P1 -> P2 -> P3 -> P4 (first thing the owner can touch in the field) -> P5 -> P6 -> P7 -> P8 -> P9 -> (P10, P11, P12, P13 in the order the field rehearsal shows to matter) -> P14 -> P15.
+P0 (done) -> P1 -> P2 -> P3 -> **P3.5 Field workflow shell v0 + FIELD-UX CHECKPOINT 1** -> P4 (first thing the owner can touch in the field) -> P5 -> P6 -> P7 -> P8 -> P9 -> (P10, P11, P12, P13 in the order the field rehearsal shows to matter) -> P14 -> P15.
 Each arrow is an owner approval and, where marked, a physical-phone check. No phase is bundled with another into one commit.
