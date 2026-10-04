@@ -105,7 +105,7 @@ await check('8. APP CLOSED, SERVER STOPPED, BROWSER RESTARTED: the installed ent
 await check('9. offline: calculations, verdict, rulebook (with review dates) and the cached Safety Gate are all accessible; nothing shows LIVE', async () => {
   await tab.run(`__t.click('[data-act="tab"][data-key="decision"]'); await __t.sleep(300); 'ok'`);
   const d = await text(tab); ok(/MAXIMUM PURCHASE PRICE/.test(d) && /AT A GLANCE/.test(d), 'verdict screen'); ok(/CONDITIONAL GO|GO|INFORMATION/.test(d), 'a verdict');
-  const badge = await text(tab, '#mode'); ok(/CACHED/.test(badge) && /NO SERVER/.test(badge) && !/LIVE/.test(badge), `badge: ${badge}`);
+  const badge = await text(tab, '#mode'); const bar = await text(tab, '#statusbar'); ok(badge === 'NO SERVER' && /SAFETY GATE CACHED/.test(bar) && !/LIVE|VERIFIED/.test(`${badge} ${bar}`), `header: ${badge} / ${bar}`);
   await tab.run(`__t.click('[data-act="tab"][data-key="compliance"]'); await __t.sleep(300); 'ok'`);
   const r = await text(tab); ok(/Data\s+CACHED/i.test(r) && !/LIVE VERIFIED/.test(r), 'Safety Gate shown as CACHED'); ok(/rule review/i.test(r), 'rulebook review is visible');
   ok(await tab.eval("[...document.querySelectorAll('#screen details')].some((x) => /consolidated/.test(x.innerText) || /Instruments:/.test(x.innerHTML))"), 'rule instruments and consolidation dates');
@@ -136,7 +136,7 @@ await check('12. NETWORK RETURNS: both changes sync, server and phone converge, 
   const srv = (await api(`/api/cases/${caseId}`)).body; ok(srv.quotes.at(-1).unitPrice === '3.60', `server has the offline edit: ${srv.quotes.at(-1).unitPrice}`);
   await tab.waitFor("JSON.parse(localStorage.getItem('nordla.sourcing.dirty') || '[]').length === 0", 15000);
   const local = JSON.parse(await tab.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(local[caseId].quotes.at(-1).unitPrice === '3.60' && local[caseId].quotes.length === srv.quotes.length, 'phone and server converge');
-  ok(/LIVE VERIFIED/.test(await text(tab, '#mode')), 'LIVE again once the server is reachable and the copy is fresh');
+  await tab.waitFor("document.querySelector('#mode').innerText === 'SERVER VERIFIED' && /SAFETY GATE LIVE/.test(document.querySelector('#statusbar').innerText)", 20000); ok(true, 'verified and live again only after an authenticated check succeeded');
 });
 
 await check('13. server RESTART mid-use does not lose the case; an interrupted sync is retried', async () => {
@@ -179,6 +179,28 @@ await check('16. layout: every screen fits 375 / 390 / 430 wide, portrait and la
     }
   }
   await tab.resize(390, 844); ok(bad.length === 0, bad.slice(0, 6).join(' | '));
+});
+
+await check('17. REGRESSION (physical phone): through a Cloudflare-like HTTPS proxy the server is VERIFIED and the header never says offline; the Safety Gate state is separate and downloads by itself', async () => {
+  // a proxy that behaves like the tunnel: the peer is loopback, the Host header is the public name, the client address arrives in cf-connecting-ip
+  const FAKE_HOST = 'fake-tunnel-1234.trycloudflare.com'; const dir2 = mkdtempSync(join(tmpdir(), 'nordla-e2e-tunnel-')); const TOKEN2 = 'tunnel-field-token-0123456789-abcdef';
+  const srv2 = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN2 }, log: () => {}, port: 0, dir: dir2, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-04', perEur: { USD: 1.08 } }), allowedHosts: [FAKE_HOST] }); await srv2.safety.refresh({ maxReports: 3 });
+  const http = await import('node:http');
+  const proxy = http.createServer((req, res) => { const up = http.request({ port: srv2.port, host: '127.0.0.1', method: req.method, path: req.url, headers: { ...req.headers, host: FAKE_HOST, 'cf-connecting-ip': '203.0.113.50', 'x-forwarded-proto': 'https', 'cf-ray': 'test-ray' } }, (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res); }); req.pipe(up); up.on('error', () => { res.writeHead(502); res.end(); }); });
+  await new Promise((r) => proxy.listen(0, '127.0.0.1', r)); const pport = proxy.address().port;
+  const b2 = await new Browser(exe).launch();
+  try {
+    const t = await b2.tab(`http://127.0.0.1:${pport}/#t=${TOKEN2}`); await ready(t);
+    await t.waitFor("window.nordlaSourcing?.state().online === true", 20000);
+    const mode = await text(t, '#mode'); ok(mode === 'SERVER VERIFIED', `header: "${mode}"`);
+    const bar = await t.waitFor("document.querySelector('#statusbar')?.innerText.includes('SAFETY GATE') && !document.querySelector('#statusbar').innerText.includes('NONE') ? document.querySelector('#statusbar').innerText : ''", 25000);
+    ok(/SAFETY GATE LIVE/.test(bar), `status line: "${bar}"`); ok(!/OFFLINE/i.test(`${mode} ${bar}`), 'nothing says offline while the server is verified');
+    const sg = await t.waitFor("__t = window.__t || null, (async () => { const r = indexedDB.open('nordla-sourcing', 1); return await new Promise((res) => { r.onsuccess = () => { const q = r.result.transaction('blobs').objectStore('blobs').get('safety'); q.onsuccess = () => res(q.result && q.result.alerts ? q.result.alerts.length : 0); }; }); })()", 15000); ok(sg >= 1, 'the copy was downloaded without pressing anything');
+    // fail closed: a wrong token behind the same proxy is refused and never shown as verified
+    await t.eval("localStorage.setItem('nordla.sourcing.token', JSON.stringify('wrong-wrong-wrong-wrong-wrong-xx')); 'ok'"); await t.goto(`http://127.0.0.1:${pport}/`); await t.waitFor("document.querySelector('#screen')?.innerText.length > 0 && !!window.nordlaSourcing", 20000);
+    await t.waitFor("window.nordlaSourcing.state().server === 'TOKEN_REFUSED' || /SIGN IN/.test(document.querySelector('#screen').innerText)", 15000);
+    const bad = await text(t); const badMode = await text(t, '#mode'); ok(/SIGN IN/.test(bad) || /TOKEN REFUSED/.test(badMode), `a refused token is shown as refused: "${badMode}" / ${bad.slice(0, 40)}`); ok(!/SERVER VERIFIED/.test(badMode), 'never verified with a wrong token');
+  } finally { await b2.close(); await new Promise((r) => proxy.close(r)); proxy.closeAllConnections?.(); await new Promise((r) => srv2.server.close(r)); rmSync(dir2, { recursive: true, force: true }); }
 });
 
 await tab.close(); await browser.close(); if (server) await stopServer(); rmSync(dir, { recursive: true, force: true });

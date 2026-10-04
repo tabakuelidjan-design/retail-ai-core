@@ -31,3 +31,4 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:5px 4px;b
 #overlay{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding:16px}#overlay.show{display:block}
 .show-sup{font-size:24px;line-height:1.4}.show-sup .zh{font-size:30px}
 @media (min-width:700px){.tabs button{font-size:13px}}
+.statusbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:6px 16px;background:var(--card);border-bottom:1px solid var(--line);min-height:32px}.linkbtn{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;font-weight:700;text-decoration:underline;padding:6px 4px;min-height:36px}

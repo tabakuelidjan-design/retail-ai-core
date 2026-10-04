@@ -8,19 +8,23 @@ import { INCOTERMS } from '/core/landed.js';
 import { MARKETPLACES } from '/core/amazon.js';
 import { DOC_TYPES } from '/core/docinspect.js';
 import { capabilityMatrix } from '/core/capabilities.js';
+import { headerStatus } from '/core/status.js';
 import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const TABS = [['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
-const S = { cases: ls.get('nordla.sourcing.cases', {}), currentId: ls.get('nordla.sourcing.current', null), tab: 'quick', token: ls.get('nordla.sourcing.token', ''), offlineChoice: ls.get('nordla.sourcing.offlineChoice', false), authFailed: false, online: false, busy: '', flash: '', whatIf: null, A: null, error: null, suggestions: [], ai: null };
+const S = { cases: ls.get('nordla.sourcing.cases', {}), currentId: ls.get('nordla.sourcing.current', null), tab: 'quick', token: ls.get('nordla.sourcing.token', ''), offlineChoice: ls.get('nordla.sourcing.offlineChoice', false), authFailed: false, lockedOut: false, verifiedAt: 0, online: false, busy: '', flash: '', whatIf: null, A: null, error: null, suggestions: [], ai: null };
 
-/** The Safety Gate cache kept ON THE PHONE (matched locally, offline). LIVE only if the server said so within the last 24 h; otherwise CACHED. */
+/** What the phone holds. */
+function safetyCopy() { const c = getBlob('safety'); return c?.alerts ? { present: true, fetchedAt: Date.parse(c.phoneFetchedAt ?? 0) || 0, serverMode: c.source?.mode } : { present: false }; }
+/** The ONE place that decides what may be called verified / live (core/status.js): an authenticated check that succeeded recently, and a live copy under 24 h old. */
+const status = () => headerStatus({ hasToken: !!S.token, offlineChoice: S.offlineChoice, authFailed: S.authFailed, lockedOut: S.lockedOut, verifiedAt: S.verifiedAt, copy: safetyCopy(), now: Date.now() });
+/** The Safety Gate copy kept ON THE PHONE (matched locally, offline). Its mode is LIVE only when status() says so; otherwise CACHED. */
 function externals() {
   const c = getBlob('safety'); if (!c || !c.alerts) return {};
-  const fresh = S.online && c.source?.mode === 'LIVE_VERIFIED' && Date.now() - Date.parse(c.phoneFetchedAt ?? 0) < 24 * 3600 * 1000; // live only while the server is reachable NOW
-  return { safety: { alerts: c.alerts, source: { ...c.source, mode: fresh ? 'LIVE_VERIFIED' : 'CACHED' } } };
+  return { safety: { alerts: c.alerts, source: { ...c.source, mode: status().safety.state === 'LIVE' ? 'LIVE_VERIFIED' : 'CACHED' } } };
 }
 const run = (state, extra = {}) => assess(state, { now: new Date(), externals: externals(), ...extra });
 
@@ -48,10 +52,22 @@ const api = async (path, opts = {}) => { const r = await fetch(path, { ...opts, 
 let retryMs = 0; let retryTimer = null;
 function scheduleRetry() { clearTimeout(retryTimer); retryMs = Math.min(retryMs ? retryMs * 2 : 1500, 30000); retryTimer = setTimeout(() => ping(), retryMs); }
 async function ping() {
-  if (!S.token) { S.online = false; return; }
+  if (!S.token) { S.online = false; S.verifiedAt = 0; return; }
   const was = S.online;
-  try { await api('/api/health'); S.online = true; S.authFailed = false; retryMs = 0; } catch (e) { S.online = false; S.authFailed = e.status === 401 || e.status === 429; if (e.status === 429) S.flash = 'Too many wrong attempts: wait a minute.'; if (!S.authFailed && dirty.size) scheduleRetry(); }
-  paintHeader(); if (S.authFailed || was !== S.online) render(); if (S.online) { refreshAi(); if (!was || dirty.size) sync(); }
+  try { await api('/api/health'); S.online = true; S.verifiedAt = Date.now(); S.authFailed = false; S.lockedOut = false; retryMs = 0; }
+  catch (e) {
+    S.online = false; S.verifiedAt = 0; S.authFailed = e.status === 401; S.lockedOut = e.status === 429;
+    if (e.status === 429) S.flash = 'Too many wrong attempts: wait a minute.';
+    if (!S.authFailed && !S.lockedOut && dirty.size) scheduleRetry();
+  }
+  paintHeader(); if (S.authFailed || was !== S.online) render();
+  if (S.online) { refreshAi(); if (!was || dirty.size) sync(); autoSafety(); }
+}
+/** Once the server is verified, the phone fetches the Safety Gate copy by itself when it has none (or only an old one): the owner should not have to find a button. */
+function autoSafety() {
+  const c = safetyCopy(); const old = c.present && Date.now() - c.fetchedAt > 20 * 3600e3;
+  if ((c.present && !old) || S.busy === 'safety' || Date.now() - (S.safetyAutoAt ?? 0) < 5 * 60e3) return;
+  S.safetyAutoAt = Date.now(); checkSafety({ quiet: true });
 }
 async function refreshAi() { try { S.ai = await api('/api/ai/status'); } catch { S.ai = null; } }
 let syncTimer = null;
@@ -70,7 +86,7 @@ async function sync() {
       const sentAt = c.updatedAt;
       try {
         const saved = await api(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(c) });
-        const now = S.cases[id]; S.online = true;
+        const now = S.cases[id]; S.online = true; S.verifiedAt = Date.now(); /* an authenticated PUT that succeeded is a live verification too */
         if (now && now.updatedAt !== sentAt) { S.cases[id] = { ...now, rev: saved.rev }; /* edited meanwhile: keep my newer content, send it again */ }
         else S.cases[id] = { ...saved };
         dirty.delete(id); if (S.cases[id].updatedAt !== sentAt) markDirty(id);
@@ -83,13 +99,14 @@ async function sync() {
   ls.set('nordla.sourcing.dirty', [...dirty]); persist(); paintHeader();
   if (dirty.size && S.online) queueSync();
 }
-async function checkSafety() {
-  S.busy = 'safety'; render();
+async function checkSafety({ quiet = false } = {}) {
+  if (!quiet) { S.busy = 'safety'; render(); }
   try {
+    try { await api('/api/safety/refresh', { method: 'POST' }); } catch { /* the server could not reach the EU source: its copy stays what it was (and says so) */ }
     const r = await api('/api/safety/alerts');
-    if (!r.alerts) { S.flash = 'The server has no Safety Gate data yet (it downloads it at start). Still OFFLINE - VERIFICATION REQUIRED.'; }
+    if (!r.alerts) { if (!quiet) S.flash = 'The server has no Safety Gate data yet. Still OFFLINE - VERIFICATION REQUIRED.'; }
     else { const ok = await putBlob('safety', { alerts: r.alerts, source: r.source, phoneFetchedAt: new Date().toISOString() }); S.flash = ok ? '' : 'The Safety Gate copy could not be stored on this phone (storage full?).'; }
-  } catch (e) { S.flash = e.status === 401 ? 'Wrong or missing access token (menu).' : 'The Safety Gate could not be reached: the result stays what it was (CACHED or OFFLINE - VERIFICATION REQUIRED). This is not a clean result.'; }
+  } catch (e) { if (!quiet) S.flash = e.status === 401 ? 'Wrong or missing access token (menu).' : 'The Safety Gate could not be reached: the result stays what it was (CACHED or OFFLINE - VERIFICATION REQUIRED). This is not a clean result.'; }
   S.busy = ''; render();
 }
 async function fetchFx() {
@@ -284,9 +301,11 @@ const SCREENS = { quick: quickScreen, decision: decisionScreen, case: caseScreen
 function paintHeader() {
   const c = cur(); if (!c) return;
   $('#case-name').textContent = c.identity.workingName || 'New case'; $('#case-sub').textContent = [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
-  const mode = S.A?.dataMode ?? 'OFFLINE_VERIFICATION_REQUIRED'; const el = $('#mode');
-  el.className = `badge ${mode === 'LIVE_VERIFIED' ? 'b-live' : mode === 'CACHED' ? 'b-cached' : 'b-off'}`;
-  el.textContent = (mode === 'LIVE_VERIFIED' ? 'LIVE VERIFIED' : mode === 'CACHED' ? 'CACHED' : 'OFFLINE - VERIFY') + (S.token && !S.online ? ' - NO SERVER' : ''); el.title = `${S.online ? 'server reachable' : 'server not reachable (the case works offline)'}`;
+  const st = status(); const el = $('#mode');
+  el.className = `badge ${st.server.tone === 'ok' ? 'b-live' : st.server.tone === 'warn' ? 'b-cached' : 'b-off'}`; el.textContent = st.server.label;
+  el.title = st.server.state === 'VERIFIED' ? 'an authenticated check of your server just succeeded' : st.server.state === 'UNREACHABLE' ? 'your server did not answer: the case works on this phone' : st.server.label;
+  const bar = $('#statusbar'); if (!bar) return;
+  bar.innerHTML = `<span class="badge ${st.safety.tone === 'ok' ? 'b-live' : st.safety.tone === 'warn' ? 'b-cached' : 'b-off'}">${esc(st.safety.label)}</span>${st.safety.action === 'DOWNLOAD' ? ' <button type="button" class="linkbtn" data-act="safety">Download now</button>' : ''}${st.safety.action === 'NEEDS_SERVER' ? ' <span class="muted small">needs your server</span>' : ''}${S.busy === 'safety' ? ' <span class="muted small">downloading...</span>' : ''}`;
 }
 function gate() {
   return `<div class="card"><h2>SIGN IN</h2><p class="small muted">Enter the access token of your Nordla server to keep cases on it and use the Safety Gate cache. Or work on this phone only: everything except live checks works offline.</p>${S.authFailed ? '<p class="warn">The token was refused.</p>' : ''}<label>Access token<input id="gate-tok" type="password" autocomplete="off"></label><button class="btn" data-act="gate-save" style="margin-top:10px">Sign in</button><button class="btn sec" data-act="gate-offline" style="margin-top:8px">Work on this phone only</button></div>`;
@@ -422,7 +441,7 @@ function showSupplier() {
 }
 function showCapabilities() {
   const sg = getBlob('safety'); const ageDays = sg ? Math.floor((Date.now() - Date.parse(sg.phoneFetchedAt ?? 0)) / 86400000) : null;
-  const m = capabilityMatrix({ serverReachable: S.online, appCached: S.sw === 'registered' || !!navigator.serviceWorker?.controller, safetyCache: { present: !!sg?.alerts, ageDays }, aiConfigured: S.ai?.enabled === true, aiRegion: S.ai?.region });
+  const m = capabilityMatrix({ serverReachable: status().server.state === 'VERIFIED', appCached: S.sw === 'registered' || !!navigator.serviceWorker?.controller, safetyCache: { present: !!sg?.alerts, ageDays }, aiConfigured: S.ai?.enabled === true, aiRegion: S.ai?.region });
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
   o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>What works right now</h2><p class="small muted">${S.online ? 'Your server is reachable.' : 'Your server is NOT reachable: everything marked "works now" still works on this phone.'} Cached data is never shown as LIVE.</p>
   <table>${m.map((f) => `<tr><td>${esc(f.label)}<br><span class="muted small">${esc(f.note)}</span></td><td class="n"><span class="chip t-${f.availableNow ? 'GREEN' : 'RED'}">${f.availableNow ? 'works now' : 'not now'}</span><br><span class="muted small">${esc(f.class.replace(/_/g, ' '))}</span></td></tr>`).join('')}</table>`;
@@ -452,8 +471,9 @@ async function onPhoto(ev) {
 document.addEventListener('click', onClick); document.addEventListener('submit', onSubmit); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
-window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; render(); });
+window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });
+setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // a verification expires: the header must not keep saying VERIFIED
 setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
-window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token }) };
+window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
 initStorage().then(() => { render(); ping(); });

@@ -23,6 +23,8 @@ export async function startPhoneMode({ env = process.env, log = console.log, spa
   const allowedHosts = []; // live list: the tunnel's host name is added when it is known
   const srv = await startServer({ env, log, allowedHosts, ...(port !== undefined ? { port } : {}) });
   const localUrl = `http://127.0.0.1:${srv.port}`;
+  // the server's own Safety Gate copy is refreshed from the EU source in the background (the phone then downloads it); a failure only leaves the older copy, labelled CACHED
+  Promise.resolve(srv.safety?.refresh?.({ maxReports: Number(env.SOURCING_SAFETY_REPORTS || 26) })).then((r) => log(r?.ok ? `Safety Gate cache refreshed (${r.added} new report(s)).` : r ? `Safety Gate refresh failed (${r.error}): the cached copy stays CACHED.` : ''), () => {});
   let child = null;
   const stop = async () => { try { child?.kill(); } catch { /* gone */ } await new Promise((r) => srv.server.close(r)); };
   try { child = spawnImpl(cloudflared, ['tunnel', '--url', localUrl, '--no-autoupdate'], { stdio: ['ignore', 'pipe', 'pipe'] }); }

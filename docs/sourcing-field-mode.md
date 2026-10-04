@@ -85,7 +85,9 @@ Cases, supplier identity, prices, contacts and documents stay on the phone and o
 
 ## Offline behaviour
 
-- **LIVE VERIFIED**: Safety Gate cache refreshed in this process (or a live check for the same product facts in the last 24 h).
+The header shows two separate facts. **Server**: SERVER VERIFIED only after an authenticated check of your server succeeded in the last 90 s; otherwise NO SERVER, TOKEN REFUSED, TOO MANY ATTEMPTS, NOT SIGNED IN or PHONE ONLY. **Safety Gate** (line below): LIVE needs a verified server AND a copy downloaded live under 24 h ago; otherwise CACHED (with its age) or NONE. The phone downloads the copy by itself once the server is verified. (Logic: `src/sourcing/core/status.js`; real-tunnel check: `npm run sourcing:e2e:tunnel`.)
+
+- **LIVE VERIFIED** (engine mode): Safety Gate cache refreshed in this process (or a live check for the same product facts in the last 24 h).
 - **CACHED**: an earlier result: shown as cached, with its date, with a condition to re-verify.
 - **OFFLINE - VERIFICATION REQUIRED**: nothing available. This is never presented as a clean result.
 Cases are stored locally on the phone first and synced when the server is reachable; a conflict (two devices) is reported and never overwritten silently.

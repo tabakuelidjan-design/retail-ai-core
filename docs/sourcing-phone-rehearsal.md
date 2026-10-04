@@ -80,12 +80,12 @@ What you need: your phone, your computer (switched on, with internet), the Nordl
 |---|---|---|
 | A3 link opens on the phone | | |
 | A4 installed with an icon | | |
-| A6 Safety Gate "LIVE VERIFIED" | | |
+| A6 header "SERVER VERIFIED" (top) and "SAFETY GATE LIVE" (line below; downloads by itself, a few seconds) | | |
 | A7 test product gives a verdict | | |
-| B3 opens in airplane mode with the product, says CACHED | | |
+| B3 opens in airplane mode with the product; header "NO SERVER", line "SAFETY GATE CACHED" | | |
 | B4 price change updates the numbers | | |
 | B5 photo saved | | |
-| B8 back to LIVE VERIFIED | | |
+| B8 network back: header "SERVER VERIFIED" again, line "SAFETY GATE LIVE" | | |
 | B9 the offline change is still there | | |
 | C2 "Show to supplier" readable | | |
 
