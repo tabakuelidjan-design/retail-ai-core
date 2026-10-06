@@ -11,7 +11,7 @@
 |---|---|---|
 | Moteur Moonshine WebAssembly 0.1.5 + `tiny-streaming-en` | **FONCTIONNE sous Firefox Android** (isolation COOP/COEP, SIMD et fils d'exécution OK) | chargement 2,5 à 2,9 s ; il a fallu télécharger en plus `frontend.ort` (8 324 920 o) car ce moteur attend l'ancien format du modèle (catalogue `quantized_26_07_30`) |
 | Moteur Moonshine 0.1.5 + `tiny-streaming-zh` (mandarin) | **ÉCHEC, candidat arrêté** | cause précise : le catalogue embarqué dans `moonshine.wasm` ne contient **pas** `tiny-streaming-zh` (pour le chinois il ne connaît que `base-zh`, modèle hérité **non commercial**, que je n'ai donc pas utilisé) et son chargeur refuse les fichiers `frontend.model.ort` / `frontend.weights.ort` du modèle mandarin récent. Ce n'est **pas** un problème de Firefox ni du téléphone : le moteur publié (npm 0.1.5, 24 août 2026) est plus ancien que le modèle. Un moteur plus récent n'est pas publié ; en compiler un exigerait une chaîne d'outils non autorisée. **Je n'ai pas contourné.** |
-| Whisper tiny int8 + Transformers.js 4.3.0 + ONNX Runtime Web (pinned) | **FONCTIONNE sous Firefox Android** | chargement 5,9 à 6,6 s ; il a fallu indiquer à ONNX Runtime les fichiers WebAssembly locaux (`wasmPaths`) car sa version de développement réclame par défaut un build « asyncify » de 26,9 Mo, non téléchargé |
+| Whisper tiny int8 + Transformers.js 4.3.0 + ONNX Runtime Web (pinned) | **FONCTIONNE sous Firefox Android** | chargement 5,9 à 6,6 s sur les premiers essais, 5,18 s sur le run d'endurance du 2026-10-06 16:27 ; il a fallu indiquer à ONNX Runtime les fichiers WebAssembly locaux (`wasmPaths`) car sa version de développement réclame par défaut un build « asyncify » de 26,9 Mo, non téléchargé |
 | Zipformer (A) | non exécuté | statut `UNKNOWN`, exclu comme décidé |
 
 Téléchargements réels : 53 fichiers, **157 809 161 octets (157,81 Mo)**, tailles toutes conformes aux tailles publiées, SHA-256 de chacun dans `data/local/voice-bench/logs/download-manifest.json` (extrait : `moonshine.wasm` d0e783f6…, `encoder.ort` anglais a8414e1a…, `decoder_kv.ort` anglais 8852553f…, `frontend.ort` 271a5632…, Whisper encodeur 03ff3c99…, décodeur 25e807a9…). Les fichiers du modèle mandarin sont téléchargés mais **inutilisables** avec ce moteur.
@@ -29,7 +29,10 @@ Le seuil proposé (suggestion affichée ≤ 3,5 s) est respecté par Moonshine ;
 ## 3. Stabilité sur 10 minutes (téléphone)
 
 - **Moonshine : 10 minutes complètes (593 s), sans plantage.** 18 échantillons, facteur de vitesse stable entre 0,21 et 0,27 **sans dérive**, texte final entre 588 et 670 ms de moyenne, mémoire WebAssembly **constante à 275,4 Mo** pendant toute la durée.
-- **Whisper : INCOMPLET, 253 s sur 600 s.** Facteur de vitesse 0,27 à 0,48, texte final 2,06 à 2,52 s, sans dérive visible. Le test s'est arrêté sur `NetworkError when attempting to fetch resource` : la page n'a pas pu télécharger le fichier audio suivant (coupure du tunnel ou du réseau du téléphone), **pas une panne du moteur**. J'ai corrigé le banc (les fichiers sont mis en mémoire avant le test) et un nouveau lien est disponible pour terminer ces 10 minutes.
+- **Whisper : 10 minutes complètes sur le second run, sans erreur.**
+  - **Premier run (2026-10-06, suite complète) : arrêté à 253 s** sur `NetworkError when attempting to fetch resource`. `MEASURED` : la page n'a pas pu télécharger le fichier audio suivant. `INFERRED` : coupure du tunnel ou du réseau du téléphone, **pas une panne du moteur** (le moteur tournait régulièrement jusque-là, aucune erreur de calcul). Ce premier arrêt ne doit pas être lu comme un plantage de Whisper.
+  - **Second run, `tag=xiaomi-whisper`, `mode=endurance`, 10 minutes demandées, écran maintenu allumé (Screen Wake Lock tenu), page au premier plan** : `MEASURED` (fichier `xiaomi-whisper.json`) début 16:27:34, fin 16:37:40 (606 s), **0 erreur**, 7 passes du scénario, 101 énoncés, 18 échantillons ; facteur de vitesse 0,27 à 0,47, moyenne 0,354, **première moitié 0,353 contre seconde moitié 0,355 (aucune dérive)** ; texte final de 1 936 à 2 589 ms selon l'échantillon, moyenne 2 177 ms (première moitié 2 173, seconde 2 181) ; chargement du moteur **5 178 ms** sur ce run. `OBSERVED` (rapporté par le propriétaire) : la page est allée jusqu'à « DONE ». Les fichiers audio sont désormais mis en mémoire avant l'essai, ce qui supprime la dépendance réseau pendant la durée du test.
+  - **Ce que cela prouve** : Whisper tiny int8 en WebAssembly tient 10 minutes en continu sur le Xiaomi 17 Ultra / Firefox 157, avec ce corpus de synthèse (LAB/CONTROLLED), sans dérive de vitesse. **Ce que cela ne prouve pas** : la stabilité sur le terrain, avec un vrai micro, du bruit réel, un vrai locuteur, plus de 10 minutes, la température ou la batterie (`NOT TESTED / UNKNOWN`). Les autres mesures de Whisper (latence, ASK NEXT, transcription, CE / RoHS, FOB Shenzhen, extraction, bruit, biais de mots-clés) **ne sont pas modifiées** par ce test.
 - **Mémoire de Whisper, chauffe et batterie : non mesurables** dans cette configuration. Firefox Android n'expose ni la mémoire, ni la température, ni l'API batterie, et `adb` n'est pas installé sur le PC ; le télécharger n'était pas autorisé. La dérive de vitesse sert d'indice de chauffe : aucune dérive observée sur Moonshine.
 
 ## 4. Utilité pour Nordla (`LAB/CONTROLLED`, 17 énoncés par condition)
@@ -94,3 +97,18 @@ Sur les énoncés du fournisseur (120 par moteur et par balayage, 6 conditions, 
 - Mémoire de Whisper, température, batterie : non mesurées.
 - Le biais de mots-clés a été étudié sur le même corpus (analyse de sensibilité, pas un réglage validé).
 - Le succès technique du probe ne vaut pas validation terrain.
+
+## 7. Niveaux de preuve (mise à jour : endurance Whisper close)
+
+| Énoncé | Niveau |
+|---|---|
+| Moonshine anglais et Whisper tiny chargent et transcrivent sur Xiaomi 17 Ultra / Firefox 157 / Android 16 | `MEASURED` (probe, suite complète) |
+| Moonshine anglais : 10 minutes complètes, vitesse stable, mémoire WebAssembly 275,4 Mo | `MEASURED` |
+| Whisper tiny : 10 minutes complètes (second run), 0 erreur, aucune dérive de vitesse | `MEASURED` + `OBSERVED` (« DONE » rapporté par le propriétaire) |
+| Premier arrêt de Whisper à 253 s : erreur réseau, pas panne du moteur | `MEASURED` (message d'erreur) + `INFERRED` (cause : coupure de liaison) |
+| Latence finale : Moonshine 707 ms médiane ; Whisper 2 060 ms médiane ; ASK NEXT ≈ 2,2 s contre ≈ 3,6 s | `MEASURED` (voix de synthèse, fichiers propres) |
+| Nombres, prix, MOQ, délais, pourcentages compris à 100 % en propre par les deux moteurs | `MEASURED` (15 phrases de synthèse, une exécution) |
+| CE / RoHS mal reconnus, « FOB Shenzhen » déformé, biais de mots-clés instable | `MEASURED` (LAB) |
+| Moonshine mandarin bloqué par incompatibilité moteur 0.1.5 / modèle récent | `MEASURED` (message du chargeur, catalogue du moteur) ; **non résolu** |
+| Moonshine « meilleur candidat » à ce stade | `INFERRED` (latence et qualité LAB) ; **le passage de l'endurance par Whisper ne change pas cette recommandation** |
+| Comportement avec un vrai fournisseur chinois, l'anglais accentué, le mandarin, le bruit de salon ou d'usine, la mémoire de Whisper, la chauffe, la batterie | `NOT TESTED / UNKNOWN` |
