@@ -266,3 +266,9 @@ Done and tested (details in `docs/CHINA-SOURCING-V1-OVERNIGHT-REPORT.md`): **P2*
 - **P6 (offers)** is cheaper than planned: pasted quotations and PDF text can go through the same extractor and review flow; tiers are already in the quote.
 - **P3.5 FIELD-UX CHECKPOINT 1** (physical phone) is the gate before P5-P9: the rehearsal script is in the overnight report, section 14.
 - The business decision stays "NOT AVAILABLE YET" until P9; the Field shell says so on screen.
+
+---
+
+## Progress log (2026-10-06): Field Mode, P5 conversation engine, grouped confirmation
+
+Done (details in `docs/CHINA-SOURCING-V1-FIELD-MODE-REPORT.md`): Field/Expert mode switch (Expert default), conversational Field Mode (Conversation + Summary views), **P5 as a pure conversation engine** (known / missing / contradictions / best next question, supplier vs owner audience, memory of shown/skipped questions, bundled documents, suggested commercial questions, French progress message, timeline), **grouped confirmation** with provenance guarantees, continuous recomputation (no "Analyze"), interpreter foundation (`CONVERSATION_DERIVE`, translation-provider seam, market profile), Chinese review states + `NATIVE_REVIEW` mechanism + generated review sheet. Next gate: **FIELD UX CHECKPOINT 2** on the physical phone; Field becomes the default only if it passes. P6 (offers), P7 (money), P10 (market) remain unstarted.
