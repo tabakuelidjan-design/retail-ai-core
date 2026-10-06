@@ -1,91 +1,150 @@
-# Retail AI Core — Project Rules
+# Nordla — Project Rules
 
-Internal codename: **retail-ai-core**. No commercial brand name has been finalized — never hardcode a retailer's name (HABB or otherwise) into the application, package name, or generic architecture.
+Internal repository codename: **retail-ai-core**.
 
-This project is **completely separate** from the HABB Shopify theme project (`website habb/theme-repaired-exact/`). Nothing here modifies, depends on, or is built specifically for HABB. HABB is client zero / the pilot merchant, exercised entirely through configuration (see [Merchant configuration](#7-merchant-configuration-habb-is-config-not-architecture) below) — never through code changes to the generic core.
+HABB is client zero / pilot merchant. HABB-specific rules remain configuration, never generic architecture.
 
-The system must work for any retailer: clothing, shoes, cosmetics, books, specialty food, electronics, pure ecommerce, hybrid physical+online, with or without internal production/customization.
+## 0. Mandatory source of truth
 
-## Architecture principle
+Before any substantial Nordla work, READ FIRST:
 
-**Generic Retail Core + optional vertical modules + merchant-specific configuration.**
+1. `NORDLA-CANONICAL-ARCHITECTURE.md`
+2. `NORDLA-DECISION-REGISTER.md`
+3. `NORDLA-DEFERRED.md`
+4. relevant accepted ADRs under `docs/decisions/`
 
-Business logic that is true for one merchant or one vertical (e.g. UV-printing production costs) must never leak into code that is supposed to be generic. When in doubt, ask: *"Would this line of code make sense for a bookstore with no in-house production?"* If not, it belongs in a vertical module or merchant config, not the core.
+These files are the current source of truth.
 
-## 1. Product principles
+Do not rely on conversation memory, model memory, an old prompt, or an old architecture note when these documents say otherwise.
 
-- **Deterministic calculations.** All metrics, margins, and financial figures are computed by versioned SQL/code — never estimated or "vibe-computed" by the LLM.
-- **LLM explains; code calculates.** The LLM's job is to interpret and narrate numbers that the deterministic engine already produced, and to help a human decide. It never invents a number that isn't traceable to a calculation.
-- **Never fabricate missing data.** If a cost, price, or quantity is missing, the system does not guess or default to zero/average.
-- **Explicit unavailable/unclassified states.** Missing or unusable data must surface as `UNCLASSIFIED` / `UNAVAILABLE`, not as a silently substituted estimate. A missing COGS becomes `UNCLASSIFIED`, never an invented profit.
-- **Human approval before consequential actions.** Anything that changes real-world state (pricing, inventory, orders, spend, publishing) requires an explicit human decision, recorded in the decision ledger — the system recommends, it does not act unilaterally.
+A decision marked `FROZEN` must never be silently replaced. If new evidence challenges it:
+- name the decision ID;
+- explain the conflict;
+- propose an explicit replacement;
+- stop before implementing the conflicting architecture unless the change is approved.
 
-## 2. Architecture pipeline
+## 1. Canonical operating model
+
+Nordla's shared operating model is:
 
 ```
-DATA
-  → DATA QUALITY
-  → METRICS
-  → RULES / DECISION ENGINE
-  → LLM EXPLANATION
-  → HUMAN DECISION
-  → DECISION LEDGER
-  → FUTURE OUTCOME TRACKING
+ENTERPRISE
+  → SUBJECTS
+  → LEVERS
+  → DECISIONS
+  → FOLLOW-UP
 ```
 
-Each stage is a distinct, inspectable layer. Data does not skip straight to LLM explanation — it must pass through data-quality checks and deterministic metric/rule computation first. Every human decision is logged with the evidence that informed it, and later compared against the outcome it produced.
+Domains do not make independent final company decisions.
 
-## 3. Generic vs. vertical vs. merchant-specific
+Domains provide:
+- facts;
+- domain rules/constraints;
+- candidate levers;
+- execution capabilities.
+
+Specialist intelligences/agents may analyse and propose.
+
+Socle Decision performs the common arbitration once.
+
+Human owners remain responsible for consequential decisions according to policy.
+
+## 2. Three internal architecture levels
+
+These are architecture levels, not subscription tiers.
+
+### Level 1 — Socle
+Shared enterprise truth, Subjects, Levers, Decision, Follow-up, validation/policy, ledger, provenance, data quality, security, observability, tool boundaries, pilot/connection surfaces.
+
+### Level 2 — Business domains
+Finance, Analyses, Sales, Inventory, Buying & Suppliers, Marketing, Branding, Sales Development, Compliance, After-Sales.
+
+### Level 3 — Specialized intelligence
+Creative Intelligence, Market Intelligence/Radar, Research Intelligence, specialist retail agents, automations, multi-model routing, forecasting when justified, and controlled execution agents.
+
+Do NOT implement Level 3 capabilities merely because they exist in the architecture. Check `NORDLA-DEFERRED.md` and the current approved scope.
+
+## 3. Foundational decision principles
+
+Nordla must work according to the principles defined in:
+- `NORDLA-CANONICAL-ARCHITECTURE.md`
+- `docs/principles/decision-principles.md`
+
+Core requirements include:
+- real value creation before extraction;
+- productive commerce and economic autonomy;
+- honest profit;
+- useful and durable deployment of capital/assets;
+- long-term trust;
+- sustainable growth;
+- rejection of deception and manipulation;
+- explicit uncertainty;
+- human responsibility for consequential actions.
+
+These principles are operational constraints, not decorative values.
+
+## 4. Product and calculation principles
+
+- **Deterministic calculations.** Material financial, inventory, sales and operational figures are computed by versioned SQL/code.
+- **LLM explains and analyses; code calculates.**
+- **Never fabricate missing data.**
+- **Explicit unavailable/unclassified states.**
+- **One shared fact model with provenance.**
+- **Hard owner constraints eliminate before comparison.**
+- **No opaque universal score across heterogeneous axes.**
+- **DO_NOTHING and TEST_SMALL remain legitimate options where meaningful.**
+- **NOT_MEASURABLE is a legitimate result.**
+- **Weak evidence never becomes a strong rule automatically.**
+
+## 5. Generic vs vertical vs merchant-specific
 
 Three strictly separated layers:
 
-1. **Generic retail core** — logic true for any retailer (orders, products, inventory, refunds, core metrics).
-2. **Vertical-specific logic** — logic true for a category of retailer (e.g. "has in-house production/customization" vs. "buys and resells finished goods"). Lives in its own module, loaded only for merchants that opt into that vertical.
-3. **Merchant-specific configuration** — data, not code (e.g. HABB's UV production costs). Lives under `config/merchants/<merchant>/`.
+1. **Generic Nordla core** — logic true for any supported business/retailer.
+2. **Vertical-specific logic** — opt-in logic true for a business category.
+3. **Merchant-specific configuration** — data/configuration only.
 
-Never hardcode a merchant's business rules into the generic core or into a vertical module. See [`config/merchants/habb/README.md`](config/merchants/habb/README.md).
+Never hardcode HABB into generic architecture.
 
-## 4. Security
+## 6. Security and execution
 
-- Never expose secrets. No production credentials in the repository, ever.
-- No raw customer PII sent to an LLM.
-- Shopify access is **read-only** in V1.
-- No destructive database operation without explicit human approval.
+- Never expose secrets.
+- No raw customer PII sent to an LLM unless explicitly designed, lawful and approved.
+- Least privilege by default.
+- Agents/tools receive bounded capabilities, not unrestricted database/system authority.
+- Consequential actions pass through policy enforcement outside the LLM/agent.
+- No destructive database operation without explicit authorization.
 - No production deployment without explicit human approval.
+- Migrations are versioned and reviewed.
 - Test before merge.
-- Migrations are versioned and reviewed before being applied.
-- If/when Shopify webhooks are added: HMAC verification is mandatory, no exceptions.
-- API rate limiting and CORS hardening: deferred to a later phase, tracked as tech debt, not skipped silently.
+- Maintain auditability, tenant isolation, idempotence and rollback/stop paths for consequential actions.
 
-See [`docs/security/baseline.md`](docs/security/baseline.md).
+## 7. Development workflow
 
-## 5. Development workflow
+`branch → test → review → merge → rollback path known`
 
-`branch → test → review (PR) → merge → rollback path known`
-
-- No direct pushes to `main`. `main` is protected.
+- No direct pushes to `main`.
 - No force push.
-- Every significant change is committed; small, atomic commits.
-- Every change has a known rollback path before it merges.
-- One feature branch per feature (`feature/<name>`) — never bundle unrelated concerns in one branch or commit.
+- One feature branch per feature.
+- Keep commits small and coherent.
+- Do not broaden scope because something sounds useful.
+- Do not create new agents/modules/capabilities unless approved in the canonical architecture/register or explicitly approved for the current phase.
+- Do not touch HABB production from this repository unless explicitly approved.
+- Build only the approved current scope.
 
-## 6. Development stack (V1, minimal)
+## 8. Connectors and temporary sources
 
-Core: Claude Code, GitHub, Supabase (dev only).
-Claude helpers: Context7 (docs), Security review, Playwright/browser tooling.
-Shopify: official Shopify MCP connector, **for development inspection/testing only**. The future SaaS product must use its own Shopify App / OAuth / Admin GraphQL integration — the runtime product is never architected around a Claude-side dev connector.
-Email: Resend is the intended provider; not implemented yet.
+Connectors are replaceable sources, not architecture.
 
-Do not add tooling (Notion, Linear, Figma, Twilio, Klaviyo, Google Ads, Meta, agent-orchestration frameworks, etc.) without a concrete V1 requirement and a written reason. See [`docs/decisions/`](docs/decisions/) for the record of what was considered and why.
+Shopify may currently supply pilot facts for HABB, but future Nordla Sales and Inventory remain the target business domains. Do not hardcode Shopify semantics into domain logic.
 
-## 7. Merchant configuration: HABB is config, not architecture
+## 9. Current rule for older documents
 
-HABB-specific concepts (UV production costs, blank product costs, ink, consumables, operator time, machine cost, remake/waste assumptions) live under `config/merchants/habb/` as data. None of these concepts are mandatory for the generic core — a retailer that simply buys and resells finished goods must work with zero merchant-specific production config.
+Older architecture notes and ADRs remain historical records.
 
-## 8. Non-negotiable (current phase)
+When they conflict with:
+- `NORDLA-CANONICAL-ARCHITECTURE.md`
+- `NORDLA-DECISION-REGISTER.md`
+- `NORDLA-DEFERRED.md`
 
-- Do not build the contribution margin engine, recommendation engine, reorder engine, cash engine, dashboard, email digest, or outcome engine until explicitly approved.
-- Do not broaden scope because something "sounds useful."
-- Do not create additional agents.
-- Do not touch HABB production (Shopify theme/store) from this project.
-- Build only what has been explicitly approved for the current phase.
+the canonical documents take precedence unless a later accepted ADR explicitly supersedes a frozen decision.
