@@ -15,7 +15,7 @@ import { existingValue } from '/core/conflicts.js';
 
 const REVIEW_TEXT = { TECHNICAL_ONLY: '中文 : relecture par un locuteur natif à faire', UNREVIEWED: '中文 : non relue', MACHINE: 'traduction automatique', UNAVAILABLE: 'chinois non disponible', NATIVE_REVIEWED: '中文 : relue' };
 const DIM_TEXT = { IDENTITY: 'Identité du produit', COMMERCIAL: 'Offre commerciale', ROLE: 'Votre rôle', REGULATORY: 'Conformité', DOCUMENTS: 'Documents', COST: 'Coûts', DECISION: 'Décision', CONFLICT: 'Contradiction' };
-const REASON_TEXT = { AMBIGUOUS: 'Valeur ambiguë : à corriger', DUPLICATE: 'Deux valeurs différentes : laquelle ?', CONFLICT: 'Contredit ce que Nordla a déjà', CALCULATED: 'Valeur calculée ou convertie : à vérifier', LOW_CONFIDENCE: 'Confiance faible : à vérifier' };
+const REASON_TEXT = { MACHINE_DERIVED: 'Issu d'une transcription ou traduction automatique : à confirmer un par un', AMBIGUOUS: 'Valeur ambiguë : à corriger', DUPLICATE: 'Deux valeurs différentes : laquelle ?', CONFLICT: 'Contredit ce que Nordla a déjà', CALCULATED: 'Valeur calculée ou convertie : à vérifier', LOW_CONFIDENCE: 'Confiance faible : à vérifier' };
 const b = (label, act, key, extra = '', cls = 'btn sec') => `<button type="button" class="${cls}" data-act="${act}" ${key !== undefined ? `data-key="${esc(key)}"` : ''} ${extra} style="min-height:44px;padding:8px 14px">${label}</button>`;
 const val = (v) => ` data-val="${esc(JSON.stringify(v))}"`;
 

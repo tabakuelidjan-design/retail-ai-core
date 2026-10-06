@@ -23,7 +23,7 @@ export function addItem(s, ev, at) {
   const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
   const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [] }; conv.items.push(item);
   const r = extractFacts({ text, lang });
-  for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
+  for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, basis: 'ORIGINAL', state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
 }
 
 /** A transcription (audio -> text) or a translation of a supplier item: DERIVED data kept next to the original, with who produced it and its review state. The original text/audio reference
@@ -31,7 +31,12 @@ export function addItem(s, ev, at) {
 export function derive(s, ev, at) {
   const conv = find(s.conversations, ev.convId, 'conversation'); const item = conv.items.find((x) => x.id === ev.itemId); if (!item) throw new Error(`unknown item: ${ev.itemId}`);
   if (!['TRANSCRIPTION', 'TRANSLATION', 'OCR'].includes(ev.kind)) throw new Error('derivation kind must be TRANSCRIPTION, TRANSLATION or OCR'); if (!String(ev.text ?? '').trim()) throw new Error('derived text is required');
-  item.derived.push({ id: `${item.id}-d${item.derived.length + 1}`, kind: ev.kind, lang: ev.lang ?? null, text: String(ev.text), provider: ev.provider ?? null, review: ev.review ?? 'MACHINE', at });
+  const d = { id: `${item.id}-d${item.derived.length + 1}`, kind: ev.kind, lang: ev.lang ?? null, text: String(ev.text), provider: ev.provider ?? null, ...(ev.version ? { version: String(ev.version) } : {}), review: ev.review ?? 'MACHINE', at }; item.derived.push(d);
+  // OPTIONAL: propose facts from the derived text. They are tagged with their basis, capped at MEDIUM confidence and flagged MACHINE_DERIVED: they can never join a grouped confirmation and are confirmed one by one.
+  if (ev.extract === true && ['TRANSCRIPTION', 'TRANSLATION'].includes(ev.kind)) {
+    const r = extractFacts({ text: d.text, lang: d.lang && d.lang !== 'auto' ? d.lang : detectLang(d.text) });
+    for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker: item.speaker, basis: ev.kind, derivedId: d.id, confidence: c.confidence === 'HIGH' ? 'MEDIUM' : c.confidence, flags: [...new Set([...(c.flags ?? []), 'MACHINE_DERIVED'])], state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
+  }
 }
 
 // ---- compile a confirmed candidate into EXISTING events -----------------------------------------------------------------------------------------------------------------------
@@ -62,7 +67,7 @@ function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDec
   const source = { kind: 'conversation', convId: c.convId, itemId: c.itemId, candidateId: c.id };
   const same = !c.key.startsWith('docClaim.') && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
   if (!same) for (const e of compile(s, c, value, level, source)) reduce(e);
-  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}) });
+  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, basis: c.basis ?? 'ORIGINAL', corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}) });
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 

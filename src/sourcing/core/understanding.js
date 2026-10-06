@@ -15,6 +15,7 @@ export function classifyCandidates(state) {
   const out = { group: [], attention: [], claims: [] };
   for (const c of proposed) {
     const value = c.correctedValue ?? c.value; const flags = c.flags ?? [];
+    if ((c.basis && c.basis !== 'ORIGINAL') || flags.includes('MACHINE_DERIVED')) { out.attention.push({ candidate: c, reason: 'MACHINE_DERIVED' }); continue; } // from a machine transcription/translation: always one by one, document statements included
     if (c.key.startsWith('docClaim.')) { const f = findCandidateConflict(state, c, value); if (f) out.attention.push({ candidate: c, reason: 'CONFLICT' }); else out.claims.push(c); continue; }
     if (c.needsCorrection || flags.includes('AMBIGUOUS_NUMBER')) { out.attention.push({ candidate: c, reason: 'AMBIGUOUS' }); continue; }
     if (flags.includes('DUPLICATE_THRESHOLD') || dup(c)) { out.attention.push({ candidate: c, reason: 'DUPLICATE' }); continue; }
