@@ -22,7 +22,7 @@ export function normalizeTiming(t) {
  * @param {{topic:{id:string},suggestion:object|null,all:object[],alerts:object[]}} ctx the result of planContext
  * @param {{composing?:boolean,lastUtteranceAt?:number|null,explicit?:boolean}} signals
  * @param {number} now milliseconds
- * @returns {{show:object|null,hold:null|{reason:string,until:number|null},alerts:object[],state:object|null}}
+ * @returns {{show:object|null,hold:null|{reason:string,until:number|null},wake?:number,alerts:object[],state:object|null}} `wake`: look again at that time (a shown suggestion is about to expire)
  */
 export function presentSuggestion(prev, ctx, signals = {}, now, timing = DEFAULT_TIMING) {
   const tm = normalizeTiming(timing); const alerts = ctx.alerts ?? []; const list = ctx.all ?? (ctx.suggestion ? [ctx.suggestion] : []);
@@ -34,8 +34,11 @@ export function presentSuggestion(prev, ctx, signals = {}, now, timing = DEFAULT
 
   // the suggestion on screen: keep it while it is still proposed and still about the subject
   if (state?.shownId) {
-    const q = list.find((x) => x.id === state.shownId); const moved = state.origin === 'ADJACENT' && (ctx.topic?.id ?? 'OTHER') !== state.topicId;
-    if (q && (!moved || now - state.shownAt < tm.dwellMs)) return showNow(q);
+    const q = list.find((x) => x.id === state.shownId); const topicNow = ctx.topic?.id ?? 'OTHER'; const changed = topicNow !== state.topicId;
+    // the subject moved on: an ADJACENT suggestion about the old subject is obsolete; a GLOBAL one (an opener shown before anyone spoke) gives way to one that fits what is now being said
+    const moved = changed && (state.origin === 'ADJACENT' || (ctx.suggestion?.origin === 'ADJACENT' && ctx.suggestion.id !== state.shownId));
+    if (q && !moved) return showNow(q);
+    if (q && now - state.shownAt < tm.dwellMs) return { ...showNow(q), wake: state.shownAt + tm.dwellMs }; // obsolete but still readable: tell the screen when to look again
     state = cleared();
   }
   const q = ctx.suggestion; if (!q) return { show: null, hold: null, alerts, state };

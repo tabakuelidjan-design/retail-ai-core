@@ -24,7 +24,8 @@ import { marketScreen } from './screens/market.js';
 import { moneyScreen } from './screens/money.js';
 import { fieldScreen } from './screens/field.js';
 import { validateCorrection } from '/core/candidate-view.js';
-import { talkScreen, summaryScreen } from './screens/fieldhome.js';
+import { fieldFirst, fmCompute, fmNav } from './screens/fieldfirst.js';
+import { planContext } from '/core/context-engine.js';
 import { planConversation, answerEvents } from '/core/conversation-engine.js';
 import { groupUnderstanding } from '/core/understanding.js';
 import { userQuestionView } from '/core/conversation.js';
@@ -132,7 +133,6 @@ async function fetchFx() {
 
 
 
-const FIELD_TABS = [['talk', 'Conversation'], ['summary', 'Résumé'], ['expert', 'Détails']];
 const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScreen, case: caseScreen, ask: askScreen, docs: docsScreen, compliance: rulesScreen, market: marketScreen, money: moneyScreen };
 
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -155,13 +155,16 @@ function render() {
   ensureCase(); const c = cur();
   if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
   const fm = S.mode === 'field';
-  $('#tabs').innerHTML = (fm ? FIELD_TABS : TABS).map(([k, l]) => `<button data-act="${fm ? 'ftab' : 'tab'}" data-key="${k}" aria-current="${fm ? S.fview === k : S.tab === k}">${l}</button>`).join('');
+  document.body.classList.toggle('fm-mode', fm);
+  $('#tabs').innerHTML = fm ? fmNav() : TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
+  let fmv = null; clearTimeout(S.fmTimer);
+  if (fm && !S.error) { try { fmv = fmCompute(S.A, c); S.fmPrev = { caseId: c.id, state: fmv.state }; if (fmv.explicit && !fmv.show) S.flash = "Rien d'important à demander pour l'instant."; const wake = fmv.hold?.until ?? fmv.wake; if (wake) S.fmTimer = setTimeout(render, Math.max(50, wake - Date.now() + 30)); } catch (e) { S.error = e; console.error(e); } }
   paintHeader();
-  const main = $('#screen'); const key = `${S.currentId}|${fm ? `field:${S.fview}` : S.tab}`;
+  const main = $('#screen'); const key = `${S.currentId}|${fm ? `field:${S.sheet ?? 'talk'}` : S.tab}`;
   const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
   const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
-  main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (S.fview === 'summary' ? summaryScreen : talkScreen) : SCREENS[S.tab])(S.A, c)}`;
+  main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (a, k) => fieldFirst(a, k, fmv) : SCREENS[S.tab])(S.A, c)}`;
   if (!fm && S.returnMode === 'field') main.insertAdjacentHTML('afterbegin', '<div class="card"><button type="button" class="btn" data-act="mode-field">← Retour au mode terrain</button></div>');
   if (keep) restoreDrafts(main, drafts, focus);
 }
@@ -176,7 +179,7 @@ async function onSubmit(ev) {
   if (name === 'compose') { // FIELD MODE: one box; the conversation starts by itself
     const text = String(d.text ?? ''); if (!text.trim()) { S.flash = 'Écrivez ou collez ce que dit le fournisseur.'; discardDrafts = false; return render(); }
     const prev = S.captureDraft?.[c.id] ?? ''; (S.captureDraft ??= {})[c.id] = ''; ls.set('nordla.sourcing.capdraft', S.captureDraft);
-    try { if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); const conv = cur().conversations.find((x) => x.status === 'OPEN'); return commit({ type: 'CONVERSATION_ITEM', convId: conv.id, speaker: d.speaker === 'me' ? 'me' : 'supplier', lang: 'auto', text }); }
+    S.sheet = null; try { if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); const conv = cur().conversations.find((x) => x.status === 'OPEN'); return commit({ type: 'CONVERSATION_ITEM', convId: conv.id, speaker: d.speaker === 'me' ? 'me' : 'supplier', lang: 'auto', text }); }
     catch (e) { S.captureDraft[c.id] = prev; ls.set('nordla.sourcing.capdraft', S.captureDraft); throw e; }
   }
   if (name === 'fh-product') { if (!String(d.name ?? '').trim()) { S.flash = 'Dites ce qu\'est le produit, même en quelques mots.'; discardDrafts = false; return render(); } return commit({ type: 'NAME', name: d.name.trim() }); }
@@ -273,10 +276,10 @@ async function addDocument(form, d) {
 }
 
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
-function setMode(m) { S.mode = m; S.returnMode = null; S.attach = false; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
+function setMode(m) { S.mode = m; S.returnMode = null; S.attach = false; S.sheet = null; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
 /** The supplier-facing screen for a question: the supplier's language BIG (never invented: when there is none the owner is told), the owner's French small. What was shown is remembered. */
 function showQuestion(id) {
-  const q = planConversation(cur(), S.A).questions.find((x) => x.id === id); if (!q || q.audience !== 'SUPPLIER') return; const zh = q.supplier.zh; const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
+  const cx = planContext(cur(), S.A); const q = cx.all.find((x) => x.id === id) ?? cx.plan.questions.find((x) => x.id === id); if (!q || q.audience !== 'SUPPLIER') return; const zh = q.supplier.zh; const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
   o.innerHTML = `<button class="btn sec" data-act="close-overlay">Fermer</button><p class="small muted" style="margin-top:12px">Pour vous : ${esc(q.text.fr).replace(/\n/g, '<br>')}</p>${zh.text ? `<div class="show-sup" style="margin-top:12px"><p class="zh" lang="zh-Hans" style="white-space:pre-wrap">${esc(zh.text)}</p></div>` : `<div class="show-sup" style="margin-top:12px"><p style="white-space:pre-wrap">${esc(q.supplier.en ?? q.text.fr)}</p></div><p class="small muted">Pas de chinois disponible pour cette question : montrez ce texte à votre traducteur ou utilisez votre application de traduction.</p>`}`;
   commit({ type: 'QUESTION_SHOWN', questionId: id, via: 'SHOWN_TO_SUPPLIER', texts: { fr: q.text.fr, zh: zh.text ?? null, zhReview: zh.review } });
 }
@@ -289,7 +292,12 @@ function showUserQuestion(id) {
 }
 async function onClick(ev) {
   const t = ev.target.closest('[data-act]'); if (!t) return; const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined;
-  if (act === 'ftab') { if (key === 'expert') return setMode('expert'); S.fview = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
+  if (act === 'ftab') { if (key === 'expert') return setMode('expert'); S.fview = key; S.sheet = null; S.flash = ''; render(); window.scrollTo(0, 0); return; }
+  if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
+  if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
+  if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
+  if (act === 'fm-start') { S.flash = ''; return guarded(() => { if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); else render(); }); }
+  if (act === 'ask-now') { S.askNow = true; S.flash = ''; return render(); }
   if (act === 'mode-expert') return setMode('expert'); if (act === 'mode-field') return setMode('field');
   if (act === 'review-expert') { S.mode = 'expert'; S.tab = 'field'; S.fstep = 'capture'; S.returnMode = 'field'; render(); window.scrollTo(0, 0); return; }
   if (act === 'attach-toggle') { S.attach = !S.attach; return render(); }

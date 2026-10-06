@@ -15,7 +15,7 @@ import { existingValue } from '/core/conflicts.js';
 
 const REVIEW_TEXT = { TECHNICAL_ONLY: '中文 : relecture par un locuteur natif à faire', UNREVIEWED: '中文 : non relue', MACHINE: 'traduction automatique', UNAVAILABLE: 'chinois non disponible', NATIVE_REVIEWED: '中文 : relue' };
 const DIM_TEXT = { IDENTITY: 'Identité du produit', COMMERCIAL: 'Offre commerciale', ROLE: 'Votre rôle', REGULATORY: 'Conformité', DOCUMENTS: 'Documents', COST: 'Coûts', DECISION: 'Décision', CONFLICT: 'Contradiction' };
-const REASON_TEXT = { MACHINE_DERIVED: 'Issu d'une transcription ou traduction automatique : à confirmer un par un', AMBIGUOUS: 'Valeur ambiguë : à corriger', DUPLICATE: 'Deux valeurs différentes : laquelle ?', CONFLICT: 'Contredit ce que Nordla a déjà', CALCULATED: 'Valeur calculée ou convertie : à vérifier', LOW_CONFIDENCE: 'Confiance faible : à vérifier' };
+const REASON_TEXT = { MACHINE_DERIVED: "Issu d'une transcription ou traduction automatique : à confirmer un par un", AMBIGUOUS: 'Valeur ambiguë : à corriger', DUPLICATE: 'Deux valeurs différentes : laquelle ?', CONFLICT: 'Contredit ce que Nordla a déjà', CALCULATED: 'Valeur calculée ou convertie : à vérifier', LOW_CONFIDENCE: 'Confiance faible : à vérifier' };
 const b = (label, act, key, extra = '', cls = 'btn sec') => `<button type="button" class="${cls}" data-act="${act}" ${key !== undefined ? `data-key="${esc(key)}"` : ''} ${extra} style="min-height:44px;padding:8px 14px">${label}</button>`;
 const val = (v) => ` data-val="${esc(JSON.stringify(v))}"`;
 
@@ -91,6 +91,7 @@ function composer(c) {
     ${S.attach ? `<div class="attach"><label class="btn sec" style="display:block;text-align:center">Photo du produit<input type="file" accept="image/*" capture="environment" data-act="photo" style="display:none"></label>${b('Document (PDF, photo, texte)', 'attach-doc')}${b('Capture WeChat, offre, catalogue', 'attach-doc')}<p class="small muted">La lecture automatique d'offres n'existe pas encore : le fichier est gardé comme preuve ; tapez l'essentiel dans la conversation.</p></div>` : ''}</div>`;
 }
 
+export { bubble, understanding, attentionCard, claimsCard, conflictCards, nextCard, REVIEW_TEXT, b, val };
 export function talkScreen(A, c) {
   const p = planConversation(c, A); const g = groupUnderstanding(c); const tl = p.timeline;
   const attention = g.attention;
@@ -108,9 +109,10 @@ export function summaryScreen(A, c) {
   <div class="card"><h2>OÙ ON EN EST</h2><table>
     <tr><td>Connu et confirmé</td><td class="n"><b>${p.known.length}</b></td></tr><tr><td>Important qui manque</td><td class="n"><b>${p.summary.missingImportant}</b></td></tr>
     <tr><td>À confirmer par vous</td><td class="n"><b>${p.summary.pending}</b></td></tr><tr><td>Contradictions</td><td class="n"><b>${p.summary.conflicts}</b></td></tr></table></div>
-  ${p.summary.stage === 'EVALUABLE' || p.summary.stage === 'ALMOST' ? `<section class="verdict v-${d.verdict}"><p class="q">CONFORMITÉ ET ÉCONOMIE (ce produit, ces conditions)</p><div class="v">${esc(d.verdict.replace(/_/g, ' '))}</div><p class="a">${esc(fr)}</p>
+  ${p.summary.stage === 'EVALUABLE' || p.summary.stage === 'ALMOST' ? `<section class="verdict v-${d.verdict}"><p class="q">ÉVALUATION D'ACHAT (conformité et économie, ce produit à ces conditions)</p><div class="v">${esc(d.verdict.replace(/_/g, ' '))}</div><p class="a">${esc(fr)}</p>
     ${hasMax ? `<p style="margin:0"><b>Prix maximum à payer : ${esc(mp.display ?? '')}</b></p>` : '<p style="margin:0" class="muted">Prix maximum : pas encore calculable.</p>'}${A.negotiation?.targetUnitPrice?.display ? `<p style="margin:4px 0 0">Cible de négociation : <b>${esc(A.negotiation.targetUnitPrice.display)}</b></p>` : ''}</section>` : '<div class="card"><h2>ANALYSE</h2><p class="muted">Pas encore assez d\'informations pour une première évaluation. Nordla continue de calculer à chaque nouvelle information.</p></div>'}
-  <div class="card"><h2>DÉCISION D'ACHAT POUR VOTRE ENTREPRISE</h2><p><b>Pas encore disponible.</b></p><p class="small muted">Elle demandera votre profil d'entreprise, le plan d'argent et des preuves de marché : ce n'est pas encore construit. Le verdict ci-dessus ne couvre que ce produit.</p></div>
+  <div class="card"><h2>DÉCISION D'ENTREPRISE</h2><p><b>Pas encore disponible.</b></p><p class="small muted">La décision pour votre entreprise se prend dans le socle commun de Nordla (votre profil, votre argent, vos règles), qui n'est pas encore raccordé. L'évaluation ci-dessus ne couvre que ce produit.</p></div>
+  ${p.questions.some((q) => q.audience === 'USER' && ['OPEN', 'UNANSWERED'].includes(q.state)) ? `<div class="card"><h2>À RENSEIGNER PAR VOUS</h2><p class="small muted">Ce sont des hypothèses de ce dossier : elles ne sont pas des règles de votre entreprise.</p></div>${p.questions.filter((q) => q.audience === 'USER' && ['OPEN', 'UNANSWERED'].includes(q.state)).map((q) => nextCard({ next: q, upcoming: [] })).join('')}` : ''}
   ${missing.length ? `<div class="card"><h2>CE QUI MANQUE</h2>${list(missing.map((q) => `${esc(q.text.fr.split('\n')[0])} <span class="chip">${q.audience === 'USER' ? 'vous' : 'fournisseur'}</span>`))}</div>` : ''}
   <details class="card"><summary>Ce que Nordla sait (${p.known.length})</summary>${list(p.known.map((k) => `${esc(k.label)} : <b>${esc(k.valueText)}</b> <span class="muted small">${k.status === 'SUPPLIER_CLAIM' ? 'dit par le fournisseur' : k.status === 'USER_PROVIDED' ? 'saisi par vous' : esc(k.status)}</span>`))}</details>
   <details class="card"><summary>Pas encore disponible (${UNAVAILABLE_ENGINES.length})</summary>${list(UNAVAILABLE_ENGINES.map((u) => `<b>${esc(u.label)}</b> - ${esc(u.note)}`))}${chip('', 'PAS ENCORE DISPONIBLE', 'UNKNOWN')}</details>

@@ -1,6 +1,3 @@
-// REAL-BROWSER end-to-end of FIELD MODE (the simplified conversational terrain experience) over the unchanged Expert screens: the mode switch, the conversation, "Nordla a compris", the grouped
-// confirmation, individual attention items, contradictions, the best next question (shown in Chinese with its review state), the owner's small answer cards, the continuous summary, offline
-// persistence and sync, drafts, layout. Real Edge/Chrome engine through the DevTools Protocol; it is NOT a physical phone.   npm run sourcing:e2e:fieldmode
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,104 +21,110 @@ const ready = async (t) => { await t.waitFor("document.readyState === 'complete'
 const kase = async (t) => JSON.parse(await t.eval('JSON.stringify(__t.kase())'));
 const text = (t, sel = '#screen') => t.eval(`document.querySelector(${JSON.stringify(sel)})?.innerText ?? ''`);
 const tap = (t, sel, ms = 350) => t.run(`__t.click(${JSON.stringify(sel)}); await __t.sleep(${ms}); return 1;`);
-const send = (t, msg, who = 'supplier') => t.run(`__t.set('form[data-form="compose"] textarea', ${JSON.stringify(msg)}); document.querySelector('form[data-form="compose"] [name="speaker"]').value = ${JSON.stringify(who)}; __t.submit('form[data-form="compose"]'); await __t.sleep(600); return 1;`);
+// REAL-BROWSER end-to-end of FIELD MODE, CONVERSATION FIRST: three entries, one calm screen, at most one suggestion at a calm moment, everything else in sheets opened on demand, the grouped
+// confirmation only on demand, owner inputs only in the summary sheet, the purchase EVALUATION (never a "decision"), provenance intact, offline, Expert untouched. Real Edge/Chrome engine through
+// the DevTools Protocol; it is NOT a physical phone.   npm run sourcing:e2e:fieldmode
+const send = async (t, msg, who = 'supplier') => { await t.run(`if (!document.querySelector('form[data-form="compose"]')) { document.querySelector('.fm-nav[data-key="write"]').click(); await __t.sleep(250); } __t.set('form[data-form="compose"] textarea', ${JSON.stringify(msg)}); document.querySelector('form[data-form="compose"] [name="speaker"]').value = ${JSON.stringify(who)}; __t.submit('form[data-form="compose"]'); await __t.sleep(700); return 1;`); };
 const PHONE = 'PB-X200. MOQ is 50 pcs. Price is USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs. FOB Shenzhen. 30% deposit, 70% balance before shipment. We have black, white, blue and pink. You can mix colors, minimum 25 pcs per color. Production time is 15 days. We have CE, RoHS and UN38.3.';
+const navLabels = (t) => t.eval("[...document.querySelectorAll('#tabs button')].map((b) => b.innerText.trim()).join(',')");
+const controls = (t) => t.eval("[...document.querySelectorAll('#screen button, #screen input:not([type=hidden]), #screen select, #screen textarea, #screen a')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }).length");
+const closeSheet = (t) => t.run(`document.querySelector('[data-act="fm-sheet-close"].fm-close')?.click(); await __t.sleep(300); return 1;`);
+const chipsOf = (t) => t.eval("[...document.querySelectorAll('.fm-chip')].map((e) => e.innerText.replace(/\\s+/g, ' ').trim())");
 
 await startServer();
 const errs = []; const browser = await new Browser(exe).launch(); browser.listeners.push((d) => { if (d.method === 'Runtime.exceptionThrown') errs.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text); });
 console.log(`Browser engine: ${exe}\n`);
 const t = await browser.tab(`${base}/#t=${TOKEN}`); await ready(t); await t.waitFor('window.nordlaSourcing?.state().online === true', 15000); await t.waitFor('navigator.serviceWorker.ready.then(() => caches.keys()).then((k) => k.length > 0)', 20000);
 
-await check('1. Expert is the default; the menu switches to Field mode (3 bottom buttons, no expert tabs) and the choice survives a reload; Expert comes back with all tabs', async () => {
-  ok((await t.eval("[...document.querySelectorAll('#tabs button')].map((b) => b.textContent).join(',')")) === 'Guided,Quick,Verdict,Case,Ask,Docs,Rules,Market,Money', 'expert tabs by default');
-  await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]');
-  ok((await t.eval("[...document.querySelectorAll('#tabs button')].map((b) => b.textContent).join(',')")) === 'Conversation,Résumé,Détails', 'field tabs');
-  await t.goto(`${base}/`); await ready(t); ok((await t.eval("document.querySelector('#tabs').innerText")).includes('Conversation'), 'mode persisted');
-  await tap(t, '#tabs [data-key="expert"]'); ok((await t.eval("document.querySelectorAll('#tabs button').length")) === 9, 'expert restored'); await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]');
+await check('1. Expert is the default; the menu switches to Field mode: exactly THREE entries (Conversation, Scanner / Ajouter, Écrire), persisted across a reload', async () => {
+  ok((await navLabels(t)) === 'Guided,Quick,Verdict,Case,Ask,Docs,Rules,Market,Money', 'expert tabs by default');
+  await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]'); ok((await navLabels(t)) === 'Conversation,Scanner / Ajouter,Écrire', await navLabels(t));
+  await t.goto(`${base}/`); await ready(t); ok((await navLabels(t)).startsWith('Conversation'), 'mode persisted');
 });
 
-await check('2. PRODUCT then CONVERSATION: the product is named in a few words, the category is only suggested (you confirm), and the progress message speaks French', async () => {
-  ok(/PRODUIT/.test(await text(t)), 'product card'); await t.run(`__t.set('form[data-form="fh-product"] input', 'Power bank'); __t.submit('form[data-form="fh-product"]'); await __t.sleep(400); return 1;`);
-  const body = await text(t); ok(/Probablement/.test(body), 'category suggestion'); await t.run(`__t.click('[data-act="cat"]'); await __t.sleep(300); return 1;`);
-  const c = await kase(t); ok(c.identity.workingName === 'Power bank' && c.identity.evidence.category.length >= 1, 'named + category confirmed by the owner'); ok(/Il me manque encore \d+ informations importantes/.test(await text(t)), 'progress message');
+await check('2. FIRST SCREEN: one question (what is this product?), nothing else; then ONE dominant action "Démarrer la conversation"; calm (few controls)', async () => {
+  ok(/Quel est ce produit/.test(await text(t)), 'product first'); ok((await controls(t)) <= 4, `controls: ${await controls(t)}`);
+  await t.run(`__t.set('form[data-form="fh-product"] input', 'Power bank'); __t.submit('form[data-form="fh-product"]'); await __t.sleep(500); return 1;`);
+  ok(/Démarrer la conversation/.test(await text(t)), 'the one action'); ok((await controls(t)) <= 4, `controls at home: ${await controls(t)}`); ok(!(await t.eval("!!document.querySelector('.fm-sheet')")), 'no sheet open');
+  await t.run(`__t.click('[data-act="cat"]'); await __t.sleep(300); return 1;`); const c = await kase(t); ok(c.identity.workingName === 'Power bank' && c.identity.evidence.category.length >= 1, 'named, category confirmed by the owner');
 });
 
-await check('3. the supplier answer: the original words stay, Nordla PROPOSES (nothing changes in the case), and shows "Nordla a compris" in plain lines', async () => {
-  await send(t, PHONE); const c = await kase(t); ok(c.conversations[0].items[0].original === PHONE, 'original kept'); ok(c.quotes.length === 0 && c.candidates.length === 16, `proposals only (${c.candidates.length})`);
-  const body = await text(t); ok(body.includes('NORDLA A COMPRIS') && /50 = 8 · 100 = 7\.20 · 300 = 6\.80/.test(body), 'understood lines'); ok(/FOB Shenzhen/.test(body) && /30 % d'acompte/.test(body) && /4 couleurs/.test(body) && /15 jours/.test(body), body.slice(0, 600));
-  ok(/DOCUMENTS ANNONCÉS/.test(body) && /aucun document reçu/.test(body), 'claims apart'); ok(/Confiance faible/.test(body), 'the unlabelled model is shown apart');
+await check('3. "Démarrer la conversation" opens the thread (Q1): a conversation starts, the keyboard is NOT forced, at most one suggestion', async () => {
+  await tap(t, '[data-act="fm-start"]', 500); const c = await kase(t); ok(c.conversations.length === 1 && c.conversations[0].status === 'OPEN', 'conversation open');
+  ok(!(await t.eval("document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'INPUT'")), 'no forced focus'); ok(/Le fournisseur parle/.test(await text(t)), 'hint'); ok((await t.eval("document.querySelectorAll('.fm-suggest').length")) <= 1, 'at most one suggestion');
 });
 
-await check('4. ONE deliberate tap confirms the clean group; the fact of the case, the provenance, the batch record are exact; the claims and the model are untouched', async () => {
-  await tap(t, '[data-act="group-confirm"]', 500); const c = await kase(t); const q = c.quotes.at(-1);
-  ok(q.tiers.length === 3 && q.tiers[0].unitPrice === '8' && q.tiers[1].unitPrice === '7.20' && q.tiers[2].unitPrice === '6.80' && q.moq === 50 && q.incoterm === 'FOB' && q.port === 'Shenzhen', JSON.stringify(q));
-  const mine = c.ledger.filter((e) => e.via === 'GROUP'); ok(mine.length === 12 && mine.every((e) => e.status === 'SUPPLIER_CLAIM' && e.userConfirmed === true && e.batchId === 'batch-1'), 'ledger provenance'); ok(c.confirmBatches.length === 1 && c.confirmBatches[0].shown.length === 12, 'what was shown is recorded');
-  ok(c.documentLedger.length === 0 && c.documents.length === 0 && !c.identity.identifiers.model, 'nothing else changed');
-  const body = await text(t); ok(!body.includes('NORDLA A COMPRIS'), 'group gone'); ok(/DOCUMENTS ANNONCÉS/.test(body), 'claims still waiting');
+await check('4. WRITING happens in a sheet from the bottom bar; sending closes it; the ORIGINAL is kept; Nordla only PROPOSES (the case is unchanged) and a quiet pill says how many to confirm, WITHOUT opening anything', async () => {
+  await tap(t, '.fm-nav[data-key="write"]', 300); ok(await t.eval('!!document.querySelector(\'.fm-sheet form[data-form="compose"]\')'), 'write sheet'); await send(t, 'We have black, white, blue and pink.');
+  ok(!(await t.eval("!!document.querySelector('.fm-sheet')")), 'sheet closed after sending'); const c = await kase(t); ok(c.conversations[0].items[0].original === 'We have black, white, blue and pink.', 'original kept'); ok(c.quotes.length === 0 && c.candidates.length >= 1, 'proposals only');
+  ok(/à confirmer/.test(await text(t)) && !(await t.eval("!!document.querySelector('.fm-sheet')")), 'pill, nothing opened by itself'); ok(/Fournisseur/.test(await text(t)), 'thread shows the supplier');
 });
 
-await check('5. document statements: their own tap records CLAIMS only (no document received, no proof); the unlabelled model is confirmed individually', async () => {
-  await tap(t, '[data-act="claims-confirm"]', 500); let c = await kase(t); ok(c.documentLedger.length === 3 && c.documentLedger.every((d) => d.status === 'CLAIMED'), 'claims recorded'); ok(c.documents.length === 0, 'no document');
-  const id = c.candidates.find((x) => x.key === 'identifier.model' && x.state === 'PROPOSED').id; await tap(t, `[data-act="cand-confirm"][data-key="${id}"]`, 500); c = await kase(t); ok(c.identity.identifiers.model === 'PB-X200', 'model confirmed by the owner'); ok(c.identity.evidence.model.at(-1).level === 'SUPPLIER_CLAIMED', 'still a supplier claim');
+await check('5. CONTEXT: the colours statement leads, after a calm moment, to ONE adjacent question (mix colours / minimum per colour); the supplier then answers by himself and the suggestion disappears', async () => {
+  await t.waitFor(`/mélanger/i.test(document.querySelector('.fm-suggest')?.innerText ?? '')`, 25000); ok((await t.eval("document.querySelectorAll('.fm-suggest').length")) === 1, 'exactly one suggestion');
+  await send(t, 'You can mix colors, minimum 25 pcs per color.'); ok(!/mélanger/i.test(await t.eval("document.querySelector('.fm-suggest')?.innerText ?? ''")), 'answered: gone'); ok(/à confirmer/.test(await text(t)), 'still just proposals');
 });
 
-await check('6. the best NEXT question (French for you), shown in Chinese on demand with its review state; what was shown is remembered and the question is not repeated', async () => {
-  const card = await t.eval(`document.querySelector('.nextq')?.dataset.qid`); ok(card, 'a next question'); ok(/PROCHAINE QUESTION/.test(await text(t)), 'card'); const before = card;
-  await tap(t, '.nextq [data-act="show-q"]', 600); const ov = await text(t, '#overlay'); ok(/Pour vous/.test(ov) && (/[一-鿿]/.test(ov) || /Pas de chinois disponible/.test(ov)), 'overlay: Chinese or an honest "not available"'); await tap(t, '[data-act="close-overlay"]', 200);
-  const c = await kase(t); ok(c.questionLog.length === 1 && c.questionLog[0].questionId === before && c.questionLog[0].kind === 'SHOWN', 'shown is logged'); ok(['TECHNICAL_ONLY', 'UNREVIEWED', 'UNAVAILABLE'].includes(c.questionLog[0].texts.zhReview), `review state kept: ${c.questionLog[0].texts.zhReview}`);
-  ok((await t.eval(`document.querySelector('.nextq')?.dataset.qid`)) !== before, 'not asked twice in a row'); ok(/Vous avez demandé/.test(await text(t)), 'it appears in the conversation');
+await check('6. "Pas maintenant" puts a suggestion aside (remembered); "Que dois-je demander maintenant ?" answers at once', async () => {
+  await tap(t, '[data-act="ask-now"]', 400); const id = await t.eval("document.querySelector('.fm-suggest')?.dataset.qid"); ok(id, 'asked explicitly: a suggestion appears at once');
+  await t.run(`document.querySelector('.fm-suggest [data-act="q-skip"]').click(); await __t.sleep(400); return 1;`); const c = await kase(t); ok(c.questionLog.some((e) => e.kind === 'SKIPPED' && e.questionId === id), 'skip remembered'); ok(!(await t.eval(`document.querySelector('.fm-suggest')?.dataset.qid === ${JSON.stringify(id)}`)), 'gone from the screen');
 });
 
-await check('7. a CONTRADICTION is shown at once with the two honest choices; "keep" and "take the new one" both work; the history keeps both statements', async () => {
-  await send(t, 'Sorry, the MOQ is 100 pcs.'); let body = await text(t); ok(/Avant :/.test(body) && /Maintenant :/.test(body) && body.includes('MOQ 50'), body.slice(0, 400)); let c = await kase(t); ok(c.quotes.at(-1).moq === 50, 'not overwritten');
-  await tap(t, '.conflict [data-act="pre-ask"]', 700); ok(/[一-鿿]/.test(await text(t, '#overlay')), 'a Chinese clarification sentence'); await tap(t, '[data-act="close-overlay"]', 200); c = await kase(t); ok(c.conflicts.some((x) => x.state === 'OPEN'), 'the conflict stays open until you decide');
-  await t.run(`document.querySelectorAll('.conflict [data-act="conflict-resolve"]')[1].click(); await __t.sleep(500); return 1;`); c = await kase(t); ok(c.quotes.at(-1).moq === 100 && c.conflicts.every((x) => x.state === 'RESOLVED'), 'new value taken by the owner'); ok(c.ledger.filter((e) => e.key === 'quote.moq').length === 2, 'both statements stay in the ledger');
+await check('7. the GROUPED confirmation is ON DEMAND (a sheet from the pill), one deliberate tap; provenance exact (SUPPLIER_CLAIM, confirmed by the user, batch id, basis ORIGINAL); never opens by itself', async () => {
+  await send(t, PHONE); ok(!(await t.eval("!!document.querySelector('.fm-sheet')")), 'still closed'); await tap(t, '.fm-pill', 400); const body = await text(t); ok(/NORDLA A COMPRIS/.test(body) && /50 = 8 · 100 = 7\.20 · 300 = 6\.80/.test(body) && /FOB Shenzhen/.test(body), body.slice(0, 500));
+  await tap(t, '[data-act="group-confirm"]', 600); const c = await kase(t); const q = c.quotes.at(-1); ok(q.tiers.length === 3 && q.moq === 50 && q.incoterm === 'FOB' && q.port === 'Shenzhen', JSON.stringify(q));
+  const mine = c.ledger.filter((e) => e.via === 'GROUP'); ok(mine.length >= 8 && mine.every((e) => e.status === 'SUPPLIER_CLAIM' && e.userConfirmed === true && /^batch-/.test(e.batchId) && e.basis === 'ORIGINAL'), 'ledger provenance'); ok(c.confirmBatches.length === 1, 'batch recorded');
+  ok(c.documentLedger.length === 0 && c.documents.length === 0, 'document statements untouched');
 });
 
-await check('8. the owner is asked small contextual cards only when they block the next action (never a questionnaire), answers are validated, and the summary updates by itself', async () => {
-  await send(t, 'Manufacturer: Brightway Electronics Ltd'); await t.run(`for (const b of [...document.querySelectorAll('.attn [data-act="cand-confirm"]')]) { b.click(); await __t.sleep(300); } return 1;`);
-  const seen = []; for (let i = 0; i < 24; i += 1) {
-    const q = await t.eval(`(() => { const e = document.querySelector('.nextq'); return e ? { id: e.dataset.qid, a: e.dataset.audience } : null; })()`); if (!q) break; seen.push(q.id);
-    if (q.a === 'SUPPLIER') { await tap(t, '.nextq [data-act="q-skip"]', 250); continue; }
-    const ans = { 'u:brand': 'No', 'u:freight': '600', 'u:duty': '2.7', 'u:fx': '0.92', 'u:sellingPrice': '21', 'u:margin': '30' }[q.id];
-    if (q.id === 'u:brand') await tap(t, '.nextq [data-act="uanswer"][data-val="false"]', 400);
-    else if (ans) { if (q.id === 'u:freight') { await t.run(`__t.set('.nextq form[data-form="uanswer"] input', '6,5'); __t.submit('.nextq form[data-form="uanswer"]'); await __t.sleep(300); return 1;`); ok(/virgule|point/i.test(await text(t)), 'a decimal comma is refused'); } await t.run(`__t.set('.nextq form[data-form="uanswer"] input', ${JSON.stringify(ans)}); __t.submit('.nextq form[data-form="uanswer"]'); await __t.sleep(400); return 1;`); }
-    else if (q.id.startsWith('u:trait:')) await tap(t, '.nextq [data-act="uanswer"][data-val="true"]', 400); else break;
-  }
-  ok(['u:freight', 'u:duty', 'u:fx'].every((x) => seen.includes(x)), `cost cards appeared: ${seen}`); ok(seen.indexOf('u:freight') < seen.indexOf('u:duty') || true, 'ordered'); const c = await kase(t);
-  ok(c.costs.costs.freight.total === '600' && c.customs.duty.ratePct === '2.7' && c.costs.fx.rate === '0.92' && c.costs.importVat === undefined, 'answers compiled into the existing fields; VAT never assumed'); ok(c.sale?.sellingPriceGross === '21' && c.sale?.targetContributionPct === '30', 'selling price and margin asked only at the end');
-  await tap(t, '#tabs [data-key="summary"]', 400); const sm = await text(t); ok(/Analyse suffisamment complète/.test(sm) || /Il me manque/.test(sm), sm.slice(0, 200)); ok(/DÉCISION D'ACHAT POUR VOTRE ENTREPRISE/.test(sm) && /Pas encore disponible/.test(sm), 'business decision honestly unavailable'); ok(/Prix maximum à payer/.test(sm), 'a maximum price exists, nothing was launched by hand');
-  await tap(t, '#tabs [data-key="talk"]', 300);
+await check('8. COMPACT STATES: ✓ means confirmed by YOU; documents announced are ◌ and NEVER ✓ (their own tap records claims only: no document, no proof)', async () => {
+  await closeSheet(t); const chips = await chipsOf(t); ok(chips.some((x) => /^Prix ✓/.test(x)) && chips.some((x) => /^MOQ ✓/.test(x)), chips.join(' | '));
+  await tap(t, '.fm-pill', 400); await tap(t, '[data-act="claims-confirm"]', 600); const c = await kase(t); ok(c.documentLedger.length === 3 && c.documentLedger.every((d) => d.status === 'CLAIMED') && c.documents.length === 0, 'claims only');
+  await closeSheet(t); const after = await chipsOf(t); const doc = after.find((x) => /^Documents/.test(x)); ok(doc && doc.includes('◌') && !doc.includes('✓'), after.join(' | '));
+  await tap(t, '.fm-status', 400); ok(/confirmé par vous/.test(await text(t)) && /jamais « confirmé »/.test(await text(t)), 'the legend says what ✓ means and that documents differ'); await closeSheet(t);
 });
 
-await check('9. a half-typed message survives background re-renders and a change of view', async () => {
-  await t.run(`__t.set('form[data-form="compose"] textarea', 'half typed 300 pcs'); window.dispatchEvent(new Event('offline')); await __t.sleep(200); window.dispatchEvent(new Event('online')); await __t.sleep(1200); return 1;`);
-  ok((await t.eval(`document.querySelector('form[data-form="compose"] textarea').value`)) === 'half typed 300 pcs', 'survived the blip'); await tap(t, '#tabs [data-key="summary"]', 300); await tap(t, '#tabs [data-key="talk"]', 300);
-  ok((await t.eval(`document.querySelector('form[data-form="compose"] textarea').value`)) === 'half typed 300 pcs', 'survived the view change'); await t.run(`__t.set('form[data-form="compose"] textarea', ''); return 1;`);
+await check('9. a CONTRADICTION is a calm banner (value NOW), never a modal; the sheet shows Avant / Maintenant with both honest choices; the history keeps both', async () => {
+  await send(t, 'Sorry, the MOQ is 100 pcs.'); ok(await t.eval("!!document.querySelector('.fm-alert')"), 'banner'); ok(!(await t.eval("!!document.querySelector('.fm-sheet')")), 'not opened by itself'); const al = await t.eval("document.querySelector('.fm-alert').innerText"); ok(/avant 50, maintenant 100/.test(al), al);
+  await tap(t, '.fm-alert', 400); ok(/Avant :/.test(await text(t)) && /Maintenant :/.test(await text(t)), 'both values'); let c = await kase(t); ok(c.quotes.at(-1).moq === 50, 'not overwritten');
+  await t.run(`document.querySelector('.fm-sheet [data-act="pre-new"]').click(); await __t.sleep(600); return 1;`); c = await kase(t); ok(c.quotes.at(-1).moq === 100 && c.ledger.filter((e) => e.key === 'quote.moq').length === 2, 'new value taken by the owner, both statements kept');
+  await closeSheet(t); ok(!(await t.eval("!!document.querySelector('.fm-alert')")), 'banner gone once settled');
 });
 
-await check('10. OFFLINE: server stopped, browser offline, cold reload: Field mode opens on the same conversation; capture and grouped confirmation work; after reconnect everything reaches the server', async () => {
-  await stopServer(); await t.offline(true); await t.goto(`${base}/`); await ready(t); let body = await text(t); ok(/Fournisseur/.test(body) && body.includes('PB-X200.'), 'conversation shown again offline');
-  await send(t, 'Lead time is 20 days. FOB Ningbo'); body = await text(t); ok(/NORDLA A COMPRIS/.test(body) || /Avant :/.test(body), 'extraction works with no network');
-  const grp = await t.eval(`!!document.querySelector('[data-act="group-confirm"]')`); if (grp) await tap(t, '[data-act="group-confirm"]', 500); let c = await kase(t); ok(c.confirmBatches.length >= 1, 'batches stored locally'); ok(await t.eval("JSON.parse(localStorage.getItem('nordla.sourcing.dirty') || '[]').length >= 1"), 'waiting to sync');
+await check('10. the owner\'s own inputs are NEVER in the conversation: only in the summary sheet, on demand, validated; the purchase EVALUATION is not called a decision', async () => {
+  ok(!(await t.eval('!!document.querySelector(\'#screen form[data-form="uanswer"]\')')), 'no owner card in the conversation');
+  await tap(t, '.fm-status', 400); const sm = await text(t); ok(/À RENSEIGNER PAR VOUS/.test(sm) && /hypothèses de ce dossier/.test(sm), sm.slice(0, 300)); ok(/DÉCISION D'ENTREPRISE/.test(sm) && /Pas encore disponible/.test(sm) && !/DÉCISION D'ACHAT/.test(sm), 'company decision not available; no "purchase decision"');
+  ok(await t.eval('!!document.querySelector(\'.fm-sheet form[data-form="uanswer"]\')'), 'an owner card exists here');
+  await t.run(`__t.set('.fm-sheet form[data-form="uanswer"] input', '6,5'); __t.submit('.fm-sheet form[data-form="uanswer"]'); await __t.sleep(300); return 1;`); ok(/virgule|point/i.test(await text(t)), 'a decimal comma is refused'); await closeSheet(t);
+});
+
+await check('11. a half-typed message survives background re-renders and the bottom-bar navigation', async () => {
+  await tap(t, '.fm-nav[data-key="write"]', 300); await t.run(`__t.set('form[data-form="compose"] textarea', 'half typed 300 pcs'); window.dispatchEvent(new Event('offline')); await __t.sleep(200); window.dispatchEvent(new Event('online')); await __t.sleep(1200); return 1;`);
+  ok((await t.eval(`document.querySelector('form[data-form="compose"] textarea').value`)) === 'half typed 300 pcs', 'survived the blip'); await tap(t, '.fm-nav[data-key="add"]', 300); await tap(t, '.fm-nav[data-key="write"]', 300);
+  ok((await t.eval(`document.querySelector('form[data-form="compose"] textarea').value`)) === 'half typed 300 pcs', 'survived the navigation'); await t.run(`__t.set('form[data-form="compose"] textarea', ''); document.querySelector('.fm-nav[data-key="talk"]').click(); await __t.sleep(200); return 1;`);
+});
+
+await check('12. OFFLINE: server stopped, browser offline, cold reload: the same conversation opens; writing and extraction work; after reconnect everything reaches the server', async () => {
+  await stopServer(); await t.offline(true); await t.goto(`${base}/`); await ready(t); let body = await text(t); ok(/Fournisseur/.test(body) && body.includes('We have black, white, blue and pink.'), 'conversation shown again offline');
+  await send(t, 'Lead time is 20 days. FOB Ningbo'); body = await text(t); ok(/à confirmer|avant/.test(body), 'extraction works with no network'); let c = await kase(t); ok(c.conversations[0].items.at(-1).original === 'Lead time is 20 days. FOB Ningbo', 'stored locally'); ok(await t.eval("JSON.parse(localStorage.getItem('nordla.sourcing.dirty') || '[]').length >= 1"), 'waiting to sync');
   await startServer(); await t.offline(false); await t.run(`window.dispatchEvent(new Event('online')); await __t.sleep(200); return 1;`); await t.waitFor("JSON.parse(localStorage.getItem('nordla.sourcing.dirty') || '[]').length === 0", 20000); c = await kase(t);
-  const sv = await (await fetch(`${base}/api/cases/${c.id}`, { headers: { 'x-sourcing-token': TOKEN } })).json(); ok(sv.confirmBatches.length === c.confirmBatches.length && sv.questionLog.length === c.questionLog.length && sv.ledger.length === c.ledger.length, 'server copy identical'); ok(sv.conversations[0].items[0].original === PHONE, 'original identical'); ok(!JSON.stringify(sv).includes(TOKEN), 'no token');
+  const sv = await (await fetch(`${base}/api/cases/${c.id}`, { headers: { 'x-sourcing-token': TOKEN } })).json(); ok(sv.confirmBatches.length === c.confirmBatches.length && sv.questionLog.length === c.questionLog.length && sv.ledger.length === c.ledger.length, 'server copy identical'); ok(!JSON.stringify(sv).includes(TOKEN), 'no token');
 });
 
-await check('11. EXPERT is intact: Détails brings back every tab; all screens render; "Revoir en détail" opens the review and a banner brings you back', async () => {
-  await tap(t, '#tabs [data-key="expert"]', 400); for (const k of ['field', 'quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money']) { await tap(t, `#tabs [data-key="${k}"]`, 250); const body = await text(t); ok(body.length > 80 && !/could not be computed/.test(body), `${k}: ${body.slice(0, 60)}`); }
-  await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]'); await send(t, '50 pcs per carton, carton size 52x38x30 cm'); await tap(t, '[data-act="review-expert"]', 500); ok(/Retour au mode terrain/.test(await text(t)) && /TO REVIEW|CAPTURE/.test(await text(t)), 'expert review with a way back'); await tap(t, '[data-act="mode-field"]', 400); ok((await t.eval("document.querySelector('#tabs').innerText")).includes('Conversation'), 'back in field mode');
-  ok(errs.length === 0, `uncaught errors: ${errs.join(' | ')}`);
+await check('13. EXPERT is intact: the menu brings back every tab; all screens render; no uncaught error in the whole run', async () => {
+  await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-expert"]', 400); for (const k of ['field', 'quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money']) { await tap(t, `#tabs [data-key="${k}"]`, 250); const body = await text(t); ok(body.length > 80 && !/could not be computed/.test(body), `${k}: ${body.slice(0, 60)}`); }
+  await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]', 400); ok((await navLabels(t)).startsWith('Conversation'), 'back in field mode'); ok(errs.length === 0, `uncaught errors: ${errs.join(' | ')}`);
 });
 
-await check('12. layout: both Field views fit 375 / 390 / 430 wide (portrait and landscape): no sideways scrolling, tap targets large enough', async () => {
+await check('14. layout: the Field screen, its sheets and the bottom bar fit 375 / 390 / 430 wide (portrait and landscape): no sideways scrolling, tap targets large enough', async () => {
   const bad = [];
   for (const [w, h] of [[375, 812], [390, 844], [430, 932], [844, 390]]) {
-    await t.resize(w, h); await sleep(300);
-    for (const v of ['talk', 'summary']) {
-      const r = await t.run(`__t.click('#tabs [data-key="${v}"]'); await __t.sleep(250);
+    await t.resize(w, h); await t.run(`document.querySelector('.fm-nav[data-key="talk"]').click(); await __t.sleep(200); return 1;`);
+    for (const v of ['talk', 'write', 'add', 'summary']) {
+      const open = v === 'summary' ? `document.querySelector('.fm-nav[data-key="talk"]').click(); await __t.sleep(150); document.querySelector('.fm-status')?.click();` : v === 'talk' ? '' : `document.querySelector('.fm-nav[data-key="${v}"]').click();`;
+      const r = await t.run(`${open} await __t.sleep(300);
         const over = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).length;
-        const small = [...document.querySelectorAll('#screen button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 36 || r.width < 36); }).length;
+        const small = [...document.querySelectorAll('#screen button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 40 || r.width < 40); }).length;
         return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, small };`);
       if (r.sideways || r.over || r.small) bad.push(`${w}x${h} ${v}: ${JSON.stringify(r)}`);
     }

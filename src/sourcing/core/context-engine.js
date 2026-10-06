@@ -65,8 +65,8 @@ export function planContext(rawState, A, opts = {}) {
   // compact, factual messages (never a verdict)
   const chips = topicChips(st, A); const messages = [];
   if (chips.find((c) => c.topic === T.DOCUMENTS && ['CLAIMED', 'PROMISED'].includes(c.doc))) messages.push({ code: 'DOCS_ANNOUNCED', fr: 'Documents annoncés, mais pas encore reçus.' });
-  if ((st.quotes.length || priceMentioned) && A.landed.status === 'INFORMATION_INSUFFICIENT') messages.push({ code: 'COST_INCOMPLETE', fr: 'Coût rendu incomplet.' });
-  const n = plan.summary.missingImportant; if (plan.summary.stage !== 'EVALUABLE' && plan.summary.stage !== 'START' && n > 0) messages.push({ code: 'MISSING', fr: `Il reste ${n} point${n > 1 ? 's' : ''} important${n > 1 ? 's' : ''} avant d'évaluer l'achat.` });
+  if (st.quotes.length && A.landed.status === 'INFORMATION_INSUFFICIENT') messages.push({ code: 'COST_INCOMPLETE', fr: 'Coût rendu incomplet.' });
+  const n = plan.summary.missingImportant; if (plan.summary.stage !== 'EVALUABLE' && plan.summary.stage !== 'START' && n > 0 && n <= 5) messages.push({ code: 'MISSING', fr: `Il reste ${n} point${n > 1 ? 's' : ''} important${n > 1 ? 's' : ''} avant d'évaluer l'achat.` });
 
   return { topic, suggestion: ranked[0] ?? null, others: ranked.slice(1, 8), all: ranked, ownerCards: plan.questions.filter((q) => q.audience === 'USER' && ACTIVE.has(q.state)), alerts, messages: messages.slice(0, 3), chips, pending: plan.summary.pending, plan };
 }

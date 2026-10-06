@@ -47,6 +47,14 @@ test('the subject moved on: an adjacent suggestion about the old subject stays f
   const g = presentSuggestion(null, ctxOf([sug('model', 'GLOBAL')], 'COLOURS'), idle, T0); const g2 = presentSuggestion(g.state, ctxOf([sug('model', 'GLOBAL')], 'LEADTIME'), idle, T0 + 1000); assert.equal(g2.show.id, 'model', 'a global question is not about a subject');
 });
 
+test('an opener (GLOBAL) shown before anyone spoke gives way, after the dwell time, to a suggestion that fits what is now being said', () => {
+  const idle = { composing: false, lastUtteranceAt: null }; const r1 = presentSuggestion(null, ctxOf([sug('model', 'GLOBAL')], 'OTHER'), idle, T0); assert.equal(r1.show.id, 'model');
+  const talk = ctxOf([sug('s:price_tiers', 'ADJACENT'), sug('model', 'GLOBAL')], 'PRICE');
+  const r2 = presentSuggestion(r1.state, talk, idle, T0 + 2000); assert.equal(r2.show.id, 'model', 'not replaced at once'); assert.equal(r2.wake, T0 + 8000, 'the screen is told when to look again');
+  const r3 = presentSuggestion(r1.state, talk, idle, T0 + 8000); assert.equal(r3.show, null, 'dropped after the dwell time'); assert.equal(r3.hold.reason, 'COOLDOWN');
+  assert.equal(presentSuggestion(r3.state, talk, idle, T0 + 10000).show.id, 's:price_tiers');
+});
+
 test('"Que dois-je demander maintenant ?" overrides typing, silence, dwell and pause', () => {
   const r1 = presentSuggestion(null, ctxOf([sug('a'), sug('b')]), { composing: false, lastUtteranceAt: null }, T0);
   const r = presentSuggestion(r1.state, ctxOf([sug('b'), sug('a')]), { composing: true, lastUtteranceAt: T0 + 900, explicit: true }, T0 + 1000); assert.equal(r.show.id, 'b');
