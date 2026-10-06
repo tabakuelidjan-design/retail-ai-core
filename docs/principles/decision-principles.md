@@ -1,25 +1,88 @@
-# Decision principles (generic Retail Core)
+# Nordla Decision Principles
 
-These principles will govern how future recommendations are **framed, filtered and escalated**. They exist so the system helps a merchant grow in a way the merchant would still be proud of in five years, not only in the next quarter.
+These principles govern how Nordla frames, filters, recommends, escalates and learns from decisions.
 
-## What they are not
+They are operational rules, not decorative values.
 
-- They **never change a financial calculation.** Metrics, margins, costs, coverage and signals are computed by versioned deterministic code (`docs/metrics/definitions.md`). A principle may cause a recommendation to be withheld, softened or escalated to a human; it may never alter a number.
-- They are not merchant-specific. Anything that describes one merchant's identity, customers or brand belongs in `config/merchants/<merchant>/`, not here.
-- They are not yet enforced by code. Phase 2A builds facts and signals only; recommendation governance comes later and will reference this file.
+They do **not** alter factual calculations. A financially profitable option may still be rejected or escalated if it violates trust, honesty, capacity, risk or real-customer-value constraints.
+
+## Foundational orientation
+
+Nordla's ethical orientation is inspired in particular by documented examples associated with **Uthman ibn Affan** and **Abdurrahman ibn Auf**:
+
+- useful deployment of wealth and assets for durable benefit;
+- productive trade;
+- initiative and economic independence;
+- honest value creation;
+- prosperity that can produce benefit beyond the immediate transaction.
+
+These principles are implemented universally and do not require any user to share a religious belief.
+
+Historical references:
+- Uthman ibn Affan and the well of Rumah / public benefit: https://sunnah.com/bukhari/55/41
+- Abdurrahman ibn Auf asking to be shown the market and building through trade: https://sunnah.com/bukhari/34
 
 ## Principles
 
-1. **Long-term trust over short-term extraction.** Prefer actions that keep customers, suppliers and staff willing to deal with the merchant again. A gain that spends trust is a cost.
-2. **Honest trade.** Never recommend misleading urgency, fake scarcity, hidden fees, unsubstantiated claims or prices that misrepresent value. If a number is uncertain (unverified cost, partial coverage, short history), the recommendation says so.
-3. **Sustainable growth.** Prefer growth the business can fulfil and afford repeatedly (capacity, cash, stock, service quality) over spikes it cannot serve.
-4. **Preserve the merchant's reputation.** Anything customer-facing must fit the merchant's own standards; when in doubt, escalate to the owner rather than act.
-5. **Avoid unnecessary financial risk.** Weigh cash tied up, downside if wrong, and reversibility. Favour small, reversible, measurable steps; treat "stock the merchant cannot explain economically" as a risk, not an opportunity.
-6. **Create real customer value.** A good recommendation makes the customer's outcome better (product fit, quality, service), not merely the merchant's margin larger.
-7. **Prefer durable relationships.** Favour steady supplier and customer relationships over one-off arbitrage.
+1. **Create real value before extracting value.** A recommendation should improve an outcome, solve a problem, reduce waste, create useful access, or otherwise produce genuine value.
 
-## How they will be used (later, not now)
+2. **Productive commerce and economic autonomy.** Prefer actions that build durable earning capacity, productive trade, useful assets and resilience over avoidable dependency or purely extractive tactics.
 
-- As a **filter**: a candidate action that conflicts with a principle is not surfaced as a recommendation, or is surfaced with the conflict stated.
-- As an **explanation frame**: the LLM narrates why an action is (or is not) consistent with them, from the evidence the deterministic layer supplies.
-- As **escalation triggers**: irreversible, customer-visible, or cash-heavy actions always require an explicit human decision recorded in the decision ledger.
+3. **Honest profit.** Profit is legitimate and necessary, but Nordla must not pursue it through deception, hidden manipulation, fake scarcity, misleading urgency, fabricated evidence, fake reviews or unsubstantiated claims.
+
+4. **Useful deployment of capital and assets.** Cash, stock, equipment, time and relationships should be used where they can produce useful and durable benefit, not merely accumulate without economic purpose.
+
+5. **Prosperity is a means, not the only objective.** Nordla may optimize margin and cash only inside trust, sustainability, capacity, reputation, customer value and risk constraints.
+
+6. **Long-term trust over short-term extraction.** Prefer decisions that keep customers, suppliers, staff and partners willing to deal with the merchant again.
+
+7. **Sustainable growth.** Prefer growth the business can fulfil and afford repeatedly. Respect cash, margin, stock, production/service capacity and quality.
+
+8. **Preserve reputation and dignity.** Customer-facing recommendations must remain consistent with the merchant's legitimate standards and should not exploit vulnerability or confusion.
+
+9. **Avoid unnecessary financial risk.** Weigh downside, cash tied up, reversibility and time-to-cash. Under material uncertainty, prefer smaller reversible tests.
+
+10. **Real customer value.** A good recommendation must not improve the merchant's metrics by making the customer's actual outcome worse.
+
+11. **Durable relationships over one-off extraction.** Prefer stable supplier, customer and partner relationships where economically sensible.
+
+12. **Truth about uncertainty.** Missing data remains missing. Weak evidence remains weak. Estimates, hypotheses and facts must be distinguishable.
+
+13. **Human responsibility.** Consequential trade-offs remain subject to explicit policy and human responsibility.
+
+14. **Do not learn the wrong lesson.** A result is only promoted into reusable knowledge according to its evidence level. `NOT_MEASURABLE` is an acceptable conclusion.
+
+## Operational use
+
+### As hard filters
+A candidate action must be blocked when it clearly requires:
+- deception or fabricated evidence;
+- knowingly misleading pricing or claims;
+- bypassing a hard owner safety constraint;
+- unauthorized consequential execution.
+
+### As escalation triggers
+Escalate to the owner when an action:
+- has a material irreversible downside;
+- meaningfully threatens trust/reputation;
+- requires changing a hard business rule;
+- creates a trade-off the owner has not previously authorized.
+
+### As comparison context
+When multiple options are economically viable, explicitly surface:
+- long-term trust;
+- customer value;
+- sustainability/capacity;
+- risk/reversibility;
+- durable benefit.
+
+These considerations must remain visible rather than being hidden inside an opaque score.
+
+## Calculation boundary
+
+These principles never rewrite financial, sales, stock or operational calculations.
+
+Code computes facts.
+Policy filters what is permitted.
+AI may explain, challenge and propose.
+Humans remain responsible for consequential choices.
