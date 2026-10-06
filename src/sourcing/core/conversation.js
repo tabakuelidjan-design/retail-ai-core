@@ -6,6 +6,7 @@ import { extractFacts, detectLang } from './extract/index.js';
 import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, confirmedStatus, documentStatusOf } from './provenance.js';
 import { findCandidateConflict, existingValue, documentModelConflicts } from './conflicts.js';
 import { effectiveQuote } from './offers.js';
+import { classifyCandidates } from './understanding.js';
 
 const nextId = (prefix, list) => `${prefix}-${list.length + 1}`;
 const find = (list, id, what) => { const x = list.find((e) => e.id === id); if (!x) throw new Error(`unknown ${what}: ${id}`); return x; };
@@ -47,13 +48,13 @@ function compile(s, c, value, level, source) {
   }
 }
 
-function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDecided = false }) {
+function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDecided = false, meta = null }) {
   const status = confirmedStatus({ speaker: c.speaker, corrected });
   const level = corrected || c.speaker === SPEAKER.ME || ownerDecided ? 'USER_STATED' : 'SUPPLIER_CLAIMED';
   const source = { kind: 'conversation', convId: c.convId, itemId: c.itemId, candidateId: c.id };
   const same = !c.key.startsWith('docClaim.') && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
   if (!same) for (const e of compile(s, c, value, level, source)) reduce(e);
-  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}) });
+  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}) });
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 
@@ -68,7 +69,7 @@ function raiseConflict(s, c, value, found, at) {
   c.state = CANDIDATE_STATE.CONFLICT;
 }
 
-export function confirm(s, ev, at, reduce, { corrected = false, value = undefined } = {}) {
+export function confirm(s, ev, at, reduce, { corrected = false, value = undefined, meta = null } = {}) {
   const c = find(s.candidates, ev.id, 'candidate');
   if (c.state === CANDIDATE_STATE.CONFIRMED || c.state === CANDIDATE_STATE.CORRECTED) return; // idempotent
   if (c.state === CANDIDATE_STATE.REJECTED) throw new Error('this candidate was already rejected');
@@ -77,9 +78,24 @@ export function confirm(s, ev, at, reduce, { corrected = false, value = undefine
   if (!corrected && c.needsCorrection) throw new Error('this candidate needs a correction before it can be used');
   const v = corrected ? value : c.value;
   const found = findCandidateConflict(s, c, v); if (found) { raiseConflict(s, c, v, found, at); if (corrected) c.correctedValue = v; return; }
-  apply(s, c, v, { corrected, at, reduce });
+  apply(s, c, v, { corrected, at, reduce, meta });
 }
 export const correct = (s, ev, at, reduce) => confirm(s, ev, at, reduce, { corrected: true, value: ev.value });
+
+/** One deliberate tap for a CLEAN group (via GROUP) or for the supplier's document statements (via CLAIMS). Eligibility is recomputed here, so a stale or forged list can never confirm
+ *  an ambiguous, calculated, conflicting or low-confidence fact. What the owner was shown is recorded; each fact is still confirmed one by one, so provenance is identical. */
+export function confirmBatch(s, ev, at, reduce) {
+  const via = ev.via === 'CLAIMS' ? 'CLAIMS' : 'GROUP'; const ids = [...new Set(ev.ids ?? [])];
+  const todo = []; for (const id of ids) { const c = find(s.candidates, id, 'candidate'); if (c.state === CANDIDATE_STATE.CONFIRMED || c.state === CANDIDATE_STATE.CORRECTED) continue; todo.push(c); }
+  if (!todo.length) return;
+  const cls = classifyCandidates(s); const ok = new Set((via === 'CLAIMS' ? cls.claims : cls.group).map((c) => c.id));
+  for (const c of todo) if (!ok.has(c.id)) throw new Error(`candidate ${c.id} is not eligible for a ${via === 'CLAIMS' ? 'document-statement' : 'grouped'} confirmation: review it individually`);
+  if (ev.shown) { const seen = new Set(ev.shown.map((x) => x.id)); if (todo.some((c) => !seen.has(c.id))) throw new Error('the confirmation does not match what was shown'); }
+  const batchId = nextId('batch', s.confirmBatches);
+  const shown = ev.shown ?? todo.map((c) => ({ id: c.id, key: c.key, value: c.value }));
+  for (const c of todo) confirm(s, { id: c.id }, at, reduce, { meta: { via, batchId } });
+  s.confirmBatches.push({ id: batchId, at, via, ids: todo.map((c) => c.id), shown });
+}
 
 export function reject(s, ev, at) {
   const c = find(s.candidates, ev.id, 'candidate');

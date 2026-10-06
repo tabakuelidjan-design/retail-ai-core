@@ -143,7 +143,7 @@ export function extractEn(text, lang) {
   if (cl) { const list = [...cl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + cl[1].length, { reason: 'colour list' })); }
   if (!cl) { // a list of two or more colours after "we have / we offer / comes in": proposed with a lower confidence (it may describe something else)
     const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+((?:${COL})(?:\\s*(?:,|and|&|/|or)\\s*(?:${COL}))+)`, 'i').exec(text);
-    if (bl) { const list = [...bl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = bl.index + bl[0].indexOf(bl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + bl[1].length, { confidence: 'MEDIUM', reason: 'colour list after "we have"' })); }
+    if (bl) { const list = [...bl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = bl.index + bl[0].indexOf(bl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + bl[1].length, { confidence: new Set(list).size >= 3 ? 'HIGH' : 'MEDIUM', reason: 'colour list after "we have"' })); }
   }
   const cc = /(?<!per\s)\b(\d{1,2})\s+colou?rs?\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
   for (const seg of segs) {
