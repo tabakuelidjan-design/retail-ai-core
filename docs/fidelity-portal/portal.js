@@ -16,8 +16,9 @@ const AV_SUP = person('#cbd7cf', '#456352'), AV_ME = person('#d5d2e2', '#4e4a6b'
 const OK = '<span class="gl ok">' + ICON_CHECK + '</span>', CL = '<span class="gl cl"></span>';
 const wave = (n = 7) => `<div class="wave" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<s style="height:${6 + Math.round(Math.abs(Math.sin(i * 1.7) + Math.sin(i * .6)) * 9)}px"></s>`).join('')}</div>`;
 
+const empty = '<div class="ph-empty">' + I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 34) + '<span>Pas de photo</span></div>';
 const header = () => `<div class="hd"><div class="brand">Nordla<small>China Sourcing</small></div><button class="bell" aria-label="Alertes">${ICON.bell}<i></i></button></div>`;
-const product = (o = {}) => `<div class="prod ${o.mini ? 'mini' : ''} ${o.hero ? 'hero' : ''}" data-go="s6" role="button" tabindex="0" aria-label="Ouvrir l'évaluation d'achat"><div class="ph">${bottle}</div><div class="t"><h1>Power bank 10&nbsp;000&nbsp;mAh</h1>${o.mini ? '' : '<p class="s">Accessoires électroniques</p>'}<span class="pill ${o.state === 'Nouveau' ? 'new' : ''}">${o.state === 'Nouveau' ? '' : ICON.check.replace('15', '14')}${o.state}</span></div>${ICON.chev}</div>`;
+const product = (o = {}) => `<div class="prod ${o.mini ? 'mini' : ''} ${o.hero ? 'hero' : ''}" data-go="s6" role="button" tabindex="0" aria-label="Ouvrir l'évaluation d'achat"><div class="ph ${o.nophoto ? 'nophoto' : ''}">${o.nophoto ? empty : bottle}${o.ref ? '<i class="refchip">Référence</i>' : ''}</div><div class="t"><h1>Power bank 10&nbsp;000&nbsp;mAh</h1>${o.mini ? '' : '<p class="s">Accessoires électroniques</p>'}<span class="pill ${o.state === 'Nouveau' ? 'new' : ''}">${o.state === 'Nouveau' ? '' : ICON.check.replace('15', '14')}${o.state}</span></div>${ICON.chev}</div>`;
 const nav = () => `<div class="nav"><button class="on">${ICON.chat}Conversation</button><button>${ICON.camera}Scanner / Ajouter</button><button>${ICON.pencil}Écrire</button></div><div class="hi"></div>`;
 const sup = (inner, time, extra = '') => `<div class="row sup"><div class="av">${AV_SUP}</div><div class="stack"><div class="b ${extra}">${inner}</div><div class="meta">${time}</div></div></div>`;
 const me = (inner, time) => `<div class="row me"><div class="stack"><div class="b">${inner}</div><div class="meta">${time} ${ICON.check}</div></div><div class="av">${AV_ME}</div></div>`;
@@ -30,8 +31,10 @@ const a1 = sup('Yes. MOQ is 50 pieces, USD 8 each.', '09:16');
 const file = '<div class="file"><div class="ic">PDF</div><div><b>PB-X200_datasheet.pdf</b><span>1,8 Mo · reçu à 09:16</span></div><div class="dl">' + ICON.dl + '</div></div>';
 
 const frames = {
-  s1: `<div class="scroll">${header()}${product({ state: 'Nouveau', hero: true })}</div>
-    <div class="start"><p>Parlez naturellement avec le fournisseur.<br>Nordla écoute et ne vous interrompt pas.</p><button class="go" data-go="s2"><span class="mic">${ICON.mic}</span>Démarrer la conversation</button></div>${nav()}`,
+  s1: `<div class="scroll">${header()}${product({ state: 'Nouveau', hero: true, nophoto: true })}</div>
+    <div class="start"><p>Photographiez le produit, puis parlez naturellement avec le fournisseur.<br>Nordla écoute et ne vous interrompt pas.</p><button class="cam" data-go="s1b">${ICON.camera}Photographier le produit</button><button class="go" data-go="s2"><span class="mic">${ICON.mic}</span>Démarrer la conversation</button></div>${nav()}`,
+  s1b: `<div class="scroll">${header()}${product({ state: 'Nouveau', hero: true, ref: true })}<p class="refnote">Cette photo sera la photo de référence du dossier.</p></div>
+    <div class="start"><p>Photo enregistrée sur ce téléphone.</p><button class="cam" data-go="s1">${ICON.camera}Reprendre la photo</button><button class="go" data-go="s2"><span class="mic">${ICON.mic}</span>Démarrer la conversation</button></div>${nav()}`,
   s2: `<div class="scroll">${header()}${product({ mini: true, state: 'En discussion' })}<div class="date">Aujourd'hui 09:14</div>${zhBubble}${q1}${a1}${file}</div>${dock()}${nav()}`,
   s3: `<div class="scroll">${header()}${product({ mini: true, state: 'En discussion' })}<div class="date">Aujourd'hui 09:14</div>${zhBubble}${q1}${a1}${suggest()}</div>${dock()}${nav()}`,
   s4: `<div class="scroll">${header()}<div class="alert">${ICON.warn}<div style="flex:1"><span>MOQ : avant 50, maintenant 100</span><small>Contradiction à clarifier</small></div>${ICON.chev}</div>${product({ mini: true, state: 'En discussion' })}<div class="date" style="margin-top:10px">Aujourd'hui 09:14</div>${q1}${a1}${sup('Sorry, the MOQ is 100 pieces for this price.', '09:18', 'hl')}</div>${dock()}${nav()}`,
@@ -51,7 +54,7 @@ const frames = {
       <div class="k">Prochaine étape</div><div class="next flat"><span class="ic">${ICON.msg}</span><span>Demander le mélange des couleurs, puis les rapports de test.</span></div>
       <p class="legend">${OK} confirmé par vous · ${CL} annoncé par le fournisseur, pas encore confirmé. Les documents ont leurs propres états : annoncé, reçu.</p></div>`,
 };
-const TITLES = { s1: '1. Avant conversation', s2: '2. Conversation active · écoute', s3: '3. Suggestion ASK NEXT', s4: '4. Alerte critique', s5: '5. Fin de conversation', s6: "6. Évaluation d'achat" };
+const TITLES = { s1: '1. Avant conversation', s1b: '1b. Photo prise', s2: '2. Conversation active · écoute', s3: '3. Suggestion ASK NEXT', s4: '4. Alerte critique', s5: '5. Fin de conversation', s6: "6. Évaluation d'achat" };
 // Three ways to look at it: the overview grid (desktop), one bare frame (#s1..#s6, used for captures), and the PHONE VIEWER (?view): a thin bar to switch state, the frame at true width.
 // A few taps move between states (product banner -> evaluation, "Démarrer" -> listening, stop -> end, close -> back): static navigation only, nothing else is wired.
 const q = new URLSearchParams(location.search); const viewer = q.has('view');
