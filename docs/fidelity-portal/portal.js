@@ -17,12 +17,12 @@ const OK = '<span class="gl ok">' + ICON_CHECK + '</span>', CL = '<span class="g
 const wave = (n = 7) => `<div class="wave" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<s style="height:${6 + Math.round(Math.abs(Math.sin(i * 1.7) + Math.sin(i * .6)) * 9)}px"></s>`).join('')}</div>`;
 
 const header = () => `<div class="hd"><div class="brand">Nordla<small>China Sourcing</small></div><button class="bell" aria-label="Alertes">${ICON.bell}<i></i></button></div>`;
-const product = (o = {}) => `<div class="prod ${o.mini ? 'mini' : ''} ${o.hero ? 'hero' : ''}"><div class="ph">${bottle}</div><div class="t"><h1>Power bank 10&nbsp;000&nbsp;mAh</h1>${o.mini ? '' : '<p class="s">Accessoires électroniques</p>'}<span class="pill ${o.state === 'Nouveau' ? 'new' : ''}">${o.state === 'Nouveau' ? '' : ICON.check.replace('15', '14')}${o.state}</span></div>${ICON.chev}</div>`;
+const product = (o = {}) => `<div class="prod ${o.mini ? 'mini' : ''} ${o.hero ? 'hero' : ''}" data-go="s6" role="button" tabindex="0" aria-label="Ouvrir l'évaluation d'achat"><div class="ph">${bottle}</div><div class="t"><h1>Power bank 10&nbsp;000&nbsp;mAh</h1>${o.mini ? '' : '<p class="s">Accessoires électroniques</p>'}<span class="pill ${o.state === 'Nouveau' ? 'new' : ''}">${o.state === 'Nouveau' ? '' : ICON.check.replace('15', '14')}${o.state}</span></div>${ICON.chev}</div>`;
 const nav = () => `<div class="nav"><button class="on">${ICON.chat}Conversation</button><button>${ICON.camera}Scanner / Ajouter</button><button>${ICON.pencil}Écrire</button></div><div class="hi"></div>`;
 const sup = (inner, time, extra = '') => `<div class="row sup"><div class="av">${AV_SUP}</div><div class="stack"><div class="b ${extra}">${inner}</div><div class="meta">${time}</div></div></div>`;
 const me = (inner, time) => `<div class="row me"><div class="stack"><div class="b">${inner}</div><div class="meta">${time} ${ICON.check}</div></div><div class="av">${AV_ME}</div></div>`;
 const conf = (n) => `<div class="conf">${ICON.list}<span>${n} éléments à confirmer</span>${ICON.chev}</div>`;
-const dock = () => `<div class="dock"><div class="rec">${ICON.mic.replace('26', '24')}<i></i></div><div class="t"><b>Écoute en cours</b><small>00:42 · sur ce téléphone</small></div>${wave()}<button class="dk" aria-label="Pause">${ICON.pause}</button><button class="dk stop" aria-label="Terminer">${ICON.stop}</button></div>`;
+const dock = () => `<div class="dock"><div class="rec">${ICON.mic.replace('26', '24')}<i></i></div><div class="t"><b>Écoute en cours</b><small>00:42 · sur ce téléphone</small></div>${wave()}<button class="dk" aria-label="Pause">${ICON.pause}</button><button class="dk stop" aria-label="Terminer" data-go="s5">${ICON.stop}</button></div>`;
 const suggest = () => `<div class="sug"><div class="sg"><div class="k"><span class="bl">${ICON.bulb}</span>ASK NEXT</div><p class="en">Can we mix different colours in the same carton?</p><p class="fr">FR — Peut-on mélanger les couleurs dans un carton ?</p></div>${ICON.chev}</div>`;
 const zhBubble = sup('我们有黑色、白色、蓝色和粉色。<span class="d">EN · We have black, white, blue and pink.<em>traduction automatique</em></span>', '09:15', 'zh');
 const q1 = me('Is the price USD 8 for 50 pieces?', '09:15');
@@ -31,18 +31,18 @@ const file = '<div class="file"><div class="ic">PDF</div><div><b>PB-X200_datashe
 
 const frames = {
   s1: `<div class="scroll">${header()}${product({ state: 'Nouveau', hero: true })}</div>
-    <div class="start"><p>Parlez naturellement avec le fournisseur.<br>Nordla écoute et ne vous interrompt pas.</p><button class="go"><span class="mic">${ICON.mic}</span>Démarrer la conversation</button></div>${nav()}`,
+    <div class="start"><p>Parlez naturellement avec le fournisseur.<br>Nordla écoute et ne vous interrompt pas.</p><button class="go" data-go="s2"><span class="mic">${ICON.mic}</span>Démarrer la conversation</button></div>${nav()}`,
   s2: `<div class="scroll">${header()}${product({ mini: true, state: 'En discussion' })}<div class="date">Aujourd'hui 09:14</div>${zhBubble}${q1}${a1}${file}</div>${dock()}${nav()}`,
   s3: `<div class="scroll">${header()}${product({ mini: true, state: 'En discussion' })}<div class="date">Aujourd'hui 09:14</div>${zhBubble}${q1}${a1}${suggest()}</div>${dock()}${nav()}`,
   s4: `<div class="scroll">${header()}<div class="alert">${ICON.warn}<div style="flex:1"><span>MOQ : avant 50, maintenant 100</span><small>Contradiction à clarifier</small></div>${ICON.chev}</div>${product({ mini: true, state: 'En discussion' })}<div class="date" style="margin-top:10px">Aujourd'hui 09:14</div>${q1}${a1}${sup('Sorry, the MOQ is 100 pieces for this price.', '09:18', 'hl')}</div>${dock()}${nav()}`,
   s5: `<div class="under"><div class="scroll">${header()}${product({ mini: true, state: 'En discussion' })}<div class="date">Aujourd'hui 09:14</div>${zhBubble}${q1}</div>${nav()}</div><div class="dim"></div>
-    <div class="sheet"><div class="grab"></div><div class="sh"><div><h2>Conversation terminée</h2><p>12 min · enregistrée sur ce téléphone</p></div><button class="x" aria-label="Fermer">${ICON.x}</button></div>
+    <div class="sheet"><div class="grab"></div><div class="sh"><div><h2>Conversation terminée</h2><p>12 min · enregistrée sur ce téléphone</p></div><button class="x" aria-label="Fermer" data-go="s2">${ICON.x}</button></div>
       <div class="k first">Ce que Nordla a compris</div><div class="card"><div class="li"><span class="g">${CL}</span><span>MOQ <b>50 pièces</b></span></div><div class="li"><span class="g">${CL}</span><span>50 pcs <b>8 USD</b> · 100 pcs <b>7,20 USD</b></span></div><div class="li"><span class="g">${CL}</span><span>FOB <b>Shenzhen</b> · délai <b>15 jours</b></span></div></div>
       <div class="k">Ce qui manque réellement</div><div class="card"><div class="li"><i class="dot"></i><span>Prix à 300 pièces</span></div><div class="li"><i class="dot"></i><span>Rapport de test UN38.3 du modèle exact</span></div></div>
       <div class="k">À clarifier</div><div class="crit"><div class="ct">${ICON.warn.replace('22', '20')}<span>MOQ : <b>50</b> puis <b>100</b></span></div><div class="cb"><button>Garder 50</button><button>Prendre 100</button></div></div>
       <div class="k">Prochaine étape</div><div class="next flat"><span class="ic">${ICON.msg}</span><span>Faire confirmer le MOQ, puis demander le mélange des couleurs.</span></div>
-      <button class="lnk">Ouvrir l'évaluation d'achat ${ICON.chev}</button></div>`,
-  s6: `<div class="sheet" style="top:0;border-radius:0;box-shadow:none;padding-top:22px"><div class="sh"><div><h2>Évaluation d'achat</h2><p>Power bank 10 000 mAh · Supplier A</p></div><button class="x" aria-label="Fermer">${ICON.x}</button></div>
+      <button class="lnk" data-go="s6">Ouvrir l'évaluation d'achat ${ICON.chev}</button></div>`,
+  s6: `<div class="sheet" style="top:0;border-radius:0;box-shadow:none;padding-top:22px"><div class="sh"><div><h2>Évaluation d'achat</h2><p>Power bank 10 000 mAh · Supplier A</p></div><button class="x" aria-label="Fermer" data-go="s2">${ICON.x}</button></div>
       <div class="bar-amber">${ICON.clock.replace('17', '22')}<span>3 éléments à confirmer</span></div>
       <div class="k">Statut</div><div class="steps"><div class="on"><i></i>Discussion</div><div><i></i>Échantillons</div><div><i></i>Validation</div><div><i></i>Commande</div></div>
       <div class="k">Fournisseur</div><div class="sup2"><div class="av">SA</div><div><b>Supplier A</b><div class="city">${ICON.pin} Shenzhen, Chine</div><span class="tag">Fabricant · déclaré${CL}</span></div></div>
@@ -51,7 +51,18 @@ const frames = {
       <div class="k">Prochaine étape</div><div class="next flat"><span class="ic">${ICON.msg}</span><span>Demander le mélange des couleurs, puis les rapports de test.</span></div>
       <p class="legend">${OK} confirmé par vous · ${CL} annoncé par le fournisseur, pas encore confirmé. Les documents ont leurs propres états : annoncé, reçu.</p></div>`,
 };
-const TITLES = { s1: '1. Avant conversation', s2: '2. Conversation active · écoute', s3: '3. Suggestion ASK NEXT', s4: '4. Alerte critique', s5: '5. Fin de conversation', s6: '6. Évaluation d\'achat' };
-const hash = location.hash.replace('#', '');
-if (frames[hash]) { document.body.classList.add('single'); const full = new URLSearchParams(location.search).has('full'); document.body.innerHTML = `<div class="frame ${full ? 'full' : ''}">${frames[hash]}</div>`; }
-else document.body.innerHTML = `<div class="grid">${Object.entries(frames).map(([k, h]) => `<div class="frame-wrap"><p class="cap">${TITLES[k]}</p><div class="frame">${h}</div></div>`).join('')}</div>`;
+const TITLES = { s1: '1. Avant conversation', s2: '2. Conversation active · écoute', s3: '3. Suggestion ASK NEXT', s4: '4. Alerte critique', s5: '5. Fin de conversation', s6: "6. Évaluation d'achat" };
+// Three ways to look at it: the overview grid (desktop), one bare frame (#s1..#s6, used for captures), and the PHONE VIEWER (?view): a thin bar to switch state, the frame at true width.
+// A few taps move between states (product banner -> evaluation, "Démarrer" -> listening, stop -> end, close -> back): static navigation only, nothing else is wired.
+const q = new URLSearchParams(location.search); const viewer = q.has('view');
+function render() {
+  const id = frames[location.hash.replace('#', '')] ? location.hash.replace('#', '') : (viewer ? 's1' : '');
+  if (viewer) {
+    document.body.className = 'viewer'; const w = Math.min(window.innerWidth, 460); const sc = w / 390; const full = id === 's6';
+    document.body.innerHTML = `<nav class="pnav" aria-label="États du portail">${Object.keys(frames).map((k) => `<a href="#${k}" class="${k === id ? 'on' : ''}">${k.slice(1)}</a>`).join('')}<span>${TITLES[id].replace(/^d. /, '')}</span></nav><div class="vw" style="width:${390 * sc}px;margin:0 auto"><div class="frame ${full ? 'full' : ''}" style="transform:scale(${sc});transform-origin:0 0;width:390px">${frames[id]}</div></div>`;
+    const fr = document.querySelector('.vw .frame'); document.querySelector('.vw').style.height = fr.getBoundingClientRect().height + 'px'; window.scrollTo(0, 0);
+  } else if (id) { document.body.className = 'single'; document.body.innerHTML = `<div class="frame ${q.has('full') ? 'full' : ''}">${frames[id]}</div>`; }
+  else document.body.innerHTML = `<div class="grid">${Object.entries(frames).map(([k, h]) => `<div class="frame-wrap"><p class="cap">${TITLES[k]}</p><div class="frame">${h}</div></div>`).join('')}</div>`;
+}
+document.addEventListener('click', (e) => { const t = e.target.closest('[data-go]'); if (!t || !viewer) return; location.hash = t.dataset.go; });
+window.addEventListener('hashchange', render); window.addEventListener('resize', () => { if (viewer) render(); }); render();

@@ -48,3 +48,11 @@ Les couleurs de la section 2.1 du rapport V1 ne changent pas.
 
 ## 6. Non vérifié
 Aucun test sur téléphone ; captures produites avec Edge simulant 390 × 844 (×2) ; proportions du mockup estimées sur une image compressée (quelques pixels d'incertitude).
+
+## 7. V2.1 (décisions du propriétaire appliquées, pour le checkpoint visuel sur téléphone)
+
+- **Aucun indicateur de confirmation dans la conversation** : confirmé, rien n'a été ajouté (pas de compteur sur le bandeau produit).
+- **Bandeau produit entièrement tappable** (pas seulement le chevron) : ouvre l'Évaluation d'achat. Aucune autre action n'existe dans la carte, donc pas de conflit de tap.
+- **ASK NEXT** : la lisibilité prime ; la phrase anglaise passe de 15,5 à **17 px** (comme les bulles), le français à 12 px ; la carte fait environ 100 px de haut (V1 : 150). Elle n'est plus réduite pour se rapprocher du mockup.
+- **Sens des signes** (inchangé et rappelé dans l'Évaluation d'achat) : ✓ confirmé par l'utilisateur, jamais « vérifié » ; ◌ annoncé par le fournisseur, sans confirmation immédiate demandée ; les déclarations de documents (CE, UN38.3…) restent distinctes de « reçu », « correspondant » et « preuve acceptée ».
+- **Visionneuse pour téléphone** (`index.html?view`) : une barre de six pastilles pour passer d'un état à l'autre, l'écran à sa largeur réelle ; quelques taps de navigation statique (bandeau produit vers l'évaluation, « Démarrer la conversation » vers l'écoute, bouton d'arrêt vers la fin, croix pour revenir, ligne « Ouvrir l'évaluation d'achat »). Rien d'autre n'est branché : aucun micro, aucune transcription, aucune traduction, aucun provider, aucun moteur.

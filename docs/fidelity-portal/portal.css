@@ -125,3 +125,10 @@ svg{display:block}
 .lnk{margin-top:16px;display:flex;align-items:center;justify-content:space-between;width:100%;height:50px;border:0;border-radius:16px;background:var(--pill);color:var(--navy-ink);font:500 15.5px/1 system-ui;padding:0 16px}
 .sug .en{text-wrap:balance}
 .prod.hero .ph{width:104px;height:104px}.prod.hero .s{white-space:nowrap;font-size:14px}
+/* phone viewer (?view): switch bar + frame at true width. Tappable product banner: the whole card, no other action inside it. */
+body.viewer{background:var(--bg)}.pnav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:6px;padding:8px 10px;background:#fff;border-bottom:1px solid #e4dfd8;font:600 13px system-ui}
+.pnav a{width:34px;height:34px;border-radius:50%;background:#ece8e5;color:#10223b;display:flex;align-items:center;justify-content:center;text-decoration:none;flex:none}.pnav a.on{background:#10223b;color:#fff}.pnav span{margin-left:6px;color:#64605d;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.prod[data-go]{cursor:pointer;-webkit-tap-highlight-color:rgba(16,34,59,.08)}.go,.dk,.x,.lnk{cursor:pointer}
+.vw{position:relative}
+/* V2.1: the English sentence is read aloud: legibility first (17 px like the bubbles), no more shrinking for the sake of the mock-up */
+.sug .en{font-size:17px;line-height:1.28}.sug .fr{font-size:12px}
