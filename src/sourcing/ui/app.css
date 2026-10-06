@@ -41,3 +41,11 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:5px 4px;b
 .cand{border-top:1px solid var(--line);padding:10px 0}.cand:first-child{border:0}.cand .val{font-weight:700}.cand.claim{border-left:3px solid var(--amber);padding-left:8px}
 .warnline{color:var(--amber)}.note.small{margin:4px 0}
 .orig{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:2px 0 8px;font-size:15px}
+.sumline{cursor:pointer;border-color:var(--accent)}.sumline .msg{font-size:17px;font-weight:700}.sumline .chips{margin:6px 0 0}
+.timeline{margin:0 0 12px}.bub{border-radius:12px;padding:8px 10px;margin:6px 0;border:1px solid var(--line);background:var(--card)}
+.bub.sup{margin-right:28px}.bub.me{margin-left:28px;background:var(--bg)}.bub.ask{margin-left:28px;border-color:var(--accent)}.bub .who{font-size:11px;color:var(--muted);font-weight:700}
+.bub.ok{border:0;background:none;text-align:center}
+.understood{border:2px solid var(--green)}.understood .uline{font-size:16px;font-weight:600;margin:3px 0}
+.nextq{border:2px solid var(--accent)}.nextq .qtext{font-size:17px;margin:4px 0 10px}
+.attn{border-left:4px solid var(--amber)}.conflict{border:2px solid var(--red)}.claim{border-left:4px solid var(--grey)}
+.composer textarea{min-height:110px}.attach{margin-top:8px;display:grid;gap:8px}

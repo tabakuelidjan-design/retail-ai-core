@@ -9,7 +9,7 @@ import { documentStatusOf, FACT_STATUS } from './provenance.js';
 import { conflictText } from './conversation.js';
 import { effectiveQuote } from './offers.js';
 import { describeFact, labelOf } from './candidate-view.js';
-import { REVIEW, DEFAULT_PROFILE, MARKET_PROFILES, SUGGESTED, frText, templateOf, docNameFr, conflictPhrases } from './phrases.js';
+import { REVIEW, DEFAULT_PROFILE, MARKET_PROFILES, SUGGESTED, frText, templateOf, docNameFr, conflictPhrases, reasonFr, shortFr } from './phrases.js';
 
 export { REVIEW };
 const kc = (key, ctx) => (ctx && ctx !== 'product' ? `${key}@${ctx}` : key);
@@ -56,7 +56,7 @@ export function planConversation(rawState, A, opts = {}) {
     if (v.id === 'brand') continue; // the OWNER decides whether to sell under their own brand: an owner card below, not a supplier question
     const zh = supplierText(profile, providers, fr, { text: v.zh, review: REVIEW.TECHNICAL_ONLY });
     const resolves = RESOLVES[v.id] ?? [];
-    const q = { id: v.id, source: tpl === 'doc_fix' ? 'ENGINE' : 'ENGINE', audience: 'SUPPLIER', dimension: tpl === 'doc_fix' ? 'DOCUMENTS' : (DIM_OF[v.id] ?? 'REGULATORY'), priority: v.priority, blocksOrder: (v.blocks ?? []).includes('IMPORT') || (v.blocks ?? []).includes('PRICE'), text: { fr, en: v.en }, supplier: { zh, en: v.en }, resolves, reason: { fr: v.why, en: v.why } };
+    const q = { id: v.id, source: tpl === 'doc_fix' ? 'ENGINE' : 'ENGINE', audience: 'SUPPLIER', dimension: tpl === 'doc_fix' ? 'DOCUMENTS' : (DIM_OF[v.id] ?? 'REGULATORY'), priority: v.priority, blocksOrder: (v.blocks ?? []).includes('IMPORT') || (v.blocks ?? []).includes('PRICE'), text: { fr, en: v.en }, supplier: { zh, en: v.en }, resolves, reason: { fr: reasonFr(v.id), en: v.why } };
     if (tpl === 'doc_fix') docFixes.push(q); else add(q);
   }
   for (const q of docFixes) add(q);
@@ -113,7 +113,7 @@ export function planConversation(rawState, A, opts = {}) {
   }
 
   // ---- states, ordering, next ----------------------------------------------------------------------------------------------------------------------------------------------------------
-  const out = qs.map((q, i) => { const base = q.forcedState ?? stateOf({ id: q.id, resolves: q.resolves, pendingKeys, log, items }); const state = base; return { ...q, state, repeat: state === 'UNANSWERED', _i: i }; });
+  const out = qs.map((q, i) => { const base = q.forcedState ?? stateOf({ id: q.id, resolves: q.resolves, pendingKeys, log, items }); const state = base; return { ...q, state, repeat: state === 'UNANSWERED', short: { fr: shortFr(q.id) }, _i: i }; });
   const order = (q) => PRIORITY[q.priority] + (DIM[q.dimension] ?? 9) * 10 + (q.audience === 'USER' ? 5 : 0) + (q.repeat ? 50 : 0) + q._i / 1000;
   const candidates = out.filter((q) => ACTIVE.has(q.state) && q.source !== 'USER_FREE').sort((a, b) => order(a) - order(b));
   const questions = out.map(({ _i, forcedState, ...q }) => q).sort((a, b) => order({ ...a, _i: 0 }) - order({ ...b, _i: 0 }));

@@ -24,10 +24,13 @@ import { marketScreen } from './screens/market.js';
 import { moneyScreen } from './screens/money.js';
 import { fieldScreen } from './screens/field.js';
 import { validateCorrection } from '/core/candidate-view.js';
+import { talkScreen, summaryScreen } from './screens/fieldhome.js';
+import { planConversation, answerEvents } from '/core/conversation-engine.js';
+import { groupUnderstanding } from '/core/understanding.js';
 import { userQuestionView } from '/core/conversation.js';
 
 
-const TABS = [['field', 'Field'], ['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
+const TABS = [['field', 'Guided'], ['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
 
 /** What the phone holds. */
 function safetyCopy() { const c = getBlob('safety'); return c?.alerts ? { present: true, fetchedAt: Date.parse(c.phoneFetchedAt ?? 0) || 0, serverMode: c.source?.mode } : { present: false }; }
@@ -129,6 +132,7 @@ async function fetchFx() {
 
 
 
+const FIELD_TABS = [['talk', 'Conversation'], ['summary', 'Résumé'], ['expert', 'Détails']];
 const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScreen, case: caseScreen, ask: askScreen, docs: docsScreen, compliance: rulesScreen, market: marketScreen, money: moneyScreen };
 
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -150,13 +154,15 @@ let lastRenderKey = null; let discardDrafts = false;
 function render() {
   ensureCase(); const c = cur();
   if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
+  const fm = S.mode === 'field';
+  $('#tabs').innerHTML = (fm ? FIELD_TABS : TABS).map(([k, l]) => `<button data-act="${fm ? 'ftab' : 'tab'}" data-key="${k}" aria-current="${fm ? S.fview === k : S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
   paintHeader();
-  const main = $('#screen'); const key = `${S.currentId}|${S.tab}`;
+  const main = $('#screen'); const key = `${S.currentId}|${fm ? `field:${S.fview}` : S.tab}`;
   const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
   const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
-  main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : SCREENS[S.tab](S.A, c)}`;
+  main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (S.fview === 'summary' ? summaryScreen : talkScreen) : SCREENS[S.tab])(S.A, c)}`;
+  if (!fm && S.returnMode === 'field') main.insertAdjacentHTML('afterbegin', '<div class="card"><button type="button" class="btn" data-act="mode-field">← Retour au mode terrain</button></div>');
   if (keep) restoreDrafts(main, drafts, focus);
 }
 
@@ -167,6 +173,17 @@ const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 
 // what was typed is submitted into the case: the next screen shows the case, not the old draft
 async function onSubmit(ev) {
   const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); if (!S.quiet) discardDrafts = true; const name = f.dataset.form; const c = cur();
+  if (name === 'compose') { // FIELD MODE: one box; the conversation starts by itself
+    const text = String(d.text ?? ''); if (!text.trim()) { S.flash = 'Écrivez ou collez ce que dit le fournisseur.'; discardDrafts = false; return render(); }
+    const prev = S.captureDraft?.[c.id] ?? ''; (S.captureDraft ??= {})[c.id] = ''; ls.set('nordla.sourcing.capdraft', S.captureDraft);
+    try { if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); const conv = cur().conversations.find((x) => x.status === 'OPEN'); return commit({ type: 'CONVERSATION_ITEM', convId: conv.id, speaker: d.speaker === 'me' ? 'me' : 'supplier', lang: 'auto', text }); }
+    catch (e) { S.captureDraft[c.id] = prev; ls.set('nordla.sourcing.capdraft', S.captureDraft); throw e; }
+  }
+  if (name === 'fh-product') { if (!String(d.name ?? '').trim()) { S.flash = 'Dites ce qu\'est le produit, même en quelques mots.'; discardDrafts = false; return render(); } return commit({ type: 'NAME', name: d.name.trim() }); }
+  if (name === 'uanswer') {
+    const q = planConversation(cur(), S.A).questions.find((x) => x.id === f.dataset.id); if (!q) return render();
+    try { const evs = answerEvents(cur(), q, d.value); for (const e of evs) commit(e); return undefined; } catch (e) { S.flash = e.message; discardDrafts = false; return render(); }
+  }
   if (name === 'capture') { // the supplier's words: stored as the ORIGINAL; facts are only PROPOSED (nothing reaches the case until the owner confirms)
     const conv = (c.conversations ?? []).find((x) => x.status === 'OPEN'); const text = String(d.text ?? '');
     if (!conv) { S.flash = 'Start a conversation first.'; discardDrafts = false; return render(); }
@@ -181,7 +198,7 @@ async function onSubmit(ev) {
   }
   if (name === 'cand-correct') {
     const cand = (c.candidates ?? []).find((x) => x.id === f.dataset.id); if (!cand) return render();
-    const v = validateCorrection(cand.key, d.value); if (!v.ok) { S.flash = v.error; discardDrafts = false; return render(); }
+    const v = validateCorrection(cand.key, d.value, S.mode === 'field' ? 'fr' : 'en'); if (!v.ok) { S.flash = v.error; discardDrafts = false; return render(); }
     S.correcting = null; return commit({ type: 'CANDIDATE_CORRECT', id: cand.id, value: v.value });
   }
   if (name === 'product') {
@@ -256,6 +273,13 @@ async function addDocument(form, d) {
 }
 
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
+function setMode(m) { S.mode = m; S.returnMode = null; S.attach = false; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
+/** The supplier-facing screen for a question: the supplier's language BIG (never invented: when there is none the owner is told), the owner's French small. What was shown is remembered. */
+function showQuestion(id) {
+  const q = planConversation(cur(), S.A).questions.find((x) => x.id === id); if (!q || q.audience !== 'SUPPLIER') return; const zh = q.supplier.zh; const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Fermer</button><p class="small muted" style="margin-top:12px">Pour vous : ${esc(q.text.fr).replace(/\n/g, '<br>')}</p>${zh.text ? `<div class="show-sup" style="margin-top:12px"><p class="zh" lang="zh-Hans" style="white-space:pre-wrap">${esc(zh.text)}</p></div>` : `<div class="show-sup" style="margin-top:12px"><p style="white-space:pre-wrap">${esc(q.supplier.en ?? q.text.fr)}</p></div><p class="small muted">Pas de chinois disponible pour cette question : montrez ce texte à votre traducteur ou utilisez votre application de traduction.</p>`}`;
+  commit({ type: 'QUESTION_SHOWN', questionId: id, via: 'SHOWN_TO_SUPPLIER', texts: { fr: q.text.fr, zh: zh.text ?? null, zhReview: zh.review } });
+}
 const FRIENDLY = [[/needs a correction/i, 'This one needs a correction first: use "Correct".'], [/already rejected/i, 'This one was already rejected.'], [/conflict/i, 'This one contradicts something already in the case: clarify it first.'], [/finished/i, 'This conversation is finished: start a new one.']];
 /** Business rules in the engine speak in sentences; the phone shows them as a plain message and keeps everything the owner typed. */
 function guarded(fn) { try { return fn(); } catch (e) { S.flash = (FRIENDLY.find(([rx]) => rx.test(e.message)) ?? [null, `This could not be done (${e.message}).`])[1]; return render(); } }
@@ -265,6 +289,25 @@ function showUserQuestion(id) {
 }
 async function onClick(ev) {
   const t = ev.target.closest('[data-act]'); if (!t) return; const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined;
+  if (act === 'ftab') { if (key === 'expert') return setMode('expert'); S.fview = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
+  if (act === 'mode-expert') return setMode('expert'); if (act === 'mode-field') return setMode('field');
+  if (act === 'review-expert') { S.mode = 'expert'; S.tab = 'field'; S.fstep = 'capture'; S.returnMode = 'field'; render(); window.scrollTo(0, 0); return; }
+  if (act === 'attach-toggle') { S.attach = !S.attach; return render(); }
+  if (act === 'attach-doc') { S.mode = 'expert'; S.tab = 'docs'; S.returnMode = 'field'; S.attach = false; S.flash = 'Ajoutez le document ici. La lecture automatique des offres n\'existe pas encore : la photo est gardée comme preuve, tapez l\'essentiel dans la conversation.'; render(); window.scrollTo(0, 0); return; }
+  if (act === 'group-edit') { S.groupEdit = !S.groupEdit; return render(); }
+  if (act === 'group-confirm' || act === 'claims-confirm') {
+    const g = groupUnderstanding(cur(), { locale: 'fr' }); const claims = act === 'claims-confirm'; const list = claims ? g.claims : g.group; if (!list.length) return render();
+    return guarded(() => commit({ type: 'CANDIDATES_CONFIRM_BATCH', ids: list.map((x) => x.id), via: claims ? 'CLAIMS' : 'GROUP', shown: (claims ? g.claimRows : g.rows).map((r) => ({ id: r.id, label: r.label, valueText: r.valueText })) }));
+  }
+  if (act === 'pre-old') return guarded(() => commit({ type: 'CANDIDATE_REJECT', id: key }));
+  if (act === 'pre-new' || act === 'pre-ask') return guarded(() => {
+    commit({ type: 'CANDIDATE_CONFIRM', id: key }); const cf = (cur().conflicts ?? []).find((x) => x.candidateId === key && x.state === 'OPEN'); if (!cf) return;
+    if (act === 'pre-new') commit({ type: 'CONFLICT_RESOLVE', id: cf.id, choice: 'NEW' }); else showQuestion(`conflict:${cf.id}`);
+  });
+  if (act === 'show-q') return showQuestion(key);
+  if (act === 'conflict-ask') return showQuestion(`conflict:${key}`);
+  if (act === 'q-skip') return commit({ type: 'QUESTION_SKIP', questionId: key });
+  if (act === 'uanswer') { const q = planConversation(cur(), S.A).questions.find((x) => x.id === key); if (!q) return render(); return guarded(() => { for (const e of answerEvents(cur(), q, val)) commit(e); }); }
   if (act === 'fstep') { S.fstep = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
   if (act === 'conv-start') return commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' });
   if (act === 'conv-finish') return commit({ type: 'CONVERSATION_FINISH', convId: key });
@@ -322,7 +365,7 @@ function showCapabilities() {
 }
 function openMenu() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
-  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
   <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button>`;
 }
 

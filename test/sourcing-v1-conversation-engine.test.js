@@ -164,3 +164,8 @@ test('suggested commercial questions appear only when useful and disappear once 
   s = say(s, 'USD 8 for 50 pcs. MOQ is 50 pcs. FOB Shenzhen. We have black, white and blue.'); s = confirmAll(s); const p = plan(s);
   assert.ok(q(p, 's:payment'), 'payment terms are useful once a price exists'); assert.equal(q(p, 's:colours'), undefined, 'colours were answered by a confirmed fact'); assert.ok(q(p, 's:mixed_colours'), 'with several colours, mixing is worth asking'); assert.match(q(p, 's:mixed_colours').supplier.zh.text, /混批/); assert.equal(q(p, 's:mixed_colours').supplier.zh.review, REVIEW.UNREVIEWED);
 });
+
+test('the owner reads French everywhere: every question has a French reason and a short label (the V0 English reasons are kept only in the English field)', () => {
+  const s = build([...ident({ name: 'Power bank', category: 'power_bank', model: 'PB-X200' }), ...traits({ 'battery.present': true, 'electrical.present': true }), ...importer]); const p = plan(start(s));
+  for (const x of p.questions) { assert.ok(x.reason.fr && x.reason.fr.length > 8, `${x.id} French reason`); assert.ok(x.short.fr && x.short.fr.length > 2, `${x.id} short label`); assert.ok(!/\b(the|must|without)\b/i.test(x.reason.fr), `${x.id}: "${x.reason.fr}" is French`); }
+});

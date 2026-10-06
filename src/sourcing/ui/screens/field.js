@@ -105,7 +105,7 @@ function negotiate(A, p) {
 export function fieldScreen(A, c) {
   const p = fieldProgress(c, A); const current = S.fstep && p.steps.some((s) => s.id === S.fstep) ? S.fstep : p.nextStep.step;
   const body = { discover: () => discover(A, c, p), talk: () => talk(A, c, p), capture: () => capture(A, c), complete: () => complete(p), analyze: () => analyze(A, p), decide: () => decide(A, c, p), negotiate: () => negotiate(A, p) }[current]();
-  return `<div class="card next"><p class="q">NEXT BEST STEP</p><b>${esc(p.nextStep.text)}</b><div style="margin-top:6px">${p.nextStep.step !== current ? btn('Go to this step', 'fstep', p.nextStep.step, '', 'btn') : ''}</div></div>
+  return `<div class="row" style="margin-bottom:10px"><button type="button" class="btn sec" data-act="mode-field">Essayer le mode terrain simplifié</button></div><div class="card next"><p class="q">NEXT BEST STEP</p><b>${esc(p.nextStep.text)}</b><div style="margin-top:6px">${p.nextStep.step !== current ? btn('Go to this step', 'fstep', p.nextStep.step, '', 'btn') : ''}</div></div>
   ${stepper(p, current)}${body}
   <details class="card"><summary>NOT AVAILABLE YET (${p.unavailable.length})</summary>${list(p.unavailable.map((u) => `<b>${esc(u.label)}</b> - ${esc(u.note)}`))}<p class="small muted">${chip('', 'NOT AVAILABLE YET', 'UNKNOWN')} These are shown so that nothing looks finished that is not.</p></details>`;
 }
