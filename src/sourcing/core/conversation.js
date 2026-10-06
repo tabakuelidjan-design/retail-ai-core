@@ -26,6 +26,14 @@ export function addItem(s, ev, at) {
   for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
 }
 
+/** A transcription (audio -> text) or a translation of a supplier item: DERIVED data kept next to the original, with who produced it and its review state. The original text/audio reference
+ *  is never touched and nothing is proposed from a derivation by itself (facts come from the original or from the owner). This is the seam for the future interpreter. */
+export function derive(s, ev, at) {
+  const conv = find(s.conversations, ev.convId, 'conversation'); const item = conv.items.find((x) => x.id === ev.itemId); if (!item) throw new Error(`unknown item: ${ev.itemId}`);
+  if (!['TRANSCRIPTION', 'TRANSLATION', 'OCR'].includes(ev.kind)) throw new Error('derivation kind must be TRANSCRIPTION, TRANSLATION or OCR'); if (!String(ev.text ?? '').trim()) throw new Error('derived text is required');
+  item.derived.push({ id: `${item.id}-d${item.derived.length + 1}`, kind: ev.kind, lang: ev.lang ?? null, text: String(ev.text), provider: ev.provider ?? null, review: ev.review ?? 'MACHINE', at });
+}
+
 // ---- compile a confirmed candidate into EXISTING events -----------------------------------------------------------------------------------------------------------------------
 function compile(s, c, value, level, source) {
   const k = c.key; const prev = s.quotes.at(-1) ?? null; const base = prev ? { ...prev } : {}; delete base.at; const quote = (patch, drop = []) => { const q = { ...base, ...patch }; for (const d of drop) delete q[d]; return [{ type: 'QUOTE', quote: q, summary: `from conversation (${c.id}): ${k}` }]; };

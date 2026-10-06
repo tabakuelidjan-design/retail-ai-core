@@ -9,7 +9,7 @@ import { documentStatusOf, FACT_STATUS } from './provenance.js';
 import { conflictText } from './conversation.js';
 import { effectiveQuote } from './offers.js';
 import { describeFact, labelOf } from './candidate-view.js';
-import { REVIEW, DEFAULT_PROFILE, MARKET_PROFILES, SUGGESTED, frText, templateOf, docNameFr, conflictPhrases, reasonFr, shortFr } from './phrases.js';
+import { REVIEW, DEFAULT_PROFILE, MARKET_PROFILES, SUGGESTED, frText, templateOf, docNameFr, conflictPhrases, reasonFr, shortFr, reviewFor } from './phrases.js';
 
 export { REVIEW };
 const kc = (key, ctx) => (ctx && ctx !== 'product' ? `${key}@${ctx}` : key);
@@ -54,7 +54,7 @@ export function planConversation(rawState, A, opts = {}) {
     const fr = frText(v.id, params) ?? v.en;
     if (v.id.startsWith('doc:') && !v.id.endsWith(':fix')) { docItems.push({ id: v.id, docType: v.docType, priority: v.priority, fr, en: v.en, zh: v.zh, why: v.why }); continue; }
     if (v.id === 'brand') continue; // the OWNER decides whether to sell under their own brand: an owner card below, not a supplier question
-    const zh = supplierText(profile, providers, fr, { text: v.zh, review: REVIEW.TECHNICAL_ONLY });
+    const zh = supplierText(profile, providers, fr, { text: v.zh, review: reviewFor(v.id, REVIEW.TECHNICAL_ONLY) });
     const resolves = RESOLVES[v.id] ?? [];
     const q = { id: v.id, source: tpl === 'doc_fix' ? 'ENGINE' : 'ENGINE', audience: 'SUPPLIER', dimension: tpl === 'doc_fix' ? 'DOCUMENTS' : (DIM_OF[v.id] ?? 'REGULATORY'), priority: v.priority, blocksOrder: (v.blocks ?? []).includes('IMPORT') || (v.blocks ?? []).includes('PRICE'), text: { fr, en: v.en }, supplier: { zh, en: v.en }, resolves, reason: { fr: reasonFr(v.id), en: v.why } };
     if (tpl === 'doc_fix') docFixes.push(q); else add(q);
@@ -75,7 +75,7 @@ export function planConversation(rawState, A, opts = {}) {
 
   // ---- 2. suggested commercial questions (only when useful: a price exists, the owner sells under own brand for logo/packaging...) ----------------------------------------------------
   const priceKnown = !!(quote?.unitPrice) && !A.questions.some((v) => v.id === 'price'); const has = (k) => confirmedKeys.has(k);
-  const suggest = (id, when) => { const t = SUGGESTED[id]; if (!when || t.resolves.some((k) => has(k))) return; add({ id: `s:${id}`, source: 'SUGGESTED', audience: 'SUPPLIER', dimension: t.dimension, priority: t.priority, blocksOrder: false, text: { fr: t.fr, en: t.en }, supplier: { zh: profile.phrasebook === 'cn' ? { text: t.zh, review: REVIEW.UNREVIEWED, lang: profile.supplierLang } : supplierText(profile, providers, t.fr, null), en: t.en }, resolves: t.resolves, reason: { fr: 'Utile pour comparer ou négocier cette offre.', en: 'Useful to compare or negotiate this offer.' } }); };
+  const suggest = (id, when) => { const t = SUGGESTED[id]; if (!when || t.resolves.some((k) => has(k))) return; add({ id: `s:${id}`, source: 'SUGGESTED', audience: 'SUPPLIER', dimension: t.dimension, priority: t.priority, blocksOrder: false, text: { fr: t.fr, en: t.en }, supplier: { zh: profile.phrasebook === 'cn' ? { text: t.zh, review: reviewFor(`s:${id}`, REVIEW.UNREVIEWED), lang: profile.supplierLang } : supplierText(profile, providers, t.fr, null), en: t.en }, resolves: t.resolves, reason: { fr: 'Utile pour comparer ou négocier cette offre.', en: 'Useful to compare or negotiate this offer.' } }); };
   suggest('price_tiers', priceKnown && !quote?.tiers?.length && !!quote?.moq);
   suggest('payment', priceKnown && !quote?.payment?.depositPct);
   suggest('colours', priceKnown);
@@ -135,7 +135,7 @@ export function planConversation(rawState, A, opts = {}) {
   const stage = !started ? 'START' : verdict !== 'INSUFFICIENT_INFORMATION' ? 'EVALUABLE' : missing.length + conflicts <= 3 ? 'ALMOST' : 'GATHERING';
   const message = progressMessage({ stage, n: missing.length, s: missingSupplier, u: missingUser, conflicts, pendingN, residual });
   const timeline = [
-    ...items.map((it) => ({ kind: it.speaker === 'supplier' ? 'SUPPLIER' : 'ME', at: it.at, id: it.id, original: it.original, lang: it.lang, convId: it.convId })),
+    ...items.map((it) => ({ kind: it.speaker === 'supplier' ? 'SUPPLIER' : 'ME', at: it.at, id: it.id, original: it.original, lang: it.lang, convId: it.convId, derived: it.derived ?? [] })),
     ...log.filter((e) => e.kind === 'SHOWN').map((e) => ({ kind: 'ASKED', at: e.at, id: e.id, questionId: e.questionId, texts: e.texts })),
     ...st.confirmBatches.map((b) => ({ kind: 'UNDERSTOOD', at: b.at, id: b.id, ids: b.ids, via: b.via })),
   ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));

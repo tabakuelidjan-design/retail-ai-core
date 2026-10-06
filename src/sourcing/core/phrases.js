@@ -8,6 +8,10 @@ export const REVIEW = Object.freeze({ NATIVE_REVIEWED: 'NATIVE_REVIEWED', TECHNI
 export const MARKET_PROFILES = Object.freeze({ CN: { id: 'CN', label: 'China', supplierLang: 'zh', phrasebook: 'cn' } });
 export const DEFAULT_PROFILE = MARKET_PROFILES.CN;
 
+/** Sentences a native speaker has approved: sentence id -> { by, at }. EMPTY today: nothing is certified. Adding an entry here (after a real review, see docs/CHINA-SOURCING-PHRASEBOOK-REVIEW.md) is the ONLY way a sentence becomes NATIVE_REVIEWED. */
+export const NATIVE_REVIEW = Object.freeze({});
+export const reviewFor = (sentenceId, base) => (NATIVE_REVIEW[sentenceId] ? REVIEW.NATIVE_REVIEWED : base);
+
 const DOC_FR = { EU_DOC: 'la déclaration UE de conformité (DoC)', TEST_REPORT: "le rapport d'essai complet d'un laboratoire accrédité (ISO/IEC 17025)", CERTIFICATE: 'le certificat', SDS: 'la fiche de données de sécurité (FDS / SDS)', UN383: "le rapport d'essai UN 38.3 de la batterie", BATTERY_DOC: 'le rapport de sécurité de la batterie (par exemple IEC 62133)', ROHS_EVIDENCE: "le rapport d'essai RoHS", REACH_EVIDENCE: 'le rapport ou la déclaration REACH / SVHC', FCM_DOC: 'la déclaration de conformité contact alimentaire', MATERIAL_DECL: 'la déclaration de matériaux', LABEL_ARTWORK: "le visuel de l'étiquette", PACKAGING_ARTWORK: "le visuel de l'emballage", MANUAL: "la notice d'utilisation" };
 export const docNameFr = (docType) => DOC_FR[docType] ?? 'le document demandé';
 

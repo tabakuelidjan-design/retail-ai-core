@@ -252,3 +252,12 @@ test('the exact phone text end to end: tiers land in the quote with the right qu
   for (const e of s.ledger.filter((x) => x.key.startsWith('docClaim.'))) assert.equal(e.status, FACT_STATUS.SUPPLIER_CLAIM);
   void before;
 });
+
+test('INTERPRETER FOUNDATION: a transcription or translation is DERIVED data attached to the supplier\'s original item; the original is never replaced and the extractor still reads the original', () => {
+  let s = build([{ type: 'NAME', name: 'Power bank' }]); s = start(s); const text = '型号：PB-X200，起订量300个'; s = say(s, text); const item = s.conversations[0].items[0];
+  s = dispatch(s, { type: 'CONVERSATION_DERIVE', convId: s.conversations[0].id, itemId: item.id, kind: 'TRANSLATION', lang: 'fr', text: 'Modèle : PB-X200, MOQ 300 pièces', provider: 'test-double', review: 'MACHINE' }, at(5));
+  const it = s.conversations[0].items[0]; assert.equal(it.original, text, 'the original is untouched'); assert.equal(it.derived.length, 1); assert.deepEqual({ kind: it.derived[0].kind, lang: it.derived[0].lang, provider: it.derived[0].provider, review: it.derived[0].review }, { kind: 'TRANSLATION', lang: 'fr', provider: 'test-double', review: 'MACHINE' });
+  assert.ok(it.derived[0].at && it.derived[0].id, 'dated and identified'); assert.equal(s.candidates.length, 2, 'adding a translation proposes nothing by itself: facts come from the original, or from the owner confirming them');
+  assert.throws(() => dispatch(s, { type: 'CONVERSATION_DERIVE', convId: s.conversations[0].id, itemId: item.id, kind: 'SOMETHING', text: 'x' }, at(6)), /kind/i); assert.throws(() => dispatch(s, { type: 'CONVERSATION_DERIVE', convId: s.conversations[0].id, itemId: item.id, kind: 'TRANSLATION', text: '  ' }, at(6)), /text/i);
+  assert.throws(() => dispatch(s, { type: 'CONVERSATION_DERIVE', convId: s.conversations[0].id, itemId: 'nope', kind: 'TRANSLATION', text: 'x' }, at(6)), /unknown item/i);
+});

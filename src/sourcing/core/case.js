@@ -96,6 +96,7 @@ function reduceInPlace(s, event, at) {
     case 'CONVERSATION_START': conv.start(s, event, at); break;
     case 'CONVERSATION_ITEM': conv.addItem(s, event, at); break;
     case 'CONVERSATION_FINISH': conv.finish(s, event, at); break;
+    case 'CONVERSATION_DERIVE': conv.derive(s, event, at); break;
     case 'CANDIDATE_CONFIRM': conv.confirm(s, event, at, sub); break;
     case 'CANDIDATE_CORRECT': conv.correct(s, event, at, sub); break;
     case 'CANDIDATES_CONFIRM_BATCH': conv.confirmBatch(s, event, at, sub); break;

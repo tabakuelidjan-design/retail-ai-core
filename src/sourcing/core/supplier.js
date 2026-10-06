@@ -26,7 +26,7 @@ const DOC_NAMES = {
 };
 
 /** id -> template. {model}, {docEn}, {docZh}, {qty}, {incoterm}, {refs} are replaced; values are inserted verbatim. */
-const TEMPLATES = {
+export const TEMPLATES = {
   model: { en: 'What is the exact model number / type designation of this product?', zh: '请问这款产品的准确型号(Model No.)是多少?' },
   manufacturer: { en: 'What is the legal company name and full address of the factory that manufactures this product?', zh: '请问生产该产品的工厂的法定公司名称和详细地址是什么?' },
   brand: { en: 'Is this product sold under your brand, or can it be sold under our own brand (private label)? Who owns the trademark?', zh: '该产品是以贵公司品牌销售,还是可以贴我们自己的品牌(贴牌)?商标归谁所有?' },

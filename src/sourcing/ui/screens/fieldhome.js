@@ -20,7 +20,7 @@ const b = (label, act, key, extra = '', cls = 'btn sec') => `<button type="butto
 const val = (v) => ` data-val="${esc(JSON.stringify(v))}"`;
 
 function bubble(e) {
-  if (e.kind === 'SUPPLIER' || e.kind === 'ME') return `<div class="bub ${e.kind === 'ME' ? 'me' : 'sup'}"><span class="who">${e.kind === 'ME' ? 'Ma note' : 'Fournisseur'}</span><div class="orig" lang="${e.lang === 'zh' ? 'zh-Hans' : esc(e.lang)}">${esc(e.original)}</div></div>`;
+  if (e.kind === 'SUPPLIER' || e.kind === 'ME') return `<div class="bub ${e.kind === 'ME' ? 'me' : 'sup'}"><span class="who">${e.kind === 'ME' ? 'Ma note' : 'Fournisseur'}</span><div class="orig" lang="${e.lang === 'zh' ? 'zh-Hans' : esc(e.lang)}">${esc(e.original)}</div>${(e.derived ?? []).map((d) => `<div class="small muted">${d.kind === 'TRANSLATION' ? 'Traduction' : d.kind === 'TRANSCRIPTION' ? 'Transcription' : 'Lecture'} (${esc(d.provider ?? 'inconnu')}, ${d.review === 'MACHINE' ? 'automatique : à vérifier' : esc(d.review)}) : ${esc(d.text)}</div>`).join('')}</div>`;
   if (e.kind === 'ASKED') return `<div class="bub ask"><span class="who">Vous avez demandé</span><div>${esc(e.texts?.fr ?? '')}</div>${e.texts?.zh ? `<div class="zh small" lang="zh-Hans">${esc(e.texts.zh)}</div><div class="small muted">${esc(REVIEW_TEXT[e.texts.zhReview] ?? '')}</div>` : ''}</div>`;
   return `<div class="bub ok small muted">✓ ${e.ids.length} fait${e.ids.length > 1 ? 's' : ''} confirmé${e.ids.length > 1 ? 's' : ''} par vous${e.via === 'CLAIMS' ? ' (déclarations notées)' : ''}</div>`;
 }
