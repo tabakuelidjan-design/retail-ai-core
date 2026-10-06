@@ -29,8 +29,14 @@ const supplierText = (profile, providers, fr, zhV0, texts = {}) => {
   void texts; return { text: null, review: REVIEW.UNAVAILABLE, lang: profile.supplierLang };
 };
 
+/** A suggested commercial question (colours, price tiers...) in the engine's question shape, WITHOUT a state. Shared with the contextual engine, which may bring one forward for the current topic. */
+export function suggestedQuestion(id, profile, providers) {
+  const t = SUGGESTED[id];
+  return { id: `s:${id}`, source: 'SUGGESTED', audience: 'SUPPLIER', dimension: t.dimension, priority: t.priority, blocksOrder: false, text: { fr: t.fr, en: t.en }, supplier: { zh: profile.phrasebook === 'cn' ? { text: t.zh, review: reviewFor(`s:${id}`, REVIEW.UNREVIEWED), lang: profile.supplierLang } : supplierText(profile, providers, t.fr, null), en: t.en }, resolves: t.resolves, reason: { fr: 'Utile pour comparer ou négocier cette offre.', en: 'Useful to compare or negotiate this offer.' } };
+}
+
 /** The pending/waiting/asked state of a question, from the case alone. */
-function stateOf({ id, resolves, pendingKeys, log, items }) {
+export function stateOf({ id, resolves, pendingKeys, log, items }) {
   if (resolves?.some((k) => pendingKeys.has(k))) return 'ANSWER_PENDING';
   const last = [...log].reverse().find((e) => e.questionId === id); if (!last) return 'OPEN';
   const later = items.some((it) => it.speaker === 'supplier' && it.at > last.at);
@@ -75,7 +81,7 @@ export function planConversation(rawState, A, opts = {}) {
 
   // ---- 2. suggested commercial questions (only when useful: a price exists, the owner sells under own brand for logo/packaging...) ----------------------------------------------------
   const priceKnown = !!(quote?.unitPrice) && !A.questions.some((v) => v.id === 'price'); const has = (k) => confirmedKeys.has(k);
-  const suggest = (id, when) => { const t = SUGGESTED[id]; if (!when || t.resolves.some((k) => has(k))) return; add({ id: `s:${id}`, source: 'SUGGESTED', audience: 'SUPPLIER', dimension: t.dimension, priority: t.priority, blocksOrder: false, text: { fr: t.fr, en: t.en }, supplier: { zh: profile.phrasebook === 'cn' ? { text: t.zh, review: reviewFor(`s:${id}`, REVIEW.UNREVIEWED), lang: profile.supplierLang } : supplierText(profile, providers, t.fr, null), en: t.en }, resolves: t.resolves, reason: { fr: 'Utile pour comparer ou négocier cette offre.', en: 'Useful to compare or negotiate this offer.' } }); };
+  const suggest = (id, when) => { const t = SUGGESTED[id]; if (!when || t.resolves.some((k) => has(k))) return; add(suggestedQuestion(id, profile, providers)); };
   suggest('price_tiers', priceKnown && !quote?.tiers?.length && !!quote?.moq);
   suggest('payment', priceKnown && !quote?.payment?.depositPct);
   suggest('colours', priceKnown);
