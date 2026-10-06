@@ -104,6 +104,12 @@ export function addQuestion(s, ev, at) {
   const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
   s.userQuestions.push({ id: nextId('uq', s.userQuestions), at, origin: 'USER', text, lang, translation: null, state: 'OPEN', answeredBy: [] });
 }
+/** The engine's questions are recomputed from the case, so what was SHOWN to the supplier (and exactly in which words) or put aside is remembered here, append-only. */
+export function questionShown(s, ev, at) {
+  const id = String(ev.questionId ?? ''); if (!id) throw new Error('questionId is required');
+  s.questionLog.push({ id: nextId('ql', s.questionLog), questionId: id, kind: 'SHOWN', at, via: ev.via ?? 'SHOWN_TO_SUPPLIER', texts: ev.texts ?? null });
+}
+export function questionSkip(s, ev, at) { const id = String(ev.questionId ?? ''); if (!id) throw new Error('questionId is required'); s.questionLog.push({ id: nextId('ql', s.questionLog), questionId: id, kind: 'SKIPPED', at }); }
 export function questionState(s, ev) { const q = find(s.userQuestions, ev.id, 'question'); if (!['OPEN', 'ASKED', 'ANSWERED'].includes(ev.state)) throw new Error('unknown question state'); q.state = ev.state; }
 
 /** How a free question can be shown to a supplier TODAY: the owner's original, an English version only if the owner wrote English, Chinese only if the owner wrote it or a reviewed translation exists. No translator exists yet. */

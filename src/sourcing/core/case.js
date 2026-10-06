@@ -31,6 +31,8 @@ export function newCase({ id, name = '', now = new Date() } = {}) {
     supplier: {}, quotes: [], costs: {}, sale: null, saleAmazon: null, documents: [], safetySnapshot: null, customs: {}, amazon: { observations: [], restricted: null }, notes: [], decisions: [], events: [],
     // V1 (schema 2): supplier conversations, candidate facts, the confirmed-fact ledger, conflicts, supplier document statements, the owner's own questions
     conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [],
+    // conversation memory: which question was shown / skipped (with the exact texts shown), and the grouped confirmations (with the list the owner saw)
+    questionLog: [], confirmBatches: [],
   };
 }
 
@@ -98,6 +100,8 @@ function reduceInPlace(s, event, at) {
     case 'CANDIDATE_CORRECT': conv.correct(s, event, at, sub); break;
     case 'CANDIDATE_REJECT': conv.reject(s, event, at); break;
     case 'CONFLICT_RESOLVE': conv.resolve(s, event, at, sub); break;
+    case 'QUESTION_SHOWN': conv.questionShown(s, event, at); break;
+    case 'QUESTION_SKIP': conv.questionSkip(s, event, at); break;
     case 'QUESTION_ADD': conv.addQuestion(s, event, at); break;
     case 'QUESTION_STATE': conv.questionState(s, event); break;
     case 'DOC_CLAIM': s.documentLedger.push({ id: `dc-${s.documentLedger.length + 1}`, claim: event.claim, status: event.status, source: event.source ?? null, at }); break; // a supplier STATEMENT about a document: never a received document
