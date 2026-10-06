@@ -107,3 +107,21 @@ svg{display:block}
 .kv{grid-template-columns:24px 128px 1fr;padding:5px 0}.steps{margin-top:2px}.sup2 .av{width:56px;height:56px}
 .sheet .sh h2{font-size:22px}.bar-amber{margin-top:12px;height:44px}
 .kv{grid-template-columns:24px 142px 1fr}
+/* ---- V2 ---- */
+/* screen 1: more presence for the product (same card, bigger photo, finer shadow), the empty space stays empty */
+.prod.hero{padding:16px;gap:16px;border-radius:26px;box-shadow:0 1px 2px rgba(30,24,16,.06),0 14px 34px rgba(30,24,16,.09)}
+.prod.hero .ph{width:112px;height:112px;border-radius:20px;box-shadow:0 6px 16px rgba(30,24,16,.16)}
+.prod.hero h1{font-size:20px;white-space:normal;line-height:1.2}.prod.hero .s{font-size:14.5px;margin-top:4px}.prod.hero .pill{margin-top:12px}
+/* screen 3: discreet suggestion (was 150 px) */
+.sug{align-items:center;gap:10px;padding:10px 12px 10px 14px;border-radius:18px;margin-top:4px}
+.sug .sg{flex:1;min-width:0}
+.sug .k{display:flex;align-items:center;gap:6px;margin:0;padding:0;border:0;font:700 10.5px/1 system-ui;letter-spacing:.09em;color:var(--sug-ink);text-transform:none}.sug .k .bl{display:inline-flex;color:var(--sug-ink)}.sug .k svg{width:14px;height:14px}
+.sug .en{margin:5px 0 0;font:600 15.5px/1.28 system-ui;color:var(--navy-ink)}
+.sug .fr{margin:3px 0 0;font-size:11.5px;line-height:1.3;color:#a39482;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sug .chev{width:18px;height:18px}
+/* screen 5: critical point with TARGETED choices, no form */
+.crit{background:var(--amber-bg);border-radius:16px;padding:12px 14px}.crit .ct{display:flex;align-items:center;gap:10px;color:var(--amber);font-size:15.5px}.crit .ct b{color:var(--navy-ink)}
+.cb{display:flex;gap:8px;margin-top:10px}.cb button{flex:1;height:44px;border-radius:14px;border:1px solid #e3cfa8;background:#fffaf0;color:var(--navy-ink);font:600 15px/1 system-ui}
+.lnk{margin-top:16px;display:flex;align-items:center;justify-content:space-between;width:100%;height:50px;border:0;border-radius:16px;background:var(--pill);color:var(--navy-ink);font:500 15.5px/1 system-ui;padding:0 16px}
+.sug .en{text-wrap:balance}
+.prod.hero .ph{width:104px;height:104px}.prod.hero .s{white-space:nowrap;font-size:14px}
