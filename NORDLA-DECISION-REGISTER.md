@@ -1,0 +1,75 @@
+# Nordla — Decision Register
+
+- **Status:** CANONICAL
+- **Effective date:** 2026-10-06
+
+This register records product decisions that must survive across conversations, models and development sessions.
+
+## Status vocabulary
+
+- **FROZEN** — current decision; cannot be silently changed.
+- **DECIDED / DEFERRED** — approved direction, implementation intentionally postponed.
+- **PROVISIONAL** — current working decision, still open to evidence.
+- **SUPERSEDED** — historical decision replaced by a later explicit decision.
+
+## Frozen decisions
+
+| ID | Decision | Status |
+|---|---|---|
+| NDR-001 | Nordla's shared operating model is **Enterprise → Subjects → Levers → Decisions → Follow-up**. | FROZEN |
+| NDR-002 | Domains do not make independent final company decisions. They provide facts, domain rules/constraints, levers and execution capabilities. | FROZEN |
+| NDR-003 | Specialist agents/intelligences may analyse and propose, but cannot bypass Socle Decision, policy enforcement or required human validation. | FROZEN |
+| NDR-004 | Company-wide arbitration happens once through the common Socle decision procedure. | FROZEN |
+| NDR-005 | Hard owner constraints eliminate options before comparison. A hard rule can only be changed explicitly and the change is logged. | FROZEN |
+| NDR-006 | No opaque universal multiplicative score for cash, margin, risk, capacity, etc. Trade-offs remain visible by axis. | FROZEN |
+| NDR-007 | `DO_NOTHING`, `TEST_SMALL` and `NOT_MEASURABLE` are first-class outcomes/capabilities. | FROZEN |
+| NDR-008 | Deterministic code calculates material business numbers. LLMs/agents may explain, analyse and propose but must not fabricate numbers. | FROZEN |
+| NDR-009 | Consequential actions require policy enforcement outside the LLM/agent and human approval unless a specific low-risk reversible rule has been explicitly pre-approved later. | FROZEN |
+| NDR-010 | Evidence/provenance, data quality, observability and tenant isolation are Socle responsibilities. | FROZEN |
+| NDR-011 | Agents/tools receive bounded capabilities, not unrestricted database or system authority. | FROZEN |
+| NDR-012 | Shopify is a temporary/current source for HABB sales/inventory where useful; Shopify is not the target architecture. Nordla Sales and Inventory remain target domains. | FROZEN |
+| NDR-013 | Marketing = **Understand → Build → Create → Steer**. | FROZEN |
+| NDR-014 | Branding is separate from Marketing. | FROZEN |
+| NDR-015 | Creative Intelligence is separate from Marketing; Marketing supplies strategy/brief, Creative Intelligence produces and quality-controls premium creative work. | FROZEN |
+| NDR-016 | Sales Development is separate from Marketing and covers B2B, partnerships, prospecting and direct commercial growth. | FROZEN |
+| NDR-017 | The three levels (Socle / Domains / Specialized Intelligence) are internal architecture levels, not subscription tiers. | FROZEN |
+| NDR-018 | The Socle is not intended as a useful standalone commercial offer. Every customer offer must include enough business capability to solve real problems. | FROZEN |
+| NDR-019 | Nordla must not intentionally hide known truths to force an upgrade. Commercial tiers, if created, differ by capabilities/depth, not by falsifying or withholding truth already required for a decision. | FROZEN |
+| NDR-020 | HABB is pilot/client zero and configuration, never generic architecture. | FROZEN |
+| NDR-021 | Nordla's foundational decision principles include real value creation, productive commerce, economic autonomy, useful deployment of capital/assets, healthy honest profit, durable benefit, long-term trust, sustainable growth and rejection of deception/manipulation. They are inspired in particular by documented examples associated with Uthman ibn Affan and Abdurrahman ibn Auf and are operationalized universally. | FROZEN |
+| NDR-022 | Wealth/profit is not treated as the only objective. Nordla may optimize profitability only inside trust, sustainability, risk, capacity, reputation and real-customer-value constraints. | FROZEN |
+| NDR-023 | No new architecture direction may silently override this register. Conflicting proposals require an explicit decision change. | FROZEN |
+
+## Decided / deferred
+
+See `NORDLA-DEFERRED.md` for implementation conditions and details.
+
+| ID | Direction | Status |
+|---|---|---|
+| NDR-D01 | Multi-model routing | DECIDED / DEFERRED |
+| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / DEFERRED |
+| NDR-D03 | Market Intelligence / Market Radar | DECIDED / DEFERRED |
+| NDR-D04 | Specialist Fujitsu-like retail agents | DECIDED / DEFERRED |
+| NDR-D05 | Event-driven agents/automations | DECIDED / DEFERRED |
+| NDR-D06 | A2A-style agent communication where justified | DECIDED / DEFERRED |
+| NDR-D07 | Advanced forecasting/statistical intelligence subject to data thresholds | DECIDED / DEFERRED |
+| NDR-D08 | Separate analytics serving layer at scale if transaction workload requires it | DECIDED / DEFERRED |
+
+## Provisional decisions
+
+| ID | Decision | Status |
+|---|---|---|
+| NDR-P01 | Future commercial packaging may use tiers such as Essential / Pro / Complete, but names and bundle boundaries are not frozen. | PROVISIONAL |
+| NDR-P02 | MCP is preferred for tool/connectors where it fits; A2A/AG-UI remain standards to monitor rather than mandatory foundations. | PROVISIONAL |
+
+## How to change a frozen decision
+
+A change proposal must contain:
+- decision ID being challenged;
+- evidence/reason;
+- expected benefit;
+- new risks;
+- compatibility/migration implications;
+- explicit replacement wording.
+
+Only after approval is the old entry marked `SUPERSEDED`.
