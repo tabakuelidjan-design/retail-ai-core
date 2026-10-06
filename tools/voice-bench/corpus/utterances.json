@@ -1,0 +1,25 @@
+{
+  "note": "LAB/CONTROLLED corpus. Voices are Windows text-to-speech (US English): they are NOT real speakers and NOT accented. Nothing measured on this corpus validates accented-Chinese English, Mandarin or the field. 'spoken' is what is read aloud; 'truth' is what Nordla must understand.",
+  "scenario": "A",
+  "items": [
+    { "id": "O1", "who": "owner", "spoken": "What is your minimum order quantity for this power bank?", "topic": "MOQ", "facts": [] },
+    { "id": "S1", "who": "supplier", "spoken": "The model is P B X two hundred. Minimum order is fifty pieces.", "topic": "MOQ", "topicAlt": ["IDENTITY"], "facts": [["identifier.model", "PBX200"], ["quote.moq", "50"]], "askNextForbidden": ["model"] },
+    { "id": "O2", "who": "owner", "spoken": "Can you give me the price for fifty, one hundred and three hundred pieces?", "topic": "PRICE", "facts": [] },
+    { "id": "S2", "who": "supplier", "spoken": "Price is eight dollars for fifty pieces, seven dollars twenty for one hundred pieces, and six dollars eighty for three hundred pieces.", "topic": "PRICE", "facts": [["quote.currency", "USD"], ["quote.tiers", "50=8;100=7.20;300=6.80"]], "askNextForbidden": ["s:price_tiers"] },
+    { "id": "O3", "who": "owner", "spoken": "Is it FOB Shenzhen or EXW?", "topic": "LOGISTICS", "facts": [] },
+    { "id": "S3", "who": "supplier", "spoken": "We can do FOB Shenzhen. EXW is also possible.", "topic": "LOGISTICS", "facts": [["quote.incoterm", "FOB"], ["quote.port", "Shenzhen"]], "allowedExtra": [["quote.incoterm", "EXW"]] },
+    { "id": "O4", "who": "owner", "spoken": "What is the lead time?", "topic": "LEADTIME", "facts": [] },
+    { "id": "S4", "who": "supplier", "spoken": "Lead time is fifteen days after deposit.", "topic": "LEADTIME", "facts": [["quote.leadTime", "15"]] },
+    { "id": "O5", "who": "owner", "spoken": "What are your payment terms?", "topic": "PAYMENT", "facts": [] },
+    { "id": "S5", "who": "supplier", "spoken": "Thirty percent deposit and seventy percent balance before shipment.", "topic": "PAYMENT", "facts": [["payment.depositPct", "30"], ["payment.balancePct", "70"]] },
+    { "id": "O6", "who": "owner", "spoken": "Which colours do you have?", "topic": "COLOURS", "facts": [] },
+    { "id": "S6", "who": "supplier", "spoken": "We have black, white, blue and pink.", "topic": "COLOURS", "facts": [["variant.colours", "black,white,blue,pink"]], "askNextExpected": ["s:mixed_colours"] },
+    { "id": "S7", "who": "supplier", "spoken": "You can mix colours, minimum twenty five pieces per colour.", "topic": "COLOURS", "facts": [["moq.mixedColours", "true"], ["moq.perColour", "25"]], "askNextForbidden": ["s:mixed_colours"], "spontaneous": true },
+    { "id": "O7", "who": "owner", "spoken": "Do you have the CE, RoHS and U N thirty eight point three certificates?", "topic": "DOCUMENTS", "facts": [] },
+    { "id": "S8", "who": "supplier", "spoken": "We have CE and RoHS. For U N thirty eight point three we are testing now.", "topic": "DOCUMENTS", "facts": [["docClaim.CE", "CLAIMED"], ["docClaim.ROHS", "CLAIMED"]], "notFacts": [["docClaim.UN383", "CLAIMED"]], "notFactsNote": "UN38.3 is being tested: it must not become a claim at MEDIUM or HIGH confidence" },
+    { "id": "S9", "who": "supplier", "spoken": "Sorry, the minimum order is one hundred pieces for this price.", "topic": "MOQ", "facts": [["quote.moq", "100"]], "contradiction": { "key": "quote.moq", "before": "50", "now": "100" } }
+  ],
+  "scenarioB": [
+    { "id": "B1", "who": "supplier", "spoken": "Price is eight dollars for fifty pieces.", "topic": "PRICE", "facts": [["quote.currency", "USD"], ["quote.tiers", "50=8"]], "askNextExpected": ["s:price_tiers"] }
+  ]
+}
