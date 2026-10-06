@@ -239,3 +239,16 @@ test('supplier statements about a document: promised -> claimed is recorded as p
   const taken = dispatch(s, { type: 'CONFLICT_RESOLVE', id: cf.id, choice: 'NEW' }, at(10)); assert.equal(documentStatusOf(taken, 'UN383').status, 'NOT_AVAILABLE'); assert.equal(taken.documents.length, 0);
 });
 function describeText(cf) { return JSON.stringify(cf.question) + cf.key; }
+
+test('the exact phone text end to end: tiers land in the quote with the right quantities; the claims never become documents or proof', () => {
+  const text = 'PB-X200. MOQ is 50 pcs. Price is USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs. FOB Shenzhen. 30% deposit, 70% balance before shipment. We have black, white, blue and pink. You can mix colors, minimum 25 pcs per color. Production time is 15 days. We have CE, RoHS and UN38.3.';
+  let s = build([{ type: 'NAME', name: 'Power bank' }, { type: 'CATEGORY', category: 'power_bank' }, ...importer]); const before = run(s); s = start(s); s = say(s, text);
+  assert.equal(s.candidates.length, 16); assert.ok(s.candidates.every((c) => c.state === CANDIDATE_STATE.PROPOSED));
+  for (const c of [...s.candidates]) s = confirm(s, c, 5);
+  const q = s.quotes.at(-1); assert.deepEqual(q.tiers, [{ minQty: '50', unitPrice: '8' }, { minQty: '100', unitPrice: '7.20' }, { minQty: '300', unitPrice: '6.80' }]); assert.equal(q.moq, 50); assert.equal(q.incoterm, 'FOB'); assert.equal(s.identity.identifiers.model, 'PB-X200');
+  assert.equal(effectiveQuote({ ...q, qty: 100 }).unitPrice, '7.20'); assert.equal(effectiveQuote({ ...q, qty: 299 }).unitPrice, '7.20'); assert.equal(effectiveQuote({ ...q, qty: 300 }).unitPrice, '6.80');
+  assert.equal(s.documents.length, 0); assert.deepEqual(s.documentLedger.map((d) => [d.claim, d.status]).sort(), [['CE', 'CLAIMED'], ['ROHS', 'CLAIMED'], ['UN383', 'CLAIMED']]);
+  const a = run(s); assert.equal(a.documents.length, 0); assert.ok(a.questions.some((x) => /UN383/.test(x.id)), 'the UN 38.3 document is still asked for'); assert.equal(a.evidence.verified.some((e) => /CE|RoHS|UN/i.test(String(e.item))), false);
+  for (const e of s.ledger.filter((x) => x.key.startsWith('docClaim.'))) assert.equal(e.status, FACT_STATUS.SUPPLIER_CLAIM);
+  void before;
+});

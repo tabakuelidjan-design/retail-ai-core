@@ -220,3 +220,16 @@ test('a MOQ, a sample price and a freight price are not tiers; a lone price with
   const b = extractFacts({ text: 'Sample price USD 15 for 1 pc. USD 8 for 50 pcs, USD 7.20 for 100 pcs.' }); assert.deepEqual(one(b, 'quote.tiers').value, T([[50, '8'], [100, '7.20']])); assert.equal(one(b, 'quote.samplePrice').value, '15');
   const c = extractFacts({ text: 'Freight USD 200 for 50 pcs. USD 8 for 50 pcs, USD 7.20 for 100 pcs.' }); assert.deepEqual(one(c, 'quote.tiers').value, T([[50, '8'], [100, '7.20']]));
 });
+
+test('the full phone text: model and colours are extracted, claims stay claims', () => {
+  const r = extractFacts({ text: PHONE_TEXT });
+  assert.equal(one(r, 'identifier.model').value, 'PB-X200'); assert.equal(one(r, 'identifier.model').confidence, 'LOW'); assert.ok(one(r, 'identifier.model').flags.includes('UNLABELLED_IDENTIFIER'), 'an identifier with no label is proposed with a visible warning');
+  assert.deepEqual(one(r, 'variant.colours').value, ['black', 'white', 'blue', 'pink']);
+  for (const k of ['CE', 'ROHS', 'UN383']) { assert.equal(one(r, `docClaim.${k}`).value, 'CLAIMED'); assert.ok(one(r, `docClaim.${k}`).flags.includes('SUPPLIER_STATEMENT')); }
+  assert.ok(!r.candidates.some((c) => /RECEIVED|MATCHED|VERIFIED/.test(String(c.value))), 'nothing becomes a received document');
+});
+
+test('an unlabelled model-like word is NOT proposed when it is really a standard, a document name, a currency or a plain word', () => {
+  for (const t of ['We have CE, RoHS and UN38.3.', 'IEC 62133 report available', 'USD 8 for 50 pcs', 'FOB Shenzhen', 'Sorry, black and white only']) assert.equal(by(extractFacts({ text: t }), 'identifier.model').length, 0, t);
+  assert.equal(by(extractFacts({ text: 'Black and white are available' }), 'variant.colours').length, 0, 'two colour words in a sentence about something else are not a colour list');
+});

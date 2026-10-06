@@ -141,6 +141,10 @@ export function extractEn(text, lang) {
   const COL = Object.keys(COLOURS).join('|');
   const cl = new RegExp(`(?:colou?rs?(?:\\s+(?:available|are|include|we have))?\\s*[:\\-]?\\s*|available in\\s+)((?:${COL})(?:\\s*(?:,|and|&|/|or)\\s*(?:${COL}))*)`, 'i').exec(text);
   if (cl) { const list = [...cl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + cl[1].length, { reason: 'colour list' })); }
+  if (!cl) { // a list of two or more colours after "we have / we offer / comes in": proposed with a lower confidence (it may describe something else)
+    const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+((?:${COL})(?:\\s*(?:,|and|&|/|or)\\s*(?:${COL}))+)`, 'i').exec(text);
+    if (bl) { const list = [...bl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = bl.index + bl[0].indexOf(bl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + bl[1].length, { confidence: 'MEDIUM', reason: 'colour list after "we have"' })); }
+  }
   const cc = /(?<!per\s)\b(\d{1,2})\s+colou?rs?\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
   for (const seg of segs) {
     const neg = /\b(?:cannot|can't|can not|couldn't|unable to|no|not|don't|do not)\s+(?:be\s+)?mix(?:ed|ing)?|\bcolou?rs?\s+(?:cannot|can't|can not)\s+be\s+mix(?:ed)?/i.exec(seg.text);
@@ -163,6 +167,10 @@ export function extractEn(text, lang) {
   if (mm) {
     let val = mm[3] && /^[A-Za-z]{1,4}$/.test(mm[2]) ? `${mm[2]} ${mm[3]}` : mm[2]; val = val.replace(/[.\-_/]+$/, '');
     if (/\d/.test(val) && val.length >= 3 && !/^\d{1,3}$/.test(val)) { const s0 = mm.index + mm[0].indexOf(val, mm[1].length); out.push(mk(text, lang, 'identifier.model', val, s0, s0 + val.length, { confidence: /^model/i.test(mm[1]) ? 'HIGH' : 'MEDIUM', reason: 'model identifier, kept as written' })); }
+  }
+  if (!out.some((c) => c.key === 'identifier.model')) { // no label: only a code-shaped word at the very START of the message ("PB-X200. MOQ is 50 pcs."), proposed LOW with a warning
+    const um = /^\s*([A-Z]{1,5}-?[A-Z]?\d{2,5}[A-Z]{0,2}(?:[-/][A-Z0-9]+)?)(?=[\s.,;:!?]|$)/.exec(text);
+    if (um && !/^(?:UN|IEC|ISO|EN|ETSI|ASTM|IP|USB|HDMI|RJ|LED|GB|CE|FCC)-?\d/.test(um[1])) { const s0 = um.index + um[0].indexOf(um[1]); out.push(mk(text, lang, 'identifier.model', um[1], s0, s0 + um[1].length, { confidence: 'LOW', flags: ['UNLABELLED_IDENTIFIER'], reason: 'a code at the start of the message, kept as written' })); }
   }
   const br = /\bbrand(?:\s+name)?\s*[:=]\s*([^\n,;.]{2,40})/i.exec(text); if (br) { const s0 = br.index + br[0].indexOf(br[1]); out.push(mk(text, lang, 'identifier.brand', br[1].trim(), s0, s0 + br[1].trim().length, { confidence: 'MEDIUM', reason: 'brand' })); }
   const mf = /\b(?:manufacturer|factory name|company name)\s*[:=]\s*([^\n,;]{3,60})/i.exec(text); if (mf) { const s0 = mf.index + mf[0].indexOf(mf[1]); out.push(mk(text, lang, 'identifier.manufacturer', mf[1].trim(), s0, s0 + mf[1].trim().length, { confidence: 'MEDIUM', reason: 'manufacturer name' })); }
