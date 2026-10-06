@@ -39,12 +39,18 @@ test('K3. 6 000 customers are labelled in well under a second (it was 8 seconds)
   assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
 });
 
-test('K4. local-date helpers reuse their formatters: 50 000 calls in well under a second, results unchanged across a DST change', async () => {
+test('K4. local-date helpers reuse their formatters: far cheaper than building a formatter per call, results unchanged across a DST change', async () => {
+  // The property under test is REUSE (building an Intl.DateTimeFormat costs ~100 us). It is asserted as a RATIO against the naive per-call construction measured in the same process, back to back,
+  // so a loaded machine (parallel suites, CI) slows both sides equally. An absolute wall-clock bound made this test fail intermittently under CPU load. Without reuse the ratio is about 1; with reuse about 50.
   const { localDateString, localMidnight } = await import('../src/metrics/windows.js');
-  const base = Date.parse('2026-03-28T00:00:00Z'); const t0 = performance.now(); let last = '';
-  for (let i = 0; i < 50000; i += 1) last = localDateString(new Date(base + i * 3_600_000 / 4), 'Europe/Brussels');
-  const ms = performance.now() - t0;
+  const base = Date.parse('2026-03-28T00:00:00Z'); const step = 3_600_000 / 4; let last = '';
+  const perCall = (fn, n) => { const t0 = performance.now(); for (let i = 0; i < n; i += 1) last = fn(new Date(base + i * step)); return (performance.now() - t0) / n; };
+  const cached = (d) => localDateString(d, 'Europe/Brussels');
+  const naive = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  perCall(cached, 2000); perCall(naive, 100); // warm-up
+  const ratios = []; for (let r = 0; r < 5; r += 1) ratios.push(perCall(naive, 400) / perCall(cached, 20000));
+  ratios.sort((x, y) => x - y); const median = ratios[2];
   assert.equal(localDateString(new Date('2026-03-28T23:30:00Z'), 'Europe/Brussels'), '2026-03-29'); assert.equal(localDateString(new Date('2026-03-28T22:30:00Z'), 'Europe/Brussels'), '2026-03-28');
   assert.equal(localMidnight('2026-03-29', 'Europe/Brussels').toISOString(), '2026-03-28T23:00:00.000Z'); assert.equal(localMidnight('2026-03-30', 'Europe/Brussels').toISOString(), '2026-03-29T22:00:00.000Z');
-  assert.ok(last); assert.ok(ms < 800, `took ${Math.round(ms)} ms`);
+  assert.ok(last); assert.ok(median >= 10, `formatters are not being reused: cached call is only ${median.toFixed(1)}x cheaper than building one per call (expected about 50x)`);
 });
