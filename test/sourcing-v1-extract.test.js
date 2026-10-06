@@ -166,3 +166,57 @@ test('number safety in running text: 6.8, 6.80, 680, $6.80, 6.80 USD and ¥6.80 
   assert.equal(by(extractFacts({ text: 'USD 6,80' }), 'quote.unitPrice')[0].needsCorrection, true); assert.equal(by(extractFacts({ text: 'USD 6,80' }), 'quote.unitPrice')[0].value, null);
   assert.notEqual(val('USD 6.8')[0], val('USD 680')[0]);
 });
+
+// ---- price tiers: a price is bound to ITS quantity, never to the neighbouring one (regression from the physical-phone test of 2026-10-06) -----------------------------------------
+const PHONE_TEXT = 'PB-X200. MOQ is 50 pcs. Price is USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs. FOB Shenzhen. 30% deposit, 70% balance before shipment. We have black, white, blue and pink. You can mix colors, minimum 25 pcs per color. Production time is 15 days. We have CE, RoHS and UN38.3.';
+const T = (pairs) => pairs.map(([q, p]) => ({ minQty: String(q), unitPrice: String(p) }));
+const GROUND = [[50, '8'], [100, '7.20'], [300, '6.80']];
+
+test('REGRESSION (phone, 2026-10-06): "USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs" keeps 50 -> 8, 100 -> 7.20, 300 -> 6.80', () => {
+  const r = extractFacts({ text: PHONE_TEXT });
+  assert.deepEqual(one(r, 'quote.tiers').value, T(GROUND)); assert.equal(by(r, 'quote.unitPrice').length, 0, 'no stray single price: every price belongs to a tier');
+  assert.equal(one(r, 'quote.moq', 'product').value, '50', 'the MOQ stays a separate fact');
+  assert.equal(one(r, 'quote.tiers').rawText, 'USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs', 'the candidate points at the supplier words it came from');
+});
+
+test('price tiers: several phrasings, separators and orders give the SAME pairs (a price never takes the neighbouring quantity)', () => {
+  const cases = [
+    'USD 8 for 50 pcs, USD 7.20 for 100 pcs, USD 6.80 for 300 pcs',
+    '50 pcs: $8; 100 pcs: $7.20; 300 pcs: $6.80',
+    'Price: $8/pc MOQ 50, $7.20/pc at 100, $6.80/pc at 300',
+    'USD 6.80 for 300 pcs, USD 7.20 for 100 pcs, USD 8 for 50 pcs', // reversed order
+    '300 pcs: USD 6.80 / 100 pcs: USD 7.20 / 50 pcs: USD 8',
+    '50pcs = USD 8, 100pcs = USD 7.20, 300pcs = USD 6.80',
+    'For 50 pcs we can do USD 8. For 100 pcs we can do USD 7.20. For 300 pcs we can do USD 6.80.',
+    '50 pcs $8, 100 pcs $7.20, 300 pcs $6.80',
+    '8 USD for 50 pcs; 7.20 USD for 100 pcs; 6.80 USD for 300 pcs',
+    'USD 8 each if you order 50 pcs, USD 7.20 each if you order 100 pcs, USD 6.80 each if you order 300 pcs',
+    'MOQ is 50 pcs. USD 8 for 50 pcs, USD 7.20 for 100 pcs and USD 6.80 for 300 pcs.', // MOQ stated apart from the price list
+    '$8/pc at 50, $7.20/pc at 100 and $6.80/pc at 300',
+  ];
+  for (const text of cases) { const r = extractFacts({ text }); assert.deepEqual(one(r, 'quote.tiers').value, T(GROUND), text); assert.equal(by(r, 'quote.unitPrice').length, 0, `no stray price: ${text}`); }
+});
+
+test('price tiers: exhaustive check over templates x orders - the extracted pairs always equal the pairs that were written', () => {
+  const levels = [[100, '7.20'], [300, '6.80'], [500, '6.40'], [1000, '6.10']];
+  const templates = [([q, p]) => `USD ${p} for ${q} pcs`, ([q, p]) => `${q} pcs: $${p}`, ([q, p]) => `${q} pcs $${p}`, ([q, p]) => `$${p}/pc at ${q}`, ([q, p]) => `${q}pcs = USD ${p}`, ([q, p]) => `${p} USD for ${q} pcs`];
+  const seps = ['; ', ' / ', ', '];
+  const perms = (a) => (a.length < 2 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map((r) => [x, ...r])));
+  let n = 0;
+  for (const tpl of templates) for (const sep of seps) for (const set of [levels.slice(0, 2), levels.slice(0, 3), levels]) for (const order of perms(set).filter((_, i) => i % 5 === 0)) {
+    const text = `Our price list: ${order.map(tpl).join(sep)}.`; const r = extractFacts({ text }); const tiers = by(r, 'quote.tiers');
+    assert.equal(tiers.length, 1, `one tier list: ${text}`); assert.deepEqual(tiers[0].value, T([...set].sort((a, b) => a[0] - b[0])), text); n += 1;
+  }
+  assert.ok(n >= 144, `${n} phrasings checked`);
+});
+
+test('price tiers: the output is always in ascending quantity order; a duplicated threshold with two prices needs a correction instead of a guess', () => {
+  const r = extractFacts({ text: 'USD 6.80 for 300 pcs, USD 8 for 50 pcs, USD 7.20 for 100 pcs' }); assert.deepEqual(one(r, 'quote.tiers').value.map((t) => t.minQty), ['50', '100', '300']);
+  const d = extractFacts({ text: 'USD 8 for 50 pcs, USD 7 for 50 pcs' }); const t = one(d, 'quote.tiers'); assert.equal(t.needsCorrection, true); assert.ok(t.flags.includes('DUPLICATE_THRESHOLD'));
+});
+
+test('a MOQ, a sample price and a freight price are not tiers; a lone price with no quantity stays a single price', () => {
+  const a = extractFacts({ text: 'MOQ is 100 pcs, price USD 6.8' }); assert.equal(by(a, 'quote.tiers').length, 0, 'a MOQ next to a price is not a tier'); assert.equal(one(a, 'quote.unitPrice').value, '6.8');
+  const b = extractFacts({ text: 'Sample price USD 15 for 1 pc. USD 8 for 50 pcs, USD 7.20 for 100 pcs.' }); assert.deepEqual(one(b, 'quote.tiers').value, T([[50, '8'], [100, '7.20']])); assert.equal(one(b, 'quote.samplePrice').value, '15');
+  const c = extractFacts({ text: 'Freight USD 200 for 50 pcs. USD 8 for 50 pcs, USD 7.20 for 100 pcs.' }); assert.deepEqual(one(c, 'quote.tiers').value, T([[50, '8'], [100, '7.20']]));
+});

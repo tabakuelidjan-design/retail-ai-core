@@ -28,17 +28,40 @@ export function qtyTokens(text) {
   return out;
 }
 
-/** Pairs "quantity -> unit price" inside one sentence: "300 pcs ... USD 6.80", "USD 6.80 for 300 pcs". */
+/**
+ * Binds each price to ITS quantity. A price can be written BEFORE its quantity ("USD 8 for 50 pcs", "$7.20/pc at 100", "$8/pc MOQ 50") or AFTER it ("50 pcs: $8", "For 300 pcs we can do USD 6.80").
+ * The old rule paired every quantity with the NEXT price, so in "USD 8 for 50 pcs, USD 7.20 for 100 pcs" the 50 stole the 7.20 that belongs to 100. Now every possible binding is an explicit edge with a
+ * strength (a connective such as "for/at/MOQ", or a separator such as ":" and "=", beats mere adjacency, which beats a bare comma) and the strongest edges win, each price and each quantity used once.
+ * A price never crosses a sentence boundary to reach a quantity.
+ */
+const CONNECT = '(?:for|at|from|over|above|x|min(?:imum)?\\.?|MOQ|if you (?:buy|order)|when you (?:buy|order)|if (?:buying|ordering)|when (?:buying|ordering))';
+const RX_FWD = new RegExp(`^\\s*(?:(?:\\/|per\\s+)\\s*[A-Za-z]+\\s*)?(?:each\\s+)?(?:,\\s*)?${CONNECT}\\s+(?:the\\s+)?(\\d{1,3}(?:,\\d{3})+|\\d+)(\\s*\\+)?(\\s*${UNIT}\\b)?`, 'id');
+const SEP_STRONG = /^[\s]*(?:[:=\-–—→@]|->|=>)[\s]*(?:(?:we can do|can do|is|at|price|each|only)\s*)*$|^\s*(?:(?:we can do|can do|is|at|price is|price|each|only)\s+)+$/i;
+const BARE_OK = /^\s*(?:$|[,;.)]|and\b|or\b|\/)/i; // a bare number after a connective counts as a quantity only when the next word is not a unit of something else
 function pairTiers(text, prices, qtys) {
-  const used = new Set(); const pairs = [];
-  for (const q of qtys) {
-    const nextQty = qtys.find((x) => x.start > q.start)?.start ?? Infinity;
-    const fwd = prices.find((p) => !used.has(p) && p.start >= q.end && p.start < nextQty && p.start - q.end <= 60 && !boundaryBetween(text, q.end, p.start));
-    if (fwd) { used.add(fwd); pairs.push({ q, p: fwd }); continue; }
-    const back = [...prices].reverse().find((p) => !used.has(p) && p.end <= q.start && q.start - p.end <= 30 && /^\s*(?:\/\s*(?:pc|piece|unit)s?\s*)?(?:each\s+)?(?:for|at|when (?:you )?(?:buy|order)s?|if (?:you )?(?:buy|order)s?)\s+$/i.test(text.slice(p.end, q.start)));
-    if (back) { used.add(back); pairs.push({ q, p: back }); }
+  const edges = []; const fwdQty = new Map();
+  const qtyAt = (start, end, num) => { const hit = qtys.find((q) => q.start === start) ?? fwdQty.get(start); if (hit) return hit; const q = { start, end, num, bare: true }; fwdQty.set(start, q); return q; };
+  for (const p of prices) {
+    const rest = text.slice(p.end); const m = RX_FWD.exec(rest);
+    if (m) {
+      const numStart = p.end + m.indices[1][0]; const withUnit = !!m[3]; const after = rest.slice(m[0].length);
+      if (withUnit || BARE_OK.test(after) || /^\s*(?:US\$|USD|RMB|CNY|EUR|[$¥￥€])/i.test(after)) {
+        const end = p.end + m[0].length; const q = qtyAt(numStart, end, m[1]);
+        if (!boundaryBetween(text, p.end, numStart)) edges.push({ p, q, strength: 3, dist: numStart - p.end });
+      }
+    }
   }
-  return { pairs, used };
+  for (const q of qtys) {
+    for (const p of prices) {
+      if (p.start < q.end) continue; const between = text.slice(q.end, p.start); if (between.length > 60 || boundaryBetween(text, q.end, p.start)) continue;
+      const strength = SEP_STRONG.test(between) ? 3 : /^\s*$/.test(between) ? 2 : /^\s*,\s*$/.test(between) ? 1 : 0;
+      if (strength) edges.push({ p, q, strength, dist: p.start - q.end });
+    }
+  }
+  edges.sort((a, b) => b.strength - a.strength || a.dist - b.dist || a.q.start - b.q.start);
+  const usedP = new Set(); const usedQ = new Set(); const pairs = [];
+  for (const e of edges) { if (usedP.has(e.p) || usedQ.has(e.q.start)) continue; usedP.add(e.p); usedQ.add(e.q.start); pairs.push({ q: e.q, p: e.p }); }
+  return { pairs, used: usedP };
 }
 
 const moqContext = (seg, sent, singleMoq) => {
@@ -51,13 +74,14 @@ export function extractEn(text, lang) {
   const prices = priceTokens(text); const qtys = qtyTokens(text);
 
   // ---- tiers (quantity -> price pairs), then lone prices ----
-  const { pairs, used } = pairTiers(text, prices, qtys);
+  const tierPrices = prices.filter((p) => !SKIP_PRICE_CLAUSE.test(within(segs, p.start).text) && !/sample/i.test(within(sents, p.start).text));
+  const { pairs, used } = pairTiers(text, tierPrices, qtys);
   const priceCand = (p, extra) => { const n = parseNumberToken(p.num, 'price'); return { n, amb: n.ambiguous, ...extra }; };
   if (pairs.length) {
-    const sorted = [...pairs].sort((a, b) => a.q.start - b.q.start); const start = Math.min(...sorted.map((x) => Math.min(x.q.start, x.p.start))); const end = Math.max(...sorted.map((x) => Math.max(x.q.end, x.p.end)));
-    const rows = sorted.map(({ q, p }) => ({ qn: parseNumberToken(q.num, 'quantity'), pn: parseNumberToken(p.num, 'price'), p }));
-    const bad = rows.some((r) => r.qn.ambiguous || r.pn.ambiguous);
-    out.push(mk(text, lang, 'quote.tiers', rows.map((r) => ({ minQty: r.qn.value, unitPrice: r.pn.value })), start, end, { confidence: rows.every((r) => !/^[$¥￥€]$/.test(r.p.cur)) ? 'HIGH' : 'MEDIUM', flags: bad ? ['AMBIGUOUS_NUMBER'] : [], needsCorrection: bad, reason: 'quantity-price pairs' }));
+    const start = Math.min(...pairs.map((x) => Math.min(x.q.start, x.p.start))); const end = Math.max(...pairs.map((x) => Math.max(x.q.end, x.p.end)));
+    const rows = pairs.map(({ q, p }) => ({ qn: parseNumberToken(q.num, 'quantity'), pn: parseNumberToken(p.num, 'price'), p })).sort((a, b) => (a.qn.value === null || b.qn.value === null ? 0 : Number(a.qn.value) - Number(b.qn.value)));
+    const amb = rows.some((r) => r.qn.ambiguous || r.pn.ambiguous); const dup = rows.some((r, i) => r.qn.value !== null && rows.findIndex((x) => x.qn.value === r.qn.value) !== i);
+    out.push(mk(text, lang, 'quote.tiers', rows.map((r) => ({ minQty: r.qn.value, unitPrice: r.pn.value })), start, end, { confidence: rows.every((r) => !/^[$¥￥€]$/.test(r.p.cur)) ? 'HIGH' : 'MEDIUM', flags: [...(amb ? ['AMBIGUOUS_NUMBER'] : []), ...(dup ? ['DUPLICATE_THRESHOLD'] : [])], needsCorrection: amb || dup, reason: 'quantity-price pairs' }));
   }
   for (const p of prices) {
     if (used.has(p)) continue;

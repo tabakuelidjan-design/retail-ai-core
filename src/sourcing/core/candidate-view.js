@@ -13,6 +13,7 @@ export const FLAG_TEXT = Object.freeze({
   SUM_NOT_100: 'Deposit and balance do not add up to 100%: please correct one of them.',
   EU_NUMBER_FORMAT: 'A European number format (1.200,50) was read as 1200.50.',
   THOUSANDS_COMMA_REMOVED: 'A thousands comma was removed from the number.',
+  DUPLICATE_THRESHOLD: 'Two different prices were given for the same quantity: reject this and enter the right tiers in the Money tab.',
   MULTIPLE_CURRENCIES: 'More than one currency was mentioned: check which one applies.',
 });
 const HIDDEN_FLAGS = new Set(['SUPPLIER_STATEMENT']);
