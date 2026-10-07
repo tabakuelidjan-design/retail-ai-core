@@ -13,5 +13,11 @@ reports/
 # Local merchant inputs (buying policy, physical stock counts) - real merchant data, never commit
 data/local/
 
+# Local/private benchmark assets and outputs - never commit
+data/private/
+benchmarks/creative-fidelity/private/
+artifacts/private/
+.nordla-private/
+
 # Local Alibaba Model Studio credentials/config - never commit
 config/marketing-creative.alibaba.env

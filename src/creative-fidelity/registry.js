@@ -1,5 +1,141 @@
-import {EXECUTION_MODE,LICENSE_STATUS,MODEL_STATUS} from './constants.js';
-const str=(v,f)=>{if(typeof v!=='string'||!v.trim())throw new TypeError(`${f} must be a non-empty string`);return v.trim()};
-const bool=(v,f)=>{if(typeof v!=='boolean')throw new TypeError(`${f} must be boolean`);return v};
-export function normalizeCapabilityEntry(i){if(!i||typeof i!=='object'||Array.isArray(i))throw new TypeError('capability entry must be an object');const caps=Array.isArray(i.capabilities)?[...new Set(i.capabilities.map(x=>str(x,'capability')))].sort():[];if(!caps.length)throw new TypeError('capabilities must contain at least one item');const mode=str(i.execution_mode,'execution_mode');if(!Object.values(EXECUTION_MODE).includes(mode))throw new TypeError(`unsupported execution_mode: ${mode}`);const status=str(i.status,'status');if(!Object.values(MODEL_STATUS).includes(status))throw new TypeError(`unsupported status: ${status}`);const ls=str(i.license_status,'license_status');if(!Object.values(LICENSE_STATUS).includes(ls))throw new TypeError(`unsupported license_status: ${ls}`);return Object.freeze({id:str(i.id,'id'),name:str(i.name,'name'),provider:str(i.provider,'provider'),kind:str(i.kind,'kind'),version:i.version==null?null:str(i.version,'version'),version_hash:i.version_hash==null?null:str(i.version_hash,'version_hash'),execution_mode:mode,capabilities:caps,status,license_status:ls,license_name:i.license_name==null?null:str(i.license_name,'license_name'),license_source:i.license_source==null?null:str(i.license_source,'license_source'),commercial_use:bool(i.commercial_use,'commercial_use'),eu_allowed:bool(i.eu_allowed,'eu_allowed'),self_hostable:bool(i.self_hostable,'self_hostable'),hardware:Object.freeze({...i.hardware}),pricing:Object.freeze({...i.pricing}),notes:Object.freeze([...(i.notes??[])])});}
-export class CapabilityRegistry{#entries=new Map();constructor(entries=[]){for(const e of entries)this.add(e)}add(i){const e=normalizeCapabilityEntry(i);if(this.#entries.has(e.id))throw new Error(`duplicate capability id: ${e.id}`);this.#entries.set(e.id,e);return e}get(id){return this.#entries.get(id)??null}list(){return [...this.#entries.values()].sort((a,b)=>a.id.localeCompare(b.id))}eligible({capability=null,requireSelfHost=false,commercialOnly=true,euOnly=true}={}){return this.list().filter(e=>e.status!==MODEL_STATUS.REJECT&&e.license_status!==LICENSE_STATUS.REJECTED&&(!commercialOnly||e.commercial_use)&&(!euOnly||e.eu_allowed)&&(!requireSelfHost||e.self_hostable)&&(!capability||e.capabilities.includes(capability)))}}
+import {
+  EXECUTION_MODE,
+  LICENSE_STATUS,
+  MODEL_STATUS,
+} from './constants.js';
+
+const str = (value, field) => {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`${field} must be a non-empty string`);
+  }
+  return value.trim();
+};
+
+const bool = (value, field) => {
+  if (typeof value !== 'boolean') throw new TypeError(`${field} must be boolean`);
+  return value;
+};
+
+export function normalizeCapabilityEntry(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new TypeError('capability entry must be an object');
+  }
+
+  const capabilities = Array.isArray(input.capabilities)
+    ? [...new Set(input.capabilities.map((x) => str(x, 'capability')))].sort()
+    : [];
+  if (!capabilities.length) {
+    throw new TypeError('capabilities must contain at least one item');
+  }
+
+  const executionMode = str(input.execution_mode, 'execution_mode');
+  if (!Object.values(EXECUTION_MODE).includes(executionMode)) {
+    throw new TypeError(`unsupported execution_mode: ${executionMode}`);
+  }
+
+  const status = str(input.status, 'status');
+  if (!Object.values(MODEL_STATUS).includes(status)) {
+    throw new TypeError(`unsupported status: ${status}`);
+  }
+
+  const licenseStatus = str(input.license_status, 'license_status');
+  if (!Object.values(LICENSE_STATUS).includes(licenseStatus)) {
+    throw new TypeError(`unsupported license_status: ${licenseStatus}`);
+  }
+
+  return Object.freeze({
+    id: str(input.id, 'id'),
+    name: str(input.name, 'name'),
+    provider: str(input.provider, 'provider'),
+    kind: str(input.kind, 'kind'),
+    version: input.version == null ? null : str(input.version, 'version'),
+    version_hash: input.version_hash == null
+      ? null
+      : str(input.version_hash, 'version_hash'),
+    execution_mode: executionMode,
+    capabilities,
+    status,
+    license_status: licenseStatus,
+    license_name: input.license_name == null
+      ? null
+      : str(input.license_name, 'license_name'),
+    license_source: input.license_source == null
+      ? null
+      : str(input.license_source, 'license_source'),
+    license_verified_at: input.license_verified_at ?? null,
+    commercial_use: bool(input.commercial_use, 'commercial_use'),
+    eu_allowed: bool(input.eu_allowed, 'eu_allowed'),
+    self_hostable: bool(input.self_hostable, 'self_hostable'),
+    hardware: Object.freeze({ ...(input.hardware ?? {}) }),
+    pricing: Object.freeze({ ...(input.pricing ?? {}) }),
+    notes: Object.freeze([...(input.notes ?? [])]),
+  });
+}
+
+export function evaluateModelExecutionGate(model, {
+  capability = null,
+  requireSelfHost = false,
+} = {}) {
+  if (!model) {
+    return Object.freeze({ allowed: false, reason: 'MODEL_NOT_REGISTERED' });
+  }
+  if ([MODEL_STATUS.REJECT, MODEL_STATUS.WATCH].includes(model.status)) {
+    return Object.freeze({ allowed: false, reason: 'MODEL_NOT_EXECUTABLE' });
+  }
+  if (model.license_status !== LICENSE_STATUS.VERIFIED) {
+    return Object.freeze({ allowed: false, reason: 'LICENSE_NOT_VERIFIED' });
+  }
+  if (!model.license_source) {
+    return Object.freeze({ allowed: false, reason: 'LICENSE_EVIDENCE_MISSING' });
+  }
+  if (model.commercial_use !== true) {
+    return Object.freeze({ allowed: false, reason: 'COMMERCIAL_USE_NOT_ALLOWED' });
+  }
+  if (model.eu_allowed !== true) {
+    return Object.freeze({ allowed: false, reason: 'EU_USE_NOT_ALLOWED' });
+  }
+  if (requireSelfHost && model.self_hostable !== true) {
+    return Object.freeze({ allowed: false, reason: 'SELF_HOST_REQUIRED' });
+  }
+  if (
+    model.execution_mode === EXECUTION_MODE.SELF_HOST
+    && !model.version_hash
+  ) {
+    return Object.freeze({ allowed: false, reason: 'ARTIFACT_HASH_MISSING' });
+  }
+  if (capability && !model.capabilities.includes(capability)) {
+    return Object.freeze({ allowed: false, reason: 'CAPABILITY_NOT_SUPPORTED' });
+  }
+  return Object.freeze({ allowed: true, reason: null });
+}
+
+export class CapabilityRegistry {
+  #entries = new Map();
+
+  constructor(entries = []) {
+    for (const entry of entries) this.add(entry);
+  }
+
+  add(input) {
+    const entry = normalizeCapabilityEntry(input);
+    if (this.#entries.has(entry.id)) {
+      throw new Error(`duplicate capability id: ${entry.id}`);
+    }
+    this.#entries.set(entry.id, entry);
+    return entry;
+  }
+
+  get(id) {
+    return this.#entries.get(id) ?? null;
+  }
+
+  list() {
+    return [...this.#entries.values()]
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  eligible(options = {}) {
+    return this.list()
+      .filter((entry) => evaluateModelExecutionGate(entry, options).allowed);
+  }
+}
