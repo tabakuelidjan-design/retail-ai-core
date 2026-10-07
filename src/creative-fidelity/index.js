@@ -8,3 +8,4 @@ export * from './candidates.js';
 export * from './adapters.js';
 export * from './manifest.js';
 export * from './runner.js';
+export * from './asset-intake.js';

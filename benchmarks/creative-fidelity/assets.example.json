@@ -1,0 +1,21 @@
+{
+  "benchmark_id": "habb-image-fidelity-v0",
+  "merchant_id": "pilot-habb",
+  "assets": [
+    {
+      "id": "product-01",
+      "product_id": "opaque-private-product-id",
+      "source_ref": "private-asset://product-01",
+      "kind": "REAL_PRODUCT_PHOTO",
+      "model_generated": false,
+      "screenshot": false,
+      "rights_confirmed": true,
+      "category": "example-only",
+      "material": "example-only",
+      "contains_face_artwork": false,
+      "contains_logo": true,
+      "contains_text": true,
+      "identity_colors": ["example"]
+    }
+  ]
+}
