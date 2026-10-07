@@ -6,3 +6,5 @@ export * from './benchmark.js';
 export * from './sandwich.js';
 export * from './candidates.js';
 export * from './adapters.js';
+export * from './manifest.js';
+export * from './runner.js';
