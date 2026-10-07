@@ -1,0 +1,25 @@
+name: Creative Fidelity V0
+
+on:
+  push:
+    branches:
+      - feature/creative-fidelity-v0
+  pull_request:
+    paths:
+      - 'src/creative-fidelity/**'
+      - 'test/creative-fidelity*.test.js'
+      - 'benchmarks/creative-fidelity/**'
+      - 'docs/architecture/creative-fidelity*'
+
+jobs:
+  targeted-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: node --test test/creative-fidelity*.test.js
