@@ -75,6 +75,7 @@ See `NORDLA-DEFERRED.md` for implementation conditions and details.
 | NDR-P14 | The first ownership-first implementation experiment is local image generation plus product-fidelity/compositing benchmarking, including Asian open/self-host candidates and premium API references. | PROVISIONAL |
 | NDR-P15 | Premium creative providers may be integrated before local/free alternatives are finalized when measured quality justifies the cost. Alibaba Cloud Model Studio is the first V0 premium provider lane: Qwen for marketing/content, Qwen Image for premium image work, and Wan 3.0 for premium video. This is an operational candidate, not a frozen vendor dependency. | PROVISIONAL |
 | NDR-P16 | Premium-provider execution must remain explicit and bounded: region-pinned where required, no silent cross-region fallback, no dynamic routing under NDR-D01, no private/customer media sent externally without an explicit data-sharing gate, no credentials in Git, and provenance/cost must be recorded before production use. | PROVISIONAL |
+| NDR-P17 | Premium creative quality is benchmarked by workload rather than vendor. GPT Image 2.5 Sunburst is the V0 precision-image challenger and Runway Product Campaign Image / Product Ad are the V0 product-marketing challengers against the Alibaba lane. They are references for evidence collection only; no automatic provider routing or production default is activated by this decision. | PROVISIONAL |
 
 ## How to change a frozen decision
 

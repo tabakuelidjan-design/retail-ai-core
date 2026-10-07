@@ -1,0 +1,43 @@
+name: Creative Premium Challengers V0
+
+on:
+  push:
+    branches:
+      - feature/creative-premium-challengers-v0
+    paths:
+      - 'src/marketing-creative/openai/**'
+      - 'src/marketing-creative/runway/**'
+      - 'src/marketing-creative/challengers/**'
+      - 'src/marketing-creative/shared/**'
+      - 'test/marketing-creative-premium-challengers.test.js'
+      - 'docs/architecture/creative-premium-challengers-v0.md'
+      - 'package.json'
+  pull_request:
+    paths:
+      - 'src/marketing-creative/openai/**'
+      - 'src/marketing-creative/runway/**'
+      - 'src/marketing-creative/challengers/**'
+      - 'src/marketing-creative/shared/**'
+      - 'test/marketing-creative-premium-challengers.test.js'
+      - 'docs/architecture/creative-premium-challengers-v0.md'
+      - 'package.json'
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Premium challenger targeted
+        run: node --test test/marketing-creative-premium-challengers.test.js
+      - name: Alibaba targeted
+        run: node --test test/marketing-creative-alibaba*.test.js
+      - name: Creative Fidelity targeted
+        run: node --test test/creative-fidelity*.test.js
+      - name: Full repository suite
+        run: npm test

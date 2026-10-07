@@ -237,8 +237,9 @@ Pour chaque produit :
 - autres candidats validés par licence.
 
 ### PREMIUM REFERENCES
-- GPT Image ;
-- Qwen Image 3.0 Pro (Alibaba Model Studio / Frankfurt).
+- GPT Image 2.5 Sunburst — precision image challenger ;
+- Qwen Image 3.0 Pro (Alibaba Model Studio / Frankfurt) ;
+- Runway Product Campaign Image — specialist product-campaign challenger.
 
 ### NORDLA REFERENCE
 - Sandwich Compositing.
@@ -367,10 +368,10 @@ Le benchmark comparatif vidéo complet reste après le pipeline image.
 
 ## 8.4 Premium references
 - **Wan 3.0 — intégré V0** ;
+- **Runway Product Ad — specialist product-video challenger** ;
 - Kling ;
 - Seedance ;
-- Vidu ;
-- Runway selon accès.
+- Vidu.
 
 Comparer également :
 - vidéo générative ;
@@ -520,8 +521,9 @@ Jamais abonnement SaaS par client par défaut.
 7. Brancher 2 premiers moteurs FREE
 8. Brancher GPT Image comme référence
 9. **Alibaba premium lane : Qwen 3.8 Max + Qwen Image 3.0 Pro + Wan 3.0**
-10. Exécuter benchmark image
-11. Choisir les finalistes
+10. **Premium challengers : GPT Image 2.5 Sunburst + Runway Product Campaign Image + Runway Product Ad**
+11. Exécuter benchmark image
+12. Choisir les finalistes
 
 ## NEXT — Phase B
 12. Brand Memory
