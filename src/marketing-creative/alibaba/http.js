@@ -1,3 +1,37 @@
+export class AlibabaProviderError extends Error {
+  constructor(
+    message,
+    {
+      code = null,
+      requestId = null,
+      status = null,
+      transient = false,
+    } = {},
+  ) {
+    super(message);
+    this.name = 'AlibabaProviderError';
+    this.code = code;
+    this.requestId = requestId;
+    this.status = status;
+    this.transient = transient;
+  }
+}
+
+function assertProviderUrl(value) {
+  const url = new URL(value);
+
+  if (
+    url.protocol !== 'https:'
+    || url.username
+    || url.password
+    || !url.hostname.endsWith('.eu-central-1.maas.aliyuncs.com')
+  ) {
+    throw new Error('Refusing non-Frankfurt Alibaba provider URL');
+  }
+
+  return url.toString();
+}
+
 export async function alibabaJsonRequest({
   url,
   apiKey,
@@ -9,6 +43,7 @@ export async function alibabaJsonRequest({
 }) {
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch implementation is required');
 
+  const safeUrl = assertProviderUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -19,27 +54,48 @@ export async function alibabaJsonRequest({
     };
     if (asyncTask) headers['X-DashScope-Async'] = 'enable';
 
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(safeUrl, {
       method,
       headers,
       body: body == null ? undefined : JSON.stringify(body),
       signal: controller.signal,
+      redirect: 'error',
     });
 
     const raw = await response.text();
-    let payload = null;
+    let payload = {};
     try {
       payload = raw ? JSON.parse(raw) : {};
     } catch {
-      payload = { message: 'Non-JSON provider response' };
+      payload = {};
     }
 
     if (!response.ok) {
       const code = payload?.code || payload?.error?.code || `HTTP_${response.status}`;
-      throw new Error(`Alibaba Model Studio request failed: ${code}`);
+      const requestId = payload?.request_id || payload?.requestId || null;
+      const transient = response.status === 429 || response.status >= 500;
+
+      throw new AlibabaProviderError(
+        `Alibaba Model Studio request failed: ${code}`,
+        {
+          code,
+          requestId,
+          status: response.status,
+          transient,
+        },
+      );
     }
 
     return payload;
+  } catch (error) {
+    if (error instanceof AlibabaProviderError) throw error;
+    if (error?.name === 'AbortError') {
+      throw new AlibabaProviderError(
+        'Alibaba Model Studio request timed out',
+        { code: 'TIMEOUT', transient: true },
+      );
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
