@@ -2,6 +2,8 @@
 
 Status: EXPERIMENTAL PROVIDER INTEGRATION
 
+Provider-selection note (2026-10-07): Alibaba is the first controlled provider lane, not the declared winner. See `marketing-creative-provider-benchmark-2026-10-07.md` for the current multi-provider benchmark decision and promotion gates.
+
 This integration does not activate dynamic multi-model routing. Provider/model selection remains explicit.
 
 ## Why Alibaba is integrated now
