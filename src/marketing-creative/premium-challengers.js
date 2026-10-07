@@ -1,0 +1,36 @@
+export const PREMIUM_CREATIVE_CHALLENGERS=Object.freeze([
+  Object.freeze({
+    id:'openai-gpt-image-2.5-sunburst',
+    provider:'OpenAI',
+    kind:'IMAGE',
+    role:'PRECISION_IMAGE_REFERENCE',
+    model:'gpt-image-2.5-sunburst',
+    status:'BENCHMARK',
+    source:'https://platform.openai.com/pricing',
+    notes:Object.freeze([
+      'Official OpenAI pricing currently lists GPT Image 2.5 Sunburst.',
+      'Use as the highest-fidelity image challenger; do not replace Nordla Sandwich fidelity gates.',
+      'Live Nordla API adapter requires a separate OPENAI_API_KEY smoke test before production use.',
+    ]),
+  }),
+  Object.freeze({
+    id:'runway-product-campaign-image',
+    provider:'Runway',
+    kind:'IMAGE',
+    role:'PRODUCT_CAMPAIGN_SPECIALIST',
+    recipe:'product_campaign_image',
+    version:'2026-06',
+    status:'BENCHMARK',
+    source:'https://docs.dev.runwayml.com/recipes/product-campaign-image/',
+  }),
+  Object.freeze({
+    id:'runway-product-ad',
+    provider:'Runway',
+    kind:'VIDEO',
+    role:'PRODUCT_AD_SPECIALIST',
+    recipe:'product_ad',
+    version:'2026-07',
+    status:'BENCHMARK',
+    source:'https://docs.dev.runwayml.com/recipes/product-ad/',
+  }),
+]);
