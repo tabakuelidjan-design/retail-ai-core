@@ -25,6 +25,7 @@ function normalizeMedia(media = []) {
     if (!MEDIA_TYPES.has(item.type)) {
       throw new Error(`unsupported Wan media type: ${item.type}`);
     }
+
     return Object.freeze({
       type: item.type,
       url: assertHttpsPublicUrl(item.url, `media[${index}].url`),
@@ -58,8 +59,12 @@ export async function createWan3VideoTask({
   if ((!prompt || !String(prompt).trim()) && cleanMedia.length === 0) {
     throw new TypeError('prompt or media is required');
   }
-  if (!RESOLUTIONS.has(resolution)) throw new RangeError('unsupported Wan 3.0 resolution');
-  if (!RATIOS.has(ratio)) throw new RangeError('unsupported Wan 3.0 ratio');
+  if (!RESOLUTIONS.has(resolution)) {
+    throw new RangeError('unsupported Wan 3.0 resolution');
+  }
+  if (!RATIOS.has(ratio)) {
+    throw new RangeError('unsupported Wan 3.0 ratio');
+  }
   if (!Number.isInteger(duration) || duration < 2 || duration > 30) {
     throw new RangeError('duration must be an integer between 2 and 30 seconds');
   }
@@ -151,7 +156,9 @@ export async function createWan3VideoTask({
 
 export async function getWan3VideoTask({ config, taskId, fetchImpl }) {
   requireAlibabaCreativeConfig(config);
-  if (typeof taskId !== 'string' || !taskId) throw new TypeError('taskId is required');
+  if (typeof taskId !== 'string' || !taskId) {
+    throw new TypeError('taskId is required');
+  }
 
   const payload = await alibabaJsonRequest({
     url: alibabaCreativeEndpoints(config).task(taskId),
@@ -178,16 +185,20 @@ export async function waitForWan3Video({
   reservation,
   budget,
   journal = null,
+  outputStore,
   resolution = '720P',
   pollIntervalMs = 15000,
   maxWaitMs = 10 * 60 * 1000,
   fetchImpl,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
+  if (!outputStore?.storeUrl) throw new TypeError('outputStore is required');
+
   const started = Date.now();
 
   while (true) {
     let result;
+
     try {
       result = await getWan3VideoTask({ config, taskId, fetchImpl });
     } catch (error) {
@@ -206,7 +217,7 @@ export async function waitForWan3Video({
           return Object.freeze({
             taskId,
             status: 'TIMED_OUT_ACTIVE',
-            videoUrl: null,
+            outputRef: null,
             usage: null,
           });
         }
@@ -221,7 +232,18 @@ export async function waitForWan3Video({
         throw new Error('Wan 3.0 task succeeded without video_url');
       }
 
-      const duration = result.usage?.output_video_duration ?? reservation?.video_seconds ?? 0;
+      const stored = await outputStore.storeUrl({
+        url: result.videoUrl,
+        kind: 'video',
+        operationId,
+        fetchImpl,
+      });
+
+      const duration = (
+        result.usage?.output_video_duration
+        ?? reservation?.video_seconds
+        ?? 0
+      );
       const actualEur = priceVideoEur({
         duration,
         resolution,
@@ -239,8 +261,18 @@ export async function waitForWan3Video({
         task_id: taskId,
         status: 'SUCCEEDED',
         actual_cost_eur: actualEur,
+        output_sha256: stored.sha256,
       });
-      return Object.freeze({ ...result, costEur: actualEur });
+
+      return Object.freeze({
+        taskId: result.taskId,
+        status: result.status,
+        usage: result.usage,
+        requestId: result.requestId,
+        outputRef: stored.ref,
+        outputSha256: stored.sha256,
+        costEur: actualEur,
+      });
     }
 
     if (['FAILED', 'CANCELED', 'UNKNOWN'].includes(result.status)) {
@@ -272,7 +304,7 @@ export async function waitForWan3Video({
       return Object.freeze({
         taskId,
         status: 'TIMED_OUT_ACTIVE',
-        videoUrl: null,
+        outputRef: null,
         usage: result.usage ?? null,
       });
     }

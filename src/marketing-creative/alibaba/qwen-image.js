@@ -7,7 +7,9 @@ import { priceImagesEur } from './budget.js';
 
 function parseOutputs(payload) {
   if (Array.isArray(payload?.data)) {
-    return payload.data.map((item) => item?.url || item?.b64_json).filter(Boolean);
+    return payload.data
+      .map((item) => item?.url || item?.b64_json)
+      .filter(Boolean);
   }
 
   const content = payload?.output?.choices?.flatMap(
@@ -23,6 +25,7 @@ export async function generateMarketingImage({
   dataPolicy,
   budget,
   journal = null,
+  outputStore,
   operationId = randomUUID(),
   size = '1024x1024',
   n = 1,
@@ -35,7 +38,10 @@ export async function generateMarketingImage({
   const policy = assertAlibabaExternalUse(dataPolicy);
 
   if (!budget?.reserveImages) throw new TypeError('budget is required');
-  if (typeof prompt !== 'string' || !prompt.trim()) throw new TypeError('prompt is required');
+  if (!outputStore?.storeUrl) throw new TypeError('outputStore is required');
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    throw new TypeError('prompt is required');
+  }
   if (!Number.isInteger(n) || n < 1 || n > 6) {
     throw new RangeError('n must be an integer between 1 and 6');
   }
@@ -66,6 +72,7 @@ export async function generateMarketingImage({
         ...refs.map((image) => ({ image })),
         { text: prompt },
       ];
+
       payload = await alibabaJsonRequest({
         url: alibabaCreativeEndpoints(config).imageDashScope,
         apiKey: config.apiKey,
@@ -103,14 +110,26 @@ export async function generateMarketingImage({
       });
     }
 
-    const outputs = parseOutputs(payload);
-    if (!outputs.length) {
+    const providerOutputs = parseOutputs(payload);
+    if (!providerOutputs.length) {
       throw new Error('Alibaba image response did not contain an output image');
     }
 
-    const count = payload?.usage?.image_count ?? outputs.length;
+    const storedOutputs = [];
+    for (const url of providerOutputs) {
+      storedOutputs.push(
+        await outputStore.storeUrl({
+          url,
+          kind: 'image',
+          operationId,
+          fetchImpl,
+        }),
+      );
+    }
+
+    const imageCount = payload?.usage?.image_count ?? storedOutputs.length;
     const actualEur = priceImagesEur({
-      n: count,
+      n: imageCount,
       size,
       usdToEur: budget.usdToEur,
     });
@@ -126,11 +145,12 @@ export async function generateMarketingImage({
       status: 'SUCCEEDED',
       actual_cost_eur: actualEur,
       data_class: policy.classification,
+      output_sha256: storedOutputs.map((item) => item.sha256).join(','),
     });
 
     return Object.freeze({
       model: config.imageModel,
-      outputs: Object.freeze(outputs),
+      outputs: Object.freeze(storedOutputs),
       usage: payload?.usage ?? null,
       requestId: payload?.request_id ?? null,
       costEur: actualEur,
