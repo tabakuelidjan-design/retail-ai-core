@@ -51,7 +51,7 @@ test('Frankfurt endpoint and workspace are hardened', () => {
   );
   assert.throws(
     () => loadAlibabaCreativeConfig({
-      ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'x@evil.example.com/',
+      ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'evil.example.com/path',
     }),
     /Invalid/,
   );
