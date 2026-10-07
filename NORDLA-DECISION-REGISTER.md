@@ -68,6 +68,11 @@ See `NORDLA-DEFERRED.md` for implementation conditions and details.
 | NDR-P07 | Final prices and included allowances must be based on observed per-merchant unit economics (including median and heavy-user profiles), not on average theoretical API costs alone. | PROVISIONAL |
 | NDR-P08 | Nordla should route work to the least-cost engine that still satisfies quality, fidelity, privacy and licensing requirements; premium engines are selective fallbacks, not universal defaults. | PROVISIONAL |
 | NDR-P09 | The commercial packaging direction and unit-economic guardrails are documented in ADR 0005; exact launch pricing remains evidence-sensitive. | PROVISIONAL |
+| NDR-P10 | Nordla follows an ownership-first infrastructure direction: build/own strategic capability first, then commercially compatible open source/open weights, then self-host where justified, then pay-as-you-go API, with recurring SaaS as a last resort when materially superior. | PROVISIONAL |
+| NDR-P11 | "99% Nordla" is the long-term ownership aspiration for value-producing capabilities, not a literal requirement to self-host everything regardless of quality, security or total cost. | PROVISIONAL |
+| NDR-P12 | Low-cost cloud storage may be used initially; Nordla should become capable of self-hosting object storage at scale, always with encrypted off-site backup and tested restoration. | PROVISIONAL |
+| NDR-P13 | Routine creative/media processing (product compositing, print/PLV, transcription, reframing, subtitles and similar deterministic work) should be Nordla-owned or open-source wherever practical; premium APIs are selective fallbacks. | PROVISIONAL |
+| NDR-P14 | The first ownership-first implementation experiment is local image generation plus product-fidelity/compositing benchmarking, including Asian open/self-host candidates and premium API references. | PROVISIONAL |
 
 ## How to change a frozen decision
 
