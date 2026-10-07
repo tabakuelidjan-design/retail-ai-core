@@ -73,6 +73,8 @@ See `NORDLA-DEFERRED.md` for implementation conditions and details.
 | NDR-P12 | Low-cost cloud storage may be used initially; Nordla should become capable of self-hosting object storage at scale, always with encrypted off-site backup and tested restoration. | PROVISIONAL |
 | NDR-P13 | Routine creative/media processing (product compositing, print/PLV, transcription, reframing, subtitles and similar deterministic work) should be Nordla-owned or open-source wherever practical; premium APIs are selective fallbacks. | PROVISIONAL |
 | NDR-P14 | The first ownership-first implementation experiment is local image generation plus product-fidelity/compositing benchmarking, including Asian open/self-host candidates and premium API references. | PROVISIONAL |
+| NDR-P15 | Premium creative providers may be integrated before local/free alternatives are finalized when measured quality justifies the cost. Alibaba Cloud Model Studio is the first V0 premium provider lane: Qwen for marketing/content, Qwen Image for premium image work, and Wan 3.0 for premium video. This is an operational candidate, not a frozen vendor dependency. | PROVISIONAL |
+| NDR-P16 | Premium-provider execution must remain explicit and bounded: region-pinned where required, no silent cross-region fallback, no dynamic routing under NDR-D01, no private/customer media sent externally without an explicit data-sharing gate, no credentials in Git, and provenance/cost must be recorded before production use. | PROVISIONAL |
 
 ## How to change a frozen decision
 
