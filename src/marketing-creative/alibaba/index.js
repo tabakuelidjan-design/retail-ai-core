@@ -7,3 +7,4 @@ export * from './output-store.js';
 export * from './qwen-text.js';
 export * from './qwen-image.js';
 export * from './wan3-video.js';
+export * from './smoke.js';

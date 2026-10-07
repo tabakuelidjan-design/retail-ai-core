@@ -26,7 +26,8 @@
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
     "finance:demo": "node src/finance/server/demo.js",
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
-    "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js"
+    "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
+    "marketing-creative:smoke": "node src/marketing-creative/alibaba/smoke-cli.js"
   },
   "engines": {
     "node": ">=20"

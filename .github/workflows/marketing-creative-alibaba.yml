@@ -6,22 +6,24 @@ on:
       - feature/marketing-creative-alibaba-v0
     paths:
       - 'src/marketing-creative/alibaba/**'
-      - 'test/marketing-creative-alibaba.test.js'
+      - 'test/marketing-creative-alibaba*.test.js'
       - 'src/creative-fidelity/**'
       - 'test/creative-fidelity*.test.js'
       - 'config/marketing-creative.alibaba.env.example'
-      - 'docs/architecture/marketing-creative-alibaba-v0.md'
+      - 'docs/architecture/marketing-creative-alibaba*'
       - 'docs/architecture/creative-fidelity*'
       - '.github/workflows/marketing-creative-alibaba.yml'
+      - 'package.json'
   pull_request:
     paths:
       - 'src/marketing-creative/alibaba/**'
-      - 'test/marketing-creative-alibaba.test.js'
+      - 'test/marketing-creative-alibaba*.test.js'
       - 'src/creative-fidelity/**'
       - 'test/creative-fidelity*.test.js'
       - 'config/marketing-creative.alibaba.env.example'
-      - 'docs/architecture/marketing-creative-alibaba-v0.md'
+      - 'docs/architecture/marketing-creative-alibaba*'
       - 'docs/architecture/creative-fidelity*'
+      - 'package.json'
 
 jobs:
   pre-smoke-tests:
@@ -35,7 +37,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Alibaba targeted
-        run: node --test test/marketing-creative-alibaba.test.js
+        run: node --test test/marketing-creative-alibaba*.test.js
       - name: Creative Fidelity targeted
         run: node --test test/creative-fidelity*.test.js
       - name: Full repository suite
