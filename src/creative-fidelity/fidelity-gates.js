@@ -1,0 +1,4 @@
+import {FIDELITY_FATAL_DEFECT} from './constants.js';
+const fatal=new Set(Object.values(FIDELITY_FATAL_DEFECT));
+export function evaluateHardFidelityGate(obs=[]){if(!Array.isArray(obs))throw new TypeError('observations must be an array');const failures=obs.filter(x=>x&&x.present===true&&fatal.has(x.code)).map(x=>Object.freeze({code:x.code,evidence:x.evidence??null,source:x.source??null}));return Object.freeze({outcome:failures.length?'FAIL':'PASS',failures:Object.freeze(failures)})}
+export function normalizeQualityAxes(i={}){const axes=['shape_fidelity','proportion_fidelity','material_fidelity','color_fidelity','texture_fidelity','realism','ai_look','creative_quality'];const out={};for(const a of axes){const v=i[a]??null;if(v!=null&&(!Number.isFinite(v)||v<0||v>100))throw new TypeError(`${a} must be null or a number between 0 and 100`);out[a]=v}return Object.freeze(out)}
