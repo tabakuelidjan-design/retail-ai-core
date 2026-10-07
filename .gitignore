@@ -12,3 +12,6 @@ reports/
 
 # Local merchant inputs (buying policy, physical stock counts) - real merchant data, never commit
 data/local/
+
+# Local Alibaba Model Studio credentials/config - never commit
+config/marketing-creative.alibaba.env
