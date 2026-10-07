@@ -59,8 +59,15 @@ See `NORDLA-DEFERRED.md` for implementation conditions and details.
 
 | ID | Decision | Status |
 |---|---|---|
-| NDR-P01 | Future commercial packaging may use tiers such as Essential / Pro / Complete, but names and bundle boundaries are not frozen. | PROVISIONAL |
+| NDR-P01 | Commercial packaging currently targets three integrated levels — Essential / Pro / Complete — but names, exact prices and bundle boundaries are not frozen. Current validation anchors are €39 / €119 / €249 excl. VAT. | PROVISIONAL |
 | NDR-P02 | MCP is preferred for tool/connectors where it fits; A2A/AG-UI remain standards to monitor rather than mandatory foundations. | PROVISIONAL |
+| NDR-P03 | Nordla should be sold as an integrated product, not as dozens of separately purchased business-domain micro-modules. | PROVISIONAL |
+| NDR-P04 | Commercial tiers should primarily differ by supported complexity, volume, automation depth, service/support level and included variable-compute allowance, while respecting NDR-019. | PROVISIONAL |
+| NDR-P05 | Materially variable external compute (especially high-volume premium image/video generation and similar metered services) must not be unlimited by default inside a low fixed subscription. | PROVISIONAL |
+| NDR-P06 | Heavy variable compute may use an included monthly allowance plus approved overage/pay-as-you-go; customer-facing presentation should prefer business-readable units or an Atelier allowance over opaque AI tokens/credits. | PROVISIONAL |
+| NDR-P07 | Final prices and included allowances must be based on observed per-merchant unit economics (including median and heavy-user profiles), not on average theoretical API costs alone. | PROVISIONAL |
+| NDR-P08 | Nordla should route work to the least-cost engine that still satisfies quality, fidelity, privacy and licensing requirements; premium engines are selective fallbacks, not universal defaults. | PROVISIONAL |
+| NDR-P09 | The commercial packaging direction and unit-economic guardrails are documented in ADR 0005; exact launch pricing remains evidence-sensitive. | PROVISIONAL |
 
 ## How to change a frozen decision
 
