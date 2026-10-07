@@ -13,9 +13,21 @@ Construire une capacité Nordla capable de :
 
 Principe d'infrastructure :
 
-> BUILD/OWN Nordla → open source/open weights → self-host si rentable → API premium uniquement si elle apporte une qualité réellement supérieure.
+> BUILD/OWN Nordla → open source/open weights → self-host si rentable → API premium lorsque la qualité réellement supérieure le justifie.
 
 Objectif stratégique long terme : **99 % Nordla**, sans sacrifier qualité, sécurité ou économie.
+
+## 0.1 Règle qualité premium
+
+Nordla n'attend plus que les modèles FREE atteignent tous les cas premium avant de pouvoir produire un marketing professionnel.
+
+Alibaba Cloud Model Studio est intégré dès la V0 comme lane premium explicite et remplaçable :
+
+- `qwen3.8-max` → stratégie/copy marketing ;
+- `qwen-image-3.0-pro` → image premium génération/édition ;
+- `wan3.0-video` → vidéo premium.
+
+La V0 est épinglée sur **Frankfurt / eu-central-1**. Il n'y a aucun routage multi-modèles automatique : le choix du provider reste explicite tant que NDR-D01 est différé.
 
 ---
 
@@ -224,8 +236,9 @@ Pour chaque produit :
 - Z-Image-Turbo ;
 - autres candidats validés par licence.
 
-### PREMIUM REFERENCE
-- GPT Image.
+### PREMIUM REFERENCES
+- GPT Image ;
+- Qwen Image 3.0 Pro (Alibaba Model Studio / Frankfurt).
 
 ### NORDLA REFERENCE
 - Sandwich Compositing.
@@ -325,7 +338,15 @@ But : couvrir la majorité du contenu social réel sans CapCut/Adobe.
 
 ---
 
-# 8. Video Benchmark — APRÈS IMAGE
+# 8. Premium Video Provider + Video Benchmark
+
+## 8.0 Intégration immédiate
+
+Wan 3.0 est intégré maintenant comme moteur vidéo premium pay-as-you-go via Alibaba Cloud Model Studio Frankfurt.
+
+Cela permet de produire des vidéos marketing professionnelles sans attendre la fin du benchmark FREE.
+
+Le benchmark comparatif vidéo complet reste après le pipeline image.
 
 ## 8.1 Produits tests
 5 à 8 produits difficiles.
@@ -345,7 +366,7 @@ But : couvrir la majorité du contenu social réel sans CapCut/Adobe.
 - autres si licence validée.
 
 ## 8.4 Premium references
-- Wan 3.x ;
+- **Wan 3.0 — intégré V0** ;
 - Kling ;
 - Seedance ;
 - Vidu ;
@@ -498,22 +519,23 @@ Jamais abonnement SaaS par client par défaut.
 6. Sandwich Compositing V0
 7. Brancher 2 premiers moteurs FREE
 8. Brancher GPT Image comme référence
-9. Exécuter benchmark image
-10. Choisir les finalistes
+9. **Alibaba premium lane : Qwen 3.8 Max + Qwen Image 3.0 Pro + Wan 3.0**
+10. Exécuter benchmark image
+11. Choisir les finalistes
 
 ## NEXT — Phase B
-11. Brand Memory
-12. Brand Guardian
-13. Image Studio
-14. Print/PLV
-15. Mini-Studio Smartphone
-16. Product Marketing / Poussée branché au Socle
+12. Brand Memory
+13. Brand Guardian
+14. Image Studio
+15. Print/PLV
+16. Mini-Studio Smartphone
+17. Product Marketing / Poussée branché au Socle
 
 ## AFTER — Phase C
-17. Video Benchmark
-18. Store Experience
-19. Publication/Analytics
-20. Routing optimisé / self-host scaling
+18. Video Benchmark comparatif FREE vs premium
+19. Store Experience
+20. Publication/Analytics
+21. Routing optimisé / self-host scaling
 
 ---
 
