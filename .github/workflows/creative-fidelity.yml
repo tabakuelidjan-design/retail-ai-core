@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - feature/creative-fidelity-v0
+      - feature/marketing-creative-alibaba-v0
+    paths:
+      - 'src/creative-fidelity/**'
+      - 'test/creative-fidelity*.test.js'
+      - 'benchmarks/creative-fidelity/**'
+      - 'docs/architecture/creative-fidelity*'
+      - '.github/workflows/creative-fidelity.yml'
   pull_request:
     paths:
       - 'src/creative-fidelity/**'
