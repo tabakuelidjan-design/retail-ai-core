@@ -255,9 +255,19 @@ Sales Development remains separate and covers B2B, partnerships, prospecting and
 
 The three architecture levels are not the three products.
 
-The Socle is not sold alone as an intentionally incomplete product. Future commercial packaging may combine the Socle with different business capabilities, but pricing/tiers are not frozen in this architecture.
+The Socle is not sold alone as an intentionally incomplete product.
 
-Nordla must not deliberately hide a known truth merely to create a higher subscription tier.
+The current commercial direction is an integrated tiered product rather than a catalogue of separately purchased business-domain micro-modules. The working tier hypothesis is Essential / Pro / Complete, but plan names, launch prices and exact boundaries remain provisional and evidence-sensitive.
+
+Commercial differentiation should come primarily from supported business complexity, volume, automation depth, service/support level and included variable-compute allowance — not from deliberately hiding a truth required for a sound decision.
+
+Nordla must not promise unrestricted heavy generative compute inside a low fixed subscription by default. Materially variable external workloads such as high-volume premium image/video generation or other metered services may use an included allowance plus explicitly approved overage/pay-as-you-go.
+
+Customer-facing usage should avoid opaque AI-token mechanics where possible. Business-readable units or an Atelier-style allowance are preferred.
+
+Final launch pricing must be based on measured per-merchant unit economics from pilots, including heavy-user behavior, rather than theoretical average API prices alone.
+
+See `docs/decisions/0005-commercial-packaging-variable-compute.md` and the provisional entries in `NORDLA-DECISION-REGISTER.md`.
 
 ## 12. Change control
 
