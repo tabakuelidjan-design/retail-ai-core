@@ -5,3 +5,4 @@ export * from './fidelity-gates.js';
 export * from './benchmark.js';
 export * from './sandwich.js';
 export * from './candidates.js';
+export * from './adapters.js';
