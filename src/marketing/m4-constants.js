@@ -70,7 +70,6 @@ export const STEER_PACKAGE_STATUS = Object.freeze({
 
 export const RUN_SIGNAL = Object.freeze({
   PARTIAL_EXECUTION: 'PARTIAL_EXECUTION',
-  OFFLINE_ATTRIBUTION_EXPECTED: 'OFFLINE_ATTRIBUTION_EXPECTED',
   INCREMENTALITY_NOT_ELIGIBLE: 'INCREMENTALITY_NOT_ELIGIBLE',
   MEASUREMENT_WINDOW_NOT_COMPLETE: 'MEASUREMENT_WINDOW_NOT_COMPLETE',
 });
@@ -86,10 +85,6 @@ export const RESULT_SIGNAL = Object.freeze({
   RESULT_CHALLENGES_HYPOTHESIS: 'RESULT_CHALLENGES_HYPOTHESIS',
   LEARNING_STALE: 'LEARNING_STALE',
 });
-
-// Delivery channels whose results usually come back OFFLINE (QR / promo code / POS marker / self-report). A generic Nordla
-// vocabulary, not a merchant configuration: it only raises OFFLINE_ATTRIBUTION_EXPECTED.
-export const OFFLINE_CHANNEL_TOKENS = Object.freeze(['STORE_FRONT', 'IN_STORE', 'PRINT']);
 
 export const MAX_FOLLOW_UPS = 10;
 export const MAX_OFFLINE_OBSERVATIONS = 50;

@@ -49,7 +49,7 @@ Rules: merchant, brand, Push, manifest and authorization refs match the original
 
 ## 5. MarketingRun
 
-`run_id (mrn_…) · schema_version · merchant_id · brand_id · finding_ref · push_ref · activation_manifest_ref · execution_ref · execution_status · activated_at · measurement_plan_ref · observation_window · created_at · review_signals[]`. Built only from the original Push, the original ActivationManifest, the authorization, the receipt, the tenant and an explicit `asOf`; scope, execution status and activation time are derived. `observation_window` is **exactly** `push.measurement_plan.observation_window` (never a second window). A Run carries no result. Signals (sorted, unique, no free text): `PARTIAL_EXECUTION`, `OFFLINE_ATTRIBUTION_EXPECTED` (an executed delivery on a channel in `OFFLINE_CHANNEL_TOKENS`), `INCREMENTALITY_NOT_ELIGIBLE`, `MEASUREMENT_WINDOW_NOT_COMPLETE`.
+`run_id (mrn_…) · schema_version · merchant_id · brand_id · finding_ref · push_ref · activation_manifest_ref · execution_ref · execution_status · activated_at · measurement_plan_ref · observation_window · created_at · review_signals[]`. Built only from the original Push, the original ActivationManifest, the authorization, the receipt, the tenant and an explicit `asOf`; scope, execution status and activation time are derived. `observation_window` is **exactly** `push.measurement_plan.observation_window` (never a second window). A Run carries no result. Signals (sorted, unique, no free text): `PARTIAL_EXECUTION`, `INCREMENTALITY_NOT_ELIGIBLE`, `MEASUREMENT_WINDOW_NOT_COMPLETE`. M4 does **not** own the offline / online taxonomy of channels (M2 channels are extensible) and never infers an expected offline attribution from a channel name; a real offline measurement arrives as an `OfflineAttributionObservation` (`OFFLINE_ATTRIBUTED`, signal `OFFLINE_ATTRIBUTION_ONLY`). An "offline attribution expected" signal would need an explicit contract / configuration, not a channel list in M4.
 
 ## 6. OfflineAttributionObservation
 
@@ -123,7 +123,7 @@ For an UNKNOWN result, `DO_NOTHING` carries `WAITING_FOR_DATA` and no new test i
 
 ## 12. MarketingSteerPackage
 
-`steer_package_id (msp_…) · merchant_id · brand_id · run_ref · result_ref · created_at · expires_at · proposals[] · proposal_readiness[] · do_nothing · package_status · unresolved_requirement_refs[] · review_signals[]`. `do_nothing` (reason codes + evidence) is **always** present; at most **10** proposals (the list may be empty); no ranking, no `best_follow_up`, no score. Every proposal must be about the same merchant, brand, Run and result and be listed once. `package_status`: `STALE` (expired, or the stored result no longer says what the live evaluation says) > `READY_FOR_SOCLE` (at least one proposal READY) > `NEEDS_EVIDENCE` > `NO_ELIGIBLE_FOLLOW_UP` (a visible state, **not** a final decision). `evaluateSteerPackageStatus` recomputes it live; the stored status and the stored proposal readiness are snapshots.
+`steer_package_id (msp_…) · merchant_id · brand_id · run_ref · result_ref · created_at · expires_at · proposals[] · do_nothing · package_status · unresolved_requirement_refs[] · review_signals[]`. `do_nothing` (reason codes + evidence) is **always** present; at most **10** proposals (the list may be empty); no ranking, no `best_follow_up`, no score. Every proposal must be about the same merchant, brand, Run and result and be listed once. `package_status`: `STALE` (expired, or the stored result no longer says what the live evaluation says) > `READY_FOR_SOCLE` (at least one proposal READY) > `NEEDS_EVIDENCE` > `NO_ELIGIBLE_FOLLOW_UP` (a visible state, **not** a final decision). `evaluateSteerPackageStatus` recomputes it live from the original result, Run, proposals and `asOf`; no readiness array is stored in the package, and the stored status and a proposal's own stored `readiness` are snapshots that never serve as an authority.
 
 ## 13. Domain boundaries
 
@@ -133,13 +133,13 @@ M4 executes nothing, publishes nothing, schedules nothing, changes no budget, ca
 
 1. `delivery_execution_refs[]` is a list of `{ deliverable_ref, delivery_execution_ref }` pairs: the mandate asks that EXECUTED "cover every manifest delivery", which needs the deliverable each execution refers to.
 2. The criterion assessment key is `criterion_ref` (mandate §26); §28's "success_criterion.ref" is read as that key.
-3. Extra derived fields beyond the mandate's lists: `schema_version` on every object, `assessment_ref` on the result (traceability to the bundle), and `proposal_readiness[]` on the package (the live readiness of each stored proposal, whose own `readiness` is a snapshot).
+3. Extra derived fields beyond the mandate's lists: `schema_version` on every object and `assessment_ref` on the result (provenance to the `RunEvidenceBundle`).
 4. M4's inputs do not include the Finding or the Decision Package (mandate §17). The original Push and ActivationManifest are therefore bound to their own content-derived ids (`mpp_`, `mam_`) and to the tenant, and the Push's MeasurementPlan is trusted as built by M2.
 5. A result that is still `PENDING` has the outcome `UNKNOWN` (nothing is concluded before the window ends or a stop rule is MET), so a PENDING result never feeds a Learning or a CONTINUE / TEST_AGAIN follow-up.
 6. `PARTIAL` / `UNAVAILABLE` data and an `INCONCLUSIVE` assessment map to `NOT_MEASURABLE` (a known insufficiency), never to `UNKNOWN`.
 7. The "evidence loss cannot silently improve" rule (§9) is implemented as a strictly-newer-evidence requirement for a FINAL result to become more conclusive.
 8. A Learning and a follow-up take the *stored* result plus the originals; the result is re-evaluated live and `result_ref` is the stored `result_id`.
-9. `OFFLINE_ATTRIBUTION_EXPECTED` is raised for executed deliveries on a channel in `OFFLINE_CHANNEL_TOKENS` (`STORE_FRONT`, `IN_STORE`, `PRINT`): a generic Nordla vocabulary, not a merchant configuration.
+9. (Removed by the audit) M4 no longer derives `OFFLINE_ATTRIBUTION_EXPECTED` from a channel list.
 10. `MEASUREMENT_WINDOW_NOT_COMPLETE` on a Run is a snapshot at `created_at`.
 
 ## 15. Open dependencies (not resolved here)
@@ -148,7 +148,7 @@ Socle execution authorization issuer · execution engine · execution receipt ad
 
 ## 16. Test coverage — mandate cases 1–194
 
-One row per numbered case of the M4 mandate (§85). Several cases share a test function when it asserts them together; `test/marketing-m4-steer.test.js` enforces that this table is contiguous, holds all 194 cases and that every named test exists. Cases marked **(CI)** are the Branding / Creative Fidelity suites, the Marketing focused suite and the full suite, executed by the `Marketing V1` workflow.
+One row per numbered case of the M4 mandate (§85). Several cases share a test function when it asserts them together; `test/marketing-m4-steer.test.js` enforces that this table is contiguous, holds all 194 cases (195+ are the audit corrections) and that every named test exists. Cases marked **(CI)** are the Branding / Creative Fidelity suites, the Marketing focused suite and the full suite, executed by the `Marketing V1` workflow.
 
 <!-- coverage-matrix:start -->
 | # | Mandate case | Test |
@@ -347,4 +347,13 @@ One row per numbered case of the M4 mandate (§85). Several cases share a test f
 | 192 | Creative Fidelity unchanged | (CI) the Creative Fidelity suite, run by its workflow |
 | 193 | Marketing focused green | (CI) `node --test test/marketing*.test.js`, run by the `Marketing V1` workflow |
 | 194 | full suite green | (CI) the full suite (`npm test`), run by the `Marketing V1` workflow |
+| 195 | STORE_FRONT does not automatically imply offline attribution expected | Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics |
+| 196 | IN_STORE does not automatically imply it | Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics |
+| 197 | PRINT does not automatically imply it | Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics |
+| 198 | a future arbitrary channel does not require changing M4 | Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics |
+| 199 | actual offline observations still produce OFFLINE_ATTRIBUTED semantics | Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics |
+| 200 | SteerPackage has no proposal_readiness field | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
+| 201 | unknown proposal_readiness field is refused | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
+| 202 | package status is derived live from proposals | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
+| 203 | stored proposal readiness cannot improve package status | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
 <!-- coverage-matrix:end -->

@@ -6,7 +6,7 @@
 // snapshot: it is re-validated against its originals and never read as a live authority.
 
 import {
-  EXECUTION_STATUS, M4_ERROR as Z, MARKETING_STEER_VERSION, OFFLINE_CHANNEL_TOKENS, RUN_SIGNAL,
+  EXECUTION_STATUS, M4_ERROR as Z, MARKETING_STEER_VERSION, RUN_SIGNAL,
 } from './m4-constants.js';
 import { normalizeMarketingExecutionReceipt, normalizeSocleExecutionAuthorization } from './execution-receipt.js';
 import {
@@ -22,13 +22,11 @@ const RUN_KEYS = [
   'execution_status', 'activated_at', 'measurement_plan_ref', 'observation_window', 'created_at', 'review_signals',
 ];
 
-function runSignals({ push, manifest, receipt, createdAt }) {
-  const executed = new Set(receipt.delivery_execution_refs.map((d) => d.deliverable_ref));
+// M4 does not own the offline / online taxonomy of channels (M2 channels are extensible): it never infers an expected offline
+// attribution from a channel name. A real offline measurement arrives as an OfflineAttributionObservation (OFFLINE_ATTRIBUTED).
+function runSignals({ push, receipt, createdAt }) {
   const signals = [];
   if (receipt.execution_status === EXECUTION_STATUS.PARTIAL) signals.push(RUN_SIGNAL.PARTIAL_EXECUTION);
-  if (manifest.deliveries.some((d) => executed.has(d.deliverable_ref) && OFFLINE_CHANNEL_TOKENS.includes(d.channel))) {
-    signals.push(RUN_SIGNAL.OFFLINE_ATTRIBUTION_EXPECTED);
-  }
   if (!push.measurement_plan.incrementality_candidate) signals.push(RUN_SIGNAL.INCREMENTALITY_NOT_ELIGIBLE);
   if (toMs(createdAt) < toMs(push.measurement_plan.observation_window.end)) signals.push(RUN_SIGNAL.MEASUREMENT_WINDOW_NOT_COMPLETE);
   return sortedUnique(signals);
@@ -61,7 +59,7 @@ export function buildMarketingRun(options = {}) {
     measurement_plan_ref: manifest.measurement_plan_ref,
     observation_window: { ...push.measurement_plan.observation_window }, // reused exactly, never a second window
     created_at: createdAt,
-    review_signals: runSignals({ push, manifest, receipt, createdAt }),
+    review_signals: runSignals({ push, receipt, createdAt }),
   };
   return deepFreeze({ run_id: deriveId('mrn', body), ...body });
 }

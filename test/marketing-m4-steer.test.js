@@ -152,7 +152,7 @@ test('Marketing Run: valid, deterministic, scope derived, the MeasurementPlan wi
   assert.ok(partial.review_signals.includes('PARTIAL_EXECUTION'));
   assert.ok(!run.review_signals.includes('PARTIAL_EXECUTION'));
   assert.ok(run.review_signals.includes('MEASUREMENT_WINDOW_NOT_COMPLETE'));
-  assert.ok(run.review_signals.includes('OFFLINE_ATTRIBUTION_EXPECTED')); // a STORE_FRONT delivery
+  assert.ok(!run.review_signals.includes('OFFLINE_ATTRIBUTION_EXPECTED')); // never inferred from a channel name
   assert.ok(!run.review_signals.includes('INCREMENTALITY_NOT_ELIGIBLE'));
   assert.ok(runOf(CH.TIME).review_signals.includes('INCREMENTALITY_NOT_ELIGIBLE'));
   assert.deepEqual([...run.review_signals], [...run.review_signals].sort());
@@ -523,7 +523,7 @@ test('Steer package: valid, deterministic, do_nothing always present, same scope
   assert.equal(code(() => packageOf(s, [forge(cont, 'follow_up_id', 'mfu', { brand_id: B2 })])), 'MKT_M4_PACKAGE_SCOPE_MISMATCH'); // 149
   assert.equal(code(() => packageOf(s, [{ ...cont, readiness: 'NOT_ELIGIBLE' }])), 'MKT_M4_FOLLOW_UP_DERIVED_MISMATCH'); // a tampered follow-up no longer matches its id
   assert.equal(pkg.package_status, 'READY_FOR_SOCLE'); // 150
-  assert.deepEqual(pkg.proposal_readiness.map((r) => r.status), ['READY_FOR_SOCLE', 'READY_FOR_SOCLE']);
+  assert.deepEqual(m4.evaluateSteerPackageStatus(pkg, { ...s.opts, result: s.result, asOf: s.asOf }).status, 'READY_FOR_SOCLE');
   const needs = NOT_MEASURABLE(); // 151: admissible but no evidence
   const needsPkg = packageOf(needs, [fuOf(needs, 'PROPOSE_TEST_AGAIN', { evidence_refs: [] })]);
   assert.equal(needsPkg.package_status, 'NEEDS_EVIDENCE');
@@ -626,6 +626,40 @@ test('Non-regression: M1, M1.5, M2, M3, Measurement, Branding and Creative Fidel
   }
   assert.doesNotMatch(await read('index'), /m4|steer/); // the CLI is untouched
   // 191-194: the Branding, Creative Fidelity, Marketing focused and full suites are executed by the Marketing V1 workflow
+});
+
+// ------------------------------------------------------------------ audit corrections (195-203)
+
+test('Offline expectation: M4 never infers it from a channel name, and real offline observations keep their semantics', () => {
+  for (const [channel, n] of [['STORE_FRONT', 195], ['IN_STORE', 196], ['PRINT', 197], ['SOME_FUTURE_CHANNEL', 198]]) {
+    const c = chainFor('HOLDOUT', { channels: [channel] });
+    assert.equal(c.activationManifest.deliveries[0].channel, channel, `case ${n}`);
+    const run = runOf(c);
+    assert.ok(!run.review_signals.includes('OFFLINE_ATTRIBUTION_EXPECTED'), `${channel} must not imply an offline expectation`);
+    assert.ok(!('OFFLINE_ATTRIBUTION_EXPECTED' in m4.RUN_SIGNAL) && !('OFFLINE_CHANNEL_TOKENS' in m4));
+  }
+  const offline = scenario('HOLDOUT', { ev: OFFLINE }).result; // 199
+  assert.deepEqual([offline.evidence_class, offline.outcome], ['OFFLINE_ATTRIBUTED', 'SUGGESTIVE']);
+  assert.ok(offline.review_signals.includes('OFFLINE_ATTRIBUTION_ONLY'));
+  assert.ok(offline.offline_attribution_refs.length === 1);
+});
+
+test('Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals', () => {
+  const s = CONFIRMED();
+  const pkg = packageOf(s, [fuOf(s, 'PROPOSE_CONTINUE')]);
+  assert.ok(!('proposal_readiness' in pkg) && !keysDeep(pkg).has('proposal_readiness')); // 200
+  assert.equal(code(() => m4.normalizeMarketingSteerPackage({ ...pkg, proposal_readiness: [{ status: 'READY_FOR_SOCLE' }] }, { ...s.opts, result: s.result })), 'MKT_UNKNOWN_KEY'); // 201
+  assert.equal(code(() => m4.evaluateSteerPackageStatus({ ...pkg, proposal_readiness: [] }, { ...s.opts, result: s.result, asOf: s.asOf })), 'MKT_M4_PACKAGE_DERIVED_MISMATCH');
+  const needs = NOT_MEASURABLE(); // 202: the status comes from the proposals themselves, recomputed at asOf
+  const weak = packageOf(needs, [fuOf(needs, 'PROPOSE_TEST_AGAIN', { evidence_refs: [] })]);
+  assert.equal(weak.package_status, 'NEEDS_EVIDENCE');
+  assert.equal(m4.evaluateSteerPackageStatus(weak, { ...needs.opts, result: needs.result, asOf: needs.asOf }).status, 'NEEDS_EVIDENCE');
+  assert.equal(m4.evaluateSteerPackageStatus(pkg, { ...s.opts, result: s.result, asOf: s.asOf }).status, 'READY_FOR_SOCLE');
+  assert.equal(m4.evaluateSteerPackageStatus(pkg, { ...s.opts, result: s.result, asOf: '2026-11-20T00:00:00Z' }).status, 'STALE');
+  // 203: a READY readiness stored on a proposal cannot improve the status - tampered, it no longer matches its id; re-hashed, it is recomputed
+  const stored = forge(weak.proposals[0], 'follow_up_id', 'mfu', { readiness: 'READY_FOR_SOCLE' });
+  assert.equal(code(() => m4.evaluateSteerPackageStatus({ ...weak, proposals: [{ ...weak.proposals[0], readiness: 'READY_FOR_SOCLE' }] }, { ...needs.opts, result: needs.result, asOf: needs.asOf })), 'MKT_M4_PACKAGE_DERIVED_MISMATCH');
+  assert.equal(packageOf(needs, [stored]).package_status, 'NEEDS_EVIDENCE');
 });
 
 // ------------------------------------------------------------------ coverage matrix (doc <-> tests)

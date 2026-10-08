@@ -23,7 +23,7 @@ const OPTION_KEYS = ['tenant', 'push', 'run', 'bundle', 'result', 'follow_ups', 
 const ORIGINALS = ['tenant', 'push', 'run', 'bundle', 'result', 'follow_ups'];
 const PACKAGE_KEYS = [
   'steer_package_id', 'schema_version', 'merchant_id', 'brand_id', 'run_ref', 'result_ref', 'created_at', 'expires_at', 'proposals',
-  'proposal_readiness', 'do_nothing', 'package_status', 'unresolved_requirement_refs', 'review_signals',
+  'do_nothing', 'package_status', 'unresolved_requirement_refs', 'review_signals',
 ];
 const EVALUATE_KEYS = ['tenant', 'push', 'run', 'bundle', 'result', 'asOf'];
 const DO_NOTHING_KEYS = ['reason_codes', 'evidence_refs'];
@@ -99,7 +99,6 @@ export function buildMarketingSteerPackage(options = {}) {
     created_at: createdAt,
     expires_at: expiresAt,
     proposals: entries.map((e) => e.followUp),
-    proposal_readiness: readiness,
     do_nothing: nothing,
     package_status: statusOf(readiness, { expired: false, resultLive }),
     unresolved_requirement_refs: sortedUnique([
