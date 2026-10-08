@@ -1,6 +1,6 @@
 import {
-  EVIDENCE_KIND,
-  SNAPSHOT_CONTRADICTION_KIND,
+  CLAIM_KIND,
+  FACT_SUPPORTING_PROVENANCE,
   SNAPSHOT_COVERAGE_STATUS,
   SNAPSHOT_RESEARCH_QUESTION,
   SNAPSHOT_REFRESH_TRIGGER,
@@ -22,10 +22,12 @@ import {
   optionalString,
   requiredString,
   stringList,
+  tenantMerchantId,
   uniqueIds,
 } from './validation.js';
 
-export const MAX_DIRECT_COMPETITORS_V1 = 3;
+// Scope default for V1, overridable per plan (policy/config), not an invariant.
+export const DEFAULT_MAX_DIRECT_COMPETITORS = 3;
 
 export const DEFAULT_SNAPSHOT_RESEARCH_QUESTIONS = Object.freeze([
   SNAPSHOT_RESEARCH_QUESTION.WHO_COMPETES,
@@ -81,20 +83,25 @@ function normalizeCompetitor(input, field) {
 }
 
 export function buildSnapshotResearchPlan({
-  merchantId,
+  tenant,
   directCompetitors = [],
+  maxDirectCompetitors = DEFAULT_MAX_DIRECT_COMPETITORS,
   questions = DEFAULT_SNAPSHOT_RESEARCH_QUESTIONS,
   sourceKinds = DEFAULT_SNAPSHOT_SOURCE_KINDS,
 } = {}) {
+  const merchantId = tenantMerchantId(tenant);
+  if (!Number.isInteger(maxDirectCompetitors) || maxDirectCompetitors < 1) {
+    throw new TypeError('maxDirectCompetitors must be an integer >= 1');
+  }
   const competitors = objectList(
     directCompetitors,
     'directCompetitors',
     normalizeCompetitor,
   );
   uniqueIds(competitors, 'directCompetitors');
-  if (competitors.length > MAX_DIRECT_COMPETITORS_V1) {
+  if (competitors.length > maxDirectCompetitors) {
     throw new RangeError(
-      `Brand Snapshot V1 supports at most ${MAX_DIRECT_COMPETITORS_V1} direct competitors`,
+      `Brand Snapshot research plan allows at most ${maxDirectCompetitors} direct competitors`,
     );
   }
 
@@ -114,8 +121,8 @@ export function buildSnapshotResearchPlan({
   )];
 
   return Object.freeze({
-    merchant_id: requiredString(merchantId, 'merchantId'),
-    max_direct_competitors: MAX_DIRECT_COMPETITORS_V1,
+    merchant_id: merchantId,
+    max_direct_competitors: maxDirectCompetitors,
     direct_competitors: Object.freeze(competitors),
     questions: Object.freeze(normalizedQuestions),
     allowed_source_kinds: Object.freeze(normalizedSources),
@@ -133,10 +140,10 @@ export function normalizeSnapshotClaim(input, field = 'claim') {
     attribute: requiredString(input.attribute, `${field}.attribute`),
     value: jsonValue(input.value, `${field}.value`),
     statement: requiredString(input.statement, `${field}.statement`),
-    evidence_kind: enumValue(
-      input.evidence_kind,
-      EVIDENCE_KIND,
-      `${field}.evidence_kind`,
+    claim_kind: enumValue(
+      input.claim_kind,
+      CLAIM_KIND,
+      `${field}.claim_kind`,
     ),
     evidence_refs: stringList(input.evidence_refs, `${field}.evidence_refs`),
   });
@@ -189,7 +196,7 @@ export function detectSnapshotContradictions(claims = []) {
 
   for (const raw of claims) {
     const claim = normalizeSnapshotClaim(raw);
-    if (claim.evidence_kind === EVIDENCE_KIND.HYPOTHESIS) continue;
+    if (claim.claim_kind === CLAIM_KIND.HYPOTHESIS) continue;
     const key = `${claim.topic}\u0000${claim.subject}\u0000${claim.attribute}`;
     const list = grouped.get(key) ?? [];
     list.push(claim);
@@ -206,24 +213,9 @@ export function detectSnapshotContradictions(claims = []) {
     }
     if (values.size < 2) continue;
 
-    const kinds = new Set(group.map((claim) => claim.evidence_kind));
-    let contradictionKind = SNAPSHOT_CONTRADICTION_KIND.INFERENCE_INFERENCE;
-    if (
-      kinds.has(EVIDENCE_KIND.FACT)
-      && group.filter((claim) => claim.evidence_kind === EVIDENCE_KIND.FACT)
-        .map((claim) => stableValue(claim.value))
-        .filter((value, index, all) => all.indexOf(value) === index)
-        .length > 1
-    ) {
-      contradictionKind = SNAPSHOT_CONTRADICTION_KIND.FACT_FACT;
-    } else if (kinds.has(EVIDENCE_KIND.FACT)) {
-      contradictionKind = SNAPSHOT_CONTRADICTION_KIND.FACT_INFERENCE;
-    }
-
     out.push(Object.freeze({
       id: `contradiction-${out.length + 1}`,
       key,
-      kind: contradictionKind,
       claim_ids: Object.freeze(group.map((claim) => claim.id)),
       evidence_refs: Object.freeze([
         ...new Set(group.flatMap((claim) => claim.evidence_refs)),
@@ -244,7 +236,7 @@ export function assessSnapshotCoverage(plan, claims = [], contradictions = []) {
     const topics = QUESTION_TOPICS[question] ?? [];
     const hasClaim = normalizedClaims.some(
       (claim) => topics.includes(claim.topic)
-        && claim.evidence_kind !== EVIDENCE_KIND.HYPOTHESIS,
+        && claim.claim_kind !== CLAIM_KIND.HYPOTHESIS,
     );
     const hasDetectedChallenge = (
       question === SNAPSHOT_RESEARCH_QUESTION.WHAT_CHALLENGES_CURRENT_BRAND
@@ -272,14 +264,14 @@ function findingFromClaim(claim) {
   return Object.freeze({
     id: claim.id,
     statement: claim.statement,
-    evidence_kind: claim.evidence_kind,
+    claim_kind: claim.claim_kind,
     evidence_refs: claim.evidence_refs,
   });
 }
 
 export function buildBrandSnapshotV1({
   id,
-  merchantId,
+  tenant,
   version = 1,
   status = SNAPSHOT_STATUS.READY,
   createdAt,
@@ -291,6 +283,7 @@ export function buildBrandSnapshotV1({
   supersedesId = null,
 } = {}) {
   if (!researchPlan) throw new TypeError('researchPlan is required');
+  const merchantId = tenantMerchantId(tenant);
   if (researchPlan.merchant_id !== merchantId) {
     throw new Error('SNAPSHOT_RESEARCH_PLAN_MERCHANT_MISMATCH');
   }
@@ -317,13 +310,16 @@ export function buildBrandSnapshotV1({
   );
   uniqueIds(normalizedClaims, 'snapshot.claims');
 
-  const evidenceIds = new Set(normalizedEvidence.map((item) => item.id));
+  const evidenceById = new Map(normalizedEvidence.map((item) => [item.id, item]));
   for (const claim of normalizedClaims) {
-    if (claim.evidence_kind === EVIDENCE_KIND.FACT && claim.evidence_refs.length === 0) {
-      throw new Error('FACT_WITHOUT_EVIDENCE_REFERENCE');
-    }
     for (const ref of claim.evidence_refs) {
-      if (!evidenceIds.has(ref)) throw new Error('CLAIM_REFERENCES_UNKNOWN_EVIDENCE');
+      if (!evidenceById.has(ref)) throw new Error('CLAIM_REFERENCES_UNKNOWN_EVIDENCE');
+    }
+    if (claim.claim_kind === CLAIM_KIND.FACT) {
+      const supported = claim.evidence_refs.some((ref) => (
+        FACT_SUPPORTING_PROVENANCE.includes(evidenceById.get(ref).provenance)
+      ));
+      if (!supported) throw new Error('FACT_REQUIRES_OBSERVED_EVIDENCE');
     }
   }
 
@@ -354,7 +350,7 @@ export function buildBrandSnapshotV1({
     groups.contradictions.push({
       id: contradiction.id,
       statement: contradiction.statement,
-      evidence_kind: EVIDENCE_KIND.INFERENCE,
+      claim_kind: CLAIM_KIND.INFERENCE,
       evidence_refs: contradiction.evidence_refs,
     });
   }
@@ -363,7 +359,7 @@ export function buildBrandSnapshotV1({
     groups.evidence_gaps.push({
       id: `evidence-gap-${index + 1}`,
       statement: `Insufficient evidence for research question: ${question}`,
-      evidence_kind: EVIDENCE_KIND.HYPOTHESIS,
+      claim_kind: CLAIM_KIND.HYPOTHESIS,
       evidence_refs: [],
     });
   });

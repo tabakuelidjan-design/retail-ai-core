@@ -1,29 +1,51 @@
 import {
+  DECISION_EVENT_TYPE,
   GOVERNED_DOCUMENT_STATUS,
+  BRAND_REVIEW_SIGNAL,
   SNAPSHOT_STATUS,
 } from './constants.js';
 import {
   normalizeBrandCore,
   validateCoreForApproval,
 } from './contracts.js';
+import { buildBrandDecisionEvent } from './decision-event.js';
 import {
   assertObject,
+  assertResolvedActor,
   isoDate,
   optionalString,
-  requiredString,
-  stringList,
+  tenantMerchantId,
 } from './validation.js';
 
-function assertSnapshotReady(snapshot, merchantId) {
+const CORE_SUBJECT = 'brand_core';
+
+// A READY snapshot is the normal base. A STALE one is still usable but raises a review
+// signal for the human reviewer: staleness informs the decision, it does not auto-block it.
+const USABLE_SNAPSHOT_STATUSES = new Set([SNAPSHOT_STATUS.READY, SNAPSHOT_STATUS.STALE]);
+
+function assertSnapshotUsable(snapshot, merchantId) {
   if (!snapshot) throw new TypeError('snapshot is required');
   if (snapshot.merchant_id !== merchantId) {
     throw new Error('CORE_SNAPSHOT_MERCHANT_MISMATCH');
   }
-  if (snapshot.status !== SNAPSHOT_STATUS.READY) {
+  if (!USABLE_SNAPSHOT_STATUSES.has(snapshot.status)) {
     throw new Error('CORE_REQUIRES_READY_SNAPSHOT');
   }
   return snapshot;
 }
+
+// Approval is stricter than preparation: the reference Snapshot must be READY.
+function assertSnapshotReadyForApproval(snapshot, merchantId) {
+  assertSnapshotUsable(snapshot, merchantId);
+  if (snapshot.status !== SNAPSHOT_STATUS.READY) {
+    throw new Error('CORE_APPROVAL_REQUIRES_READY_SNAPSHOT');
+  }
+  return snapshot;
+}
+
+const snapshotSignals = (snapshot) => (
+  snapshot.status === SNAPSHOT_STATUS.STALE ? [BRAND_REVIEW_SIGNAL.SNAPSHOT_STALE] : []
+);
 
 export function validateCoreEvidenceAgainstSnapshot(core, snapshot) {
   const reasons = [];
@@ -54,14 +76,15 @@ export function validateCoreEvidenceAgainstSnapshot(core, snapshot) {
 
 export function buildBrandCoreProposal({
   id,
-  merchantId,
+  tenant,
   version = 1,
   createdAt,
   snapshot,
   decisions = {},
   supersedesId = null,
 } = {}) {
-  assertSnapshotReady(snapshot, merchantId);
+  const merchantId = tenantMerchantId(tenant);
+  assertSnapshotUsable(snapshot, merchantId);
   assertObject(decisions, 'decisions');
 
   const core = normalizeBrandCore({
@@ -95,23 +118,39 @@ export function buildBrandCoreProposal({
     core,
     approval_readiness: validateCoreForApproval(core),
     source_snapshot_status: snapshot.status,
+    review_signals: Object.freeze(snapshotSignals(snapshot)),
     auto_approved: false,
   });
 }
 
+/**
+ * Human approval of a Core proposal.
+ * - `resolvedActor` comes from the trusted server/Socle context, never from a client payload.
+ *   Branding only checks it is present, same tenant and an authorized role - it authenticates nobody;
+ * - `activeCore` is the tenant's currently APPROVED Core (or null). A new version MUST
+ *   supersede it, so two APPROVED Cores can never coexist for one tenant;
+ * - returns the approved Core, the superseded previous Core (if any) and a decision event
+ *   ready to be handed to the Socle Decision Ledger. Nothing is persisted here.
+ */
 export function approveBrandCore({
   proposal,
   snapshot,
-  approvedBy,
+  tenant,
+  resolvedActor,
+  activeCore = null,
   approvedAt,
   note = null,
 } = {}) {
   if (!proposal) throw new TypeError('proposal is required');
+  const merchantId = tenantMerchantId(tenant);
+  if (proposal.merchant_id !== merchantId) throw new Error('CORE_TENANT_MISMATCH');
+  const actor = assertResolvedActor(resolvedActor, tenant);
+
   if (proposal.status !== GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED) {
     throw new Error('CORE_MUST_BE_REVIEW_REQUIRED_BEFORE_APPROVAL');
   }
 
-  assertSnapshotReady(snapshot, proposal.merchant_id);
+  assertSnapshotReadyForApproval(snapshot, merchantId);
 
   const evidenceValidation = validateCoreEvidenceAgainstSnapshot(proposal, snapshot);
   if (!evidenceValidation.ok) {
@@ -123,20 +162,70 @@ export function approveBrandCore({
     throw new Error(`CORE_NOT_READY_FOR_APPROVAL: ${readiness.reasons.join(', ')}`);
   }
 
-  return normalizeBrandCore({
+  let superseded = null;
+  if (activeCore) {
+    if (activeCore.merchant_id !== merchantId) throw new Error('CORE_ACTIVE_CORE_TENANT_MISMATCH');
+    if (activeCore.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
+      throw new Error('CORE_ACTIVE_CORE_NOT_APPROVED');
+    }
+    if (proposal.supersedes_id !== activeCore.id || proposal.version !== activeCore.version + 1) {
+      throw new Error('CORE_ACTIVE_CORE_MUST_BE_SUPERSEDED');
+    }
+    superseded = normalizeBrandCore({
+      ...activeCore,
+      status: GOVERNED_DOCUMENT_STATUS.SUPERSEDED,
+    });
+  } else if (proposal.supersedes_id) {
+    throw new Error('CORE_SUPERSEDES_UNKNOWN_ACTIVE_CORE');
+  }
+
+  const decidedAt = isoDate(approvedAt, 'approvedAt');
+  const decisionEvent = buildBrandDecisionEvent({
+    type: DECISION_EVENT_TYPE.BRAND_CORE_APPROVED,
+    merchantId,
+    actor,
+    subject: { kind: CORE_SUBJECT, id: proposal.id, version: proposal.version },
+    decidedAt,
+    note: optionalString(note, 'note'),
+    supersedes: superseded
+      ? { kind: CORE_SUBJECT, id: superseded.id, version: superseded.version }
+      : null,
+  });
+
+  const core = normalizeBrandCore({
     ...proposal,
     status: GOVERNED_DOCUMENT_STATUS.APPROVED,
     approval: {
-      approved_by: requiredString(approvedBy, 'approvedBy'),
-      approved_at: isoDate(approvedAt, 'approvedAt'),
+      decision_event_id: decisionEvent.id,
+      approved_by: actor.user_id,
+      approver_role: actor.role,
+      approved_at: decidedAt,
       note: optionalString(note, 'note'),
     },
   });
+
+  return Object.freeze({
+    core,
+    superseded,
+    decision_event: decisionEvent,
+    review_signals: Object.freeze(snapshotSignals(snapshot)),
+  });
+}
+
+// Guard for stores/callers: a tenant has at most one APPROVED Core.
+export function selectActiveBrandCore(cores = [], tenant) {
+  const merchantId = tenantMerchantId(tenant);
+  const active = cores.filter((core) => (
+    core.merchant_id === merchantId && core.status === GOVERNED_DOCUMENT_STATUS.APPROVED
+  ));
+  if (active.length > 1) throw new Error('MULTIPLE_APPROVED_BRAND_CORES');
+  return active[0] ?? null;
 }
 
 export function proposeBrandCoreRevision({
   approvedCore,
   snapshot,
+  tenant,
   id,
   createdAt,
   changes = {},
@@ -145,7 +234,6 @@ export function proposeBrandCoreRevision({
   if (approvedCore.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
     throw new Error('CORE_REVISION_REQUIRES_APPROVED_CORE');
   }
-  assertSnapshotReady(snapshot, approvedCore.merchant_id);
   assertObject(changes, 'changes');
 
   const next = {
@@ -164,7 +252,7 @@ export function proposeBrandCoreRevision({
 
   return buildBrandCoreProposal({
     id,
-    merchantId: approvedCore.merchant_id,
+    tenant,
     version: approvedCore.version + 1,
     createdAt,
     snapshot,
@@ -182,6 +270,7 @@ export function buildCoreDecisionPacket({ proposal, snapshot } = {}) {
     core_ref: Object.freeze({ id: proposal.id, version: proposal.version }),
     snapshot_ref: proposal.snapshot_ref,
     status: proposal.status,
+    review_signals: Object.freeze(snapshotSignals(snapshot)),
     decisions: Object.freeze({
       category: proposal.category,
       buying_contexts: proposal.buying_contexts,

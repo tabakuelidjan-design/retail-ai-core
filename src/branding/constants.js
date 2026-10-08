@@ -14,10 +14,36 @@ export const GOVERNED_DOCUMENT_STATUS = Object.freeze({
   SUPERSEDED: 'SUPERSEDED',
 });
 
-export const EVIDENCE_KIND = Object.freeze({
+// Status of a CLAIM (what Nordla asserts). Never a property of the proof itself.
+export const CLAIM_KIND = Object.freeze({
   FACT: 'FACT',
   INFERENCE: 'INFERENCE',
   HYPOTHESIS: 'HYPOTHESIS',
+});
+
+// Status of the EVIDENCE (how the proof was obtained). Vocabulary aligned with
+// the Marketing provenance words, but deliberately NOT imported from Marketing
+// (Branding stays separate, NDR-014) and NOT merged with CLAIM_KIND.
+export const EVIDENCE_PROVENANCE = Object.freeze({
+  OBSERVED: 'observed',
+  INFERRED: 'inferred',
+  DERIVED: 'derived',
+  UNAVAILABLE: 'unavailable',
+});
+
+// Only these provenances can support a FACT claim.
+export const FACT_SUPPORTING_PROVENANCE = Object.freeze([
+  EVIDENCE_PROVENANCE.OBSERVED,
+  EVIDENCE_PROVENANCE.DERIVED,
+]);
+
+export const DECISION_EVENT_TYPE = Object.freeze({
+  BRAND_CORE_APPROVED: 'BRAND_CORE_APPROVED',
+});
+
+export const APPROVER_ROLE = Object.freeze({
+  OWNER: 'OWNER',
+  AUTHORIZED_REVIEWER: 'AUTHORIZED_REVIEWER',
 });
 
 export const EVIDENCE_COMPLETENESS = Object.freeze({
@@ -59,12 +85,6 @@ export const SNAPSHOT_COVERAGE_STATUS = Object.freeze({
   UNAVAILABLE: 'UNAVAILABLE',
 });
 
-export const SNAPSHOT_CONTRADICTION_KIND = Object.freeze({
-  FACT_FACT: 'FACT_FACT',
-  FACT_INFERENCE: 'FACT_INFERENCE',
-  INFERENCE_INFERENCE: 'INFERENCE_INFERENCE',
-});
-
 export const SNAPSHOT_REFRESH_TRIGGER = Object.freeze({
   NEW_RELEVANT_COMPETITOR: 'NEW_RELEVANT_COMPETITOR',
   CUSTOMER_REVIEW_SIGNAL_CHANGED: 'CUSTOMER_REVIEW_SIGNAL_CHANGED',
@@ -81,9 +101,6 @@ export const DISTINCTIVE_ASSET_TYPE = Object.freeze({
   PATTERN: 'PATTERN',
   PACKAGING: 'PACKAGING',
   PHOTOGRAPHY_STYLE: 'PHOTOGRAPHY_STYLE',
-  MOTION: 'MOTION',
-  SOUND: 'SOUND',
-  CHARACTER: 'CHARACTER',
   VERBAL_CUE: 'VERBAL_CUE',
   OTHER: 'OTHER',
 });
@@ -94,11 +111,9 @@ export const BRAND_RULE_TYPE = Object.freeze({
   TYPOGRAPHY: 'TYPOGRAPHY',
   WORDING: 'WORDING',
   CLAIM: 'CLAIM',
-  VISUAL: 'VISUAL',
   TONE: 'TONE',
   PRODUCT_FIDELITY: 'PRODUCT_FIDELITY',
   ASSET_USAGE: 'ASSET_USAGE',
-  LAYOUT: 'LAYOUT',
 });
 
 export const RULE_ENFORCEMENT = Object.freeze({
@@ -120,7 +135,6 @@ export const RULE_OPERATOR = Object.freeze({
   NOT_CONTAINS: 'NOT_CONTAINS',
   RANGE: 'RANGE',
   REFERENCE: 'REFERENCE',
-  CUSTOM: 'CUSTOM',
 });
 
 export const GUARDIAN_OUTCOME = Object.freeze({
@@ -133,12 +147,20 @@ export const GUARDIAN_OUTCOME = Object.freeze({
 export const GUARDIAN_METHOD = Object.freeze({
   DETERMINISTIC: 'DETERMINISTIC',
   OCR: 'OCR',
-  VISION: 'VISION',
-  QUALITATIVE_MODEL: 'QUALITATIVE_MODEL',
-  HUMAN_OBSERVATION: 'HUMAN_OBSERVATION',
+  // Result of the existing creative-fidelity hard gate (consumed, never re-implemented).
+  FIDELITY_GATE: 'FIDELITY_GATE',
+  // Any AI/VLM judgment. Can raise REVIEW_REQUIRED, never a hard FAIL on its own.
+  MODEL: 'MODEL',
+  HUMAN: 'HUMAN',
 });
 
 export const BRAND_CONTEXT_STATUS = Object.freeze({
   READY: 'READY',
   GATED: 'GATED',
+});
+
+// Non-blocking signals attached to a READY brand context.
+export const BRAND_REVIEW_SIGNAL = Object.freeze({
+  SNAPSHOT_STALE: 'BRAND_SNAPSHOT_STALE',
+  SNAPSHOT_SUPERSEDED_BY_NEWER: 'BRAND_SNAPSHOT_REFERENCE_OUTDATED',
 });

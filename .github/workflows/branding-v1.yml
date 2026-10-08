@@ -2,18 +2,18 @@ name: Branding V1
 
 on:
   push:
-    branches:
-      - feature/branding-marketing-creative-v1
     paths:
       - 'src/branding/**'
-      - 'schemas/branding/**'
+      - 'src/tenant/**'
+      - 'src/creative-fidelity/**'
       - 'test/branding*.test.js'
       - 'docs/architecture/branding-v1-*'
       - '.github/workflows/branding-v1.yml'
   pull_request:
     paths:
       - 'src/branding/**'
-      - 'schemas/branding/**'
+      - 'src/tenant/**'
+      - 'src/creative-fidelity/**'
       - 'test/branding*.test.js'
       - 'docs/architecture/branding-v1-*'
 

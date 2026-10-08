@@ -1,8 +1,10 @@
 import {
   BRAND_RULE_TYPE,
   DISTINCTIVE_ASSET_TYPE,
+  CLAIM_KIND,
   EVIDENCE_COMPLETENESS,
-  EVIDENCE_KIND,
+  EVIDENCE_PROVENANCE,
+  FACT_SUPPORTING_PROVENANCE,
   GOVERNED_DOCUMENT_STATUS,
   RULE_ENFORCEMENT,
   RULE_OPERATOR,
@@ -18,6 +20,7 @@ import {
   integerVersion,
   isoDate,
   jsonValue,
+  merchantIdValue,
   objectList,
   optionalString,
   requiredString,
@@ -36,7 +39,7 @@ function commonDocument(input, kind, allowedStatuses) {
   }
   return {
     id: requiredString(input.id, `${kind}.id`),
-    merchant_id: requiredString(input.merchant_id, `${kind}.merchant_id`),
+    merchant_id: merchantIdValue(input.merchant_id, `${kind}.merchant_id`),
     version: integerVersion(input.version, `${kind}.version`),
     status,
     created_at: isoDate(input.created_at, `${kind}.created_at`),
@@ -51,7 +54,7 @@ export function normalizeEvidence(input, field = 'evidence') {
 
   return Object.freeze({
     id: requiredString(input.id, `${field}.id`),
-    evidence_kind: enumValue(input.evidence_kind, EVIDENCE_KIND, `${field}.evidence_kind`),
+    provenance: enumValue(input.provenance, EVIDENCE_PROVENANCE, `${field}.provenance`),
     statement: requiredString(input.statement, `${field}.statement`),
     source: Object.freeze({
       system: requiredString(source.system, `${field}.source.system`),
@@ -76,7 +79,7 @@ function normalizeFinding(input, field) {
   return Object.freeze({
     id: requiredString(input.id, `${field}.id`),
     statement: requiredString(input.statement, `${field}.statement`),
-    evidence_kind: enumValue(input.evidence_kind, EVIDENCE_KIND, `${field}.evidence_kind`),
+    claim_kind: enumValue(input.claim_kind, CLAIM_KIND, `${field}.claim_kind`),
     evidence_refs: stringList(input.evidence_refs, `${field}.evidence_refs`),
   });
 }
@@ -129,7 +132,7 @@ export function validateSnapshotReadiness(snapshot) {
     reasons.push('SNAPSHOT_READY_WITHOUT_EVIDENCE');
   }
 
-  const evidenceIds = new Set(snapshot.evidence.map((item) => item.id));
+  const evidenceById = new Map(snapshot.evidence.map((item) => [item.id, item]));
   for (const group of [
     snapshot.positioning,
     snapshot.messages,
@@ -140,11 +143,14 @@ export function validateSnapshotReadiness(snapshot) {
     snapshot.contradictions,
   ]) {
     for (const finding of group) {
-      if (finding.evidence_kind === EVIDENCE_KIND.FACT && finding.evidence_refs.length === 0) {
-        reasons.push('FACT_WITHOUT_EVIDENCE_REFERENCE');
-      }
       for (const ref of finding.evidence_refs) {
-        if (!evidenceIds.has(ref)) reasons.push('FINDING_REFERENCES_UNKNOWN_EVIDENCE');
+        if (!evidenceById.has(ref)) reasons.push('FINDING_REFERENCES_UNKNOWN_EVIDENCE');
+      }
+      if (finding.claim_kind === CLAIM_KIND.FACT) {
+        const supported = finding.evidence_refs.some((ref) => (
+          FACT_SUPPORTING_PROVENANCE.includes(evidenceById.get(ref)?.provenance)
+        ));
+        if (!supported) reasons.push('FACT_REQUIRES_OBSERVED_EVIDENCE');
       }
     }
   }
