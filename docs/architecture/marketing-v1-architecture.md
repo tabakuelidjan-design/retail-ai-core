@@ -1,10 +1,10 @@
 # Nordla — Marketing V1 Architecture
 
-- **Status:** APPROVED WORKING ARCHITECTURE — M1 BUILD READY
+- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 IMPLEMENTED LOCALLY / UNDER AUDIT
 - **Date:** 2026-10-08
 - **Canonical sequence:** `UNDERSTAND → BUILD → CREATE → STEER`
 - **Scope:** Marketing core + reserved specialized intelligences
-- **Current build target:** M1 — UNDERSTAND Foundation
+- **Build status:** M1 — UNDERSTAND Foundation = **COMPLETE** (pushed). M1.5 — first signal producers = **IMPLEMENTED LOCALLY / UNDER AUDIT** (not pushed; do not mark complete before audit and push). Next: M2 — BUILD (not started).
 
 ## 0. Architectural rules
 
@@ -695,6 +695,8 @@ Not in M1:
 ---
 
 # 13. M1.5 follow-up
+
+**Status: IMPLEMENTED LOCALLY / UNDER AUDIT** — see [`marketing-m1-5-signal-producers.md`](./marketing-m1-5-signal-producers.md). M1 is COMPLETE and was not changed by M1.5.
 
 After M1:
 
