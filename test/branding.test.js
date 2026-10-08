@@ -18,11 +18,14 @@ import {
   SNAPSHOT_TOPIC,
   aggregateGuardianOutcome,
   assertBrandStatusTransition,
+  approveBrandCore,
   buildBrandContext,
+  buildBrandCoreProposal,
   buildBrandSnapshotV1,
   buildGuardianPlan,
   buildSnapshotResearchPlan,
   buildGuardianReport,
+  buildCoreDecisionPacket,
   creativeBrandInterface,
   detectSnapshotContradictions,
   evaluateSnapshotRefresh,
@@ -30,6 +33,7 @@ import {
   normalizeBrandCore,
   normalizeBrandMemory,
   normalizeBrandSnapshot,
+  proposeBrandCoreRevision,
   validateCoreForApproval,
   validateMemoryForApproval,
   validateSnapshotReadiness,
@@ -438,4 +442,155 @@ test('material refresh events make Snapshot stale without rewriting Brand Core',
   assert.equal(refresh.next_snapshot_status, SNAPSHOT_STATUS.STALE);
   assert.equal(refresh.core_update, null);
   assert.match(refresh.policy_note, /NEVER_REWRITES_BRAND_CORE/);
+});
+
+
+function readySnapshotForCore() {
+  return normalizeBrandSnapshot({
+    id: 'snapshot-core-1',
+    merchant_id: 'merchant-1',
+    version: 1,
+    status: SNAPSHOT_STATUS.READY,
+    created_at: '2026-10-08T09:00:00Z',
+    observed_at: '2026-10-08T09:00:00Z',
+    evidence: [{
+      id: 'e-core-1',
+      evidence_kind: 'FACT',
+      statement: 'Observed capability',
+      source: {
+        system: 'internal',
+        observed_at: '2026-10-08T08:00:00Z',
+        kind: SNAPSHOT_SOURCE_KIND.INTERNAL_FACT,
+      },
+      completeness: 'COMPLETE',
+    }],
+  });
+}
+
+function fullCoreDecisions() {
+  return {
+    category: 'category',
+    buying_contexts: ['buying-context'],
+    value_proposition: 'Value proposition',
+    positioning: 'Positioning',
+    core_promise: 'Promise',
+    reasons_to_believe: ['Observed capability'],
+    personality: ['clear'],
+    voice: { traits: ['clear'], do: ['be specific'], dont: ['invent'] },
+    exclusions: ['do not mislead'],
+    distinctive_assets: [],
+    evidence_refs: ['e-core-1'],
+  };
+}
+
+test('Brand Core proposal is always review-required and never auto-approved', () => {
+  const snapshot = readySnapshotForCore();
+  const result = buildBrandCoreProposal({
+    id: 'core-proposal-1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: fullCoreDecisions(),
+  });
+  assert.equal(result.core.status, GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED);
+  assert.equal(result.core.approval, null);
+  assert.equal(result.auto_approved, false);
+  assert.equal(result.approval_readiness.ok, true);
+});
+
+test('Brand Core proposal cannot use a stale Snapshot', () => {
+  const snapshot = normalizeBrandSnapshot({
+    ...readySnapshotForCore(),
+    status: SNAPSHOT_STATUS.STALE,
+  });
+  assert.throws(() => buildBrandCoreProposal({
+    id: 'core-proposal-1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: fullCoreDecisions(),
+  }), /CORE_REQUIRES_READY_SNAPSHOT/);
+});
+
+test('Brand Core cannot cite evidence absent from its Snapshot', () => {
+  const snapshot = readySnapshotForCore();
+  assert.throws(() => buildBrandCoreProposal({
+    id: 'core-proposal-1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: { ...fullCoreDecisions(), evidence_refs: ['missing'] },
+  }), /CORE_REFERENCES_UNKNOWN_EVIDENCE/);
+});
+
+test('Brand Core approval is explicit and records the human authority', () => {
+  const snapshot = readySnapshotForCore();
+  const proposal = buildBrandCoreProposal({
+    id: 'core-proposal-1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: fullCoreDecisions(),
+  }).core;
+
+  const approved = approveBrandCore({
+    proposal,
+    snapshot,
+    approvedBy: 'owner-1',
+    approvedAt: '2026-10-08T10:30:00Z',
+    note: 'Approved after review',
+  });
+
+  assert.equal(approved.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
+  assert.equal(approved.approval.approved_by, 'owner-1');
+  assert.deepEqual(approved.snapshot_ref, { id: snapshot.id, version: snapshot.version });
+});
+
+test('Brand Core revision creates a new review version and never mutates the approved version', () => {
+  const snapshot = readySnapshotForCore();
+  const proposal = buildBrandCoreProposal({
+    id: 'core-v1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: fullCoreDecisions(),
+  }).core;
+  const approved = approveBrandCore({
+    proposal,
+    snapshot,
+    approvedBy: 'owner-1',
+    approvedAt: '2026-10-08T10:30:00Z',
+  });
+
+  const revision = proposeBrandCoreRevision({
+    approvedCore: approved,
+    snapshot,
+    id: 'core-v2',
+    createdAt: '2026-10-08T11:00:00Z',
+    changes: { positioning: 'Updated positioning' },
+  }).core;
+
+  assert.equal(approved.positioning, 'Positioning');
+  assert.equal(approved.version, 1);
+  assert.equal(revision.positioning, 'Updated positioning');
+  assert.equal(revision.version, 2);
+  assert.equal(revision.status, GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED);
+  assert.equal(revision.supersedes_id, 'core-v1');
+});
+
+test('Brand Core decision packet exposes evidence and requires human approval', () => {
+  const snapshot = readySnapshotForCore();
+  const proposal = buildBrandCoreProposal({
+    id: 'core-proposal-1',
+    merchantId: 'merchant-1',
+    createdAt: '2026-10-08T10:00:00Z',
+    snapshot,
+    decisions: fullCoreDecisions(),
+  }).core;
+
+  const packet = buildCoreDecisionPacket({ proposal, snapshot });
+  assert.equal(packet.approval_required, true);
+  assert.equal(packet.auto_apply, false);
+  assert.equal(packet.evidence.length, 1);
+  assert.equal('budget' in packet.decisions, false);
 });

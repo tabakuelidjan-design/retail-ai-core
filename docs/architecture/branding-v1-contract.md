@@ -77,3 +77,23 @@ The four V1 questions are:
 4. what evidence materially challenges the current brand.
 
 The research adapter layer is intentionally not implemented here. Search engines, review sources and connectors feed evidence into this contract later; they do not define Branding architecture.
+
+
+## Brand Core V1 engine
+
+Implemented in `src/branding/core.js`.
+
+Brand Core is a governed human decision, not an automatic summary of Brand Snapshot.
+
+Rules:
+- a proposal can only be created from a READY Snapshot of the same merchant;
+- every cited evidence reference must exist in that Snapshot;
+- a proposal is always `REVIEW_REQUIRED`;
+- Nordla never auto-approves Brand Core;
+- approval requires an explicit authorized human identity and timestamp;
+- an approved Core is immutable;
+- changes create a new version that supersedes the previous version;
+- a stale Snapshot cannot be used to approve a new Core until refreshed;
+- the decision packet shows the chosen Core fields and supporting evidence without introducing budget, calendar or marketing decisions.
+
+This keeps Branding responsible for identity governance while Socle retains consequential decision control.

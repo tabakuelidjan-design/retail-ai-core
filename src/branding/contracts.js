@@ -173,8 +173,18 @@ export function normalizeBrandCore(input) {
     throw new RangeError('core.distinctive_assets must contain at most 3 priority assets');
   }
 
+  let snapshotRef = null;
+  if (input.snapshot_ref != null) {
+    assertObject(input.snapshot_ref, 'core.snapshot_ref');
+    snapshotRef = Object.freeze({
+      id: requiredString(input.snapshot_ref.id, 'core.snapshot_ref.id'),
+      version: integerVersion(input.snapshot_ref.version, 'core.snapshot_ref.version'),
+    });
+  }
+
   return Object.freeze({
     ...base,
+    snapshot_ref: snapshotRef,
     category: optionalString(input.category, 'core.category'),
     buying_contexts: stringList(input.buying_contexts, 'core.buying_contexts'),
     value_proposition: optionalString(input.value_proposition, 'core.value_proposition'),
