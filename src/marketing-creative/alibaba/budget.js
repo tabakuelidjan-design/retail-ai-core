@@ -99,6 +99,15 @@ export class SpendGuard {
     return token;
   }
 
+  reserveCost({ id, eur, images = 0, videoSeconds = 0 }) {
+    if (!(eur >= 0)) throw new TypeError('eur must be >= 0');
+    if (!Number.isInteger(images) || images < 0) throw new TypeError('images must be >= 0');
+    if (!Number.isInteger(videoSeconds) || videoSeconds < 0) {
+      throw new TypeError('videoSeconds must be >= 0');
+    }
+    return this.#reserve({ id, eur, images, videoSeconds });
+  }
+
   reserveText({ id, estimatedInputTokens, maxOutputTokens }) {
     return this.#reserve({
       id,
