@@ -8,6 +8,7 @@ import {
   RULE_OPERATOR,
   RULE_SEVERITY,
   SNAPSHOT_REFRESH_TRIGGER,
+  SNAPSHOT_SOURCE_KIND,
   SNAPSHOT_STATUS,
 } from './constants.js';
 import {
@@ -56,6 +57,10 @@ export function normalizeEvidence(input, field = 'evidence') {
       system: requiredString(source.system, `${field}.source.system`),
       ref: optionalString(source.ref, `${field}.source.ref`),
       observed_at: isoDate(source.observed_at, `${field}.source.observed_at`),
+      kind: source.kind == null
+        ? null
+        : enumValue(source.kind, SNAPSHOT_SOURCE_KIND, `${field}.source.kind`),
+      subject_ref: optionalString(source.subject_ref, `${field}.source.subject_ref`),
     }),
     completeness: enumValue(
       input.completeness ?? EVIDENCE_COMPLETENESS.PARTIAL,

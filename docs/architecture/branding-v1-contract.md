@@ -50,3 +50,30 @@ An approved version never goes back to DRAFT. A change creates a new version.
 No web research, no LLM, no image generation, no budget decisions, no campaign calendar, no publication, no merchant-specific rules.
 
 Those capabilities are layered later against this contract.
+
+
+## Brand Snapshot V1 engine
+
+Implemented in `src/branding/snapshot.js`.
+
+The Snapshot engine is deliberately bounded:
+
+- maximum 3 direct competitors in the V1 research plan;
+- no continuous crawling;
+- research is limited to four decision-relevant questions;
+- every source is typed;
+- competitor evidence must belong to the explicit research plan;
+- FACT claims require concrete evidence references;
+- HYPOTHESIS never becomes FACT automatically;
+- conflicting structured claims are surfaced as contradictions;
+- missing answers become explicit evidence gaps rather than invented conclusions;
+- material refresh events make the Snapshot STALE but never rewrite Brand Core.
+
+The four V1 questions are:
+
+1. who are the relevant direct competitors;
+2. how do those competitors position themselves;
+3. what do customers appear to value or reject;
+4. what evidence materially challenges the current brand.
+
+The research adapter layer is intentionally not implemented here. Search engines, review sources and connectors feed evidence into this contract later; they do not define Branding architecture.

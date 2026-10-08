@@ -6,71 +6,213 @@
   "$defs": {
     "documentRef": {
       "type": "object",
-      "required": ["id", "version"],
+      "required": [
+        "id",
+        "version"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "version": {"type": "integer", "minimum": 1}
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "additionalProperties": false
     },
     "approval": {
       "type": "object",
-      "required": ["approved_by", "approved_at"],
+      "required": [
+        "approved_by",
+        "approved_at"
+      ],
       "properties": {
-        "approved_by": {"type": "string", "minLength": 1},
-        "approved_at": {"type": "string", "format": "date-time"},
-        "note": {"type": ["string", "null"]}
+        "approved_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
     "evidence": {
       "type": "object",
-      "required": ["id", "evidence_kind", "statement", "source", "completeness"],
+      "required": [
+        "id",
+        "evidence_kind",
+        "statement",
+        "source",
+        "completeness"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "evidence_kind": {"enum": ["FACT", "INFERENCE", "HYPOTHESIS"]},
-        "statement": {"type": "string", "minLength": 1},
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_kind": {
+          "enum": [
+            "FACT",
+            "INFERENCE",
+            "HYPOTHESIS"
+          ]
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
         "source": {
           "type": "object",
-          "required": ["system", "observed_at"],
+          "required": [
+            "system",
+            "observed_at"
+          ],
           "properties": {
-            "system": {"type": "string", "minLength": 1},
-            "ref": {"type": ["string", "null"]},
-            "observed_at": {"type": "string", "format": "date-time"}
+            "system": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "kind": {
+              "enum": [
+                "MERCHANT_PROVIDED",
+                "OWNED_SURFACE",
+                "INTERNAL_FACT",
+                "CUSTOMER_REVIEW",
+                "DIRECT_COMPETITOR",
+                "PUBLIC_REFERENCE"
+              ]
+            },
+            "subject_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           },
           "additionalProperties": false
         },
-        "completeness": {"enum": ["COMPLETE", "PARTIAL", "UNAVAILABLE"]},
-        "limitations": {"type": "array", "items": {"type": "string"}}
+        "completeness": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL",
+            "UNAVAILABLE"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       },
       "additionalProperties": false
     },
     "hardRule": {
       "type": "object",
-      "required": ["id", "rule_type", "subject", "enforcement", "severity", "constraint"],
+      "required": [
+        "id",
+        "rule_type",
+        "subject",
+        "enforcement",
+        "severity",
+        "constraint"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "rule_type": {"enum": ["LOGO", "COLOR", "TYPOGRAPHY", "WORDING", "CLAIM", "VISUAL", "TONE", "PRODUCT_FIDELITY", "ASSET_USAGE", "LAYOUT"]},
-        "subject": {"type": "string", "minLength": 1},
-        "enforcement": {"enum": ["DETERMINISTIC", "QUALITATIVE", "HYBRID"]},
-        "severity": {"enum": ["BLOCK", "REVIEW"]},
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule_type": {
+          "enum": [
+            "LOGO",
+            "COLOR",
+            "TYPOGRAPHY",
+            "WORDING",
+            "CLAIM",
+            "VISUAL",
+            "TONE",
+            "PRODUCT_FIDELITY",
+            "ASSET_USAGE",
+            "LAYOUT"
+          ]
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforcement": {
+          "enum": [
+            "DETERMINISTIC",
+            "QUALITATIVE",
+            "HYBRID"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "BLOCK",
+            "REVIEW"
+          ]
+        },
         "constraint": {
           "type": "object",
-          "required": ["operator", "value"],
+          "required": [
+            "operator",
+            "value"
+          ],
           "properties": {
-            "operator": {"enum": ["EQUALS", "ONE_OF", "NOT_ONE_OF", "CONTAINS", "NOT_CONTAINS", "RANGE", "REFERENCE", "CUSTOM"]},
+            "operator": {
+              "enum": [
+                "EQUALS",
+                "ONE_OF",
+                "NOT_ONE_OF",
+                "CONTAINS",
+                "NOT_CONTAINS",
+                "RANGE",
+                "REFERENCE",
+                "CUSTOM"
+              ]
+            },
             "value": {}
           },
           "additionalProperties": false
         },
-        "scope": {"type": "string"},
-        "source_ref": {"type": ["string", "null"]}
+        "scope": {
+          "type": "string"
+        },
+        "source_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     }
   },
   "properties": {
-    "version": {"const": "1.0"}
+    "version": {
+      "const": "1.0"
+    }
   },
   "additionalProperties": true
 }

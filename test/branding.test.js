@@ -12,13 +12,20 @@ import {
   RULE_OPERATOR,
   RULE_SEVERITY,
   SNAPSHOT_REFRESH_TRIGGER,
+  SNAPSHOT_RESEARCH_QUESTION,
+  SNAPSHOT_SOURCE_KIND,
   SNAPSHOT_STATUS,
+  SNAPSHOT_TOPIC,
   aggregateGuardianOutcome,
   assertBrandStatusTransition,
   buildBrandContext,
+  buildBrandSnapshotV1,
   buildGuardianPlan,
+  buildSnapshotResearchPlan,
   buildGuardianReport,
   creativeBrandInterface,
+  detectSnapshotContradictions,
+  evaluateSnapshotRefresh,
   marketingBrandInterface,
   normalizeBrandCore,
   normalizeBrandMemory,
@@ -237,4 +244,198 @@ test('generic branding source contains no merchant-specific architecture', async
     const source = await readFile(`src/branding/${file}`, 'utf8');
     assert.equal(/habb|namur|tyeso/i.test(source), false, file);
   }
+});
+
+
+test('Brand Snapshot research scope is deliberately bounded to three direct competitors', () => {
+  assert.throws(() => buildSnapshotResearchPlan({
+    merchantId: 'm1',
+    directCompetitors: ['c1', 'c2', 'c3', 'c4'],
+  }), /at most 3/);
+
+  const plan = buildSnapshotResearchPlan({
+    merchantId: 'm1',
+    directCompetitors: ['c1', 'c2', 'c3'],
+  });
+  assert.equal(plan.max_direct_competitors, 3);
+  assert.equal(plan.continuous_crawling, false);
+  assert.equal(plan.questions.length, 4);
+});
+
+test('Brand Snapshot rejects competitor evidence outside the explicit research plan', () => {
+  const plan = buildSnapshotResearchPlan({
+    merchantId: 'm1',
+    directCompetitors: ['competitor-1'],
+  });
+
+  assert.throws(() => buildBrandSnapshotV1({
+    id: 's1',
+    merchantId: 'm1',
+    createdAt: '2026-10-08T10:00:00Z',
+    observedAt: '2026-10-08T10:00:00Z',
+    researchPlan: plan,
+    evidence: [{
+      id: 'e1',
+      evidence_kind: 'FACT',
+      statement: 'Observed competitor message',
+      source: {
+        system: 'public_web',
+        ref: 'https://example.test',
+        observed_at: '2026-10-08T09:00:00Z',
+        kind: SNAPSHOT_SOURCE_KIND.DIRECT_COMPETITOR,
+        subject_ref: 'competitor-2',
+      },
+      completeness: 'COMPLETE',
+    }],
+  }), /DIRECT_COMPETITOR_OUTSIDE_RESEARCH_PLAN/);
+});
+
+test('Brand Snapshot detects structured contradictions instead of resolving them by guess', () => {
+  const contradictions = detectSnapshotContradictions([
+    {
+      id: 'c1',
+      topic: SNAPSHOT_TOPIC.POSITIONING,
+      subject: 'brand',
+      attribute: 'price_tier',
+      value: 'premium',
+      statement: 'Owned site says premium',
+      evidence_kind: 'FACT',
+      evidence_refs: ['e1'],
+    },
+    {
+      id: 'c2',
+      topic: SNAPSHOT_TOPIC.POSITIONING,
+      subject: 'brand',
+      attribute: 'price_tier',
+      value: 'budget',
+      statement: 'Current assortment is budget-led',
+      evidence_kind: 'FACT',
+      evidence_refs: ['e2'],
+    },
+  ]);
+  assert.equal(contradictions.length, 1);
+  assert.equal(contradictions[0].kind, 'FACT_FACT');
+});
+
+test('Brand Snapshot makes evidence gaps explicit and never fabricates missing answers', () => {
+  const plan = buildSnapshotResearchPlan({
+    merchantId: 'm1',
+    directCompetitors: ['competitor-1'],
+  });
+
+  const result = buildBrandSnapshotV1({
+    id: 's1',
+    merchantId: 'm1',
+    createdAt: '2026-10-08T10:00:00Z',
+    observedAt: '2026-10-08T10:00:00Z',
+    researchPlan: plan,
+    evidence: [{
+      id: 'e1',
+      evidence_kind: 'FACT',
+      statement: 'Competitor exists',
+      source: {
+        system: 'public_web',
+        ref: 'https://example.test',
+        observed_at: '2026-10-08T09:00:00Z',
+        kind: SNAPSHOT_SOURCE_KIND.DIRECT_COMPETITOR,
+        subject_ref: 'competitor-1',
+      },
+      completeness: 'PARTIAL',
+    }],
+    claims: [{
+      id: 'c1',
+      topic: SNAPSHOT_TOPIC.COMPETITOR,
+      subject: 'competitor-1',
+      attribute: 'relevance',
+      value: true,
+      statement: 'Competitor 1 is directly relevant',
+      evidence_kind: 'FACT',
+      evidence_refs: ['e1'],
+    }],
+  });
+
+  assert.equal(result.research.coverage.status, 'PARTIAL');
+  assert.ok(
+    result.research.coverage.missing_questions
+      .includes(SNAPSHOT_RESEARCH_QUESTION.WHAT_CUSTOMERS_VALUE_OR_REJECT),
+  );
+  assert.ok(result.snapshot.evidence_gaps.length >= 1);
+  assert.equal(
+    result.snapshot.evidence_gaps.every((gap) => gap.evidence_kind === 'HYPOTHESIS'),
+    true,
+  );
+});
+
+test('hypotheses do not satisfy Snapshot research coverage', () => {
+  const plan = buildSnapshotResearchPlan({ merchantId: 'm1' });
+  const result = buildBrandSnapshotV1({
+    id: 's1',
+    merchantId: 'm1',
+    createdAt: '2026-10-08T10:00:00Z',
+    observedAt: '2026-10-08T10:00:00Z',
+    researchPlan: plan,
+    evidence: [{
+      id: 'e1',
+      evidence_kind: 'HYPOTHESIS',
+      statement: 'Unverified customer idea',
+      source: {
+        system: 'manual_note',
+        observed_at: '2026-10-08T09:00:00Z',
+        kind: SNAPSHOT_SOURCE_KIND.MERCHANT_PROVIDED,
+      },
+      completeness: 'PARTIAL',
+    }],
+    claims: [{
+      id: 'c1',
+      topic: SNAPSHOT_TOPIC.CUSTOMER_EXPECTATION,
+      subject: 'customer',
+      attribute: 'priority',
+      value: 'speed',
+      statement: 'Customers may value speed',
+      evidence_kind: 'HYPOTHESIS',
+      evidence_refs: ['e1'],
+    }],
+  });
+
+  assert.equal(
+    result.research.coverage.missing_questions
+      .includes(SNAPSHOT_RESEARCH_QUESTION.WHAT_CUSTOMERS_VALUE_OR_REJECT),
+    true,
+  );
+});
+
+test('material refresh events make Snapshot stale without rewriting Brand Core', () => {
+  const snapshot = normalizeBrandSnapshot({
+    id: 's1',
+    merchant_id: 'm1',
+    version: 1,
+    status: SNAPSHOT_STATUS.READY,
+    created_at: '2026-10-08T09:00:00Z',
+    observed_at: '2026-10-08T09:00:00Z',
+    evidence: [{
+      id: 'e1',
+      evidence_kind: 'FACT',
+      statement: 'Observed',
+      source: {
+        system: 'owned',
+        observed_at: '2026-10-08T08:00:00Z',
+        kind: SNAPSHOT_SOURCE_KIND.OWNED_SURFACE,
+      },
+      completeness: 'COMPLETE',
+    }],
+  });
+
+  const refresh = evaluateSnapshotRefresh({
+    snapshot,
+    events: [{
+      type: SNAPSHOT_REFRESH_TRIGGER.OFFER_PORTFOLIO_CHANGED,
+      occurred_at: '2026-10-08T10:00:00Z',
+      source_ref: 'catalog://change-1',
+    }],
+  });
+
+  assert.equal(refresh.refresh_required, true);
+  assert.equal(refresh.next_snapshot_status, SNAPSHOT_STATUS.STALE);
+  assert.equal(refresh.core_update, null);
+  assert.match(refresh.policy_note, /NEVER_REWRITES_BRAND_CORE/);
 });
