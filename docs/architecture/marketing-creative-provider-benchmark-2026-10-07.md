@@ -1,10 +1,10 @@
 # Nordla Marketing Creative — provider benchmark decision (2026-10-07)
 
-Status: BENCHMARK REQUIRED / NO SINGLE PROVIDER WINNER YET
+Status: IMAGE PROVIDER DECIDED / VIDEO AND TEXT STILL OPEN
 
 ## Decision
 
-Do not replace the existing Alibaba integration. Keep it as the first controlled provider lane, but do not promote it to "best provider" until it wins Nordla's HABB benchmark.
+Image decision (2026-10-08): promote `qwen-image-3.0-pro` as Nordla/HABB's default image-generation and image-editing provider for the current phase. This decision is based on the real HABB TYESO benchmark, where Qwen preserved the source product more faithfully than the OpenAI image lane. Gemini Nano Banana 2.1 was not evaluated because the user's current Google project exposed a Free Tier rate limit of zero for that model. Video and text provider selection remain open.
 
 The architecture stays provider-neutral. The benchmark must optimize for accepted commercial output, not benchmark hype.
 
@@ -20,11 +20,11 @@ Qwen remains attractive on cost in Frankfurt. GPT-5.6 Sol is the premium referen
 
 ### Image generation / editing
 
-1. `qwen-image-3.0-pro` — incumbent low-cost HABB candidate.
-2. `gpt-image-2.5-sunburst` — premium quality reference.
-3. `gemini-nano-banana-2.1` — high-efficiency challenger with 1K/2K/4K output.
+1. `qwen-image-3.0-pro` — **SELECTED DEFAULT FOR HABB/NORDLA**.
+2. OpenAI image lane — retained as a reference/challenger, not the default.
+3. `gemini-nano-banana-2.1` — not evaluated in the live HABB benchmark because the active Google project had a Free Tier rate limit of zero for this model.
 
-Current independent text-to-image evidence puts GPT Image 2.5 Sunburst at the top of the Artificial Analysis image leaderboard. This is useful evidence, but Nordla must still test real-product fidelity, typography, brand constraints and edit preservation on HABB assets.
+Decision basis: on the real TYESO FLAIR 2.0 benchmark, Qwen preserved the source product state and identity more faithfully, including the open tumbler, ice, separated lid, straw, branding placement and overall geometry. The OpenAI result was aesthetically strong but reconstructed the product more aggressively. For HABB, product fidelity outranks generic aesthetic leaderboard position.
 
 ### Video generation / editing
 
@@ -176,3 +176,20 @@ Independent evidence:
 - Artificial Analysis AA-Image-T2I v2.0.
 - Arena.ai video leaderboard snapshots reported September 2026.
 
+
+
+## Image provider decision — 2026-10-08
+
+**Default:** `qwen-image-3.0-pro`
+
+Reason:
+- best observed fidelity to the real HABB product in the live TYESO benchmark;
+- commercially usable visual quality;
+- low observed cost (EUR 0.034 for the successful 1K benchmark output);
+- already integrated in Nordla through Alibaba Model Studio;
+- keeps real-product identity more reliably than the OpenAI lane tested in the same session.
+
+Operational rule:
+- use Qwen Image 3.0 Pro by default for HABB product advertising and product-scene editing;
+- keep hard fidelity constraints and reject outputs that mutate product geometry, branding, text, accessories or materials;
+- do not re-open provider selection unless a new candidate is tested on the same real-product benchmark and clearly beats Qwen on accepted-output quality, not leaderboard reputation alone.
