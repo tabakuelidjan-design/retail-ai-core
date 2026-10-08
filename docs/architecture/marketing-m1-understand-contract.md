@@ -1,6 +1,6 @@
 # Nordla — Marketing M1 · UNDERSTAND Foundation V1 (contract)
 
-- **Status:** IMPLEMENTED (M1) + audit corrections (freshness bound, `effective_window`, canonical registry, coverage matrix) — local commits, not pushed
+- **Status:** **M1 — UNDERSTAND FOUNDATION COMPLETE** — audited, integrated on `feature/branding-marketing-creative-v1`, CI `Marketing V1` green (includes the audit corrections: freshness bound, `effective_window`, canonical registry, coverage matrix)
 - **Parent architecture:** [`marketing-v1-architecture.md`](./marketing-v1-architecture.md)
 - **Decisions respected:** NDR-001/002/003/007/008/010/013/014/015/016/020 (see §12)
 - **Code:** `src/marketing/{understand-constants,understand-validation,market-signal,marketing-context,materiality,domain-fit,finding,understand}.js`

@@ -1,6 +1,6 @@
 # Nordla — Marketing M1.5 · Signal Producers
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT — not pushed, not COMPLETE until audited
+- **Status:** **M1.5 COMPLETE** — audited, integrated on `feature/branding-marketing-creative-v1`, CI `Marketing V1` green
 - **Builds on:** [`marketing-m1-understand-contract.md`](./marketing-m1-understand-contract.md) (M1 = COMPLETE, unchanged)
 - **Parent architecture:** [`marketing-v1-architecture.md`](./marketing-v1-architecture.md) §13
 - **Code:** `src/marketing/{signal-producer,lost-demand,calendar-signals,manual-observation}.js`
