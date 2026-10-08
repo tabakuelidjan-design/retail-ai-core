@@ -889,6 +889,78 @@ test('Non-regression: M1, M1.5, M2 and Measurement keep their public surface; th
   // 189 / 190 / 192: the Branding and Creative Fidelity suites and the full suite are executed by the Marketing V1 workflow
 });
 
+// ------------------------------------------------------------------ audit corrections (193-198)
+
+const STALE_BRAND = { ...BRAND, review_signals: ['BRAND_SNAPSHOT_STALE'] };
+const REVIEW_SEMANTIC = { outcome: 'REVIEW_REQUIRED', method: 'HUMAN', evidence_refs: ['review://note-1'] };
+const NOT_MEASURABLE_SEMANTIC = { outcome: 'NOT_MEASURABLE', method: 'MODEL' };
+
+test('Review signals: a Brand Context signal survives Brand Context -> Guardian -> validation -> Activation Manifest', () => {
+  const report = validate(entryOf(imageSpec), ctx({ brandContext: STALE_BRAND })); // 193
+  assert.deepEqual([...report.guardian_report.brand_review_signals], ['BRAND_SNAPSHOT_STALE']);
+  const manifest = activation({}, ctx({ brandContext: STALE_BRAND }));
+  assert.ok(manifest.review_signals.includes('BRAND_SNAPSHOT_STALE'));
+  assert.equal(manifest.readiness.status, 'READY_FOR_POLICY'); // a signal informs, it does not change readiness by itself
+  assert.ok(!MANIFEST.review_signals.includes('BRAND_SNAPSHOT_STALE')); // and nothing is invented when the Brand Context has none
+  // the stored manifest re-validates, and a forged signal list is refused
+  const entries = ENTRIES;
+  assert.equal(normalizeActivationManifest(manifest, { ...ctx({ brandContext: STALE_BRAND }), brief: BRIEF, candidates: entries }).activation_manifest_id, manifest.activation_manifest_id);
+  assert.equal(code(() => normalizeActivationManifest({ ...clone(manifest), review_signals: [] }, { ...ctx({ brandContext: STALE_BRAND }), brief: BRIEF, candidates: entries })), 'MKT_M3_ACTIVATION_DERIVED_MISMATCH');
+});
+
+test('Review signals: a Guardian semantic NOT_MEASURABLE keeps readiness READY_FOR_POLICY but BRAND_SEMANTIC_NOT_MEASURABLE stays visible', () => {
+  const entries = [entryOf(imageSpec, { semanticAssessment: NOT_MEASURABLE_SEMANTIC }), entryOf(textSpec)]; // 194
+  const manifest = activation({ candidates: entries });
+  assert.equal(manifest.readiness.status, 'READY_FOR_POLICY');
+  assert.ok(manifest.review_signals.includes('BRAND_SEMANTIC_NOT_MEASURABLE'));
+  assert.equal(evaluateActivationReadiness(manifest, live({ candidates: entries })).status, 'READY_FOR_POLICY');
+});
+
+test('Review signals: the union is unique, sorted and stable, and keeps the Push signals', () => {
+  const entries = [entryOf(imageSpec, { semanticAssessment: NOT_MEASURABLE_SEMANTIC }), entryOf(textSpec, { semanticAssessment: NOT_MEASURABLE_SEMANTIC })]; // 195
+  const manifest = activation({ candidates: entries }, ctx({ brandContext: STALE_BRAND }));
+  const signals = [...manifest.review_signals];
+  assert.equal(new Set(signals).size, signals.length);
+  assert.deepEqual(signals, [...signals].sort());
+  assert.deepEqual(signals.filter((s) => s.startsWith('BRAND_')), ['BRAND_SEMANTIC_NOT_MEASURABLE', 'BRAND_SNAPSHOT_STALE']);
+  for (const pushSignal of MANIFEST.review_signals) assert.ok(signals.includes(pushSignal), pushSignal);
+  assert.equal(activation({ candidates: entries }, ctx({ brandContext: STALE_BRAND })).activation_manifest_id, manifest.activation_manifest_id);
+});
+
+test('Semantic live revalidation: a REVIEW_REQUIRED never becomes PASS because the live entry omits the semanticAssessment', () => {
+  const reviewed = entryOf(imageSpec, { semanticAssessment: REVIEW_SEMANTIC }); // 196
+  const validation = validate(reviewed);
+  assert.equal(validation.validation_status, 'REVIEW_REQUIRED');
+  const manifest = activation({ candidates: [reviewed, entryOf(textSpec)] });
+  assert.equal(manifest.readiness.status, 'REVIEW_REQUIRED');
+  // the live entry carries the stored validation but no current assessment: the recorded one stays in force
+  const omitted = { candidate: reviewed.candidate, candidateManifest: reviewed.candidateManifest, validation };
+  assert.equal(evaluateActivationReadiness(manifest, live({ candidates: [omitted, entryOf(textSpec)] })).status, 'REVIEW_REQUIRED');
+  // without the stored validation either, nothing silently improves: the stored manifest no longer matches and is refused
+  const bare = { candidate: reviewed.candidate, candidateManifest: reviewed.candidateManifest };
+  assert.equal(validate(bare).validation_status, 'READY_FOR_ACTIVATION_POLICY'); // a fresh build with no assessment is a new evaluation
+  assert.equal(code(() => evaluateActivationReadiness(manifest, live({ candidates: [bare, entryOf(textSpec)] }))), 'MKT_M3_ACTIVATION_DERIVED_MISMATCH');
+  // an explicit current assessment can still degrade the answer (and replaces the recorded one)
+  const degraded = { ...omitted, semanticAssessment: NOT_MEASURABLE_SEMANTIC };
+  assert.equal(code(() => evaluateActivationReadiness(manifest, live({ candidates: [degraded, entryOf(textSpec)] }))), 'MKT_M3_ACTIVATION_VALIDATION_MISMATCH');
+});
+
+test('Candidate manifest refs: M3 refuses a data URI, blob, file or URL as an asset ref, through Branding itself', () => {
+  for (const ref of ['data:image/png;base64,AAAA', 'blob:abc', 'file:///etc/passwd', 'https://provider.test/a.png', 'https://signed.test/a.png?token=abc']) { // 197
+    const manifest = { content_kind: 'IMAGE', assets: [{ subject: 'primary', coverage: 'COMPLETE', values: [ref], evidence_refs: [] }] };
+    assert.equal(code(() => validate({ candidate: candidateOf(imageSpec), candidateManifest: manifest })), 'MKT_M3_CANDIDATE_MANIFEST_INVALID', ref);
+  }
+  const ok = { content_kind: 'IMAGE', assets: [{ subject: 'primary', coverage: 'COMPLETE', values: ['asset://out-1'], evidence_refs: ['evidence://run-1'] }] };
+  assert.equal(validate({ candidate: candidateOf(imageSpec), candidateManifest: ok }).candidate_ref, 'cand-image-1');
+});
+
+test('Review signals: no execution decision, override or readiness change comes with a signal', () => {
+  const manifest = activation({}, ctx({ brandContext: STALE_BRAND })); // 198
+  assert.equal(manifest.execution_decision, null);
+  assert.equal(manifest.readiness.status, MANIFEST.readiness.status);
+  assert.deepEqual([...manifest.readiness.reason_codes], [...MANIFEST.readiness.reason_codes]);
+});
+
 // ------------------------------------------------------------------ coverage matrix (doc <-> tests)
 
 test('Coverage matrix: the doc maps all 192 mandate cases, and every test it names exists', async () => {

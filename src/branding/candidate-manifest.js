@@ -48,10 +48,23 @@ function exactKeys(input, allowed, field) {
   }
 }
 
+// A manifest carries controlled Nordla references (asset://, evidence://, ...), never a location or inline media: no data/blob/file
+// URI, no http(s)/ftp/ws URL (raw provider or signed URL, credentials) and no filesystem path. Manifest-specific on purpose: the
+// global opaqueRef() is shared by other Branding contracts and is left untouched.
+const FORBIDDEN_LOCATION = /^(?:https?|ftps?|wss?|file|data|blob):|^[a-z]:\\|^[\\/]/i;
+
+function candidateRef(value, field) {
+  const ref = opaqueRef(value, field);
+  if (FORBIDDEN_LOCATION.test(ref)) {
+    throw new TypeError(`${field} must be a controlled Nordla reference, not inline media, a URL or a file location`);
+  }
+  return ref;
+}
+
 function evidenceRefs(value, field) {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new TypeError(`${field} must be an array`);
-  const out = value.map((ref, index) => opaqueRef(ref, `${field}[${index}]`));
+  const out = value.map((ref, index) => candidateRef(ref, `${field}[${index}]`));
   if (new Set(out).size !== out.length) throw new TypeError(`${field} contains duplicates`);
   return out;
 }
@@ -130,7 +143,7 @@ export function normalizeCandidateManifest(input) {
   exactKeys(input, KEYS, 'manifest');
   return deepFreeze({
     content_kind: enumValue(input.content_kind, CONTENT_KIND, 'manifest.content_kind'),
-    assets: channel(input.assets, 'manifest.assets', valuesObservation(opaqueRef)),
+    assets: channel(input.assets, 'manifest.assets', valuesObservation(candidateRef)),
     colors: channel(input.colors, 'manifest.colors', valuesObservation(normalizeHexColor)),
     typography: channel(input.typography, 'manifest.typography', valuesObservation(family)),
     text: channel(input.text, 'manifest.text', valuesObservation(fragment, { unique: false })),

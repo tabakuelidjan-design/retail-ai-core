@@ -131,7 +131,7 @@ delivery = { deliverable_ref, candidate_ref, channel, placement, format_ref, loc
 - **Every brief deliverable has exactly one delivery** (`MKT_M3_ACTIVATION_DELIVERABLE_MISSING`, `…_DUPLICATE_DELIVERABLE`); a candidate for a deliverable the Brief does not contain is refused (`MKT_M3_CANDIDATE_UNKNOWN_DELIVERABLE`; a stored delivery naming a candidate that was not supplied: `MKT_M3_ACTIVATION_UNKNOWN_CANDIDATE`). Channel, placement, format and locale are preserved from the deliverable.
 - **Validations are computed by the Guardian inside the builder.** A `validation` supplied with a candidate is only cross-checked against the recomputed report (`MKT_M3_ACTIVATION_VALIDATION_MISMATCH`).
 - `measurement_plan_ref = "<push_id>#measurement"` — a pointer to the M2 plan inside the Push, never a copy.
-- Claims, policy, consent and promotion rules are **carried as opaque refs and validated by nobody here** (no compliance engine). `unresolved_requirement_refs` and `review_signals` are derived from the Push (the Push-scoped counterpart of the M2 package derivation): they make visible what the Socle must still resolve.
+- Claims, policy, consent and promotion rules are **carried as opaque refs and validated by nobody here** (no compliance engine). `unresolved_requirement_refs` is derived from the Push (the Push-scoped counterpart of the M2 package derivation). `review_signals` is the deterministic, unique, sorted union of the Push signals, the Brand Context `review_signals` and every candidate's `guardian_report.brand_review_signals` and `guardian_report.guardian_review_signals`: no signal is lost along Brand Context -> Guardian -> CreativeValidationReport -> ActivationManifest, and a signal alone never changes readiness (it stays visible for the Socle / policy / human review).
 - **Window.** `activation_window` is a **constraint, not a job**: `start` ≥ the Push window start; `end` ≤ the Push window end, the authorization expiry, the Brief expiry and every candidate expiry. A sub-window is accepted, a wider one refused (`MKT_M3_ACTIVATION_WINDOW_WIDER`, `detail.bound`). **Expiry:** `expires_at` after `created_at` and ≤ the Finding, Push, package, authorization, Brief and every candidate (`MKT_M3_ACTIVATION_OUTLIVES_GOVERNING`, `detail.bound`).
 - No connector, no publication, no scheduler, no recipient, no send: such keys do not exist (refused as unknown keys).
 
@@ -173,15 +173,15 @@ Socle Decision engine · real Socle authorization issuer · Decision Ledger · P
 2. **`brief_limitations` are UPPER_SNAKE codes**, not sentences, so that no prose or hidden instruction can ride along.
 3. **Derived Brief fields are refused even with an equal value** (the mandate refuses a contradictory one): the simplest unambiguous rule.
 4. **A cta_intent is checked for a raw link / tracking parameter** (`MKT_M3_BRIEF_CTA_UNSAFE`). This inspects the shape of the text for safety only; no business decision is taken from it. `message_intent` is never inspected.
-5. **Raw locations are refused among manifest assets** by M3 (see §8) because Branding alone accepts a `data:` URI as an "opaque" token.
+5. **Raw locations are refused at the source** (audit correction): `normalizeCandidateManifest` now uses a manifest-specific `candidateRef` for `assets[].values[]` and every `evidence_refs[]` (refusing data:, blob:, file:, http(s):, ftp, ws, drive and absolute paths). The global `opaqueRef()` is unchanged. M3 keeps its own `isLocation` check as defense in depth.
 6. **The activation builder takes the candidate entries and computes the validations itself**; a pre-built `validation` is only cross-checked. The stored manifest therefore cannot be live-evaluated without the candidate manifests.
 7. **`BLOCKED` is the activation status for a gated live gate** (not authorized, Push not ready, Brand Context GATED), since the readiness vocabulary has no dedicated status; the reason codes carry the gate status.
-8. **`review_signals` / `unresolved_requirement_refs` of the manifest are re-derived from the Push** (M2 left its package-level helpers private; M2 was not modified).
+8. **`unresolved_requirement_refs` of the manifest is re-derived from the Push, `review_signals` from the Push + Brand Context + Guardian reports** (M2 left its package-level helpers private; M2 was not modified).
 9. **Not independently testable by construction (equivalent mutants):** the *finding* and *push* expiry bounds of a Brief or manifest are implied by the chain `authorization ≤ package ≤ push ≤ finding` that M2 already enforces; they are kept as defense in depth and are exercised through `detail.bound` where the chain makes them reachable.
 
 ## 16. Test coverage — mandate cases 1–192
 
-One row per numbered case of the M3 mandate (§55). Several cases share a test function when it asserts them together; `test/marketing-m3-create.test.js` enforces that this table is contiguous, holds all 192 cases and that every named test exists. Cases marked **(CI)** are the Branding / Creative Fidelity suites and the full suite, executed by the `Marketing V1` workflow.
+One row per numbered case of the M3 mandate (§55). Several cases share a test function when it asserts them together; `test/marketing-m3-create.test.js` enforces that this table is contiguous, holds all 192 cases (193+ are the audit corrections) and that every named test exists. Cases marked **(CI)** are the Branding / Creative Fidelity suites and the full suite, executed by the `Marketing V1` workflow.
 
 <!-- coverage-matrix:start -->
 | Mandate case | Behaviour | Test (`test/marketing-m3-create.test.js` unless noted) |
@@ -378,4 +378,15 @@ One row per numbered case of the M3 mandate (§55). Several cases share a test f
 | 190 | Creative Fidelity tests unchanged | (CI) the Branding, Creative Fidelity and full suites, run by the `Marketing V1` workflow |
 | 191 | Measurement unchanged | Non-regression: M1, M1.5, M2 and Measurement keep their public surface; the experimental providers are not activated |
 | 192 | full suite green | (CI) the Branding, Creative Fidelity and full suites, run by the `Marketing V1` workflow |
+| 193 | Brand Context signal survives to the manifest | Review signals: a Brand Context signal survives Brand Context -> Guardian -> validation -> Activation Manifest |
+| 194 | Guardian semantic NOT_MEASURABLE signal visible | Review signals: a Guardian semantic NOT_MEASURABLE keeps readiness READY_FOR_POLICY but BRAND_SEMANTIC_NOT_MEASURABLE stays visible |
+| 195 | signal union is unique, sorted, stable | Review signals: the union is unique, sorted and stable, and keeps the Push signals |
+| 196 | semantic REVIEW_REQUIRED never silently improved | Semantic live revalidation: a REVIEW_REQUIRED never becomes PASS because the live entry omits the semanticAssessment |
+| 197 | M3 refuses data / blob / file / URL asset refs | Candidate manifest refs: M3 refuses a data URI, blob, file or URL as an asset ref, through Branding itself |
+| 198 | a signal changes no readiness and no decision | Review signals: no execution decision, override or readiness change comes with a signal |
+| 199 | Branding refuses non-controlled manifest refs | (CI) `test/branding-candidate-manifest-refs.test.js`: asset:// and evidence:// accepted; data, blob, file, http(s), signed and credentialed URLs refused |
 <!-- coverage-matrix:end -->
+
+## 17. Semantic live revalidation rule (audit correction)
+
+A live revalidation may degrade but never improves by losing evidence. When an entry carries its stored `validation` but no current `semanticAssessment`, the semantic assessment recorded in that validation snapshot stays in force (smallest variant). An explicit current assessment replaces it, and is then cross-checked against the supplied validation. Without either, the stored manifest no longer matches what the candidates produce and is refused (`MKT_M3_ACTIVATION_DERIVED_MISMATCH`), never silently read as READY.

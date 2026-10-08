@@ -71,6 +71,14 @@ function reviewSignals(push) {
   return Object.keys(has).filter((signal) => has[signal]);
 }
 
+// Deterministic, unique, stable union: Push signals, Brand Context signals and every Guardian report signal. Nothing is lost on the
+// way and nothing here changes readiness; the signals stay visible for the Socle / policy / human review.
+function allReviewSignals(push, brandContext, validations) {
+  const fromBrand = Array.isArray(brandContext?.review_signals) ? brandContext.review_signals : [];
+  const fromGuardian = validations.flatMap((v) => [...v.report.guardian_report.brand_review_signals, ...v.report.guardian_report.guardian_review_signals]);
+  return [...new Set([...reviewSignals(push), ...fromBrand, ...fromGuardian])].sort();
+}
+
 function entriesOf(value) {
   if (!Array.isArray(value) || value.length === 0) fail(Z.ACTIVATION_DELIVERABLE_MISSING, 'an Activation Manifest needs one candidate per brief deliverable');
   if (value.length > MAX_ENTRIES) fail(E.INVALID_FIELD, `at most ${MAX_ENTRIES} candidates`, { field: 'candidates' });
@@ -183,7 +191,7 @@ export function buildActivationManifest(options = {}) {
     consent_requirement_refs: [...push.consent_requirement_refs],
     promotion_rule_refs: [...push.promotion_rule_refs],
     unresolved_requirement_refs: unresolvedRefs(push),
-    review_signals: reviewSignals(push),
+    review_signals: allReviewSignals(push, context.brandContext, validations),
     readiness: readinessFrom(validations.map((v) => v.report.validation_status)),
     execution_decision: null,
   };

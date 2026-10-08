@@ -50,10 +50,14 @@ export function validateCandidateEntry({ resolved, tenant, brief, entry }) {
   }
   if (manifest.content_kind !== candidate.content_kind) fail(Z.MANIFEST_KIND_MISMATCH, 'the candidate manifest describes another content kind than the candidate');
 
+  // A live revalidation may degrade but never improve by losing evidence: when no current assessment is supplied, the assessment
+  // already recorded in the supplied validation snapshot stays in force (an explicit current assessment replaces it).
+  const recorded = entry.validation?.guardian_report?.semantic_assessment;
+  const semanticInput = entry.semanticAssessment ?? recorded ?? null;
   let semantic = null;
-  if (entry.semanticAssessment != null) {
+  if (semanticInput != null) {
     try {
-      semantic = normalizeSemanticAssessment(entry.semanticAssessment); // advisory lane only: it has no FAIL
+      semantic = normalizeSemanticAssessment(semanticInput); // advisory lane only: it has no FAIL
     } catch (error) {
       fail(Z.SEMANTIC_ASSESSMENT_INVALID, 'the semantic assessment is not a valid Branding semantic assessment', { cause: String(error?.message ?? error) });
     }
