@@ -1,0 +1,56 @@
+name: Marketing V1
+
+# Marketing V1 (UNDERSTAND / signal producers) has contracts that touch tenant, branding, metrics and quality code, and no
+# general CI guarantees cross-domain non-regression today, so this job runs the focused Marketing tests (fast diagnosis)
+# and then the whole suite. No path filter on branches: it follows the global path filters of the other contract workflows.
+
+on:
+  push:
+    paths:
+      - 'src/marketing/**'
+      - 'test/marketing*.test.js'
+      - 'test/fixtures/**'
+      - 'docs/architecture/marketing-*.md'
+      - 'src/metrics/**'
+      - 'src/quality/**'
+      - 'src/tenant/**'
+      - 'src/branding/**'
+      - 'NORDLA-CANONICAL-ARCHITECTURE.md'
+      - 'NORDLA-DECISION-REGISTER.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/marketing-v1.yml'
+  pull_request:
+    paths:
+      - 'src/marketing/**'
+      - 'test/marketing*.test.js'
+      - 'test/fixtures/**'
+      - 'docs/architecture/marketing-*.md'
+      - 'src/metrics/**'
+      - 'src/quality/**'
+      - 'src/tenant/**'
+      - 'src/branding/**'
+      - 'NORDLA-CANONICAL-ARCHITECTURE.md'
+      - 'NORDLA-DECISION-REGISTER.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/marketing-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  marketing-v1-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Focused Marketing tests
+        run: node --test test/marketing*.test.js
+      - name: Full suite (cross-domain non-regression)
+        run: npm test
