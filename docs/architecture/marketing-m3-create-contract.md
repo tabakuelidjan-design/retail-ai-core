@@ -1,6 +1,6 @@
 # Nordla — Marketing M3 · CREATE V1 (contract)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT — not pushed, not COMPLETE until audit, push and CI
+- **Status:** M3 — CREATE COMPLETE (audited, pushed, CI green)
 - **Version:** `marketing-m3-create.v1`
 - **Builds on:** [M1](./marketing-m1-understand-contract.md), [M1.5](./marketing-m1-5-signal-producers.md), [M2](./marketing-m2-build-contract.md) (all COMPLETE, unchanged), [Branding V1](./branding-v1-contract.md) and Creative Fidelity (reused, unchanged)
 - **Parent architecture:** [`marketing-v1-architecture.md`](./marketing-v1-architecture.md)
@@ -390,3 +390,18 @@ One row per numbered case of the M3 mandate (§55). Several cases share a test f
 ## 17. Semantic live revalidation rule (audit correction)
 
 A live revalidation may degrade but never improves by losing evidence. When an entry carries its stored `validation` but no current `semanticAssessment`, the semantic assessment recorded in that validation snapshot stays in force (smallest variant). An explicit current assessment replaces it, and is then cross-checked against the supplied validation. Without either, the stored manifest no longer matches what the candidates produce and is refused (`MKT_M3_ACTIVATION_DERIVED_MISMATCH`), never silently read as READY.
+
+## 18. Invariants kept at closure
+
+```text
+READY_FOR_POLICY
+≠ approved for execution
+≠ published
+
+Creative Intelligence owns creative execution / artistic quality
+Creative Fidelity owns product fidelity
+Brand Guardian owns brand compliance
+Socle / Policy / human owns activation authorization
+```
+
+Live revalidation can degrade, but cannot improve merely because a previous semantic assessment disappeared (see §17).

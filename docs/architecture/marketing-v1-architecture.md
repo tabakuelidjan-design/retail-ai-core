@@ -1,10 +1,10 @@
 # Nordla — Marketing V1 Architecture
 
-- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE · M2 COMPLETE · M3 IMPLEMENTED LOCALLY / UNDER AUDIT
+- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE · M2 COMPLETE · M3 COMPLETE
 - **Date:** 2026-10-08
 - **Canonical sequence:** `UNDERSTAND → BUILD → CREATE → STEER`
 - **Scope:** Marketing core + reserved specialized intelligences
-- **Build status:** M1 = **COMPLETE**. M1.5 = **COMPLETE**. M2 = **COMPLETE**. M3 — CREATE = **IMPLEMENTED LOCALLY / UNDER AUDIT** (not pushed; do not mark complete before audit, push and CI). Current build target remains **M3 — CREATE** until audit and push. Next: M4 — STEER (not started).
+- **Build status:** M1 = **COMPLETE**. M1.5 = **COMPLETE**. M2 = **COMPLETE**. M3 = **COMPLETE**. Current build target = **M4 — STEER** (not started; waits for the architect mandate).
 
 ## 0. Architectural rules
 
@@ -729,7 +729,7 @@ Socle Decision Package
 
 ## M3 — CREATE
 
-**Status: IMPLEMENTED LOCALLY / UNDER AUDIT** — see [`marketing-m3-create-contract.md`](./marketing-m3-create-contract.md).
+**Status: COMPLETE** — see [`marketing-m3-create-contract.md`](./marketing-m3-create-contract.md).
 
 ```text
 CreativeBrief

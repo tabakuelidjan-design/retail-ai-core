@@ -124,6 +124,8 @@ The Brand Context must be `READY`; otherwise `GUARDIAN_REQUIRES_READY_BRAND_CONT
 The `candidateManifest` and the `semanticAssessment` must come from **trusted adapters or server context** (OCR, color extraction, the creative-fidelity adapter, a human review tool, a model run) and **must never be built directly from an untrusted client payload**. The Guardian is pure: it validates their shape (strict keys, enums, coverage rules) but **authenticates neither**, and cannot tell a truthful observation from a forged one. Whoever assembles these objects carries that trust, exactly as for `resolvedActor` and the brand object. This stays an open dependency until Nordla Identity / signed adapter outputs exist.
 
 ### Candidate manifest: subject-aware and coverage-aware
+Candidate Manifest asset/evidence references are controlled opaque references. Raw transport locations are not valid candidate refs: `data:`, `blob:`, `file:`, `http(s):`, `ftp(s):`, `ws(s):` and local absolute filesystem paths.
+
 `content_kind` (`TEXT`, `IMAGE`, `VIDEO`, `DOCUMENT`, the only source of truth) plus one channel per rule type:
 
 | Channel | Rule type | Observation |
