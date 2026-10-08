@@ -1,6 +1,14 @@
 # Nordla Branding V1 — Generic contract
 
-Status: IMPLEMENTING
+Status: BRANDING V1 CORE COMPLETE
+
+Core scope complete:
+Brand Identity → Brand Snapshot → Brand Core → Brand Memory → Brand Guardian.
+
+Integration dependencies remain intentionally open:
+persistence, Nordla Identity, Decision Ledger, Production Asset Registry,
+Claims Registry, DAM, upstream extraction adapters and Branding UX.
+These do not reopen the Branding V1 core architecture.
 
 This document describes the generic contract implemented under `src/branding/`.
 It does not contain any merchant-specific brand rule.
