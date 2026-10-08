@@ -28,7 +28,8 @@
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
     "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
     "marketing-creative:smoke": "node src/marketing-creative/alibaba/smoke-cli.js",
-    "marketing-creative:qwen-image": "node src/marketing-creative/alibaba/qwen-image-benchmark-cli.js"
+    "marketing-creative:qwen-image": "node src/marketing-creative/alibaba/qwen-image-benchmark-cli.js",
+    "marketing-creative:nano-banana-image": "node src/marketing-creative/gemini/nano-banana-image-benchmark-cli.js"
   },
   "engines": {
     "node": ">=20"
