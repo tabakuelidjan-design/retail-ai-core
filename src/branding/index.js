@@ -4,7 +4,7 @@ export * from './contracts.js';
 export * from './hard-rules.js';
 export * from './memory.js';
 export * from './candidate-manifest.js';
-export * from './json-schema-lite.js';
+export * from './schema-subset.js';
 export * from './guardian.js';
 export * from './interfaces.js';
 export * from './snapshot.js';

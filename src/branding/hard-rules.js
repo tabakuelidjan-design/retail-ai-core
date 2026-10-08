@@ -11,6 +11,8 @@ import {
 } from './validation.js';
 import { FIDELITY_GATE_OUTCOME } from '../creative-fidelity/constants.js';
 
+// Pattern matching (regex) is deliberately NOT part of V1: no real need yet, and a safe mechanism
+// does not exist. It can be reintroduced later if a concrete business case requires it.
 // Hard rule = a rule a machine can check without judgment. Qualitative expectations
 // ("elegant", "premium", "balanced", "must not look AI") are NOT hard rules: they belong to
 // Brand Memory's semantic_context or to Creative Quality.
@@ -20,7 +22,7 @@ export const HARD_RULE_MATRIX = Object.freeze({
   [T.ASSET_REF]: Object.freeze([O.EQUALS, O.ONE_OF, O.REQUIRED]),
   [T.COLOR]: Object.freeze([O.EQUALS, O.ONE_OF, O.REQUIRED]),
   [T.TYPOGRAPHY]: Object.freeze([O.EQUALS, O.ONE_OF, O.REQUIRED]),
-  [T.TEXT]: Object.freeze([O.CONTAINS, O.NOT_CONTAINS, O.MATCHES_PATTERN, O.REQUIRED]),
+  [T.TEXT]: Object.freeze([O.CONTAINS, O.NOT_CONTAINS, O.REQUIRED]),
   [T.CLAIM_REF]: Object.freeze([O.EQUALS, O.ONE_OF, O.REQUIRED]),
   [T.EXTERNAL_GATE]: Object.freeze([O.STATUS_IN, O.REQUIRED]),
 });
@@ -42,9 +44,6 @@ const OPAQUE_REF = /^\S+$/;
 
 const MAX_ONE_OF = 50;
 const MAX_TEXT_VALUE = 500;
-const MAX_PATTERN = 200;
-// Heuristic guard against catastrophic backtracking: a quantified group that itself holds a quantifier.
-const NESTED_QUANTIFIER = /\([^)]*[+*][^)]*\)\s*[+*{]/;
 
 export function normalizeHexColor(value, field) {
   const text = requiredString(value, field);
@@ -80,18 +79,6 @@ function textValue(value, field) {
   return text;
 }
 
-function patternValue(value, field) {
-  const text = requiredString(value, field);
-  if (text.length > MAX_PATTERN) throw new RangeError(`${field} is too long`);
-  if (NESTED_QUANTIFIER.test(text)) throw new TypeError(`${field} risks catastrophic backtracking`);
-  try {
-    new RegExp(text, 'u'); // eslint-disable-line no-new
-  } catch {
-    throw new TypeError(`${field} is not a valid pattern`);
-  }
-  return text;
-}
-
 function requiredFlag(value, field) {
   if (value !== true) throw new TypeError(`${field} must be true for a REQUIRED rule`);
   return true;
@@ -112,7 +99,6 @@ function normalizeValue(rule, value, field, gate) {
     case O.ONE_OF: return oneOf(value, field, SCALAR[rule.rule_type]);
     case O.CONTAINS:
     case O.NOT_CONTAINS: return textValue(value, field);
-    case O.MATCHES_PATTERN: return patternValue(value, field);
     case O.STATUS_IN: {
       const statuses = oneOf(value, field, (entry, f) => requiredString(entry, f));
       for (const status of statuses) {

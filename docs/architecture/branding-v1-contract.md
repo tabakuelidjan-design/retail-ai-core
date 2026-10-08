@@ -38,7 +38,7 @@ Implemented in `src/branding/memory.js`, `hard-rules.js`, `candidate-manifest.js
 
 | Category | Content |
 |---|---|
-| `identity_references` | `primary_logo_ref`, `approved_logo_refs[]`, `distinctive_asset_refs[]` - opaque refs, no binaries, no DAM. A logo is never mandatory. `distinctive_asset_refs` must come from the Core's `distinctive_assets[].asset_ref` (referenced, not re-declared). |
+| `identity_references` | `primary_logo_ref`, `approved_logo_refs[]` - opaque refs, no binaries, no DAM. A logo is never mandatory. **Distinctive Brand Assets are not stored here**: `Brand Core.distinctive_assets` is the single authoritative source and is exposed to Creative through the Creative interface (`distinctive_assets`). Memory has no second list and refuses a `distinctive_asset_refs` key. |
 | `design_tokens` | `colors` (`#RRGGBB`, normalized uppercase, unique values) and `typography` (`family`, integer `weights` 1-1000). No spacing/radius/shadow/grid/motion. |
 | `hard_rules` | Verifiable rules only (below). |
 | `semantic_context` | `voice_traits`, `do`, `dont`, `brand_style_summary`, `on_brand_examples`, `off_brand_examples`. Qualitative expectations live here, never in hard rules. |
@@ -51,9 +51,9 @@ Unknown keys are refused at every level, so budget, strategy, competitors, catal
 `{ id, rule_type, subject, operator, value, severity, scope, source_ref }` - every field validated, no extra field allowed.
 
 - **rule_type** (exactly six): `ASSET_REF`, `COLOR`, `TYPOGRAPHY`, `TEXT`, `CLAIM_REF`, `EXTERNAL_GATE`.
-- **operator** (exactly seven): `EQUALS`, `ONE_OF`, `CONTAINS`, `NOT_CONTAINS`, `MATCHES_PATTERN`, `REQUIRED`, `STATUS_IN`. No `CUSTOM`, `EXECUTE_CODE`, `PROMPT` or `LLM_DECIDE`.
-- **Matrix** (`HARD_RULE_MATRIX`, any other pair is refused): `ASSET_REF`/`COLOR`/`TYPOGRAPHY`/`CLAIM_REF` -> `EQUALS`, `ONE_OF`, `REQUIRED`; `TEXT` -> `CONTAINS`, `NOT_CONTAINS`, `MATCHES_PATTERN`, `REQUIRED`; `EXTERNAL_GATE` -> `STATUS_IN`, `REQUIRED`.
-- **value**: shaped by type and operator (hex color, `claim://` ref, opaque asset ref, text, pattern, list of known gate statuses; `REQUIRED` takes `true`). `MATCHES_PATTERN` is length-capped, must compile, and a nested-quantifier heuristic rejects obvious catastrophic-backtracking patterns.
+- **operator** (exactly six): `EQUALS`, `ONE_OF`, `CONTAINS`, `NOT_CONTAINS`, `REQUIRED`, `STATUS_IN`. No `CUSTOM`, `EXECUTE_CODE`, `PROMPT` or `LLM_DECIDE`, and **no `MATCHES_PATTERN`**: pattern matching is out of V1 (no business need yet, no safe mechanism); it may be reintroduced later with a safe mechanism if a real case requires it.
+- **Matrix** (`HARD_RULE_MATRIX`, any other pair is refused): `ASSET_REF`/`COLOR`/`TYPOGRAPHY`/`CLAIM_REF` -> `EQUALS`, `ONE_OF`, `REQUIRED`; `TEXT` -> `CONTAINS`, `NOT_CONTAINS`, `REQUIRED`; `EXTERNAL_GATE` -> `STATUS_IN`, `REQUIRED`.
+- **value**: shaped by type and operator (hex color, `claim://` ref, opaque asset ref, text, list of known gate statuses; `REQUIRED` takes `true`).
 - **severity**: `BLOCK` (failure -> Guardian `FAIL`) or `REVIEW` (failure -> `REVIEW_REQUIRED`). A required rule with no result is `NOT_MEASURABLE`; no `PASS` is possible with an uncovered rule.
 - **scope**: `GLOBAL`, `TEXT`, `IMAGE`, `VIDEO`, `DOCUMENT` (no per-social-platform scope).
 - **source_ref** (mandatory, "why does this rule exist?"): `brand-core://`, `decision://`, `approved-asset://`, `claim://` or `external-policy://`. A missing or non-standard one is refused (`HARD_RULE_SOURCE_REF_REQUIRED`).
@@ -68,7 +68,7 @@ Memory references an exact `core_ref { id, version }`. It requires an APPROVED C
 
 `buildBrandMemoryDraft` (DRAFT) -> `validateBrandMemory` -> `submitBrandMemoryForReview` (REVIEW_REQUIRED) -> `approveBrandMemory` (APPROVED) -> `proposeBrandMemoryRevision` (new version, REVIEW_REQUIRED) ; `selectActiveBrandMemory` refuses two APPROVED Memories for one tenant. Transitions are checked inside these functions.
 
-`approveBrandMemory({ memory, core, tenant, resolvedActor, activeMemory, approvedAt })` has the same trust model as Core approval: `resolvedActor` comes from the trusted server / Socle context and **must never be built from an untrusted client payload**; Branding authenticates nobody and checks only presence, tenant and role (OWNER / AUTHORIZED_REVIEWER). It persists nothing and returns `{ approvedMemory, supersededMemory, decisionEvent }`. The event reuses the Core decision-event model with type `BRAND_MEMORY_APPROVED`. An empty Memory cannot be submitted. An APPROVED version is deeply frozen; a revision never mutates it.
+`approveBrandMemory({ memory, core, tenant, resolvedActor, activeMemory, approvedAt })` has the same trust model as Core approval: `resolvedActor` comes from the trusted server / Socle context and **must never be built from an untrusted client payload**; Branding authenticates nobody and checks only presence, tenant and role (OWNER / AUTHORIZED_REVIEWER). It persists nothing and returns `{ approvedMemory, supersededMemory, decisionEvent }` (same shape as Core approval: `approvedX` / `supersededX` / `decisionEvent`; only the Core adds `reviewSignals`, which come from its reference Snapshot). The event reuses the Core decision-event model with type `BRAND_MEMORY_APPROVED`. An empty Memory cannot be submitted. An APPROVED version is deeply frozen; a revision never mutates it.
 
 ### Candidate manifest (contract only)
 
@@ -76,7 +76,7 @@ Memory references an exact `core_ref { id, version }`. It requires an APPROVED C
 
 ### Schema
 
-`schemas/branding/brand-memory-v1.schema.json` describes the normalized document structure. It is executed in tests by `validateJsonSchemaLite` (`json-schema-lite.js`, no dependency: NDR-P10 build-own-when-cheap), which refuses any schema keyword it does not enforce. The type x operator matrix, value shapes, Core binding and token-name rules live in code only; a test fails if the schema enums drift from the code constants.
+`schemas/branding/brand-memory-v1.schema.json` describes the normalized document structure. It is executed in tests by `validateSchemaSubset` (`schema-subset.js`), a **strict subset validator - not a general JSON Schema implementation**: it supports only the keywords the Branding schemas use (type, enum, const, properties, required, additionalProperties, items, min/max constraints, pattern, uniqueItems, local `#/$defs/` `$ref`) and refuses every other keyword, even in unreached branches, so a schema can never hold an unenforced constraint. `$schema`/`$id` are annotations only. It has no dependency (NDR-P10: build/own what is cheap). The type x operator matrix, value shapes, Core binding and token-name rules live in code only; a test fails if the schema enums drift from the code constants.
 
 ## Generic interfaces
 
@@ -107,7 +107,7 @@ Note: `REVIEW_REQUIRED` is both a document status and a Guardian outcome. They a
 
 - **Preparation vs approval.** A proposal may be prepared from a READY or STALE Snapshot (STALE adds a review signal). Approval is stricter: the reference Snapshot must be `READY`, otherwise `CORE_APPROVAL_REQUIRES_READY_SNAPSHOT`. An already APPROVED Core is unaffected when its Snapshot later becomes STALE: the brand context stays `READY` and carries `BRAND_SNAPSHOT_STALE` in `review_signals`.
 - **`resolvedActor` - trust boundary.** It must come from the trusted server / Socle context and **must never be built from an untrusted client payload**. Branding performs **no authentication and no cryptographic verification**; it only checks that an actor is present, belongs to the same tenant and holds an authorized role (OWNER or AUTHORIZED_REVIEWER). Whoever constructs `resolved_actor` carries the trust. This stays an **open dependency on Nordla Identity**, which does not exist yet.
-- Returns the approved Core, the previous Core marked `SUPERSEDED` (a V2 must supersede the active V1 - two APPROVED Cores can never coexist), and a minimal **decision event** (`BRAND_CORE_APPROVED`, deterministic id, actor, subject, supersedes) shaped to map onto the future Socle Decision Ledger;
+- Returns `{ approvedCore, supersededCore, decisionEvent, reviewSignals }` - the approved Core, the previous Core marked `SUPERSEDED` (a V2 must supersede the active V1 - two APPROVED Cores can never coexist), and a minimal **decision event** (`BRAND_CORE_APPROVED`, deterministic id, actor, subject, supersedes) shaped to map onto the future Socle Decision Ledger;
 - persists nothing and creates no second approval system.
 
 ## Non-goals of this foundation

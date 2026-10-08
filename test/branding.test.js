@@ -621,7 +621,11 @@ const approve = (over = {}) => approveBrandCore({
 });
 
 test('Brand Core approval records a resolved identity and emits a ledger-compatible decision event', () => {
-  const { core, superseded, decision_event: event } = approve();
+  const result = approve();
+  // uniform approval contract: approvedX / supersededX / decisionEvent (+ reviewSignals for Core)
+  assert.deepEqual(Object.keys(result).sort(), ['approvedCore', 'decisionEvent', 'reviewSignals', 'supersededCore']);
+  assert.deepEqual(result.reviewSignals, []);
+  const { approvedCore: core, supersededCore: superseded, decisionEvent: event } = result;
   assert.equal(core.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
   assert.equal(superseded, null);
   assert.equal(core.approval.approved_by, 'user-owner-1');
@@ -633,7 +637,7 @@ test('Brand Core approval records a resolved identity and emits a ledger-compati
   assert.equal(event.merchant_id, M1);
   assert.equal(event.supersedes, null);
   // deterministic: replaying the same decision gives the same event id
-  assert.equal(approve().decision_event.id, event.id);
+  assert.equal(approve().decisionEvent.id, event.id);
 });
 
 test('approval is refused without a present, same-tenant, authorized resolved actor', () => {
@@ -661,13 +665,13 @@ test('approval is refused while the reference Snapshot is not READY, even though
   );
   // once the Snapshot is READY again, the same proposal can be approved
   assert.equal(
-    approve({ proposal: prepared.core, snapshot: readySnapshotForCore() }).core.status,
+    approve({ proposal: prepared.core, snapshot: readySnapshotForCore() }).approvedCore.status,
     GOVERNED_DOCUMENT_STATUS.APPROVED,
   );
 });
 
 test('an already APPROVED Core stays usable when its Snapshot becomes STALE', () => {
-  const core = approve().core;
+  const core = approve().approvedCore;
   const stale = readySnapshotForCore(SNAPSHOT_STATUS.STALE);
   const memory = memoryWith([wordingRule], { core_ref: { id: core.id, version: core.version } });
   const context = buildBrandContext({ tenant: tenant(), core, memory, snapshot: stale });
@@ -682,7 +686,7 @@ test('approval is refused for a proposal that is not review-required or not read
 });
 
 test('approving V2 supersedes V1 and emits a superseding decision event', () => {
-  const v1 = approve().core;
+  const v1 = approve().approvedCore;
   const v2Proposal = proposeBrandCoreRevision({
     approvedCore: v1, snapshot: readySnapshotForCore(), tenant: tenant(), id: 'core-v2',
     createdAt: '2026-10-08T11:00:00Z', changes: { positioning: 'Updated positioning' },
@@ -694,15 +698,15 @@ test('approving V2 supersedes V1 and emits a superseding decision event', () => 
   assert.equal(v2Proposal.supersedes_id, 'core-v1');
 
   const result = approve({ proposal: v2Proposal, activeCore: v1, approvedAt: '2026-10-08T12:00:00Z' });
-  assert.equal(result.core.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
-  assert.equal(result.superseded.id, 'core-v1');
-  assert.equal(result.superseded.status, GOVERNED_DOCUMENT_STATUS.SUPERSEDED);
-  assert.deepEqual(result.decision_event.supersedes, { kind: 'brand_core', id: 'core-v1', version: 1 });
+  assert.equal(result.approvedCore.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
+  assert.equal(result.supersededCore.id, 'core-v1');
+  assert.equal(result.supersededCore.status, GOVERNED_DOCUMENT_STATUS.SUPERSEDED);
+  assert.deepEqual(result.decisionEvent.supersedes, { kind: 'brand_core', id: 'core-v1', version: 1 });
   assert.equal(v1.status, GOVERNED_DOCUMENT_STATUS.APPROVED, 'the input object is never mutated');
 });
 
 test('two APPROVED Cores can never coexist for one tenant', () => {
-  const v1 = approve().core;
+  const v1 = approve().approvedCore;
   // a fresh v1-style proposal that does not supersede the active core
   assert.throws(
     () => approve({ proposal: proposal({ id: 'core-other' }).core, activeCore: v1 }),

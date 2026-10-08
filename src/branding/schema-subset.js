@@ -1,9 +1,14 @@
-// Minimal JSON Schema validator for Nordla Branding schemas.
+// Strict SUBSET validator for Nordla Branding schemas - NOT a general JSON Schema implementation.
+//
+// It supports only the keywords listed in SUPPORTED below (type, enum, const, properties, required,
+// additionalProperties, items, min/max constraints, pattern, uniqueItems, local #/$defs/ $ref) and
+// REFUSES every other keyword (oneOf, allOf, if/then, patternProperties, format, remote $ref...),
+// even in branches the data never reaches. A schema file is therefore either enforced for real or
+// rejected - it can never silently contain an unenforced constraint. `$schema`/`$id` are treated as
+// annotations only. Do not rely on it for third-party schemas or full draft 2020-12 semantics.
 //
 // Why it exists: a schema nobody executes rots (the first Branding schema was removed for that
-// reason), and a full validator would add a dependency (NDR-P10: build/own what is cheap). This
-// one supports ONLY the keywords the Branding schemas use, and REFUSES any other keyword at
-// validation time, so a schema can never silently contain an unenforced constraint.
+// reason), and a full validator would add a dependency (NDR-P10: build/own what is cheap).
 
 const ANNOTATIONS = new Set(['$schema', '$id', 'title', 'description', '$defs']);
 const SUPPORTED = new Set([
@@ -99,7 +104,7 @@ function assertSupported(schema) {
 }
 
 /** @returns {{ ok: boolean, errors: string[] }} - throws on a schema using an unsupported keyword. */
-export function validateJsonSchemaLite(schema, value) {
+export function validateSchemaSubset(schema, value) {
   assertSupported(schema);
   const errors = [];
   check(schema, value, '$', schema, errors);

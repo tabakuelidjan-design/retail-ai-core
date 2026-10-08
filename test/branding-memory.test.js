@@ -33,7 +33,7 @@ import {
   selectActiveBrandMemory,
   submitBrandMemoryForReview,
   validateBrandMemory,
-  validateJsonSchemaLite,
+  validateSchemaSubset,
 } from '../src/branding/index.js';
 
 const M1 = '11111111-1111-4111-8111-111111111111';
@@ -72,7 +72,7 @@ const coreV1Proposal = () => buildBrandCoreProposal({
 }).core;
 const approveCore = (proposal, activeCore = null) => approveBrandCore({
   proposal, snapshot: snapshot(), tenant: tenant(), resolvedActor: actor(), activeCore, approvedAt: '2026-10-08T10:30:00Z',
-}).core;
+}).approvedCore;
 const coreV1 = () => approveCore(coreV1Proposal());
 const coreV2 = (v1 = coreV1()) => approveCore(proposeBrandCoreRevision({
   approvedCore: v1, snapshot: snapshot(), tenant: tenant(), id: 'core-v2',
@@ -88,7 +88,6 @@ const content = (over = {}) => ({
   identity_references: {
     primary_logo_ref: 'asset://logo-primary',
     approved_logo_refs: ['asset://logo-mono'],
-    distinctive_asset_refs: ['asset://logo-primary'],
   },
   design_tokens: {
     colors: { primary: '#112233', secondary: '#ffffff' },
@@ -198,7 +197,7 @@ const SAMPLE = {
   ASSET_REF: { EQUALS: 'asset://a', ONE_OF: ['asset://a', 'asset://b'], REQUIRED: true },
   COLOR: { EQUALS: '#112233', ONE_OF: ['#112233', '#ffffff'], REQUIRED: true },
   TYPOGRAPHY: { EQUALS: 'Example Sans', ONE_OF: ['Example Sans', 'Other Serif'], REQUIRED: true },
-  TEXT: { CONTAINS: 'foo', NOT_CONTAINS: 'bar', MATCHES_PATTERN: '^[A-Z]+$', REQUIRED: true },
+  TEXT: { CONTAINS: 'foo', NOT_CONTAINS: 'bar', REQUIRED: true },
   CLAIM_REF: { EQUALS: 'claim://a', ONE_OF: ['claim://a', 'claim://b'], REQUIRED: true },
   EXTERNAL_GATE: { STATUS_IN: ['PASS'], REQUIRED: true },
 };
@@ -221,12 +220,18 @@ test('10. the type x operator matrix is exact: every allowed pair passes, every 
   }
 });
 
-test('11. ASSET_REF + MATCHES_PATTERN is refused', () => {
-  assert.throws(() => normalizeHardRule(rule({ rule_type: 'ASSET_REF', operator: 'MATCHES_PATTERN', value: '^a' })), /not allowed/);
+test('11. ASSET_REF + CONTAINS is refused', () => {
+  assert.throws(() => normalizeHardRule(rule({ rule_type: 'ASSET_REF', operator: 'CONTAINS', value: 'a' })), /not allowed/);
 });
 
-test('12. TEXT + MATCHES_PATTERN is accepted', () => {
-  assert.equal(normalizeHardRule(rule({ operator: 'MATCHES_PATTERN', value: '^[A-Z ]+$' })).operator, 'MATCHES_PATTERN');
+test('12. TEXT keeps only CONTAINS, NOT_CONTAINS and REQUIRED; pattern matching is out of V1', () => {
+  assert.deepEqual(HARD_RULE_MATRIX.TEXT, ['CONTAINS', 'NOT_CONTAINS', 'REQUIRED']);
+  for (const operator of ['CONTAINS', 'NOT_CONTAINS']) {
+    assert.equal(normalizeHardRule(rule({ operator, value: 'foo' })).operator, operator);
+  }
+  assert.equal(normalizeHardRule(rule({ operator: 'REQUIRED', value: true })).value, true);
+  assert.equal(Object.values(RULE_OPERATOR).includes('MATCHES_PATTERN'), false);
+  assert.throws(() => normalizeHardRule(rule({ operator: 'MATCHES_PATTERN', value: '^[A-Z]+$' })), /unsupported/);
 });
 
 test('13. EXTERNAL_GATE + STATUS_IN is accepted for a known gate and known statuses', () => {
@@ -271,8 +276,6 @@ test('hard rule values are validated per type, and unknown fields are refused', 
   assert.throws(() => normalizeHardRule(rule({ rule_type: 'COLOR', operator: 'ONE_OF', value: [] })), /non-empty/);
   assert.throws(() => normalizeHardRule(rule({ rule_type: 'COLOR', operator: 'ONE_OF', value: ['#112233', '#112233'] })), /duplicates/);
   assert.throws(() => normalizeHardRule(rule({ operator: 'REQUIRED', value: 'yes' })), /must be true/);
-  assert.throws(() => normalizeHardRule(rule({ operator: 'MATCHES_PATTERN', value: '([' })), /not a valid pattern/);
-  assert.throws(() => normalizeHardRule(rule({ operator: 'MATCHES_PATTERN', value: '(a+)+$' })), /backtracking/);
   assert.throws(() => normalizeHardRule(rule({ tone: 'elegant' })), /not part of the hard rule contract/);
   assert.equal(normalizeHardRule(rule({ rule_type: 'COLOR', operator: 'EQUALS', value: '#aabbcc' })).value, '#AABBCC');
 });
@@ -341,7 +344,9 @@ test('25. an unauthorized role is refused; authorized roles are exactly OWNER an
 });
 
 test('26. approval produces a BRAND_MEMORY_APPROVED decision event reusing the Core event model', () => {
-  const { approvedMemory, supersededMemory, decisionEvent } = approveMemory();
+  const result = approveMemory();
+  assert.deepEqual(Object.keys(result).sort(), ['approvedMemory', 'decisionEvent', 'supersededMemory']);
+  const { approvedMemory, supersededMemory, decisionEvent } = result;
   assert.equal(approvedMemory.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
   assert.equal(supersededMemory, null);
   assert.equal(decisionEvent.type, DECISION_EVENT_TYPE.BRAND_MEMORY_APPROVED);
@@ -446,14 +451,19 @@ test('an empty Memory is not approvable, but no logo is mandatory', () => {
   assert.equal(noLogo.memory.identity_references.primary_logo_ref, null);
 });
 
-test('a distinctive asset is referenced from the Core, never invented in Memory', () => {
+test('Distinctive Brand Assets live only in the Core: Memory has no list of its own', () => {
   const core = coreV1();
-  const invented = buildBrandMemoryDraft({
-    tenant: tenant(), id: 'm', createdAt: '2026-10-08T12:00:00Z', core,
-    content: content({ identity_references: { distinctive_asset_refs: ['asset://not-in-core'] } }),
-  });
-  assert.ok(invented.readiness.reasons.includes('MEMORY_DISTINCTIVE_ASSET_NOT_IN_CORE'));
-  assert.equal(draft(core).identity_references.distinctive_asset_refs[0], core.distinctive_assets[0].asset_ref);
+  assert.throws(
+    () => draft(core, { content: content({ identity_references: { distinctive_asset_refs: ['asset://x'] } }) }),
+    /distinctive_asset_refs is not part of Brand Memory V1/,
+  );
+  assert.equal('distinctive_asset_refs' in draft(core).identity_references, false);
+  // Creative reads them from the Core, through the Creative interface
+  const context = buildBrandContext({ tenant: tenant(), core, memory: approveMemory({ core }).approvedMemory });
+  const view = creativeBrandInterface(context);
+  assert.deepEqual(view.distinctive_assets, JSON.parse(JSON.stringify(core.distinctive_assets)));
+  assert.equal(view.distinctive_assets[0].asset_ref, 'asset://logo-primary');
+  assert.throws(() => { view.distinctive_assets[0].asset_ref = 'x'; }, TypeError);
 });
 
 test('identity references are opaque refs: no binary, no whitespace, no repeated primary logo', () => {
@@ -532,7 +542,7 @@ test('33. a valid normalized Memory passes the schema (draft, reviewed and appro
   const schema = await schemaOf();
   const core = coreV1();
   for (const memory of [draft(core), reviewed(core), approveMemory({ core }).approvedMemory]) {
-    const result = validateJsonSchemaLite(schema, JSON.parse(JSON.stringify(memory)));
+    const result = validateSchemaSubset(schema, JSON.parse(JSON.stringify(memory)));
     assert.deepEqual(result.errors, []);
     assert.equal(result.ok, true);
   }
@@ -561,7 +571,7 @@ test('34. an invalid Memory really fails the schema validator', async () => {
     'bad approver role': mutate((m) => { m.approval.approver_role = 'GUEST'; }),
   };
   for (const [label, doc] of Object.entries(bad)) {
-    assert.equal(validateJsonSchemaLite(schema, doc).ok, false, label);
+    assert.equal(validateSchemaSubset(schema, doc).ok, false, label);
   }
 });
 
@@ -577,10 +587,10 @@ test('schema enums cannot drift from the code constants', async () => {
 });
 
 test('the schema validator refuses keywords it does not enforce, even in unreached branches', () => {
-  assert.throws(() => validateJsonSchemaLite({ type: 'object', properties: { a: { oneOf: [] } } }, {}), /UNSUPPORTED_SCHEMA_KEYWORD: oneOf/);
-  assert.throws(() => validateJsonSchemaLite({ $defs: { x: { patternProperties: {} } }, type: 'object' }, {}), /UNSUPPORTED_SCHEMA_KEYWORD/);
-  assert.throws(() => validateJsonSchemaLite({ $ref: '#/$defs/missing' }, 1), /UNRESOLVED_SCHEMA_REF/);
-  assert.equal(validateJsonSchemaLite({ type: 'integer', minimum: 1 }, 0).ok, false);
+  assert.throws(() => validateSchemaSubset({ type: 'object', properties: { a: { oneOf: [] } } }, {}), /UNSUPPORTED_SCHEMA_KEYWORD: oneOf/);
+  assert.throws(() => validateSchemaSubset({ $defs: { x: { patternProperties: {} } }, type: 'object' }, {}), /UNSUPPORTED_SCHEMA_KEYWORD/);
+  assert.throws(() => validateSchemaSubset({ $ref: '#/$defs/missing' }, 1), /UNRESOLVED_SCHEMA_REF/);
+  assert.equal(validateSchemaSubset({ type: 'integer', minimum: 1 }, 0).ok, false);
 });
 
 // ------------------------------------------------------------------ Candidate manifest contract

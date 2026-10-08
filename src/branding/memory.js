@@ -29,6 +29,8 @@ import {
 // Exactly five categories (no budget, strategy, catalog, pricing, production dimensions...):
 //   identity_references, design_tokens, hard_rules, semantic_context, external_references.
 // It stores REFERENCES, never binaries and never the truth of a claim or a product fact.
+// Distinctive Brand Assets are NOT duplicated here: Brand Core.distinctive_assets is the single
+// authoritative source and is exposed to Creative through the Creative interface.
 
 const MEMORY_SUBJECT = 'brand_memory';
 const NAME = /^[a-z][a-z0-9-]*$/;
@@ -66,7 +68,7 @@ function textList(value, field, max) {
 
 // ---------------------------------------------------------------- 1. identity references
 export function normalizeIdentityReferences(input = {}, field = 'identity_references') {
-  exactKeys(input, ['primary_logo_ref', 'approved_logo_refs', 'distinctive_asset_refs'], field);
+  exactKeys(input, ['primary_logo_ref', 'approved_logo_refs'], field);
   const primary = input.primary_logo_ref == null
     ? null
     : opaqueRef(input.primary_logo_ref, `${field}.primary_logo_ref`);
@@ -77,7 +79,6 @@ export function normalizeIdentityReferences(input = {}, field = 'identity_refere
   return {
     primary_logo_ref: primary,
     approved_logo_refs: approved,
-    distinctive_asset_refs: refList(input.distinctive_asset_refs, `${field}.distinctive_asset_refs`, opaqueRef),
   };
 }
 
@@ -193,7 +194,6 @@ const hasContent = (memory) => {
   return Boolean(
     id.primary_logo_ref
     || id.approved_logo_refs.length
-    || id.distinctive_asset_refs.length
     || Object.keys(tokens.colors).length
     || Object.keys(tokens.typography).length
     || memory.hard_rules.length
@@ -203,8 +203,6 @@ const hasContent = (memory) => {
     || ext.production_asset_refs.length || ext.claim_refs.length || ext.policy_refs.length,
   );
 };
-
-const coreAssetRefs = (core) => core.distinctive_assets.map((asset) => asset.asset_ref).filter(Boolean);
 
 /**
  * Structural + binding validation. `core` must be the tenant's active APPROVED Core: the Memory
@@ -224,11 +222,6 @@ export function validateBrandMemory(memory, { core = null } = {}) {
     if (core.merchant_id !== memory.merchant_id) reasons.push('CORE_MEMORY_MERCHANT_MISMATCH');
     if (memory.core_ref.id !== core.id || memory.core_ref.version !== core.version) {
       reasons.push('BRAND_MEMORY_CORE_MISMATCH');
-    }
-    // A distinctive asset is referenced from the Core, never invented in Memory.
-    const known = new Set(coreAssetRefs(core));
-    for (const ref of memory.identity_references.distinctive_asset_refs) {
-      if (!known.has(ref)) reasons.push('MEMORY_DISTINCTIVE_ASSET_NOT_IN_CORE');
     }
   }
   return validationResult(reasons);

@@ -129,7 +129,7 @@ export function buildBrandCoreProposal({
  *   Branding only checks it is present, same tenant and an authorized role - it authenticates nobody;
  * - `activeCore` is the tenant's currently APPROVED Core (or null). A new version MUST
  *   supersede it, so two APPROVED Cores can never coexist for one tenant;
- * - returns the approved Core, the superseded previous Core (if any) and a decision event
+ * - returns { approvedCore, supersededCore, decisionEvent, reviewSignals }: the approved Core, the superseded previous Core (if any) and a decision event
  *   ready to be handed to the Socle Decision Ledger. Nothing is persisted here.
  */
 export function approveBrandCore({
@@ -205,10 +205,10 @@ export function approveBrandCore({
   });
 
   return Object.freeze({
-    core,
-    superseded,
-    decision_event: decisionEvent,
-    review_signals: Object.freeze(snapshotSignals(snapshot)),
+    approvedCore: core,
+    supersededCore: superseded,
+    decisionEvent,
+    reviewSignals: Object.freeze(snapshotSignals(snapshot)),
   });
 }
 
