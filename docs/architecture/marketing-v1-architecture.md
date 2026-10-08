@@ -1,10 +1,23 @@
 # Nordla — Marketing V1 Architecture
 
-- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE · M2 COMPLETE · M3 COMPLETE · M4 IMPLEMENTED LOCALLY / UNDER AUDIT
+- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE · M2 COMPLETE · M3 COMPLETE · M4 COMPLETE · MARKETING V1 CORE COMPLETE
 - **Date:** 2026-10-08
 - **Canonical sequence:** `UNDERSTAND → BUILD → CREATE → STEER`
 - **Scope:** Marketing core + reserved specialized intelligences
-- **Build status:** M1 = **COMPLETE**. M1.5 = **COMPLETE**. M2 = **COMPLETE**. M3 = **COMPLETE**. M4 — STEER = **IMPLEMENTED LOCALLY / UNDER AUDIT** (not pushed; do not mark complete before audit, push and CI). Marketing V1 Core is not declared complete before then.
+- **Build status:**
+
+```text
+M1 — UNDERSTAND          = COMPLETE
+M1.5 — SIGNAL PRODUCERS  = COMPLETE
+M2 — BUILD               = COMPLETE
+M3 — CREATE              = COMPLETE
+M4 — STEER               = COMPLETE
+
+MARKETING V1 CORE = COMPLETE
+
+Next phase   = Specialized Marketing Intelligences
+First target = Social Trend Intelligence
+```
 
 ## 0. Architectural rules
 
@@ -741,7 +754,7 @@ ActivationManifest contract
 
 ## M4 — STEER
 
-**Status: IMPLEMENTED LOCALLY / UNDER AUDIT** — see [`marketing-m4-steer-contract.md`](./marketing-m4-steer-contract.md).
+**Status: COMPLETE** — see [`marketing-m4-steer-contract.md`](./marketing-m4-steer-contract.md).
 
 ```text
 MarketingRun

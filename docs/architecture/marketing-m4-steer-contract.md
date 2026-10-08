@@ -1,6 +1,6 @@
 # Marketing M4 — STEER contract (V1)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT — not pushed, not COMPLETE until audit, push and CI
+- **Status:** M4 — STEER COMPLETE (audited, pushed, CI green)
 - **Version:** `marketing-m4-steer.v1` (`MARKETING_STEER_VERSION`)
 - **Code:** `src/marketing/m4.js` (public surface) · `m4-constants.js` · `m4-validation.js` · `execution-receipt.js` · `marketing-run.js` · `run-evidence.js` · `run-result.js` · `marketing-learning.js` · `follow-up-proposal.js` · `steer-package.js`
 - **Tests:** `test/marketing-m4-steer.test.js` (+ shared fixtures `test/marketing-m4-fixtures.js`)
@@ -357,3 +357,18 @@ One row per numbered case of the M4 mandate (§85). Several cases share a test f
 | 202 | package status is derived live from proposals | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
 | 203 | stored proposal readiness cannot improve package status | Steer package readiness: no stored proposal_readiness exists, and the package status is derived live from the proposals |
 <!-- coverage-matrix:end -->
+
+## 17. Invariants kept at closure
+
+```text
+OBSERVED ≠ ATTRIBUTED ≠ INCREMENTAL ≠ CAUSAL
+
+NONE / TIME cannot CONFIRM or REFUTE
+PARTIAL execution cannot CONFIRM / REFUTE / SCALE
+UNKNOWN != NOT_MEASURABLE
+Offline attribution is not causality
+CONFIRMED / REFUTED require eligible incremental evidence
+MarketingLearning never promotes SUGGESTIVE to FACT
+Follow-up proposals return to the Socle
+no auto-scale / auto-stop / auto-budget / auto-execution
+```
