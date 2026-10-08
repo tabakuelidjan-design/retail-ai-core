@@ -1,10 +1,10 @@
 # Alibaba Creative V0 — controlled smoke test
 
-Status: READY FOR CREDENTIAL CONFIGURATION / NOT YET EXECUTED LIVE
+Status: EXECUTED LIVE / OUTPUTS REVIEWED / QUALITY INSUFFICIENT FOR PROMOTION
 
 Independent pre-smoke review returned **GO FOR SMOKE TEST (conditional)**.
 
-The smoke test exists only to validate the real provider wiring. It is **not** a Creative Fidelity benchmark and must not be used to rank models.
+The smoke test was executed live on a public HABB product and produced one image and one 5-second Wan video. Both outputs were reviewed manually. The wiring was validated, but the observed creative quality was not sufficient to promote Alibaba as the default creative provider. The smoke test remains **not** a Creative Fidelity benchmark and must not be used alone to rank models.
 
 ## Fixed sequence
 
@@ -74,10 +74,14 @@ Journal, downloaded image/video and summary are written under the operating-syst
 
 Nothing is written to Git.
 
+## Historical execution
+
+The controlled live smoke run completed and produced the expected image and video outputs. Manual review concluded that the result was technically valid but not strong enough for HABB's production-quality bar. The next step is the multi-provider benchmark defined in `marketing-creative-provider-benchmark-2026-10-07.md`; do not repeat the smoke test merely to re-prove provider wiring.
+
 ## Command
 
-After the environment variables are configured:
+For any future diagnostic rerun only:
 
 `npm run marketing-creative:smoke`
 
-After the run, compare the JSONL journal and summary to the Alibaba billing/usage dashboard. Do not register smoke-test outputs as benchmark evidence.
+Do not register smoke-test outputs as benchmark evidence.
