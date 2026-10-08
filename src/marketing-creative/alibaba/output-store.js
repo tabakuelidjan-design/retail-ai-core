@@ -39,11 +39,22 @@ async function download(url, {
 export class MemoryOutputStore {
   async storeUrl({ url, kind = 'image', operationId, fetchImpl }) {
     const downloaded = await download(url, { fetchImpl });
+    return this.storeBytes({
+      bytes: downloaded.bytes,
+      contentType: downloaded.contentType,
+      kind,
+      operationId,
+    });
+  }
+
+  async storeBytes({ bytes, contentType = null, kind = 'image', operationId }) {
+    const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
     return Object.freeze({
-      ref: `memory://${operationId}/${downloaded.sha256}`,
-      sha256: downloaded.sha256,
-      bytes: downloaded.bytes.length,
-      content_type: downloaded.contentType,
+      ref: `memory://${operationId}/${sha256}`,
+      sha256,
+      bytes: buffer.length,
+      content_type: contentType,
       kind,
     });
   }
@@ -65,20 +76,31 @@ export class FileOutputStore {
 
   async storeUrl({ url, kind = 'image', operationId, fetchImpl }) {
     const downloaded = await download(url, { fetchImpl });
+    return this.storeBytes({
+      bytes: downloaded.bytes,
+      contentType: downloaded.contentType,
+      kind,
+      operationId,
+    });
+  }
+
+  async storeBytes({ bytes, contentType = null, kind = 'image', operationId }) {
+    const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
 
     await mkdir(this.directory, { recursive: true });
     const filename = (
-      `${operationId}-${downloaded.sha256.slice(0, 16)}`
-      + extensionFor(downloaded.contentType, kind)
+      `${operationId}-${sha256.slice(0, 16)}`
+      + extensionFor(contentType, kind)
     );
     const target = path.join(this.directory, filename);
-    await writeFile(target, downloaded.bytes, { mode: 0o600 });
+    await writeFile(target, buffer, { mode: 0o600 });
 
     return Object.freeze({
       ref: `file://${target}`,
-      sha256: downloaded.sha256,
-      bytes: downloaded.bytes.length,
-      content_type: downloaded.contentType,
+      sha256,
+      bytes: buffer.length,
+      content_type: contentType,
       kind,
     });
   }
