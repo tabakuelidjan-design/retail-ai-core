@@ -103,7 +103,7 @@ else (all NOT_APPLICABLE)                        -> UNKNOWN
 
 `MARKETING_RELEVANT | REFER_TO_DOMAIN | NO_MATERIAL_SIGNAL | NOT_MEASURABLE`, with `reason_codes[]` (≥ 1), `evidence_refs[]`, `target_domains[]`.
 
-`REFER_TO_DOMAIN` requires `target_domains` + `reason_codes` + `evidence_refs`; targets are forbidden otherwise. The target registry is closed and follows the canonical domain map of `NORDLA-CANONICAL-ARCHITECTURE.md` (no code-level registry exists, so none was duplicated): `FINANCE, ANALYSES, SALES_PRODUCT, INVENTORY, BUYING_SUPPLIERS, BRANDING, SALES_DEVELOPMENT, COMPLIANCE, AFTER_SALES`, plus three routing destinations used by the architecture that the map does not name: `CUSTOMERS, SITE_COMMERCE, OPERATIONS`. `SERVICE_SUPPORT` was a synonym of After-Sales and is replaced by `AFTER_SALES` (it is now refused). Marketing is never its own target. Domain Fit carries a diagnosis only — no lever, budget, campaign or action.
+`REFER_TO_DOMAIN` requires `target_domains` + `reason_codes` + `evidence_refs`; targets are forbidden otherwise. The target registry is closed and is **exactly the approved Level-2 domain map** of `NORDLA-CANONICAL-ARCHITECTURE.md` (no code-level registry exists, so none was duplicated), minus Marketing itself: `FINANCE, ANALYSES, SALES, INVENTORY, BUYING_SUPPLIERS, BRANDING, SALES_DEVELOPMENT, COMPLIANCE, AFTER_SALES_SERVICE`. `MARKETING` is not a destination (a problem is never referred back to the referring domain). `CUSTOMERS`, `SITE_COMMERCE`, `OPERATIONS`, `SALES_PRODUCT`, `AFTER_SALES` and `SERVICE_SUPPORT` are refused; a future need for another owner is a separate architecture decision, the canonical map is not changed here. The same registry types `data_gaps[].owner_domain`. A test checks that every entry appears in the canonical document's domain map. Domain Fit carries a diagnosis only — no lever, budget, campaign or action.
 
 ## 7. MarketingFinding
 
@@ -130,6 +130,14 @@ MarketingFinding
   - a supporting signal already expired at `created_at` (`expires_at ≤ created_at`) is refused as active proof, `MKT_FINDING_EVIDENCE_SIGNAL_EXPIRED`. It stays visible in the context (`STALE`) and can still be cited in `contradictory_evidence_refs` — kept for audit and flagged `CITED_SIGNAL_EXPIRED` — but it can never be what makes a Finding `READY_FOR_BUILD`.
   - `contradictory_evidence_refs` never bound the Finding.
   - The check needs the context's signals, so it applies in `buildMarketingFinding`; `normalizeMarketingFinding` re-validates stored data without a context and cannot re-check it (the persistence layer must call the builder).
+- **Evidence-resolution limitation (explicit).** M1 resolves only what it can see:
+
+  | Reference | M1 behaviour |
+  |---|---|
+  | `MarketSignal` whose id is present in the `MarketingContext` | freshness and transitive expiry **enforced** (rules above) |
+  | any other opaque evidence ref (measurement facts, domain facts, documents…) | a **trusted server-side reference**: M1 checks only its shape; its resolution and freshness are **delegated to a future Socle Evidence Registry / evidence resolver**, which does not exist yet and is not built here |
+
+  So a Finding that cites only non-signal refs is not bounded by any expiry other than its own `expires_at`, and an unknown or stale non-signal ref is not detected by M1.
 - Only structured gaps — **no estimate is ever substituted for a missing value**; no `observed_change` snapshot field in M1 (a value, if ever needed, is referenced by evidence ref).
 
 ## 8. CandidateHypothesis
@@ -213,7 +221,7 @@ evaluateFindingReadiness(finding, '2026-10-09T00:00:00Z'); // READY_FOR_BUILD
 
 ## 14. Open dependencies (intentionally not resolved here)
 
-Lost Demand producer · Calendar/seasonality producer · Manual Observation input workflow · Social Trend / Search Demand / Store Experience / Reputation radars · Operations / Workshop data source · Customers segment source · richer Finance / Inventory contracts · persistence · Decision Ledger · Activation · Creative · STEER · Nordla Identity (trust of server-built inputs).
+Lost Demand producer · Calendar/seasonality producer · Manual Observation input workflow · Social Trend / Search Demand / Store Experience / Reputation radars · Operations / Workshop data source · Customers segment source · richer Finance / Inventory contracts · persistence · Decision Ledger · Activation · Creative · STEER · Nordla Identity (trust of server-built inputs) · **Socle Evidence Registry / evidence resolver** (resolution and freshness of non-signal evidence refs).
 
 ## 15. Test coverage — mandate cases 1–131
 

@@ -570,14 +570,26 @@ test('MarketSignal effective_window: the period of the phenomenon, independent o
   assert.deepEqual(normalizeMarketSignal(JSON.parse(JSON.stringify(upcoming)), { tenant: tenant() }), upcoming);
 });
 
-test('REFER_TO_DOMAIN registry follows the canonical domain map (After-Sales, Buying & Suppliers, Compliance, Analyses)', () => {
+test('REFER_TO_DOMAIN registry is exactly the canonical Level-2 domain map, minus MARKETING', async () => {
   const refer = (target) => buildDomainFit(fit({ status: 'REFER_TO_DOMAIN', target_domains: [target], evidence_refs: ['ev/1'] }));
-  for (const target of ['FINANCE', 'ANALYSES', 'SALES_PRODUCT', 'INVENTORY', 'BUYING_SUPPLIERS', 'BRANDING', 'SALES_DEVELOPMENT', 'COMPLIANCE', 'AFTER_SALES', 'CUSTOMERS', 'SITE_COMMERCE', 'OPERATIONS']) {
-    assert.deepEqual(refer(target).target_domains, [target], target);
+  const canonical = ['FINANCE', 'ANALYSES', 'SALES', 'INVENTORY', 'BUYING_SUPPLIERS', 'BRANDING', 'SALES_DEVELOPMENT', 'COMPLIANCE', 'AFTER_SALES_SERVICE'];
+  assert.deepEqual(Object.values(understand.TARGET_DOMAIN).sort(), [...canonical].sort());
+  for (const target of canonical) assert.deepEqual(refer(target).target_domains, [target], target);
+  // renamed or removed destinations, and Marketing itself, are refused
+  for (const gone of ['MARKETING', 'SALES_PRODUCT', 'AFTER_SALES', 'SERVICE_SUPPORT', 'CUSTOMERS', 'SITE_COMMERCE', 'OPERATIONS']) {
+    assert.equal(code(() => refer(gone)), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET', gone);
   }
-  assert.equal(code(() => refer('SERVICE_SUPPORT')), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET'); // replaced by AFTER_SALES
-  assert.equal(code(() => refer('MARKETING')), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET'); // Marketing never refers to itself
+  assert.equal(code(() => finding({ data_gaps: [{ gap_code: 'X', owner_domain: 'CUSTOMERS', description: 'x' }] })), 'MKT_INVALID_FIELD'); // gap owners use the same registry
+  assert.equal(finding({ data_gaps: [{ gap_code: 'X', owner_domain: 'AFTER_SALES_SERVICE', description: 'x' }] }).data_gaps[0].owner_domain, 'AFTER_SALES_SERVICE');
   assert.equal(Object.isFrozen(understand.TARGET_DOMAIN), true);
+  // the registry must not drift from the canonical document: every entry appears in its approved domain map
+  const doc = await readFile(new URL('../NORDLA-CANONICAL-ARCHITECTURE.md', import.meta.url), 'utf8');
+  const map = doc.slice(doc.indexOf('Approved domain map:'), doc.indexOf('A domain may know what is abnormal'));
+  const label = { BUYING_SUPPLIERS: 'Buying & Suppliers', SALES_DEVELOPMENT: 'Sales Development', AFTER_SALES_SERVICE: 'After-Sales Service' };
+  for (const target of canonical) {
+    const name = label[target] ?? target.charAt(0) + target.slice(1).toLowerCase();
+    assert.ok(map.includes(`- ${name}\n`) || map.includes(`- ${name}\r\n`), `${target} is not in the canonical domain map`);
+  }
 });
 
 // ------------------------------------------------------------------ CandidateHypothesis (81-95)

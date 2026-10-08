@@ -63,24 +63,20 @@ export const DOMAIN_FIT_STATUS = Object.freeze({
   NOT_MEASURABLE: 'NOT_MEASURABLE',
 });
 
-// Closed registry of the destinations Marketing may refer a problem to. There is no code-level domain registry in the
-// repository: the canonical domain map lives in NORDLA-CANONICAL-ARCHITECTURE.md (Finance, Analyses, Sales, Inventory,
-// Buying & Suppliers, Marketing, Branding, Sales Development, Compliance, After-Sales Service). Marketing is never its own
-// target. CUSTOMERS, SITE_COMMERCE and OPERATIONS are routing destinations used by the architecture that are not (yet)
-// named in that map; AFTER_SALES is the canonical After-Sales Service (no SERVICE_SUPPORT synonym).
+// Closed registry of the destinations Marketing may refer a problem to: exactly the approved Level-2 domain map of
+// NORDLA-CANONICAL-ARCHITECTURE.md (there is no code-level registry, so none is duplicated), minus MARKETING itself - a
+// problem is never referred back to the domain that is referring it. A new owner (e.g. customers, site/commerce,
+// operations) would need a separate architecture decision; it is not added here.
 export const TARGET_DOMAIN = Object.freeze({
   FINANCE: 'FINANCE',
   ANALYSES: 'ANALYSES',
-  SALES_PRODUCT: 'SALES_PRODUCT',
+  SALES: 'SALES',
   INVENTORY: 'INVENTORY',
   BUYING_SUPPLIERS: 'BUYING_SUPPLIERS',
   BRANDING: 'BRANDING',
   SALES_DEVELOPMENT: 'SALES_DEVELOPMENT',
   COMPLIANCE: 'COMPLIANCE',
-  AFTER_SALES: 'AFTER_SALES',
-  CUSTOMERS: 'CUSTOMERS',
-  SITE_COMMERCE: 'SITE_COMMERCE',
-  OPERATIONS: 'OPERATIONS',
+  AFTER_SALES_SERVICE: 'AFTER_SALES_SERVICE',
 });
 
 // Domains whose typed facts a MarketingContext may carry (read-only, owner-computed).
