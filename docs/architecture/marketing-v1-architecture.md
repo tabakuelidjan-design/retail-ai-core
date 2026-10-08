@@ -15,8 +15,10 @@ M4 — STEER               = COMPLETE
 
 MARKETING V1 CORE = COMPLETE
 
-Next phase   = Specialized Marketing Intelligences
-First target = Social Trend Intelligence
+Next phase   = Activation & Channel Execution
+First target = Activation & Channel Execution V1
+After        = Specialized Marketing Intelligences
+First specialized intelligence = Social Trend Intelligence
 ```
 
 ## 0. Architectural rules
@@ -762,6 +764,15 @@ Attribution / incremental eligibility
 Offline attribution
 MarketingLearning
 Follow-up proposals
+```
+
+
+**Activation & Channel Execution** (the next target after Marketing V1 Core):
+
+```text
+Activation & Channel Execution is not part of Marketing decision logic.
+It is the governed execution layer consuming an approved ActivationManifest
+and returning ExecutionReceipts to M4.
 ```
 
 ---
