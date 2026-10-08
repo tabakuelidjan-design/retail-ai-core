@@ -83,6 +83,13 @@ export function merchantIdValue(value, field = 'merchant_id') {
   return text.toLowerCase();
 }
 
+// A brand id is a stable UUID issued server-side, distinct from the merchant (tenant) id.
+export function brandIdValue(value, field = 'brand_id') {
+  const text = requiredString(value, field);
+  if (!isUuid(text)) throw new TypeError(`${field} must be a brand UUID`);
+  return text.toLowerCase();
+}
+
 // Branding never resolves a tenant itself (ADR 0003): callers pass the result of
 // the canonical resolver in src/tenant ({ merchantId, source }).
 export function tenantMerchantId(tenant, field = 'tenant') {

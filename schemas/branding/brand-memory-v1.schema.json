@@ -7,6 +7,7 @@
   "required": [
     "id",
     "merchant_id",
+    "brand_id",
     "version",
     "status",
     "created_at",
@@ -26,6 +27,10 @@
       "minLength": 1
     },
     "merchant_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "brand_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },

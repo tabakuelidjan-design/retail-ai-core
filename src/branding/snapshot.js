@@ -8,6 +8,7 @@ import {
   SNAPSHOT_STATUS,
   SNAPSHOT_TOPIC,
 } from './constants.js';
+import { resolveBrand } from './brand.js';
 import {
   normalizeBrandSnapshot,
   normalizeEvidence,
@@ -84,12 +85,13 @@ function normalizeCompetitor(input, field) {
 
 export function buildSnapshotResearchPlan({
   tenant,
+  brand,
   directCompetitors = [],
   maxDirectCompetitors = DEFAULT_MAX_DIRECT_COMPETITORS,
   questions = DEFAULT_SNAPSHOT_RESEARCH_QUESTIONS,
   sourceKinds = DEFAULT_SNAPSHOT_SOURCE_KINDS,
 } = {}) {
-  const merchantId = tenantMerchantId(tenant);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
   if (!Number.isInteger(maxDirectCompetitors) || maxDirectCompetitors < 1) {
     throw new TypeError('maxDirectCompetitors must be an integer >= 1');
   }
@@ -122,6 +124,7 @@ export function buildSnapshotResearchPlan({
 
   return Object.freeze({
     merchant_id: merchantId,
+    brand_id: brandId,
     max_direct_competitors: maxDirectCompetitors,
     direct_competitors: Object.freeze(competitors),
     questions: Object.freeze(normalizedQuestions),
@@ -272,6 +275,7 @@ function findingFromClaim(claim) {
 export function buildBrandSnapshotV1({
   id,
   tenant,
+  brand,
   version = 1,
   status = SNAPSHOT_STATUS.READY,
   createdAt,
@@ -283,9 +287,12 @@ export function buildBrandSnapshotV1({
   supersedesId = null,
 } = {}) {
   if (!researchPlan) throw new TypeError('researchPlan is required');
-  const merchantId = tenantMerchantId(tenant);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
   if (researchPlan.merchant_id !== merchantId) {
     throw new Error('SNAPSHOT_RESEARCH_PLAN_MERCHANT_MISMATCH');
+  }
+  if (researchPlan.brand_id !== brandId) {
+    throw new Error('SNAPSHOT_RESEARCH_PLAN_BRAND_MISMATCH');
   }
 
   const normalizedEvidence = objectList(
@@ -367,6 +374,7 @@ export function buildBrandSnapshotV1({
   const snapshot = normalizeBrandSnapshot({
     id,
     merchant_id: merchantId,
+    brand_id: brandId,
     version,
     status,
     created_at: createdAt,

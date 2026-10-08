@@ -19,6 +19,7 @@ import {
   approveBrandCore,
   approveBrandMemory,
   buildBrandContext,
+  buildBrandIdentity,
   buildBrandCoreProposal,
   buildBrandMemoryDraft,
   creativeBrandInterface,
@@ -39,13 +40,26 @@ import {
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
 const tenant = (merchantId = M1) => ({ merchantId, source: 'env' });
+const B1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const B2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const B3 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+// A brand of the given merchant (the server-side registry would issue it); B1 for M1, B3 for others.
+const brand = (merchantId = M1, over = {}) => buildBrandIdentity({
+  tenant: tenant(merchantId),
+  brandId: merchantId === M1 ? B1 : B3,
+  name: 'Brand One',
+  createdAt: '2026-10-01T09:00:00Z',
+  defaultLocale: 'fr-BE',
+  supportedLocales: ['fr-BE', 'nl-BE'],
+  ...over,
+});
 const actor = (merchantId = M1, over = {}) => ({
   user_id: 'user-owner-1', role: 'OWNER', merchant_id: merchantId, ...over,
 });
 
 // ------------------------------------------------------------------ fixtures (real Core flow)
 const snapshot = (status = SNAPSHOT_STATUS.READY) => normalizeBrandSnapshot({
-  id: 'snapshot-1', merchant_id: M1, version: 1, status,
+  id: 'snapshot-1', merchant_id: M1, brand_id: B1, version: 1, status,
   created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
   evidence: [{
     id: 'e1', provenance: 'observed', statement: 'Observed', completeness: 'COMPLETE',
@@ -68,14 +82,14 @@ const coreDecisions = () => ({
 });
 
 const coreV1Proposal = () => buildBrandCoreProposal({
-  id: 'core-v1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z', snapshot: snapshot(), decisions: coreDecisions(),
+  id: 'core-v1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z', snapshot: snapshot(), decisions: coreDecisions(),
 }).core;
 const approveCore = (proposal, activeCore = null) => approveBrandCore({
-  proposal, snapshot: snapshot(), tenant: tenant(), resolvedActor: actor(), activeCore, approvedAt: '2026-10-08T10:30:00Z',
+  proposal, snapshot: snapshot(), tenant: tenant(), brand: brand(), resolvedActor: actor(), activeCore, approvedAt: '2026-10-08T10:30:00Z',
 }).approvedCore;
 const coreV1 = () => approveCore(coreV1Proposal());
 const coreV2 = (v1 = coreV1()) => approveCore(proposeBrandCoreRevision({
-  approvedCore: v1, snapshot: snapshot(), tenant: tenant(), id: 'core-v2',
+  approvedCore: v1, snapshot: snapshot(), tenant: tenant(), brand: brand(), id: 'core-v2',
   createdAt: '2026-10-08T11:00:00Z', changes: { positioning: 'Updated' },
 }).core, v1);
 
@@ -117,19 +131,19 @@ const content = (over = {}) => ({
 });
 
 const draft = (core = coreV1(), over = {}) => buildBrandMemoryDraft({
-  tenant: tenant(), id: 'mem-v1', createdAt: '2026-10-08T12:00:00Z', core, content: content(), ...over,
+  tenant: tenant(), brand: brand(), id: 'mem-v1', createdAt: '2026-10-08T12:00:00Z', core, content: content(), ...over,
 }).memory;
-const reviewed = (core = coreV1(), memory = draft(core)) => submitBrandMemoryForReview({ memory, core, tenant: tenant() });
+const reviewed = (core = coreV1(), memory = draft(core)) => submitBrandMemoryForReview({ memory, core, tenant: tenant(), brand: brand() });
 const approveMemory = (over = {}) => {
   const core = over.core ?? coreV1();
   return approveBrandMemory({
-    memory: reviewed(core), core, tenant: tenant(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z', ...over,
+    memory: reviewed(core), core, tenant: tenant(), brand: brand(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z', ...over,
   });
 };
 
 // ------------------------------------------------------------------ Core binding
 test('1. a Memory cannot be built without a Core', () => {
-  assert.throws(() => buildBrandMemoryDraft({ tenant: tenant(), id: 'm', createdAt: '2026-10-08T12:00:00Z', core: null, content: content() }),
+  assert.throws(() => buildBrandMemoryDraft({ tenant: tenant(), brand: brand(), id: 'm', createdAt: '2026-10-08T12:00:00Z', core: null, content: content() }),
     /MEMORY_REQUIRES_APPROVED_CORE/);
 });
 
@@ -138,7 +152,7 @@ test('2. a Memory cannot be built on a Core that is not APPROVED', () => {
 });
 
 test('3. a Memory cannot be built on another tenant\'s Core', () => {
-  assert.throws(() => draft(coreV1(), { tenant: tenant(M2) }), /MEMORY_CORE_TENANT_MISMATCH/);
+  assert.throws(() => draft(coreV1(), { tenant: tenant(M2), brand: brand(M2) }), /MEMORY_CORE_TENANT_MISMATCH/);
 });
 
 test('4. an incorrect core_ref is refused at validation and at approval', () => {
@@ -147,7 +161,7 @@ test('4. an incorrect core_ref is refused at validation and at approval', () => 
   assert.ok(validateBrandMemory(memoryOnV1, { core: v2 }).reasons.includes('BRAND_MEMORY_CORE_MISMATCH'));
   assert.throws(
     () => approveBrandMemory({
-      memory: memoryOnV1, core: v2, tenant: tenant(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z',
+      memory: memoryOnV1, core: v2, tenant: tenant(), brand: brand(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z',
     }),
     /BRAND_MEMORY_CORE_MISMATCH/,
   );
@@ -156,10 +170,10 @@ test('4. an incorrect core_ref is refused at validation and at approval', () => 
 test('5. when the active Core changes, the Brand Context is GATED with BRAND_MEMORY_CORE_MISMATCH', () => {
   const v1 = coreV1();
   const memory = approveMemory({ core: v1 }).approvedMemory;
-  const ready = buildBrandContext({ tenant: tenant(), core: v1, memory });
+  const ready = buildBrandContext({ tenant: tenant(), brand: brand(), core: v1, memory });
   assert.equal(ready.status, BRAND_CONTEXT_STATUS.READY);
 
-  const gated = buildBrandContext({ tenant: tenant(), core: coreV2(v1), memory });
+  const gated = buildBrandContext({ tenant: tenant(), brand: brand(), core: coreV2(v1), memory });
   assert.equal(gated.status, BRAND_CONTEXT_STATUS.GATED);
   assert.ok(gated.reasons.includes('BRAND_MEMORY_CORE_MISMATCH'));
   assert.throws(() => marketingBrandInterface(gated), /gated/);
@@ -168,7 +182,7 @@ test('5. when the active Core changes, the Brand Context is GATED with BRAND_MEM
 test('6. a STALE Snapshot with compatible Core and Memory stays READY with a review signal', () => {
   const v1 = coreV1();
   const memory = approveMemory({ core: v1 }).approvedMemory;
-  const context = buildBrandContext({ tenant: tenant(), core: v1, memory, snapshot: snapshot(SNAPSHOT_STATUS.STALE) });
+  const context = buildBrandContext({ tenant: tenant(), brand: brand(), core: v1, memory, snapshot: snapshot(SNAPSHOT_STATUS.STALE) });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.READY);
   assert.deepEqual(context.review_signals, ['BRAND_SNAPSHOT_STALE']);
 });
@@ -321,11 +335,11 @@ test('22. a DRAFT cannot be approved directly; it must be submitted for review f
   const memory = draft();
   assert.equal(memory.status, GOVERNED_DOCUMENT_STATUS.DRAFT);
   assert.throws(
-    () => approveBrandMemory({ memory, core: coreV1(), tenant: tenant(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z' }),
+    () => approveBrandMemory({ memory, core: coreV1(), tenant: tenant(), brand: brand(), resolvedActor: actor(), approvedAt: '2026-10-08T13:00:00Z' }),
     /MEMORY_MUST_BE_REVIEW_REQUIRED_BEFORE_APPROVAL/,
   );
   assert.equal(reviewed().status, GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED);
-  assert.throws(() => submitBrandMemoryForReview({ memory: reviewed(), core: coreV1(), tenant: tenant() }), /MUST_BE_DRAFT_TO_SUBMIT/);
+  assert.throws(() => submitBrandMemoryForReview({ memory: reviewed(), core: coreV1(), tenant: tenant(), brand: brand() }), /MUST_BE_DRAFT_TO_SUBMIT/);
 });
 
 test('23. approval without a resolved actor is refused', () => {
@@ -334,7 +348,7 @@ test('23. approval without a resolved actor is refused', () => {
 
 test('24. an actor from another tenant is refused', () => {
   assert.throws(() => approveMemory({ resolvedActor: actor(M2) }), /RESOLVED_ACTOR_TENANT_MISMATCH/);
-  assert.throws(() => approveMemory({ tenant: tenant(M2), resolvedActor: actor(M2) }), /MEMORY_TENANT_MISMATCH/);
+  assert.throws(() => approveMemory({ tenant: tenant(M2), brand: brand(M2), resolvedActor: actor(M2) }), /MEMORY_TENANT_MISMATCH/);
 });
 
 test('25. an unauthorized role is refused; authorized roles are exactly OWNER and AUTHORIZED_REVIEWER', () => {
@@ -359,7 +373,7 @@ test('26. approval produces a BRAND_MEMORY_APPROVED decision event reusing the C
 });
 
 const v2For = (v1Memory, core) => proposeBrandMemoryRevision({
-  approvedMemory: v1Memory, core, tenant: tenant(), id: 'mem-v2', createdAt: '2026-10-08T14:00:00Z',
+  approvedMemory: v1Memory, core, tenant: tenant(), brand: brand(), id: 'mem-v2', createdAt: '2026-10-08T14:00:00Z',
   changes: { semantic_context: { ...content().semantic_context, brand_style_summary: 'Updated.' } },
 }).memory;
 
@@ -372,7 +386,7 @@ test('27. approving V2 supersedes V1 with a superseding decision event', () => {
   assert.equal(v2.supersedes_id, 'mem-v1');
 
   const result = approveBrandMemory({
-    memory: v2, core, tenant: tenant(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z',
+    memory: v2, core, tenant: tenant(), brand: brand(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z',
   });
   assert.equal(result.approvedMemory.status, GOVERNED_DOCUMENT_STATUS.APPROVED);
   assert.equal(result.supersededMemory.id, 'mem-v1');
@@ -387,9 +401,9 @@ test('a new Memory version can move to a newer Core and supersede the old Memory
   const v2 = v2For(v1, v2Core);
   assert.deepEqual(v2.core_ref, { id: 'core-v2', version: 2 });
   const result = approveBrandMemory({
-    memory: v2, core: v2Core, tenant: tenant(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z',
+    memory: v2, core: v2Core, tenant: tenant(), brand: brand(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z',
   });
-  assert.equal(buildBrandContext({ tenant: tenant(), core: v2Core, memory: result.approvedMemory }).status, BRAND_CONTEXT_STATUS.READY);
+  assert.equal(buildBrandContext({ tenant: tenant(), brand: brand(), core: v2Core, memory: result.approvedMemory }).status, BRAND_CONTEXT_STATUS.READY);
 });
 
 test('28. two active APPROVED Memories are refused explicitly', () => {
@@ -397,24 +411,24 @@ test('28. two active APPROVED Memories are refused explicitly', () => {
   const v1 = approveMemory({ core }).approvedMemory;
   const sibling = reviewed(core, draft(core, { id: 'mem-other' }));
   assert.throws(
-    () => approveBrandMemory({ memory: sibling, core, tenant: tenant(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z' }),
+    () => approveBrandMemory({ memory: sibling, core, tenant: tenant(), brand: brand(), resolvedActor: actor(), activeMemory: v1, approvedAt: '2026-10-08T15:00:00Z' }),
     /MEMORY_ACTIVE_MEMORY_MUST_BE_SUPERSEDED/,
   );
   const orphan = proposeBrandMemoryRevision({
-    approvedMemory: v1, core, tenant: tenant(), id: 'mem-v2', createdAt: '2026-10-08T14:00:00Z',
+    approvedMemory: v1, core, tenant: tenant(), brand: brand(), id: 'mem-v2', createdAt: '2026-10-08T14:00:00Z',
   }).memory;
   assert.throws(
-    () => approveBrandMemory({ memory: orphan, core, tenant: tenant(), resolvedActor: actor(), approvedAt: '2026-10-08T15:00:00Z' }),
+    () => approveBrandMemory({ memory: orphan, core, tenant: tenant(), brand: brand(), resolvedActor: actor(), approvedAt: '2026-10-08T15:00:00Z' }),
     /MEMORY_SUPERSEDES_UNKNOWN_ACTIVE_MEMORY/,
   );
   assert.throws(
-    () => approveBrandMemory({ memory: orphan, core, tenant: tenant(), resolvedActor: actor(), activeMemory: reviewed(core), approvedAt: '2026-10-08T15:00:00Z' }),
+    () => approveBrandMemory({ memory: orphan, core, tenant: tenant(), brand: brand(), resolvedActor: actor(), activeMemory: reviewed(core), approvedAt: '2026-10-08T15:00:00Z' }),
     /MEMORY_ACTIVE_MEMORY_NOT_APPROVED/,
   );
-  assert.equal(selectActiveBrandMemory([v1], tenant()).id, 'mem-v1');
-  assert.equal(selectActiveBrandMemory([v1], tenant(M2)), null);
+  assert.equal(selectActiveBrandMemory([v1], tenant(), brand()).id, 'mem-v1');
+  assert.equal(selectActiveBrandMemory([v1], tenant(M2), brand(M2)), null);
   assert.throws(
-    () => selectActiveBrandMemory([v1, { ...v1, id: 'mem-x' }], tenant()),
+    () => selectActiveBrandMemory([v1, { ...v1, id: 'mem-x' }], tenant(), brand()),
     /MULTIPLE_APPROVED_BRAND_MEMORIES/,
   );
 });
@@ -432,19 +446,19 @@ test('29. an approved version is immutable and never mutated by a revision', () 
   assert.equal(JSON.stringify(v1), before);
   assert.equal(v1.semantic_context.brand_style_summary, 'Sober and credible.');
   assert.equal(v2.semantic_context.brand_style_summary, 'Updated.');
-  assert.throws(() => proposeBrandMemoryRevision({ approvedMemory: reviewed(core), core, tenant: tenant(), id: 'x', createdAt: '2026-10-08T14:00:00Z' }),
+  assert.throws(() => proposeBrandMemoryRevision({ approvedMemory: reviewed(core), core, tenant: tenant(), brand: brand(), id: 'x', createdAt: '2026-10-08T14:00:00Z' }),
     /REVISION_REQUIRES_APPROVED_MEMORY/);
 });
 
 // ------------------------------------------------------------------ Content rules
 test('an empty Memory is not approvable, but no logo is mandatory', () => {
   const core = coreV1();
-  const empty = buildBrandMemoryDraft({ tenant: tenant(), id: 'm-empty', createdAt: '2026-10-08T12:00:00Z', core, content: {} });
+  const empty = buildBrandMemoryDraft({ tenant: tenant(), brand: brand(), id: 'm-empty', createdAt: '2026-10-08T12:00:00Z', core, content: {} });
   assert.deepEqual(empty.readiness.reasons, ['BRAND_MEMORY_EMPTY']);
-  assert.throws(() => submitBrandMemoryForReview({ memory: empty.memory, core, tenant: tenant() }), /BRAND_MEMORY_EMPTY/);
+  assert.throws(() => submitBrandMemoryForReview({ memory: empty.memory, core, tenant: tenant(), brand: brand() }), /BRAND_MEMORY_EMPTY/);
 
   const noLogo = buildBrandMemoryDraft({
-    tenant: tenant(), id: 'm-nologo', createdAt: '2026-10-08T12:00:00Z', core,
+    tenant: tenant(), brand: brand(), id: 'm-nologo', createdAt: '2026-10-08T12:00:00Z', core,
     content: { design_tokens: { colors: { primary: '#112233' } } },
   });
   assert.equal(noLogo.readiness.ok, true);
@@ -459,7 +473,7 @@ test('Distinctive Brand Assets live only in the Core: Memory has no list of its 
   );
   assert.equal('distinctive_asset_refs' in draft(core).identity_references, false);
   // Creative reads them from the Core, through the Creative interface
-  const context = buildBrandContext({ tenant: tenant(), core, memory: approveMemory({ core }).approvedMemory });
+  const context = buildBrandContext({ tenant: tenant(), brand: brand(), core, memory: approveMemory({ core }).approvedMemory });
   const view = creativeBrandInterface(context);
   assert.deepEqual(view.distinctive_assets, JSON.parse(JSON.stringify(core.distinctive_assets)));
   assert.equal(view.distinctive_assets[0].asset_ref, 'asset://logo-primary');
@@ -479,7 +493,7 @@ test('out-of-scope data cannot enter Brand Memory (budget, strategy, catalog, pr
   const base = draft(core);
   for (const key of ['budget', 'campaign_strategy', 'competitors', 'product_catalog', 'pricing', 'ai_look_score']) {
     assert.throws(() => normalizeBrandMemory({ ...base, [key]: {} }), /not part of Brand Memory V1/, key);
-    assert.throws(() => buildBrandMemoryDraft({ tenant: tenant(), id: 'm', createdAt: '2026-10-08T12:00:00Z', core, content: { [key]: {} } }), /not part of Brand Memory V1/, key);
+    assert.throws(() => buildBrandMemoryDraft({ tenant: tenant(), brand: brand(), id: 'm', createdAt: '2026-10-08T12:00:00Z', core, content: { [key]: {} } }), /not part of Brand Memory V1/, key);
   }
   assert.throws(() => draft(core, { content: content({ semantic_context: { budget: 'x' } }) }), /not part of Brand Memory V1/);
   assert.throws(() => draft(core, { content: content({ external_references: { price_list: [] } }) }), /not part of Brand Memory V1/);
@@ -489,7 +503,7 @@ test('out-of-scope data cannot enter Brand Memory (budget, strategy, catalog, pr
 // ------------------------------------------------------------------ Interfaces
 const readyContext = () => {
   const core = coreV1();
-  return buildBrandContext({ tenant: tenant(), core, memory: approveMemory({ core }).approvedMemory });
+  return buildBrandContext({ tenant: tenant(), brand: brand(), core, memory: approveMemory({ core }).approvedMemory });
 };
 
 test('30. Marketing gets a narrow view without approval internals', () => {
@@ -521,16 +535,16 @@ test('31. Creative gets identity, tokens and rules read-only (no write capabilit
 
 test('32. the Brand Context is GATED without a validated, approved Memory', () => {
   const core = coreV1();
-  const none = buildBrandContext({ tenant: tenant(), core, memory: null });
+  const none = buildBrandContext({ tenant: tenant(), brand: brand(), core, memory: null });
   assert.equal(none.status, BRAND_CONTEXT_STATUS.GATED);
   assert.ok(none.reasons.includes('BRAND_MEMORY_MISSING'));
 
-  const unapproved = buildBrandContext({ tenant: tenant(), core, memory: reviewed(core) });
+  const unapproved = buildBrandContext({ tenant: tenant(), brand: brand(), core, memory: reviewed(core) });
   assert.equal(unapproved.status, BRAND_CONTEXT_STATUS.GATED);
   assert.ok(unapproved.reasons.includes('BRAND_MEMORY_NOT_APPROVED'));
   assert.throws(() => creativeBrandInterface(unapproved), /gated/);
 
-  const otherTenant = buildBrandContext({ tenant: tenant(M2), core, memory: approveMemory({ core }).approvedMemory });
+  const otherTenant = buildBrandContext({ tenant: tenant(M2), brand: brand(M2), core, memory: approveMemory({ core }).approvedMemory });
   assert.equal(otherTenant.status, BRAND_CONTEXT_STATUS.GATED);
   assert.ok(otherTenant.reasons.includes('BRAND_MEMORY_TENANT_MISMATCH'));
 });

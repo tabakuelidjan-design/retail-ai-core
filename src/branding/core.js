@@ -8,6 +8,7 @@ import {
   normalizeBrandCore,
   validateCoreForApproval,
 } from './contracts.js';
+import { resolveBrand } from './brand.js';
 import { buildBrandDecisionEvent } from './decision-event.js';
 import {
   assertObject,
@@ -23,10 +24,13 @@ const CORE_SUBJECT = 'brand_core';
 // signal for the human reviewer: staleness informs the decision, it does not auto-block it.
 const USABLE_SNAPSHOT_STATUSES = new Set([SNAPSHOT_STATUS.READY, SNAPSHOT_STATUS.STALE]);
 
-function assertSnapshotUsable(snapshot, merchantId) {
+function assertSnapshotUsable(snapshot, merchantId, brandId) {
   if (!snapshot) throw new TypeError('snapshot is required');
   if (snapshot.merchant_id !== merchantId) {
     throw new Error('CORE_SNAPSHOT_MERCHANT_MISMATCH');
+  }
+  if (snapshot.brand_id !== brandId) {
+    throw new Error('CORE_SNAPSHOT_BRAND_MISMATCH');
   }
   if (!USABLE_SNAPSHOT_STATUSES.has(snapshot.status)) {
     throw new Error('CORE_REQUIRES_READY_SNAPSHOT');
@@ -35,8 +39,8 @@ function assertSnapshotUsable(snapshot, merchantId) {
 }
 
 // Approval is stricter than preparation: the reference Snapshot must be READY.
-function assertSnapshotReadyForApproval(snapshot, merchantId) {
-  assertSnapshotUsable(snapshot, merchantId);
+function assertSnapshotReadyForApproval(snapshot, merchantId, brandId) {
+  assertSnapshotUsable(snapshot, merchantId, brandId);
   if (snapshot.status !== SNAPSHOT_STATUS.READY) {
     throw new Error('CORE_APPROVAL_REQUIRES_READY_SNAPSHOT');
   }
@@ -53,6 +57,9 @@ export function validateCoreEvidenceAgainstSnapshot(core, snapshot) {
 
   if (core.merchant_id !== snapshot.merchant_id) {
     reasons.push('CORE_SNAPSHOT_MERCHANT_MISMATCH');
+  }
+  if (core.brand_id !== snapshot.brand_id) {
+    reasons.push('CORE_SNAPSHOT_BRAND_MISMATCH');
   }
   if (!core.snapshot_ref) {
     reasons.push('CORE_SNAPSHOT_REFERENCE_REQUIRED');
@@ -77,19 +84,21 @@ export function validateCoreEvidenceAgainstSnapshot(core, snapshot) {
 export function buildBrandCoreProposal({
   id,
   tenant,
+  brand,
   version = 1,
   createdAt,
   snapshot,
   decisions = {},
   supersedesId = null,
 } = {}) {
-  const merchantId = tenantMerchantId(tenant);
-  assertSnapshotUsable(snapshot, merchantId);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
+  assertSnapshotUsable(snapshot, merchantId, brandId);
   assertObject(decisions, 'decisions');
 
   const core = normalizeBrandCore({
     id,
     merchant_id: merchantId,
+    brand_id: brandId,
     version,
     status: GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED,
     created_at: createdAt,
@@ -136,21 +145,23 @@ export function approveBrandCore({
   proposal,
   snapshot,
   tenant,
+  brand,
   resolvedActor,
   activeCore = null,
   approvedAt,
   note = null,
 } = {}) {
   if (!proposal) throw new TypeError('proposal is required');
-  const merchantId = tenantMerchantId(tenant);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
   if (proposal.merchant_id !== merchantId) throw new Error('CORE_TENANT_MISMATCH');
+  if (proposal.brand_id !== brandId) throw new Error('CORE_BRAND_MISMATCH');
   const actor = assertResolvedActor(resolvedActor, tenant);
 
   if (proposal.status !== GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED) {
     throw new Error('CORE_MUST_BE_REVIEW_REQUIRED_BEFORE_APPROVAL');
   }
 
-  assertSnapshotReadyForApproval(snapshot, merchantId);
+  assertSnapshotReadyForApproval(snapshot, merchantId, brandId);
 
   const evidenceValidation = validateCoreEvidenceAgainstSnapshot(proposal, snapshot);
   if (!evidenceValidation.ok) {
@@ -165,6 +176,7 @@ export function approveBrandCore({
   let superseded = null;
   if (activeCore) {
     if (activeCore.merchant_id !== merchantId) throw new Error('CORE_ACTIVE_CORE_TENANT_MISMATCH');
+    if (activeCore.brand_id !== brandId) throw new Error('CORE_ACTIVE_CORE_BRAND_MISMATCH');
     if (activeCore.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
       throw new Error('CORE_ACTIVE_CORE_NOT_APPROVED');
     }
@@ -183,6 +195,7 @@ export function approveBrandCore({
   const decisionEvent = buildBrandDecisionEvent({
     type: DECISION_EVENT_TYPE.BRAND_CORE_APPROVED,
     merchantId,
+    brandId,
     actor,
     subject: { kind: CORE_SUBJECT, id: proposal.id, version: proposal.version },
     decidedAt,
@@ -212,11 +225,14 @@ export function approveBrandCore({
   });
 }
 
-// Guard for stores/callers: a tenant has at most one APPROVED Core.
-export function selectActiveBrandCore(cores = [], tenant) {
-  const merchantId = tenantMerchantId(tenant);
+// Guard for stores/callers: a BRAND (merchant_id + brand_id) has at most one APPROVED Core.
+// Other brands of the same merchant keep their own.
+export function selectActiveBrandCore(cores = [], tenant, brand) {
+  const { merchantId, brandId } = resolveBrand(tenant, brand, { requireActive: false });
   const active = cores.filter((core) => (
-    core.merchant_id === merchantId && core.status === GOVERNED_DOCUMENT_STATUS.APPROVED
+    core.merchant_id === merchantId
+    && core.brand_id === brandId
+    && core.status === GOVERNED_DOCUMENT_STATUS.APPROVED
   ));
   if (active.length > 1) throw new Error('MULTIPLE_APPROVED_BRAND_CORES');
   return active[0] ?? null;
@@ -226,6 +242,7 @@ export function proposeBrandCoreRevision({
   approvedCore,
   snapshot,
   tenant,
+  brand,
   id,
   createdAt,
   changes = {},
@@ -235,6 +252,7 @@ export function proposeBrandCoreRevision({
     throw new Error('CORE_REVISION_REQUIRES_APPROVED_CORE');
   }
   assertObject(changes, 'changes');
+  if (approvedCore.brand_id !== resolveBrand(tenant, brand).brandId) throw new Error('CORE_BRAND_MISMATCH');
 
   const next = {
     category: changes.category ?? approvedCore.category,
@@ -253,6 +271,7 @@ export function proposeBrandCoreRevision({
   return buildBrandCoreProposal({
     id,
     tenant,
+    brand,
     version: approvedCore.version + 1,
     createdAt,
     snapshot,
@@ -267,6 +286,7 @@ export function buildCoreDecisionPacket({ proposal, snapshot } = {}) {
 
   const evidenceById = new Map(snapshot.evidence.map((item) => [item.id, item]));
   return Object.freeze({
+    brand_id: proposal.brand_id,
     core_ref: Object.freeze({ id: proposal.id, version: proposal.version }),
     snapshot_ref: proposal.snapshot_ref,
     status: proposal.status,

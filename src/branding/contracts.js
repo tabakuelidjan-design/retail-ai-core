@@ -12,6 +12,7 @@ import {
 import {
   approval,
   assertObject,
+  brandIdValue,
   enumValue,
   integerVersion,
   isoDate,
@@ -33,9 +34,13 @@ export function commonDocument(input, kind, allowedStatuses) {
   if (!allowedStatuses.includes(status)) {
     throw new TypeError(`unsupported ${kind}.status: ${status}`);
   }
+  const merchantId = merchantIdValue(input.merchant_id, `${kind}.merchant_id`);
+  const brandId = brandIdValue(input.brand_id, `${kind}.brand_id`);
+  if (brandId === merchantId) throw new TypeError(`${kind}.brand_id must be distinct from ${kind}.merchant_id`);
   return {
     id: requiredString(input.id, `${kind}.id`),
-    merchant_id: merchantIdValue(input.merchant_id, `${kind}.merchant_id`),
+    merchant_id: merchantId,
+    brand_id: brandId,
     version: integerVersion(input.version, `${kind}.version`),
     status,
     created_at: isoDate(input.created_at, `${kind}.created_at`),

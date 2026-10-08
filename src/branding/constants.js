@@ -172,3 +172,9 @@ export const BRAND_REVIEW_SIGNAL = Object.freeze({
   SNAPSHOT_STALE: 'BRAND_SNAPSHOT_STALE',
   SNAPSHOT_SUPERSEDED_BY_NEWER: 'BRAND_SNAPSHOT_REFERENCE_OUTDATED',
 });
+
+// Brand Identity is a light referential, not a governed document: it is either in use or retired.
+export const BRAND_STATUS = Object.freeze({
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+});

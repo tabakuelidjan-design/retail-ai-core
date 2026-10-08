@@ -7,7 +7,7 @@ It does not contain any merchant-specific brand rule.
 
 ## Components
 
-`Brand Snapshot → Brand Core → Brand Memory → Brand Guardian`
+`Brand Identity` (which brand?) then `Brand Snapshot → Brand Core → Brand Memory → Brand Guardian`, all of it per brand.
 
 ### Brand Snapshot
 Evidence-facing observation layer. Two separate vocabularies, never merged: a **claim** is FACT / INFERENCE / HYPOTHESIS (`claim_kind`, what Nordla asserts); a piece of **evidence** carries a `provenance` of observed / inferred / derived / unavailable (how the proof was obtained). A FACT must cite at least one `observed` or `derived` evidence. A Snapshot can become STALE after a material refresh trigger, but it cannot silently rewrite Brand Core.
@@ -29,6 +29,34 @@ Compliance reporter only. Deterministic checks are planned first; qualitative ch
 - Visual composition/layout and AI-look quality stay with Creative Intelligence; there is no `VISUAL`/`LAYOUT`/`TONE` rule type and no `CUSTOM` operator.
 
 The Guardian never decides publication or execution. `execution_decision` is deliberately null in the report. Socle policy owns the action decision.
+
+## Brand Identity V1 (`merchant_id` + `brand_id`)
+
+Implemented in `src/branding/brand.js`.
+
+A merchant (tenant) is not a brand. One company can own several brands (a house brand and a sub-brand, a webshop brand distinct from the legal entity, a brand launched later), so Branding never encodes "1 merchant = 1 brand".
+
+- `merchant_id` answers *which company owns this data?* and always comes from the canonical tenant resolver.
+- `brand_id` answers *which brand is this data about?* It is a stable UUID, distinct from `merchant_id`, issued server-side (a future `brands` registry). Like `resolvedActor`, a brand object must come from trusted server context and **never from an untrusted client payload**; Branding only checks shape, tenant ownership and status.
+
+Brand Identity is a light referential, **not a fifth engine and not a governed document** (no draft/review/approval): `{ brand_id, merchant_id, name, status, created_at, parent_brand_id, default_locale, supported_locales }`.
+
+- `name`: the commercial brand name (not necessarily the legal or tenant name).
+- `status`: `ACTIVE` or `INACTIVE`. An INACTIVE brand cannot start governed work (`BRAND_INACTIVE`) and gates its Brand Context.
+- `parent_brand_id`: `null` or another brand of the same merchant (`validateBrandHierarchy` checks existence, same merchant, no cycle on a list loaded from the registry). Nothing more: no endorsement, house-of-brands logic, portfolio scoring or equity.
+- Locales: `default_locale` is mandatory and must be in `supported_locales`; the list is non-empty and duplicate-free; locales are canonical BCP 47 (`language[-Script][-REGION]`, canonical casing, e.g. `fr-BE`, `nl-BE`, `en-GB`). This only prepares the model: no translations, fallback chain, per-locale Core/Memory or i18n.
+- It holds no positioning, promise, voice, assets, hard rules or tokens: those stay in Brand Core and Brand Memory.
+- The object is deeply frozen. `buildBrandIdentity({ tenant, ... })` takes `merchant_id` from the tenant; `resolveBrand(tenant, brand)` is the entry point of every governed operation (brand present, same tenant, ACTIVE).
+- Persistence is not built; the contract maps one-to-one onto a future `brands` table (`brand_id`, `merchant_id`, `name`, `status`, `parent_brand_id`, `default_locale`, `supported_locales`, `created_at`).
+
+### `brand_id` propagation
+
+- **Snapshot, Core, Memory** each carry `merchant_id` and `brand_id`. Every operation takes the explicit `brand` next to `tenant` and checks `document.merchant_id == tenant.merchantId`, `document.brand_id == brand.brand_id` and `brand.merchant_id == tenant.merchantId`.
+- Two brands of the same merchant have separate Snapshots, Cores and Memories. `Core.brand_id == Snapshot.brand_id` and `Memory.brand_id == Core.brand_id` (`CORE_SNAPSHOT_BRAND_MISMATCH`, `MEMORY_CORE_BRAND_MISMATCH`).
+- **Active documents are unique per `merchant_id + brand_id`**: `selectActiveBrandCore(cores, tenant, brand)` and `selectActiveBrandMemory(memories, tenant, brand)` refuse two APPROVED documents for the same brand and allow one per other brand of the same merchant; a document of another brand can never be the one superseded (`CORE_ACTIVE_CORE_BRAND_MISMATCH`, `MEMORY_ACTIVE_MEMORY_BRAND_MISMATCH`).
+- **Brand Context:** `buildBrandContext({ tenant, brand, snapshot, core, memory })`. GATED with explicit brand reasons: `BRAND_IDENTITY_MISSING`, `BRAND_TENANT_MISMATCH`, `BRAND_INACTIVE`, `BRAND_SNAPSHOT_BRAND_MISMATCH`, `BRAND_CORE_BRAND_MISMATCH`, `BRAND_MEMORY_BRAND_MISMATCH` (in addition to the existing document reasons). READY exposes `brand`; the Marketing and Creative views carry `brand { brand_id, name, default_locale, supported_locales }` and nothing from the registry internals.
+- **Decision events:** `BRAND_CORE_APPROVED` and `BRAND_MEMORY_APPROVED` now include `brand_id` next to `merchant_id` and the subject (same single event model; the brand is part of the deterministic event id).
+- **Guardian:** the report carries `merchant_id`, `brand_id`, `core_ref` and `memory_ref`. The brand is never inferred from the candidate: it is the resolved brand, it must be the one the approved Memory belongs to (`GUARDIAN_BRAND_MISMATCH`), and a candidate manifest cannot carry a `brand_id`. With a READY Brand Context the brand comes from the context, so there is a single source of truth.
 
 ## Brand Memory V1
 
@@ -62,7 +90,7 @@ Unknown keys are refused at every level, so budget, strategy, competitors, catal
 
 ### Core <-> Memory binding
 
-Memory references an exact `core_ref { id, version }`. It requires an APPROVED Core of the same tenant. When the tenant's active Core is not the Memory's `core_ref` (e.g. Core V2 approved while Memory is still on Core V1), validation reports `BRAND_MEMORY_CORE_MISMATCH` and the Brand Context is `GATED`. A new Memory version for the new Core supersedes the old Memory. A STALE Snapshot is NOT a mismatch: compatible Core + Memory stay `READY` with `BRAND_SNAPSHOT_STALE` in `review_signals`.
+Memory references an exact `core_ref { id, version }`. It requires an APPROVED Core of the same tenant and the same brand. When the brand's active Core is not the Memory's `core_ref` (e.g. Core V2 approved while Memory is still on Core V1), validation reports `BRAND_MEMORY_CORE_MISMATCH` and the Brand Context is `GATED`. A new Memory version for the new Core supersedes the old Memory. A STALE Snapshot is NOT a mismatch: compatible Core + Memory stay `READY` with `BRAND_SNAPSHOT_STALE` in `review_signals`.
 
 ### Governed flow (no local lifecycle framework)
 
@@ -80,7 +108,7 @@ Memory references an exact `core_ref { id, version }`. It requires an APPROVED C
 
 ## Generic interfaces
 
-`buildBrandContext({ tenant, core, memory, snapshot })` is the gate consumed by other domains. `tenant` is the result of the canonical resolver in `src/tenant` (ADR 0003); Branding never resolves or trusts a client-supplied merchant id, and every document stores a tenant UUID.
+`buildBrandContext({ tenant, brand, core, memory, snapshot })` is the gate consumed by other domains. `tenant` is the result of the canonical resolver in `src/tenant` (ADR 0003); Branding never resolves or trusts a client-supplied merchant id, and every document stores a tenant UUID.
 
 If the Core or Memory is missing, unapproved, mismatched or invalid, the context is `GATED` and no brand facts are invented.
 
@@ -151,7 +179,7 @@ Implemented in `src/branding/core.js`.
 Brand Core is a governed human decision, not an automatic summary of Brand Snapshot.
 
 Rules:
-- a proposal can only be created from a READY or STALE Snapshot of the same tenant (STALE adds a review signal; DRAFT/SUPERSEDED are refused);
+- a proposal can only be created from a READY or STALE Snapshot of the same tenant and brand (STALE adds a review signal; DRAFT/SUPERSEDED are refused);
 - every cited evidence reference must exist in that Snapshot;
 - a proposal is always `REVIEW_REQUIRED`;
 - Nordla never auto-approves Brand Core;

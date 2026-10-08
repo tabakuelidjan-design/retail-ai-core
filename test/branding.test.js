@@ -20,6 +20,7 @@ import {
   aggregateGuardianOutcome,
   approveBrandCore,
   buildBrandContext,
+  buildBrandIdentity,
   buildBrandCoreProposal,
   buildBrandSnapshotV1,
   buildCoreDecisionPacket,
@@ -45,6 +46,19 @@ import { evaluateHardFidelityGate } from '../src/creative-fidelity/fidelity-gate
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
 const tenant = (merchantId = M1) => ({ merchantId, source: 'env' });
+const B1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const B2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const B3 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+// A brand of the given merchant (the server-side registry would issue it); B1 for M1, B3 for others.
+const brand = (merchantId = M1, over = {}) => buildBrandIdentity({
+  tenant: tenant(merchantId),
+  brandId: merchantId === M1 ? B1 : B3,
+  name: 'Brand One',
+  createdAt: '2026-10-01T09:00:00Z',
+  defaultLocale: 'fr-BE',
+  supportedLocales: ['fr-BE', 'nl-BE'],
+  ...over,
+});
 // Stands for the actor the trusted server/Socle context would hand to Branding.
 const resolvedActor = (merchantId = M1, over = {}) => ({
   user_id: 'user-owner-1',
@@ -62,7 +76,7 @@ const approvalRecord = {
 
 const coreApproved = (over = {}) => normalizeBrandCore({
   id: 'core-1',
-  merchant_id: M1,
+  merchant_id: M1, brand_id: B1,
   version: 1,
   status: GOVERNED_DOCUMENT_STATUS.APPROVED,
   created_at: '2026-10-08T10:00:00Z',
@@ -84,7 +98,7 @@ const coreApproved = (over = {}) => normalizeBrandCore({
 
 const memoryWith = (hardRules, over = {}) => normalizeBrandMemory({
   id: 'memory-1',
-  merchant_id: M1,
+  merchant_id: M1, brand_id: B1,
   version: 1,
   status: GOVERNED_DOCUMENT_STATUS.APPROVED,
   created_at: '2026-10-08T10:30:00Z',
@@ -139,7 +153,7 @@ const evidence = (over = {}) => ({
 test('claim kind (FACT/INFERENCE/HYPOTHESIS) and evidence provenance are separate fields', () => {
   const snapshot = normalizeBrandSnapshot({
     id: 'snapshot-1',
-    merchant_id: M1,
+    merchant_id: M1, brand_id: B1,
     version: 1,
     status: SNAPSHOT_STATUS.READY,
     created_at: '2026-10-08T09:00:00Z',
@@ -157,7 +171,7 @@ test('claim kind (FACT/INFERENCE/HYPOTHESIS) and evidence provenance are separat
 test('a FACT claim backed only by inferred or unavailable evidence is rejected', () => {
   for (const provenance of [EVIDENCE_PROVENANCE.INFERRED, EVIDENCE_PROVENANCE.UNAVAILABLE]) {
     const snapshot = normalizeBrandSnapshot({
-      id: 's', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.READY,
+      id: 's', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.READY,
       created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
       evidence: [evidence({ provenance })],
       positioning: [{ id: 'f1', statement: 'x', claim_kind: CLAIM_KIND.FACT, evidence_refs: ['e1'] }],
@@ -168,7 +182,7 @@ test('a FACT claim backed only by inferred or unavailable evidence is rejected',
 
 test('an INFERENCE may rest on inferred evidence', () => {
   const snapshot = normalizeBrandSnapshot({
-    id: 's', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.READY,
+    id: 's', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.READY,
     created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
     evidence: [evidence({ provenance: EVIDENCE_PROVENANCE.INFERRED })],
     positioning: [{ id: 'f1', statement: 'x', claim_kind: CLAIM_KIND.INFERENCE, evidence_refs: ['e1'] }],
@@ -178,7 +192,7 @@ test('an INFERENCE may rest on inferred evidence', () => {
 
 test('snapshot READY without evidence is rejected by readiness validation', () => {
   const snapshot = normalizeBrandSnapshot({
-    id: 'snapshot-1', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.READY,
+    id: 'snapshot-1', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.READY,
     created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
   });
   assert.ok(validateSnapshotReadiness(snapshot).reasons.includes('SNAPSHOT_READY_WITHOUT_EVIDENCE'));
@@ -203,7 +217,7 @@ test('approved core requires operationally useful fields and approval record', (
   assert.equal(validateCoreForApproval(coreApproved()).ok, true);
 
   const weak = normalizeBrandCore({
-    id: 'c', merchant_id: M1, version: 1, status: GOVERNED_DOCUMENT_STATUS.APPROVED,
+    id: 'c', merchant_id: M1, brand_id: B1, version: 1, status: GOVERNED_DOCUMENT_STATUS.APPROVED,
     created_at: '2026-10-08T09:00:00Z',
   });
   const result = validateCoreForApproval(weak);
@@ -230,7 +244,7 @@ test('approved memory must bind to the approved core of the same merchant/versio
 
 test('empty Brand Memory is never considered ready', () => {
   const empty = normalizeBrandMemory({
-    id: 'mem', merchant_id: M1, version: 1,
+    id: 'mem', merchant_id: M1, brand_id: B1, version: 1,
     status: GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED,
     created_at: '2026-10-08T10:00:00Z',
     core_ref: { id: 'core-1', version: 1 },
@@ -241,7 +255,7 @@ test('empty Brand Memory is never considered ready', () => {
 // ---------------------------------------------------------------- Context / interfaces
 
 test('brand context gates Marketing and Creative when Core or Memory are missing', () => {
-  const gated = buildBrandContext({ tenant: tenant(), core: coreApproved(), memory: null });
+  const gated = buildBrandContext({ tenant: tenant(), brand: brand(), core: coreApproved(), memory: null });
   assert.equal(gated.status, BRAND_CONTEXT_STATUS.GATED);
   assert.equal(gated.memory, null);
   assert.ok(gated.reasons.includes('BRAND_MEMORY_MISSING'));
@@ -249,14 +263,14 @@ test('brand context gates Marketing and Creative when Core or Memory are missing
 });
 
 test('brand context is gated for another tenant', () => {
-  const context = buildBrandContext({ tenant: tenant(M2), core: coreApproved(), memory: memoryApproved() });
+  const context = buildBrandContext({ tenant: tenant(M2), brand: brand(M2), core: coreApproved(), memory: memoryApproved() });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.GATED);
   assert.ok(context.reasons.includes('BRAND_CORE_TENANT_MISMATCH'));
   assert.ok(context.reasons.includes('BRAND_MEMORY_TENANT_MISMATCH'));
 });
 
 test('ready brand context exposes narrow Marketing and Creative interfaces', () => {
-  const context = buildBrandContext({ tenant: tenant(), core: coreApproved(), memory: memoryApproved() });
+  const context = buildBrandContext({ tenant: tenant(), brand: brand(), core: coreApproved(), memory: memoryApproved() });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.READY);
   assert.deepEqual(context.review_signals, []);
 
@@ -270,11 +284,11 @@ test('ready brand context exposes narrow Marketing and Creative interfaces', () 
 
 test('a STALE snapshot is a review signal, never an automatic block', () => {
   const stale = normalizeBrandSnapshot({
-    id: 'snapshot-core-1', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.STALE,
+    id: 'snapshot-core-1', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.STALE,
     created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
   });
   const context = buildBrandContext({
-    tenant: tenant(), core: coreApproved(), memory: memoryApproved(), snapshot: stale,
+    tenant: tenant(), brand: brand(), core: coreApproved(), memory: memoryApproved(), snapshot: stale,
   });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.READY);
   assert.deepEqual(context.review_signals, ['BRAND_SNAPSHOT_STALE']);
@@ -284,11 +298,11 @@ test('a STALE snapshot is a review signal, never an automatic block', () => {
 
 test('a newer snapshot than the one behind the Core raises an outdated-reference signal', () => {
   const newer = normalizeBrandSnapshot({
-    id: 'snapshot-core-2', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.READY,
+    id: 'snapshot-core-2', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.READY,
     created_at: '2026-10-09T09:00:00Z', observed_at: '2026-10-09T09:00:00Z',
   });
   const context = buildBrandContext({
-    tenant: tenant(), core: coreApproved(), memory: memoryApproved(), snapshot: newer,
+    tenant: tenant(), brand: brand(), core: coreApproved(), memory: memoryApproved(), snapshot: newer,
   });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.READY);
   assert.deepEqual(context.review_signals, ['BRAND_SNAPSHOT_REFERENCE_OUTDATED']);
@@ -320,7 +334,7 @@ const check = (over) => ({
   id: 'c1', rule_id: 'r1', outcome: 'PASS', method: GUARDIAN_METHOD.DETERMINISTIC, evidence_refs: [], ...over,
 });
 const report = (memory, checks, over = {}) => buildGuardianReport({
-  id: 'g1', tenant: tenant(), memory, target_ref: 'creative://asset-1', created_at: '2026-10-08T12:00:00Z', checks, ...over,
+  id: 'g1', tenant: tenant(), brand: brand(), memory, target_ref: 'creative://asset-1', created_at: '2026-10-08T12:00:00Z', checks, ...over,
 });
 
 test('Guardian never returns PASS while a required rule has not been checked', () => {
@@ -402,7 +416,7 @@ test('Guardian refuses unknown rules, unapproved memory and a foreign tenant', (
   );
   assert.throws(
     () => buildGuardianReport({
-      id: 'g', tenant: tenant(M2), memory: memoryApproved(), target_ref: 't',
+      id: 'g', tenant: tenant(M2), brand: brand(M2), memory: memoryApproved(), target_ref: 't',
       created_at: '2026-10-08T12:00:00Z', checks: [],
     }),
     /GUARDIAN_TENANT_MISMATCH/,
@@ -424,26 +438,26 @@ test('generic branding source contains no merchant-specific architecture', async
 test('research plan competitor cap is a configurable default, not a hard invariant', () => {
   assert.equal(DEFAULT_MAX_DIRECT_COMPETITORS, 3);
   assert.throws(() => buildSnapshotResearchPlan({
-    tenant: tenant(), directCompetitors: ['c1', 'c2', 'c3', 'c4'],
+    tenant: tenant(), brand: brand(), directCompetitors: ['c1', 'c2', 'c3', 'c4'],
   }), /at most 3/);
 
-  const plan = buildSnapshotResearchPlan({ tenant: tenant(), directCompetitors: ['c1', 'c2', 'c3'] });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(), brand: brand(), directCompetitors: ['c1', 'c2', 'c3'] });
   assert.equal(plan.max_direct_competitors, 3);
   assert.equal(plan.continuous_crawling, false);
   assert.equal(plan.questions.length, 4);
 
   const wider = buildSnapshotResearchPlan({
-    tenant: tenant(), directCompetitors: ['c1', 'c2', 'c3', 'c4'], maxDirectCompetitors: 5,
+    tenant: tenant(), brand: brand(), directCompetitors: ['c1', 'c2', 'c3', 'c4'], maxDirectCompetitors: 5,
   });
   assert.equal(wider.max_direct_competitors, 5);
   assert.equal(wider.direct_competitors.length, 4);
-  assert.throws(() => buildSnapshotResearchPlan({ tenant: tenant(), maxDirectCompetitors: 0 }), /integer >= 1/);
+  assert.throws(() => buildSnapshotResearchPlan({ tenant: tenant(), brand: brand(), maxDirectCompetitors: 0 }), /integer >= 1/);
 });
 
 test('Brand Snapshot rejects competitor evidence outside the explicit research plan', () => {
-  const plan = buildSnapshotResearchPlan({ tenant: tenant(), directCompetitors: ['competitor-1'] });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(), brand: brand(), directCompetitors: ['competitor-1'] });
   assert.throws(() => buildBrandSnapshotV1({
-    id: 's1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
+    id: 's1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
     researchPlan: plan,
     evidence: [evidence({
       source: {
@@ -455,9 +469,9 @@ test('Brand Snapshot rejects competitor evidence outside the explicit research p
 });
 
 test('Brand Snapshot rejects a research plan built for another tenant', () => {
-  const plan = buildSnapshotResearchPlan({ tenant: tenant(M2) });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(M2), brand: brand(M2) });
   assert.throws(() => buildBrandSnapshotV1({
-    id: 's1', tenant: tenant(M1), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
+    id: 's1', tenant: tenant(M1), brand: brand(M1), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
     researchPlan: plan,
   }), /SNAPSHOT_RESEARCH_PLAN_MERCHANT_MISMATCH/);
 });
@@ -473,9 +487,9 @@ test('Brand Snapshot detects structured contradictions instead of resolving them
 });
 
 test('Brand Snapshot makes evidence gaps explicit and never fabricates missing answers', () => {
-  const plan = buildSnapshotResearchPlan({ tenant: tenant(), directCompetitors: ['competitor-1'] });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(), brand: brand(), directCompetitors: ['competitor-1'] });
   const result = buildBrandSnapshotV1({
-    id: 's1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
+    id: 's1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
     researchPlan: plan,
     evidence: [evidence({
       statement: 'Competitor exists', completeness: 'PARTIAL',
@@ -497,9 +511,9 @@ test('Brand Snapshot makes evidence gaps explicit and never fabricates missing a
 });
 
 test('Brand Snapshot refuses a FACT resting on non-observed evidence', () => {
-  const plan = buildSnapshotResearchPlan({ tenant: tenant() });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(), brand: brand() });
   assert.throws(() => buildBrandSnapshotV1({
-    id: 's1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
+    id: 's1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
     researchPlan: plan,
     evidence: [evidence({ provenance: EVIDENCE_PROVENANCE.INFERRED })],
     claims: [{
@@ -510,9 +524,9 @@ test('Brand Snapshot refuses a FACT resting on non-observed evidence', () => {
 });
 
 test('hypotheses do not satisfy Snapshot research coverage', () => {
-  const plan = buildSnapshotResearchPlan({ tenant: tenant() });
+  const plan = buildSnapshotResearchPlan({ tenant: tenant(), brand: brand() });
   const result = buildBrandSnapshotV1({
-    id: 's1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
+    id: 's1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z', observedAt: '2026-10-08T10:00:00Z',
     researchPlan: plan,
     evidence: [evidence({
       provenance: EVIDENCE_PROVENANCE.INFERRED, statement: 'Unverified customer idea', completeness: 'PARTIAL',
@@ -531,7 +545,7 @@ test('hypotheses do not satisfy Snapshot research coverage', () => {
 
 test('material refresh events make Snapshot stale without rewriting Brand Core', () => {
   const snapshot = normalizeBrandSnapshot({
-    id: 's1', merchant_id: M1, version: 1, status: SNAPSHOT_STATUS.READY,
+    id: 's1', merchant_id: M1, brand_id: B1, version: 1, status: SNAPSHOT_STATUS.READY,
     created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
     evidence: [evidence()],
   });
@@ -548,7 +562,7 @@ test('material refresh events make Snapshot stale without rewriting Brand Core',
 // ---------------------------------------------------------------- Core governance
 
 const readySnapshotForCore = (status = SNAPSHOT_STATUS.READY) => normalizeBrandSnapshot({
-  id: 'snapshot-core-1', merchant_id: M1, version: 1, status,
+  id: 'snapshot-core-1', merchant_id: M1, brand_id: B1, version: 1, status,
   created_at: '2026-10-08T09:00:00Z', observed_at: '2026-10-08T09:00:00Z',
   evidence: [evidence({
     id: 'e-core-1', statement: 'Observed capability',
@@ -571,7 +585,7 @@ const fullCoreDecisions = () => ({
 });
 
 const proposal = (over = {}) => buildBrandCoreProposal({
-  id: 'core-v1', tenant: tenant(), createdAt: '2026-10-08T10:00:00Z',
+  id: 'core-v1', tenant: tenant(), brand: brand(), createdAt: '2026-10-08T10:00:00Z',
   snapshot: readySnapshotForCore(), decisions: fullCoreDecisions(), ...over,
 });
 
@@ -606,14 +620,14 @@ test('Brand Core cannot cite evidence absent from its Snapshot', () => {
 });
 
 test('Brand Core proposal requires a resolved tenant matching the snapshot', () => {
-  assert.throws(() => proposal({ tenant: tenant(M2) }), /CORE_SNAPSHOT_MERCHANT_MISMATCH/);
+  assert.throws(() => proposal({ tenant: tenant(M2), brand: brand(M2) }), /CORE_SNAPSHOT_MERCHANT_MISMATCH/);
   assert.throws(() => proposal({ tenant: { merchantId: M1 } }), /canonical tenant source/);
 });
 
 const approve = (over = {}) => approveBrandCore({
   proposal: proposal().core,
   snapshot: readySnapshotForCore(),
-  tenant: tenant(),
+  tenant: tenant(), brand: brand(),
   resolvedActor: resolvedActor(),
   approvedAt: '2026-10-08T10:30:00Z',
   note: 'Approved after review',
@@ -646,7 +660,7 @@ test('approval is refused without a present, same-tenant, authorized resolved ac
   assert.throws(() => approve({ resolvedActor: resolvedActor(M2) }), /RESOLVED_ACTOR_TENANT_MISMATCH/);
   assert.throws(() => approve({ resolvedActor: resolvedActor(M1, { role: 'INTERN' }) }), /unsupported/);
   assert.throws(() => approve({ resolvedActor: resolvedActor(M1, { user_id: ' ' }) }), /user_id/);
-  assert.throws(() => approve({ tenant: tenant(M2), resolvedActor: resolvedActor(M2) }), /CORE_TENANT_MISMATCH/);
+  assert.throws(() => approve({ tenant: tenant(M2), brand: brand(M2), resolvedActor: resolvedActor(M2) }), /CORE_TENANT_MISMATCH/);
 });
 
 test('an authenticated flag is not a substitute for a resolved actor', () => {
@@ -674,7 +688,7 @@ test('an already APPROVED Core stays usable when its Snapshot becomes STALE', ()
   const core = approve().approvedCore;
   const stale = readySnapshotForCore(SNAPSHOT_STATUS.STALE);
   const memory = memoryWith([wordingRule], { core_ref: { id: core.id, version: core.version } });
-  const context = buildBrandContext({ tenant: tenant(), core, memory, snapshot: stale });
+  const context = buildBrandContext({ tenant: tenant(), brand: brand(), core, memory, snapshot: stale });
   assert.equal(context.status, BRAND_CONTEXT_STATUS.READY);
   assert.deepEqual(context.review_signals, ['BRAND_SNAPSHOT_STALE']);
 });
@@ -688,7 +702,7 @@ test('approval is refused for a proposal that is not review-required or not read
 test('approving V2 supersedes V1 and emits a superseding decision event', () => {
   const v1 = approve().approvedCore;
   const v2Proposal = proposeBrandCoreRevision({
-    approvedCore: v1, snapshot: readySnapshotForCore(), tenant: tenant(), id: 'core-v2',
+    approvedCore: v1, snapshot: readySnapshotForCore(), tenant: tenant(), brand: brand(), id: 'core-v2',
     createdAt: '2026-10-08T11:00:00Z', changes: { positioning: 'Updated positioning' },
   }).core;
 
@@ -721,10 +735,10 @@ test('two APPROVED Cores can never coexist for one tenant', () => {
     /CORE_ACTIVE_CORE_NOT_APPROVED/,
   );
   // store guard
-  assert.equal(selectActiveBrandCore([v1], tenant()).id, 'core-v1');
-  assert.equal(selectActiveBrandCore([v1], tenant(M2)), null);
+  assert.equal(selectActiveBrandCore([v1], tenant(), brand()).id, 'core-v1');
+  assert.equal(selectActiveBrandCore([v1], tenant(M2), brand(M2)), null);
   assert.throws(
-    () => selectActiveBrandCore([v1, { ...v1, id: 'core-x' }], tenant()),
+    () => selectActiveBrandCore([v1, { ...v1, id: 'core-x' }], tenant(), brand()),
     /MULTIPLE_APPROVED_BRAND_CORES/,
   );
 });

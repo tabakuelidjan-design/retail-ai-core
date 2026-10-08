@@ -2,9 +2,11 @@ import {
   BRAND_CONTEXT_STATUS,
   BRAND_REVIEW_SIGNAL,
   BRAND_RULE_TYPE,
+  BRAND_STATUS,
   GOVERNED_DOCUMENT_STATUS,
   SNAPSHOT_STATUS,
 } from './constants.js';
+import { normalizeBrandIdentity } from './brand.js';
 import { validateCoreForApproval } from './contracts.js';
 import { validateBrandMemory } from './memory.js';
 import { deepFreeze, tenantMerchantId } from './validation.js';
@@ -28,12 +30,29 @@ function reviewSignals(core, snapshot) {
 
 export function buildBrandContext({
   tenant,
+  brand = null,
   core = null,
   memory = null,
   snapshot = null,
 } = {}) {
   const merchantId = tenantMerchantId(tenant);
   const reasons = [];
+
+  // The brand is explicit (merchant_id owns the data, brand_id says which brand it is about).
+  // Brand reasons are their own codes: they are never reported as plain tenant errors.
+  const identity = brand == null ? null : normalizeBrandIdentity(brand);
+  if (!identity) {
+    reasons.push('BRAND_IDENTITY_MISSING');
+  } else {
+    if (identity.merchant_id !== merchantId) reasons.push('BRAND_TENANT_MISMATCH');
+    if (identity.status !== BRAND_STATUS.ACTIVE) reasons.push('BRAND_INACTIVE');
+  }
+  const brandId = identity ? identity.brand_id : null;
+  if (identity) {
+    if (snapshot && snapshot.brand_id !== brandId) reasons.push('BRAND_SNAPSHOT_BRAND_MISMATCH');
+    if (core && core.brand_id !== brandId) reasons.push('BRAND_CORE_BRAND_MISMATCH');
+    if (memory && memory.brand_id !== brandId) reasons.push('BRAND_MEMORY_BRAND_MISMATCH');
+  }
 
   if (!core) reasons.push('BRAND_CORE_MISSING');
   if (!memory) reasons.push('BRAND_MEMORY_MISSING');
@@ -60,6 +79,7 @@ export function buildBrandContext({
       status: BRAND_CONTEXT_STATUS.GATED,
       reasons: Object.freeze(unique),
       review_signals: Object.freeze([]),
+      brand: null,
       core: null,
       memory: null,
     });
@@ -69,6 +89,7 @@ export function buildBrandContext({
     status: BRAND_CONTEXT_STATUS.READY,
     reasons: Object.freeze([]),
     review_signals: Object.freeze(reviewSignals(core, snapshot)),
+    brand: identity,
     core,
     memory,
   });
@@ -86,10 +107,18 @@ export function assertBrandContextReady(context) {
 // (approval record, decision event id, timestamps) are never exposed.
 const MARKETING_RULE_TYPES = new Set([BRAND_RULE_TYPE.TEXT, BRAND_RULE_TYPE.CLAIM_REF]);
 const copy = (value) => JSON.parse(JSON.stringify(value));
+// Which brand the view is about (and its locales); not the brand's registry internals.
+const brandView = (brand) => ({
+  brand_id: brand.brand_id,
+  name: brand.name,
+  default_locale: brand.default_locale,
+  supported_locales: brand.supported_locales,
+});
 
 export function marketingBrandInterface(context) {
   assertBrandContextReady(context);
   return deepFreeze(copy({
+    brand: brandView(context.brand),
     core_ref: { id: context.core.id, version: context.core.version },
     memory_ref: { id: context.memory.id, version: context.memory.version },
     review_signals: context.review_signals,
@@ -110,6 +139,7 @@ export function marketingBrandInterface(context) {
 export function creativeBrandInterface(context) {
   assertBrandContextReady(context);
   return deepFreeze(copy({
+    brand: brandView(context.brand),
     core_ref: { id: context.core.id, version: context.core.version },
     memory_ref: { id: context.memory.id, version: context.memory.version },
     review_signals: context.review_signals,

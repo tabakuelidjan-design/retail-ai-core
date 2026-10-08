@@ -2,6 +2,7 @@ import {
   DECISION_EVENT_TYPE,
   GOVERNED_DOCUMENT_STATUS as STATUS,
 } from './constants.js';
+import { resolveBrand } from './brand.js';
 import { commonDocument } from './contracts.js';
 import { buildBrandDecisionEvent } from './decision-event.js';
 import {
@@ -159,7 +160,7 @@ export function normalizeExternalReferences(input = {}, field = 'external_refere
 
 // ---------------------------------------------------------------- document
 const DOCUMENT_KEYS = [
-  'id', 'merchant_id', 'version', 'status', 'created_at', 'supersedes_id', 'core_ref',
+  'id', 'merchant_id', 'brand_id', 'version', 'status', 'created_at', 'supersedes_id', 'core_ref',
   'identity_references', 'design_tokens', 'hard_rules', 'semantic_context', 'external_references',
   'approval',
 ];
@@ -220,6 +221,7 @@ export function validateBrandMemory(memory, { core = null } = {}) {
   } else {
     if (core.status !== STATUS.APPROVED) reasons.push('CORE_NOT_APPROVED');
     if (core.merchant_id !== memory.merchant_id) reasons.push('CORE_MEMORY_MERCHANT_MISMATCH');
+    if (core.brand_id !== memory.brand_id) reasons.push('MEMORY_CORE_BRAND_MISMATCH');
     if (memory.core_ref.id !== core.id || memory.core_ref.version !== core.version) {
       reasons.push('BRAND_MEMORY_CORE_MISMATCH');
     }
@@ -228,14 +230,16 @@ export function validateBrandMemory(memory, { core = null } = {}) {
 }
 
 // ---------------------------------------------------------------- governed flow
-function assertBindableCore(core, merchantId) {
+function assertBindableCore(core, merchantId, brandId) {
   if (!core || core.status !== STATUS.APPROVED) throw new Error('MEMORY_REQUIRES_APPROVED_CORE');
   if (core.merchant_id !== merchantId) throw new Error('MEMORY_CORE_TENANT_MISMATCH');
+  if (core.brand_id !== brandId) throw new Error('MEMORY_CORE_BRAND_MISMATCH');
   return core;
 }
 
 export function buildBrandMemoryDraft({
   tenant,
+  brand,
   id,
   version = 1,
   createdAt,
@@ -243,13 +247,14 @@ export function buildBrandMemoryDraft({
   content = {},
   supersedesId = null,
 } = {}) {
-  const merchantId = tenantMerchantId(tenant);
-  assertBindableCore(core, merchantId);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
+  assertBindableCore(core, merchantId, brandId);
   exactKeys(content, CONTENT_KEYS, 'content');
 
   const memory = normalizeBrandMemory({
     id,
     merchant_id: merchantId,
+    brand_id: brandId,
     version,
     status: STATUS.DRAFT,
     created_at: createdAt,
@@ -265,12 +270,13 @@ export function buildBrandMemoryDraft({
   });
 }
 
-export function submitBrandMemoryForReview({ memory, core, tenant } = {}) {
+export function submitBrandMemoryForReview({ memory, core, tenant, brand } = {}) {
   if (!memory) throw new TypeError('memory is required');
-  const merchantId = tenantMerchantId(tenant);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
   if (memory.merchant_id !== merchantId) throw new Error('MEMORY_TENANT_MISMATCH');
+  if (memory.brand_id !== brandId) throw new Error('MEMORY_BRAND_MISMATCH');
   if (memory.status !== STATUS.DRAFT) throw new Error('MEMORY_MUST_BE_DRAFT_TO_SUBMIT');
-  assertBindableCore(core, merchantId);
+  assertBindableCore(core, merchantId, brandId);
 
   const readiness = validateBrandMemory(memory, { core });
   if (!readiness.ok) throw new Error(`MEMORY_NOT_READY_FOR_REVIEW: ${readiness.reasons.join(', ')}`);
@@ -288,26 +294,29 @@ export function approveBrandMemory({
   memory,
   core,
   tenant,
+  brand,
   resolvedActor,
   activeMemory = null,
   approvedAt,
   note = null,
 } = {}) {
   if (!memory) throw new TypeError('memory is required');
-  const merchantId = tenantMerchantId(tenant);
+  const { merchantId, brandId } = resolveBrand(tenant, brand);
   if (memory.merchant_id !== merchantId) throw new Error('MEMORY_TENANT_MISMATCH');
+  if (memory.brand_id !== brandId) throw new Error('MEMORY_BRAND_MISMATCH');
   const actor = assertResolvedActor(resolvedActor, tenant);
 
   if (memory.status !== STATUS.REVIEW_REQUIRED) {
     throw new Error('MEMORY_MUST_BE_REVIEW_REQUIRED_BEFORE_APPROVAL');
   }
-  assertBindableCore(core, merchantId);
+  assertBindableCore(core, merchantId, brandId);
   const readiness = validateBrandMemory(memory, { core });
   if (!readiness.ok) throw new Error(`MEMORY_NOT_READY_FOR_APPROVAL: ${readiness.reasons.join(', ')}`);
 
   let supersededMemory = null;
   if (activeMemory) {
     if (activeMemory.merchant_id !== merchantId) throw new Error('MEMORY_ACTIVE_MEMORY_TENANT_MISMATCH');
+    if (activeMemory.brand_id !== brandId) throw new Error('MEMORY_ACTIVE_MEMORY_BRAND_MISMATCH');
     if (activeMemory.status !== STATUS.APPROVED) throw new Error('MEMORY_ACTIVE_MEMORY_NOT_APPROVED');
     if (memory.supersedes_id !== activeMemory.id || memory.version !== activeMemory.version + 1) {
       throw new Error('MEMORY_ACTIVE_MEMORY_MUST_BE_SUPERSEDED');
@@ -321,6 +330,7 @@ export function approveBrandMemory({
   const decisionEvent = buildBrandDecisionEvent({
     type: DECISION_EVENT_TYPE.BRAND_MEMORY_APPROVED,
     merchantId,
+    brandId,
     actor,
     subject: { kind: MEMORY_SUBJECT, id: memory.id, version: memory.version },
     decidedAt,
@@ -351,6 +361,7 @@ export function proposeBrandMemoryRevision({
   approvedMemory,
   core,
   tenant,
+  brand,
   id,
   createdAt,
   changes = {},
@@ -358,12 +369,14 @@ export function proposeBrandMemoryRevision({
   if (!approvedMemory) throw new TypeError('approvedMemory is required');
   if (approvedMemory.status !== STATUS.APPROVED) throw new Error('MEMORY_REVISION_REQUIRES_APPROVED_MEMORY');
   exactKeys(changes, CONTENT_KEYS, 'changes');
+  if (approvedMemory.brand_id !== resolveBrand(tenant, brand).brandId) throw new Error('MEMORY_BRAND_MISMATCH');
 
   const content = {};
   for (const key of CONTENT_KEYS) content[key] = changes[key] ?? approvedMemory[key];
 
   const draft = buildBrandMemoryDraft({
     tenant,
+    brand,
     id,
     version: approvedMemory.version + 1,
     createdAt,
@@ -371,15 +384,17 @@ export function proposeBrandMemoryRevision({
     content: JSON.parse(JSON.stringify(content)),
     supersedesId: approvedMemory.id,
   });
-  const memory = submitBrandMemoryForReview({ memory: draft.memory, core, tenant });
+  const memory = submitBrandMemoryForReview({ memory: draft.memory, core, tenant, brand });
   return Object.freeze({ memory, readiness: validateBrandMemory(memory, { core }), auto_approved: false });
 }
 
-// Guard for stores/callers: a tenant has at most one APPROVED Memory.
-export function selectActiveBrandMemory(memories = [], tenant) {
-  const merchantId = tenantMerchantId(tenant);
+// Guard for stores/callers: a BRAND (merchant_id + brand_id) has at most one APPROVED Memory.
+export function selectActiveBrandMemory(memories = [], tenant, brand) {
+  const { merchantId, brandId } = resolveBrand(tenant, brand, { requireActive: false });
   const active = memories.filter((memory) => (
-    memory.merchant_id === merchantId && memory.status === STATUS.APPROVED
+    memory.merchant_id === merchantId
+    && memory.brand_id === brandId
+    && memory.status === STATUS.APPROVED
   ));
   if (active.length > 1) throw new Error('MULTIPLE_APPROVED_BRAND_MEMORIES');
   return active[0] ?? null;

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { DECISION_EVENT_TYPE } from './constants.js';
 import {
   assertObject,
+  brandIdValue,
   enumValue,
   integerVersion,
   isoDate,
@@ -22,6 +23,7 @@ const stable = (value) => {
 export function buildBrandDecisionEvent({
   type,
   merchantId,
+  brandId,
   actor,
   subject,
   decidedAt,
@@ -33,6 +35,7 @@ export function buildBrandDecisionEvent({
   const body = {
     type: enumValue(type, DECISION_EVENT_TYPE, 'type'),
     merchant_id: requiredString(merchantId, 'merchantId'),
+    brand_id: brandIdValue(brandId, 'brandId'),
     actor: {
       user_id: requiredString(actor.user_id, 'actor.user_id'),
       role: requiredString(actor.role, 'actor.role'),

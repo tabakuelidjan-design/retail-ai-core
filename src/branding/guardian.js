@@ -7,6 +7,7 @@ import {
   RULE_SCOPE,
   RULE_SEVERITY,
 } from './constants.js';
+import { resolveBrand } from './brand.js';
 import { EXTERNAL_GATES } from './hard-rules.js';
 import {
   assertObject,
@@ -125,12 +126,17 @@ export function buildGuardianPlan(memory, { contentKind = null } = {}) {
 
 export function buildGuardianReport(input) {
   assertObject(input, 'guardian_report');
-  const { memory, tenant } = input;
+  const { memory, tenant, brand } = input;
+  // The brand is NEVER inferred from the candidate: it comes from the resolved brand, and must
+  // be the one the approved Memory belongs to. A candidate manifest cannot carry a brand_id.
+  if ('brand_id' in input) throw new TypeError('guardian_report.brand_id is not accepted: pass the resolved brand');
   assertObject(memory, 'guardian_report.memory');
   if (memory.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
     throw new Error('GUARDIAN_REQUIRES_APPROVED_MEMORY');
   }
   assertSameTenant(tenant, memory.merchant_id, 'GUARDIAN_TENANT_MISMATCH');
+  const { brandId } = resolveBrand(tenant, brand, { requireActive: false });
+  if (memory.brand_id !== brandId) throw new Error('GUARDIAN_BRAND_MISMATCH');
 
   const checks = objectList(input.checks, 'guardian_report.checks', normalizeGuardianCheck);
   uniqueIds(checks, 'guardian_report.checks');
@@ -157,6 +163,7 @@ export function buildGuardianReport(input) {
   return Object.freeze({
     id: requiredString(input.id, 'guardian_report.id'),
     merchant_id: memory.merchant_id,
+    brand_id: brandId,
     memory_ref: Object.freeze({ id: memory.id, version: memory.version }),
     target_ref: requiredString(input.target_ref, 'guardian_report.target_ref'),
     created_at: isoDate(input.created_at, 'guardian_report.created_at'),

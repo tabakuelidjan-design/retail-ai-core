@@ -1,5 +1,6 @@
 export * from './constants.js';
 export * from './validation.js';
+export * from './brand.js';
 export * from './contracts.js';
 export * from './hard-rules.js';
 export * from './memory.js';
