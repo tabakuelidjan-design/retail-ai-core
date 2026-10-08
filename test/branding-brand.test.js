@@ -12,13 +12,11 @@ import {
   buildBrandMemoryDraft,
   buildBrandSnapshotV1,
   buildCoreDecisionPacket,
-  buildGuardianReport,
   buildSnapshotResearchPlan,
   creativeBrandInterface,
   marketingBrandInterface,
   normalizeBrandIdentity,
   normalizeBrandSnapshot,
-  normalizeCandidateManifest,
   proposeBrandCoreRevision,
   proposeBrandMemoryRevision,
   resolveBrand,
@@ -164,6 +162,18 @@ test('8. parent_brand_id: null or another brand of the SAME merchant, without cy
   const a = normalizeBrandIdentity(identity({ brand_id: B1, parent_brand_id: B2 }));
   const b = normalizeBrandIdentity(identity({ brand_id: B2, name: 'B', parent_brand_id: B1 }));
   assert.ok(validateBrandHierarchy([a, b], tenant()).reasons.includes('BRAND_PARENT_CYCLE'));
+});
+
+test('8b. hierarchy validation is only as complete as the graph the caller supplies (registry = open dependency)', async () => {
+  const child = normalizeBrandIdentity(identity({ brand_id: B2, name: 'Sub brand', parent_brand_id: B1 }));
+  // the parent exists in the registry but was not supplied: never a false "ok"
+  const result = validateBrandHierarchy([child], tenant());
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.reasons, ['BRAND_PARENT_NOT_FOUND']);
+  const { readFile } = await import('node:fs/promises');
+  const doc = await readFile('docs/architecture/branding-v1-contract.md', 'utf8');
+  assert.match(doc, /complete only over the brand graph the caller supplies/);
+  assert.match(doc, /persistent `brands` registry, which remains an \*\*open dependency\*\*/);
 });
 
 test('9. Brand Identity is deeply frozen, minimal (no portfolio or Core/Memory content) and has a light status', () => {
@@ -410,28 +420,5 @@ test('25. the Memory approval event identifies merchant, brand and subject; the 
   assert.notEqual(sameIdsOtherBrand.coreResult.decisionEvent.id, chain(brandA(), 'a').coreResult.decisionEvent.id);
 });
 
-// ------------------------------------------------------------------ Guardian (26-27) on the current report builder
-const guardianReport = (extra = {}) => {
-  const a = chain(brandA(), 'a');
-  return buildGuardianReport({
-    id: 'g1', tenant: tenant(), brand: brandA(), memory: a.memory, target_ref: 'creative://1', created_at: '2026-10-08T12:00:00Z',
-    checks: [{ id: 'c1', rule_id: 'r1', outcome: 'PASS', method: 'DETERMINISTIC', evidence_refs: [] }], ...extra,
-  });
-};
-
-test('26. the Guardian report carries merchant_id and brand_id', () => {
-  const report = guardianReport();
-  assert.equal(report.merchant_id, M1);
-  assert.equal(report.brand_id, B1);
-  assert.deepEqual(report.memory_ref, { id: 'mem-a', version: 1 });
-  assert.equal(report.execution_decision, null);
-});
-
-test('27. the Guardian never infers brand_id from the candidate', () => {
-  assert.throws(() => normalizeCandidateManifest({ content_kind: 'IMAGE', brand_id: B2 }), /not part of the candidate manifest/);
-  assert.throws(() => guardianReport({ brand_id: B2 }), /brand_id is not accepted/);
-  // the brand must be the one the approved Memory belongs to
-  assert.throws(() => guardianReport({ brand: brandB() }), /GUARDIAN_BRAND_MISMATCH/);
-  assert.throws(() => guardianReport({ brand: undefined }), /BRAND_IDENTITY_MISSING/);
-  assert.throws(() => guardianReport({ brand: brandOf(M2, B3, 'Foreign') }), /BRAND_TENANT_MISMATCH/);
-});
+// Guardian (mandate tests 26-27: brand_id in the report, never inferred from the candidate) is covered
+// against the V1 engine in test/branding-guardian.test.js ("Brand 26", "Brand 27" and the multi-brand tests).

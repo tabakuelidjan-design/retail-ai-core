@@ -6,7 +6,6 @@ import {
   APPROVER_ROLE,
   BRAND_CONTEXT_STATUS,
   BRAND_RULE_TYPE,
-  CONTENT_KIND,
   DECISION_EVENT_TYPE,
   EXTERNAL_GATES,
   GOVERNED_DOCUMENT_STATUS,
@@ -26,7 +25,6 @@ import {
   marketingBrandInterface,
   normalizeBrandMemory,
   normalizeBrandSnapshot,
-  normalizeCandidateManifest,
   normalizeDesignTokens,
   normalizeHardRule,
   proposeBrandCoreRevision,
@@ -605,27 +603,6 @@ test('the schema validator refuses keywords it does not enforce, even in unreach
   assert.throws(() => validateSchemaSubset({ $defs: { x: { patternProperties: {} } }, type: 'object' }, {}), /UNSUPPORTED_SCHEMA_KEYWORD/);
   assert.throws(() => validateSchemaSubset({ $ref: '#/$defs/missing' }, 1), /UNRESOLVED_SCHEMA_REF/);
   assert.equal(validateSchemaSubset({ type: 'integer', minimum: 1 }, 0).ok, false);
-});
-
-// ------------------------------------------------------------------ Candidate manifest contract
-test('the candidate manifest contract is defined and strict (evaluation is Guardian V1)', () => {
-  const manifest = normalizeCandidateManifest({
-    content_kind: 'IMAGE',
-    asset_refs: ['asset://x'],
-    detected_colors: ['#112233', '#ffffff'],
-    typography: [{ family: 'Example Sans' }],
-    text_content: 'Hello',
-    claim_refs: ['claim://price-policy'],
-    external_gate_results: [{ gate: 'product_fidelity', status: 'PASS' }],
-  });
-  assert.deepEqual(manifest.detected_colors, ['#112233', '#FFFFFF']);
-  assert.equal(Object.isFrozen(manifest), true);
-  assert.deepEqual(Object.values(CONTENT_KIND), ['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT']);
-  assert.throws(() => normalizeCandidateManifest({ content_kind: 'GLOBAL' }), /unsupported/);
-  assert.throws(() => normalizeCandidateManifest({ content_kind: 'TEXT', score: 9 }), /not part of the candidate manifest/);
-  assert.throws(() => normalizeCandidateManifest({ content_kind: 'IMAGE', external_gate_results: [{ gate: 'x', status: 'PASS' }] }), /known external gate/);
-  assert.throws(() => normalizeCandidateManifest({ content_kind: 'IMAGE', external_gate_results: [{ gate: 'product_fidelity', status: 'OK' }] }), /unknown to gate/);
-  assert.deepEqual(normalizeCandidateManifest({ content_kind: 'TEXT' }).asset_refs, []);
 });
 
 test('the same rule set is rebuilt identically from a draft (no hidden state)', () => {

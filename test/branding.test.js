@@ -8,8 +8,6 @@ import {
   DEFAULT_MAX_DIRECT_COMPETITORS,
   EVIDENCE_PROVENANCE,
   GOVERNED_DOCUMENT_STATUS,
-  GUARDIAN_METHOD,
-  GUARDIAN_OUTCOME,
   RULE_OPERATOR,
   RULE_SEVERITY,
   SNAPSHOT_REFRESH_TRIGGER,
@@ -17,20 +15,16 @@ import {
   SNAPSHOT_SOURCE_KIND,
   SNAPSHOT_STATUS,
   SNAPSHOT_TOPIC,
-  aggregateGuardianOutcome,
   approveBrandCore,
   buildBrandContext,
   buildBrandIdentity,
   buildBrandCoreProposal,
   buildBrandSnapshotV1,
   buildCoreDecisionPacket,
-  buildGuardianPlan,
-  buildGuardianReport,
   buildSnapshotResearchPlan,
   creativeBrandInterface,
   detectSnapshotContradictions,
   evaluateSnapshotRefresh,
-  guardianCheckFromFidelityGate,
   marketingBrandInterface,
   normalizeBrandCore,
   normalizeBrandMemory,
@@ -41,7 +35,6 @@ import {
   validateBrandMemory,
   validateSnapshotReadiness,
 } from '../src/branding/index.js';
-import { evaluateHardFidelityGate } from '../src/creative-fidelity/fidelity-gates.js';
 
 const M1 = '11111111-1111-4111-8111-111111111111';
 const M2 = '22222222-2222-4222-8222-222222222222';
@@ -121,16 +114,6 @@ const wordingRule = {
   severity: RULE_SEVERITY.BLOCK,
   scope: 'GLOBAL',
   source_ref: 'brand-core://core-1',
-};
-const gateRule = {
-  id: 'g1',
-  rule_type: BRAND_RULE_TYPE.EXTERNAL_GATE,
-  subject: 'product_fidelity',
-  operator: RULE_OPERATOR.STATUS_IN,
-  value: ['PASS'],
-  severity: RULE_SEVERITY.BLOCK,
-  scope: 'IMAGE',
-  source_ref: 'external-policy://creative-fidelity',
 };
 const memoryApproved = () => memoryWith([wordingRule]);
 
@@ -309,119 +292,6 @@ test('a newer snapshot than the one behind the Core raises an outdated-reference
 });
 
 // ---------------------------------------------------------------- Guardian
-
-test('Guardian plan lists applicable rules with allowed methods and delegates external gates', () => {
-  const memory = memoryWith([wordingRule, gateRule]);
-  const plan = buildGuardianPlan(memory);
-  assert.deepEqual(plan.rules.map((x) => x.rule_id), ['r1', 'g1']);
-  assert.deepEqual(plan.rules[0].allowed_methods, ['DETERMINISTIC', 'OCR', 'HUMAN']);
-  assert.deepEqual(plan.rules[1].allowed_methods, ['FIDELITY_GATE', 'HUMAN']);
-  assert.equal(plan.rules[1].delegate_to, 'creative-fidelity');
-  // scope filter: a TEXT candidate does not owe the IMAGE-scoped gate
-  assert.deepEqual(buildGuardianPlan(memory, { contentKind: 'TEXT' }).rules.map((x) => x.rule_id), ['r1']);
-  assert.throws(() => buildGuardianPlan(memory, { contentKind: 'TWEET' }), /unsupported/);
-});
-
-test('Guardian outcome precedence is FAIL > REVIEW_REQUIRED > NOT_MEASURABLE > PASS', () => {
-  assert.equal(aggregateGuardianOutcome([]), GUARDIAN_OUTCOME.NOT_MEASURABLE);
-  assert.equal(aggregateGuardianOutcome([{ outcome: 'PASS' }]), GUARDIAN_OUTCOME.PASS);
-  assert.equal(aggregateGuardianOutcome([{ outcome: 'PASS' }, { outcome: 'NOT_MEASURABLE' }]), GUARDIAN_OUTCOME.NOT_MEASURABLE);
-  assert.equal(aggregateGuardianOutcome([{ outcome: 'REVIEW_REQUIRED' }, { outcome: 'NOT_MEASURABLE' }]), GUARDIAN_OUTCOME.REVIEW_REQUIRED);
-  assert.equal(aggregateGuardianOutcome([{ outcome: 'FAIL' }, { outcome: 'REVIEW_REQUIRED' }]), GUARDIAN_OUTCOME.FAIL);
-});
-
-const check = (over) => ({
-  id: 'c1', rule_id: 'r1', outcome: 'PASS', method: GUARDIAN_METHOD.DETERMINISTIC, evidence_refs: [], ...over,
-});
-const report = (memory, checks, over = {}) => buildGuardianReport({
-  id: 'g1', tenant: tenant(), brand: brand(), memory, target_ref: 'creative://asset-1', created_at: '2026-10-08T12:00:00Z', checks, ...over,
-});
-
-test('Guardian never returns PASS while a required rule has not been checked', () => {
-  const memory = memoryWith([wordingRule, { ...wordingRule, id: 'r2' }]);
-  const partial = report(memory, [check({ rule_id: 'r1' })]);
-  assert.equal(partial.outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-  assert.equal(partial.rules.find((r) => r.rule_id === 'r2').reason, 'RULE_NOT_CHECKED');
-
-  const complete = report(memory, [check({ id: 'a', rule_id: 'r1' }), check({ id: 'b', rule_id: 'r2' })]);
-  assert.equal(complete.outcome, GUARDIAN_OUTCOME.PASS);
-  assert.equal(report(memory, []).outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-});
-
-test('Guardian cannot PASS a memory with no rules', () => {
-  assert.equal(report(memoryWith([]), []).outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-});
-
-test('Guardian report does not make the execution decision and uses the memory it was given', () => {
-  const result = report(memoryApproved(), [check({ outcome: 'FAIL', evidence_refs: ['ocr://1'] })]);
-  assert.equal(result.outcome, GUARDIAN_OUTCOME.FAIL);
-  assert.equal(result.execution_decision, null);
-  assert.equal(result.policy_note, 'GUARDIAN_REPORT_IS_NOT_AN_EXECUTION_POLICY_DECISION');
-  assert.deepEqual(result.memory_ref, { id: 'memory-1', version: 1 });
-});
-
-test('BLOCK and REVIEW severities stay distinct: failed BLOCK = FAIL, failed REVIEW = REVIEW_REQUIRED', () => {
-  const reviewRule = { ...wordingRule, severity: RULE_SEVERITY.REVIEW };
-  assert.equal(report(memoryWith([reviewRule]), [check({ outcome: 'FAIL' })]).outcome, GUARDIAN_OUTCOME.REVIEW_REQUIRED);
-  assert.equal(report(memoryWith([wordingRule]), [check({ outcome: 'FAIL' })]).outcome, GUARDIAN_OUTCOME.FAIL);
-});
-
-test('a model judgment can never settle a hard rule', () => {
-  const result = report(memoryWith([wordingRule]), [check({ method: GUARDIAN_METHOD.MODEL, outcome: 'PASS' })]);
-  assert.equal(result.outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-  assert.deepEqual(result.rules[0].ignored_check_ids, ['c1']);
-});
-
-test('Guardian consumes the creative-fidelity gate for an EXTERNAL_GATE rule instead of duplicating it', () => {
-  const memory = memoryWith([gateRule]);
-  const gateCheck = (gate) => guardianCheckFromFidelityGate({ id: 'c1', ruleId: 'g1', gate });
-
-  const failed = gateCheck(evaluateHardFidelityGate({
-    requiredChecks: ['PRODUCT_IDENTITY', 'LOGO'],
-    observations: [{ code: 'PRODUCT_IDENTITY', outcome: 'PASS' }, { code: 'LOGO', outcome: 'FAIL' }],
-  }));
-  assert.equal(failed.method, GUARDIAN_METHOD.FIDELITY_GATE);
-  assert.match(failed.note, /failed:LOGO/);
-  assert.equal(report(memory, [failed]).outcome, GUARDIAN_OUTCOME.FAIL);
-
-  const passed = gateCheck(evaluateHardFidelityGate({
-    requiredChecks: ['PRODUCT_IDENTITY'], observations: [{ code: 'PRODUCT_IDENTITY', outcome: 'PASS' }],
-  }));
-  assert.equal(report(memory, [passed]).outcome, GUARDIAN_OUTCOME.PASS);
-
-  const unmeasured = gateCheck(evaluateHardFidelityGate({ requiredChecks: ['PRODUCT_IDENTITY'], observations: [] }));
-  assert.equal(report(memory, [unmeasured]).outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-
-  // an ad-hoc deterministic check cannot stand in for the fidelity gate
-  assert.equal(
-    report(memory, [check({ rule_id: 'g1', method: GUARDIAN_METHOD.DETERMINISTIC })]).outcome,
-    GUARDIAN_OUTCOME.NOT_MEASURABLE,
-  );
-});
-
-test('rule scope limits which rules a candidate owes, without letting rules go unchecked', () => {
-  const memory = memoryWith([wordingRule, gateRule]);
-  const textOnly = report(memory, [check()], { contentKind: 'TEXT' });
-  assert.equal(textOnly.outcome, GUARDIAN_OUTCOME.PASS);
-  assert.deepEqual(textOnly.not_applicable_rule_ids, ['g1']);
-  // without a content kind every rule is owed
-  assert.equal(report(memory, [check()]).outcome, GUARDIAN_OUTCOME.NOT_MEASURABLE);
-});
-
-test('Guardian refuses unknown rules, unapproved memory and a foreign tenant', () => {
-  assert.throws(() => report(memoryApproved(), [check({ rule_id: 'ghost' })]), /UNKNOWN_RULE/);
-  assert.throws(
-    () => report(memoryWith([wordingRule], { status: GOVERNED_DOCUMENT_STATUS.REVIEW_REQUIRED, approval: null }), []),
-    /GUARDIAN_REQUIRES_APPROVED_MEMORY/,
-  );
-  assert.throws(
-    () => buildGuardianReport({
-      id: 'g', tenant: tenant(M2), brand: brand(M2), memory: memoryApproved(), target_ref: 't',
-      created_at: '2026-10-08T12:00:00Z', checks: [],
-    }),
-    /GUARDIAN_TENANT_MISMATCH/,
-  );
-});
 
 test('generic branding source contains no merchant-specific architecture', async () => {
   const { readdir, readFile } = await import('node:fs/promises');

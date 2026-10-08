@@ -19,16 +19,7 @@ Small human-governed strategic core. An approved Core requires category, buying 
 The approved, versioned, machine-readable operational brand. It is bound to ONE exact approved Core version and holds exactly five categories (see *Brand Memory V1* below). It stores references, never binaries and never the truth of a claim or product fact.
 
 ### Brand Guardian
-Compliance reporter only. Deterministic checks are planned first; qualitative checks follow when required. Outcomes are PASS / FAIL / REVIEW_REQUIRED / NOT_MEASURABLE.
-
-- **PASS requires full coverage:** every rule of the approved Memory must be controlled. A rule with no usable check is `NOT_MEASURABLE`; an empty rule set is `NOT_MEASURABLE`.
-- **Severity is honoured:** a failed `REVIEW` rule yields `REVIEW_REQUIRED`; a failed `BLOCK` rule yields `FAIL`.
-- **Method limits:** hard rules are deterministic by construction, so a `MODEL` judgment can never settle one (it is ignored and the rule stays `NOT_MEASURABLE`). Allowed methods: `DETERMINISTIC`, `OCR`, `HUMAN` for ordinary rules; `FIDELITY_GATE`, `HUMAN` for external gates.
-- **Scope:** a rule scoped to `TEXT`/`IMAGE`/`VIDEO`/`DOCUMENT` is owed only by a candidate of that `contentKind`; `GLOBAL` is always owed. Skipped rules are listed in `not_applicable_rule_ids`; without a `contentKind` every rule is owed.
-- **Product fidelity is not duplicated:** an `EXTERNAL_GATE` rule (first gate: `product_fidelity`) is settled only by the `creative-fidelity` hard gate via `guardianCheckFromFidelityGate`, or by a human.
-- Visual composition/layout and AI-look quality stay with Creative Intelligence; there is no `VISUAL`/`LAYOUT`/`TONE` rule type and no `CUSTOM` operator.
-
-The Guardian never decides publication or execution. `execution_decision` is deliberately null in the report. Socle policy owns the action decision.
+A pure, deterministic compliance engine: it evaluates a candidate (described by a Candidate Manifest) against the approved Brand Memory behind a READY Brand Context and returns a traceable report. It is not an art director, a generator, a policy engine, a ledger or an override mechanism - see *Brand Guardian V1* below.
 
 ## Brand Identity V1 (`merchant_id` + `brand_id`)
 
@@ -44,6 +35,7 @@ Brand Identity is a light referential, **not a fifth engine and not a governed d
 - `name`: the commercial brand name (not necessarily the legal or tenant name).
 - `status`: `ACTIVE` or `INACTIVE`. An INACTIVE brand cannot start governed work (`BRAND_INACTIVE`) and gates its Brand Context.
 - `parent_brand_id`: `null` or another brand of the same merchant (`validateBrandHierarchy` checks existence, same merchant, no cycle on a list loaded from the registry). Nothing more: no endorsement, house-of-brands logic, portfolio scoring or equity.
+  **Limit:** hierarchy validation, including cycle detection, is complete only over the brand graph the caller supplies. It cannot see brands it was not given, so a cycle or a foreign parent hidden in unloaded brands is invisible to it. Enforcing the hierarchy globally needs the persistent `brands` registry, which remains an **open dependency**.
 - Locales: `default_locale` is mandatory and must be in `supported_locales`; the list is non-empty and duplicate-free; locales are canonical BCP 47 (`language[-Script][-REGION]`, canonical casing, e.g. `fr-BE`, `nl-BE`, `en-GB`). This only prepares the model: no translations, fallback chain, per-locale Core/Memory or i18n.
 - It holds no positioning, promise, voice, assets, hard rules or tokens: those stay in Brand Core and Brand Memory.
 - The object is deeply frozen. `buildBrandIdentity({ tenant, ... })` takes `merchant_id` from the tenant; `resolveBrand(tenant, brand)` is the entry point of every governed operation (brand present, same tenant, ACTIVE).
@@ -56,7 +48,7 @@ Brand Identity is a light referential, **not a fifth engine and not a governed d
 - **Active documents are unique per `merchant_id + brand_id`**: `selectActiveBrandCore(cores, tenant, brand)` and `selectActiveBrandMemory(memories, tenant, brand)` refuse two APPROVED documents for the same brand and allow one per other brand of the same merchant; a document of another brand can never be the one superseded (`CORE_ACTIVE_CORE_BRAND_MISMATCH`, `MEMORY_ACTIVE_MEMORY_BRAND_MISMATCH`).
 - **Brand Context:** `buildBrandContext({ tenant, brand, snapshot, core, memory })`. GATED with explicit brand reasons: `BRAND_IDENTITY_MISSING`, `BRAND_TENANT_MISMATCH`, `BRAND_INACTIVE`, `BRAND_SNAPSHOT_BRAND_MISMATCH`, `BRAND_CORE_BRAND_MISMATCH`, `BRAND_MEMORY_BRAND_MISMATCH` (in addition to the existing document reasons). READY exposes `brand`; the Marketing and Creative views carry `brand { brand_id, name, default_locale, supported_locales }` and nothing from the registry internals.
 - **Decision events:** `BRAND_CORE_APPROVED` and `BRAND_MEMORY_APPROVED` now include `brand_id` next to `merchant_id` and the subject (same single event model; the brand is part of the deterministic event id).
-- **Guardian:** the report carries `merchant_id`, `brand_id`, `core_ref` and `memory_ref`. The brand is never inferred from the candidate: it is the resolved brand, it must be the one the approved Memory belongs to (`GUARDIAN_BRAND_MISMATCH`), and a candidate manifest cannot carry a `brand_id`. With a READY Brand Context the brand comes from the context, so there is a single source of truth.
+- **Guardian:** the brand reaches the Guardian only through the READY Brand Context (no `brand` / `brand_id` input). The report carries `merchant_id`, `brand_id`, `core_ref` and `memory_ref`; the Guardian re-verifies that the brand belongs to the tenant and that Core and Memory belong to that brand, and never infers the brand from the Candidate Manifest (which cannot carry a `brand_id`). See *Brand Guardian V1*.
 
 ## Brand Memory V1
 
@@ -85,7 +77,7 @@ Unknown keys are refused at every level, so budget, strategy, competitors, catal
 - **severity**: `BLOCK` (failure -> Guardian `FAIL`) or `REVIEW` (failure -> `REVIEW_REQUIRED`). A required rule with no result is `NOT_MEASURABLE`; no `PASS` is possible with an uncovered rule.
 - **scope**: `GLOBAL`, `TEXT`, `IMAGE`, `VIDEO`, `DOCUMENT` (no per-social-platform scope).
 - **source_ref** (mandatory, "why does this rule exist?"): `brand-core://`, `decision://`, `approved-asset://`, `claim://` or `external-policy://`. A missing or non-standard one is refused (`HARD_RULE_SOURCE_REF_REQUIRED`).
-- **EXTERNAL_GATE** consumes a canonical gate computed elsewhere; the subject must be a registered gate (`EXTERNAL_GATES`, V1: `product_fidelity` -> `creative-fidelity`) and `STATUS_IN` values must be statuses of that gate. Branding never recomputes it.
+- **EXTERNAL_GATE** consumes a canonical gate computed elsewhere; the subject must be a registered gate (`EXTERNAL_GATES`, V1: `product_fidelity` -> `creative-fidelity`). The registry separates what a gate can **report** (`observable_statuses`: for `product_fidelity`, `PASS`/`FAIL`/`NOT_MEASURABLE`, the vocabulary of a candidate manifest) from what a rule may declare **compliant** (`allowed_rule_statuses`: for `product_fidelity`, `[PASS]`). `STATUS_IN` may only list `allowed_rule_statuses`, so `FAIL` and `NOT_MEASURABLE` can never be configured as a conforming state. Branding never recomputes the gate.
 - `CLAIM_REF` stores a `claim://` reference, never the claim's truth.
 
 ### Core <-> Memory binding
@@ -98,13 +90,80 @@ Memory references an exact `core_ref { id, version }`. It requires an APPROVED C
 
 `approveBrandMemory({ memory, core, tenant, resolvedActor, activeMemory, approvedAt })` has the same trust model as Core approval: `resolvedActor` comes from the trusted server / Socle context and **must never be built from an untrusted client payload**; Branding authenticates nobody and checks only presence, tenant and role (OWNER / AUTHORIZED_REVIEWER). It persists nothing and returns `{ approvedMemory, supersededMemory, decisionEvent }` (same shape as Core approval: `approvedX` / `supersededX` / `decisionEvent`; only the Core adds `reviewSignals`, which come from its reference Snapshot). The event reuses the Core decision-event model with type `BRAND_MEMORY_APPROVED`. An empty Memory cannot be submitted. An APPROVED version is deeply frozen; a revision never mutates it.
 
-### Candidate manifest (contract only)
+### Candidate manifest
 
-`normalizeCandidateManifest` fixes the input the Guardian evaluates rules against: `content_kind`, `asset_refs[]`, `detected_colors[]`, `typography[]`, `text_content`, `claim_refs[]`, `external_gate_results[]`. Future adapters (OCR, color extraction, font detection, creative-fidelity) fill it. Evaluating rules against the manifest is **deferred to Guardian V1**; only the shape is validated here.
+Structured facts about a candidate, produced by upstream adapters (OCR, color extraction, font detection, asset resolver, creative-fidelity, document parser...). It holds **no raw media**: only refs, colors, family names, text fragments and statuses. See *Brand Guardian V1*.
 
 ### Schema
 
 `schemas/branding/brand-memory-v1.schema.json` describes the normalized document structure. It is executed in tests by `validateSchemaSubset` (`schema-subset.js`), a **strict subset validator - not a general JSON Schema implementation**: it supports only the keywords the Branding schemas use (type, enum, const, properties, required, additionalProperties, items, min/max constraints, pattern, uniqueItems, local `#/$defs/` `$ref`) and refuses every other keyword, even in unreached branches, so a schema can never hold an unenforced constraint. `$schema`/`$id` are annotations only. It has no dependency (NDR-P10: build/own what is cheap). The type x operator matrix, value shapes, Core binding and token-name rules live in code only; a test fails if the schema enums drift from the code constants.
+
+## Brand Guardian V1
+
+Implemented in `src/branding/guardian.js` and `src/branding/candidate-manifest.js`.
+
+```text
+Brand Context READY + Candidate Manifest -> evaluateBrandGuardian -> Guardian Report
+                                                                    -> Socle Policy / human validation / execution
+```
+
+`evaluateBrandGuardian({ tenant, brandContext, candidateManifest, targetRef, evaluatedAt, semanticAssessment? })` - no other key is accepted (in particular no `contentKind`, no per-rule `checks`, and no `brand` / `brand_id`: the brand comes from the READY Brand Context, the single source of truth).
+
+### Preconditions
+The Brand Context must be `READY`; otherwise `GUARDIAN_REQUIRES_READY_BRAND_CONTEXT` (with the reasons). Guardian does not trust the flag: it rebuilds the gate from the brand, the approved Core and Memory and the tenant, so a tenant mismatch, a brand mismatch (`BRAND_CORE_BRAND_MISMATCH`, `BRAND_MEMORY_BRAND_MISMATCH`) or a Core/Memory mismatch (`BRAND_MEMORY_CORE_MISMATCH`) is refused even on a forged READY object. The report carries `merchant_id` and `brand_id` (taken from that context) next to `core_ref` and `memory_ref`; the brand is never inferred from the Candidate Manifest, which cannot carry a `brand_id`. A STALE Snapshot does not block: `BRAND_SNAPSHOT_STALE` is propagated in `brand_review_signals` and never changes the outcome.
+
+### Trust of the inputs
+The `candidateManifest` and the `semanticAssessment` must come from **trusted adapters or server context** (OCR, color extraction, the creative-fidelity adapter, a human review tool, a model run) and **must never be built directly from an untrusted client payload**. The Guardian is pure: it validates their shape (strict keys, enums, coverage rules) but **authenticates neither**, and cannot tell a truthful observation from a forged one. Whoever assembles these objects carries that trust, exactly as for `resolvedActor` and the brand object. This stays an open dependency until Nordla Identity / signed adapter outputs exist.
+
+### Candidate manifest: subject-aware and coverage-aware
+`content_kind` (`TEXT`, `IMAGE`, `VIDEO`, `DOCUMENT`, the only source of truth) plus one channel per rule type:
+
+| Channel | Rule type | Observation |
+|---|---|---|
+| `assets` | `ASSET_REF` | `{ subject, coverage, values: [asset ref], evidence_refs }` |
+| `colors` | `COLOR` | values: `#RRGGBB` (normalized uppercase) |
+| `typography` | `TYPOGRAPHY` | values: family names |
+| `text` | `TEXT` | values: text fragments |
+| `claims` | `CLAIM_REF` | values: `claim://` refs |
+| `external_gates` | `EXTERNAL_GATE` | `{ subject (a registered gate), coverage, status, evidence_refs }` |
+
+- **coverage** is the quality of the measurement, not a score: `COMPLETE` (exhaustive enough to conclude on an absence), `PARTIAL` (observations exist, exhaustiveness not guaranteed), `UNAVAILABLE` (no reliable measurement; it cannot carry values or a status). This is what separates *"no logo found after a complete measurement"* from *"the logo detector did not run"*.
+- **subject** is the deterministic key: a rule reads the observation with `observation.subject === rule.subject` in its channel. No fuzzy or model matching. A subject appears once per channel; several values go in `values[]`. An adapter that cannot classify a subject must report `PARTIAL`/`UNAVAILABLE`, not guess.
+- No observation at all for a rule's subject is `NOT_MEASURABLE` (`OBSERVATION_NOT_PROVIDED`), which is different from a COMPLETE observation with no value.
+- `fidelityGateObservation({ gate })` turns a creative-fidelity `evaluateHardFidelityGate` result into the `product_fidelity` observation: PASS -> COMPLETE/PASS; FAIL without gaps -> COMPLETE/FAIL; FAIL with missing checks -> PARTIAL/FAIL (a violation is proven, compliance is not); NOT_MEASURABLE -> UNAVAILABLE.
+
+### Hard-rule evaluation
+A rule applies when `scope === GLOBAL` or `scope === content_kind`; others are listed in `not_applicable_rule_ids` and never count. For applicable rules (raw result before severity):
+
+| Operator | COMPLETE | PARTIAL | UNAVAILABLE |
+|---|---|---|---|
+| `REQUIRED` | values -> PASS; none -> violation | values -> PASS; none -> NOT_MEASURABLE | NOT_MEASURABLE |
+| `EQUALS` / `ONE_OF` (every observed value must be allowed) | >=1 value, all allowed -> PASS; none, or one not allowed -> violation | one not allowed -> violation; otherwise NOT_MEASURABLE | NOT_MEASURABLE |
+| `CONTAINS` | found -> PASS; absent -> violation | found -> PASS; absent -> NOT_MEASURABLE | NOT_MEASURABLE |
+| `NOT_CONTAINS` | found -> violation; absent -> PASS | found -> violation; absent -> NOT_MEASURABLE | NOT_MEASURABLE |
+| `STATUS_IN` / `REQUIRED` on a gate | see below | | |
+
+Principle: a partial observation can prove a violation, never compliance or the absence of something.
+
+- **Text** matching joins only the fragments of the SAME subject and compares after one shared normalization (Unicode NFC, locale-independent lower-casing, whitespace collapsed). It is not fuzzy matching.
+- **External gates:** a gate that is absent, UNAVAILABLE, status-less or reporting `NOT_MEASURABLE` is `NOT_MEASURABLE` (`EXTERNAL_GATE_NOT_MEASURED`), never a brand violation. `REQUIRED` passes on any usable result. `STATUS_IN`: status not allowed -> violation (even from a PARTIAL gate); allowed -> PASS only if COMPLETE, else NOT_MEASURABLE. Guardian never recomputes product fidelity.
+- **Severity** is applied afterwards: violation + `BLOCK` -> `FAIL`, violation + `REVIEW` -> `REVIEW_REQUIRED`; `PASS` and `NOT_MEASURABLE` never change.
+- **Aggregation:** `FAIL > REVIEW_REQUIRED > NOT_MEASURABLE > PASS` over applicable rules. No PASS if any applicable rule is NOT_MEASURABLE. Zero applicable rule -> `hard_outcome = NOT_MEASURABLE` with `NO_APPLICABLE_HARD_RULES` (nothing verified is not compliance).
+- **Reason codes** (stable, `GUARDIAN_REASON`): `RULE_PASSED`, `REQUIRED_VALUE_MISSING`, `OBSERVED_VALUE_MISMATCH`, `OBSERVED_VALUE_NOT_ALLOWED`, `REQUIRED_TEXT_MISSING`, `FORBIDDEN_TEXT_FOUND`, `EXTERNAL_GATE_STATUS_NOT_ALLOWED`, `OBSERVATION_NOT_PROVIDED`, `MEASUREMENT_PARTIAL`, `MEASUREMENT_UNAVAILABLE`, `EXTERNAL_GATE_NOT_MEASURED`, `NO_APPLICABLE_HARD_RULES`.
+
+### Semantic lane (advisory, separate)
+`semantic_context` is not a hard rule. A `semanticAssessment` `{ outcome: PASS | REVIEW_REQUIRED | NOT_MEASURABLE, method: MODEL | HUMAN, evidence_refs, note }` may be passed in, already computed elsewhere; Guardian makes no model call. `FAIL` does not exist in this lane and the assessment cannot name a rule: a model never settles a hard rule.
+
+`hard_outcome` and `semantic_outcome` are reported separately. Overall: hard FAIL / REVIEW_REQUIRED / NOT_MEASURABLE dominate; hard PASS + semantic REVIEW_REQUIRED -> `REVIEW_REQUIRED`; hard PASS + semantic PASS or absent -> `PASS`; hard PASS + semantic NOT_MEASURABLE -> `PASS` plus the Guardian signal `BRAND_SEMANTIC_NOT_MEASURABLE` in `guardian_review_signals`.
+
+### Report
+`id, merchant_id, core_ref, memory_ref, target_ref, content_kind, evaluated_at, rule_results[], not_applicable_rule_ids[], hard_outcome, hard_outcome_reason, semantic_outcome, semantic_assessment, brand_review_signals[], guardian_review_signals[], outcome, execution_decision (null), policy_note`. Each rule result: `rule_id, subject, rule_type, severity, scope, outcome, reason, evidence_refs, observed_summary`. `observed_summary` is a compact deterministic string (coverage, value count, at most three clipped offending values): no media and no full text is copied. Evidence refs are those of the observation actually used; nothing is invented. The report is deeply frozen.
+
+### Authority, purity, boundaries
+- `execution_decision` is always `null` and `policy_note` is `GUARDIAN_REPORT_IS_NOT_AN_EXECUTION_POLICY_DECISION`. Even `FAIL` is not an action. No `override`, `forcePass` or `publishAnyway` exists; a human observation enters through the manifest via a trusted adapter, it is not a policy override (override belongs to Socle Policy).
+- The evaluation is pure: same Memory + Manifest + inputs give the same report. No network, filesystem, database, model, implicit clock or randomness; `evaluatedAt` is explicit and the report id is a hash of the explicit inputs. Nothing is persisted.
+- Creative Intelligence owns composition, hierarchy, finishing, AI look, artifacts and aesthetics; creative-fidelity owns product fidelity. Neither is duplicated here.
+- Not built (non-goals): OCR, vision, font detection, color extraction, any LLM/VLM call, publication, overrides, Decision Ledger persistence, dashboards, scoring, platform rules, auto-fix or regeneration.
 
 ## Generic interfaces
 

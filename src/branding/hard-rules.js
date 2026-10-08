@@ -27,12 +27,16 @@ export const HARD_RULE_MATRIX = Object.freeze({
   [T.EXTERNAL_GATE]: Object.freeze([O.STATUS_IN, O.REQUIRED]),
 });
 
-// Canonical external gates a rule may consume. The gate is computed elsewhere; Branding only
-// declares which statuses are acceptable. First (and only) V1 gate: creative-fidelity.
+// Canonical external gates a rule may consume. The gate is computed elsewhere (never by Branding).
+//   observable_statuses    what the gate can REPORT (the vocabulary a candidate manifest may carry)
+//   allowed_rule_statuses  what a rule's STATUS_IN may declare as COMPLIANT
+// They differ on purpose: FAIL and NOT_MEASURABLE are valid things for a gate to report, but they can
+// never be configured as a conforming state. First (and only) V1 gate: creative-fidelity.
 export const EXTERNAL_GATES = Object.freeze({
   product_fidelity: Object.freeze({
     source: 'creative-fidelity',
-    statuses: Object.freeze(Object.values(FIDELITY_GATE_OUTCOME)),
+    observable_statuses: Object.freeze(Object.values(FIDELITY_GATE_OUTCOME)),
+    allowed_rule_statuses: Object.freeze([FIDELITY_GATE_OUTCOME.PASS]),
   }),
 });
 
@@ -102,8 +106,11 @@ function normalizeValue(rule, value, field, gate) {
     case O.STATUS_IN: {
       const statuses = oneOf(value, field, (entry, f) => requiredString(entry, f));
       for (const status of statuses) {
-        if (!gate.statuses.includes(status)) {
+        if (!gate.observable_statuses.includes(status)) {
           throw new TypeError(`${field} contains a status unknown to gate ${rule.subject}: ${status}`);
+        }
+        if (!gate.allowed_rule_statuses.includes(status)) {
+          throw new TypeError(`${field}: ${status} cannot be configured as a compliant status of gate ${rule.subject}`);
         }
       }
       return statuses;

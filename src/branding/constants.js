@@ -152,14 +152,44 @@ export const GUARDIAN_OUTCOME = Object.freeze({
   NOT_MEASURABLE: 'NOT_MEASURABLE',
 });
 
-export const GUARDIAN_METHOD = Object.freeze({
-  DETERMINISTIC: 'DETERMINISTIC',
-  OCR: 'OCR',
-  // Result of the existing creative-fidelity hard gate (consumed, never re-implemented).
-  FIDELITY_GATE: 'FIDELITY_GATE',
-  // Advisory AI/VLM judgment (e.g. against semantic_context). It can never settle a hard rule.
+// Quality of a measurement (not a statistical score):
+//   COMPLETE     exhaustive enough to conclude on an ABSENCE too
+//   PARTIAL      some observations exist, exhaustiveness is not guaranteed
+//   UNAVAILABLE  no reliable measurement at all
+// "nothing found after a complete measurement" is NOT "the detector did not run".
+export const OBSERVATION_COVERAGE = EVIDENCE_COMPLETENESS;
+
+// Semantic lane (brand tone/style advisory): advisory only, never a hard FAIL, never settles a hard rule.
+export const SEMANTIC_OUTCOME = Object.freeze({
+  PASS: 'PASS',
+  REVIEW_REQUIRED: 'REVIEW_REQUIRED',
+  NOT_MEASURABLE: 'NOT_MEASURABLE',
+});
+
+export const SEMANTIC_METHOD = Object.freeze({
   MODEL: 'MODEL',
   HUMAN: 'HUMAN',
+});
+
+// Stable machine-readable reasons attached to every rule result.
+export const GUARDIAN_REASON = Object.freeze({
+  RULE_PASSED: 'RULE_PASSED',
+  REQUIRED_VALUE_MISSING: 'REQUIRED_VALUE_MISSING',
+  OBSERVED_VALUE_MISMATCH: 'OBSERVED_VALUE_MISMATCH',
+  OBSERVED_VALUE_NOT_ALLOWED: 'OBSERVED_VALUE_NOT_ALLOWED',
+  REQUIRED_TEXT_MISSING: 'REQUIRED_TEXT_MISSING',
+  FORBIDDEN_TEXT_FOUND: 'FORBIDDEN_TEXT_FOUND',
+  EXTERNAL_GATE_STATUS_NOT_ALLOWED: 'EXTERNAL_GATE_STATUS_NOT_ALLOWED',
+  OBSERVATION_NOT_PROVIDED: 'OBSERVATION_NOT_PROVIDED',
+  MEASUREMENT_PARTIAL: 'MEASUREMENT_PARTIAL',
+  MEASUREMENT_UNAVAILABLE: 'MEASUREMENT_UNAVAILABLE',
+  EXTERNAL_GATE_NOT_MEASURED: 'EXTERNAL_GATE_NOT_MEASURED',
+  NO_APPLICABLE_HARD_RULES: 'NO_APPLICABLE_HARD_RULES',
+});
+
+// Signals raised by the Guardian itself (distinct from the Brand Context review signals).
+export const GUARDIAN_SIGNAL = Object.freeze({
+  SEMANTIC_NOT_MEASURABLE: 'BRAND_SEMANTIC_NOT_MEASURABLE',
 });
 
 export const BRAND_CONTEXT_STATUS = Object.freeze({
