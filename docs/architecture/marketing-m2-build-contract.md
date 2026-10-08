@@ -1,6 +1,6 @@
 # Nordla — Marketing M2 · BUILD V1 (contract)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT — not pushed, not COMPLETE until audit, push and CI
+- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT (architect audit corrections applied) — not pushed, not COMPLETE until push and CI
 - **Version:** `marketing-m2-build.v1`
 - **Builds on:** [M1 UNDERSTAND](./marketing-m1-understand-contract.md) and [M1.5 signal producers](./marketing-m1-5-signal-producers.md) (both COMPLETE, unchanged)
 - **Parent architecture:** [`marketing-v1-architecture.md`](./marketing-v1-architecture.md) §6 and §14
@@ -69,7 +69,7 @@ completion      = candidate_start + lead_time
 completion <= window.end  ->  FIT      otherwise  ->  NOT_FIT
 ```
 
-**DAYS = 24 hours exactly** (V1): no business days, no calendar, no timezone or daylight-saving arithmetic; a fractional lead time rounds the completion up, so it is never optimistic. The result `{ status, as_of, candidate_start, completion }` is stored in the Push as `lead_time_fit` and **re-evaluated at each `asOf`** by `evaluatePushReadiness` (a Push that fit yesterday can stop fitting today).
+**DAYS = 24 hours exactly** (V1): no business days, no calendar, no timezone or daylight-saving arithmetic; **the arithmetic is exact** — `HOURS → value × 60 × 60 × 1000 ms`, `DAYS → value × 24 × 60 × 60 × 1000 ms`, so `1.5 HOURS = 90 minutes` and `1.5 DAYS = 36 hours`. The declared value is never rounded or otherwise altered; the FIT / NOT_FIT comparison uses the exact completion, and only the displayed `completion` timestamp is truncated to the millisecond (so `72.0000001 HOURS` is `NOT_FIT` even though its displayed completion equals `window.end`). The result `{ status, as_of, candidate_start, completion }` is stored in the Push as `lead_time_fit` (a snapshot at `created_at`) and **re-evaluated at each live `asOf`** by `evaluatePushReadiness` (a Push that fit yesterday can stop fitting today).
 
 ## 8. Measurement plan and reversibility
 
@@ -100,7 +100,7 @@ Derived and therefore refused as input: `push_id`, `schema_version`, `merchant_i
 
 **Freshness.** `created_at < expires_at ≤ finding.expires_at` (`MKT_M2_PUSH_INVALID_EXPIRY`, `MKT_M2_PUSH_OUTLIVES_FINDING`); at `asOf ≥ expires_at` a Push is `STALE`.
 
-**Re-validation.** `normalizeMarketingPushProposal(stored, { tenant, finding })` rebuilds the Push from its own non-derived fields at its own `created_at` and compares it with the stored object: a forged `readiness`, `push_id`, `lead_time_fit` or `finding_ref` is refused (`MKT_M2_PUSH_DERIVED_MISMATCH`).
+**Re-validation.** `normalizeMarketingPushProposal(stored, { tenant, finding })` rebuilds the Push from its own non-derived fields at its own `created_at` and compares it with the stored object: a forged `readiness`, `push_id`, `lead_time_fit` or `finding_ref` is refused (`MKT_M2_PUSH_DERIVED_MISMATCH`). This validates **form and derivable values** at `created_at`; it never, by itself, authorizes a live conclusion (§10).
 
 ## 10. Push readiness
 
@@ -113,11 +113,27 @@ Exactly `READY_FOR_SOCLE | NEEDS_EVIDENCE | NOT_ELIGIBLE | STALE`, precedence **
 | `NEEDS_EVIDENCE` | fitness `UNKNOWN`, **or** measurement `eligibility_status = UNKNOWN` |
 | `READY_FOR_SOCLE` | fresh, fitness `FIT`, lead time `FIT`, valid MeasurementPlan |
 
-**`READY_FOR_SOCLE` ≠ approved ≠ executable ≠ budget authorized ≠ inventory reserved ≠ policy cleared.** It means "worth the Socle's arbitration", nothing more. `evaluatePushReadiness(push, asOf)` is the live evaluation. A `TEST_SMALL` has no universal definition of "small" (no amount threshold anywhere); the only structural rule is that a hard-to-reverse test is not eligible. An `ACTION` that is `HARD_TO_REVERSE` is not excluded by M2: the Socle weighs it, with the reversibility visible.
+**`READY_FOR_SOCLE` ≠ approved ≠ executable ≠ budget authorized ≠ inventory reserved ≠ policy cleared.** It means "worth the Socle's arbitration", nothing more. A `TEST_SMALL` has no universal definition of "small" (no amount threshold anywhere); the only structural rule is that a hard-to-reverse test is not eligible. An `ACTION` that is `HARD_TO_REVERSE` is not excluded by M2: the Socle weighs it, with the reversibility visible.
+
+### Persisted object ≠ live readiness authority
+
+A stored (serialized) Push carries a `readiness` field. **That field is a snapshot at `created_at` and is never an authority.** The only live answer is
+
+```text
+evaluatePushReadiness(push, { tenant, finding, asOf, brand? })
+```
+
+which needs the **original `MarketingFinding` and an explicit `asOf`** (no Finding, no clock or no tenant is refused; the old `(push, asOf)` call shape no longer exists) and recomputes everything:
+
+1. the Finding is re-validated by M1 (`normalizeMarketingFinding`, so a forged materiality is refused) and passes the M1 gate `evaluateFindingReadiness` at `asOf` — `STALE` is reported (`FINDING_EXPIRED`), any other non-`READY_FOR_BUILD` state is refused (`MKT_M2_FINDING_NOT_READY`);
+2. the Push is re-validated against that Finding by `normalizeMarketingPushProposal` (every derived field recomputed; a Push is bound to **its** Finding — another one gives `MKT_M2_PUSH_DERIVED_MISMATCH`; a forged `readiness`, `lever_fitness`, `lead_time_fit` or `measurement_plan` is refused the same way);
+3. proposal freshness, lever fitness, **lead-time fit at `asOf`** and measurement state are evaluated on the validated Push.
+
+So a stored `READY_FOR_SOCLE` is `STALE` once the clock passes `expires_at`, becomes `NOT_ELIGIBLE` when the lead time no longer fits, and can never be forced onto a Push whose fields do not produce it.
 
 ## 11. DO_NOTHING and TEST_SMALL in the package
 
-`do_nothing` `{ reason_codes (≥ 1), evidence_refs[] }` is **always present**, separate from the proposals. `test_small_disposition` is always present: `INCLUDED { proposal_ref }` (must point at a `TEST_SMALL` proposal **of this package**; an `ACTION` is refused) or `NOT_APPLICABLE { reason_codes ≥ 1, evidence_refs ≥ 1 }` (refused if the package contains a `TEST_SMALL`). So `TEST_SMALL` is never silently skipped.
+`do_nothing` `{ reason_codes (≥ 1), evidence_refs (≥ 1) }` is **always present**, separate from the proposals, and **always needs non-empty reasons and non-empty evidence** — whether the package holds zero proposals or several `READY_FOR_SOCLE` ones (`MKT_M2_PACKAGE_DO_NOTHING_REQUIRED`, `MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED`). `DO_NOTHING` is a first-class option, not an administrative box. `test_small_disposition` is always present: `INCLUDED { proposal_ref }` (must point at a `TEST_SMALL` proposal **of this package**; an `ACTION` is refused) or `NOT_APPLICABLE { reason_codes ≥ 1, evidence_refs ≥ 1 }` (refused if the package contains a `TEST_SMALL`). So `TEST_SMALL` is never silently skipped.
 
 ## 12. SocleDecisionPackage
 
@@ -129,7 +145,8 @@ proposals[≤ 10]  do_nothing  test_small_disposition  unresolved_requirement_re
 - **Recommends nothing.** No `winner`, `best_option`, `recommended_option`, `selected_option`, `ranking_score`, rank, score or priority exists (all refused as unknown keys). Proposals are stored in a canonical order (by `push_id`) that carries **no** meaning; the same set in any order gives the same `package_id`.
 - **Scope.** Every proposal must have the package's merchant, brand and Finding (`MKT_M2_PACKAGE_SCOPE_MISMATCH`, `detail.scope`); duplicate `push_id` refused; each proposal is re-validated (forged derived fields refused); at most 10 proposals.
 - **Expiry.** `package.expires_at ≤ finding.expires_at` and `≤ min(proposal.expires_at)`; with no proposal, `≤ finding.expires_at`.
-- **Status** (a state, **not** a decision; evaluated live by `evaluatePackageStatus(pkg, asOf)`): `STALE` once the package has expired; else `READY_FOR_SOCLE` if ≥ 1 proposal is `READY_FOR_SOCLE`; else `NEEDS_EVIDENCE` if ≥ 1 needs evidence; else `NO_ELIGIBLE_MARKETING_ACTION` (all proposals `NOT_ELIGIBLE`, **or** no proposal at all). A package with **zero** proposals is accepted only with an explicit, evidenced `do_nothing` justification (`MKT_M2_PACKAGE_EMPTY_NEEDS_JUSTIFICATION`).
+- **Status** (a state, **not** a decision): `STALE` once the Finding or the package has expired; else `READY_FOR_SOCLE` if ≥ 1 proposal is `READY_FOR_SOCLE`; else `NEEDS_EVIDENCE` if ≥ 1 needs evidence; else `NO_ELIGIBLE_MARKETING_ACTION` (all proposals `NOT_ELIGIBLE`, **or** no proposal at all). A package with **zero** proposals is justified by the same mandatory `do_nothing` reasons and evidence.
+- **Persisted package ≠ live authority.** A stored package's `package_status` is a snapshot at `created_at`, never an authority. The live status is `evaluatePackageStatus(pkg, { tenant, finding, asOf, brand? })`: it needs the **original Finding and an explicit `asOf`**, re-validates the Finding (M1 gate + freshness), re-validates the whole package against it with `normalizeSocleDecisionPackage` (rebuilds it from its own non-derived fields at its own `created_at`: a forged `package_status`, `package_id`, `review_signals` or embedded proposal is refused, `MKT_M2_PACKAGE_DERIVED_MISMATCH` / `MKT_M2_PUSH_DERIVED_MISMATCH`; a package is bound to **its** Finding, `MKT_M2_PACKAGE_SCOPE_MISMATCH`), then evaluates each proposal live (freshness, lever fitness, lead-time fit at `asOf`, measurement state). The stored status is never read.
 - **What is still unresolved is made visible, not resolved.** `unresolved_requirement_refs` is the de-duplicated union of the claim/policy/consent/promotion/unknown refs, the capacity/inventory/creative/contact/other resource refs and the audience segment/criteria refs of the proposals. `review_signals` (fixed order) lists which verdicts the Socle still owes: `FINANCE_VERDICT_REQUIRED` (any cash), `INVENTORY_VERDICT_REQUIRED`, `CAPACITY_VERDICT_REQUIRED` (operational/creative/contact capacity or human time), `POLICY_CLEARANCE_REQUIRED`, `REVERSIBILITY_UNKNOWN`, `HARD_TO_REVERSE_PRESENT`.
 
 ## 13. Domain boundaries
@@ -161,12 +178,13 @@ Socle Decision engine · Socle Evidence Registry · Decision Ledger · policy en
 6. **`review_signals` and `unresolved_requirement_refs` are derived** (the mandate names them without defining them); they are deterministic summaries, never a verdict.
 7. **`schema_version` is an output field** of the Push and of the package.
 8. **`ACTION` + `HARD_TO_REVERSE` is not excluded** by M2 (only `TEST_SMALL` is, per the mandate); the reversibility stays visible to the Socle.
-9. **Building a package requires a `READY_FOR_BUILD` Finding at `asOf`**; staleness of an existing package is evaluated afterwards by `evaluatePackageStatus`.
+9. **Building a package requires a `READY_FOR_BUILD` Finding at `asOf`**; staleness of an existing package is evaluated afterwards by `evaluatePackageStatus`, with the original Finding.
 10. **Measurement `eligibility_status` other than `UNKNOWN` does not block** a `NONE` / `TIME` plan (`NOT_ELIGIBLE` simply means no controlled design is available); only `UNKNOWN` yields `NEEDS_EVIDENCE`.
+11. **Audit corrections (applied on top of the first M2 commit):** (a) lead-time arithmetic is exact, no rounding; (b) `do_nothing` evidence is mandatory in every package — the former special case "zero proposals needs an evidenced justification" (`MKT_M2_PACKAGE_EMPTY_NEEDS_JUSTIFICATION`) became redundant and was removed; (c) live readiness / package status can no longer be read from a stored object: `evaluatePushReadiness` and `evaluatePackageStatus` now take `{ tenant, finding, asOf }` (a signature change, because the previous `(object, asOf)` form trusted the stored `lever_fitness`, `measurement_plan` and similar fields), and `normalizeSocleDecisionPackage` was added as the package counterpart of `normalizeMarketingPushProposal`.
 
-## 17. Test coverage — mandate cases 1–151
+## 17. Test coverage — mandate cases 1–151, plus audit additions 152+
 
-One row per numbered case of the M2 mandate (§32). Several cases share a test function when it asserts them together; `test/marketing-m2-build.test.js` enforces that this table has exactly 151 rows and that every named test exists. Case 151 is the full suite, run by the `Marketing V1` workflow.
+One row per numbered case of the M2 mandate (§32). Several cases share a test function when it asserts them together; `test/marketing-m2-build.test.js` enforces that this table is contiguous (the mandate numbering 1–151 is never reshuffled), that it contains the audit additions, and that every named test exists. Case 151 is the full suite, run by the `Marketing V1` workflow. **Cases 152 and above were added by the architect's final audit** (exact lead time, `do_nothing` evidence, persisted object ≠ live authority).
 
 <!-- coverage-matrix:start -->
 | Mandate case | Behaviour | Test (`test/marketing-m2-build.test.js` unless noted) |
@@ -322,4 +340,17 @@ One row per numbered case of the M2 mandate (§32). Several cases share a test f
 | 149 | M1.5 unchanged | Non-regression: M1, M1.5 and Measurement keep exactly their public surface; M2 added no field to them |
 | 150 | Measurement unchanged | Non-regression: M1, M1.5 and Measurement keep exactly their public surface; M2 added no field to them |
 | 151 | full suite green | (CI) full suite `npm test`, run by the `Marketing V1` workflow |
+| 152 | HOURS / DAYS are exactly 3 600 000 / 86 400 000 ms | Lead time: exact arithmetic - fractional values are never rounded (1.5 HOURS = 90 minutes, 1.5 DAYS = 36 hours) |
+| 153 | 1.5 DAYS = 36 hours, 1.5 HOURS = 90 minutes (no rounding) | Lead time: exact arithmetic - fractional values are never rounded (1.5 HOURS = 90 minutes, 1.5 DAYS = 36 hours) |
+| 154 | fractional values: FIT / NOT_FIT around the window end | Lead time: exact arithmetic - fractional values are never rounded (1.5 HOURS = 90 minutes, 1.5 DAYS = 36 hours) |
+| 155 | a sub-millisecond lead time is not rounded up | Lead time: exact arithmetic - fractional values are never rounded (1.5 HOURS = 90 minutes, 1.5 DAYS = 36 hours) |
+| 156 | do_nothing without evidence_refs refused | DO_NOTHING evidence: reasons AND evidence are always required, even with several READY proposals |
+| 157 | do_nothing with empty evidence_refs refused | DO_NOTHING evidence: reasons AND evidence are always required, even with several READY proposals |
+| 158 | do_nothing with evidence accepted (also with several READY proposals) | DO_NOTHING evidence: reasons AND evidence are always required, even with several READY proposals |
+| 159 | a stored Push readiness is a snapshot, not an authority | Persisted Push is never a live authority: its stored readiness is a snapshot; the live answer needs the original Finding and an explicit asOf |
+| 160 | live Push evaluation requires the original Finding and an explicit asOf | Persisted Push is never a live authority: its stored readiness is a snapshot; the live answer needs the original Finding and an explicit asOf |
+| 161 | a forged stored Push (readiness, fitness, lead time, measurement) is refused live | Persisted Push is never a live authority: its stored readiness is a snapshot; the live answer needs the original Finding and an explicit asOf |
+| 162 | live Push readiness re-evaluates lead time, fitness and measurement at the clock | Persisted Push is never a live authority: its stored readiness is a snapshot; the live answer needs the original Finding and an explicit asOf |
+| 163 | a stored package_status is a snapshot; the live status needs the Finding and asOf and re-validates the package | Persisted package is never a live authority: stored package_status is a snapshot; the live status needs the original Finding and an explicit asOf |
+| 164 | live evaluation passes through the M1 Finding gate and never reads the stored status (source check) | Live evaluation goes through the M1 Finding gate, never through the stored object alone (source check) |
 <!-- coverage-matrix:end -->

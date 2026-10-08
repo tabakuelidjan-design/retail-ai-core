@@ -81,19 +81,21 @@ export function buildExecutionWindow(input) {
  *   candidate_start = max(asOf, window.start)
  *   completion      = candidate_start + lead_time          (DAYS = 24 hours exactly; no business days)
  *   completion <= window.end  -> FIT,  otherwise NOT_FIT
- * The fractional millisecond of a fractional lead time is rounded UP so a completion is never optimistic.
+ * The arithmetic is EXACT: HOURS -> value * 60 * 60 * 1000 ms, DAYS -> value * 24 * 60 * 60 * 1000 ms (1.5 HOURS = 90 minutes,
+ * 1.5 DAYS = 36 hours). The declared value is never rounded or otherwise altered, and the comparison uses the exact
+ * completion; only the displayed `completion` timestamp is truncated to the millisecond.
  */
 export function evaluateLeadTimeFit(leadTime, window, asOf) {
   const lead = buildEstimatedLeadTime(leadTime);
   const win = buildExecutionWindow(window);
   const asOfIso = asOfValue(asOf);
   const startMs = Math.max(toMs(asOfIso), toMs(win.start));
-  const completionMs = startMs + Math.ceil(lead.value * LEAD_TIME_MS[lead.unit]);
+  const completionMs = startMs + lead.value * LEAD_TIME_MS[lead.unit];
   if (!Number.isFinite(completionMs) || Number.isNaN(new Date(completionMs).getTime())) fail(E.INVALID_FIELD, 'the completion date is out of range', { field: 'estimated_lead_time' });
   return deepFreeze({
     status: completionMs <= toMs(win.end) ? LEAD_TIME_FIT.FIT : LEAD_TIME_FIT.NOT_FIT,
     as_of: asOfIso,
     candidate_start: new Date(startMs).toISOString(),
-    completion: new Date(completionMs).toISOString(),
+    completion: new Date(Math.floor(completionMs)).toISOString(),
   });
 }

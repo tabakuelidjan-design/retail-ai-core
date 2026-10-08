@@ -12,13 +12,18 @@ import { MKT_ERROR as E } from './understand-constants.js';
 import {
   M2_ERROR as X, M2_VERSION, MAX_PROPOSALS, PACKAGE_STATUS, PUSH_READINESS, ACTION_MODE, REVERSIBILITY_STATUS, TEST_SMALL_DISPOSITION,
 } from './m2-constants.js';
-import { gateFinding, evaluatePushReadiness, normalizeMarketingPushProposal } from './push-proposal.js';
+import { gateFinding, liveFinding, normalizeMarketingPushProposal, pushReadinessAt } from './push-proposal.js';
+import { canonical } from './m2-validation.js';
 import {
   asOfValue, closedObject, deepFreeze, deriveId, enumValue, fail, isPlainObject, isoTimestamp, opaqueRef, refList, tenantMerchantId,
   tokenList, toMs,
 } from './understand-validation.js';
 
 const BUILD_KEYS = ['proposals', 'do_nothing', 'test_small_disposition', 'expires_at'];
+const PACKAGE_KEYS = [
+  'package_id', 'schema_version', 'merchant_id', 'brand_id', 'finding_ref', 'created_at', 'expires_at', 'proposals', 'do_nothing',
+  'test_small_disposition', 'unresolved_requirement_refs', 'review_signals', 'package_status',
+];
 const DO_NOTHING_KEYS = ['reason_codes', 'evidence_refs'];
 const INCLUDED_KEYS = ['status', 'proposal_ref'];
 const NOT_APPLICABLE_KEYS = ['status', 'reason_codes', 'evidence_refs'];
@@ -29,12 +34,16 @@ const REVIEW_SIGNAL_ORDER = [
   'REVERSIBILITY_UNKNOWN', 'HARD_TO_REVERSE_PRESENT',
 ];
 
+// DO_NOTHING is a first-class option, not an administrative box: it always carries non-empty reasons AND non-empty evidence,
+// whether the package holds zero proposals or several READY ones.
 function doNothing(input) {
   if (input == null) fail(X.PACKAGE_DO_NOTHING_REQUIRED, 'a Decision Package always carries do_nothing');
   closedObject(input, DO_NOTHING_KEYS, 'do_nothing');
   const reasonCodes = tokenList(input.reason_codes, 'do_nothing.reason_codes');
   if (!reasonCodes.length) fail(X.PACKAGE_DO_NOTHING_REQUIRED, 'do_nothing needs at least one reason code');
-  return { reason_codes: reasonCodes, evidence_refs: refList(input.evidence_refs, 'do_nothing.evidence_refs') };
+  const evidenceRefs = refList(input.evidence_refs, 'do_nothing.evidence_refs');
+  if (!evidenceRefs.length) fail(X.PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED, 'do_nothing needs at least one evidence_ref');
+  return { reason_codes: reasonCodes, evidence_refs: evidenceRefs };
 }
 
 // TEST_SMALL is always explicitly considered: either a TEST_SMALL proposal of this package, or a justified "not applicable".
@@ -108,7 +117,7 @@ function reviewSignals(proposals) {
 
 function statusAt(pkg, asOfIso) {
   if (toMs(pkg.expires_at) <= toMs(asOfIso)) return PACKAGE_STATUS.STALE;
-  const readiness = pkg.proposals.map((p) => evaluatePushReadiness(p, asOfIso).status);
+  const readiness = pkg.proposals.map((p) => pushReadinessAt(p, asOfIso).status);
   if (readiness.includes(PUSH_READINESS.READY_FOR_SOCLE)) return PACKAGE_STATUS.READY_FOR_SOCLE;
   if (readiness.includes(PUSH_READINESS.NEEDS_EVIDENCE)) return PACKAGE_STATUS.NEEDS_EVIDENCE;
   // every proposal is NOT_ELIGIBLE, or there is none (then the explicit justification was required at build time)
@@ -116,15 +125,22 @@ function statusAt(pkg, asOfIso) {
 }
 
 /**
- * Live status of a stored package at `asOf`. STALE once the package (which never outlives its Finding or any proposal) has
- * expired; otherwise READY_FOR_SOCLE if at least one proposal is READY_FOR_SOCLE, else NEEDS_EVIDENCE if at least one needs
- * evidence, else NO_ELIGIBLE_MARKETING_ACTION. This is a state, never a decision.
+ * LIVE status of a package at `asOf`. A stored package is NEVER the authority: its `package_status` is a snapshot at
+ * created_at and is ignored. The status is recomputed from the ORIGINAL MarketingFinding (re-validated, M1 readiness gate,
+ * freshness) + the explicit asOf + the package re-validated against that Finding (every proposal and every derived field
+ * recomputed; a forged one is refused) + each proposal's live readiness (freshness, lever fitness, lead-time fit at asOf,
+ * measurement state).
+ *   STALE if the Finding or the package has expired; else READY_FOR_SOCLE if >= 1 proposal is READY_FOR_SOCLE; else
+ *   NEEDS_EVIDENCE if >= 1 needs evidence; else NO_ELIGIBLE_MARKETING_ACTION. A state, never a decision.
+ *
+ * @param {object} pkg a stored or freshly built package
+ * @param {object} p { tenant, finding, asOf, brand? } - the Finding and the explicit clock are mandatory
  */
-export function evaluatePackageStatus(pkg, asOf) {
-  if (!isPlainObject(pkg) || !Array.isArray(pkg.proposals) || !pkg.do_nothing || !pkg.test_small_disposition) {
-    fail(E.INVALID_FIELD, 'pkg must be a Decision Package', { field: 'pkg' });
-  }
-  return statusAt(pkg, asOfValue(asOf));
+export function evaluatePackageStatus(pkg, { tenant, finding, asOf, brand = null } = {}) {
+  const live = liveFinding({ tenant, brand, finding, asOf });
+  const stored = normalizeSocleDecisionPackage(pkg, { tenant, finding: live.validated, brand });
+  if (live.findingStale) return PACKAGE_STATUS.STALE;
+  return statusAt(stored, live.asOfIso);
 }
 
 /**
@@ -153,10 +169,7 @@ export function buildSocleDecisionPackage({ tenant, brand = null, finding, asOf,
     .map((p) => normalizeMarketingPushProposal(p, { tenant, finding: validated, brand }))
     .sort((a, b) => (a.push_id < b.push_id ? -1 : 1));
 
-  const nothing = doNothing(fields.do_nothing);
-  if (!proposals.length && !nothing.evidence_refs.length) {
-    fail(X.PACKAGE_EMPTY_NEEDS_JUSTIFICATION, 'a package without any proposal needs an explicit, evidenced do_nothing justification');
-  }
+  const nothing = doNothing(fields.do_nothing); // reasons and evidence always required (so zero proposals is always justified)
   const disposition = testSmallDisposition(fields.test_small_disposition, proposals);
 
   const expiresAt = isoTimestamp(fields.expires_at, 'package.expires_at', X.PACKAGE_INVALID_EXPIRY);
@@ -179,4 +192,25 @@ export function buildSocleDecisionPackage({ tenant, brand = null, finding, asOf,
   };
   body.package_status = statusAt(body, createdAt);
   return deepFreeze({ package_id: deriveId('mpk', body), ...body });
+}
+
+/**
+ * Re-validates a STORED package against the Finding it claims to come from, by rebuilding it from its own non-derived fields
+ * at its own created_at and comparing: a forged package_status, package_id, review signal or proposal is refused. It validates
+ * shape and derivable values; it never, by itself, authorizes a live conclusion (see evaluatePackageStatus).
+ */
+export function normalizeSocleDecisionPackage(input, { tenant, finding, brand = null } = {}) {
+  closedObject(input, PACKAGE_KEYS, 'package');
+  const rebuilt = buildSocleDecisionPackage({
+    tenant,
+    brand,
+    finding,
+    asOf: input.created_at,
+    proposals: input.proposals,
+    do_nothing: input.do_nothing,
+    test_small_disposition: input.test_small_disposition,
+    expires_at: input.expires_at,
+  });
+  if (canonical(rebuilt) !== canonical(input)) fail(X.PACKAGE_DERIVED_MISMATCH, 'the package does not match what its own fields and Finding produce');
+  return rebuilt;
 }

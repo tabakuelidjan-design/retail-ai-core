@@ -16,4 +16,4 @@ export { buildMeasurementPlan, buildReversibility } from './measurement-plan.js'
 export {
   buildAudienceIntent, buildMarketingPushProposal, normalizeMarketingPushProposal, evaluatePushReadiness,
 } from './push-proposal.js';
-export { buildSocleDecisionPackage, evaluatePackageStatus } from './socle-decision-package.js';
+export { buildSocleDecisionPackage, normalizeSocleDecisionPackage, evaluatePackageStatus } from './socle-decision-package.js';

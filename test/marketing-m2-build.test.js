@@ -18,7 +18,7 @@ import * as measurementBuild from '../src/marketing/build.js';
 import {
   M2_VERSION, assessLeverFitness, buildAudienceIntent, buildEstimatedLeadTime, buildExecutionWindow, buildMarketingPushProposal,
   buildMeasurementPlan, buildResourceRequirements, buildReversibility, buildSocleDecisionPackage, evaluateLeadTimeFit,
-  evaluatePackageStatus, evaluatePushReadiness, normalizeLeverFitness, normalizeMarketingPushProposal,
+  evaluatePackageStatus, evaluatePushReadiness, normalizeLeverFitness, normalizeMarketingPushProposal, normalizeSocleDecisionPackage,
 } from '../src/marketing/m2.js';
 import {
   MarketingUnderstandError, assessMateriality, buildMarketingContext, buildMarketingFinding, buildMarketSignal,
@@ -109,6 +109,8 @@ const pkgFields = (proposals, over = {}) => ({
   test_small_disposition: { status: 'NOT_APPLICABLE', reason_codes: ['NOT_PROPOSED'], evidence_refs: ['ev/ts'] }, expires_at: '2026-10-25T00:00:00Z', ...over,
 });
 const pkg = (proposals, over = {}, extra = {}) => buildSocleDecisionPackage({ tenant: tenant(), finding: F, asOf: ASOF, ...pkgFields(proposals, over), ...extra });
+// the only way to ask for a LIVE conclusion: the original Finding and an explicit clock
+const live = (asOf, finding_ = F) => ({ tenant: tenant(), finding: finding_, asOf });
 const included = (p) => ({ test_small_disposition: { status: 'INCLUDED', proposal_ref: p.push_id } });
 
 const code = (fn) => {
@@ -468,10 +470,10 @@ test('Push freshness: expires_at must be after creation and cannot outlive the F
   assert.equal(code(() => push({ expires_at: '2026-10-01T00:00:00Z' })), 'MKT_M2_PUSH_INVALID_EXPIRY');
   assert.equal(code(() => push({ expires_at: 'next week' })), 'MKT_M2_PUSH_INVALID_EXPIRY');
   const p = push(); // 96
-  assert.equal(evaluatePushReadiness(p, '2026-10-10T00:00:00Z').status, 'READY_FOR_SOCLE');
-  assert.deepEqual({ ...evaluatePushReadiness(p, '2026-10-25T00:00:00Z') }, { status: 'STALE', reason_codes: ['PROPOSAL_EXPIRED'] }); // at expiry
-  assert.equal(evaluatePushReadiness(p, '2026-12-01T00:00:00Z').status, 'STALE');
-  assert.equal(code(() => evaluatePushReadiness(p)), 'MKT_INVALID_TIMESTAMP');
+  assert.equal(evaluatePushReadiness(p, live('2026-10-10T00:00:00Z')).status, 'READY_FOR_SOCLE');
+  assert.deepEqual({ ...evaluatePushReadiness(p, live('2026-10-25T00:00:00Z')) }, { status: 'STALE', reason_codes: ['PROPOSAL_EXPIRED'] }); // at expiry
+  assert.equal(evaluatePushReadiness(p, live('2026-12-01T00:00:00Z')).status, 'STALE');
+  assert.equal(code(() => evaluatePushReadiness(p, { tenant: tenant(), finding: F })), 'MKT_INVALID_TIMESTAMP');
 });
 
 test('Push readiness: NOT_FIT / NOT_FIT lead time / UNKNOWN fitness / READY, with the precedence STALE > NOT_ELIGIBLE > NEEDS_EVIDENCE > READY', () => {
@@ -487,17 +489,17 @@ test('Push readiness: NOT_FIT / NOT_FIT lead time / UNKNOWN fitness / READY, wit
   const ready = push(); // 100
   assert.deepEqual({ ...ready.readiness }, { status: 'READY_FOR_SOCLE', reason_codes: ['FIT_AND_MEASURABLE'] });
   assert.equal(push({ lever_fitness: allFit({ CHANNEL_FIT: axisOf('NOT_FIT'), AUDIENCE_FIT: axisOf('UNKNOWN') }), measurement_plan: plan({ eligibility_status: 'UNKNOWN' }) }).readiness.status, 'NOT_ELIGIBLE'); // NOT_ELIGIBLE beats NEEDS_EVIDENCE
-  assert.equal(evaluatePushReadiness(notFit, '2026-12-01T00:00:00Z').status, 'STALE'); // STALE beats everything
+  assert.equal(evaluatePushReadiness(notFit, live('2026-12-01T00:00:00Z')).status, 'STALE'); // STALE beats everything
   // the live evaluation re-computes the lead time at the new clock
   const tight = push({ estimated_lead_time: { value: 5, unit: 'DAYS', basis: 'OWNER_DECIDED' }, valid_execution_window: { start: '2026-10-09T00:00:00Z', end: '2026-10-15T00:00:00Z' } });
   assert.equal(tight.readiness.status, 'READY_FOR_SOCLE');
-  assert.equal(evaluatePushReadiness(tight, '2026-10-12T00:00:00Z').status, 'NOT_ELIGIBLE'); // too late to finish by 10-15
+  assert.equal(evaluatePushReadiness(tight, live('2026-10-12T00:00:00Z')).status, 'NOT_ELIGIBLE'); // too late to finish by 10-15
   // 101: a TEST_SMALL that is hard to reverse is not eligible; an ACTION is judged by the Socle, not excluded here
   const hard = { status: 'HARD_TO_REVERSE', reason_codes: ['PRINTED_RUN'] };
   assert.deepEqual({ ...push({ reversibility: hard }).readiness }, { status: 'NOT_ELIGIBLE', reason_codes: ['TEST_SMALL_HARD_TO_REVERSE'] });
   assert.equal(push({ action_mode: 'ACTION', reversibility: hard }).readiness.status, 'READY_FOR_SOCLE');
   assert.equal(push({ reversibility: { status: 'PARTIALLY_REVERSIBLE', reason_codes: ['PART'] } }).readiness.status, 'READY_FOR_SOCLE');
-  assert.ok(isDeepFrozen(evaluatePushReadiness(ready, ASOF)));
+  assert.ok(isDeepFrozen(evaluatePushReadiness(ready, live(ASOF))));
 });
 
 test('Push: claims, policy, consent, promotion rules, risks and unknowns are opaque refs - Marketing validates none of them', () => {
@@ -553,7 +555,7 @@ test('DO_NOTHING: always present in the package, separate from the proposals, wi
   assert.equal(code(() => pkg([p], { ...included(p), do_nothing: { reason_codes: [], evidence_refs: ['ev/x'] } })), 'MKT_M2_PACKAGE_DO_NOTHING_REQUIRED'); // 109
   assert.equal(code(() => pkg([p], { ...included(p), do_nothing: { evidence_refs: ['ev/x'] } })), 'MKT_M2_PACKAGE_DO_NOTHING_REQUIRED');
   assert.equal(code(() => pkg([p], { ...included(p), do_nothing: { reason_codes: ['WHY'], recommended: true } })), 'MKT_UNKNOWN_KEY');
-  assert.deepEqual(pkg([p], { ...included(p), do_nothing: { reason_codes: ['WHY'] } }).do_nothing.evidence_refs, []); // evidence is optional when proposals exist
+  assert.equal(code(() => pkg([p], { ...included(p), do_nothing: { reason_codes: ['WHY'] } })), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED'); // evidence is never optional
 });
 
 test('TEST_SMALL is always explicitly considered: INCLUDED points at a TEST_SMALL proposal, NOT_APPLICABLE is reasoned and evidenced', () => {
@@ -582,7 +584,7 @@ test('Decision package: valid, deterministic, one finding, one tenant, one brand
   assert.match(a.package_id, /^mpk_[0-9a-f]{32}$/); // 116
   assert.equal(pkg([p], included(p)).package_id, a.package_id);
   assert.deepEqual([a.merchant_id, a.brand_id, a.finding_ref, a.schema_version, a.created_at], [M1, null, F.finding_id, M2_VERSION, '2026-10-08T13:00:00.000Z']);
-  assert.notEqual(pkg([p], { ...included(p), do_nothing: { reason_codes: ['OTHER'] } }).package_id, a.package_id);
+  assert.notEqual(pkg([p], { ...included(p), do_nothing: { reason_codes: ['OTHER'], evidence_refs: ['ev/base'] } }).package_id, a.package_id);
   // 117: another Finding
   const other = finding({ statement: 'A different problem entirely.' });
   const foreign = buildMarketingPushProposal({ tenant: tenant(), finding: other, asOf: ASOF, ...pushFields() });
@@ -641,22 +643,22 @@ test('Decision package status: READY / NEEDS_EVIDENCE / NO_ELIGIBLE_MARKETING_AC
   // 126: zero proposals only with an explicit, evidenced justification
   const empty = pkg([], { do_nothing: { reason_codes: ['NO_MARKETING_LEVER_FITS'], evidence_refs: ['ev/why'] } });
   assert.deepEqual([empty.package_status, empty.proposals.length], ['NO_ELIGIBLE_MARKETING_ACTION', 0]);
-  assert.equal(code(() => pkg([], { do_nothing: { reason_codes: ['NO_MARKETING_LEVER_FITS'] } })), 'MKT_M2_PACKAGE_EMPTY_NEEDS_JUSTIFICATION');
-  assert.equal(code(() => pkg([], { do_nothing: { reason_codes: ['NO_MARKETING_LEVER_FITS'], evidence_refs: [] } })), 'MKT_M2_PACKAGE_EMPTY_NEEDS_JUSTIFICATION');
+  assert.equal(code(() => pkg([], { do_nothing: { reason_codes: ['NO_MARKETING_LEVER_FITS'] } })), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED');
+  assert.equal(code(() => pkg([], { do_nothing: { reason_codes: ['NO_MARKETING_LEVER_FITS'], evidence_refs: [] } })), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED');
   assert.equal(pkg(undefined, { do_nothing: { reason_codes: ['X'], evidence_refs: ['ev/why'] } }).proposals.length, 0);
   // 127: stale
   const a = pkg([ready], included(ready));
-  assert.equal(evaluatePackageStatus(a, '2026-10-10T00:00:00Z'), 'READY_FOR_SOCLE');
-  assert.equal(evaluatePackageStatus(a, a.expires_at), 'STALE');
-  assert.equal(evaluatePackageStatus(a, '2026-12-01T00:00:00Z'), 'STALE');
-  assert.equal(evaluatePackageStatus(empty, '2026-12-01T00:00:00Z'), 'STALE');
-  assert.equal(code(() => evaluatePackageStatus(a)), 'MKT_INVALID_TIMESTAMP');
-  assert.equal(code(() => evaluatePackageStatus({ proposals: [] }, ASOF)), 'MKT_INVALID_FIELD');
+  assert.equal(evaluatePackageStatus(a, live('2026-10-10T00:00:00Z')), 'READY_FOR_SOCLE');
+  assert.equal(evaluatePackageStatus(a, live(a.expires_at)), 'STALE');
+  assert.equal(evaluatePackageStatus(a, live('2026-12-01T00:00:00Z')), 'STALE');
+  assert.equal(evaluatePackageStatus(empty, live('2026-12-01T00:00:00Z')), 'STALE');
+  assert.equal(code(() => evaluatePackageStatus(a, { tenant: tenant(), finding: F })), 'MKT_INVALID_TIMESTAMP');
+  assert.equal(code(() => evaluatePackageStatus({ proposals: [] }, live(ASOF))), 'MKT_INVALID_TIMESTAMP'); // not a package: nothing to re-validate
   // the status follows the live lead-time fit: it can degrade before the package expires
   const tight = push({ lever_variant: 'TIGHT', estimated_lead_time: { value: 5, unit: 'DAYS', basis: 'OWNER_DECIDED' }, valid_execution_window: { start: '2026-10-09T00:00:00Z', end: '2026-10-15T00:00:00Z' } });
   const t = pkg([tight], included(tight));
   assert.equal(t.package_status, 'READY_FOR_SOCLE');
-  assert.equal(evaluatePackageStatus(t, '2026-10-12T00:00:00Z'), 'NO_ELIGIBLE_MARKETING_ACTION');
+  assert.equal(evaluatePackageStatus(t, live('2026-10-12T00:00:00Z')), 'NO_ELIGIBLE_MARKETING_ACTION');
   // 'STALE' is also refused as a build-time finding state
   assert.equal(code(() => buildSocleDecisionPackage({ tenant: tenant(), finding: F, asOf: '2026-11-15T00:00:00Z', ...pkgFields([]) })), 'MKT_M2_FINDING_NOT_READY');
 });
@@ -711,7 +713,7 @@ test('Domain boundaries: M2 exposes proposal contracts only - no finance, invent
   const allowedFunctions = [
     'assessLeverFitness', 'normalizeLeverFitness', 'buildResourceRequirements', 'buildEstimatedLeadTime', 'buildExecutionWindow', 'evaluateLeadTimeFit',
     'buildMeasurementPlan', 'buildReversibility', 'buildAudienceIntent', 'buildMarketingPushProposal', 'normalizeMarketingPushProposal',
-    'evaluatePushReadiness', 'buildSocleDecisionPackage', 'evaluatePackageStatus',
+    'evaluatePushReadiness', 'buildSocleDecisionPackage', 'normalizeSocleDecisionPackage', 'evaluatePackageStatus',
   ];
   assert.deepEqual(Object.entries(m2).filter(([, v]) => typeof v === 'function').map(([k]) => k).sort(), [...allowedFunctions].sort());
   for (const name of M2_FILES) {
@@ -779,14 +781,167 @@ test('Non-regression: M1, M1.5 and Measurement keep exactly their public surface
   // 151: the full suite (npm test, CI "Marketing V1") must stay green - asserted by the CI run, not by this file
 });
 
+// ------------------------------------------------------------------ audit corrections (cases 152+)
+
+test('Lead time: exact arithmetic - fractional values are never rounded (1.5 HOURS = 90 minutes, 1.5 DAYS = 36 hours)', async () => {
+  const win = { start: '2026-10-09T00:00:00Z', end: '2026-10-12T00:00:00Z' };
+  const at = '2026-10-09T00:00:00Z';
+  const run = (value, unit) => evaluateLeadTimeFit({ value, unit, basis: 'OWNER_DECIDED' }, win, at);
+  assert.equal(m2.LEAD_TIME_MS.HOURS, 60 * 60 * 1000); // 152
+  assert.equal(m2.LEAD_TIME_MS.DAYS, 24 * 60 * 60 * 1000);
+  assert.equal(run(1.5, 'HOURS').completion, '2026-10-09T01:30:00.000Z');
+  assert.equal(run(1.5, 'DAYS').completion, '2026-10-10T12:00:00.000Z'); // 153: 36 hours
+  assert.equal(run(1.5, 'DAYS').completion, run(36, 'HOURS').completion);
+  assert.equal(run(1.5, 'HOURS').completion, run(0.0625, 'DAYS').completion); // 90 minutes either way
+  assert.equal(run(0.25, 'DAYS').completion, '2026-10-09T06:00:00.000Z');
+  // 154: fractional FIT / NOT_FIT around the window end (3 days from the window start)
+  assert.equal(run(3, 'DAYS').status, 'FIT'); // completion == window.end
+  assert.equal(run(2.9999999, 'DAYS').status, 'FIT');
+  assert.equal(run(3.0000001, 'DAYS').status, 'NOT_FIT');
+  assert.equal(run(72, 'HOURS').status, 'FIT');
+  assert.equal(run(71.9999999, 'HOURS').status, 'FIT');
+  assert.equal(run(72.0000001, 'HOURS').status, 'NOT_FIT'); // 0.36 ms late: NOT_FIT although the displayed (ms-truncated) completion equals window.end
+  assert.equal(run(72.0000001, 'HOURS').completion, '2026-10-12T00:00:00.000Z');
+  // 155: no rounding UP of the declared value - a sub-millisecond lead time adds nothing to the displayed completion
+  assert.equal(run(0.0000001, 'HOURS').completion, '2026-10-09T00:00:00.000Z');
+  assert.equal(run(0.0000001, 'HOURS').candidate_start, run(0.0000001, 'HOURS').completion);
+  // a fraction also moves a Push between FIT and NOT_FIT in a real build
+  const tightWindow = { valid_execution_window: { start: '2026-10-09T00:00:00Z', end: '2026-10-10T12:00:00Z' } };
+  assert.equal(push({ ...tightWindow, estimated_lead_time: { value: 1.5, unit: 'DAYS', basis: 'OWNER_DECIDED' } }).lead_time_fit.status, 'FIT');
+  assert.equal(push({ ...tightWindow, estimated_lead_time: { value: 1.5000001, unit: 'DAYS', basis: 'OWNER_DECIDED' } }).lead_time_fit.status, 'NOT_FIT');
+  // the source rounds nothing
+  assert.doesNotMatch(stripComments(await read('resource-requirements')), /Math\.(ceil|round|floor|trunc)\(\s*lead|Math\.ceil|Math\.round/);
+});
+
+test('DO_NOTHING evidence: reasons AND evidence are always required, even with several READY proposals', () => {
+  const a = push({ lever_variant: 'READY_A' });
+  const b = push({ lever_variant: 'READY_B', lever_family: 'OFFER' });
+  assert.deepEqual([a.readiness.status, b.readiness.status], ['READY_FOR_SOCLE', 'READY_FOR_SOCLE']);
+  const withNothing = (do_nothing, proposals = [a, b]) => pkg(proposals, { ...included(a), do_nothing });
+  const reasons = ['BASELINE_ACCEPTABLE'];
+  for (const [label, doNothing] of [['missing evidence_refs', { reason_codes: reasons }], ['empty evidence_refs', { reason_codes: reasons, evidence_refs: [] }], ['undefined evidence_refs', { reason_codes: reasons, evidence_refs: undefined }]]) { // 156 / 157
+    assert.equal(code(() => withNothing(doNothing)), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED', `${label} (two READY proposals)`);
+    assert.equal(code(() => withNothing(doNothing, [a])), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED', `${label} (one READY proposal)`);
+    assert.equal(code(() => pkg([], { do_nothing: doNothing })), 'MKT_M2_PACKAGE_DO_NOTHING_EVIDENCE_REQUIRED', `${label} (zero proposals)`);
+  }
+  assert.equal(code(() => withNothing({ reason_codes: [], evidence_refs: ['ev/base'] })), 'MKT_M2_PACKAGE_DO_NOTHING_REQUIRED'); // reasons stay mandatory
+  assert.equal(code(() => withNothing(null)), 'MKT_M2_PACKAGE_DO_NOTHING_REQUIRED');
+  const ok = withNothing({ reason_codes: reasons, evidence_refs: ['ev/base', 'ev/base', 'ev/market'] }); // 158
+  assert.deepEqual({ ...ok.do_nothing }, { reason_codes: reasons, evidence_refs: ['ev/base', 'ev/market'] });
+  assert.equal(ok.package_status, 'READY_FOR_SOCLE');
+  assert.equal(pkg([], { do_nothing: { reason_codes: reasons, evidence_refs: ['ev/base'] } }).proposals.length, 0); // zero proposals: justified by the same rule
+});
+
+test('Persisted Push is never a live authority: its stored readiness is a snapshot; the live answer needs the original Finding and an explicit asOf', () => {
+  const live = (asOf, finding_ = F) => ({ tenant: tenant(), finding: finding_, asOf });
+  const p = push();
+  const stored = JSON.parse(JSON.stringify(p));
+  assert.equal(stored.readiness.status, 'READY_FOR_SOCLE'); // the snapshot at created_at
+  assert.equal(evaluatePushReadiness(stored, live(ASOF)).status, 'READY_FOR_SOCLE');
+  // 159: same stored object, later clock: the snapshot is ignored, the live answer is STALE
+  assert.equal(stored.readiness.status, 'READY_FOR_SOCLE');
+  assert.equal(evaluatePushReadiness(stored, live('2026-10-26T00:00:00Z')).status, 'STALE');
+  // the Finding's own freshness is part of the live answer
+  const sameAsFinding = push({ expires_at: '2026-10-30T12:00:00Z' });
+  assert.deepEqual({ ...evaluatePushReadiness(sameAsFinding, live('2026-10-30T12:00:00Z')) }, { status: 'STALE', reason_codes: ['FINDING_EXPIRED'] });
+  assert.equal(evaluatePushReadiness(sameAsFinding, live('2026-10-29T00:00:00Z')).status, 'NOT_ELIGIBLE'); // fresh Finding, but the lead time no longer fits the window
+  // 160: no Finding, no clock, no context: no live conclusion
+  assert.equal(code(() => evaluatePushReadiness(stored)), 'MKT_TENANT_INVALID');
+  assert.equal(code(() => evaluatePushReadiness(stored, ASOF)), 'MKT_TENANT_INVALID'); // the old (push, asOf) call shape no longer exists
+  assert.equal(code(() => evaluatePushReadiness(stored, { tenant: tenant(), asOf: ASOF })), 'MKT_INVALID_FIELD'); // no Finding
+  assert.equal(code(() => evaluatePushReadiness(stored, { tenant: tenant(), finding: F })), 'MKT_INVALID_TIMESTAMP'); // no explicit clock
+  assert.equal(code(() => evaluatePushReadiness(stored, { tenant: tenant(M2), finding: F, asOf: ASOF })), 'MKT_FINDING_TENANT_MISMATCH');
+  // the M1 Finding gate is re-run live, on a re-validated Finding
+  const refer = finding({ domain_fit: fitOf({ status: 'REFER_TO_DOMAIN', target_domains: ['INVENTORY'], evidence_refs: ['ev/1'] }) });
+  assert.equal(code(() => evaluatePushReadiness(stored, live(ASOF, refer))), 'MKT_M2_FINDING_NOT_READY');
+  assert.equal(code(() => evaluatePushReadiness(stored, live(ASOF, { ...JSON.parse(JSON.stringify(F)), materiality: { ...JSON.parse(JSON.stringify(F.materiality)), overall: 'NOT_MATERIAL' } }))), 'MKT_MATERIALITY_OVERALL_MISMATCH');
+  // 161: a serialized object cannot carry a conclusion the live recomputation does not produce
+  const notFit = push({ lever_variant: 'NOT_FIT_ONE', lever_fitness: allFit({ CHANNEL_FIT: axisOf('NOT_FIT') }) });
+  const forged = JSON.parse(JSON.stringify(notFit));
+  assert.equal(forged.readiness.status, 'NOT_ELIGIBLE');
+  forged.readiness = { status: 'READY_FOR_SOCLE', reason_codes: ['FORGED'] };
+  assert.equal(code(() => evaluatePushReadiness(forged, live(ASOF))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  const forgedFitness = { ...JSON.parse(JSON.stringify(notFit)), lever_fitness: JSON.parse(JSON.stringify(allFit())) }; // overall flipped to FIT with consistent axes
+  assert.equal(code(() => evaluatePushReadiness(forgedFitness, live(ASOF))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  const forgedLead = { ...JSON.parse(JSON.stringify(p)), lead_time_fit: { ...p.lead_time_fit, status: 'NOT_FIT' } };
+  assert.equal(code(() => evaluatePushReadiness(forgedLead, live(ASOF))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  const forgedMeasurement = { ...JSON.parse(JSON.stringify(p)), measurement_plan: { ...JSON.parse(JSON.stringify(p.measurement_plan)), eligibility_status: 'UNKNOWN' } };
+  assert.equal(code(() => evaluatePushReadiness(forgedMeasurement, live(ASOF))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  // a Push is bound to ITS Finding
+  assert.equal(code(() => evaluatePushReadiness(stored, live(ASOF, finding({ statement: 'A different Finding.' })))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  // the live answer still reflects the clock for lead time, fitness and measurement
+  const tight = push({ lever_variant: 'TIGHT_ONE', estimated_lead_time: { value: 5, unit: 'DAYS', basis: 'OWNER_DECIDED' }, valid_execution_window: { start: '2026-10-09T00:00:00Z', end: '2026-10-15T00:00:00Z' } });
+  assert.equal(evaluatePushReadiness(tight, live(ASOF)).status, 'READY_FOR_SOCLE');
+  assert.equal(evaluatePushReadiness(tight, live('2026-10-12T00:00:00Z')).status, 'NOT_ELIGIBLE'); // 162
+  assert.equal(evaluatePushReadiness(notFit, live(ASOF)).status, 'NOT_ELIGIBLE');
+  assert.equal(evaluatePushReadiness(push({ measurement_plan: plan({ eligibility_status: 'UNKNOWN' }) }), live(ASOF)).status, 'NEEDS_EVIDENCE');
+});
+
+test('Persisted package is never a live authority: stored package_status is a snapshot; the live status needs the original Finding and an explicit asOf', () => {
+  const live = (asOf, finding_ = F) => ({ tenant: tenant(), finding: finding_, asOf });
+  const ready = push({ lever_variant: 'READY_ONE' });
+  const a = pkg([ready], included(ready));
+  const stored = JSON.parse(JSON.stringify(a));
+  assert.equal(stored.package_status, 'READY_FOR_SOCLE'); // snapshot at created_at
+  assert.equal(evaluatePackageStatus(stored, live('2026-10-10T00:00:00Z')), 'READY_FOR_SOCLE');
+  assert.equal(JSON.stringify(normalizeSocleDecisionPackage(stored, { tenant: tenant(), finding: F })), JSON.stringify(a)); // the form validates...
+  // ...but the stored status is not the answer: same stored object, later clock
+  assert.equal(evaluatePackageStatus(stored, live('2026-10-26T00:00:00Z')), 'STALE'); // 163: package expired
+  const sameAsFinding = push({ lever_variant: 'LONG_ONE', expires_at: '2026-10-30T12:00:00Z' });
+  const long = pkg([sameAsFinding], { ...included(sameAsFinding), expires_at: '2026-10-30T12:00:00Z' });
+  assert.equal(evaluatePackageStatus(long, live('2026-10-30T12:00:00Z')), 'STALE'); // the Finding's freshness is part of the live status
+  // lead-time and fitness are re-evaluated at the live clock
+  const tight = push({ lever_variant: 'TIGHT_ONE', estimated_lead_time: { value: 5, unit: 'DAYS', basis: 'OWNER_DECIDED' }, valid_execution_window: { start: '2026-10-09T00:00:00Z', end: '2026-10-15T00:00:00Z' } });
+  const t = pkg([tight], included(tight));
+  assert.equal(t.package_status, 'READY_FOR_SOCLE');
+  assert.equal(evaluatePackageStatus(t, live('2026-10-12T00:00:00Z')), 'NO_ELIGIBLE_MARKETING_ACTION');
+  // a serialized status cannot be forced
+  const notEligible = push({ lever_variant: 'NOT_ELIGIBLE_ONE', lever_fitness: allFit({ CHANNEL_FIT: axisOf('NOT_FIT') }) });
+  const nothing = pkg([notEligible], included(notEligible));
+  assert.equal(nothing.package_status, 'NO_ELIGIBLE_MARKETING_ACTION');
+  const forgedStatus = { ...JSON.parse(JSON.stringify(nothing)), package_status: 'READY_FOR_SOCLE' };
+  assert.equal(code(() => evaluatePackageStatus(forgedStatus, live(ASOF))), 'MKT_M2_PACKAGE_DERIVED_MISMATCH');
+  assert.equal(code(() => normalizeSocleDecisionPackage(forgedStatus, { tenant: tenant(), finding: F })), 'MKT_M2_PACKAGE_DERIVED_MISMATCH');
+  const forgedProposal = JSON.parse(JSON.stringify(nothing));
+  forgedProposal.proposals[0].readiness = { status: 'READY_FOR_SOCLE', reason_codes: ['FORGED'] };
+  assert.equal(code(() => evaluatePackageStatus(forgedProposal, live(ASOF))), 'MKT_M2_PUSH_DERIVED_MISMATCH');
+  assert.equal(code(() => evaluatePackageStatus({ ...JSON.parse(JSON.stringify(a)), review_signals: [] }, live(ASOF))), 'MKT_M2_PACKAGE_DERIVED_MISMATCH');
+  assert.equal(code(() => evaluatePackageStatus({ ...JSON.parse(JSON.stringify(a)), winner: ready.push_id }, live(ASOF))), 'MKT_UNKNOWN_KEY');
+  // no Finding, no clock, no context: no live conclusion
+  assert.equal(code(() => evaluatePackageStatus(stored)), 'MKT_TENANT_INVALID');
+  assert.equal(code(() => evaluatePackageStatus(stored, ASOF)), 'MKT_TENANT_INVALID');
+  assert.equal(code(() => evaluatePackageStatus(stored, { tenant: tenant(), asOf: ASOF })), 'MKT_INVALID_FIELD');
+  assert.equal(code(() => evaluatePackageStatus(stored, { tenant: tenant(), finding: F })), 'MKT_INVALID_TIMESTAMP');
+  assert.equal(code(() => evaluatePackageStatus({ proposals: [] }, live(ASOF))), 'MKT_INVALID_TIMESTAMP'); // not a package: refused
+  assert.equal(code(() => evaluatePackageStatus(stored, live(ASOF, finding({ statement: 'A different Finding.' })))), 'MKT_M2_PACKAGE_SCOPE_MISMATCH'); // a package is bound to ITS Finding
+  const refer = finding({ domain_fit: fitOf({ status: 'REFER_TO_DOMAIN', target_domains: ['INVENTORY'], evidence_refs: ['ev/1'] }) });
+  assert.equal(code(() => evaluatePackageStatus(stored, live(ASOF, refer))), 'MKT_M2_FINDING_NOT_READY');
+});
+
+test('Live evaluation goes through the M1 Finding gate, never through the stored object alone (source check)', async () => {
+  const push_ = stripComments(await read('push-proposal'));
+  const live = push_.slice(push_.indexOf('export function liveFinding'), push_.indexOf('export function evaluatePushReadiness'));
+  assert.match(live, /normalizeMarketingFinding\(/);
+  assert.match(live, /evaluateFindingReadiness\(/);
+  const evaluate = push_.slice(push_.indexOf('export function evaluatePushReadiness'), push_.indexOf('export function buildMarketingPushProposal'));
+  assert.match(evaluate, /liveFinding\(/);
+  assert.match(evaluate, /normalizeMarketingPushProposal\(/);
+  const pkgSource = stripComments(await read('socle-decision-package'));
+  const evaluatePackage = pkgSource.slice(pkgSource.indexOf('export function evaluatePackageStatus'), pkgSource.indexOf('export function buildSocleDecisionPackage'));
+  assert.match(evaluatePackage, /liveFinding\(/);
+  assert.match(evaluatePackage, /normalizeSocleDecisionPackage\(/);
+  assert.doesNotMatch(evaluatePackage, /pkg\.package_status|stored\.package_status/); // the stored status is never read
+});
+
 // ------------------------------------------------------------------ coverage matrix (doc <-> tests)
 
-test('Coverage matrix: the doc maps all 151 mandate cases, and every test it names exists', async () => {
+test('Coverage matrix: the doc maps all 151 mandate cases plus the audit additions, and every test it names exists', async () => {
   const doc = await readFile(new URL('../docs/architecture/marketing-m2-build-contract.md', import.meta.url), 'utf8');
   const self = await readFile(new URL(import.meta.url), 'utf8');
   const matrix = doc.slice(doc.indexOf('<!-- coverage-matrix:start -->'), doc.indexOf('<!-- coverage-matrix:end -->'));
   const rows = [...matrix.matchAll(/^\| (\d+) \| (.+?) \| (.+?) \|$/gm)].map((m) => ({ n: Number(m[1]), name: m[3] }));
-  assert.deepEqual(rows.map((r) => r.n), Array.from({ length: 151 }, (_, i) => i + 1));
+  assert.ok(rows.length >= 163, 'the 151 mandate cases and the audit additions (152+)');
+  assert.deepEqual(rows.map((r) => r.n), Array.from({ length: rows.length }, (_, i) => i + 1)); // contiguous: the mandate numbering is never reshuffled
   for (const { n, name } of rows) {
     const known = name.startsWith('(CI)') || self.includes(`test('${name}'`);
     assert.ok(known, `mandate case ${n} names a test that does not exist: ${name}`);

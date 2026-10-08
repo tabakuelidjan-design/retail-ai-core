@@ -104,7 +104,9 @@ export function gateFinding({ tenant, brand, finding, asOfIso }) {
 }
 
 // ---- readiness ----
-function readinessOf(push, asOfIso) {
+// PURE helper over a Push that has ALREADY been re-validated against its Finding. It is shared with the package module but
+// is not a public decision API: a stored `readiness` / `package_status` is a snapshot at created_at, never an authority.
+export function pushReadinessAt(push, asOfIso) {
   const result = (status, ...reasonCodes) => ({ status, reason_codes: reasonCodes });
   if (toMs(push.expires_at) <= toMs(asOfIso)) return result(PUSH_READINESS.STALE, 'PROPOSAL_EXPIRED');
 
@@ -126,14 +128,41 @@ function readinessOf(push, asOfIso) {
 }
 
 /**
- * Live readiness of a stored Push at `asOf`. Precedence: STALE > NOT_ELIGIBLE > NEEDS_EVIDENCE > READY_FOR_SOCLE.
- *   STALE          the proposal is expired (its expiry never exceeds its Finding's, so a stale Finding implies a stale Push)
+ * Validates the Finding and applies the M1 readiness gate at the LIVE clock. A Finding that is no longer fresh is reported
+ * (`findingStale`), anything else than READY_FOR_BUILD / STALE is refused, exactly as at build time.
+ */
+export function liveFinding({ tenant, brand = null, finding, asOf }) {
+  tenantMerchantId(tenant);
+  const asOfIso = asOfValue(asOf);
+  const validated = normalizeMarketingFinding(finding, { tenant, brand });
+  const status = evaluateFindingReadiness(validated, asOfIso).status;
+  if (status !== READINESS.READY_FOR_BUILD && status !== READINESS.STALE) {
+    fail(X.FINDING_NOT_READY, `a Push needs a READY_FOR_BUILD Finding (found ${status})`, { readiness: status });
+  }
+  return { validated, asOfIso, findingStale: status === READINESS.STALE };
+}
+
+/**
+ * LIVE readiness of a Push at `asOf`. A stored object is NEVER the authority: whatever `readiness` it carries is a snapshot
+ * at created_at and is ignored. The conclusion is recomputed from
+ *   the ORIGINAL MarketingFinding (re-validated, M1 readiness gate, finding freshness)
+ *   + the explicit asOf
+ *   + the Push re-validated against that Finding (every derived field recomputed; a forged one is refused)
+ *   + proposal freshness, lever fitness, lead-time fit at asOf, measurement state.
+ * Precedence: STALE > NOT_ELIGIBLE > NEEDS_EVIDENCE > READY_FOR_SOCLE.
+ *   STALE          the Finding or the proposal is expired
  *   NOT_ELIGIBLE   lever fitness NOT_FIT, lead time NOT_FIT at asOf, or a TEST_SMALL that is HARD_TO_REVERSE
  *   NEEDS_EVIDENCE lever fitness UNKNOWN, or the measurement eligibility is unresolved (UNKNOWN)
- *   READY_FOR_SOCLE fresh, fitness FIT, lead time FIT, valid MeasurementPlan (a Push whose plan is invalid cannot exist)
+ *   READY_FOR_SOCLE fresh, fitness FIT, lead time FIT, valid MeasurementPlan
+ *
+ * @param {object} push a stored or freshly built Push
+ * @param {object} p { tenant, finding, asOf, brand? } - the Finding and the explicit clock are mandatory
  */
-export function evaluatePushReadiness(push, asOf) {
-  return deepFreeze(readinessOf(push, asOfValue(asOf)));
+export function evaluatePushReadiness(push, { tenant, finding, asOf, brand = null } = {}) {
+  const live = liveFinding({ tenant, brand, finding, asOf });
+  const stored = normalizeMarketingPushProposal(push, { tenant, finding: live.validated, brand });
+  if (live.findingStale) return deepFreeze({ status: PUSH_READINESS.STALE, reason_codes: ['FINDING_EXPIRED'] });
+  return deepFreeze(pushReadinessAt(stored, live.asOfIso));
 }
 
 // ---- MarketingPushProposal ----
@@ -201,7 +230,7 @@ export function buildMarketingPushProposal({ tenant, brand = null, finding, asOf
     created_at: createdAt,
     expires_at: expiresAt,
   };
-  body.readiness = readinessOf(body, createdAt);
+  body.readiness = pushReadinessAt(body, createdAt);
   return deepFreeze({ push_id: deriveId('mpp', body), ...body });
 }
 
