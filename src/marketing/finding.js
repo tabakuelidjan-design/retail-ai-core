@@ -152,8 +152,8 @@ function contextScope(context, merchantId) {
   return { merchant_id: merchantId, brand_id: context.brand_id ?? null };
 }
 
-// Limitations of every cited signal travel to the Finding (so caveats are never lost on the way), and a signal that had
-// already expired when the Finding was created is flagged instead of silently treated as fresh evidence.
+// Limitations of every cited signal travel to the Finding (so caveats are never lost on the way). A signal that had already
+// expired when the Finding was created can only be cited as contradictory evidence (see enforceEvidenceFreshness) and is flagged.
 function carriedLimitations(context, citedRefs, createdAt) {
   const cited = new Set(citedRefs);
   const out = [];
@@ -163,6 +163,27 @@ function carriedLimitations(context, citedRefs, createdAt) {
     if (toMs(signal.expires_at) <= toMs(createdAt)) out.push(CITED_SIGNAL_EXPIRED);
   }
   return out;
+}
+
+// Evidence freshness bound. The "active support" of a Finding is every ref that can make it material or relevant:
+// evidence_refs plus the evidence of its materiality axes and of its domain fit. Among the signals of the context that are
+// part of that support:
+//   - none may already be expired at created_at (an expired signal stays usable as contradictory evidence or in the
+//     limitations, for audit, but never as active proof);
+//   - the Finding cannot outlive the earliest of them:  expires_at <= min(signal.expires_at).
+function enforceEvidenceFreshness(context, body) {
+  const support = new Set([
+    ...body.evidence_refs,
+    ...Object.values(body.materiality.axes).flatMap((a) => a.evidence_refs),
+    ...body.domain_fit.evidence_refs,
+  ]);
+  const supporting = context.market_signals.filter((s) => support.has(s.signal_id));
+  if (supporting.some((s) => toMs(s.expires_at) <= toMs(body.created_at))) {
+    fail(E.FINDING_EVIDENCE_SIGNAL_EXPIRED, 'an expired signal cannot be active evidence for a Finding');
+  }
+  if (supporting.length && toMs(body.expires_at) > Math.min(...supporting.map((s) => toMs(s.expires_at)))) {
+    fail(E.FINDING_OUTLIVES_EVIDENCE, 'a Finding cannot outlive the signals that support it');
+  }
 }
 
 /**
@@ -184,6 +205,7 @@ export function buildMarketingFinding({ tenant, context, ...fields } = {}) {
     limitations: [...textList(fields.limitations, 'finding.limitations', { max: 100 }), ...carriedLimitations(context, cited, createdAt)],
   };
   const body = findingBody(payload, { tenant, brand: null, requireHypothesisIds: false });
+  enforceEvidenceFreshness(context, body);
   body.finding_id = deriveId('mfd', { ...body, finding_id: null });
   return deepFreeze(body);
 }

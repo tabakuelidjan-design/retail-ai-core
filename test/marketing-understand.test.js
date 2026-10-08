@@ -360,6 +360,14 @@ test('Materiality aggregation is deterministic and visible - no score, no weight
   assert.ok(isDeepFrozen(a));
 });
 
+test('Materiality has no hard-coded business threshold: no currency, no numeric comparison in its source', async () => {
+  const text = await readFile(new URL('../src/marketing/materiality.js', import.meta.url), 'utf8');
+  const source = text.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(source, /€|\bEUR\b|\bUSD\b/);
+  assert.doesNotMatch(source, /[<>]=?\s*\d|\d\s*[<>]=?/); // no `x < 100`, no `500 > y`
+  assert.doesNotMatch(source, /\bthreshold\b|\bscore\b|\bweight/i);
+});
+
 test('Materiality: a forged overall that disagrees with its own axes is refused when re-validated', () => {
   const ok = material();
   assert.deepEqual(normalizeMaterialityAssessment(JSON.parse(JSON.stringify(ok))), ok);
@@ -497,13 +505,79 @@ test('Finding keeps what the cited signals said: their limitations travel, and a
   const external = signal({ signal_class: 'EXTERNAL_SIGNAL', signal_type: 'SOCIAL_TREND', provenance: provenanceOf({ evidence_kind: 'inferred' }), limitations: ['one platform only'] });
   const expired = signal({ signal_type: 'SEARCH_DEMAND', detected_at: '2026-09-01T10:00:00Z', expires_at: '2026-09-08T10:00:00Z' });
   const ctx = context({ marketSignals: [external, expired] });
-  const f = finding({ evidence_refs: [external.signal_id], contradictory_evidence_refs: [expired.signal_id] }, ctx);
+  const f = finding({ evidence_refs: [external.signal_id], contradictory_evidence_refs: [expired.signal_id], expires_at: '2026-10-15T10:00:00Z' }, ctx);
   for (const l of ['EXTERNAL_SIGNAL_IS_NOT_A_MERCHANT_FACT', 'one platform only', 'ATTRIBUTION_IS_NOT_CAUSAL_PROOF', 'CITED_SIGNAL_EXPIRED', 'one week only']) {
     assert.ok(f.limitations.includes(l), l);
   }
   const unrelated = finding({ evidence_refs: ['ev/1'] }, ctx);
   assert.equal(unrelated.limitations.includes('CITED_SIGNAL_EXPIRED'), false); // only cited signals contribute
   assert.equal(unrelated.limitations.includes('EXTERNAL_SIGNAL_IS_NOT_A_MERCHANT_FACT'), false);
+});
+
+test('Evidence freshness bound: a Finding cannot outlive the signals that support it (expires_at <= min(signal.expires_at))', () => {
+  const early = signal({ signal_type: 'SEARCH_DEMAND', expires_at: '2026-10-12T10:00:00Z' });
+  const late = signal({ signal_type: 'REPUTATION', expires_at: '2026-10-20T10:00:00Z' });
+  const ctx = context({ marketSignals: [early, late] });
+  const at = (iso) => ({ expires_at: iso });
+  assert.equal(code(() => finding({ evidence_refs: [early.signal_id], ...at('2026-10-12T10:00:01Z') }, ctx)), 'MKT_FINDING_OUTLIVES_EVIDENCE');
+  assert.equal(finding({ evidence_refs: [early.signal_id], ...at('2026-10-12T10:00:00Z') }, ctx).expires_at, '2026-10-12T10:00:00.000Z'); // equal to the bound is allowed
+  // the bound is the MINIMUM over every supporting signal
+  assert.equal(code(() => finding({ evidence_refs: [early.signal_id, late.signal_id], ...at('2026-10-15T00:00:00Z') }, ctx)), 'MKT_FINDING_OUTLIVES_EVIDENCE');
+  assert.equal(finding({ evidence_refs: [late.signal_id], ...at('2026-10-20T10:00:00Z') }, ctx).expires_at, '2026-10-20T10:00:00.000Z');
+  // contradictory evidence is not support: it does not bound the Finding
+  assert.equal(finding({ evidence_refs: [late.signal_id], contradictory_evidence_refs: [early.signal_id], ...at('2026-10-18T00:00:00Z') }, ctx).finding_id.startsWith('mfd_'), true);
+  // refs that are not signals of the context (measurement facts, other evidence) impose no bound
+  assert.equal(finding({ evidence_refs: ['ev/1'], ...at('2027-01-01T00:00:00Z') }, ctx).expires_at, '2027-01-01T00:00:00.000Z');
+  // support also counts when it is only cited by the materiality or domain-fit evidence
+  const viaMateriality = assessMateriality({ ECONOMIC: axis('MATERIAL', ['R'], [early.signal_id]) });
+  assert.equal(code(() => finding({ materiality: viaMateriality, ...at('2026-10-20T00:00:00Z') }, ctx)), 'MKT_FINDING_OUTLIVES_EVIDENCE');
+  const viaFit = fit({ status: 'REFER_TO_DOMAIN', target_domains: ['INVENTORY'], evidence_refs: [early.signal_id] });
+  assert.equal(code(() => finding({ domain_fit: viaFit, ...at('2026-10-20T00:00:00Z') }, ctx)), 'MKT_FINDING_OUTLIVES_EVIDENCE');
+});
+
+test('Evidence freshness bound: a signal already expired at created_at stays visible for audit but is never active proof', () => {
+  const expired = signal({ signal_type: 'SEARCH_DEMAND', detected_at: '2026-09-01T10:00:00Z', expires_at: '2026-10-08T12:00:00Z' }); // expires exactly at created_at
+  const ctx = context({ marketSignals: [expired] });
+  assert.equal(ctx.signal_freshness[0].freshness, 'STALE'); // still in the context, labelled
+  assert.equal(code(() => finding({ evidence_refs: [expired.signal_id] }, ctx)), 'MKT_FINDING_EVIDENCE_SIGNAL_EXPIRED');
+  assert.equal(code(() => finding({ materiality: assessMateriality({ ECONOMIC: axis('MATERIAL', ['R'], [expired.signal_id]) }) }, ctx)), 'MKT_FINDING_EVIDENCE_SIGNAL_EXPIRED');
+  assert.equal(code(() => finding({ domain_fit: fit({ status: 'REFER_TO_DOMAIN', target_domains: ['INVENTORY'], evidence_refs: [expired.signal_id] }) }, ctx)), 'MKT_FINDING_EVIDENCE_SIGNAL_EXPIRED');
+  // usable as contradictory evidence: the Finding keeps it, flagged, and stays auditable
+  const f = finding({ contradictory_evidence_refs: [expired.signal_id] }, ctx);
+  assert.deepEqual(f.contradictory_evidence_refs, [expired.signal_id]);
+  assert.ok(f.limitations.includes('CITED_SIGNAL_EXPIRED'));
+  // the expired signal is never among the Finding's active support, so it can never be what makes it READY_FOR_BUILD
+  assert.equal(f.evidence_refs.includes(expired.signal_id), false);
+  assert.equal(JSON.stringify(f.materiality).includes(expired.signal_id), false);
+});
+
+test('MarketSignal effective_window: the period of the phenomenon, independent of observed_at and expires_at', () => {
+  assert.equal(signal().effective_window, null);
+  const upcoming = signal({
+    signal_type: 'LOCAL_EVENT', signal_class: 'EXTERNAL_SIGNAL', observed_at: '2026-10-08T09:00:00Z',
+    effective_window: { start: '2026-12-20T00:00:00Z', end: '2026-12-27T00:00:00Z' }, expires_at: '2026-10-15T10:00:00Z',
+  });
+  assert.deepEqual(upcoming.effective_window, { start: '2026-12-20T00:00:00.000Z', end: '2026-12-27T00:00:00.000Z' }); // future window, evidence expires long before
+  assert.equal(upcoming.observed_at, '2026-10-08T09:00:00.000Z'); // observed_at untouched
+  assert.equal(code(() => signal({ observed_at: '2026-10-08T10:00:01Z', effective_window: { start: '2026-12-20T00:00:00Z', end: '2026-12-27T00:00:00Z' } })), 'MKT_SIGNAL_INVALID_OBSERVED_AT'); // the rule stays
+  assert.equal(code(() => signal({ effective_window: { start: '2026-12-27T00:00:00Z', end: '2026-12-20T00:00:00Z' } })), 'MKT_SIGNAL_INVALID_EFFECTIVE_WINDOW');
+  assert.equal(code(() => signal({ effective_window: { start: '2026-12-20T00:00:00Z', end: '2026-12-20T00:00:00Z' } })), 'MKT_SIGNAL_INVALID_EFFECTIVE_WINDOW'); // end must be strictly after start
+  assert.equal(code(() => signal({ effective_window: { start: '2026-12-20', end: '2026-12-27T00:00:00Z' } })), 'MKT_SIGNAL_INVALID_EFFECTIVE_WINDOW');
+  assert.equal(code(() => signal({ effective_window: { start: '2026-12-20T00:00:00Z' } })), 'MKT_SIGNAL_INVALID_EFFECTIVE_WINDOW');
+  assert.equal(code(() => signal({ effective_window: { start: '2026-12-20T00:00:00Z', end: '2026-12-27T00:00:00Z', key: 'x' } })), 'MKT_UNKNOWN_KEY');
+  // freshness is driven by expires_at only, never by the effective window
+  assert.equal(marketSignalFreshness(upcoming, '2026-11-01T00:00:00Z'), 'STALE');
+  assert.deepEqual(normalizeMarketSignal(JSON.parse(JSON.stringify(upcoming)), { tenant: tenant() }), upcoming);
+});
+
+test('REFER_TO_DOMAIN registry follows the canonical domain map (After-Sales, Buying & Suppliers, Compliance, Analyses)', () => {
+  const refer = (target) => buildDomainFit(fit({ status: 'REFER_TO_DOMAIN', target_domains: [target], evidence_refs: ['ev/1'] }));
+  for (const target of ['FINANCE', 'ANALYSES', 'SALES_PRODUCT', 'INVENTORY', 'BUYING_SUPPLIERS', 'BRANDING', 'SALES_DEVELOPMENT', 'COMPLIANCE', 'AFTER_SALES', 'CUSTOMERS', 'SITE_COMMERCE', 'OPERATIONS']) {
+    assert.deepEqual(refer(target).target_domains, [target], target);
+  }
+  assert.equal(code(() => refer('SERVICE_SUPPORT')), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET'); // replaced by AFTER_SALES
+  assert.equal(code(() => refer('MARKETING')), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET'); // Marketing never refers to itself
+  assert.equal(Object.isFrozen(understand.TARGET_DOMAIN), true);
 });
 
 // ------------------------------------------------------------------ CandidateHypothesis (81-95)
@@ -646,3 +720,15 @@ test('Repository hygiene: no HABB/merchant name in the generic M1 code, CLI unto
   const files = await readdir(new URL('../src/branding/', import.meta.url));
   assert.ok(files.includes('interfaces.js'));
 });
+test('Coverage matrix: the doc maps all 131 mandate cases, and every test it names exists', async () => {
+  const doc = await readFile(new URL('../docs/architecture/marketing-m1-understand-contract.md', import.meta.url), 'utf8');
+  const self = await readFile(new URL(import.meta.url), 'utf8');
+  const matrix = doc.slice(doc.indexOf('<!-- coverage-matrix:start -->'), doc.indexOf('<!-- coverage-matrix:end -->'));
+  const rows = [...matrix.matchAll(/^\| (\d+) \| (.+?) \| (.+?) \|$/gm)].map((m) => ({ n: Number(m[1]), name: m[3] }));
+  assert.deepEqual(rows.map((r) => r.n), Array.from({ length: 131 }, (_, i) => i + 1));
+  for (const { n, name } of rows) {
+    const known = name.startsWith('test/marketing.test.js') || self.includes(`test('${name}'`);
+    assert.ok(known, `mandate case ${n} names a test that does not exist: ${name}`);
+  }
+});
+

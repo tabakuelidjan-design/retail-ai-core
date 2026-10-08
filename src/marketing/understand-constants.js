@@ -63,17 +63,24 @@ export const DOMAIN_FIT_STATUS = Object.freeze({
   NOT_MEASURABLE: 'NOT_MEASURABLE',
 });
 
-// Closed registry of the domains Marketing may refer a problem to (architecture names, no second taxonomy).
+// Closed registry of the destinations Marketing may refer a problem to. There is no code-level domain registry in the
+// repository: the canonical domain map lives in NORDLA-CANONICAL-ARCHITECTURE.md (Finance, Analyses, Sales, Inventory,
+// Buying & Suppliers, Marketing, Branding, Sales Development, Compliance, After-Sales Service). Marketing is never its own
+// target. CUSTOMERS, SITE_COMMERCE and OPERATIONS are routing destinations used by the architecture that are not (yet)
+// named in that map; AFTER_SALES is the canonical After-Sales Service (no SERVICE_SUPPORT synonym).
 export const TARGET_DOMAIN = Object.freeze({
-  INVENTORY: 'INVENTORY',
   FINANCE: 'FINANCE',
-  CUSTOMERS: 'CUSTOMERS',
+  ANALYSES: 'ANALYSES',
   SALES_PRODUCT: 'SALES_PRODUCT',
+  INVENTORY: 'INVENTORY',
+  BUYING_SUPPLIERS: 'BUYING_SUPPLIERS',
+  BRANDING: 'BRANDING',
+  SALES_DEVELOPMENT: 'SALES_DEVELOPMENT',
+  COMPLIANCE: 'COMPLIANCE',
+  AFTER_SALES: 'AFTER_SALES',
+  CUSTOMERS: 'CUSTOMERS',
   SITE_COMMERCE: 'SITE_COMMERCE',
   OPERATIONS: 'OPERATIONS',
-  SALES_DEVELOPMENT: 'SALES_DEVELOPMENT',
-  BRANDING: 'BRANDING',
-  SERVICE_SUPPORT: 'SERVICE_SUPPORT',
 });
 
 // Domains whose typed facts a MarketingContext may carry (read-only, owner-computed).
@@ -125,6 +132,7 @@ export const MKT_ERROR = Object.freeze({
   SIGNAL_SOURCE_REQUIRED: 'MKT_SIGNAL_SOURCE_REQUIRED',
   SIGNAL_INVALID_EXPIRY: 'MKT_SIGNAL_INVALID_EXPIRY',
   SIGNAL_INVALID_OBSERVED_AT: 'MKT_SIGNAL_INVALID_OBSERVED_AT',
+  SIGNAL_INVALID_EFFECTIVE_WINDOW: 'MKT_SIGNAL_INVALID_EFFECTIVE_WINDOW',
 
   CONTEXT_TENANT_MISMATCH: 'MKT_CONTEXT_TENANT_MISMATCH',
   CONTEXT_BRAND_NOT_READY: 'MKT_CONTEXT_BRAND_NOT_READY',
@@ -154,6 +162,8 @@ export const MKT_ERROR = Object.freeze({
   FINDING_INVALID_EXPIRY: 'MKT_FINDING_INVALID_EXPIRY',
   FINDING_INVALID_WINDOW: 'MKT_FINDING_INVALID_WINDOW',
   FINDING_IS_IS_NOT_CONFLICT: 'MKT_FINDING_IS_IS_NOT_CONFLICT',
+  FINDING_EVIDENCE_SIGNAL_EXPIRED: 'MKT_FINDING_EVIDENCE_SIGNAL_EXPIRED',
+  FINDING_OUTLIVES_EVIDENCE: 'MKT_FINDING_OUTLIVES_EVIDENCE',
 
   HYPOTHESIS_INVALID_TESTABILITY: 'MKT_HYPOTHESIS_INVALID_TESTABILITY',
 });

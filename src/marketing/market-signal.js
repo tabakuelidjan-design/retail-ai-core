@@ -16,12 +16,13 @@ import {
 
 const SIGNAL_KEYS = [
   'signal_id', 'merchant_id', 'brand_id', 'signal_class', 'signal_type', 'subject_refs', 'source_ref',
-  'detected_at', 'observed_at', 'expires_at', 'locale', 'market', 'evidence_refs', 'limitations', 'provenance',
+  'detected_at', 'observed_at', 'expires_at', 'effective_window', 'locale', 'market', 'evidence_refs', 'limitations', 'provenance',
 ];
 const PROVENANCE_KEYS = [
   'source_system', 'attribution_model', 'source_fields', 'window', 'filters', 'limitations', 'completeness', 'evidence_kind', 'causal_claim',
 ];
 const WINDOW_KEYS = ['key', 'start', 'end', 'timeZone'];
+const EFFECTIVE_WINDOW_KEYS = ['start', 'end'];
 const COMPLETENESS = Object.freeze({ COMPLETE: 'COMPLETE', PARTIAL: 'PARTIAL', UNAVAILABLE: 'UNAVAILABLE' });
 const EVIDENCE_KIND = Object.freeze(Object.fromEntries(EVIDENCE_KINDS.map((kind) => [kind, kind])));
 const PENDING_ID = 'msig_pending';
@@ -38,6 +39,17 @@ function signalWindow(value, field) {
     end,
     timeZone: optionalText(value.timeZone, `${field}.timeZone`, { max: 64 }),
   });
+}
+
+// The period of the PHENOMENON the signal is about (a coming event, a season, a trend, a commercial window). It is
+// independent of observed_at (when it was seen) and of expires_at (how long the evidence stays valid), and it may lie in the future.
+function effectiveWindow(value, field) {
+  if (value == null) return null;
+  closedObject(value, EFFECTIVE_WINDOW_KEYS, field);
+  const start = isoTimestamp(value.start, `${field}.start`, E.SIGNAL_INVALID_EFFECTIVE_WINDOW);
+  const end = isoTimestamp(value.end, `${field}.end`, E.SIGNAL_INVALID_EFFECTIVE_WINDOW);
+  if (toMs(end) <= toMs(start)) fail(E.SIGNAL_INVALID_EFFECTIVE_WINDOW, `${field}.end must be after ${field}.start`, { field });
+  return { start, end };
 }
 
 // Only flat, JSON-primitive filters: they describe how the source data was pulled, never customer data.
@@ -107,6 +119,7 @@ function signalBody(input, { tenant, brand }) {
     detected_at: detectedAt,
     observed_at: observedAt,
     expires_at: expiresAt,
+    effective_window: effectiveWindow(input.effective_window, 'signal.effective_window'),
     locale: optionalLocale(input.locale, 'signal.locale'),
     market: optionalMarket(input.market, 'signal.market'),
     evidence_refs: refList(input.evidence_refs, 'signal.evidence_refs'),
