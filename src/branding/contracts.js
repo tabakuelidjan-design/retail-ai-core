@@ -1,14 +1,10 @@
 import {
-  BRAND_RULE_TYPE,
   DISTINCTIVE_ASSET_TYPE,
   CLAIM_KIND,
   EVIDENCE_COMPLETENESS,
   EVIDENCE_PROVENANCE,
   FACT_SUPPORTING_PROVENANCE,
   GOVERNED_DOCUMENT_STATUS,
-  RULE_ENFORCEMENT,
-  RULE_OPERATOR,
-  RULE_SEVERITY,
   SNAPSHOT_REFRESH_TRIGGER,
   SNAPSHOT_SOURCE_KIND,
   SNAPSHOT_STATUS,
@@ -31,7 +27,7 @@ import {
 
 const governedStatuses = Object.values(GOVERNED_DOCUMENT_STATUS);
 
-function commonDocument(input, kind, allowedStatuses) {
+export function commonDocument(input, kind, allowedStatuses) {
   assertObject(input, kind);
   const status = requiredString(input.status, `${kind}.status`);
   if (!allowedStatuses.includes(status)) {
@@ -222,84 +218,5 @@ export function validateCoreForApproval(core) {
   if (core.status === GOVERNED_DOCUMENT_STATUS.APPROVED && !core.approval) {
     reasons.push('APPROVAL_RECORD_REQUIRED');
   }
-  return validationResult(reasons);
-}
-
-function normalizeHardRule(input, field) {
-  assertObject(input, field);
-  const constraint = input.constraint ?? {};
-  assertObject(constraint, `${field}.constraint`);
-
-  return Object.freeze({
-    id: requiredString(input.id, `${field}.id`),
-    rule_type: enumValue(input.rule_type, BRAND_RULE_TYPE, `${field}.rule_type`),
-    subject: requiredString(input.subject, `${field}.subject`),
-    enforcement: enumValue(input.enforcement, RULE_ENFORCEMENT, `${field}.enforcement`),
-    severity: enumValue(input.severity, RULE_SEVERITY, `${field}.severity`),
-    constraint: Object.freeze({
-      operator: enumValue(constraint.operator, RULE_OPERATOR, `${field}.constraint.operator`),
-      value: jsonValue(constraint.value, `${field}.constraint.value`),
-    }),
-    scope: optionalString(input.scope, `${field}.scope`) ?? 'GLOBAL',
-    source_ref: optionalString(input.source_ref, `${field}.source_ref`),
-  });
-}
-
-export function normalizeBrandMemory(input) {
-  const base = commonDocument(input, 'memory', governedStatuses);
-  assertObject(input.core_ref, 'memory.core_ref');
-  const hardRules = objectList(input.hard_rules, 'memory.hard_rules', normalizeHardRule);
-  uniqueIds(hardRules, 'memory.hard_rules');
-
-  return Object.freeze({
-    ...base,
-    core_ref: Object.freeze({
-      id: requiredString(input.core_ref.id, 'memory.core_ref.id'),
-      version: integerVersion(input.core_ref.version, 'memory.core_ref.version'),
-    }),
-    hard_rules: hardRules,
-    design_tokens: Object.freeze(jsonValue(input.design_tokens ?? {}, 'memory.design_tokens')),
-    semantic_context: Object.freeze(jsonValue(input.semantic_context ?? {}, 'memory.semantic_context')),
-    asset_refs: stringList(input.asset_refs, 'memory.asset_refs'),
-    production_asset_refs: stringList(
-      input.production_asset_refs,
-      'memory.production_asset_refs',
-    ),
-    approval: approval(input.approval, 'memory.approval'),
-  });
-}
-
-const hasOwnKeys = (value) => value && typeof value === 'object' && Object.keys(value).length > 0;
-
-export function validateMemoryForApproval(memory, { core = null } = {}) {
-  const reasons = [];
-
-  if (memory.status === GOVERNED_DOCUMENT_STATUS.APPROVED && !memory.approval) {
-    reasons.push('APPROVAL_RECORD_REQUIRED');
-  }
-
-  const hasContent = (
-    memory.hard_rules.length > 0
-    || memory.asset_refs.length > 0
-    || memory.production_asset_refs.length > 0
-    || hasOwnKeys(memory.design_tokens)
-    || hasOwnKeys(memory.semantic_context)
-  );
-  if (!hasContent) reasons.push('BRAND_MEMORY_EMPTY');
-
-  if (!core) {
-    reasons.push('APPROVED_CORE_REQUIRED');
-  } else {
-    if (core.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
-      reasons.push('CORE_NOT_APPROVED');
-    }
-    if (core.merchant_id !== memory.merchant_id) {
-      reasons.push('CORE_MEMORY_MERCHANT_MISMATCH');
-    }
-    if (memory.core_ref.id !== core.id || memory.core_ref.version !== core.version) {
-      reasons.push('CORE_REFERENCE_MISMATCH');
-    }
-  }
-
   return validationResult(reasons);
 }

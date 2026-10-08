@@ -127,6 +127,15 @@ export function approval(input, field = 'approval') {
   });
 }
 
+// Recursively freezes plain data so consumers (Marketing, Creative) get read-only views.
+export function deepFreeze(value) {
+  if (value != null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.keys(value)) deepFreeze(value[key]);
+  }
+  return value;
+}
+
 export function validationResult(reasons = []) {
   const unique = [...new Set(reasons)];
   return Object.freeze({

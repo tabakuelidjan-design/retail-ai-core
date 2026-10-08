@@ -1,11 +1,13 @@
 import {
   BRAND_RULE_TYPE,
+  CONTENT_KIND,
   GOVERNED_DOCUMENT_STATUS,
   GUARDIAN_METHOD,
   GUARDIAN_OUTCOME,
-  RULE_ENFORCEMENT,
+  RULE_SCOPE,
   RULE_SEVERITY,
 } from './constants.js';
+import { EXTERNAL_GATES } from './hard-rules.js';
 import {
   assertObject,
   assertSameTenant,
@@ -22,15 +24,12 @@ import { FIDELITY_GATE_OUTCOME } from '../creative-fidelity/constants.js';
 
 const M = GUARDIAN_METHOD;
 
-// Which methods may settle a rule. A deterministic rule can never be settled by a model;
-// product fidelity is owned by creative-fidelity (or a human), never by an ad-hoc check.
+// Which methods may settle a hard rule. Hard rules are deterministic by construction, so a model
+// judgment can never settle one; an external gate (product fidelity) is settled only by the
+// creative-fidelity gate adapter or a human, never by an ad-hoc check.
 function allowedMethods(rule) {
-  if (rule.rule_type === BRAND_RULE_TYPE.PRODUCT_FIDELITY) return [M.FIDELITY_GATE, M.HUMAN];
-  switch (rule.enforcement) {
-    case RULE_ENFORCEMENT.DETERMINISTIC: return [M.DETERMINISTIC, M.OCR, M.FIDELITY_GATE, M.HUMAN];
-    case RULE_ENFORCEMENT.QUALITATIVE: return [M.MODEL, M.HUMAN];
-    default: return [M.DETERMINISTIC, M.OCR, M.FIDELITY_GATE, M.MODEL, M.HUMAN];
-  }
+  if (rule.rule_type === BRAND_RULE_TYPE.EXTERNAL_GATE) return [M.FIDELITY_GATE, M.HUMAN];
+  return [M.DETERMINISTIC, M.OCR, M.HUMAN];
 }
 
 export function normalizeGuardianCheck(input, field = 'check') {
@@ -95,62 +94,33 @@ function evaluateRule(rule, checks) {
     return { outcome: GUARDIAN_OUTCOME.NOT_MEASURABLE, reason: 'RULE_NOT_CHECKED', ignored };
   }
 
-  const effective = usable.map((check) => {
-    // A model judgment can only ask for review; a hard FAIL needs a deterministic/human/gate check.
-    if (check.method === M.MODEL && check.outcome === GUARDIAN_OUTCOME.FAIL) {
-      return GUARDIAN_OUTCOME.REVIEW_REQUIRED;
-    }
-    return check.outcome;
-  });
-  let outcome = worst(effective);
+  let outcome = worst(usable.map((check) => check.outcome));
   // Severity REVIEW downgrades a hard failure to a human review request.
   if (outcome === GUARDIAN_OUTCOME.FAIL && rule.severity === RULE_SEVERITY.REVIEW) {
     outcome = GUARDIAN_OUTCOME.REVIEW_REQUIRED;
   }
-  // HYBRID rules need their deterministic part measured: a lone model PASS is not enough.
-  if (
-    outcome === GUARDIAN_OUTCOME.PASS
-    && rule.enforcement === RULE_ENFORCEMENT.HYBRID
-    && !usable.some((check) => check.method !== M.MODEL)
-  ) {
-    outcome = GUARDIAN_OUTCOME.NOT_MEASURABLE;
-  }
   return { outcome, reason: null, ignored };
 }
 
-export function buildGuardianPlan(memory) {
-  const phase1 = [];
-  const phase2 = [];
+const appliesTo = (rule, contentKind) => (
+  contentKind == null || rule.scope === RULE_SCOPE.GLOBAL || rule.scope === contentKind
+);
 
-  for (const rule of memory?.hard_rules ?? []) {
-    const base = {
+export function buildGuardianPlan(memory, { contentKind = null } = {}) {
+  if (contentKind != null) enumValue(contentKind, CONTENT_KIND, 'contentKind');
+  const rules = (memory?.hard_rules ?? [])
+    .filter((rule) => appliesTo(rule, contentKind))
+    .map((rule) => Object.freeze({
       rule_id: rule.id,
-      severity: rule.severity,
       rule_type: rule.rule_type,
+      severity: rule.severity,
+      scope: rule.scope,
       allowed_methods: Object.freeze(allowedMethods(rule)),
-      ...(rule.rule_type === BRAND_RULE_TYPE.PRODUCT_FIDELITY
-        ? { delegate_to: 'creative-fidelity' }
+      ...(rule.rule_type === BRAND_RULE_TYPE.EXTERNAL_GATE
+        ? { delegate_to: EXTERNAL_GATES[rule.subject]?.source ?? null }
         : {}),
-    };
-    if (rule.enforcement !== RULE_ENFORCEMENT.QUALITATIVE) {
-      phase1.push(Object.freeze({ ...base, enforcement: rule.enforcement }));
-    }
-    if (
-      rule.enforcement !== RULE_ENFORCEMENT.DETERMINISTIC
-      && rule.rule_type !== BRAND_RULE_TYPE.PRODUCT_FIDELITY
-    ) {
-      phase2.push(Object.freeze({
-        ...base,
-        enforcement: RULE_ENFORCEMENT.QUALITATIVE,
-        ...(rule.enforcement === RULE_ENFORCEMENT.HYBRID ? { fallback_only: true } : {}),
-      }));
-    }
-  }
-
-  return Object.freeze({
-    deterministic_first: Object.freeze(phase1),
-    qualitative_second: Object.freeze(phase2),
-  });
+    }));
+  return Object.freeze({ rules: Object.freeze(rules) });
 }
 
 export function buildGuardianReport(input) {
@@ -170,7 +140,11 @@ export function buildGuardianReport(input) {
     if (!ruleIds.has(check.rule_id)) throw new Error('GUARDIAN_CHECK_REFERENCES_UNKNOWN_RULE');
   }
 
-  const rules = memory.hard_rules.map((rule) => {
+  if (input.contentKind != null) enumValue(input.contentKind, CONTENT_KIND, 'contentKind');
+  const applicable = memory.hard_rules.filter((rule) => appliesTo(rule, input.contentKind));
+  const notApplicable = memory.hard_rules.filter((rule) => !appliesTo(rule, input.contentKind));
+
+  const rules = applicable.map((rule) => {
     const result = evaluateRule(rule, checks.filter((check) => check.rule_id === rule.id));
     return Object.freeze({
       rule_id: rule.id,
@@ -188,6 +162,7 @@ export function buildGuardianReport(input) {
     created_at: isoDate(input.created_at, 'guardian_report.created_at'),
     checks,
     rules: Object.freeze(rules),
+    not_applicable_rule_ids: Object.freeze(notApplicable.map((rule) => rule.id)),
     // Every required rule must be controlled for PASS; an empty rule set is NOT_MEASURABLE.
     outcome: aggregateGuardianOutcome(rules),
     execution_decision: null,

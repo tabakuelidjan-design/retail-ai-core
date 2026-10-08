@@ -39,6 +39,7 @@ export const FACT_SUPPORTING_PROVENANCE = Object.freeze([
 
 export const DECISION_EVENT_TYPE = Object.freeze({
   BRAND_CORE_APPROVED: 'BRAND_CORE_APPROVED',
+  BRAND_MEMORY_APPROVED: 'BRAND_MEMORY_APPROVED',
 });
 
 export const APPROVER_ROLE = Object.freeze({
@@ -105,21 +106,28 @@ export const DISTINCTIVE_ASSET_TYPE = Object.freeze({
   OTHER: 'OTHER',
 });
 
+// Hard rules are verifiable by construction: exactly these six types in V1.
 export const BRAND_RULE_TYPE = Object.freeze({
-  LOGO: 'LOGO',
+  ASSET_REF: 'ASSET_REF',
   COLOR: 'COLOR',
   TYPOGRAPHY: 'TYPOGRAPHY',
-  WORDING: 'WORDING',
-  CLAIM: 'CLAIM',
-  TONE: 'TONE',
-  PRODUCT_FIDELITY: 'PRODUCT_FIDELITY',
-  ASSET_USAGE: 'ASSET_USAGE',
+  TEXT: 'TEXT',
+  CLAIM_REF: 'CLAIM_REF',
+  EXTERNAL_GATE: 'EXTERNAL_GATE',
 });
 
-export const RULE_ENFORCEMENT = Object.freeze({
-  DETERMINISTIC: 'DETERMINISTIC',
-  QUALITATIVE: 'QUALITATIVE',
-  HYBRID: 'HYBRID',
+// What a candidate asset is (candidate manifest) ...
+export const CONTENT_KIND = Object.freeze({
+  TEXT: 'TEXT',
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO',
+  DOCUMENT: 'DOCUMENT',
+});
+
+// ... and which candidates a rule applies to. No per-social-platform scope in V1.
+export const RULE_SCOPE = Object.freeze({
+  GLOBAL: 'GLOBAL',
+  ...CONTENT_KIND,
 });
 
 export const RULE_SEVERITY = Object.freeze({
@@ -127,14 +135,15 @@ export const RULE_SEVERITY = Object.freeze({
   REVIEW: 'REVIEW',
 });
 
+// No CUSTOM / EXECUTE_CODE / PROMPT / LLM_DECIDE: no non-deterministic escape hatch.
 export const RULE_OPERATOR = Object.freeze({
   EQUALS: 'EQUALS',
   ONE_OF: 'ONE_OF',
-  NOT_ONE_OF: 'NOT_ONE_OF',
   CONTAINS: 'CONTAINS',
   NOT_CONTAINS: 'NOT_CONTAINS',
-  RANGE: 'RANGE',
-  REFERENCE: 'REFERENCE',
+  MATCHES_PATTERN: 'MATCHES_PATTERN',
+  REQUIRED: 'REQUIRED',
+  STATUS_IN: 'STATUS_IN',
 });
 
 export const GUARDIAN_OUTCOME = Object.freeze({
@@ -149,7 +158,7 @@ export const GUARDIAN_METHOD = Object.freeze({
   OCR: 'OCR',
   // Result of the existing creative-fidelity hard gate (consumed, never re-implemented).
   FIDELITY_GATE: 'FIDELITY_GATE',
-  // Any AI/VLM judgment. Can raise REVIEW_REQUIRED, never a hard FAIL on its own.
+  // Advisory AI/VLM judgment (e.g. against semantic_context). It can never settle a hard rule.
   MODEL: 'MODEL',
   HUMAN: 'HUMAN',
 });

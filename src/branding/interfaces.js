@@ -1,15 +1,16 @@
 import {
   BRAND_CONTEXT_STATUS,
   BRAND_REVIEW_SIGNAL,
+  BRAND_RULE_TYPE,
   GOVERNED_DOCUMENT_STATUS,
   SNAPSHOT_STATUS,
 } from './constants.js';
-import {
-  validateCoreForApproval,
-  validateMemoryForApproval,
-} from './contracts.js';
-import { tenantMerchantId } from './validation.js';
+import { validateCoreForApproval } from './contracts.js';
+import { validateBrandMemory } from './memory.js';
+import { deepFreeze, tenantMerchantId } from './validation.js';
 
+// The context is only as good as the ACTIVE Core: if the Memory was approved against another Core
+// version, validateBrandMemory reports BRAND_MEMORY_CORE_MISMATCH and the context is GATED.
 // A stale (or outdated) Snapshot is a REVIEW SIGNAL, never an automatic block:
 // the approved Core stays usable until a human decides otherwise.
 function reviewSignals(core, snapshot) {
@@ -50,7 +51,7 @@ export function buildBrandContext({
     if (memory.status !== GOVERNED_DOCUMENT_STATUS.APPROVED) {
       reasons.push('BRAND_MEMORY_NOT_APPROVED');
     }
-    reasons.push(...validateMemoryForApproval(memory, { core }).reasons);
+    reasons.push(...validateBrandMemory(memory, { core }).reasons);
   }
 
   const unique = [...new Set(reasons)];
@@ -81,11 +82,16 @@ export function assertBrandContextReady(context) {
   return context;
 }
 
+// Read-only views: everything handed out is deeply frozen, and approval internals
+// (approval record, decision event id, timestamps) are never exposed.
+const MARKETING_RULE_TYPES = new Set([BRAND_RULE_TYPE.TEXT, BRAND_RULE_TYPE.CLAIM_REF]);
+const copy = (value) => JSON.parse(JSON.stringify(value));
+
 export function marketingBrandInterface(context) {
   assertBrandContextReady(context);
-  return Object.freeze({
-    core_ref: Object.freeze({ id: context.core.id, version: context.core.version }),
-    memory_ref: Object.freeze({ id: context.memory.id, version: context.memory.version }),
+  return deepFreeze(copy({
+    core_ref: { id: context.core.id, version: context.core.version },
+    memory_ref: { id: context.memory.id, version: context.memory.version },
     review_signals: context.review_signals,
     category: context.core.category,
     buying_contexts: context.core.buying_contexts,
@@ -95,22 +101,23 @@ export function marketingBrandInterface(context) {
     reasons_to_believe: context.core.reasons_to_believe,
     exclusions: context.core.exclusions,
     voice: context.core.voice,
-    hard_rules: context.memory.hard_rules,
     semantic_context: context.memory.semantic_context,
-  });
+    hard_rules: context.memory.hard_rules.filter((rule) => MARKETING_RULE_TYPES.has(rule.rule_type)),
+    claim_refs: context.memory.external_references.claim_refs,
+  }));
 }
 
 export function creativeBrandInterface(context) {
   assertBrandContextReady(context);
-  return Object.freeze({
-    core_ref: Object.freeze({ id: context.core.id, version: context.core.version }),
-    memory_ref: Object.freeze({ id: context.memory.id, version: context.memory.version }),
+  return deepFreeze(copy({
+    core_ref: { id: context.core.id, version: context.core.version },
+    memory_ref: { id: context.memory.id, version: context.memory.version },
     review_signals: context.review_signals,
     distinctive_assets: context.core.distinctive_assets,
+    identity_references: context.memory.identity_references,
     design_tokens: context.memory.design_tokens,
     hard_rules: context.memory.hard_rules,
-    asset_refs: context.memory.asset_refs,
-    production_asset_refs: context.memory.production_asset_refs,
     semantic_context: context.memory.semantic_context,
-  });
+    external_references: context.memory.external_references,
+  }));
 }
