@@ -1,6 +1,6 @@
 # Nordla — Marketing M2 · BUILD V1 (contract)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT (architect audit corrections applied) — not pushed, not COMPLETE until push and CI
+- **Status:** **M2 — BUILD COMPLETE** — audited, integrated on `feature/branding-marketing-creative-v1`, CI `Marketing V1` green
 - **Version:** `marketing-m2-build.v1`
 - **Builds on:** [M1 UNDERSTAND](./marketing-m1-understand-contract.md) and [M1.5 signal producers](./marketing-m1-5-signal-producers.md) (both COMPLETE, unchanged)
 - **Parent architecture:** [`marketing-v1-architecture.md`](./marketing-v1-architecture.md) §6 and §14
@@ -8,6 +8,8 @@
 - **Tests:** `test/marketing-m2-build.test.js` · **CI:** `Marketing V1` (covers `src/marketing/**` and `test/marketing*.test.js` automatically)
 
 > **M2 PROPOSES. The Socle DECIDES.**
+>
+> **Note on readiness.** `MarketingPushProposal.READY_FOR_SOCLE` is **not** approved, **not** executable, **not** budget authorized, **not** inventory reserved and **not** policy cleared. A `readiness` or `package_status` carried by a stored object is only a snapshot at `created_at`. Any **live** readiness or package status always requires the **original `MarketingFinding` plus an explicit `asOf`** (`evaluatePushReadiness` / `evaluatePackageStatus` take `{ tenant, finding, asOf }`), and is recomputed from them (§10, §12).
 
 M2 turns a `MarketingFinding` that is really `READY_FOR_BUILD` into structured Marketing **options**, with their needs, limits, planned measurement and uncertainties, and hands them to the Socle:
 
