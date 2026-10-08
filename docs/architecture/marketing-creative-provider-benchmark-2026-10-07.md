@@ -202,6 +202,15 @@ Operational rule:
 - do not re-open provider selection unless a new candidate is tested on the same real-product benchmark and clearly beats Qwen on accepted-output quality, not leaderboard reputation alone.
 
 
+
+### MiniMax H3 EU deployment rule
+
+For Nordla/HABB in Belgium, use **MiniMax's hosted API only** for the H3 benchmark.
+
+MiniMax states that the H3 open-weight license currently excludes the EU, UK, US and South Korea for local weight deployment, while the hosted API is available globally with provider safeguards. Therefore Nordla must not download or self-host H3 weights in the EU unless MiniMax grants the required formal authorization.
+
+This does not block the hosted API benchmark.
+
 ## Video benchmark decision — 2026-10-08
 
 Official HABB/Nordla shortlist:
