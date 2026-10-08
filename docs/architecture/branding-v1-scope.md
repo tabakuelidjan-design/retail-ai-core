@@ -211,19 +211,22 @@ Marketing answers:
 
 Branding never makes budget or calendar decisions.
 
-## 5. HABB rule
+## 5. Merchant-specific configuration rule
 
-HABB is configuration, never architecture.
+Nordla Branding remains fully merchant-generic.
 
-Examples such as:
-- HABB colors;
-- HABB typography;
-- no hearts/leaves/beige AI-look;
-- HABB logo;
-- specific product prices;
+Any company-specific:
+- colors;
+- typography;
+- logos;
+- visual prohibitions;
+- wording rules;
+- product/price presentation rules;
+- approved claims;
+- distinctive assets;
 - visual preferences;
 
-must live in HABB Brand Memory/configuration and must never be hard-coded into the generic Branding domain.
+must live in that merchant's Brand Memory/configuration and must never be hard-coded into the generic Branding domain.
 
 ## 6. Research boundary
 
@@ -275,7 +278,7 @@ Do not build now:
 5. Brand Guardian deterministic checks
 6. qualitative Guardian checks only where deterministic checks cannot decide
 7. Socle policy integration for PASS / FAIL / REVIEW_REQUIRED / NOT_MEASURABLE
-8. HABB configuration as client-zero fixture, never generic logic
+8. merchant configuration fixtures for testing, never generic logic
 
 ## 10. Acceptance criterion
 
@@ -286,4 +289,4 @@ Branding V1 is complete enough when:
 - Brand Guardian can deterministically catch material brand-rule violations where the rule is machine-testable;
 - uncertain qualitative cases remain REVIEW_REQUIRED / NOT_MEASURABLE rather than fabricated;
 - a material change in market/customer/offer evidence can trigger a Brand Core review without silently changing the brand;
-- HABB-specific rules remain configuration only.
+- merchant-specific rules remain configuration only.
