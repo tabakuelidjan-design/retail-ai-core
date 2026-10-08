@@ -41,7 +41,7 @@ existing facts / domain-owned facts / MarketSignal[]
 - `brand_id` is **optional** (merchant-wide object) and **never inferred**. When a resolved Brand Identity is supplied it must belong to the same merchant, be `ACTIVE`, and equal the declared `brand_id`.
 - A **brand-scoped `MarketingContext`** requires `brandId` plus a **`READY` Brand Context** (`buildBrandContext`) of that exact merchant and brand. It stores only `brand_id`, `core_ref`, `memory_ref` and review signals — Branding is referenced, never rebuilt or copied.
 - **Signal scope:** a brand-scoped signal enters only its own brand's context; a merchant-wide signal (`brand_id: null`) may enter any brand's context of the same merchant; a brand-scoped signal never enters a merchant-wide context. Two merchants can never mix signals.
-- **Trust boundary (same philosophy as Branding):** tenant, Brand Identity/Context, measurement facts, domain facts, manual observations and signals must come from **trusted server-side adapters**. M1 validates shape, scope, freshness and the causal boundary; it performs **no** authentication, cryptographic verification or connector authorization. Until Nordla Identity exists, whoever builds those inputs carries that trust (open dependency).
+- **Trust boundary (same philosophy as Branding):** tenant, Brand Identity/Context, measurement facts, context facts, manual observations and signals must come from **trusted server-side adapters**. M1 validates shape, scope, freshness and the causal boundary; it performs **no** authentication, cryptographic verification or connector authorization. Until Nordla Identity exists, whoever builds those inputs carries that trust (open dependency).
 
 ## 3. MarketSignal
 
@@ -80,10 +80,10 @@ MarketSignal
 
 ## 4. MarketingContext
 
-`buildMarketingContext({ tenant, asOf, brandId?, brandContext?, measurementFacts?, domainInputs?, customerSegmentRefs?, productRefs?, offerRefs?, calendarRefs?, marketSignals? })` — read-only inputs for UNDERSTAND, not a warehouse.
+`buildMarketingContext({ tenant, asOf, brandId?, brandContext?, measurementFacts?, contextInputs?, customerSegmentRefs?, productRefs?, offerRefs?, calendarRefs?, marketSignals? })` — read-only inputs for UNDERSTAND, not a warehouse.
 
 - **Existing Marketing Measurement** is consumed through **`phase3Inputs(facts)` unchanged** (cloned, never aliased): a `GATED` conversion stays `GATED` with `traffic: null`; an `OPEN` one is consumed without recomputation; search facts stay `not_a_conversion_input`; `causal_claims` stays `false`. Facts of another merchant are refused.
-- **Domain facts** (`SALES_PRODUCT`, `INVENTORY`, `FINANCE`, `OPERATIONS`): each fact is typed (`fact_key`, `value` = finite number | boolean | short string, `unit?`, **`source_ref` required**, `observed_at`). Marketing reads what the owner exposes (`available_units`, `unit_margin`, `coverage_days`, `capacity_window`…) and **never recomputes it**. Customers appear as **segment refs only** — no profile data.
+- **Context inputs** (`context_inputs`, categories `SALES`, `INVENTORY`, `FINANCE`, `OPERATIONAL_CAPACITY`): each category holds `refs[]` and typed `facts[]` (`fact_key`, `value` = finite number | boolean | short string, `unit?`, `subject_ref?`, **`source_ref` required**, `observed_at`). These are **input categories, not domains**: `SALES`, `INVENTORY` and `FINANCE` merely share the name of the canonical Level-2 domain that owns the data, while `OPERATIONAL_CAPACITY` is only a kind of fact (it is not a Nordla domain and is not a `REFER_TO_DOMAIN` target). What a fact is about — a product, a segment, a machine — belongs to its `fact_key` / `subject_ref`, never to the category name (hence `SALES`, not `SALES_PRODUCT`). The real owners stay external to M1; the context only consumes their trusted, owner-computed facts (`available_units`, `unit_margin`, `coverage_days`, `capacity_window`…) and **never recomputes them**. M1 stores no `source_domain`; if one is ever added it must use the canonical Level-2 map only. Customers appear as **segment refs only** — no profile data.
 - Output carries `signal_freshness[]` relative to `as_of`.
 
 ## 5. Materiality Assessment
@@ -135,7 +135,7 @@ MarketingFinding
   | Reference | M1 behaviour |
   |---|---|
   | `MarketSignal` whose id is present in the `MarketingContext` | freshness and transitive expiry **enforced** (rules above) |
-  | any other opaque evidence ref (measurement facts, domain facts, documents…) | a **trusted server-side reference**: M1 checks only its shape; its resolution and freshness are **delegated to a future Socle Evidence Registry / evidence resolver**, which does not exist yet and is not built here |
+  | any other opaque evidence ref (measurement facts, context facts, documents…) | a **trusted server-side reference**: M1 checks only its shape; its resolution and freshness are **delegated to a future Socle Evidence Registry / evidence resolver**, which does not exist yet and is not built here |
 
   So a Finding that cites only non-signal refs is not bounded by any expiry other than its own `expires_at`, and an unknown or stale non-signal ref is not detected by M1.
 - Only structured gaps — **no estimate is ever substituted for a missing value**; no `observed_change` snapshot field in M1 (a value, if ever needed, is referenced by evidence ref).

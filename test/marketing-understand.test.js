@@ -221,7 +221,8 @@ test('MarketingContext: needs the canonical tenant and an explicit clock', () =>
   assert.equal(code(() => buildMarketingContext({ tenant: tenant() })), 'MKT_INVALID_TIMESTAMP');
   const ctx = context();
   assert.deepEqual([ctx.merchant_id, ctx.brand_id, ctx.brand, ctx.as_of], [M1, null, null, '2026-10-08T12:00:00.000Z']); // merchant-wide: no brand
-  assert.deepEqual(Object.keys(ctx.domain_inputs), ['SALES_PRODUCT', 'INVENTORY', 'FINANCE', 'OPERATIONS']);
+  assert.deepEqual(Object.keys(ctx.context_inputs), ['SALES', 'INVENTORY', 'FINANCE', 'OPERATIONAL_CAPACITY']);
+  assert.equal('domain_inputs' in ctx, false);
 });
 
 test('MarketingContext: a brand-scoped context needs a READY Brand Context of that exact brand and merchant', () => {
@@ -291,32 +292,37 @@ test('MarketingContext: measurement of another merchant is refused; search facts
   assert.equal(code(() => context({ measurementFacts: 'facts' })), 'MKT_INVALID_FIELD');
 });
 
-test('MarketingContext: owner-computed domain facts are typed and sourced; nothing is recalculated; customers are refs only', () => {
+test('MarketingContext: owner-computed context facts are typed and sourced; nothing is recalculated; customers are refs only', () => {
   const ctx = context({
-    domainInputs: { INVENTORY: { refs: ['inventory://snapshot-1'], facts: [{ fact_key: 'available_units', subject_ref: 'product://widget', value: 12, unit: 'unit', source_ref: 'inventory/snap-1', observed_at: '2026-10-08T08:00:00Z' }] } },
+    contextInputs: { INVENTORY: { refs: ['inventory://snapshot-1'], facts: [{ fact_key: 'available_units', subject_ref: 'product://widget', value: 12, unit: 'unit', source_ref: 'inventory/snap-1', observed_at: '2026-10-08T08:00:00Z' }] } },
     customerSegmentRefs: ['segment://vip'], productRefs: ['product://widget'], offerRefs: ['offer://spring'], calendarRefs: ['calendar://eid-2026'],
   });
-  assert.equal(ctx.domain_inputs.INVENTORY.facts[0].value, 12);
+  assert.equal(ctx.context_inputs.INVENTORY.facts[0].value, 12);
   assert.deepEqual(ctx.customer_segment_refs, ['segment://vip']);
   const f = (over) => ({ fact_key: 'unit_margin', value: 0.3, source_ref: 'finance/m', observed_at: '2026-10-08T08:00:00Z', ...over });
-  assert.equal(code(() => context({ domainInputs: { FINANCE: { facts: [f({ source_ref: undefined })] } } })), 'MKT_INVALID_FIELD'); // no source, no fact
-  assert.equal(code(() => context({ domainInputs: { FINANCE: { facts: [f({ value: Number.NaN })] } } })), 'MKT_INVALID_FIELD');
-  assert.equal(code(() => context({ domainInputs: { FINANCE: { facts: [f({ value: { margin: 1 } })] } } })), 'MKT_INVALID_FIELD');
-  assert.equal(code(() => context({ domainInputs: { FINANCE: { facts: [f(), f()] } } })), 'MKT_DUPLICATE_ENTRY');
-  assert.equal(code(() => context({ domainInputs: { CUSTOMERS: { facts: [] } } })), 'MKT_UNKNOWN_KEY'); // no customer profile data in the context
-  assert.equal(code(() => context({ domainInputs: { FINANCE: { facts: [f({ email: 'x' })] } } })), 'MKT_UNKNOWN_KEY');
+  assert.equal(code(() => context({ contextInputs: { FINANCE: { facts: [f({ source_ref: undefined })] } } })), 'MKT_INVALID_FIELD'); // no source, no fact
+  assert.equal(code(() => context({ contextInputs: { FINANCE: { facts: [f({ value: Number.NaN })] } } })), 'MKT_INVALID_FIELD');
+  assert.equal(code(() => context({ contextInputs: { FINANCE: { facts: [f({ value: { margin: 1 } })] } } })), 'MKT_INVALID_FIELD');
+  assert.equal(code(() => context({ contextInputs: { FINANCE: { facts: [f(), f()] } } })), 'MKT_DUPLICATE_ENTRY');
+  assert.equal(code(() => context({ contextInputs: { CUSTOMERS: { facts: [] } } })), 'MKT_UNKNOWN_KEY'); // no customer profile data in the context
+  // input categories are not domains: the old domain-looking names are refused, and OPERATIONAL_CAPACITY is not a REFER target
+  for (const old of ['SALES_PRODUCT', 'OPERATIONS']) assert.equal(code(() => context({ contextInputs: { [old]: { refs: ['x/1'] } } })), 'MKT_UNKNOWN_KEY', old);
+  assert.deepEqual(context({ domainInputs: { SALES: { refs: ['x/1'] } } }).context_inputs.SALES.refs, []); // the old option name is no longer honoured
+  assert.equal(code(() => buildDomainFit(fit({ status: 'REFER_TO_DOMAIN', target_domains: ['OPERATIONAL_CAPACITY'], evidence_refs: ['ev/1'] }))), 'MKT_DOMAIN_FIT_UNKNOWN_TARGET');
+  assert.equal(context({ contextInputs: { OPERATIONAL_CAPACITY: { facts: [{ fact_key: 'capacity_window', value: 'weeks_2', source_ref: 'ops/cap-1', observed_at: '2026-10-08T08:00:00Z' }] } } }).context_inputs.OPERATIONAL_CAPACITY.facts[0].fact_key, 'capacity_window');
+  assert.equal(code(() => context({ contextInputs: { FINANCE: { facts: [f({ email: 'x' })] } } })), 'MKT_UNKNOWN_KEY');
 });
 
 test('MarketingContext: deep-frozen output; caller inputs never mutated', () => {
   const s = signal();
   const f = facts({ open: true });
-  const inputs = { measurementFacts: f, marketSignals: [s], domainInputs: { SALES_PRODUCT: { refs: ['sales://w'] } }, productRefs: ['product://widget'] };
+  const inputs = { measurementFacts: f, marketSignals: [s], contextInputs: { SALES: { refs: ['sales://w'] } }, productRefs: ['product://widget'] };
   const before = structuredClone({ ...inputs, marketSignals: [] });
   const ctx = context(inputs);
   assert.ok(isDeepFrozen(ctx));
   assert.deepEqual(structuredClone({ ...inputs, marketSignals: [] }), before);
   assert.equal(Object.isFrozen(f.traffic), false); // the caller's facts were not frozen through the context
-  assert.equal(Object.isFrozen(inputs.domainInputs.SALES_PRODUCT), false);
+  assert.equal(Object.isFrozen(inputs.contextInputs.SALES), false);
 });
 
 // ------------------------------------------------------------------ Materiality (36-46)

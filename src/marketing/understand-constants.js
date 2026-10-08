@@ -79,12 +79,16 @@ export const TARGET_DOMAIN = Object.freeze({
   AFTER_SALES_SERVICE: 'AFTER_SALES_SERVICE',
 });
 
-// Domains whose typed facts a MarketingContext may carry (read-only, owner-computed).
-export const CONTEXT_DOMAIN = Object.freeze({
-  SALES_PRODUCT: 'SALES_PRODUCT',
+// Categories of read-only input a MarketingContext may carry. These are INPUT categories, not domain identities:
+// SALES, INVENTORY and FINANCE happen to share the name of the canonical Level-2 domain that owns the data, but
+// OPERATIONAL_CAPACITY is only a kind of fact (work/machine/time capacity) and is NOT a Nordla domain. What a fact is
+// about (a product, a segment...) belongs to its fact_key / subject_ref, never to the category name. The real owners stay
+// external to M1; the context only consumes their trusted, owner-computed facts and refs.
+export const CONTEXT_INPUT_CATEGORY = Object.freeze({
+  SALES: 'SALES',
   INVENTORY: 'INVENTORY',
   FINANCE: 'FINANCE',
-  OPERATIONS: 'OPERATIONS',
+  OPERATIONAL_CAPACITY: 'OPERATIONAL_CAPACITY',
 });
 
 // ---- Finding / Hypothesis ----

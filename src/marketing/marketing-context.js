@@ -3,14 +3,14 @@
 // (available_units, unit_margin, coverage_days, capacity_window...). Marketing never recalculates them and is never
 // their source of truth.
 //
-// Trust boundary: tenant, Brand Context, measurement facts, domain facts and signals must be produced by trusted
+// Trust boundary: tenant, Brand Context, measurement facts, context facts and signals must be produced by trusted
 // server-side adapters. This module checks shape, tenant/brand scope and freshness; it authenticates nobody.
 
 import { BRAND_CONTEXT_STATUS } from '../branding/constants.js';
 import { phase3Inputs } from './phase3-contract.js';
 import { normalizeMarketSignal, marketSignalFreshness } from './market-signal.js';
 import {
-  CONTEXT_DOMAIN, MKT_ERROR as E, UNDERSTAND_VERSION,
+  CONTEXT_INPUT_CATEGORY, MKT_ERROR as E, UNDERSTAND_VERSION,
 } from './understand-constants.js';
 import {
   asOfValue, closedObject, deepFreeze, fail, isPlainObject, isoTimestamp, lowerToken, objectList, opaqueRef, optionalRef,
@@ -19,7 +19,7 @@ import {
 
 export const CONTEXT_VERSION = `${UNDERSTAND_VERSION}/context`;
 
-const DOMAIN_INPUT_KEYS = ['refs', 'facts'];
+const INPUT_CATEGORY_KEYS = ['refs', 'facts'];
 const FACT_KEYS = ['fact_key', 'subject_ref', 'value', 'unit', 'source_ref', 'observed_at'];
 
 // A typed value exposed by an owning domain. It must say where it comes from; no source_ref, no fact.
@@ -40,13 +40,13 @@ function domainFact(input, field) {
   };
 }
 
-function domainInputs(input) {
-  closedObject(input ?? {}, Object.values(CONTEXT_DOMAIN), 'domain_inputs');
-  return Object.fromEntries(Object.values(CONTEXT_DOMAIN).map((domain) => {
-    const field = `domain_inputs.${domain}`;
-    const entry = input?.[domain] ?? {};
-    closedObject(entry, DOMAIN_INPUT_KEYS, field);
-    return [domain, {
+function contextInputs(input) {
+  closedObject(input ?? {}, Object.values(CONTEXT_INPUT_CATEGORY), 'context_inputs');
+  return Object.fromEntries(Object.values(CONTEXT_INPUT_CATEGORY).map((category) => {
+    const field = `context_inputs.${category}`;
+    const entry = input?.[category] ?? {};
+    closedObject(entry, INPUT_CATEGORY_KEYS, field);
+    return [category, {
       refs: refList(entry.refs, `${field}.refs`),
       facts: objectList(entry.facts, `${field}.facts`, domainFact, { max: 100, keyOf: (f) => `${f.fact_key}|${f.subject_ref}` }),
     }];
@@ -118,7 +118,7 @@ export function buildMarketingContext({
   brandId = null,
   brandContext = null,
   measurementFacts = null,
-  domainInputs: domainInputsArg = {},
+  contextInputs: contextInputsArg = {},
   customerSegmentRefs = [],
   productRefs = [],
   offerRefs = [],
@@ -137,7 +137,7 @@ export function buildMarketingContext({
     as_of: asOfIso,
     brand: scope.brand,
     measurement: measurementOf(measurementFacts, merchantId),
-    domain_inputs: domainInputs(domainInputsArg),
+    context_inputs: contextInputs(contextInputsArg),
     customer_segment_refs: refList(customerSegmentRefs, 'customerSegmentRefs'),
     product_refs: refList(productRefs, 'productRefs'),
     offer_refs: refList(offerRefs, 'offerRefs'),
