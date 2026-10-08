@@ -1,0 +1,31 @@
+name: Branding V1
+
+on:
+  push:
+    branches:
+      - feature/branding-marketing-creative-v1
+    paths:
+      - 'src/branding/**'
+      - 'schemas/branding/**'
+      - 'test/branding*.test.js'
+      - 'docs/architecture/branding-v1-*'
+      - '.github/workflows/branding-v1.yml'
+  pull_request:
+    paths:
+      - 'src/branding/**'
+      - 'schemas/branding/**'
+      - 'test/branding*.test.js'
+      - 'docs/architecture/branding-v1-*'
+
+jobs:
+  branding-contract-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: node --test test/branding*.test.js
