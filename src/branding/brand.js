@@ -26,14 +26,29 @@ import {
 const KEYS = ['brand_id', 'merchant_id', 'name', 'status', 'created_at', 'parent_brand_id', 'default_locale', 'supported_locales'];
 const MAX_NAME = 120;
 const MAX_LOCALES = 30;
-// Canonical BCP 47 subset: language[-Script][-REGION], e.g. fr-BE, nl-BE, en-GB, zh-Hant-TW.
-// Canonical casing is required so that "fr-be" and "fr-BE" cannot both exist as duplicates.
+// Only canonical BCP 47 locales are STORED, restricted to the simple shape language[-Script][-REGION]
+// (fr-BE, nl-BE, en-GB, zh-Hant-TW, es-419): no variants, no extensions, no private use in V1.
 const LOCALE = /^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$/;
+
+// A valid locale is NORMALIZED on the way in ("fr-be" -> "fr-BE", legacy "iw" -> "he") by the platform's
+// own `Intl.getCanonicalLocales` - no home-made normalizer - instead of being refused for its casing.
+// Without Intl, only an already-canonical value is accepted.
+const canonicalize = typeof Intl?.getCanonicalLocales === 'function'
+  ? (text) => Intl.getCanonicalLocales(text)[0]
+  : (text) => text;
 
 function locale(value, field) {
   const text = requiredString(value, field);
-  if (!LOCALE.test(text)) throw new TypeError(`${field} must be a canonical BCP 47 locale such as fr-BE`);
-  return text;
+  let canonical;
+  try {
+    canonical = canonicalize(text);
+  } catch {
+    throw new TypeError(`${field} must be a BCP 47 locale such as fr-BE`);
+  }
+  if (!LOCALE.test(canonical)) {
+    throw new TypeError(`${field} must be a BCP 47 locale of the form language[-Script][-REGION] such as fr-BE`);
+  }
+  return canonical;
 }
 
 export function normalizeBrandIdentity(input) {
@@ -56,6 +71,7 @@ export function normalizeBrandIdentity(input) {
     throw new RangeError(`brand.supported_locales must contain at most ${MAX_LOCALES} locales`);
   }
   const supported = input.supported_locales.map((value, index) => locale(value, `brand.supported_locales[${index}]`));
+  // duplicates are detected AFTER normalization, so fr-BE and fr-be count as the same locale
   if (new Set(supported).size !== supported.length) throw new TypeError('brand.supported_locales contains duplicates');
 
   const defaultLocale = locale(input.default_locale, 'brand.default_locale');

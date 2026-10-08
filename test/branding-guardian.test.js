@@ -769,3 +769,39 @@ test('Trust: the manifest and the semantic assessment are documented as trusted-
     assert.match(source, /untrusted client payload/, file);
   }
 });
+
+// ------------------------------------------------------------------ Guardian delegates the gate to buildBrandContext
+test('Guardian rebuilds the gate with the canonical buildBrandContext and does not duplicate its logic', async () => {
+  const raw = await readFile('src/branding/guardian.js', 'utf8');
+  const source = raw.replace(/\/\/.*$/gm, ''); // code only: comments may name the reasons
+  assert.match(source, /import \{ buildBrandContext \} from '\.\/interfaces\.js'/);
+  assert.match(source, /buildBrandContext\(\{/);
+  // none of the gate's own reason codes is re-implemented in the Guardian
+  for (const reason of ['BRAND_TENANT_MISMATCH', 'BRAND_CORE_BRAND_MISMATCH', 'BRAND_MEMORY_BRAND_MISMATCH', 'BRAND_MEMORY_CORE_MISMATCH', 'BRAND_IDENTITY_MISSING', 'BRAND_INACTIVE']) {
+    assert.equal(source.includes(reason), false, reason);
+  }
+  // parity: for each broken context, the refusal carries exactly the reasons buildBrandContext reports
+  const a = contextFor([rule()]);
+  const b = chainFor(brandOf(B2, 'Webshop Brand'), 'b');
+  const inactive = buildBrandIdentity({
+    tenant: tenant(), brandId: B1, name: 'Retired', status: 'INACTIVE', createdAt: '2026-10-01T09:00:00Z',
+    defaultLocale: 'fr-BE', supportedLocales: ['fr-BE'],
+  });
+  const variants = [
+    { ...a, core: b.core },
+    { ...a, memory: b.memory },
+    { ...a, brand: brandOf(B2, 'Webshop Brand') },
+    { ...a, brand: null },
+    { ...a, brand: inactive },
+    { ...a, memory: null },
+  ];
+  for (const variant of variants) {
+    const expected = buildBrandContext({ tenant: tenant(), brand: variant.brand, core: variant.core, memory: variant.memory });
+    assert.equal(expected.status, 'GATED');
+    assert.throws(
+      () => evaluateWith(variant),
+      (error) => error.message === `GUARDIAN_REQUIRES_READY_BRAND_CONTEXT: ${expected.reasons.join(', ')}`,
+      JSON.stringify(expected.reasons),
+    );
+  }
+});

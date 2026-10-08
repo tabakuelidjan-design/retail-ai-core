@@ -121,14 +121,29 @@ test('3. an empty name is refused (the name is the brand name, not the legal or 
   assert.throws(() => normalizeBrandIdentity(identity({ name: 'x'.repeat(121) })), /too long/);
 });
 
-test('4. default_locale is mandatory and must be a canonical locale', () => {
+test('4. default_locale is mandatory; a valid locale is normalized to its canonical BCP 47 form, an invalid one is refused', () => {
   assert.throws(() => normalizeBrandIdentity(identity({ default_locale: undefined })), /default_locale/);
-  for (const bad of ['fr_BE', 'fr-be', 'french', 'f', 'fr-Belgium']) {
+  // normalization instead of a casing error
+  const cases = { 'fr-be': 'fr-BE', 'FR-be': 'fr-BE', 'nl-BE': 'nl-BE', 'EN-gb': 'en-GB', 'zh-hant-tw': 'zh-Hant-TW', 'ES-419': 'es-419', FR: 'fr', iw: 'he' };
+  for (const [input, expected] of Object.entries(cases)) {
+    const brand = normalizeBrandIdentity(identity({ default_locale: input, supported_locales: [input] }));
+    assert.equal(brand.default_locale, expected, input);
+    assert.deepEqual(brand.supported_locales, [expected], input);
+  }
+  // not BCP 47, or outside the stored shape language[-Script][-REGION]
+  for (const bad of ['fr_BE', 'french', 'f', 'fr-', 'fr-Belgium', 'fr-BE-u-ca-gregory', 'fr-BE-x-private', 'i-klingon', '12-34']) {
     assert.throws(() => normalizeBrandIdentity(identity({ default_locale: bad, supported_locales: [bad] })), /BCP 47/, bad);
   }
   for (const ok of ['fr-BE', 'nl-BE', 'en-GB', 'fr', 'zh-Hant-TW', 'es-419']) {
     assert.equal(normalizeBrandIdentity(identity({ default_locale: ok, supported_locales: [ok] })).default_locale, ok);
   }
+});
+
+test('4b. default_locale and supported_locales are compared after normalization', () => {
+  const brand = normalizeBrandIdentity(identity({ default_locale: 'nl-be', supported_locales: ['FR-be', 'nl-BE'] }));
+  assert.equal(brand.default_locale, 'nl-BE');
+  assert.deepEqual(brand.supported_locales, ['fr-BE', 'nl-BE']);
+  assert.throws(() => normalizeBrandIdentity(identity({ default_locale: 'en-gb', supported_locales: ['fr-BE'] })), /must be one of/);
 });
 
 test('5. supported_locales cannot be empty or missing', () => {
@@ -140,8 +155,9 @@ test('6. default_locale must be one of supported_locales', () => {
   assert.throws(() => normalizeBrandIdentity(identity({ default_locale: 'en-GB', supported_locales: ['fr-BE', 'nl-BE'] })), /must be one of/);
 });
 
-test('7. duplicate locales are refused', () => {
+test('7. duplicate locales are refused, including duplicates that only differ by casing', () => {
   assert.throws(() => normalizeBrandIdentity(identity({ supported_locales: ['fr-BE', 'nl-BE', 'fr-BE'] })), /duplicates/);
+  assert.throws(() => normalizeBrandIdentity(identity({ supported_locales: ['fr-BE', 'FR-be'] })), /duplicates/);
 });
 
 test('8. parent_brand_id: null or another brand of the SAME merchant, without cycles', () => {
