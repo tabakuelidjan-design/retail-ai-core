@@ -1,10 +1,10 @@
 # Nordla — Marketing V1 Architecture
 
-- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE
+- **Status:** APPROVED WORKING ARCHITECTURE — M1 COMPLETE · M1.5 COMPLETE · M2 IMPLEMENTED LOCALLY / UNDER AUDIT
 - **Date:** 2026-10-08
 - **Canonical sequence:** `UNDERSTAND → BUILD → CREATE → STEER`
 - **Scope:** Marketing core + reserved specialized intelligences
-- **Build status:** M1 = **COMPLETE**. M1.5 = **COMPLETE**. Current build target = **M2 — BUILD** (not started; waits for the next architect mandate).
+- **Build status:** M1 = **COMPLETE**. M1.5 = **COMPLETE**. M2 — BUILD = **IMPLEMENTED LOCALLY / UNDER AUDIT** (not pushed; do not mark complete before audit, push and CI). Next: M3 — CREATE (not started).
 
 ## 0. Architectural rules
 
@@ -715,6 +715,8 @@ These validate that the `MarketSignal` envelope works across different signal so
 # 14. M2 and later
 
 ## M2 — BUILD
+
+**Status: IMPLEMENTED LOCALLY / UNDER AUDIT** — see [`marketing-m2-build-contract.md`](./marketing-m2-build-contract.md).
 
 ```text
 Lever Fitness
