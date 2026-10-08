@@ -28,13 +28,17 @@ Decision basis: on the real TYESO FLAIR 2.0 benchmark, Qwen preserved the source
 
 ### Video generation / editing
 
-1. `wan3.0-video` — incumbent Alibaba candidate.
-2. `gemini-omni-1.1-flash` — primary challenger.
-3. Seedance 2.5 — research candidate only until direct API, commercial terms and data-routing requirements are accepted.
+Nordla will keep three official video lanes for the HABB benchmark:
+
+1. `wan3.0-video` — Alibaba incumbent; already integrated and live-tested.
+2. `gemini-omni-1.1-flash` — Google paid-tier challenger.
+3. `MiniMax-H3` — MiniMax challenger for image-to-video, multimodal reference control and product/brand fidelity.
+
+These three remain active benchmark candidates until the same real HABB source asset is tested across all three. No default video provider is selected yet.
 
 Do not integrate Veo 3.1 as a new lane: Google has already published its October 22, 2026 shutdown/replacement path toward Gemini Omni 1.1 Flash.
 
-Runway remains useful as a production/editing workflow reference, but Nordla should not add it as the default raw-generation provider merely because its UI/workflow is strong.
+Seedance remains a research-only candidate. Runway remains useful as a production/editing workflow reference, but Nordla should not add either as a default raw-generation provider before the three-lane benchmark is complete.
 
 ## Current evidence snapshot
 
@@ -50,14 +54,13 @@ Approximate provider list prices at this checkpoint:
 
 ### Video
 
-Public arena evidence as of September 2026 places Gemini Omni 1.1 Flash and Wan 3.0 in the leading group for text-to-video and image-to-video. Seedance 2.5 is also competitive, especially in editing, but is not yet a justified Nordla integration.
+Current official pricing/capability checkpoint:
 
-Approximate 720p list prices at this checkpoint:
+- Wan 3.0 Frankfurt: USD 0.082513/sec at 720P.
+- Gemini Omni 1.1 Flash: about USD 0.10/sec effective at 720P; paid tier required.
+- MiniMax H3: USD 0.08/sec at 768P; image-to-video supported, with output up to 15 seconds and optional 2K workflow.
 
-- Wan 3.0: about USD 0.10/sec international.
-- Gemini Omni 1.1 Flash: about USD 0.10/sec effective Standard price.
-
-A 5-second head-to-head between Wan and Gemini therefore costs roughly USD 1.00 before retries.
+A first-pass 5-second comparison across all three costs roughly USD 1.31 before retries, excluding small input/token overhead where applicable.
 
 ## HABB benchmark — what actually decides the winner
 
@@ -124,12 +127,16 @@ Phase B — image head-to-head:
 - Gemini Nano Banana 2.1;
 - same source, prompt, output target and deterministic HABB overlay strategy.
 
-Phase C — video head-to-head:
-- Wan 3.0;
-- Gemini Omni 1.1 Flash;
-- same HABB source image;
-- one 5-second 720p clip each;
-- no retry during the first pass.
+Phase C — video three-way benchmark:
+- Wan 3.0 at 720P;
+- Gemini Omni 1.1 Flash at 720P;
+- MiniMax H3 at 768P;
+- same real HABB source image;
+- same motion/camera brief;
+- one 5-second clip per provider;
+- no retry during the first pass;
+- preserve the real product, branding, geometry, accessories and materials;
+- judge temporal product fidelity before generic cinematic quality.
 
 Phase D — text/campaign:
 - Qwen 3.8 Max;
@@ -193,3 +200,20 @@ Operational rule:
 - use Qwen Image 3.0 Pro by default for HABB product advertising and product-scene editing;
 - keep hard fidelity constraints and reject outputs that mutate product geometry, branding, text, accessories or materials;
 - do not re-open provider selection unless a new candidate is tested on the same real-product benchmark and clearly beats Qwen on accepted-output quality, not leaderboard reputation alone.
+
+
+## Video benchmark decision — 2026-10-08
+
+Official HABB/Nordla shortlist:
+- `wan3.0-video`
+- `gemini-omni-1.1-flash`
+- `MiniMax-H3`
+
+All three are retained for testing. No video winner is selected yet.
+
+Operational rule:
+- reuse the same public TYESO source asset;
+- use the same 5-second brief;
+- first pass only, no retries;
+- prioritize temporal product fidelity, logo/text stability, geometry stability and commercial usability;
+- compare cost only after quality acceptance.
