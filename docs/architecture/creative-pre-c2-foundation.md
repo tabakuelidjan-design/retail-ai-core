@@ -89,6 +89,15 @@ profile is invented. ICC / CMYK belongs to a future print pipeline.
 
 ## 7. HABB CREATIVE BENCHMARK 001 — status (after preparation)
 
+```text
+HABB BENCHMARK 001 PREPARATION = COMPLETE   (pushed at 0b1e328, remote CI green)
+HABB BENCHMARK 001 = NOT_RUN / BLOCKED
+C2 = NOT READY
+```
+
+Prepared: price claim, speed claim, FORMAT, and the owner-approved HABB expression payload (as content; not yet in Brand Memory).
+Remaining binding work: canonical HABB Brand Identity / Core / Memory, benchmark fonts, the real PRODUCT, the real merchant-provided ASSET.
+
 `NOT_RUN`, and **BLOCKED**. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
 read from the connected `merchants` table):
 
