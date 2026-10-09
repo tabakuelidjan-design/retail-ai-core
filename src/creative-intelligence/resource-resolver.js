@@ -13,10 +13,11 @@ import {
   CI_ERROR as E, PLATFORM_LEVEL_KINDS, RESOURCE_KIND, RESOURCE_STATUS, SUBJECT_KINDS,
 } from './constants.js';
 import {
-  closedObject, deepFreeze, enumValue, fail, integer, isPlainObject, plainJson, ref, uuid,
+  closedObject, deepFreeze, enumValue, fail, idToken, integer, isPlainObject, plainJson, ref, uuid,
 } from './validation.js';
 
-const KEYS = ['ref', 'kind', 'merchant_id', 'version', 'status', 'metadata'];
+const KEYS = ['ref', 'kind', 'merchant_id', 'version', 'status', 'metadata', 'provenance'];
+const PROVENANCE_KEYS = ['adapter_id', 'evidence_ref', 'content_hash', 'resolver_version'];
 // metadata is descriptive data about the resource (sizes, safe zones...). It can never carry a location or a payload.
 const LOCATION_IN_TEXT = /\b(?:https?|ftps?|file|data|blob|wss?):\/?\/?[^\s"']*|\bdata:[a-z]+\/[a-z0-9.+-]+;base64,/i;
 
@@ -35,7 +36,7 @@ export function normalizeResourceResolution(raw, { ref: requestedRef, tenant }) 
   const merchantId = uuid(tenant?.merchantId, 'tenant.merchantId');
   if (raw == null) {
     return deepFreeze({
-      ref: requestedRef, kind: null, merchant_id: null, version: null, status: RESOURCE_STATUS.UNRESOLVED, metadata: null,
+      ref: requestedRef, kind: null, merchant_id: null, version: null, status: RESOURCE_STATUS.UNRESOLVED, metadata: null, provenance: null,
     });
   }
   const data = plainJson(raw, 'resolution');
@@ -50,6 +51,17 @@ export function normalizeResourceResolution(raw, { ref: requestedRef, tenant }) 
     fail(E.RESOURCE_CROSS_MERCHANT, `a ${kind} must belong to the merchant`, { field: 'resolution.merchant_id' });
   }
   if (data.metadata != null) assertNoLocation(data.metadata);
+  // where the operational resolver got its answer: which owner adapter, and the evidence that proves it (required for an ACTIVE resource there)
+  let provenance = null;
+  if (data.provenance != null) {
+    closedObject(data.provenance, PROVENANCE_KEYS, 'resolution.provenance', E.RESOURCE_INVALID);
+    provenance = {
+      adapter_id: idToken(data.provenance.adapter_id, 'resolution.provenance.adapter_id'),
+      evidence_ref: data.provenance.evidence_ref == null ? null : ref(data.provenance.evidence_ref, 'resolution.provenance.evidence_ref'),
+      content_hash: data.provenance.content_hash ?? null,
+      resolver_version: data.provenance.resolver_version ?? null,
+    };
+  }
   return deepFreeze({
     ref: requestedRef,
     kind,
@@ -57,6 +69,7 @@ export function normalizeResourceResolution(raw, { ref: requestedRef, tenant }) 
     version: data.version == null ? null : integer(data.version, 'resolution.version', { min: 1, max: 1000000, code: E.RESOURCE_INVALID }),
     status,
     metadata: data.metadata ?? null,
+    provenance,
   });
 }
 

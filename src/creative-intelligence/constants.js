@@ -86,6 +86,8 @@ export const CI_ERROR = Object.freeze({
   // marketing handoff
   HANDOFF_INVALID: 'CI_HANDOFF_INVALID',
   READINESS_INVALID: 'CI_READINESS_INVALID',
+  PROBE_FAILED: 'CI_PROBE_FAILED',
+  BENCHMARK_INVALID: 'CI_BENCHMARK_INVALID',
   // agents
   AGENT_UNKNOWN_ROLE: 'CI_AGENT_UNKNOWN_ROLE',
   AGENT_OUTPUT_INVALID: 'CI_AGENT_OUTPUT_INVALID',
@@ -307,6 +309,7 @@ export const RESOURCE_KIND = Object.freeze({
   CLAIM: 'CLAIM',
   FONT: 'FONT',
   FORMAT: 'FORMAT',
+  POLICY: 'POLICY',
 });
 // What a Marketing `subject_ref` may turn out to be once resolved.
 export const SUBJECT_KINDS = Object.freeze(['PRODUCT', 'COLLECTION', 'CATEGORY', 'SUBJECT_OTHER']);
