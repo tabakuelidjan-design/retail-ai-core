@@ -4,7 +4,7 @@
 // SelectedCreativeCandidate (that one is what Creative Intelligence hands to Marketing after selection and approval).
 
 import {
-  CI_ERROR as E, CI_VERSION, FORBIDDEN_APPROVAL_KEYS, FORBIDDEN_PROVIDER_KEYS, FORBIDDEN_SCORE_KEYS, LAYER_ORIGIN,
+  CI_ERROR as E, CI_VERSION, FORBIDDEN_APPROVAL_KEYS, FORBIDDEN_PROVIDER_KEYS, FORBIDDEN_SCORE_KEYS, LAYER_ORIGIN, RENDER_MODE,
 } from './constants.js';
 import { normalizeDesignDocument } from './design-document.js';
 import { normalizeQualityReport } from './creative-quality.js';
@@ -13,13 +13,17 @@ import {
 } from './validation.js';
 
 const KEYS = [
-  'candidate_id', 'schema_version', 'merchant_id', 'brand_id', 'brief_ref', 'direction_ref', 'rendered_asset_ref', 'design_document', 'preflight_report',
+  'candidate_id', 'schema_version', 'merchant_id', 'brand_id', 'brief_ref', 'direction_ref', 'render_mode', 'rendered_asset_ref', 'design_document', 'preflight_report',
   'quality_report', 'provenance', 'created_at',
 ];
 const REPORT_KEYS = ['report_id', 'schema_version', 'document_ref', 'status', 'checks', 'context_provided'];
 
 /** The durable reference of a render: the digest of its bytes. The pixels themselves live in the asset store, not here. */
-export const renderedAssetRefOf = (rendered) => `render:${rendered.digest}`;
+export function renderedAssetRefOf(rendered) {
+  // a structural render (unresolved placeholders) has no production reference: it can never back a render-ready candidate
+  if (rendered?.render_mode !== RENDER_MODE.RESOLVED) fail(E.RENDER_NOT_RESOLVED, 'only a RESOLVED render can back a candidate: some media references are unresolved', { unresolved: rendered?.unresolved_asset_refs ?? null });
+  return `render:${rendered.digest}`;
+}
 
 /** Shape + identity of a stored preflight report. Its VALUE is never trusted: the selector recomputes it from the document. */
 export function assertPreflightReportShape(report, documentId) {
@@ -54,6 +58,7 @@ export function normalizeCreativeCandidate(input) {
     brand_id: brandId,
     brief_ref: briefRef,
     direction_ref: directionRef,
+    render_mode: input.render_mode === RENDER_MODE.RESOLVED ? RENDER_MODE.RESOLVED : fail(E.RENDER_NOT_RESOLVED, 'a render-ready candidate states render_mode RESOLVED', { field: 'candidate.render_mode' }),
     rendered_asset_ref: ref(input.rendered_asset_ref, 'candidate.rendered_asset_ref'),
     design_document: document,
     preflight_report: report,

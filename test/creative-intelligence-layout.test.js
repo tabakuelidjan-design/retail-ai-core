@@ -231,8 +231,10 @@ test('Renderer: a pure, deterministic projection of the document', () => {
   assert.equal(png.reason, 'NO_RASTERIZER_IN_RUNTIME');
   // 163 an injected rasterizer's output must really be a PNG
   const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
-  assert.equal(CI.renderPng(rendered, { rasterizer: () => pngBytes }).supported, true);
-  assert.equal(code(() => CI.renderPng(rendered, { rasterizer: () => Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9]) })), CI.CI_ERROR.RASTER_UNSUPPORTED);
+  const resolvedRender = render(undefined, { assetResolver: () => 'data:image/png;base64,iVBORw0KGgo=' });
+  assert.equal(CI.renderPng(resolvedRender, { rasterizer: () => pngBytes }).supported, true);
+  assert.equal(code(() => CI.renderPng(resolvedRender, { rasterizer: () => Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9]) })), CI.CI_ERROR.RASTER_UNSUPPORTED);
+  assert.equal(code(() => CI.renderPng(rendered, { rasterizer: () => pngBytes })), CI.CI_ERROR.RENDER_NOT_RESOLVED); // a structural render is never rasterized
   // 164 the render reports its structure and its text runs
   assert.deepEqual(rendered.structure.map((s) => s.layer_id), order);
   assert.ok(rendered.text_runs.every((t) => t.fits));

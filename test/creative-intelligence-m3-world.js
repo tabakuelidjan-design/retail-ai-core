@@ -104,11 +104,8 @@ export const posterFormat = (over = {}) => ({
   version: 1,
   status: 'ACTIVE',
   metadata: {
-    canvas: { width: 2000, height: 2800 },
-    aspect_ratio: '5:7',
-    physical_or_digital: 'PHYSICAL',
-    viewing_distance_m: 2,
-    expected_dwell_time_s: 3,
+    canvas: { width: 2000, height: 2800, unit: 'px' },
+    medium: 'PHYSICAL',
     safe_zones: [{ zone_id: 'safe', x: 100, y: 100, width: 1800, height: 2600 }],
     forbidden_zones: [],
     production_constraints: ['PRINT_READY'],

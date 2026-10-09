@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import {
-  CI_ERROR as E, EFFECT_KIND, IMAGE_FIT, LAYER_TYPE, RENDERABLE_PRESERVATION_MODES, SHAPE_KIND, VISIBILITY,
+  CI_ERROR as E, EFFECT_KIND, IMAGE_FIT, LAYER_TYPE, RENDERABLE_PRESERVATION_MODES, RENDER_MODE, SHAPE_KIND, VISIBILITY,
 } from './constants.js';
 import { layerBounds } from './layers.js';
 import { layoutText, positionLines } from './typography.js';
@@ -25,10 +25,19 @@ const xmlId = (i, id) => `l${i}-${id.replace(/[^A-Za-z0-9_-]/g, '_')}`;
 // An <image> may only point at an inline raster / svg data URI or at a symbolic asset reference. Never http(s), file or script.
 const SAFE_HREF = /^(data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+|ref:[A-Za-z0-9:_./#-]+)$/;
 
-function href(resolver, assetRef) {
-  const resolved = resolver ? resolver(assetRef) : `ref:${assetRef}`;
+const SYMBOLIC = /^ref:/;
+
+// A reference the trusted resolver did not turn into a payload (no resolver, no answer, or a symbolic answer) stays an UNRESOLVED
+// placeholder: the render is then STRUCTURAL.
+function href(resolver, assetRef, unresolved) {
+  const resolved = resolver ? resolver(assetRef) : null;
   const value = typeof resolved === 'string' ? resolved : resolved?.href;
+  if (value == null) {
+    unresolved.add(assetRef);
+    return `ref:${assetRef}`;
+  }
   if (typeof value !== 'string' || !SAFE_HREF.test(value)) fail(E.RENDER_INPUT_INVALID, 'an asset resolver returned a location that is not an inline image or a symbolic reference', { field: 'assetResolver' });
+  if (SYMBOLIC.test(value)) unresolved.add(assetRef);
   return value;
 }
 
@@ -51,7 +60,8 @@ function effectAttrs(layer, defs, fid) {
  * opaque refs; `assetResolver(asset_ref)` is a TRUSTED, injected function that may hand the renderer an EPHEMERAL payload (an inline
  * image data URI) for this one render. That payload ends up in the SVG projection only: it is never written back into the document,
  * the candidate or any reference. Without a resolver an image points at the symbolic `ref:<canonical ref>`.
- * Returns { svg, digest, structure, text_runs }.
+ * Returns { svg, digest, render_mode, unresolved_asset_refs, structure, text_runs }. render_mode is STRUCTURAL while any needed media
+ * reference is unresolved (inspection only, labelled `data-render-mode` in the SVG) and RESOLVED only when every one was resolved.
  */
 export function renderDesignDocument({ document, fonts, assetResolver = null } = {}) {
   const doc = normalizeDesignDocument(document);
@@ -59,8 +69,9 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
   const hidden = new Set(doc.layers.filter((l) => l.visibility === VISIBILITY.HIDDEN).map((l) => l.id));
   for (const g of doc.layers.filter((l) => l.type === LAYER_TYPE.GROUP && l.visibility === VISIBILITY.HIDDEN)) g.members.forEach((m) => hidden.add(m));
 
+  const unresolved = new Set();
   const defs = [];
-  const body = [];
+  const body = []; 
   const structure = [];
   const textRuns = [];
   doc.layers.forEach((layer, i) => {
@@ -76,23 +87,23 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
       case LAYER_TYPE.BACKGROUND:
         body.push(layer.fill
           ? `<rect id="${xmlId(i, layer.id)}" ${common} ${box} fill="${layer.fill}"${fx}${tf}/>`
-          : `<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref))}" preserveAspectRatio="xMidYMid slice"${fx}${tf}/>`);
+          : `<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref, unresolved))}" preserveAspectRatio="xMidYMid slice"${fx}${tf}/>`);
         break;
       case LAYER_TYPE.PRODUCT:
         if (!RENDERABLE_PRESERVATION_MODES.includes(layer.preservation_mode)) {
           fail(E.RENDER_INPUT_INVALID, `the C1 renderer only places existing pixels: ${layer.preservation_mode} is not renderable`, { layer: layer.id });
         }
         // "meet": the pixels are scaled uniformly and never stretched, whatever the box says.
-        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.asset_ref))}" preserveAspectRatio="xMidYMid meet"${fx}${tf}/>`);
+        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.asset_ref, unresolved))}" preserveAspectRatio="xMidYMid meet"${fx}${tf}/>`);
         break;
       case LAYER_TYPE.IMAGE: {
         const slice = layer.fit === IMAGE_FIT.COVER;
         if (slice) defs.push(`<clipPath id="cp${i}"><rect ${box}/></clipPath>`);
-        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref))}" preserveAspectRatio="xMidYMid ${slice ? 'slice' : 'meet'}"${slice ? ` clip-path="url(#cp${i})"` : ''}${fx}${tf}/>`);
+        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref, unresolved))}" preserveAspectRatio="xMidYMid ${slice ? 'slice' : 'meet'}"${slice ? ` clip-path="url(#cp${i})"` : ''}${fx}${tf}/>`);
         break;
       }
       case LAYER_TYPE.LOGO:
-        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref))}" preserveAspectRatio="xMidYMid meet"${fx}${tf}/>`);
+        body.push(`<image id="${xmlId(i, layer.id)}" ${common} ${box} href="${esc(href(assetResolver, layer.source_ref, unresolved))}" preserveAspectRatio="xMidYMid meet"${fx}${tf}/>`);
         break;
       case LAYER_TYPE.SHAPE: {
         const paint = `fill="${layer.fill ?? 'none'}"${layer.stroke ? ` stroke="${layer.stroke}" stroke-width="${num(layer.stroke_width)}"` : ''}`;
@@ -121,8 +132,9 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
   });
 
   const { width, height, background_color: bg } = doc.canvas;
+  const renderMode = unresolved.size === 0 ? RENDER_MODE.RESOLVED : RENDER_MODE.STRUCTURAL;
   const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-document="${esc(doc.document_id)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-document="${esc(doc.document_id)}" data-render-mode="${renderMode}">`,
     defs.length ? `<defs>${defs.join('')}</defs>` : '',
     `<rect width="${width}" height="${height}" fill="${bg}"/>`,
     ...body,
@@ -131,6 +143,8 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
   return deepFreeze({
     svg,
     digest: createHash('sha256').update(svg).digest('hex'),
+    render_mode: renderMode,
+    unresolved_asset_refs: [...unresolved].sort(),
     width,
     height,
     structure,
@@ -144,6 +158,7 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
  */
 export function renderPng(rendered, { rasterizer = null } = {}) {
   if (typeof rasterizer !== 'function') return deepFreeze({ supported: false, reason: 'NO_RASTERIZER_IN_RUNTIME', code: E.RASTER_UNSUPPORTED });
+  if (rendered.render_mode !== RENDER_MODE.RESOLVED) fail(E.RENDER_NOT_RESOLVED, 'a structural render (unresolved media references) is never rasterized into a production image', { unresolved: rendered.unresolved_asset_refs });
   const bytes = rasterizer(rendered.svg, { width: rendered.width, height: rendered.height });
   if (!(bytes instanceof Uint8Array) || bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50) {
     fail(E.RASTER_UNSUPPORTED, 'the rasterizer did not return a PNG');

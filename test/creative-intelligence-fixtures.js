@@ -197,13 +197,18 @@ export const preflightContext = (over = {}) => ({
   fonts: fonts(), assets: assetDims(), approved_claim_refs: [CLAIM_PRICE], ...over,
 });
 
+// An ephemeral payload a trusted resolver would hand to ONE render (a 1x1 PNG). It never belongs to a document.
+export const PAYLOAD = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+export const resolveAllMedia = () => PAYLOAD;
+
 export function candidateFor(document, { context = preflightContext(), quality = null } = {}) {
-  const rendered = CI.renderDesignDocument({ document, fonts: fonts() });
+  const rendered = CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: resolveAllMedia });
   return CI.normalizeCreativeCandidate({
     merchant_id: document.merchant_id,
     brand_id: document.brand_id,
     brief_ref: document.brief_ref,
     direction_ref: document.direction_ref,
+    render_mode: rendered.render_mode,
     rendered_asset_ref: CI.renderedAssetRefOf(rendered),
     design_document: document,
     preflight_report: CI.runCreativePreflight(document, context),

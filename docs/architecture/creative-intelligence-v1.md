@@ -54,8 +54,9 @@ never touched - a test makes reading them throw), copies no business truth (no o
 product identity, and preserves: `merchant_id`, `brand_id`, `brief_ref`, `deliverable_ref`, `subject_refs`, `source_asset_refs` (Brief and
 deliverable), `claim_refs`, mandatory refs (Brief and deliverable), prohibited refs, `requirement_refs`, policy / consent / promotion refs,
 `needed_by`, channel, placement, locale, `format_ref` and `content_kind`. The brand interface travels inside the handoff, so
-`brand_context_ref` is the `handoff_id`. The canvas, aspect ratio and zones come from the **resolved FORMAT** (an injected resolver's
-answer), never from the reference text. A `TEXT` / `VIDEO` deliverable is refused (`CONTENT_KIND_UNSUPPORTED`), not converted. The integration
+`brand_context_ref` is the `handoff_id`. The canvas (width, height, unit `px`), medium, zones and production constraints come from the **resolved FORMAT** (the
+common resolver's answer), never from the reference text; the aspect ratio is **derived** from the canvas; `channel` and `placement` stay
+Marketing deliverable facts and cannot be stated by a format. A `TEXT` / `VIDEO` deliverable is refused (`CONTENT_KIND_UNSUPPORTED`), not converted. The integration
 test (rows 256-278) builds the chain with the real Marketing and Branding builders (Finding, Push, Package, Authorization, Brand Context,
 CreativeBrief, CreativeHandoffPackage) and compares field by field; Marketing M3 is not modified. Not enforced yet (recommended, not built):
 a preflight check that a document uses no prohibited content and carries every mandatory content reference.
@@ -72,15 +73,32 @@ reference names by reading the string (a test scans the source). The resolver's 
 never "probably a product"; a resource of another merchant is refused; only a font or a format may be platform-level; a URL / payload is not an
 identity (refused before the resolver is asked) and metadata cannot carry a location. `resolveIntakeResources` reports `RESOLVED` only if every
 reference is `ACTIVE` and of an expected kind; asset readiness is `NOT_MEASURABLE` without a resolution and `NOT_READY` for an unresolved,
-revoked, expired, restricted or wrongly-typed asset. **The Socle Resource / Evidence Resolver that implements this boundary is an explicit
-PRE-C2 dependency.**
+revoked, expired, restricted or wrongly-typed asset. **The common Socle Resource Resolver that implements this boundary is an explicit PRE-C2 dependency.**
 
-## 0.3 Canonical reference vs resolved payload
+**FORMAT is a resource kind, not a second resolver.** It is resolved through that same resolver (there is no separate architectural Format
+Resolver or Format Registry dependency). Its metadata is exactly:
+
+```text
+{ canvas: { width, height, unit }, medium, safe_zones, forbidden_zones, production_constraints }
+```
+
+C1 renders in `px` (another unit is refused, not converted). `aspect_ratio` is derived from the canvas by `CreativeOutputContext` (omitted it
+is computed, supplied it must agree) and is never an independent source of truth.
+
+## 0.3 Canonical reference vs resolved payload; structural vs resolved render
 
 A `DesignDocument` stores canonical references (`asset://...`) and never `data:`, `blob:`, `http(s):` or `file:` (refused in every reference
 position). A **trusted resolver** may hand the renderer an **ephemeral payload** (an inline image data URI) for one render; it appears in the
 SVG projection only, never in the document, the structure, the text runs, the candidate or any reference. With no resolver an image points at
 the symbolic `ref:<canonical ref>`.
+
+**STRUCTURAL / UNRESOLVED render != RESOLVED render.** `renderDesignDocument` reports `render_mode`. It is `RESOLVED` only when every media
+reference the render needs (a background image, a product, an image, a logo) was resolved by the trusted resolver into an ephemeral payload;
+a missing, partial or merely symbolic (`ref:…`) answer leaves it `STRUCTURAL`, lists the `unresolved_asset_refs`, and labels the SVG itself
+(`data-render-mode`). A structural SVG is for deterministic inspection and tests; it can never back a render-ready candidate
+(`renderedAssetRefOf` and `normalizeCreativeCandidate` refuse it with `CI_RENDER_NOT_RESOLVED`; the candidate must state `render_mode:
+RESOLVED`) and `renderPng` never rasterizes it. A document with no media to resolve has nothing unresolved. The payload never enters the
+DesignDocument. Limit: the candidate's `render_mode` is stated by the trusted pipeline that rendered it; selection does not re-render.
 
 ## 0.4 Brand expression system - PRE-C2 dependency
 
@@ -88,16 +106,29 @@ C1 invents **no** brand expression: no colour literal, font family, style vocabu
 font family or default recipe exists in the source (tests scan for them; the canvas colour, image fit and font generic family are
 required inputs; a layout recipe must be named by the caller). The recipes are neutral geometry primitives selected explicitly, not a
 house style. **Brand Memory V1.1 `expression_system`** (photography, product_presentation, composition, layout_principles, illustration,
-iconography, motion, locale overrides where required) is a PRE-C2 dependency; Branding is **not** modified by this audit. There is no
+iconography, motion, locale_overrides) is a PRE-C2 dependency; Branding is **not** modified by this audit. There is no
 fallback "AI style", no generic "premium" style, no hidden template default.
 
 ## 0.5 Typography / rasterization - C2 is blocked until
 
-`assessCreativeC2Readiness()` lists them and answers `c2_allowed: false` until each has explicit evidence: **resource resolver, format
-resolver, brand expression system, real font metrics from real font files, real shaping for complex scripts, Arabic / bidi / RTL
-verification, a deterministic rasterizer, a real PNG render path**. CJK line breaking is documented as DEFERRED (not claimed, not blocking).
+`assessCreativeC2Readiness()` lists them and answers `c2_allowed: false` until each has explicit evidence: **the common resource resolver (with
+FORMAT capability), brand expression system, real font metrics from real font files, real shaping for complex scripts, Arabic / bidi / RTL
+verification, a deterministic rasterizer, a real PNG render path, a real campaign benchmark**. CJK line breaking is documented as DEFERRED (not claimed, not blocking).
 The current typography is exact **only against declared metrics**; it is not production typography and `typography_production_ready` is
 always `false`. No PNG is ever faked.
+
+## 0.6 L3-002 / NDR-D02 and HABB CREATIVE BENCHMARK 001
+
+C1 foundation may close.
+C2 provider work remains blocked until a real HABB campaign benchmark exists.
+
+The Decision Register is **not** changed by this work (a test guards NDR-D02). The architect-selected benchmark is **HABB CREATIVE BENCHMARK 001**:
+a personalized phone case, price 25 €, promise "5 minutes", primary channel Instagram Feed, primary canvas 1080 x 1350. It lives as
+**configuration data only** in `benchmarks/creative-intelligence/habb-creative-benchmark-001.json` (status `NOT_RUN`) and no generic Creative
+source contains any of it (tested). Its requirements: real product asset, exact product preservation, exact approved price (25 €), exact
+approved claim (5 minutes), exact critical text, brand expression compliance, no generic style fallback, deterministic typography, preflight
+PASS, Fidelity gate, Guardian gate. The file lists what is still missing to run it (the real product asset and its resolution, the approved claim
+references, the Brand Memory V1.1 `expression_system`, the resolved FORMAT).
 
 ## 1. What C1 builds (and what it does not)
 
@@ -560,5 +591,18 @@ Every row is a behaviour the mandate (rows 1-255) or the final architect audit (
 | 309 | evidence is an opaque reference (never a URL) and an unknown dependency is refused | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
 | 310 | CJK line breaking is DEFERRED: documented, never claimed, and it does not block C2 | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
 | 311 | no PNG is faked meanwhile: without an injected rasterizer the answer is "unsupported" | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
-| 312 | the resolver and the format registry are named as explicit pre-C2 dependencies, with the resolve() contract spelled out | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 312 | ONE resource resolver (with FORMAT capability) is the pre-C2 dependency - there is no separate format resolver | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 313 | an unresolved asset may produce a structural representation (labelled, deterministic, for inspection and tests) | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 314 | a partial resolution, a symbolic answer or no answer all stay structural | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 315 | an unresolved render can never become a render-ready candidate, nor a production image | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 316 | a resolved ephemeral payload can render: every needed media reference resolved, a RESOLVED render and candidate | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 317 | the resolved payload never enters the DesignDocument, nor the candidate | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 318 | the same resolved inputs produce the same bytes; another payload changes the bytes, never the document | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 319 | a document with no media to resolve has nothing unresolved (text and shapes only) | creative-intelligence-m3-resolver.test.js › Structural render is not a production render: only resolved media may back a render-ready candidate |
+| 320 | the architect-selected benchmark exists as DATA with exactly the facts and requirements given | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 321 | none of it lives in the generic Creative source: no campaign, price, promise or channel | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 322 | with everything else closed, the missing real benchmark alone keeps C2 blocked | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 323 | the benchmark says honestly what is still missing before it can run | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 324 | the architecture document states the decision: C1 may close, C2 provider work is blocked on that benchmark | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 325 | the canonical Decision Register was not changed by this work (NDR-D02 is still DECIDED / DEFERRED) | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
 <!-- coverage-matrix:end -->

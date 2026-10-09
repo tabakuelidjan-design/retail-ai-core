@@ -57,6 +57,9 @@ test('Output context: canvas, aspect ratio, zones, locale / direction and unsupp
   // 12 the aspect ratio must follow from the canvas
   assert.equal(code(() => CI.normalizeOutputContext(outputContext({ aspect_ratio: '16:9' }))), CI.CI_ERROR.ASPECT_RATIO_MISMATCH);
   assert.equal(CI.reducedAspectRatio(1920, 1080), '16:9');
+  // the aspect ratio is derived from the canvas: omitted it is computed, supplied it must agree
+  const noRatio = outputContext(); delete noRatio.aspect_ratio;
+  assert.equal(CI.normalizeOutputContext(noRatio).aspect_ratio, '4:5');
   // 13 VIDEO and TEXT are not expressible by C1
   assert.equal(code(() => CI.normalizeOutputContext(outputContext({ content_kind: 'VIDEO' }))), CI.CI_ERROR.CONTENT_KIND_UNSUPPORTED);
   assert.equal(code(() => CI.normalizeOutputContext(outputContext({ content_kind: 'TEXT' }))), CI.CI_ERROR.CONTENT_KIND_UNSUPPORTED);

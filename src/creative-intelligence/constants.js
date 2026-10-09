@@ -64,6 +64,7 @@ export const CI_ERROR = Object.freeze({
   FONT_MISSING: 'CI_FONT_MISSING',
   RENDER_INPUT_INVALID: 'CI_RENDER_INPUT_INVALID',
   RASTER_UNSUPPORTED: 'CI_RASTER_UNSUPPORTED',
+  RENDER_NOT_RESOLVED: 'CI_RENDER_NOT_RESOLVED',
   // quality / candidate / selection
   QUALITY_REPORT_INVALID: 'CI_QUALITY_REPORT_INVALID',
   CANDIDATE_INVALID: 'CI_CANDIDATE_INVALID',
@@ -318,12 +319,16 @@ export const PLATFORM_LEVEL_KINDS = Object.freeze(['FONT', 'FORMAT']);
 // ---- pre-C2 dependencies (C2 stays blocked until every one that is not DEFERRED has explicit evidence)
 export const PRE_C2_DEPENDENCY = Object.freeze({
   RESOURCE_RESOLVER: 'RESOURCE_RESOLVER',
-  FORMAT_RESOLVER: 'FORMAT_RESOLVER',
   BRAND_EXPRESSION_SYSTEM: 'BRAND_EXPRESSION_SYSTEM',
   REAL_FONT_METRICS: 'REAL_FONT_METRICS',
   COMPLEX_SCRIPT_SHAPING: 'COMPLEX_SCRIPT_SHAPING',
   ARABIC_BIDI_RTL_VERIFICATION: 'ARABIC_BIDI_RTL_VERIFICATION',
   DETERMINISTIC_RASTERIZER: 'DETERMINISTIC_RASTERIZER',
   REAL_PNG_RENDER_PATH: 'REAL_PNG_RENDER_PATH',
+  REAL_CAMPAIGN_BENCHMARK: 'REAL_CAMPAIGN_BENCHMARK',
   CJK_LINE_BREAKING: 'CJK_LINE_BREAKING',
 });
+
+// A render is STRUCTURAL while any media reference it needs has not been resolved into an ephemeral payload by the trusted resolver
+// (it holds symbolic placeholders: fine for deterministic inspection, never a production render); RESOLVED when every one has.
+export const RENDER_MODE = Object.freeze({ STRUCTURAL: 'STRUCTURAL', RESOLVED: 'RESOLVED' });

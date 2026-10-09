@@ -1,0 +1,33 @@
+{
+  "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
+  "kind": "CONFIGURATION_DATA",
+  "status": "NOT_RUN",
+  "selected_by": "architect",
+  "purpose": "Exit condition of C1 and entry condition of C2 provider work (NORDLA-DEFERRED L3-002 / NDR-D02): a real campaign used as benchmark. This file is configuration data: no Creative Intelligence source depends on it.",
+  "subject": "Personalized phone case",
+  "facts_given_by_the_architect": {
+    "price": "25 €",
+    "promise": "5 minutes",
+    "primary_channel": "Instagram Feed",
+    "primary_canvas": { "width": 1080, "height": 1350, "unit": "px" }
+  },
+  "requirements": [
+    "real product asset",
+    "exact product preservation",
+    "exact approved price (25 €)",
+    "exact approved claim (5 minutes)",
+    "exact critical text",
+    "brand expression compliance",
+    "no generic style fallback",
+    "deterministic typography",
+    "preflight PASS",
+    "Fidelity gate",
+    "Guardian gate"
+  ],
+  "bindings_still_missing": [
+    "the real product asset reference and its resolution",
+    "the approved claim references for the price and the promise",
+    "the Brand Memory V1.1 expression_system",
+    "the resolved FORMAT for Instagram Feed 1080 x 1350"
+  ]
+}

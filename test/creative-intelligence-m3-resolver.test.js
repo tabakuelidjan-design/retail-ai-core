@@ -4,8 +4,8 @@ import { readFile, readdir } from 'node:fs/promises';
 
 import * as CI from '../src/creative-intelligence/index.js';
 import {
-  ASSET_LOGO, ASSET_PRODUCT, CLAIM_PRICE, IDS, LATER, NOW, PRODUCT, acode, assetDims, clone, code, demoDocument, documentParts, fonts, intakeInput, isDeepFrozen,
-  resolutionFor, solved,
+  ASSET_LOGO, ASSET_PRODUCT, CLAIM_PRICE, IDS, LATER, NOW, PAYLOAD, PRODUCT, acode, assetDims, backgroundLayer, candidateFor, clone, code, demoDocument, documentParts, fonts,
+  intakeInput, isDeepFrozen, resolveAllMedia, resolutionFor, solved, textLayer,
 } from './creative-intelligence-fixtures.js';
 import { M1, M2, buildM3World, posterFormat, tenant } from './creative-intelligence-m3-world.js';
 
@@ -61,9 +61,17 @@ test('Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing i
   assert.equal(intake.output_context.direction, 'LTR');
   // 265 the format reference is preserved; the canvas comes from the RESOLVED format, never from the reference text
   assert.equal(intake.output_context.format_ref, imageSpec.format_ref);
-  assert.deepEqual(intake.output_context.canvas, posterFormat().metadata.canvas);
-  const other = intakeOf({ resolved_format: posterFormat({ metadata: { ...posterFormat().metadata, canvas: { width: 1000, height: 1400 }, safe_zones: [] } }) });
+  assert.deepEqual(intake.output_context.canvas, { width: posterFormat().metadata.canvas.width, height: posterFormat().metadata.canvas.height });
+  const other = intakeOf({ resolved_format: posterFormat({ metadata: { ...posterFormat().metadata, canvas: { width: 1000, height: 1400, unit: 'px' }, safe_zones: [] } }) });
   assert.deepEqual(other.output_context.canvas, { width: 1000, height: 1400 });
+  // the aspect ratio is derived from that canvas - the format states none
+  assert.equal(other.output_context.aspect_ratio, '5:7');
+  assert.equal(intake.output_context.aspect_ratio, CI.reducedAspectRatio(2000, 2800));
+  assert.ok(!('aspect_ratio' in posterFormat().metadata));
+  // channel and placement are Marketing deliverable facts: a format cannot state them
+  for (const key of ['channel', 'placement', 'aspect_ratio']) assert.equal(code(() => intakeOf({ resolved_format: posterFormat({ metadata: { ...posterFormat().metadata, [key]: 'X' } }) })), CI.CI_ERROR.RESOURCE_INVALID, key);
+  // C1 renders in px: another unit is refused, not converted
+  assert.equal(code(() => intakeOf({ resolved_format: posterFormat({ metadata: { ...posterFormat().metadata, canvas: { width: 210, height: 297, unit: 'mm' } } }) })), CI.CI_ERROR.CANVAS_INVALID);
   // 266 mandatory content: the Brief's and the deliverable's
   assert.deepEqual(intake.mandatory_content_refs, union(brief.mandatory_content_refs, imageSpec.mandatory_content_refs));
   // 267 prohibited content is preserved
@@ -299,7 +307,7 @@ test('No invented style: with no brand expression system, Creative Intelligence 
   // 304 the expression system is a declared PRE-C2 dependency covering every domain the architect listed
   const dependency = CI.PRE_C2_DEPENDENCIES.find((d) => d.id === 'BRAND_EXPRESSION_SYSTEM');
   assert.equal(dependency.blocking, true);
-  for (const domain of ['photography', 'product_presentation', 'composition', 'layout_principles', 'illustration', 'iconography', 'motion', 'locale overrides']) {
+  for (const domain of ['expression_system', 'photography', 'product_presentation', 'composition', 'layout_principles', 'illustration', 'iconography', 'motion', 'locale_overrides']) {
     assert.ok(dependency.summary.includes(domain), domain);
   }
   assert.match(dependency.summary, /invents none of those values/);
@@ -308,7 +316,7 @@ test('No invented style: with no brand expression system, Creative Intelligence 
 // ------------------------------------------------------------------ pre-C2 readiness (305-312)
 
 test('Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence', () => {
-  const blocking = ['RESOURCE_RESOLVER', 'FORMAT_RESOLVER', 'BRAND_EXPRESSION_SYSTEM', 'REAL_FONT_METRICS', 'COMPLEX_SCRIPT_SHAPING', 'ARABIC_BIDI_RTL_VERIFICATION', 'DETERMINISTIC_RASTERIZER', 'REAL_PNG_RENDER_PATH'];
+  const blocking = ['RESOURCE_RESOLVER', 'BRAND_EXPRESSION_SYSTEM', 'REAL_FONT_METRICS', 'COMPLEX_SCRIPT_SHAPING', 'ARABIC_BIDI_RTL_VERIFICATION', 'DETERMINISTIC_RASTERIZER', 'REAL_PNG_RENDER_PATH', 'REAL_CAMPAIGN_BENCHMARK'];
   // 305 with no fact, C2 is not allowed and every blocking dependency is open
   const none = CI.assessCreativeC2Readiness();
   assert.equal(none.c2_allowed, false);
@@ -340,8 +348,93 @@ test('Pre-C2 readiness: C2 stays blocked until every blocking dependency has exp
   // 311 no PNG is faked meanwhile: without an injected rasterizer the answer is "unsupported"
   const rendered = CI.renderDesignDocument({ document: solved().document, fonts: fonts() });
   assert.equal(CI.renderPng(rendered).supported, false);
-  // 312 the resolver and the format registry are named as explicit pre-C2 dependencies, with the resolve() contract spelled out
+  // 312 ONE resource resolver (with FORMAT capability) is the pre-C2 dependency - there is no separate format resolver
   assert.match(CI.PRE_C2_DEPENDENCIES.find((d) => d.id === 'RESOURCE_RESOLVER').summary, /resolve\(ref, tenant\)/);
-  assert.match(CI.PRE_C2_DEPENDENCIES.find((d) => d.id === 'FORMAT_RESOLVER').summary, /canvas/);
+  assert.match(CI.PRE_C2_DEPENDENCIES.find((d) => d.id === 'RESOURCE_RESOLVER').summary, /FORMAT capability/);
+  assert.ok(!CI.PRE_C2_DEPENDENCIES.some((d) => d.id === 'FORMAT_RESOLVER'));
   assert.ok(CLAIM_PRICE && intakeInput && fonts);
+});
+
+// ------------------------------------------------------------------ structural vs resolved render (313-319)
+
+test('Structural render is not a production render: only resolved media may back a render-ready candidate', () => {
+  const document = solved().document;
+  // 313 an unresolved asset may produce a structural representation (labelled, deterministic, for inspection and tests)
+  const structural = CI.renderDesignDocument({ document, fonts: fonts() });
+  assert.equal(structural.render_mode, 'STRUCTURAL');
+  assert.deepEqual(structural.unresolved_asset_refs, [ASSET_LOGO, ASSET_PRODUCT].sort());
+  assert.ok(structural.svg.includes('data-render-mode="STRUCTURAL"'));
+  assert.ok(structural.svg.includes(`href="ref:${ASSET_PRODUCT}"`));
+  // 314 a partial resolution, a symbolic answer or no answer all stay structural
+  const onlyProduct = CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: (r) => (r === ASSET_PRODUCT ? PAYLOAD : null) });
+  assert.equal(onlyProduct.render_mode, 'STRUCTURAL');
+  assert.deepEqual(onlyProduct.unresolved_asset_refs, [ASSET_LOGO]);
+  assert.equal(CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: (r) => `ref:${r}` }).render_mode, 'STRUCTURAL');
+  assert.equal(CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: () => null }).unresolved_asset_refs.length, 2);
+  // 315 an unresolved render can never become a render-ready candidate, nor a production image
+  assert.equal(code(() => CI.renderedAssetRefOf(structural)), CI.CI_ERROR.RENDER_NOT_RESOLVED);
+  const ready = candidateFor(document);
+  assert.equal(ready.render_mode, 'RESOLVED');
+  assert.equal(code(() => CI.normalizeCreativeCandidate({ ...clone(ready), render_mode: 'STRUCTURAL' })), CI.CI_ERROR.RENDER_NOT_RESOLVED);
+  const { render_mode: _dropped, ...withoutMode } = clone(ready);
+  assert.equal(code(() => CI.normalizeCreativeCandidate(withoutMode)), CI.CI_ERROR.RENDER_NOT_RESOLVED);
+  assert.equal(code(() => CI.renderPng(structural, { rasterizer: () => Uint8Array.from([0x89, 0x50, 0, 0, 0, 0, 0, 0, 0]) })), CI.CI_ERROR.RENDER_NOT_RESOLVED);
+  // 316 a resolved ephemeral payload can render: every needed media reference resolved, a RESOLVED render and candidate
+  const resolved = CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: resolveAllMedia });
+  assert.equal(resolved.render_mode, 'RESOLVED');
+  assert.deepEqual(resolved.unresolved_asset_refs, []);
+  assert.ok(resolved.svg.includes('data-render-mode="RESOLVED"'));
+  assert.ok(resolved.svg.includes(PAYLOAD));
+  assert.match(CI.renderedAssetRefOf(resolved), /^render:[0-9a-f]{64}$/);
+  // 317 the resolved payload never enters the DesignDocument, nor the candidate
+  assert.ok(!JSON.stringify(document).includes('base64'));
+  assert.ok(!JSON.stringify(ready).includes('base64'));
+  assert.equal(CI.normalizeDesignDocument(document).document_id, document.document_id);
+  // 318 the same resolved inputs produce the same bytes; another payload changes the bytes, never the document
+  assert.equal(CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: resolveAllMedia }).svg, resolved.svg);
+  const other = CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: () => 'data:image/png;base64,iVBORw0KGgo=' });
+  assert.notEqual(other.digest, resolved.digest);
+  assert.equal(other.render_mode, 'RESOLVED');
+  // 319 a document with no media to resolve has nothing unresolved (text and shapes only)
+  const textOnly = CI.buildDesignDocument(documentParts({ layers: [backgroundLayer(), textLayer('only', 'HEADLINE', 'Rien à résoudre', { geometry: { x: 100, y: 100, width: 800, height: 200, rotation_deg: 0 } })], asset_refs: [], claim_refs: [] }));
+  assert.equal(CI.renderDesignDocument({ document: textOnly, fonts: fonts() }).render_mode, 'RESOLVED');
+});
+
+// ------------------------------------------------------------------ L3-002 / NDR-D02 and the benchmark (320-325)
+
+test('C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data', async () => {
+  const benchmark = JSON.parse(await readFile(new URL('../benchmarks/creative-intelligence/habb-creative-benchmark-001.json', import.meta.url), 'utf8'));
+  // 320 the architect-selected benchmark exists as DATA with exactly the facts and requirements given
+  assert.equal(benchmark.kind, 'CONFIGURATION_DATA');
+  assert.equal(benchmark.status, 'NOT_RUN');
+  assert.equal(benchmark.subject, 'Personalized phone case');
+  assert.equal(benchmark.facts_given_by_the_architect.price, '25 €');
+  assert.equal(benchmark.facts_given_by_the_architect.promise, '5 minutes');
+  assert.equal(benchmark.facts_given_by_the_architect.primary_channel, 'Instagram Feed');
+  assert.deepEqual(benchmark.facts_given_by_the_architect.primary_canvas, { width: 1080, height: 1350, unit: 'px' });
+  for (const requirement of ['real product asset', 'exact product preservation', 'exact critical text', 'brand expression compliance', 'no generic style fallback', 'deterministic typography', 'preflight PASS', 'Fidelity gate', 'Guardian gate']) {
+    assert.ok(benchmark.requirements.includes(requirement), requirement);
+  }
+  assert.ok(benchmark.requirements.some((r) => r.includes('25 €')) && benchmark.requirements.some((r) => r.includes('5 minutes')));
+  // 321 none of it lives in the generic Creative source: no campaign, price, promise or channel
+  for (const [file, text] of Object.entries(await sources())) assert.doesNotMatch(text, /25 €|5 minutes|habb|instagram/i, file);
+  // 322 with everything else closed, the missing real benchmark alone keeps C2 blocked
+  const ids = CI.PRE_C2_DEPENDENCIES.filter((d) => d.blocking && d.id !== 'REAL_CAMPAIGN_BENCHMARK').map((d) => d.id);
+  const closed = Object.fromEntries(ids.map((id) => [id, `evidence://${id.toLowerCase()}`]));
+  const almost = CI.assessCreativeC2Readiness(closed);
+  assert.equal(almost.c2_allowed, false);
+  assert.deepEqual(almost.open_blockers, ['REAL_CAMPAIGN_BENCHMARK']);
+  assert.equal(CI.assessCreativeC2Readiness({ ...closed, REAL_CAMPAIGN_BENCHMARK: 'evidence://benchmark-001-run' }).c2_allowed, true);
+  // 323 the benchmark says honestly what is still missing before it can run
+  assert.ok(benchmark.bindings_still_missing.length >= 4);
+  assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('expression_system')));
+  assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('FORMAT')));
+  // 324 the architecture document states the decision: C1 may close, C2 provider work is blocked on that benchmark
+  const doc = await readFile(new URL('../docs/architecture/creative-intelligence-v1.md', import.meta.url), 'utf8');
+  assert.ok(doc.includes('C1 foundation may close.'));
+  assert.ok(doc.includes('C2 provider work remains blocked until a real HABB campaign benchmark exists.'));
+  assert.ok(doc.includes('HABB CREATIVE BENCHMARK 001'));
+  // 325 the canonical Decision Register was not changed by this work (NDR-D02 is still DECIDED / DEFERRED)
+  const register = await readFile(new URL('../NORDLA-DECISION-REGISTER.md', import.meta.url), 'utf8');
+  assert.ok(register.includes('| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / DEFERRED |'));
 });

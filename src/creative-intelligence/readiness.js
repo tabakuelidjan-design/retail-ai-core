@@ -12,17 +12,12 @@ export const PRE_C2_DEPENDENCIES = deepFreeze([
   {
     id: D.RESOURCE_RESOLVER,
     blocking: true,
-    summary: 'A Socle Resource / Evidence Resolver implementing resolve(ref, tenant) -> { ref, kind, merchant_id, version?, status, metadata? } for subjects, assets, claims, fonts and formats. C1 defines only the boundary.',
-  },
-  {
-    id: D.FORMAT_RESOLVER,
-    blocking: true,
-    summary: 'A Format / Production Registry that resolves a Marketing format_ref to its canvas, safe zones and forbidden zones (an open dependency since M3).',
+    summary: 'The common Socle Resource Resolver with FORMAT capability, implementing resolve(ref, tenant) -> { ref, kind, merchant_id, version?, status, metadata? } for subjects, assets, claims, fonts and formats (a FORMAT carries canvas {width, height, unit}, medium, safe_zones, forbidden_zones, production_constraints; the aspect ratio is derived; channel and placement stay Marketing deliverable facts). It also turns an asset reference into an ephemeral payload for a RESOLVED render. C1 defines only the boundary.',
   },
   {
     id: D.BRAND_EXPRESSION_SYSTEM,
     blocking: true,
-    summary: 'Brand Memory V1.1 `expression_system`: photography, product_presentation, composition, layout_principles, illustration, iconography, motion, locale overrides where required. Until it exists C1 invents none of those values and falls back to no generic or "premium" style.',
+    summary: 'Brand Memory V1.1 `expression_system`: photography, product_presentation, composition, layout_principles, illustration, iconography, motion, locale_overrides. Until it exists C1 invents none of those values and falls back to no generic or "premium" style.',
   },
   {
     id: D.REAL_FONT_METRICS,
@@ -48,6 +43,11 @@ export const PRE_C2_DEPENDENCIES = deepFreeze([
     id: D.REAL_PNG_RENDER_PATH,
     blocking: true,
     summary: 'A real PNG render path from the DesignDocument (today renderPng answers { supported: false } without an injected rasterizer; no PNG is ever faked).',
+  },
+  {
+    id: D.REAL_CAMPAIGN_BENCHMARK,
+    blocking: true,
+    summary: 'C2 provider work stays blocked until a real campaign benchmark exists: the architect-selected benchmark is kept as configuration data under benchmarks/creative-intelligence/ (product fidelity, exact approved price and claim, exact critical text, brand expression compliance, deterministic typography, preflight PASS, Fidelity gate, Guardian gate). No campaign logic lives in this source.',
   },
   {
     id: D.CJK_LINE_BREAKING,

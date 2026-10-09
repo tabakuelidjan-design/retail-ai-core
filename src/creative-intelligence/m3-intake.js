@@ -20,9 +20,10 @@ import {
   closedObject, fail, isPlainObject, iso, ref, refList, uuid,
 } from './validation.js';
 
-const FORMAT_METADATA_KEYS = [
-  'canvas', 'aspect_ratio', 'physical_or_digital', 'viewing_distance_m', 'expected_dwell_time_s', 'safe_zones', 'forbidden_zones', 'production_constraints',
-];
+// What a FORMAT resource says (resolved through the common Socle Resource Resolver): its canvas (with unit), medium, zones and production
+// constraints. The aspect ratio is DERIVED from the canvas. `channel` and `placement` are Marketing deliverable facts, never format facts.
+const FORMAT_METADATA_KEYS = ['canvas', 'medium', 'safe_zones', 'forbidden_zones', 'production_constraints'];
+const SUPPORTED_UNITS = ['px'];
 const union = (...lists) => [...new Set(lists.flat())].sort();
 
 /**
@@ -54,6 +55,8 @@ export function buildIntakeFromHandoff({
   if (format.kind !== RESOURCE_KIND.FORMAT) fail(E.RESOURCE_KIND_MISMATCH, 'the resolver says this reference is not a format', { field: 'resolved_format' });
   closedObject(format.metadata ?? {}, FORMAT_METADATA_KEYS, 'resolved_format.metadata', E.RESOURCE_INVALID);
   const facts = format.metadata ?? {};
+  closedObject(facts.canvas ?? {}, ['width', 'height', 'unit'], 'resolved_format.metadata.canvas', E.CANVAS_INVALID);
+  if (!SUPPORTED_UNITS.includes(facts.canvas?.unit)) fail(E.CANVAS_INVALID, 'C1 renders in px: a format canvas states unit px', { field: 'resolved_format.metadata.canvas.unit' });
 
   return normalizeCreativeIntake({
     merchant_id: merchantId,
@@ -76,11 +79,10 @@ export function buildIntakeFromHandoff({
       channel: deliverable.channel,
       placement: deliverable.placement,
       format_ref: deliverable.format_ref,
-      canvas: facts.canvas,
-      aspect_ratio: facts.aspect_ratio,
-      physical_or_digital: facts.physical_or_digital,
-      viewing_distance_m: facts.viewing_distance_m ?? null,
-      expected_dwell_time_s: facts.expected_dwell_time_s ?? null,
+      canvas: { width: facts.canvas.width, height: facts.canvas.height },
+      physical_or_digital: facts.medium,
+      viewing_distance_m: null,
+      expected_dwell_time_s: null,
       safe_zones: facts.safe_zones ?? [],
       forbidden_zones: facts.forbidden_zones ?? [],
       locale: deliverable.locale,

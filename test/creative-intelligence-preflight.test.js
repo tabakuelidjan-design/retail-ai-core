@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import * as CI from '../src/creative-intelligence/index.js';
 import {
   ASSET_LOGO, ASSET_PHOTO, ASSET_PRODUCT, BRIEF, CLAIM_PRICE, FONT, FONT_AR, FONT_AR_EXACT, IDS, LATER, NOW, assetDims, backgroundLayer, candidateFor, checkOf, clone, code,
-  demoDocument, demoLayers, documentParts, fonts, intakeInput, isDeepFrozen, outputContext, preflightContext, solved, textLayer,
+  demoDocument, demoLayers, documentParts, fonts, intakeInput, isDeepFrozen, outputContext, preflightContext, resolveAllMedia, solved, textLayer,
 } from './creative-intelligence-fixtures.js';
 
 // `// N text` markers are rows of the coverage matrix (docs/architecture/creative-intelligence-v1.md).
@@ -184,7 +184,8 @@ test('Creative candidate: facts about the pipeline, never another module\'s verd
   const candidate = candidateFor(document);
   // 191 a candidate holds the document, the reference of its render and its preflight report
   assert.equal(candidate.design_document.document_id, document.document_id);
-  assert.equal(candidate.rendered_asset_ref, CI.renderedAssetRefOf(CI.renderDesignDocument({ document, fonts: fonts() })));
+  assert.equal(candidate.rendered_asset_ref, CI.renderedAssetRefOf(CI.renderDesignDocument({ document, fonts: fonts(), assetResolver: resolveAllMedia })));
+  assert.equal(candidate.render_mode, 'RESOLVED');
   assert.equal(candidate.preflight_report.document_ref, document.document_id);
   assert.ok(isDeepFrozen(candidate));
   // 192 the candidate id is derived; a forged one is refused
@@ -383,7 +384,7 @@ test('Coverage matrix: the doc maps every behaviour row (1-255 mandate, 256+ arc
   const doc = await readFile(new URL('../docs/architecture/creative-intelligence-v1.md', import.meta.url), 'utf8');
   const matrix = doc.slice(doc.indexOf('<!-- coverage-matrix:start -->'), doc.indexOf('<!-- coverage-matrix:end -->'));
   const rows = [...matrix.matchAll(/^\| (\d+) \| (.+?) \| (.+?) \|$/gm)].map((m) => ({ n: Number(m[1]), ref: m[3] }));
-  assert.ok(rows.length >= 312, `at least 312 rows, found ${rows.length}`);
+  assert.ok(rows.length >= 325, `at least 325 rows, found ${rows.length}`);
   assert.deepEqual(rows.map((r) => r.n), Array.from({ length: rows.length }, (_, i) => i + 1));
   for (const { n, ref } of rows) {
     const [file, name] = ref.split(' › ');

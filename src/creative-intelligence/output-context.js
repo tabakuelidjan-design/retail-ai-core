@@ -57,7 +57,8 @@ export function normalizeOutputContext(input) {
   if (!CI_SUPPORTED_CONTENT_KINDS.includes(contentKind)) fail(E.CONTENT_KIND_UNSUPPORTED, 'Creative Intelligence C1 expresses still IMAGE / DOCUMENT outputs only', { field: 'output_context.content_kind' });
   const canvas = normalizeCanvas(input.canvas, 'output_context.canvas');
   const ratio = reducedAspectRatio(canvas.width, canvas.height);
-  if (input.aspect_ratio !== ratio) fail(E.ASPECT_RATIO_MISMATCH, 'output_context.aspect_ratio does not follow from the canvas (reduced W:H)', { field: 'output_context.aspect_ratio' });
+  // the aspect ratio is DERIVED from the canvas, never an independent source of truth: omitted, it is computed; supplied, it must agree
+  if (input.aspect_ratio !== undefined && input.aspect_ratio !== ratio) fail(E.ASPECT_RATIO_MISMATCH, 'output_context.aspect_ratio does not follow from the canvas (reduced W:H)', { field: 'output_context.aspect_ratio' });
   const loc = locale(input.locale, 'output_context.locale');
   const direction = enumValue(input.direction, TEXT_DIRECTION, 'output_context.direction');
   if (direction !== directionForLocale(loc)) fail(E.DIRECTION_LOCALE_MISMATCH, 'output_context.direction contradicts the locale', { field: 'output_context.direction' });
