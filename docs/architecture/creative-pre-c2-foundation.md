@@ -87,19 +87,23 @@ package/version, upstream source, source-availability mechanism, notice and modi
 the DIGITAL pipeline's pixels are sRGB (resvg paints in sRGB) in the same bytes every time. The pixel data (`IDAT`) is the encoder's, unchanged; no ICC
 profile is invented. ICC / CMYK belongs to a future print pipeline.
 
-## 7. HABB CREATIVE BENCHMARK 001 — status
+## 7. HABB CREATIVE BENCHMARK 001 — status (after preparation)
 
-`NOT_RUN`, and as shipped **BLOCKED**. Only the FORMAT is bound (1080 × 1350 px, DIGITAL, explicit empty zones — from the architect's decision,
-resolved through the common resolver). Still missing, nothing invented:
+`NOT_RUN`, and **BLOCKED**. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
+read from the connected `merchants` table):
 
-- the canonical PRODUCT reference of the personalized phone case;
-- **`HABB_BENCHMARK_REAL_ASSET_MISSING`** — the real, merchant-provided, approved product photograph (origin `MERCHANT_PROVIDED`, approval
-  reference, content hash, payload). A generated or synthetic image is refused as a substitute;
-- approved CLAIM resources for the wordings `25 €` and `5 minutes`, each with the reference of its approval;
-- the HABB font files with their licence references;
-- an approved, non-empty Brand Memory V1.1 `expression_system` for HABB (the missing decisions per domain are listed in the benchmark file).
+| Binding | State | Detail |
+|---|---|---|
+| FORMAT | BOUND | `format://habb/benchmark-001/instagram-feed-1080x1350`, 1080 × 1350 px, DIGITAL, explicit empty zones, platform-level (unchanged) |
+| CLAIM price | BOUND | `claim://habb/benchmark-001/price-25`, wording `25 €`, approval `approval://habb/GBP-PROD-01` |
+| CLAIM speed | BOUND | `claim://habb/benchmark-001/express-5-minutes`, wording `5 minutes`, same approval; the qualification (store, model available, customer file usable) is kept beside the evidence |
+| PRODUCT | MISSING | `HABB_BENCHMARK_PRODUCT_BINDING_MISSING` — the catalogue holds one product per phone model; the owner must name the benchmark product |
+| ASSET | MISSING | `HABB_BENCHMARK_REAL_ASSET_MISSING` — no verified real photograph of a personalised HABB case exists |
+| FONT | MISSING | `HABB_BENCHMARK_FONT_BINDINGS_MISSING` — no approved HABB font files / licences found |
+| Expression system | MISSING | content is owner-approved (`habb-expression-system-benchmark-001.json`) but there is no canonical HABB brand_id, approved Brand Core or approved Brand Memory to carry it |
 
-Readiness values are computed by `assessBenchmarkReadiness` and never written in the file. RUNNABLE is not RUN.
+The two claims are **benchmark-owned trusted records, not the Claims Registry** (which does not exist yet). 25 € is scoped to Benchmark 001 and
+the approved store-service evidence; it is not the universal online price. Readiness values are never written in the configuration file. RUNNABLE is not RUN.
 
 ## 8. C2 readiness
 
@@ -203,7 +207,7 @@ Each row is a `// PC2-N` marker in the named test; the coverage test checks that
 | PC2-51 | no payload ever persists into the DesignDocument (font bytes, image bytes, the PNG) | creative-intelligence-production.test.js › Deterministic rasterizer and the real PNG path |
 | PC2-52 | no network access is needed: the whole path runs with fetch and every socket module unavailable | creative-intelligence-production.test.js › Deterministic rasterizer and the real PNG path |
 | PC2-53 | the benchmark is configuration data: nothing in the generic source knows the campaign, the merchant or the product | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
-| PC2-54 | as shipped (real bindings missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
+| PC2-54 | as shipped (product, real asset, fonts and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-55 | the FORMAT is the one binding that resolves, from the benchmark's own owned record, through the common resolver (platform-level, 1080x1350 px DIGITAL) | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-56 | a missing real asset is never substituted: a generated, synthetic or unapproved asset, or one without bytes, keeps the benchmark blocked | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-57 | claim evidence missing (wording differs, unresolved or revoked) blocks RUNNABLE: nothing approves a claim by itself | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |

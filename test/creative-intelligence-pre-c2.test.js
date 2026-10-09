@@ -149,13 +149,13 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
     assert.equal(offending(source, /habb|phone case|coque|instagram|1080|1350/i), null, file);
   }
   assert.equal(benchmarkConfig.kind, 'CONFIGURATION_DATA');
-  // PC2-54 as shipped (real bindings missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
-  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: resolverFor(), tenant, creativeInterface: null });
+  // PC2-54 as shipped (product, real asset, fonts and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
+  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: resolverFor(), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
   assert.equal(shipped.status, 'BLOCKED');
   assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
   assert.equal(reasonOf(shipped, 'asset'), 'BINDING_MISSING');
-  assert.equal(reasonOf(shipped, 'claim:price'), 'BINDING_MISSING');
-  assert.equal(reasonOf(shipped, 'claim:promise'), 'BINDING_MISSING');
+  assert.equal(reasonOf(shipped, 'claim:price'), 'RESOLVED_WITH_EVIDENCE');
+  assert.equal(reasonOf(shipped, 'claim:promise'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'fonts'), 'BINDING_MISSING');
   assert.equal(reasonOf(shipped, 'expression_system'), 'EXPRESSION_SYSTEM_ABSENT');
   // PC2-55 the FORMAT is the one binding that resolves, from the benchmark's own owned record, through the common resolver (platform-level, 1080x1350 px DIGITAL)
