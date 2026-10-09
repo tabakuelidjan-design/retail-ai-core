@@ -2,12 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
-import { crc32 } from 'node:zlib';
 import { Resvg } from '@resvg/resvg-js';
 
 import * as P from '../src/creative-intelligence/production.js';
 
 // `// PC2-N text` markers are rows of the PRE-C2 coverage matrix (docs/architecture/creative-pre-c2-foundation.md).
+
+// Independent bitwise CRC-32 (ISO 3309 / PNG, reflected polynomial 0xEDB88320). Deliberately NOT the implementation under test, and no node:zlib.crc32
+// (only available from Node 20.15, while the repository declares node >= 20).
+const crc32 = (bytes) => {
+  let c = 0xffffffff;
+  for (const byte of bytes) {
+    c ^= byte;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+  }
+  return (c ^ 0xffffffff) >>> 0;
+};
+const storedCrc = (png, c) => new DataView(png.buffer, png.byteOffset, png.byteLength).getUint32(c.at + 8 + c.data.length);
+const computedCrc = (png, c) => crc32(png.subarray(c.at + 4, c.at + 8 + c.data.length));
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const chunksOf = (bytes) => {
@@ -37,11 +49,22 @@ test('PNG colour semantics: explicit deterministic sRGB, no variable metadata, p
   for (const forbidden of ['tIME', 'tEXt', 'zTXt', 'iTXt', 'iCCP', 'pHYs', 'eXIf']) assert.ok(!chunks.some((c) => c.type === forbidden), forbidden);
   for (let i = 0; i < 4; i += 1) assert.deepEqual([...rasterize(svg, { width: 40, height: 10 })], [...png]);
   assert.deepEqual([...P.stripPngMetadata(png)], [...png]); // idempotent
-  // the generated chunks carry valid CRCs
-  for (const c of chunks) {
-    const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
-    assert.equal(view.getUint32(c.at + 8 + c.data.length), crc32(png.subarray(c.at + 4, c.at + 8 + c.data.length)), c.type);
+  // the generated chunks carry valid CRCs, checked with an independent CRC-32 (known vector first: CRC-32('123456789') = 0xCBF43926)
+  assert.equal(crc32(Buffer.from('123456789')), 0xcbf43926);
+  for (const type of ['cHRM', 'gAMA', 'sRGB']) {
+    const c = chunks.find((x) => x.type === type);
+    assert.equal(storedCrc(png, c), computedCrc(png, c), `${type} CRC`);
   }
+  for (const c of chunks) assert.equal(storedCrc(png, c), computedCrc(png, c), c.type);
+  // a corrupted CRC, or a corrupted data byte, is detected by the same check
+  const corrupted = Uint8Array.from(png);
+  const srgb = chunks.find((x) => x.type === 'sRGB');
+  corrupted[srgb.at + 8 + srgb.data.length] ^= 0xff;
+  assert.notEqual(storedCrc(corrupted, srgb), computedCrc(corrupted, srgb));
+  const flipped = Uint8Array.from(png);
+  const gama = chunks.find((x) => x.type === 'gAMA');
+  flipped[gama.at + 8] ^= 0x01;
+  assert.notEqual(storedCrc(flipped, gama), computedCrc(flipped, gama));
   // the pixel data is the encoder's own, byte for byte: normalization touches metadata only
   assert.ok(idat(png).equals(idat(raw)));
   assert.deepEqual(chunksOf(raw).map((c) => c.type), ['IHDR', 'IDAT', 'IEND']); // what the encoder itself emits: NO colour signalling
