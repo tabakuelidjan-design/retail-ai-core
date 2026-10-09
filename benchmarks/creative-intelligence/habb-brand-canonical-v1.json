@@ -1,0 +1,1197 @@
+{
+  "kind": "CONFIGURATION_DATA",
+  "package_id": "HABB-BRAND-CANONICAL-V1",
+  "scope": "HABB CREATIVE BENCHMARK 001",
+  "purpose": "Owner-authorized, benchmark-scoped canonical HABB brand package (Brand Identity, Snapshot, Core V1, Memory V1.1) produced through the real Branding governance. Inputs are authoritative; outputs are derived and verified by scripts/build-benchmark-brand-package.mjs.",
+  "inputs": {
+    "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+    "brand": {
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "name": "HABB",
+      "created_at": "2026-10-09T08:00:00Z",
+      "parent_brand_id": null,
+      "default_locale": "fr-BE",
+      "supported_locales": [
+        "fr-BE"
+      ]
+    },
+    "approver": {
+      "user_id": "habb-owner",
+      "role": "OWNER"
+    },
+    "expression_file": "benchmarks/creative-intelligence/habb-expression-system-benchmark-001.json",
+    "snapshot": {
+      "id": "habb-snapshot-v1",
+      "version": 1,
+      "status": "READY",
+      "created_at": "2026-10-09T08:00:00Z",
+      "observed_at": "2026-10-09T08:00:00Z",
+      "evidence": [
+        {
+          "id": "ev-01",
+          "provenance": "observed",
+          "statement": "HABB is a personalized-gifts and UV-printing shop with a physical retail shop at Rue de Bruxelles 18, 5000 Namur and a Shopify online store; phone cases can be personalized in the shop in about 5 minutes, depending on model availability.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://MASTER_CONTEXT",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "INTERNAL_FACT"
+          }
+        },
+        {
+          "id": "ev-02",
+          "provenance": "observed",
+          "statement": "Positioning is premium-but-accessible: personalized gifts that look premium but are not expensive; the visual and brand identity is deliberately sober and credible.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://MASTER_CONTEXT#positioning",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "INTERNAL_FACT"
+          }
+        },
+        {
+          "id": "ev-03",
+          "provenance": "observed",
+          "statement": "Brand rules: premium, sober, credible. Explicitly forbidden: generic AI-generated rendering look, fake gold effects, artificial warm glow gradients, heavy unrealistic shadows, decorative branches and hearts unless asked. Confirmed colours: navy 0f2a52 / 183247, terracotta c0392b / c56e54, cream fbf8f3, sand efe9e1.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://BRAND_RULES",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "INTERNAL_FACT"
+          }
+        },
+        {
+          "id": "ev-04",
+          "provenance": "observed",
+          "statement": "Visual rules: never alter a customer face; preserve the exact proportions of real products; no unnecessary decorative hearts or branches (owner clarification 2026-08-26); print assets are checked before production.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://VISUAL_RULES",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "INTERNAL_FACT"
+          }
+        },
+        {
+          "id": "ev-05",
+          "provenance": "observed",
+          "statement": "HABB is a local personalisation studio and concept store: personalised gifts and emotional keepsakes, useful everyday objects such as tumblers, express phone-case personalisation, curated lifestyle tech and premium gift presentation. It should not be positioned as a discount or generic gadget shop.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#identity",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-06",
+          "provenance": "observed",
+          "statement": "Approved or established brand ideas include \"HABB Store n’est pas une simple boutique. C’est une signature.\" and \"Vos souvenirs. Votre création. Prêt chez HABB à Namur.\"; the commercial meaning is that HABB transforms photos, names, messages and memories into gifts that carry a story.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#brand-ideas",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-07",
+          "provenance": "observed",
+          "statement": "Differentiators: physical shop in central Namur, personalisation made locally on site, human help with photo, text and layout, an express case-personalisation kiosk, one destination for personalised gifts, tumblers, gift boxes and selected lifestyle tech, premium presentation. HABB checks customer files and may contact the customer or provide a preview.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#differentiators",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-08",
+          "provenance": "observed",
+          "statement": "HABB works with UV and UV-DTF methods.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#uv",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-09",
+          "provenance": "observed",
+          "statement": "The owner lists the needs HABB serves: a thoughtful last-minute gift, a unique gift carrying a photo, name, date, message, logo or QR code, a memorial object, an attractive ready-to-offer gift, a practical object made personal, a locally made gift with assistance.",
+          "completeness": "PARTIAL",
+          "limitations": [
+            "owner-stated needs, not customer research"
+          ],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#needs",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-10",
+          "provenance": "observed",
+          "statement": "Approved service description GBP-PROD-01: \"La personnalisation est réalisée en boutique en environ 5 minutes, selon la disponibilité du modèle.\" and \"Coque + personnalisation : 25 €.\"",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-google-business",
+            "ref": "habb-gbp://GBP-PROD-01",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-11",
+          "provenance": "observed",
+          "statement": "The owner approved the HABB expression system for Benchmark 001: realistic and credible photography, the real product authoritative, editorial composition with breathing room, no automatic decorative hearts or leaves, no artificial gold, glow or generic AI look.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-12",
+          "provenance": "observed",
+          "statement": "The owner approved the strategic content of the canonical Brand Core V1 (category, buying contexts, value proposition, positioning, core promise, reasons to believe, personality, voice, exclusions).",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-canonical-brand-bootstrap/core-v1",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-13",
+          "provenance": "observed",
+          "statement": "The owner approved the initial digital colour tokens navy #183247, terracotta #C56E54, cream #FBF8F3 and white #FFFFFF, no beige or sand default, and left typography empty until an exact font pair is approved with licence evidence.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-canonical-brand-bootstrap/memory-v1-1",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-14",
+          "provenance": "observed",
+          "statement": "The knowledge base gives a working reference retail price of 24.90 EUR for the personalised-case offer and asks to confirm in Shopify before quoting.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#phone-case-price",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "MERCHANT_PROVIDED"
+          }
+        },
+        {
+          "id": "ev-15",
+          "provenance": "observed",
+          "statement": "A search of the HABB project folders and downloads found no file holding the HABB Master Reference (18 July 2026) or the HABB Design Manual v1.0 / Design Bible Foundation v1, and no competitor or customer-review research; those sources were therefore not cited.",
+          "completeness": "COMPLETE",
+          "limitations": [],
+          "source": {
+            "system": "nordla-bootstrap",
+            "ref": "nordla-bootstrap://source-search-2026-10-09",
+            "observed_at": "2026-10-09T08:00:00Z",
+            "kind": "INTERNAL_FACT"
+          }
+        }
+      ],
+      "category": [
+        {
+          "id": "sf-category",
+          "statement": "Personalised gifts, personalised everyday products and curated lifestyle-tech retail.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-01",
+            "ev-05"
+          ]
+        }
+      ],
+      "positioning": [
+        {
+          "id": "sf-positioning",
+          "statement": "Premium but accessible, sober and credible; not a discount or generic gadget shop.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-02",
+            "ev-05"
+          ]
+        }
+      ],
+      "messages": [
+        {
+          "id": "sf-signature",
+          "statement": "The established brand line is \"HABB Store n’est pas une simple boutique. C’est une signature.\"",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-06"
+          ]
+        },
+        {
+          "id": "sf-express",
+          "statement": "Phone cases are personalized in the shop in about 5 minutes, depending on model availability.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-10",
+            "ev-01"
+          ]
+        }
+      ],
+      "customer_expectations": [
+        {
+          "id": "sf-needs",
+          "statement": "Customers come for thoughtful, personal, ready-to-offer gifts and personalised everyday objects, with human help.",
+          "claim_kind": "INFERENCE",
+          "evidence_refs": [
+            "ev-09",
+            "ev-07"
+          ]
+        }
+      ],
+      "visible_assets": [
+        {
+          "id": "sf-visual",
+          "statement": "A sober, credible visual language (navy, terracotta, cream) with real products and real in-shop personalisations as proof; no generic AI look.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-03",
+            "ev-04",
+            "ev-11"
+          ]
+        }
+      ],
+      "contradictions": [
+        {
+          "id": "sf-price",
+          "statement": "Two price representations exist in HABB material: 25 EUR (store service description) and a 24.90 EUR working reference offer.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-10",
+            "ev-14"
+          ]
+        }
+      ],
+      "evidence_gaps": [
+        {
+          "id": "gap-master-reference",
+          "statement": "The HABB Master Reference (18 July 2026) was not available to this run and is not cited.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-design-manual",
+          "statement": "The HABB Design Manual v1.0 / Design Bible Foundation v1 was not available to this run and is not cited.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-competitors",
+          "statement": "No competitor research: none is claimed.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-customers",
+          "statement": "No customer research or reviews: none is claimed.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        }
+      ],
+      "competitors": [],
+      "refresh_triggers": []
+    },
+    "core": {
+      "id": "habb-core-v1",
+      "created_at": "2026-10-09T09:00:00Z",
+      "approved_at": "2026-10-09T10:00:00Z",
+      "approval_note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "decisions": {
+        "category": "Personalised gifts, personalised everyday products, and curated lifestyle-tech retail.",
+        "buying_contexts": [
+          "personal gift giving",
+          "emotional keepsakes and memories",
+          "personalised everyday-use products",
+          "local express personalisation",
+          "gift-ready retail purchase"
+        ],
+        "value_proposition": "HABB transforms photos, names, dates, messages and memories into finished physical gifts and useful personalised products, combining local production, real products and gift-ready presentation.",
+        "positioning": "Premium but attainable, emotion-first, local and human personalisation: designer-made presentation without artificial luxury or generic AI imagery.",
+        "core_promise": "Premium, emotional, human and useful personalised products rather than generic customised objects.",
+        "reasons_to_believe": [
+          "physical HABB store in Namur",
+          "in-house personalisation / production capability",
+          "UV and UV-DTF production capability",
+          "real stocked products and supports",
+          "local fulfilment / store service",
+          "controlled production and quality checks"
+        ],
+        "personality": [
+          "sober",
+          "modern",
+          "human",
+          "emotional",
+          "credible",
+          "premium-but-accessible",
+          "non-generic"
+        ],
+        "voice": {
+          "traits": [
+            "warm",
+            "precise",
+            "direct",
+            "human",
+            "accessible",
+            "restrained"
+          ],
+          "do": [
+            "explain the emotional or useful benefit before the production technique",
+            "use clear concrete language",
+            "sound local and credible",
+            "keep commercial messages concise"
+          ],
+          "dont": [
+            "use artificial luxury language",
+            "overclaim",
+            "use generic AI marketing language",
+            "sound kitsch",
+            "use exaggerated superlatives without evidence"
+          ]
+        },
+        "exclusions": [
+          "cheap / generic personalised-gift positioning",
+          "artificial luxury / fake gold positioning",
+          "generic AI-generated visual identity",
+          "overloaded decorative presentation",
+          "unrelated electronics-store positioning"
+        ],
+        "distinctive_assets": [],
+        "evidence_refs": [
+          "ev-01",
+          "ev-02",
+          "ev-03",
+          "ev-04",
+          "ev-05",
+          "ev-06",
+          "ev-07",
+          "ev-08",
+          "ev-09",
+          "ev-10",
+          "ev-11",
+          "ev-12"
+        ]
+      }
+    },
+    "memory": {
+      "id": "habb-memory-v1",
+      "created_at": "2026-10-09T11:00:00Z",
+      "approved_at": "2026-10-09T12:00:00Z",
+      "approval_note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "content": {
+        "identity_references": {
+          "primary_logo_ref": null,
+          "approved_logo_refs": []
+        },
+        "design_tokens": {
+          "colors": {
+            "navy": "#183247",
+            "terracotta": "#C56E54",
+            "cream": "#FBF8F3",
+            "white": "#FFFFFF"
+          },
+          "typography": {}
+        },
+        "hard_rules": [],
+        "semantic_context": {
+          "voice_traits": [
+            "warm",
+            "precise",
+            "direct",
+            "human",
+            "accessible",
+            "restrained"
+          ],
+          "do": [
+            "lead with the emotional or useful benefit",
+            "use concrete language",
+            "stay local and credible"
+          ],
+          "dont": [
+            "artificial luxury language",
+            "overclaiming",
+            "generic AI marketing language"
+          ],
+          "brand_style_summary": "Sober, credible and human; premium through real products, real composition and restraint, never through decoration or artificial effects.",
+          "on_brand_examples": [
+            "HABB Store n’est pas une simple boutique. C’est une signature.",
+            "Vos souvenirs. Votre création. Prêt chez HABB à Namur."
+          ],
+          "off_brand_examples": []
+        },
+        "external_references": {
+          "production_asset_refs": [],
+          "claim_refs": [],
+          "policy_refs": []
+        }
+      }
+    },
+    "notes": {
+      "brand_id": "Minted once on the owner’s authorization. Benchmark-scoped trusted canonical data, NOT the future persistent brands registry. A migration to that registry MUST preserve this brand_id.",
+      "claim_refs": "external_references.claim_refs is left empty: it is meant for production Claims Registry refs. The benchmark-owned claim://habb/benchmark-001/* refs are bound by the benchmark configuration, and putting them in Brand Memory would present them as registry claims.",
+      "distinctive_assets": "Empty: no approved HABB logo asset ref exists, and the Core distinctive-asset types (logo, symbol, colour, typography, shape, pattern, packaging, photography style) have no verbal-cue type. The brand line is kept as an on-brand example in Memory.",
+      "typography": "Empty on purpose: no exact benchmark font pair has been owner-approved and bound with licence evidence. No fallback font is created."
+    }
+  },
+  "outputs": {
+    "brand": {
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "name": "HABB",
+      "status": "ACTIVE",
+      "created_at": "2026-10-09T08:00:00.000Z",
+      "parent_brand_id": null,
+      "default_locale": "fr-BE",
+      "supported_locales": [
+        "fr-BE"
+      ]
+    },
+    "snapshot": {
+      "id": "habb-snapshot-v1",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 1,
+      "status": "READY",
+      "created_at": "2026-10-09T08:00:00.000Z",
+      "supersedes_id": null,
+      "observed_at": "2026-10-09T08:00:00.000Z",
+      "evidence": [
+        {
+          "id": "ev-01",
+          "provenance": "observed",
+          "statement": "HABB is a personalized-gifts and UV-printing shop with a physical retail shop at Rue de Bruxelles 18, 5000 Namur and a Shopify online store; phone cases can be personalized in the shop in about 5 minutes, depending on model availability.",
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://MASTER_CONTEXT",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "INTERNAL_FACT",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-02",
+          "provenance": "observed",
+          "statement": "Positioning is premium-but-accessible: personalized gifts that look premium but are not expensive; the visual and brand identity is deliberately sober and credible.",
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://MASTER_CONTEXT#positioning",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "INTERNAL_FACT",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-03",
+          "provenance": "observed",
+          "statement": "Brand rules: premium, sober, credible. Explicitly forbidden: generic AI-generated rendering look, fake gold effects, artificial warm glow gradients, heavy unrealistic shadows, decorative branches and hearts unless asked. Confirmed colours: navy 0f2a52 / 183247, terracotta c0392b / c56e54, cream fbf8f3, sand efe9e1.",
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://BRAND_RULES",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "INTERNAL_FACT",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-04",
+          "provenance": "observed",
+          "statement": "Visual rules: never alter a customer face; preserve the exact proportions of real products; no unnecessary decorative hearts or branches (owner clarification 2026-08-26); print assets are checked before production.",
+          "source": {
+            "system": "habb-os",
+            "ref": "habb-os://VISUAL_RULES",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "INTERNAL_FACT",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-05",
+          "provenance": "observed",
+          "statement": "HABB is a local personalisation studio and concept store: personalised gifts and emotional keepsakes, useful everyday objects such as tumblers, express phone-case personalisation, curated lifestyle tech and premium gift presentation. It should not be positioned as a discount or generic gadget shop.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#identity",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-06",
+          "provenance": "observed",
+          "statement": "Approved or established brand ideas include \"HABB Store n’est pas une simple boutique. C’est une signature.\" and \"Vos souvenirs. Votre création. Prêt chez HABB à Namur.\"; the commercial meaning is that HABB transforms photos, names, messages and memories into gifts that carry a story.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#brand-ideas",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-07",
+          "provenance": "observed",
+          "statement": "Differentiators: physical shop in central Namur, personalisation made locally on site, human help with photo, text and layout, an express case-personalisation kiosk, one destination for personalised gifts, tumblers, gift boxes and selected lifestyle tech, premium presentation. HABB checks customer files and may contact the customer or provide a preview.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#differentiators",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-08",
+          "provenance": "observed",
+          "statement": "HABB works with UV and UV-DTF methods.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#uv",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-09",
+          "provenance": "observed",
+          "statement": "The owner lists the needs HABB serves: a thoughtful last-minute gift, a unique gift carrying a photo, name, date, message, logo or QR code, a memorial object, an attractive ready-to-offer gift, a practical object made personal, a locally made gift with assistance.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#needs",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "PARTIAL",
+          "limitations": [
+            "owner-stated needs, not customer research"
+          ]
+        },
+        {
+          "id": "ev-10",
+          "provenance": "observed",
+          "statement": "Approved service description GBP-PROD-01: \"La personnalisation est réalisée en boutique en environ 5 minutes, selon la disponibilité du modèle.\" and \"Coque + personnalisation : 25 €.\"",
+          "source": {
+            "system": "habb-google-business",
+            "ref": "habb-gbp://GBP-PROD-01",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-11",
+          "provenance": "observed",
+          "statement": "The owner approved the HABB expression system for Benchmark 001: realistic and credible photography, the real product authoritative, editorial composition with breathing room, no automatic decorative hearts or leaves, no artificial gold, glow or generic AI look.",
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-12",
+          "provenance": "observed",
+          "statement": "The owner approved the strategic content of the canonical Brand Core V1 (category, buying contexts, value proposition, positioning, core promise, reasons to believe, personality, voice, exclusions).",
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-canonical-brand-bootstrap/core-v1",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-13",
+          "provenance": "observed",
+          "statement": "The owner approved the initial digital colour tokens navy #183247, terracotta #C56E54, cream #FBF8F3 and white #FFFFFF, no beige or sand default, and left typography empty until an exact font pair is approved with licence evidence.",
+          "source": {
+            "system": "owner-decision",
+            "ref": "owner-decision://habb-canonical-brand-bootstrap/memory-v1-1",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-14",
+          "provenance": "observed",
+          "statement": "The knowledge base gives a working reference retail price of 24.90 EUR for the personalised-case offer and asks to confirm in Shopify before quoting.",
+          "source": {
+            "system": "habb-sales-knowledge-base",
+            "ref": "habb-kb://sales-director-2026-08-14#phone-case-price",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        },
+        {
+          "id": "ev-15",
+          "provenance": "observed",
+          "statement": "A search of the HABB project folders and downloads found no file holding the HABB Master Reference (18 July 2026) or the HABB Design Manual v1.0 / Design Bible Foundation v1, and no competitor or customer-review research; those sources were therefore not cited.",
+          "source": {
+            "system": "nordla-bootstrap",
+            "ref": "nordla-bootstrap://source-search-2026-10-09",
+            "observed_at": "2026-10-09T08:00:00.000Z",
+            "kind": "INTERNAL_FACT",
+            "subject_ref": null
+          },
+          "completeness": "COMPLETE",
+          "limitations": []
+        }
+      ],
+      "positioning": [
+        {
+          "id": "sf-positioning",
+          "statement": "Premium but accessible, sober and credible; not a discount or generic gadget shop.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-02",
+            "ev-05"
+          ]
+        }
+      ],
+      "messages": [
+        {
+          "id": "sf-signature",
+          "statement": "The established brand line is \"HABB Store n’est pas une simple boutique. C’est une signature.\"",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-06"
+          ]
+        },
+        {
+          "id": "sf-express",
+          "statement": "Phone cases are personalized in the shop in about 5 minutes, depending on model availability.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-10",
+            "ev-01"
+          ]
+        }
+      ],
+      "category": [
+        {
+          "id": "sf-category",
+          "statement": "Personalised gifts, personalised everyday products and curated lifestyle-tech retail.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-01",
+            "ev-05"
+          ]
+        }
+      ],
+      "competitors": [],
+      "customer_expectations": [
+        {
+          "id": "sf-needs",
+          "statement": "Customers come for thoughtful, personal, ready-to-offer gifts and personalised everyday objects, with human help.",
+          "claim_kind": "INFERENCE",
+          "evidence_refs": [
+            "ev-09",
+            "ev-07"
+          ]
+        }
+      ],
+      "visible_assets": [
+        {
+          "id": "sf-visual",
+          "statement": "A sober, credible visual language (navy, terracotta, cream) with real products and real in-shop personalisations as proof; no generic AI look.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-03",
+            "ev-04",
+            "ev-11"
+          ]
+        }
+      ],
+      "contradictions": [
+        {
+          "id": "sf-price",
+          "statement": "Two price representations exist in HABB material: 25 EUR (store service description) and a 24.90 EUR working reference offer.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-10",
+            "ev-14"
+          ]
+        }
+      ],
+      "evidence_gaps": [
+        {
+          "id": "gap-master-reference",
+          "statement": "The HABB Master Reference (18 July 2026) was not available to this run and is not cited.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-design-manual",
+          "statement": "The HABB Design Manual v1.0 / Design Bible Foundation v1 was not available to this run and is not cited.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-competitors",
+          "statement": "No competitor research: none is claimed.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        },
+        {
+          "id": "gap-customers",
+          "statement": "No customer research or reviews: none is claimed.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-15"
+          ]
+        }
+      ],
+      "refresh_triggers": []
+    },
+    "approved_core": {
+      "id": "habb-core-v1",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 1,
+      "status": "APPROVED",
+      "created_at": "2026-10-09T09:00:00.000Z",
+      "supersedes_id": null,
+      "snapshot_ref": {
+        "id": "habb-snapshot-v1",
+        "version": 1
+      },
+      "category": "Personalised gifts, personalised everyday products, and curated lifestyle-tech retail.",
+      "buying_contexts": [
+        "personal gift giving",
+        "emotional keepsakes and memories",
+        "personalised everyday-use products",
+        "local express personalisation",
+        "gift-ready retail purchase"
+      ],
+      "value_proposition": "HABB transforms photos, names, dates, messages and memories into finished physical gifts and useful personalised products, combining local production, real products and gift-ready presentation.",
+      "positioning": "Premium but attainable, emotion-first, local and human personalisation: designer-made presentation without artificial luxury or generic AI imagery.",
+      "core_promise": "Premium, emotional, human and useful personalised products rather than generic customised objects.",
+      "reasons_to_believe": [
+        "physical HABB store in Namur",
+        "in-house personalisation / production capability",
+        "UV and UV-DTF production capability",
+        "real stocked products and supports",
+        "local fulfilment / store service",
+        "controlled production and quality checks"
+      ],
+      "personality": [
+        "sober",
+        "modern",
+        "human",
+        "emotional",
+        "credible",
+        "premium-but-accessible",
+        "non-generic"
+      ],
+      "voice": {
+        "traits": [
+          "warm",
+          "precise",
+          "direct",
+          "human",
+          "accessible",
+          "restrained"
+        ],
+        "do": [
+          "explain the emotional or useful benefit before the production technique",
+          "use clear concrete language",
+          "sound local and credible",
+          "keep commercial messages concise"
+        ],
+        "dont": [
+          "use artificial luxury language",
+          "overclaim",
+          "use generic AI marketing language",
+          "sound kitsch",
+          "use exaggerated superlatives without evidence"
+        ]
+      },
+      "exclusions": [
+        "cheap / generic personalised-gift positioning",
+        "artificial luxury / fake gold positioning",
+        "generic AI-generated visual identity",
+        "overloaded decorative presentation",
+        "unrelated electronics-store positioning"
+      ],
+      "distinctive_assets": [],
+      "evidence_refs": [
+        "ev-01",
+        "ev-02",
+        "ev-03",
+        "ev-04",
+        "ev-05",
+        "ev-06",
+        "ev-07",
+        "ev-08",
+        "ev-09",
+        "ev-10",
+        "ev-11",
+        "ev-12"
+      ],
+      "approval": {
+        "decision_event_id": "bde_791c9c8e3295698f2e0e3afce0c4c1c5",
+        "approved_by": "habb-owner",
+        "approver_role": "OWNER",
+        "approved_at": "2026-10-09T10:00:00.000Z",
+        "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet)."
+      }
+    },
+    "core_decision_event": {
+      "id": "bde_791c9c8e3295698f2e0e3afce0c4c1c5",
+      "type": "BRAND_CORE_APPROVED",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "actor": {
+        "user_id": "habb-owner",
+        "role": "OWNER"
+      },
+      "subject": {
+        "kind": "brand_core",
+        "id": "habb-core-v1",
+        "version": 1
+      },
+      "decided_at": "2026-10-09T10:00:00.000Z",
+      "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "supersedes": null
+    },
+    "approved_memory": {
+      "id": "habb-memory-v1",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 1,
+      "status": "APPROVED",
+      "created_at": "2026-10-09T11:00:00.000Z",
+      "supersedes_id": null,
+      "core_ref": {
+        "id": "habb-core-v1",
+        "version": 1
+      },
+      "identity_references": {
+        "primary_logo_ref": null,
+        "approved_logo_refs": []
+      },
+      "design_tokens": {
+        "colors": {
+          "navy": "#183247",
+          "terracotta": "#C56E54",
+          "cream": "#FBF8F3",
+          "white": "#FFFFFF"
+        },
+        "typography": {}
+      },
+      "hard_rules": [],
+      "semantic_context": {
+        "voice_traits": [
+          "warm",
+          "precise",
+          "direct",
+          "human",
+          "accessible",
+          "restrained"
+        ],
+        "do": [
+          "lead with the emotional or useful benefit",
+          "use concrete language",
+          "stay local and credible"
+        ],
+        "dont": [
+          "artificial luxury language",
+          "overclaiming",
+          "generic AI marketing language"
+        ],
+        "brand_style_summary": "Sober, credible and human; premium through real products, real composition and restraint, never through decoration or artificial effects.",
+        "on_brand_examples": [
+          "HABB Store n’est pas une simple boutique. C’est une signature.",
+          "Vos souvenirs. Votre création. Prêt chez HABB à Namur."
+        ],
+        "off_brand_examples": []
+      },
+      "external_references": {
+        "production_asset_refs": [],
+        "claim_refs": [],
+        "policy_refs": []
+      },
+      "expression_system": {
+        "photography": {
+          "principles": [
+            "realistic and credible product photography",
+            "natural or controlled studio lighting",
+            "soft directional light rather than flat lighting",
+            "materials and textures must look real",
+            "the product must remain immediately identifiable",
+            "images must not have a generic AI-generated look"
+          ],
+          "do": [
+            "use clean, sober backgrounds",
+            "use realistic stone, marble, studio or physical surfaces only when relevant",
+            "preserve natural shadows and believable depth",
+            "keep lighting coherent across product and scene",
+            "preserve sufficient contrast between product and background"
+          ],
+          "dont": [
+            "beige as a generic AI-style default",
+            "artificial glow",
+            "fake luxury effects",
+            "artificial gold",
+            "generic warm gradients",
+            "dreamy AI haze",
+            "plastic-looking textures",
+            "excessive decor",
+            "decorative leaves or foliage added automatically",
+            "decorative hearts added automatically"
+          ],
+          "reference_asset_refs": []
+        },
+        "product_presentation": {
+          "principles": [
+            "the real HABB product is authoritative",
+            "the creative adapts to the product, never the opposite",
+            "real dimensions, proportions and distinctive details must be preserved",
+            "personalisation must remain visible and readable",
+            "the product is the hero of the composition"
+          ],
+          "do": [
+            "preserve original product pixels whenever possible",
+            "prefer cut-out and compositing over product regeneration",
+            "generate or compose the environment around the product",
+            "add realistic shadow/reflection only when it does not alter the product",
+            "allow controlled relighting only when product colours remain truthful",
+            "show enough of the product to understand immediately what is being sold"
+          ],
+          "dont": [
+            "regenerate a real product when the real asset exists",
+            "change phone-case cut-outs, buttons, camera holes, shape, proportions or material",
+            "invent packaging",
+            "modify HABB logo",
+            "modify the customer's printed personalisation",
+            "modify a face appearing in a customer's personalisation/photo",
+            "distort a person's face, body or identity"
+          ],
+          "reference_asset_refs": []
+        },
+        "composition": {
+          "principles": [
+            "editorial composition rather than generic advertising-template composition",
+            "strong visual breathing room",
+            "immediately understandable hierarchy",
+            "product dominance",
+            "simple does not mean empty",
+            "premium does not mean decorated"
+          ],
+          "do": [
+            "reserve text space before generating or composing the environment",
+            "use negative space intentionally",
+            "create one clear focal point",
+            "balance product, text and environment",
+            "allow asymmetry when it strengthens the composition",
+            "preserve clear space around the product"
+          ],
+          "dont": [
+            "fill every available space",
+            "stack unnecessary decorative elements",
+            "automatically centre every element",
+            "add ornaments only to make the design feel premium",
+            "create visually noisy layouts"
+          ],
+          "reference_asset_refs": []
+        },
+        "layout_principles": {
+          "principles": [
+            "layout is built around the product and the message",
+            "hierarchy must be clear",
+            "alignments must be intentional",
+            "margins and spacing must feel generous",
+            "product and text must never collide",
+            "price and primary promise must remain readable"
+          ],
+          "do": [
+            "reserve safe text areas",
+            "respect the placement/channel facts supplied by Marketing",
+            "trigger re-layout when text does not fit",
+            "keep spacing rhythm coherent"
+          ],
+          "dont": [
+            "shrink text below minimum readable size",
+            "place a headline over an essential part of the product",
+            "hide the personalisation",
+            "use the exact same placement for every creative",
+            "turn all HABB content into one repetitive template"
+          ],
+          "reference_asset_refs": []
+        },
+        "illustration": {
+          "principles": [
+            "illustration is secondary",
+            "illustration must never compensate for a weak product asset",
+            "illustration must remain simple and relevant"
+          ],
+          "do": [
+            "allow illustration only when explicitly required by the creative concept",
+            "allow illustration when it is itself part of the customer's personalisation"
+          ],
+          "dont": [
+            "decorative hearts by default",
+            "decorative leaves / branches by default",
+            "generic lifestyle doodles",
+            "fake-luxury ornaments",
+            "unnecessary AI characters",
+            "random decorative motifs"
+          ],
+          "reference_asset_refs": []
+        },
+        "iconography": {
+          "principles": [
+            "functional before decorative",
+            "simple",
+            "coherent",
+            "immediately readable"
+          ],
+          "do": [
+            "use icons only when they materially improve comprehension",
+            "keep a clean, geometric and consistent icon style"
+          ],
+          "dont": [
+            "generic icon collections used as decoration",
+            "stars, crowns, diamonds or badges to simulate premium",
+            "hearts as automatic decoration",
+            "leaves as automatic decoration",
+            "generic 3D icons"
+          ],
+          "reference_asset_refs": []
+        },
+        "motion": {
+          "principles": [
+            "motion must be useful, not demonstrative",
+            "product identity must remain stable",
+            "pacing should feel modern and controlled",
+            "motion serves comprehension"
+          ],
+          "do": [
+            "product reveal",
+            "subtle zoom",
+            "believable camera movement",
+            "limited typographic animation",
+            "clean transitions"
+          ],
+          "dont": [
+            "aggressive transitions",
+            "permanent zoom",
+            "particles/glow",
+            "morphing the product",
+            "deforming the product",
+            "effects that look like an AI demo"
+          ],
+          "reference_asset_refs": []
+        }
+      },
+      "approval": {
+        "decision_event_id": "bde_515425127dbb3de6ebceffe47f7025c0",
+        "approved_by": "habb-owner",
+        "approver_role": "OWNER",
+        "approved_at": "2026-10-09T12:00:00.000Z",
+        "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet)."
+      }
+    },
+    "memory_decision_event": {
+      "id": "bde_515425127dbb3de6ebceffe47f7025c0",
+      "type": "BRAND_MEMORY_APPROVED",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "actor": {
+        "user_id": "habb-owner",
+        "role": "OWNER"
+      },
+      "subject": {
+        "kind": "brand_memory",
+        "id": "habb-memory-v1",
+        "version": 1
+      },
+      "decided_at": "2026-10-09T12:00:00.000Z",
+      "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "supersedes": null
+    }
+  }
+}
