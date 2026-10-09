@@ -1,0 +1,190 @@
+{
+  "kind": "CONFIGURATION_DATA",
+  "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
+  "decision": {
+    "decided_by": "owner",
+    "scope": "Owner-approved HABB expression system for Benchmark 001. A brand decision for HABB, not a Nordla default.",
+    "evidence_ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1"
+  },
+  "governance": {
+    "status": "NOT_IN_BRAND_MEMORY",
+    "reason": "Brand Memory is governed per brand (Brand Identity -> approved Brand Core -> Memory DRAFT -> REVIEW_REQUIRED -> human APPROVED). No canonical HABB brand_id, approved Brand Core or Brand Memory exists in the repository or in the connected project data, so this content cannot be submitted as a real revision and nothing here is Brand Memory yet.",
+    "required_to_bind": [
+      "a canonical HABB brand_id (Brand Identity for merchant 36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5)",
+      "an APPROVED HABB Brand Core",
+      "an APPROVED HABB Brand Memory (V1 or V1.1) to revise",
+      "the owner's APPROVAL of the revision that carries this expression_system"
+    ]
+  },
+  "expression_system": {
+    "photography": {
+      "principles": [
+        "realistic and credible product photography",
+        "natural or controlled studio lighting",
+        "soft directional light rather than flat lighting",
+        "materials and textures must look real",
+        "the product must remain immediately identifiable",
+        "images must not have a generic AI-generated look"
+      ],
+      "do": [
+        "use clean, sober backgrounds",
+        "use realistic stone, marble, studio or physical surfaces only when relevant",
+        "preserve natural shadows and believable depth",
+        "keep lighting coherent across product and scene",
+        "preserve sufficient contrast between product and background"
+      ],
+      "dont": [
+        "beige as a generic AI-style default",
+        "artificial glow",
+        "fake luxury effects",
+        "artificial gold",
+        "generic warm gradients",
+        "dreamy AI haze",
+        "plastic-looking textures",
+        "excessive decor",
+        "decorative leaves or foliage added automatically",
+        "decorative hearts added automatically"
+      ]
+    },
+    "product_presentation": {
+      "principles": [
+        "the real HABB product is authoritative",
+        "the creative adapts to the product, never the opposite",
+        "real dimensions, proportions and distinctive details must be preserved",
+        "personalisation must remain visible and readable",
+        "the product is the hero of the composition"
+      ],
+      "do": [
+        "preserve original product pixels whenever possible",
+        "prefer cut-out and compositing over product regeneration",
+        "generate or compose the environment around the product",
+        "add realistic shadow/reflection only when it does not alter the product",
+        "allow controlled relighting only when product colours remain truthful",
+        "show enough of the product to understand immediately what is being sold"
+      ],
+      "dont": [
+        "regenerate a real product when the real asset exists",
+        "change phone-case cut-outs, buttons, camera holes, shape, proportions or material",
+        "invent packaging",
+        "modify HABB logo",
+        "modify the customer's printed personalisation",
+        "modify a face appearing in a customer's personalisation/photo",
+        "distort a person's face, body or identity"
+      ]
+    },
+    "composition": {
+      "principles": [
+        "editorial composition rather than generic advertising-template composition",
+        "strong visual breathing room",
+        "immediately understandable hierarchy",
+        "product dominance",
+        "simple does not mean empty",
+        "premium does not mean decorated"
+      ],
+      "do": [
+        "reserve text space before generating or composing the environment",
+        "use negative space intentionally",
+        "create one clear focal point",
+        "balance product, text and environment",
+        "allow asymmetry when it strengthens the composition",
+        "preserve clear space around the product"
+      ],
+      "dont": [
+        "fill every available space",
+        "stack unnecessary decorative elements",
+        "automatically centre every element",
+        "add ornaments only to make the design feel premium",
+        "create visually noisy layouts"
+      ]
+    },
+    "layout_principles": {
+      "principles": [
+        "layout is built around the product and the message",
+        "hierarchy must be clear",
+        "alignments must be intentional",
+        "margins and spacing must feel generous",
+        "product and text must never collide",
+        "price and primary promise must remain readable"
+      ],
+      "do": [
+        "reserve safe text areas",
+        "respect the placement/channel facts supplied by Marketing",
+        "trigger re-layout when text does not fit",
+        "keep spacing rhythm coherent"
+      ],
+      "dont": [
+        "shrink text below minimum readable size",
+        "place a headline over an essential part of the product",
+        "hide the personalisation",
+        "use the exact same placement for every creative",
+        "turn all HABB content into one repetitive template"
+      ]
+    },
+    "illustration": {
+      "principles": [
+        "illustration is secondary",
+        "illustration must never compensate for a weak product asset",
+        "illustration must remain simple and relevant"
+      ],
+      "do": [
+        "allow illustration only when explicitly required by the creative concept",
+        "allow illustration when it is itself part of the customer's personalisation"
+      ],
+      "dont": [
+        "decorative hearts by default",
+        "decorative leaves / branches by default",
+        "generic lifestyle doodles",
+        "fake-luxury ornaments",
+        "unnecessary AI characters",
+        "random decorative motifs"
+      ]
+    },
+    "iconography": {
+      "principles": [
+        "functional before decorative",
+        "simple",
+        "coherent",
+        "immediately readable"
+      ],
+      "do": [
+        "use icons only when they materially improve comprehension",
+        "keep a clean, geometric and consistent icon style"
+      ],
+      "dont": [
+        "generic icon collections used as decoration",
+        "stars, crowns, diamonds or badges to simulate premium",
+        "hearts as automatic decoration",
+        "leaves as automatic decoration",
+        "generic 3D icons"
+      ]
+    },
+    "motion": {
+      "principles": [
+        "motion must be useful, not demonstrative",
+        "product identity must remain stable",
+        "pacing should feel modern and controlled",
+        "motion serves comprehension"
+      ],
+      "do": [
+        "product reveal",
+        "subtle zoom",
+        "believable camera movement",
+        "limited typographic animation",
+        "clean transitions"
+      ],
+      "dont": [
+        "aggressive transitions",
+        "permanent zoom",
+        "particles/glow",
+        "morphing the product",
+        "deforming the product",
+        "effects that look like an AI demo"
+      ]
+    }
+  },
+  "notes": [
+    "Motion is part of the expression system but NOT_APPLICABLE to Benchmark 001, which is a static Instagram Feed still.",
+    "locale_overrides is deliberately absent: no cultural difference was evidenced; the global HABB rules apply.",
+    "reference_asset_refs is deliberately empty: no approved reference asset exists yet."
+  ]
+}
