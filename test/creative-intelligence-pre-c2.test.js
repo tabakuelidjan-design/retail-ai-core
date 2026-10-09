@@ -248,6 +248,12 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /Montserrat\s+= BOUND/);
   assert.match(doc, /HABB Brand Memory v2 = APPROVED/);
   assert.match(doc, /PRODUCT = BOUND/);
+  assert.match(doc, /ASSET\s+= BOUND BY METADATA/);
+  assert.match(doc, /-> Benchmark 001 = RUNNABLE/);
+  assert.match(doc, /exact blocker = ASSET_PAYLOAD_UNAVAILABLE/);
+  assert.match(doc, /gid:\/\/shopify\/Product\/15684483187036/);
+  assert.match(doc, /coque-personnalisee-samsung-galaxy-a17/);
+  assert.match(doc, /RUNNABLE is not RUN, and is not PASS/);
   assert.match(doc, /readiness = RUNNABLE, status NOT_RUN \(RUNNABLE is not RUN\)/);
   assert.match(doc, /readiness = BLOCKED \(ASSET_PAYLOAD_UNAVAILABLE\), status NOT_RUN/);
   assert.match(doc, /C2 = NOT READY/);

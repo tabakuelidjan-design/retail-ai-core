@@ -107,6 +107,30 @@ HABB BENCHMARK 001 = NOT_RUN   (RUNNABLE locally with the verified private paylo
 C2 = NOT READY
 ```
 
+```text
+HABB BENCHMARK 001 PREPARATION = COMPLETE   (final product + asset binding pushed at 0a0d77f, remote CI green on Node 20 and 24)
+
+CLAIMS      = BOUND
+FORMAT      = BOUND
+EXPRESSION  = BOUND
+FONTS       = BOUND
+PRODUCT     = BOUND
+ASSET       = BOUND BY METADATA
+
+LOCAL TRUSTED ENVIRONMENT   (real private payload present + SHA-256 verified)  -> Benchmark 001 = RUNNABLE
+CLEAN CLONE / CI            (private payload absent)                           -> Benchmark 001 = BLOCKED, exact blocker = ASSET_PAYLOAD_UNAVAILABLE
+
+Benchmark 001 = NOT_RUN        (RUNNABLE is not RUN, and is not PASS)
+C2 = NOT READY
+```
+
+Product truth: **Samsung Galaxy A17**, `product://habb/benchmark-001/samsung-galaxy-a17`, Shopify `gid://shopify/Product/15684483187036`, handle `coque-personnalisee-samsung-galaxy-a17`
+(owner confirmation + the exact catalogue item; never inferred from the photograph).
+
+Asset truth: `asset://habb/benchmark-001/real-personalised-case-001`, SHA-256 `6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e`
+(a real merchant photograph; the bytes are private and are not in Git). The clean-clone BLOCKED is correct: the payload gate is deliberately not weakened.
+Next target: HABB BENCHMARK 001 RUN.
+
 HABB BENCHMARK FONT BINDINGS = COMPLETE   (pushed at e8f0da8, remote CI green on Node 20 and 24)
   Playfair Display = BOUND
   Montserrat       = BOUND

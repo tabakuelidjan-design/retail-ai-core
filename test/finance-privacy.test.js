@@ -20,6 +20,8 @@ const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf
   // the pinned sha-256 of a benchmark's private asset (the hash identifies the evidence; the bytes are never committed)
   && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-benchmark-\d+\.json$/.test(f)
   && f !== 'THIRD_PARTY_NOTICES.md'
+  // the architecture record of the pinned evidence (asset / font hashes)
+  && f !== 'docs/architecture/creative-pre-c2-foundation.md'
   && !/^resources\/fonts\/[a-z0-9-]+\/manifest\.json$/.test(f));
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const contents = new Map(textFiles.map((f) => [f, read(f)]));
