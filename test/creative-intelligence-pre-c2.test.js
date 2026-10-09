@@ -244,5 +244,9 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /HABB Brand Core V1    = APPROVED/);
   assert.match(doc, /HABB expression_system = BOUND/);
   assert.match(doc, /HABB BENCHMARK FONT BINDINGS = COMPLETE/);
+  assert.match(doc, /Playfair Display = BOUND/);
+  assert.match(doc, /Montserrat\s+= BOUND/);
+  assert.match(doc, /HABB Brand Memory v2 = APPROVED/);
+  assert.match(doc, /PRODUCT = MISSING/);
   assert.match(doc, /C2 = NOT READY/);
 });

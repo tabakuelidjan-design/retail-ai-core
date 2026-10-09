@@ -107,7 +107,16 @@ HABB BENCHMARK 001 = NOT_RUN / BLOCKED
 C2 = NOT READY
 ```
 
-HABB BENCHMARK FONT BINDINGS = COMPLETE (Playfair Display + Montserrat, pinned open fonts; Brand Memory v2 APPROVED).
+HABB BENCHMARK FONT BINDINGS = COMPLETE   (pushed at e8f0da8, remote CI green on Node 20 and 24)
+  Playfair Display = BOUND
+  Montserrat       = BOUND
+  HABB Brand Memory v2 = APPROVED   (habb-memory-v2@2, v1 SUPERSEDED)
+
+PRODUCT = MISSING
+ASSET   = MISSING
+HABB BENCHMARK 001 = NOT_RUN / BLOCKED
+C2 = NOT READY
+
 Remaining blockers: exact PRODUCT, real merchant-provided ASSET. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
 
 Prepared: price claim, speed claim, FORMAT, and the canonical HABB brand package (Brand Identity, Snapshot, APPROVED Core V1, APPROVED Brand Memory V1.1 carrying the owner-approved expression system).
