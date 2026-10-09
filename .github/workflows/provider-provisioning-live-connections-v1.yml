@@ -1,0 +1,84 @@
+name: Provider Provisioning & Live Connections V1
+
+# OAuth provisioning, the credential vault design and the Connection Center backend for Instagram / TikTok / Google Business Profile.
+# It plugs into Activation (credential resolver) and reuses merchant_connectors, so the focused suites run first (fast diagnosis), then
+# Activation, then Marketing / Branding / Creative Fidelity, then the whole suite. No real network and no credential: every test uses fakes.
+# A second job applies every migration on a REAL PostgreSQL with the REAL Supabase Vault (Docker) - the fake Vault is never production proof.
+
+on:
+  push:
+    paths:
+      - 'src/provider-connections/**'
+      - 'src/activation/**'
+      - 'src/tenant/connectors.js'
+      - 'test/provider-*.test.js'
+      - 'test/provider-fixtures.js'
+      - 'test/channel-*.test.js'
+      - 'test/channel-fixtures.js'
+      - 'test/merchant-connectors.test.js'
+      - 'docs/architecture/provider-provisioning-live-connections-v1.md'
+      - 'docs/runbooks/provider-app-registration.md'
+      - 'docs/runbooks/connect-social-accounts.md'
+      - 'supabase/migrations/*provider_connections*'
+      - 'test/postgres/**'
+      - '.env.example'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/provider-provisioning-live-connections-v1.yml'
+  pull_request:
+    paths:
+      - 'src/provider-connections/**'
+      - 'src/activation/**'
+      - 'src/tenant/connectors.js'
+      - 'test/provider-*.test.js'
+      - 'test/provider-fixtures.js'
+      - 'test/channel-*.test.js'
+      - 'test/channel-fixtures.js'
+      - 'test/merchant-connectors.test.js'
+      - 'docs/architecture/provider-provisioning-live-connections-v1.md'
+      - 'docs/runbooks/provider-app-registration.md'
+      - 'docs/runbooks/connect-social-accounts.md'
+      - 'supabase/migrations/*provider_connections*'
+      - 'test/postgres/**'
+      - '.env.example'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/provider-provisioning-live-connections-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  provider-provisioning-live-connections-v1-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Provider provisioning tests (credential store, OAuth sessions, Instagram, TikTok, Google, Connection Center, Activation integration, security)
+        run: node --test test/provider-*.test.js
+      - name: Activation tests and merchant connectors (unchanged, non-regression)
+        run: node --test test/channel-*.test.js test/merchant-connectors.test.js
+      - name: Marketing tests
+        run: node --test test/marketing*.test.js
+      - name: Branding and Creative Fidelity
+        run: node --test test/branding*.test.js test/creative-fidelity*.test.js
+      - name: Full suite (cross-domain non-regression)
+        run: npm test
+
+  postgres-vault-smoke:
+    # A REAL PostgreSQL with the REAL Supabase Vault (supabase/postgres image, Docker): every migration of the repository in order, then the
+    # constraints, guards, the SECURITY DEFINER Vault functions, two-session races (single-use callback, one winner per rotation) and the
+    # privileges of anon / authenticated / service_role. No in-memory substitute.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - run: node test/postgres/provider-connections.pg-smoke.mjs
