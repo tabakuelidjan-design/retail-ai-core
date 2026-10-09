@@ -105,9 +105,9 @@ test('HABB expression system content: owner-approved, normalized, governed, and 
   const report = await assess({ creativeInterface: creativeBrandInterface(context) });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
   assert.equal(report.status, 'BLOCKED');
-  // as shipped, the content is NOT in any Brand Memory, and the file says so
-  assert.equal(expressionFile.governance.status, 'NOT_IN_BRAND_MEMORY');
-  assert.equal(config.bindings.expression.status, 'CONTENT_APPROVED_BY_OWNER_NOT_IN_BRAND_MEMORY');
+  // the content now lives in the APPROVED HABB Brand Memory (creative-intelligence-habb-brand.test.js); without a brand interface the binding is still reported absent
+  assert.equal(expressionFile.governance.status, 'IN_APPROVED_BRAND_MEMORY');
+  assert.equal(config.bindings.expression.status, 'BOUND_TO_APPROVED_BRAND_MEMORY');
   assert.equal(reasonOf(await assess(), 'expression_system'), 'EXPRESSION_SYSTEM_ABSENT');
 });
 

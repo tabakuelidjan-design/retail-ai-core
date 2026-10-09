@@ -95,8 +95,15 @@ HABB BENCHMARK 001 = NOT_RUN / BLOCKED
 C2 = NOT READY
 ```
 
-Prepared: price claim, speed claim, FORMAT, and the owner-approved HABB expression payload (as content; not yet in Brand Memory).
-Remaining binding work: canonical HABB Brand Identity / Core / Memory, benchmark fonts, the real PRODUCT, the real merchant-provided ASSET.
+Prepared: price claim, speed claim, FORMAT, and the canonical HABB brand package (Brand Identity, Snapshot, APPROVED Core V1, APPROVED Brand Memory V1.1 carrying the owner-approved expression system).
+Remaining binding work: benchmark fonts (owner decision on the exact two-family pair, with licence evidence), the exact PRODUCT, the real merchant-provided ASSET.
+
+**Canonical HABB brand package** (`benchmarks/creative-intelligence/habb-brand-canonical-v1.json`, benchmark-scoped trusted data, not the future persistent `brands` registry):
+one `brand_id` minted once on the owner's authorization (a later migration to a brands registry MUST preserve it), `fr-BE` only; a READY Snapshot from readable HABB
+sources (HABB_OS, the Sales Director knowledge base, the Google Business service descriptions, owner decisions) with explicit gaps — the *Master Reference (18 July 2026)* and the
+*Design Manual v1.0 / Design Bible Foundation v1* were not available to the run and are recorded as gaps, not cited; Core V1 and Memory V1.1 approved through the real governed flow
+by a resolved OWNER actor (an authorization recorded in the decision event, not an authenticated Nordla identity: none exists yet). Memory carries four colour tokens, **empty
+typography** (no font fallback) and no logo ref; `scripts/build-benchmark-brand-package.mjs` re-derives and verifies the outputs from the inputs and cannot mint an id.
 
 `NOT_RUN`, and **BLOCKED**. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
 read from the connected `merchants` table):
@@ -109,7 +116,7 @@ read from the connected `merchants` table):
 | PRODUCT | MISSING | `HABB_BENCHMARK_PRODUCT_BINDING_MISSING` — the catalogue holds one product per phone model; the owner must name the benchmark product |
 | ASSET | MISSING | `HABB_BENCHMARK_REAL_ASSET_MISSING` — no verified real photograph of a personalised HABB case exists |
 | FONT | MISSING | `HABB_BENCHMARK_FONT_BINDINGS_MISSING` — no approved HABB font files / licences found |
-| Expression system | MISSING | content is owner-approved (`habb-expression-system-benchmark-001.json`) but there is no canonical HABB brand_id, approved Brand Core or approved Brand Memory to carry it |
+| Expression system | BOUND (when the Creative interface of the approved Memory is supplied) | owner-approved content carried by the APPROVED HABB Brand Memory V1.1 `habb-memory-v1@1` (Core `habb-core-v1@1`, brand_id `4c487848-8d41-4e30-8f3f-66afd09b4be4`), see below |
 
 The two claims are **benchmark-owned trusted records, not the Claims Registry** (which does not exist yet). 25 € is scoped to Benchmark 001 and
 the approved store-service evidence; it is not the universal online price. Readiness values are never written in the configuration file. RUNNABLE is not RUN.
