@@ -69,18 +69,26 @@
     "format": {
       "ref": "format://habb/benchmark-001/instagram-feed-1080x1350"
     },
-    "fonts": [],
+    "fonts": [
+      {
+        "ref": "font://google-fonts/playfair-display",
+        "family": "Playfair Display"
+      },
+      {
+        "ref": "font://google-fonts/montserrat",
+        "family": "Montserrat"
+      }
+    ],
     "expression": {
       "required": true,
       "content_file": "benchmarks/creative-intelligence/habb-expression-system-benchmark-001.json",
       "status": "BOUND_TO_APPROVED_BRAND_MEMORY",
       "memory_ref": {
-        "id": "habb-memory-v1",
-        "version": 1
+        "id": "habb-memory-v2",
+        "version": 2
       },
       "note": "Readiness is still computed: it is BOUND only when the Creative brand interface of this approved Memory is supplied to assessBenchmarkReadiness."
-    },
-    "fonts_status": "HABB_BENCHMARK_FONT_BINDINGS_MISSING"
+    }
   },
   "owned_records": [
     {
@@ -134,8 +142,7 @@
   },
   "bindings_still_missing": [
     "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - no single canonical PRODUCT for \"the personalised phone case\": the Core catalogue holds one product per phone model (\"Coque personnalisée - <model>\"); the owner must name the benchmark product",
-    "HABB_BENCHMARK_REAL_ASSET_MISSING - a real, merchant-provided, approved photograph of a personalised HABB phone case, with content hash and payload (no AI-generated poster, mockup, stock or render qualifies)",
-    "HABB_BENCHMARK_FONT_BINDINGS_MISSING - the HABB font files with their licence references (the test fixtures are not HABB fonts)"
+    "HABB_BENCHMARK_REAL_ASSET_MISSING - a real, merchant-provided, approved photograph of a personalised HABB phone case, with content hash and payload (no AI-generated poster, mockup, stock or render qualifies)"
   ],
   "claim_evidence": {
     "registry_status": "BENCHMARK_OWNED_NOT_A_CLAIMS_REGISTRY",
@@ -174,9 +181,47 @@
       "version": 1
     },
     "memory_ref": {
-      "id": "habb-memory-v1",
-      "version": 1
+      "id": "habb-memory-v2",
+      "version": 2
     },
     "note": "Benchmark-scoped trusted canonical brand data, not the future persistent brands registry. A migration to that registry must preserve this brand_id."
+  },
+  "resource_manifests": [
+    "resources/fonts/habb-benchmark/manifest.json"
+  ],
+  "typography": {
+    "note": "Benchmark role mapping (configuration, not Brand Memory). Brand Memory carries only family + weights. Both fonts are variable: a weight is an instance (wght) of the same hash-checked bytes. No third family and no fallback.",
+    "roles": {
+      "headline": {
+        "font_ref": "font://google-fonts/playfair-display",
+        "family": "Playfair Display",
+        "weight": 600,
+        "use": "editorial headline / primary display text"
+      },
+      "price": {
+        "font_ref": "font://google-fonts/montserrat",
+        "family": "Montserrat",
+        "weight": 700,
+        "use": "primary price (\"25 €\")"
+      },
+      "speed_claim": {
+        "font_ref": "font://google-fonts/montserrat",
+        "family": "Montserrat",
+        "weight": 600,
+        "use": "primary speed claim (\"5 minutes\")"
+      },
+      "supporting": {
+        "font_ref": "font://google-fonts/montserrat",
+        "family": "Montserrat",
+        "weight": 500,
+        "use": "supporting information / CTA"
+      },
+      "body": {
+        "font_ref": "font://google-fonts/montserrat",
+        "family": "Montserrat",
+        "weight": 400,
+        "use": "body / small informational copy if needed"
+      }
+    }
   }
 }
