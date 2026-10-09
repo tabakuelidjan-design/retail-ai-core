@@ -288,10 +288,15 @@ export function combineFontRegistries(...registries) {
  * Loads a REAL font through the common resource resolver: FONT must resolve ACTIVE, its payload comes from the owning adapter
  * (hash-verified) and is wrapped here. The bytes stay inside the returned font; nothing is persisted.
  */
-export async function loadRealFont({ resolver, font_ref: fontRef, tenant }) {
+export async function loadRealFont({
+  resolver, font_ref: fontRef, tenant, instance_ref: instanceRef = null, variations = null,
+}) {
   const resolution = await resolver.require(fontRef, ['FONT'], tenant);
   const payload = await resolver.loadPayload(fontRef, tenant);
-  return createRealFont({ font_ref: fontRef, bytes: payload.bytes, metadata: resolution.metadata });
+  // a layer addresses a font by ONE reference: an instance of a variable font (a weight) gets its own reference, over the same resource and bytes
+  return createRealFont({
+    font_ref: instanceRef ?? fontRef, bytes: payload.bytes, metadata: resolution.metadata, variations,
+  });
 }
 
 /**

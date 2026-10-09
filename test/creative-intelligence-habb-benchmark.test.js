@@ -10,6 +10,7 @@ import {
   buildBrandContext, creativeBrandInterface, isExpressionNonEmpty, normalizeExpressionSystem,
 } from '../src/branding/index.js';
 import { buildMemoryFlow, reviseMemory } from './branding-v11-world.js';
+import { loadFontManifest } from '../scripts/benchmark-resources.mjs';
 
 // HABB CREATIVE BENCHMARK 001 preparation. `// HB-N` markers follow the numbered list of the preparation mandate. The HABB data lives in
 // benchmarks/creative-intelligence/*.json; nothing about HABB is in src/.
@@ -20,9 +21,10 @@ const expressionFile = await read('habb-expression-system-benchmark-001.json');
 const HABB = { merchantId: config.merchant.merchant_id };
 const PRICE = 'claim://habb/benchmark-001/price-25';
 const SPEED = 'claim://habb/benchmark-001/express-5-minutes';
+const fontResources = loadFontManifest(config.resource_manifests[0]);
 const resolverOf = (records = [], payloads = {}) => R.createCommonResourceResolver({
   adapters: [
-    R.createStaticResourceAdapter({ adapter_id: 'benchmark-owned', records: config.owned_records }),
+    R.createStaticResourceAdapter({ adapter_id: 'benchmark-owned', records: [...config.owned_records, ...fontResources.records], payloads: fontResources.payloads }),
     ...(records.length ? [R.createStaticResourceAdapter({ adapter_id: 'other-owner', records, payloads })] : []),
   ],
 });
@@ -131,10 +133,10 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
     assert.equal(reasonOf(report, 'asset'), 'ASSET_NOT_REAL_MERCHANT_ASSET', origin);
     assert.equal(report.status, 'BLOCKED');
   }
-  // HB-14 not RUNNABLE without font bindings, and the test fixtures are not HABB fonts
-  assert.equal(reasonOf(shipped, 'fonts'), 'BINDING_MISSING');
-  assert.deepEqual(config.bindings.fonts, []);
-  assert.equal(config.bindings.fonts_status, 'HABB_BENCHMARK_FONT_BINDINGS_MISSING');
+  // HB-14 not RUNNABLE without font bindings (a benchmark with no font is blocked), and the test fixtures are not HABB fonts; the shipped benchmark now binds its two fonts
+  const noFonts = { ...config, bindings: { ...config.bindings, fonts: [] } };
+  assert.equal(reasonOf(await assess({ config: noFonts }), 'fonts'), 'BINDING_MISSING');
+  assert.deepEqual(config.bindings.fonts.map((f) => f.ref), ['font://google-fonts/playfair-display', 'font://google-fonts/montserrat']);
   assert.ok(!JSON.stringify(config).match(/DejaVu|Noto/));
   // HB-15 the missing canonical PRODUCT stays a named blocker (no fake catalogue record was created)
   assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
@@ -142,7 +144,7 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(config.bindings.product.status, 'HABB_BENCHMARK_PRODUCT_BINDING_MISSING');
   assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
   assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_REAL_ASSET_MISSING')));
-  assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_FONT_BINDINGS_MISSING')));
+  assert.ok(!config.bindings_still_missing.some((b) => b.includes('FONT_BINDINGS_MISSING')));
   assert.equal(config.owned_records.filter((r) => r.kind === 'PRODUCT' || r.kind === 'ASSET' || r.kind === 'FONT').length, 0);
   // HB-16 the FORMAT is unchanged: 1080 x 1350 px DIGITAL, explicit empty zones, platform-level
   assert.equal(reasonOf(shipped, 'format'), 'RESOLVED_WITH_EVIDENCE');
@@ -154,7 +156,7 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(format.merchant_id, null);
   // the claims and the format are the bound items; everything else is individually reported
   assert.deepEqual(shipped.bindings.map((b) => [b.id, b.status]), [
-    ['product', 'MISSING'], ['asset', 'MISSING'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['fonts', 'MISSING'], ['expression_system', 'MISSING'],
+    ['product', 'MISSING'], ['asset', 'MISSING'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
   ]);
   // HB-17 C2 stays blocked, the benchmark stays NOT_RUN, and a BLOCKED benchmark cannot be recorded as run
   assert.equal(config.status, 'NOT_RUN');

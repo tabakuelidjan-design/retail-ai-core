@@ -439,7 +439,7 @@ test('C1 may close, C2 provider work stays blocked on a real campaign benchmark 
   assert.deepEqual(almost.open_blockers, ['REAL_CAMPAIGN_BENCHMARK']);
   assert.equal(CI.assessCreativeC2Readiness({ ...closed, REAL_CAMPAIGN_BENCHMARK: evidenceFor('REAL_CAMPAIGN_BENCHMARK') }).c2_allowed, true);
   // 323 the benchmark says honestly what is still missing before it can run
-  assert.ok(benchmark.bindings_still_missing.length >= 3);
+  assert.ok(benchmark.bindings_still_missing.length >= 2);
   assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
   assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_REAL_ASSET_MISSING')));
   assert.ok(!benchmark.bindings_still_missing.some((b) => b.includes('FORMAT'))); // the FORMAT is bound (benchmark owned_records)

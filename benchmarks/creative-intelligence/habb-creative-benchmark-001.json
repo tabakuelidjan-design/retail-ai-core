@@ -190,37 +190,57 @@
     "resources/fonts/habb-benchmark/manifest.json"
   ],
   "typography": {
-    "note": "Benchmark role mapping (configuration, not Brand Memory). Brand Memory carries only family + weights. Both fonts are variable: a weight is an instance (wght) of the same hash-checked bytes. No third family and no fallback.",
+    "note": "Benchmark role mapping (configuration, not Brand Memory). Brand Memory carries only family + weights. Both fonts are variable: a weight is an instance (wght) of the same hash-checked bytes. No third family and no fallback. A text layer addresses a font by one reference, so each role has its own instance_ref (same resource, same hash-checked bytes, one wght instance).",
     "roles": {
       "headline": {
         "font_ref": "font://google-fonts/playfair-display",
         "family": "Playfair Display",
         "weight": 600,
-        "use": "editorial headline / primary display text"
+        "use": "editorial headline / primary display text",
+        "instance_ref": "font-instance://habb/benchmark-001/playfair-display-600",
+        "variations": {
+          "wght": 600
+        }
       },
       "price": {
         "font_ref": "font://google-fonts/montserrat",
         "family": "Montserrat",
         "weight": 700,
-        "use": "primary price (\"25 €\")"
+        "use": "primary price (\"25 €\")",
+        "instance_ref": "font-instance://habb/benchmark-001/montserrat-700",
+        "variations": {
+          "wght": 700
+        }
       },
       "speed_claim": {
         "font_ref": "font://google-fonts/montserrat",
         "family": "Montserrat",
         "weight": 600,
-        "use": "primary speed claim (\"5 minutes\")"
+        "use": "primary speed claim (\"5 minutes\")",
+        "instance_ref": "font-instance://habb/benchmark-001/montserrat-600",
+        "variations": {
+          "wght": 600
+        }
       },
       "supporting": {
         "font_ref": "font://google-fonts/montserrat",
         "family": "Montserrat",
         "weight": 500,
-        "use": "supporting information / CTA"
+        "use": "supporting information / CTA",
+        "instance_ref": "font-instance://habb/benchmark-001/montserrat-500",
+        "variations": {
+          "wght": 500
+        }
       },
       "body": {
         "font_ref": "font://google-fonts/montserrat",
         "family": "Montserrat",
         "weight": 400,
-        "use": "body / small informational copy if needed"
+        "use": "body / small informational copy if needed",
+        "instance_ref": "font-instance://habb/benchmark-001/montserrat-400",
+        "variations": {
+          "wght": 400
+        }
       }
     }
   }

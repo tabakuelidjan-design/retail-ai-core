@@ -107,10 +107,19 @@ HABB BENCHMARK 001 = NOT_RUN / BLOCKED
 C2 = NOT READY
 ```
 
-Remaining blockers: benchmark fonts, exact PRODUCT, real merchant-provided ASSET. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
+HABB BENCHMARK FONT BINDINGS = COMPLETE (Playfair Display + Montserrat, pinned open fonts; Brand Memory v2 APPROVED).
+Remaining blockers: exact PRODUCT, real merchant-provided ASSET. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
 
 Prepared: price claim, speed claim, FORMAT, and the canonical HABB brand package (Brand Identity, Snapshot, APPROVED Core V1, APPROVED Brand Memory V1.1 carrying the owner-approved expression system).
-Remaining binding work (only): benchmark fonts (owner decision on the exact two-family pair, with licence evidence), the exact PRODUCT, the real merchant-provided ASSET.
+Remaining binding work (only): the exact PRODUCT and the real merchant-provided ASSET. The fonts are bound (below).
+
+**Benchmark fonts (owner decision):** Playfair Display for the editorial headline (600) and Montserrat for price (700), speed claim (600), supporting text / CTA (500) and body (400); no third family, no fallback.
+Both are variable fonts from one pinned commit of `google/fonts` (`51303ca9…cfca`), unmodified, with their OFL texts and SHA-256 pinned in `resources/fonts/habb-benchmark/manifest.json` and listed in
+`THIRD_PARTY_NOTICES.md` (open font resources selected for HABB, not proprietary HABB fonts). They are served as ephemeral, hash-checked payloads of two platform-level FONT resources of the common
+resolver. The production typography engine selects a weight as a variable-font instance (`wght`) of the same bytes; a text layer addresses a font by one reference, so each benchmark role has its own
+`instance_ref`. The role mapping is benchmark configuration (`typography.roles`); Brand Memory v2 carries only family + weights. Upstream provenance sits in the manifest, not in the generic FONT metadata contract.
+Memory v2 is a governed revision (v1 SUPERSEDED, untouched): same Core binding, colours, expression system, semantic context and external refs; only typography added. Its approval time (2026-10-09T17:39:04Z)
+is recorded data read once outside the builders, an owner authorization not authenticated by Nordla Identity.
 
 **Canonical HABB brand package** (`benchmarks/creative-intelligence/habb-brand-canonical-v1.json`, benchmark-scoped trusted data, not the future persistent `brands` registry):
 one `brand_id` minted once on the owner's authorization (a later migration to a brands registry MUST preserve it), `fr-BE` only; a READY Snapshot from readable HABB
@@ -132,8 +141,8 @@ read from the connected `merchants` table):
 | CLAIM speed | BOUND | `claim://habb/benchmark-001/express-5-minutes`, wording `5 minutes`, same approval; the qualification (store, model available, customer file usable) is kept beside the evidence |
 | PRODUCT | MISSING | `HABB_BENCHMARK_PRODUCT_BINDING_MISSING` — the catalogue holds one product per phone model; the owner must name the benchmark product |
 | ASSET | MISSING | `HABB_BENCHMARK_REAL_ASSET_MISSING` — no verified real photograph of a personalised HABB case exists |
-| FONT | MISSING | `HABB_BENCHMARK_FONT_BINDINGS_MISSING` — no approved HABB font files / licences found |
-| Expression system | BOUND (when the Creative interface of the approved Memory is supplied) | owner-approved content carried by the APPROVED HABB Brand Memory V1.1 `habb-memory-v1@1` (Core `habb-core-v1@1`, brand_id `4c487848-8d41-4e30-8f3f-66afd09b4be4`), see below |
+| FONT | BOUND | `font://google-fonts/playfair-display` and `font://google-fonts/montserrat`: two pinned open fonts (SIL OFL 1.1), platform-level FONT resources, bytes + OFL texts in `resources/fonts/habb-benchmark/`, one upstream `google/fonts` commit; see the font-bindings section below |
+| Expression system | BOUND (when the Creative interface of the approved Memory is supplied) | owner-approved content carried by the APPROVED HABB Brand Memory V1.1 `habb-memory-v2@2` (revision of `habb-memory-v1@1`; Core `habb-core-v1@1`, brand_id `4c487848-8d41-4e30-8f3f-66afd09b4be4`), see below |
 
 The two claims are **benchmark-owned trusted records, not the Claims Registry** (which does not exist yet). 25 € is scoped to Benchmark 001 and
 the approved store-service evidence; it is not the universal online price. Readiness values are never written in the configuration file. RUNNABLE is not RUN.
@@ -160,7 +169,6 @@ the approved store-service evidence; it is not the universal online price. Readi
 
 - exact HABB PRODUCT binding;
 - real approved HABB product photo (`HABB_BENCHMARK_REAL_ASSET_MISSING`);
-- actual HABB font resource bindings (files + licence references);
 - HABB CREATIVE BENCHMARK 001 execution.
 
 Closed since: the price and speed claims (benchmark-owned records), the FORMAT, and the canonical HABB brand (Identity, Snapshot, Core V1, Memory V1.1 with the bound expression system).
@@ -239,7 +247,7 @@ Each row is a `// PC2-N` marker in the named test; the coverage test checks that
 | PC2-51 | no payload ever persists into the DesignDocument (font bytes, image bytes, the PNG) | creative-intelligence-production.test.js › Deterministic rasterizer and the real PNG path |
 | PC2-52 | no network access is needed: the whole path runs with fetch and every socket module unavailable | creative-intelligence-production.test.js › Deterministic rasterizer and the real PNG path |
 | PC2-53 | the benchmark is configuration data: nothing in the generic source knows the campaign, the merchant or the product | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
-| PC2-54 | as shipped (product, real asset, fonts and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
+| PC2-54 | as shipped (product, real asset and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-55 | the FORMAT is the one binding that resolves, from the benchmark's own owned record, through the common resolver (platform-level, 1080x1350 px DIGITAL) | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-56 | a missing real asset is never substituted: a generated, synthetic or unapproved asset, or one without bytes, keeps the benchmark blocked | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |
 | PC2-57 | claim evidence missing (wording differs, unresolved or revoked) blocks RUNNABLE: nothing approves a claim by itself | creative-intelligence-pre-c2.test.js › HABB Creative Benchmark 001: configuration data, bound through the common resolver, blocked until every binding is real |

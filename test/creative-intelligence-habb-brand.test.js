@@ -11,6 +11,7 @@ import {
   creativeBrandInterface, isExpressionNonEmpty, normalizeExpressionSystem, validateBrandMemory, validateCoreForApproval,
 } from '../src/branding/index.js';
 import { buildBrandPackage } from '../scripts/build-benchmark-brand-package.mjs';
+import { createBenchmarkResolver } from '../scripts/benchmark-resources.mjs';
 
 // Canonical HABB brand package for Benchmark 001 (`// HBB-N` markers follow the numbered test list of the bootstrap mandate).
 // HABB is configuration: the package lives in benchmarks/creative-intelligence/, nothing about it is in src/.
@@ -94,11 +95,11 @@ test('HABB Core V1: valid, governed, approved by a resolved owner, bound to the 
   assert.ok(core.evidence_refs.every((r) => out.snapshot.evidence.some((e) => e.id === r)));
 });
 
-test('HABB Brand Memory V1.1: exact Core binding, owner-approved expression, approved colours, empty typography', () => {
+test('HABB Brand Memory V1.1 (current revision): exact Core binding, owner-approved expression, approved colours, two typography families', () => {
   const memory = out.approved_memory;
-  // HBB-8 Memory V1.1 is APPROVED, version 1, bound to EXACTLY the approved Core V1, and valid against it
+  // HBB-8 the current Memory V1.1 is APPROVED (v2, the governed typography revision), bound to EXACTLY the approved Core V1, and valid against it
   assert.equal(memory.status, 'APPROVED');
-  assert.equal(memory.version, 1);
+  assert.equal(memory.version, 2);
   assert.deepEqual(memory.core_ref, { id: out.approved_core.id, version: 1 });
   assert.deepEqual(validateBrandMemory(built.memory, { core: built.core }), { ok: true, reasons: [] });
   assert.ok(validateBrandMemory(built.memory, { core: { ...built.core, version: 2 } }).reasons.includes('BRAND_MEMORY_CORE_MISMATCH'));
@@ -110,10 +111,11 @@ test('HABB Brand Memory V1.1: exact Core binding, owner-approved expression, app
   assert.deepEqual(memory.expression_system, JSON.parse(JSON.stringify(normalizeExpressionSystem(expressionFile.expression_system))));
   assert.equal(isExpressionNonEmpty(memory.expression_system), true);
   assert.ok(!('locale_overrides' in memory.expression_system));
-  // HBB-10 typography is empty; HBB-11 and no font, fallback or otherwise, is introduced anywhere
-  assert.deepEqual(memory.design_tokens.typography, {});
-  assert.doesNotMatch(JSON.stringify(out), /Georgia|Arial|Helvetica|Montserrat|Playfair|DejaVu|Noto|font-family|sans-serif/i);
-  assert.deepEqual(iface.design_tokens.typography, {});
+  // HBB-10 typography is exactly the two approved families (v1 left it empty); HBB-11 no other family, no fallback, anywhere
+  assert.deepEqual(memory.design_tokens.typography, { display: { family: 'Playfair Display', weights: [600] }, text: { family: 'Montserrat', weights: [400, 500, 600, 700] } });
+  assert.doesNotMatch(JSON.stringify(out), /Georgia|Arial|Helvetica|DejaVu|Noto|font-family|sans-serif/i);
+  assert.deepEqual(iface.design_tokens.typography, memory.design_tokens.typography);
+  assert.deepEqual(out.memory_v1_approved.design_tokens.typography, {}); // v1 is untouched
   // HBB-12 the colours are exactly the approved initial tokens
   assert.deepEqual(memory.design_tokens.colors, { navy: '#183247', terracotta: '#C56E54', cream: '#FBF8F3', white: '#FFFFFF' });
   // HBB-13 no beige / sand default token
@@ -131,7 +133,7 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   // HBB-15 the Creative interface exposes the HABB identity, exact refs, expression system and colours; typography stays empty
   assert.equal(iface.brand.brand_id, HABB_BRAND_ID);
   assert.deepEqual(iface.core_ref, { id: 'habb-core-v1', version: 1 });
-  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v1', version: 1 });
+  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v2', version: 2 });
   assert.equal(isExpressionNonEmpty(iface.expression_system), true);
   assert.deepEqual(Object.keys(iface.design_tokens.colors), ['navy', 'terracotta', 'cream', 'white']);
   assert.deepEqual(config.brand.core_ref, iface.core_ref);
@@ -140,23 +142,21 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   const claims = config.owned_records.filter((r) => r.kind === 'CLAIM');
   assert.deepEqual(claims.map((c) => [c.ref, c.metadata.approved_wording]), [['claim://habb/benchmark-001/price-25', '25 €'], ['claim://habb/benchmark-001/express-5-minutes', '5 minutes']]);
   // HBB-16 the benchmark's expression binding is BOUND to the approved Memory (readiness computed by the real assessor)
-  const resolver = R.createCommonResourceResolver({ adapters: [R.createStaticResourceAdapter({ adapter_id: 'benchmark-owned', records: config.owned_records })] });
+  const resolver = createBenchmarkResolver(config);
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
-  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v1@1');
+  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v2@2');
   assert.equal(config.bindings.expression.status, 'BOUND_TO_APPROVED_BRAND_MEMORY');
-  assert.deepEqual(config.bindings.expression.memory_ref, { id: 'habb-memory-v1', version: 1 });
+  assert.deepEqual(config.bindings.expression.memory_ref, { id: 'habb-memory-v2', version: 2 });
   assert.ok(P.assessExpressionReadiness(iface).ready);
-  // HBB-17 / 18 / 19 still BLOCKED, and for the right reasons: fonts, PRODUCT, real ASSET
+  // HBB-17 fonts are bound now (Playfair Display and Montserrat, see the font-binding tests); HBB-18 / 19 still BLOCKED for PRODUCT and the real ASSET
   assert.equal(report.status, 'BLOCKED');
-  assert.deepEqual(report.blockers, [
-    { id: 'product', reason: 'BINDING_MISSING' }, { id: 'asset', reason: 'BINDING_MISSING' }, { id: 'fonts', reason: 'BINDING_MISSING' },
-  ]);
-  assert.equal(config.bindings.fonts.length, 0);
+  assert.deepEqual(report.blockers, [{ id: 'product', reason: 'BINDING_MISSING' }, { id: 'asset', reason: 'BINDING_MISSING' }]);
+  assert.equal(config.bindings.fonts.length, 2);
   assert.equal(config.bindings.product.ref, null);
   assert.equal(config.bindings.asset.ref, null);
   assert.equal(config.status, 'NOT_RUN');
-  assert.equal(config.bindings_still_missing.length, 3);
+  assert.equal(config.bindings_still_missing.length, 2);
   // HBB-20 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence }).c2_allowed, false);
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
@@ -179,7 +179,7 @@ test('HABB stays configuration; the bootstrap is reproducible and never mints a 
   assert.doesNotMatch(script, /randomUUID|uuid\(|Math\.random|Date\.now|new Date\(/);
   assert.match(pkg.inputs.expression_file, /habb-expression-system-benchmark-001\.json$/);
   assert.match(pkg.inputs.notes.brand_id, /MUST preserve this brand_id/);
-  assert.match(pkg.inputs.notes.typography, /No fallback font/);
+  assert.match(pkg.inputs.notes.typography, /no fallback/);
 });
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -261,12 +261,12 @@ test('Core impact, Brand Context, benchmark blockers and approval timestamps aft
   assert.ok(core.evidence_refs.includes('ev-16') && core.evidence_refs.includes('ev-25'));
   // HBE-7 / 8 / 9 the Brand Context stays READY, the expression stays BOUND, typography stays empty
   assert.equal(built.context.status, 'READY');
-  assert.deepEqual(out.approved_memory.design_tokens.typography, {});
-  const resolver = R.createCommonResourceResolver({ adapters: [R.createStaticResourceAdapter({ adapter_id: 'benchmark-owned', records: config.owned_records })] });
+  assert.equal(Object.keys(out.approved_memory.design_tokens.typography).length, 2);
+  const resolver = createBenchmarkResolver(config);
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
-  // HBE-10 fonts, PRODUCT and ASSET remain the benchmark blockers (the Design Manual limits to two families but names none)
-  assert.deepEqual(report.blockers.map((b) => b.id), ['product', 'asset', 'fonts']);
+  // HBE-10 PRODUCT and ASSET remain the benchmark blockers (fonts are bound by the owner's typography decision; the Design Manual limits to two families but names none)
+  assert.deepEqual(report.blockers.map((b) => b.id), ['product', 'asset']);
   assert.ok(out.snapshot.evidence_gaps.some((g) => g.id === 'gap-fonts-unchosen'));
   // HBE-11 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
@@ -278,9 +278,9 @@ test('Core impact, Brand Context, benchmark blockers and approval timestamps aft
     assert.equal(value, auth.recorded_at);
   }
   assert.equal(core.approval.approved_at, stamp);
-  assert.equal(out.approved_memory.approval.approved_at, stamp);
+  assert.equal(out.memory_v1_approved.approval.approved_at, stamp);
   assert.equal(out.core_decision_event.decided_at, stamp);
-  assert.equal(out.memory_decision_event.decided_at, stamp);
+  assert.equal(out.memory_v1_decision_event.decided_at, stamp);
   assert.match(auth.identity, /Nordla Identity did not authenticate it and remains an open dependency/);
   assert.match(auth.clock, /Read once, outside the builder/);
   assert.match(core.approval.note, /Nordla Identity, which remains an open dependency/);

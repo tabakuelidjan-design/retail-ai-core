@@ -6,6 +6,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import * as CI from '../src/creative-intelligence/index.js';
 import * as P from '../src/creative-intelligence/production.js';
 import * as R from '../src/resources/index.js';
+import { createBenchmarkResolver } from '../scripts/benchmark-resources.mjs';
 import { creativeBrandInterface } from '../src/branding/index.js';
 import { buildMemoryFlow, colorRule, sampleExpression } from './branding-v11-world.js';
 import { FONT, FONT_AR, LATER, code, demoDocument, resolveAllMedia } from './creative-intelligence-fixtures.js';
@@ -149,14 +150,15 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
     assert.equal(offending(source, /habb|phone case|coque|instagram|1080|1350/i), null, file);
   }
   assert.equal(benchmarkConfig.kind, 'CONFIGURATION_DATA');
-  // PC2-54 as shipped (product, real asset, fonts and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
-  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: resolverFor(), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
+  // PC2-54 as shipped (product, real asset and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
+  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: createBenchmarkResolver(benchmarkConfig), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
   assert.equal(shipped.status, 'BLOCKED');
   assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
   assert.equal(reasonOf(shipped, 'asset'), 'BINDING_MISSING');
   assert.equal(reasonOf(shipped, 'claim:price'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'claim:promise'), 'RESOLVED_WITH_EVIDENCE');
-  assert.equal(reasonOf(shipped, 'fonts'), 'BINDING_MISSING');
+  assert.equal(reasonOf(shipped, 'font:font://google-fonts/playfair-display'), 'RESOLVED_WITH_EVIDENCE');
+  assert.equal(reasonOf(shipped, 'font:font://google-fonts/montserrat'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'expression_system'), 'EXPRESSION_SYSTEM_ABSENT');
   // PC2-55 the FORMAT is the one binding that resolves, from the benchmark's own owned record, through the common resolver (platform-level, 1080x1350 px DIGITAL)
   assert.equal(reasonOf(shipped, 'format'), 'RESOLVED_WITH_EVIDENCE');
@@ -241,5 +243,6 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /HABB CANONICAL BRAND = COMPLETE/);
   assert.match(doc, /HABB Brand Core V1    = APPROVED/);
   assert.match(doc, /HABB expression_system = BOUND/);
+  assert.match(doc, /HABB BENCHMARK FONT BINDINGS = COMPLETE/);
   assert.match(doc, /C2 = NOT READY/);
 });

@@ -1,7 +1,7 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
 - **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
-- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** · **HABB BENCHMARK 001 = NOT_RUN / BLOCKED** (only benchmark fonts, the exact PRODUCT and the real merchant-provided ASSET outstanding) · **C2 = NOT READY**
+- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** · **HABB BENCHMARK 001 = NOT_RUN / BLOCKED** (benchmark fonts bound; only the exact PRODUCT and the real merchant-provided ASSET outstanding) · **C2 = NOT READY**
 - **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 = NOT READY** — HABB CREATIVE BENCHMARK 001 is NOT_RUN / BLOCKED on real HABB data. See `creative-pre-c2-foundation.md`.
 - **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
