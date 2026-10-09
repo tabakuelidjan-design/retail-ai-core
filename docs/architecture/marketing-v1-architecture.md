@@ -15,12 +15,22 @@ M4 — STEER               = COMPLETE
 
 MARKETING V1 CORE = COMPLETE
 
-Next phase   = Activation & Channel Execution
-First target = Activation & Channel Execution V1
-Activation & Channel Execution V1 = IMPLEMENTED LOCALLY / UNDER AUDIT  (see activation-channel-execution-v1.md)
+Activation & Channel Execution V1 = COMPLETE  (see activation-channel-execution-v1.md)
+
+Next phase   = Provider Provisioning & Live Connections
+First target = Connection Center + OAuth/Credential provisioning
 After        = Specialized Marketing Intelligences
 First specialized intelligence = Social Trend Intelligence
 ```
+
+```text
+Activation & Channel Execution V1 COMPLETE
+means Nordla's execution architecture and provider adapters are complete.
+
+It does NOT mean real merchant accounts are connected or production publishing is enabled.
+```
+
+Blockers kept for Provider Provisioning & Live Connections: production credential vault · OAuth applications · provider app approvals / audits · merchant OAuth consent · Connection Center UI · controlled media delivery · real account / location binding · public webhook endpoint where required. Readiness stays `ADAPTER_READY` for Instagram, TikTok and Google Business Profile (never `PRODUCTION_READY` without those).
 
 ## 0. Architectural rules
 

@@ -1,6 +1,26 @@
 # Activation & Channel Execution V1 (Instagram · TikTok · Google Business Profile)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT — not pushed, not COMPLETE until audit, push and CI
+- **Status:** ACTIVATION & CHANNEL EXECUTION V1 COMPLETE (audited, pushed, CI green including the real PostgreSQL smoke job)
+
+```text
+Core execution contracts        COMPLETE
+Durable outbox / idempotency    COMPLETE
+Instagram adapter               COMPLETE
+TikTok adapter                  COMPLETE
+Google Business Profile adapter COMPLETE
+M4 receipt handoff              COMPLETE
+
+Production connection           NOT READY
+
+Instagram               = ADAPTER_READY
+TikTok                  = ADAPTER_READY
+Google Business Profile = ADAPTER_READY      (none of them is PRODUCTION_READY)
+```
+
+**COMPLETE means** Nordla's execution architecture and provider adapters are complete and tested against fakes, and the migration is verified on a real PostgreSQL.
+**It does NOT mean** that real merchant accounts are connected or that production publishing is enabled.
+
+Remaining blockers before any live publication: production credential vault · OAuth applications · provider app approvals / audits · merchant OAuth consent · Connection Center UI · controlled media delivery · real account / location binding · public webhook endpoint where required.
 - **Version:** `activation-channel-execution.v1` (`ACTIVATION_VERSION`)
 - **Code:** `src/activation/` · **Migration:** `supabase/migrations/20261009100000_channel_execution_jobs.sql` · **CI:** `.github/workflows/activation-channel-execution-v1.yml`
 - **Tests:** `test/channel-execution-core.test.js` · `channel-execution-repository.test.js` · `channel-instagram.test.js` · `channel-tiktok.test.js` · `channel-google-business.test.js` · `channel-execution-m4-integration.test.js` (+ fixtures `test/channel-fixtures.js`)
