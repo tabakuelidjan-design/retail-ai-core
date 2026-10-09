@@ -1,0 +1,56 @@
+{
+  "kind": "CONFIGURATION_DATA",
+  "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
+  "purpose": "What Benchmark 001 composes and which gates it must pass. Configuration for scripts/run-benchmark-001.mjs: the harness is generic, this file is the benchmark's composition. Nothing here is a creative outcome; the outcome comes from the run.",
+  "recipe_id": "PRODUCT_HERO",
+  "brief_ref": "brief:habb-benchmark-001",
+  "direction_ref": "direction:habb-benchmark-001",
+  "layers": {
+    "background": { "token": "cream" },
+    "product": { "preservation_mode": "PIXEL_PRESERVE", "note": "the real photograph is placed as it is: no crop, no relight, no rotation, no shadow" },
+    "headline": {
+      "role": "HEADLINE",
+      "typography_role": "headline",
+      "color_token": "navy",
+      "content": "Vos souvenirs. Votre création.",
+      "content_basis": "the first two sentences of the approved HABB brand line (evidence ev-06 of the canonical Snapshot); non-claim creative text, no number, no fact",
+      "font_size": 72,
+      "min_font_size": 44,
+      "max_lines": 2
+    },
+    "price": {
+      "role": "PRICE",
+      "typography_role": "price",
+      "color_token": "terracotta",
+      "claim": "price",
+      "font_size": 64,
+      "min_font_size": 36,
+      "max_lines": 1
+    },
+    "speed_claim": {
+      "role": "SUBHEADLINE",
+      "typography_role": "speed_claim",
+      "color_token": "navy",
+      "claim": "promise",
+      "font_size": 40,
+      "min_font_size": 28,
+      "max_lines": 1
+    }
+  },
+  "not_composed": "No logo (no approved logo asset ref exists), no CTA and no decoration: nothing is invented to fill a slot.",
+  "acceptance": {
+    "all_of": [
+      "readiness is RUNNABLE with the verified private payload",
+      "the document is built from the bound product, the real asset and the approved claims only",
+      "Preflight PASS",
+      "Creative Fidelity gate PASS (measured observations for every required check)",
+      "Brand Guardian PASS (a measured hard-rule outcome)",
+      "a real PNG is produced from a RESOLVED render with real typography"
+    ],
+    "verdicts": {
+      "PASS": "every gate PASS and the PNG exists",
+      "FAIL": "a gate is evaluated and fails",
+      "BLOCKED": "a required gate cannot be measured (NOT_MEASURABLE) or a required condition is missing: no PASS is inferred"
+    }
+  }
+}

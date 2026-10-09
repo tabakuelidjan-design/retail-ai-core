@@ -248,6 +248,9 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /Montserrat\s+= BOUND/);
   assert.match(doc, /HABB Brand Memory v2 = APPROVED/);
   assert.match(doc, /PRODUCT = BOUND/);
+  assert.match(doc, /RUNNABLE -> RUN -> BLOCKED/);
+  assert.match(doc, /Creative Fidelity \| \*\*NOT_MEASURABLE\*\*/);
+  assert.match(doc, /Brand Guardian \| \*\*NOT_MEASURABLE\*\*/);
   assert.match(doc, /ASSET\s+= BOUND BY METADATA/);
   assert.match(doc, /-> Benchmark 001 = RUNNABLE/);
   assert.match(doc, /exact blocker = ASSET_PAYLOAD_UNAVAILABLE/);

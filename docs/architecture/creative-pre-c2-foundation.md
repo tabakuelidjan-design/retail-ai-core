@@ -190,6 +190,32 @@ read from the connected `merchants` table):
 The two claims are **benchmark-owned trusted records, not the Claims Registry** (which does not exist yet). 25 € is scoped to Benchmark 001 and
 the approved store-service evidence; it is not the universal online price. Readiness values are never written in the configuration file. RUNNABLE is not RUN.
 
+## 7b. HABB CREATIVE BENCHMARK 001 — execution (2026-10-09)
+
+```text
+RUNNABLE -> RUN -> BLOCKED
+```
+
+The benchmark was executed locally with the real, hash-verified private photograph (`LOCAL_REAL_ASSET`, no fixture, no mock, no synthetic asset, no fallback)
+by `scripts/run-benchmark-001.mjs` and the composition in `habb-benchmark-001-run-spec.json`. Readiness (RUNNABLE), execution (RUN) and result (BLOCKED) are three different things.
+
+| Stage | Observed | Verdict |
+|---|---|---|
+| Readiness | RUNNABLE (claims, format, expression, fonts, product, asset metadata and payload) | PASS |
+| Asset hash (re-verified) | the pinned SHA-256 | PASS |
+| Preflight | all 19 checks PASS on the document built from the bound product, the real asset and the approved claims | PASS |
+| PNG | RESOLVED render, REAL typography (Playfair Display 600, Montserrat 700 / 600), 1080 × 1350, the real photograph consumed once; deterministic across runs (`4fde0571…7e49`) | PASS |
+| Creative Fidelity | **NOT_MEASURABLE**: 0 of the 5 required checks were observed; no measurement tool exists in the repository, and nothing was assumed | BLOCKED |
+| Brand Guardian | **NOT_MEASURABLE** (`NO_APPLICABLE_HARD_RULES`): the approved HABB Memory carries no hard rule, and zero applicable rules is not compliance | BLOCKED |
+
+**Verdict: BLOCKED.** Not PASS (two mandatory gates cannot be measured) and not FAIL (no gate was evaluated and failed on the composition). Attempt 1 failed Preflight on
+`INVALID_Z_ORDER` (the harness gave three text layers one z-index): a harness defect, recorded as found and corrected before attempt 2. The configuration status stays `NOT_RUN`
+(RUN is the closing state that opens C2 and needs every gate PASS). The full record is `execution` in the benchmark configuration.
+
+What a PASS needs next (not done here): a measured Creative Fidelity observation for each required check, and a measured Brand Guardian outcome (deterministic hard rules the owner approves,
+because the semantic lane is advisory and never settles a hard rule). One honest creative note: the real photograph is a table-top shot and is placed as it is (PIXEL_PRESERVE); the expression
+system prefers a cut-out and compositing, which needs a segmentation step that does not exist yet.
+
 ## 8. C2 readiness
 
 **Technical foundation — COMPLETE**

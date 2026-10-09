@@ -407,5 +407,43 @@
     "asset_identity": "owner-supplied real photograph",
     "proof": "owner statement + exact catalogue item",
     "inference": "none: the link is not inferred from camera geometry or any visual feature"
+  },
+  "execution": {
+    "summary": "RUNNABLE -> RUN -> BLOCKED",
+    "verdict": "BLOCKED",
+    "status_note": "The configuration status stays NOT_RUN on purpose: RUN is the closing state that opens the C2 gate and it requires every gate to PASS. A run whose required gates cannot be measured is recorded here, not promoted.",
+    "harness": "scripts/run-benchmark-001.mjs with benchmarks/creative-intelligence/habb-benchmark-001-run-spec.json (no clock, no network, no provider, no generated pixel; the private evidence and the PNG stay under the gitignored data/private/)",
+    "environment": "LOCAL_REAL_ASSET",
+    "real_asset_consumed": true,
+    "fallback_used": false,
+    "attempts": [
+      {
+        "attempt": 1,
+        "at": "2026-10-09T20:35:52Z",
+        "verdict": "FAIL (harness composition defect)",
+        "decisive": "Preflight INVALID_Z_ORDER = FAIL (SHARED_Z_INDEX): the harness gave its three text layers the same z-index. Every other preflight check passed. Recorded as found, classified as a harness defect, then corrected (each layer has its own z-index)."
+      },
+      {
+        "attempt": 2,
+        "at": "2026-10-09T20:36:09Z",
+        "verdict": "BLOCKED",
+        "stages": {
+          "readiness": "RUNNABLE (verified private payload)",
+          "asset_hash": "verified again: the pinned SHA-256",
+          "preflight": "PASS (all 19 checks)",
+          "png": "RESOLVED render, REAL typography, 1080 x 1350, the real photograph consumed once",
+          "creative_fidelity": "NOT_MEASURABLE (0 of 5 required checks observed: no measurement tool exists in the repository)",
+          "brand_guardian": "NOT_MEASURABLE (NO_APPLICABLE_HARD_RULES: the approved HABB Memory carries no hard rule, and zero applicable rules is not compliance)"
+        },
+        "png_sha256": "4fde0571ce0998e5a027f2c2294c1c8f181d6933522164985eec32ca2a1e7e49"
+      }
+    ],
+    "blocking_gates": [
+      "creative_fidelity",
+      "brand_guardian"
+    ],
+    "why_not_pass": "Two mandatory gates returned NOT_MEASURABLE. Nothing was assumed: a gate that cannot be measured is never a PASS.",
+    "why_not_fail": "No gate was evaluated and failed on the composition: the only failure (attempt 1) was a harness defect that was corrected.",
+    "c2": "NOT READY. C2 needs an actual run with Preflight PASS, Creative Fidelity PASS, Brand Guardian PASS and a real PNG; two of those gates are not yet measurable."
   }
 }
