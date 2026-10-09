@@ -3,7 +3,7 @@
   "kind": "CONFIGURATION_DATA",
   "status": "NOT_RUN",
   "selected_by": "architect",
-  "purpose": "Exit condition of C1 and entry condition of C2 provider work (NORDLA-DEFERRED L3-002 / NDR-D02): a real campaign used as benchmark. This file is configuration data: no Creative Intelligence source depends on it. Its readiness (BLOCKED / RUNNABLE) is computed by assessBenchmarkReadiness over the common resource resolver; it is never written here.",
+  "purpose": "HABB CREATIVE BENCHMARK 001 is the entry condition for C2 provider work under NDR-D02 / L3-002: a real campaign used as benchmark. C1 is already COMPLETE. This file is configuration data: no Creative Intelligence source depends on it. Its readiness (BLOCKED / RUNNABLE) is computed by assessBenchmarkReadiness over the common resource resolver; it is never written here.",
   "subject": "Personalized phone case",
   "facts_given_by_the_architect": {
     "price": "25 €",

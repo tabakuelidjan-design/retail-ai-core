@@ -37,19 +37,26 @@ Resource Resolver interface                     COMPLETE
 COMPLETE means the contracts, deterministic engines and their tests are finished and tested against synthetic fixtures. It does **not**
 mean Creative Intelligence can produce a production creative.
 
+### Status after PRE-C2
+
+```text
+PRE-C2 technical mechanisms = COMPLETE
+  (common Resource Resolver, FORMAT and FONT resolution, Brand Memory V1.1 expression_system mechanism, real font metrics,
+   real shaping, Arabic / Bidi / RTL verification, deterministic rasterizer, real PNG path, sRGB PNG semantics)
+
+HABB operational bindings / data = NOT COMPLETE
+```
+
 ### What is explicitly NOT complete
 
 ```text
-production Resource Registry
-Brand Memory V1.1 expression_system
-real font metrics
-complex-script shaping
-Arabic / Bidi / RTL production verification
-deterministic PNG rasterizer
-real PNG production path
-HABB benchmark execution
-product segmentation / compositing providers
-image generation / edit providers
+populated / approved HABB expression_system
+HABB product binding
+real approved HABB product asset
+approved HABB claims
+HABB font bindings
+HABB Benchmark 001 execution
+C2 providers (product segmentation / compositing, image generation / edit)
 VLM Creative Critic
 video
 Creative Learning
@@ -97,7 +104,7 @@ All nine canonical documents were re-read in full against C1: `NORDLA-CANONICAL-
 brief contract is stable **and a real HABB campaign is used as benchmark**", and rule 3 asks for an explicit implementation decision when the
 prerequisites are met. The Marketing brief contract is stable, `marketing-v1-architecture.md` names Creative Intelligence the next build
 target, and the C1 mandate is the architect's explicit decision to start; but C1 is validated on **synthetic** fixtures only, so the
-"real campaign benchmark" condition is **not met by C1**. It is carried forward as the exit condition of C2 (the first real HABB campaign
+"real campaign benchmark" condition is **not met by C1**. It is carried forward as the entry condition of C2 provider work (the first real HABB campaign
 is the benchmark), and the architect has since recorded the per-stage clarification in `NORDLA-DECISION-REGISTER.md` (NDR-D02) and `NORDLA-DEFERRED.md`
 (L3-002), keeping the original condition.
 
