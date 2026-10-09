@@ -1,22 +1,32 @@
 # Provider Provisioning & Live Connections V1 (Instagram · TikTok · Google Business Profile)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT (not pushed)
+- **Status:** PROVIDER PROVISIONING & LIVE CONNECTIONS V1 COMPLETE (audited, pushed, CI green including the PostgreSQL/Vault smoke job on the GitHub runner)
 
 ```text
-Credential store (Supabase Vault design)   IMPLEMENTED   real Postgres + real Vault: 98/98 checks
-OAuth sessions (CSRF state, PKCE, CAS)     IMPLEMENTED
-Instagram OAuth                            IMPLEMENTED   (fakes; sandbox verification still required)
-TikTok OAuth                               IMPLEMENTED   (fakes; sandbox verification still required)
-Google Business Profile OAuth              IMPLEMENTED   (fakes; sandbox verification still required)
-Connection Center BACKEND                  IMPLEMENTED   (no UI - open dependency)
-Activation credential resolver             IMPLEMENTED   (Activation V1 is UNCHANGED)
+OAuth lifecycle                  COMPLETE
+CSRF/state protection            COMPLETE
+PKCE where applicable            COMPLETE
+Credential Vault boundary        COMPLETE
+Temporary-secret cleanup         COMPLETE
+Explicit account/location choice COMPLETE
+Token refresh / reauth           COMPLETE
+Connection Center backend        COMPLETE
+Activation credential bridge     COMPLETE
+Tenant isolation                 COMPLETE
+PostgreSQL/Vault smoke           COMPLETE   (98/98 checks, also green on the GitHub runner)
 
-Provider app registrations                 NOT DONE      (USER ACTION REQUIRED, see §14 and docs/runbooks/provider-app-registration.md)
-Real merchant accounts connected           NO
+PROVIDER CONNECTION ARCHITECTURE / BACKEND = COMPLETE
+
+REAL MERCHANT ACCOUNTS CONNECTED = NO
+LIVE PUBLISHING ENABLED          = NO
+
+Instagram               = BACKEND_READY
+TikTok                  = BACKEND_READY
+Google Business Profile = BACKEND_READY      (none of them is PRODUCTION_READY)
 ```
 
-**IMPLEMENTED means** the provisioning backend is complete and tested against fakes, and the migration is verified on a real PostgreSQL with the real Supabase Vault.
-**It does NOT mean** that a real Instagram / TikTok / Google account is connected: that needs the OAuth apps to be registered by the owner, a deployed HTTPS callback and the merchant's consent (§14).
+**COMPLETE means** the provisioning backend is complete and tested against fakes, and the migration and Vault functions are verified on a real PostgreSQL with the real Supabase Vault.
+**It does NOT mean** that a real Instagram / TikTok / Google account is connected or that live publishing is enabled. Real accounts still need deployment / provisioning actions that are not part of this module and do not make it incomplete: create/configure the Meta app · create/configure the TikTok developer app · configure the Google OAuth/API project · enter the production client secrets in the secret store · provider app review/audit where required · merchant OAuth consent · choose the real Instagram account, TikTok account and Google Business location · controlled production media delivery (§14).
 
 - **Version:** `provider-provisioning.v1` (`PROVISIONING_VERSION`)
 - **Code:** `src/provider-connections/` · **Migration:** `supabase/migrations/20261009200000_provider_connections.sql` · **CI:** `.github/workflows/provider-provisioning-live-connections-v1.yml`
@@ -329,4 +339,4 @@ Nothing below can be done by the code, and none of it is circumvented.
 
 ## 16. Next
 
-Not started by this mandate: a Connection Center UI, controlled media delivery, a provider sandbox pass, then Creative Intelligence (after prior deep research) and Social Trend Intelligence.
+**Next build target: CREATIVE INTELLIGENCE** (after prior deep research). Not started by this mandate. Deployment-side follow-ups that are not build targets of this module: a Connection Center UI, controlled media delivery, a provider sandbox pass.

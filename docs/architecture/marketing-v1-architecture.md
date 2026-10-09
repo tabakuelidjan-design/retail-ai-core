@@ -17,10 +17,9 @@ MARKETING V1 CORE = COMPLETE
 
 Activation & Channel Execution V1 = COMPLETE  (see activation-channel-execution-v1.md)
 
-Provider Provisioning & Live Connections V1 = IMPLEMENTED LOCALLY / UNDER AUDIT  (see provider-provisioning-live-connections-v1.md)
+Provider Provisioning & Live Connections V1 = COMPLETE  (see provider-provisioning-live-connections-v1.md)
 
-Current phase = Provider Provisioning & Live Connections (audit)
-First target  = Connection Center + OAuth/Credential provisioning
+Next build target = CREATIVE INTELLIGENCE
 After        = Specialized Marketing Intelligences
 First specialized intelligence = Social Trend Intelligence
 ```
