@@ -43,7 +43,10 @@ export function normalizeTransformationPolicy(input, field = 'transformation_pol
   if (mode === PRESERVATION_MODE.COMPOSITE && policy.allow_relight) {
     fail(E.PRESERVATION_POLICY_INVALID, 'COMPOSITE places the original cut-out pixels: relighting belongs to CONTROLLED_EDIT', { field });
   }
-  if ([PRESERVATION_MODE.CONTROLLED_EDIT, PRESERVATION_MODE.GENERATIVE_REFERENCE].includes(mode) && !policy.justification_ref) {
+  if (mode === PRESERVATION_MODE.IDENTITY_PRESERVE && (policy.allow_crop || policy.allow_rotation)) {
+    fail(E.PRESERVATION_POLICY_INVALID, 'IDENTITY_PRESERVE allows no crop and no rotation: relighting, shadow and a new background are its purpose', { field });
+  }
+  if ([PRESERVATION_MODE.CONTROLLED_EDIT, PRESERVATION_MODE.GENERATIVE_REFERENCE, PRESERVATION_MODE.IDENTITY_PRESERVE].includes(mode) && !policy.justification_ref) {
     fail(E.PRESERVATION_POLICY_INVALID, `${mode} needs a justification_ref: real commerce defaults to PIXEL_PRESERVE or COMPOSITE`, { field });
   }
   return policy;
@@ -62,8 +65,8 @@ export function normalizeProductUnderstanding(input) {
       fail(E.REGION_INVALID, 'every logo / packaging-text region must be covered by a protected region', { field: 'product_understanding.protected_regions' });
     }
   }
-  if (policy.mode === PRESERVATION_MODE.CONTROLLED_EDIT && protectedRegions.length === 0) {
-    fail(E.PRESERVATION_POLICY_INVALID, 'CONTROLLED_EDIT needs protected regions', { field: 'product_understanding.protected_regions' });
+  if ([PRESERVATION_MODE.CONTROLLED_EDIT, PRESERVATION_MODE.IDENTITY_PRESERVE].includes(policy.mode) && protectedRegions.length === 0) {
+    fail(E.PRESERVATION_POLICY_INVALID, `${policy.mode} needs protected regions`, { field: 'product_understanding.protected_regions' });
   }
   const bounds = input.product_bounds == null ? null : normalizedRegion({ region_id: 'bounds', ...input.product_bounds }, 'product_understanding.product_bounds');
   const body = {

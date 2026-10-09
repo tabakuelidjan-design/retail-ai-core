@@ -172,6 +172,11 @@ function productSpecific(input, field, geo, effectList) {
   if (mode === PRESERVATION_MODE.COMPOSITE && flags.allow_relight) {
     fail(E.PRODUCT_PIXEL_MUTATION, `${field}: COMPOSITE places the original pixels; relighting is a CONTROLLED_EDIT`, { field });
   }
+  if (mode === PRESERVATION_MODE.IDENTITY_PRESERVE) {
+    // the identity-preserve measurements register the real product under scale + translation only: no crop, no rotation
+    if (flags.allow_crop || flags.allow_rotation) fail(E.PRODUCT_PIXEL_MUTATION, `${field}: IDENTITY_PRESERVE allows no crop and no rotation`, { field });
+    if (!Array.isArray(input.protected_regions) || input.protected_regions.length === 0) fail(E.PRODUCT_PIXEL_MUTATION, `${field}: IDENTITY_PRESERVE needs protected regions`, { field });
+  }
   if (geo.rotation_deg !== 0 && !flags.allow_rotation) fail(E.PRODUCT_PIXEL_MUTATION, `${field}: the product is rotated but allow_rotation is false`, { field });
   for (const e of effectList) {
     if (e.kind !== EFFECT_KIND.SHADOW) fail(E.PRODUCT_PIXEL_MUTATION, `${field}: only a cast shadow may accompany a product (no opacity change)`, { field });

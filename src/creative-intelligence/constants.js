@@ -122,9 +122,12 @@ export const PRESERVATION_MODE = Object.freeze({
   COMPOSITE: 'COMPOSITE',
   CONTROLLED_EDIT: 'CONTROLLED_EDIT',
   GENERATIVE_REFERENCE: 'GENERATIVE_REFERENCE',
+  // A provider-edited / composited product image: background, placement, scale and surrounding light may change, the product IDENTITY may not.
+  IDENTITY_PRESERVE: 'IDENTITY_PRESERVE',
 });
-// The C1 renderer only places existing pixels: it renders the first two. The other two are CONTRACT-only modes for later lanes.
-export const RENDERABLE_PRESERVATION_MODES = Object.freeze(['PIXEL_PRESERVE', 'COMPOSITE']);
+// The renderer only places existing pixels: it renders PIXEL_PRESERVE, COMPOSITE and IDENTITY_PRESERVE (the already-edited asset is placed untouched).
+// CONTROLLED_EDIT and GENERATIVE_REFERENCE are CONTRACT-only modes for later lanes.
+export const RENDERABLE_PRESERVATION_MODES = Object.freeze(['PIXEL_PRESERVE', 'COMPOSITE', 'IDENTITY_PRESERVE']);
 export const ORIENTATION = Object.freeze({
   FRONT: 'FRONT', BACK: 'BACK', SIDE: 'SIDE', TOP: 'TOP', THREE_QUARTER: 'THREE_QUARTER', UNKNOWN: 'UNKNOWN',
 });

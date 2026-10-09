@@ -19,6 +19,8 @@ const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf
   // pinned sha-256 checksums of open font files and their licence texts (provenance, not secrets)
   // the pinned sha-256 of a benchmark's private asset (the hash identifies the evidence; the bytes are never committed)
   && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-benchmark-\d+\.json$/.test(f)
+  // the same pinned sha-256 repeated by a scoped external-media authorization record (it names the asset it authorizes; the bytes are never committed)
+  && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-external-media-authorization\.json$/.test(f)
   && f !== 'THIRD_PARTY_NOTICES.md'
   // the architecture record of the pinned evidence (asset / font hashes)
   && f !== 'docs/architecture/creative-pre-c2-foundation.md'

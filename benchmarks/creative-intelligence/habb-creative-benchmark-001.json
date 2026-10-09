@@ -428,7 +428,133 @@
         "decision_ref": "decision://habb/benchmark-001/printed-text-region",
         "basis": "Annotated by inspecting the verified local source photograph: a rectangle with a small margin around the four printed lines on the open book page. The text is never transcribed, read or interpreted."
       }
-    ]
+    ],
+    "identity_annotations": {
+      "purpose": "IDENTITY_PRESERVE measurements (coordinates only, annotated by Claude from the real local asset on 2026-10-10 and to be confirmed by the owner): case outline, camera module, lens openings, printed artwork area, printed-text region. Normalized to the source (x and width by its width, y and height by its height; the lens and module radii by its width). No pixel is stored.",
+      "status": "PROVISIONAL_ANNOTATION_NOT_OWNER_CONFIRMED",
+      "source_size_px": {
+        "width": 1152,
+        "height": 1536
+      },
+      "outline": [
+        [
+          0.29948,
+          0.09115
+        ],
+        [
+          0.68576,
+          0.09115
+        ],
+        [
+          0.71354,
+          0.10547
+        ],
+        [
+          0.72743,
+          0.13997
+        ],
+        [
+          0.75521,
+          0.27344
+        ],
+        [
+          0.80729,
+          0.49479
+        ],
+        [
+          0.85503,
+          0.77474
+        ],
+        [
+          0.8533,
+          0.82161
+        ],
+        [
+          0.82899,
+          0.84635
+        ],
+        [
+          0.78125,
+          0.85807
+        ],
+        [
+          0.26042,
+          0.85807
+        ],
+        [
+          0.21701,
+          0.84635
+        ],
+        [
+          0.19097,
+          0.82161
+        ],
+        [
+          0.18663,
+          0.78125
+        ],
+        [
+          0.20833,
+          0.65755
+        ],
+        [
+          0.2474,
+          0.41667
+        ],
+        [
+          0.26476,
+          0.26042
+        ],
+        [
+          0.27344,
+          0.13997
+        ],
+        [
+          0.27951,
+          0.11068
+        ]
+      ],
+      "camera_module": {
+        "x": 0.35677,
+        "y_top": 0.14974,
+        "y_bottom": 0.21615,
+        "radius": 0.06944
+      },
+      "lenses": [
+        {
+          "x": 0.35677,
+          "y": 0.13477,
+          "r": 0.03819
+        },
+        {
+          "x": 0.35677,
+          "y": 0.18034,
+          "r": 0.03819
+        },
+        {
+          "x": 0.35677,
+          "y": 0.22982,
+          "r": 0.03819
+        }
+      ],
+      "artwork_region": {
+        "x": 0.21701,
+        "y": 0.28646,
+        "width": 0.60764,
+        "height": 0.5599
+      },
+      "text_regions": [
+        {
+          "region_id": "printed-text",
+          "x": 0.24306,
+          "y": 0.64779,
+          "width": 0.3125,
+          "height": 0.19206
+        }
+      ],
+      "visible_lens_openings": 3,
+      "note": "The flash / sensor bump next to the module is not counted as a lens opening."
+    }
   },
   "bindings_notes": [
     "ASSET payload availability: the real photograph is private (not in Git). It is available, and the benchmark RUNNABLE, only where the hash-verified file is present; a clean clone reports ASSET_PAYLOAD_UNAVAILABLE and BLOCKED. This is correct.",

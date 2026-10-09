@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto';
 import { FIDELITY_CHECK as C, FIDELITY_GATE_OUTCOME as O } from '../creative-fidelity/constants.js';
 import { rasterizeToPixels } from './production-render.js';
 import { decodePng } from './png-pixels.js';
+import { measureIdentityPreserve } from './identity-preserve-measurements.js';
 
 export const FIDELITY_MEASUREMENT_SOURCE = 'deterministic-composite-measurement@1';
 
@@ -95,7 +96,17 @@ const inward = (r) => ({
  *  expected      { asset_ref, pinned_sha256, piece_count }
  *  text_regions  [{ region_id, x, y, width, height }]                                   normalized (0..1) in the SOURCE, owner-approved
  */
-export function measureProductFidelity({
+/**
+ * The measurements of a product by its preservation mode: PIXEL_PRESERVE (placement of the untouched real pixels, below, unchanged) or IDENTITY_PRESERVE
+ * (a provider-edited product whose identity must survive, `identity-preserve-measurements.js`). Any other mode is not measurable here.
+ */
+export function measureProductFidelity(input = {}) {
+  const layers = input.product_layers ?? [];
+  if (layers.length === 1 && layers[0].preservation_mode === 'IDENTITY_PRESERVE') return measureIdentityPreserve(input);
+  return measurePixelPreserve(input);
+}
+
+function measurePixelPreserve({
   source, candidate, canvas, product_layers: layers = [], raster_layer_count: rasterLayers = 0, render_log: log, expected, text_regions: textRegions = [], tolerances = TOLERANCES,
 } = {}) {
   const observations = [];

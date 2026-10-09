@@ -1,0 +1,55 @@
+{
+  "kind": "EXTERNAL_MEDIA_AUTHORIZATION",
+  "authorization_id": "authz://habb/benchmark-001/alibaba-eu-central-1",
+  "purpose_note": "A scoped, asset-specific authorization to transmit ONE private merchant photograph to ONE external provider for ONE purpose. It is not a change of the global external-data policy: the Alibaba default stays PUBLIC-only for every other asset (src/marketing-creative/alibaba/policy.js is untouched). It authorizes; it does not transmit.",
+  "asset": {
+    "asset_ref": "asset://habb/benchmark-001/real-personalised-case-001",
+    "asset_sha256": "6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e",
+    "data_class": "MERCHANT_PRIVATE_MEDIA",
+    "contains_personal_data": false,
+    "contains_face": false,
+    "content_basis": "A photograph of a personalised phone case on a table: a printed beach picture and a printed quotation. No face and no personal data were seen when the asset was reviewed on 2026-10-10; the owner is asked to confirm."
+  },
+  "provider": {
+    "provider_id": "alibaba-cloud-model-studio",
+    "region": "eu-central-1",
+    "region_label": "Frankfurt",
+    "endpoint_class": "WORKSPACE_DOMAIN",
+    "other_providers": "NOT_AUTHORIZED",
+    "other_regions": "NOT_AUTHORIZED"
+  },
+  "purpose": "C2_HABB_BENCHMARK_001",
+  "allowed_operations": [
+    "IMAGE_EDIT",
+    "VISION_CRITIQUE"
+  ],
+  "transmissible": "THE_SOURCE_ASSET_AND_IMAGES_DERIVED_FROM_IT_FOR_THIS_PURPOSE_ONLY",
+  "retention": {
+    "standard_inference_retention_days_max": 30,
+    "zdr_status": "NOT_CONFIRMED",
+    "zdr_claimed": false,
+    "zdr_evidence_ref": null,
+    "transient_cache_hours_max": 24,
+    "uploaded_files_deleted_within_hours": 48,
+    "training_use": "NOT_WITHOUT_SEPARATE_CONSENT_PER_PROVIDER_POLICY",
+    "basis": "Alibaba Cloud Model Studio data retention policy (page last updated 2026-10-01): inference prompts and responses are retained up to 30 days by default; Zero Data Retention is available only to eligible enterprise customers of the International site and only for ZDR-enabled workspaces. Whether this workspace has ZDR is NOT confirmed and is not claimed.",
+    "acknowledged": true
+  },
+  "authorization": {
+    "authorized_by": "owner",
+    "recorded_at": "2026-10-10",
+    "basis": "Explicit instruction from the owner in chat on 2026-10-10 (C2-A).",
+    "authentication": "Owner authorization captured in the working session. Not authenticated by Nordla Identity, which remains an open dependency.",
+    "revoked": false,
+    "valid_until": "completion of HABB CREATIVE BENCHMARK 001 under C2"
+  },
+  "state": {
+    "transmission": "NOT_TRANSMITTED",
+    "credentials": "NOT_PROVISIONED",
+    "note": "Nothing was sent to Alibaba and no credential was created or requested when this record was written. A transmission needs this record AND a dedicated credential AND a passing identity-preserve fidelity gate."
+  },
+  "global_policy": {
+    "alibaba_default": "PUBLIC_ONLY",
+    "changed_by_this_record": false
+  }
+}
