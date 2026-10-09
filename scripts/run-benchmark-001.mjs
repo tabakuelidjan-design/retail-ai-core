@@ -22,6 +22,12 @@ const root = new URL('../', import.meta.url);
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (path) => JSON.parse(readFileSync(new URL(path, root), 'utf8'));
 
+/** The benchmark verdict from the stage verdicts: any FAIL dominates; otherwise anything not PASS (BLOCKED, NOT_MEASURABLE, unknown) is BLOCKED; only all-PASS is PASS. */
+export function deriveVerdict(verdicts) {
+  if (verdicts.includes('FAIL')) return 'FAIL';
+  return verdicts.length > 0 && verdicts.every((v) => v === 'PASS') ? 'PASS' : 'BLOCKED';
+}
+
 function stage(report, name, observed, expected, actual, verdict) {
   report.stages.push({ stage: name, observed, expected, actual, verdict });
   return verdict;
@@ -228,7 +234,7 @@ export async function runBenchmark({ at, configPath, specPath, outDir }) {
 
   // ---- verdict
   const verdicts = report.stages.map((s) => s.verdict);
-  report.verdict = verdicts.includes('FAIL') ? 'FAIL' : (verdicts.every((v) => v === 'PASS') ? 'PASS' : 'BLOCKED');
+  report.verdict = deriveVerdict(verdicts);
   if (outDir) {
     mkdirSync(new URL(outDir, root), { recursive: true });
     writeFileSync(new URL(`${outDir}/candidate.png`, root), png.bytes);

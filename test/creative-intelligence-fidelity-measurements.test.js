@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { deflateSync } from 'node:zlib';
+
 import * as P from '../src/creative-intelligence/production.js';
 import { evaluateHardFidelityGate, requiredChecksFromInvariants } from '../src/creative-fidelity/fidelity-gates.js';
 import {
@@ -42,6 +44,47 @@ test('A clean composite passes all five checks, and the comparison is not a taut
   assert.deepEqual([rect.x, rect.y, rect.width, rect.height], [190 + 50, 300, 600, 800]);
   const reference = P.renderReference({ sourceBytes: SOURCE, canvas: CANVAS, rect });
   assert.notEqual(sha(reference.pixels), sha(P.decodePng(mutated.png).pixels));
+});
+
+const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function encodePng({ width, height, pixels }) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 6;
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y += 1) Buffer.from(pixels.buffer, pixels.byteOffset + y * width * 4, width * 4).copy(raw, y * (width * 4 + 1) + 1);
+  return new Uint8Array(Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
+}
+
+test('PRODUCT_COLOR: the mean-absolute component detects what the signed shift cannot', () => {
+  // FM-C1 a checkerboard of +1 / -1 levels on every channel of the product region: signed changes cancel, absolute changes do not
+  const clean = renderCandidate();
+  const img = P.decodePng(clean.png);
+  const pixels = new Uint8Array(img.pixels);
+  const rect = P.containFit({ x: 190, y: 300, width: 700, height: 800 }, SRC.width, SRC.height);
+  for (let y = rect.y + 2; y < rect.y + rect.height - 2; y += 1) {
+    for (let x = rect.x + 2; x < rect.x + rect.width - 2; x += 1) {
+      const p = (y * img.width + x) * 4;
+      const d = (x + y) % 2 === 0 ? 1 : -1;
+      if ([0, 1, 2].every((k) => pixels[p + k] + d >= 0 && pixels[p + k] + d <= 255)) for (let k = 0; k < 3; k += 1) pixels[p + k] += d;
+    }
+  }
+  const altered = { ...clean, png: encodePng({ width: img.width, height: img.height, pixels }) };
+  const observations = measure(altered);
+  const ev = observations.find((o) => o.code === 'PRODUCT_COLOR').evidence;
+  // the signed shift stays inside its tolerance on every channel, the mean absolute difference exceeds its own
+  assert.ok(ev.mean_signed_shift.every((s) => Math.abs(s) <= ev.tolerance_shift), JSON.stringify(ev.mean_signed_shift));
+  assert.ok(ev.mean_abs_diff > ev.tolerance_mean_abs, String(ev.mean_abs_diff));
+  assert.equal(outcomes(observations).PRODUCT_COLOR, 'FAIL');
+  // nothing else regresses: the other four checks still PASS
+  for (const code of ['PRODUCT_IDENTITY', 'PRODUCT_GEOMETRY', 'PIECE_COUNT', 'TEXT']) assert.equal(outcomes(observations)[code], 'PASS', code);
+  // and the unaltered candidate passes
+  assert.equal(outcomes(measure(clean)).PRODUCT_COLOR, 'PASS');
 });
 
 test('Mutations: every real regression fails the check that owns it', () => {

@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
 
-import { runBenchmark } from '../scripts/run-benchmark-001.mjs';
+import { deriveVerdict, runBenchmark } from '../scripts/run-benchmark-001.mjs';
 
 // HABB CREATIVE BENCHMARK 001: the real run (`// HR-N` markers). The private photograph is only present on a trusted local machine: the tests that need it run
 // only there; everywhere else the run must report BLOCKED at readiness (never PASS, never a fallback).
@@ -16,6 +16,22 @@ const config = JSON.parse(await readFile(new URL(CONFIG, root), 'utf8'));
 const HERE = existsSync(new URL(config.private_payloads[0].path, root));
 const AT = '2026-10-09T20:36:09Z';
 const stageOf = (report, name) => report.stages.find((s) => s.stage === name);
+
+test('The benchmark verdict aggregation: FAIL dominates, any BLOCKED stage is never PASS, only all-PASS passes', () => {
+  // HR-V1 any FAIL => FAIL, whatever else happened
+  assert.equal(deriveVerdict(['PASS', 'FAIL', 'BLOCKED']), 'FAIL');
+  assert.equal(deriveVerdict(['FAIL']), 'FAIL');
+  // HR-V2 no FAIL + any BLOCKED => BLOCKED: an unmeasurable Fidelity or Guardian stage can never produce PASS
+  for (const blocked of ['creative_fidelity', 'brand_guardian']) {
+    const stages = { readiness: 'PASS', preflight: 'PASS', creative_fidelity: 'PASS', brand_guardian: 'PASS', [blocked]: 'BLOCKED' };
+    assert.equal(deriveVerdict(Object.values(stages)), 'BLOCKED', blocked);
+  }
+  assert.equal(deriveVerdict(['PASS', 'NOT_MEASURABLE']), 'BLOCKED');
+  assert.equal(deriveVerdict(['BLOCKED', 'BLOCKED']), 'BLOCKED');
+  // HR-V3 all PASS => PASS, and no stage at all is not a PASS
+  assert.equal(deriveVerdict(['PASS', 'PASS', 'PASS']), 'PASS');
+  assert.equal(deriveVerdict([]), 'BLOCKED');
+});
 
 test('The run harness is generic, clock-free and never falls back', async () => {
   const source = await readFile(new URL('scripts/run-benchmark-001.mjs', root), 'utf8');
