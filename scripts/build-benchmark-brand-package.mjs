@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import {
   approveBrandCore, approveBrandMemory, buildBrandContext, buildBrandCoreProposal, buildBrandIdentity, buildBrandMemoryDraft,
-  normalizeBrandSnapshot, submitBrandMemoryForReview,
+  normalizeBrandSnapshot, proposeBrandMemoryRevision, submitBrandMemoryForReview,
 } from '../src/branding/index.js';
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -46,8 +46,24 @@ export function buildBrandPackage(inputs, expression) {
   const memoryApproval = approveBrandMemory({
     memory: reviewed, core: coreApproval.approvedCore, tenant, brand, resolvedActor: actor, approvedAt: inputs.memory.approved_at, note: inputs.memory.approval_note,
   });
+
+  // an optional governed REVISION of the approved Memory: v1 stays untouched and becomes SUPERSEDED, v2 is the approved successor
+  let current = memoryApproval;
+  let revisionReview = null;
+  let revisionApproval = null;
+  if (inputs.memory_revision) {
+    const r = inputs.memory_revision;
+    const revision = proposeBrandMemoryRevision({
+      approvedMemory: memoryApproval.approvedMemory, core: coreApproval.approvedCore, tenant, brand, id: r.id, createdAt: r.created_at, changes: r.changes,
+    });
+    revisionReview = revision.memory;
+    revisionApproval = approveBrandMemory({
+      memory: revision.memory, core: coreApproval.approvedCore, tenant, brand, resolvedActor: actor, activeMemory: memoryApproval.approvedMemory, approvedAt: r.approved_at, note: r.approval_note,
+    });
+    current = revisionApproval;
+  }
   const context = buildBrandContext({
-    tenant, brand, core: coreApproval.approvedCore, memory: memoryApproval.approvedMemory, snapshot,
+    tenant, brand, core: coreApproval.approvedCore, memory: current.approvedMemory, snapshot,
   });
 
   return {
@@ -56,16 +72,24 @@ export function buildBrandPackage(inputs, expression) {
     snapshot,
     core: coreApproval.approvedCore,
     coreEvent: coreApproval.decisionEvent,
-    memory: memoryApproval.approvedMemory,
-    memoryEvent: memoryApproval.decisionEvent,
+    memory: current.approvedMemory,
+    memoryEvent: current.decisionEvent,
+    memoryV1: memoryApproval.approvedMemory,
     context,
     outputs: plain({
       brand,
       snapshot,
       approved_core: coreApproval.approvedCore,
       core_decision_event: coreApproval.decisionEvent,
-      approved_memory: memoryApproval.approvedMemory,
-      memory_decision_event: memoryApproval.decisionEvent,
+      // approved_memory is the CURRENT approved Memory (the revision when there is one); v1 is kept as approved, and as superseded once revised
+      approved_memory: current.approvedMemory,
+      memory_decision_event: current.decisionEvent,
+      ...(revisionApproval ? {
+        memory_v1_approved: memoryApproval.approvedMemory,
+        memory_v1_decision_event: memoryApproval.decisionEvent,
+        memory_v1_superseded: revisionApproval.supersededMemory,
+        memory_revision_review_required: revisionReview,
+      } : {}),
     }),
   };
 }
