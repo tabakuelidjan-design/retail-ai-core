@@ -225,7 +225,7 @@ of the verified source built independently of the document renderer; mutations (
 | Creative Fidelity — TEXT | printed-text region, maximum channel difference 0 (limit 2 of 255) | PASS |
 | Brand Guardian | R1, R2, R3 applicable and PASS | PASS |
 
-**Result: PASS**, derived by the harness from the gates, never asserted. The configuration status is `RUN`. The earlier attempts are kept as found (attempt 1: a harness z-index defect; attempt 2: BLOCKED,
+**Result: TECHNICAL PASS** (not a creative-quality pass). **Owner review (2026-10-10): `TECHNICALLY_VALID / OWNER_REJECTED / NOT_SHIPPABLE`** — the HABB owner rejected the poster as not premium. The PASS proves real asset preservation, deterministic rendering, claims, typography, Creative Fidelity and Brand Guardian; it does NOT prove autonomous creative quality or shippability. The composition was authored in the run spec, not decided by Nordla, so the run says nothing about Nordla creating a creative. The historical PASS is not rewritten as FAIL. The result was derived by the harness from the gates, never asserted. The configuration status is `RUN`. The earlier attempts are kept as found (attempt 1: a harness z-index defect; attempt 2: BLOCKED,
 both gates unmeasurable). **Visual inspection: AUTOMATED PASS / VISUAL CONCERN** — technically clean but plain (the product is a third of the width, the dark table background of the photograph is placed as
 is, the headline breaks after "Votre", the price sits apart): none is an implemented rule, so the verdict stands. Limits: the reference and the candidate share the rasterizer's image decoding and
 resampling; tolerances are provisional technical ones; the run is reproducible only where the verified private payload exists.

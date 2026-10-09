@@ -574,6 +574,12 @@
       "Tolerances are the provisional technical ones; a measured difference of 0 here does not tighten them.",
       "R1 constrains declared colours only, never the pixels of the photograph; R3 applies to IMAGE candidates and reports NOT_MEASURABLE for an image with no product-fidelity observation."
     ],
+    "result_meaning": "TECHNICAL PASS only (asset preservation, deterministic rendering, claims, typography, Creative Fidelity, Brand Guardian). Not a creative-quality pass and not proof that Nordla can create a creative: the composition was authored in the run spec.",
+    "owner_review": {
+      "recorded_at": "2026-10-10",
+      "status": "TECHNICALLY_VALID / OWNER_REJECTED / NOT_SHIPPABLE",
+      "note": "The HABB owner rejected the candidate as not premium (small product in a raw dark photo rectangle, awkward headline wrap, price disconnected from the product, unused space, weak art direction). It must not be used as a design target. It may serve as a negative quality reference."
+    },
     "visual_inspection": {
       "status": "AUTOMATED PASS / VISUAL CONCERN",
       "note": "Not a violated rule, so the verdict is unchanged. The creative is technically clean but plain: the product (the whole table-top photograph, accepted by decision) occupies about a third of the canvas width; the dark table background of the photograph is placed as is; the headline breaks after \"Votre\"; the price sits apart from the product with a large empty area below. None of these is an implemented rule."
