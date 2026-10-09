@@ -43,13 +43,17 @@
   ],
   "bindings": {
     "product": {
-      "ref": null,
-      "needs": "the canonical PRODUCT reference of the personalized phone case, resolved ACTIVE by the owning catalogue adapter",
-      "status": "HABB_BENCHMARK_PRODUCT_BINDING_MISSING",
+      "ref": "product://habb/benchmark-001/samsung-galaxy-a17",
+      "status": "BOUND_BY_OWNER_CONFIRMATION_AND_CATALOGUE",
+      "proof": {
+        "kind": "OWNER_STATEMENT",
+        "owner_decision_ref": "owner-decision://habb/benchmark-001/product/samsung-galaxy-a17",
+        "catalogue_evidence_ref": "evidence://habb/benchmark-001/product/samsung-galaxy-a17/shopify",
+        "note": "The model is proven by the owner’s explicit statement AND the exact live catalogue item. It is never inferred from camera geometry or appearance."
+      },
       "resolution": {
-        "status": "OWNER_PRODUCT_CONFIRMATION_REQUIRED",
-        "question": "Which exact phone model is this case for?",
-        "why": "No trusted source ties this photograph to a catalogue model (the file carries no model metadata, no EXIF, no order or production record, and the owner has not named a model). The catalogue holds one personalised-case product per phone model.",
+        "status": "RESOLVED",
+        "note": "The PRODUCT resolves ACTIVE through the common resource resolver (owner adapter), with the owner confirmation and the catalogue evidence recorded in product_evidence. This closes the earlier owner-confirmation blocker.",
         "accepted_proof_kinds": [
           "OWNER_STATEMENT",
           "PRODUCTION_RECORD",
@@ -63,9 +67,7 @@
           "comparison with internet images",
           "model popularity",
           "a single catalogue candidate picked by guess"
-        ],
-        "unverified_candidates": [],
-        "candidates_note": "No evidence-based shortlist exists, so none is offered: any shortlist would come from the photo’s appearance, which is not evidence. Nothing is bound."
+        ]
       }
     },
     "asset": {
@@ -171,15 +173,31 @@
         "origin": "MERCHANT_PROVIDED",
         "approval_ref": "approval://habb/benchmark-001/real-case-asset-001"
       }
+    },
+    {
+      "ref": "product://habb/benchmark-001/samsung-galaxy-a17",
+      "kind": "PRODUCT",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "evidence://habb/benchmark-001/product/samsung-galaxy-a17/shopify",
+      "metadata": {
+        "source_system": "shopify",
+        "source_product_id": "gid://shopify/Product/15684483187036",
+        "title": "Coque personnalisée – Samsung Galaxy A17",
+        "handle": "coque-personnalisee-samsung-galaxy-a17",
+        "vendor": "Samsung",
+        "product_type": "Coque personnalisée",
+        "source_status": "ACTIVE",
+        "owner_confirmation_ref": "owner-decision://habb/benchmark-001/product/samsung-galaxy-a17"
+      }
     }
   ],
   "expression_system_missing_decisions": {
     "status": "DECIDED_AND_GOVERNED",
     "reason": "The owner-approved expression content is carried by the APPROVED HABB Brand Memory V1.1 (see brand and bindings.expression)."
   },
-  "bindings_still_missing": [
-    "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - OWNER_PRODUCT_CONFIRMATION_REQUIRED: no trusted evidence names the exact phone model of the real asset; the owner must say which exact phone model the case is for"
-  ],
+  "bindings_still_missing": [],
   "claim_evidence": {
     "registry_status": "BENCHMARK_OWNED_NOT_A_CLAIMS_REGISTRY",
     "note": "The production Claims Registry does not exist yet. These two records are benchmark-owned, trusted configuration resolved through the common resource resolver; they are not the final registry and not a general HABB claim approval.",
@@ -327,7 +345,7 @@
       "a separate small circular cutout beside the camera module",
       "the printed scene contains a beach / sunset composition and an open book"
     ],
-    "not_inferred": "The phone model. Camera geometry and visual similarity are never a proof of the exact product (see bindings.product.resolution).",
+    "not_inferred": "The phone model was NOT inferred from the image: camera geometry and visual similarity are never proof. It comes from the owner’s statement and the exact catalogue item (see product_evidence).",
     "fidelity_baseline": {
       "fidelity_checks": [
         "PRODUCT_GEOMETRY",
@@ -355,6 +373,39 @@
     }
   },
   "bindings_notes": [
-    "The real ASSET is bound (metadata) and its payload is private; it is available only where the hash-verified file is present (see private_payloads)."
-  ]
+    "ASSET payload availability: the real photograph is private (not in Git). It is available, and the benchmark RUNNABLE, only where the hash-verified file is present; a clean clone reports ASSET_PAYLOAD_UNAVAILABLE and BLOCKED. This is correct.",
+    "RUNNABLE is not RUN: this configuration stays NOT_RUN and C2 stays closed until a real run records its evidence."
+  ],
+  "product_evidence": {
+    "product_ref": "product://habb/benchmark-001/samsung-galaxy-a17",
+    "owner_confirmation": {
+      "ref": "owner-decision://habb/benchmark-001/product/samsung-galaxy-a17",
+      "statement": "The Benchmark 001 case is for Samsung Galaxy A17.",
+      "model": "Samsung Galaxy A17",
+      "recorded_at": "2026-10-09T19:44:19Z",
+      "scope": "Benchmark 001 only.",
+      "authentication": "Owner authorization recorded for the benchmark; not authenticated by Nordla Identity, which remains an open dependency. The clock was read once, outside any builder."
+    },
+    "catalogue": {
+      "ref": "evidence://habb/benchmark-001/product/samsung-galaxy-a17/shopify",
+      "source_system": "Shopify / HABB catalogue",
+      "product_gid": "gid://shopify/Product/15684483187036",
+      "title": "Coque personnalisée – Samsung Galaxy A17",
+      "handle": "coque-personnalisee-samsung-galaxy-a17",
+      "status": "ACTIVE",
+      "vendor": "Samsung",
+      "product_type": "Coque personnalisée",
+      "verified": "Live read-only lookup of the connected HABB Shopify store (product by GID) on 2026-10-09T19:44:19Z, and the HABB Core catalogue synchronised copy (same GID and handle).",
+      "identity_only": "Mutable price and inventory are not part of the product identity: the 25 EUR price is the separate approved CLAIM. The Shopify featured image is not copied and never substitutes for the benchmark ASSET."
+    }
+  },
+  "product_asset_link": {
+    "product_ref": "product://habb/benchmark-001/samsung-galaxy-a17",
+    "asset_ref": "asset://habb/benchmark-001/real-personalised-case-001",
+    "asset_sha256": "6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e",
+    "product_identity": "Samsung Galaxy A17",
+    "asset_identity": "owner-supplied real photograph",
+    "proof": "owner statement + exact catalogue item",
+    "inference": "none: the link is not inferred from camera geometry or any visual feature"
+  }
 }
