@@ -4,7 +4,7 @@
 // The font bytes are an ephemeral payload of the resolver (hash-checked by `loadPayload`); they never enter a document or a Brand Memory.
 
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createCommonResourceResolver, createStaticResourceAdapter } from '../src/resources/index.js';
 
 const root = new URL('../', import.meta.url);
@@ -29,10 +29,28 @@ export function loadFontManifest(manifestPath) {
   return { manifest, records, payloads };
 }
 
-/** The common resolver of a benchmark: its own records (config.owned_records) and the records + payloads of its resource manifests, one owner adapter. */
-export function createBenchmarkResolver(config) {
-  const records = [...(config.owned_records ?? [])];
+/**
+ * Private payloads (merchant originals that are never committed): present only where the trusted file exists. A file that is present but whose hash differs
+ * from the pinned one is refused, never used. Absent means "not available here", which readiness reports; it is never an error and never a substitute.
+ */
+export function loadPrivatePayloads(config, base = root) {
   const payloads = {};
+  const status = [];
+  for (const entry of config.private_payloads ?? []) {
+    const location = new URL(entry.path, base);
+    if (!existsSync(location)) { status.push({ ref: entry.ref, available: false }); continue; }
+    const bytes = new Uint8Array(readFileSync(location));
+    if (sha256(bytes) !== entry.sha256) throw new Error(`${entry.path}: the private payload differs from its pinned SHA-256`);
+    payloads[entry.ref] = bytes;
+    status.push({ ref: entry.ref, available: true });
+  }
+  return { payloads, status };
+}
+
+/** The common resolver of a benchmark (`privatePayloads: false` models an environment that does not hold the private files, such as CI): its own records (config.owned_records) and the records + payloads of its resource manifests, one owner adapter. */
+export function createBenchmarkResolver(config, { privatePayloads = true } = {}) {
+  const records = [...(config.owned_records ?? [])];
+  const payloads = privatePayloads ? loadPrivatePayloads(config).payloads : {};
   for (const path of config.resource_manifests ?? []) {
     const loaded = loadFontManifest(path);
     records.push(...loaded.records);

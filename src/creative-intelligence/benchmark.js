@@ -15,6 +15,9 @@ import { CI_ERROR as E, PRE_C2_DEPENDENCY as D, RESOURCE_KIND } from './constant
 import { registerEvidence } from './readiness.js';
 import { deepFreeze, fail, isPlainObject, ref } from './validation.js';
 
+/** What may prove which exact product a real asset shows. Visual similarity and classifiers are deliberately absent. */
+export const PRODUCT_PROOF_KINDS = Object.freeze(['OWNER_STATEMENT', 'PRODUCTION_RECORD', 'ASSET_METADATA', 'INVENTORY_REFERENCE']);
+
 export const BENCHMARK_STATUS = Object.freeze({
   NOT_RUN: 'NOT_RUN', BLOCKED: 'BLOCKED', RUNNABLE: 'RUNNABLE', RUN: 'RUN',
 });
@@ -58,15 +61,25 @@ export async function assessBenchmarkReadiness({
   const { bindings, expected } = config;
   const items = [];
 
-  items.push(await bindResource({ id: 'product', kind: RESOURCE_KIND.PRODUCT, reference: bindings.product?.ref, resolver, tenant }));
+  // PRODUCT: the owning adapter must resolve it ACTIVE with evidence AND the benchmark must state HOW the product was proven. A visual guess
+  // (appearance, similarity, popularity) is never a proof: it can suggest a candidate, never bind one.
+  items.push(await bindResource({
+    id: 'product', kind: RESOURCE_KIND.PRODUCT, reference: bindings.product?.ref, resolver, tenant,
+    check: () => (PRODUCT_PROOF_KINDS.includes(bindings.product?.proof?.kind) ? null : 'PRODUCT_PROOF_MISSING'),
+  }));
 
+  // three separate facts: the asset METADATA is bound (real, approved, hash declared), its PAYLOAD is available and hash-verified here, and the
+  // benchmark is RUNNABLE (all bindings). A manifest alone never makes a benchmark runnable.
+  const asset = { metadata_bound: false, payload_available: false };
   items.push(await bindResource({
     id: 'asset', kind: RESOURCE_KIND.ASSET, reference: bindings.asset?.ref, resolver, tenant,
     check: async (r) => {
       // a REAL, approved merchant asset: never generated, never synthetic, never unapproved - and its bytes must really be there
       if (r.metadata.origin !== 'MERCHANT_PROVIDED') return 'ASSET_NOT_REAL_MERCHANT_ASSET';
       if (!r.metadata.approval_ref) return 'ASSET_NOT_APPROVED';
+      asset.metadata_bound = true;
       try { await resolver.loadPayload(r.ref, tenant); } catch { return 'ASSET_PAYLOAD_UNAVAILABLE'; }
+      asset.payload_available = true;
       return null;
     },
   }));
@@ -111,6 +124,7 @@ export async function assessBenchmarkReadiness({
     benchmark_id: config.benchmark_id,
     status: blockers.length === 0 ? BENCHMARK_STATUS.RUNNABLE : BENCHMARK_STATUS.BLOCKED,
     runnable_is_not_run: true,
+    asset: { ...asset },
     bindings: items,
     blockers,
   });

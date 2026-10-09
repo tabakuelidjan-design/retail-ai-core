@@ -9,4 +9,6 @@ export {
 export {
   verifyResourceResolver, verifyFontMetrics, verifyShaping, verifyArabicBidi, verifyRasterizer, verifyPngPath, assessExpressionReadiness,
 } from './pre-c2-probes.js';
-export { assessBenchmarkReadiness, recordBenchmarkRun, BENCHMARK_STATUS } from './benchmark.js';
+export {
+  assessBenchmarkReadiness, recordBenchmarkRun, BENCHMARK_STATUS, PRODUCT_PROOF_KINDS,
+} from './benchmark.js';

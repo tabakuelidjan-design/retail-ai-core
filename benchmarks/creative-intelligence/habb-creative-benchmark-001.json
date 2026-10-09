@@ -45,12 +45,33 @@
     "product": {
       "ref": null,
       "needs": "the canonical PRODUCT reference of the personalized phone case, resolved ACTIVE by the owning catalogue adapter",
-      "status": "HABB_BENCHMARK_PRODUCT_BINDING_MISSING"
+      "status": "HABB_BENCHMARK_PRODUCT_BINDING_MISSING",
+      "resolution": {
+        "status": "OWNER_PRODUCT_CONFIRMATION_REQUIRED",
+        "question": "Which exact phone model is this case for?",
+        "why": "No trusted source ties this photograph to a catalogue model (the file carries no model metadata, no EXIF, no order or production record, and the owner has not named a model). The catalogue holds one personalised-case product per phone model.",
+        "accepted_proof_kinds": [
+          "OWNER_STATEMENT",
+          "PRODUCTION_RECORD",
+          "ASSET_METADATA",
+          "INVENTORY_REFERENCE"
+        ],
+        "refused_as_proof": [
+          "camera geometry or camera count",
+          "visual similarity",
+          "an image classifier",
+          "comparison with internet images",
+          "model popularity",
+          "a single catalogue candidate picked by guess"
+        ],
+        "unverified_candidates": [],
+        "candidates_note": "No evidence-based shortlist exists, so none is offered: any shortlist would come from the photo’s appearance, which is not evidence. Nothing is bound."
+      }
     },
     "asset": {
-      "ref": null,
-      "needs": "a REAL, merchant-provided, approved product photograph (origin MERCHANT_PROVIDED, approval_ref, content hash, payload available) - never generated, never substituted",
-      "status": "HABB_BENCHMARK_REAL_ASSET_MISSING"
+      "ref": "asset://habb/benchmark-001/real-personalised-case-001",
+      "status": "METADATA_BOUND",
+      "note": "The asset METADATA is bound here. Its PAYLOAD is private (not in Git): readiness reports ASSET_PAYLOAD_UNAVAILABLE in any environment that does not hold the hash-verified file, and BOUND where it does. A manifest alone never makes the benchmark runnable."
     },
     "claims": [
       {
@@ -134,6 +155,22 @@
         "approved_wording": "5 minutes",
         "approval_ref": "approval://habb/GBP-PROD-01"
       }
+    },
+    {
+      "ref": "asset://habb/benchmark-001/real-personalised-case-001",
+      "kind": "ASSET",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "evidence://habb/benchmark-001/real-case-asset-001",
+      "metadata": {
+        "media_type": "image/jpeg",
+        "width_px": 1152,
+        "height_px": 1536,
+        "content_hash": "6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e",
+        "origin": "MERCHANT_PROVIDED",
+        "approval_ref": "approval://habb/benchmark-001/real-case-asset-001"
+      }
     }
   ],
   "expression_system_missing_decisions": {
@@ -141,8 +178,7 @@
     "reason": "The owner-approved expression content is carried by the APPROVED HABB Brand Memory V1.1 (see brand and bindings.expression)."
   },
   "bindings_still_missing": [
-    "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - no single canonical PRODUCT for \"the personalised phone case\": the Core catalogue holds one product per phone model (\"Coque personnalisée - <model>\"); the owner must name the benchmark product",
-    "HABB_BENCHMARK_REAL_ASSET_MISSING - a real, merchant-provided, approved photograph of a personalised HABB phone case, with content hash and payload (no AI-generated poster, mockup, stock or render qualifies)"
+    "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - OWNER_PRODUCT_CONFIRMATION_REQUIRED: no trusted evidence names the exact phone model of the real asset; the owner must say which exact phone model the case is for"
   ],
   "claim_evidence": {
     "registry_status": "BENCHMARK_OWNED_NOT_A_CLAIMS_REGISTRY",
@@ -243,5 +279,82 @@
         }
       }
     }
-  }
+  },
+  "private_payloads": [
+    {
+      "ref": "asset://habb/benchmark-001/real-personalised-case-001",
+      "sha256": "6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e",
+      "path": "data/private/benchmark-assets/habb-benchmark-001/HABB_BENCHMARK_001_REAL_CASE_ASSET.jpg",
+      "storage": "PRIVATE_LOCAL_NOT_IN_GIT",
+      "original_filename": "HABB_BENCHMARK_001_REAL_CASE_ASSET.jpg",
+      "policy": "The repository is public and its asset policy (benchmarks/creative-fidelity/README.md, .gitignore data/private/) forbids committing merchant originals. Only metadata, hash and evidence are committed; the bytes live in the gitignored private location and are verified against this hash on load. CI does not need the file."
+    }
+  ],
+  "asset_evidence": {
+    "asset_ref": "asset://habb/benchmark-001/real-personalised-case-001",
+    "owner_declaration": {
+      "declared_by": "owner",
+      "recorded_at": "2026-10-09T19:04:02Z",
+      "statement": "The attached image is a real photograph of a real personalised phone case produced / used by HABB, merchant-provided and approved for HABB CREATIVE BENCHMARK 001 use. It is not an AI-generated product image, not a stock image and not a Canva / mockup render.",
+      "approval_ref": "approval://habb/benchmark-001/real-case-asset-001",
+      "evidence_ref": "evidence://habb/benchmark-001/real-case-asset-001",
+      "scope": "Benchmark 001 only.",
+      "authentication": "Owner authorization captured for the benchmark bootstrap / run preparation. Not authenticated by Nordla Identity, which remains an open dependency. The clock was read once, outside any builder."
+    },
+    "verified_file_facts": {
+      "sha256": "6c63d3e38c97fa77a72aed6b6056e93a71167055b152601968e5a72f7a7b890e",
+      "bytes": 281920,
+      "media_type": "image/jpeg",
+      "width_px": 1152,
+      "height_px": 1536,
+      "jpeg": {
+        "process": "baseline DCT, 8-bit",
+        "components": 3,
+        "exif": false,
+        "markers_seen": [
+          "JFIF",
+          "ICC_PROFILE"
+        ],
+        "icc_profile_present": true
+      },
+      "unchanged": "The original bytes are the evidence: no crop, enhancement, denoise, relight, rotation, upscale, recompression or colour change. Any production transformation works on a derived copy; this hash always names the original."
+    },
+    "visual_observations": [
+      "phone case viewed from the back",
+      "a printed personalised design covers the rear surface",
+      "black / dark case edge",
+      "vertical three-camera cutout / module area",
+      "a separate small circular cutout beside the camera module",
+      "the printed scene contains a beach / sunset composition and an open book"
+    ],
+    "not_inferred": "The phone model. Camera geometry and visual similarity are never a proof of the exact product (see bindings.product.resolution).",
+    "fidelity_baseline": {
+      "fidelity_checks": [
+        "PRODUCT_GEOMETRY",
+        "PRODUCT_COLOR",
+        "PRODUCT_IDENTITY",
+        "TEXT"
+      ],
+      "invariants": [
+        "PRESERVE_PRODUCT_GEOMETRY",
+        "PRESERVE_PIECE_COUNT",
+        "PRESERVE_PRODUCT_COLOR",
+        "PRESERVE_TEXT_EXACTLY"
+      ],
+      "must_remain_unchanged": {
+        "silhouette": "the case outer silhouette",
+        "camera_geometry": "the camera / cutout geometry (the vertical three-lens module and the separate circular cutout)",
+        "printed_artwork": "the printed artwork, as pixels and content",
+        "printed_text": "the printed text inside the artwork: it is product content, never rewritten, never OCR-reinterpreted and never promoted to a marketing claim",
+        "border_material": "the case border / material appearance: nothing is fabricated",
+        "proportions": "the overall product proportions"
+      },
+      "piece_count": 1,
+      "face_identity_gate": "NOT_APPLICABLE_FOR_THIS_ASSET",
+      "face_gate_note": "The photo shows no clearly visible human face. This is a fact about this asset only: the global HABB rule that customer faces must never be altered is unchanged."
+    }
+  },
+  "bindings_notes": [
+    "The real ASSET is bound (metadata) and its payload is private; it is available only where the hash-verified file is present (see private_payloads)."
+  ]
 }
