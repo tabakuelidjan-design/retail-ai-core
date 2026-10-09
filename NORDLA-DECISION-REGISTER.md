@@ -47,13 +47,28 @@ See `NORDLA-DEFERRED.md` for implementation conditions and details.
 | ID | Direction | Status |
 |---|---|---|
 | NDR-D01 | Multi-model routing | DECIDED / DEFERRED |
-| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / DEFERRED |
+| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / C1 FOUNDATION COMPLETE · C2 DEFERRED (see clarification below) |
 | NDR-D03 | Market Intelligence / Market Radar | DECIDED / DEFERRED |
 | NDR-D04 | Specialist Fujitsu-like retail agents | DECIDED / DEFERRED |
 | NDR-D05 | Event-driven agents/automations | DECIDED / DEFERRED |
 | NDR-D06 | A2A-style agent communication where justified | DECIDED / DEFERRED |
 | NDR-D07 | Advanced forecasting/statistical intelligence subject to data thresholds | DECIDED / DEFERRED |
 | NDR-D08 | Separate analytics serving layer at scale if transaction workload requires it | DECIDED / DEFERRED |
+
+### Clarification of NDR-D02 (Creative Intelligence)
+
+The original direction and its condition are kept: Creative Intelligence is built when the Marketing brief contract is stable **and a real HABB
+campaign is used as benchmark** (see `NORDLA-DEFERRED.md`, L3-002). The decision is now stated per stage:
+
+```
+Marketing brief stable                          YES
+C1 deterministic foundation                     COMPLETE   (docs/architecture/creative-intelligence-v1.md)
+Real HABB campaign benchmark                    NOT YET RUN  (HABB CREATIVE BENCHMARK 001, configuration data only)
+C2 provider bake-off / real provider execution  BLOCKED / DEFERRED until HABB CREATIVE BENCHMARK 001 is runnable and used
+```
+
+Creative Intelligence C1 Foundation is allowed and COMPLETE. This does not mean Creative Intelligence is complete: C2 and later stages remain
+deferred under NDR-D01 (no dynamic routing) and NDR-P16 (explicit, bounded premium-provider execution).
 
 ## Provisional decisions
 

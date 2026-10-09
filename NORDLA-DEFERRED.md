@@ -10,7 +10,7 @@ Deferred means **decided direction, not permission to implement immediately**.
 | ID | Capability | Why kept | Build when | Current state |
 |---|---|---|---|---|
 | L3-001 | Multi-model Router | Avoid dependency on one model; route by task, quality, cost, privacy and availability. | Level 3 work begins and at least two real workloads justify routing. | DECIDED / NOT IMPLEMENTED |
-| L3-002 | Creative Intelligence | Premium creative workflow: direction → exploration → selection → finishing → QA → learning. | Marketing strategy/brief contract is stable and a real HABB campaign is used as benchmark. | DECIDED / NOT IMPLEMENTED |
+| L3-002 | Creative Intelligence | Premium creative workflow: direction → exploration → selection → finishing → QA → learning. | Marketing strategy/brief contract is stable and a real HABB campaign is used as benchmark. | DECIDED / C1 FOUNDATION COMPLETE · C2 NOT IMPLEMENTED (see clarification below) |
 | L3-003 | Market Intelligence / Market Radar | Read-only market, competitor, platform, demand and opportunity research serving Marketing, Sales Development, Buying and Inventory. | Core evidence/provenance and bounded external-tool access exist. | DECIDED / NOT IMPLEMENTED |
 | L3-004 | Research Intelligence | Deep sourced research with provenance and uncertainty. | Evidence model/tool boundary stable. | DECIDED / NOT IMPLEMENTED |
 | L3-005 | Specialist Sales Intelligence agent | Deep sales analysis/proposals, no final arbitration. | Sales domain contract exists. | DECIDED / NOT IMPLEMENTED |
@@ -26,6 +26,20 @@ Deferred means **decided direction, not permission to implement immediately**.
 | INF-002 | Advanced immutable/isolated disaster recovery | Survive compromise of the primary environment without ransom dependency. | Security/resilience phase; design must remain a requirement now. | DECIDED / PARTIALLY PLANNED |
 | DATA-001 | Cross-merchant aggregated benchmarks | Create benchmarks impossible at one SME's scale while preserving privacy. | Legal basis, privacy design, minimum aggregation thresholds and sufficient merchant count exist. | DECIDED / NOT IMPLEMENTED |
 | MKT-001 | Advanced independent marketing incrementality/MMM | Separate attributed from incremental impact. | Sufficient history/channels/geography; do not use when statistically unjustified. | DECIDED / NOT IMPLEMENTED |
+
+## Clarification of L3-002 (Creative Intelligence)
+
+The "Build when" condition above is kept; it is now applied per stage.
+
+| Condition / stage | State |
+|---|---|
+| Marketing strategy / brief contract is stable | YES |
+| C1 deterministic foundation (intake, DesignDocument, layout, typography contract, deterministic renderer, preflight, candidate, registry contract, agent interfaces, resource-resolver interface) | COMPLETE |
+| A real HABB campaign is used as benchmark | NOT YET RUN: HABB CREATIVE BENCHMARK 001 (configuration data only, `benchmarks/creative-intelligence/`) |
+| C2 provider bake-off, real provider execution, segmentation / compositing providers, generation / edit providers | BLOCKED / DEFERRED until HABB CREATIVE BENCHMARK 001 is runnable and used |
+| VLM Creative Critic, video, Creative Learning | NOT IMPLEMENTED (later stages) |
+
+Creative Intelligence is NOT complete as a whole: only its C1 foundation is.
 
 ## Rules
 

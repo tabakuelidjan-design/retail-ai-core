@@ -434,7 +434,13 @@ test('C1 may close, C2 provider work stays blocked on a real campaign benchmark 
   assert.ok(doc.includes('C1 foundation may close.'));
   assert.ok(doc.includes('C2 provider work remains blocked until a real HABB campaign benchmark exists.'));
   assert.ok(doc.includes('HABB CREATIVE BENCHMARK 001'));
-  // 325 the canonical Decision Register was not changed by this work (NDR-D02 is still DECIDED / DEFERRED)
+  // 325 NDR-D02 / L3-002 carry the explicit clarification (C1 foundation COMPLETE, C2 DEFERRED on the benchmark) and keep the original condition
   const register = await readFile(new URL('../NORDLA-DECISION-REGISTER.md', import.meta.url), 'utf8');
-  assert.ok(register.includes('| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / DEFERRED |'));
+  const deferred = await readFile(new URL('../NORDLA-DEFERRED.md', import.meta.url), 'utf8');
+  assert.ok(register.includes('| NDR-D02 | Creative Intelligence implementation beyond current experiments | DECIDED / C1 FOUNDATION COMPLETE · C2 DEFERRED'));
+  assert.ok(register.includes('C2 provider bake-off / real provider execution  BLOCKED / DEFERRED until HABB CREATIVE BENCHMARK 001 is runnable and used'));
+  assert.ok(register.includes('This does not mean Creative Intelligence is complete'));
+  assert.ok(deferred.includes('a real HABB campaign is used as benchmark.')); // the original condition is not deleted
+  assert.ok(deferred.includes('| L3-002 | Creative Intelligence |') && deferred.includes('C1 FOUNDATION COMPLETE · C2 NOT IMPLEMENTED'));
+  assert.ok(deferred.includes('Creative Intelligence is NOT complete as a whole: only its C1 foundation is.'));
 });

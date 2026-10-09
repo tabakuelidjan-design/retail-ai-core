@@ -1,7 +1,7 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
-- **Status:** C1 FOUNDATION — IMPLEMENTED LOCALLY / UNDER AUDIT (architect audit applied; not COMPLETE until pushed and CI-green)
-- **Branch:** `feature/creative-intelligence-c1-foundation` (from `feature/branding-marketing-creative-v1` @ `a0162e9`)
+- **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
+- **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 
 ```text
@@ -12,6 +12,66 @@ CREATIVE FIDELITY guards the product · BRAND GUARDIAN guards the brand · ACTIV
 
 The durable output of Creative Intelligence is **not an image**. It is a structured **DesignDocument** (a scene graph), plus a
 **CreativeCandidate** that points at it, plus provenance and a preflight report. A PNG / SVG is a **projection** of that state.
+
+## Closure
+
+### What COMPLETE means (C1 FOUNDATION)
+
+```text
+Creative Intake contract                        COMPLETE
+M3 -> C1 handoff                                COMPLETE
+Product / Asset readiness contract              COMPLETE
+DesignDocument / Scene Graph V1                 COMPLETE
+Layout Constraint Engine V1                     COMPLETE
+Typography contract                             COMPLETE
+deterministic SVG renderer                      COMPLETE
+structural / resolved render boundary           COMPLETE
+deterministic preflight                         COMPLETE
+CreativeCandidate / selection                   COMPLETE
+Provider Capability Registry                    COMPLETE
+agent interfaces / trust boundary               COMPLETE
+Resource Resolver interface                     COMPLETE
+```
+
+COMPLETE means the contracts, deterministic engines and their tests are finished and tested against synthetic fixtures. It does **not**
+mean Creative Intelligence can produce a production creative.
+
+### What is explicitly NOT complete
+
+```text
+production Resource Registry
+Brand Memory V1.1 expression_system
+real font metrics
+complex-script shaping
+Arabic / Bidi / RTL production verification
+deterministic PNG rasterizer
+real PNG production path
+HABB benchmark execution
+product segmentation / compositing providers
+image generation / edit providers
+VLM Creative Critic
+video
+Creative Learning
+```
+
+### C2 - NOT READY
+
+C2 provider bake-off and real provider execution are **DEFERRED until HABB CREATIVE BENCHMARK 001 is runnable and used**
+(`NORDLA-DECISION-REGISTER.md` NDR-D02 clarification, `NORDLA-DEFERRED.md` L3-002 clarification). Blockers (`assessCreativeC2Readiness()`):
+
+```text
+1. production Socle Resource Resolver with FORMAT capability
+2. Brand Memory V1.1 expression_system
+3. real font metrics from real font files
+4. real font shaping
+5. Arabic / bidi / RTL verification
+6. deterministic rasterizer
+7. real PNG path
+8. HABB CREATIVE BENCHMARK 001 runnable with real evidence / assets
+```
+
+CJK line breaking remains deferred and is not a C2 blocker. HABB CREATIVE BENCHMARK 001 stays configuration / benchmark data only
+(status `NOT_RUN`). Next target: the PRE-C2 foundation patch.
 
 ## 0. Canonical documents audit (final architect audit)
 
@@ -37,8 +97,8 @@ brief contract is stable **and a real HABB campaign is used as benchmark**", and
 prerequisites are met. The Marketing brief contract is stable, `marketing-v1-architecture.md` names Creative Intelligence the next build
 target, and the C1 mandate is the architect's explicit decision to start; but C1 is validated on **synthetic** fixtures only, so the
 "real campaign benchmark" condition is **not met by C1**. It is carried forward as the exit condition of C2 (the first real HABB campaign
-is the benchmark), and a Decision Register entry recording the implementation decision remains the architect's to make: this audit does not
-edit the register.
+is the benchmark), and the architect has since recorded the per-stage clarification in `NORDLA-DECISION-REGISTER.md` (NDR-D02) and `NORDLA-DEFERRED.md`
+(L3-002), keeping the original condition.
 
 **Two defects found by the audit and fixed** (neither is a redesign): (1) the reference validator refused every `scheme://` reference,
 whereas Marketing and Branding identify resources as `asset://...`, `claim://...`, `category://...`, `format://...`; it now refuses only
@@ -122,7 +182,7 @@ always `false`. No PNG is ever faked.
 C1 foundation may close.
 C2 provider work remains blocked until a real HABB campaign benchmark exists.
 
-The Decision Register is **not** changed by this work (a test guards NDR-D02). The architect-selected benchmark is **HABB CREATIVE BENCHMARK 001**:
+The canonical register and deferred list carry the explicit clarification (a test guards it and guards that the original condition is kept). The architect-selected benchmark is **HABB CREATIVE BENCHMARK 001**:
 a personalized phone case, price 25 €, promise "5 minutes", primary channel Instagram Feed, primary canvas 1080 x 1350. It lives as
 **configuration data only** in `benchmarks/creative-intelligence/habb-creative-benchmark-001.json` (status `NOT_RUN`) and no generic Creative
 source contains any of it (tested). Its requirements: real product asset, exact product preservation, exact approved price (25 €), exact
@@ -604,5 +664,5 @@ Every row is a behaviour the mandate (rows 1-255) or the final architect audit (
 | 322 | with everything else closed, the missing real benchmark alone keeps C2 blocked | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
 | 323 | the benchmark says honestly what is still missing before it can run | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
 | 324 | the architecture document states the decision: C1 may close, C2 provider work is blocked on that benchmark | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
-| 325 | the canonical Decision Register was not changed by this work (NDR-D02 is still DECIDED / DEFERRED) | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
+| 325 | NDR-D02 / L3-002 carry the explicit clarification (C1 foundation COMPLETE, C2 DEFERRED on the benchmark) and keep the original condition | creative-intelligence-m3-resolver.test.js › C1 may close, C2 provider work stays blocked on a real campaign benchmark kept as configuration data |
 <!-- coverage-matrix:end -->
