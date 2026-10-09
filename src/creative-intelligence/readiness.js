@@ -2,11 +2,22 @@
 // dependencies below have explicit evidence. Nothing is inferred and nothing is marked ready by default: this is the same honesty
 // device as Activation's production-readiness report.
 //
-// A dependency is closed only by an opaque evidence reference (a decision, a verification report, a test run) supplied by the caller.
+// A dependency is closed only by EVIDENCE ISSUED BY A VERIFICATION in this package (pre-c2-probes.js, benchmark.js): a real probe that ran
+// (resolver conformance, real-font shaping, bidi, deterministic rasterization, a real PNG path, an approved non-empty expression system) or a
+// benchmark that was actually RUN. A string, a hand-made object or a "RUNNABLE" report is not evidence and is refused. Infrastructure
+// existing never opens C2: the architect-selected campaign benchmark must have actually been run.
 // CJK line breaking is DEFERRED by decision: it is documented, it does not block C2, and it must not be claimed as supported.
 
 import { CI_ERROR as E, PRE_C2_DEPENDENCY as D } from './constants.js';
 import { deepFreeze, fail, isPlainObject, ref } from './validation.js';
+
+// Evidence issued by a verification. Registration is module-private to the package (the index does not re-export it): an object that was
+// not registered here is not evidence, whatever it says.
+const ISSUED = new WeakSet();
+export function registerEvidence(evidence) {
+  ISSUED.add(evidence);
+  return evidence;
+}
 
 export const PRE_C2_DEPENDENCIES = deepFreeze([
   {
@@ -57,7 +68,7 @@ export const PRE_C2_DEPENDENCIES = deepFreeze([
 ]);
 
 /**
- * @param {object} facts a map { DEPENDENCY_ID: evidence_ref } - the evidence that closes a dependency
+ * @param {object} facts a map { DEPENDENCY_ID: evidence } - the EVIDENCE issued by the verification of that dependency
  * @returns the status of every dependency and whether C2 may start. With no fact at all: C2 is NOT allowed, every blocking dependency open.
  */
 export function assessCreativeC2Readiness(facts = {}) {
@@ -65,17 +76,26 @@ export function assessCreativeC2Readiness(facts = {}) {
   const known = PRE_C2_DEPENDENCIES.map((d) => d.id);
   for (const key of Object.keys(facts)) if (!known.includes(key)) fail(E.READINESS_INVALID, `${key} is not a pre-C2 dependency`, { field: 'facts' });
   const dependencies = PRE_C2_DEPENDENCIES.map((d) => {
-    const evidence = facts[d.id] === undefined ? null : ref(facts[d.id], `facts.${d.id}`);
+    let evidence = null;
+    if (facts[d.id] !== undefined) {
+      const given = facts[d.id];
+      if (!ISSUED.has(given) || given.dependency !== d.id || given.status !== 'VERIFIED') {
+        fail(E.READINESS_INVALID, `${d.id}: only evidence issued by its verification closes a dependency (not a reference, not a report that merely says so)`, { field: d.id });
+      }
+      evidence = ref(given.evidence_ref, `facts.${d.id}.evidence_ref`);
+    }
     let status;
     if (evidence) status = 'CLOSED';
     else status = d.blocking ? 'OPEN' : 'DEFERRED';
     return { id: d.id, blocking: d.blocking, status, evidence_ref: evidence, summary: d.summary };
   });
   const open = dependencies.filter((d) => d.status === 'OPEN').map((d) => d.id);
+  const closed = (id) => dependencies.find((d) => d.id === id).status === 'CLOSED';
   return deepFreeze({
     c2_allowed: open.length === 0,
     open_blockers: open,
     dependencies,
-    typography_production_ready: false, // never claimed by C1, whatever the facts say
+    // derived from the evidence of the three typography verifications, never asserted
+    typography_production_ready: closed(D.REAL_FONT_METRICS) && closed(D.COMPLEX_SCRIPT_SHAPING) && closed(D.ARABIC_BIDI_RTL_VERIFICATION),
   });
 }

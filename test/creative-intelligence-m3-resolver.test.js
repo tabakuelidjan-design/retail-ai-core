@@ -8,6 +8,13 @@ import {
   intakeInput, isDeepFrozen, resolveAllMedia, resolutionFor, solved, textLayer,
 } from './creative-intelligence-fixtures.js';
 import { M1, M2, buildM3World, posterFormat, tenant } from './creative-intelligence-m3-world.js';
+import { registerEvidence } from '../src/creative-intelligence/readiness.js';
+
+// Evidence as the package's own verifications issue it. The REAL verifications are exercised in creative-pre-c2-foundation.test.js; here the
+// readiness AGGREGATION is tested, so the evidence is registered directly.
+const evidenceFor = (dependency) => registerEvidence(Object.freeze({
+  dependency, status: 'VERIFIED', verified_by: 'test', evidence_ref: `probe://${dependency.toLowerCase()}/test`, details: Object.freeze({}),
+}));
 
 // `// N text` markers are rows of the coverage matrix (docs/architecture/creative-intelligence-v1.md). Rows 256+ belong to the final
 // architect audit: real Marketing M3 compatibility, the resource resolver boundary, canonical ref vs payload, no style defaults, pre-C2.
@@ -140,7 +147,7 @@ test('Resource resolver boundary: the resolver\'s kind is authoritative, nothing
   const boundary = CI.createResourceBoundary({ resolver: world({ 'asset://a': res('asset://a', 'ASSET') }) });
   // 279 a resolution has exactly: ref, kind, merchant_id, version, status, metadata
   const r = await boundary.resolve('asset://a', T);
-  assert.deepEqual(Object.keys(r).sort(), ['kind', 'merchant_id', 'metadata', 'ref', 'status', 'version']);
+  assert.deepEqual(Object.keys(r).sort(), ['kind', 'merchant_id', 'metadata', 'provenance', 'ref', 'status', 'version']);
   assert.ok(isDeepFrozen(r));
   assert.equal(code(() => CI.normalizeResourceResolution({ ...res('asset://a', 'ASSET'), extra: 1 }, { ref: 'asset://a', tenant: T })), CI.CI_ERROR.RESOURCE_INVALID);
   // 287 closed vocabularies: kind and status are enums
@@ -327,18 +334,24 @@ test('Pre-C2 readiness: C2 stays blocked until every blocking dependency has exp
     assert.equal(CI.PRE_C2_DEPENDENCIES.find((d) => d.id === id).blocking, true, id);
   }
   // 307 one closed dependency does not unblock C2
-  const one = CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: 'evidence://font-metrics-report' });
+  const one = CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: evidenceFor('REAL_FONT_METRICS') });
   assert.equal(one.c2_allowed, false);
   assert.equal(one.dependencies.find((d) => d.id === 'REAL_FONT_METRICS').status, 'CLOSED');
   assert.equal(one.open_blockers.length, blocking.length - 1);
-  // 308 C2 is allowed only when every blocking dependency has evidence - and typography is never declared production-ready by C1
-  const all = CI.assessCreativeC2Readiness(Object.fromEntries(blocking.map((id) => [id, `evidence://${id.toLowerCase()}`])));
+  // 308 C2 is allowed only when every blocking dependency has explicit evidence; typography is production-ready only when its three evidences exist
+  const all = CI.assessCreativeC2Readiness(Object.fromEntries(blocking.map((id) => [id, evidenceFor(id)])));
   assert.equal(all.c2_allowed, true);
   assert.deepEqual(all.open_blockers, []);
-  assert.equal(all.typography_production_ready, false);
-  // 309 evidence is an opaque reference (never a URL) and an unknown dependency is refused
-  assert.equal(code(() => CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: 'https://example.com/report' })), CI.CI_ERROR.INVALID_REFERENCE);
-  assert.equal(code(() => CI.assessCreativeC2Readiness({ MAGIC: 'evidence://x' })), CI.CI_ERROR.READINESS_INVALID);
+  assert.equal(all.typography_production_ready, true);
+  assert.equal(one.typography_production_ready, false);
+  assert.equal(none.typography_production_ready, false);
+  // 309 only issued evidence closes a dependency: a reference, a hand-made object, evidence of another dependency, or an unknown dependency is refused
+  assert.equal(code(() => CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: 'evidence://font-metrics-report' })), CI.CI_ERROR.READINESS_INVALID);
+  assert.equal(code(() => CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: 'https://example.com/report' })), CI.CI_ERROR.READINESS_INVALID);
+  const forged = { dependency: 'REAL_FONT_METRICS', status: 'VERIFIED', evidence_ref: 'probe://real-font-metrics/forged' };
+  assert.equal(code(() => CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: forged })), CI.CI_ERROR.READINESS_INVALID);
+  assert.equal(code(() => CI.assessCreativeC2Readiness({ REAL_FONT_METRICS: evidenceFor('REAL_PNG_RENDER_PATH') })), CI.CI_ERROR.READINESS_INVALID);
+  assert.equal(code(() => CI.assessCreativeC2Readiness({ MAGIC: evidenceFor('REAL_FONT_METRICS') })), CI.CI_ERROR.READINESS_INVALID);
   assert.equal(code(() => CI.assessCreativeC2Readiness('yes')), CI.CI_ERROR.READINESS_INVALID);
   // 310 CJK line breaking is DEFERRED: documented, never claimed, and it does not block C2
   const cjk = none.dependencies.find((d) => d.id === 'CJK_LINE_BREAKING');
@@ -420,15 +433,16 @@ test('C1 may close, C2 provider work stays blocked on a real campaign benchmark 
   for (const [file, text] of Object.entries(await sources())) assert.doesNotMatch(text, /25 €|5 minutes|habb|instagram/i, file);
   // 322 with everything else closed, the missing real benchmark alone keeps C2 blocked
   const ids = CI.PRE_C2_DEPENDENCIES.filter((d) => d.blocking && d.id !== 'REAL_CAMPAIGN_BENCHMARK').map((d) => d.id);
-  const closed = Object.fromEntries(ids.map((id) => [id, `evidence://${id.toLowerCase()}`]));
+  const closed = Object.fromEntries(ids.map((id) => [id, evidenceFor(id)]));
   const almost = CI.assessCreativeC2Readiness(closed);
   assert.equal(almost.c2_allowed, false);
   assert.deepEqual(almost.open_blockers, ['REAL_CAMPAIGN_BENCHMARK']);
-  assert.equal(CI.assessCreativeC2Readiness({ ...closed, REAL_CAMPAIGN_BENCHMARK: 'evidence://benchmark-001-run' }).c2_allowed, true);
+  assert.equal(CI.assessCreativeC2Readiness({ ...closed, REAL_CAMPAIGN_BENCHMARK: evidenceFor('REAL_CAMPAIGN_BENCHMARK') }).c2_allowed, true);
   // 323 the benchmark says honestly what is still missing before it can run
   assert.ok(benchmark.bindings_still_missing.length >= 4);
   assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('expression_system')));
-  assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('FORMAT')));
+  assert.ok(benchmark.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_REAL_ASSET_MISSING')));
+  assert.ok(!benchmark.bindings_still_missing.some((b) => b.includes('FORMAT'))); // the FORMAT is bound (benchmark owned_records)
   // 324 the architecture document states the decision: C1 may close, C2 provider work is blocked on that benchmark
   const doc = await readFile(new URL('../docs/architecture/creative-intelligence-v1.md', import.meta.url), 'utf8');
   assert.ok(doc.includes('C1 foundation may close.'));

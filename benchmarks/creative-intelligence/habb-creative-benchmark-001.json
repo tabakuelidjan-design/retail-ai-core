@@ -3,13 +3,17 @@
   "kind": "CONFIGURATION_DATA",
   "status": "NOT_RUN",
   "selected_by": "architect",
-  "purpose": "Exit condition of C1 and entry condition of C2 provider work (NORDLA-DEFERRED L3-002 / NDR-D02): a real campaign used as benchmark. This file is configuration data: no Creative Intelligence source depends on it.",
+  "purpose": "Exit condition of C1 and entry condition of C2 provider work (NORDLA-DEFERRED L3-002 / NDR-D02): a real campaign used as benchmark. This file is configuration data: no Creative Intelligence source depends on it. Its readiness (BLOCKED / RUNNABLE) is computed by assessBenchmarkReadiness over the common resource resolver; it is never written here.",
   "subject": "Personalized phone case",
   "facts_given_by_the_architect": {
     "price": "25 €",
     "promise": "5 minutes",
     "primary_channel": "Instagram Feed",
     "primary_canvas": { "width": 1080, "height": 1350, "unit": "px" }
+  },
+  "expected": {
+    "canvas": { "width": 1080, "height": 1350, "unit": "px" },
+    "medium": "DIGITAL"
   },
   "requirements": [
     "real product asset",
@@ -24,10 +28,57 @@
     "Fidelity gate",
     "Guardian gate"
   ],
+  "bindings": {
+    "product": { "ref": null, "needs": "the canonical PRODUCT reference of the personalized phone case, resolved ACTIVE by the owning catalogue adapter" },
+    "asset": { "ref": null, "needs": "a REAL, merchant-provided, approved product photograph (origin MERCHANT_PROVIDED, approval_ref, content hash, payload available) - never generated, never substituted" },
+    "claims": [
+      { "id": "price", "ref": null, "expected_wording": "25 €", "needs": "an approved CLAIM resource whose approved wording is exactly this, with the reference of its approval" },
+      { "id": "promise", "ref": null, "expected_wording": "5 minutes", "needs": "an approved CLAIM resource whose approved wording is exactly this, with the reference of its approval" }
+    ],
+    "format": { "ref": "format://habb/benchmark-001/instagram-feed-1080x1350" },
+    "fonts": [],
+    "expression": { "required": true, "needs": "Brand Memory V1.1 expression_system, approved and non-empty, for the HABB brand" }
+  },
+  "owned_records": [
+    {
+      "ref": "format://habb/benchmark-001/instagram-feed-1080x1350",
+      "kind": "FORMAT",
+      "merchant_id": null,
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "architect-decision://habb-creative-benchmark-001/primary-canvas",
+      "metadata": {
+        "canvas": { "width": 1080, "height": 1350, "unit": "px" },
+        "medium": "DIGITAL",
+        "safe_zones": [],
+        "forbidden_zones": [],
+        "production_constraints": []
+      },
+      "note": "The canvas and the medium are the architect's. The zones are EXPLICITLY EMPTY: no platform overlay is declared and none is inferred (an Instagram safe zone, if wanted, is benchmark / placement configuration to be added here with its evidence, not a universal format fact). Channel and placement remain Marketing facts and are not part of a FORMAT."
+    }
+  ],
+  "expression_system_missing_decisions": {
+    "status": "NOT_POPULATED",
+    "reason": "No approved HABB Brand Memory V1.1 expression_system exists. Nothing is invented: these are the decisions the owner must make (the HABB working rules held in the website project are candidate inputs, not approved Brand Memory).",
+    "domains": {
+      "photography": ["light direction and softness", "background types allowed", "depth of field", "retouching limits", "reference images (approved assets)"],
+      "product_presentation": ["angles allowed for a phone case", "how much of the product the frame shows", "context objects allowed", "how personalization (the printed photo) is shown", "what must never be altered on the product"],
+      "composition": ["negative-space rule", "product dominance rule", "crowding limit", "text-to-image balance"],
+      "layout_principles": ["margins and rhythm", "hierarchy of price / promise / call to action", "alignment preference", "what a headline may not cover"],
+      "illustration": ["is illustration allowed at all", "style limits", "forbidden motifs"],
+      "iconography": ["icon style", "forbidden icons", "usage rules"],
+      "motion": ["is motion in scope for the first benchmark", "pace and transition limits"],
+      "locale_overrides": ["which of the brand's supported locales need a different expression", "per-locale composition room for longer headlines"]
+    },
+    "candidate_inputs_found_unapproved": [
+      "HABB working rules (website project): premium, sober, credible; no artificial warm gradients, no heavy shadows, no decorative branches or hearts unless asked; preserve faces, products, screws and exact proportions of photographs"
+    ]
+  },
   "bindings_still_missing": [
-    "the real product asset reference and its resolution",
-    "the approved claim references for the price and the promise",
-    "the Brand Memory V1.1 expression_system",
-    "the resolved FORMAT for Instagram Feed 1080 x 1350"
+    "the canonical product reference and its resolution (PRODUCT)",
+    "the real approved product asset (ASSET) - HABB_BENCHMARK_REAL_ASSET_MISSING",
+    "the approved claim references for the price and the promise, with their approval evidence (CLAIM)",
+    "the HABB font files with their licence references (FONT)",
+    "the Brand Memory V1.1 expression_system, approved and non-empty"
   ]
 }

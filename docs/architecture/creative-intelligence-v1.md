@@ -1,6 +1,7 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
 - **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
+- **PRE-C2 FOUNDATION = IMPLEMENTED LOCALLY / UNDER AUDIT** (branch `feature/creative-pre-c2-foundation`, not pushed) · **C2 = NOT READY** — see `creative-pre-c2-foundation.md`
 - **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 
@@ -171,11 +172,14 @@ fallback "AI style", no generic "premium" style, no hidden template default.
 
 ## 0.5 Typography / rasterization - C2 is blocked until
 
-`assessCreativeC2Readiness()` lists them and answers `c2_allowed: false` until each has explicit evidence: **the common resource resolver (with
+`assessCreativeC2Readiness()` lists them and answers `c2_allowed: false` until each has **issued evidence** (an object produced by this package's own
+verifications; a string, a hand-made object or evidence of another dependency is refused): **the common resource resolver (with
 FORMAT capability), brand expression system, real font metrics from real font files, real shaping for complex scripts, Arabic / bidi / RTL
 verification, a deterministic rasterizer, a real PNG render path, a real campaign benchmark**. CJK line breaking is documented as DEFERRED (not claimed, not blocking).
-The current typography is exact **only against declared metrics**; it is not production typography and `typography_production_ready` is
-always `false`. No PNG is ever faked.
+The PRE-C2 patch implements the capabilities (`socle-resource-resolver-v1.md`, `creative-pre-c2-foundation.md`): production typography exists
+(`production.js`, real fonts, shaping, bidi, glyph-path SVG, resvg PNG) and `typography_production_ready` is derived from the three typography
+verifications. The declared-metrics typography stays an inspection mode (`typography_mode: DECLARED_METRICS`) and can never produce a PNG.
+`BRAND_EXPRESSION_SYSTEM` and `REAL_CAMPAIGN_BENCHMARK` need real HABB data and stay open: `c2_allowed` is `false`.
 
 ## 0.6 L3-002 / NDR-D02 and HABB CREATIVE BENCHMARK 001
 

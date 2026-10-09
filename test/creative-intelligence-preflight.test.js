@@ -282,7 +282,7 @@ test('Boundaries: Creative Intelligence expresses an approved brief - it never p
   // 238 the only modules imported from outside the directory are shared pure validators and the Branding content-kind constant
   const outside = new Set();
   for (const text of Object.values(src)) for (const m of text.matchAll(/from '(\.\.\/[^']+)'/g)) outside.add(m[1]);
-  assert.deepEqual([...outside].sort(), ['../branding/constants.js', '../marketing/m2-validation.js', '../marketing/understand-validation.js']);
+  assert.deepEqual([...outside].sort(), ['../branding/constants.js', '../branding/expression-system.js', '../marketing/m2-validation.js', '../marketing/understand-validation.js', '../resources/index.js']);
   // 239 no merchant-specific logic in the generic domain
   for (const [file, text] of Object.entries(src)) assert.doesNotMatch(text, /habb|shopify|namur|\bcoque/i, file);
   // 240 no platform is hardcoded in the generic domain (channel facts come from explicit contracts)
@@ -329,9 +329,9 @@ test('Boundaries: Creative Intelligence expresses an approved brief - it never p
   for (const object of [base(), candidate, CI.runCreativePreflight(base(), preflightContext()), CI.renderDesignDocument({ document: base(), fonts: fonts() }), CI.planCreativeRun(), CI.notAssessedQualityReport('cdd_x'), solved()]) {
     assert.ok(isDeepFrozen(object));
   }
-  // 248 no dependency was added: the package manifest still holds only what existed before Creative Intelligence
+  // 248 no unaudited dependency: the manifest holds the pdf pair and ONLY the three audited production packages (docs: dependency / license audit)
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['pdfjs-dist', 'pdfkit']);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@resvg/resvg-js', 'bidi-js', 'harfbuzzjs', 'pdfjs-dist', 'pdfkit']);
   assert.equal(pkg.devDependencies, undefined);
   // 249 error codes are stable, unique and namespaced
   const entries = Object.entries(CI.CI_ERROR);
