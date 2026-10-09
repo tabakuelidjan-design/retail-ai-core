@@ -7,14 +7,13 @@
     "evidence_ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1"
   },
   "governance": {
-    "status": "NOT_IN_BRAND_MEMORY",
-    "reason": "Brand Memory is governed per brand (Brand Identity -> approved Brand Core -> Memory DRAFT -> REVIEW_REQUIRED -> human APPROVED). No canonical HABB brand_id, approved Brand Core or Brand Memory exists in the repository or in the connected project data, so this content cannot be submitted as a real revision and nothing here is Brand Memory yet.",
-    "required_to_bind": [
-      "a canonical HABB brand_id (Brand Identity for merchant 36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5)",
-      "an APPROVED HABB Brand Core",
-      "an APPROVED HABB Brand Memory (V1 or V1.1) to revise",
-      "the owner's APPROVAL of the revision that carries this expression_system"
-    ]
+    "status": "IN_APPROVED_BRAND_MEMORY",
+    "reason": "This content, unchanged, is the expression_system of the APPROVED HABB Brand Memory V1.1 produced through the real Branding governance (see habb-brand-canonical-v1.json).",
+    "memory_ref": {
+      "id": "habb-memory-v1",
+      "version": 1
+    },
+    "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4"
   },
   "expression_system": {
     "photography": {

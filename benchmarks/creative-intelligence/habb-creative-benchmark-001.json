@@ -73,8 +73,12 @@
     "expression": {
       "required": true,
       "content_file": "benchmarks/creative-intelligence/habb-expression-system-benchmark-001.json",
-      "status": "CONTENT_APPROVED_BY_OWNER_NOT_IN_BRAND_MEMORY",
-      "needs": "an approved HABB Brand Memory V1.1 that carries this expression_system: requires a canonical HABB brand_id, an approved Brand Core and an approved Brand Memory, none of which exist yet"
+      "status": "BOUND_TO_APPROVED_BRAND_MEMORY",
+      "memory_ref": {
+        "id": "habb-memory-v1",
+        "version": 1
+      },
+      "note": "Readiness is still computed: it is BOUND only when the Creative brand interface of this approved Memory is supplied to assessBenchmarkReadiness."
     },
     "fonts_status": "HABB_BENCHMARK_FONT_BINDINGS_MISSING"
   },
@@ -125,14 +129,13 @@
     }
   ],
   "expression_system_missing_decisions": {
-    "status": "DECIDED_BY_OWNER",
-    "reason": "The owner approved the HABB expression system for Benchmark 001 (see bindings.expression.content_file). What is missing is not a decision but its governed home: Brand Memory V1.1 of an approved HABB brand."
+    "status": "DECIDED_AND_GOVERNED",
+    "reason": "The owner-approved expression content is carried by the APPROVED HABB Brand Memory V1.1 (see brand and bindings.expression)."
   },
   "bindings_still_missing": [
     "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - no single canonical PRODUCT for \"the personalised phone case\": the Core catalogue holds one product per phone model (\"Coque personnalisée - <model>\"); the owner must name the benchmark product",
     "HABB_BENCHMARK_REAL_ASSET_MISSING - a real, merchant-provided, approved photograph of a personalised HABB phone case, with content hash and payload (no AI-generated poster, mockup, stock or render qualifies)",
-    "HABB_BENCHMARK_FONT_BINDINGS_MISSING - the HABB font files with their licence references (the test fixtures are not HABB fonts)",
-    "the Brand Memory V1.1 expression_system in an approved HABB Brand Memory - needs a canonical HABB brand_id, an approved Brand Core and an approved Brand Memory (content is owner-approved)"
+    "HABB_BENCHMARK_FONT_BINDINGS_MISSING - the HABB font files with their licence references (the test fixtures are not HABB fonts)"
   ],
   "claim_evidence": {
     "registry_status": "BENCHMARK_OWNED_NOT_A_CLAIMS_REGISTRY",
@@ -162,5 +165,18 @@
         }
       }
     }
+  },
+  "brand": {
+    "package_file": "benchmarks/creative-intelligence/habb-brand-canonical-v1.json",
+    "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+    "core_ref": {
+      "id": "habb-core-v1",
+      "version": 1
+    },
+    "memory_ref": {
+      "id": "habb-memory-v1",
+      "version": 1
+    },
+    "note": "Benchmark-scoped trusted canonical brand data, not the future persistent brands registry. A migration to that registry must preserve this brand_id."
   }
 }
