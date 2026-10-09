@@ -3,16 +3,29 @@
   "kind": "CONFIGURATION_DATA",
   "status": "NOT_RUN",
   "selected_by": "architect",
+  "merchant": {
+    "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+    "name": "HABB",
+    "provenance": "merchants table of the connected retail-ai-core-dev project (single row named HABB), read 2026-10-09; the same tenant the Core catalogue sync writes to"
+  },
   "purpose": "HABB CREATIVE BENCHMARK 001 is the entry condition for C2 provider work under NDR-D02 / L3-002: a real campaign used as benchmark. C1 is already COMPLETE. This file is configuration data: no Creative Intelligence source depends on it. Its readiness (BLOCKED / RUNNABLE) is computed by assessBenchmarkReadiness over the common resource resolver; it is never written here.",
   "subject": "Personalized phone case",
   "facts_given_by_the_architect": {
     "price": "25 €",
     "promise": "5 minutes",
     "primary_channel": "Instagram Feed",
-    "primary_canvas": { "width": 1080, "height": 1350, "unit": "px" }
+    "primary_canvas": {
+      "width": 1080,
+      "height": 1350,
+      "unit": "px"
+    }
   },
   "expected": {
-    "canvas": { "width": 1080, "height": 1350, "unit": "px" },
+    "canvas": {
+      "width": 1080,
+      "height": 1350,
+      "unit": "px"
+    },
     "medium": "DIGITAL"
   },
   "requirements": [
@@ -29,15 +42,41 @@
     "Guardian gate"
   ],
   "bindings": {
-    "product": { "ref": null, "needs": "the canonical PRODUCT reference of the personalized phone case, resolved ACTIVE by the owning catalogue adapter" },
-    "asset": { "ref": null, "needs": "a REAL, merchant-provided, approved product photograph (origin MERCHANT_PROVIDED, approval_ref, content hash, payload available) - never generated, never substituted" },
+    "product": {
+      "ref": null,
+      "needs": "the canonical PRODUCT reference of the personalized phone case, resolved ACTIVE by the owning catalogue adapter",
+      "status": "HABB_BENCHMARK_PRODUCT_BINDING_MISSING"
+    },
+    "asset": {
+      "ref": null,
+      "needs": "a REAL, merchant-provided, approved product photograph (origin MERCHANT_PROVIDED, approval_ref, content hash, payload available) - never generated, never substituted",
+      "status": "HABB_BENCHMARK_REAL_ASSET_MISSING"
+    },
     "claims": [
-      { "id": "price", "ref": null, "expected_wording": "25 €", "needs": "an approved CLAIM resource whose approved wording is exactly this, with the reference of its approval" },
-      { "id": "promise", "ref": null, "expected_wording": "5 minutes", "needs": "an approved CLAIM resource whose approved wording is exactly this, with the reference of its approval" }
+      {
+        "id": "price",
+        "ref": "claim://habb/benchmark-001/price-25",
+        "expected_wording": "25 €",
+        "needs": "BOUND to a benchmark-owned CLAIM record (see claim_evidence)"
+      },
+      {
+        "id": "promise",
+        "ref": "claim://habb/benchmark-001/express-5-minutes",
+        "expected_wording": "5 minutes",
+        "needs": "BOUND to a benchmark-owned CLAIM record (see claim_evidence)"
+      }
     ],
-    "format": { "ref": "format://habb/benchmark-001/instagram-feed-1080x1350" },
+    "format": {
+      "ref": "format://habb/benchmark-001/instagram-feed-1080x1350"
+    },
     "fonts": [],
-    "expression": { "required": true, "needs": "Brand Memory V1.1 expression_system, approved and non-empty, for the HABB brand" }
+    "expression": {
+      "required": true,
+      "content_file": "benchmarks/creative-intelligence/habb-expression-system-benchmark-001.json",
+      "status": "CONTENT_APPROVED_BY_OWNER_NOT_IN_BRAND_MEMORY",
+      "needs": "an approved HABB Brand Memory V1.1 that carries this expression_system: requires a canonical HABB brand_id, an approved Brand Core and an approved Brand Memory, none of which exist yet"
+    },
+    "fonts_status": "HABB_BENCHMARK_FONT_BINDINGS_MISSING"
   },
   "owned_records": [
     {
@@ -48,37 +87,80 @@
       "status": "ACTIVE",
       "evidence_ref": "architect-decision://habb-creative-benchmark-001/primary-canvas",
       "metadata": {
-        "canvas": { "width": 1080, "height": 1350, "unit": "px" },
+        "canvas": {
+          "width": 1080,
+          "height": 1350,
+          "unit": "px"
+        },
         "medium": "DIGITAL",
         "safe_zones": [],
         "forbidden_zones": [],
         "production_constraints": []
       },
       "note": "The canvas and the medium are the architect's. The zones are EXPLICITLY EMPTY: no platform overlay is declared and none is inferred (an Instagram safe zone, if wanted, is benchmark / placement configuration to be added here with its evidence, not a universal format fact). Channel and placement remain Marketing facts and are not part of a FORMAT."
+    },
+    {
+      "ref": "claim://habb/benchmark-001/price-25",
+      "kind": "CLAIM",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "evidence://habb/GBP-PROD-01/price",
+      "metadata": {
+        "approved_wording": "25 €",
+        "approval_ref": "approval://habb/GBP-PROD-01"
+      }
+    },
+    {
+      "ref": "claim://habb/benchmark-001/express-5-minutes",
+      "kind": "CLAIM",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "evidence://habb/GBP-PROD-01/speed",
+      "metadata": {
+        "approved_wording": "5 minutes",
+        "approval_ref": "approval://habb/GBP-PROD-01"
+      }
     }
   ],
   "expression_system_missing_decisions": {
-    "status": "NOT_POPULATED",
-    "reason": "No approved HABB Brand Memory V1.1 expression_system exists. Nothing is invented: these are the decisions the owner must make (the HABB working rules held in the website project are candidate inputs, not approved Brand Memory).",
-    "domains": {
-      "photography": ["light direction and softness", "background types allowed", "depth of field", "retouching limits", "reference images (approved assets)"],
-      "product_presentation": ["angles allowed for a phone case", "how much of the product the frame shows", "context objects allowed", "how personalization (the printed photo) is shown", "what must never be altered on the product"],
-      "composition": ["negative-space rule", "product dominance rule", "crowding limit", "text-to-image balance"],
-      "layout_principles": ["margins and rhythm", "hierarchy of price / promise / call to action", "alignment preference", "what a headline may not cover"],
-      "illustration": ["is illustration allowed at all", "style limits", "forbidden motifs"],
-      "iconography": ["icon style", "forbidden icons", "usage rules"],
-      "motion": ["is motion in scope for the first benchmark", "pace and transition limits"],
-      "locale_overrides": ["which of the brand's supported locales need a different expression", "per-locale composition room for longer headlines"]
-    },
-    "candidate_inputs_found_unapproved": [
-      "HABB working rules (website project): premium, sober, credible; no artificial warm gradients, no heavy shadows, no decorative branches or hearts unless asked; preserve faces, products, screws and exact proportions of photographs"
-    ]
+    "status": "DECIDED_BY_OWNER",
+    "reason": "The owner approved the HABB expression system for Benchmark 001 (see bindings.expression.content_file). What is missing is not a decision but its governed home: Brand Memory V1.1 of an approved HABB brand."
   },
   "bindings_still_missing": [
-    "the canonical product reference and its resolution (PRODUCT)",
-    "the real approved product asset (ASSET) - HABB_BENCHMARK_REAL_ASSET_MISSING",
-    "the approved claim references for the price and the promise, with their approval evidence (CLAIM)",
-    "the HABB font files with their licence references (FONT)",
-    "the Brand Memory V1.1 expression_system, approved and non-empty"
-  ]
+    "HABB_BENCHMARK_PRODUCT_BINDING_MISSING - no single canonical PRODUCT for \"the personalised phone case\": the Core catalogue holds one product per phone model (\"Coque personnalisée - <model>\"); the owner must name the benchmark product",
+    "HABB_BENCHMARK_REAL_ASSET_MISSING - a real, merchant-provided, approved photograph of a personalised HABB phone case, with content hash and payload (no AI-generated poster, mockup, stock or render qualifies)",
+    "HABB_BENCHMARK_FONT_BINDINGS_MISSING - the HABB font files with their licence references (the test fixtures are not HABB fonts)",
+    "the Brand Memory V1.1 expression_system in an approved HABB Brand Memory - needs a canonical HABB brand_id, an approved Brand Core and an approved Brand Memory (content is owner-approved)"
+  ],
+  "claim_evidence": {
+    "registry_status": "BENCHMARK_OWNED_NOT_A_CLAIMS_REGISTRY",
+    "note": "The production Claims Registry does not exist yet. These two records are benchmark-owned, trusted configuration resolved through the common resource resolver; they are not the final registry and not a general HABB claim approval.",
+    "source": "HABB_Google_Business/03_Produits/fiches-produits-gbp.md, GBP-PROD-01 (v3, 2026-09-05), supplied and approved by the owner",
+    "claims": {
+      "claim://habb/benchmark-001/price-25": {
+        "display_wording": "25 €",
+        "approved_source_text": "Coque + personnalisation : 25 €.",
+        "approval_ref": "approval://habb/GBP-PROD-01",
+        "additional_material": "In-store pricing material: \"Coque personnalisée 15 € promo / 25 € tarif normal\".",
+        "scope": "Benchmark 001 and the approved store-service evidence only. 25 € is NOT generalized as the universal HABB online price; another HABB source mentions a working 24.90 € Shopify offer and Benchmark 001 is not silently changed to it."
+      },
+      "claim://habb/benchmark-001/express-5-minutes": {
+        "display_wording": "5 minutes",
+        "approved_source_text": "La personnalisation est réalisée en boutique en environ 5 minutes, selon la disponibilité du modèle.",
+        "in_store_creative_wording": "VOTRE COQUE EN 5 MINUTES",
+        "approval_ref": "approval://habb/GBP-PROD-01",
+        "qualification": {
+          "applies_in": "store (boutique)",
+          "only_when": [
+            "the compatible case/model is available",
+            "the customer's file is ready and usable"
+          ],
+          "not": "an unconditional, universal operational guarantee",
+          "where_kept": "This qualification is preserved here, beside the benchmark-owned evidence. The generic CLAIM metadata contract ({approved_wording, approval_ref}) is deliberately NOT widened by this preparation; the display wording stays exactly \"5 minutes\"."
+        }
+      }
+    }
+  }
 }
