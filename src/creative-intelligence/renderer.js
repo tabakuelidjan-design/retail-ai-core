@@ -41,6 +41,12 @@ function href(resolver, assetRef, unresolved) {
   return value;
 }
 
+const num6 = (n) => {
+  const v = Math.round(n * 1e6) / 1e6;
+  return Object.is(v, -0) ? '0' : String(v);
+};
+const textDigestOf = (content) => createHash('sha256').update(content.normalize('NFC')).digest('hex');
+
 const transformOf = (g) => (g.rotation_deg ? ` transform="rotate(${num(g.rotation_deg)} ${num(g.x + g.width / 2)} ${num(g.y + g.height / 2)})"` : '');
 
 function effectAttrs(layer, defs, fid) {
@@ -71,7 +77,10 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
 
   const unresolved = new Set();
   const defs = [];
-  const body = []; 
+  const body = [];
+  const typographyModes = new Set();
+  const glyphDefs = new Set();
+  const fontIndex = new Map();
   const structure = [];
   const textRuns = [];
   doc.layers.forEach((layer, i) => {
@@ -121,6 +130,32 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
         if (placed.lines.map((l) => l.text).join(' ') !== layer.content.replace(/\n/g, ' ')) {
           fail(E.RENDER_INPUT_INVALID, 'the text would not be rendered exactly as written', { layer: layer.id });
         }
+        if (font.engine) {
+          // PRODUCTION projection: the glyph outlines of the REAL font file, positioned by the real shaping. No <text>, no font lookup, no
+          // rasterizer text engine: the layout and the pixels cannot drift. The canonical text stays in the DesignDocument; the group
+          // carries it back (aria-label), with the digest of its exact wording and the hash of the font bytes that drew it.
+          if (laid.missing_glyphs.length) fail(E.RENDER_INPUT_INVALID, 'the font has no glyph for part of the text and there is no fallback font', { layer: layer.id });
+          typographyModes.add('REAL');
+          if (!fontIndex.has(layer.font_ref)) fontIndex.set(layer.font_ref, fontIndex.size);
+          const fi = fontIndex.get(layer.font_ref);
+          const scale = laid.font_size / font.units_per_em;
+          const uses = [];
+          for (const line of placed.lines) {
+            for (const run of line.runs) {
+              for (const g of run.glyphs) {
+                const d = font.engine.glyphPath(g.gid);
+                if (!d) continue;
+                const gid = `gl${fi}-${g.gid}`;
+                if (!glyphDefs.has(gid)) { glyphDefs.add(gid); defs.push(`<path id="${gid}" d="${d}"/>`); }
+                uses.push(`<use href="#${gid}" transform="translate(${num(line.x + run.x + g.x + g.ox)} ${num(line.y - g.y)}) scale(${num6(scale)} ${num6(-scale)})"/>`);
+              }
+            }
+          }
+          body.push(`<g id="${xmlId(i, layer.id)}" ${common} data-projection="GLYPH_PATH" data-font-ref="${esc(layer.font_ref)}" data-font-hash="${font.content_hash}" data-text-digest="${textDigestOf(layer.content)}" role="img" aria-label="${esc(layer.content)}" fill="${layer.color}"${fx}${tf}>${uses.join('')}</g>`);
+          textRuns.push({ layer_id: layer.id, font_size: laid.font_size, lines: placed.lines.map((l) => l.text), fits: laid.fits });
+          break;
+        }
+        typographyModes.add('DECLARED_METRICS');
         const spans = placed.lines.map((line) => `<tspan x="${num(line.x)}" y="${num(line.y)}" text-anchor="${line.anchor}">${esc(line.text)}</tspan>`).join('');
         body.push(`<text id="${xmlId(i, layer.id)}" ${common} font-family="${esc(font.family)}, ${font.generic}" font-size="${num(laid.font_size)}" fill="${layer.color}" direction="${layer.direction.toLowerCase()}" letter-spacing="${num(layer.tracking * laid.font_size)}" xml:lang="${esc(layer.locale)}"${fx}${tf}>${spans}</text>`);
         textRuns.push({ layer_id: layer.id, font_size: laid.font_size, lines: placed.lines.map((l) => l.text), fits: laid.fits });
@@ -145,6 +180,8 @@ export function renderDesignDocument({ document, fonts, assetResolver = null } =
     digest: createHash('sha256').update(svg).digest('hex'),
     render_mode: renderMode,
     unresolved_asset_refs: [...unresolved].sort(),
+    // REAL: every text is drawn from real font outlines (production). DECLARED_METRICS: inspection only. NONE: no text.
+    typography_mode: typographyModes.size === 0 ? 'NONE' : typographyModes.size === 2 ? 'MIXED' : [...typographyModes][0],
     width,
     height,
     structure,

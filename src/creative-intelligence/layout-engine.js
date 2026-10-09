@@ -78,12 +78,14 @@ const slotBox = (usable, slot, mirror) => {
   return { x: r3(usable.x + x * usable.width), y: r3(usable.y + slot.y * usable.height), width: r3(slot.w * usable.width), height: r3(slot.h * usable.height) };
 };
 
-function fitInto(box, dims, { anchorStart = false, rtl = false } = {}) {
+function fitInto(box, dims, { align, rtl = false } = {}) {
+  if (!['START', 'CENTER', 'END'].includes(align)) fail(E.LAYOUT_INPUT_INVALID, 'a media slot states its alignment (START | CENTER | END): nothing is centred by default', { field: 'slot.align' });
   if (!dims) return { box, aspectKnown: false };
   const scale = Math.min(box.width / dims.width_px, box.height / dims.height_px);
   const width = r3(dims.width_px * scale);
   const height = r3(dims.height_px * scale);
-  const x = anchorStart ? (rtl ? box.x + box.width - width : box.x) : box.x + (box.width - width) / 2;
+  const left = (align === 'START') !== rtl;
+  const x = align === 'CENTER' ? box.x + (box.width - width) / 2 : left ? box.x : box.x + box.width - width;
   return { box: { x: r3(x), y: r3(box.y + (box.height - height) / 2), width, height }, aspectKnown: true };
 }
 
@@ -184,7 +186,7 @@ export function solveLayout({
       }
     } else {
       const assetRef = layer.type === LAYER_TYPE.PRODUCT ? layer.asset_ref : layer.source_ref;
-      const fitted = fitInto(box, assets[assetRef], { anchorStart: layer.type === LAYER_TYPE.LOGO, rtl });
+      const fitted = fitInto(box, assets[assetRef], { align: slot.align, rtl });
       if (!fitted.aspectKnown) notes.push('ASPECT_UNKNOWN');
       next.push({ ...layer, geometry: { ...fitted.box, rotation_deg: 0 } });
     }

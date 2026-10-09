@@ -105,11 +105,47 @@ export function breakLines(content, font, fontSize, tracking, maxWidth) {
   return { lines, tooWide };
 }
 
+// A REAL font (production-typography.js) lays its text out through its own engine: real shaping, bidi, kerning. The result has the same
+// shape as the declared-metrics one, plus the shaped runs the production renderer draws, so layout / fitting / preflight stay one code path.
+function layoutRealText(layer, font, fontSize) {
+  const pad = layer.box.padding;
+  const innerW = layer.geometry.width - 2 * pad;
+  const innerH = layer.geometry.height - 2 * pad;
+  const lh = fontSize * layer.line_height;
+  if (innerW <= 0 || innerH <= 0) {
+    return deepFreeze({
+      font_size: fontSize, lines: [], line_height_px: lh, block_height: 0, fits: false, measurable: true, reasons: ['BOX_TOO_SMALL'], unsupported_scripts: [], missing_glyphs: [], max_line_width: 0,
+    });
+  }
+  const paragraph = font.engine.layout(layer.content, {
+    fontSize, tracking: layer.tracking, direction: layer.direction, maxWidth: innerW, language: layer.locale,
+  });
+  const block = paragraph.lines.length * lh;
+  const reasons = [];
+  if (paragraph.lines.length > layer.max_lines) reasons.push('TOO_MANY_LINES');
+  if (block > innerH + EPS) reasons.push('TOO_TALL');
+  if (paragraph.too_wide.length) reasons.push('WORD_TOO_WIDE');
+  return deepFreeze({
+    font_size: fontSize,
+    lines: paragraph.lines,
+    line_height_px: lh,
+    block_height: block,
+    fits: reasons.length === 0,
+    measurable: true,
+    reasons,
+    // a character the font has no glyph for is reported, never substituted (there is no fallback font)
+    unsupported_scripts: scriptsOf(paragraph.missing.join('')),
+    missing_glyphs: paragraph.missing,
+    max_line_width: paragraph.lines.length ? Math.max(...paragraph.lines.map((l) => l.width)) : 0,
+  });
+}
+
 /**
  * Lays one text layer out at a given font size. Returns the lines with their measured widths, whether the text fits its box, why it
  * does not, and whether the measurement is trustworthy for these scripts.
  */
 export function layoutText(layer, font, fontSize = layer.font_size) {
+  if (font.engine) return layoutRealText(layer, font, fontSize);
   const pad = layer.box.padding;
   const innerW = layer.geometry.width - 2 * pad;
   const innerH = layer.geometry.height - 2 * pad;
@@ -183,6 +219,24 @@ export function positionLines(layer, font, laidOut) {
   const ascent = (font.ascent / font.units_per_em) * size;
   const descent = (font.descent / font.units_per_em) * size;
   const lh = laidOut.line_height_px;
+  if (font.engine) {
+    // real glyph runs: each line starts at a physical left edge (alignment resolved against the direction); the glyphs carry their own offsets
+    const realLines = laidOut.lines.map((line, i) => ({
+      text: line.text,
+      width: line.width,
+      x: side === 'LEFT' ? x : side === 'RIGHT' ? x - line.width : x - line.width / 2,
+      y: top + i * lh + (lh - (ascent + descent)) / 2 + ascent,
+      anchor: 'start',
+      runs: line.runs,
+    }));
+    const left = realLines.length ? Math.min(...realLines.map((l) => l.x)) : layer.geometry.x;
+    const right = realLines.length ? Math.max(...realLines.map((l) => l.x + l.width)) : layer.geometry.x;
+    return deepFreeze({
+      lines: realLines,
+      ink: { x: left, y: top, width: Math.max(right - left, 0.0001), height: Math.max(laidOut.block_height, 0.0001) },
+      font_size: size,
+    });
+  }
   const out = laidOut.lines.map((line, i) => ({
     text: line.text,
     width: line.width,

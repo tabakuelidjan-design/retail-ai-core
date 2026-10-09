@@ -80,7 +80,9 @@ test('Layout recipes are declarative; the solver places layers deterministically
     const recipe = CI.getLayoutRecipe(id);
     assert.deepEqual(Object.keys(recipe).sort(), ['description', 'margin_ratio', 'mirror_on_rtl', 'recipe_id', 'slots']);
     for (const s of recipe.slots) {
-      assert.deepEqual(Object.keys(s).sort(), ['h', 'role', 'w', 'x', 'y']);
+      const media = s.role === 'PRODUCT' || s.role === 'LOGO';
+      assert.deepEqual(Object.keys(s).sort(), media ? ['align', 'h', 'role', 'w', 'x', 'y'] : ['h', 'role', 'w', 'x', 'y']);
+      if (media) assert.ok(['START', 'CENTER', 'END'].includes(s.align), `${id}/${s.role}: the picture alignment is explicit recipe data`);
       assert.ok(s.x >= 0 && s.y >= 0 && s.x + s.w <= 1.0001 && s.y + s.h <= 1.0001, `${id}/${s.role}`);
     }
   }

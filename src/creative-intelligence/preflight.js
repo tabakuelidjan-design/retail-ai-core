@@ -235,7 +235,7 @@ export function runCreativePreflight(documentInput, contextInput = {}) {
     const failed = [];
     for (const t of texts) {
       const font = fonts?.get(t.font_ref);
-      if (font && scriptsOf(t.content).some((s) => !font.scripts.includes(s))) failed.push(t.id);
+      if (font && (font.engine ? font.engine.missingChars(t.content).length > 0 : scriptsOf(t.content).some((s) => !font.scripts.includes(s)))) failed.push(t.id);
     }
     checks.push(result(C.FONT_SCRIPT_UNSUPPORTED, failed, { reasons: failed.length ? ['SCRIPT_NOT_COVERED_BY_FONT'] : [] }));
   }

@@ -8,6 +8,9 @@
 import { deepFreeze } from './validation.js';
 
 const slot = (role, x, y, w, h) => ({ role, x, y, w, h });
+// A media slot (product, logo) states how the picture sits in its slot: START | CENTER | END (logical: START is the right edge for RTL). Nothing
+// is centred by default - the alignment is data of the recipe the caller chose.
+const media = (role, x, y, w, h, align) => ({ role, x, y, w, h, align });
 
 export const LAYOUT_RECIPES = deepFreeze({
   PRODUCT_HERO: {
@@ -16,10 +19,10 @@ export const LAYOUT_RECIPES = deepFreeze({
     margin_ratio: 0.06,
     mirror_on_rtl: false,
     slots: [
-      slot('LOGO', 0, 0, 0.24, 0.06),
+      media('LOGO', 0, 0, 0.24, 0.06, 'START'),
       slot('HEADLINE', 0, 0.08, 1, 0.16),
       slot('SUBHEADLINE', 0, 0.25, 1, 0.08),
-      slot('PRODUCT', 0.05, 0.35, 0.9, 0.4),
+      media('PRODUCT', 0.05, 0.35, 0.9, 0.4, 'CENTER'),
       slot('PRICE', 0, 0.78, 0.5, 0.1),
       slot('CTA', 0.55, 0.78, 0.45, 0.1),
     ],
@@ -30,8 +33,8 @@ export const LAYOUT_RECIPES = deepFreeze({
     margin_ratio: 0.06,
     mirror_on_rtl: true,
     slots: [
-      slot('PRODUCT', 0, 0.05, 0.46, 0.9),
-      slot('LOGO', 0.54, 0, 0.3, 0.08),
+      media('PRODUCT', 0, 0.05, 0.46, 0.9, 'START'),
+      media('LOGO', 0.54, 0, 0.3, 0.08, 'START'),
       slot('HEADLINE', 0.54, 0.14, 0.46, 0.3),
       slot('SUBHEADLINE', 0.54, 0.46, 0.46, 0.14),
       slot('PRICE', 0.54, 0.64, 0.46, 0.12),
@@ -44,10 +47,10 @@ export const LAYOUT_RECIPES = deepFreeze({
     margin_ratio: 0.07,
     mirror_on_rtl: false,
     slots: [
-      slot('LOGO', 0, 0, 0.25, 0.06),
+      media('LOGO', 0, 0, 0.25, 0.06, 'START'),
       slot('HEADLINE', 0, 0.12, 1, 0.34),
       slot('SUBHEADLINE', 0, 0.48, 1, 0.12),
-      slot('PRODUCT', 0.25, 0.62, 0.5, 0.24),
+      media('PRODUCT', 0.25, 0.62, 0.5, 0.24, 'CENTER'),
       slot('PRICE', 0, 0.88, 0.5, 0.1),
       slot('CTA', 0.5, 0.88, 0.5, 0.1),
     ],
@@ -58,8 +61,8 @@ export const LAYOUT_RECIPES = deepFreeze({
     margin_ratio: 0.06,
     mirror_on_rtl: false,
     slots: [
-      slot('LOGO', 0, 0, 0.25, 0.07),
-      slot('PRODUCT', 0.05, 0.1, 0.9, 0.55),
+      media('LOGO', 0, 0, 0.25, 0.07, 'START'),
+      media('PRODUCT', 0.05, 0.1, 0.9, 0.55, 'CENTER'),
       slot('HEADLINE', 0, 0.67, 1, 0.1),
       slot('PRICE', 0, 0.78, 0.58, 0.18),
       slot('CTA', 0.62, 0.8, 0.38, 0.14),
