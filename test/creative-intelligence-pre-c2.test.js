@@ -235,6 +235,7 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
     assert.ok(text.includes(`test('${name}'`), `PC2-${n} names a test that does not exist: ${ref}`);
     assert.match(text, new RegExp(`^\\s*// PC2-${n} `, 'm'), `PC2-${n} has no marker in ${file}`);
   }
-  assert.match(doc, /PRE-C2 FOUNDATION = IMPLEMENTED LOCALLY \/ UNDER AUDIT/);
+  assert.match(doc, /PRE-C2 TECHNICAL FOUNDATION = COMPLETE/);
+  assert.match(doc, /HABB BENCHMARK 001 = NOT_RUN \/ BLOCKED/);
   assert.match(doc, /C2 = NOT READY/);
 });

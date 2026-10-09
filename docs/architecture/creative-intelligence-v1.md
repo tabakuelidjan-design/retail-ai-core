@@ -1,7 +1,7 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
 - **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
-- **PRE-C2 FOUNDATION = IMPLEMENTED LOCALLY / UNDER AUDIT** (branch `feature/creative-pre-c2-foundation`, not pushed) · **C2 = NOT READY** — see `creative-pre-c2-foundation.md`
+- **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 = NOT READY** — HABB CREATIVE BENCHMARK 001 is NOT_RUN / BLOCKED on real HABB data. See `creative-pre-c2-foundation.md`.
 - **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 
@@ -179,7 +179,7 @@ verification, a deterministic rasterizer, a real PNG render path, a real campaig
 The PRE-C2 patch implements the capabilities (`socle-resource-resolver-v1.md`, `creative-pre-c2-foundation.md`): production typography exists
 (`production.js`, real fonts, shaping, bidi, glyph-path SVG, resvg PNG) and `typography_production_ready` is derived from the three typography
 verifications. The declared-metrics typography stays an inspection mode (`typography_mode: DECLARED_METRICS`) and can never produce a PNG.
-`BRAND_EXPRESSION_SYSTEM` and `REAL_CAMPAIGN_BENCHMARK` need real HABB data and stay open: `c2_allowed` is `false`.
+`BRAND_EXPRESSION_SYSTEM` and `REAL_CAMPAIGN_BENCHMARK` need real HABB data (an approved expression system, the product binding and photo, approved claims, font bindings, and the benchmark run) and stay open: `c2_allowed` is `false`.
 
 ## 0.6 L3-002 / NDR-D02 and HABB CREATIVE BENCHMARK 001
 

@@ -1,6 +1,6 @@
 # Socle common resource resolver — contract (V1)
 
-- **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT (PRE-C2). **Code:** `src/resources/` · **Tests:** `test/resources-resolver.test.js`, `test/creative-intelligence-production.test.js`.
+- **Status:** COMPLETE (PRE-C2 technical foundation, pushed at `d182e86`). **Code:** `src/resources/` · **Tests:** `test/resources-resolver.test.js`, `test/creative-intelligence-production.test.js`.
 
 One resolver for every resource a domain references by an opaque `scheme://name`. There is no Format Resolver, no Font Resolver, no Asset Resolver:
 those are kinds of the same resolver.

@@ -108,6 +108,8 @@ Structured facts about a candidate, produced by upstream adapters (OCR, color ex
 
 ## Brand Memory V1.1 — `expression_system` (PRE-C2)
 
+**Status: Brand Memory V1.1 mechanism COMPLETE** (pushed at `d182e86`). A *populated, approved* HABB `expression_system` does not exist yet: it is an owner decision and a C2 data blocker, not a missing capability.
+
 V1.1 is **additive and backward compatible**: a sixth, optional Memory category. A V1 Memory stays valid, keeps exactly its V1 shape and is still a READY context;
 it is simply not *C2 brand-ready* (`assessExpressionReadiness` answers `EXPRESSION_SYSTEM_ABSENT`). No default style is ever substituted.
 

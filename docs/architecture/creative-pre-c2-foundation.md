@@ -1,6 +1,10 @@
 # Creative Intelligence — PRE-C2 Foundation
 
-**Status: `PRE-C2 FOUNDATION = IMPLEMENTED LOCALLY / UNDER AUDIT` · `C2 = NOT READY`**
+**Status: `C1 FOUNDATION = COMPLETE` · `PRE-C2 TECHNICAL FOUNDATION = COMPLETE` · `C2 = NOT READY`**
+
+Pushed at `d182e86` on `feature/branding-marketing-creative-v1`; remote CI green (Creative Intelligence V1 on Node 20 and 24, Branding V1, Marketing V1).
+The technical foundation is complete. What is **not** complete is the real HABB data the benchmark needs (section 8): that is an operational / data
+blocker, not a missing capability.
 
 Nothing here starts C2, integrates a provider, or runs a benchmark. This patch closes the foundation blockers the C1 closure listed, from real
 evidence only, and keeps `c2_allowed` false until HABB CREATIVE BENCHMARK 001 has actually been run.
@@ -99,13 +103,44 @@ Readiness values are computed by `assessBenchmarkReadiness` and never written in
 
 ## 8. C2 readiness
 
+**Technical foundation — COMPLETE**
+
+| Capability | State |
+|---|---|
+| Common Socle Resource Resolver | COMPLETE |
+| FORMAT resource resolution | COMPLETE |
+| FONT resource resolution | COMPLETE |
+| Brand Memory V1.1 `expression_system` (mechanism) | COMPLETE |
+| Real font metrics | COMPLETE |
+| Real font shaping | COMPLETE |
+| Arabic / bidi / RTL verification | COMPLETE |
+| Deterministic rasterizer | COMPLETE |
+| Real PNG path | COMPLETE |
+| Deterministic sRGB PNG semantics | COMPLETE |
+| Third-party licence inventory (`THIRD_PARTY_NOTICES.md`) | COMPLETE |
+
+**Operational / data blockers (not capabilities) — OPEN**
+
+- real HABB PRODUCT binding;
+- real approved HABB product photo (`HABB_BENCHMARK_REAL_ASSET_MISSING`);
+- approved CLAIM resource for "25 €";
+- approved CLAIM resource for "5 minutes";
+- actual HABB font resource bindings (files + licence references);
+- approved HABB Brand Memory V1.1 `expression_system`;
+- HABB CREATIVE BENCHMARK 001 execution.
+
+HABB BENCHMARK 001 = NOT_RUN / BLOCKED. `c2_allowed` is `false`: the two dependencies that need this data, `BRAND_EXPRESSION_SYSTEM` and
+`REAL_CAMPAIGN_BENCHMARK`, stay OPEN.
+
+Detail:
+
 `c2_allowed` is `false`. Of the blocking dependencies, six are capabilities this patch implements and verifies (resolver, font metrics, shaping,
 Arabic/bidi, rasterizer, PNG path); the remaining two depend on real data and stay open until it exists: `BRAND_EXPRESSION_SYSTEM`
 (an approved HABB expression system) and `REAL_CAMPAIGN_BENCHMARK` (the benchmark actually run, gates PASS).
 
 ## 9. Rollback
 
-All changes are additive on `feature/creative-pre-c2-foundation` (four local commits above `3d4f850`). Reverting the four commits restores C1
+All changes are additive and sit above `3d4f850` (six commits, `17e4d04` to `d182e86`). Reverting the four commits restores C1
 exactly; the Brand Memory V1 shape and every C1 DesignDocument semantic are unchanged.
 
 ## 10. Coverage matrix
