@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 
 import * as CI from '../src/creative-intelligence/index.js';
 import * as P from '../src/creative-intelligence/production.js';
-import { creativeBrandInterface, evaluateBrandGuardian, fidelityGateObservation } from '../src/branding/index.js';
+import { creativeBrandInterface, evaluateBrandGuardian } from '../src/branding/index.js';
 import { evaluateHardFidelityGate, requiredChecksFromInvariants } from '../src/creative-fidelity/fidelity-gates.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
@@ -74,7 +74,11 @@ export async function runBenchmark({ at, configPath, specPath, outDir }) {
 
   // ---- 2. the document: only the bound product, the real asset and the approved claims
   const format = await resolver.resolve(config.bindings.format.ref, tenant);
-  const claimByName = Object.fromEntries(config.bindings.claims.map((c) => [c.id, c]));
+  const claimByName = {};
+  for (const c of config.bindings.claims) {
+    const resolved = await resolver.resolve(c.ref, tenant);
+    claimByName[c.id] = { ref: c.ref, expected_wording: resolved.metadata.approved_wording };
+  }
   const colors = brand.memory.design_tokens.colors;
   const geo = (x, y, width, height) => ({ x, y, width, height, rotation_deg: 0 });
   const common = (id, type, z, geometry, origin) => ({
@@ -109,7 +113,7 @@ export async function runBenchmark({ at, configPath, specPath, outDir }) {
       product_ref: productRef,
       asset_ref: assetRef,
       preservation_mode: L.product.preservation_mode,
-      protected_regions: [],
+      protected_regions: config.asset_evidence.protected_regions.filter((r) => (L.product.protected_region_ids ?? []).includes(r.region_id)).map((r) => ({ region_id: r.region_id, ...r.normalized })),
       allow_crop: false,
       allow_relight: false,
       allow_shadow: false,
@@ -159,43 +163,67 @@ export async function runBenchmark({ at, configPath, specPath, outDir }) {
   report.document = { id: solved.document.document_id, recipe_id: spec.recipe_id, unplaced: solved.unplaced ?? [], violations: solved.violations ?? [] };
 
   // ---- 3. Preflight
-  const preflight = CI.runCreativePreflight(solved.document, { fonts, assets, approved_claim_refs: claimRefs });
+  const approvedTexts = Object.fromEntries(Object.values(claimByName).map((c) => [c.ref, CI.textDigest(c.expected_wording)]));
+  const preflight = CI.runCreativePreflight(solved.document, {
+    fonts, assets, approved_claim_refs: claimRefs, approved_texts: approvedTexts,
+  });
   report.preflight = { status: preflight.status, checks: preflight.checks.map((c) => `${c.code}=${c.status}`) };
   stage(report, 'preflight', report.preflight.checks, 'PASS', preflight.status, preflight.status === 'PASS' ? 'PASS' : (preflight.status === 'FAIL' ? 'FAIL' : 'BLOCKED'));
 
   // ---- 4. the real, RESOLVED, production PNG (the only payload consumed is the verified private photograph)
-  const dataUri = `data:image/jpeg;base64,${Buffer.from(payload.bytes).toString('base64')}`;
-  let consumed = 0;
-  const rendered = CI.renderDesignDocument({ document: solved.document, fonts, assetResolver: (ref) => { if (ref === assetRef) { consumed += 1; return dataUri; } report.fallback.used = true; report.fallback.notes.push(`unexpected asset requested: ${ref}`); return null; } });
+  const renderLog = P.createRenderLog((ref) => {
+    if (ref === assetRef) return payload.bytes;
+    report.fallback.used = true;
+    report.fallback.notes.push(`unexpected asset requested: ${ref}`);
+    return null;
+  });
+  const rendered = CI.renderDesignDocument({ document: solved.document, fonts, assetResolver: renderLog.resolver });
   const png = P.renderProductionPng(rendered);
-  report.png = { render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, width: png.width, height: png.height, sha256: png.sha256, asset_resolutions: consumed };
-  stage(report, 'png', { render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, asset_resolutions: consumed }, 'RESOLVED + REAL typography + the real asset consumed', `${rendered.render_mode} + ${rendered.typography_mode}, asset consumed ${consumed}x`,
-    rendered.render_mode === 'RESOLVED' && rendered.typography_mode === 'REAL' && consumed > 0 ? 'PASS' : 'FAIL');
-
-  // ---- 5. Creative Fidelity gate: only MEASURED observations count. Nothing in the repository measures the product against the source photograph.
+  const log = renderLog.finish(rendered.svg);
+  report.png = {
+    render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, width: png.width, height: png.height, sha256: png.sha256, asset_resolutions: log.resolutions.length,
+  };
+  stage(report, 'png', { render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, asset_resolutions: log.resolutions.length }, 'RESOLVED + REAL typography + the real asset consumed',
+    `${rendered.render_mode} + ${rendered.typography_mode}, asset consumed ${log.resolutions.length}x`,
+    rendered.render_mode === 'RESOLVED' && rendered.typography_mode === 'REAL' && log.resolutions.length > 0 ? 'PASS' : 'FAIL');
+  // ---- 5. Creative Fidelity: the required checks come from the asset baseline; each is MEASURED on the delivered PNG against a reference rendering of the verified source
   const invariants = config.asset_evidence.fidelity_baseline.invariants;
   const requiredChecks = requiredChecksFromInvariants(invariants);
-  const observations = []; // no measurement tool exists: nothing is claimed
+  const assetRecord = config.owned_records.find((r) => r.ref === assetRef);
+  const productLayers = solved.document.layers.filter((l) => l.type === 'PRODUCT');
+  const observations = P.measureProductFidelity({
+    source: {
+      bytes: payload.bytes, sha256: assetHash, origin: assetRecord.metadata.origin, width_px: assetRecord.metadata.width_px, height_px: assetRecord.metadata.height_px, has_alpha: assetRecord.metadata.media_type === 'image/png',
+    },
+    candidate: { png_bytes: png.bytes },
+    canvas: { width: solved.document.canvas.width, height: solved.document.canvas.height, background: solved.document.canvas.background_color },
+    product_layers: productLayers,
+    raster_layer_count: solved.document.layers.filter((l) => l.type === 'IMAGE' || l.type === 'LOGO').length,
+    render_log: log,
+    expected: { asset_ref: assetRef, pinned_sha256: pinned, piece_count: config.asset_evidence.fidelity_baseline.piece_count },
+    text_regions: productLayers.flatMap((l) => l.protected_regions),
+  });
   const fidelity = evaluateHardFidelityGate({ observations, requiredChecks });
-  report.fidelity = { outcome: fidelity.outcome, required_checks: requiredChecks, observed: observations.length, missing: fidelity.missing };
-  stage(report, 'creative_fidelity', { observed: observations.length, missing: fidelity.missing }, 'PASS on every required check', fidelity.outcome, fidelity.outcome === 'PASS' ? 'PASS' : (fidelity.outcome === 'FAIL' ? 'FAIL' : 'BLOCKED'));
-
-  // ---- 6. Brand Guardian on the candidate manifest (structured facts about the candidate; no raw media)
-  const hex = (h) => h.toUpperCase();
-  const manifest = {
-    content_kind: 'IMAGE',
-    assets: [{ subject: 'product.asset', coverage: 'COMPLETE', values: [assetRef], evidence_refs: [] }],
-    colors: [{ subject: 'canvas.colors', coverage: 'COMPLETE', values: [...new Set([colors[L.background.token], colors[L.headline.color_token], colors[L.price.color_token]].map(hex))], evidence_refs: [] }],
-    typography: [{ subject: 'text.families', coverage: 'COMPLETE', values: [...new Set(Object.values(loaded).map((f) => f.family))], evidence_refs: [] }],
-    text: [{ subject: 'text.fragments', coverage: 'COMPLETE', values: layers.filter((l) => l.type === 'TEXT').map((l) => l.content), evidence_refs: [] }],
-    claims: [{ subject: 'text.claims', coverage: 'COMPLETE', values: claimRefs, evidence_refs: [] }],
-    external_gates: [fidelityGateObservation({ gate: fidelity })],
+  report.fidelity = {
+    outcome: fidelity.outcome, required_checks: requiredChecks, observed: observations.length, missing: fidelity.missing, observations,
   };
+  stage(report, 'creative_fidelity', observations.map((o) => `${o.code}=${o.outcome}`), 'PASS on every required check', fidelity.outcome, fidelity.outcome === 'PASS' ? 'PASS' : (fidelity.outcome === 'FAIL' ? 'FAIL' : 'BLOCKED'));
+
+  // ---- 6. Brand Guardian on a manifest built from the actual document; it consumes the Fidelity outcome (evaluated first) and never recomputes it
+  const manifest = P.buildCandidateManifest({ document: solved.document, fonts, fidelityGate: fidelity });
   const guardian = evaluateBrandGuardian({
     tenant: brand.tenant, brandContext: brand.context, candidateManifest: manifest, targetRef: `benchmark:${config.benchmark_id.toLowerCase()}`, evaluatedAt: at,
   });
-  report.guardian = { outcome: guardian.outcome, hard_outcome: guardian.hard_outcome, hard_outcome_reason: guardian.hard_outcome_reason, applicable_hard_rules: guardian.rule_results.length, semantic_outcome: guardian.semantic_outcome };
-  stage(report, 'brand_guardian', { applicable_hard_rules: guardian.rule_results.length, hard_outcome_reason: guardian.hard_outcome_reason }, 'PASS (a measured hard-rule outcome)', guardian.outcome,
+  report.guardian = {
+    outcome: guardian.outcome,
+    hard_outcome: guardian.hard_outcome,
+    hard_outcome_reason: guardian.hard_outcome_reason,
+    applicable_hard_rules: guardian.rule_results.length,
+    semantic_outcome: guardian.semantic_outcome,
+    rules: guardian.rule_results.map((r) => ({ rule_id: r.rule_id, outcome: r.outcome, reason: r.reason, observed: r.observed_summary })),
+    manifest_summary: { colors: manifest.colors[0].values, families: manifest.typography[0].values, claims: manifest.claims[0].values, gates: manifest.external_gates.map((g) => `${g.subject}=${g.status}`) },
+  };
+  stage(report, 'brand_guardian', report.guardian.rules.map((r) => `${r.rule_id}=${r.outcome}`), 'PASS (every applicable hard rule PASS)', guardian.outcome,
     guardian.outcome === 'PASS' ? 'PASS' : (guardian.outcome === 'FAIL' ? 'FAIL' : 'BLOCKED'));
 
   // ---- verdict

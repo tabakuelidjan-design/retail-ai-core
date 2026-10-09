@@ -1,8 +1,8 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
-- **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
-- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** (CLAIMS, FORMAT, EXPRESSION, FONTS, PRODUCT bound; ASSET bound by metadata; RUNNABLE locally, BLOCKED / `ASSET_PAYLOAD_UNAVAILABLE` in a clean clone) · **HABB BENCHMARK 001 = NOT_RUN** (HABB BENCHMARK FONT BINDINGS = COMPLETE: Playfair Display and Montserrat BOUND, HABB Brand Memory v2 APPROVED; ASSET registered with a private payload, PRODUCT bound to the Samsung Galaxy A17 by owner confirmation and the exact catalogue item; RUNNABLE only where the verified private payload is present; EXECUTED 2026-10-09: RUNNABLE -> RUN -> BLOCKED, Preflight PASS and a real PNG, Creative Fidelity and Brand Guardian NOT_MEASURABLE) · **C2 = NOT READY**
-- **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 = NOT READY** — HABB CREATIVE BENCHMARK 001 is NOT_RUN: every binding is prepared, and only an actual run (real PNG, Preflight, Fidelity and Guardian evidence) can open C2. See `creative-pre-c2-foundation.md`.
+- **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 provider work has NOT been started (its gate contract is satisfied, see below).
+- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** (CLAIMS, FORMAT, EXPRESSION, FONTS, PRODUCT bound; ASSET bound by metadata; RUNNABLE locally, BLOCKED / `ASSET_PAYLOAD_UNAVAILABLE` in a clean clone) · **HABB BENCHMARK 001 = RUN -> PASS** (HABB BENCHMARK FONT BINDINGS = COMPLETE: Playfair Display and Montserrat BOUND, HABB Brand Memory v2 APPROVED; ASSET registered with a private payload, PRODUCT bound to the Samsung Galaxy A17 by owner confirmation and the exact catalogue item; RUNNABLE only where the verified private payload is present; EXECUTED 2026-10-09: RUNNABLE -> RUN -> PASS with the real asset, no fallback: Preflight PASS, a real PNG, five measured Creative Fidelity checks PASS, Brand Guardian hard rules R1-R3 PASS under Brand Memory v3) · **C2 gate contract = SATISFIED, C2 NOT STARTED**
+- **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 gate contract = SATISFIED** — HABB CREATIVE BENCHMARK 001 was actually run (real PNG, Preflight, Fidelity and Guardian evidence recorded), so every blocking dependency can be closed with real evidence; starting C2 is a separate explicit decision and nothing has been started. See `creative-pre-c2-foundation.md`.
 - **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 
@@ -63,7 +63,7 @@ video
 Creative Learning
 ```
 
-### C2 - NOT READY
+### C2 - gate contract satisfied, NOT STARTED (history below: the blockers before the benchmark was run)
 
 C2 provider bake-off and real provider execution are **DEFERRED until HABB CREATIVE BENCHMARK 001 is runnable and used**
 (`NORDLA-DECISION-REGISTER.md` NDR-D02 clarification, `NORDLA-DEFERRED.md` L3-002 clarification). Blockers (`assessCreativeC2Readiness()`):
@@ -80,7 +80,7 @@ C2 provider bake-off and real provider execution are **DEFERRED until HABB CREAT
 ```
 
 CJK line breaking remains deferred and is not a C2 blocker. HABB CREATIVE BENCHMARK 001 stays configuration / benchmark data only
-(status `NOT_RUN`). Next target: the PRE-C2 foundation patch.
+(status then `NOT_RUN`; since 2026-10-09 it is `RUN`, result PASS). Next target then: the PRE-C2 foundation patch.
 
 ## 0. Canonical documents audit (final architect audit)
 

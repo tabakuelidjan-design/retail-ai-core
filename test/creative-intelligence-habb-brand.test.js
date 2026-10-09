@@ -99,7 +99,7 @@ test('HABB Brand Memory V1.1 (current revision): exact Core binding, owner-appro
   const memory = out.approved_memory;
   // HBB-8 the current Memory V1.1 is APPROVED (v2, the governed typography revision), bound to EXACTLY the approved Core V1, and valid against it
   assert.equal(memory.status, 'APPROVED');
-  assert.equal(memory.version, 2);
+  assert.equal(memory.version, 3);
   assert.deepEqual(memory.core_ref, { id: out.approved_core.id, version: 1 });
   assert.deepEqual(validateBrandMemory(built.memory, { core: built.core }), { ok: true, reasons: [] });
   assert.ok(validateBrandMemory(built.memory, { core: { ...built.core, version: 2 } }).reasons.includes('BRAND_MEMORY_CORE_MISMATCH'));
@@ -123,7 +123,7 @@ test('HABB Brand Memory V1.1 (current revision): exact Core binding, owner-appro
   assert.ok(!Object.values(memory.design_tokens.colors).includes('#EFE9E1'));
   // no logo ref is invented; no hard rule is forced into the DSL; benchmark claims are not smuggled in as registry claims
   assert.deepEqual(memory.identity_references, { primary_logo_ref: null, approved_logo_refs: [] });
-  assert.deepEqual(memory.hard_rules, []);
+  assert.deepEqual(memory.hard_rules.map((r) => r.id), ['habb-palette-closed', 'habb-typography-two-families', 'habb-product-fidelity-gate']); // exactly the three approved minimum hard rules
   assert.deepEqual(memory.external_references.claim_refs, []);
 });
 
@@ -133,21 +133,21 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   // HBB-15 the Creative interface exposes the HABB identity, exact refs, expression system and colours; typography stays empty
   assert.equal(iface.brand.brand_id, HABB_BRAND_ID);
   assert.deepEqual(iface.core_ref, { id: 'habb-core-v1', version: 1 });
-  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v2', version: 2 });
+  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v3', version: 3 });
   assert.equal(isExpressionNonEmpty(iface.expression_system), true);
   assert.deepEqual(Object.keys(iface.design_tokens.colors), ['navy', 'terracotta', 'cream', 'white']);
   assert.deepEqual(config.brand.core_ref, iface.core_ref);
   assert.deepEqual(config.brand.memory_ref, iface.memory_ref);
   // the benchmark claims are unchanged
   const claims = config.owned_records.filter((r) => r.kind === 'CLAIM');
-  assert.deepEqual(claims.map((c) => [c.ref, c.metadata.approved_wording]), [['claim://habb/benchmark-001/price-25', '25 €'], ['claim://habb/benchmark-001/express-5-minutes', '5 minutes']]);
+  assert.deepEqual(claims.map((c) => [c.ref, c.metadata.approved_wording]), [['claim://habb/benchmark-001/price-25', '25 €'], ['claim://habb/benchmark-001/express-5-minutes', '5 minutes'], ['claim://habb/benchmark-001/express-5-minutes-display', 'Coque personnalisée en 5 minutes']]);
   // HBB-16 the benchmark's expression binding is BOUND to the approved Memory (readiness computed by the real assessor)
   const resolver = createBenchmarkResolver(config, { privatePayloads: false });
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
-  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v2@2');
+  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v3@3');
   assert.equal(config.bindings.expression.status, 'BOUND_TO_APPROVED_BRAND_MEMORY');
-  assert.deepEqual(config.bindings.expression.memory_ref, { id: 'habb-memory-v2', version: 2 });
+  assert.deepEqual(config.bindings.expression.memory_ref, { id: 'habb-memory-v3', version: 3 });
   assert.ok(P.assessExpressionReadiness(iface).ready);
   // HBB-17 fonts and the PRODUCT are bound now; HBB-18 / 19 in a CI-like environment the private ASSET payload is the one blocker
   assert.equal(report.status, 'BLOCKED');
@@ -155,7 +155,7 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   assert.equal(config.bindings.fonts.length, 2);
   assert.equal(config.bindings.product.ref, 'product://habb/benchmark-001/samsung-galaxy-a17');
   assert.equal(config.bindings.asset.ref, 'asset://habb/benchmark-001/real-personalised-case-001');
-  assert.equal(config.status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
   assert.equal(config.bindings_still_missing.length, 0);
   // HBB-20 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence }).c2_allowed, false);

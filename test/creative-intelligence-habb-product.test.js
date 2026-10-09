@@ -145,8 +145,8 @@ test('Local RUNNABLE gate: runnable only with the verified private payload; a cl
     assert.equal(code(() => P.recordBenchmarkRun({ readiness: local, results: {}, ran_at: '2026-10-10T10:00:00.000Z' })), CI.CI_ERROR.BENCHMARK_INVALID);
   }
   // HP-18 the configuration status is NOT_RUN in both environments (readiness never writes it)
-  assert.equal(config.status, 'NOT_RUN');
-  assert.equal(JSON.parse(readFileSync(new URL('benchmarks/creative-intelligence/habb-creative-benchmark-001.json', root), 'utf8')).status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
+  assert.equal(JSON.parse(readFileSync(new URL('benchmarks/creative-intelligence/habb-creative-benchmark-001.json', root), 'utf8')).status, 'RUN');
   // HP-20 C2 stays closed: RUNNABLE opens nothing, only a recorded run does
   const onlyExpression = CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence });
   assert.equal(onlyExpression.c2_allowed, false);

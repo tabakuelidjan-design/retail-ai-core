@@ -160,7 +160,7 @@ test('HABB benchmark fonts: real coverage and real shaping per role, no fallback
 test('HABB Brand Memory typography revision: governed, additive, v1 untouched', async () => {
   const v1 = out.memory_v1_approved;
   const v1Superseded = out.memory_v1_superseded;
-  const v2 = out.approved_memory;
+  const v2 = out.memory_v2_approved;
   const isFrozen = (v) => v == null || typeof v !== 'object' || (Object.isFrozen(v) && Object.values(v).every(isFrozen));
   const rebuilt = buildBrandPackage(pkg.inputs, expressionFile.expression_system);
   // HF-14 Memory v1 is immutable: the approved v1 is deeply frozen, still APPROVED in its own record, with typography still empty
@@ -175,11 +175,11 @@ test('HABB Brand Memory typography revision: governed, additive, v1 untouched', 
   assert.equal(v2.status, 'APPROVED');
   assert.equal(out.memory_revision_review_required.status, 'REVIEW_REQUIRED');
   assert.equal(v2.approval.approver_role, 'OWNER');
-  assert.equal(out.memory_decision_event.type, 'BRAND_MEMORY_APPROVED');
-  assert.equal(v2.approval.decision_event_id, out.memory_decision_event.id);
-  assert.deepEqual(out.memory_decision_event.supersedes, { kind: 'brand_memory', id: 'habb-memory-v1', version: 1 });
+  assert.equal(out.memory_v2_decision_event.type, 'BRAND_MEMORY_APPROVED');
+  assert.equal(v2.approval.decision_event_id, out.memory_v2_decision_event.id);
+  assert.deepEqual(out.memory_v2_decision_event.supersedes, { kind: 'brand_memory', id: 'habb-memory-v1', version: 1 });
   assert.equal(v2.supersedes_id, 'habb-memory-v1');
-  assert.equal(v2.approval.approved_at, new Date(pkg.inputs.memory_revision.approved_at).toISOString());
+  assert.equal(v2.approval.approved_at, new Date(pkg.inputs.memory_revisions[0].approved_at).toISOString());
   assert.match(pkg.inputs.authorization.revision_basis, /not authenticated by Nordla Identity, which remains an open dependency/);
   // HF-16 the old Memory is SUPERSEDED
   assert.equal(v1Superseded.status, 'SUPERSEDED');
@@ -201,7 +201,7 @@ test('HABB Brand Memory typography revision: governed, additive, v1 untouched', 
   assert.deepEqual(iface.design_tokens.typography.text.weights, [400, 500, 600, 700]);
   assert.equal(iface.brand.brand_id, '4c487848-8d41-4e30-8f3f-66afd09b4be4');
   assert.deepEqual(iface.core_ref, { id: 'habb-core-v1', version: 1 });
-  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v2', version: 2 });
+  assert.deepEqual(iface.memory_ref, { id: 'habb-memory-v3', version: 3 }); // the current revision (v3 added the hard rules)
   assert.deepEqual(rebuilt.outputs, pkg.outputs); // the stored package is exactly what the governed flow produces
 });
 
@@ -217,7 +217,7 @@ test('HABB Benchmark 001 after the font bindings: fonts bound, PRODUCT and ASSET
   assert.equal(state['claim:promise'], 'BOUND');
   assert.equal(state.format, 'BOUND');
   assert.equal(state.expression_system, 'BOUND');
-  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v2@2');
+  assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v3@3');
   // HF-22 / HF-23 the PRODUCT is bound now; the ASSET payload (private) is absent in this CI-like environment, HF-24 so the overall status is BLOCKED (never RUNNABLE)
   assert.equal(state.product, 'BOUND');
   assert.equal(state.asset, 'BLOCKED'); // bound by metadata; the private payload is not in this (CI-like) environment
@@ -229,7 +229,7 @@ test('HABB Benchmark 001 after the font bindings: fonts bound, PRODUCT and ASSET
   const partial = await P.assessBenchmarkReadiness({ config: oneMissing, resolver, tenant: TENANT, creativeInterface: iface });
   assert.equal(partial.bindings.find((b) => b.id === 'font:font://google-fonts/third-family').status, 'BLOCKED');
   // HF-25 the benchmark status is still NOT_RUN, HF-26 C2 is still false
-  assert.equal(config.status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
   assert.equal(code(() => P.recordBenchmarkRun({ readiness: report, results: { preflight_status: 'PASS', fidelity_status: 'PASS', guardian_status: 'PASS', png_sha256: 'a'.repeat(64) }, ran_at: '2026-10-10T10:00:00.000Z' })), CI.CI_ERROR.BENCHMARK_INVALID);
   // the benchmark role mapping is configuration data (a role, a resource, a weight), not Brand Memory

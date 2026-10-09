@@ -419,7 +419,7 @@ test('C1 may close, C2 provider work stays blocked on a real campaign benchmark 
   const benchmark = JSON.parse(await readFile(new URL('../benchmarks/creative-intelligence/habb-creative-benchmark-001.json', import.meta.url), 'utf8'));
   // 320 the architect-selected benchmark exists as DATA with exactly the facts and requirements given
   assert.equal(benchmark.kind, 'CONFIGURATION_DATA');
-  assert.equal(benchmark.status, 'NOT_RUN');
+  assert.equal(benchmark.status, 'RUN');
   assert.equal(benchmark.subject, 'Personalized phone case');
   assert.equal(benchmark.facts_given_by_the_architect.price, '25 €');
   assert.equal(benchmark.facts_given_by_the_architect.promise, '5 minutes');

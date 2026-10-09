@@ -38,7 +38,13 @@ test('Benchmark 001 real asset: the fidelity baseline preserves silhouette, came
   // FB-20 (the book text is deliberately NOT transcribed anywhere in the repository data)
   assert.match(keep.printed_text, /never rewritten, never OCR-reinterpreted and never promoted to a marketing claim/);
   assert.doesNotMatch(JSON.stringify(config), /bonheur|d.appr.cier|que l.on a/i);
-  assert.deepEqual(config.owned_records.filter((r) => r.kind === 'CLAIM').map((r) => r.metadata.approved_wording), ['25 €', '5 minutes']);
+  assert.deepEqual(config.owned_records.filter((r) => r.kind === 'CLAIM').map((r) => r.metadata.approved_wording), ['25 €', '5 minutes', 'Coque personnalisée en 5 minutes']);
+  // the printed-text region of the real photograph is annotated (coordinates only) and carried by the baseline
+  assert.deepEqual(baseline.protected_regions, ['printed-text']);
+  const region = config.asset_evidence.protected_regions[0];
+  assert.equal(region.kind, 'TEXT');
+  assert.deepEqual(region.source_dimensions, { width_px: 1152, height_px: 1536 });
+  assert.ok(region.source_pixels.x >= 0 && region.source_pixels.y >= 0 && region.source_pixels.x + region.source_pixels.width <= 1152 && region.source_pixels.y + region.source_pixels.height <= 1536);
 });
 
 test('Benchmark 001 real asset: the face gate is a fact about this asset only', () => {

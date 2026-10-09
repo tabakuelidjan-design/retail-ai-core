@@ -1,7 +1,7 @@
 {
   "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
   "kind": "CONFIGURATION_DATA",
-  "status": "NOT_RUN",
+  "status": "RUN",
   "selected_by": "architect",
   "merchant": {
     "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
@@ -84,9 +84,10 @@
       },
       {
         "id": "promise",
-        "ref": "claim://habb/benchmark-001/express-5-minutes",
-        "expected_wording": "5 minutes",
-        "needs": "BOUND to a benchmark-owned CLAIM record (see claim_evidence)"
+        "ref": "claim://habb/benchmark-001/express-5-minutes-display",
+        "expected_wording": "Coque personnalisée en 5 minutes",
+        "needs": "BOUND to a benchmark-owned CLAIM record (see claim_evidence)",
+        "derived_from": "claim://habb/benchmark-001/express-5-minutes"
       }
     ],
     "format": {
@@ -107,8 +108,8 @@
       "content_file": "benchmarks/creative-intelligence/habb-expression-system-benchmark-001.json",
       "status": "BOUND_TO_APPROVED_BRAND_MEMORY",
       "memory_ref": {
-        "id": "habb-memory-v2",
-        "version": 2
+        "id": "habb-memory-v3",
+        "version": 3
       },
       "note": "Readiness is still computed: it is BOUND only when the Creative brand interface of this approved Memory is supplied to assessBenchmarkReadiness."
     }
@@ -191,6 +192,18 @@
         "source_status": "ACTIVE",
         "owner_confirmation_ref": "owner-decision://habb/benchmark-001/product/samsung-galaxy-a17"
       }
+    },
+    {
+      "ref": "claim://habb/benchmark-001/express-5-minutes-display",
+      "kind": "CLAIM",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "version": 1,
+      "status": "ACTIVE",
+      "evidence_ref": "evidence://habb/benchmark-001/express-5-minutes-display",
+      "metadata": {
+        "approved_wording": "Coque personnalisée en 5 minutes",
+        "approval_ref": "approval://habb/benchmark-001/qualified-speed-display"
+      }
     }
   ],
   "expression_system_missing_decisions": {
@@ -224,6 +237,24 @@
           "not": "an unconditional, universal operational guarantee",
           "where_kept": "This qualification is preserved here, beside the benchmark-owned evidence. The generic CLAIM metadata contract ({approved_wording, approval_ref}) is deliberately NOT widened by this preparation; the display wording stays exactly \"5 minutes\"."
         }
+      },
+      "claim://habb/benchmark-001/express-5-minutes-display": {
+        "display_wording": "Coque personnalisée en 5 minutes",
+        "derived_from": "claim://habb/benchmark-001/express-5-minutes",
+        "derived_from_source_text": "La personnalisation est réalisée en boutique en environ 5 minutes, selon la disponibilité du modèle.",
+        "approval_ref": "approval://habb/benchmark-001/qualified-speed-display",
+        "decision_ref": "decision://habb/benchmark-001/qualified-speed-display",
+        "recorded_at": "2026-10-09T21:06:36Z",
+        "qualification": {
+          "applies_in": "store (boutique)",
+          "only_when": [
+            "the compatible case/model is available",
+            "the customer's file is ready and usable"
+          ],
+          "not": "an unconditional, universal operational guarantee",
+          "where_kept": "This qualification is preserved here, beside the benchmark-owned evidence. The generic CLAIM metadata contract ({approved_wording, approval_ref}) is deliberately NOT widened by this preparation; the display wording stays exactly \"5 minutes\"."
+        },
+        "note": "The visible form names the product and the duration; the qualification (in store, compatible model available, customer file usable) is carried by this evidence and is not printed on the visual. Nothing else is promised."
       }
     }
   },
@@ -235,8 +266,8 @@
       "version": 1
     },
     "memory_ref": {
-      "id": "habb-memory-v2",
-      "version": 2
+      "id": "habb-memory-v3",
+      "version": 3
     },
     "note": "Benchmark-scoped trusted canonical brand data, not the future persistent brands registry. A migration to that registry must preserve this brand_id."
   },
@@ -369,8 +400,35 @@
       },
       "piece_count": 1,
       "face_identity_gate": "NOT_APPLICABLE_FOR_THIS_ASSET",
-      "face_gate_note": "The photo shows no clearly visible human face. This is a fact about this asset only: the global HABB rule that customer faces must never be altered is unchanged."
-    }
+      "face_gate_note": "The photo shows no clearly visible human face. This is a fact about this asset only: the global HABB rule that customer faces must never be altered is unchanged.",
+      "protected_regions": [
+        "printed-text"
+      ]
+    },
+    "protected_regions": [
+      {
+        "region_id": "printed-text",
+        "kind": "TEXT",
+        "source_pixels": {
+          "x": 280,
+          "y": 995,
+          "width": 360,
+          "height": 295
+        },
+        "normalized": {
+          "x": 0.243056,
+          "y": 0.647786,
+          "width": 0.3125,
+          "height": 0.192057
+        },
+        "source_dimensions": {
+          "width_px": 1152,
+          "height_px": 1536
+        },
+        "decision_ref": "decision://habb/benchmark-001/printed-text-region",
+        "basis": "Annotated by inspecting the verified local source photograph: a rectangle with a small margin around the four printed lines on the open book page. The text is never transcribed, read or interpreted."
+      }
+    ]
   },
   "bindings_notes": [
     "ASSET payload availability: the real photograph is private (not in Git). It is available, and the benchmark RUNNABLE, only where the hash-verified file is present; a clean clone reports ASSET_PAYLOAD_UNAVAILABLE and BLOCKED. This is correct.",
@@ -409,9 +467,9 @@
     "inference": "none: the link is not inferred from camera geometry or any visual feature"
   },
   "execution": {
-    "summary": "RUNNABLE -> RUN -> BLOCKED",
-    "verdict": "BLOCKED",
-    "status_note": "The configuration status stays NOT_RUN on purpose: RUN is the closing state that opens the C2 gate and it requires every gate to PASS. A run whose required gates cannot be measured is recorded here, not promoted.",
+    "summary": "RUNNABLE -> RUN -> PASS",
+    "verdict": "PASS",
+    "status_note": "status is RUN: the benchmark was actually executed locally with the real asset and every required gate passed. RUNNABLE is readiness, RUN is execution, PASS is the result. The run is reproducible only where the verified private payload is present; a clean clone reports BLOCKED with ASSET_PAYLOAD_UNAVAILABLE, which is correct.",
     "harness": "scripts/run-benchmark-001.mjs with benchmarks/creative-intelligence/habb-benchmark-001-run-spec.json (no clock, no network, no provider, no generated pixel; the private evidence and the PNG stay under the gitignored data/private/)",
     "environment": "LOCAL_REAL_ASSET",
     "real_asset_consumed": true,
@@ -435,15 +493,144 @@
           "creative_fidelity": "NOT_MEASURABLE (0 of 5 required checks observed: no measurement tool exists in the repository)",
           "brand_guardian": "NOT_MEASURABLE (NO_APPLICABLE_HARD_RULES: the approved HABB Memory carries no hard rule, and zero applicable rules is not compliance)"
         },
-        "png_sha256": "4fde0571ce0998e5a027f2c2294c1c8f181d6933522164985eec32ca2a1e7e49"
+        "png_sha256": "4fde0571ce0998e5a027f2c2294c1c8f181d6933522164985eec32ca2a1e7e49",
+        "contract": "before the measurement contract: Creative Fidelity had no measurement tool and the approved HABB Memory had no hard rule"
+      },
+      {
+        "attempt": 3,
+        "at": "2026-10-09T21:12:31Z",
+        "contract": "the approved measurement contract: five deterministic Fidelity checks on the delivered PNG, Brand Memory v3 hard rules R1-R3, fixture decisions applied",
+        "verdict": "PASS",
+        "stages": {
+          "readiness": "RUNNABLE (verified private payload)",
+          "asset_hash": "verified again: the pinned SHA-256",
+          "preflight": "PASS (all 19 checks)",
+          "png": "RESOLVED render, REAL typography, 1080 x 1350, the real photograph consumed once; white canvas",
+          "creative_fidelity": "PASS: PRODUCT_IDENTITY PASS, PRODUCT_GEOMETRY PASS, PIECE_COUNT PASS, PRODUCT_COLOR PASS, TEXT PASS",
+          "brand_guardian": "PASS: R1 habb-palette-closed PASS, R2 habb-typography-two-families PASS, R3 habb-product-fidelity-gate PASS"
+        },
+        "measured": {
+          "geometry": {
+            "expected_box": {
+              "x0": 357,
+              "y0": 492,
+              "x1": 723,
+              "y1": 980
+            },
+            "reference_box": {
+              "x0": 356,
+              "y0": 491,
+              "x1": 724,
+              "y1": 981
+            },
+            "candidate_box": {
+              "x0": 356,
+              "y0": 491,
+              "x1": 724,
+              "y1": 981
+            },
+            "aspect_error": 0.0013605442176871652,
+            "tolerance_px": 1,
+            "tolerance_aspect": 0.005
+          },
+          "color": {
+            "pixels": 178608,
+            "mean_abs_diff": 0,
+            "mean_signed_shift": [
+              0,
+              0,
+              0
+            ],
+            "tolerance_mean_abs": 0.5,
+            "tolerance_shift": 1
+          },
+          "text": {
+            "region": "printed-text",
+            "max_channel_diff": 0,
+            "tolerance_max_diff": 2
+          },
+          "piece_count": {
+            "product_layers": 1,
+            "product_asset_draws": 1,
+            "total_image_draws": 1
+          },
+          "declared_colours": [
+            "#183247",
+            "#C56E54",
+            "#FFFFFF"
+          ],
+          "families": [
+            "Montserrat",
+            "Playfair Display"
+          ]
+        },
+        "png_sha256": "5a32ebf2947adba59486be08b1a5287c29ed6363f212c6e6a80aad407ee61a37"
       }
     ],
-    "blocking_gates": [
-      "creative_fidelity",
-      "brand_guardian"
+    "blocking_gates": [],
+    "why_pass": "Every required gate returned PASS from measurement, none from assumption: Preflight PASS, all five Creative Fidelity checks PASS on the delivered PNG, all three Brand Guardian hard rules PASS, a real RESOLVED PNG with real typography, the real asset consumed, no fallback.",
+    "limits": [
+      "The reference rendering and the candidate share the rasterizer's own image decoding and resampling: a defect inside the rasterizer is not detectable by these measurements.",
+      "Tolerances are the provisional technical ones; a measured difference of 0 here does not tighten them.",
+      "R1 constrains declared colours only, never the pixels of the photograph; R3 applies to IMAGE candidates and reports NOT_MEASURABLE for an image with no product-fidelity observation."
     ],
-    "why_not_pass": "Two mandatory gates returned NOT_MEASURABLE. Nothing was assumed: a gate that cannot be measured is never a PASS.",
-    "why_not_fail": "No gate was evaluated and failed on the composition: the only failure (attempt 1) was a harness defect that was corrected.",
-    "c2": "NOT READY. C2 needs an actual run with Preflight PASS, Creative Fidelity PASS, Brand Guardian PASS and a real PNG; two of those gates are not yet measurable."
+    "visual_inspection": {
+      "status": "AUTOMATED PASS / VISUAL CONCERN",
+      "note": "Not a violated rule, so the verdict is unchanged. The creative is technically clean but plain: the product (the whole table-top photograph, accepted by decision) occupies about a third of the canvas width; the dark table background of the photograph is placed as is; the headline breaks after \"Votre\"; the price sits apart from the product with a large empty area below. None of these is an implemented rule."
+    },
+    "c2": "Under the existing gate contract (assessCreativeC2Readiness) every blocking dependency can now be closed with real evidence, the benchmark one by this run (recordBenchmarkRun): c2_allowed computes true in the local trusted environment. C2 is NOT started and starting it remains a separate explicit decision. The clean clone cannot reproduce the run (private payload)."
+  },
+  "approved_decisions": {
+    "recorded_at": "2026-10-09T21:06:36Z",
+    "authentication": "Owner authorization recorded for Benchmark 001; not authenticated by Nordla Identity, which remains an open dependency. The clock was read once, outside any builder.",
+    "decisions": [
+      {
+        "ref": "decision://habb/benchmark-001/fixture-background-white",
+        "scope": "Benchmark 001 fixture",
+        "statement": "The Benchmark 001 canvas background is white (#FFFFFF), not cream. Cream (#FBF8F3) remains an allowed HABB colour token and is neither a required nor an authoritative HABB background."
+      },
+      {
+        "ref": "decision://habb/palette-allowlist-v1",
+        "scope": "Brand Guardian R1 (global HABB)",
+        "statement": "The allowed declared colours are #183247, #C56E54, #FBF8F3, #FFFFFF, #0F2A52 and #C0392B. An allowlist: a creative need not use all six, and no semantic role is assigned to any of them."
+      },
+      {
+        "ref": "decision://habb/benchmark-001/headline-copy-variant",
+        "scope": "Benchmark 001 copy",
+        "statement": "The short copy \"Vos souvenirs. Votre création.\" is an authorised HABB copy variant for Benchmark 001. This is a NEW approval; the longer line it comes from was approved earlier and that history is not rewritten.",
+        "copy": "Vos souvenirs. Votre création.",
+        "derived_from_evidence": "ev-06"
+      },
+      {
+        "ref": "decision://habb/benchmark-001/qualified-speed-display",
+        "scope": "Benchmark 001 copy",
+        "statement": "The visible speed claim is \"Coque personnalisée en 5 minutes\", never an isolated \"5 minutes\". The operational qualification (in store, compatible model available, customer file usable) stays in the claim evidence and is not printed on the visual."
+      },
+      {
+        "ref": "decision://habb/benchmark-001/pixel-preserve-whole-photo",
+        "scope": "Benchmark 001 fixture",
+        "statement": "PIXEL_PRESERVE with the whole real photograph placed as a rectangular photo is the accepted form: no segmentation, no cut-out, no relight, no crop reconstruction, no generative transformation. A fixture decision, not a universal HABB creative rule."
+      },
+      {
+        "ref": "decision://habb/benchmark-001/printed-text-region",
+        "scope": "Benchmark 001 asset",
+        "statement": "The printed-text region of the real photograph is annotated (see asset_evidence.protected_regions) for the Fidelity TEXT check."
+      },
+      {
+        "ref": "decision://habb/guardian-hard-rules-v1",
+        "scope": "Brand Memory v3",
+        "statement": "Exactly three minimum hard rules: R1 declared-colour allowlist, R2 text families within Playfair Display / Montserrat, R3 the product_fidelity gate must be PASS. Fixture choices are not converted into brand rules."
+      },
+      {
+        "ref": "decision://habb/benchmark-001/fidelity-tolerances-provisional",
+        "scope": "Creative Fidelity measurements",
+        "statement": "Provisional technical tolerances: rectangle ±1 px, aspect error ≤ 0.5%, colour mean absolute difference ≤ 0.5/255 and per-channel mean signed shift ≤ 1/255, protected-text region maximum difference ≤ 2/255. Rasterization and rounding tolerances, not aesthetic ones."
+      },
+      {
+        "ref": "decision://habb/readability-floor-deferred",
+        "scope": "Preflight",
+        "statement": "No new global minimum font-size rule is introduced now; the self-declared minimum remains a separate future concern."
+      }
+    ]
   }
 }

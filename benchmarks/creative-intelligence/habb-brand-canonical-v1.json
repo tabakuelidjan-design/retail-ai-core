@@ -676,7 +676,8 @@
       "brand_id": "Minted once on the owner’s authorization. Benchmark-scoped trusted canonical data, NOT the future persistent brands registry. A migration to that registry MUST preserve this brand_id.",
       "claim_refs": "external_references.claim_refs is left empty: it is meant for production Claims Registry refs. The benchmark-owned claim://habb/benchmark-001/* refs are bound by the benchmark configuration, and putting them in Brand Memory would present them as registry claims.",
       "distinctive_assets": "Empty: no approved HABB logo asset ref exists, and the Core distinctive-asset types (logo, symbol, colour, typography, shape, pattern, packaging, photography style) have no verbal-cue type. The brand line is kept as an on-brand example in Memory.",
-      "typography": "Memory v1 left typography empty on purpose (no font pair had been approved). Memory v2 adds exactly two families, Playfair Display [600] and Montserrat [400, 500, 600, 700], and nothing else: no third family, no fallback. The role mapping (headline, price, speed claim, supporting text) is benchmark configuration, not Memory."
+      "typography": "Memory v1 left typography empty on purpose (no font pair had been approved). Memory v2 adds exactly two families, Playfair Display [600] and Montserrat [400, 500, 600, 700], and nothing else: no third family, no fallback. The role mapping (headline, price, speed claim, supporting text) is benchmark configuration, not Memory.",
+      "hard_rules": "v3 adds exactly three hard rules and changes nothing else: R1 declared colours within an allowlist of six (an allowlist, not a requirement to use them all; it never constrains photograph pixels), R2 text families within two (not both required), R3 the product_fidelity gate must be PASS (Guardian consumes the Fidelity outcome and never recomputes it). Benchmark-specific refs are NOT in Memory."
     },
     "source_documents": [
       {
@@ -712,41 +713,97 @@
       "identity": "Owner authorization recorded for benchmark bootstrap. Nordla Identity did not authenticate it and remains an open dependency.",
       "replaces": "Earlier synthetic placeholder times (2026-10-09T08:00 to 12:00) that were not backed by a recorded authorization.",
       "revision_recorded_at": "2026-10-09T17:39:04Z",
-      "revision_basis": "The owner’s explicit approval of the exact two-family benchmark typography (Playfair Display, Montserrat) in the font-bindings mandate. Clock read once, outside the builders; not authenticated by Nordla Identity, which remains an open dependency."
+      "revision_basis": "The owner’s explicit approval of the exact two-family benchmark typography (Playfair Display, Montserrat) in the font-bindings mandate. Clock read once, outside the builders; not authenticated by Nordla Identity, which remains an open dependency.",
+      "revision_v3_recorded_at": "2026-10-09T21:06:04Z",
+      "revision_v3_basis": "The owner’s approval of the three minimum Brand Guardian hard rules (palette allowlist, two typography families, product-fidelity gate) in the measurement-contract implementation mandate. Clock read once, outside the builders; not authenticated by Nordla Identity."
     },
-    "memory_revision": {
-      "id": "habb-memory-v2",
-      "created_at": "2026-10-09T17:39:04Z",
-      "approved_at": "2026-10-09T17:39:04Z",
-      "approval_note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
-      "changes": {
-        "design_tokens": {
-          "colors": {
-            "navy": "#183247",
-            "terracotta": "#C56E54",
-            "cream": "#FBF8F3",
-            "white": "#FFFFFF"
-          },
-          "typography": {
-            "display": {
-              "family": "Playfair Display",
-              "weights": [
-                600
-              ]
+    "memory_revisions": [
+      {
+        "id": "habb-memory-v2",
+        "created_at": "2026-10-09T17:39:04Z",
+        "approved_at": "2026-10-09T17:39:04Z",
+        "approval_note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
+        "changes": {
+          "design_tokens": {
+            "colors": {
+              "navy": "#183247",
+              "terracotta": "#C56E54",
+              "cream": "#FBF8F3",
+              "white": "#FFFFFF"
             },
-            "text": {
-              "family": "Montserrat",
-              "weights": [
-                400,
-                500,
-                600,
-                700
-              ]
+            "typography": {
+              "display": {
+                "family": "Playfair Display",
+                "weights": [
+                  600
+                ]
+              },
+              "text": {
+                "family": "Montserrat",
+                "weights": [
+                  400,
+                  500,
+                  600,
+                  700
+                ]
+              }
             }
           }
         }
+      },
+      {
+        "id": "habb-memory-v3",
+        "created_at": "2026-10-09T21:06:04Z",
+        "approved_at": "2026-10-09T21:06:04Z",
+        "approval_note": "Owner authorization recorded for the Guardian hard-rules revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
+        "changes": {
+          "hard_rules": [
+            {
+              "id": "habb-palette-closed",
+              "rule_type": "COLOR",
+              "subject": "canvas.colors",
+              "operator": "ONE_OF",
+              "value": [
+                "#183247",
+                "#C56E54",
+                "#FBF8F3",
+                "#FFFFFF",
+                "#0F2A52",
+                "#C0392B"
+              ],
+              "severity": "BLOCK",
+              "scope": "IMAGE",
+              "source_ref": "decision://habb/guardian-hard-rules-v1"
+            },
+            {
+              "id": "habb-typography-two-families",
+              "rule_type": "TYPOGRAPHY",
+              "subject": "text.families",
+              "operator": "ONE_OF",
+              "value": [
+                "Playfair Display",
+                "Montserrat"
+              ],
+              "severity": "BLOCK",
+              "scope": "IMAGE",
+              "source_ref": "decision://habb/guardian-hard-rules-v1"
+            },
+            {
+              "id": "habb-product-fidelity-gate",
+              "rule_type": "EXTERNAL_GATE",
+              "subject": "product_fidelity",
+              "operator": "STATUS_IN",
+              "value": [
+                "PASS"
+              ],
+              "severity": "BLOCK",
+              "scope": "IMAGE",
+              "source_ref": "decision://habb/guardian-hard-rules-v1"
+            }
+          ]
+        }
       }
-    }
+    ]
   },
   "outputs": {
     "brand": {
@@ -1409,13 +1466,13 @@
       "supersedes": null
     },
     "approved_memory": {
-      "id": "habb-memory-v2",
+      "id": "habb-memory-v3",
       "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
-      "version": 2,
+      "version": 3,
       "status": "APPROVED",
-      "created_at": "2026-10-09T17:39:04.000Z",
-      "supersedes_id": "habb-memory-v1",
+      "created_at": "2026-10-09T21:06:04.000Z",
+      "supersedes_id": "habb-memory-v2",
       "core_ref": {
         "id": "habb-core-v1",
         "version": 1
@@ -1449,7 +1506,50 @@
           }
         }
       },
-      "hard_rules": [],
+      "hard_rules": [
+        {
+          "id": "habb-palette-closed",
+          "rule_type": "COLOR",
+          "subject": "canvas.colors",
+          "operator": "ONE_OF",
+          "value": [
+            "#183247",
+            "#C56E54",
+            "#FBF8F3",
+            "#FFFFFF",
+            "#0F2A52",
+            "#C0392B"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        },
+        {
+          "id": "habb-typography-two-families",
+          "rule_type": "TYPOGRAPHY",
+          "subject": "text.families",
+          "operator": "ONE_OF",
+          "value": [
+            "Playfair Display",
+            "Montserrat"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        },
+        {
+          "id": "habb-product-fidelity-gate",
+          "rule_type": "EXTERNAL_GATE",
+          "subject": "product_fidelity",
+          "operator": "STATUS_IN",
+          "value": [
+            "PASS"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        }
+      ],
       "semantic_context": {
         "voice_traits": [
           "warm",
@@ -1655,15 +1755,15 @@
         }
       },
       "approval": {
-        "decision_event_id": "bde_21b7c51c0acd0bac829efa1effa1c8a9",
+        "decision_event_id": "bde_5661e652199ba1a8ca0c5c6854ca26ee",
         "approved_by": "habb-owner",
         "approver_role": "OWNER",
-        "approved_at": "2026-10-09T17:39:04.000Z",
-        "note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
+        "approved_at": "2026-10-09T21:06:04.000Z",
+        "note": "Owner authorization recorded for the Guardian hard-rules revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
       }
     },
     "memory_decision_event": {
-      "id": "bde_21b7c51c0acd0bac829efa1effa1c8a9",
+      "id": "bde_5661e652199ba1a8ca0c5c6854ca26ee",
       "type": "BRAND_MEMORY_APPROVED",
       "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
@@ -1673,15 +1773,15 @@
       },
       "subject": {
         "kind": "brand_memory",
-        "id": "habb-memory-v2",
-        "version": 2
+        "id": "habb-memory-v3",
+        "version": 3
       },
-      "decided_at": "2026-10-09T17:39:04.000Z",
-      "note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
+      "decided_at": "2026-10-09T21:06:04.000Z",
+      "note": "Owner authorization recorded for the Guardian hard-rules revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
       "supersedes": {
         "kind": "brand_memory",
-        "id": "habb-memory-v1",
-        "version": 1
+        "id": "habb-memory-v2",
+        "version": 2
       }
     },
     "memory_v1_approved": {
@@ -2220,6 +2320,827 @@
         }
       },
       "hard_rules": [],
+      "semantic_context": {
+        "voice_traits": [
+          "warm",
+          "precise",
+          "direct",
+          "human",
+          "accessible",
+          "restrained"
+        ],
+        "do": [
+          "lead with the emotional or useful benefit",
+          "use concrete language",
+          "stay local and credible"
+        ],
+        "dont": [
+          "artificial luxury language",
+          "overclaiming",
+          "generic AI marketing language"
+        ],
+        "brand_style_summary": "Sober, credible and human; premium through real products, real composition and restraint, never through decoration or artificial effects.",
+        "on_brand_examples": [
+          "HABB Store n’est pas une simple boutique. C’est une signature.",
+          "Vos souvenirs. Votre création. Prêt chez HABB à Namur."
+        ],
+        "off_brand_examples": []
+      },
+      "external_references": {
+        "production_asset_refs": [],
+        "claim_refs": [],
+        "policy_refs": []
+      },
+      "expression_system": {
+        "photography": {
+          "principles": [
+            "realistic and credible product photography",
+            "natural or controlled studio lighting",
+            "soft directional light rather than flat lighting",
+            "materials and textures must look real",
+            "the product must remain immediately identifiable",
+            "images must not have a generic AI-generated look"
+          ],
+          "do": [
+            "use clean, sober backgrounds",
+            "use realistic stone, marble, studio or physical surfaces only when relevant",
+            "preserve natural shadows and believable depth",
+            "keep lighting coherent across product and scene",
+            "preserve sufficient contrast between product and background"
+          ],
+          "dont": [
+            "beige as a generic AI-style default",
+            "artificial glow",
+            "fake luxury effects",
+            "artificial gold",
+            "generic warm gradients",
+            "dreamy AI haze",
+            "plastic-looking textures",
+            "excessive decor",
+            "decorative leaves or foliage added automatically",
+            "decorative hearts added automatically"
+          ],
+          "reference_asset_refs": []
+        },
+        "product_presentation": {
+          "principles": [
+            "the real HABB product is authoritative",
+            "the creative adapts to the product, never the opposite",
+            "real dimensions, proportions and distinctive details must be preserved",
+            "personalisation must remain visible and readable",
+            "the product is the hero of the composition"
+          ],
+          "do": [
+            "preserve original product pixels whenever possible",
+            "prefer cut-out and compositing over product regeneration",
+            "generate or compose the environment around the product",
+            "add realistic shadow/reflection only when it does not alter the product",
+            "allow controlled relighting only when product colours remain truthful",
+            "show enough of the product to understand immediately what is being sold"
+          ],
+          "dont": [
+            "regenerate a real product when the real asset exists",
+            "change phone-case cut-outs, buttons, camera holes, shape, proportions or material",
+            "invent packaging",
+            "modify HABB logo",
+            "modify the customer's printed personalisation",
+            "modify a face appearing in a customer's personalisation/photo",
+            "distort a person's face, body or identity"
+          ],
+          "reference_asset_refs": []
+        },
+        "composition": {
+          "principles": [
+            "editorial composition rather than generic advertising-template composition",
+            "strong visual breathing room",
+            "immediately understandable hierarchy",
+            "product dominance",
+            "simple does not mean empty",
+            "premium does not mean decorated"
+          ],
+          "do": [
+            "reserve text space before generating or composing the environment",
+            "use negative space intentionally",
+            "create one clear focal point",
+            "balance product, text and environment",
+            "allow asymmetry when it strengthens the composition",
+            "preserve clear space around the product"
+          ],
+          "dont": [
+            "fill every available space",
+            "stack unnecessary decorative elements",
+            "automatically centre every element",
+            "add ornaments only to make the design feel premium",
+            "create visually noisy layouts"
+          ],
+          "reference_asset_refs": []
+        },
+        "layout_principles": {
+          "principles": [
+            "layout is built around the product and the message",
+            "hierarchy must be clear",
+            "alignments must be intentional",
+            "margins and spacing must feel generous",
+            "product and text must never collide",
+            "price and primary promise must remain readable"
+          ],
+          "do": [
+            "reserve safe text areas",
+            "respect the placement/channel facts supplied by Marketing",
+            "trigger re-layout when text does not fit",
+            "keep spacing rhythm coherent"
+          ],
+          "dont": [
+            "shrink text below minimum readable size",
+            "place a headline over an essential part of the product",
+            "hide the personalisation",
+            "use the exact same placement for every creative",
+            "turn all HABB content into one repetitive template"
+          ],
+          "reference_asset_refs": []
+        },
+        "illustration": {
+          "principles": [
+            "illustration is secondary",
+            "illustration must never compensate for a weak product asset",
+            "illustration must remain simple and relevant"
+          ],
+          "do": [
+            "allow illustration only when explicitly required by the creative concept",
+            "allow illustration when it is itself part of the customer's personalisation"
+          ],
+          "dont": [
+            "decorative hearts by default",
+            "decorative leaves / branches by default",
+            "generic lifestyle doodles",
+            "fake-luxury ornaments",
+            "unnecessary AI characters",
+            "random decorative motifs"
+          ],
+          "reference_asset_refs": []
+        },
+        "iconography": {
+          "principles": [
+            "functional before decorative",
+            "simple",
+            "coherent",
+            "immediately readable"
+          ],
+          "do": [
+            "use icons only when they materially improve comprehension",
+            "keep a clean, geometric and consistent icon style"
+          ],
+          "dont": [
+            "generic icon collections used as decoration",
+            "stars, crowns, diamonds or badges to simulate premium",
+            "hearts as automatic decoration",
+            "leaves as automatic decoration",
+            "generic 3D icons"
+          ],
+          "reference_asset_refs": []
+        },
+        "motion": {
+          "principles": [
+            "motion must be useful, not demonstrative",
+            "product identity must remain stable",
+            "pacing should feel modern and controlled",
+            "motion serves comprehension"
+          ],
+          "do": [
+            "product reveal",
+            "subtle zoom",
+            "believable camera movement",
+            "limited typographic animation",
+            "clean transitions"
+          ],
+          "dont": [
+            "aggressive transitions",
+            "permanent zoom",
+            "particles/glow",
+            "morphing the product",
+            "deforming the product",
+            "effects that look like an AI demo"
+          ],
+          "reference_asset_refs": []
+        }
+      },
+      "approval": null
+    },
+    "memory_v2_approved": {
+      "id": "habb-memory-v2",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 2,
+      "status": "APPROVED",
+      "created_at": "2026-10-09T17:39:04.000Z",
+      "supersedes_id": "habb-memory-v1",
+      "core_ref": {
+        "id": "habb-core-v1",
+        "version": 1
+      },
+      "identity_references": {
+        "primary_logo_ref": null,
+        "approved_logo_refs": []
+      },
+      "design_tokens": {
+        "colors": {
+          "navy": "#183247",
+          "terracotta": "#C56E54",
+          "cream": "#FBF8F3",
+          "white": "#FFFFFF"
+        },
+        "typography": {
+          "display": {
+            "family": "Playfair Display",
+            "weights": [
+              600
+            ]
+          },
+          "text": {
+            "family": "Montserrat",
+            "weights": [
+              400,
+              500,
+              600,
+              700
+            ]
+          }
+        }
+      },
+      "hard_rules": [],
+      "semantic_context": {
+        "voice_traits": [
+          "warm",
+          "precise",
+          "direct",
+          "human",
+          "accessible",
+          "restrained"
+        ],
+        "do": [
+          "lead with the emotional or useful benefit",
+          "use concrete language",
+          "stay local and credible"
+        ],
+        "dont": [
+          "artificial luxury language",
+          "overclaiming",
+          "generic AI marketing language"
+        ],
+        "brand_style_summary": "Sober, credible and human; premium through real products, real composition and restraint, never through decoration or artificial effects.",
+        "on_brand_examples": [
+          "HABB Store n’est pas une simple boutique. C’est une signature.",
+          "Vos souvenirs. Votre création. Prêt chez HABB à Namur."
+        ],
+        "off_brand_examples": []
+      },
+      "external_references": {
+        "production_asset_refs": [],
+        "claim_refs": [],
+        "policy_refs": []
+      },
+      "expression_system": {
+        "photography": {
+          "principles": [
+            "realistic and credible product photography",
+            "natural or controlled studio lighting",
+            "soft directional light rather than flat lighting",
+            "materials and textures must look real",
+            "the product must remain immediately identifiable",
+            "images must not have a generic AI-generated look"
+          ],
+          "do": [
+            "use clean, sober backgrounds",
+            "use realistic stone, marble, studio or physical surfaces only when relevant",
+            "preserve natural shadows and believable depth",
+            "keep lighting coherent across product and scene",
+            "preserve sufficient contrast between product and background"
+          ],
+          "dont": [
+            "beige as a generic AI-style default",
+            "artificial glow",
+            "fake luxury effects",
+            "artificial gold",
+            "generic warm gradients",
+            "dreamy AI haze",
+            "plastic-looking textures",
+            "excessive decor",
+            "decorative leaves or foliage added automatically",
+            "decorative hearts added automatically"
+          ],
+          "reference_asset_refs": []
+        },
+        "product_presentation": {
+          "principles": [
+            "the real HABB product is authoritative",
+            "the creative adapts to the product, never the opposite",
+            "real dimensions, proportions and distinctive details must be preserved",
+            "personalisation must remain visible and readable",
+            "the product is the hero of the composition"
+          ],
+          "do": [
+            "preserve original product pixels whenever possible",
+            "prefer cut-out and compositing over product regeneration",
+            "generate or compose the environment around the product",
+            "add realistic shadow/reflection only when it does not alter the product",
+            "allow controlled relighting only when product colours remain truthful",
+            "show enough of the product to understand immediately what is being sold"
+          ],
+          "dont": [
+            "regenerate a real product when the real asset exists",
+            "change phone-case cut-outs, buttons, camera holes, shape, proportions or material",
+            "invent packaging",
+            "modify HABB logo",
+            "modify the customer's printed personalisation",
+            "modify a face appearing in a customer's personalisation/photo",
+            "distort a person's face, body or identity"
+          ],
+          "reference_asset_refs": []
+        },
+        "composition": {
+          "principles": [
+            "editorial composition rather than generic advertising-template composition",
+            "strong visual breathing room",
+            "immediately understandable hierarchy",
+            "product dominance",
+            "simple does not mean empty",
+            "premium does not mean decorated"
+          ],
+          "do": [
+            "reserve text space before generating or composing the environment",
+            "use negative space intentionally",
+            "create one clear focal point",
+            "balance product, text and environment",
+            "allow asymmetry when it strengthens the composition",
+            "preserve clear space around the product"
+          ],
+          "dont": [
+            "fill every available space",
+            "stack unnecessary decorative elements",
+            "automatically centre every element",
+            "add ornaments only to make the design feel premium",
+            "create visually noisy layouts"
+          ],
+          "reference_asset_refs": []
+        },
+        "layout_principles": {
+          "principles": [
+            "layout is built around the product and the message",
+            "hierarchy must be clear",
+            "alignments must be intentional",
+            "margins and spacing must feel generous",
+            "product and text must never collide",
+            "price and primary promise must remain readable"
+          ],
+          "do": [
+            "reserve safe text areas",
+            "respect the placement/channel facts supplied by Marketing",
+            "trigger re-layout when text does not fit",
+            "keep spacing rhythm coherent"
+          ],
+          "dont": [
+            "shrink text below minimum readable size",
+            "place a headline over an essential part of the product",
+            "hide the personalisation",
+            "use the exact same placement for every creative",
+            "turn all HABB content into one repetitive template"
+          ],
+          "reference_asset_refs": []
+        },
+        "illustration": {
+          "principles": [
+            "illustration is secondary",
+            "illustration must never compensate for a weak product asset",
+            "illustration must remain simple and relevant"
+          ],
+          "do": [
+            "allow illustration only when explicitly required by the creative concept",
+            "allow illustration when it is itself part of the customer's personalisation"
+          ],
+          "dont": [
+            "decorative hearts by default",
+            "decorative leaves / branches by default",
+            "generic lifestyle doodles",
+            "fake-luxury ornaments",
+            "unnecessary AI characters",
+            "random decorative motifs"
+          ],
+          "reference_asset_refs": []
+        },
+        "iconography": {
+          "principles": [
+            "functional before decorative",
+            "simple",
+            "coherent",
+            "immediately readable"
+          ],
+          "do": [
+            "use icons only when they materially improve comprehension",
+            "keep a clean, geometric and consistent icon style"
+          ],
+          "dont": [
+            "generic icon collections used as decoration",
+            "stars, crowns, diamonds or badges to simulate premium",
+            "hearts as automatic decoration",
+            "leaves as automatic decoration",
+            "generic 3D icons"
+          ],
+          "reference_asset_refs": []
+        },
+        "motion": {
+          "principles": [
+            "motion must be useful, not demonstrative",
+            "product identity must remain stable",
+            "pacing should feel modern and controlled",
+            "motion serves comprehension"
+          ],
+          "do": [
+            "product reveal",
+            "subtle zoom",
+            "believable camera movement",
+            "limited typographic animation",
+            "clean transitions"
+          ],
+          "dont": [
+            "aggressive transitions",
+            "permanent zoom",
+            "particles/glow",
+            "morphing the product",
+            "deforming the product",
+            "effects that look like an AI demo"
+          ],
+          "reference_asset_refs": []
+        }
+      },
+      "approval": {
+        "decision_event_id": "bde_21b7c51c0acd0bac829efa1effa1c8a9",
+        "approved_by": "habb-owner",
+        "approver_role": "OWNER",
+        "approved_at": "2026-10-09T17:39:04.000Z",
+        "note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
+      }
+    },
+    "memory_v2_decision_event": {
+      "id": "bde_21b7c51c0acd0bac829efa1effa1c8a9",
+      "type": "BRAND_MEMORY_APPROVED",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "actor": {
+        "user_id": "habb-owner",
+        "role": "OWNER"
+      },
+      "subject": {
+        "kind": "brand_memory",
+        "id": "habb-memory-v2",
+        "version": 2
+      },
+      "decided_at": "2026-10-09T17:39:04.000Z",
+      "note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
+      "supersedes": {
+        "kind": "brand_memory",
+        "id": "habb-memory-v1",
+        "version": 1
+      }
+    },
+    "memory_v2_superseded": {
+      "id": "habb-memory-v2",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 2,
+      "status": "SUPERSEDED",
+      "created_at": "2026-10-09T17:39:04.000Z",
+      "supersedes_id": "habb-memory-v1",
+      "core_ref": {
+        "id": "habb-core-v1",
+        "version": 1
+      },
+      "identity_references": {
+        "primary_logo_ref": null,
+        "approved_logo_refs": []
+      },
+      "design_tokens": {
+        "colors": {
+          "navy": "#183247",
+          "terracotta": "#C56E54",
+          "cream": "#FBF8F3",
+          "white": "#FFFFFF"
+        },
+        "typography": {
+          "display": {
+            "family": "Playfair Display",
+            "weights": [
+              600
+            ]
+          },
+          "text": {
+            "family": "Montserrat",
+            "weights": [
+              400,
+              500,
+              600,
+              700
+            ]
+          }
+        }
+      },
+      "hard_rules": [],
+      "semantic_context": {
+        "voice_traits": [
+          "warm",
+          "precise",
+          "direct",
+          "human",
+          "accessible",
+          "restrained"
+        ],
+        "do": [
+          "lead with the emotional or useful benefit",
+          "use concrete language",
+          "stay local and credible"
+        ],
+        "dont": [
+          "artificial luxury language",
+          "overclaiming",
+          "generic AI marketing language"
+        ],
+        "brand_style_summary": "Sober, credible and human; premium through real products, real composition and restraint, never through decoration or artificial effects.",
+        "on_brand_examples": [
+          "HABB Store n’est pas une simple boutique. C’est une signature.",
+          "Vos souvenirs. Votre création. Prêt chez HABB à Namur."
+        ],
+        "off_brand_examples": []
+      },
+      "external_references": {
+        "production_asset_refs": [],
+        "claim_refs": [],
+        "policy_refs": []
+      },
+      "expression_system": {
+        "photography": {
+          "principles": [
+            "realistic and credible product photography",
+            "natural or controlled studio lighting",
+            "soft directional light rather than flat lighting",
+            "materials and textures must look real",
+            "the product must remain immediately identifiable",
+            "images must not have a generic AI-generated look"
+          ],
+          "do": [
+            "use clean, sober backgrounds",
+            "use realistic stone, marble, studio or physical surfaces only when relevant",
+            "preserve natural shadows and believable depth",
+            "keep lighting coherent across product and scene",
+            "preserve sufficient contrast between product and background"
+          ],
+          "dont": [
+            "beige as a generic AI-style default",
+            "artificial glow",
+            "fake luxury effects",
+            "artificial gold",
+            "generic warm gradients",
+            "dreamy AI haze",
+            "plastic-looking textures",
+            "excessive decor",
+            "decorative leaves or foliage added automatically",
+            "decorative hearts added automatically"
+          ],
+          "reference_asset_refs": []
+        },
+        "product_presentation": {
+          "principles": [
+            "the real HABB product is authoritative",
+            "the creative adapts to the product, never the opposite",
+            "real dimensions, proportions and distinctive details must be preserved",
+            "personalisation must remain visible and readable",
+            "the product is the hero of the composition"
+          ],
+          "do": [
+            "preserve original product pixels whenever possible",
+            "prefer cut-out and compositing over product regeneration",
+            "generate or compose the environment around the product",
+            "add realistic shadow/reflection only when it does not alter the product",
+            "allow controlled relighting only when product colours remain truthful",
+            "show enough of the product to understand immediately what is being sold"
+          ],
+          "dont": [
+            "regenerate a real product when the real asset exists",
+            "change phone-case cut-outs, buttons, camera holes, shape, proportions or material",
+            "invent packaging",
+            "modify HABB logo",
+            "modify the customer's printed personalisation",
+            "modify a face appearing in a customer's personalisation/photo",
+            "distort a person's face, body or identity"
+          ],
+          "reference_asset_refs": []
+        },
+        "composition": {
+          "principles": [
+            "editorial composition rather than generic advertising-template composition",
+            "strong visual breathing room",
+            "immediately understandable hierarchy",
+            "product dominance",
+            "simple does not mean empty",
+            "premium does not mean decorated"
+          ],
+          "do": [
+            "reserve text space before generating or composing the environment",
+            "use negative space intentionally",
+            "create one clear focal point",
+            "balance product, text and environment",
+            "allow asymmetry when it strengthens the composition",
+            "preserve clear space around the product"
+          ],
+          "dont": [
+            "fill every available space",
+            "stack unnecessary decorative elements",
+            "automatically centre every element",
+            "add ornaments only to make the design feel premium",
+            "create visually noisy layouts"
+          ],
+          "reference_asset_refs": []
+        },
+        "layout_principles": {
+          "principles": [
+            "layout is built around the product and the message",
+            "hierarchy must be clear",
+            "alignments must be intentional",
+            "margins and spacing must feel generous",
+            "product and text must never collide",
+            "price and primary promise must remain readable"
+          ],
+          "do": [
+            "reserve safe text areas",
+            "respect the placement/channel facts supplied by Marketing",
+            "trigger re-layout when text does not fit",
+            "keep spacing rhythm coherent"
+          ],
+          "dont": [
+            "shrink text below minimum readable size",
+            "place a headline over an essential part of the product",
+            "hide the personalisation",
+            "use the exact same placement for every creative",
+            "turn all HABB content into one repetitive template"
+          ],
+          "reference_asset_refs": []
+        },
+        "illustration": {
+          "principles": [
+            "illustration is secondary",
+            "illustration must never compensate for a weak product asset",
+            "illustration must remain simple and relevant"
+          ],
+          "do": [
+            "allow illustration only when explicitly required by the creative concept",
+            "allow illustration when it is itself part of the customer's personalisation"
+          ],
+          "dont": [
+            "decorative hearts by default",
+            "decorative leaves / branches by default",
+            "generic lifestyle doodles",
+            "fake-luxury ornaments",
+            "unnecessary AI characters",
+            "random decorative motifs"
+          ],
+          "reference_asset_refs": []
+        },
+        "iconography": {
+          "principles": [
+            "functional before decorative",
+            "simple",
+            "coherent",
+            "immediately readable"
+          ],
+          "do": [
+            "use icons only when they materially improve comprehension",
+            "keep a clean, geometric and consistent icon style"
+          ],
+          "dont": [
+            "generic icon collections used as decoration",
+            "stars, crowns, diamonds or badges to simulate premium",
+            "hearts as automatic decoration",
+            "leaves as automatic decoration",
+            "generic 3D icons"
+          ],
+          "reference_asset_refs": []
+        },
+        "motion": {
+          "principles": [
+            "motion must be useful, not demonstrative",
+            "product identity must remain stable",
+            "pacing should feel modern and controlled",
+            "motion serves comprehension"
+          ],
+          "do": [
+            "product reveal",
+            "subtle zoom",
+            "believable camera movement",
+            "limited typographic animation",
+            "clean transitions"
+          ],
+          "dont": [
+            "aggressive transitions",
+            "permanent zoom",
+            "particles/glow",
+            "morphing the product",
+            "deforming the product",
+            "effects that look like an AI demo"
+          ],
+          "reference_asset_refs": []
+        }
+      },
+      "approval": {
+        "decision_event_id": "bde_21b7c51c0acd0bac829efa1effa1c8a9",
+        "approved_by": "habb-owner",
+        "approver_role": "OWNER",
+        "approved_at": "2026-10-09T17:39:04.000Z",
+        "note": "Owner authorization recorded for the benchmark typography revision (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
+      }
+    },
+    "memory_v3_review_required": {
+      "id": "habb-memory-v3",
+      "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
+      "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
+      "version": 3,
+      "status": "REVIEW_REQUIRED",
+      "created_at": "2026-10-09T21:06:04.000Z",
+      "supersedes_id": "habb-memory-v2",
+      "core_ref": {
+        "id": "habb-core-v1",
+        "version": 1
+      },
+      "identity_references": {
+        "primary_logo_ref": null,
+        "approved_logo_refs": []
+      },
+      "design_tokens": {
+        "colors": {
+          "navy": "#183247",
+          "terracotta": "#C56E54",
+          "cream": "#FBF8F3",
+          "white": "#FFFFFF"
+        },
+        "typography": {
+          "display": {
+            "family": "Playfair Display",
+            "weights": [
+              600
+            ]
+          },
+          "text": {
+            "family": "Montserrat",
+            "weights": [
+              400,
+              500,
+              600,
+              700
+            ]
+          }
+        }
+      },
+      "hard_rules": [
+        {
+          "id": "habb-palette-closed",
+          "rule_type": "COLOR",
+          "subject": "canvas.colors",
+          "operator": "ONE_OF",
+          "value": [
+            "#183247",
+            "#C56E54",
+            "#FBF8F3",
+            "#FFFFFF",
+            "#0F2A52",
+            "#C0392B"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        },
+        {
+          "id": "habb-typography-two-families",
+          "rule_type": "TYPOGRAPHY",
+          "subject": "text.families",
+          "operator": "ONE_OF",
+          "value": [
+            "Playfair Display",
+            "Montserrat"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        },
+        {
+          "id": "habb-product-fidelity-gate",
+          "rule_type": "EXTERNAL_GATE",
+          "subject": "product_fidelity",
+          "operator": "STATUS_IN",
+          "value": [
+            "PASS"
+          ],
+          "severity": "BLOCK",
+          "scope": "IMAGE",
+          "source_ref": "decision://habb/guardian-hard-rules-v1"
+        }
+      ],
       "semantic_context": {
         "voice_traits": [
           "warm",

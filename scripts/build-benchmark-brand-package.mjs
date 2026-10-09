@@ -47,20 +47,19 @@ export function buildBrandPackage(inputs, expression) {
     memory: reviewed, core: coreApproval.approvedCore, tenant, brand, resolvedActor: actor, approvedAt: inputs.memory.approved_at, note: inputs.memory.approval_note,
   });
 
-  // an optional governed REVISION of the approved Memory: v1 stays untouched and becomes SUPERSEDED, v2 is the approved successor
+  // governed REVISIONS of the approved Memory, in order: each one leaves the previous version untouched (and SUPERSEDED) and is approved as its successor
+  const revisions = inputs.memory_revisions ?? (inputs.memory_revision ? [inputs.memory_revision] : []);
   let current = memoryApproval;
-  let revisionReview = null;
-  let revisionApproval = null;
-  if (inputs.memory_revision) {
-    const r = inputs.memory_revision;
+  const chain = [];
+  for (const r of revisions) {
     const revision = proposeBrandMemoryRevision({
-      approvedMemory: memoryApproval.approvedMemory, core: coreApproval.approvedCore, tenant, brand, id: r.id, createdAt: r.created_at, changes: r.changes,
+      approvedMemory: current.approvedMemory, core: coreApproval.approvedCore, tenant, brand, id: r.id, createdAt: r.created_at, changes: r.changes,
     });
-    revisionReview = revision.memory;
-    revisionApproval = approveBrandMemory({
-      memory: revision.memory, core: coreApproval.approvedCore, tenant, brand, resolvedActor: actor, activeMemory: memoryApproval.approvedMemory, approvedAt: r.approved_at, note: r.approval_note,
+    const approved = approveBrandMemory({
+      memory: revision.memory, core: coreApproval.approvedCore, tenant, brand, resolvedActor: actor, activeMemory: current.approvedMemory, approvedAt: r.approved_at, note: r.approval_note,
     });
-    current = revisionApproval;
+    chain.push({ review_required: revision.memory, approved });
+    current = approved;
   }
   const context = buildBrandContext({
     tenant, brand, core: coreApproval.approvedCore, memory: current.approvedMemory, snapshot,
@@ -84,11 +83,17 @@ export function buildBrandPackage(inputs, expression) {
       // approved_memory is the CURRENT approved Memory (the revision when there is one); v1 is kept as approved, and as superseded once revised
       approved_memory: current.approvedMemory,
       memory_decision_event: current.decisionEvent,
-      ...(revisionApproval ? {
+      ...(chain.length ? {
         memory_v1_approved: memoryApproval.approvedMemory,
         memory_v1_decision_event: memoryApproval.decisionEvent,
-        memory_v1_superseded: revisionApproval.supersededMemory,
-        memory_revision_review_required: revisionReview,
+        memory_v1_superseded: chain[0].approved.supersededMemory,
+        memory_revision_review_required: chain[0].review_required,
+      } : {}),
+      ...(chain.length > 1 ? {
+        memory_v2_approved: chain[0].approved.approvedMemory,
+        memory_v2_decision_event: chain[0].approved.decisionEvent,
+        memory_v2_superseded: chain[1].approved.supersededMemory,
+        memory_v3_review_required: chain[1].review_required,
       } : {}),
     }),
   };

@@ -10,8 +10,8 @@
     "status": "IN_APPROVED_BRAND_MEMORY",
     "reason": "This content, unchanged, is the expression_system of the APPROVED HABB Brand Memory V1.1 (v1, carried unchanged into v2 by the typography revision), produced through the real Branding governance (see habb-brand-canonical-v1.json).",
     "memory_ref": {
-      "id": "habb-memory-v2",
-      "version": 2
+      "id": "habb-memory-v3",
+      "version": 3
     },
     "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4"
   },

@@ -190,7 +190,7 @@ test('Benchmark 001 after the real asset and product: never RUNNABLE without the
   assert.equal(state.product, 'BOUND');
   assert.deepEqual(report.blockers, [{ id: 'asset', reason: 'ASSET_PAYLOAD_UNAVAILABLE' }]);
   // HA-27 / HA-28
-  assert.equal(config.status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
   // HA-29 RUNNABLE only when PRODUCT is truly bound (with proof) AND the payload is available: exercised with SYNTHETIC stand-ins, never HABB data
   const bytes = Uint8Array.from(Array.from({ length: 96 }, (_, i) => (i * 11) % 251));
@@ -219,7 +219,7 @@ test('Benchmark 001 after the real asset and product: never RUNNABLE without the
   assert.equal((await assess(cfg({ kind: 'OWNER_STATEMENT' }), build([s.asset], { 'asset://synthetic/photo': bytes }))).status, 'BLOCKED'); // no product record
   // HA-30 RUNNABLE is not RUN: the report says so, the status is untouched and C2 stays closed until a real run is recorded with every gate PASS
   assert.equal(runnable.runnable_is_not_run, true);
-  assert.equal(config.status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
   assert.equal(code(() => P.recordBenchmarkRun({ readiness: report, results: {}, ran_at: '2026-10-10T10:00:00.000Z' })), CI.CI_ERROR.BENCHMARK_INVALID);
   assert.equal(CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence }).c2_allowed, false);
 });

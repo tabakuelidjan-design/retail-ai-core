@@ -1,6 +1,6 @@
 # Creative Intelligence — PRE-C2 Foundation
 
-**Status: `C1 FOUNDATION = COMPLETE` · `PRE-C2 TECHNICAL FOUNDATION = COMPLETE` · `C2 = NOT READY`**
+**Status: `C1 FOUNDATION = COMPLETE` · `PRE-C2 TECHNICAL FOUNDATION = COMPLETE` · `HABB BENCHMARK 001 = RUN -> PASS` · `C2 gate contract = SATISFIED (C2 NOT STARTED)`**
 
 Pushed at `d182e86` on `feature/branding-marketing-creative-v1`; remote CI green (Creative Intelligence V1 on Node 20 and 24, Branding V1, Marketing V1).
 The technical foundation is complete. What is **not** complete is the real HABB data the benchmark needs (section 8): that is an operational / data
@@ -91,8 +91,8 @@ profile is invented. ICC / CMYK belongs to a future print pipeline.
 
 ```text
 HABB BENCHMARK 001 PREPARATION = COMPLETE   (pushed at 0b1e328, remote CI green)
-HABB BENCHMARK 001 = NOT_RUN   (RUNNABLE only where the verified private asset payload is present; BLOCKED in a clean clone)
-C2 = NOT READY
+HABB BENCHMARK 001 = RUN -> PASS   (executed locally with the real asset; BLOCKED / ASSET_PAYLOAD_UNAVAILABLE in a clean clone)
+C2 gate contract = SATISFIED   (C2 NOT STARTED)
 ```
 
 ```text
@@ -103,8 +103,8 @@ HABB CANONICAL BRAND = COMPLETE
   HABB Brand Memory V1.1 = APPROVED
   HABB expression_system = BOUND
 
-HABB BENCHMARK 001 = NOT_RUN   (RUNNABLE locally with the verified private payload; BLOCKED in a clean clone)
-C2 = NOT READY
+HABB BENCHMARK 001 = RUN -> PASS   (executed locally with the real asset; BLOCKED in a clean clone)
+C2 gate contract = SATISFIED   (C2 NOT STARTED)
 ```
 
 ```text
@@ -120,8 +120,8 @@ ASSET       = BOUND BY METADATA
 LOCAL TRUSTED ENVIRONMENT   (real private payload present + SHA-256 verified)  -> Benchmark 001 = RUNNABLE
 CLEAN CLONE / CI            (private payload absent)                           -> Benchmark 001 = BLOCKED, exact blocker = ASSET_PAYLOAD_UNAVAILABLE
 
-Benchmark 001 = NOT_RUN        (RUNNABLE is not RUN, and is not PASS)
-C2 = NOT READY
+Benchmark 001 = RUN -> PASS    (executed 2026-10-09; RUNNABLE is not RUN, and RUN is not PASS: each is recorded separately)
+C2 gate contract = SATISFIED   (C2 NOT STARTED)
 ```
 
 Product truth: **Samsung Galaxy A17**, `product://habb/benchmark-001/samsung-galaxy-a17`, Shopify `gid://shopify/Product/15684483187036`, handle `coque-personnalisee-samsung-galaxy-a17`
@@ -139,9 +139,9 @@ HABB BENCHMARK FONT BINDINGS = COMPLETE   (pushed at e8f0da8, remote CI green on
 ASSET   = METADATA BOUND (real merchant photograph, SHA-256 pinned; payload private, not in Git)
 PRODUCT = BOUND   (Samsung Galaxy A17: owner statement + exact Shopify item; ref product://habb/benchmark-001/samsung-galaxy-a17)
 
-Local trusted environment (verified private payload present):  readiness = RUNNABLE, status NOT_RUN (RUNNABLE is not RUN)
-Clean clone / CI (no private payload):                         readiness = BLOCKED (ASSET_PAYLOAD_UNAVAILABLE), status NOT_RUN
-C2 = NOT READY   (opens only after an actual run records the real PNG, Preflight PASS, Creative Fidelity PASS, Brand Guardian PASS)
+Local trusted environment (verified private payload present):  readiness = RUNNABLE, executed RUN, result PASS
+Clean clone / CI (no private payload):                         readiness = BLOCKED (ASSET_PAYLOAD_UNAVAILABLE); the recorded run is not reproducible there
+C2 gate contract = SATISFIED   (an actual run recorded the real PNG, Preflight PASS, Creative Fidelity PASS and Brand Guardian PASS; starting C2 is a separate decision)
 
 Remaining before C2: an actual Benchmark 001 RUN with its evidence. No binding is missing. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
 
@@ -174,7 +174,7 @@ by a resolved OWNER actor; every governed timestamp is **one recorded authorizat
 recorded for the benchmark bootstrap, not authenticated by Nordla Identity, which remains an open dependency. The Core semantics are unchanged (only evidence linkage was strengthened). Memory carries four colour tokens, **empty
 typography** (no font fallback) and no logo ref; `scripts/build-benchmark-brand-package.mjs` re-derives and verifies the outputs from the inputs and cannot mint an id.
 
-`NOT_RUN`. Readiness is **RUNNABLE** where the verified private payload is present and **BLOCKED** in a clean clone. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
+`RUN` (result **PASS**, see 7b). Readiness is **RUNNABLE** where the verified private payload is present and **BLOCKED** in a clean clone. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
 read from the connected `merchants` table):
 
 | Binding | State | Detail |
@@ -190,31 +190,45 @@ read from the connected `merchants` table):
 The two claims are **benchmark-owned trusted records, not the Claims Registry** (which does not exist yet). 25 € is scoped to Benchmark 001 and
 the approved store-service evidence; it is not the universal online price. Readiness values are never written in the configuration file. RUNNABLE is not RUN.
 
-## 7b. HABB CREATIVE BENCHMARK 001 — execution (2026-10-09)
+## 7b. HABB CREATIVE BENCHMARK 001 — execution
 
 ```text
-RUNNABLE -> RUN -> BLOCKED
+RUNNABLE -> RUN -> PASS        (2026-10-09, local, real asset, no fallback)
 ```
 
-The benchmark was executed locally with the real, hash-verified private photograph (`LOCAL_REAL_ASSET`, no fixture, no mock, no synthetic asset, no fallback)
-by `scripts/run-benchmark-001.mjs` and the composition in `habb-benchmark-001-run-spec.json`. Readiness (RUNNABLE), execution (RUN) and result (BLOCKED) are three different things.
+Readiness (RUNNABLE), execution (RUN) and result (PASS) are three different records. The benchmark was executed by `scripts/run-benchmark-001.mjs` with the composition in
+`habb-benchmark-001-run-spec.json`, on the verified private photograph (`LOCAL_REAL_ASSET`: no fixture, mock, synthetic asset or fallback; no network; no provider). The harness first
+ran BLOCKED (both gates unmeasurable); the measurement contract below was then implemented and approved by decision, and the benchmark was run again with the same asset.
 
-| Stage | Observed | Verdict |
+**Governed decisions applied** (each a traceable item in `approved_decisions` of the benchmark configuration; none rewrites history):
+fixture background **white** (cream stays an allowed token, never a required background); the colour allowlist of **six** (`#183247 #C56E54 #FBF8F3 #FFFFFF #0F2A52 #C0392B`, an allowlist and not
+a requirement); the short headline "Vos souvenirs. Votre création." approved as a new copy variant; the visible speed claim **"Coque personnalisée en 5 minutes"** (a new benchmark-owned claim derived from
+the original, the in-store / model-available / file-usable qualification kept in its evidence); PIXEL_PRESERVE with the whole photograph accepted as a Benchmark 001 fixture form (not a universal rule);
+the printed-text region of the photograph annotated (coordinates only); provisional technical tolerances; no new global readability floor.
+
+**Brand Memory v3** (governed revision of v2, v2 SUPERSEDED, same Core binding): exactly three hard rules and nothing else changed — **R1** declared colours within the six; **R2** text families within
+Playfair Display / Montserrat; **R3** the `product_fidelity` gate must be PASS. Benchmark-specific refs are not in Memory.
+
+**Measurements** (`fidelity-measurements.js`, `png-pixels.js`, `candidate-manifest-from-document.js`): the five existing required Fidelity checks are measured on the DELIVERED PNG against a reference rendering
+of the verified source built independently of the document renderer; mutations (wrong asset, crop, stretch, shift, duplicate, opacity, tint, protected-text overwrite) each fail the check that owns them.
+
+| Stage | Observed (measured) | Verdict |
 |---|---|---|
-| Readiness | RUNNABLE (claims, format, expression, fonts, product, asset metadata and payload) | PASS |
+| Readiness | RUNNABLE | PASS |
 | Asset hash (re-verified) | the pinned SHA-256 | PASS |
-| Preflight | all 19 checks PASS on the document built from the bound product, the real asset and the approved claims | PASS |
-| PNG | RESOLVED render, REAL typography (Playfair Display 600, Montserrat 700 / 600), 1080 × 1350, the real photograph consumed once; deterministic across runs (`4fde0571…7e49`) | PASS |
-| Creative Fidelity | **NOT_MEASURABLE**: 0 of the 5 required checks were observed; no measurement tool exists in the repository, and nothing was assumed | BLOCKED |
-| Brand Guardian | **NOT_MEASURABLE** (`NO_APPLICABLE_HARD_RULES`): the approved HABB Memory carries no hard rule, and zero applicable rules is not compliance | BLOCKED |
+| Preflight | all 19 checks | PASS |
+| PNG | RESOLVED, REAL typography, 1080 × 1350 (white canvas), the real photograph consumed once, `5a32ebf2…1a37` | PASS |
+| Creative Fidelity — PRODUCT_IDENTITY | consumed hash = pinned, origin MERCHANT_PROVIDED, one distinct asset | PASS |
+| Creative Fidelity — PRODUCT_GEOMETRY | measured rectangle = reference rectangle (±1 px), aspect error 0.14% (limit 0.5%) | PASS |
+| Creative Fidelity — PIECE_COUNT | 1 product layer, 1 draw | PASS |
+| Creative Fidelity — PRODUCT_COLOR | mean absolute difference 0, signed shift 0 (limits 0.5 / 1 of 255) | PASS |
+| Creative Fidelity — TEXT | printed-text region, maximum channel difference 0 (limit 2 of 255) | PASS |
+| Brand Guardian | R1, R2, R3 applicable and PASS | PASS |
 
-**Verdict: BLOCKED.** Not PASS (two mandatory gates cannot be measured) and not FAIL (no gate was evaluated and failed on the composition). Attempt 1 failed Preflight on
-`INVALID_Z_ORDER` (the harness gave three text layers one z-index): a harness defect, recorded as found and corrected before attempt 2. The configuration status stays `NOT_RUN`
-(RUN is the closing state that opens C2 and needs every gate PASS). The full record is `execution` in the benchmark configuration.
-
-What a PASS needs next (not done here): a measured Creative Fidelity observation for each required check, and a measured Brand Guardian outcome (deterministic hard rules the owner approves,
-because the semantic lane is advisory and never settles a hard rule). One honest creative note: the real photograph is a table-top shot and is placed as it is (PIXEL_PRESERVE); the expression
-system prefers a cut-out and compositing, which needs a segmentation step that does not exist yet.
+**Result: PASS**, derived by the harness from the gates, never asserted. The configuration status is `RUN`. The earlier attempts are kept as found (attempt 1: a harness z-index defect; attempt 2: BLOCKED,
+both gates unmeasurable). **Visual inspection: AUTOMATED PASS / VISUAL CONCERN** — technically clean but plain (the product is a third of the width, the dark table background of the photograph is placed as
+is, the headline breaks after "Votre", the price sits apart): none is an implemented rule, so the verdict stands. Limits: the reference and the candidate share the rasterizer's image decoding and
+resampling; tolerances are provisional technical ones; the run is reproducible only where the verified private payload exists.
 
 ## 8. C2 readiness
 
@@ -240,7 +254,7 @@ system prefers a cut-out and compositing, which needs a segmentation step that d
 
 Closed since: the price and speed claims (benchmark-owned records), the FORMAT, and the canonical HABB brand (Identity, Snapshot, Core V1, Memory V1.1 with the bound expression system).
 
-HABB BENCHMARK 001 = NOT_RUN (RUNNABLE locally with the verified private payload, BLOCKED in a clean clone). `c2_allowed` is `false`: `REAL_CAMPAIGN_BENCHMARK` stays OPEN until the benchmark is actually run. The
+HABB BENCHMARK 001 = RUN -> PASS. With the recorded run evidence `c2_allowed` computes `true` in the local trusted environment (see 7b); it is `false` wherever no real run is recorded. The
 `BRAND_EXPRESSION_SYSTEM` dependency can now be closed from the approved HABB Memory (`assessExpressionReadiness`).
 
 Detail:

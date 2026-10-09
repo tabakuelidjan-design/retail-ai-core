@@ -221,7 +221,7 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
   assert.deepEqual(withoutRun.open_blockers, ['REAL_CAMPAIGN_BENCHMARK']);
   assert.equal(CI.assessCreativeC2Readiness({ ...all, REAL_CAMPAIGN_BENCHMARK: runEvidence }).c2_allowed, true);
   // the shipped configuration itself still says NOT_RUN and still lists what is missing
-  assert.equal(benchmarkConfig.status, 'NOT_RUN');
+  assert.equal(benchmarkConfig.status, 'RUN');
   assert.deepEqual(benchmarkConfig.bindings_still_missing, []); // PRODUCT, ASSET, claims, format, fonts and expression are all bound; only the private payload is environment-dependent
 });
 
@@ -238,7 +238,7 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
     assert.match(text, new RegExp(`^\\s*// PC2-${n} `, 'm'), `PC2-${n} has no marker in ${file}`);
   }
   assert.match(doc, /PRE-C2 TECHNICAL FOUNDATION = COMPLETE/);
-  assert.match(doc, /HABB BENCHMARK 001 = NOT_RUN/);
+  assert.match(doc, /HABB BENCHMARK 001 = RUN -> PASS/);
   assert.match(doc, /HABB BENCHMARK 001 PREPARATION = COMPLETE/);
   assert.match(doc, /HABB CANONICAL BRAND = COMPLETE/);
   assert.match(doc, /HABB Brand Core V1    = APPROVED/);
@@ -248,16 +248,17 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /Montserrat\s+= BOUND/);
   assert.match(doc, /HABB Brand Memory v2 = APPROVED/);
   assert.match(doc, /PRODUCT = BOUND/);
-  assert.match(doc, /RUNNABLE -> RUN -> BLOCKED/);
-  assert.match(doc, /Creative Fidelity \| \*\*NOT_MEASURABLE\*\*/);
-  assert.match(doc, /Brand Guardian \| \*\*NOT_MEASURABLE\*\*/);
+  assert.match(doc, /RUNNABLE -> RUN -> PASS/);
+  assert.match(doc, /Creative Fidelity — PRODUCT_GEOMETRY \|/);
+  assert.match(doc, /\| Brand Guardian \| R1, R2, R3 applicable and PASS \| PASS \|/);
+  assert.match(doc, /AUTOMATED PASS \/ VISUAL CONCERN/);
   assert.match(doc, /ASSET\s+= BOUND BY METADATA/);
   assert.match(doc, /-> Benchmark 001 = RUNNABLE/);
   assert.match(doc, /exact blocker = ASSET_PAYLOAD_UNAVAILABLE/);
   assert.match(doc, /gid:\/\/shopify\/Product\/15684483187036/);
   assert.match(doc, /coque-personnalisee-samsung-galaxy-a17/);
-  assert.match(doc, /RUNNABLE is not RUN, and is not PASS/);
-  assert.match(doc, /readiness = RUNNABLE, status NOT_RUN \(RUNNABLE is not RUN\)/);
-  assert.match(doc, /readiness = BLOCKED \(ASSET_PAYLOAD_UNAVAILABLE\), status NOT_RUN/);
-  assert.match(doc, /C2 = NOT READY/);
+  assert.match(doc, /RUNNABLE is not RUN, and RUN is not PASS/);
+  assert.match(doc, /readiness = RUNNABLE, executed RUN, result PASS/);
+  assert.match(doc, /readiness = BLOCKED \(ASSET_PAYLOAD_UNAVAILABLE\); the recorded run is not reproducible there/);
+  assert.match(doc, /C2 gate contract = SATISFIED/);
 });

@@ -282,7 +282,7 @@ test('Boundaries: Creative Intelligence expresses an approved brief - it never p
   // 238 the only modules imported from outside the directory are shared pure validators and the Branding content-kind constant
   const outside = new Set();
   for (const text of Object.values(src)) for (const m of text.matchAll(/from '(\.\.\/[^']+)'/g)) outside.add(m[1]);
-  assert.deepEqual([...outside].sort(), ['../branding/constants.js', '../branding/expression-system.js', '../marketing/m2-validation.js', '../marketing/understand-validation.js', '../resources/index.js']);
+  assert.deepEqual([...outside].sort(), ['../branding/candidate-manifest.js', '../branding/constants.js', '../branding/expression-system.js', '../creative-fidelity/constants.js', '../marketing/m2-validation.js', '../marketing/understand-validation.js', '../resources/index.js']);
   // 239 no merchant-specific logic in the generic domain
   for (const [file, text] of Object.entries(src)) assert.doesNotMatch(text, /habb|shopify|namur|\bcoque/i, file);
   // 240 no platform is hardcoded in the generic domain (channel facts come from explicit contracts)

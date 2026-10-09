@@ -162,7 +162,7 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
     ['product', 'BOUND'], ['asset', 'BLOCKED'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
   ]);
   // HB-17 C2 stays blocked, the benchmark stays NOT_RUN, and a BLOCKED benchmark cannot be recorded as run
-  assert.equal(config.status, 'NOT_RUN');
+  assert.equal(config.status, 'RUN');
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
   assert.equal(code(() => P.recordBenchmarkRun({ readiness: shipped, results: { preflight_status: 'PASS', fidelity_status: 'PASS', guardian_status: 'PASS', png_sha256: 'a'.repeat(64) }, ran_at: '2026-10-10T10:00:00.000Z' })), CI.CI_ERROR.BENCHMARK_INVALID);
 });
