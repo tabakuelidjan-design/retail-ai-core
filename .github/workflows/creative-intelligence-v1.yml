@@ -1,0 +1,53 @@
+name: Creative Intelligence V1
+
+# C1 foundation: DesignDocument, deterministic layout / typography / SVG renderer, preflight, hard-gate selection and the contracts of the
+# agents and of the provider registry. It consumes only shared pure validators of Marketing and the Branding content-kind constant, so the
+# focused suite runs first (fast diagnosis), then Branding + Creative Fidelity + Marketing + Creative Intelligence together, then the whole
+# suite for cross-domain non-regression. No network, no model, no provider credential: every test is deterministic.
+
+on:
+  push:
+    paths:
+      - 'src/creative-intelligence/**'
+      - 'test/creative-intelligence*.test.js'
+      - 'test/creative-intelligence-fixtures.js'
+      - 'docs/architecture/creative-intelligence-v1.md'
+      - 'src/marketing/understand-validation.js'
+      - 'src/marketing/m2-validation.js'
+      - 'src/branding/constants.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/creative-intelligence-v1.yml'
+  pull_request:
+    paths:
+      - 'src/creative-intelligence/**'
+      - 'test/creative-intelligence*.test.js'
+      - 'test/creative-intelligence-fixtures.js'
+      - 'docs/architecture/creative-intelligence-v1.md'
+      - 'src/marketing/understand-validation.js'
+      - 'src/marketing/m2-validation.js'
+      - 'src/branding/constants.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/creative-intelligence-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  creative-intelligence-v1-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Focused Creative Intelligence tests
+        run: node --test test/creative-intelligence*.test.js
+      - name: Branding, Creative Fidelity, Marketing and Creative Intelligence together
+        run: node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js
+      - name: Full suite (cross-domain non-regression)
+        run: npm test
