@@ -16,6 +16,7 @@ on:
       - 'test/merchant-connectors.test.js'
       - 'docs/architecture/activation-channel-execution-v1.md'
       - 'supabase/migrations/*channel_execution*'
+      - 'test/postgres/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/activation-channel-execution-v1.yml'
@@ -30,6 +31,7 @@ on:
       - 'test/merchant-connectors.test.js'
       - 'docs/architecture/activation-channel-execution-v1.md'
       - 'supabase/migrations/*channel_execution*'
+      - 'test/postgres/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/activation-channel-execution-v1.yml'
@@ -54,3 +56,15 @@ jobs:
         run: node --test test/marketing*.test.js
       - name: Full suite (cross-domain non-regression)
         run: npm test
+
+  postgres-migration-smoke:
+    # A REAL PostgreSQL 17 (Docker): every migration of the repository in order, then the constraints, triggers and a two-session
+    # compare-and-set race of channel_execution_jobs. No in-memory substitute.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - run: node test/postgres/channel-execution-jobs.pg-smoke.mjs

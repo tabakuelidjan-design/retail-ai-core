@@ -13,6 +13,7 @@ import {
 } from './validation.js';
 
 const TABLE = 'channel_execution_jobs';
+const REF = /^[A-Za-z0-9][A-Za-z0-9:_./#-]*$/;
 const isUniqueViolation = (e) => /HTTP 409|23505/.test(String(e?.message ?? ''));
 const SAFE_CODE = /^[A-Za-z0-9_.:-]{1,64}$/;
 const safeCode = (value) => (typeof value === 'string' && SAFE_CODE.test(value) ? value : 'UNKNOWN');
@@ -22,7 +23,7 @@ const fromRow = (r) => deepFreeze({
   id: r.id, merchant_id: r.merchant_id, brand_id: r.brand_id ?? null, activation_manifest_ref: r.activation_manifest_ref, manifest_delivery_ref: r.manifest_delivery_ref,
   connector_id: r.connector_id, provider: r.provider, idempotency_key: r.idempotency_key, request_fingerprint: r.request_fingerprint, state: r.state,
   publish_mode: r.publish_mode, publish_at: r.publish_at ?? null, deadline_at: r.deadline_at, payload: clone(r.payload) ?? {},
-  provider_submission_id: r.provider_submission_id ?? null, provider_post_id: r.provider_post_id ?? null, attempt_count: r.attempt_count ?? 0,
+  provider_submission_id: r.provider_submission_id ?? null, provider_post_ids: clone(r.provider_post_ids) ?? [], reconciliation_ref: r.reconciliation_ref ?? null, attempt_count: r.attempt_count ?? 0,
   status_poll_count: r.status_poll_count ?? 0, last_error_code: r.last_error_code ?? null, last_error_class: r.last_error_class ?? null,
   next_attempt_at: r.next_attempt_at ?? null, created_at: r.created_at ?? null, updated_at: r.updated_at ?? null, published_at: r.published_at ?? null,
   safe_metadata: clone(r.safe_metadata) ?? {},
@@ -139,12 +140,44 @@ export function createChannelExecutionRepository({ supabase }) {
       return rows && rows.length ? fromRow(rows[0]) : null;
     },
 
-    markPublished: (merchantId, id, {
-      providerPostId, providerSubmissionId = null, publishedAt, nowIso, safeMetadata = {},
-    }) => transition(merchantId, id, J.PUBLISHED, {
-      provider_post_id: providerPostId, ...(providerSubmissionId ? { provider_submission_id: providerSubmissionId } : {}), published_at: iso(publishedAt, 'published_at'),
-      updated_at: nowIso, next_attempt_at: null, last_error_code: null, last_error_class: null, safe_metadata: safeMetadata,
+    /**
+     * Published = the provider CONFIRMED it. `providerPostIds` holds only post ids the provider really returned (it may be empty: a
+     * TikTok private post is PUBLISH_COMPLETE without a public post id) - a submission id is never copied into it.
+     */
+    markPublished: async (merchantId, id, {
+      providerPostIds = [], providerSubmissionId = null, publishedAt, nowIso, safeMetadata = {},
+    }) => {
+      if (!providerSubmissionId && !(providerPostIds ?? []).length) fail(E.RECEIPT_PROVIDER_REF_REQUIRED, 'a published job needs the provider submission id or a provider post id');
+      return transition(merchantId, id, J.PUBLISHED, {
+        provider_post_ids: [...providerPostIds], ...(providerSubmissionId ? { provider_submission_id: providerSubmissionId } : {}), published_at: iso(publishedAt, 'published_at'),
+        updated_at: nowIso, next_attempt_at: null, last_error_code: null, last_error_class: null, safe_metadata: safeMetadata,
+      });
+    },
+
+    /** The call may have reached the provider and its outcome is unknown: no retry, no receipt, no "failed" claim. Reconciliation only. */
+    markSubmissionUnknown: (merchantId, id, { errorCode, nowIso }) => transition(merchantId, id, J.SUBMISSION_UNKNOWN, {
+      last_error_code: safeCode(errorCode), last_error_class: 'AMBIGUOUS', next_attempt_at: null, updated_at: nowIso,
     }),
+
+    /** Explicit reconciliation: the post EXISTS at the provider (an evidence reference is required). */
+    async reconcilePublished(merchantId, id, {
+      reconciliationRef, providerPostIds = [], providerSubmissionId = null, publishedAt, nowIso,
+    }) {
+      if (typeof reconciliationRef !== 'string' || !REF.test(reconciliationRef)) fail(E.RECONCILIATION_REF_REQUIRED, 'a reconciliation needs an evidence reference');
+      if (!providerSubmissionId && !(providerPostIds ?? []).length) fail(E.RECEIPT_PROVIDER_REF_REQUIRED, 'a reconciled publication needs the provider submission id or a provider post id');
+      return transition(merchantId, id, J.PUBLISHED, {
+        reconciliation_ref: reconciliationRef, provider_post_ids: [...providerPostIds], ...(providerSubmissionId ? { provider_submission_id: providerSubmissionId } : {}),
+        published_at: iso(publishedAt, 'published_at'), updated_at: nowIso, next_attempt_at: null, last_error_code: null, last_error_class: null,
+      });
+    },
+
+    /** Explicit reconciliation: it was verified that NOTHING was published (an evidence reference is required). The intent can still not be re-enqueued. */
+    async reconcileNotPublished(merchantId, id, { reconciliationRef, nowIso }) {
+      if (typeof reconciliationRef !== 'string' || !REF.test(reconciliationRef)) fail(E.RECONCILIATION_REF_REQUIRED, 'a reconciliation needs an evidence reference');
+      return transition(merchantId, id, J.FAILED_FINAL, {
+        reconciliation_ref: reconciliationRef, last_error_code: 'RECONCILED_NOT_PUBLISHED', last_error_class: 'RECONCILED', next_attempt_at: null, updated_at: nowIso,
+      });
+    },
 
     markRetryableFailure: (merchantId, id, {
       errorCode, nextAttemptAt, nowIso,

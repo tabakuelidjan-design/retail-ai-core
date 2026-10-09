@@ -26,15 +26,15 @@ test('Publication receipt: produced only from a PUBLISHED job, deterministic, sc
   const { jobs, receipts } = await published();
   assert.equal(receipts.length, 2); // 151
   const [receipt] = receipts;
-  const job = jobs.find((j) => j.provider_post_id === receipt.provider_post_id);
+  const job = jobs.find((j) => j.provider_submission_id === receipt.provider_submission_id);
   assert.match(receipt.receipt_id, /^acr_[0-9a-f]{32}$/);
   assert.equal(A.buildChannelPublicationReceipt(job).receipt_id, receipt.receipt_id); // 152
-  assert.notEqual(A.buildChannelPublicationReceipt({ ...job, provider_post_id: 'another-post' }).receipt_id, receipt.receipt_id);
+  assert.notEqual(A.buildChannelPublicationReceipt({ ...job, provider_post_ids: ['another-post'] }).receipt_id, receipt.receipt_id);
   const processing = { ...job, state: 'PROCESSING' }; // 153
   assert.equal(code(() => A.buildChannelPublicationReceipt(processing)), 'ACT_RECEIPT_NOT_PUBLISHED');
-  assert.equal(code(() => A.buildChannelPublicationReceipt({ ...job, provider_post_id: null })), 'ACT_RECEIPT_POST_ID_REQUIRED');
-  assert.equal(code(() => A.buildChannelPublicationReceipt({ ...job, provider_post_id: 'bad id with spaces' })), 'ACT_RECEIPT_POST_ID_REQUIRED');
-  assert.ok(receipt.provider_post_id);
+  assert.equal(code(() => A.buildChannelPublicationReceipt({ ...job, provider_post_ids: [], provider_submission_id: null })), 'ACT_RECEIPT_PROVIDER_REF_REQUIRED');
+  assert.equal(code(() => A.buildChannelPublicationReceipt({ ...job, provider_post_ids: ['bad id with spaces'] })), 'ACT_RECEIPT_PROVIDER_REF_REQUIRED');
+  assert.ok(receipt.provider_post_ids.length > 0 && receipt.provider_submission_id);
   assert.deepEqual([receipt.merchant_id, receipt.brand_id], [M1, W.activationManifest.brand_id]); // 154, 155
   assert.equal(receipt.activation_manifest_ref, W.activationManifest.activation_manifest_id); // 156
   assert.ok(W.activationManifest.deliveries.some((d) => d.deliverable_ref === receipt.manifest_delivery_ref)); // 157
@@ -58,7 +58,7 @@ test('M4 handoff: all published -> EXECUTED, a subset -> PARTIAL, nothing -> no 
     assert.equal(receipts.find((r) => r.receipt_id === ref.delivery_execution_ref).manifest_delivery_ref, ref.deliverable_ref);
   }
   assert.equal(code(() => handoff([receipts[0], receipts[0]], rt)), 'ACT_ORDER_DUPLICATE_DELIVERY');
-  assert.equal(code(() => handoff([{ ...receipts[0], provider_post_id: 'forged' }], rt)), 'ACT_M4_RECEIPT_SCOPE_MISMATCH'); // a tampered receipt no longer matches its id
+  assert.equal(code(() => handoff([{ ...receipts[0], provider_post_ids: ['forged'] }], rt)), 'ACT_M4_RECEIPT_SCOPE_MISMATCH'); // a tampered receipt no longer matches its id
   assert.ok(isDeepFrozen(executed));
 });
 
@@ -71,7 +71,7 @@ test('The handoff is an EXISTING M4 receipt: M4 builds its Run from it unchanged
   assert.deepEqual([run.execution_status, run.merchant_id, run.activation_manifest_ref], ['EXECUTED', M1, W.activationManifest.activation_manifest_id]);
   assert.equal(run.execution_ref, receipt.execution_ref);
   assert.ok(receipt.evidence_refs.every((ref) => /^provider-(post|submission):\/\//.test(ref))); // 167
-  for (const r of receipts) assert.ok(receipt.evidence_refs.includes(`provider-post://${r.provider}/${r.provider_post_id.replace(/[^A-Za-z0-9:_./#-]/g, '-')}`));
+  for (const r of receipts) for (const id of r.provider_post_ids) assert.ok(receipt.evidence_refs.includes(`provider-post://${r.provider}/${id.replace(/[^A-Za-z0-9:_./#-]/g, '-')}`));
   const partialRun = m4.buildMarketingRun({
     tenant: tenant(), push: W.push, activationManifest: W.activationManifest, authorization: W.execAuthorization, receipt: handoff([receipts[0]], rt), asOf: new Date(rt.clock.t + 60_000).toISOString(),
   });

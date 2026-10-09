@@ -56,7 +56,14 @@ export function createInstagramAdapter({
   }
 
   async function publishContainer(connector, credential, containerId) {
-    const res = await call({ method: 'POST', url: `${base}/${connector.external_id}/media_publish`, body: { creation_id: containerId, access_token: credential.access_token } });
+    let res;
+    try {
+      res = await call({ method: 'POST', url: `${base}/${connector.external_id}/media_publish`, body: { creation_id: containerId, access_token: credential.access_token } });
+    } catch (error) {
+      // media_publish may have PUBLISHED the post before the connection broke: that outcome is unknown, never "retry" and never "failed"
+      if (error instanceof ProviderRejection && ['TIMEOUT', 'PROVIDER_UNAVAILABLE'].includes(error.code)) throw new ProviderRejection({ code: PE.PUBLISH_RESULT_UNKNOWN, safeCode: error.code });
+      throw error;
+    }
     const mediaId = res.body?.id;
     if (!mediaId) throw new ProviderRejection({ code: PE.PUBLISH_RESULT_UNKNOWN, safeCode: 'NO_MEDIA_ID' });
     return String(mediaId);
@@ -66,7 +73,7 @@ export function createInstagramAdapter({
     const status = await containerStatus(containerId, credential);
     if (status === 'FINISHED') {
       const postId = await publishContainer(connector, credential, containerId);
-      return outcome({ outcome: 'PUBLISHED', provider_submission_id: containerId, provider_post_id: postId, published_at: new Date(now()).toISOString() });
+      return outcome({ outcome: 'PUBLISHED', provider_submission_id: containerId, provider_post_ids: [postId], published_at: new Date(now()).toISOString() });
     }
     if (status === 'IN_PROGRESS') return outcome({ outcome: 'PROCESSING', provider_submission_id: containerId });
     if (status === 'ERROR' || status === 'EXPIRED') throw new ProviderRejection({ code: PE.MEDIA_INVALID, safeCode: status });

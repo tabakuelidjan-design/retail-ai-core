@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import * as A from '../src/activation/index.js';
 import {
   IDS, M1, NOW, TIKTOK_OPTIONS, TOKENS, advance, createFakeHttp, credentialProvider, gbpRoutes, igRoutes, imageDelivery, jobOf, mediaTransport, orderOf, preflightInput, runtime,
-  services, textDelivery, ttRoutes, world,
+  services, tenant, textDelivery, ttRoutes, world,
 } from './channel-fixtures.js';
 
 const W = world();
@@ -100,10 +100,10 @@ test('TikTok publishing: publish_id captured, init is not published, the final s
   advance(rt, 120_000);
   await rt.executor.runDueJobs({ merchantId: M1 });
   const done = jobOf(rt, 'tiktok');
-  assert.deepEqual([done.state, done.provider_post_id, done.safe_metadata.post_id_kind], ['PUBLISHED', '7000000000001', 'PUBLIC_POST_ID']);
+  assert.deepEqual([done.state, done.provider_submission_id, [...done.provider_post_ids]], ['PUBLISHED', 'p_pub_url~v2.1', ['7000000000001']]);
   assert.equal(rt.svc.http.raw.filter((r) => r.url.endsWith('/status/fetch/')).length, 2);
   const moderated = await run(ttRoutes({ publicIds: [] }), { cycles: 3 }); // the public id exists only after moderation
-  assert.deepEqual([jobOf(moderated, 'tiktok').provider_post_id, jobOf(moderated, 'tiktok').safe_metadata.post_id_kind], ['p_pub_url~v2.1', 'PUBLISH_ID']);
+  assert.deepEqual([jobOf(moderated, 'tiktok').provider_submission_id, [...jobOf(moderated, 'tiktok').provider_post_ids]], ['p_pub_url~v2.1', []]);
   assert.ok(A.getChannelCapability('tiktok').limitations.includes('WEBHOOK_NOT_IMPLEMENTED_V1')); // 124: polling only; a webhook alone could not finalize
   assert.equal(Object.keys(A.createTikTokAdapter({ http: createFakeHttp([]) })).filter((k) => /webhook/i.test(k)).length, 0);
 });
@@ -128,7 +128,7 @@ test('TikTok errors are normalized and safe: rate limit, token, scope, daily cap
   const mismatch = await run(failing(err(403, 'privacy_level_option_mismatch')));
   assert.equal(jobOf(mismatch, 'tiktok').last_error_code, 'PRIVACY_MISMATCH');
   const outage = await run(failing(resp(503, {})), { cycles: 3 }); // 130: a creating call whose outcome is unknown is NEVER retried (the post may exist)
-  assert.deepEqual([jobOf(outage, 'tiktok').state, jobOf(outage, 'tiktok').last_error_code], ['FAILED_FINAL', 'SUBMISSION_OUTCOME_UNKNOWN']);
+  assert.deepEqual([jobOf(outage, 'tiktok').state, jobOf(outage, 'tiktok').last_error_code], ['SUBMISSION_UNKNOWN', 'SUBMISSION_OUTCOME_UNKNOWN']);
   assert.equal(outage.svc.http.raw.filter((r) => r.url.includes('/content/init/')).length, 1);
   const ok = await run(ttRoutes(), { cycles: 5 });
   assert.equal(ok.svc.http.raw.filter((r) => r.url.includes('/content/init/')).length, 1);
@@ -149,4 +149,35 @@ test('TikTok decisions are never guessed: is_aigc, the brand toggles and the pri
   const rt = await run(ttRoutes(), { d: deliveries({}, { is_aigc: true, brand_content_toggle: true, brand_organic_toggle: false }) });
   const init = rt.svc.http.raw.find((r) => r.url.endsWith('/content/init/'));
   assert.deepEqual([init.body.is_aigc, init.body.post_info.brand_content_toggle, init.body.post_info.brand_organic_toggle, init.body.post_info.privacy_level], [true, true, false, 'SELF_ONLY']);
+});
+
+test('TikTok ids: the publish_id is a SUBMISSION id and never a post id; a private PUBLISH_COMPLETE still gets a receipt; public ids only when returned; M4 cites the internal receipt', async () => {
+  const privatePost = await run(ttRoutes({ publicIds: [] }), { cycles: 3 }); // 211, 212
+  const row = jobOf(privatePost, 'tiktok');
+  assert.deepEqual([row.state, row.provider_submission_id, [...row.provider_post_ids]], ['PUBLISHED', 'p_pub_url~v2.1', []]); // the publish_id is NOT copied into the post ids
+  assert.ok(!row.provider_post_ids.includes(row.provider_submission_id));
+  const receipt = A.buildChannelPublicationReceipt(row);
+  assert.deepEqual([receipt.provider_submission_id, [...receipt.provider_post_ids]], ['p_pub_url~v2.1', []]);
+  assert.ok(receipt.evidence_refs.includes('provider-submission://tiktok/p_pub_url-v2.1'));
+  assert.ok(!receipt.evidence_refs.some((ref) => ref.startsWith('provider-post://'))); // no post id was invented
+  const publicPost = await run(ttRoutes({ publicIds: ['7000000000001', '7000000000002'] }), { cycles: 3 }); // 213
+  const published = A.buildChannelPublicationReceipt(jobOf(publicPost, 'tiktok'));
+  assert.deepEqual([...published.provider_post_ids], ['7000000000001', '7000000000002']);
+  assert.ok(published.evidence_refs.includes('provider-post://tiktok/7000000000001'));
+  const processing = await run(ttRoutes({ statuses: ['PROCESSING_DOWNLOAD', 'PUBLISH_COMPLETE'] }), { cycles: 2 });
+  assert.deepEqual([jobOf(processing, 'tiktok').state, [...jobOf(processing, 'tiktok').provider_post_ids]], ['PROCESSING', []]); // nothing is claimed before PUBLISH_COMPLETE
+  const adapter = A.createTikTokAdapter({ http: createFakeHttp([{ method: 'POST', url: '/status/fetch/', respond: resp(200, { data: { status: 'PUBLISH_COMPLETE' }, error: { code: 'ok' } }) }]) });
+  const credential = await A.resolveChannelCredential(credentialProvider(), { merchantId: M1, connectorId: IDS.TT, provider: 'tiktok', purpose: 'STATUS', asOf: NOW });
+  assert.deepEqual([...(await adapter.fetchStatus({ credential, providerSubmissionId: 'p_pub_url~v2.9' })).provider_post_ids], []);
+  assert.throws(() => A.buildChannelPublicationReceipt({ ...row, provider_submission_id: null }), (e) => e.code === 'ACT_RECEIPT_PROVIDER_REF_REQUIRED'); // neither a submission id nor a post id: no receipt
+  const both = await run(ttRoutes({ publicIds: [] }), { cycles: 3 }); // 214
+  const receipts = both.store._rows.filter((r) => r.state === 'PUBLISHED').map((r) => A.buildChannelPublicationReceipt(r));
+  const handoff = A.buildMarketingExecutionReceiptFromPublications({
+    tenant: tenant(), push: W.push, activationManifest: W.activationManifest, authorization: W.execAuthorization, publications: receipts, recordedAt: new Date(both.clock.t).toISOString(),
+  });
+  const tiktokReceipt = receipts.find((r) => r.provider === 'tiktok');
+  assert.ok(handoff.delivery_execution_refs.some((ref) => ref.delivery_execution_ref === tiktokReceipt.receipt_id)); // the INTERNAL publication receipt
+  assert.ok(handoff.delivery_execution_refs.every((ref) => ref.delivery_execution_ref.startsWith('acr_')));
+  assert.ok(!handoff.evidence_refs.some((ref) => ref.startsWith('provider-post://tiktok/'))); // and no fake post id
+  assert.ok(handoff.evidence_refs.includes('provider-submission://tiktok/p_pub_url-v2.1'));
 });

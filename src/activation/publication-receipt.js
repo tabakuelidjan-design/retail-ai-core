@@ -9,7 +9,7 @@ import {
   assertNoSecrets, deepFreeze, deriveId, fail, iso, isPlainObject, sortedUnique,
 } from './validation.js';
 
-const POST_ID = /^[A-Za-z0-9_.:/~+-]{1,200}$/;
+const PROVIDER_ID = /^[A-Za-z0-9_.:/~+-]{1,200}$/;
 const REF_SAFE = (value) => String(value).replace(/[^A-Za-z0-9:_./#-]/g, '-');
 const METADATA_KEYS = ['post_id_kind', 'permalink'];
 
@@ -31,9 +31,12 @@ export function sanitizeSafeMetadata(raw) {
 /** @param {object} job a PUBLISHED job as returned by the repository */
 export function buildChannelPublicationReceipt(job) {
   if (!isPlainObject(job) || job.state !== JOB_STATE.PUBLISHED) fail(E.RECEIPT_NOT_PUBLISHED, 'a publication receipt exists only for a job the provider confirmed as PUBLISHED');
-  if (typeof job.provider_post_id !== 'string' || !POST_ID.test(job.provider_post_id)) fail(E.RECEIPT_POST_ID_REQUIRED, 'a publication receipt needs the provider post id');
   if (!job.published_at) fail(E.RECEIPT_PUBLISHED_AT_REQUIRED, 'a publication receipt needs the publication time');
-  const submission = job.provider_submission_id && POST_ID.test(job.provider_submission_id) ? job.provider_submission_id : null;
+  // A submission id (e.g. a TikTok publish_id) is NEVER a post id: post ids are only what the provider really returned (possibly none).
+  const postIds = Array.isArray(job.provider_post_ids) ? job.provider_post_ids : [];
+  if (postIds.some((id) => typeof id !== 'string' || !PROVIDER_ID.test(id))) fail(E.RECEIPT_PROVIDER_REF_REQUIRED, 'a provider post id is not a valid provider id');
+  const submission = job.provider_submission_id && PROVIDER_ID.test(job.provider_submission_id) ? job.provider_submission_id : null;
+  if (!submission && postIds.length === 0) fail(E.RECEIPT_PROVIDER_REF_REQUIRED, 'a publication receipt needs the provider submission id or a provider post id');
   const body = {
     schema_version: ACTIVATION_VERSION,
     merchant_id: job.merchant_id,
@@ -43,10 +46,10 @@ export function buildChannelPublicationReceipt(job) {
     connector_id: job.connector_id,
     provider: job.provider,
     provider_submission_id: submission,
-    provider_post_id: job.provider_post_id,
+    provider_post_ids: [...postIds],
     published_at: iso(job.published_at, 'published_at'),
     evidence_refs: sortedUnique([
-      `provider-post://${job.provider}/${REF_SAFE(job.provider_post_id)}`,
+      ...postIds.map((id) => `provider-post://${job.provider}/${REF_SAFE(id)}`),
       ...(submission ? [`provider-submission://${job.provider}/${REF_SAFE(submission)}`] : []),
     ]),
     safe_metadata: sanitizeSafeMetadata(job.safe_metadata),

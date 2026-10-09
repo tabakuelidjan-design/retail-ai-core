@@ -39,6 +39,9 @@ export const JOB_STATE = Object.freeze({
   FAILED_RETRYABLE: 'FAILED_RETRYABLE',
   FAILED_FINAL: 'FAILED_FINAL',
   CANCELLED: 'CANCELLED',
+  // The outcome of a call that may have reached the provider is unknown: no retry, no receipt, no claim that it failed.
+  // Only an explicit reconciliation (a human / the provider's own record) leaves it.
+  SUBMISSION_UNKNOWN: 'SUBMISSION_UNKNOWN',
 });
 
 // Closed transitions. PUBLISHED, FAILED_FINAL and CANCELLED are terminal. SUBMITTING -> READY exists only to hand a claimed job
@@ -46,14 +49,18 @@ export const JOB_STATE = Object.freeze({
 export const JOB_TRANSITIONS = Object.freeze({
   PLANNED: ['READY', 'CANCELLED', 'FAILED_FINAL'],
   READY: ['SUBMITTING', 'CANCELLED', 'FAILED_FINAL'],
-  SUBMITTING: ['PROCESSING', 'PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'READY'],
-  PROCESSING: ['PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL'],
+  SUBMITTING: ['PROCESSING', 'PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'READY', 'SUBMISSION_UNKNOWN'],
+  PROCESSING: ['PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'SUBMISSION_UNKNOWN'],
+  // explicit reconciliation only: it was published (with evidence) or it was not (final)
+  SUBMISSION_UNKNOWN: ['PUBLISHED', 'FAILED_FINAL'],
   FAILED_RETRYABLE: ['SUBMITTING', 'FAILED_FINAL', 'CANCELLED'],
   PUBLISHED: [],
   FAILED_FINAL: [],
   CANCELLED: [],
 });
 export const TERMINAL_JOB_STATES = Object.freeze(['PUBLISHED', 'FAILED_FINAL', 'CANCELLED']);
+/** States the automatic worker never acts on: nothing is retried, polled or published until a human / provider reconciliation. */
+export const WORKER_HALTED_STATES = Object.freeze(['SUBMISSION_UNKNOWN']);
 
 // Provider-normalized error codes (never a raw provider payload).
 export const PROVIDER_ERROR = Object.freeze({
@@ -129,7 +136,8 @@ export const ACT_ERROR = Object.freeze({
   STORE_FAILED: 'ACT_STORE_FAILED',
 
   RECEIPT_NOT_PUBLISHED: 'ACT_RECEIPT_NOT_PUBLISHED',
-  RECEIPT_POST_ID_REQUIRED: 'ACT_RECEIPT_POST_ID_REQUIRED',
+  RECEIPT_PROVIDER_REF_REQUIRED: 'ACT_RECEIPT_PROVIDER_REF_REQUIRED',
+  RECONCILIATION_REF_REQUIRED: 'ACT_RECONCILIATION_REF_REQUIRED',
   RECEIPT_PUBLISHED_AT_REQUIRED: 'ACT_RECEIPT_PUBLISHED_AT_REQUIRED',
   M4_NOTHING_PUBLISHED: 'ACT_M4_NOTHING_PUBLISHED',
   M4_RECEIPT_SCOPE_MISMATCH: 'ACT_M4_RECEIPT_SCOPE_MISMATCH',

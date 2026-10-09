@@ -39,6 +39,13 @@ export function createChannelExecutor({
     return { outcome: 'FAILED_FINAL', code, job: updated };
   };
 
+  // The outcome of a call that may have reached the provider is unknown: no retry, no receipt, no "failed" claim - reconciliation only.
+  const unknown = async (job, code) => {
+    const updated = await repository.markSubmissionUnknown(job.merchant_id, job.id, { errorCode: code, nowIso: iso(clock()) });
+    log('job.submission_unknown', updated ?? job, { code });
+    return { outcome: 'SUBMISSION_UNKNOWN', code, job: updated };
+  };
+
   const retryOrFail = async (job, code, retryAfterMs) => {
     const nowIso = iso(clock());
     const decision = decideRetry({ attemptCount: job.attempt_count, nowIso, retryAfterMs, deadlineAt: job.deadline_at });
@@ -63,6 +70,10 @@ export function createChannelExecutor({
         continue;
       }
       const { job } = await repository.enqueue(drafts[i]);
+      if (job.state === J.SUBMISSION_UNKNOWN) { // the same logical intent can never become a fresh post without an explicit reconciliation
+        jobs.push({ delivery_ref: delivery.delivery_ref, status: 'RECONCILIATION_REQUIRED', reason_codes: ['RECONCILIATION_REQUIRED'], job });
+        continue;
+      }
       const ready = result.status === S.READY && job.state === J.PLANNED ? await repository.markReady(job.merchant_id, job.id, { nowIso: asOf }) : job;
       jobs.push({ delivery_ref: delivery.delivery_ref, status: result.status, reason_codes: result.reason_codes, job: ready ?? job });
     }
@@ -97,8 +108,8 @@ export function createChannelExecutor({
       submitted = await adapter.submit({ connector, credential, submission, delivery });
     } catch (error) {
       const normalized = adapter.normalizeProviderError(error);
-      if (normalized.retryable && adapter.ambiguousSubmitCodes?.includes(normalized.code)) {
-        return fail(claimed, 'SUBMISSION_OUTCOME_UNKNOWN', 'AMBIGUOUS'); // the post may exist: never resubmitted blindly
+      if (normalized.code === 'PUBLISH_RESULT_UNKNOWN' || (normalized.retryable && adapter.ambiguousSubmitCodes?.includes(normalized.code))) {
+        return unknown(claimed, 'SUBMISSION_OUTCOME_UNKNOWN'); // the post may exist: never resubmitted blindly, never reported as failed
       }
       if (normalized.retryable) return retryOrFail(claimed, normalized.code, normalized.retry_after_ms);
       return fail(claimed, normalized.code, 'PROVIDER');
@@ -111,8 +122,8 @@ export function createChannelExecutor({
 
   async function publish(job, result) {
     const updated = await repository.markPublished(job.merchant_id, job.id, {
-      providerPostId: result.provider_post_id, providerSubmissionId: result.provider_submission_id, publishedAt: result.published_at, nowIso: iso(clock()),
-      safeMetadata: sanitizeSafeMetadata({ post_id_kind: result.post_id_kind, search_url: result.search_url }), // only a public https permalink without query
+      providerPostIds: result.provider_post_ids ?? [], providerSubmissionId: result.provider_submission_id, publishedAt: result.published_at, nowIso: iso(clock()),
+      safeMetadata: sanitizeSafeMetadata({ search_url: result.search_url }), // only a public https permalink without query
     });
     if (!updated) return { outcome: 'SKIPPED', job: null }; // another worker already settled it
     log('job.published', updated);
@@ -131,7 +142,7 @@ export function createChannelExecutor({
     const nowIso = iso(clock());
     const claimed = await repository.claimPoll(job.merchant_id, job.id, { nowIso });
     if (!claimed) return { outcome: 'SKIPPED', job: null };
-    if (claimed.status_poll_count > MAX_STATUS_POLLS || toMs(nowIso) >= toMs(claimed.deadline_at)) return fail(claimed, 'STATUS_POLL_EXHAUSTED', 'TIMEOUT');
+    if (claimed.status_poll_count > MAX_STATUS_POLLS || toMs(nowIso) >= toMs(claimed.deadline_at)) return unknown(claimed, 'STATUS_POLL_EXHAUSTED'); // it may still publish later
     let input; let connector; let credential;
     try {
       input = await loadContext(claimed);
@@ -151,7 +162,8 @@ export function createChannelExecutor({
       return { outcome: 'PROCESSING', job: claimed };
     } catch (error) {
       const normalized = adapter.normalizeProviderError(error);
-      if (normalized.retryable) return { outcome: 'PROCESSING', job: claimed, note: normalized.code }; // keep polling, bounded
+      if (normalized.code === 'PUBLISH_RESULT_UNKNOWN') return unknown(claimed, 'SUBMISSION_OUTCOME_UNKNOWN'); // media_publish may have published
+      if (normalized.retryable) return { outcome: 'PROCESSING', job: claimed, note: normalized.code }; // a read: keep polling, bounded
       return fail(claimed, normalized.code, 'PROVIDER');
     }
   }
@@ -165,7 +177,7 @@ export function createChannelExecutor({
       if (job.provider_submission_id) {
         out.push(await repository.markProcessing(merchantId, job.id, { providerSubmissionId: job.provider_submission_id, nowIso }));
       } else {
-        out.push((await fail(job, 'SUBMISSION_STATE_UNKNOWN', 'AMBIGUOUS')).job);
+        out.push((await unknown(job, 'SUBMISSION_STATE_UNKNOWN')).job); // the worker died mid-call: it may have published
       }
     }
     return out;

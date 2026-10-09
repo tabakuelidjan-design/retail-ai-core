@@ -154,10 +154,10 @@ export function createTikTokAdapter({
       const data = res.body?.data ?? {};
       if (data.status === 'PUBLISH_COMPLETE') {
         const publicIds = Array.isArray(data.publicaly_available_post_id) ? data.publicaly_available_post_id : [];
-        const postId = publicIds.length ? String(publicIds[0]) : providerSubmissionId; // the public id exists only after moderation
+        // PUBLISH_COMPLETE is the provider's confirmation. The public post id(s) exist only for a public, moderated post: for a private
+        // post the list is empty and the receipt stands on the publish_id (the SUBMISSION id) - it is never copied into the post ids.
         return outcome({
-          outcome: 'PUBLISHED', provider_submission_id: providerSubmissionId, provider_post_id: postId,
-          post_id_kind: publicIds.length ? 'PUBLIC_POST_ID' : 'PUBLISH_ID', published_at: new Date(now()).toISOString(),
+          outcome: 'PUBLISHED', provider_submission_id: providerSubmissionId, provider_post_ids: publicIds.map(String), published_at: new Date(now()).toISOString(),
         });
       }
       if (data.status === 'FAILED') {

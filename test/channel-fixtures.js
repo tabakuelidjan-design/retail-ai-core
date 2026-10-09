@@ -179,7 +179,7 @@ export function createJobStore({ merchants = [M1, M2], connectors = CONNECTORS()
         if (rows.some((e) => e.merchant_id === r.merchant_id && e.activation_manifest_ref === r.activation_manifest_ref && e.manifest_delivery_ref === r.manifest_delivery_ref && e.connector_id === r.connector_id)) throw new Error('HTTP 409 23505');
         if (rows.some((e) => e.merchant_id === r.merchant_id && e.idempotency_key === r.idempotency_key)) throw new Error('HTTP 409 23505');
         const row = {
-          id: randomUUID(), state: 'PLANNED', attempt_count: 0, status_poll_count: 0, created_at: NOW, updated_at: NOW, safe_metadata: {}, provider_submission_id: null, provider_post_id: null,
+          id: randomUUID(), state: 'PLANNED', attempt_count: 0, status_poll_count: 0, created_at: NOW, updated_at: NOW, safe_metadata: {}, provider_submission_id: null, provider_post_ids: [], reconciliation_ref: null,
           next_attempt_at: null, published_at: null, last_error_code: null, last_error_class: null, ...r,
         };
         rows.push(row); created.push({ ...row });
@@ -192,6 +192,7 @@ export function createJobStore({ merchants = [M1, M2], connectors = CONNECTORS()
       const out = [];
       for (const row of hit) {
         if (TERMINAL.includes(row.state)) throw new Error('HTTP 409 terminal job cannot change');
+        if (row.state === 'SUBMISSION_UNKNOWN' && patch.state && patch.state !== 'SUBMISSION_UNKNOWN' && !patch.reconciliation_ref) throw new Error('HTTP 409 needs reconciliation');
         for (const immutable of ['merchant_id', 'connector_id', 'activation_manifest_ref', 'manifest_delivery_ref', 'provider', 'idempotency_key', 'request_fingerprint']) {
           if (immutable in patch && patch[immutable] !== row[immutable]) throw new Error('HTTP 409 immutable');
         }

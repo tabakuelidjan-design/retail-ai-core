@@ -81,7 +81,7 @@ test('Google Business content: the call to action is never invented, the media g
   assert.deepEqual([image.media[0].mediaFormat, image.media[0].sourceUrl.reveal(), image.summary], ['PHOTO', 'https://media.example.test/img-1.jpg?sig=SIGNEDSECRET', 'Venez découvrir la nouvelle collection en boutique.']);
   const rt = await run();
   const published = rt.store._rows.find((r) => r.provider === 'google_business_profile' && r.state === 'PUBLISHED'); // 142, 143
-  assert.deepEqual([published.provider_post_id, published.provider_submission_id], ['accounts/111/locations/222/localPosts/9', 'accounts/111/locations/222/localPosts/9']);
+  assert.deepEqual([[...published.provider_post_ids], published.provider_submission_id], [['accounts/111/locations/222/localPosts/9'], 'accounts/111/locations/222/localPosts/9']);
   assert.equal(rt.svc.http.raw.filter((r) => r.method === 'GET' && /localPosts\/9/.test(r.url)).length, 0); // synchronous LIVE: no polling needed
 });
 

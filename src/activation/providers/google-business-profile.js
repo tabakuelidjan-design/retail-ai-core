@@ -75,7 +75,7 @@ export function createGoogleBusinessProfileAdapter({ http, timeoutMs, now = () =
     if (post?.state === 'REJECTED') throw new ProviderRejection({ code: PE.POLICY_VIOLATION, safeCode: 'REJECTED' });
     if (post?.state === 'LIVE' && name) {
       return outcome({
-        outcome: 'PUBLISHED', provider_submission_id: name, provider_post_id: name, published_at: post.createTime ? new Date(Date.parse(post.createTime)).toISOString() : new Date(now()).toISOString(),
+        outcome: 'PUBLISHED', provider_submission_id: name, provider_post_ids: [name], published_at: post.createTime ? new Date(Date.parse(post.createTime)).toISOString() : new Date(now()).toISOString(),
         search_url: typeof post.searchUrl === 'string' && post.searchUrl.startsWith('https://') ? post.searchUrl : null,
       });
     }

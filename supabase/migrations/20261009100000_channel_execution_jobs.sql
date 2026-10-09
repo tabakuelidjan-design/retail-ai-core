@@ -14,13 +14,17 @@ create table channel_execution_jobs (
   -- deterministic keys: the same intent can only ever exist once
   idempotency_key text not null check (btrim(idempotency_key) <> ''),
   request_fingerprint text not null check (btrim(request_fingerprint) <> ''),
-  state text not null default 'PLANNED' check (state in ('PLANNED', 'READY', 'SUBMITTING', 'PROCESSING', 'PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED')),
+  state text not null default 'PLANNED' check (state in ('PLANNED', 'READY', 'SUBMITTING', 'PROCESSING', 'PUBLISHED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED', 'SUBMISSION_UNKNOWN')),
   publish_mode text not null check (publish_mode in ('PUBLISH_NOW', 'SCHEDULE_INTERNAL', 'INTERACTIVE_CONFIRMATION')),
   publish_at timestamptz,
   deadline_at timestamptz not null,
   payload jsonb not null default '{}'::jsonb check (jsonb_typeof(payload) = 'object'),
+  -- the provider's SUBMISSION id (e.g. a TikTok publish_id, an Instagram container id): never a post id
   provider_submission_id text,
-  provider_post_id text,
+  -- only post ids the provider REALLY returned; may be empty (a private TikTok post is PUBLISH_COMPLETE without a public post id)
+  provider_post_ids jsonb not null default '[]'::jsonb check (jsonb_typeof(provider_post_ids) = 'array'),
+  -- evidence reference of an explicit reconciliation of a SUBMISSION_UNKNOWN job (a human / the provider's own record)
+  reconciliation_ref text check (reconciliation_ref is null or reconciliation_ref ~ '^[A-Za-z0-9][A-Za-z0-9:_./#-]*$'),
   attempt_count integer not null default 0 check (attempt_count >= 0),
   status_poll_count integer not null default 0 check (status_poll_count >= 0),
   last_error_code text check (last_error_code is null or last_error_code ~ '^[A-Za-z0-9_.:-]{1,64}$'),
@@ -33,8 +37,10 @@ create table channel_execution_jobs (
   -- one external action per (merchant, manifest, delivery, connector): a race between two enqueues loses on this constraint
   constraint channel_execution_jobs_intent_uq unique (merchant_id, activation_manifest_ref, manifest_delivery_ref, connector_id),
   constraint channel_execution_jobs_idempotency_uq unique (merchant_id, idempotency_key),
-  -- PUBLISHED only with proof
-  constraint channel_execution_jobs_published_proof check (state <> 'PUBLISHED' or (provider_post_id is not null and published_at is not null))
+  -- PUBLISHED only with proof: a publication time and the provider's submission id or at least one real post id
+  constraint channel_execution_jobs_published_proof check (
+    state <> 'PUBLISHED' or (published_at is not null and (provider_submission_id is not null or jsonb_array_length(provider_post_ids) > 0))
+  )
 );
 
 -- "what is due for this tenant" lookups
@@ -50,7 +56,8 @@ begin
 end $$;
 create trigger channel_execution_jobs_insert_guard_trg before insert on channel_execution_jobs for each row execute function channel_execution_jobs_insert_guard();
 
--- Identity never changes; PUBLISHED, FAILED_FINAL and CANCELLED are terminal (no re-publication, no resurrection); updated_at follows.
+-- Identity never changes; PUBLISHED, FAILED_FINAL and CANCELLED are terminal (no re-publication, no resurrection); SUBMISSION_UNKNOWN is
+-- left only by an explicit reconciliation; updated_at follows.
 create function channel_execution_jobs_update_guard() returns trigger language plpgsql set search_path = '' as $$
 begin
   if new.merchant_id is distinct from old.merchant_id or new.connector_id is distinct from old.connector_id
@@ -61,6 +68,16 @@ begin
   end if;
   if old.state in ('PUBLISHED', 'FAILED_FINAL', 'CANCELLED') then
     raise exception 'channel_execution_jobs: a terminal job cannot change' using errcode = 'integrity_constraint_violation';
+  end if;
+  -- SUBMISSION_UNKNOWN (the outcome of a call that may have reached the provider is unknown) halts the automatic worker: only an explicit
+  -- reconciliation, with its evidence reference, can move it to PUBLISHED or FAILED_FINAL
+  if old.state = 'SUBMISSION_UNKNOWN' and new.state <> 'SUBMISSION_UNKNOWN' then
+    if new.state not in ('PUBLISHED', 'FAILED_FINAL') or new.reconciliation_ref is null then
+      raise exception 'channel_execution_jobs: a SUBMISSION_UNKNOWN job needs an explicit reconciliation' using errcode = 'integrity_constraint_violation';
+    end if;
+  end if;
+  if new.state = 'PUBLISHED' and old.state not in ('SUBMITTING', 'PROCESSING', 'SUBMISSION_UNKNOWN') then
+    raise exception 'channel_execution_jobs: a job is published only after a submission' using errcode = 'integrity_constraint_violation';
   end if;
   new.updated_at = now();
   return new;

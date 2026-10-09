@@ -71,7 +71,7 @@ test('Instagram publishing: container -> status -> media_publish, processing is 
   advance(rt, 120_000);
   await rt.executor.runDueJobs({ merchantId: M1 });
   const done = jobOf(rt, 'instagram');
-  assert.deepEqual([done.state, done.provider_post_id], ['PUBLISHED', 'ig-media-1']); // 100
+  assert.deepEqual([done.state, [...done.provider_post_ids], done.provider_submission_id], ['PUBLISHED', ['ig-media-1'], 'container-1']); // 100
   const order = rt.svc.http.raw.filter((r) => r.url.includes('container-1') || r.url.endsWith('media_publish') || r.url.endsWith('/media')).map((r) => `${r.method} ${r.url.split('/').pop().split('?')[0]}`);
   assert.deepEqual(order.slice(0, 2), ['POST media', 'GET container-1']);
   assert.equal(order.at(-1), 'POST media_publish'); // published only AFTER media_publish
@@ -105,7 +105,7 @@ test('Instagram errors are normalized: rate limit, auth, permanent media errors;
   assert.equal(jobOf(once, 'instagram').state, 'PUBLISHED');
   assert.equal(once.svc.http.raw.filter((r) => r.url.endsWith('/media_publish')).length, 1);
   const already = await flow(igRoutes({ statuses: ['PUBLISHED'] }), { cycles: 3 }); // the container says PUBLISHED but we hold no media id: never publish again
-  assert.deepEqual([jobOf(already, 'instagram').state, jobOf(already, 'instagram').last_error_code], ['FAILED_FINAL', 'PUBLISH_RESULT_UNKNOWN']);
+  assert.deepEqual([jobOf(already, 'instagram').state, jobOf(already, 'instagram').last_error_code], ['SUBMISSION_UNKNOWN', 'SUBMISSION_OUTCOME_UNKNOWN']); // the post may exist: reconciliation, never "failed"
   assert.equal(already.svc.http.raw.filter((r) => r.url.endsWith('/media_publish')).length, 0);
   assert.equal(SCOPES.instagram.length, 2);
   assert.equal(IDS.IG.length, 36);

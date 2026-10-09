@@ -54,12 +54,12 @@ test('Job state machine: every legal transition works, terminal states are final
   assert.deepEqual([claimed.state, claimed.attempt_count], ['SUBMITTING', 1]);
   const processing = await repo.markProcessing(M1, job.id, { providerSubmissionId: 'sub-1', nowIso: NOW }); // 67
   assert.deepEqual([processing.state, processing.provider_submission_id], ['PROCESSING', 'sub-1']);
-  const published = await repo.markPublished(M1, job.id, { providerPostId: 'post-1', publishedAt: NOW, nowIso: NOW }); // 69
-  assert.deepEqual([published.state, published.provider_post_id], ['PUBLISHED', 'post-1']);
+  const published = await repo.markPublished(M1, job.id, { providerPostIds: ['post-1'], publishedAt: NOW, nowIso: NOW }); // 69
+  assert.deepEqual([published.state, [...published.provider_post_ids]], ['PUBLISHED', ['post-1']]);
   const { job: direct } = await repo.enqueue(d2);
   await repo.markReady(M1, direct.id, { nowIso: NOW });
   await repo.claim(M1, direct.id, { nowIso: NOW });
-  assert.equal((await repo.markPublished(M1, direct.id, { providerPostId: 'post-2', publishedAt: NOW, nowIso: NOW })).state, 'PUBLISHED'); // 68
+  assert.equal((await repo.markPublished(M1, direct.id, { providerPostIds: ['post-2'], publishedAt: NOW, nowIso: NOW })).state, 'PUBLISHED'); // 68
   // 73, 74, 75: terminal states
   assert.equal(await repo.claim(M1, job.id, { nowIso: NOW }), null); // published: not retried
   assert.equal(await acode(repo.markFinalFailure(M1, job.id, { errorCode: 'X', nowIso: NOW })), 'ACT_JOB_INVALID_TRANSITION');
@@ -160,7 +160,7 @@ test('Provider errors: only transient failures are retried, never a permanent 4x
   assert.deepEqual([jobOf(slow, 'instagram').state, jobOf(slow, 'instagram').last_error_code], ['FAILED_RETRYABLE', 'TIMEOUT']);
   const hung = await runtime(W, { timeoutMs: 20, routes: [{ method: 'POST', url: '/localPosts', respond: () => new Promise(() => {}) }, ...igRoutes(), ...ttRoutes()] }); // a creating call that timed out may have created the post
   await hung.executor.runDueJobs({ merchantId: M1 });
-  assert.deepEqual([jobOf(hung, 'google_business_profile').state, jobOf(hung, 'google_business_profile').last_error_code], ['FAILED_FINAL', 'SUBMISSION_OUTCOME_UNKNOWN']);
+  assert.deepEqual([jobOf(hung, 'google_business_profile').state, jobOf(hung, 'google_business_profile').last_error_code], ['SUBMISSION_UNKNOWN', 'SUBMISSION_OUTCOME_UNKNOWN']);
   const auth = await runtime(W, { routes: [...igFail(401, { code: 190 }), ...ttRoutes(), ...gbpRoutes()] }); // 86
   await auth.executor.runDueJobs({ merchantId: M1 });
   assert.deepEqual([jobOf(auth, 'instagram').state, jobOf(auth, 'instagram').last_error_code], ['FAILED_FINAL', 'AUTH_INVALID']);
@@ -199,7 +199,65 @@ test('Stale worker recovery: a job claimed by a dead worker is never resubmitted
   await rt.repo.claim(M1, job.id, { nowIso: NOW }); // the worker dies right here
   advance(rt, 20 * 60_000);
   const recovered = await rt.executor.recoverStale({ merchantId: M1 });
-  assert.deepEqual(recovered.map((j) => [j.state, j.last_error_code]), [['FAILED_FINAL', 'SUBMISSION_STATE_UNKNOWN']]);
+  assert.deepEqual(recovered.map((j) => [j.state, j.last_error_code]), [['SUBMISSION_UNKNOWN', 'SUBMISSION_STATE_UNKNOWN']]);
   assert.equal(rt.svc.http.raw.filter((r) => r.method === 'POST').length, 0);
   assert.equal(M2.length > 0, true);
+});
+
+test('Ambiguous submission: a timeout after a creating call is SUBMISSION_UNKNOWN - no retry, no receipt, no failure claim, never a fresh post for the same intent', async () => {
+  const never = () => new Promise(() => {});
+  const hung = await runtime(W, { timeoutMs: 20, routes: [{ method: 'POST', url: '/localPosts', respond: never }, ...igRoutes(), ...ttRoutes()] });
+  await hung.executor.runDueJobs({ merchantId: M1 });
+  const row = jobOf(hung, 'google_business_profile'); // 215
+  assert.deepEqual([row.state, row.last_error_code, row.last_error_class], ['SUBMISSION_UNKNOWN', 'SUBMISSION_OUTCOME_UNKNOWN', 'AMBIGUOUS']);
+  assert.ok(!['FAILED_FINAL', 'FAILED_RETRYABLE'].includes(row.state)); // 217: it is not claimed to have failed
+  const posts = () => hung.svc.http.raw.filter((r) => r.method === 'POST' && r.url.includes('/localPosts')).length;
+  assert.equal(posts(), 1);
+  advance(hung, 24 * 3_600_000); // 216: no blind retry, however long we wait
+  await hung.executor.runDueJobs({ merchantId: M1 });
+  assert.deepEqual([posts(), jobOf(hung, 'google_business_profile').attempt_count, jobOf(hung, 'google_business_profile').state], [1, 1, 'SUBMISSION_UNKNOWN']);
+  assert.equal(await hung.repo.claim(M1, row.id, { nowIso: new Date(hung.clock.t).toISOString() }), null);
+  assert.equal(code(() => A.buildChannelPublicationReceipt(jobOf(hung, 'google_business_profile'))), 'ACT_RECEIPT_NOT_PUBLISHED'); // 218
+  assert.equal(code(() => A.buildChannelPublicationReceipt({ ...jobOf(hung, 'google_business_profile'), provider_submission_id: 'guess', published_at: NOW })), 'ACT_RECEIPT_NOT_PUBLISHED');
+  // 219: the same logical intent is never a fresh post - enqueue returns the same halted job, and no new call is made
+  const again = await hung.executor.enqueueChannelExecutionOrder({ ...hung.input, asOf: new Date(hung.clock.t - 24 * 3_600_000 + 60_000).toISOString() });
+  const entry = again.jobs.find((j) => j.job?.id === row.id);
+  assert.deepEqual([entry.status, entry.reason_codes, entry.job.state], ['RECONCILIATION_REQUIRED', ['RECONCILIATION_REQUIRED'], 'SUBMISSION_UNKNOWN']);
+  assert.equal(hung.store._rows.filter((r) => r.provider === 'google_business_profile').length, 1);
+  const enqueued = await hung.repo.enqueue(A.planChannelExecutionJobs({ order: hung.order, manifest: W.activationManifest, candidates: W.candidates })[1]);
+  assert.deepEqual([enqueued.created, enqueued.job.state], [false, 'SUBMISSION_UNKNOWN']);
+  assert.equal(posts(), 1);
+  // 220: only an explicit reconciliation, with its evidence reference, leaves the state
+  const at = new Date(hung.clock.t).toISOString();
+  assert.equal(code(() => A.assertTransition('SUBMISSION_UNKNOWN', 'READY')), 'ACT_JOB_INVALID_TRANSITION');
+  assert.equal(code(() => A.assertTransition('SUBMISSION_UNKNOWN', 'FAILED_RETRYABLE')), 'ACT_JOB_INVALID_TRANSITION');
+  assert.ok(A.WORKER_HALTED_STATES.includes('SUBMISSION_UNKNOWN'));
+  assert.equal(await acode(hung.repo.reconcilePublished(M1, row.id, { providerPostIds: ['p'], publishedAt: at, nowIso: at })), 'ACT_RECONCILIATION_REF_REQUIRED');
+  assert.equal(await acode(hung.repo.reconcilePublished(M1, row.id, { reconciliationRef: 'reconciliation://operator-1', publishedAt: at, nowIso: at })), 'ACT_RECEIPT_PROVIDER_REF_REQUIRED');
+  assert.equal(await acode(hung.repo.reconcileNotPublished(M1, row.id, { nowIso: at })), 'ACT_RECONCILIATION_REF_REQUIRED');
+  const reconciled = await hung.repo.reconcilePublished(M1, row.id, { reconciliationRef: 'reconciliation://operator-1', providerPostIds: ['accounts/111/locations/222/localPosts/9'], publishedAt: at, nowIso: at });
+  assert.deepEqual([reconciled.state, reconciled.reconciliation_ref], ['PUBLISHED', 'reconciliation://operator-1']);
+  assert.equal(A.buildChannelPublicationReceipt(reconciled).provider_post_ids.length, 1); // a receipt exists only AFTER the reconciliation proved the publication
+  const verified = await runtime(W, { timeoutMs: 20, routes: [{ method: 'POST', url: '/localPosts', respond: never }, ...igRoutes(), ...ttRoutes()] });
+  await verified.executor.runDueJobs({ merchantId: M1 });
+  const none = await verified.repo.reconcileNotPublished(M1, jobOf(verified, 'google_business_profile').id, { reconciliationRef: 'reconciliation://operator-2', nowIso: NOW });
+  assert.deepEqual([none.state, none.last_error_code], ['FAILED_FINAL', 'RECONCILED_NOT_PUBLISHED']);
+  const stillSame = await verified.executor.enqueueChannelExecutionOrder({ ...verified.input, asOf: NOW });
+  assert.equal(stillSame.jobs.find((j) => j.job?.id === none.id).job.state, 'FAILED_FINAL'); // even verified "not published", the same intent does not become a new post
+  // 221: Instagram - a container is harmless to retry, but media_publish may have published
+  const container = await runtime(W, { timeoutMs: 20, routes: [{ method: 'POST', url: '/17841400000000001/media', respond: never }, ...igRoutes().filter((r) => !(r.method === 'POST' && r.url.endsWith('/media'))), ...ttRoutes(), ...gbpRoutes()] });
+  await container.executor.runDueJobs({ merchantId: M1 });
+  assert.equal(jobOf(container, 'instagram').state, 'FAILED_RETRYABLE'); // nothing can have been published yet
+  const publishing = await runtime(W, { timeoutMs: 20, routes: [{ method: 'POST', url: '/media_publish', respond: never }, ...igRoutes().filter((r) => !r.url.endsWith('/media_publish')), ...ttRoutes(), ...gbpRoutes()] });
+  await publishing.executor.runDueJobs({ merchantId: M1 });
+  advance(publishing, 120_000);
+  await publishing.executor.runDueJobs({ merchantId: M1 });
+  const ig = jobOf(publishing, 'instagram');
+  assert.deepEqual([ig.state, ig.last_error_code, ig.provider_submission_id], ['SUBMISSION_UNKNOWN', 'SUBMISSION_OUTCOME_UNKNOWN', 'container-1']);
+  advance(publishing, 24 * 3_600_000);
+  await publishing.executor.runDueJobs({ merchantId: M1 });
+  assert.equal(publishing.svc.http.raw.filter((r) => r.url.endsWith('/media_publish')).length, 1); // never published a second time
+  const exhausted = await runtime(W, { routes: [...igRoutes({ statuses: ['IN_PROGRESS'] }), ...ttRoutes(), ...gbpRoutes()] }); // a job that stays PROCESSING may still publish later
+  for (let i = 0; i < 16; i += 1) { await exhausted.executor.runDueJobs({ merchantId: M1 }); advance(exhausted, 61_000); }
+  assert.deepEqual([jobOf(exhausted, 'instagram').state, jobOf(exhausted, 'instagram').last_error_code], ['SUBMISSION_UNKNOWN', 'STATUS_POLL_EXHAUSTED']);
 });

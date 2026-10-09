@@ -279,10 +279,10 @@ test('Security: tenant and brand isolation, safe permalinks, media locations, cr
   const store = createJobStore({ merchants: [M1, M2] });
   const draft = A.planChannelExecutionJobs({ order: rt.order, manifest: W.activationManifest, candidates: W.candidates })[0];
   assert.equal(await acode(A.createChannelExecutionRepository({ supabase: store }).enqueue({ ...draft, merchant_id: M2 })), 'ACT_STORE_FAILED'); // the connector belongs to M1
-  const publication = A.buildChannelPublicationReceipt({ ...job, state: 'PUBLISHED', provider_post_id: 'p1', published_at: NOW, safe_metadata: {} }); // 179
+  const publication = A.buildChannelPublicationReceipt({ ...job, state: 'PUBLISHED', provider_post_ids: ['p1'], published_at: NOW, safe_metadata: {} }); // 179
   const forged = { ...publication, brand_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' };
   assert.throws(() => A.buildMarketingExecutionReceiptFromPublications({ tenant: tenant(), push: W.push, activationManifest: W.activationManifest, authorization: W.execAuthorization, publications: [forged], recordedAt: NOW }), (e) => e.code === 'ACT_M4_RECEIPT_SCOPE_MISMATCH');
-  const clean = (job2) => A.buildChannelPublicationReceipt({ ...job, state: 'PUBLISHED', provider_post_id: 'p1', published_at: NOW, safe_metadata: job2 }).safe_metadata; // 180
+  const clean = (job2) => A.buildChannelPublicationReceipt({ ...job, state: 'PUBLISHED', provider_post_ids: ['p1'], published_at: NOW, safe_metadata: job2 }).safe_metadata; // 180
   assert.equal(clean({ permalink: 'https://www.instagram.com/p/abc/' }).permalink, 'https://www.instagram.com/p/abc/');
   for (const bad of ['http://x.test/p', 'https://x.test/p?token=1', `https://u:p${AT}x.test/p`, 'https://x.test/p#f', '/tmp/x']) assert.equal(clean({ permalink: bad }).permalink, undefined);
   for (const location of ['/var/media/a.jpg', 'C:\\media\\a.jpg', 'file:///etc/passwd', 'http://media.example.test/a.jpg', `https://u:p${AT}media.example.test/a.jpg`, 'https://localhost/a.jpg']) { // 181
