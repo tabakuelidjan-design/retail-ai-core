@@ -150,10 +150,10 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
     assert.equal(offending(source, /habb|phone case|coque|instagram|1080|1350/i), null, file);
   }
   assert.equal(benchmarkConfig.kind, 'CONFIGURATION_DATA');
-  // PC2-54 as shipped (product, real asset and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
+  // PC2-54 as shipped (the real asset payload is private and absent, and no Brand Memory interface is supplied) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
   const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: createBenchmarkResolver(benchmarkConfig, { privatePayloads: false }), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
   assert.equal(shipped.status, 'BLOCKED');
-  assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
+  assert.equal(reasonOf(shipped, 'product'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'asset'), 'ASSET_PAYLOAD_UNAVAILABLE');
   assert.equal(reasonOf(shipped, 'claim:price'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'claim:promise'), 'RESOLVED_WITH_EVIDENCE');
@@ -222,7 +222,7 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
   assert.equal(CI.assessCreativeC2Readiness({ ...all, REAL_CAMPAIGN_BENCHMARK: runEvidence }).c2_allowed, true);
   // the shipped configuration itself still says NOT_RUN and still lists what is missing
   assert.equal(benchmarkConfig.status, 'NOT_RUN');
-  assert.ok(benchmarkConfig.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
+  assert.deepEqual(benchmarkConfig.bindings_still_missing, []); // PRODUCT, ASSET, claims, format, fonts and expression are all bound; only the private payload is environment-dependent
 });
 
 test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it names exists', async () => {
@@ -238,7 +238,7 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
     assert.match(text, new RegExp(`^\\s*// PC2-${n} `, 'm'), `PC2-${n} has no marker in ${file}`);
   }
   assert.match(doc, /PRE-C2 TECHNICAL FOUNDATION = COMPLETE/);
-  assert.match(doc, /HABB BENCHMARK 001 = NOT_RUN \/ BLOCKED/);
+  assert.match(doc, /HABB BENCHMARK 001 = NOT_RUN/);
   assert.match(doc, /HABB BENCHMARK 001 PREPARATION = COMPLETE/);
   assert.match(doc, /HABB CANONICAL BRAND = COMPLETE/);
   assert.match(doc, /HABB Brand Core V1    = APPROVED/);
@@ -247,6 +247,8 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /Playfair Display = BOUND/);
   assert.match(doc, /Montserrat\s+= BOUND/);
   assert.match(doc, /HABB Brand Memory v2 = APPROVED/);
-  assert.match(doc, /PRODUCT = MISSING/);
+  assert.match(doc, /PRODUCT = BOUND/);
+  assert.match(doc, /readiness = RUNNABLE, status NOT_RUN \(RUNNABLE is not RUN\)/);
+  assert.match(doc, /readiness = BLOCKED \(ASSET_PAYLOAD_UNAVAILABLE\), status NOT_RUN/);
   assert.match(doc, /C2 = NOT READY/);
 });

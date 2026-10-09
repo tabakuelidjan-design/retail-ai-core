@@ -1,8 +1,8 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
 - **Status:** C1 FOUNDATION — COMPLETE (audited, pushed, CI green). Creative Intelligence as a whole is NOT complete: C2 is NOT READY and deferred.
-- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** · **HABB BENCHMARK 001 = NOT_RUN / BLOCKED** (HABB BENCHMARK FONT BINDINGS = COMPLETE: Playfair Display and Montserrat BOUND, HABB Brand Memory v2 APPROVED; ASSET registered (private payload), PRODUCT still MISSING pending the owner's phone-model confirmation) · **C2 = NOT READY**
-- **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 = NOT READY** — HABB CREATIVE BENCHMARK 001 is NOT_RUN / BLOCKED on real HABB data. See `creative-pre-c2-foundation.md`.
+- **HABB CANONICAL BRAND = COMPLETE** (Identity, Snapshot, Core V1 APPROVED, Memory V1.1 APPROVED, expression_system BOUND) · **HABB BENCHMARK 001 PREPARATION = COMPLETE** · **HABB BENCHMARK 001 = NOT_RUN** (HABB BENCHMARK FONT BINDINGS = COMPLETE: Playfair Display and Montserrat BOUND, HABB Brand Memory v2 APPROVED; ASSET registered with a private payload, PRODUCT bound to the Samsung Galaxy A17 by owner confirmation and the exact catalogue item; RUNNABLE only where the verified private payload is present, never RUN) · **C2 = NOT READY**
+- **PRE-C2 TECHNICAL FOUNDATION = COMPLETE** (pushed at `d182e86`, remote CI green on Node 20 and 24) · **C2 = NOT READY** — HABB CREATIVE BENCHMARK 001 is NOT_RUN: every binding is prepared, and only an actual run (real PNG, Preflight, Fidelity and Guardian evidence) can open C2. See `creative-pre-c2-foundation.md`.
 - **Branch:** `feature/branding-marketing-creative-v1` (C1 pushed as `055708e` on top of `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 

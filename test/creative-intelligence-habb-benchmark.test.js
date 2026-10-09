@@ -140,14 +140,14 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(reasonOf(await assess({ config: noFonts }), 'fonts'), 'BINDING_MISSING');
   assert.deepEqual(config.bindings.fonts.map((f) => f.ref), ['font://google-fonts/playfair-display', 'font://google-fonts/montserrat']);
   assert.ok(!JSON.stringify(config).match(/DejaVu|Noto/));
-  // HB-15 the missing canonical PRODUCT stays a named blocker (no fake catalogue record was created)
-  assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
-  assert.equal(config.bindings.product.ref, null);
-  assert.equal(config.bindings.product.status, 'HABB_BENCHMARK_PRODUCT_BINDING_MISSING');
-  assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
+  // HB-15 the PRODUCT is bound by the owner's confirmation and the exact catalogue item (see creative-intelligence-habb-product.test.js); no blocker is left in the list
+  assert.equal(reasonOf(shipped, 'product'), 'RESOLVED_WITH_EVIDENCE');
+  assert.equal(config.bindings.product.ref, 'product://habb/benchmark-001/samsung-galaxy-a17');
+  assert.deepEqual(config.bindings_still_missing, []);
   assert.ok(!config.bindings_still_missing.some((b) => b.includes('REAL_ASSET_MISSING'))); // the real asset is registered (see creative-intelligence-habb-asset.test.js)
   assert.ok(!config.bindings_still_missing.some((b) => b.includes('FONT_BINDINGS_MISSING')));
-  assert.equal(config.owned_records.filter((r) => r.kind === 'PRODUCT' || r.kind === 'FONT').length, 0); // no fake catalogue record, no font record in the config
+  assert.equal(config.owned_records.filter((r) => r.kind === 'FONT').length, 0); // fonts come from the resource manifest
+  assert.equal(config.owned_records.filter((r) => r.kind === 'PRODUCT').length, 1); // exactly the one proven product
   assert.equal(config.owned_records.filter((r) => r.kind === 'ASSET').length, 1); // exactly the one real asset
   // HB-16 the FORMAT is unchanged: 1080 x 1350 px DIGITAL, explicit empty zones, platform-level
   assert.equal(reasonOf(shipped, 'format'), 'RESOLVED_WITH_EVIDENCE');
@@ -159,7 +159,7 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(format.merchant_id, null);
   // the claims and the format are the bound items; everything else is individually reported
   assert.deepEqual(shipped.bindings.map((b) => [b.id, b.status]), [
-    ['product', 'MISSING'], ['asset', 'BLOCKED'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
+    ['product', 'BOUND'], ['asset', 'BLOCKED'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
   ]);
   // HB-17 C2 stays blocked, the benchmark stays NOT_RUN, and a BLOCKED benchmark cannot be recorded as run
   assert.equal(config.status, 'NOT_RUN');

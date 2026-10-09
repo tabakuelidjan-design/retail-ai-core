@@ -146,7 +146,7 @@ test('ASSET is BOUND only with a verified payload; nothing generated can replace
   }
 });
 
-test('PRODUCT is never inferred: it needs trusted proof, and the owner is asked the one question', async () => {
+test('PRODUCT needs trusted proof and is never inferred (the owner has since confirmed the model: see the product tests)', async () => {
   const product = config.bindings.product;
   // HA-13 camera geometry, visual similarity or a classifier is never a proof: a bound-looking product with such a "proof" stays BLOCKED
   for (const kind of ['VISUAL_SIMILARITY', 'IMAGE_CLASSIFIER', 'CAMERA_GEOMETRY', undefined]) {
@@ -160,23 +160,21 @@ test('PRODUCT is never inferred: it needs trusted proof, and the owner is asked 
   for (const file of readdirSync(new URL('src/creative-intelligence/', root)).filter((f) => f.endsWith('.js'))) {
     assert.doesNotMatch(readFileSync(new URL(`src/creative-intelligence/${file}`, root), 'utf8'), /camera_count|camera_shape|camera_layout|camera geometry|image.?classifier/i, file);
   }
-  // HA-14 no trusted evidence names the model: PRODUCT stays MISSING and unbound
-  assert.equal(product.ref, null);
-  assert.equal(product.status, 'HABB_BENCHMARK_PRODUCT_BINDING_MISSING');
-  assert.equal(reasonOf(await assess(config, createBenchmarkResolver(config, { privatePayloads: false })), 'product'), 'BINDING_MISSING');
+  // HA-14 the product is bound only through its proof, never from the image: without its proof kind the same PRODUCT fails again
+  assert.equal(product.ref, 'product://habb/benchmark-001/samsung-galaxy-a17');
+  assert.equal(reasonOf(await assess(config, createBenchmarkResolver(config, { privatePayloads: false })), 'product'), 'RESOLVED_WITH_EVIDENCE');
+  const noProof = { ...config, bindings: { ...config.bindings, product: { ref: product.ref } } };
+  assert.equal(reasonOf(await assess(noProof, createBenchmarkResolver(config, { privatePayloads: false })), 'product'), 'PRODUCT_PROOF_MISSING');
   assert.ok(!JSON.stringify(config.asset_evidence.visual_observations).match(/Samsung|iPhone|Galaxy|Pixel|Xiaomi|Redmi|A5\d|S2\d/i));
   assert.match(config.asset_evidence.not_inferred, /The phone model/);
-  // HA-15 the exact owner question is produced
-  assert.equal(product.resolution.status, 'OWNER_PRODUCT_CONFIRMATION_REQUIRED');
-  assert.equal(product.resolution.question, 'Which exact phone model is this case for?');
-  assert.ok(config.bindings_still_missing.some((m) => m.includes('OWNER_PRODUCT_CONFIRMATION_REQUIRED')));
-  // HA-16 candidate suggestions would be labelled UNVERIFIED and never bound; there is no evidence-based shortlist, so there are none
-  assert.deepEqual(product.resolution.unverified_candidates, []);
-  for (const c of product.resolution.unverified_candidates) assert.equal(c.status, 'UNVERIFIED');
+  // HA-15 the owner question was answered: the confirmation is recorded and the old blockers are gone
+  assert.equal(product.resolution.status, 'RESOLVED');
+  assert.ok(!JSON.stringify(config.bindings_still_missing).includes('OWNER_PRODUCT_CONFIRMATION_REQUIRED'));
+  assert.deepEqual(config.bindings_still_missing, []);
   assert.ok(product.resolution.refused_as_proof.includes('camera geometry or camera count'));
 });
 
-test('Benchmark 001 after the real asset: all bindings but PRODUCT, never RUNNABLE without it, never run', async () => {
+test('Benchmark 001 after the real asset and product: never RUNNABLE without the payload or the proof, never run', async () => {
   const resolver = createBenchmarkResolver(config, { privatePayloads: false });
   const report = await assess(config, resolver);
   const state = stateOf(report);
@@ -187,9 +185,10 @@ test('Benchmark 001 after the real asset: all bindings but PRODUCT, never RUNNAB
   assert.equal(state['font:font://google-fonts/playfair-display'], 'BOUND');
   assert.equal(state['font:font://google-fonts/montserrat'], 'BOUND');
   assert.equal(state.expression_system, 'BOUND');
-  // blocked: PRODUCT (always) and, in an environment without the private file, the ASSET payload
+  // PRODUCT is bound (owner confirmation + catalogue); in an environment without the private file the ASSET payload is the one blocker
   assert.equal(report.status, 'BLOCKED');
-  assert.equal(state.product, 'MISSING');
+  assert.equal(state.product, 'BOUND');
+  assert.deepEqual(report.blockers, [{ id: 'asset', reason: 'ASSET_PAYLOAD_UNAVAILABLE' }]);
   // HA-27 / HA-28
   assert.equal(config.status, 'NOT_RUN');
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);

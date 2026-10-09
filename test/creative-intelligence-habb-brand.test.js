@@ -149,14 +149,14 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   assert.equal(config.bindings.expression.status, 'BOUND_TO_APPROVED_BRAND_MEMORY');
   assert.deepEqual(config.bindings.expression.memory_ref, { id: 'habb-memory-v2', version: 2 });
   assert.ok(P.assessExpressionReadiness(iface).ready);
-  // HBB-17 fonts are bound now (Playfair Display and Montserrat, see the font-binding tests); HBB-18 / 19 still BLOCKED for PRODUCT and the real ASSET
+  // HBB-17 fonts and the PRODUCT are bound now; HBB-18 / 19 in a CI-like environment the private ASSET payload is the one blocker
   assert.equal(report.status, 'BLOCKED');
-  assert.deepEqual(report.blockers, [{ id: 'product', reason: 'BINDING_MISSING' }, { id: 'asset', reason: 'ASSET_PAYLOAD_UNAVAILABLE' }]); // CI-like: the private payload is absent
+  assert.deepEqual(report.blockers, [{ id: 'asset', reason: 'ASSET_PAYLOAD_UNAVAILABLE' }]); // CI-like: the private payload is absent
   assert.equal(config.bindings.fonts.length, 2);
-  assert.equal(config.bindings.product.ref, null);
+  assert.equal(config.bindings.product.ref, 'product://habb/benchmark-001/samsung-galaxy-a17');
   assert.equal(config.bindings.asset.ref, 'asset://habb/benchmark-001/real-personalised-case-001');
   assert.equal(config.status, 'NOT_RUN');
-  assert.equal(config.bindings_still_missing.length, 1);
+  assert.equal(config.bindings_still_missing.length, 0);
   // HBB-20 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence }).c2_allowed, false);
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
@@ -265,8 +265,8 @@ test('Core impact, Brand Context, benchmark blockers and approval timestamps aft
   const resolver = createBenchmarkResolver(config, { privatePayloads: false });
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
-  // HBE-10 PRODUCT and ASSET remain the benchmark blockers (fonts are bound by the owner's typography decision; the Design Manual limits to two families but names none)
-  assert.deepEqual(report.blockers.map((b) => b.id), ['product', 'asset']);
+  // HBE-10 only the ASSET payload (private, absent in a CI-like environment) blocks; fonts and the product are bound (the Design Manual limits to two families but names none)
+  assert.deepEqual(report.blockers.map((b) => b.id), ['asset']);
   assert.ok(out.snapshot.evidence_gaps.some((g) => g.id === 'gap-fonts-unchosen'));
   // HBE-11 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);

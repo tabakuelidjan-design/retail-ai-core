@@ -218,11 +218,11 @@ test('HABB Benchmark 001 after the font bindings: fonts bound, PRODUCT and ASSET
   assert.equal(state.format, 'BOUND');
   assert.equal(state.expression_system, 'BOUND');
   assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v2@2');
-  // HF-22 / HF-23 PRODUCT and ASSET remain missing, HF-24 so the overall status is BLOCKED (never RUNNABLE)
-  assert.equal(state.product, 'MISSING');
+  // HF-22 / HF-23 the PRODUCT is bound now; the ASSET payload (private) is absent in this CI-like environment, HF-24 so the overall status is BLOCKED (never RUNNABLE)
+  assert.equal(state.product, 'BOUND');
   assert.equal(state.asset, 'BLOCKED'); // bound by metadata; the private payload is not in this (CI-like) environment
   assert.equal(report.status, 'BLOCKED');
-  assert.deepEqual(report.blockers.map((b) => b.id), ['product', 'asset']);
+  assert.deepEqual(report.blockers.map((b) => b.id), ['asset']);
   assert.ok(!config.bindings_still_missing.some((b) => b.includes('FONT_BINDINGS_MISSING')));
   // one font missing keeps the fonts from being bound (fonts are not marked BOUND on a partial set)
   const oneMissing = { ...config, bindings: { ...config.bindings, fonts: [...config.bindings.fonts, { ref: 'font://google-fonts/third-family' }] } };
