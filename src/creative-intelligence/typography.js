@@ -31,7 +31,7 @@ export function normalizeFontMetrics(input, field = 'font') {
   return deepFreeze({
     font_ref: ref(input.font_ref, `${field}.font_ref`),
     family: input.family,
-    generic: enumValue(input.generic ?? 'sans-serif', GENERIC, `${field}.generic`, E.FONT_INVALID),
+    generic: enumValue(input.generic, GENERIC, `${field}.generic`, E.FONT_INVALID),
     units_per_em: integer(input.units_per_em, `${field}.units_per_em`, { min: 100, max: 10000, code: E.FONT_INVALID }),
     ascent: number(input.ascent, `${field}.ascent`, { min: 0, max: 10000, code: E.FONT_INVALID }),
     descent: number(input.descent, `${field}.descent`, { min: 0, max: 10000, code: E.FONT_INVALID }),

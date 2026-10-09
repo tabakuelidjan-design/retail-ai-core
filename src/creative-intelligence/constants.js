@@ -74,6 +74,17 @@ export const CI_ERROR = Object.freeze({
   PROVIDER_INVALID: 'CI_PROVIDER_INVALID',
   PROVIDER_RANKING_FORBIDDEN: 'CI_PROVIDER_RANKING_FORBIDDEN',
   PROVIDER_DUPLICATE: 'CI_PROVIDER_DUPLICATE',
+  // resource resolution boundary
+  RESOURCE_INVALID: 'CI_RESOURCE_INVALID',
+  RESOURCE_REF_MISMATCH: 'CI_RESOURCE_REF_MISMATCH',
+  RESOURCE_CROSS_MERCHANT: 'CI_RESOURCE_CROSS_MERCHANT',
+  RESOURCE_KIND_MISMATCH: 'CI_RESOURCE_KIND_MISMATCH',
+  RESOURCE_NOT_ACTIVE: 'CI_RESOURCE_NOT_ACTIVE',
+  RESOURCE_RESOLVER_FAILED: 'CI_RESOURCE_RESOLVER_FAILED',
+  RESOURCE_METADATA_LOCATION: 'CI_RESOURCE_METADATA_LOCATION',
+  // marketing handoff
+  HANDOFF_INVALID: 'CI_HANDOFF_INVALID',
+  READINESS_INVALID: 'CI_READINESS_INVALID',
   // agents
   AGENT_UNKNOWN_ROLE: 'CI_AGENT_UNKNOWN_ROLE',
   AGENT_OUTPUT_INVALID: 'CI_AGENT_OUTPUT_INVALID',
@@ -282,3 +293,37 @@ export const VISUAL_PURPOSE = Object.freeze({
   BACKGROUND: 'BACKGROUND', AMBIENCE: 'AMBIENCE', RETOUCH: 'RETOUCH', REFERENCE: 'REFERENCE',
 });
 export const MAX_CANDIDATE_BUDGET = 5;
+
+// ---- resource resolution boundary
+// A reference is an OPAQUE identity. What it names (a product, a category, an asset, a claim, a font, a format) is told by an injected,
+// trusted resolver - never inferred from the shape of the string. The resolver's kind is authoritative.
+export const RESOURCE_KIND = Object.freeze({
+  PRODUCT: 'PRODUCT',
+  COLLECTION: 'COLLECTION',
+  CATEGORY: 'CATEGORY',
+  SUBJECT_OTHER: 'SUBJECT_OTHER',
+  ASSET: 'ASSET',
+  CLAIM: 'CLAIM',
+  FONT: 'FONT',
+  FORMAT: 'FORMAT',
+});
+// What a Marketing `subject_ref` may turn out to be once resolved.
+export const SUBJECT_KINDS = Object.freeze(['PRODUCT', 'COLLECTION', 'CATEGORY', 'SUBJECT_OTHER']);
+export const RESOURCE_STATUS = Object.freeze({
+  ACTIVE: 'ACTIVE', UNRESOLVED: 'UNRESOLVED', REVOKED: 'REVOKED', EXPIRED: 'EXPIRED', RESTRICTED: 'RESTRICTED',
+});
+// Platform-level resources (a font, a format definition) may belong to no merchant; everything else belongs to exactly one.
+export const PLATFORM_LEVEL_KINDS = Object.freeze(['FONT', 'FORMAT']);
+
+// ---- pre-C2 dependencies (C2 stays blocked until every one that is not DEFERRED has explicit evidence)
+export const PRE_C2_DEPENDENCY = Object.freeze({
+  RESOURCE_RESOLVER: 'RESOURCE_RESOLVER',
+  FORMAT_RESOLVER: 'FORMAT_RESOLVER',
+  BRAND_EXPRESSION_SYSTEM: 'BRAND_EXPRESSION_SYSTEM',
+  REAL_FONT_METRICS: 'REAL_FONT_METRICS',
+  COMPLEX_SCRIPT_SHAPING: 'COMPLEX_SCRIPT_SHAPING',
+  ARABIC_BIDI_RTL_VERIFICATION: 'ARABIC_BIDI_RTL_VERIFICATION',
+  DETERMINISTIC_RASTERIZER: 'DETERMINISTIC_RASTERIZER',
+  REAL_PNG_RENDER_PATH: 'REAL_PNG_RENDER_PATH',
+  CJK_LINE_BREAKING: 'CJK_LINE_BREAKING',
+});

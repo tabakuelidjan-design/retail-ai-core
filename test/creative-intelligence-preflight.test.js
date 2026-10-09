@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import * as CI from '../src/creative-intelligence/index.js';
 import {
   ASSET_LOGO, ASSET_PHOTO, ASSET_PRODUCT, BRIEF, CLAIM_PRICE, FONT, FONT_AR, FONT_AR_EXACT, IDS, LATER, NOW, assetDims, backgroundLayer, candidateFor, checkOf, clone, code,
-  demoDocument, demoLayers, documentParts, fonts, isDeepFrozen, outputContext, preflightContext, solved, textLayer,
+  demoDocument, demoLayers, documentParts, fonts, intakeInput, isDeepFrozen, outputContext, preflightContext, solved, textLayer,
 } from './creative-intelligence-fixtures.js';
 
 // `// N text` markers are rows of the coverage matrix (docs/architecture/creative-intelligence-v1.md).
@@ -20,7 +20,7 @@ function defect(edit, extra = {}) {
 const setLayer = (id, patch) => (layers) => layers.map((l) => (l.id === id ? { ...l, ...patch } : l));
 const run = (document, over) => CI.runCreativePreflight(document, preflightContext(over));
 const status = (report, name) => checkOf(report, name).status;
-const long = 'Une coque personnalisée avec vos plus belles photos de vacances en famille et entre amis';
+const long = 'Un objet personnalisé avec vos plus belles photos de vacances en famille et entre amis';
 
 // ------------------------------------------------------------------ preflight (166-190)
 
@@ -159,8 +159,8 @@ test('Preflight report: complete, ordered, never an optimistic default, no score
   // 186 a script the font does not cover fails
   assert.equal(status(run(arabic(FONT)), 'FONT_SCRIPT_UNSUPPORTED'), 'FAIL');
   // 187 a claim-bearing text that differs from the approved wording fails
-  assert.equal(status(run(base(), { approved_texts: { [CLAIM_PRICE]: CI.textDigest('25,00 €') } }), 'TEXT_CONTENT_CHANGED'), 'PASS');
-  assert.equal(status(run(base(), { approved_texts: { [CLAIM_PRICE]: CI.textDigest('24,90 €') } }), 'TEXT_CONTENT_CHANGED'), 'FAIL');
+  assert.equal(status(run(base(), { approved_texts: { [CLAIM_PRICE]: CI.textDigest('19,90 €') } }), 'TEXT_CONTENT_CHANGED'), 'PASS');
+  assert.equal(status(run(base(), { approved_texts: { [CLAIM_PRICE]: CI.textDigest('17,50 €') } }), 'TEXT_CONTENT_CHANGED'), 'FAIL');
   // 188 a violated constraint fails
   const violated = run(defect((l) => l, { constraints: [{ kind: 'ABOVE', subject: 'price', target: 'headline', value: null }] }));
   assert.equal(status(violated, 'CONSTRAINT_VIOLATION'), 'FAIL');
@@ -305,7 +305,7 @@ test('Boundaries: Creative Intelligence expresses an approved brief - it never p
   // 245 a raw URL can never become a canonical asset reference, in any contract
   const url = 'https://cdn.example.com/a.png';
   const attempts = [
-    () => CI.normalizeCreativeIntake({ merchant_id: IDS.merchant, brand_id: IDS.brand, brief_ref: BRIEF, deliverable_ref: 'd:1', brand_context_ref: 'b:1', product_refs: [], asset_refs: [url], claim_refs: [CLAIM_PRICE], output_context: outputContext(), evidence_refs: [], created_at: NOW }),
+    () => CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: [url] })),
     () => CI.buildDesignDocument(documentParts({ asset_refs: [url] })),
     () => CI.normalizeLayer({ ...demoLayers()[2], source_ref: url }),
     () => CI.normalizeLayer({ ...demoLayers()[1], asset_ref: url }),
@@ -366,9 +366,9 @@ test('Demo: one synthetic still, end to end, with no network and no model', () =
   assert.equal(selection.status, 'CANDIDATES_EXPOSED');
   assert.equal(selection.eligible.length, 1);
   // 254 the price in the SVG and in the document is exactly the approved wording
-  assert.ok(rendered.svg.includes('>25,00 €</tspan>'));
-  assert.equal(layout.document.layers.find((l) => l.id === 'price').content, '25,00 €');
-  assert.equal(layout.document.layers.find((l) => l.id === 'price').approved_digest, CI.textDigest('25,00 €'));
+  assert.ok(rendered.svg.includes('>19,90 €</tspan>'));
+  assert.equal(layout.document.layers.find((l) => l.id === 'price').content, '19,90 €');
+  assert.equal(layout.document.layers.find((l) => l.id === 'price').approved_digest, CI.textDigest('19,90 €'));
   // 255 two complete runs produce the same bytes and the same ids
   const again = run1();
   assert.equal(again.rendered.digest, rendered.digest);
@@ -379,11 +379,11 @@ test('Demo: one synthetic still, end to end, with no network and no model', () =
 
 // ------------------------------------------------------------------ coverage matrix (doc <-> tests)
 
-test('Coverage matrix: the doc maps every behaviour row 1-255 and every test it names exists', async () => {
+test('Coverage matrix: the doc maps every behaviour row (1-255 mandate, 256+ architect audit) and every test it names exists', async () => {
   const doc = await readFile(new URL('../docs/architecture/creative-intelligence-v1.md', import.meta.url), 'utf8');
   const matrix = doc.slice(doc.indexOf('<!-- coverage-matrix:start -->'), doc.indexOf('<!-- coverage-matrix:end -->'));
   const rows = [...matrix.matchAll(/^\| (\d+) \| (.+?) \| (.+?) \|$/gm)].map((m) => ({ n: Number(m[1]), ref: m[3] }));
-  assert.ok(rows.length >= 250, `at least 250 rows, found ${rows.length}`);
+  assert.ok(rows.length >= 312, `at least 312 rows, found ${rows.length}`);
   assert.deepEqual(rows.map((r) => r.n), Array.from({ length: rows.length }, (_, i) => i + 1));
   for (const { n, ref } of rows) {
     const [file, name] = ref.split(' › ');

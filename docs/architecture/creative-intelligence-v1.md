@@ -1,6 +1,6 @@
 # Creative Intelligence C1 — Foundation, DesignDocument, deterministic composer & preflight
 
-- **Status:** C1 FOUNDATION — IMPLEMENTED LOCALLY / UNDER AUDIT (not COMPLETE until audited, pushed and CI-green)
+- **Status:** C1 FOUNDATION — IMPLEMENTED LOCALLY / UNDER AUDIT (architect audit applied; not COMPLETE until pushed and CI-green)
 - **Branch:** `feature/creative-intelligence-c1-foundation` (from `feature/branding-marketing-creative-v1` @ `a0162e9`)
 - **Code:** `src/creative-intelligence/` · **Tests:** `test/creative-intelligence-*.test.js` · **CI:** `.github/workflows/creative-intelligence-v1.yml`
 
@@ -13,9 +13,95 @@ CREATIVE FIDELITY guards the product · BRAND GUARDIAN guards the brand · ACTIV
 The durable output of Creative Intelligence is **not an image**. It is a structured **DesignDocument** (a scene graph), plus a
 **CreativeCandidate** that points at it, plus provenance and a preflight report. A PNG / SVG is a **projection** of that state.
 
+## 0. Canonical documents audit (final architect audit)
+
+All nine canonical documents were re-read in full against C1: `NORDLA-CANONICAL-ARCHITECTURE.md`, `NORDLA-DECISION-REGISTER.md`,
+`NORDLA-DEFERRED.md`, `docs/principles/decision-principles.md`, `branding-v1-contract.md`, `marketing-v1-architecture.md`,
+`marketing-m3-create-contract.md`, `activation-channel-execution-v1.md`, `provider-provisioning-live-connections-v1.md`.
+
+| Decision | C1 |
+|---|---|
+| NDR-015 / NDR-014 / NDR-013 (Creative Intelligence separate from Marketing and Branding) | respected: Creative consumes a Marketing handoff by reference and writes nothing back |
+| NDR-006 (no opaque universal score) | respected: no score anywhere; per-check and per-dimension statuses (a test refuses any score key) |
+| NDR-007 (`NOT_MEASURABLE` is first-class) | respected: every gate has it; an unknown is never a pass |
+| NDR-008 / NDR-011 / NDR-009 (deterministic numbers, bounded agents, policy outside the model) | respected: agents are untrusted until normalized; they cannot publish, schedule, price or decide |
+| NDR-020 (HABB is configuration, not architecture) | respected: no merchant logic in the source (tested); fixtures are generic |
+| NDR-D01 (no dynamic routing yet) / NDR-P16 (no private media sent externally without a gate) | respected: the provider registry is data and a filter, never a router; `cloud_provider_allowed` is false for personal / unclassified / unreleased media |
+| NDR-P13 / NDR-P08 (routine compositing is Nordla-owned, least-cost engine) | respected: composition, layout, typography and render are deterministic Nordla code; no provider is integrated |
+| Branding: hard rules, reference conventions (`asset://`, `claim://`...), Guardian owns brand compliance | respected after a fix (below); Creative does not evaluate brand compliance and does not touch Brand Memory |
+| Marketing M3: the Brief carries no HOW; the handoff is `creative_brief` + creative brand interface | respected: the adapter reads references only |
+| Activation / Provisioning (`READY_FOR_POLICY` is not publication; media transport is ephemeral) | respected: Creative publishes nothing and a resolved payload is never persisted |
+
+**Finding recorded (not a design conflict).** `NORDLA-DEFERRED.md` L3-002 / NDR-D02 say Creative Intelligence is built "when the Marketing
+brief contract is stable **and a real HABB campaign is used as benchmark**", and rule 3 asks for an explicit implementation decision when the
+prerequisites are met. The Marketing brief contract is stable, `marketing-v1-architecture.md` names Creative Intelligence the next build
+target, and the C1 mandate is the architect's explicit decision to start; but C1 is validated on **synthetic** fixtures only, so the
+"real campaign benchmark" condition is **not met by C1**. It is carried forward as the exit condition of C2 (the first real HABB campaign
+is the benchmark), and a Decision Register entry recording the implementation decision remains the architect's to make: this audit does not
+edit the register.
+
+**Two defects found by the audit and fixed** (neither is a redesign): (1) the reference validator refused every `scheme://` reference,
+whereas Marketing and Branding identify resources as `asset://...`, `claim://...`, `category://...`, `format://...`; it now refuses only
+transport schemes (`http(s)`, `ftp(s)`, `sftp`, `ssh`, `file`, `data`, `blob`, `ws(s)`, `javascript`, `mailto`, `tel`, `s3`, `gs`, `gcs`,
+`drive`) and bare host paths; (2) the intake carried `product_refs`, but a real Marketing subject is `category://phone-cases`: the intake now
+carries untyped `subject_refs`.
+
+## 0.1 Real Marketing M3 to C1 intake
+
+`buildIntakeFromHandoff({ handoff, deliverable_ref, resolved_format, created_at })` (`m3-intake.js`) is a tiny pure adapter over plain data; it
+imports nothing from Marketing. It **copies references and pins**, reads no prose (`message_intent`, `cta_intent`, `brief_limitations` are
+never touched - a test makes reading them throw), copies no business truth (no objective, audience, channels or statement), invents no
+product identity, and preserves: `merchant_id`, `brand_id`, `brief_ref`, `deliverable_ref`, `subject_refs`, `source_asset_refs` (Brief and
+deliverable), `claim_refs`, mandatory refs (Brief and deliverable), prohibited refs, `requirement_refs`, policy / consent / promotion refs,
+`needed_by`, channel, placement, locale, `format_ref` and `content_kind`. The brand interface travels inside the handoff, so
+`brand_context_ref` is the `handoff_id`. The canvas, aspect ratio and zones come from the **resolved FORMAT** (an injected resolver's
+answer), never from the reference text. A `TEXT` / `VIDEO` deliverable is refused (`CONTENT_KIND_UNSUPPORTED`), not converted. The integration
+test (rows 256-278) builds the chain with the real Marketing and Branding builders (Finding, Push, Package, Authorization, Brand Context,
+CreativeBrief, CreativeHandoffPackage) and compares field by field; Marketing M3 is not modified. Not enforced yet (recommended, not built):
+a preflight check that a document uses no prohibited content and carries every mandatory content reference.
+
+## 0.2 Resource resolution boundary
+
+```text
+resolve(ref, tenant)  ->  { ref, kind, merchant_id, version?, status, metadata? }
+```
+
+`resource-resolver.js` defines only the **boundary and its checks** - no registry, no database, no network. Creative never infers what a
+reference names by reading the string (a test scans the source). The resolver's `kind` (`PRODUCT`, `COLLECTION`, `CATEGORY`,
+`SUBJECT_OTHER`, `ASSET`, `CLAIM`, `FONT`, `FORMAT`) is authoritative; a reference the resolver does not know is `UNRESOLVED` (no kind),
+never "probably a product"; a resource of another merchant is refused; only a font or a format may be platform-level; a URL / payload is not an
+identity (refused before the resolver is asked) and metadata cannot carry a location. `resolveIntakeResources` reports `RESOLVED` only if every
+reference is `ACTIVE` and of an expected kind; asset readiness is `NOT_MEASURABLE` without a resolution and `NOT_READY` for an unresolved,
+revoked, expired, restricted or wrongly-typed asset. **The Socle Resource / Evidence Resolver that implements this boundary is an explicit
+PRE-C2 dependency.**
+
+## 0.3 Canonical reference vs resolved payload
+
+A `DesignDocument` stores canonical references (`asset://...`) and never `data:`, `blob:`, `http(s):` or `file:` (refused in every reference
+position). A **trusted resolver** may hand the renderer an **ephemeral payload** (an inline image data URI) for one render; it appears in the
+SVG projection only, never in the document, the structure, the text runs, the candidate or any reference. With no resolver an image points at
+the symbolic `ref:<canonical ref>`.
+
+## 0.4 Brand expression system - PRE-C2 dependency
+
+C1 invents **no** brand expression: no colour literal, font family, style vocabulary, default canvas colour, default image fit, default
+font family or default recipe exists in the source (tests scan for them; the canvas colour, image fit and font generic family are
+required inputs; a layout recipe must be named by the caller). The recipes are neutral geometry primitives selected explicitly, not a
+house style. **Brand Memory V1.1 `expression_system`** (photography, product_presentation, composition, layout_principles, illustration,
+iconography, motion, locale overrides where required) is a PRE-C2 dependency; Branding is **not** modified by this audit. There is no
+fallback "AI style", no generic "premium" style, no hidden template default.
+
+## 0.5 Typography / rasterization - C2 is blocked until
+
+`assessCreativeC2Readiness()` lists them and answers `c2_allowed: false` until each has explicit evidence: **resource resolver, format
+resolver, brand expression system, real font metrics from real font files, real shaping for complex scripts, Arabic / bidi / RTL
+verification, a deterministic rasterizer, a real PNG render path**. CJK line breaking is documented as DEFERRED (not claimed, not blocking).
+The current typography is exact **only against declared metrics**; it is not production typography and `typography_production_ready` is
+always `false`. No PNG is ever faked.
+
 ## 1. What C1 builds (and what it does not)
 
-Built: creative intake contract · `CreativeOutputContext` · Asset Readiness · `ProductUnderstandingPackage` · `CreativeDirection` ·
+Built: creative intake contract (and the real M3 handoff adapter), resource resolution boundary, pre-C2 readiness, · `CreativeOutputContext` · Asset Readiness · `ProductUnderstandingPackage` · `CreativeDirection` ·
 `DesignDocument` V1 (+ layers, revisions, locks) · Layout Recipes V1 · Layout Constraint Engine V1 · Typography engine (measure, line
 break, fit) · deterministic SVG renderer · Preflight V1 (18 deterministic checks) · Creative Quality **contract** · `CreativeCandidate` V1
 · hard-gate selection V1 · Provider Capability Registry **contract** · six agent **interfaces** with fakes and a trust boundary.
@@ -145,7 +231,7 @@ with evidence.
 
 ## 10. Dependencies and coupling
 
-Imports from outside `src/creative-intelligence/` are limited to three pure shared helpers: `marketing/understand-validation.js`
+Imports from outside `src/creative-intelligence/` are limited to three pure shared helpers (the M3 adapter imports nothing from Marketing): `marketing/understand-validation.js`
 (`deepFreeze`, `deriveId`, `localeValue`), `marketing/m2-validation.js` (`canonical`) and the `CONTENT_KIND` constant of `branding/constants.js`
 (tested). No new npm dependency. No Marketing M1–M4, Branding, Creative Fidelity, Activation, Provider Connections or Finance file is modified.
 
@@ -157,7 +243,7 @@ C5: Creative Learning from M4 evidence (OBSERVED / ATTRIBUTED / INCREMENTAL).
 
 ## 12. Coverage matrix
 
-Every row is a behaviour the mandate asks to prove; each carries a `// N` marker in the named test, and the test
+Every row is a behaviour the mandate (rows 1-255) or the final architect audit (rows 256 and up) asks to prove; each carries a `// N` marker in the named test, and the test
 `Coverage matrix: ...` verifies that all rows exist, are contiguous and point at a real test.
 
 <!-- coverage-matrix:start -->
@@ -169,10 +255,10 @@ Every row is a behaviour the mandate asks to prove; each carries a `// N` marker
 | 4 | a provider prompt / model key is refused | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
 | 5 | a URL can never be an asset reference | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
 | 6 | identifiers are validated (merchant UUID, brief reference) | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
-| 7 | at least one asset reference is required | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
+| 7 | an intake may carry no source asset (the readiness report then says NO_ASSETS) | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
 | 8 | a free-text claim is not a claim reference | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
 | 9 | the clock is explicit and carries an offset | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
-| 10 | an intake needs a product reference or an approved claim reference | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
+| 10 | an intake needs a subject reference or an approved claim reference, and no content can be both mandatory and prohibited | creative-intelligence-contracts.test.js › Creative intake: references only, closed schema, explicit clock, deep-frozen and deterministic |
 | 11 | a valid output context is normalized | creative-intelligence-contracts.test.js › Output context: canvas, aspect ratio, zones, locale / direction and unsupported kinds |
 | 12 | the aspect ratio must follow from the canvas | creative-intelligence-contracts.test.js › Output context: canvas, aspect ratio, zones, locale / direction and unsupported kinds |
 | 13 | VIDEO and TEXT are not expressible by C1 | creative-intelligence-contracts.test.js › Output context: canvas, aspect ratio, zones, locale / direction and unsupported kinds |
@@ -318,7 +404,7 @@ Every row is a behaviour the mandate asks to prove; each carries a `// N` marker
 | 153 | XML special characters in a text are escaped, never interpreted | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
 | 154 | the output has no script, no foreignObject and no event handler | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
 | 155 | an asset resolver cannot point an image at a remote or script location | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
-| 156 | by default an image points at the symbolic asset reference | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
+| 156 | by default an image points at the symbolic canonical reference (the renderer never parses it) | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
 | 157 | a hidden layer - and the members of a hidden group - are not rendered | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
 | 158 | layers are drawn in z order | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
 | 159 | numbers are formatted stably (no -0, at most three decimals) | creative-intelligence-layout.test.js › Renderer: a pure, deterministic projection of the document |
@@ -418,4 +504,61 @@ Every row is a behaviour the mandate asks to prove; each carries a `// N` marker
 | 253 | the selection exposes the candidate without ranking it | creative-intelligence-preflight.test.js › Demo: one synthetic still, end to end, with no network and no model |
 | 254 | the price in the SVG and in the document is exactly the approved wording | creative-intelligence-preflight.test.js › Demo: one synthetic still, end to end, with no network and no model |
 | 255 | two complete runs produce the same bytes and the same ids | creative-intelligence-preflight.test.js › Demo: one synthetic still, end to end, with no network and no model |
+| 256 | a real CreativeHandoffPackage (real Marketing and Branding builders) becomes a valid, deep-frozen C1 intake | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 257 | merchant and brand are preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 258 | the Brief, the deliverable and the brand interface (through the handoff) are pinned by reference | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 259 | subject_refs are preserved exactly and stay untyped: a category is not turned into a product | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 260 | source assets: the Brief's and the deliverable's, preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 261 | claims are preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 262 | the channel is the deliverable's | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 263 | the placement is the deliverable's | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 264 | the locale is the deliverable's (the direction is the platform rule for that language, not a choice) | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 265 | the format reference is preserved; the canvas comes from the RESOLVED format, never from the reference text | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 266 | mandatory content: the Brief's and the deliverable's | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 267 | prohibited content is preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 268 | the deliverable's requirement refs are preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 269 | policy, consent and promotion refs are preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 270 | the deadline is preserved | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 271 | no business truth of Marketing is copied into Creative | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 272 | the prose of the Brief is never read (accessing it would throw) | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 273 | the Marketing objects are not modified | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 274 | a TEXT deliverable is refused, never converted into an image | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 275 | a resolved format of another reference, kind, status or merchant is refused | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 276 | a handoff of another scope, an expired one or an unknown deliverable is refused | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 277 | the same inputs give the same intake | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 278 | the adapter imports nothing from Marketing: it receives plain data | creative-intelligence-m3-resolver.test.js › Real Marketing M3 handoff -> C1 intake: every fact is preserved, nothing is copied, invented or parsed |
+| 279 | a resolution has exactly: ref, kind, merchant_id, version, status, metadata | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 280 | an unknown reference cannot become a PRODUCT by inference - however product-like it looks | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 281 | the resolver's kind is authoritative: a product-looking reference that is an ASSET is an ASSET, and vice versa | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 282 | a resource of another merchant is refused; a merchant-less resource is only allowed for platform-level kinds | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 283 | a raw URL is not a resource identity: refused before the resolver is even asked; metadata cannot carry a location either | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 284 | an unresolved resource can never silently become READY | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 285 | a failing resolver is a stable refusal and its message is not echoed | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 286 | a resolver that answers for another reference is refused | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 287 | closed vocabularies: kind and status are enums | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 288 | the resolver receives only the merchant (frozen) and the boundary never touches the network | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 289 | no Creative Intelligence module reads a reference to decide what it names (only the location deny-list of the validator does) | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 290 | a subject, an asset and a claim always belong to a merchant; only a font and a format may be platform-level | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 291 | an intake whose every reference resolves ACTIVE and of an expected kind is RESOLVED | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 292 | a reference resolved as the wrong kind, or not at all, leaves the intake UNRESOLVED (reported, never assumed) | creative-intelligence-m3-resolver.test.js › Resource resolver boundary: the resolver\'s kind is authoritative, nothing is inferred from a string |
+| 293 | a DesignDocument stores canonical references in the platform convention | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 294 | a payload or a location is refused in every canonical position | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 295 | the ephemeral payload lives in the SVG projection only: the document, the structure and the text runs never hold it | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 296 | the candidate carries a digest reference of the render, never the payload; that reference is itself a valid opaque ref | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 297 | a resolver cannot point an image at a remote location instead of a payload | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 298 | the same document renders deterministically with the same payload, and the document id never depends on it | creative-intelligence-m3-resolver.test.js › Canonical ref is not a resolved payload: a trusted resolver may feed one render, never the document |
+| 299 | no colour literal anywhere in the C1 source (no default palette, no "premium" colour) | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 300 | no font family and no style vocabulary table anywhere in the C1 source | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 301 | the canvas colour is required, never defaulted | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 302 | an image fit and a font's generic family are required, never defaulted | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 303 | no recipe is chosen by default: the caller (the creative direction) names it | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 304 | the expression system is a declared PRE-C2 dependency covering every domain the architect listed | creative-intelligence-m3-resolver.test.js › No invented style: with no brand expression system, Creative Intelligence carries no style default |
+| 305 | with no fact, C2 is not allowed and every blocking dependency is open | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 306 | the typography / rasterization blockers the architect named are all present and blocking | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 307 | one closed dependency does not unblock C2 | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 308 | C2 is allowed only when every blocking dependency has evidence - and typography is never declared production-ready by C1 | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 309 | evidence is an opaque reference (never a URL) and an unknown dependency is refused | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 310 | CJK line breaking is DEFERRED: documented, never claimed, and it does not block C2 | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 311 | no PNG is faked meanwhile: without an injected rasterizer the answer is "unsupported" | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
+| 312 | the resolver and the format registry are named as explicit pre-C2 dependencies, with the resolve() contract spelled out | creative-intelligence-m3-resolver.test.js › Pre-C2 readiness: C2 stays blocked until every blocking dependency has explicit evidence |
 <!-- coverage-matrix:end -->

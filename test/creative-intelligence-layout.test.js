@@ -108,7 +108,7 @@ test('Layout recipes are declarative; the solver places layers deterministically
   for (const t of out.document.layers.filter((l) => l.type === 'TEXT')) assert.ok(t.font_size >= t.min_font_size, t.id);
   // 139 a text that is too big is shrunk to fit - and only down to its minimum
   const crowded = CI.reviseDesignDocument(demoDocument(), {
-    layers: clone(demoDocument().layers).map((l) => (l.id === 'headline' ? { ...l, content: 'Une coque personnalisée avec vos plus belles photos', font_size: 120, min_font_size: 40, max_lines: 3 } : l)),
+    layers: clone(demoDocument().layers).map((l) => (l.id === 'headline' ? { ...l, content: 'Un objet personnalisé avec vos plus belles photos', font_size: 120, min_font_size: 40, max_lines: 3 } : l)),
     created_at: LATER,
   });
   // the digest of a NON_CLAIM text is null, so changing its content is legitimate
@@ -117,7 +117,7 @@ test('Layout recipes are declarative; the solver places layers deterministically
   assert.ok(headline.font_size < 120 && headline.font_size >= 40);
   // 140 a text that cannot fit even at its minimum is reported with its overflow policy and stays at the minimum
   const impossible = CI.reviseDesignDocument(demoDocument(), {
-    layers: clone(demoDocument().layers).map((l) => (l.id === 'headline' ? { ...l, content: 'Une coque personnalisée avec vos plus belles photos de vacances en famille', font_size: 140, min_font_size: 120, max_lines: 1, overflow_policy: 'REWRITE_REQUIRED' } : l)),
+    layers: clone(demoDocument().layers).map((l) => (l.id === 'headline' ? { ...l, content: 'Un objet personnalisé avec vos plus belles photos de vacances en famille', font_size: 140, min_font_size: 120, max_lines: 1, overflow_policy: 'REWRITE_REQUIRED' } : l)),
     created_at: LATER,
   });
   const failed = CI.solveLayout({ document: impossible, recipe_id: 'PRODUCT_HERO', fonts: fonts(), assets: assetDims(), created_at: LATER });
@@ -125,7 +125,7 @@ test('Layout recipes are declarative; the solver places layers deterministically
   const v = failed.violations.find((x) => x.code === 'TEXT_DOES_NOT_FIT');
   assert.equal(v.overflow_policy, 'REWRITE_REQUIRED');
   assert.equal(failed.document.layers.find((l) => l.id === 'headline').font_size, 120);
-  assert.equal(failed.document.layers.find((l) => l.id === 'headline').content, 'Une coque personnalisée avec vos plus belles photos de vacances en famille');
+  assert.equal(failed.document.layers.find((l) => l.id === 'headline').content, 'Un objet personnalisé avec vos plus belles photos de vacances en famille');
   // 141 a locked layer is never moved
   const lockedLayers = clone(demoDocument().layers).map((l) => (l.id === 'logo' ? { ...l, locked: true } : l));
   const lockedDoc = CI.reviseDesignDocument(demoDocument(), { layers: lockedLayers, created_at: LATER });
@@ -185,8 +185,8 @@ test('Renderer: a pure, deterministic projection of the document', () => {
   assert.equal(render().digest, rendered.digest);
   assert.match(rendered.digest, /^[0-9a-f]{64}$/);
   // 152 critical text is rendered exactly as written (the price included)
-  assert.ok(rendered.svg.includes('>25,00 €</tspan>'));
-  assert.deepEqual(rendered.text_runs.find((t) => t.layer_id === 'price').lines, ['25,00 €']);
+  assert.ok(rendered.svg.includes('>19,90 €</tspan>'));
+  assert.deepEqual(rendered.text_runs.find((t) => t.layer_id === 'price').lines, ['19,90 €']);
   // 153 XML special characters in a text are escaped, never interpreted
   const risky = CI.buildDesignDocument(documentParts({ layers: [backgroundLayer(), textLayer('h', 'HEADLINE', 'Fish & <Chips> "now"', { geometry: { x: 10, y: 10, width: 900, height: 200, rotation_deg: 0 }, font_size: 40 })] }));
   const riskySvg = render(risky).svg;
@@ -199,8 +199,8 @@ test('Renderer: a pure, deterministic projection of the document', () => {
     assert.equal(code(() => render(undefined, { assetResolver: () => href })), CI.CI_ERROR.RENDER_INPUT_INVALID, href);
   }
   assert.ok(render(undefined, { assetResolver: () => 'data:image/png;base64,iVBORw0KGgo=' }).svg.includes('data:image/png;base64,iVBORw0KGgo='));
-  // 156 by default an image points at the symbolic asset reference
-  assert.match(rendered.svg, /href="asset:demo\/product-cutout"/);
+  // 156 by default an image points at the symbolic canonical reference (the renderer never parses it)
+  assert.match(rendered.svg, /href="ref:asset:\/\/demo\/product-cutout"/);
   // 157 a hidden layer - and the members of a hidden group - are not rendered
   const hid = clone(solved().document.layers).map((l) => (l.id === 'cta' ? { ...l, visibility: 'HIDDEN' } : l));
   assert.doesNotMatch(render(CI.reviseDesignDocument(solved().document, { layers: hid, created_at: LATER })).svg, /data-layer="cta"/);

@@ -106,22 +106,22 @@ test('DesignDocument: a closed, content-addressed, versioned scene graph', () =>
 // ------------------------------------------------------------------ text layers (81-100)
 
 const withText = (text) => { const l = demoLayers(); l[3] = text; return () => CI.buildDesignDocument(documentParts({ layers: l })); };
-const textRaw = (over = {}) => ({ ...textLayer('headline', 'HEADLINE', 'Votre coque, votre style'), ...over });
+const textRaw = (over = {}) => ({ ...textLayer('headline', 'HEADLINE', 'Votre objet, votre style'), ...over });
 
 test('Text layers: the characters are the approved characters; fact-bearing text always has a claim basis', () => {
   // 81 the content is preserved exactly (NFC-normalized, nothing trimmed or altered)
   const doc = demoDocument();
-  assert.equal(doc.layers.find((l) => l.id === 'headline').content, 'Votre coque, votre style');
+  assert.equal(doc.layers.find((l) => l.id === 'headline').content, 'Votre objet, votre style');
   assert.equal(CI.normalizeLayer(textRaw({ content: 'Café' })).content, 'Café');
   // 82 claim-bearing text needs a claim reference
   assert.equal(code(withText(textRaw({ text_kind: 'CLAIM_BEARING', claim_ref: null }))), CI.CI_ERROR.CLAIM_BASIS_MISSING);
   // 83 claim-bearing text needs the digest of the approved wording
   assert.equal(code(withText(textRaw({ text_role: 'PRICE', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_PRICE, approved_digest: null }))), CI.CI_ERROR.TEXT_DIGEST_MISMATCH);
   // 84 a price that changed after approval is refused
-  const price = textLayer('price', 'PRICE', '25,00 €', { claim_ref: CLAIM_PRICE });
+  const price = textLayer('price', 'PRICE', '19,90 €', { claim_ref: CLAIM_PRICE });
   assert.ok(CI.normalizeLayer(price));
   assert.equal(code(() => CI.normalizeLayer({ ...price, content: '22,00 €' })), CI.CI_ERROR.TEXT_DIGEST_MISMATCH);
-  assert.equal(code(() => CI.normalizeLayer({ ...price, content: '25,00 € ' })), CI.CI_ERROR.TEXT_LAYER_INVALID);
+  assert.equal(code(() => CI.normalizeLayer({ ...price, content: '19,90 € ' })), CI.CI_ERROR.TEXT_LAYER_INVALID);
   // 85 non-claim text cannot carry a claim reference or a digest
   assert.equal(code(() => CI.normalizeLayer(textRaw({ claim_ref: CLAIM_PRICE }))), CI.CI_ERROR.TEXT_LAYER_INVALID);
   assert.equal(code(() => CI.normalizeLayer(textRaw({ approved_digest: 'a'.repeat(64) }))), CI.CI_ERROR.TEXT_LAYER_INVALID);

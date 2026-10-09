@@ -34,16 +34,16 @@ export function rejectKeysDeep(value, forbidden, code, field, path = '') {
 }
 
 const REF = /^[A-Za-z0-9][A-Za-z0-9:_./#-]*$/;
-const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
-const BARE_SCHEME = /^(https?|ftp|ftps|file|data|blob|ws|wss|javascript|mailto):/i;
+// Resource identity uses the platform convention `kind-ish://name` (asset://, claim://, format://, category://...). Only TRANSPORT schemes -
+// a location, a payload, a script - are refused. Nothing here ever reads a reference to decide what KIND of thing it names.
+const LOCATION_SCHEME = /^(https?|ftps?|sftp|ssh|file|data|blob|wss?|javascript|mailto|tel|s3|gs|gcs|drive):/i;
 const HOST_PATH = /^(www\.|[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\/)/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 const TOKEN = /^[A-Z][A-Z0-9_]*$/;
 
 /** An opaque, durable reference. A URL, a host/path, a data/blob/file location or a query string can never be one. */
 export function ref(value, field, { max = 300 } = {}) {
-  if (typeof value !== 'string' || !value.trim() || value.length > max || !REF.test(value) || SCHEME.test(value)
-    || BARE_SCHEME.test(value) || HOST_PATH.test(value)) {
+  if (typeof value !== 'string' || !value.trim() || value.length > max || !REF.test(value) || LOCATION_SCHEME.test(value) || HOST_PATH.test(value)) {
     fail(E.INVALID_REFERENCE, `${field} must be an opaque reference (no URL, no host, no whitespace, no query)`, { field });
   }
   return value;

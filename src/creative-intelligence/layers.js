@@ -220,7 +220,7 @@ export function normalizeLayer(input, field = 'layer') {
       break;
     case LAYER_TYPE.IMAGE:
       if (!base.source_ref) fail(E.LAYER_INVALID, `${field}.source_ref is required for an image`, { field });
-      specific = { fit: enumValue(input.fit ?? IMAGE_FIT.COVER, IMAGE_FIT, `${field}.fit`, E.LAYER_INVALID) };
+      specific = { fit: enumValue(input.fit, IMAGE_FIT, `${field}.fit`, E.LAYER_INVALID) };
       break;
     case LAYER_TYPE.LOGO:
       if (!base.source_ref) fail(E.LAYER_INVALID, `${field}.source_ref is required for a logo`, { field });

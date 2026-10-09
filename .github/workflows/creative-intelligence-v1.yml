@@ -1,6 +1,6 @@
 name: Creative Intelligence V1
 
-# C1 foundation: DesignDocument, deterministic layout / typography / SVG renderer, preflight, hard-gate selection and the contracts of the
+# C1 foundation (and its real Marketing M3 integration test, which builds the Marketing / Branding chain): DesignDocument, deterministic layout / typography / SVG renderer, preflight, hard-gate selection and the contracts of the
 # agents and of the provider registry. It consumes only shared pure validators of Marketing and the Branding content-kind constant, so the
 # focused suite runs first (fast diagnosis), then Branding + Creative Fidelity + Marketing + Creative Intelligence together, then the whole
 # suite for cross-domain non-regression. No network, no model, no provider credential: every test is deterministic.
@@ -11,10 +11,11 @@ on:
       - 'src/creative-intelligence/**'
       - 'test/creative-intelligence*.test.js'
       - 'test/creative-intelligence-fixtures.js'
+      - 'test/creative-intelligence-m3-world.js'
       - 'docs/architecture/creative-intelligence-v1.md'
-      - 'src/marketing/understand-validation.js'
-      - 'src/marketing/m2-validation.js'
-      - 'src/branding/constants.js'
+      - 'src/marketing/**'
+      - 'src/branding/**'
+      - 'src/creative-fidelity/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/creative-intelligence-v1.yml'
@@ -23,10 +24,11 @@ on:
       - 'src/creative-intelligence/**'
       - 'test/creative-intelligence*.test.js'
       - 'test/creative-intelligence-fixtures.js'
+      - 'test/creative-intelligence-m3-world.js'
       - 'docs/architecture/creative-intelligence-v1.md'
-      - 'src/marketing/understand-validation.js'
-      - 'src/marketing/m2-validation.js'
-      - 'src/branding/constants.js'
+      - 'src/marketing/**'
+      - 'src/branding/**'
+      - 'src/creative-fidelity/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/creative-intelligence-v1.yml'

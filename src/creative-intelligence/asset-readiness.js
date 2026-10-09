@@ -1,9 +1,11 @@
 // C1 - Asset readiness. METADATA / REFERENCE readiness only: no pixel is read, nothing is segmented, nothing is sent to a provider.
 // Aggregation (stated, not implied): NOT_READY > NOT_MEASURABLE > PARTIAL > READY. An unknown is never reported as ready.
+// An asset reference is only an identity: until a trusted resolver has answered ACTIVE / ASSET for it, it cannot be READY.
 
 import {
-  ASSET_KIND, CI_ERROR as E, CI_VERSION, PRIVACY_CLASS, PRIVACY_ORDER, READINESS, RIGHTS_CLASS,
+  ASSET_KIND, CI_ERROR as E, CI_VERSION, PRIVACY_CLASS, PRIVACY_ORDER, READINESS, RESOURCE_KIND, RESOURCE_STATUS, RIGHTS_CLASS,
 } from './constants.js';
+import { normalizeResourceResolution } from './resource-resolver.js';
 import {
   bool, closedObject, deepFreeze, deriveId, enumValue, fail, integer, iso, ref, text, uuid,
 } from './validation.js';
@@ -18,7 +20,7 @@ const worst = (statuses) => statuses.reduce((a, b) => (rank[b] > rank[a] ? b : a
 
 function check(name, status, reason) { return { check: name, status, reason_code: reason }; }
 
-function assessAsset(input, target, i) {
+function assessAsset(input, target, i, resolution) {
   closedObject(input, ASSET_KEYS, `assets[${i}]`, E.ASSET_REPORT_INVALID);
   const kind = enumValue(input.kind, ASSET_KIND, `assets[${i}].kind`);
   const width = input.width_px == null ? null : integer(input.width_px, `assets[${i}].width_px`, { min: 1, max: 100000 });
@@ -30,6 +32,11 @@ function assessAsset(input, target, i) {
   const released = input.released == null ? null : bool(input.released, `assets[${i}].released`);
 
   const checks = [];
+  // the reference must have been resolved - by a trusted resolver, as an ASSET, and be ACTIVE - before anything else counts
+  if (!resolution) checks.push(check('RESOURCE', READINESS.NOT_MEASURABLE, 'RESOURCE_NOT_RESOLVED'));
+  else if (resolution.status !== RESOURCE_STATUS.ACTIVE) checks.push(check('RESOURCE', READINESS.NOT_READY, `RESOURCE_${resolution.status}`));
+  else if (resolution.kind !== RESOURCE_KIND.ASSET) checks.push(check('RESOURCE', READINESS.NOT_READY, 'RESOURCE_KIND_MISMATCH'));
+  else checks.push(check('RESOURCE', READINESS.READY, 'RESOURCE_ACTIVE_ASSET'));
   if (width == null || height == null) checks.push(check('RESOLUTION', READINESS.NOT_MEASURABLE, 'DIMENSIONS_UNKNOWN'));
   else if (!target) checks.push(check('RESOLUTION', READINESS.NOT_MEASURABLE, 'NO_TARGET_SIZE'));
   else {
@@ -61,10 +68,20 @@ function assessAsset(input, target, i) {
 /**
  * Builds the AssetReadinessReport for the assets of a run against the canvas it must fill (`target` = {width,height} or null).
  * `assets[]` carries metadata only; the Product & Asset Analyst produces it, a stored report is never an authority.
+ * `resolutions[]` are what the trusted resolver answered for those references (see resource-resolver.js); without one an asset is
+ * NOT_MEASURABLE, never READY.
  */
-export function buildAssetReadinessReport({ merchant_id, brand_id, assets, target = null, created_at } = {}) {
+export function buildAssetReadinessReport({
+  merchant_id, brand_id, assets, resolutions = null, target = null, created_at,
+} = {}) {
   if (!Array.isArray(assets) || assets.length > 100) fail(E.ASSET_REPORT_INVALID, 'assets must be an array of at most 100 entries', { field: 'assets' });
-  const items = assets.map((a, i) => assessAsset(a, target, i)).sort((a, b) => (a.asset_ref < b.asset_ref ? -1 : 1));
+  const tenant = { merchantId: uuid(merchant_id, 'merchant_id') };
+  const resolved = new Map();
+  for (const r of resolutions ?? []) {
+    const n = normalizeResourceResolution(r, { ref: r?.ref, tenant });
+    resolved.set(n.ref, n);
+  }
+  const items = assets.map((a, i) => assessAsset(a, target, i, resolved.get(a?.asset_ref))).sort((a, b) => (a.asset_ref < b.asset_ref ? -1 : 1));
   if (new Set(items.map((i) => i.asset_ref)).size !== items.length) fail(E.ASSET_REPORT_INVALID, 'the same asset_ref appears twice', { field: 'assets' });
   const status = items.length === 0 ? READINESS.NOT_READY : worst(items.map((i) => i.status));
   const body = {

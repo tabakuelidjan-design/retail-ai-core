@@ -63,7 +63,7 @@ const NORMALIZERS = {
     const understanding = normalizeProductUnderstanding(raw.product_understanding);
     if (ctx.merchant_id && (understanding.merchant_id !== ctx.merchant_id || understanding.brand_id !== ctx.brand_id)) fail(E.AGENT_OUTPUT_INVALID, 'the analyst answered for another merchant or brand', { field: 'analyst' });
     const readiness = buildAssetReadinessReport({
-      merchant_id: understanding.merchant_id, brand_id: understanding.brand_id, assets: raw.asset_observations, target: ctx.target ?? null, created_at: understanding.created_at,
+      merchant_id: understanding.merchant_id, brand_id: understanding.brand_id, assets: raw.asset_observations, resolutions: ctx.resolutions ?? null, target: ctx.target ?? null, created_at: understanding.created_at,
     });
     return deepFreeze({ product_understanding: understanding, asset_readiness: readiness });
   },

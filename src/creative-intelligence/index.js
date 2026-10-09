@@ -12,6 +12,9 @@ export {
   canonical, deriveId, deepFreeze, textDigest, sha256,
 } from './validation.js';
 export { normalizeCreativeIntake } from './intake.js';
+export { buildIntakeFromHandoff } from './m3-intake.js';
+export { createResourceBoundary, normalizeResourceResolution, resolveIntakeResources } from './resource-resolver.js';
+export { assessCreativeC2Readiness, PRE_C2_DEPENDENCIES } from './readiness.js';
 export { normalizeOutputContext, normalizeCanvas, reducedAspectRatio, directionForLocale } from './output-context.js';
 export {
   buildAssetReadinessReport, normalizeReuseLookupRequest, normalizeReuseLookupResult, MIN_USABLE_RATIO,

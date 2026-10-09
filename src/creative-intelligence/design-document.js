@@ -37,7 +37,7 @@ function provenance(input) {
 function canvasOf(input) {
   closedObject(input, ['width', 'height', 'background_color'], 'document.canvas', E.CANVAS_INVALID);
   const { width, height } = normalizeCanvas({ width: input.width, height: input.height }, 'document.canvas');
-  return { width, height, background_color: hexColor(input.background_color ?? '#FFFFFF', 'document.canvas.background_color') };
+  return { width, height, background_color: hexColor(input.background_color, 'document.canvas.background_color') };
 }
 
 /**

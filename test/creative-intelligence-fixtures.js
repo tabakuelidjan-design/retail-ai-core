@@ -11,12 +11,12 @@ export const NOW = '2026-10-10T09:00:00.000Z';
 export const LATER = '2026-10-10T10:00:00.000Z';
 export const BRIEF = 'brief:demo-001';
 export const DIRECTION_REF = 'direction:demo-a';
-export const PRODUCT = 'product:demo-case';
-export const ASSET_PRODUCT = 'asset:demo/product-cutout';
-export const ASSET_LOGO = 'asset:demo/logo';
-export const ASSET_PHOTO = 'asset:demo/photo';
-export const CLAIM_PRICE = 'claim:demo-price';
-export const CLAIM_OTHER = 'claim:demo-other';
+export const PRODUCT = 'product://demo-item';
+export const ASSET_PRODUCT = 'asset://demo/product-cutout';
+export const ASSET_LOGO = 'asset://demo/logo';
+export const ASSET_PHOTO = 'asset://demo/photo';
+export const CLAIM_PRICE = 'claim://demo-price';
+export const CLAIM_OTHER = 'claim://demo-other';
 export const FONT = 'font:synthetic-sans';
 export const FONT_AR = 'font:synthetic-arabic';
 export const FONT_AR_EXACT = 'font:synthetic-arabic-exact';
@@ -52,6 +52,8 @@ export const assetDims = () => ({
 export const outputContext = (over = {}) => ({
   content_kind: 'IMAGE',
   channel: 'SOCIAL_FEED',
+  placement: 'FEED_POST',
+  format_ref: 'format://demo/feed-4x5',
   canvas: { width: 1080, height: 1350 },
   aspect_ratio: '4:5',
   physical_or_digital: 'DIGITAL',
@@ -162,9 +164,9 @@ export const demoLayers = () => [
   backgroundLayer(),
   productLayer(),
   logoLayer(),
-  textLayer('headline', 'HEADLINE', 'Votre coque, votre style', { font_size: 76, min_font_size: 44, z_index: 20 }),
+  textLayer('headline', 'HEADLINE', 'Votre objet, votre style', { font_size: 76, min_font_size: 44, z_index: 20 }),
   textLayer('subheadline', 'SUBHEADLINE', 'Personnalisée avec vos photos', { font_size: 40, min_font_size: 28, z_index: 21 }),
-  textLayer('price', 'PRICE', '25,00 €', { claim_ref: CLAIM_PRICE, font_size: 64, min_font_size: 36, z_index: 22, max_lines: 1 }),
+  textLayer('price', 'PRICE', '19,90 €', { claim_ref: CLAIM_PRICE, font_size: 64, min_font_size: 36, z_index: 22, max_lines: 1 }),
   textLayer('cta', 'CTA', 'Découvrir', { font_size: 44, min_font_size: 28, z_index: 23, max_lines: 1 }),
 ];
 
@@ -216,3 +218,28 @@ export const acode = async (promise) => { try { await promise; } catch (error) {
 export const clone = (v) => JSON.parse(JSON.stringify(v));
 export const isDeepFrozen = (v) => v == null || typeof v !== 'object' || (Object.isFrozen(v) && Object.values(v).every(isDeepFrozen));
 export const checkOf = (report, name) => report.checks.find((c) => c.code === name);
+
+export const resolutionFor = (reference, over = {}) => ({
+  ref: reference, kind: 'ASSET', merchant_id: IDS.merchant, version: 1, status: 'ACTIVE', metadata: null, ...over,
+});
+export const intakeInput = (over = {}) => ({
+  merchant_id: IDS.merchant,
+  brand_id: IDS.brand,
+  brief_ref: BRIEF,
+  deliverable_ref: 'deliverable://demo-1',
+  brand_context_ref: 'handoff://demo-1',
+  subject_refs: [PRODUCT],
+  source_asset_refs: [ASSET_PRODUCT, ASSET_LOGO],
+  claim_refs: [CLAIM_PRICE],
+  mandatory_content_refs: [],
+  prohibited_content_refs: [],
+  requirement_refs: [],
+  policy_requirement_refs: [],
+  consent_requirement_refs: [],
+  promotion_rule_refs: [],
+  needed_by: LATER,
+  output_context: outputContext(),
+  evidence_refs: ['evidence://brief-1'],
+  created_at: NOW,
+  ...over,
+});

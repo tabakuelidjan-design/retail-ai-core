@@ -23,10 +23,10 @@ const num = (n) => {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 const xmlId = (i, id) => `l${i}-${id.replace(/[^A-Za-z0-9_-]/g, '_')}`;
 // An <image> may only point at an inline raster / svg data URI or at a symbolic asset reference. Never http(s), file or script.
-const SAFE_HREF = /^(data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+|asset:[A-Za-z0-9:_./#-]+)$/;
+const SAFE_HREF = /^(data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+|ref:[A-Za-z0-9:_./#-]+)$/;
 
 function href(resolver, assetRef) {
-  const resolved = resolver ? resolver(assetRef) : (assetRef.startsWith('asset:') ? assetRef : `asset:${assetRef}`);
+  const resolved = resolver ? resolver(assetRef) : `ref:${assetRef}`;
   const value = typeof resolved === 'string' ? resolved : resolved?.href;
   if (typeof value !== 'string' || !SAFE_HREF.test(value)) fail(E.RENDER_INPUT_INVALID, 'an asset resolver returned a location that is not an inline image or a symbolic reference', { field: 'assetResolver' });
   return value;
@@ -47,8 +47,11 @@ function effectAttrs(layer, defs, fid) {
 }
 
 /**
- * Renders a DesignDocument to SVG. `fonts` is the explicit font registry; `assetResolver(asset_ref)` returns an inline image data URI or
- * a symbolic `asset:<ref>` (the default). Returns { svg, digest, structure, text_runs }.
+ * Renders a DesignDocument to SVG. `fonts` is the explicit font registry. CANONICAL REF != RESOLVED PAYLOAD: the document holds only
+ * opaque refs; `assetResolver(asset_ref)` is a TRUSTED, injected function that may hand the renderer an EPHEMERAL payload (an inline
+ * image data URI) for this one render. That payload ends up in the SVG projection only: it is never written back into the document,
+ * the candidate or any reference. Without a resolver an image points at the symbolic `ref:<canonical ref>`.
+ * Returns { svg, digest, structure, text_runs }.
  */
 export function renderDesignDocument({ document, fonts, assetResolver = null } = {}) {
   const doc = normalizeDesignDocument(document);

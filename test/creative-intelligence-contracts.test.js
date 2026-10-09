@@ -3,26 +3,11 @@ import assert from 'node:assert/strict';
 
 import * as CI from '../src/creative-intelligence/index.js';
 import {
-  ASSET_LOGO, ASSET_PHOTO, ASSET_PRODUCT, BRIEF, CLAIM_OTHER, CLAIM_PRICE, IDS, NOW, PRODUCT, acode, clone, code, isDeepFrozen, outputContext,
+  ASSET_LOGO, ASSET_PHOTO, ASSET_PRODUCT, BRIEF, CLAIM_OTHER, CLAIM_PRICE, IDS, NOW, PRODUCT, acode, clone, code, intakeInput, isDeepFrozen, outputContext, resolutionFor,
 } from './creative-intelligence-fixtures.js';
 
 // Each `// N text` marker below is one row of the C1 coverage matrix (docs/architecture/creative-intelligence-v1.md); a test
 // that checks the row carries the marker right above the assertion.
-
-const intakeInput = (over = {}) => ({
-  merchant_id: IDS.merchant,
-  brand_id: IDS.brand,
-  brief_ref: BRIEF,
-  deliverable_ref: 'deliverable:demo-1',
-  brand_context_ref: 'brandctx:demo-1',
-  product_refs: [PRODUCT],
-  asset_refs: [ASSET_PRODUCT, ASSET_LOGO],
-  claim_refs: [CLAIM_PRICE],
-  output_context: outputContext(),
-  evidence_refs: ['evidence:brief-1'],
-  created_at: NOW,
-  ...over,
-});
 
 // ------------------------------------------------------------------ creative intake (1-10)
 
@@ -40,22 +25,26 @@ test('Creative intake: references only, closed schema, explicit clock, deep-froz
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ prompt: 'make it pop' }))), CI.CI_ERROR.FORBIDDEN_KEY);
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ output_context: { ...outputContext(), model: 'x' } }))), CI.CI_ERROR.FORBIDDEN_KEY);
   // 5 a URL can never be an asset reference
-  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ asset_refs: ['https://cdn.example.com/a.png'] }))), CI.CI_ERROR.INVALID_REFERENCE);
-  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ asset_refs: ['cdn.example.com/a.png'] }))), CI.CI_ERROR.INVALID_REFERENCE);
-  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ asset_refs: ['data:image/png;base64,AAAA'] }))), CI.CI_ERROR.INVALID_REFERENCE);
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: ['https://cdn.example.com/a.png'] }))), CI.CI_ERROR.INVALID_REFERENCE);
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: ['cdn.example.com/a.png'] }))), CI.CI_ERROR.INVALID_REFERENCE);
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: ['data:image/png;base64,AAAA'] }))), CI.CI_ERROR.INVALID_REFERENCE);
+  // the platform convention scheme://name is an identity, not a location
+  assert.deepEqual(CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: ['asset://folder/a'] })).source_asset_refs, ['asset://folder/a']);
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: ['s3://bucket/a'] }))), CI.CI_ERROR.INVALID_REFERENCE);
   // 6 identifiers are validated (merchant UUID, brief reference)
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ merchant_id: 'not-a-uuid' }))), CI.CI_ERROR.INVALID_FIELD);
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ brief_ref: undefined }))), CI.CI_ERROR.INVALID_REFERENCE);
-  // 7 at least one asset reference is required
-  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ asset_refs: [] }))), CI.CI_ERROR.INVALID_FIELD);
+  // 7 an intake may carry no source asset (the readiness report then says NO_ASSETS)
+  assert.deepEqual(CI.normalizeCreativeIntake(intakeInput({ source_asset_refs: [] })).source_asset_refs, []);
   // 8 a free-text claim is not a claim reference
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ claim_refs: ['Livraison gratuite dès 50 euros'] }))), CI.CI_ERROR.INVALID_REFERENCE);
   // 9 the clock is explicit and carries an offset
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ created_at: '2026-10-10' }))), CI.CI_ERROR.INVALID_TIMESTAMP);
   assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ created_at: undefined }))), CI.CI_ERROR.INVALID_TIMESTAMP);
-  // 10 an intake needs a product reference or an approved claim reference
-  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ product_refs: [], claim_refs: [] }))), CI.CI_ERROR.INTAKE_INVALID);
-  assert.ok(CI.normalizeCreativeIntake(intakeInput({ product_refs: [] })));
+  // 10 an intake needs a subject reference or an approved claim reference, and no content can be both mandatory and prohibited
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ subject_refs: [], claim_refs: [] }))), CI.CI_ERROR.INTAKE_INVALID);
+  assert.ok(CI.normalizeCreativeIntake(intakeInput({ subject_refs: [] })));
+  assert.equal(code(() => CI.normalizeCreativeIntake(intakeInput({ mandatory_content_refs: ['content://x'], prohibited_content_refs: ['content://x'] }))), CI.CI_ERROR.INTAKE_INVALID);
 });
 
 // ------------------------------------------------------------------ output context (11-20)
@@ -100,8 +89,8 @@ test('Output context: canvas, aspect ratio, zones, locale / direction and unsupp
 const asset = (over = {}) => ({
   asset_ref: ASSET_PRODUCT, kind: 'PRODUCT', width_px: 2000, height_px: 2500, has_alpha: true, cutout_available: true, rights_class: 'OWNED', privacy_class: 'PUBLIC', released: true, ...over,
 });
-const readiness = (assets, target = { width: 1080, height: 1350 }) => CI.buildAssetReadinessReport({
-  merchant_id: IDS.merchant, brand_id: IDS.brand, assets, target, created_at: NOW,
+const readiness = (assets, target = { width: 1080, height: 1350 }, resolutions = assets.map((a) => resolutionFor(a.asset_ref))) => CI.buildAssetReadinessReport({
+  merchant_id: IDS.merchant, brand_id: IDS.brand, assets, resolutions, target, created_at: NOW,
 });
 
 test('Asset readiness: metadata-only verdicts, honest unknowns, stated aggregation', () => {
@@ -373,13 +362,13 @@ test('Agents: six roles, one trust boundary - model output is untrusted until it
   assert.equal(await acode(CI.defineCreativeAgent('CREATIVE_DIRECTOR', () => ({ directions: [{ ...direction(), prompt: 'ultra realistic' }] })).invoke({})), CI.CI_ERROR.FORBIDDEN_KEY);
   // 228 the copy agent cannot use a claim reference that is not approved
   const copy = (items, ctx = copyContext) => CI.defineCreativeAgent('COPY_CLAIMS_AGENT', () => ({ items })).invoke({}, ctx);
-  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '25,00 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_OTHER }])), CI.CI_ERROR.CLAIM_REF_NOT_APPROVED);
-  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '25,00 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_PRICE }], {})), CI.CI_ERROR.AGENT_OUTPUT_INVALID);
+  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '19,90 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_OTHER }])), CI.CI_ERROR.CLAIM_REF_NOT_APPROVED);
+  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '19,90 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_PRICE }], {})), CI.CI_ERROR.AGENT_OUTPUT_INVALID);
   // 229 an approved claim gets the digest of its wording; a number in non-claim text is refused
-  const ok = await copy([{ text_role: 'PRICE', content: '25,00 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_PRICE }, { text_role: 'HEADLINE', content: 'Votre coque, votre style', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }]);
-  assert.equal(ok.items.find((i) => i.text_role === 'PRICE').approved_digest, CI.textDigest('25,00 €'));
+  const ok = await copy([{ text_role: 'PRICE', content: '19,90 €', text_kind: 'CLAIM_BEARING', claim_ref: CLAIM_PRICE }, { text_role: 'HEADLINE', content: 'Votre objet, votre style', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }]);
+  assert.equal(ok.items.find((i) => i.text_role === 'PRICE').approved_digest, CI.textDigest('19,90 €'));
   assert.equal(await acode(copy([{ text_role: 'HEADLINE', content: 'Dès 25 euros', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }])), CI.CI_ERROR.NON_CLAIM_TEXT_FACTUAL);
-  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '25,00 €', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }])), CI.CI_ERROR.CLAIM_BASIS_MISSING);
+  assert.equal(await acode(copy([{ text_role: 'PRICE', content: '19,90 €', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }])), CI.CI_ERROR.CLAIM_BASIS_MISSING);
   // 230 one text per role
   assert.equal(await acode(copy([{ text_role: 'HEADLINE', content: 'Un', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }, { text_role: 'HEADLINE', content: 'Deux', text_kind: 'NON_CLAIM_CREATIVE_TEXT' }])), CI.CI_ERROR.AGENT_OUTPUT_INVALID);
   // 231 a visual request must state that no critical text is generated into pixels
@@ -413,7 +402,7 @@ test('Agents: six roles, one trust boundary - model output is untrusted until it
   // 235 the analyst returns a product package and a readiness report, for the right merchant only
   const analyst = (raw, ctx = {}) => CI.defineCreativeAgent('PRODUCT_ASSET_ANALYST', () => raw).invoke({}, ctx);
   const raw = { product_understanding: understanding(), asset_observations: [asset()] };
-  const analysed = await analyst(raw, { merchant_id: IDS.merchant, brand_id: IDS.brand, target: { width: 1080, height: 1350 } });
+  const analysed = await analyst(raw, { merchant_id: IDS.merchant, brand_id: IDS.brand, target: { width: 1080, height: 1350 }, resolutions: [resolutionFor(ASSET_PRODUCT)] });
   assert.equal(analysed.product_understanding.product_ref, PRODUCT);
   assert.equal(analysed.asset_readiness.status, 'READY');
   assert.equal(await acode(analyst(raw, { merchant_id: IDS.otherMerchant, brand_id: IDS.brand })), CI.CI_ERROR.AGENT_OUTPUT_INVALID);

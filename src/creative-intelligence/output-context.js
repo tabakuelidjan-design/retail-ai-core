@@ -8,11 +8,11 @@
 import { CI_ERROR as E, CI_SUPPORTED_CONTENT_KINDS, MEDIUM, RTL_LANGUAGES, TEXT_DIRECTION } from './constants.js';
 import { CONTENT_KIND } from '../branding/constants.js';
 import {
-  closedObject, contains, deepFreeze, enumValue, fail, idToken, integer, locale, optionalNumber, rect, tokenList, upperToken,
+  closedObject, contains, deepFreeze, enumValue, fail, idToken, integer, locale, optionalNumber, rect, ref, tokenList, upperToken,
 } from './validation.js';
 
 const KEYS = [
-  'content_kind', 'channel', 'canvas', 'aspect_ratio', 'physical_or_digital', 'viewing_distance_m', 'expected_dwell_time_s',
+  'content_kind', 'channel', 'placement', 'format_ref', 'canvas', 'aspect_ratio', 'physical_or_digital', 'viewing_distance_m', 'expected_dwell_time_s',
   'safe_zones', 'forbidden_zones', 'locale', 'direction', 'production_constraints',
 ];
 export const MIN_CANVAS = 64;
@@ -72,6 +72,8 @@ export function normalizeOutputContext(input) {
   return deepFreeze({
     content_kind: contentKind,
     channel: upperToken(input.channel, 'output_context.channel'),
+    placement: upperToken(input.placement, 'output_context.placement'),
+    format_ref: ref(input.format_ref, 'output_context.format_ref'),
     canvas,
     aspect_ratio: ratio,
     physical_or_digital: medium,
