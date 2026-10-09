@@ -1,0 +1,56 @@
+name: Activation & Channel Execution V1
+
+# The governed execution layer (Instagram / TikTok / Google Business Profile). It consumes Marketing's ActivationManifest and the
+# M4 execution receipt, and reuses merchant_connectors, so the focused suites run first (fast diagnosis), then Marketing, then the
+# whole suite for cross-domain non-regression. No real network, no credential: every test uses fakes.
+
+on:
+  push:
+    paths:
+      - 'src/activation/**'
+      - 'src/tenant/connectors.js'
+      - 'src/marketing/activation-manifest.js'
+      - 'src/marketing/execution-receipt.js'
+      - 'test/channel-*.test.js'
+      - 'test/channel-fixtures.js'
+      - 'test/merchant-connectors.test.js'
+      - 'docs/architecture/activation-channel-execution-v1.md'
+      - 'supabase/migrations/*channel_execution*'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/activation-channel-execution-v1.yml'
+  pull_request:
+    paths:
+      - 'src/activation/**'
+      - 'src/tenant/connectors.js'
+      - 'src/marketing/activation-manifest.js'
+      - 'src/marketing/execution-receipt.js'
+      - 'test/channel-*.test.js'
+      - 'test/channel-fixtures.js'
+      - 'test/merchant-connectors.test.js'
+      - 'docs/architecture/activation-channel-execution-v1.md'
+      - 'supabase/migrations/*channel_execution*'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/activation-channel-execution-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  activation-channel-execution-v1-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Focused channel execution and connector tests
+        run: node --test test/channel-*.test.js test/merchant-connectors.test.js
+      - name: Marketing tests (ActivationManifest / M4 receipt contracts)
+        run: node --test test/marketing*.test.js
+      - name: Full suite (cross-domain non-regression)
+        run: npm test

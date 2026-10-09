@@ -106,15 +106,15 @@ export const PLANS = {
 };
 export const MEASURE = { baseline_ref: 'metric/baseline', primary_metric_ref: 'metric/orders', guardrail_metric_refs: ['metric/returns'], observation_window: { start: '2026-10-10T00:00:00Z', end: '2026-10-24T00:00:00Z' }, success_criterion_ref: 'criterion/ok', failure_criterion_ref: 'criterion/ko', stop_rule_refs: ['stop/low-stock', 'stop/complaints'] };
 
-const candidateFor = (brief, spec) => ({
+const candidateFor = (brief, spec, assets = {}) => ({
   candidate_id: `cand-${spec.content_kind.toLowerCase()}-1`, merchant_id: M1, brand_id: B1, brief_ref: brief.brief_id, deliverable_ref: spec.deliverable_id,
-  selection_ref: 'selection://ci-run-1', content_kind: spec.content_kind, channel: spec.channel, asset_refs: ['asset://out-1'], provenance_ref: 'provenance://ci-run-1',
+  selection_ref: 'selection://ci-run-1', content_kind: spec.content_kind, channel: spec.channel, asset_refs: assets[spec.content_kind] ?? ['asset://out-1'], provenance_ref: 'provenance://ci-run-1',
   selected_at: '2026-10-10T09:00:00Z', candidate_expires_at: '2026-10-18T00:00:00Z',
 });
 const manifestFor = (kind) => ({ content_kind: kind, colors: [{ subject: 'logo.color', coverage: 'COMPLETE', values: ['#112233'], evidence_refs: ['ev/color'] }] });
 
 /** A REAL chain for a given MeasurementPlan variant (name in PLANS). Returns every original M4 needs. */
-export function chainFor(planName = 'HOLDOUT', { channels = ['STORE_FRONT'], hypothesis = false } = {}) {
+export function chainFor(planName = 'HOLDOUT', { channels = ['STORE_FRONT'], hypothesis = false, assets = {} } = {}) {
   const t = tenant();
   const finding = FINDING;
   const measurement_plan = { ...MEASURE, ...PLANS[planName] };
@@ -125,11 +125,13 @@ export function chainFor(planName = 'HOLDOUT', { channels = ['STORE_FRONT'], hyp
   const context = { tenant: t, finding, decisionPackage, push, authorization, brandContext: BRAND, asOf: T };
   const brief = buildCreativeBrief({ ...context, ...briefFields({ deliverables: [dImage({ channel: channels[0] }), dText({ channel: channels[0] })] }) });
   const specs = brief.deliverables;
-  const candidates = specs.map((spec) => ({ candidate: candidateFor(brief, spec), candidateManifest: manifestFor(spec.content_kind) }));
+  const candidates = specs.map((spec) => ({ candidate: candidateFor(brief, spec, assets), candidateManifest: manifestFor(spec.content_kind) }));
   const activationManifest = buildActivationManifest({
     ...context, brief, candidates, activation_window: { start: '2026-10-12T00:00:00Z', end: '2026-10-17T00:00:00Z' }, expires_at: '2026-10-18T00:00:00Z',
   });
-  return { tenant: t, finding, push, decisionPackage, brief, activationManifest, planName };
+  return {
+    tenant: t, finding, push, decisionPackage, brief, activationManifest, planName, candidates, createAuthorization: authorization, brandContext: BRAND,
+  };
 }
 
 export { M1, M2, B1, B2, tenant };

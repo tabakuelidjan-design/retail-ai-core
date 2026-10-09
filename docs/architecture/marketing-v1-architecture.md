@@ -17,6 +17,7 @@ MARKETING V1 CORE = COMPLETE
 
 Next phase   = Activation & Channel Execution
 First target = Activation & Channel Execution V1
+Activation & Channel Execution V1 = IMPLEMENTED LOCALLY / UNDER AUDIT  (see activation-channel-execution-v1.md)
 After        = Specialized Marketing Intelligences
 First specialized intelligence = Social Trend Intelligence
 ```
