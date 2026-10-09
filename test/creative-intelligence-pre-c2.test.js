@@ -238,5 +238,8 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   assert.match(doc, /PRE-C2 TECHNICAL FOUNDATION = COMPLETE/);
   assert.match(doc, /HABB BENCHMARK 001 = NOT_RUN \/ BLOCKED/);
   assert.match(doc, /HABB BENCHMARK 001 PREPARATION = COMPLETE/);
+  assert.match(doc, /HABB CANONICAL BRAND = COMPLETE/);
+  assert.match(doc, /HABB Brand Core V1    = APPROVED/);
+  assert.match(doc, /HABB expression_system = BOUND/);
   assert.match(doc, /C2 = NOT READY/);
 });

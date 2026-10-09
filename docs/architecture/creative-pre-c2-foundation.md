@@ -95,8 +95,22 @@ HABB BENCHMARK 001 = NOT_RUN / BLOCKED
 C2 = NOT READY
 ```
 
+```text
+HABB CANONICAL BRAND = COMPLETE
+  HABB Brand Identity   = COMPLETE   (brand_id 4c487848-8d41-4e30-8f3f-66afd09b4be4, merchant_id 36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5)
+  HABB Snapshot         = COMPLETE
+  HABB Brand Core V1    = APPROVED
+  HABB Brand Memory V1.1 = APPROVED
+  HABB expression_system = BOUND
+
+HABB BENCHMARK 001 = NOT_RUN / BLOCKED
+C2 = NOT READY
+```
+
+Remaining blockers: benchmark fonts, exact PRODUCT, real merchant-provided ASSET. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
+
 Prepared: price claim, speed claim, FORMAT, and the canonical HABB brand package (Brand Identity, Snapshot, APPROVED Core V1, APPROVED Brand Memory V1.1 carrying the owner-approved expression system).
-Remaining binding work: benchmark fonts (owner decision on the exact two-family pair, with licence evidence), the exact PRODUCT, the real merchant-provided ASSET.
+Remaining binding work (only): benchmark fonts (owner decision on the exact two-family pair, with licence evidence), the exact PRODUCT, the real merchant-provided ASSET.
 
 **Canonical HABB brand package** (`benchmarks/creative-intelligence/habb-brand-canonical-v1.json`, benchmark-scoped trusted data, not the future persistent `brands` registry):
 one `brand_id` minted once on the owner's authorization (a later migration to a brands registry MUST preserve it), `fr-BE` only; a READY Snapshot from readable HABB
@@ -144,16 +158,15 @@ the approved store-service evidence; it is not the universal online price. Readi
 
 **Operational / data blockers (not capabilities) — OPEN**
 
-- real HABB PRODUCT binding;
+- exact HABB PRODUCT binding;
 - real approved HABB product photo (`HABB_BENCHMARK_REAL_ASSET_MISSING`);
-- approved CLAIM resource for "25 €";
-- approved CLAIM resource for "5 minutes";
 - actual HABB font resource bindings (files + licence references);
-- approved HABB Brand Memory V1.1 `expression_system`;
 - HABB CREATIVE BENCHMARK 001 execution.
 
-HABB BENCHMARK 001 = NOT_RUN / BLOCKED. `c2_allowed` is `false`: the two dependencies that need this data, `BRAND_EXPRESSION_SYSTEM` and
-`REAL_CAMPAIGN_BENCHMARK`, stay OPEN.
+Closed since: the price and speed claims (benchmark-owned records), the FORMAT, and the canonical HABB brand (Identity, Snapshot, Core V1, Memory V1.1 with the bound expression system).
+
+HABB BENCHMARK 001 = NOT_RUN / BLOCKED. `c2_allowed` is `false`: `REAL_CAMPAIGN_BENCHMARK` stays OPEN until the benchmark is actually run. The
+`BRAND_EXPRESSION_SYSTEM` dependency can now be closed from the approved HABB Memory (`assessExpressionReadiness`).
 
 Detail:
 
