@@ -8,7 +8,7 @@
     "brand": {
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
       "name": "HABB",
-      "created_at": "2026-10-09T08:00:00Z",
+      "created_at": "2026-10-09T16:13:28Z",
       "parent_brand_id": null,
       "default_locale": "fr-BE",
       "supported_locales": [
@@ -24,8 +24,8 @@
       "id": "habb-snapshot-v1",
       "version": 1,
       "status": "READY",
-      "created_at": "2026-10-09T08:00:00Z",
-      "observed_at": "2026-10-09T08:00:00Z",
+      "created_at": "2026-10-09T16:13:28Z",
+      "observed_at": "2026-10-09T16:13:28Z",
       "evidence": [
         {
           "id": "ev-01",
@@ -36,7 +36,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://MASTER_CONTEXT",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "INTERNAL_FACT"
           }
         },
@@ -49,7 +49,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://MASTER_CONTEXT#positioning",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "INTERNAL_FACT"
           }
         },
@@ -62,7 +62,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://BRAND_RULES",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "INTERNAL_FACT"
           }
         },
@@ -75,7 +75,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://VISUAL_RULES",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "INTERNAL_FACT"
           }
         },
@@ -88,7 +88,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#identity",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -101,7 +101,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#brand-ideas",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -114,7 +114,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#differentiators",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -127,7 +127,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#uv",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -142,7 +142,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#needs",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -155,7 +155,7 @@
           "source": {
             "system": "habb-google-business",
             "ref": "habb-gbp://GBP-PROD-01",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -168,7 +168,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -181,7 +181,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-canonical-brand-bootstrap/core-v1",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -194,7 +194,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-canonical-brand-bootstrap/memory-v1-1",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
@@ -207,21 +207,183 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#phone-case-price",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "MERCHANT_PROVIDED"
           }
         },
         {
           "id": "ev-15",
           "provenance": "observed",
-          "statement": "A search of the HABB project folders and downloads found no file holding the HABB Master Reference (18 July 2026) or the HABB Design Manual v1.0 / Design Bible Foundation v1, and no competitor or customer-review research; those sources were therefore not cited.",
+          "statement": "A search of the HABB project folders, downloads and the supplied sources found no competitor research and no customer-review research.",
           "completeness": "COMPLETE",
           "limitations": [],
           "source": {
             "system": "nordla-bootstrap",
             "ref": "nordla-bootstrap://source-search-2026-10-09",
-            "observed_at": "2026-10-09T08:00:00Z",
+            "observed_at": "2026-10-09T16:13:28Z",
             "kind": "INTERNAL_FACT"
+          }
+        },
+        {
+          "id": "ev-16",
+          "provenance": "observed",
+          "statement": "[CONFIRMED] HABB Store is a physical and online personalised-gift and lifestyle-tech business based in Namur, Belgium, operating through the HABB brand and habb.be. The lines that follow in the snapshot (untagged) state the proposition: personalised gifts produced through UV printing, UV-DTF and related finishing with curated lifestyle technology and gift-ready presentation; promise: premium, emotional, human and useful products rather than generic customised objects.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "only the first sentence carries the CONFIRMED tag; the proposition and promise lines follow it untagged"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#1-executive-snapshot",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:CONFIRMED"
+          }
+        },
+        {
+          "id": "ev-17",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Positioning principles: premium but attainable (avoid both a cheap personalised-gift perception and artificial luxury); emotion first; fast local service; real products, real materials and real photographs rather than generic AI imagery; designer-made appearance; practical curation of lifestyle technology.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#2-2-positioning-principles",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          }
+        },
+        {
+          "id": "ev-18",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] The brand statement is \"HABB Store n’est pas une simple boutique. C’est une signature.\"; core messages include \"Immortalisez vos émotions.\" and \"Prêt en 24–48h.\".",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#2-1-2-3-brand-statement-and-messages",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          }
+        },
+        {
+          "id": "ev-19",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Core production: UV printing with white, colour and gloss layers; UV-DTF with A and B films, lamination and transfer; phone-case personalisation with a fast-service concept of around five minutes; photo, text, QR, decorative and multi-material personalisation.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#6-1-core-production",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          }
+        },
+        {
+          "id": "ev-20",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Default visual direction: sober, minimalist and chic; editorial composition, strong hierarchy, realistic proportions, coherent typography, breathing room; a light neutral palette that lists beige, cream, soft grey and black accents; soft side lighting, stone or marble surfaces; natural designer-made appearance rather than templated, over-decorated or generically AI-generated imagery. Avoid: repeated decorative hearts, fake gold and artificial luxury cues, warm artificial gradients, excessive glow, heavy shadows, invented products when real photographs exist, altered customer or pet faces, moved product mechanisms or camera cut-outs.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026",
+            "the palette lists beige; the owner-approved Benchmark 001 decisions (ev-13) exclude beige as a default token"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#8-1-to-8-3-brand-and-design-system",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          }
+        },
+        {
+          "id": "ev-22",
+          "provenance": "observed",
+          "statement": "[WORKING] The preferred entrance presentation is a premium editorial retail display using real HABB products, larger images, few words and stronger colour contrast than earlier pale concepts.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "WORKING: a current decision or operating assumption, not a canonical fact"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#4-2-merchandising-direction",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:WORKING"
+          }
+        },
+        {
+          "id": "ev-23",
+          "provenance": "observed",
+          "statement": "[OPEN] A formal HABB production SOP is still needed for material preparation, profiles, curing, white choke, gloss order, adhesion tests and acceptable quality thresholds by substrate.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "OPEN: unresolved; quality checks (adhesion and scratch tests, file checks) are practised but their formal thresholds are not defined"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#7-2-recurrent-technical-issues",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:OPEN"
+          }
+        },
+        {
+          "id": "ev-24",
+          "provenance": "observed",
+          "statement": "[HISTORY] Launch promotion: phone cases at 15 EUR instead of 25 EUR.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "HISTORY: a past promotion, not current truth unless separately revalidated"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#13-1-historical-commercial-information",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:HISTORY"
+          }
+        },
+        {
+          "id": "ev-25",
+          "provenance": "observed",
+          "statement": "HABB Design Manual v1.0 (studio reference): HABB creates compositions, not decorations; emotion first, generous whitespace, timeless typography, material-first design. Grid rules: margins of 10-15% minimum, about 30% whitespace, one visual entry point, a maximum of two font families, material creates the luxury while graphics remain restrained.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "an internal studio reference and the foundation of a future illustrated Design Bible; it names no font family"
+          ],
+          "source": {
+            "system": "habb-design-manual",
+            "ref": "habb-source://HABB_Design_Manual_v1.pdf@sha256:14c545a8d8c21f480cd8a309072890214bd86ef0dbeb04f58b886f6d16826ddb#grid-rules",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "design-manual-status:STUDIO_REFERENCE"
+          }
+        },
+        {
+          "id": "ev-26",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] The UV-DTF working process ends with adhesion and scratch tests before customer delivery; artwork is prepared at exact physical dimensions.",
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026",
+            "a working process, not a certified quality system"
+          ],
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#7-1-uv-dtf-working-process",
+            "observed_at": "2026-10-09T16:13:28Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
           }
         }
       ],
@@ -232,7 +394,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-01",
-            "ev-05"
+            "ev-05",
+            "ev-16"
           ]
         }
       ],
@@ -243,7 +406,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-02",
-            "ev-05"
+            "ev-05",
+            "ev-17"
           ]
         }
       ],
@@ -253,7 +417,8 @@
           "statement": "The established brand line is \"HABB Store n’est pas une simple boutique. C’est une signature.\"",
           "claim_kind": "FACT",
           "evidence_refs": [
-            "ev-06"
+            "ev-06",
+            "ev-18"
           ]
         },
         {
@@ -262,7 +427,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-10",
-            "ev-01"
+            "ev-01",
+            "ev-19"
           ]
         }
       ],
@@ -285,8 +451,18 @@
           "evidence_refs": [
             "ev-03",
             "ev-04",
-            "ev-11"
+            "ev-11",
+            "ev-20",
+            "ev-25"
           ]
+        },
+        {
+          "id": "sf-working-entrance",
+          "claim_kind": "HYPOTHESIS",
+          "evidence_refs": [
+            "ev-22"
+          ],
+          "statement": "Working assumption (not canonical): the preferred entrance presentation is a premium editorial retail display with real products, larger images and few words."
         }
       ],
       "contradictions": [
@@ -298,25 +474,27 @@
             "ev-10",
             "ev-14"
           ]
+        },
+        {
+          "id": "sf-palette",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-20",
+            "ev-13"
+          ],
+          "statement": "The Master Reference default palette lists beige among its neutrals, while the owner-approved Benchmark 001 decisions exclude beige or sand as a default token; the later, explicit benchmark decision governs this benchmark."
+        },
+        {
+          "id": "sf-price-history",
+          "claim_kind": "INFERENCE",
+          "evidence_refs": [
+            "ev-24",
+            "ev-10"
+          ],
+          "statement": "The 15 EUR launch price is HISTORY and is not current truth; the regular case-plus-personalisation price in the approved service description is 25 EUR."
         }
       ],
       "evidence_gaps": [
-        {
-          "id": "gap-master-reference",
-          "statement": "The HABB Master Reference (18 July 2026) was not available to this run and is not cited.",
-          "claim_kind": "FACT",
-          "evidence_refs": [
-            "ev-15"
-          ]
-        },
-        {
-          "id": "gap-design-manual",
-          "statement": "The HABB Design Manual v1.0 / Design Bible Foundation v1 was not available to this run and is not cited.",
-          "claim_kind": "FACT",
-          "evidence_refs": [
-            "ev-15"
-          ]
-        },
         {
           "id": "gap-competitors",
           "statement": "No competitor research: none is claimed.",
@@ -332,6 +510,22 @@
           "evidence_refs": [
             "ev-15"
           ]
+        },
+        {
+          "id": "gap-production-sop",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-23"
+          ],
+          "statement": "OPEN in the Master Reference: no formal production SOP or quality thresholds by substrate; \"controlled production and quality checks\" rests on practised checks, not a documented standard."
+        },
+        {
+          "id": "gap-fonts-unchosen",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-25"
+          ],
+          "statement": "The Design Manual limits HABB to a maximum of two font families but no supplied source names the families; typography stays undecided."
         }
       ],
       "competitors": [],
@@ -339,9 +533,9 @@
     },
     "core": {
       "id": "habb-core-v1",
-      "created_at": "2026-10-09T09:00:00Z",
-      "approved_at": "2026-10-09T10:00:00Z",
-      "approval_note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "created_at": "2026-10-09T16:13:28Z",
+      "approved_at": "2026-10-09T16:13:28Z",
+      "approval_note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
       "decisions": {
         "category": "Personalised gifts, personalised everyday products, and curated lifestyle-tech retail.",
         "buying_contexts": [
@@ -414,15 +608,22 @@
           "ev-09",
           "ev-10",
           "ev-11",
-          "ev-12"
+          "ev-12",
+          "ev-16",
+          "ev-17",
+          "ev-18",
+          "ev-19",
+          "ev-20",
+          "ev-25",
+          "ev-26"
         ]
       }
     },
     "memory": {
       "id": "habb-memory-v1",
-      "created_at": "2026-10-09T11:00:00Z",
-      "approved_at": "2026-10-09T12:00:00Z",
-      "approval_note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "created_at": "2026-10-09T16:13:28Z",
+      "approved_at": "2026-10-09T16:13:28Z",
+      "approval_note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
       "content": {
         "identity_references": {
           "primary_logo_ref": null,
@@ -476,6 +677,40 @@
       "claim_refs": "external_references.claim_refs is left empty: it is meant for production Claims Registry refs. The benchmark-owned claim://habb/benchmark-001/* refs are bound by the benchmark configuration, and putting them in Brand Memory would present them as registry claims.",
       "distinctive_assets": "Empty: no approved HABB logo asset ref exists, and the Core distinctive-asset types (logo, symbol, colour, typography, shape, pattern, packaging, photography style) have no verbal-cue type. The brand line is kept as an on-brand example in Memory.",
       "typography": "Empty on purpose: no exact benchmark font pair has been owner-approved and bound with licence evidence. No fallback font is created."
+    },
+    "source_documents": [
+      {
+        "id": "habb-master-reference",
+        "filename": "HABB_Master_Reference_2026-07-18.docx",
+        "sha256": "ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8",
+        "consolidated_on": "2026-07-18",
+        "document_status": "Internal master reference - editable (a living internal document, not a final legal or accounting record)",
+        "status_vocabulary": [
+          "CONFIRMED",
+          "WORKING",
+          "OPEN",
+          "HISTORY"
+        ],
+        "handling": "CONFIRMED may support canonical facts. WORKING is recorded as working evidence only. OPEN is an evidence gap. HISTORY is historical context only. Untagged statements are recorded as statements of the document (status UNTAGGED), never promoted to CONFIRMED.",
+        "stored_in_repo": false
+      },
+      {
+        "id": "habb-design-manual",
+        "filename": "HABB_Design_Manual_v1.pdf",
+        "sha256": "14c545a8d8c21f480cd8a309072890214bd86ef0dbeb04f58b886f6d16826ddb",
+        "consolidated_on": null,
+        "document_status": "HABB Design Manual v1.0 - Studio Reference Document (foundation of the future illustrated HABB Design Bible)",
+        "status_vocabulary": [],
+        "handling": "An internal studio reference: supports HABB design principles only. It names no font family.",
+        "stored_in_repo": false
+      }
+    ],
+    "authorization": {
+      "recorded_at": "2026-10-09T16:13:28Z",
+      "basis": "The owner’s explicit authorization in the canonical brand bootstrap mandate and its evidence-audit correction.",
+      "clock": "Read once, outside the builder, by the correction run and stored here as data. The builders have no clock; a re-run reproduces the same values.",
+      "identity": "Owner authorization recorded for benchmark bootstrap. Nordla Identity did not authenticate it and remains an open dependency.",
+      "replaces": "Earlier synthetic placeholder times (2026-10-09T08:00 to 12:00) that were not backed by a recorded authorization."
     }
   },
   "outputs": {
@@ -484,7 +719,7 @@
       "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
       "name": "HABB",
       "status": "ACTIVE",
-      "created_at": "2026-10-09T08:00:00.000Z",
+      "created_at": "2026-10-09T16:13:28.000Z",
       "parent_brand_id": null,
       "default_locale": "fr-BE",
       "supported_locales": [
@@ -497,9 +732,9 @@
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
       "version": 1,
       "status": "READY",
-      "created_at": "2026-10-09T08:00:00.000Z",
+      "created_at": "2026-10-09T16:13:28.000Z",
       "supersedes_id": null,
-      "observed_at": "2026-10-09T08:00:00.000Z",
+      "observed_at": "2026-10-09T16:13:28.000Z",
       "evidence": [
         {
           "id": "ev-01",
@@ -508,7 +743,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://MASTER_CONTEXT",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "INTERNAL_FACT",
             "subject_ref": null
           },
@@ -522,7 +757,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://MASTER_CONTEXT#positioning",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "INTERNAL_FACT",
             "subject_ref": null
           },
@@ -536,7 +771,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://BRAND_RULES",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "INTERNAL_FACT",
             "subject_ref": null
           },
@@ -550,7 +785,7 @@
           "source": {
             "system": "habb-os",
             "ref": "habb-os://VISUAL_RULES",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "INTERNAL_FACT",
             "subject_ref": null
           },
@@ -564,7 +799,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#identity",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -578,7 +813,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#brand-ideas",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -592,7 +827,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#differentiators",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -606,7 +841,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#uv",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -620,7 +855,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#needs",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -636,7 +871,7 @@
           "source": {
             "system": "habb-google-business",
             "ref": "habb-gbp://GBP-PROD-01",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -650,7 +885,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-creative-benchmark-001/expression-system-v1",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -664,7 +899,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-canonical-brand-bootstrap/core-v1",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -678,7 +913,7 @@
           "source": {
             "system": "owner-decision",
             "ref": "owner-decision://habb-canonical-brand-bootstrap/memory-v1-1",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -692,7 +927,7 @@
           "source": {
             "system": "habb-sales-knowledge-base",
             "ref": "habb-kb://sales-director-2026-08-14#phone-case-price",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "MERCHANT_PROVIDED",
             "subject_ref": null
           },
@@ -702,16 +937,178 @@
         {
           "id": "ev-15",
           "provenance": "observed",
-          "statement": "A search of the HABB project folders and downloads found no file holding the HABB Master Reference (18 July 2026) or the HABB Design Manual v1.0 / Design Bible Foundation v1, and no competitor or customer-review research; those sources were therefore not cited.",
+          "statement": "A search of the HABB project folders, downloads and the supplied sources found no competitor research and no customer-review research.",
           "source": {
             "system": "nordla-bootstrap",
             "ref": "nordla-bootstrap://source-search-2026-10-09",
-            "observed_at": "2026-10-09T08:00:00.000Z",
+            "observed_at": "2026-10-09T16:13:28.000Z",
             "kind": "INTERNAL_FACT",
             "subject_ref": null
           },
           "completeness": "COMPLETE",
           "limitations": []
+        },
+        {
+          "id": "ev-16",
+          "provenance": "observed",
+          "statement": "[CONFIRMED] HABB Store is a physical and online personalised-gift and lifestyle-tech business based in Namur, Belgium, operating through the HABB brand and habb.be. The lines that follow in the snapshot (untagged) state the proposition: personalised gifts produced through UV printing, UV-DTF and related finishing with curated lifestyle technology and gift-ready presentation; promise: premium, emotional, human and useful products rather than generic customised objects.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#1-executive-snapshot",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:CONFIRMED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "only the first sentence carries the CONFIRMED tag; the proposition and promise lines follow it untagged"
+          ]
+        },
+        {
+          "id": "ev-17",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Positioning principles: premium but attainable (avoid both a cheap personalised-gift perception and artificial luxury); emotion first; fast local service; real products, real materials and real photographs rather than generic AI imagery; designer-made appearance; practical curation of lifestyle technology.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#2-2-positioning-principles",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ]
+        },
+        {
+          "id": "ev-18",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] The brand statement is \"HABB Store n’est pas une simple boutique. C’est une signature.\"; core messages include \"Immortalisez vos émotions.\" and \"Prêt en 24–48h.\".",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#2-1-2-3-brand-statement-and-messages",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ]
+        },
+        {
+          "id": "ev-19",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Core production: UV printing with white, colour and gloss layers; UV-DTF with A and B films, lamination and transfer; phone-case personalisation with a fast-service concept of around five minutes; photo, text, QR, decorative and multi-material personalisation.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#6-1-core-production",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026"
+          ]
+        },
+        {
+          "id": "ev-20",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] Default visual direction: sober, minimalist and chic; editorial composition, strong hierarchy, realistic proportions, coherent typography, breathing room; a light neutral palette that lists beige, cream, soft grey and black accents; soft side lighting, stone or marble surfaces; natural designer-made appearance rather than templated, over-decorated or generically AI-generated imagery. Avoid: repeated decorative hearts, fake gold and artificial luxury cues, warm artificial gradients, excessive glow, heavy shadows, invented products when real photographs exist, altered customer or pet faces, moved product mechanisms or camera cut-outs.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#8-1-to-8-3-brand-and-design-system",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026",
+            "the palette lists beige; the owner-approved Benchmark 001 decisions (ev-13) exclude beige as a default token"
+          ]
+        },
+        {
+          "id": "ev-22",
+          "provenance": "observed",
+          "statement": "[WORKING] The preferred entrance presentation is a premium editorial retail display using real HABB products, larger images, few words and stronger colour contrast than earlier pale concepts.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#4-2-merchandising-direction",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:WORKING"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "WORKING: a current decision or operating assumption, not a canonical fact"
+          ]
+        },
+        {
+          "id": "ev-23",
+          "provenance": "observed",
+          "statement": "[OPEN] A formal HABB production SOP is still needed for material preparation, profiles, curing, white choke, gloss order, adhesion tests and acceptable quality thresholds by substrate.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#7-2-recurrent-technical-issues",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:OPEN"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "OPEN: unresolved; quality checks (adhesion and scratch tests, file checks) are practised but their formal thresholds are not defined"
+          ]
+        },
+        {
+          "id": "ev-24",
+          "provenance": "observed",
+          "statement": "[HISTORY] Launch promotion: phone cases at 15 EUR instead of 25 EUR.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#13-1-historical-commercial-information",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:HISTORY"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "HISTORY: a past promotion, not current truth unless separately revalidated"
+          ]
+        },
+        {
+          "id": "ev-25",
+          "provenance": "observed",
+          "statement": "HABB Design Manual v1.0 (studio reference): HABB creates compositions, not decorations; emotion first, generous whitespace, timeless typography, material-first design. Grid rules: margins of 10-15% minimum, about 30% whitespace, one visual entry point, a maximum of two font families, material creates the luxury while graphics remain restrained.",
+          "source": {
+            "system": "habb-design-manual",
+            "ref": "habb-source://HABB_Design_Manual_v1.pdf@sha256:14c545a8d8c21f480cd8a309072890214bd86ef0dbeb04f58b886f6d16826ddb#grid-rules",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "design-manual-status:STUDIO_REFERENCE"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "an internal studio reference and the foundation of a future illustrated Design Bible; it names no font family"
+          ]
+        },
+        {
+          "id": "ev-26",
+          "provenance": "observed",
+          "statement": "[UNTAGGED] The UV-DTF working process ends with adhesion and scratch tests before customer delivery; artwork is prepared at exact physical dimensions.",
+          "source": {
+            "system": "habb-master-reference",
+            "ref": "habb-source://HABB_Master_Reference_2026-07-18.docx@sha256:ccb6562e1433d35c340a58c56a9af321cc65f9ead8589b8e5783db88e2d5f0c8#7-1-uv-dtf-working-process",
+            "observed_at": "2026-10-09T16:13:28.000Z",
+            "kind": "MERCHANT_PROVIDED",
+            "subject_ref": "master-reference-status:UNTAGGED"
+          },
+          "completeness": "COMPLETE",
+          "limitations": [
+            "untagged in the source (not marked CONFIRMED by the document); recorded as a statement of the document, source dated 18 July 2026",
+            "a working process, not a certified quality system"
+          ]
         }
       ],
       "positioning": [
@@ -721,7 +1118,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-02",
-            "ev-05"
+            "ev-05",
+            "ev-17"
           ]
         }
       ],
@@ -731,7 +1129,8 @@
           "statement": "The established brand line is \"HABB Store n’est pas une simple boutique. C’est une signature.\"",
           "claim_kind": "FACT",
           "evidence_refs": [
-            "ev-06"
+            "ev-06",
+            "ev-18"
           ]
         },
         {
@@ -740,7 +1139,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-10",
-            "ev-01"
+            "ev-01",
+            "ev-19"
           ]
         }
       ],
@@ -751,7 +1151,8 @@
           "claim_kind": "FACT",
           "evidence_refs": [
             "ev-01",
-            "ev-05"
+            "ev-05",
+            "ev-16"
           ]
         }
       ],
@@ -775,7 +1176,17 @@
           "evidence_refs": [
             "ev-03",
             "ev-04",
-            "ev-11"
+            "ev-11",
+            "ev-20",
+            "ev-25"
+          ]
+        },
+        {
+          "id": "sf-working-entrance",
+          "statement": "Working assumption (not canonical): the preferred entrance presentation is a premium editorial retail display with real products, larger images and few words.",
+          "claim_kind": "HYPOTHESIS",
+          "evidence_refs": [
+            "ev-22"
           ]
         }
       ],
@@ -788,25 +1199,27 @@
             "ev-10",
             "ev-14"
           ]
+        },
+        {
+          "id": "sf-palette",
+          "statement": "The Master Reference default palette lists beige among its neutrals, while the owner-approved Benchmark 001 decisions exclude beige or sand as a default token; the later, explicit benchmark decision governs this benchmark.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-20",
+            "ev-13"
+          ]
+        },
+        {
+          "id": "sf-price-history",
+          "statement": "The 15 EUR launch price is HISTORY and is not current truth; the regular case-plus-personalisation price in the approved service description is 25 EUR.",
+          "claim_kind": "INFERENCE",
+          "evidence_refs": [
+            "ev-24",
+            "ev-10"
+          ]
         }
       ],
       "evidence_gaps": [
-        {
-          "id": "gap-master-reference",
-          "statement": "The HABB Master Reference (18 July 2026) was not available to this run and is not cited.",
-          "claim_kind": "FACT",
-          "evidence_refs": [
-            "ev-15"
-          ]
-        },
-        {
-          "id": "gap-design-manual",
-          "statement": "The HABB Design Manual v1.0 / Design Bible Foundation v1 was not available to this run and is not cited.",
-          "claim_kind": "FACT",
-          "evidence_refs": [
-            "ev-15"
-          ]
-        },
         {
           "id": "gap-competitors",
           "statement": "No competitor research: none is claimed.",
@@ -822,6 +1235,22 @@
           "evidence_refs": [
             "ev-15"
           ]
+        },
+        {
+          "id": "gap-production-sop",
+          "statement": "OPEN in the Master Reference: no formal production SOP or quality thresholds by substrate; \"controlled production and quality checks\" rests on practised checks, not a documented standard.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-23"
+          ]
+        },
+        {
+          "id": "gap-fonts-unchosen",
+          "statement": "The Design Manual limits HABB to a maximum of two font families but no supplied source names the families; typography stays undecided.",
+          "claim_kind": "FACT",
+          "evidence_refs": [
+            "ev-25"
+          ]
         }
       ],
       "refresh_triggers": []
@@ -832,7 +1261,7 @@
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
       "version": 1,
       "status": "APPROVED",
-      "created_at": "2026-10-09T09:00:00.000Z",
+      "created_at": "2026-10-09T16:13:28.000Z",
       "supersedes_id": null,
       "snapshot_ref": {
         "id": "habb-snapshot-v1",
@@ -909,18 +1338,25 @@
         "ev-09",
         "ev-10",
         "ev-11",
-        "ev-12"
+        "ev-12",
+        "ev-16",
+        "ev-17",
+        "ev-18",
+        "ev-19",
+        "ev-20",
+        "ev-25",
+        "ev-26"
       ],
       "approval": {
-        "decision_event_id": "bde_791c9c8e3295698f2e0e3afce0c4c1c5",
+        "decision_event_id": "bde_b49f05722716edc6538c29145c8734bf",
         "approved_by": "habb-owner",
         "approver_role": "OWNER",
-        "approved_at": "2026-10-09T10:00:00.000Z",
-        "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet)."
+        "approved_at": "2026-10-09T16:13:28.000Z",
+        "note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
       }
     },
     "core_decision_event": {
-      "id": "bde_791c9c8e3295698f2e0e3afce0c4c1c5",
+      "id": "bde_b49f05722716edc6538c29145c8734bf",
       "type": "BRAND_CORE_APPROVED",
       "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
@@ -933,8 +1369,8 @@
         "id": "habb-core-v1",
         "version": 1
       },
-      "decided_at": "2026-10-09T10:00:00.000Z",
-      "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "decided_at": "2026-10-09T16:13:28.000Z",
+      "note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
       "supersedes": null
     },
     "approved_memory": {
@@ -943,7 +1379,7 @@
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
       "version": 1,
       "status": "APPROVED",
-      "created_at": "2026-10-09T11:00:00.000Z",
+      "created_at": "2026-10-09T16:13:28.000Z",
       "supersedes_id": null,
       "core_ref": {
         "id": "habb-core-v1",
@@ -1168,15 +1604,15 @@
         }
       },
       "approval": {
-        "decision_event_id": "bde_515425127dbb3de6ebceffe47f7025c0",
+        "decision_event_id": "bde_c2e8de5807de88beedc35d4cf71ea86c",
         "approved_by": "habb-owner",
         "approver_role": "OWNER",
-        "approved_at": "2026-10-09T12:00:00.000Z",
-        "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet)."
+        "approved_at": "2026-10-09T16:13:28.000Z",
+        "note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time."
       }
     },
     "memory_decision_event": {
-      "id": "bde_515425127dbb3de6ebceffe47f7025c0",
+      "id": "bde_c2e8de5807de88beedc35d4cf71ea86c",
       "type": "BRAND_MEMORY_APPROVED",
       "merchant_id": "36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5",
       "brand_id": "4c487848-8d41-4e30-8f3f-66afd09b4be4",
@@ -1189,8 +1625,8 @@
         "id": "habb-memory-v1",
         "version": 1
       },
-      "decided_at": "2026-10-09T12:00:00.000Z",
-      "note": "Approved per the owner’s explicit authorization in the canonical brand bootstrap mandate; recorded by the real governed flow. Not an authenticated Nordla identity (none exists yet).",
+      "decided_at": "2026-10-09T16:13:28.000Z",
+      "note": "Owner authorization recorded for benchmark bootstrap (not authenticated by Nordla Identity, which remains an open dependency); recorded by the real governed flow at the recorded authorization time.",
       "supersedes": null
     }
   }

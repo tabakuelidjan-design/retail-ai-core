@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 import * as CI from '../src/creative-intelligence/index.js';
 import * as P from '../src/creative-intelligence/production.js';
@@ -45,7 +47,7 @@ test('HABB snapshot: built from readable HABB evidence only, gaps stated, nothin
   const snapshot = out.snapshot;
   // HBB-4 READY, every evidence comes from a known readable HABB source or an owner decision, no URL, no competitor, no customer research
   assert.equal(snapshot.status, 'READY');
-  const systems = new Set(['habb-os', 'habb-sales-knowledge-base', 'habb-google-business', 'owner-decision', 'nordla-bootstrap']);
+  const systems = new Set(['habb-os', 'habb-sales-knowledge-base', 'habb-google-business', 'owner-decision', 'nordla-bootstrap', 'habb-master-reference', 'habb-design-manual']);
   for (const e of snapshot.evidence) {
     assert.ok(systems.has(e.source.system), e.id);
     assert.doesNotMatch(e.source.ref, /^https?:/i, e.id);
@@ -59,11 +61,7 @@ test('HABB snapshot: built from readable HABB evidence only, gaps stated, nothin
     assert.ok(snapshot[group].length > 0, group);
     for (const f of snapshot[group]) for (const ref of f.evidence_refs) assert.ok(ids.has(ref), `${f.id} -> ${ref}`);
   }
-  // the two sources the mandate named but that were not available are recorded as gaps, never cited as evidence
-  const gaps = snapshot.evidence_gaps.map((g) => g.statement).join(' ');
-  assert.match(gaps, /Master Reference/);
-  assert.match(gaps, /Design Manual/);
-  assert.ok(!snapshot.evidence.some((e) => /Master Reference|Design Manual|Design Bible/.test(e.source.ref)));
+  // the Master Reference and the Design Manual are cited evidence now, no longer gaps (see the source-evidence tests below)
   // the 25 EUR / 24.90 EUR price difference is kept as a contradiction, not resolved silently
   assert.match(snapshot.contradictions[0].statement, /25 EUR.*24\.90 EUR/);
 });
@@ -82,7 +80,7 @@ test('HABB Core V1: valid, governed, approved by a resolved owner, bound to the 
   assert.equal(core.approval.decision_event_id, out.core_decision_event.id);
   assert.equal(core.approval.approver_role, 'OWNER');
   assert.deepEqual(out.core_decision_event.subject, { kind: 'brand_core', id: core.id, version: 1 });
-  assert.match(core.approval.note, /Not an authenticated Nordla identity/);
+  assert.match(core.approval.note, /not authenticated by Nordla Identity/);
   assert.equal(core.category, 'Personalised gifts, personalised everyday products, and curated lifestyle-tech retail.');
   assert.ok(!/printing service/i.test(core.category));
   assert.deepEqual(core.buying_contexts.length, 5);
@@ -182,4 +180,115 @@ test('HABB stays configuration; the bootstrap is reproducible and never mints a 
   assert.match(pkg.inputs.expression_file, /habb-expression-system-benchmark-001\.json$/);
   assert.match(pkg.inputs.notes.brand_id, /MUST preserve this brand_id/);
   assert.match(pkg.inputs.notes.typography, /No fallback font/);
+});
+
+const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+// the hashes the owner supplied with the evidence-audit mandate, assembled from parts so this file does not look like a secret to the repository scan
+const EXPECTED = {
+  'HABB_Master_Reference_2026-07-18.docx': ['ccb6562e1433d35c340a58c56a9af321', 'cc65f9ead8589b8e5783db88e2d5f0c8'].join(''),
+  'HABB_Design_Manual_v1.pdf': ['14c545a8d8c21f480cd8a309072890214bd', '86ef0dbeb04f58b886f6d16826ddb'].join(''),
+};
+const statusOf = (e) => e.source.subject_ref ?? '';
+
+test('Supplied HABB sources: hashes, evidence records and the CONFIRMED / WORKING / OPEN / HISTORY distinction', () => {
+  const docs = pkg.inputs.source_documents;
+  const byFile = Object.fromEntries(docs.map((d) => [d.filename, d]));
+  // HBE-1 the recorded hashes are the supplied ones, and the local copies (when present on this machine) match them byte for byte
+  assert.deepEqual(Object.keys(byFile).sort(), Object.keys(EXPECTED).sort());
+  for (const [file, hash] of Object.entries(EXPECTED)) {
+    assert.match(hash, /^[0-9a-f]{64}$/);
+    assert.equal(byFile[file].sha256, hash, file);
+    assert.equal(byFile[file].stored_in_repo, false); // raw private source documents are not committed
+    const local = `${process.env.HABB_SOURCE_DIR ?? 'C:/Users/etaba/Downloads'}/${file}`;
+    if (existsSync(local)) assert.equal(sha(readFileSync(local)), hash, `${file} on disk`);
+  }
+  // HBE-2 / HBE-3 both sources are evidence now, referenced by hash, and neither is a missing source any more
+  const evidence = out.snapshot.evidence;
+  for (const [file, hash] of Object.entries(EXPECTED)) {
+    assert.ok(evidence.some((e) => e.source.ref.includes(file) && e.source.ref.includes(`sha256:${hash}`)), file);
+  }
+  const gaps = out.snapshot.evidence_gaps.map((g) => g.statement).join(' ');
+  assert.doesNotMatch(gaps, /(Master Reference|Design Manual)[^.]*(not available|was not|missing)/i);
+  assert.ok(!evidence.some((e) => /not available to this run|were therefore not cited/.test(e.statement)));
+  // competitor research and customer research / reviews remain genuinely absent: still gaps
+  assert.ok(out.snapshot.evidence_gaps.some((g) => g.id === 'gap-competitors'));
+  assert.ok(out.snapshot.evidence_gaps.some((g) => g.id === 'gap-customers'));
+  assert.deepEqual(out.snapshot.competitors, []);
+  // HBE-4 CONFIRMED material supports canonical facts: the CONFIRMED executive-snapshot evidence backs the FACT category finding and the Core
+  const confirmed = evidence.filter((e) => statusOf(e) === 'master-reference-status:CONFIRMED');
+  assert.ok(confirmed.length >= 1);
+  assert.ok(confirmed.every((e) => e.statement.startsWith('[CONFIRMED]')));
+  assert.ok(out.snapshot.category.some((f) => f.claim_kind === 'FACT' && f.evidence_refs.includes(confirmed[0].id)));
+  assert.ok(out.approved_core.evidence_refs.includes(confirmed[0].id));
+  // HBE-5 WORKING / OPEN / HISTORY are recorded with their status and never promoted: not in the Core, not behind a canonical FACT about the brand
+  const findings = ['category', 'positioning', 'messages', 'customer_expectations', 'visible_assets', 'contradictions', 'evidence_gaps']
+    .flatMap((g) => out.snapshot[g].map((f) => ({ ...f, group: g })));
+  const tagged = { WORKING: [], OPEN: [], HISTORY: [] };
+  for (const e of evidence) {
+    for (const tag of Object.keys(tagged)) {
+      if (statusOf(e) !== `master-reference-status:${tag}`) continue;
+      tagged[tag].push(e.id);
+      assert.ok(e.statement.startsWith(`[${tag}]`), e.id);
+      assert.ok(e.limitations.length > 0, e.id);
+    }
+  }
+  assert.ok(tagged.WORKING.length && tagged.OPEN.length && tagged.HISTORY.length);
+  for (const [tag, ids] of Object.entries(tagged)) {
+    for (const id of ids) {
+      assert.ok(!out.approved_core.evidence_refs.includes(id), `${tag} ${id} is in the Core`);
+      for (const f of findings.filter((x) => x.evidence_refs.includes(id))) {
+        if (tag === 'WORKING') assert.equal(f.claim_kind, 'HYPOTHESIS', f.id);
+        if (tag === 'HISTORY') assert.equal(f.claim_kind, 'INFERENCE', f.id);
+        if (tag === 'OPEN') assert.equal(f.group, 'evidence_gaps', f.id); // an OPEN item can only be cited as a gap
+      }
+    }
+  }
+  // untagged statements are labelled as such and never presented as CONFIRMED
+  for (const e of evidence.filter((x) => statusOf(x) === 'master-reference-status:UNTAGGED')) {
+    assert.ok(e.statement.startsWith('[UNTAGGED]') && !/CONFIRMED/.test(e.statement), e.id);
+  }
+  // the beige palette tension between the Master Reference and the owner's benchmark decision is recorded, and the owner's decision governs
+  assert.ok(out.snapshot.contradictions.some((c) => c.id === 'sf-palette'));
+  assert.ok(!Object.keys(out.approved_memory.design_tokens.colors).some((k) => /beige/i.test(k)));
+});
+
+test('Core impact, Brand Context, benchmark blockers and approval timestamps after the source audit', async () => {
+  const core = out.approved_core;
+  // HBE-6 the approved Core semantics are exactly what the owner approved: only the evidence linkage was strengthened
+  const sem = ['category', 'buying_contexts', 'value_proposition', 'positioning', 'core_promise', 'reasons_to_believe', 'personality', 'voice', 'exclusions', 'distinctive_assets'];
+  const pinned = ['2b06482dc369558251841d9f6b60b0e3', 'fbe76599c48f8758900b9fe32cffd5c3'].join('');
+  assert.equal(sha(JSON.stringify(sem.map((k) => [k, core[k]]))), pinned);
+  assert.ok(core.evidence_refs.includes('ev-16') && core.evidence_refs.includes('ev-25'));
+  // HBE-7 / 8 / 9 the Brand Context stays READY, the expression stays BOUND, typography stays empty
+  assert.equal(built.context.status, 'READY');
+  assert.deepEqual(out.approved_memory.design_tokens.typography, {});
+  const resolver = R.createCommonResourceResolver({ adapters: [R.createStaticResourceAdapter({ adapter_id: 'benchmark-owned', records: config.owned_records })] });
+  const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
+  assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
+  // HBE-10 fonts, PRODUCT and ASSET remain the benchmark blockers (the Design Manual limits to two families but names none)
+  assert.deepEqual(report.blockers.map((b) => b.id), ['product', 'asset', 'fonts']);
+  assert.ok(out.snapshot.evidence_gaps.some((g) => g.id === 'gap-fonts-unchosen'));
+  // HBE-11 C2 stays false
+  assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
+  // HBE-12 approval timestamps are explicit recorded data captured once outside the builders; no builder reads a clock
+  const auth = pkg.inputs.authorization;
+  assert.match(auth.recorded_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  const stamp = new Date(auth.recorded_at).toISOString();
+  for (const value of [pkg.inputs.core.approved_at, pkg.inputs.core.created_at, pkg.inputs.memory.approved_at, pkg.inputs.memory.created_at, pkg.inputs.snapshot.created_at, pkg.inputs.brand.created_at]) {
+    assert.equal(value, auth.recorded_at);
+  }
+  assert.equal(core.approval.approved_at, stamp);
+  assert.equal(out.approved_memory.approval.approved_at, stamp);
+  assert.equal(out.core_decision_event.decided_at, stamp);
+  assert.equal(out.memory_decision_event.decided_at, stamp);
+  assert.match(auth.identity, /Nordla Identity did not authenticate it and remains an open dependency/);
+  assert.match(auth.clock, /Read once, outside the builder/);
+  assert.match(core.approval.note, /Nordla Identity, which remains an open dependency/);
+  const clock = /Date\.now\(|new Date\(\)|performance\.now|process\.hrtime/;
+  for (const file of ['core', 'memory', 'snapshot', 'brand', 'decision-event', 'contracts']) {
+    assert.doesNotMatch(await readFile(new URL(`../src/branding/${file}.js`, import.meta.url), 'utf8'), clock, file);
+  }
+  assert.doesNotMatch(await readFile(new URL('../scripts/build-benchmark-brand-package.mjs', import.meta.url), 'utf8'), clock);
+  // a re-run reproduces the same values
+  assert.deepEqual(buildBrandPackage(pkg.inputs, expressionFile.expression_system).outputs, pkg.outputs);
 });

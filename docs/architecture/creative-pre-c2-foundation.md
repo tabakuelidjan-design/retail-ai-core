@@ -100,9 +100,12 @@ Remaining binding work: benchmark fonts (owner decision on the exact two-family 
 
 **Canonical HABB brand package** (`benchmarks/creative-intelligence/habb-brand-canonical-v1.json`, benchmark-scoped trusted data, not the future persistent `brands` registry):
 one `brand_id` minted once on the owner's authorization (a later migration to a brands registry MUST preserve it), `fr-BE` only; a READY Snapshot from readable HABB
-sources (HABB_OS, the Sales Director knowledge base, the Google Business service descriptions, owner decisions) with explicit gaps — the *Master Reference (18 July 2026)* and the
-*Design Manual v1.0 / Design Bible Foundation v1* were not available to the run and are recorded as gaps, not cited; Core V1 and Memory V1.1 approved through the real governed flow
-by a resolved OWNER actor (an authorization recorded in the decision event, not an authenticated Nordla identity: none exists yet). Memory carries four colour tokens, **empty
+sources (HABB_OS, the Sales Director knowledge base, the Google Business service descriptions, owner decisions) **and the two official HABB documents supplied afterwards, referenced by
+SHA-256 and not stored in the repo: the *Master Reference* (18 July 2026, `ccb6562e…f0c8`) and the *Design Manual v1.0* (`14c545a8…6ddb`)**. The Master Reference's CONFIRMED / WORKING /
+OPEN / HISTORY tags are preserved as the evidence status (`subject_ref`): CONFIRMED may back canonical facts, WORKING only a hypothesis, HISTORY only an inference, OPEN only a gap, and untagged
+statements are labelled `[UNTAGGED]` and never presented as CONFIRMED. Competitor and customer research remain gaps. Core V1 and Memory V1.1 are approved through the real governed flow
+by a resolved OWNER actor; every governed timestamp is **one recorded authorization time (2026-10-09T16:13:28Z) read once outside the builders and stored as data** — an owner authorization
+recorded for the benchmark bootstrap, not authenticated by Nordla Identity, which remains an open dependency. The Core semantics are unchanged (only evidence linkage was strengthened). Memory carries four colour tokens, **empty
 typography** (no font fallback) and no logo ref; `scripts/build-benchmark-brand-package.mjs` re-derives and verifies the outputs from the inputs and cannot mint an id.
 
 `NOT_RUN`, and **BLOCKED**. Computed by `assessBenchmarkReadiness` over the common resolver (HABB tenant `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5`,
