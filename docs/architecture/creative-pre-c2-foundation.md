@@ -112,15 +112,23 @@ HABB BENCHMARK FONT BINDINGS = COMPLETE   (pushed at e8f0da8, remote CI green on
   Montserrat       = BOUND
   HABB Brand Memory v2 = APPROVED   (habb-memory-v2@2, v1 SUPERSEDED)
 
-PRODUCT = MISSING
-ASSET   = MISSING
+ASSET   = METADATA BOUND (real merchant photograph, SHA-256 pinned; payload private, not in Git)
+PRODUCT = MISSING   (OWNER_PRODUCT_CONFIRMATION_REQUIRED)
 HABB BENCHMARK 001 = NOT_RUN / BLOCKED
 C2 = NOT READY
 
-Remaining blockers: exact PRODUCT, real merchant-provided ASSET. (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
+Remaining blocker: the exact PRODUCT (the owner must name the exact phone model of the real case). (The raw Master Reference DOCX and Design Manual PDF are not stored in the repo: they are referenced by SHA-256 and evidence metadata only.)
 
 Prepared: price claim, speed claim, FORMAT, and the canonical HABB brand package (Brand Identity, Snapshot, APPROVED Core V1, APPROVED Brand Memory V1.1 carrying the owner-approved expression system).
-Remaining binding work (only): the exact PRODUCT and the real merchant-provided ASSET. The fonts are bound (below).
+Remaining binding work (only): the exact PRODUCT. The real ASSET is registered (below) and the fonts are bound.
+
+**Real product asset (owner-supplied).** `asset://habb/benchmark-001/real-personalised-case-001`: a real photograph of a real personalised HABB case, 1152 × 1536 JPEG, SHA-256 pinned in the benchmark
+configuration, ASSET metadata (`MERCHANT_PROVIDED`, approval `approval://habb/benchmark-001/real-case-asset-001`, evidence `evidence://habb/benchmark-001/real-case-asset-001`) served by the
+benchmark's owner adapter. The repository is public and its asset policy forbids merchant originals, so **the bytes are not committed**: they live in the gitignored `data/private/` location and are
+hash-verified on load. Three facts stay separate: *asset metadata bound*, *asset payload available* (only where the verified file is present; CI does not need it) and *benchmark RUNNABLE*.
+The original is evidence and is never modified. The fidelity baseline (silhouette, camera / cutout geometry, printed artwork, proportions preserved; the face gate is NOT_APPLICABLE for this asset only)
+is recorded in the configuration. **The phone model is not inferred**: camera geometry and appearance are never proof. A PRODUCT binds only with a trusted proof kind (owner statement, production record, asset metadata,
+inventory reference) in addition to an ACTIVE catalogue resource.
 
 **Benchmark fonts (owner decision):** Playfair Display for the editorial headline (600) and Montserrat for price (700), speed claim (600), supporting text / CTA (500) and body (400); no third family, no fallback.
 Both are variable fonts from one pinned commit of `google/fonts` (`51303ca9…cfca`), unmodified, with their OFL texts and SHA-256 pinned in `resources/fonts/habb-benchmark/manifest.json` and listed in
@@ -148,8 +156,8 @@ read from the connected `merchants` table):
 | FORMAT | BOUND | `format://habb/benchmark-001/instagram-feed-1080x1350`, 1080 × 1350 px, DIGITAL, explicit empty zones, platform-level (unchanged) |
 | CLAIM price | BOUND | `claim://habb/benchmark-001/price-25`, wording `25 €`, approval `approval://habb/GBP-PROD-01` |
 | CLAIM speed | BOUND | `claim://habb/benchmark-001/express-5-minutes`, wording `5 minutes`, same approval; the qualification (store, model available, customer file usable) is kept beside the evidence |
-| PRODUCT | MISSING | `HABB_BENCHMARK_PRODUCT_BINDING_MISSING` — the catalogue holds one product per phone model; the owner must name the benchmark product |
-| ASSET | MISSING | `HABB_BENCHMARK_REAL_ASSET_MISSING` — no verified real photograph of a personalised HABB case exists |
+| PRODUCT | MISSING | `HABB_BENCHMARK_PRODUCT_BINDING_MISSING` — `OWNER_PRODUCT_CONFIRMATION_REQUIRED`: no trusted source ties the photograph to a phone model; question: *Which exact phone model is this case for?* |
+| ASSET | METADATA BOUND | the real photograph is registered (hash, approval, evidence); BOUND where its private payload is present and verified, `ASSET_PAYLOAD_UNAVAILABLE` elsewhere (CI) |
 | FONT | BOUND | `font://google-fonts/playfair-display` and `font://google-fonts/montserrat`: two pinned open fonts (SIL OFL 1.1), platform-level FONT resources, bytes + OFL texts in `resources/fonts/habb-benchmark/`, one upstream `google/fonts` commit; see the font-bindings section below |
 | Expression system | BOUND (when the Creative interface of the approved Memory is supplied) | owner-approved content carried by the APPROVED HABB Brand Memory V1.1 `habb-memory-v2@2` (revision of `habb-memory-v1@1`; Core `habb-core-v1@1`, brand_id `4c487848-8d41-4e30-8f3f-66afd09b4be4`), see below |
 
@@ -176,8 +184,7 @@ the approved store-service evidence; it is not the universal online price. Readi
 
 **Operational / data blockers (not capabilities) — OPEN**
 
-- exact HABB PRODUCT binding;
-- real approved HABB product photo (`HABB_BENCHMARK_REAL_ASSET_MISSING`);
+- exact HABB PRODUCT binding (owner confirmation of the phone model);
 - HABB CREATIVE BENCHMARK 001 execution.
 
 Closed since: the price and speed claims (benchmark-owned records), the FORMAT, and the canonical HABB brand (Identity, Snapshot, Core V1, Memory V1.1 with the bound expression system).

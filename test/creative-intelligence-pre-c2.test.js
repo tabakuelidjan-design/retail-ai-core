@@ -109,7 +109,7 @@ const completeConfig = () => ({
   ...benchmarkConfig,
   bindings: {
     ...benchmarkConfig.bindings,
-    product: { ref: 'product://bench/item' },
+    product: { ref: 'product://bench/item', proof: { kind: 'OWNER_STATEMENT' } },
     asset: { ref: 'asset://bench/photo' },
     claims: [
       { id: 'price', ref: 'claim://bench/price', expected_wording: '25 €' },
@@ -151,10 +151,10 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
   }
   assert.equal(benchmarkConfig.kind, 'CONFIGURATION_DATA');
   // PC2-54 as shipped (product, real asset and the Brand Memory expression system still missing) the benchmark is BLOCKED, never RUNNABLE, and names every missing binding
-  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: createBenchmarkResolver(benchmarkConfig), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
+  const shipped = await P.assessBenchmarkReadiness({ config: benchmarkConfig, resolver: createBenchmarkResolver(benchmarkConfig, { privatePayloads: false }), tenant: { merchantId: benchmarkConfig.merchant.merchant_id }, creativeInterface: null });
   assert.equal(shipped.status, 'BLOCKED');
   assert.equal(reasonOf(shipped, 'product'), 'BINDING_MISSING');
-  assert.equal(reasonOf(shipped, 'asset'), 'BINDING_MISSING');
+  assert.equal(reasonOf(shipped, 'asset'), 'ASSET_PAYLOAD_UNAVAILABLE');
   assert.equal(reasonOf(shipped, 'claim:price'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'claim:promise'), 'RESOLVED_WITH_EVIDENCE');
   assert.equal(reasonOf(shipped, 'font:font://google-fonts/playfair-display'), 'RESOLVED_WITH_EVIDENCE');
@@ -222,7 +222,7 @@ test('HABB Creative Benchmark 001: configuration data, bound through the common 
   assert.equal(CI.assessCreativeC2Readiness({ ...all, REAL_CAMPAIGN_BENCHMARK: runEvidence }).c2_allowed, true);
   // the shipped configuration itself still says NOT_RUN and still lists what is missing
   assert.equal(benchmarkConfig.status, 'NOT_RUN');
-  assert.ok(benchmarkConfig.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_REAL_ASSET_MISSING')));
+  assert.ok(benchmarkConfig.bindings_still_missing.some((b) => b.includes('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
 });
 
 test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it names exists', async () => {

@@ -121,11 +121,13 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
     metadata: { media_type: 'image/png', width_px: 800, height_px: 1000, content_hash: sha(bytes), origin, approval_ref: 'approval://x' }, ...over,
   });
   const shipped = await assess();
-  // HB-12 not RUNNABLE without a real product asset
+  // HB-12 not RUNNABLE without a real product asset PAYLOAD: the asset is bound by metadata, its bytes are private and absent from this (CI-like) environment
   assert.equal(shipped.status, 'BLOCKED');
-  assert.equal(reasonOf(shipped, 'asset'), 'BINDING_MISSING');
-  assert.equal(config.bindings.asset.ref, null);
-  assert.equal(config.bindings.asset.status, 'HABB_BENCHMARK_REAL_ASSET_MISSING');
+  assert.equal(reasonOf(shipped, 'asset'), 'ASSET_PAYLOAD_UNAVAILABLE');
+  assert.deepEqual(shipped.asset, { metadata_bound: true, payload_available: false });
+  assert.equal(config.bindings.asset.ref, 'asset://habb/benchmark-001/real-personalised-case-001');
+  const unboundAsset = await assess({ config: { ...config, bindings: { ...config.bindings, asset: { ref: null } } } });
+  assert.equal(reasonOf(unboundAsset, 'asset'), 'BINDING_MISSING');
   // HB-13 a generated / synthetic poster (or any non-merchant image) cannot satisfy ASSET, and nothing in the repository ever binds one
   for (const origin of ['GENERATED', 'SYNTHETIC']) {
     const withPoster = { ...config, bindings: { ...config.bindings, asset: { ref: 'asset://habb/poster' } } };
@@ -143,9 +145,10 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(config.bindings.product.ref, null);
   assert.equal(config.bindings.product.status, 'HABB_BENCHMARK_PRODUCT_BINDING_MISSING');
   assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_PRODUCT_BINDING_MISSING')));
-  assert.ok(config.bindings_still_missing.some((b) => b.startsWith('HABB_BENCHMARK_REAL_ASSET_MISSING')));
+  assert.ok(!config.bindings_still_missing.some((b) => b.includes('REAL_ASSET_MISSING'))); // the real asset is registered (see creative-intelligence-habb-asset.test.js)
   assert.ok(!config.bindings_still_missing.some((b) => b.includes('FONT_BINDINGS_MISSING')));
-  assert.equal(config.owned_records.filter((r) => r.kind === 'PRODUCT' || r.kind === 'ASSET' || r.kind === 'FONT').length, 0);
+  assert.equal(config.owned_records.filter((r) => r.kind === 'PRODUCT' || r.kind === 'FONT').length, 0); // no fake catalogue record, no font record in the config
+  assert.equal(config.owned_records.filter((r) => r.kind === 'ASSET').length, 1); // exactly the one real asset
   // HB-16 the FORMAT is unchanged: 1080 x 1350 px DIGITAL, explicit empty zones, platform-level
   assert.equal(reasonOf(shipped, 'format'), 'RESOLVED_WITH_EVIDENCE');
   const format = await resolverOf().resolve(config.bindings.format.ref, HABB);
@@ -156,7 +159,7 @@ test('Benchmark 001 readiness: bound where proven, blocked and named where not, 
   assert.equal(format.merchant_id, null);
   // the claims and the format are the bound items; everything else is individually reported
   assert.deepEqual(shipped.bindings.map((b) => [b.id, b.status]), [
-    ['product', 'MISSING'], ['asset', 'MISSING'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
+    ['product', 'MISSING'], ['asset', 'BLOCKED'], ['claim:price', 'BOUND'], ['claim:promise', 'BOUND'], ['format', 'BOUND'], ['font:font://google-fonts/playfair-display', 'BOUND'], ['font:font://google-fonts/montserrat', 'BOUND'], ['expression_system', 'MISSING'],
   ]);
   // HB-17 C2 stays blocked, the benchmark stays NOT_RUN, and a BLOCKED benchmark cannot be recorded as run
   assert.equal(config.status, 'NOT_RUN');

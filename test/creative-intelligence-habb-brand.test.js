@@ -142,7 +142,7 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   const claims = config.owned_records.filter((r) => r.kind === 'CLAIM');
   assert.deepEqual(claims.map((c) => [c.ref, c.metadata.approved_wording]), [['claim://habb/benchmark-001/price-25', '25 €'], ['claim://habb/benchmark-001/express-5-minutes', '5 minutes']]);
   // HBB-16 the benchmark's expression binding is BOUND to the approved Memory (readiness computed by the real assessor)
-  const resolver = createBenchmarkResolver(config);
+  const resolver = createBenchmarkResolver(config, { privatePayloads: false });
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
   assert.equal(report.bindings.find((b) => b.id === 'expression_system').ref, 'habb-memory-v2@2');
@@ -151,12 +151,12 @@ test('HABB Creative brand interface and Benchmark 001 binding', async () => {
   assert.ok(P.assessExpressionReadiness(iface).ready);
   // HBB-17 fonts are bound now (Playfair Display and Montserrat, see the font-binding tests); HBB-18 / 19 still BLOCKED for PRODUCT and the real ASSET
   assert.equal(report.status, 'BLOCKED');
-  assert.deepEqual(report.blockers, [{ id: 'product', reason: 'BINDING_MISSING' }, { id: 'asset', reason: 'BINDING_MISSING' }]);
+  assert.deepEqual(report.blockers, [{ id: 'product', reason: 'BINDING_MISSING' }, { id: 'asset', reason: 'ASSET_PAYLOAD_UNAVAILABLE' }]); // CI-like: the private payload is absent
   assert.equal(config.bindings.fonts.length, 2);
   assert.equal(config.bindings.product.ref, null);
-  assert.equal(config.bindings.asset.ref, null);
+  assert.equal(config.bindings.asset.ref, 'asset://habb/benchmark-001/real-personalised-case-001');
   assert.equal(config.status, 'NOT_RUN');
-  assert.equal(config.bindings_still_missing.length, 2);
+  assert.equal(config.bindings_still_missing.length, 1);
   // HBB-20 C2 stays false
   assert.equal(CI.assessCreativeC2Readiness({ BRAND_EXPRESSION_SYSTEM: P.assessExpressionReadiness(iface).evidence }).c2_allowed, false);
   assert.equal(CI.assessCreativeC2Readiness({}).c2_allowed, false);
@@ -262,7 +262,7 @@ test('Core impact, Brand Context, benchmark blockers and approval timestamps aft
   // HBE-7 / 8 / 9 the Brand Context stays READY, the expression stays BOUND, typography stays empty
   assert.equal(built.context.status, 'READY');
   assert.equal(Object.keys(out.approved_memory.design_tokens.typography).length, 2);
-  const resolver = createBenchmarkResolver(config);
+  const resolver = createBenchmarkResolver(config, { privatePayloads: false });
   const report = await P.assessBenchmarkReadiness({ config, resolver, tenant: { merchantId: MERCHANT }, creativeInterface: iface });
   assert.equal(reasonOf(report, 'expression_system'), 'APPROVED_NON_EMPTY');
   // HBE-10 PRODUCT and ASSET remain the benchmark blockers (fonts are bound by the owner's typography decision; the Design Manual limits to two families but names none)
