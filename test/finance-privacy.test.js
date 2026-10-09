@@ -15,7 +15,10 @@ const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf
   // published sha-256 checksums of the committed test-fixture fonts (provenance inventory, not secrets)
   && f !== 'test/fixtures/fonts/FONTS.json'
   // sha-256 checksums of the supplied merchant source documents (evidence provenance, not secrets)
-  && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-brand-canonical-v\d+\.json$/.test(f));
+  && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-brand-canonical-v\d+\.json$/.test(f)
+  // pinned sha-256 checksums of open font files and their licence texts (provenance, not secrets)
+  && f !== 'THIRD_PARTY_NOTICES.md'
+  && !/^resources\/fonts\/[a-z0-9-]+\/manifest\.json$/.test(f));
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const contents = new Map(textFiles.map((f) => [f, read(f)]));
 

@@ -1,0 +1,99 @@
+{
+  "kind": "FONT_RESOURCE_MANIFEST",
+  "scope": "HABB CREATIVE BENCHMARK 001",
+  "purpose": "Pinned open-licensed production fonts selected by the owner for Benchmark 001. They are open font resources (SIL Open Font License 1.1) selected for HABB, not proprietary HABB fonts. The bytes live beside this file; the FONT records below are what the common resource resolver serves, with the bytes as an ephemeral, hash-checked payload.",
+  "owner_decision": {
+    "families": ["Playfair Display", "Montserrat"],
+    "no_third_family": true,
+    "no_fallback_family": true,
+    "evidence_ref": "owner-decision://habb-creative-benchmark-001/typography-v1"
+  },
+  "upstream": {
+    "repository": "https://github.com/google/fonts",
+    "commit": "51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca",
+    "commit_date": "2026-10-09T12:49:29Z",
+    "note": "One exact upstream commit for both families; never a moving branch."
+  },
+  "fonts": [
+    {
+      "family": "Playfair Display",
+      "file": "PlayfairDisplay[wght].ttf",
+      "upstream_path": "ofl/playfairdisplay/PlayfairDisplay[wght].ttf",
+      "font_sha256": "c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6",
+      "name_table": {
+        "family": "Playfair Display",
+        "version": "Version 1.203",
+        "copyright": "Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name \"Playfair Display\"."
+      },
+      "variable_axes": { "wght": { "min": 400, "default": 400, "max": 900 } },
+      "license": {
+        "id": "OFL-1.1",
+        "name": "SIL Open Font License, Version 1.1",
+        "file": "OFL-PlayfairDisplay.txt",
+        "upstream_path": "ofl/playfairdisplay/OFL.txt",
+        "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e",
+        "copyright": "Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name \"Playfair Display\"",
+        "notice_must_contain": "SIL Open Font License, Version 1.1"
+      },
+      "record": {
+        "ref": "font://google-fonts/playfair-display",
+        "kind": "FONT",
+        "merchant_id": null,
+        "version": 1,
+        "status": "ACTIVE",
+        "evidence_ref": "evidence://google-fonts/ofl/playfairdisplay/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca",
+        "metadata": {
+          "family": "Playfair Display",
+          "style": "normal",
+          "weight": 400,
+          "version": "1.203",
+          "format": "ttf",
+          "content_hash": "c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6",
+          "license_ref": "license://sil-ofl-1.1/playfair-display"
+        }
+      }
+    },
+    {
+      "family": "Montserrat",
+      "file": "Montserrat[wght].ttf",
+      "upstream_path": "ofl/montserrat/Montserrat[wght].ttf",
+      "font_sha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+      "name_table": {
+        "family": "Montserrat",
+        "version": "Version 9.000",
+        "copyright": "Copyright 2011 The Montserrat Project Authors (https://github.com/JulietaUla/Montserrat)"
+      },
+      "variable_axes": { "wght": { "min": 100, "default": 100, "max": 900 } },
+      "license": {
+        "id": "OFL-1.1",
+        "name": "SIL Open Font License, Version 1.1",
+        "file": "OFL-Montserrat.txt",
+        "upstream_path": "ofl/montserrat/OFL.txt",
+        "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e",
+        "copyright": "Copyright 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git)",
+        "notice_must_contain": "SIL Open Font License, Version 1.1"
+      },
+      "record": {
+        "ref": "font://google-fonts/montserrat",
+        "kind": "FONT",
+        "merchant_id": null,
+        "version": 1,
+        "status": "ACTIVE",
+        "evidence_ref": "evidence://google-fonts/ofl/montserrat/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca",
+        "metadata": {
+          "family": "Montserrat",
+          "style": "normal",
+          "weight": 100,
+          "version": "9.000",
+          "format": "ttf",
+          "content_hash": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+          "license_ref": "license://sil-ofl-1.1/montserrat"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "metadata.weight is the weight of the file's DEFAULT instance (Playfair Display 400, Montserrat 100). The weights actually used are selected as variable-font instances (wght) by the typography engine, on the same hash-checked bytes.",
+    "Upstream provenance (repository, commit, path, licence hash, axes) is kept here beside the bytes: the generic FONT metadata contract of the common resolver is deliberately not widened for it."
+  ]
+}

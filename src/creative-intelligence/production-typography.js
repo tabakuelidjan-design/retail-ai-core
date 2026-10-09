@@ -13,7 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import {
-  Blob as HbBlob, Buffer as HbBuffer, Direction, Face, Font, shape,
+  Blob as HbBlob, Buffer as HbBuffer, Direction, Face, Font, Variation, shape,
 } from 'harfbuzzjs';
 import bidiFactory from 'bidi-js';
 import { CI_ERROR as E, SCRIPT } from './constants.js';
@@ -41,8 +41,13 @@ const SCRIPT_PROBES = {
 /**
  * Builds a REAL font from trusted bytes. `metadata` is what the FONT resource declared (family, style, weight, version, content_hash,
  * license_ref): the bytes must match the declared hash. The bytes are used for this font object only and are never stored elsewhere.
+ *
+ * `variations` selects an instance of a VARIABLE font ({ wght: 600 }): the same hash-checked bytes, a fixed design-space position. It is applied to
+ * measuring, shaping and outlines alike, and is reported on the font. Absent, the font's default instance is used.
  */
-export function createRealFont({ font_ref: fontRef, bytes, metadata }) {
+export function createRealFont({
+  font_ref: fontRef, bytes, metadata, variations = null,
+}) {
   ref(fontRef, 'font_ref');
   if (!(bytes instanceof Uint8Array) || bytes.length < 64) fail(E.FONT_INVALID, 'a real font needs its bytes', { field: 'bytes' });
   const hash = sha256(bytes);
@@ -55,6 +60,12 @@ export function createRealFont({ font_ref: fontRef, bytes, metadata }) {
   } catch {
     return fail(E.FONT_INVALID, 'the font bytes could not be parsed as an OpenType font', { field: 'bytes' });
   }
+  const axes = variations === null ? {} : variations;
+  if (typeof axes !== 'object' || Array.isArray(axes)) fail(E.FONT_INVALID, 'variations must be an object of axis tag to value', { field: 'variations' });
+  for (const [tag, value] of Object.entries(axes)) {
+    if (!/^[A-Za-z0-9 ]{4}$/.test(tag) || !Number.isFinite(value)) fail(E.FONT_INVALID, 'a variation is a four-character axis tag and a finite number', { field: 'variations' });
+  }
+  if (Object.keys(axes).length > 0) font.setVariations(Object.entries(axes).sort(([a], [b]) => (a < b ? -1 : 1)).map(([tag, value]) => Variation.fromString(`${tag}=${value}`)));
   const upem = face.upem;
   if (!(upem >= 16 && upem <= 16384)) fail(E.FONT_INVALID, 'the font has an invalid units-per-em', { field: 'bytes' });
   const extents = font.hExtents();
@@ -238,6 +249,7 @@ export function createRealFont({ font_ref: fontRef, bytes, metadata }) {
     family: metadata.family,
     style: metadata.style ?? null,
     weight: metadata.weight ?? null,
+    variations: Object.freeze({ ...axes }),
     version: metadata.version ?? null,
     content_hash: hash,
     license_ref: metadata.license_ref ?? null,

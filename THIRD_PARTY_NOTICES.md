@@ -38,3 +38,17 @@ Inventory with source, licence and hash: `test/fixtures/fonts/FONTS.json` (check
 |---|---|---|
 | `DejaVuSans.ttf` (DejaVu Sans 2.37) | Bitstream Vera Fonts licence (SPDX `Bitstream-Vera`) with DejaVu public-domain changes and Arev (Tavmjong Bah) terms | `test/fixtures/fonts/LICENSE-DejaVu.txt` |
 | `NotoNaskhArabic_400Regular.ttf` (Noto Naskh Arabic 2.021) | SIL Open Font License 1.1 (`OFL-1.1`), Noto Project Authors | `test/fixtures/fonts/LICENSE-NotoNaskhArabic-OFL.txt` |
+
+## Production fonts for Benchmark 001 (shipped with the repository; open fonts, not proprietary)
+
+Open font resources selected for the benchmark. Bytes, pinned hashes and licence texts: `resources/fonts/habb-benchmark/` (`manifest.json`, checked by a test).
+Both come from one pinned upstream commit of https://github.com/google/fonts (`51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca`, never a moving branch), are unmodified,
+and are licensed under the **SIL Open Font License, Version 1.1** (`OFL-1.1`). The OFL texts are kept beside the fonts and must accompany any redistribution of the font files.
+
+| Family | File (upstream path) | Copyright (OFL notice) | Font SHA-256 | Licence-text SHA-256 |
+|---|---|---|---|---|
+| Playfair Display (variable `wght` 400-900, v1.203) | `PlayfairDisplay[wght].ttf` (`ofl/playfairdisplay/`) | Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name "Playfair Display" | `c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6` | `566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e` |
+| Montserrat (variable `wght` 100-900, v9.000) | `Montserrat[wght].ttf` (`ofl/montserrat/`) | Copyright 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git) | `0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7` | `8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e` |
+
+OFL obligations observed: the fonts are not sold on their own, the copyright and licence notice travel with them, and the files are not modified or renamed (a Reserved Font Name applies to Playfair Display).
+Weights are selected at render time as instances of the variable fonts; no derived font file is created.
