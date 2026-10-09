@@ -1,0 +1,35 @@
+{
+  "purpose": "Provenance and licence inventory of the font files committed as TEST FIXTURES. A test (PC2-79) requires every committed font file to be listed here with its source, exact licence, notice file and content hash. Fonts are never shipped in a build and are not merchant fonts.",
+  "fonts": [
+    {
+      "file": "DejaVuSans.ttf",
+      "family": "DejaVu Sans",
+      "version": "2.37",
+      "source": "https://dejavu-fonts.github.io/ (DejaVu fonts 2.37)",
+      "license": {
+        "name": "Bitstream Vera Fonts licence with DejaVu public-domain changes and Arev Fonts (Tavmjong Bah) terms",
+        "spdx": "Bitstream-Vera",
+        "note": "NOT the SIL Open Font License. The Bitstream Vera licence permits use, copying, merging, publishing, distribution and sale of the Font Software, forbids selling the fonts by themselves, and forbids using the names Bitstream or Vera on modified versions. DejaVu's own changes are public domain. Glyphs imported from Arev are (c) Tavmjong Bah under the same terms.",
+        "notice_file": "LICENSE-DejaVu.txt",
+        "notice_must_contain": "Bitstream Vera Fonts Copyright",
+        "embedded_license_url": "http://dejavu.sourceforge.net/wiki/index.php/License"
+      },
+      "content_hash": "7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954"
+    },
+    {
+      "file": "NotoNaskhArabic_400Regular.ttf",
+      "family": "Noto Naskh Arabic",
+      "version": "2.021",
+      "source": "https://github.com/notofonts/arabic (Noto Project Authors)",
+      "license": {
+        "name": "SIL Open Font License, Version 1.1",
+        "spdx": "OFL-1.1",
+        "note": "Verified independently from the font's own name table (copyright, licence description and licence URL) and from the notice file.",
+        "notice_file": "LICENSE-NotoNaskhArabic-OFL.txt",
+        "notice_must_contain": "SIL OPEN FONT LICENSE Version 1.1",
+        "embedded_license_url": "https://openfontlicense.org"
+      },
+      "content_hash": "706b4580c025f6c75ec1c06013e17f00a23ec1780091b77a5a5b339469bda94d"
+    }
+  ]
+}

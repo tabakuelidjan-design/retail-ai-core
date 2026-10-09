@@ -166,7 +166,8 @@ export async function verifyRasterizer() {
       }
       return true;
     },
-    no_variable_metadata: () => pngChunkTypes(first).every((t) => ['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND'].includes(t)),
+    no_variable_metadata: () => pngChunkTypes(first).every((t) => ['IHDR', 'cHRM', 'gAMA', 'sRGB', 'PLTE', 'tRNS', 'IDAT', 'IEND'].includes(t)),
+    explicit_srgb_signalling: () => ['cHRM', 'gAMA', 'sRGB'].every((t) => pngChunkTypes(first).includes(t)),
     size_mismatch_refused: () => refusesWith(E.RASTER_UNSUPPORTED, () => rasterize(PROBE_SVG, { width: 999, height: 80 })),
   });
   return issue(D.DETERMINISTIC_RASTERIZER, { checks: names, sha256: createHash('sha256').update(first).digest('hex'), engine: RASTERIZER_ENGINE });

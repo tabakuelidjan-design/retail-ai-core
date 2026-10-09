@@ -4,7 +4,7 @@ export {
   createRealFont, createRealFontRegistry, combineFontRegistries, loadRealFont, lineInkBounds, PARITY_TOLERANCE_PX,
 } from './production-typography.js';
 export {
-  createResvgRasterizer, renderProductionPng, stripPngMetadata, pngDimensions, pngChunkTypes, rasterizeToPixels, inkBoundsOfPixels, RASTERIZER_ENGINE,
+  createResvgRasterizer, renderProductionPng, stripPngMetadata, PNG_COLOR_CHUNKS, pngDimensions, pngChunkTypes, rasterizeToPixels, inkBoundsOfPixels, RASTERIZER_ENGINE,
 } from './production-render.js';
 export {
   verifyResourceResolver, verifyFontMetrics, verifyShaping, verifyArabicBidi, verifyRasterizer, verifyPngPath, assessExpressionReadiness,

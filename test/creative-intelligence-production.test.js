@@ -200,7 +200,7 @@ test('Deterministic rasterizer and the real PNG path', async () => {
     await new Promise((resolve) => { setTimeout(resolve, 3); });
   }
   assert.equal(hashes.size, 1);
-  assert.ok(P.pngChunkTypes(png.bytes).every((t) => ['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND'].includes(t)));
+  assert.ok(P.pngChunkTypes(png.bytes).every((t) => ['IHDR', 'cHRM', 'gAMA', 'sRGB', 'PLTE', 'tRNS', 'IDAT', 'IEND'].includes(t)));
   // a PNG carrying a timestamp / text chunk is normalized to the same bytes
   const chunk = (type, data) => {
     const body = Buffer.concat([Buffer.from(type, 'latin1'), Buffer.from(data)]);

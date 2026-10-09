@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const git = (args) => execSync(`git ${args}`, { cwd: ROOT, encoding: 'utf8' });
 const files = git('ls-files --cached --others --exclude-standard').split('\n').filter(Boolean);
-const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf)$/i.test(f) && !f.endsWith('package-lock.json'));
+const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf)$/i.test(f) && !f.endsWith('package-lock.json')
+  // published sha-256 checksums of the committed test-fixture fonts (provenance inventory, not secrets)
+  && f !== 'test/fixtures/fonts/FONTS.json');
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const contents = new Map(textFiles.map((f) => [f, read(f)]));
 

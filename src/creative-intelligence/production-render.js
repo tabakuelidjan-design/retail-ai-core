@@ -15,8 +15,42 @@ const require = createRequire(import.meta.url);
 export const RASTERIZER_ENGINE = Object.freeze({ name: 'resvg-js', version: require('@resvg/resvg-js/package.json').version });
 
 const PNG_SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-// only the chunks needed to decode the image survive: header, palette, transparency, data, end
+// Retained from the encoder: the chunks needed to decode the image (header, palette, transparency, data, end).
+// Everything else the encoder or a caller may have put there (tIME, tEXt/zTXt/iTXt, pHYs, eXIf, iCCP, any colour chunk...) is dropped, and the
+// colour semantics are then GENERATED, identically every time: this pipeline is DIGITAL and its pixels are sRGB (resvg paints in sRGB).
 const KEPT_CHUNKS = new Set(['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND']);
+// Generated, in this order, right after IHDR (they must precede PLTE / IDAT):
+//   cHRM  the sRGB primaries and white point (PNG spec 11.3.3.1 values, x100000)
+//   gAMA  45455 = 1/2.2 (the PNG spec's sRGB-compatible fallback for decoders that ignore sRGB)
+//   sRGB  rendering intent 0 (perceptual): the image IS sRGB; a decoder must not apply any other profile
+// No ICC profile is invented (no iCCP): ICC / CMYK is a separate print pipeline.
+export const PNG_COLOR_CHUNKS = Object.freeze(['cHRM', 'gAMA', 'sRGB']);
+const SRGB_CHUNK_DATA = Object.freeze({
+  cHRM: [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000],
+  gAMA: [45455],
+  sRGB: null,
+});
+
+const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function pngChunk(type, data) {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), Buffer.from(data)]);
+  const out = Buffer.alloc(12 + data.length);
+  out.writeUInt32BE(data.length, 0);
+  body.copy(out, 4);
+  out.writeUInt32BE(crc32(body), 8 + data.length);
+  return out;
+}
+const u32s = (values) => { const b = Buffer.alloc(values.length * 4); values.forEach((v, i) => b.writeUInt32BE(v, i * 4)); return b; };
+const colorChunks = () => PNG_COLOR_CHUNKS.map((type) => pngChunk(type, SRGB_CHUNK_DATA[type] === null ? Buffer.from([0]) : u32s(SRGB_CHUNK_DATA[type])));
 
 /** The size a PNG declares in its header, or null when the bytes are not a PNG. */
 export function pngDimensions(bytes) {
@@ -26,7 +60,7 @@ export function pngDimensions(bytes) {
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
-/** Removes every non-essential chunk (tIME, tEXt, zTXt, iTXt, pHYs, gAMA, sRGB, eXIf...): the output holds nothing that can vary between runs. */
+/** Keeps the decoding chunks, drops every other chunk (tIME, tEXt, zTXt, iTXt, pHYs, eXIf, iCCP, incoming colour chunks...) and inserts the fixed sRGB colour chunks. Idempotent. */
 export function stripPngMetadata(bytes) {
   if (!pngDimensions(bytes)) fail(E.RASTER_UNSUPPORTED, 'not a PNG');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -37,7 +71,10 @@ export function stripPngMetadata(bytes) {
     const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
     const end = offset + 12 + length;
     if (end > bytes.length) fail(E.RASTER_UNSUPPORTED, 'truncated PNG');
-    if (KEPT_CHUNKS.has(type)) parts.push(bytes.subarray(offset, end));
+    if (KEPT_CHUNKS.has(type)) {
+      parts.push(bytes.subarray(offset, end));
+      if (type === 'IHDR') parts.push(...colorChunks());
+    }
     offset = end;
   }
   return Uint8Array.from(Buffer.concat(parts));

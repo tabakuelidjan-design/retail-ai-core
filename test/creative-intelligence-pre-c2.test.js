@@ -227,7 +227,7 @@ test('PRE-C2 coverage matrix: the doc maps every behaviour row and every test it
   const doc = await readFile(new URL('../docs/architecture/creative-pre-c2-foundation.md', import.meta.url), 'utf8');
   const matrix = doc.slice(doc.indexOf('<!-- coverage-matrix:start -->'), doc.indexOf('<!-- coverage-matrix:end -->'));
   const rows = [...matrix.matchAll(/^\| PC2-(\d+) \| (.+?) \| (.+?) \|$/gm)].map((m) => ({ n: Number(m[1]), ref: m[3] }));
-  assert.ok(rows.length >= 77, `at least 77 rows, found ${rows.length}`);
+  assert.ok(rows.length >= 81, `at least 81 rows, found ${rows.length}`);
   assert.deepEqual(rows.map((r) => r.n), Array.from({ length: rows.length }, (_, i) => i + 1));
   for (const { n, ref } of rows) {
     const [file, name] = ref.split(' › ');

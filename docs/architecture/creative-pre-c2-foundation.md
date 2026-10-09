@@ -55,8 +55,8 @@ The ink rasterized by resvg for each text is compared with the analytic ink boun
 
 ## 5. PNG determinism
 
-`renderProductionPng` requires a RESOLVED render with REAL (or no) typography. The encoded PNG is reduced to the critical chunks
-(`IHDR`, `PLTE`, `tRNS`, `IDAT`, `IEND`) so no timestamp, software tag or text chunk can vary. Six consecutive renders are byte-identical.
+`renderProductionPng` requires a RESOLVED render with REAL (or no) typography. The encoded PNG is normalized (see the PNG chunks paragraph in section 6):
+no timestamp, text or machine-specific chunk survives and the sRGB colour signalling is explicit. Six consecutive renders are byte-identical.
 Cross-platform byte equality of the encoded PNG is **not claimed** (zlib/encoder differences between native builds are possible); what is
 verified on every platform is determinism per platform and pixel parity with the layout.
 
@@ -68,12 +68,20 @@ verified on every platform is determinism per platform and pixel parity with the
 | `bidi-js` | 1.1.0 | MIT | Unicode bidi levels | pure JS | verified | verified | verified | verified |
 | `@resvg/resvg-js` | 2.6.2 | **MPL-2.0** | SVG → PNG | native (prebuilt, per-platform optional dependency) | verified | verified | verified (win32-x64) | verified (linux-x64-gnu, Docker) |
 
-Fixtures (tests only): DejaVu Sans (Bitstream Vera / DejaVu licence) and Noto Naskh Arabic (SIL OFL 1.1), licences stored beside the files in
-`test/fixtures/fonts/`.
+Fixtures (tests only, never shipped): DejaVu Sans 2.37 under the **Bitstream Vera Fonts licence** (with DejaVu public-domain changes and Arev terms; SPDX
+`Bitstream-Vera`) and Noto Naskh Arabic 2.021 under the **SIL OFL 1.1**. Source, exact licence, notice file and content hash of every
+committed font are in `test/fixtures/fonts/FONTS.json`, which a test checks against the files.
 
-**MPL-2.0 (resvg):** file-level copyleft. We use the published npm package unmodified, as a dependency; no resvg source is copied or modified in
-this repository, so no source-disclosure obligation is triggered. If resvg is ever modified or vendored, the modified files must be published
-under MPL-2.0. Not verified: macOS, arm64 and musl prebuilds (declared by the package, not tested here).
+**MPL-2.0 (resvg):** file-level copyleft. Nordla's proprietary source does not become MPL by using or linking resvg. Nordla does not modify any
+covered file. If an executable containing resvg is *distributed*, MPL-2.0 §3.2 requires the covered source to be made available. The exact
+package/version, upstream source, source-availability mechanism, notice and modification status are recorded in the repository-level
+`THIRD_PARTY_NOTICES.md`. Not verified: macOS, arm64 and musl prebuilds (declared by the package, not tested here).
+
+**PNG chunks.** resvg's own output holds only `IHDR`, `IDAT`, `IEND`: it carries *no* colour signalling. The normalizer keeps the decoding chunks
+(`IHDR`, `PLTE`, `tRNS`, `IDAT`, `IEND`), drops everything else (`tIME`, `tEXt`/`zTXt`/`iTXt`, `pHYs`, `eXIf`, `iCCP`, any incoming colour chunk) and
+**generates** `cHRM` (sRGB primaries and white point), `gAMA` 45455 and `sRGB` (perceptual intent) right after `IHDR`, with valid CRCs. This states that
+the DIGITAL pipeline's pixels are sRGB (resvg paints in sRGB) in the same bytes every time. The pixel data (`IDAT`) is the encoder's, unchanged; no ICC
+profile is invented. ICC / CMYK belongs to a future print pipeline.
 
 ## 7. HABB CREATIVE BENCHMARK 001 — status
 
@@ -184,4 +192,8 @@ Each row is a `// PC2-N` marker in the named test; the coverage test checks that
 | PC2-75 | the rasterized ink of each text agrees with the analytic ink of its shaped glyphs (PARITY_TOLERANCE_PX), in LTR and RTL | creative-intelligence-production.test.js › SVG / PNG parity: the pixels land where the layout says, within a documented tolerance |
 | PC2-76 | with real fonts the demo is laid out, preflight is measurable (no NOT_MEASURABLE for text) and passes, and the PNG renders | creative-intelligence-production.test.js › The full production path on the demo: layout, preflight, glyph render, PNG - measurable and green |
 | PC2-77 | each verification issues registered evidence for ITS dependency, and assessCreativeC2Readiness accepts nothing else | creative-intelligence-pre-c2.test.js › PRE-C2 verifications run real checks and issue the only evidence that closes a dependency |
+| PC2-78 | explicit sRGB (cHRM + gAMA + sRGB perceptual) before IDAT; no timestamp, text, ICC or physical-size chunk; repeated renders are byte-identical | creative-intelligence-colorspace.test.js › PNG colour semantics: explicit deterministic sRGB, no variable metadata, pixels untouched |
+| PC2-79 | the inventory lists exactly the committed font files; each hash matches; each notice file exists and carries its licence text | creative-intelligence-colorspace.test.js › Font fixtures: every committed font file has its source, exact licence, notice and content hash |
+| PC2-80 | opaque brand hex colours come out of the rasterizer unchanged: tolerance 0 per channel | creative-intelligence-colorspace.test.js › Brand colours survive rasterization exactly |
+| PC2-81 | exact package, licence, upstream source, source-availability mechanism, notice, modification status | creative-intelligence-colorspace.test.js › THIRD_PARTY_NOTICES records the MPL-2.0 obligations of resvg exactly |
 <!-- coverage-matrix:end -->
