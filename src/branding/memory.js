@@ -5,6 +5,7 @@ import {
 import { resolveBrand } from './brand.js';
 import { commonDocument } from './contracts.js';
 import { buildBrandDecisionEvent } from './decision-event.js';
+import { assertExpressionLocalesSupported, isExpressionNonEmpty, normalizeExpressionSystem } from './expression-system.js';
 import {
   claimRef,
   normalizeHardRule,
@@ -27,6 +28,8 @@ import {
 } from './validation.js';
 
 // Brand Memory V1 = the approved, versioned, machine-readable operational brand.
+// V1.1 adds ONE optional, backward-compatible sixth category, `expression_system` (see expression-system.js): a V1 Memory without it stays
+// valid, and Creative C2 additionally requires an approved NON-EMPTY expression system.
 // Exactly five categories (no budget, strategy, catalog, pricing, production dimensions...):
 //   identity_references, design_tokens, hard_rules, semantic_context, external_references.
 // It stores REFERENCES, never binaries and never the truth of a claim or a product fact.
@@ -161,11 +164,11 @@ export function normalizeExternalReferences(input = {}, field = 'external_refere
 // ---------------------------------------------------------------- document
 const DOCUMENT_KEYS = [
   'id', 'merchant_id', 'brand_id', 'version', 'status', 'created_at', 'supersedes_id', 'core_ref',
-  'identity_references', 'design_tokens', 'hard_rules', 'semantic_context', 'external_references',
+  'identity_references', 'design_tokens', 'hard_rules', 'semantic_context', 'external_references', 'expression_system',
   'approval',
 ];
 const CONTENT_KEYS = [
-  'identity_references', 'design_tokens', 'hard_rules', 'semantic_context', 'external_references',
+  'identity_references', 'design_tokens', 'hard_rules', 'semantic_context', 'external_references', 'expression_system',
 ];
 
 export function normalizeBrandMemory(input) {
@@ -186,6 +189,8 @@ export function normalizeBrandMemory(input) {
     hard_rules: rules.map((rule) => ({ ...rule })),
     semantic_context: normalizeSemanticContext(input.semantic_context ?? {}),
     external_references: normalizeExternalReferences(input.external_references ?? {}),
+    // optional (V1.1): the key is ABSENT on a legacy Memory, so a V1 document keeps exactly its V1 shape
+    ...(input.expression_system == null ? {} : { expression_system: normalizeExpressionSystem(input.expression_system, 'memory.expression_system') }),
     approval: approval(input.approval, 'memory.approval'),
   });
 }
@@ -201,7 +206,8 @@ const hasContent = (memory) => {
     || sem.voice_traits.length || sem.do.length || sem.dont.length
     || sem.brand_style_summary
     || sem.on_brand_examples.length || sem.off_brand_examples.length
-    || ext.production_asset_refs.length || ext.claim_refs.length || ext.policy_refs.length,
+    || ext.production_asset_refs.length || ext.claim_refs.length || ext.policy_refs.length
+    || isExpressionNonEmpty(memory.expression_system),
   );
 };
 
@@ -247,7 +253,7 @@ export function buildBrandMemoryDraft({
   content = {},
   supersedesId = null,
 } = {}) {
-  const { merchantId, brandId } = resolveBrand(tenant, brand);
+  const { merchantId, brandId, brand: identity } = resolveBrand(tenant, brand);
   assertBindableCore(core, merchantId, brandId);
   exactKeys(content, CONTENT_KEYS, 'content');
 
@@ -263,6 +269,8 @@ export function buildBrandMemoryDraft({
     ...content,
     approval: null,
   });
+  // governed boundary: a locale override must be a locale the brand supports
+  assertExpressionLocalesSupported(memory.expression_system, identity.supported_locales, 'memory.expression_system');
   return Object.freeze({
     memory,
     readiness: validateBrandMemory(memory, { core }),
@@ -272,10 +280,11 @@ export function buildBrandMemoryDraft({
 
 export function submitBrandMemoryForReview({ memory, core, tenant, brand } = {}) {
   if (!memory) throw new TypeError('memory is required');
-  const { merchantId, brandId } = resolveBrand(tenant, brand);
+  const { merchantId, brandId, brand: identity } = resolveBrand(tenant, brand);
   if (memory.merchant_id !== merchantId) throw new Error('MEMORY_TENANT_MISMATCH');
   if (memory.brand_id !== brandId) throw new Error('MEMORY_BRAND_MISMATCH');
   if (memory.status !== STATUS.DRAFT) throw new Error('MEMORY_MUST_BE_DRAFT_TO_SUBMIT');
+  assertExpressionLocalesSupported(memory.expression_system, identity.supported_locales, 'memory.expression_system');
   assertBindableCore(core, merchantId, brandId);
 
   const readiness = validateBrandMemory(memory, { core });
@@ -301,9 +310,10 @@ export function approveBrandMemory({
   note = null,
 } = {}) {
   if (!memory) throw new TypeError('memory is required');
-  const { merchantId, brandId } = resolveBrand(tenant, brand);
+  const { merchantId, brandId, brand: identity } = resolveBrand(tenant, brand);
   if (memory.merchant_id !== merchantId) throw new Error('MEMORY_TENANT_MISMATCH');
   if (memory.brand_id !== brandId) throw new Error('MEMORY_BRAND_MISMATCH');
+  assertExpressionLocalesSupported(memory.expression_system, identity.supported_locales, 'memory.expression_system');
   const actor = assertResolvedActor(resolvedActor, tenant);
 
   if (memory.status !== STATUS.REVIEW_REQUIRED) {

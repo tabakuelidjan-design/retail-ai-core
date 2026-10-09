@@ -11,3 +11,4 @@ export * from './interfaces.js';
 export * from './snapshot.js';
 export * from './core.js';
 export * from './decision-event.js';
+export * from './expression-system.js';

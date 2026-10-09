@@ -149,5 +149,7 @@ export function creativeBrandInterface(context) {
     hard_rules: context.memory.hard_rules,
     semantic_context: context.memory.semantic_context,
     external_references: context.memory.external_references,
+    // V1.1: null when the approved Memory predates the expression system (absence is explicit, never defaulted)
+    expression_system: context.memory.expression_system ?? null,
   }));
 }

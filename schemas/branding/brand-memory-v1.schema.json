@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "nordla://schemas/branding/brand-memory-v1",
   "title": "Nordla Brand Memory V1 (normalized document shape)",
-  "description": "Structural contract of a normalized Brand Memory. Cross-field rules (type x operator matrix, value shapes, Core binding, token name format, duplicate colors) live in code and are covered by tests. This schema is executed in tests by validateSchemaSubset (a strict subset validator, not a general JSON Schema implementation) and checked against the code constants for drift.",
+  "description": "Structural contract of a normalized Brand Memory. Cross-field rules (type x operator matrix, value shapes, Core binding, token name format, duplicate colors) live in code and are covered by tests. This schema is executed in tests by validateSchemaSubset (a strict subset validator, not a general JSON Schema implementation) and checked against the code constants for drift. V1.1 (additive, backward compatible): the OPTIONAL `expression_system` category; a V1 document without it stays valid. The canonical locale form of `locale_overrides` keys and the text guards (no URL, no hex colour, no claim reference, no generation parameter) live in code and are covered by tests.",
   "type": "object",
   "required": [
     "id",
@@ -271,6 +271,9 @@
           ]
         }
       }
+    },
+    "expression_system": {
+      "$ref": "#/$defs/expression_system"
     }
   },
   "$defs": {
@@ -362,6 +365,117 @@
         "source_ref": {
           "type": "string",
           "pattern": "^(brand-core|decision|approved-asset|claim|external-policy)://\\S+$"
+        }
+      }
+    },
+    "expression_guideline": {
+      "type": "object",
+      "required": [
+        "principles",
+        "do",
+        "dont",
+        "reference_asset_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "principles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "do": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "dont": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "reference_asset_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\S+$"
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        }
+      }
+    },
+    "expression_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "photography": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "product_presentation": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "composition": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "layout_principles": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "illustration": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "iconography": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "motion": {
+          "$ref": "#/$defs/expression_guideline"
+        }
+      }
+    },
+    "expression_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "photography": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "product_presentation": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "composition": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "layout_principles": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "illustration": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "iconography": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "motion": {
+          "$ref": "#/$defs/expression_guideline"
+        },
+        "locale_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/expression_overrides"
+          }
         }
       }
     }

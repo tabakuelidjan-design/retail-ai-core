@@ -106,6 +106,18 @@ Structured facts about a candidate, produced by upstream adapters (OCR, color ex
 
 `schemas/branding/brand-memory-v1.schema.json` describes the normalized document structure. It is executed in tests by `validateSchemaSubset` (`schema-subset.js`), a **strict subset validator - not a general JSON Schema implementation**: it supports only the keywords the Branding schemas use (type, enum, const, properties, required, additionalProperties, items, min/max constraints, pattern, uniqueItems, local `#/$defs/` `$ref`) and refuses every other keyword, even in unreached branches, so a schema can never hold an unenforced constraint. `$schema`/`$id` are annotations only. It has no dependency (NDR-P10: build/own what is cheap). The type x operator matrix, value shapes, Core binding and token-name rules live in code only; a test fails if the schema enums drift from the code constants.
 
+## Brand Memory V1.1 — `expression_system` (PRE-C2)
+
+V1.1 is **additive and backward compatible**: a sixth, optional Memory category. A V1 Memory stays valid, keeps exactly its V1 shape and is still a READY context;
+it is simply not *C2 brand-ready* (`assessExpressionReadiness` answers `EXPRESSION_SYSTEM_ABSENT`). No default style is ever substituted.
+
+- Domains: `photography`, `product_presentation`, `composition`, `layout_principles`, `illustration`, `iconography`, `motion`, `locale_overrides`.
+- Each non-locale domain is `{principles, do, dont, reference_asset_refs}`: at most 20 items of at most 300 characters; no URL, prompt, model, seed, score, hex colour or claim/policy reference. Hard rules stay in `hard_rules` and are not duplicated here.
+- `locale_overrides` is a partial map keyed by canonical locale; every key must be a locale the brand supports (checked at draft, submit and approve, where the brand is known).
+- Governance is unchanged: DRAFT → REVIEW_REQUIRED → APPROVED → SUPERSEDED; an expression change is a revision; the exact Core binding is unchanged; there is no `core_version_range`.
+- `creativeBrandInterface` exposes `expression_system` (`null` for a legacy Memory); `marketingBrandInterface` does **not**.
+- Schema: `schemas/branding/brand-memory-v1.schema.json` (optional `expression_system`). Code: `src/branding/expression-system.js`. Tests: `test/branding-expression-system.test.js`.
+
 ## Brand Guardian V1
 
 Implemented in `src/branding/guardian.js` and `src/branding/candidate-manifest.js`.
