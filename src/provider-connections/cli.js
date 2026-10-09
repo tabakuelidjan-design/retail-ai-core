@@ -19,7 +19,7 @@ import { assessProviderProvisioningReadiness } from './readiness.js';
 import { PC_ERROR as E, PROVIDERS, ProvisioningError } from './constants.js';
 import { assertNoSecrets, redact } from './validation.js';
 
-const USAGE = 'usage: status | connect <provider> | serve-callback | targets <session_ref> | select <session_ref> <external_id> | verify <connector_id> | disconnect <connector_id> | readiness';
+const USAGE = 'usage: status | connect <provider> | serve-callback | targets <session_ref> | select <session_ref> <external_id> | verify <connector_id> | disconnect <connector_id> | cleanup | readiness';
 
 /**
  * The authorization URL is the one value the operator MUST see: it carries the one-time CSRF `state` (public by design - it travels through
@@ -96,6 +96,7 @@ export async function runCli(argv, {
       case 'select': emit(io, await runtime.connectionCenter.selectTarget({ tenant, sessionRef: a, externalId: b, actorRef: 'cli' })); break;
       case 'verify': emit(io, await runtime.connectionCenter.verify({ tenant, connectorId: a })); break;
       case 'disconnect': emit(io, await runtime.connectionCenter.disconnect({ tenant, connectorId: a })); break;
+      case 'cleanup': emit(io, await runtime.provisioning.cleanupExpiredOAuthSessions({ tenant })); break;
       case 'readiness': emit(io, assessProviderProvisioningReadiness(facts)); break;
       default: io.err(USAGE); return 2;
     }

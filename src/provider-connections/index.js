@@ -26,4 +26,4 @@ export { runCli, createCallbackServer } from './cli.js';
 export { loadProviderAppConfig, OAuthFailure } from './providers/common.js';
 export { createInstagramOAuth, INSTAGRAM_MINIMUM_SCOPES } from './providers/instagram-oauth.js';
 export { createTikTokOAuth, TIKTOK_MINIMUM_SCOPES } from './providers/tiktok-oauth.js';
-export { createGoogleBusinessOAuth, GOOGLE_MINIMUM_SCOPES } from './providers/google-business-oauth.js';
+export { createGoogleBusinessOAuth, googleLocationBinding, GOOGLE_MINIMUM_SCOPES } from './providers/google-business-oauth.js';

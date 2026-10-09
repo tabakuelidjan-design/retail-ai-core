@@ -209,7 +209,11 @@ try {
   sql(`select provider_vault_session_put('${M1}', '${sE}', 'PKCE_VERIFIER', 'EXPIRED-CANARY')`);
   value('cleanup removes the expired unbound session (and counts it)', sql("select provider_oauth_cleanup(now())"), '1');
   value('cleanup destroyed its Vault secret', sql(`select count(*) from vault.secrets where name = 'nordla/oauth-session/${sE}/PKCE_VERIFIER'`), '0');
-  value('cleanup keeps BOUND sessions', sql(`select count(*) from provider_oauth_sessions where id = '${s1.out}'`), '1');
+  value('cleanup never deletes a bound connector credential or its Vault secret', sql(`select (provider_vault_read('${M1}', '${IG1}')->>'secret') like '%RECONNECT-CANARY%'`), 't');
+  sql(`select provider_vault_session_put('${M1}', '${sS}', 'PENDING_TOKENS', 'KEEP-CANARY')`);
+  sql(`select provider_vault_session_delete('${M2}', '${sS}', 'PENDING_TOKENS')`);
+  value('session secret delete by another merchant removes nothing (merchant scoped)', sql(`select count(*) from vault.secrets where name = 'nordla/oauth-session/${sS}/PENDING_TOKENS'`), '1');
+  value('cleanup keeps BOUND sessions',sql(`select count(*) from provider_oauth_sessions where id = '${s1.out}'`), '1');
 
   // ---------------------------------------------------------------- privileges: only the service role reaches the Vault door
   value('service_role may execute the Vault functions', sql("select bool_and(has_function_privilege('service_role', p.oid, 'execute')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'provider\\_vault\\_%'"), 't');

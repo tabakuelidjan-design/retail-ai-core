@@ -3,7 +3,7 @@
 - **Status:** IMPLEMENTED LOCALLY / UNDER AUDIT (not pushed)
 
 ```text
-Credential store (Supabase Vault design)   IMPLEMENTED   real Postgres + real Vault: 96/96 checks
+Credential store (Supabase Vault design)   IMPLEMENTED   real Postgres + real Vault: 98/98 checks
 OAuth sessions (CSRF state, PKCE, CAS)     IMPLEMENTED
 Instagram OAuth                            IMPLEMENTED   (fakes; sandbox verification still required)
 TikTok OAuth                               IMPLEMENTED   (fakes; sandbox verification still required)
@@ -150,18 +150,18 @@ Google Business Profile BACKEND_READY   next blocker: APP_CONFIG_REQUIRED
 
 ## 11. Security properties
 
-No token / refresh token / client secret / authorization code / PKCE verifier / raw state in: `merchant_connectors`, `connector_credentials`, `provider_oauth_sessions`, logs, errors, CLI output, Connection Center views, callback responses. Client secrets and redirect URIs come from environment **names** only (`.env.example`). `SealedSecret` prints and serializes `[REDACTED]`; `.reveal()` is used only where a value must leave the process (the provider HTTP call, Activation's resolver). Every cross-merchant access (store, read, rotate, revoke, bind, session) is refused (`PC_CREDENTIAL_SCOPE_MISMATCH`, `PC_SESSION_NOT_FOUND`, `PC_CONNECTOR_NOT_FOUND`).
+No token / refresh token / client secret / authorization code / PKCE verifier / raw state in: `merchant_connectors`, `connector_credentials`, `provider_oauth_sessions`, logs, errors, CLI output, Connection Center views, callback responses. Client secrets and redirect URIs come from environment **names** only (`.env.example`). `SealedSecret` prints and serializes `[REDACTED]`; `.reveal()` is used only where a value must leave the process (the provider HTTP call, Activation's resolver). The temporary OAuth secrets have an explicit lifecycle (§13.1). Every cross-merchant access (store, read, rotate, revoke, bind, session) is refused (`PC_CREDENTIAL_SCOPE_MISMATCH`, `PC_SESSION_NOT_FOUND`, `PC_CONNECTOR_NOT_FOUND`).
 
 ## 12. Verification
 
-- **Unit / contract tests** against fakes (`node --test test/provider-*.test.js`): 43 tests covering the 115 mandate cases (§13).
-- **Real PostgreSQL + real Supabase Vault:** `node test/postgres/provider-connections.pg-smoke.mjs` starts a `supabase/postgres:17.6.1.054` container, applies **every** migration in order, then runs 96 checks: constraints, guard triggers, single-use callback and one-winner rotation under two concurrent sessions, token encrypted in `vault.secrets` and absent from every table, Vault functions scoped to the merchant, `REVOKE` for `anon`/`authenticated`, `service_role` execution, destroy-on-revoke and take-once session secrets. The only stub is the minimal `storage` columns an unrelated finance migration needs.
-- **Mutation checks** (each applied to the source, detected by the provider tests, then restored byte for byte — 14/14 detected): persist `access_token` in connector config · persist the raw OAuth state · accept a callback twice · allow target auto-selection · allow a session of another merchant · skip TikTok `video.publish` · bind a Google account without an explicit location · return a token in the Connection Center view · refresh the same connector concurrently · accept an external `return_to` · skip the required-scope check · ignore the merchant that owns the connector · take the merchant from the callback query · persist the PKCE verifier. One mutation initially *survived* (a repository that stopped filtering by merchant): a repository-level test and a service-level check were added.
+- **Unit / contract tests** against fakes (`node --test test/provider-*.test.js`): 48 tests covering the 125 cases (§13).
+- **Real PostgreSQL + real Supabase Vault:** `node test/postgres/provider-connections.pg-smoke.mjs` starts a `supabase/postgres:17.6.1.054` container, applies **every** migration in order, then runs 98 checks: constraints, guard triggers, single-use callback and one-winner rotation under two concurrent sessions, token encrypted in `vault.secrets` and absent from every table, Vault functions scoped to the merchant, `REVOKE` for `anon`/`authenticated`, `service_role` execution, destroy-on-revoke and take-once session secrets. The only stub is the minimal `storage` columns an unrelated finance migration needs.
+- **Mutation checks** (each applied to the source, detected by the provider tests, then restored byte for byte — 17/17 detected, the last three added by the final audit: an expired session leaves its pending token in the Vault · cleanup deletes a bound credential · Google binding assumes discovery already contains the account id): persist `access_token` in connector config · persist the raw OAuth state · accept a callback twice · allow target auto-selection · allow a session of another merchant · skip TikTok `video.publish` · bind a Google account without an explicit location · return a token in the Connection Center view · refresh the same connector concurrently · accept an external `return_to` · skip the required-scope check · ignore the merchant that owns the connector · take the merchant from the callback query · persist the PKCE verifier. One mutation initially *survived* (a repository that stopped filtering by merchant): a repository-level test and a service-level check were added.
 - **Non-regression:** Activation (66 channel/connector tests), Marketing, Branding, Creative Fidelity and the full suite are run by the dedicated workflow.
 
-## 13. Test coverage — mandate cases 1–115
+## 13. Test coverage — mandate cases 1–115 (+ 116–125, audit additions)
 
-One row per numbered case of the mandate. Several cases share a test function when it asserts them together; `test/provider-coverage-matrix.test.js` enforces that this table is contiguous, holds all 115 cases and that every named test exists. Cases marked **(CI)** are the cross-domain suites and the real-PostgreSQL smoke executed by the dedicated workflow.
+One row per numbered case of the mandate. Several cases share a test function when it asserts them together; `test/provider-coverage-matrix.test.js` enforces that this table is contiguous, holds all 125 cases and that every named test exists. Cases marked **(CI)** are the cross-domain suites and the real-PostgreSQL smoke executed by the dedicated workflow.
 
 <!-- coverage-matrix:start -->
 | # | Mandate case | Test |
@@ -281,7 +281,22 @@ One row per numbered case of the mandate. Several cases share a test function wh
 | 113 | Creative Fidelity green | (CI) Creative Fidelity: `node --test test/creative-fidelity*.test.js` - dedicated workflow |
 | 114 | full suite green | (CI) full suite: `npm test` - dedicated workflow |
 | 115 | migrations smoke green where applicable | (CI) `test/postgres/provider-connections.pg-smoke.mjs` (real PostgreSQL + real Supabase Vault in Docker; not `npm test`) |
+| 116 | expired unbound OAuth session removes pending token secret (found lazily by the merchant coming back) | provider-session-cleanup.test.js › Cleanup: an abandoned target-selection session loses its pending token secret (116, 117) |
+| 117 | abandoned target-selection session removes pending token secret (cleanup, after the selection window) | provider-session-cleanup.test.js › Cleanup: an abandoned target-selection session loses its pending token secret (116, 117) |
+| 118 | expired Google PKCE verifier is removed (and after a denial) | provider-session-cleanup.test.js › Cleanup: an expired Google PKCE verifier is removed, also after a denial or a failed exchange (118) |
+| 119 | completed/bound connector credential is never deleted by session cleanup | provider-session-cleanup.test.js › Cleanup never deletes a credential bound to a connector, and is idempotent (119, 120) |
+| 120 | cleanup is idempotent | provider-session-cleanup.test.js › Cleanup never deletes a credential bound to a connector, and is idempotent (119, 120) |
+| 121 | cross-merchant cleanup refused | provider-session-cleanup.test.js › Cleanup is merchant scoped: another merchant cannot clean, or even name, a session (121) |
+| 122 | discovered locations/{id} + selected account → canonical activation binding | provider-session-cleanup.test.js › Google: the canonical binding is built from the selected account and location, never assumed from discovery (122-125) |
+| 123 | account-only target cannot bind | provider-session-cleanup.test.js › Google: the canonical binding is built from the selected account and location, never assumed from discovery (122-125) |
+| 124 | location from another selected account cannot bind | provider-session-cleanup.test.js › Google: the canonical binding is built from the selected account and location, never assumed from discovery (122-125) |
+| 125 | canonical external_id remains compatible with the Google Business Profile Activation adapter | provider-session-cleanup.test.js › Google: the canonical binding is built from the selected account and location, never assumed from discovery (122-125) |
 <!-- coverage-matrix:end -->
+
+### 13.1 Audit additions (cases 116–125, appended without renumbering)
+
+- **Temporary OAuth secret lifecycle.** `PENDING_TOKENS` and the PKCE verifier are removed from the Vault as soon as their session is provably dead: immediately on a denial, a failed exchange, or an expiry noticed by the callback / target selection; and by `cleanupExpiredOAuthSessions({ tenant, sessionRef? })` (CLI: `cleanup`) for sessions nobody comes back to — a PENDING session past its 10-minute expiry, an AUTHORIZED one whose 15-minute selection window passed, and FAILED / EXPIRED ones. It is merchant scoped (a `sessionRef` of another merchant is `PC_SESSION_NOT_FOUND`), idempotent, compare-and-set (secrets are only deleted if the session really moved to EXPIRED, so a callback or a bind racing the cleanup keeps its secrets), and it never touches a BOUND session or any `connector_credentials` row: it only calls the merchant-scoped `provider_vault_session_delete`. The database-wide `provider_oauth_cleanup` function remains the scheduled janitor.
+- **Google location normalization.** Business Information lists a location as `locations/{id}`; LocalPosts needs `accounts/{accountId}/locations/{locationId}`. `googleLocationBinding(account, location)` builds the canonical binding explicitly from the account the location was listed under and the location name, and refuses a location name that already contains an account. The merchant still has to select that exact binding (an account alone, a bare `locations/{id}`, or a location paired with another account is `PC_TARGET_NOT_FOUND`).
 
 ## 14. Open dependencies and USER ACTIONS REQUIRED
 

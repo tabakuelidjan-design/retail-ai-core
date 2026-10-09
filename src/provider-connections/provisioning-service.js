@@ -30,8 +30,14 @@ export function createProviderProvisioningService({
   const nowIso = () => new Date(clock()).toISOString();
   const log = (event, extra) => logger({ event, ...extra }); // ids and safe codes only
 
+  /** Temporary OAuth secrets (PKCE verifier, tokens waiting for the target choice). Idempotent; never touches a credential bound to a connector. */
+  async function dropSessionSecrets(session) {
+    for (const kind of ['PKCE_VERIFIER', 'PENDING_TOKENS']) await sessionSecrets.delete({ merchantId: session.merchant_id, sessionId: session.id, kind });
+  }
+
   async function failSession(session, code) {
     await sessions.markFailed({ merchantId: session.merchant_id, id: session.id, code, nowIso: nowIso() });
+    await dropSessionSecrets(session);
     log('oauth.session_failed', { session_id: session.id, merchant_id: session.merchant_id, provider: session.provider, safe_code: code });
   }
 
@@ -66,7 +72,7 @@ export function createProviderProvisioningService({
     const found = await sessions.findByStateHash({ merchantId, stateHash: sha256Hex(query.state) });
     if (!found || found.provider !== provider || found.merchant_id !== merchantId) throw oauthError(OAUTH_ERROR.INVALID_STATE, 'the callback does not match a pending authorization'); // unknown, other merchant or other provider
     if (sessions.isExpired(found, clock())) {
-      await sessions.markExpired({ merchantId, id: found.id, nowIso: nowIso() });
+      if (await sessions.markExpired({ merchantId, id: found.id, nowIso: nowIso() })) await dropSessionSecrets(found);
       throw oauthError(OAUTH_ERROR.SESSION_EXPIRED, 'the authorization request has expired');
     }
     if (typeof query.error === 'string' && query.error) { // the merchant refused (or the provider refused): the state is consumed either way
@@ -100,7 +106,7 @@ export function createProviderProvisioningService({
     if (!session) throw new ProvisioningError(E.SESSION_NOT_FOUND, 'unknown authorization session');
     if (session.status !== S.AUTHORIZED) throw new ProvisioningError(E.SESSION_STATE_CONFLICT, `the session is ${session.status}`);
     const secret = await sessionSecrets.peek({ merchantId, sessionId: session.id, kind: 'PENDING_TOKENS' });
-    if (!secret) { await sessions.markExpired({ merchantId, id: session.id, nowIso: nowIso() }); throw oauthError(OAUTH_ERROR.SESSION_EXPIRED, 'the target selection window has expired'); }
+    if (!secret) { if (await sessions.markExpired({ merchantId, id: session.id, nowIso: nowIso() })) await dropSessionSecrets(session); throw oauthError(OAUTH_ERROR.SESSION_EXPIRED, 'the target selection window has expired'); }
     return { session, tokens: parseBundle(secret.reveal()) };
   }
 
@@ -220,6 +226,40 @@ export function createProviderProvisioningService({
     return deepFreeze({ connector_id: connector.id, session_ref: session.id, verification });
   }
 
+  // ---------------------------------------------------------------- temporary secret lifecycle
+  /**
+   * Expires the merchant's dead OAuth sessions and deletes their temporary Vault secrets: a PENDING session past its expiry (never
+   * consented / abandoned), an AUTHORIZED one whose target-selection window has passed, and FAILED / EXPIRED ones that may still hold a secret.
+   * Merchant scoped (the tenant; a sessionRef of another merchant is refused). Idempotent. A BOUND session and every credential bound
+   * to a connector are never touched: only session secrets are deleted, and only after the session is provably dead.
+   */
+  async function cleanupExpiredOAuthSessions({ tenant, sessionRef = null }) {
+    const merchantId = merchantOf(tenant);
+    let rows;
+    if (sessionRef) {
+      const one = await sessions.getById({ merchantId, id: uuid(sessionRef, 'session_ref') });
+      if (!one) throw new ProvisioningError(E.SESSION_NOT_FOUND, 'unknown authorization session');
+      rows = [one];
+    } else rows = await sessions.listOpen({ merchantId });
+    const now = clock();
+    const result = { sessions_expired: 0, sessions_cleaned: 0 };
+    for (const session of rows) {
+      if (session.merchant_id !== merchantId || session.status === S.BOUND) continue;
+      const dead = session.status === S.FAILED || session.status === S.EXPIRED
+        || (session.status === S.PENDING && sessions.isExpired(session, now))
+        || (session.status === S.AUTHORIZED && Date.parse(session.authorized_at) + PENDING_BINDING_TTL_MS <= now);
+      if (!dead) continue;
+      if (session.status === S.PENDING || session.status === S.AUTHORIZED) {
+        if (!(await sessions.markExpired({ merchantId, id: session.id, nowIso: nowIso() }))) continue; // it changed meanwhile (callback / bind): leave its secrets alone
+        result.sessions_expired += 1;
+      }
+      await dropSessionSecrets(session);
+      result.sessions_cleaned += 1;
+    }
+    log('oauth.sessions_cleaned', { merchant_id: merchantId, ...result });
+    return deepFreeze(result);
+  }
+
   // ---------------------------------------------------------------- refresh / disconnect
   async function refreshConnection({ tenant, connectorId }) {
     const merchantId = merchantOf(tenant);
@@ -239,6 +279,6 @@ export function createProviderProvisioningService({
   }
 
   return {
-    startConnection, handleCallback, listAuthorizedTargets, bindSelectedTarget, verifyConnection, refreshConnection, disconnectConnection, connectorOf,
+    startConnection, handleCallback, listAuthorizedTargets, bindSelectedTarget, verifyConnection, refreshConnection, disconnectConnection, connectorOf, cleanupExpiredOAuthSessions,
   };
 }

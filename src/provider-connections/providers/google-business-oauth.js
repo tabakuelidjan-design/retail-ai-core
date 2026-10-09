@@ -22,6 +22,17 @@ import {
 export const GOOGLE_MINIMUM_SCOPES = Object.freeze(['https://www.googleapis.com/auth/business.manage']);
 const MAX_PAGES = 10;
 
+/**
+ * The canonical Activation binding, built EXPLICITLY from the account and the location it was listed under.
+ * Business Information returns a location as `locations/{id}` (no account): the account is never assumed to be inside it, and a name that
+ * already carries `accounts/` is refused rather than trusted. LocalPosts expects `accounts/{accountId}/locations/{locationId}`.
+ */
+export function googleLocationBinding(accountName, locationName) {
+  if (typeof accountName !== 'string' || !/^accounts\/[^/]+$/.test(accountName)) return null;
+  if (typeof locationName !== 'string' || !/^locations\/[^/]+$/.test(locationName)) return null;
+  return accountName + '/' + locationName;
+}
+
 export function createGoogleBusinessOAuth({ http, timeoutMs, now = Date.now } = {}) {
   const classify = (r) => {
     const code = r.body?.error;
@@ -57,9 +68,10 @@ export function createGoogleBusinessOAuth({ http, timeoutMs, now = Date.now } = 
       if (typeof account?.name !== 'string' || !/^accounts\/[^/]+$/.test(account.name)) continue;
       const locations = await pages(`https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations`, tokens, 'locations', { readMask: 'name,title,storeCode', pageSize: 100 });
       for (const location of locations) {
-        if (typeof location?.name !== 'string' || !/^locations\/[^/]+$/.test(location.name)) continue;
+        const binding = googleLocationBinding(account.name, location?.name);
+        if (!binding) continue;
         candidates.push(deepFreeze({
-          provider: PROVIDER.GOOGLE_BUSINESS_PROFILE, external_id: `${account.name}/${location.name}`, display_name: location.title ?? null, account_type: account.type ?? null,
+          provider: PROVIDER.GOOGLE_BUSINESS_PROFILE, external_id: binding, display_name: location.title ?? null, account_type: account.type ?? null,
           location_name: location.name, granted_scopes: [...tokens.scopes], eligibility: { eligible: reasons.length === 0, reasons },
           review_signals: [], safe_metadata: { account_name: account.name, account_display_name: account.accountName ?? null, store_code: location.storeCode ?? null },
         }));

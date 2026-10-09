@@ -41,6 +41,10 @@ Several accounts / locations of one provider can be connected side by side (one 
 | `REAUTH_REQUIRED` | the provider no longer accepts the grant (revoked, expired, password change…) | `connect` again for the same account: the same connector is reused and its credential rotated |
 | `PC_VAULT_UNAVAILABLE` | the Vault cannot be reached or is not enabled | enable/repair the Vault; there is **no** plaintext fallback |
 
+## Abandoned attempts
+
+A connection nobody finishes (consent never given, target never chosen) is cleaned automatically: its temporary secrets leave the Vault after 10 minutes (consent) or 15 minutes (target selection). `cleanup` runs the same sweep on demand for the merchant; running it twice is harmless and it never touches a connected account.
+
 ## Reconnect, disconnect
 
 - **Reconnect:** run `connect` again and choose the same account / location — identity (`external_id`) is stable, the connector is reused and the credential is rotated.

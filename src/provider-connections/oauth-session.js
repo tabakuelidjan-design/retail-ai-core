@@ -87,6 +87,11 @@ export function createOAuthSessionRepository({ supabase }) {
     markBound: ({ merchantId, id, connectorId, nowIso }) => cas(merchantId, id, [S.AUTHORIZED], { status: S.BOUND, bound_connector_id: connectorId, completed_at: iso(nowIso, 'now') }),
     markFailed: ({ merchantId, id, code, nowIso }) => cas(merchantId, id, [S.PENDING, S.AUTHORIZED], { status: S.FAILED, failure_code: String(code).replace(/[^A-Z_]/g, '').slice(0, 40) || 'UNKNOWN', completed_at: iso(nowIso, 'now') }),
     markExpired: ({ merchantId, id, nowIso }) => cas(merchantId, id, [S.PENDING, S.AUTHORIZED], { status: S.EXPIRED, completed_at: iso(nowIso, 'now') }),
+    /** The merchant's sessions that may still hold temporary secrets (never BOUND ones). */
+    async listOpen({ merchantId, limit = 200 }) {
+      const rows = await store('the session read', () => supabase.select(TABLE, { select: '*', merchant_id: `eq.${uuid(merchantId, 'merchant_id')}`, status: 'in.(PENDING,AUTHORIZED,FAILED,EXPIRED)', limit: String(limit) }));
+      return rows.map(fromRow);
+    },
     /** Removes expired, never-bound sessions (and their Vault secrets, inside the database function). */
     async cleanupExpired({ nowIso }) {
       if (typeof supabase.rpc !== 'function') return 0;
