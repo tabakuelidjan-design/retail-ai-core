@@ -381,3 +381,9 @@ test('C3 vision port: bounded vision timeout, thinking off, a client-side timeou
   assert.ok(r.critique.dimensions.every((d) => d.outcome === 'NOT_MEASURABLE'));
   assert.equal(fetches, 1);
 });
+
+test('C3 the critic script never calls process.exit (Windows Node 24 libuv assertion when exiting during an HTTPS fetch close)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../scripts/run-c3-critic.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source.replace(/\/\/.*$/gm, ''), /process\.exit\(/);
+});

@@ -29,9 +29,13 @@ const CANDIDATE_REF = 'candidate:habb-c2-creative-run-001';
 
 const privateDir = process.env.NORDLA_PRIVATE_DIR ? path.join(process.env.NORDLA_PRIVATE_DIR, 'creative-run-001') : path.join(os.homedir(), 'nordla-private', 'c2-habb-benchmark-001', 'creative-run-001');
 const report = { mode, status: null, checks: [], private_directory: privateDir };
-const finish = (status, code) => { report.status = status; console.log(JSON.stringify(report, null, 2)); process.exit(code); };
+// Never process.exit(): on Windows, Node 24 aborts with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), srcwinasync.c` when the process exits while an HTTPS fetch is still
+// closing (reproduced with a bare fetch + process.exit). The exit code is set and the script is unwound, so the event loop drains and the process ends by itself.
+const STOP = Symbol('stop');
+const finish = (status, code) => { report.status = status; console.log(JSON.stringify(report, null, 2)); process.exitCode = code; throw STOP; };
 const check = (name, ok, detail = null) => { report.checks.push({ name, ok, detail }); return ok; };
 
+try {
 if (mode === 'compare') {
   const { compareWithOwner } = await import('../src/creative-critic/owner-review.js');
   let stored;
@@ -95,3 +99,4 @@ const verdict = finalizeVerdict({ critique, deterministic });
 await writeFile(path.join(privateDir, 'critique-001.json'), `${JSON.stringify({ critique, verdict, deterministic, provenance, budget: budget.snapshot() }, null, 2)}\n`, { mode: 0o600 });
 report.result = { creative_status: verdict.creative_status, blockers: verdict.blockers, production_status: verdict.production_status, owner_approval: verdict.owner_approval, outcomes: critique.dimensions.map((d) => [d.dimension, d.outcome]), provenance_called: provenance.called, provenance_failure: provenance.failure ?? null, rejected: provenance.rejected ?? null };
 finish(verdict.creative_status, verdict.creative_status === 'NOT_MEASURABLE' ? 3 : 0);
+} catch (error) { if (error !== STOP) throw error; }
