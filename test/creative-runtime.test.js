@@ -48,9 +48,11 @@ test('A full run: the real product is cut out locally, the provider only draws a
   assert.equal(s.environment.calls.length, 1);
   const request = s.environment.calls[0];
   assert.deepEqual(request.input_asset_refs, []);
-  assert.match(request.prompt, /The scene is empty: no product, no phone, no case/);
+  // the positive prompt describes an empty surface and NAMES NOTHING it must not draw; what is forbidden is in the negative prompt only (naming it primes a generator to draw it)
+  assert.match(request.prompt, /quiet and empty/);
+  assert.doesNotMatch(request.prompt, /\b(phone|product|case|camera|text|letters|logo|watermark)\b/i);
+  assert.match(request.negative_prompt, /product.*phone.*pedestal.*plinth.*slab.*text.*letters.*logo.*watermark/);
   assert.doesNotMatch(request.prompt, /product photography|real HABB product/i);
-  assert.match(request.prompt, /no text, no letters, no logo, no watermark/);
   assert.equal(result.environment.carries_input_asset, false);
   // RT-4 the approved texts, and only them, are on the poster: claim-bearing text carries its claim, the headline is the approved creative text
   assert.deepEqual(result.copy.map((c) => [c.text_role, c.content]), [['HEADLINE', 'Vos souvenirs. Votre création.'], ['SUBHEADLINE', 'Coque personnalisée en 5 minutes'], ['PRICE', '25 €']]);

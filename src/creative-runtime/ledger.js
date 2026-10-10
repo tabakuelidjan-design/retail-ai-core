@@ -11,6 +11,7 @@ export const COMPONENT = Object.freeze({
   PROVIDER_REQUEST_BUILDER: 'nordla:provider-request-builder@1',
   LAYOUT_PLANNER: 'nordla:layout-planner@1',
   LAYOUT_ENGINE: 'nordla:layout-constraint-engine@1',
+  ENVIRONMENT_SUITABILITY_GATE: 'nordla:environment-suitability-gate@1',
   TYPOGRAPHY_RULES: 'nordla:typography-rules@1',
   SHADOW_RULE: 'nordla:contact-shadow-rule@1',
   RENDERER: 'nordla:deterministic-renderer@1',
@@ -25,6 +26,7 @@ export const DECISION = Object.freeze({
   COPY_SELECTION: 'COPY_SELECTION',
   BACKGROUND_STRATEGY: 'BACKGROUND_STRATEGY',
   PROVIDER_REQUEST_CONSTRUCTION: 'PROVIDER_REQUEST_CONSTRUCTION',
+  ENVIRONMENT_SUITABILITY: 'ENVIRONMENT_SUITABILITY',
   LAYOUT_RECIPE: 'LAYOUT_RECIPE',
   PRODUCT_PLACEMENT: 'PRODUCT_PLACEMENT',
   TYPOGRAPHY_PLACEMENT: 'TYPOGRAPHY_PLACEMENT',
@@ -61,11 +63,22 @@ export function createDecisionLedger() {
 /** The decisions that must all be present, each with a Nordla component, for a run to claim "no manual creative steering". */
 export const REQUIRED_DECISIONS = Object.freeze([
   DECISION.PRODUCT_PRESERVATION_MODE, DECISION.SEGMENTATION, DECISION.CREATIVE_DIRECTION, DECISION.BACKGROUND_STRATEGY, DECISION.PROVIDER_REQUEST_CONSTRUCTION,
-  DECISION.LAYOUT_RECIPE, DECISION.PRODUCT_PLACEMENT, DECISION.TYPOGRAPHY_PLACEMENT, DECISION.FIDELITY,
+  DECISION.LAYOUT_RECIPE, DECISION.PRODUCT_PLACEMENT, DECISION.ENVIRONMENT_SUITABILITY, DECISION.TYPOGRAPHY_PLACEMENT, DECISION.FIDELITY,
 ]);
 
+/**
+ * `manual_creative_steering` is NONE when every recorded decision belongs to a Nordla component (the ledger cannot hold another kind), and the run's completeness is a separate
+ * fact: a run that stopped early has simply not reached some decisions (`decisions_not_reached`), which is not a manual decision.
+ */
 export function manualSteeringReport(ledger) {
   const present = new Set(ledger.entries().map((e) => e.decision));
-  const missing = REQUIRED_DECISIONS.filter((d) => !present.has(d));
-  return Object.freeze({ manual_creative_steering: missing.length === 0 ? 'NONE' : 'NORDLA_CREATIVE_RUNTIME_INCOMPLETE', missing_decisions: missing, attribution: ledger.attribution() });
+  const notReached = REQUIRED_DECISIONS.filter((d) => !present.has(d));
+  const foreign = ledger.entries().filter((e) => !KNOWN.has(e.decided_by));
+  return Object.freeze({
+    manual_creative_steering: foreign.length === 0 ? 'NONE' : 'NORDLA_CREATIVE_RUNTIME_INCOMPLETE',
+    run_complete: notReached.length === 0,
+    decisions_not_reached: notReached,
+    missing_decisions: notReached,
+    attribution: ledger.attribution(),
+  });
 }

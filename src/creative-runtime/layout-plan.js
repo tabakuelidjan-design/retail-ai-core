@@ -4,18 +4,30 @@ import * as CI from '../creative-intelligence/index.js';
 // Placement itself is the deterministic layout constraint engine's (solveLayout, recipe slots, uniform fit, text fitting); typography is the real fonts'.
 // Nothing here knows the case at hand: it reads the direction, the brand tokens and the pixels of the environment.
 
-/** spatial intent (+ product role) -> layout recipe. A direction with no recipe is reported, never approximated. */
-export function selectLayoutRecipe(direction) {
+/** The recipes that realize a spatial intent, in order of affinity (a hero product prefers the dominant layout). */
+export function recipesForIntent(direction) {
   const hero = direction.product_role === 'HERO';
   const table = {
-    PRODUCT_CENTER_TEXT_ABOVE: hero ? 'PRODUCT_DOMINANT' : 'PRODUCT_HERO',
-    PRODUCT_CENTER_TEXT_BELOW: 'PRODUCT_AND_PRICE',
-    PRODUCT_START_TEXT_END: 'EDITORIAL_SPLIT',
-    TEXT_DOMINANT: 'TEXT_LED',
-    PRODUCT_AND_PRICE: 'PRODUCT_AND_PRICE',
+    PRODUCT_CENTER_TEXT_ABOVE: hero ? ['PRODUCT_DOMINANT', 'PRODUCT_HERO'] : ['PRODUCT_HERO', 'PRODUCT_DOMINANT'],
+    PRODUCT_CENTER_TEXT_BELOW: ['PRODUCT_AND_PRICE'],
+    PRODUCT_START_TEXT_END: ['EDITORIAL_SPLIT'],
+    TEXT_DOMINANT: ['TEXT_LED'],
+    PRODUCT_AND_PRICE: ['PRODUCT_AND_PRICE'],
   };
-  const recipe = table[direction.spatial_intent] ?? null;
-  return recipe ? { recipe_id: recipe, rule: `SPATIAL_INTENT_${direction.spatial_intent}${hero && direction.spatial_intent === 'PRODUCT_CENTER_TEXT_ABOVE' ? '_WITH_HERO_PRODUCT' : ''}` } : null;
+  return table[direction.spatial_intent] ?? [];
+}
+
+/**
+ * spatial intent (+ product role) -> layout recipe, among the recipes of that intent the first one that has a SLOT for every text role the copy fills (a role with no slot would
+ * be left unplaced). `roles` are the filled text roles. Returns { recipe_id, rule, considered } or { recipe_id: null, reason, considered }: never an approximation.
+ */
+export function selectLayoutRecipe(direction, roles = []) {
+  const candidates = recipesForIntent(direction);
+  if (!candidates.length) return { recipe_id: null, reason: 'NO_LAYOUT_RECIPE_FOR_THE_SPATIAL_INTENT', considered: [] };
+  const considered = candidates.map((id) => ({ recipe_id: id, missing_slots: roles.filter((role) => !CI.getLayoutRecipe(id).slots.some((s) => s.role === role)) }));
+  const fit = considered.find((c) => c.missing_slots.length === 0);
+  if (!fit) return { recipe_id: null, reason: 'NO_LAYOUT_RECIPE_COVERS_THE_HIERARCHY', considered };
+  return { recipe_id: fit.recipe_id, rule: `SPATIAL_INTENT_${direction.spatial_intent}_RECIPE_WITH_A_SLOT_FOR_EVERY_ROLE`, considered };
 }
 
 // ---- typography rules (provisional, stated)
@@ -73,6 +85,27 @@ export function chooseTextColor({ textRole, backdrops, tokens }) {
     ? [...pool].sort((a, b) => b.sat - a.sat || b.contrast - a.contrast || (a.token < b.token ? -1 : 1))[0]
     : [...pool].sort((a, b) => b.contrast - a.contrast || (a.token < b.token ? -1 : 1))[0];
   return { ...best, candidates: candidates.map(({ token, contrast }) => ({ token, contrast })) };
+}
+
+/**
+ * When no brand token reads on the environment behind a text, a SOLID plate in a brand token is placed behind it and the text takes a token that reads on the plate. The
+ * plate token is the one on which most brand tokens read (ties: the lighter one), so every plated text uses the same plate. Returns null when no brand pair reads.
+ */
+export function choosePlate({ tokens }) {
+  const entries = Object.entries(tokens);
+  const scored = entries.map(([token, hex]) => ({ token, hex, readers: entries.filter(([other, h]) => other !== token && CI.contrastRatio(h, hex) >= 4.5).length, lum: CI.relativeLuminance(hex) }));
+  scored.sort((a, b) => b.readers - a.readers || b.lum - a.lum || (a.token < b.token ? -1 : 1));
+  return scored[0] && scored[0].readers > 0 ? { plate_token: scored[0].token, plate_hex: scored[0].hex } : null;
+}
+
+/** The plate layer behind a text box: a solid rectangle, padded, inside the canvas. */
+export function plateLayer({ id, z, box, canvas, fill }) {
+  const pad = Math.round(canvas.width * 0.02);
+  const x = Math.max(0, box.x - pad); const y = Math.max(0, box.y - pad);
+  const width = Math.min(canvas.width - x, box.width + 2 * pad); const height = Math.min(canvas.height - y, box.height + 2 * pad);
+  return {
+    ...common(id, 'SHAPE', z, geo(x, y, width, height), 'ENGINE'), shape_kind: 'RECT', fill, stroke: null, stroke_width: 0, corner_radius: Math.round(canvas.width * 0.012),
+  };
 }
 
 /** A soft contact shadow under the product: the darkest brand colour, offset down and slightly to the end, scaled to the canvas. */

@@ -71,15 +71,16 @@ export const LAYOUT_RECIPES = deepFreeze({
   },
   PRODUCT_AND_PRICE: {
     recipe_id: 'PRODUCT_AND_PRICE',
-    description: 'the product and a dominant price; a short headline between them',
+    description: 'the product and a dominant price; a short headline and a subheadline between them',
     margin_ratio: 0.06,
     mirror_on_rtl: false,
     slots: [
       media('LOGO', 0, 0, 0.25, 0.07, 'START'),
       media('PRODUCT', 0.05, 0.1, 0.9, 0.55, 'CENTER'),
-      slot('HEADLINE', 0, 0.67, 1, 0.1),
-      slot('PRICE', 0, 0.78, 0.58, 0.18),
-      slot('CTA', 0.62, 0.8, 0.38, 0.14),
+      slot('HEADLINE', 0, 0.67, 1, 0.085),
+      slot('SUBHEADLINE', 0, 0.76, 1, 0.055),
+      slot('PRICE', 0, 0.825, 0.58, 0.14),
+      slot('CTA', 0.62, 0.825, 0.38, 0.14),
     ],
   },
 });
