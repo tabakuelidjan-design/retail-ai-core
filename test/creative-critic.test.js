@@ -347,3 +347,37 @@ test('C3 vision port: an authorization that does not cover VISION_CRITIQUE, this
   await assert.rejects(() => attempt({ ...authz, allowed_operations: ['VISION_CRITIQUE'], authorization: { revoked: true } }), /REVOKED/);
   assert.equal(sent, 0);
 });
+
+test('C3 vision port: bounded vision timeout, thinking off, a client-side timeout is classified and never retried', async () => {
+  const authz = {
+    kind: 'EXTERNAL_MEDIA_AUTHORIZATION', authorization_id: 'authz://t', purpose_note: 'x',
+    asset: { asset_ref: 'cand:1', asset_sha256: sha(PNG), data_class: 'MERCHANT_PRIVATE_MEDIA', contains_personal_data: false, contains_face: false },
+    provider: { provider_id: 'alibaba-cloud-model-studio', region: 'eu-central-1' }, purpose: 'P', allowed_operations: ['VISION_CRITIQUE'],
+    transmissible: 'THE_SOURCE_ASSET_AND_IMAGES_DERIVED_FROM_IT_FOR_THIS_PURPOSE_ONLY',
+    retention: { standard_inference_retention_days_max: 30, zdr_status: 'NOT_CONFIRMED', zdr_claimed: false, zdr_evidence_ref: null, acknowledged: true },
+    authorization: { revoked: false }, state: {}, global_policy: { changed_by_this_record: false },
+  };
+  const config = { apiKey: 'sk-test-1234567890abcdef', workspaceId: 'ws0123456789abcd', region: 'eu-central-1', textModel: 'qwen3.8-max', imageModel: 'qwen-image-3.0-pro', videoModel: 'wan3.0-video', requestTimeoutMs: 120000 };
+  const make = (extra = {}, cfg = config) => createQwenVisionPort({ config: cfg, budget: new SpendGuard({ maxSpendEur: 0.5, maxImages: 0 }), authorization: authz, purpose: 'P', assetRefFor: () => 'cand:1', ...extra });
+  // default: above the old 120 s, never above the hard cap, never below the lane's configured value
+  assert.equal(make({ fetchImpl: async () => ({}) }).timeout_ms, 240000);
+  assert.equal(make({ fetchImpl: async () => ({}) }, { ...config, requestTimeoutMs: 280000 }).timeout_ms, 280000);
+  assert.equal(make({ fetchImpl: async () => ({}) }, { ...config, requestTimeoutMs: 900000 }).timeout_ms, 300000);
+  assert.throws(() => make({ timeoutMs: 300001 }), RangeError);
+  assert.throws(() => make({ timeoutMs: 10 }), RangeError);
+  // the request asks for no thinking phase
+  let body;
+  await make({ fetchImpl: async (u, init) => { body = JSON.parse(init.body); return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'x' } }] }) }; } })
+    .invoke({ system: 's', user: 'u', images: [{ label: 'candidate', media_type: 'image/png', bytes: PNG }] });
+  assert.equal(body.enable_thinking, false);
+  // a hanging provider is aborted at the (small, test-only) timeout, classified TIMEOUT with no request id, and fetch is called once
+  let fetches = 0;
+  const hang = (u, init) => { fetches += 1; return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))); };
+  const port = make({ fetchImpl: hang, timeoutMs: 1000 }, { ...config, requestTimeoutMs: 0 });
+  const critic = C.createCreativeCritic({ vlm: port });
+  const r = await critic.critique({ candidate: { ref: 'cand:1', png_bytes: PNG }, brief });
+  assert.equal(r.provenance.failure.code, 'TIMEOUT');
+  assert.equal(r.provenance.failure.request_id, null);
+  assert.ok(r.critique.dimensions.every((d) => d.outcome === 'NOT_MEASURABLE'));
+  assert.equal(fetches, 1);
+});

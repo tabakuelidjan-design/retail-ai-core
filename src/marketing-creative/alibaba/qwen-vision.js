@@ -12,6 +12,10 @@ import { assertScopedExternalMediaUse } from './scoped-media-authorization.js';
 // bytes, this provider, this region, this purpose and the VISION_CRITIQUE operation. The global PUBLIC-only policy is not changed. No retry and no model fallback.
 
 export const VISION_OPERATION = 'VISION_CRITIQUE';
+// A vision request carries a ~2 MB image and a 14-dimension answer: the first real call was aborted client-side at exactly the 120 s default of the text lane, before any response. The vision
+// lane therefore has its own bounded timeout: never below the lane's configured value, never above the hard cap. There is still no retry.
+export const VISION_TIMEOUT_MS = 240_000;
+export const VISION_TIMEOUT_CAP_MS = 300_000;
 const PROVIDER_ID = 'alibaba-cloud-model-studio';
 const MAX_IMAGE_BYTES = 14 * 1024 * 1024; // base64 of this stays under the 20 MB per-image limit
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -21,11 +25,15 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
  * @returns {{ invoke: Function, calls: () => number }}
  */
 export function createQwenVisionPort({
-  config, budget, journal = null, authorization, purpose, assetRefFor, fetchImpl = globalThis.fetch, maxTokens = 2200, temperature = 0.2, maxCalls = 1,
+  config, budget, journal = null, authorization, purpose, assetRefFor, fetchImpl = globalThis.fetch, maxTokens = 2200, temperature = 0.2, maxCalls = 1, timeoutMs = VISION_TIMEOUT_MS,
 }) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > VISION_TIMEOUT_CAP_MS) throw new RangeError(`timeoutMs must be between 1000 and ${VISION_TIMEOUT_CAP_MS}`);
   let calls = 0;
+  // never below the lane's configured timeout, never above the hard cap
+  const effectiveTimeoutMs = Math.min(Math.max(timeoutMs, config.requestTimeoutMs ?? 0), VISION_TIMEOUT_CAP_MS);
   return {
     calls: () => calls,
+    timeout_ms: effectiveTimeoutMs,
     async invoke({ system, user, images }) {
       requireAlibabaCreativeConfig(config);
       if (!isHeaderSafeApiKey(config.apiKey)) throw Object.assign(new Error('Alibaba Model Studio API key is not a valid credential'), { code: 'INVALID_API_KEY_FORMAT' });
@@ -55,9 +63,9 @@ export function createQwenVisionPort({
         const payload = await alibabaJsonRequest({
           url: alibabaCreativeEndpoints(config).chatCompletions,
           apiKey: config.apiKey,
-          timeoutMs: config.requestTimeoutMs,
+          timeoutMs: effectiveTimeoutMs,
           fetchImpl,
-          body: { model: config.textModel, messages: [{ role: 'system', content: system }, { role: 'user', content }], temperature, max_tokens: maxTokens },
+          body: { model: config.textModel, messages: [{ role: 'system', content: system }, { role: 'user', content }], temperature, max_tokens: maxTokens, enable_thinking: false },
         });
         const text = payload?.choices?.[0]?.message?.content;
         if (typeof text !== 'string' || !text.trim()) throw new AlibabaProviderError('Alibaba vision response did not contain assistant content', { code: 'INVALID_PROVIDER_RESPONSE', requestId: payload?.id ?? null });
