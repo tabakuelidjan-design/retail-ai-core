@@ -89,3 +89,6 @@ export function fakeEnvironmentPort({ pixelsOf = null } = {}) {
     },
   };
 }
+
+/** A stub Brand Guardian PORT for runtime tests that are not about the Guardian (the real Guardian has its own tests): it always passes. */
+export const GUARDIAN_PASS = Object.freeze({ evaluate: () => ({ report_id: 'gr_stub', outcome: 'PASS', hard_outcome: 'PASS', rule_results: [] }) });

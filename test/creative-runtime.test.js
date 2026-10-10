@@ -8,7 +8,7 @@ import {
   DECISION, DIRECTOR_CONSTANTS, REQUIRED_DECISIONS, runProductPreservingCreative,
 } from '../src/creative-runtime/index.js';
 import {
-  ANNOTATIONS, BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts, SOURCE, sha,
+  ANNOTATIONS, BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts, SOURCE, sha, GUARDIAN_PASS,
 } from './runtime-world.js';
 
 // The Nordla creative runtime (`// RT-N` markers): every decision comes from a Nordla component and is recorded; the provider never receives the product.
@@ -30,7 +30,7 @@ function setup({ answer = directorAnswer(), environment = fakeEnvironmentPort(),
     ports: { segmenter: segmenter ?? createLocalProductSegmenter({ ledger }), environment },
   };
 }
-const run = (s, brief = buildBrief()) => runProductPreservingCreative({ at: AT, brief, fonts, agents: s.agents, ports: s.ports, ledger: s.ledger });
+const run = (s, brief = buildBrief()) => runProductPreservingCreative({ at: AT, brief, fonts, agents: s.agents, ports: s.ports, ledger: s.ledger, guardian: GUARDIAN_PASS });
 
 test('A full run: the real product is cut out locally, the provider only draws an empty environment, Nordla places, types and gates', async () => {
   const s = setup();

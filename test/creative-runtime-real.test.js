@@ -8,7 +8,7 @@ import {
   createApprovedCopyAgent, createCreativeDirector, createDecisionLedger, createLocalProductSegmenter, createProductAssetAnalyst, createVisualProductionDirector, DIRECTOR_CONSTANTS, runProductPreservingCreative,
 } from '../src/creative-runtime/index.js';
 import {
-  BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts,
+  BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts, GUARDIAN_PASS,
 } from './runtime-world.js';
 
 // TECHNICAL VERIFICATION on the REAL HABB asset (`// RR-N` markers), local only (the photograph is private and absent from a clean clone). It answers one question before any
@@ -43,6 +43,7 @@ test('On the real asset: the local mask is confident and the identity gate passe
     },
     ports: { segmenter: createLocalProductSegmenter({ ledger }), environment },
     ledger,
+    guardian: GUARDIAN_PASS,
   });
   // RR-1 the mask of the real photograph is confident, fitted by the rounded-quadrilateral model, with a small residual
   const segmentation = result.ledger.find((e) => e.decision === 'SEGMENTATION');

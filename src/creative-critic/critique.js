@@ -48,7 +48,7 @@ const DIMENSION_KEYS = ['dimension', 'outcome', 'evidence', 'revision_hint'];
 // a score hidden in words ("8/10", "score: 7", "rated 4 out of 5") is still a score
 const SCORE_IN_TEXT = /\b\d+(\.\d+)?\s*(\/|out of)\s*(5|10|100)\b|\b(score|rating|rated|grade)\b\s*[:=]?\s*\d|\b\d{1,3}\s*(points?|pts)\b/i;
 // a hint that micromanages the layout: coordinates, sizes, font settings, colour codes, "x = ...", "make it N% larger"
-const NOT_SEMANTIC = /\b\d+(\.\d+)?\s*(px|pt|em|rem|percent|pixels?|points?)\b|\b\d+(\.\d+)?\s*%|\b[xy]\s*[=:]\s*\d|\b(width|height|size|margin|padding|offset|position)\s*[=:]\s*\d|font[-_ ]?(size|weight|family)|#[0-9a-f]{3,8}\b|\brgb\(|\b\d+\s*(x|by)\s*\d+\b|\b\d+(\.\d+)?\s*(times|x)\s*(larger|bigger|smaller)\b/i;
+export const NOT_SEMANTIC = /\b\d+(\.\d+)?\s*(px|pt|em|rem|percent|pixels?|points?)\b|\b\d+(\.\d+)?\s*%|\b[xy]\s*[=:]\s*\d|\b(width|height|size|margin|padding|offset|position)\s*[=:]\s*\d|font[-_ ]?(size|weight|family)|#[0-9a-f]{3,8}\b|\brgb\(|\b\d+\s*(x|by)\s*\d+\b|\b\d+(\.\d+)?\s*(times|x)\s*(larger|bigger|smaller)\b/i;
 const URL_OR_CONTROL = /https?:\/\/|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 function text(value, field, { min, max, code = CRITIQUE_ERROR.TEXT_INVALID }) {
@@ -154,6 +154,9 @@ export function finalizeVerdict({ critique, deterministic = {} }) {
     inconsistent_overall: Boolean(inconsistent),
     // CREATIVE_PASS is an opinion about perception, not an approval: only the owner can set OWNER_APPROVED / SHIPPABLE, outside Nordla
     production_status: deterministicBlockers.length === 0 ? 'AWAITING_OWNER_APPROVAL' : 'BLOCKED_BY_A_DETERMINISTIC_GATE',
+    // READY_FOR_OWNER_REVIEW is a routing state, not an approval: every deterministic gate (Preflight, Fidelity, Brand Guardian) must PASS and the critic must not have concluded CREATIVE_FAIL
+    ready_for_owner_review: deterministicBlockers.length === 0 && creativeStatus !== CREATIVE_STATUS.CREATIVE_FAIL,
+    owner_review_blockers: [...deterministicBlockers.map((b) => `${b.gate}=${b.outcome}`), ...(creativeStatus === CREATIVE_STATUS.CREATIVE_FAIL ? ['CREATIVE_FAIL'] : [])],
     owner_approval: 'PENDING',
   });
 }

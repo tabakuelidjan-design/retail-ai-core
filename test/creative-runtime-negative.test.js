@@ -10,7 +10,7 @@ import {
 } from '../src/creative-runtime/index.js';
 import { productSvg } from './identity-preserve-world.js';
 import {
-  ANNOTATIONS, BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts,
+  ANNOTATIONS, BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts, GUARDIAN_PASS,
 } from './runtime-world.js';
 
 // The runtime when it must stop (`// RN-N` markers): the provider never receives a product, a bad direction never reaches a provider, and nothing is ever "approximately" done.
@@ -31,7 +31,7 @@ function setup({ answer = directorAnswer(), environment = fakeEnvironmentPort(),
     ports: { segmenter: segmenter ?? createLocalProductSegmenter({ ledger }), environment },
   };
 }
-const run = (s, brief = buildBrief()) => runProductPreservingCreative({ at: AT, brief, fonts, agents: s.agents, ports: s.ports, ledger: s.ledger });
+const run = (s, brief = buildBrief()) => runProductPreservingCreative({ at: AT, brief, fonts, agents: s.agents, ports: s.ports, ledger: s.ledger, guardian: GUARDIAN_PASS });
 const pngOf = (svg) => new Uint8Array(new Resvg(svg).render().asPng());
 
 test('A direction that asks for what the brand forbids, or is not a valid direction, stops the run before any provider call', async () => {

@@ -17,6 +17,8 @@ export const COMPONENT = Object.freeze({
   RENDERER: 'nordla:deterministic-renderer@1',
   IDENTITY_FIDELITY_GATE: 'nordla:identity-fidelity-gate@1',
   PREFLIGHT: 'nordla:creative-preflight@1',
+  BRAND_GUARDIAN: 'nordla:brand-guardian@1',
+  REVISION_DIRECTOR: 'nordla:revision-director@1',
 });
 
 export const DECISION = Object.freeze({
@@ -34,6 +36,8 @@ export const DECISION = Object.freeze({
   SHADOW: 'SHADOW',
   FIDELITY: 'FIDELITY',
   PREFLIGHT: 'PREFLIGHT',
+  BRAND_GUARDIAN: 'BRAND_GUARDIAN',
+  REVISION_DIRECTION: 'REVISION_DIRECTION',
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));
@@ -63,7 +67,7 @@ export function createDecisionLedger() {
 /** The decisions that must all be present, each with a Nordla component, for a run to claim "no manual creative steering". */
 export const REQUIRED_DECISIONS = Object.freeze([
   DECISION.PRODUCT_PRESERVATION_MODE, DECISION.SEGMENTATION, DECISION.CREATIVE_DIRECTION, DECISION.BACKGROUND_STRATEGY, DECISION.PROVIDER_REQUEST_CONSTRUCTION,
-  DECISION.LAYOUT_RECIPE, DECISION.PRODUCT_PLACEMENT, DECISION.ENVIRONMENT_SUITABILITY, DECISION.TYPOGRAPHY_PLACEMENT, DECISION.FIDELITY,
+  DECISION.LAYOUT_RECIPE, DECISION.PRODUCT_PLACEMENT, DECISION.ENVIRONMENT_SUITABILITY, DECISION.TYPOGRAPHY_PLACEMENT, DECISION.FIDELITY, DECISION.BRAND_GUARDIAN,
 ]);
 
 /**

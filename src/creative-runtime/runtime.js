@@ -19,6 +19,8 @@ import { assessEnvironment } from './environment-suitability.js';
 //
 // The provider is used for the environment only and never receives a product pixel. The runtime stops at a candidate READY_FOR_REVIEW: there is no Critic and no
 // approval here. A run that cannot decide something reports it (BLOCKED) instead of falling back to a hand-made choice.
+// Every produced candidate also passes the deterministic Brand Guardian gate (`guardian`); READY_FOR_REVIEW needs Preflight, Fidelity AND Guardian to PASS.
+// A run may be a REVISION (`revision`): the same pipeline, with the direction produced by the revision Director.
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const CONSTANTS = Object.freeze({
@@ -37,7 +39,9 @@ const blocked = (reason, extra = {}) => Object.freeze({ status: 'BLOCKED', reaso
  *  ports     { segmenter, environment }                     execution of the requests: segmenter.segment(...) and environment.generate({ request }) -> { output_bytes, provenance }
  *  ledger    the decision ledger
  */
-export async function runProductPreservingCreative({ at, brief, fonts, agents, ports, ledger }) {
+export async function runProductPreservingCreative({
+  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null,
+}) {
   const { ids, asset, brand } = brief;
   const format = { ...brief.format };
   const canvas = format.canvas;
@@ -55,10 +59,16 @@ export async function runProductPreservingCreative({ at, brief, fonts, agents, p
 
   // 2. Creative Director: the direction
   const claimRefs = brief.claims.map((c) => c.ref);
-  const { directions } = await agents.director.invoke({
+  // (a revision is directed by the revision Director from canonical evidence and semantic intents only; the initial direction by the Creative Director)
+  const directorInput = {
     brief: { public_facts: brief.public_facts, approved_text_roles: [...new Set([...brief.claims.map((c) => c.role), ...brief.approved_copy.map((c) => c.role)])], format: { content_kind: 'IMAGE', aspect_ratio: format.aspect_ratio, canvas }, expression: brand.expression },
     ids: { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, asset_refs: [asset.ref], claim_refs: claimRefs, evidence_refs: [] },
-  }, { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, claim_refs: claimRefs });
+  };
+  const directorContext = { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, claim_refs: claimRefs };
+  if (revision && !agents.revision_director) return stop('A_REVISION_NEEDS_A_REVISION_DIRECTOR');
+  const { directions } = revision
+    ? await agents.revision_director.invoke({ ...directorInput, revision }, directorContext)
+    : await agents.director.invoke(directorInput, directorContext);
   const direction = directions[0];
   evidence.direction = direction;
 
@@ -194,14 +204,28 @@ export async function runProductPreservingCreative({ at, brief, fonts, agents, p
   const failed = observations.flatMap((o) => (o.evidence.sub_observations ?? []).filter((s) => s.outcome !== 'PASS').map((s) => ({ check: o.code, observation: s.id, outcome: s.outcome, evidence: s.evidence })));
   ledger.record({ decision: DECISION.FIDELITY, decided_by: COMPONENT.IDENTITY_FIDELITY_GATE, rule: 'IDENTITY_PRESERVE_MEASUREMENTS_ON_THE_DELIVERED_PNG', basis: [asset.ref], outcome: { gate: gate.outcome, failed_observations: failed.map((f) => `${f.check}/${f.observation}=${f.outcome}`) } });
 
+  // 11. Brand Guardian: a deterministic gate on EVERY candidate (it consumes the Fidelity result and never recomputes it); not configured => the candidate cannot be reviewed
+  let guardianResult = null;
+  if (guardian) {
+    guardianResult = guardian.evaluate({ document: finalDocument, fonts, fidelityGate: gate });
+    ledger.record({ decision: DECISION.BRAND_GUARDIAN, decided_by: COMPONENT.BRAND_GUARDIAN, rule: 'APPROVED_BRAND_MEMORY_HARD_RULES_ON_THE_DECLARED_CANDIDATE', basis: [], outcome: { outcome: guardianResult.outcome, rules: guardianResult.rule_results.map((r) => `${r.rule_id}=${r.outcome}`) } });
+  }
+  let status;
+  if (gate.outcome === 'FAIL') status = 'FIDELITY_FAIL';
+  else if (gate.outcome !== 'PASS') status = 'BLOCKED';
+  else if (!guardianResult) status = 'BLOCKED';
+  else status = guardianResult.outcome === 'PASS' ? 'READY_FOR_REVIEW' : 'GUARDIAN_FAIL';
+
   return Object.freeze({
-    status: gate.outcome === 'PASS' ? 'READY_FOR_REVIEW' : (gate.outcome === 'FAIL' ? 'FIDELITY_FAIL' : 'BLOCKED'),
+    status,
+    ...(status === 'BLOCKED' && gate.outcome === 'PASS' && !guardianResult ? { reason: 'BRAND_GUARDIAN_NOT_CONFIGURED' } : {}),
     png_bytes: png.bytes,
     png_sha256: png.sha256,
     width: png.width,
     height: png.height,
     document: finalDocument,
     preflight: { status: preflight.status },
+    guardian: guardianResult,
     fidelity: { gate: gate.outcome, observations, failed },
     render: { render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, resolutions: log.resolutions.length, image_draws: log.image_draws },
     environment: environment.provenance,

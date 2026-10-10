@@ -56,7 +56,25 @@ no model fallback, no retry. The candidate contains the merchant's product photo
 derived from the authorized asset may be transmitted for this purpose; `deriveCandidateAuthorization` binds the **same** scope to the candidate's own ref and bytes. Retention is stated, ZDR is
 not claimed. Whether this model accepts images in the Frankfurt region is confirmed only by the first real call; a failure is reported as the blocker, never faked.
 
+## Revision Cycle 1 preparation (the two runtime gaps, closed)
+
+**Brand Guardian is a deterministic gate of the runtime.** `src/creative-runtime/guardian-gate.js` wraps the existing `evaluateBrandGuardian` over a manifest built from the produced
+DesignDocument and the Fidelity gate it consumes. `runProductPreservingCreative` runs it on **every** candidate it produces; a runtime without a gate cannot reach `READY_FOR_REVIEW`
+(`BLOCKED: BRAND_GUARDIAN_NOT_CONFIGURED`), and a Guardian that does not PASS gives `GUARDIAN_FAIL`. The critic never replaces or overrides it. The verdict adds
+`ready_for_owner_review` = Preflight PASS ∧ Fidelity PASS ∧ Guardian PASS ∧ critic not `CREATIVE_FAIL` (a routing state, not an approval).
+
+**The revision-side Creative Director.** `src/creative-runtime/revision-director.js`. It consumes, through an explicit allow-list (`normalizeRevisionEvidence`): the original brief, the
+previous creative direction (its creative fields), the evidence of the previous candidate (recipe, roles, gate outcomes, product share: facts, no geometry), the normalized critique and the
+normalized semantic revision request. Anything else (an owner review, a coordinate, a colour, a font size, a design opinion) is refused at the door, and all text that crosses is re-checked
+for pixel / coordinate / font / colour literals. The model's revised direction is checked the same way, must not add fields, and must **differ meaningfully** from the previous one (a
+structural field changed, or at least two descriptive fields rewritten). It is recorded as `REVISION_DIRECTION` by `nordla:revision-director@1`. The owner-review module is imported by none
+of the revision path (a test checks it).
+
+**Revision cycle** (`scripts/run-c3-revision.mjs`): Candidate 1 → critique v2 → semantic intents → revised direction → production plan → environment (text-only) → deterministic product-preserving
+composite → deterministic text → Preflight → Fidelity → Brand Guardian → critique of Candidate 2 (only if every deterministic gate passed). Bounded by `MAX_CANDIDATES = 3`; a cycle needs
+`--confirm-revision-cycle=1`; one lock that code never releases; three billable calls (revision Director, environment, vision critic).
+
 ## Known gaps (reported, not hidden)
 
-- **Brand Guardian was never run in the creative runtime.** For the existing candidate it is `NOT_EVALUATED`, so its production status is `BLOCKED_BY_A_DETERMINISTIC_GATE` until a Guardian step exists. Adding it (and storing the DesignDocument in the run summary) is a runtime task, not done here.
-- Director conditioning on a revision request (the producer side of revision cycle 1) is not wired; it starts only after the owner confirms the quality of the critic.
+- Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.
+- Whether a revised direction is sufficient to move the layout depends on the recipes available (five today): the Director can change the spatial intent, the hierarchy and the environment, not invent a layout.

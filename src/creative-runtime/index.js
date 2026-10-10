@@ -5,3 +5,5 @@ export * from './layout-plan.js';
 export * from './segmenter.js';
 export * from './runtime.js';
 export * from './environment-suitability.js';
+export * from './guardian-gate.js';
+export * from './revision-director.js';

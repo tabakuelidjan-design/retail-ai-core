@@ -8,7 +8,7 @@ import {
   createVisualProductionDirector, DECISION, DIRECTOR_CONSTANTS, displayStructuresIn, runProductPreservingCreative, selectLayoutRecipe, zoneStructure,
 } from '../src/creative-runtime/index.js';
 import {
-  BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts,
+  BRAND, buildBrief, directorAnswer, fakeEnvironmentPort, fonts, GUARDIAN_PASS,
 } from './runtime-world.js';
 
 // Regressions of the first autonomous HABB run (`// RG-N` markers). Both provider calls succeeded; the run stopped at PREFLIGHT_FAIL because (1) the layout planner chose a recipe
@@ -47,7 +47,7 @@ function setup({ answer = REAL_ANSWER(), environment = flatEnvironment('#bdbdbd'
     ports: { segmenter: createLocalProductSegmenter({ ledger }), environment },
   };
 }
-const run = (s) => runProductPreservingCreative({ at: AT, brief: buildBrief({ brand: s.brand }), fonts, agents: s.agents, ports: s.ports, ledger: s.ledger });
+const run = (s) => runProductPreservingCreative({ at: AT, brief: buildBrief({ brand: s.brand }), fonts, agents: s.agents, ports: s.ports, ledger: s.ledger, guardian: GUARDIAN_PASS });
 
 test('The planner picks a recipe with a slot for every role the copy fills, and never leaves a text unplaced', () => {
   const direction = { spatial_intent: 'PRODUCT_CENTER_TEXT_BELOW', product_role: 'HERO' };
