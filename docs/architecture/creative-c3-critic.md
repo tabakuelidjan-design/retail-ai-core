@@ -74,6 +74,15 @@ of the revision path (a test checks it).
 composite → deterministic text → Preflight → Fidelity → Brand Guardian → critique of Candidate 2 (only if every deterministic gate passed). Bounded by `MAX_CANDIDATES = 3`; a cycle needs
 `--confirm-revision-cycle=1`; one lock that code never releases; three billable calls (revision Director, environment, vision critic).
 
+## Revision Cycle 1, first live attempt (2026-10-10): stopped at the layout
+
+The revision Director's accepted direction (spatial intent `PRODUCT_START_TEXT_END`) selected the recipe `EDITORIAL_SPLIT`, whose text column (46% of the usable width) cannot hold the approved
+supporting claim on one line at the minimum size of the type scale (`TEXT_DOES_NOT_FIT / TOO_MANY_LINES`, supporting text limited to one line by `TYPE_SCALE_V1`). The solver returned
+`UNSATISFIED`, no document was rendered, so Preflight, Fidelity and Brand Guardian never ran. Cause: **LAYOUT_CAPABILITY_LIMIT** (a limit of the five recipes and of the type rules, not a
+bug and not a HABB-specific problem). Two runtime defects were found and fixed generically: the layout is now solved **before** the billable environment call (it needs only the cut-out and
+the canvas size), and a stop is reported by its real stage and one classified cause (`stop-stage.js`, `--explain`), never as a failure of gates that did not run. The layout rules were not
+changed to make this direction pass.
+
 ## Known gaps (reported, not hidden)
 
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.
