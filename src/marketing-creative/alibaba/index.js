@@ -11,3 +11,4 @@ export * from './smoke.js';
 export * from './scoped-media-authorization.js';
 export * from './qwen-image-edit.js';
 export * from './edit-acceptance.js';
+export * from './live-call-lock.js';

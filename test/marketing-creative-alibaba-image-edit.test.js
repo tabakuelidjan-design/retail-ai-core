@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,11 +15,13 @@ import {
   imageInfoOf,
   isAcceptedProviderCandidate,
   isHeaderSafeApiKey,
+  LIVE_CALL_ALREADY_ATTEMPTED,
   loadAlibabaCreativeConfig,
   MemoryCallJournal,
   MemoryOutputStore,
   PROVIDER_OUTPUT_STATUS,
   redactCredentials,
+  runSingleLiveCall,
   SpendGuard,
 } from '../src/marketing-creative/alibaba/index.js';
 import { ANNOTATIONS, buildCandidate, SOURCE, SOURCE_ASSET, sha } from './identity-preserve-world.js';
@@ -390,4 +393,49 @@ test('A malformed credential is refused before anything is reserved, journaled, 
     }
     assert.equal((await readdir(dir)).length, 0);
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('A provider-side 403 Endpoint.AccessDenied is a real, non-transient provider failure that consumes the one-live-call lock and is never retried', async () => {
+  // IE-39 the real response of the first live attempt: 403 + Endpoint.AccessDenied + a request id. One request, no retry, no other host, nothing stored, nothing settled
+  const fetchImpl = fakeFetch({ status: 403, payload: { code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.', request_id: '77af93e6-9c06-9eed-be5a-216a4ca2cf29' } });
+  const input = setup({ fetchImpl });
+  const error = await editProductImage(input).catch((e) => e);
+  assert.equal(error.name, 'AlibabaProviderError');
+  assert.equal(error.status, 403);
+  assert.equal(error.code, 'Endpoint.AccessDenied');
+  assert.equal(error.requestId, '77af93e6-9c06-9eed-be5a-216a4ca2cf29');
+  assert.equal(error.transient, false);
+  assert.equal(fetchImpl.calls.length, 1);
+  assert.deepEqual(input.journal.list().map((e) => [e.event, e.request_id ?? null, e.reason ?? null]), [['RESERVED', null, null], ['FAILED', '77af93e6-9c06-9eed-be5a-216a4ca2cf29', 'Endpoint.AccessDenied']]);
+  assert.equal(input.budget.snapshot().settled_eur, 0);
+  // IE-40 the lock: a failed attempt (provider-side 403, 429, 500, a timeout) keeps it, and a second attempt is refused WITHOUT running the call at all
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nordla-lock-'));
+  const lockPath = path.join(dir, 'live-call-001.lock');
+  try {
+    let runs = 0;
+    const failing = async () => { runs += 1; throw error; };
+    await assert.rejects(runSingleLiveCall({ lockPath, call: failing }), (e) => e === error);
+    assert.equal(runs, 1);
+    assert.equal(existsSync(lockPath), true);
+    await assert.rejects(runSingleLiveCall({ lockPath, call: failing }), (e) => e.code === LIVE_CALL_ALREADY_ATTEMPTED);
+    assert.equal(runs, 1);
+    // IE-41 a success keeps the lock too, and two simultaneous attempts let exactly one through
+    const dir2 = await mkdtemp(path.join(os.tmpdir(), 'nordla-lock2-'));
+    try {
+      const lock2 = path.join(dir2, 'live-call-001.lock');
+      let started = 0;
+      const results = await Promise.allSettled([1, 2, 3].map(() => runSingleLiveCall({ lockPath: lock2, call: async () => { started += 1; return 'ok'; } })));
+      assert.equal(started, 1);
+      assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+      assert.equal(results.filter((r) => r.status === 'rejected' && r.reason.code === LIVE_CALL_ALREADY_ATTEMPTED).length, 2);
+      assert.equal(existsSync(lock2), true);
+    } finally { await rm(dir2, { recursive: true, force: true }); }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+  // IE-42 no code path deletes the lock or retries: the helper and the script never unlink / remove it
+  for (const file of ['src/marketing-creative/alibaba/live-call-lock.js', 'scripts/run-c2-habb-edit.mjs']) {
+    assert.doesNotMatch(await readFile(new URL(file, root), 'utf8'), /\bunlink\b|\brm\(|\brmSync\b|\brename\(/, file);
+  }
+  // IE-43 the script takes its lock through the helper, before any provider call
+  const script = await readFile(new URL('scripts/run-c2-habb-edit.mjs', root), 'utf8');
+  assert.ok(script.indexOf('takeLiveCallLock(lockPath)') > 0 && script.indexOf('takeLiveCallLock(lockPath)') < script.indexOf('editProductImage({'));
 });

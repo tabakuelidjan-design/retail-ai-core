@@ -24,6 +24,7 @@ import {
   PROVIDER_OUTPUT_STATUS,
   requireAlibabaCreativeConfig,
   SpendGuard,
+  takeLiveCallLock,
 } from '../src/marketing-creative/alibaba/index.js';
 
 const root = new URL('../', import.meta.url);
@@ -60,7 +61,8 @@ if (mode === 'check') finish('READY_FOR_ONE_LIVE_CALL (nothing was sent)', 0);
 
 // ---- exactly one live call
 await mkdir(privateDir, { recursive: true });
-try { await writeFile(lockPath, JSON.stringify({ started_at: new Date().toISOString(), note: 'delete this file only after reviewing why the single live call did not complete' }), { flag: 'wx', mode: 0o600 }); } catch { check('single live call lock', false, { lock: lockPath }); finish('BLOCKED: LIVE_CALL_ALREADY_ATTEMPTED', 3); }
+// the lock is exclusive and is never released by code, whatever the provider answers (see live-call-lock.js)
+try { await takeLiveCallLock(lockPath); } catch { check('single live call lock', false, { lock: lockPath }); finish('BLOCKED: LIVE_CALL_ALREADY_ATTEMPTED', 3); }
 
 const request = {
   request_id: 'c2b-habb-edit-001',
