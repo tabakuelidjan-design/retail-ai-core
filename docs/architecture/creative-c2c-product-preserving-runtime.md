@@ -84,3 +84,5 @@ Both calls succeeded (the Director text completion; one text-only environment im
 | The stopped run's summary lacked the direction, the copy and the environment provenance | Nordla runtime defect | runtime | every stop carries the evidence gathered so far |
 
 `MANUAL CREATIVE STEERING: NONE` was true for that run: every recorded decision had a Nordla component. The label `NORDLA_CREATIVE_RUNTIME_INCOMPLETE` it printed only meant the run had not reached the fidelity decision; the report now says `run_complete: false` and `decisions_not_reached` separately.
+
+**CI note:** the first CI run of the fix commit (`b2408fd`) failed on the Node 24 job only, in the full-suite step; the Node 20 job passed. The failure did not reproduce locally on Node 24.21 (8 cores, 2 CPUs / 7 GB in Docker, 24-way test concurrency). The failing test's name could not be read (the job log needs authentication), so the cause is unknown until the re-run below or the log is read; it is not assumed to be a flake.
