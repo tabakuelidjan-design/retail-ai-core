@@ -3,6 +3,8 @@
 //
 //   node scripts/run-c3-revision.mjs --check                              no network: credentials, Candidate 1, critique v2, the derived revision request, the canonical revision evidence (refused
 //                                                                           if it holds anything non-semantic), a LOCAL segmentation dry-run. Sends nothing, bills nothing.
+//   node scripts/run-c3-revision.mjs --explain                            offline and read-only: where the stored revision run really stopped (the execution chain, the provider calls with their request ids and
+//                                                                           costs, one classified cause). Nothing is sent or modified.
 //   node scripts/run-c3-revision.mjs --live --confirm-revision-cycle=1   the explicit human confirmation of THIS cycle. THREE billable calls under one lock that code never releases:
 //                                                                           one text completion (the revision Director), one text-only environment image, one vision call (the critic on Candidate 2).
 //
@@ -22,14 +24,14 @@ import {
 } from '../src/marketing-creative/alibaba/index.js';
 import {
   buildCandidateEvidence, buildRevisionInstruction, createApprovedCopyAgent, createBrandGuardianGate, createCreativeDirector, createDecisionLedger, createLocalProductSegmenter, createProductAssetAnalyst,
-  createRevisionDirector, createVisualProductionDirector, DIRECTOR_CONSTANTS, normalizeRevisionEvidence, runProductPreservingCreative,
+  buildExecutionChain, createRevisionDirector, createVisualProductionDirector, describeStop, DIRECTOR_CONSTANTS, normalizeRevisionEvidence, runProductPreservingCreative,
 } from '../src/creative-runtime/index.js';
 import { buildRevisionRequest, createCreativeCritic, finalizeVerdict } from '../src/creative-critic/index.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
 
 const root = new URL('../', import.meta.url);
-const mode = process.argv.includes('--live') ? 'live' : (process.argv.includes('--check') ? 'check' : null);
+const mode = process.argv.includes('--live') ? 'live' : (process.argv.includes('--check') ? 'check' : (process.argv.includes('--explain') ? 'explain' : null));
 const confirmed = process.argv.includes('--confirm-revision-cycle=1');
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (rel) => JSON.parse(readFileSync(new URL(rel, root), 'utf8'));
@@ -38,7 +40,10 @@ const CRITIQUE_FILE = 'critique-002.json';
 const APPROVED_INTENTS = ['INTEGRATE_PRICE_WITH_THE_COMPOSITION', 'ELEVATE_RETAIL_QUALITY', 'REDUCE_TEMPLATE_FEEL', 'IMPROVE_PRODUCT_ENVIRONMENT_INTEGRATION', 'CLARIFY_VISUAL_HIERARCHY', 'REFINE_TYPOGRAPHIC_COMPOSITION', 'REBALANCE_WHITESPACE', 'REBALANCE_COMPOSITION'];
 
 const runDir = process.env.NORDLA_PRIVATE_DIR ? path.join(process.env.NORDLA_PRIVATE_DIR, 'creative-run-001') : path.join(os.homedir(), 'nordla-private', 'c2-habb-benchmark-001', 'creative-run-001');
-const outDir = path.join(runDir, 'revision-001');
+const dirArg = process.argv.find((a) => a.startsWith('--dir='))?.split('=')[1];
+if (dirArg !== undefined && !/^[A-Za-z0-9._-]+$/.test(dirArg)) { console.error('--dir must be a folder name'); process.exitCode = 64; throw new Error('invalid --dir'); }
+const outDir = path.join(runDir, dirArg ?? 'revision-001');
+const readEvents = async (file) => (await readFile(file, 'utf8').catch(() => '')).split(String.fromCharCode(10)).filter(Boolean).map((l) => JSON.parse(l));
 const report = { mode, status: null, checks: [], private_directory: outDir };
 // Never process.exit(): on Windows, Node 24 aborts with a libuv assertion when the process exits while an HTTPS fetch is closing. The exit code is set and the script unwinds.
 const STOP = Symbol('stop');
@@ -46,7 +51,20 @@ const finish = (status, code) => { report.status = status; console.log(JSON.stri
 const check = (name, ok, detail = null) => { report.checks.push({ name, ok, detail }); return ok; };
 
 try {
-  if (!mode) { console.error('use --check (no network) or --live --confirm-revision-cycle=1 (three billable calls)'); process.exitCode = 64; throw STOP; }
+  if (!mode) { console.error('use --check (no network), --explain (offline) or --live --confirm-revision-cycle=1 (three billable calls)'); process.exitCode = 64; throw STOP; }
+  if (mode === 'explain') {
+    // read-only: the stored record of a revision run, explained from its own evidence
+    const stored = await readFile(path.join(outDir, 'summary.json'), 'utf8').then(JSON.parse).catch(() => null);
+    if (!check('the stored revision record exists', stored !== null)) finish('BLOCKED: NO_REVISION_RECORD', 3);
+    const events = await readEvents(path.join(outDir, 'provider-calls.jsonl'));
+    const result = { status: stored.status, reason: stored.reason, ledger: stored.ledger, png_sha256: stored.png?.sha256 ?? null, preflight: stored.preflight, fidelity: stored.fidelity, guardian: stored.guardian };
+    report.stored_status = stored.status; report.stored_reason = stored.reason;
+    report.stop = describeStop({ result });
+    report.execution_chain = buildExecutionChain({ result, events });
+    report.provider_calls = events.filter((e) => e.event === 'SUCCEEDED' || e.event === 'FAILED').map((e) => ({ operation: e.operation ?? 'REVISION_DIRECTOR_COMPLETION', model: e.model, event: e.event, request_id: e.request_id ?? null, cost_eur: e.actual_cost_eur ?? e.estimated_cost_eur ?? null, latency_ms: e.latency_ms ?? null, reason: e.reason ?? null }));
+    report.cost_eur_total = stored.budget?.settled_eur ?? null;
+    finish('EXPLAINED', 0);
+  }
   if (mode === 'live' && !confirmed) { console.error('a revision cycle needs the explicit human confirmation: --confirm-revision-cycle=1'); process.exitCode = 64; throw STOP; }
 
   // ---- credentials (names only are reported, never a value)
@@ -154,9 +172,15 @@ try {
     const cause = error.detail?.cause ?? {};
     report.runtime_error = { code: error.code ?? null, role: error.detail?.role ?? null, cause_name: cause.name ?? null, cause_code: cause.code ?? error.code ?? null, status: cause.status ?? error.status ?? null, request_id: cause.request_id ?? error.requestId ?? null, message: error.message };
     await writeFile(path.join(outDir, 'summary.json'), `${JSON.stringify({ ...report, status: 'BLOCKED: RUNTIME_ERROR', ledger: ledger.entries() }, null, 2)}\n`, { mode: 0o600 });
-    finish('BLOCKED: RUNTIME_ERROR', 3);
+    const events = await readEvents(path.join(outDir, 'provider-calls.jsonl'));
+    report.stop = describeStop({ error });
+    report.execution_chain = buildExecutionChain({ result: { ledger: ledger.entries() }, error, events });
+    await writeFile(path.join(outDir, 'summary.json'), JSON.stringify({ ...report, status: 'BLOCKED: RUNTIME_ERROR', budget: budget.snapshot(), ledger: ledger.entries() }, null, 2), { mode: 0o600 });
+    finish(report.stop.status, 3);
   }
   const png2Path = path.join(outDir, 'candidate-002.png');
+  const stopInfo = result.status === 'READY_FOR_REVIEW' ? null : describeStop({ result });
+  const chain = buildExecutionChain({ result, events: await readEvents(path.join(outDir, 'provider-calls.jsonl')) });
   if (result.png_bytes) await writeFile(png2Path, result.png_bytes, { mode: 0o600 });
   const summary = {
     status: result.status, reason: result.reason ?? null, budget: budget.snapshot(),
@@ -164,12 +188,14 @@ try {
     preflight: result.preflight ?? null, guardian: result.guardian ?? null, fidelity: result.fidelity ? { gate: result.fidelity.gate, failed_observations: result.fidelity.failed } : null,
     environment: result.environment ?? null, direction: result.direction ?? null, copy: result.copy ?? null, steering: result.steering ?? null, revision_request: revisionRequest, ledger: result.ledger,
     previous_direction_id: summary1.direction.direction_id,
+    stop: stopInfo, execution_chain: chain,
   };
   await writeFile(path.join(outDir, 'summary.json'), `${JSON.stringify({ ...report, ...summary }, null, 2)}\n`, { mode: 0o600 });
 
   // ---- the critic looks at Candidate 2 only when every deterministic gate passed (no money is spent judging a blocked candidate)
   report.result = { status: result.status, png: summary.png, preflight: result.preflight?.status ?? null, fidelity_gate: result.fidelity?.gate ?? null, guardian: result.guardian?.outcome ?? null, steering: result.steering?.manual_creative_steering ?? null };
-  if (result.status !== 'READY_FOR_REVIEW') finish(`${result.status}: Candidate 2 did not pass the deterministic gates; the critic was not called`, result.status === 'FIDELITY_FAIL' ? 2 : 3);
+  report.execution_chain = chain;
+  if (stopInfo) { report.stop = stopInfo; finish(stopInfo.status, result.status === 'FIDELITY_FAIL' ? 2 : 3); }
   const candidateRef = 'candidate:habb-c3-revision-001-candidate-002';
   const candidateAuthorization = deriveCandidateAuthorization({ authorization, source_asset_sha256: payload.sha256, candidate_ref: candidateRef, candidate_sha256: result.png_sha256 });
   const cleared = assessScopedExternalMediaUse({ authorization: candidateAuthorization, asset: { ref: candidateRef, sha256: result.png_sha256 }, provider_id: 'alibaba-cloud-model-studio', region: config.region, purpose: authorization.purpose, operation: 'VISION_CRITIQUE' });

@@ -76,9 +76,43 @@ export async function runProductPreservingCreative({
   const copy = await agents.copy.invoke({ hierarchy: direction.hierarchy, approved_copy: brief.approved_copy, claims: brief.claims }, { claim_refs: claimRefs });
   evidence.copy = copy.items;
 
+  // the layout plan: recipe, document and constraint solving. It needs only the cut-out and the canvas size (the environment is exactly the canvas), so it is run BEFORE the billable
+  // environment call as well: a direction whose layout cannot be solved must not cost a provider call
+  const cutoutRef = `asset://runtime/${ids.brief_ref.replace(/[^A-Za-z0-9_.-]/g, '-')}/product-cutout`;
+  const environmentRef = `asset://runtime/${ids.brief_ref.replace(/[^A-Za-z0-9_.-]/g, '-')}/environment`;
+  let segmentation = null; let environment = null;
+  const planLayout = ({ providerId, size }) => {
+    const recipe = selectLayoutRecipe(direction, copy.items.map((i) => i.text_role));
+    if (!recipe.recipe_id) return { recipe, ok: false };
+    const document = assembleDocument({
+      at, ids, direction, format: { ...format, recipe_id: recipe.recipe_id }, brand, copyItems: copy.items,
+      product: { cutout_ref: cutoutRef }, environment: { ref: environmentRef, provider_id: providerId }, fonts, assetRefs: [cutoutRef, environmentRef], claimRefs,
+    });
+    const assets = { [cutoutRef]: { width_px: segmentation.width_px, height_px: segmentation.height_px }, [environmentRef]: { width_px: size.width, height_px: size.height } };
+    const solved = CI.solveLayout({ document, recipe_id: recipe.recipe_id, fonts, assets, created_at: at });
+    // a layer the layout engine could not place (no slot for its role) is never rendered at its default box: the run stops
+    const ok = solved.status === 'SOLVED' && !solved.unplaced.some((u) => ['PRODUCT', 'TEXT'].includes(solved.document.layers.find((l) => l.id === u.layer_id)?.type));
+    return { recipe, document, assets, solved, ok };
+  };
+  const recordLayout = ({ recipe, solved }) => {
+    ledger.record({
+      decision: DECISION.LAYOUT_RECIPE, decided_by: COMPONENT.LAYOUT_PLANNER, rule: recipe.rule, basis: [direction.direction_id],
+      outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered },
+    });
+    const productLayer = solved.document.layers.find((l) => l.type === 'PRODUCT');
+    ledger.record({
+      decision: DECISION.PRODUCT_PLACEMENT, decided_by: COMPONENT.LAYOUT_ENGINE, rule: 'RECIPE_SLOT_UNIFORM_FIT', basis: [recipe.recipe_id],
+      outcome: { box: productLayer.geometry, canvas, product_height_share: productLayer.geometry.height / canvas.height, status: solved.status },
+    });
+    const texts = solved.document.layers.filter((l) => l.type === 'TEXT');
+    ledger.record({
+      decision: DECISION.TYPOGRAPHY_PLACEMENT, decided_by: COMPONENT.LAYOUT_ENGINE, rule: 'RECIPE_SLOTS_AND_TEXT_FITTING', basis: [recipe.recipe_id],
+      outcome: { texts: texts.map((t) => ({ role: t.text_role, box: t.geometry, font_size: t.font_size })), unplaced: solved.unplaced, violations: solved.violations },
+    });
+  };
+
   // 4. Visual Production Director: the strategy as requests; the runtime executes them and enforces that no product pixel reaches a provider
   const { requests } = await agents.visual_director.invoke({ understanding }, {});
-  let segmentation = null; let environment = null;
   for (const request of requests) {
     if (request.capability === 'PRODUCT_SEGMENT') {
       segmentation = await ports.segmenter.segment({ asset, annotations: brief.identity_annotations });
@@ -87,6 +121,12 @@ export async function runProductPreservingCreative({
       if (!segmentation.quality.confident) return stop('SEGMENTATION_LOW_CONFIDENCE', { quality: segmentation.quality });
     } else if (request.capability === 'IMAGE_GENERATE') {
       if (request.input_asset_refs.length !== 0) return stop('A_PROVIDER_REQUEST_MAY_NOT_CARRY_A_PRODUCT_ASSET', { request_id: request.request_id });
+      // the layout is solved with the real cut-out and the canvas-sized environment BEFORE the provider is paid: an unsolvable layout stops here, with its record
+      if (segmentation) {
+        const pre = planLayout({ providerId: 'pending-environment', size: canvas });
+        if (!pre.recipe.recipe_id) return stop(pre.recipe.reason, { spatial_intent: direction.spatial_intent, considered: pre.recipe.considered, before_environment_call: true });
+        if (!pre.ok) { recordLayout(pre); return stop('THE_LAYOUT_COULD_NOT_BE_SOLVED', { violations: pre.solved.violations, unplaced: pre.solved.unplaced, before_environment_call: true }); }
+      }
       let built;
       try { built = buildEnvironmentRequest({ direction, expression: brand.expression, canvas, ledger }); } catch (error) { return stop(error.code ?? 'ENVIRONMENT_REQUEST_REFUSED', { message: error.message }); }
       environment = await ports.environment.generate({ request: { ...built, capability: 'IMAGE_GENERATE', purpose: 'BACKGROUND', input_asset_refs: [] }, expected_size: canvas });
@@ -100,39 +140,14 @@ export async function runProductPreservingCreative({
   try { envPixels = P.decodePng(environment.output_bytes); } catch { return stop('THE_ENVIRONMENT_IS_NOT_A_DECODABLE_PNG'); }
   if (envPixels.width !== canvas.width || envPixels.height !== canvas.height) return stop('THE_ENVIRONMENT_SIZE_DIFFERS_FROM_THE_CANVAS', { environment_size: [envPixels.width, envPixels.height], canvas: [canvas.width, canvas.height] });
 
-  // 5. layout planner: the recipe
-  const recipe = selectLayoutRecipe(direction, copy.items.map((i) => i.text_role));
-  if (!recipe.recipe_id) return stop(recipe.reason, { spatial_intent: direction.spatial_intent, considered: recipe.considered });
-  ledger.record({
-    decision: DECISION.LAYOUT_RECIPE, decided_by: COMPONENT.LAYOUT_PLANNER, rule: recipe.rule, basis: [direction.direction_id],
-    outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered },
-  });
-
-  const cutoutRef = `asset://runtime/${ids.brief_ref.replace(/[^A-Za-z0-9_.-]/g, '-')}/product-cutout`;
-  const environmentRef = `asset://runtime/${ids.brief_ref.replace(/[^A-Za-z0-9_.-]/g, '-')}/environment`;
-  const document = assembleDocument({
-    at, ids, direction, format: { ...format, recipe_id: recipe.recipe_id }, brand, copyItems: copy.items,
-    product: { cutout_ref: cutoutRef }, environment: { ref: environmentRef, provider_id: environment.provenance.provider_id }, fonts, assetRefs: [cutoutRef, environmentRef], claimRefs,
-  });
-  const assets = { [cutoutRef]: { width_px: segmentation.width_px, height_px: segmentation.height_px }, [environmentRef]: { width_px: envPixels.width, height_px: envPixels.height } };
-
-  // 6. layout engine: placement of the product and of the text
-  const solved = CI.solveLayout({ document, recipe_id: recipe.recipe_id, fonts, assets, created_at: at });
+  // 5-6. layout planner (the recipe) and layout engine (placement of the product and of the text), now with the environment actually delivered
+  const plan = planLayout({ providerId: environment.provenance.provider_id, size: { width: envPixels.width, height: envPixels.height } });
+  if (!plan.recipe.recipe_id) return stop(plan.recipe.reason, { spatial_intent: direction.spatial_intent, considered: plan.recipe.considered });
+  const { recipe, document, assets, solved } = plan;
+  recordLayout(plan);
   // (the director's negative-space intent is realized in the ENVIRONMENT request - calm areas to set text on - not as a margin the layout engine reserves)
   const productLayer = solved.document.layers.find((l) => l.type === 'PRODUCT');
-  ledger.record({
-    decision: DECISION.PRODUCT_PLACEMENT, decided_by: COMPONENT.LAYOUT_ENGINE, rule: 'RECIPE_SLOT_UNIFORM_FIT', basis: [recipe.recipe_id],
-    outcome: { box: productLayer.geometry, canvas, product_height_share: productLayer.geometry.height / canvas.height, status: solved.status },
-  });
-  const texts = solved.document.layers.filter((l) => l.type === 'TEXT');
-  ledger.record({
-    decision: DECISION.TYPOGRAPHY_PLACEMENT, decided_by: COMPONENT.LAYOUT_ENGINE, rule: 'RECIPE_SLOTS_AND_TEXT_FITTING', basis: [recipe.recipe_id],
-    outcome: { texts: texts.map((t) => ({ role: t.text_role, box: t.geometry, font_size: t.font_size })), unplaced: solved.unplaced, violations: solved.violations },
-  });
-  // a layer the layout engine could not place (no slot for its role) is never rendered at its default box: the run stops
-  if (solved.status !== 'SOLVED' || solved.unplaced.some((u) => ['PRODUCT', 'TEXT'].includes(solved.document.layers.find((l) => l.id === u.layer_id)?.type))) {
-    return stop('THE_LAYOUT_COULD_NOT_BE_SOLVED', { violations: solved.violations, unplaced: solved.unplaced });
-  }
+  if (!plan.ok) return stop('THE_LAYOUT_COULD_NOT_BE_SOLVED', { violations: solved.violations, unplaced: solved.unplaced });
 
   // 6b. environment suitability: where the real product is placed the environment must be a calm surface (a provider may draw an object although it was asked not to)
   const suitability = assessEnvironment({ environment: envPixels, productBox: productLayer.geometry });

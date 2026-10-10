@@ -34,6 +34,7 @@ on:
       - 'src/creative-critic/**'
       - 'test/creative-critic.test.js'
       - 'test/creative-revision.test.js'
+      - 'test/creative-stop-stage.test.js'
       - 'scripts/run-c3-revision.mjs'
       - 'scripts/run-c3-critic.mjs'
       - 'docs/architecture/creative-c3-critic.md'
@@ -79,6 +80,7 @@ on:
       - 'src/creative-critic/**'
       - 'test/creative-critic.test.js'
       - 'test/creative-revision.test.js'
+      - 'test/creative-stop-stage.test.js'
       - 'scripts/run-c3-revision.mjs'
       - 'scripts/run-c3-critic.mjs'
       - 'docs/architecture/creative-c3-critic.md'
@@ -117,8 +119,8 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Focused Creative Intelligence tests
-        run: node --test test/creative-intelligence*.test.js test/creative-critic.test.js test/creative-revision.test.js test/resources*.test.js
+        run: node --test test/creative-intelligence*.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/resources*.test.js
       - name: Branding, Creative Fidelity, Marketing and Creative Intelligence together
-        run: node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-critic.test.js test/creative-revision.test.js test/resources*.test.js
+        run: node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/resources*.test.js
       - name: Full suite (cross-domain non-regression)
         run: npm test
