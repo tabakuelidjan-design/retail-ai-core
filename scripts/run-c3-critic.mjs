@@ -20,7 +20,6 @@ import { createCreativeCritic, finalizeVerdict } from '../src/creative-critic/in
 
 const root = new URL('../', import.meta.url);
 const mode = ['--check', '--live', '--compare'].find((m) => process.argv.includes(m))?.slice(2);
-if (!mode) { console.error('use --check (no network), --live (ONE billable vision call) or --compare (offline, after the critique)'); process.exit(64); }
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (rel) => JSON.parse(readFileSync(new URL(rel, root), 'utf8'));
 // the pinned hash identifies the reviewed candidate: it lives in the owner's review record, not in code
@@ -36,6 +35,7 @@ const finish = (status, code) => { report.status = status; console.log(JSON.stri
 const check = (name, ok, detail = null) => { report.checks.push({ name, ok, detail }); return ok; };
 
 try {
+if (!mode) { console.error('use --check (no network), --live (ONE billable vision call) or --compare (offline, after the critique)'); process.exitCode = 64; throw STOP; }
 if (mode === 'compare') {
   const { compareWithOwner } = await import('../src/creative-critic/owner-review.js');
   let stored;
