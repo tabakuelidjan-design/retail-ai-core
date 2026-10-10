@@ -1,0 +1,29 @@
+{
+  "kind": "OWNER_REVIEW",
+  "recorded_by": "owner",
+  "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
+  "candidate_ref": "candidate:habb-c2-creative-run-001",
+  "candidate_sha256": "2d57bfac0d24551cd25fa0b9a81439fe4d3cb64ffeca62ac0e19e2912808e07d",
+  "status": "OWNER_REJECTED",
+  "production_state": "NOT_SHIPPABLE",
+  "deterministic_record": { "technical": "TECHNICAL_PASS", "fidelity": "FIDELITY_PASS", "manual_creative_steering": "NONE" },
+  "purpose_note": "The owner's review of the latest autonomous C2 candidate, kept as EVIDENCE for the C3 agreement comparison. It is read ONLY by the comparison step AFTER the blind critique exists (scripts/run-c3-critic.mjs --compare); the critic, its instruction and the revision loop never receive it, and it is not a template for any future creative.",
+  "owner_words": "title plate dominates; price block disproportionate; awkward subheadline; weak hierarchy; weak product/environment integration; template-like; insufficient premium quality",
+  "mapping_note": "The mapping of the owner's words to the reusable critic dimensions was made by the implementer, not by the owner. Dimensions the owner did not speak about are NOT_STATED and are never compared.",
+  "dimensions": [
+    { "dimension": "TEXT_HIERARCHY", "owner_view": "FAIL", "note": "title plate dominates" },
+    { "dimension": "PRICE_INTEGRATION", "owner_view": "FAIL", "note": "price block disproportionate" },
+    { "dimension": "TYPOGRAPHY_COMPOSITION", "owner_view": "FAIL", "note": "awkward subheadline" },
+    { "dimension": "VISUAL_HIERARCHY", "owner_view": "FAIL", "note": "title plate dominates; weak hierarchy" },
+    { "dimension": "PRODUCT_INTEGRATION", "owner_view": "FAIL", "note": "weak product/environment integration" },
+    { "dimension": "TEMPLATE_LIKE_APPEARANCE", "owner_view": "FAIL", "note": "template-like" },
+    { "dimension": "PREMIUM_RETAIL_FEEL", "owner_view": "FAIL", "note": "insufficient premium quality" },
+    { "dimension": "OVERALL_SHIPPABILITY", "owner_view": "FAIL", "note": "owner rejected the candidate" },
+    { "dimension": "PRODUCT_PROMINENCE", "owner_view": "NOT_STATED", "note": "" },
+    { "dimension": "CLAIM_VISIBILITY", "owner_view": "NOT_STATED", "note": "" },
+    { "dimension": "WHITESPACE_BALANCE", "owner_view": "NOT_STATED", "note": "" },
+    { "dimension": "COMPOSITION_BALANCE", "owner_view": "NOT_STATED", "note": "" },
+    { "dimension": "BRAND_EXPRESSION", "owner_view": "NOT_STATED", "note": "" },
+    { "dimension": "AI_ARTIFACTS", "owner_view": "NOT_STATED", "note": "" }
+  ]
+}

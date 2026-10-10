@@ -31,6 +31,10 @@ on:
       - 'test/fidelity-measurement-world.js'
       - 'test/identity-preserve-world.js'
       - 'src/creative-runtime/**'
+      - 'src/creative-critic/**'
+      - 'test/creative-critic.test.js'
+      - 'scripts/run-c3-critic.mjs'
+      - 'docs/architecture/creative-c3-critic.md'
       - 'test/runtime-world.js'
       - 'scripts/run-c2-habb-creative.mjs'
       - 'docs/architecture/creative-c2c-product-preserving-runtime.md'
@@ -70,6 +74,10 @@ on:
       - 'test/fidelity-measurement-world.js'
       - 'test/identity-preserve-world.js'
       - 'src/creative-runtime/**'
+      - 'src/creative-critic/**'
+      - 'test/creative-critic.test.js'
+      - 'scripts/run-c3-critic.mjs'
+      - 'docs/architecture/creative-c3-critic.md'
       - 'test/runtime-world.js'
       - 'scripts/run-c2-habb-creative.mjs'
       - 'docs/architecture/creative-c2c-product-preserving-runtime.md'
@@ -105,8 +113,8 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Focused Creative Intelligence tests
-        run: node --test test/creative-intelligence*.test.js test/resources*.test.js
+        run: node --test test/creative-intelligence*.test.js test/creative-critic.test.js test/resources*.test.js
       - name: Branding, Creative Fidelity, Marketing and Creative Intelligence together
-        run: node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/resources*.test.js
+        run: node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-critic.test.js test/resources*.test.js
       - name: Full suite (cross-domain non-regression)
         run: npm test
