@@ -23,6 +23,16 @@ const MAX_PIXELS = 2048 * 2048;
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+/** A credential must be usable as an HTTP header value: printable ASCII, no space, no line break. Never echoes the value. */
+export const isHeaderSafeApiKey = (value) => typeof value === 'string' && /^[!-~]{8,}$/.test(value);
+
+/** An error message without the key and without any Authorization value (a fetch implementation may quote a header in its message). */
+export function redactCredentials(message, apiKey) {
+  let text = String(message ?? '');
+  if (apiKey) text = text.split(apiKey).join('[redacted]');
+  return text.replace(/Bearer\s[^"\n]*/g, 'Bearer [redacted]');
+}
+
 const FIXED_CLAUSES = Object.freeze([
   'Do not add any text, letters, numbers, prices, logos, labels, captions or watermarks anywhere in the image.',
   'The only text allowed is the text already printed on the product, which must stay exactly as it is.',
@@ -97,6 +107,10 @@ export async function editProductImage({
   config, authorization, asset, request, budget, journal = null, outputStore, operationId = randomUUID(), fetchImpl = globalThis.fetch, now = () => performance.now(),
 }) {
   requireAlibabaCreativeConfig(config);
+  if (!isHeaderSafeApiKey(config.apiKey)) {
+    // before anything is reserved, journaled or sent; the value is never echoed
+    throw Object.assign(new Error('Alibaba Model Studio API key is not a valid credential: it must be one token of printable characters without spaces or line breaks'), { code: 'INVALID_API_KEY_FORMAT' });
+  }
   if (config.imageModel !== IMAGE_EDIT_MODEL) throw new Error(`IMAGE_EDIT is defined for ${IMAGE_EDIT_MODEL} only: no model fallback`);
   if (request?.capability !== 'IMAGE_EDIT') throw new TypeError('request.capability must be IMAGE_EDIT');
   if (request?.text_policy !== 'NO_CRITICAL_TEXT') throw new TypeError('request.text_policy must be NO_CRITICAL_TEXT: critical text is never generated into provider pixels');
@@ -168,7 +182,9 @@ export async function editProductImage({
       output: stored,
       output_info: info,
     });
-  } catch (error) {
+  } catch (caught) {
+    // a provider error already carries no credential; any other error (a fetch implementation may quote a header) is redacted before it leaves
+    const error = caught instanceof AlibabaProviderError ? caught : Object.assign(new Error(redactCredentials(caught?.message, config.apiKey)), { name: caught?.name ?? 'Error', code: caught?.code ?? null, requestId: caught?.requestId ?? null, status: caught?.status ?? null, transient: caught?.transient ?? null });
     budget.hold(reservation);
     await journal?.append({
       ...base, event: 'FAILED', status: 'FAILED', request_id: error?.requestId ?? null, estimated_cost_eur: reservation.reserved_eur, reason: error?.code ?? 'REQUEST_FAILED',

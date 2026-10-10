@@ -17,6 +17,7 @@ import {
   assertScopedExternalMediaUse,
   editProductImage,
   evaluateProviderEdit,
+  isHeaderSafeApiKey,
   FileOutputStore,
   JsonlCallJournal,
   loadAlibabaCreativeConfig,
@@ -44,6 +45,7 @@ const check = (name, ok, detail = null) => { report.checks.push({ name, ok, deta
 const config = loadAlibabaCreativeConfig(process.env);
 const missing = ['ALIBABA_MODEL_STUDIO_API_KEY', 'ALIBABA_MODEL_STUDIO_WORKSPACE_ID'].filter((name) => !process.env[name]);
 if (!check('credentials present', missing.length === 0, missing.length ? { missing_environment_variables: missing } : null)) finish('BLOCKED: CREDENTIALS_NOT_PROVISIONED', 3);
+if (!check('API key has a valid format (one token, no spaces or line breaks)', isHeaderSafeApiKey(config.apiKey), { key_length: String(process.env.ALIBABA_MODEL_STUDIO_API_KEY).length })) finish('BLOCKED: API_KEY_FORMAT_INVALID', 3);
 try { requireAlibabaCreativeConfig(config); check('credentials and region valid', true, { region: config.region, model: config.imageModel }); } catch (error) { check('credentials and region valid', false, { reason: error.message }); finish('BLOCKED: CONFIG_INVALID', 3); }
 
 // ---- the real asset and the scoped clearance (before anything can be sent)

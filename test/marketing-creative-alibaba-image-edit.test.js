@@ -13,10 +13,12 @@ import {
   FileOutputStore,
   imageInfoOf,
   isAcceptedProviderCandidate,
+  isHeaderSafeApiKey,
   loadAlibabaCreativeConfig,
   MemoryCallJournal,
   MemoryOutputStore,
   PROVIDER_OUTPUT_STATUS,
+  redactCredentials,
   SpendGuard,
 } from '../src/marketing-creative/alibaba/index.js';
 import { ANNOTATIONS, buildCandidate, SOURCE, SOURCE_ASSET, sha } from './identity-preserve-world.js';
@@ -351,4 +353,41 @@ test('The controlled live-run script refuses without credentials, sends nothing 
   const source = await readFile(new URL('scripts/run-c2-habb-edit.mjs', root), 'utf8');
   assert.doesNotMatch(source, /sk-[A-Za-z0-9]{8,}|https?:\/\/|fetch\(/);
   assert.match(source, /loadAlibabaCreativeConfig\(process\.env\)/);
+});
+
+test('A malformed credential is refused before anything is reserved, journaled, locked or sent, and a key never leaks into an error', async () => {
+  // IE-36 command text, spaces, line breaks and empty / tiny values are not credentials: refused with a stable code, without echoing the value
+  const malformed = ['$env:ALIBABA_MODEL_STUDIO_API_KEY = (Get-Clipboard).Trim()\nClear-Clipboard', 'sk-with space-inside-1234', 'sk-trailing-newline-12345\n', 'short'];
+  for (const apiKey of malformed) {
+    const input = setup({ config: { ...config, apiKey } });
+    const error = await editProductImage(input).catch((e) => e);
+    assert.equal(error.code, 'INVALID_API_KEY_FORMAT');
+    assert.equal(input.fetchImpl.calls.length, 0);
+    assert.equal(input.journal.list().length, 0);
+    assert.equal(input.budget.snapshot().reserved_eur, 0);
+    assert.doesNotMatch(String(error.message), /Get-Clipboard|Clear-Clipboard|trailing-newline|with space/);
+  }
+  assert.equal(isHeaderSafeApiKey(API_KEY), true);
+  // IE-37 a fetch implementation that quotes the Authorization header in its own error cannot leak the key through the thrown error or the journal
+  const quoting = async (url, init) => { throw new TypeError(`Headers.append: "${init.headers.Authorization}" is an invalid header value (${API_KEY}).`); };
+  const input = setup({ fetchImpl: quoting });
+  const error = await editProductImage(input).catch((e) => e);
+  assert.equal(error.name, 'TypeError');
+  assert.doesNotMatch(`${error.message} ${dump(input.journal.list())}`, /NEVER-LEAK/);
+  assert.match(error.message, /\[redacted\]/);
+  assert.equal(redactCredentials(`x ${API_KEY} y`, API_KEY), 'x [redacted] y');
+  // IE-38 the live script refuses a malformed key in --check and --live, names the problem, never prints it and never takes the lock
+  const { spawnSync } = await import('node:child_process');
+  const script = fileURLToPath(new URL('scripts/run-c2-habb-edit.mjs', root));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^ALIBABA_|^DASHSCOPE|^NORDLA_PRIVATE_DIR$/.test(k)));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nordla-live-badkey-'));
+  try {
+    for (const flag of ['--check', '--live']) {
+      const out = spawnSync(process.execPath, [script, flag], { env: { ...env, ALIBABA_MODEL_STUDIO_API_KEY: '$env:K = (Get-Clipboard).Trim()\nClear-Clipboard', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: WORKSPACE, NORDLA_PRIVATE_DIR: dir }, encoding: 'utf8' });
+      assert.equal(out.status, 3, flag);
+      assert.equal(JSON.parse(out.stdout).status, 'BLOCKED: API_KEY_FORMAT_INVALID');
+      assert.doesNotMatch(out.stdout, /Get-Clipboard|Clear-Clipboard/);
+    }
+    assert.equal((await readdir(dir)).length, 0);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
