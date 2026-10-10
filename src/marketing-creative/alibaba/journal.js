@@ -18,6 +18,12 @@ function sanitizeEvent(event) {
     'output_sha256',
     'created_at',
     'reason',
+    'operation',
+    'latency_ms',
+    'usage',
+    'input_sha256',
+    'prompt_sha256',
+    'clearance_id',
   ];
   const output = {};
   for (const key of allowed) {

@@ -9,3 +9,5 @@ export * from './qwen-image.js';
 export * from './wan3-video.js';
 export * from './smoke.js';
 export * from './scoped-media-authorization.js';
+export * from './qwen-image-edit.js';
+export * from './edit-acceptance.js';

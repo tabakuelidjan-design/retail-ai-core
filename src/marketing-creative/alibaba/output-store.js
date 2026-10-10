@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { assertHttpsPublicUrl } from './policy.js';
@@ -37,6 +37,14 @@ async function download(url, {
 }
 
 export class MemoryOutputStore {
+  #blobs = new Map();
+
+  async readBytes(stored) {
+    const bytes = this.#blobs.get(stored?.ref);
+    if (!bytes) throw new Error('unknown stored output');
+    return Buffer.from(bytes);
+  }
+
   async storeUrl({ url, kind = 'image', operationId, fetchImpl }) {
     const downloaded = await download(url, { fetchImpl });
     return this.storeBytes({
@@ -50,6 +58,7 @@ export class MemoryOutputStore {
   async storeBytes({ bytes, contentType = null, kind = 'image', operationId }) {
     const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
     const sha256 = createHash('sha256').update(buffer).digest('hex');
+    this.#blobs.set(`memory://${operationId}/${sha256}`, buffer);
     return Object.freeze({
       ref: `memory://${operationId}/${sha256}`,
       sha256,
@@ -72,6 +81,14 @@ export class FileOutputStore {
       throw new Error('output directory must be outside repository');
     }
     this.directory = resolved;
+  }
+
+  async readBytes(stored) {
+    const prefix = 'file://';
+    if (typeof stored?.ref !== 'string' || stored.ref.slice(0, prefix.length) !== prefix) throw new Error('not a stored file output');
+    const target = path.resolve(stored.ref.slice(prefix.length));
+    if (path.dirname(target) !== this.directory) throw new Error('output is outside the store');
+    return readFile(target);
   }
 
   async storeUrl({ url, kind = 'image', operationId, fetchImpl }) {
