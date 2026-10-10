@@ -12,3 +12,5 @@ export * from './scoped-media-authorization.js';
 export * from './qwen-image-edit.js';
 export * from './edit-acceptance.js';
 export * from './live-call-lock.js';
+export * from './qwen-environment.js';
+export * from './qwen-director-port.js';

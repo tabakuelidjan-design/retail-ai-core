@@ -16,7 +16,7 @@ import { evaluateConstraints } from './layout-engine.js';
 import { layerBounds } from './layers.js';
 import { layoutText, positionLines, scriptsOf } from './typography.js';
 import {
-  closedObject, contains, deepFreeze, deriveId, fail, intersects, number, refList,
+  closedObject, contains, deepFreeze, deriveId, fail, hexColor, intersects, number, refList,
 } from './validation.js';
 
 const STATUS_RANK = { PASS: 0, NOT_MEASURABLE: 1, REVIEW_REQUIRED: 2, FAIL: 3 };
@@ -35,7 +35,7 @@ export function contrastRatio(a, b) {
 }
 
 function normalizeContext(context) {
-  closedObject(context ?? {}, ['fonts', 'assets', 'approved_claim_refs', 'approved_texts'], 'preflight_context', E.LAYOUT_INPUT_INVALID);
+  closedObject(context ?? {}, ['fonts', 'assets', 'approved_claim_refs', 'approved_texts', 'measured_backdrops'], 'preflight_context', E.LAYOUT_INPUT_INVALID);
   const c = context ?? {};
   if (c.fonts != null && typeof c.fonts.get !== 'function') fail(E.LAYOUT_INPUT_INVALID, 'preflight_context.fonts must be a font registry', { field: 'fonts' });
   let assets = null;
@@ -49,7 +49,14 @@ function normalizeContext(context) {
     }
   }
   const approvedTexts = c.approved_texts == null ? null : { ...c.approved_texts };
+  // measured_backdrops: { [text layer id]: [#RRGGBB, ...] } - colours MEASURED from the pixels behind a text (e.g. quantiles of an image background); the contrast check takes the worst of them
+  const measuredBackdrops = {};
+  for (const [id, colors] of Object.entries(c.measured_backdrops ?? {})) {
+    if (!Array.isArray(colors) || colors.length === 0 || colors.length > 16) fail(E.LAYOUT_INPUT_INVALID, `measured_backdrops.${id} must list 1..16 colours`, { field: 'measured_backdrops' });
+    measuredBackdrops[id] = colors.map((hex, i) => hexColor(hex, `measured_backdrops.${id}[${i}]`));
+  }
   return {
+    measuredBackdrops,
     fonts: c.fonts ?? null,
     assets,
     approvedClaims: c.approved_claim_refs == null ? null : refList(c.approved_claim_refs, 'approved_claim_refs'),
@@ -210,7 +217,14 @@ export function runCreativePreflight(documentInput, contextInput = {}) {
         if (!contains(layerBounds(top), rect, GEOMETRY_EPSILON) && under.length > 1) measurable = false;
         backdrop = solid(top);
       }
-      if (!measurable) { unmeasurable.push(t.id); reasons.push('BACKDROP_NOT_SOLID'); continue; }
+      if (!measurable) {
+        // an image backdrop is judged only on colours measured from its pixels (the worst of them); without them it is NOT_MEASURABLE, never assumed
+        const sampled = ctx.measuredBackdrops[t.id];
+        if (!sampled) { unmeasurable.push(t.id); reasons.push('BACKDROP_NOT_SOLID'); continue; }
+        const needSampled = t.font_size >= LARGE_TEXT_PX ? CONTRAST_MIN_LARGE : CONTRAST_MIN;
+        if (Math.min(...sampled.map((b) => contrastRatio(t.color, b))) < needSampled) { failed.push(t.id); reasons.push('CONTRAST_BELOW_MINIMUM'); }
+        continue;
+      }
       const need = t.font_size >= LARGE_TEXT_PX ? CONTRAST_MIN_LARGE : CONTRAST_MIN;
       if (contrastRatio(t.color, backdrop) < need) { failed.push(t.id); reasons.push('CONTRAST_BELOW_MINIMUM'); }
     }

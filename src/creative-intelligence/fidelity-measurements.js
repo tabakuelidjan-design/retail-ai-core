@@ -102,7 +102,7 @@ const inward = (r) => ({
  */
 export function measureProductFidelity(input = {}) {
   const layers = input.product_layers ?? [];
-  if (layers.length === 1 && layers[0].preservation_mode === 'IDENTITY_PRESERVE') return measureIdentityPreserve(input);
+  if (layers.length === 1 && ['IDENTITY_PRESERVE', 'COMPOSITE'].includes(layers[0].preservation_mode)) return measureIdentityPreserve(input);
   return measurePixelPreserve(input);
 }
 

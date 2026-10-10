@@ -11,6 +11,9 @@ export {
 } from './pre-c2-probes.js';
 export { measureProductFidelity, createRenderLog, containFit, renderReference, TOLERANCES as FIDELITY_TOLERANCES, FIDELITY_MEASUREMENT_SOURCE } from './fidelity-measurements.js';
 export { decodePng } from './png-pixels.js';
+export { encodePng } from './png-encode.js';
+export { buildProductMask, MASK_DEFAULTS } from './product-mask.js';
+export { makeProductCutout, CUTOUT_SOURCE } from './product-cutout.js';
 export { measureIdentityPreserve, IDENTITY_TOLERANCES, IDENTITY_MEASUREMENT_SOURCE } from './identity-preserve-measurements.js';
 export { buildCandidateManifest, MANIFEST_SUBJECTS } from './candidate-manifest-from-document.js';
 export {

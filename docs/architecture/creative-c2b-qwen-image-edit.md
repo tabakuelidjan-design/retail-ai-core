@@ -68,3 +68,17 @@ One `IMAGE_EDIT` request, output size 1152×1536, goal: keep the exact personali
 **What `Endpoint.AccessDenied` is not** (Alibaba's error table): a wrong key is `401 InvalidApiKey`; a wrong or unauthorized workspace is `401 NOT AUTHORIZED` or `404 WorkSpaceNotFound`; a model without calling permission is `403 Model.AccessDenied`; an unactivated service is `403 AccessDenied.Unpurchased`; an overdue account is `400 Arrearage`. `403 Endpoint.AccessDenied` is documented as "Workspace endpoint access denied", usually a deprecated model or an endpoint that is no longer available. The adapter's Frankfurt endpoint (`https://{WorkspaceId}.eu-central-1.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`) matches the official contract exactly, and the lane's earlier public smoke test reached the same model and endpoint.
 
 **The lock is never released by code** (`live-call-lock.js`): a provider-side 403 / 429 / 5xx, a timeout or a success all keep it, a second attempt is refused without running the call, and no code path retries or deletes it.
+
+### Attempt 3 (2026-10-10 08:31 UTC): the first real Qwen Image edit — `PROVIDER_OUTPUT_FIDELITY_FAIL`
+
+The call succeeded technically (request `af170080-…`, 19.5 s, 1152 x 1536, estimated 0.069 EUR, output stored privately, output hash prefix `fd08a1a5`). The provider returned a PNG, and the IDENTITY_PRESERVE gate **failed it**; the output is kept as evidence and the tolerances were not touched.
+
+| Failed observation | Measured | Limit | Meaning |
+|---|---|---|---|
+| `ARTWORK` | correlation 0.80 | 0.85 | the printed picture was re-rendered |
+| `ANISOTROPY` | scale x 0.945 vs y 1.001 (5.6 %) | 3 % | the viewing angle of the case was changed (the lay-flat photo became a frontal, upright view) |
+| `OUTLINE_EDGE` | 48 % of the outline supported | 80 % | the silhouette was redrawn |
+| `CAMERA_MODULE` | 0.76 at its best position, 0.51 at the predicted one; residual 3.0 % | 0.75 / 1.5 % | the camera module was redrawn and moved |
+| `PRINTED_TEXT_REGION` | shift 4 px (limit 4), contrast 0.94 | — | the printed quotation was re-rendered; its letters are visibly garbled |
+
+Passed: derivation chain, lens count (3) and placement, instance count, colour (global and local). **Root cause:** a generative edit re-renders every pixel, so it cannot guarantee that a real product stays the same product (and a masked provider edit would be re-encoded too); the gate worked as designed. The production strategy changed, not the gate: see `creative-c2c-product-preserving-runtime.md`.

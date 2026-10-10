@@ -1,0 +1,33 @@
+{
+  "kind": "CREATIVE_BRIEF_DATA",
+  "brief_ref": "brief:habb-c2-benchmark-001",
+  "benchmark_id": "HABB-CREATIVE-BENCHMARK-001",
+  "purpose": "The Creative Brief of the first autonomous C2 run, as DATA. It carries Marketing facts and APPROVED text only: which approved text exists, what each approved claim is (its semantic role), and the public facts of the product. It carries no composition, no layout, no recipe, no font size, no colour choice, no background and no provider instruction: those are decided by Nordla's agents and rules at run time (see docs/architecture/creative-c2c-product-preserving-runtime.md).",
+  "approved_copy": [
+    {
+      "ref": "copy://habb/benchmark-001/headline-variant",
+      "role": "HEADLINE",
+      "content": "Vos souvenirs. Votre création.",
+      "approval_ref": "decision://habb/benchmark-001/headline-copy-variant",
+      "note": "an authorised HABB copy variant (a new governed decision); non-claim creative text"
+    }
+  ],
+  "claim_roles": {
+    "price": {
+      "text_role": "PRICE",
+      "why": "a price claim is the price text"
+    },
+    "promise": {
+      "text_role": "SUBHEADLINE",
+      "why": "the approved visible speed claim is a supporting message, not a price and not the headline"
+    }
+  },
+  "public_facts": {
+    "product": "Coque personnalisée pour Samsung Galaxy A17, imprimée avec la photo du client",
+    "merchant": "HABB, magasin de cadeaux personnalisés et d'impression UV à Namur (Belgique)",
+    "deliverable": "visuel pour le fil Instagram, format 4:5",
+    "language": "fr-BE"
+  },
+  "data_class": "PUBLIC",
+  "note": "Everything in this file may be sent to a language model as is: it holds no merchant media and no personal data."
+}

@@ -72,8 +72,8 @@ test('Usable area: margins, safe zones, forbidden zones and negative space - all
 // ------------------------------------------------------------------ layout recipes and solver (131-150)
 
 test('Layout recipes are declarative; the solver places layers deterministically and honestly', () => {
-  // 131 four generic recipes exist (closed set)
-  assert.deepEqual([...CI.LAYOUT_RECIPE_IDS].sort(), ['EDITORIAL_SPLIT', 'PRODUCT_AND_PRICE', 'PRODUCT_HERO', 'TEXT_LED']);
+  // 131 five generic recipes exist (closed set)
+  assert.deepEqual([...CI.LAYOUT_RECIPE_IDS].sort(), ['EDITORIAL_SPLIT', 'PRODUCT_AND_PRICE', 'PRODUCT_DOMINANT', 'PRODUCT_HERO', 'TEXT_LED']);
   assert.equal(CI.getLayoutRecipe('SOMETHING_ELSE'), null);
   // 132 every slot is a fraction of the usable area (0..1) and carries no merchant, font or colour
   for (const id of CI.LAYOUT_RECIPE_IDS) {

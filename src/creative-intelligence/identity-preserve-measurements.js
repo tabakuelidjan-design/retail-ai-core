@@ -144,20 +144,33 @@ function coarseSearch(T, plane) {
 const MIN_COARSE_SAMPLES = 300;
 
 function refine(ctx, candPyr, start) {
-  // coordinate hill-climb on (sx, sy, px, py) at 1/4 resolution with sub-pixel positions
+  // coordinate hill-climb on (sx, sy, px, py) at 1/4 resolution with sub-pixel positions. Every scale move keeps the CENTRE of the template fixed (so scale and position do
+  // not fight each other), and a joint isotropic move (sx and sy together) is part of the neighbourhood.
   const evalAt = (p) => {
     const T = buildTemplate(ctx.src, p.sx, p.sy, 4);
     if (T.n < 40) return -2;
     const r = nccAt(T, candPyr[2], 2, p.px, p.py);
     return r.ncc == null || r.coverage < 0.9 ? -2 : r.ncc;
   };
+  const { bw, bh } = ctx.src;
+  const rescale = (p, fx, fy) => {
+    const sx = p.sx * fx; const sy = p.sy * fy;
+    return { sx, sy, px: p.px + (bw * p.sx - bw * sx) / 2, py: p.py + (bh * p.sy - bh * sy) / 2 };
+  };
   let cur = { ...start }; let score = evalAt(cur);
   let ds = 0.05; let dp = 8;
   while (ds > 0.003 || dp > 0.5) {
     let improved = false;
-    for (const [key, d] of [['sx', ds], ['sx', -ds], ['sy', ds], ['sy', -ds], ['px', dp], ['px', -dp], ['py', dp], ['py', -dp]]) {
-      const next = { ...cur };
-      next[key] = (key === 'sx' || key === 'sy') ? cur[key] * (1 + d) : cur[key] + d;
+    // each move is derived from the CURRENT parameters, so an accepted move is the base of the next one. Two families: scale moves anchored at the top-left corner
+    // (a product that grows from where it was placed) and scale moves about the template centre (a product that grows in place); both, plus plain translations.
+    const anchored = (c, fx, fy) => ({ ...c, sx: c.sx * fx, sy: c.sy * fy });
+    const moves = [
+      (c) => anchored(c, 1 + ds, 1 + ds), (c) => anchored(c, 1 - ds, 1 - ds), (c) => anchored(c, 1 + ds, 1), (c) => anchored(c, 1 - ds, 1), (c) => anchored(c, 1, 1 + ds), (c) => anchored(c, 1, 1 - ds),
+      (c) => rescale(c, 1 + ds, 1 + ds), (c) => rescale(c, 1 - ds, 1 - ds), (c) => rescale(c, 1 + ds, 1), (c) => rescale(c, 1 - ds, 1), (c) => rescale(c, 1, 1 + ds), (c) => rescale(c, 1, 1 - ds),
+      (c) => ({ ...c, px: c.px + dp }), (c) => ({ ...c, px: c.px - dp }), (c) => ({ ...c, py: c.py + dp }), (c) => ({ ...c, py: c.py - dp }),
+    ];
+    for (const move of moves) {
+      const next = move(cur);
       const sc = evalAt(next);
       if (sc > score + 1e-6) { cur = next; score = sc; improved = true; }
     }
@@ -212,7 +225,8 @@ export function measureIdentityPreserve(input) {
   const tol = { ...IDENTITY_TOLERANCES, ...(input.tolerances ?? {}) };
 
   if (layers.length !== 1) return blocked('EXACTLY_ONE_PRODUCT_LAYER_REQUIRED', { product_layers: layers.length });
-  if (layers[0].preservation_mode !== 'IDENTITY_PRESERVE') return blocked('MEASUREMENT_DEFINED_FOR_IDENTITY_PRESERVE_ONLY', { preservation_mode: layers[0].preservation_mode });
+  // IDENTITY_PRESERVE (a provider-edited product) and COMPOSITE (a cut-out of the real pixels on a new environment) are both proven by registering the real product
+  if (!['IDENTITY_PRESERVE', 'COMPOSITE'].includes(layers[0].preservation_mode)) return blocked('MEASUREMENT_DEFINED_FOR_IDENTITY_AND_COMPOSITE_ONLY', { preservation_mode: layers[0].preservation_mode });
   if (!source || !candidate || !canvas || !expected || !ann || !derivation || !log) return blocked('INPUT_MISSING');
   if (sha256(source.bytes) !== source.sha256) return blocked('SOURCE_BYTES_DO_NOT_MATCH_THEIR_HASH');
   const mediaType = mediaTypeOf(source.bytes);
@@ -248,7 +262,8 @@ export function measureIdentityPreserve(input) {
     derived_hash_matches_consumed: resolved.length === 1 && resolved[0].sha256 === derivation.derived_sha256,
     producer_provenance_complete: ['provider_id', 'model', 'region', 'request_id'].every((k) => typeof producer[k] === 'string' && producer[k].length > 0),
   });
-  const drawnOnce = log.image_draws === expected.piece_count && resolved.length === 1;
+  // the product asset is drawn once; a composite may also draw the environment images it declares (expected.allowed_other_image_draws, default 0)
+  const drawnOnce = log.image_draws === expected.piece_count + (expected.allowed_other_image_draws ?? 0) && resolved.length === 1;
 
   // ---- registration
   const reg = estimateRegistration(ctx, candPyr, tol);
@@ -398,7 +413,7 @@ export function measureIdentityPreserve(input) {
     pieces.push((second.ncc == null || second.ncc < tol.duplicate_ncc_max ? PASS : FAIL)('INSTANCE_COUNT', { second_instance_ncc: second.ncc, duplicate_ncc_max: tol.duplicate_ncc_max }));
   }
   pieces.push(lensCount);
-  pieces.push((drawnOnce ? PASS : FAIL)('ASSET_DRAWN_ONCE', { image_draws: log.image_draws, expected: expected.piece_count, derived_asset_consumed: resolved.length }));
+  pieces.push((drawnOnce ? PASS : FAIL)('ASSET_DRAWN_ONCE', { image_draws: log.image_draws, expected: expected.piece_count + (expected.allowed_other_image_draws ?? 0), derived_asset_consumed: resolved.length }));
   const pieceCount = aggregate(C.PIECE_COUNT, pieces);
 
   // ---- PRODUCT_COLOR: gain, channel spread, chroma over the whole registered case mask (nearest samples at 1/2 resolution)
