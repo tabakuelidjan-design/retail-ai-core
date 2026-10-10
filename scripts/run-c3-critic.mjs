@@ -20,6 +20,9 @@ import { createCreativeCritic, finalizeVerdict } from '../src/creative-critic/in
 
 const root = new URL('../', import.meta.url);
 const mode = ['--check', '--live', '--compare'].find((m) => process.argv.includes(m))?.slice(2);
+// Each critique is a numbered version (--critique-id=002): a stored critique is never overwritten and each version has its own lock.
+const critiqueId = (process.argv.find((a) => a.startsWith('--critique-id=')) ?? '--critique-id=001').split('=')[1];
+if (!/^\d{3}$/.test(critiqueId)) { console.error('--critique-id must be three digits'); process.exitCode = 64; throw new Error('invalid --critique-id'); }
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (rel) => JSON.parse(readFileSync(new URL(rel, root), 'utf8'));
 // the pinned hash identifies the reviewed candidate: it lives in the owner's review record, not in code
@@ -39,10 +42,19 @@ if (!mode) { console.error('use --check (no network), --live (ONE billable visio
 if (mode === 'compare') {
   const { compareWithOwner } = await import('../src/creative-critic/owner-review.js');
   let stored;
-  try { stored = JSON.parse(await readFile(path.join(privateDir, 'critique-001.json'), 'utf8')); } catch { check('the blind critique exists', false); finish('BLOCKED: NO_CRITIQUE_YET', 3); }
+  try { stored = JSON.parse(await readFile(path.join(privateDir, `critique-${critiqueId}.json`), 'utf8')); } catch { check('the blind critique exists', false); finish('BLOCKED: NO_CRITIQUE_YET', 3); }
   const comparison = compareWithOwner({ critique: stored.critique, ownerReview: json('benchmarks/creative-intelligence/habb-c2-owner-review-001.json') });
-  await writeFile(path.join(privateDir, 'owner-comparison-001.json'), `${JSON.stringify(comparison, null, 2)}\n`, { mode: 0o600 });
   report.comparison = comparison;
+  // the earlier critique versions, dimension by dimension (read-only: nothing is rewritten)
+  const previous = {};
+  for (const other of ['001', '002', '003'].filter((v) => v < critiqueId)) {
+    try { previous[other] = JSON.parse(await readFile(path.join(privateDir, `critique-${other}.json`), 'utf8')).critique; } catch { /* that version was never produced */ }
+  }
+  report.versions = Object.entries(previous).map(([version, earlier]) => ({
+    from: version, to: critiqueId, schema_from: earlier.schema_version, schema_to: stored.critique.schema_version,
+    rows: stored.critique.dimensions.map((d) => ({ dimension: d.dimension, from: earlier.dimensions.find((x) => x.dimension === d.dimension)?.outcome ?? null, to: d.outcome })),
+  }));
+  await writeFile(path.join(privateDir, `owner-comparison-${critiqueId}.json`), `${JSON.stringify({ comparison, versions: report.versions }, null, 2)}\n`, { mode: 0o600 });
   finish('COMPARED', 0);
 }
 
@@ -89,14 +101,16 @@ const brief = {
 
 // ---- exactly one live vision call, guarded by a lock that code never releases
 await mkdir(privateDir, { recursive: true });
-const lock = path.join(privateDir, 'c3-critique-001.lock');
+const existing = await readFile(path.join(privateDir, `critique-${critiqueId}.json`)).catch(() => null);
+if (!check('critique version is new (a stored critique is never overwritten)', existing === null, { critique: `critique-${critiqueId}.json` })) finish('BLOCKED: CRITIQUE_VERSION_ALREADY_EXISTS', 3);
+const lock = path.join(privateDir, `c3-critique-${critiqueId}.lock`);
 try { await takeLiveCallLock(lock); } catch { check('single live critique lock', false, { lock }); finish('BLOCKED: LIVE_CRITIQUE_ALREADY_ATTEMPTED', 3); }
 const budget = new SpendGuard({ maxSpendEur: 0.2, maxImages: 0, maxVideoSeconds: 0 });
 const journal = new JsonlCallJournal(path.join(privateDir, 'c3-provider-calls.jsonl'));
 const vlm = createQwenVisionPort({ config, budget, journal, authorization: candidateAuthorization, purpose: authorization.purpose, assetRefFor: () => CANDIDATE_REF, maxCalls: 1 });
 const { critique, provenance } = await createCreativeCritic({ vlm }).critique({ candidate: { ref: CANDIDATE_REF, png_bytes: png }, brief });
 const verdict = finalizeVerdict({ critique, deterministic });
-await writeFile(path.join(privateDir, 'critique-001.json'), `${JSON.stringify({ critique, verdict, deterministic, provenance, budget: budget.snapshot() }, null, 2)}\n`, { mode: 0o600 });
+await writeFile(path.join(privateDir, `critique-${critiqueId}.json`), `${JSON.stringify({ critique, verdict, deterministic, provenance, budget: budget.snapshot() }, null, 2)}\n`, { mode: 0o600 });
 report.result = { creative_status: verdict.creative_status, blockers: verdict.blockers, production_status: verdict.production_status, owner_approval: verdict.owner_approval, outcomes: critique.dimensions.map((d) => [d.dimension, d.outcome]), provenance_called: provenance.called, provenance_failure: provenance.failure ?? null, rejected: provenance.rejected ?? null };
 finish(verdict.creative_status, verdict.creative_status === 'NOT_MEASURABLE' ? 3 : 0);
 } catch (error) { if (error !== STOP) throw error; }

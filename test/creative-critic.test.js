@@ -387,3 +387,80 @@ test('C3 the critic script never calls process.exit (Windows Node 24 libuv asser
   const source = await readFile(new URL('../scripts/run-c3-critic.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source.replace(/\/\/.*$/gm, ''), /process\.exit\(/);
 });
+
+// ---- critique@2: proportion and competition, not only the existence of an order (generic wording; nothing about a product, a campaign, a size or a coordinate)
+const FOUR = ['VISUAL_HIERARCHY', 'TEXT_HIERARCHY', 'PRICE_INTEGRATION', 'COMPOSITION_BALANCE'];
+
+test('C3 critique@2 the four questions ask for order AND proportion / competition, in generic words', () => {
+  const q = C.DIMENSION_QUESTIONS;
+  assert.equal(C.CRITIQUE_VERSION, 'creative-critique@2');
+  for (const d of FOUR) assert.match(q[d], /\bAND\b/, d); // two conditions, not one
+  assert.match(q.VISUAL_HIERARCHY, /BOTH a clear order/);
+  assert.match(q.VISUAL_HIERARCHY, /relative visual weight/);
+  assert.match(q.VISUAL_HIERARCHY, /overpowering it or competing/);
+  assert.match(q.VISUAL_HIERARCHY, /several elements of similar heavy weight/);
+  assert.match(q.TEXT_HIERARCHY, /proportionate/);
+  assert.match(q.TEXT_HIERARCHY, /so large or heavy that it dominates the whole composition/);
+  assert.match(q.TEXT_HIERARCHY, /fragments/);
+  assert.match(q.PRICE_INTEGRATION, /legible but oversized/);
+  assert.match(q.PRICE_INTEGRATION, /competing with the hero subject/);
+  assert.match(q.PRICE_INTEGRATION, /similar weight to the main message/);
+  assert.match(q.COMPOSITION_BALANCE, /Symmetry or a centred stack is not enough/);
+  assert.match(q.COMPOSITION_BALANCE, /similar weight make the arrangement rigid or mechanical/);
+  assert.match(q.COMPOSITION_BALANCE, /commercially awkward/);
+  // reusable: no pixel value, coordinate, merchant, product, campaign or review vocabulary in any question
+  for (const d of C.DIMENSIONS) assert.doesNotMatch(q[d], /\d+\s*(px|%|pt)|\bx\s*=|HABB|Samsung|phone|case|coque|owner|reject|bplateb|#[0-9a-f]{3,6}\b/i, d);
+});
+
+test('C3 critique@2 the other ten questions are unchanged', () => {
+  const keep = C.DIMENSIONS.filter((d) => !FOUR.includes(d));
+  assert.equal(keep.length, 10);
+  assert.equal(createHash('sha256').update(keep.map((d) => d + C.DIMENSION_QUESTIONS[d]).join('\n')).digest('hex').slice(0, 16), '742aebbef43371d5');
+});
+
+test('C3 critique@2 the instruction sent to the model carries the proportion criteria for exactly those four dimensions', async () => {
+  let seen;
+  await C.createCreativeCritic({ vlm: { invoke: async (input) => { seen = input; return { text: JSON.stringify(answer()) }; } } }).critique({ candidate: { ref: 'c', png_bytes: PNG }, brief });
+  for (const d of FOUR) assert.ok(seen.user.includes(`- ${d}: ${C.DIMENSION_QUESTIONS[d]}`));
+  assert.match(seen.user, /so large or heavy that it dominates the whole composition/);
+});
+
+const g = { preflight: 'PASS', fidelity: 'PASS', guardian: 'PASS' };
+const judge = async (over) => {
+  const { critique } = await C.createCreativeCritic({ vlm: vlmReturning(answer(over)) }).critique({ candidate: { ref: 'c', png_bytes: PNG }, brief });
+  return { critique, verdict: C.finalizeVerdict({ critique, deterministic: g }), revision: C.buildRevisionRequest({ critique, iteration: 1 }) };
+};
+
+test('C3 critique@2 a clear but over-dominant headline can FAIL or REVIEW_REQUIRED and asks for a semantic revision', async () => {
+  for (const outcome of ['FAIL', 'REVIEW_REQUIRED']) {
+    const r = await judge({ TEXT_HIERARCHY: { outcome, evidence: 'The headline is clearly first but its weight overpowers the subject.', revision_hint: 'Give the main message a lighter presence so the hero subject leads.' } });
+    assert.notEqual(r.verdict.creative_status, 'CREATIVE_PASS');
+    assert.deepEqual(r.revision.intents.map((i) => i.intent), ['CLARIFY_TEXT_HIERARCHY']);
+  }
+});
+
+test('C3 critique@2 a readable but oversized price treatment can FAIL or REVIEW_REQUIRED', async () => {
+  for (const outcome of ['FAIL', 'REVIEW_REQUIRED']) {
+    const r = await judge({ PRICE_INTEGRATION: { outcome, evidence: 'The price is legible but is as heavy as the main message and competes with it.', revision_hint: 'Make the price a calmer, clearly secondary element of the composition.' } });
+    assert.notEqual(r.verdict.creative_status, 'CREATIVE_PASS');
+    assert.deepEqual(r.revision.intents.map((i) => i.intent), ['INTEGRATE_PRICE_WITH_THE_COMPOSITION']);
+  }
+});
+
+test('C3 critique@2 a visually centred stack can still FAIL composition balance (and the hierarchy dimension), independently of the rest', async () => {
+  const r = await judge({
+    COMPOSITION_BALANCE: { outcome: 'FAIL', evidence: 'The centred stack is stable, but equal-weight blocks make it rigid and mechanical.', revision_hint: 'Vary the weight of the elements so the arrangement feels considered, not stacked.' },
+    VISUAL_HIERARCHY: { outcome: 'REVIEW_REQUIRED', evidence: 'Several heavy elements of similar weight compete for first attention.', revision_hint: 'Let the hero subject lead and soften the competing elements.' },
+  });
+  assert.equal(r.verdict.creative_status, 'CREATIVE_FAIL');
+  assert.deepEqual(r.verdict.blockers, ['COMPOSITION_BALANCE']);
+  assert.deepEqual(r.revision.intents.map((i) => i.intent), ['REBALANCE_COMPOSITION', 'CLARIFY_VISUAL_HIERARCHY']);
+});
+
+test('C3 critique@2 a valid premium composition with a clear hierarchy still PASSes (and is still only awaiting the owner)', async () => {
+  const r = await judge({});
+  assert.equal(r.verdict.creative_status, 'CREATIVE_PASS');
+  assert.equal(r.verdict.production_status, 'AWAITING_OWNER_APPROVAL');
+  assert.equal(r.revision, null);
+  assert.equal(r.critique.schema_version, 'creative-critique@2');
+});
