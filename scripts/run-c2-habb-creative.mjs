@@ -126,7 +126,11 @@ let result;
 try {
   result = await runProductPreservingCreative({ at: new Date().toISOString(), brief, fonts, agents, ports, ledger });
 } catch (error) {
-  report.runtime_error = { code: error.code ?? null, status: error.status ?? null, request_id: error.requestId ?? null, message: error.message };
+  // a failing agent keeps the SAFE diagnostics of its cause (code, HTTP status, request id): a provider refusal must not look like a bug
+  const cause = error.detail?.cause ?? {};
+  report.runtime_error = {
+    code: error.code ?? null, role: error.detail?.role ?? null, cause_name: cause.name ?? null, cause_code: cause.code ?? error.code ?? null, status: cause.status ?? error.status ?? null, request_id: cause.request_id ?? error.requestId ?? null, message: error.message,
+  };
   await writeFile(path.join(privateDir, 'summary.json'), `${JSON.stringify({ ...report, status: 'BLOCKED: RUNTIME_ERROR', ledger: ledger.entries() }, null, 2)}\n`, { mode: 0o600 });
   finish('BLOCKED: RUNTIME_ERROR', 3);
 }

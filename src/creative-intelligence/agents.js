@@ -130,6 +130,19 @@ const NORMALIZERS = {
   },
 };
 
+const SAFE_TOKEN = /^[A-Za-z0-9_.:-]{1,100}$/;
+/** The diagnostics of a thrown value that are safe to keep: scalars of a fixed shape, never a message. */
+export function safeCause(cause) {
+  const out = {};
+  if (typeof cause?.name === 'string' && SAFE_TOKEN.test(cause.name)) out.name = cause.name;
+  if (typeof cause?.code === 'string' && SAFE_TOKEN.test(cause.code)) out.code = cause.code;
+  if (Number.isInteger(cause?.status) && cause.status >= 100 && cause.status <= 599) out.status = cause.status;
+  const requestId = cause?.requestId ?? cause?.request_id;
+  if (typeof requestId === 'string' && SAFE_TOKEN.test(requestId)) out.request_id = requestId;
+  if (typeof cause?.transient === 'boolean') out.transient = cause.transient;
+  return out;
+}
+
 export function normalizeAgentOutput(role, raw, context = {}) {
   const normalizer = NORMALIZERS[role];
   if (!normalizer) fail(E.AGENT_UNKNOWN_ROLE, 'unknown agent role');
@@ -152,8 +165,10 @@ export function defineCreativeAgent(role, handler) {
       let raw;
       try {
         raw = await handler(deepFreeze(plainJson(input ?? {}, 'input')), deepFreeze(plainJson(context, 'context')));
-      } catch {
-        fail(E.AGENT_FAILED, 'the agent handler failed', { role });
+      } catch (cause) {
+        // the message is never echoed (it may carry model output or a header), but the SAFE diagnostics of the failure are kept: without them a provider refusal is
+        // indistinguishable from a bug (name, a code token, an HTTP status, a request id, transient)
+        fail(E.AGENT_FAILED, 'the agent handler failed', { role, cause: safeCause(cause) });
       }
       return normalizeAgentOutput(role, raw, context);
     },

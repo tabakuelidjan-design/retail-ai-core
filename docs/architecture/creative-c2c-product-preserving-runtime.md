@@ -65,3 +65,9 @@ Creative Brief (data: approved copy, claim roles, public facts)
 ## 6. Not in this runtime (next)
 
 Creative Critic, Brand Guardian on the composite, owner approval, and multiple candidates. A mask on a photo whose rim and surface have almost the same tone is the known weak spot; its quality is reported, never hidden.
+
+## 7. First autonomous attempt (2026-10-10): stopped by a provider refusal, and by a Nordla defect that hid it
+
+The first `--live` run took its lock, assembled the brief, segmented the real product locally (ROUNDED_QUAD, residual 1.33 px) and then called the Creative Director's text model (`qwen3.8-max`, Frankfurt). Alibaba answered **403 `access_denied`** (no permission for the model; most likely the API key's Access Scope listed the image model only) with no request id. Only that call was sent: the environment image call never happened and no image was generated. The runtime stopped with a bare `CI_AGENT_FAILED` because the C1 agent wrapper discarded every diagnostic of the failure: a provider refusal was indistinguishable from a bug.
+
+**Fix (Nordla, not the creative result):** a failing agent now keeps the SAFE diagnostics of its cause (name, code token, HTTP status, request id, transient) and never its message; the run script reports them. Nothing was decided in the Director's place: no direction, no composition, no fallback. The lock of that attempt stays until the Alibaba-side permission is fixed and the evidence is archived. Provisioning: the key's Access Scope must list `qwen3.8-max` and `qwen-image-3.0-pro`.
