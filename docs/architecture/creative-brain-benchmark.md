@@ -70,3 +70,12 @@ Five live attempts each stopped on one contract/instruction mismatch. The method
 - **Property/fuzz**: for every contract, generated valid structures are accepted and every single-rule mutation is refused with the precise rule (`test/creative-brain-contract-parity.test.js`).
 - **Synthetic end to end** (`test/creative-brain-synthetic-e2e.test.js`): happy path to READY_FOR_OWNER_REVIEW, round 2 after a rejection, RECONCEPT, REFINE, RECOMPOSE, and a malformed answer at each model stage; every stop names stage, round, code, raw-answer evidence, provider calls and cost.
 - **Live-readiness gate** (`src/creative-brain-benchmark/readiness.js`): `--check` and `--live` are blocked with `CONTRACT_PARITY_NOT_READY` unless the verdict is `CREATIVE_BRAIN_CONTRACT_PARITY_READY`: parity computed now, plus `docs/architecture/creative-brain-readiness.json` recording the full suite, the mutation sweep, the Node 20 and 24 clean clones and CI for the exact code hash (`node scripts/check-creative-brain-parity.mjs --code-hash`). Any code change invalidates the attestation.
+
+## Incident 7 and the one protocol repair
+
+Attempt 7 stopped at IDEATE: the provider returned text that is not parseable JSON (a bracket closed with the wrong character, a garbled key). That is a protocol failure, not a creative one. A stage may therefore re-ask **once**, and only when the provider call succeeded, a body exists, and parsing failed before any contract validation (`src/creative-brain/model-port.js`, `PROTOCOL_REPAIR`).
+
+- Same stage, same model, same instruction (same input, creative context and contract) plus an addendum asking for the same intended answer as valid JSON, without adding, removing or reconsidering any creative decision. The malformed text is attached as repair evidence only (bounded to 6000 characters).
+- Never after a semantic, contract or relation failure; never twice; no new or alternative answer. The repaired text goes through the complete canonical validation and the near-miss layer like any answer.
+- Journal (`meta.protocol_repair`, in the Brain ledger and in `error.evidence.protocol_repair`): original request id, malformed response sha256 and length, parse failure, repair request id, outcome (`PARSED`, `STILL_MALFORMED`, `PORT_FAILED`), original and added cost; after a failure the original malformed answer is kept beside the repair answer.
+- Bounds: the worst case is now 18 text calls (9 stage calls plus at most one repair per stage call); the Brain port is bounded to 18 and the spend ceiling to EUR 0.95, under the EUR 1.00 hard ceiling.

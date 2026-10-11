@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { normalizeNearMisses, REPAIR_KIND } from './contract.js';
 import { BRAIN_ERROR, BrainError, fail } from './validation.js';
 
@@ -69,18 +70,63 @@ export function repairNearMissKeys(value, schema, repairs = [], path = 'answer')
   return out;
 }
 
+// ---- the ONE protocol repair. A provider may return text that is not parseable JSON at all (a bracket closed with the wrong character, a truncated key). That is a failure of the PROTOCOL, not of the
+// creative answer, so a stage may re-ask exactly ONCE, and only then: the provider call succeeded, a body exists, and parsing failed before any contract validation. It is the same stage, the same
+// model, the same instruction (same input, same creative context, same contract) with a short addendum asking for the same intended answer as valid JSON; the malformed text is attached as repair evidence
+// only. Never after a semantic or contract failure, never twice, never to obtain a different or a new creative answer. The repaired text goes through the complete canonical validation like any answer.
+
+export const PROTOCOL_REPAIR = Object.freeze({ max_reasks_per_stage: 1, evidence_chars: 6000, outcome: Object.freeze({ PARSED: 'PARSED', STILL_MALFORMED: 'STILL_MALFORMED', PORT_FAILED: 'PORT_FAILED' }) });
+
+export function buildProtocolRepairInstruction(instruction, malformedText) {
+  const evidence = String(malformedText ?? '').slice(0, PROTOCOL_REPAIR.evidence_chars);
+  return {
+    system: instruction.system,
+    user: `${instruction.user}
+
+PROTOCOL REPAIR (the only one for this stage): your previous answer to the request above could not be parsed as JSON. Return the same intended answer as valid JSON conforming exactly to the contract stated above. Do not add, remove or reconsider any creative decision, and do not write a new or alternative answer. Output the JSON object only.
+The previous answer, supplied as repair evidence only:
+${evidence}`,
+  };
+}
+
+const sha256Text = (text) => createHash('sha256').update(String(text ?? '')).digest('hex');
+const costOf = (reply) => (Number.isFinite(reply?.cost_eur) ? reply.cost_eur : null);
+
 /**
  * One completion, then the stage's normalization, with the evidence a diagnosis needs: if normalization refuses the answer, the error carries `evidence` ({ stage, request_id, model,
- * key_repairs, raw_answer (bounded) }) so that a failed stage can be reconstructed from the record alone. Returns { value, meta }.
+ * key_repairs, raw_answer (bounded) }) so that a failed stage can be reconstructed from the record alone. Malformed JSON gets at most ONE protocol repair re-ask (see above); its journal is
+ * `meta.protocol_repair` and `evidence.protocol_repair`. Returns { value, meta }.
  */
 export async function askAndNormalize({ complete, instruction, stage, schema = null, spec = null, normalize }) {
   if (typeof complete !== 'function') throw new TypeError(`${stage} needs a language-model port`);
-  let reply;
-  try { reply = await complete(instruction); } catch (cause) { throw new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed`, stage, safeCause(cause)); }
-  const meta = { model: reply?.model ?? null, request_id: reply?.request_id ?? null, key_repairs: [], repairs: [] };
-  const evidence = { stage, request_id: meta.request_id, model: meta.model, key_repairs: meta.key_repairs, repairs: meta.repairs, raw_answer: String(reply?.text ?? '').slice(0, 8000) };
+  const call = async (input) => {
+    try { return await complete(input); } catch (cause) { throw new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed`, stage, safeCause(cause)); }
+  };
+  let reply = await call(instruction);
+  let parsed;
+  let repair = null;
+  let originalBody = null;
+  try { parsed = parseJsonObject(reply?.text, stage); } catch (parseError) {
+    const body = String(reply?.text ?? '');
+    originalBody = body;
+    if (parseError?.code !== BRAIN_ERROR.MALFORMED || body.trim() === '') throw withEvidence(parseError, stage, reply, [], [], null);
+    repair = {
+      original_request_id: reply?.request_id ?? null, original_model: reply?.model ?? null, malformed_response_sha256: sha256Text(body), malformed_response_chars: body.length,
+      parse_failure: String(parseError.message).slice(0, 200), original_cost_eur: costOf(reply), repair_request_id: null, outcome: null, added_cost_eur: null,
+    };
+    const original = reply;
+    try { reply = await complete(buildProtocolRepairInstruction(instruction, body)); } catch (cause) {
+      repair.outcome = PROTOCOL_REPAIR.outcome.PORT_FAILED;
+      throw withEvidence(new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed during the protocol repair`, stage, safeCause(cause)), stage, original, [], [], repair, body);
+    }
+    repair.repair_request_id = reply?.request_id ?? null; repair.added_cost_eur = costOf(reply);
+    try { parsed = parseJsonObject(reply?.text, stage); repair.outcome = PROTOCOL_REPAIR.outcome.PARSED; } catch (second) {
+      repair.outcome = PROTOCOL_REPAIR.outcome.STILL_MALFORMED;
+      throw withEvidence(second, stage, reply, [], [], repair, body);
+    }
+  }
+  const meta = { model: reply?.model ?? null, request_id: reply?.request_id ?? null, key_repairs: [], repairs: [], ...(repair ? { protocol_repair: repair } : {}) };
   try {
-    const parsed = parseJsonObject(reply?.text, stage);
     let raw = parsed;
     if (spec) {
       raw = normalizeNearMisses(spec, parsed, meta.repairs, stage);
@@ -88,7 +134,17 @@ export async function askAndNormalize({ complete, instruction, stage, schema = n
     } else if (schema) raw = repairNearMissKeys(parsed, schema, meta.key_repairs, stage);
     return { value: normalize(raw), meta };
   } catch (error) {
-    if (error && typeof error === 'object') error.evidence = evidence;
-    throw error;
+    throw withEvidence(error, stage, reply, meta.key_repairs, meta.repairs, repair, originalBody);
   }
+}
+
+/** The evidence of a refused answer: the latest answer (the one that was parsed or validated), and, after a protocol repair, the journal of the repair with the ORIGINAL malformed text. */
+function withEvidence(error, stage, reply, keyRepairs, repairs, repair, originalBody = null) {
+  if (error && typeof error === 'object') {
+    error.evidence = {
+      stage, request_id: reply?.request_id ?? null, model: reply?.model ?? null, key_repairs: keyRepairs, repairs, raw_answer: String(reply?.text ?? '').slice(0, 8000),
+      ...(repair ? { protocol_repair: { ...repair, ...(originalBody != null ? { original_raw_answer: String(originalBody).slice(0, 8000) } : {}) } } : {}),
+    };
+  }
+  return error;
 }

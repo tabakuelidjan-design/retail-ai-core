@@ -64,24 +64,29 @@ test('SE-4 REFINE and RECOMPOSE are diagnosed from the execution critic, recorde
 
 // one malformed answer per model stage. Each: the exact stage, round, canonical code and cause, the raw answer kept as evidence, and the calls and the cost state of the stop.
 const MALFORMED = [
+  // not parseable JSON at all: ONE protocol repair re-ask, which here is malformed again, so the stage stops after exactly two calls
+  { stage: 'frame', brain: 'FRAME', answer: () => 'this is not json at all', unparseable: true, calls: 1 },
+  { stage: 'ideate', brain: 'IDEATE', answer: () => '{"concepts": [{"central_idea": "x"}', unparseable: true, calls: 2 },
+  { stage: 'select', brain: 'SELECT_CONCEPT', answer: () => '{"evaluations": [', unparseable: true, calls: 3 },
+  { stage: 'art_direct', brain: 'ART_DIRECT', answer: () => '[]', unparseable: true, calls: 4 },
+  { stage: 'compose', brain: 'COMPOSE', answer: () => 'not json either', unparseable: true, calls: 5 },
+  // parseable but violating the contract: NO re-ask, the semantic failure is final
   { stage: 'frame', brain: 'FRAME', answer: () => JSON.stringify({ ...frameAnswer(), surprise_key_that_is_not_in_the_contract: 'x' }), calls: 1 },
-  { stage: 'frame', brain: 'FRAME', answer: () => 'this is not json at all', calls: 1 },
   { stage: 'ideate', brain: 'IDEATE', answer: () => JSON.stringify({ concepts: CONCEPTS.slice(0, 2) }), calls: 2 },
   { stage: 'ideate', brain: 'IDEATE', answer: () => JSON.stringify({ concepts: [{ ...CONCEPTS[0], unknown_extra: 'x' }, CONCEPTS[1], CONCEPTS[2]] }), calls: 2 },
   { stage: 'select', brain: 'SELECT_CONCEPT', answer: () => JSON.stringify({ evaluations: [] }), calls: 3 },
-  { stage: 'select', brain: 'SELECT_CONCEPT', answer: () => '{"evaluations": [', calls: 3 },
   { stage: 'art_direct', brain: 'ART_DIRECT', answer: () => JSON.stringify({ ...PALE, composition_geometry: 'x' }), calls: 4 },
-  { stage: 'art_direct', brain: 'ART_DIRECT', answer: () => '[]', calls: 4 },
   { stage: 'compose', brain: 'COMPOSE', answer: () => JSON.stringify({ ...compositionAnswer(), mystery: 1 }), calls: 5 },
-  { stage: 'compose', brain: 'COMPOSE', answer: () => 'not json either', calls: 5 },
 ];
 
 test('SE-5 a malformed provider answer at EACH model stage names the stage, the round, the code, keeps the raw answer, and reports calls and cost', async () => {
   for (const c of MALFORMED) {
     const answer = c.answer();
-    const w = world({ answers: { [c.stage]: [answer] } });
+    const second = `${answer} (still broken)`;
+    const w = world({ answers: { [c.stage]: c.unparseable ? [answer, second] : [answer] } });
     const r = await live(w);
     const label = `${c.stage} ${answer.slice(0, 30)}`;
+    const calls = c.calls + (c.unparseable ? 1 : 0); // the one protocol repair
     assert.equal(r.status, RESULT_STATE.BLOCKED, label);
     const s = await w.store.readJson('summary.json');
     assert.equal(s.error.stage, 'CREATIVE_BRAIN_PLAN', label);
@@ -89,13 +94,17 @@ test('SE-5 a malformed provider answer at EACH model stage names the stage, the 
     assert.equal(s.error.brain_round, ['IDEATE', 'SELECT_CONCEPT'].includes(c.brain) ? 1 : null, label); // concept rounds belong to the two concept stages
     assert.ok(s.error.cause && s.error.cause !== 'STOPPED_AT_CREATIVE_BRAIN_PLAN', `${label}: ${s.error.cause}`);
     assert.ok(s.error.code && s.error.code !== 'STOPPED_AT_CREATIVE_BRAIN_PLAN', `${label}: ${s.error.code}`);
-    assert.equal(s.error.evidence.raw_answer, answer, label);
+    assert.equal(s.error.evidence.raw_answer, c.unparseable ? second : answer, label);
     assert.ok(s.error.evidence.request_id, label);
-    assert.equal(s.error.provider_calls.text, c.calls, `${label} text calls`);
+    if (c.unparseable) {
+      assert.equal(s.error.evidence.protocol_repair.outcome, 'STILL_MALFORMED', label);
+      assert.equal(s.error.evidence.protocol_repair.original_raw_answer, answer, label);
+    } else assert.equal(s.error.evidence.protocol_repair, null, label);
+    assert.equal(s.error.provider_calls.text, calls, `${label} text calls`);
     assert.equal(s.error.provider_calls.image, 0, label);
     assert.ok(s.error.cost && typeof s.error.cost === 'object', label);
     assert.equal(s.final.stopped_at, c.brain, label);
-    assert.equal(s.final.provider_calls.total, c.calls, label);
+    assert.equal(s.final.provider_calls.total, calls, label);
     assert.equal(w.envRequests.length, 0, `no image after a refused ${label}`);
     const explained = await runExplain({ store: w.store });
     assert.equal(explained.final.stopped_at, c.brain, label);

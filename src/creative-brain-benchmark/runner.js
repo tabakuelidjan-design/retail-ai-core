@@ -6,7 +6,7 @@ import {
 } from '../creative-critic/index.js';
 import {
   CAPABILITY, buildConceptCriticInstruction, buildFramerInstruction, createConceptCritic, createCreativeBrain, CREATIVE_KNOWLEDGE, CREATIVE_QUALITY, creativeQualityState, diagnoseRecovery, isSupported,
-  observeBrief, validateKnowledge,
+  observeBrief, PROTOCOL_REPAIR, validateKnowledge,
 } from '../creative-brain/index.js';
 import {
   computeLayoutCapabilityProfile, createApprovedCopyAgent, createDecisionLedger, createLocalProductSegmenter, createProductAssetAnalyst, createVisualProductionDirector, describeStop,
@@ -54,7 +54,9 @@ const REQUIRED_CAPABILITIES = Object.freeze([
  * text calls: 1 framing + 2 per concept round (ideation, evaluation) + 2 per planned candidate (art direction, composition); images: one per candidate; vision: two critics per candidate.
  */
 export function worstCase({ canvas, criticChars, usdToEur = 1 }) {
-  const text = 1 + (2 * BOUNDS.concept_rounds) + (2 * MAX_CANDIDATES);
+  const stageCalls = 1 + (2 * BOUNDS.concept_rounds) + (2 * MAX_CANDIDATES); // FRAME; IDEATE + SELECT per round; ART_DIRECT + COMPOSE per candidate
+  const protocolRepairs = stageCalls * PROTOCOL_REPAIR.max_reasks_per_stage; // each stage may re-ask ONCE when its answer is not parseable JSON, never otherwise
+  const text = stageCalls + protocolRepairs;
   const image = MAX_CANDIDATES;
   const vision = 2 * MAX_CANDIDATES;
   const textEach = priceTextEur({ inputTokens: BRAIN_PORT_LIMITS.max_input_tokens, outputTokens: BRAIN_PORT_LIMITS.max_output_tokens, usdToEur });
@@ -63,7 +65,7 @@ export function worstCase({ canvas, criticChars, usdToEur = 1 }) {
   const cost = { text: text * textEach, image: image * imageEach, vision: vision * visionEach };
   const total = cost.text + cost.image + cost.vision;
   return {
-    calls: { text, image, vision, total: text + image + vision },
+    calls: { text, text_stage_calls: stageCalls, text_protocol_repairs_max: protocolRepairs, image, vision, total: text + image + vision },
     per_call_eur: { text: textEach, image: imageEach, vision: visionEach },
     cost_eur: { ...cost, total },
     max_spend_eur: Math.round(Math.ceil((total - 1e-9) / 0.05) * 5) / 100,
@@ -78,7 +80,7 @@ const describeFailure = (error, stage) => {
   const cause = classifyBrainFailure({ stage: brainStage, name: error?.name, code: error?.code, problem: error?.detail?.problem });
   return {
     stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, problem: error?.detail?.problem ?? null, words: error?.detail?.words ?? null, ...safeError(error),
-    evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer } : null,
+    evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer, protocol_repair: error.evidence.protocol_repair ?? null } : null,
   };
 };
 
