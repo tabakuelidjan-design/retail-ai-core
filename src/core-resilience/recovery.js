@@ -36,7 +36,7 @@ export const CORE_POLICY = Object.freeze({
   [C.USER_CONTRADICTION]: [A.NORMALIZE, A.ASK_USER, A.GRACEFUL_BLOCK], // NORMALIZE = an explicit user-priority rule resolves it
   [C.RECOVERABLE_EXECUTION_ERROR]: [A.RETRY_SAFE_OPERATION, A.REPLAN, A.ROLLBACK, A.GRACEFUL_BLOCK],
   [C.TOOL_CAPABILITY_LIMIT]: [A.REPLAN, A.SWITCH_CAPABILITY, A.ASK_USER, A.GRACEFUL_BLOCK],
-  [C.PROVIDER_FAILURE]: [A.RETRY_SAFE_OPERATION, A.SWITCH_CAPABILITY, A.GRACEFUL_BLOCK],
+  [C.PROVIDER_FAILURE]: [A.RETRY_SAFE_OPERATION, A.SWITCH_CAPABILITY, A.ASK_USER, A.GRACEFUL_BLOCK], // ASK_USER only when the sole alternatives would DEGRADE the requested outcome
   [C.DOMAIN_RULE_VIOLATION]: [A.ASK_USER, A.GRACEFUL_BLOCK], // the module policy may declare more, never fewer safeguards
   [C.SAFETY_OR_FIDELITY_BLOCK]: [A.GRACEFUL_BLOCK, A.ASK_USER, A.FATAL_STOP],
   [C.STATE_INTEGRITY_ERROR]: [A.ROLLBACK, A.FATAL_STOP],
@@ -78,16 +78,17 @@ export function createRecoveryBudget(limits = {}, { clock = () => Date.now() } =
     max, used,
     elapsed: () => clock() - started,
     /** null when the action fits, otherwise the reason it does not. */
-    refusal(action, costDelta = 0) {
+    refusal(action, costDelta = 0, { ignoreTime = false } = {}) {
       const counter = COUNTER[action];
       if (counter && used[counter] >= max[counter]) return `${counter.toUpperCase()}_EXHAUSTED`;
       if (!TERMINAL_ACTIONS.includes(action) && used.depth >= max.depth) return 'RECOVERY_DEPTH_EXHAUSTED';
       if (!TERMINAL_ACTIONS.includes(action) && used.cost_eur + costDelta > max.cost_eur) return 'RECOVERY_COST_EXHAUSTED';
-      if (!TERMINAL_ACTIONS.includes(action) && budget.elapsed() > max.elapsed_ms) return 'RECOVERY_TIME_EXHAUSTED';
+      if (!ignoreTime && !TERMINAL_ACTIONS.includes(action) && budget.elapsed() > max.elapsed_ms) return 'RECOVERY_TIME_EXHAUSTED';
       return null;
     },
     spend(action, costDelta = 0) {
-      const why = budget.refusal(action, costDelta);
+      // the decision already checked the clock; recording must not depend on it again (a second reading could differ)
+      const why = budget.refusal(action, costDelta, { ignoreTime: true });
       if (why) throw Object.assign(new Error(`recovery budget refused ${action}: ${why}`), { code: 'CORE_RECOVERY_BUDGET_REFUSED', reason: why });
       const counter = COUNTER[action];
       if (counter) used[counter] += 1;
@@ -140,13 +141,17 @@ export function assertAuthorized(error, action, modulePolicy = null) {
  *   safeDefault (a declared default), priorityRule (an explicit user-priority rule), canAskUser.
  */
 function precondition(action, error, ctx) {
+  if (ctx.failedActions?.has(action)) return 'RECOVERY_ACTION_ALREADY_FAILED';
   switch (action) {
     case A.NORMALIZE: return ctx.normalizable ? null : 'NO_MEANING_PRESERVING_REPAIR';
     case A.REASK_PROVIDER: return ctx.reaskable ? null : 'STAGE_DOES_NOT_ALLOW_A_REASK';
     case A.RETRY_SAFE_OPERATION: return ctx.idempotent && (error.category !== C.PROVIDER_FAILURE || ctx.transient) ? null : 'NOT_A_DECLARED_TRANSIENT_FAILURE_OF_AN_IDEMPOTENT_OPERATION';
     case A.REPLAN: return ctx.replannable ? null : 'NOTHING_TO_REPLAN';
     case A.SWITCH_CAPABILITY: return (ctx.alternates?.length ?? 0) > 0 ? null : 'NO_DECLARED_AUTHORIZED_EQUIVALENT_CAPABILITY';
-    case A.ASK_USER: return ctx.canAskUser === false ? 'NO_USER_TO_ASK' : null;
+    case A.ASK_USER:
+      if (ctx.canAskUser === false) return 'NO_USER_TO_ASK';
+      if (error.category === C.PROVIDER_FAILURE && (ctx.degradingAlternates?.length ?? 0) === 0) return 'NOTHING_TO_DECIDE_FOR_THE_USER';
+      return null;
     default: return null;
   }
 }

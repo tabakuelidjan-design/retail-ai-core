@@ -107,7 +107,13 @@ export function registerAlibaba(registry) {
   });
 }
 
+// ---------------------------------------------------------------------------------------------------------------- BUYING
+/** Buying returns a verdict, not an exception, for a candidate file it cannot read: that reason is INPUT_INVALID. */
+export function registerBuying(registry) {
+  return registry.register('buying', { INVALID_CANDIDATE_FILE: { category: C.INPUT_INVALID, domain_code: 'BUYING_INVALID_CANDIDATE_FILE' } });
+}
+
 /** One registry with every adapter registered. */
 export function registerAll(registry) {
-  return registerAlibaba(registerTenant(registerActivation(registerFinance(registry))));
+  return registerBuying(registerAlibaba(registerTenant(registerActivation(registerFinance(registry)))));
 }

@@ -35,6 +35,7 @@ export async function runResilient({
   let runInput = { ...input };
   let index = 0;
   const failedNormalize = new Set();
+  const failedActions = new Set(); // `${stage}:${action}` whose handler failed with an unclassified fault: that action is not tried again
 
   const ev = (e) => state.record({ module, ...e });
   const classify = (raw, stage) => {
@@ -62,10 +63,10 @@ export async function runResilient({
         // ---- a failure: classify, decide, execute (all bounded)
         for (let guard = 0; ; guard += 1) {
           if (guard > 64) return finish(TERMINAL_STATE.FATAL, A.FATAL_STOP, makeCoreError({ category: C.FATAL_SYSTEM_ERROR, code: 'CORE_RECOVERY_LOOP_GUARD', module, stage: stage.name, tenant }), stage);
-          const ctx = recoveryContext(error, stage, { failedNormalize, capabilities, dataClass, canAskUser, runInput });
+          const ctx = recoveryContext(error, stage, { failedNormalize, failedActions, capabilities, dataClass, canAskUser, runInput });
           const decision = decideRecovery({ error, budget, modulePolicy, ctx });
           assertAuthorized(error, decision.action, modulePolicy);
-          budget.spend(decision.action);
+          budget.spend(decision.action, ctx.costDelta ?? 0);
           report.recovery_depth = budget.used.depth;
           report.recoveries.push({ stage: stage.name, category: error.category, code: error.code, action: decision.action });
           ev({ stage: stage.name, error_category: error.category, domain_code: error.domain_code ?? error.code, recovery_action: decision.action, attempt, checkpoint: state.lastCheckpoint(), result: decision.terminal ? 'TERMINAL' : 'EXECUTING', evidence_reference: error.evidence_ref, rationale: decision.skipped.map((s) => `${s.action}:${s.why}`).join(' | ') || 'first authorized action' });
@@ -75,6 +76,7 @@ export async function runResilient({
           if (outcome.restart) { index = outcome.restart.index - 1; committed = true; break; }
           if (outcome.retry) break; // run the stage again
           if (outcome.failed) { error = outcome.failed; if (outcome.normalizeFailed) failedNormalize.add(stage.name); }
+          if (outcome.handlerFault) failedActions.add(`${stage.name}:${outcome.handlerFault}`); // the ORIGINAL error stands; the next authorized action is tried
         }
       }
       index += 1;
@@ -91,7 +93,11 @@ export async function runResilient({
   // ---------------------------------------------------------------------------------------------------- helpers (closures over the run)
   async function execute(action, error, stage, ctx) {
     const h = stage.handlers ?? {};
-    const failure = (e, extra = {}) => ({ failed: classify(e, stage.name), ...extra });
+    // a recovery handler that fails with an unclassified fault does not turn a recoverable error into a fatal one: the original error stands and the next authorized action is tried
+    const failure = (e, extra = {}) => {
+      const classified = classify(e, stage.name);
+      return classified.unmapped ? { handlerFault: action, normalizeFailed: extra.normalizeFailed } : { failed: classified, ...extra };
+    };
     const accept = (value, label) => { stage.validate?.(value); state.commit(stage.name, value, hashOf(runInput)); ev({ stage: stage.name, recovery_action: action, checkpoint: state.lastCheckpoint(), result: `COMMITTED_AFTER_${label}` }); return { committed: true }; };
     try {
       switch (action) {
@@ -162,10 +168,11 @@ function makeCtx({ state, stage, input, attempt, tenant, runId, module, capabili
       return out;
     },
     once: (key, fn, opts) => state.once(`${stage}:${key}`, fn, opts),
+    meterAttempt: (n = 1, costEur = 0) => { for (let i = 0; i < n; i += 1) state.meterCall(stage, i === 0 ? costEur : 0); },
   };
 }
 
-function recoveryContext(error, stage, { failedNormalize, capabilities, dataClass, canAskUser, runInput }) {
+function recoveryContext(error, stage, { failedNormalize, failedActions, capabilities, dataClass, canAskUser, runInput }) {
   const h = stage.handlers ?? {};
   const sub = PROTOCOL_SUBCODE[error.code];
   const alternates = stage.capability && capabilities ? capabilities.alternatesFor(stage.capability, { data_class: dataClass }) : { safe: [], degrading: [] };
@@ -178,7 +185,8 @@ function recoveryContext(error, stage, { failedNormalize, capabilities, dataClas
     alternates: typeof h.switchTo === 'function' ? alternates.safe : [],
     degradingAlternates: alternates.degrading,
     canAskUser,
-    costDelta: 0,
+    failedActions: new Set([...failedActions].filter((k) => k.startsWith(`${stage.name}:`)).map((k) => k.slice(stage.name.length + 1))),
+    costDelta: stage.recoveryCostEur ?? 0, // what ONE more recovery attempt of this stage is declared to cost
     runInput,
   };
 }

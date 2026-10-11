@@ -23,7 +23,6 @@ const CODE_MAP = Object.freeze({
   // the content breaks a creative rule: a domain rule, not a formatting problem
   [BRAIN_ERROR.FORBIDDEN_CONTENT]: { category: C.DOMAIN_RULE_VIOLATION, domain_code: 'BRAIN_FORBIDDEN_CONTENT' },
   [BRAIN_ERROR.NOT_DISTINCT]: { category: C.DOMAIN_RULE_VIOLATION, domain_code: 'BRAIN_CONCEPTS_NOT_DISTINCT' },
-  [BRAIN_ERROR.RULE_VIOLATION]: { category: C.DOMAIN_RULE_VIOLATION, domain_code: 'BRAIN_RELATION_OR_RULE' },
   [BRAIN_ERROR.PORT_FAILED]: { category: C.PROVIDER_FAILURE, domain_code: 'BRAIN_PORT_FAILED' },
 });
 
@@ -98,6 +97,11 @@ export const CREATIVE_CODE_TABLE = Object.freeze(Object.fromEntries(Object.entri
 export function registerCreative(registry) {
   return registry.register('creative', CREATIVE_CODE_TABLE, {
     classifyUnknown(error, where) {
+      if (error?.code === BRAIN_ERROR.RULE_VIOLATION) {
+        // two equal keys in one JSON object are a protocol failure of the provider's answer; every other rule violation is a creative rule
+        if (error.detail?.problem === 'DUPLICATE_KEY') return makeCoreError({ ...where, category: C.PROTOCOL_ERROR, code: 'PROVIDER_DUPLICATE_KEYS', domain_code: BRAIN_ERROR.RULE_VIOLATION });
+        return makeCoreError({ ...where, category: C.DOMAIN_RULE_VIOLATION, code: BRAIN_ERROR.RULE_VIOLATION, domain_code: 'BRAIN_RELATION_OR_RULE', diagnostics: { problem: error.detail?.problem } });
+      }
       if (error?.code === BRAIN_ERROR.PORT_FAILED) return classifyProviderFailure({ status: error.detail?.status, code: error.detail?.code, name: error.detail?.name, message: error.detail?.code }, where);
       const cause = error?.cause ?? error?.root_cause;
       if (typeof cause === 'string' && (BRAIN_CAUSE_MAP[cause] || RUNTIME_CAUSE_MAP[cause])) return makeCoreError({ ...where, category: BRAIN_CAUSE_MAP[cause] ?? RUNTIME_CAUSE_MAP[cause], code: cause });

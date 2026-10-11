@@ -4,7 +4,7 @@ import { CORE_CATEGORY as C, makeCoreError } from './taxonomy.js';
 // is ASK_USER. Nothing is truncated, translated or guessed, and nothing is ever invented: a price, a legal or financial fact, a product claim, a supplier claim, a compliance claim or a commercial fact that is
 // missing is MISSING_INFORMATION unless a safe default was DECLARED for that field. Contradictions are detected, not resolved, unless an explicit user-priority rule resolves them.
 
-const INVISIBLE = /[​-‍⁠﻿­‪-‮⁦-⁩]/g; // zero-width, BOM, soft hyphen, bidirectional controls
+const INVISIBLE = /[​⁠﻿­]/g; // zero-width space, word joiner, BOM, soft hyphen. NOT kept out: the zero-width joiner and non-joiner (they change emoji and Persian/Indic words) and bidirectional marks (they change mixed-direction text)
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const NULL_LIKE = new Set(['null', 'undefined', 'nan', 'n/a', 'na', 'none', 'nil', '-', '--', '—', '?', 'tbd', 'todo', 'unknown', 'aucun', 'neant', 'néant', 'geen', 'ninguno', 'kein', 'nessuno']);
 
@@ -114,4 +114,17 @@ export function reconcileStatements(statements, { priority = {}, module, stage, 
     contradictions.push(makeCoreError({ module, stage, tenant, category: C.USER_CONTRADICTION, code: 'USER_STATEMENTS_CONTRADICT', domain_code: null, human_message: `Two different values were given for ${key}.`, diagnostics: { key, values: distinct.size } }));
   }
   return { resolved, contradictions };
+}
+
+/**
+ * A module's input collections (rows of orders, lines, variants...) must be arrays before the module is called: several modules throw a raw TypeError on a null collection. Missing collections are
+ * MISSING_INFORMATION (the person or the connector is asked), never a crash. Returns CoreError[] (empty when all are present).
+ */
+export function requireCollections(data, names, { module, stage, tenant = null } = {}) {
+  const problems = [];
+  for (const name of names) {
+    if (Array.isArray(data?.[name])) continue;
+    problems.push(makeCoreError({ module, stage, tenant, category: C.MISSING_INFORMATION, code: 'INPUT_COLLECTION_MISSING', human_message: `The data set ${name} is missing.`, diagnostics: { collection: name } }));
+  }
+  return problems;
 }

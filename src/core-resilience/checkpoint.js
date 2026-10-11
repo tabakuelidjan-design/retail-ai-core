@@ -56,6 +56,14 @@ export function createStateHub() {
     handle: (tenant, runId) => { run(tenant, runId); return handle(tenant, runId); },
     tenants: () => [...tenants.keys()].sort(),
     runs: (tenant) => [...(tenants.get(tenant)?.keys() ?? [])].sort(),
+    /** Everything one tenant holds, in full (committed values, partial evidence, journal, meter, effects): for the isolation checks, never for display. */
+    inspectTenant(tenant) {
+      const out = {};
+      for (const [id, r] of tenants.get(tenant) ?? []) {
+        out[id] = { committed: Object.fromEntries([...r.committed].map(([k, v]) => [k, v.value])), partial: Object.fromEntries(r.partial), journal: [...r.journal], meter: { ...r.meter }, effects: [...r.effects.keys()], terminal: r.terminal };
+      }
+      return out;
+    },
     /** A copy of everything one tenant holds, for the isolation tests: it never contains another tenant's data. */
     exportTenant(tenant) {
       const out = {};
@@ -130,9 +138,12 @@ export function createStateHub() {
         const known = x.effects.get(key);
         if (known?.status === 'DONE') { x.suppressed += 1; return known.result; }
         if (known?.status === 'UNKNOWN') { x.suppressed += 1; throw integrity(tenant, `The outcome of side effect ${redact(key, 60)} is unknown: it is not repeated automatically.`, 'CORE_EFFECT_OUTCOME_UNKNOWN'); }
+        if (known?.status === 'RUNNING') { x.suppressed += 1; return known.promise; } // a concurrent attempt of the same effect waits for the one that is running (found by the chaos benchmark: five at once ran it five times)
         if (irreversible) x.effects.set(key, { status: 'UNKNOWN', result: null });
+        const promise = (async () => fn())();
+        if (!irreversible) x.effects.set(key, { status: 'RUNNING', promise });
         let result;
-        try { result = await fn(); } catch (error) { if (!irreversible) x.effects.delete(key); throw error; }
+        try { result = await promise; } catch (error) { if (!irreversible) x.effects.delete(key); throw error; }
         x.effects.set(key, { status: 'DONE', result });
         return result;
       },

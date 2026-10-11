@@ -20,6 +20,13 @@ export const CORE_CODE_TABLE = Object.freeze({
   CORE_RECOVERY_LOOP_GUARD: { category: C.FATAL_SYSTEM_ERROR },
   CORE_REPLAN_TARGET_INVALID: { category: C.TOOL_CAPABILITY_LIMIT },
   CORE_UNKNOWN_FACT: { category: C.INPUT_INVALID },
+  // the codes of Core's own input layer
+  INPUT_REQUIRED_FIELD_MISSING: { category: C.MISSING_INFORMATION },
+  INPUT_COLLECTION_MISSING: { category: C.MISSING_INFORMATION },
+  INPUT_TOO_LONG: { category: C.INPUT_INVALID },
+  INPUT_AMBIGUOUS: { category: C.INPUT_INVALID },
+  INPUT_NOT_USABLE: { category: C.INPUT_INVALID },
+  USER_STATEMENTS_CONTRADICT: { category: C.USER_CONTRADICTION },
 });
 
 /** A registry that already knows the Core codes. */
