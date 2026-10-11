@@ -109,22 +109,26 @@ test('RI-5 the brand rules stay authoritative over a rich scene: a scene that as
   assert.equal(s.environment.calls.length, 0);
 });
 
-test('RI-6 a synthesized recipe that the solver cannot realize for the real approved texts gives way to the named preset, with the reason recorded and no provider call wasted', async () => {
-  const plan = await planWith(); // BESIDE: a narrow text column that the long approved supporting claim cannot fit
+test('RI-6 a plan whose first proportions do not fit the real approved texts is relaxed on its own ladder, keeping every relation, before any preset is considered', async () => {
+  const plan = await planWith(); // BESIDE: the first text column is too narrow for the approved supporting claim
   assert.equal(plan.layout_choice.source, 'SYNTHESIZED');
+  assert.ok(plan.layout_choice.ladder.length > 1);
   const s = runtime();
   const result = await s.run({ creativePlan: plan });
+  assert.equal(result.status, 'READY_FOR_REVIEW');
   const row = s.ledger.of('LAYOUT_RECIPE')[0];
-  assert.equal(row.outcome.source, 'PRESET_FALLBACK');
-  assert.equal(row.outcome.fallback_reason, 'THE_SYNTHESIZED_RECIPE_DID_NOT_SOLVE_FOR_THE_APPROVED_TEXTS');
-  assert.ok(!/^SYNTH_/.test(row.outcome.recipe_id));
-  if (result.status === 'BLOCKED') assert.equal(s.environment.calls.length, 0);
+  assert.equal(row.outcome.source, 'SYNTHESIZED');
+  assert.equal(row.outcome.relaxation, 'TEXT_PROPORTION_RELAXED');
+  assert.ok(row.outcome.relaxation_step > 0);
+  assert.equal(row.outcome.attempts[0].outcome, 'NOT_SOLVED');
+  assert.equal(row.outcome.attempts.at(-1).outcome, 'SOLVED');
 });
 
 test('RI-7 a synthesized recipe without a slot for an approved text is not used: the preset takes over and says why', async () => {
   const plan = await planWith(compositionAnswer({ text_adjacency: 'BELOW', product_anchor: { horizontal: 'CENTER', vertical: 'UPPER' }, alignment_family: 'START' }));
   const recipe = plan.layout_choice.recipe;
-  const without = { ...plan, layout_choice: { ...plan.layout_choice, recipe: { ...recipe, slots: recipe.slots.filter((slot) => slot.role !== 'PRICE') } } };
+  const strip = (r) => ({ ...r, slots: r.slots.filter((slot) => slot.role !== 'PRICE') });
+  const without = { ...plan, layout_choice: { ...plan.layout_choice, recipe: strip(recipe), ladder: plan.layout_choice.ladder.map((rung) => ({ ...rung, recipe: strip(rung.recipe) })) } };
   const s = runtime();
   await s.run({ creativePlan: without });
   const row = s.ledger.of('LAYOUT_RECIPE')[0];

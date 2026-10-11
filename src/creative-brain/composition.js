@@ -95,6 +95,10 @@ const TEXT_HEIGHT = Object.freeze({
   CTA: { DOMINANT: 0.09, STRONG: 0.075, BALANCED: 0.065, QUIET: 0.055 },
 });
 const PRICE_WIDTH = Object.freeze({ DOMINANT: 0.9, STRONG: 0.75, BALANCED: 0.6, QUIET: 0.5 });
+// the bounded relaxation ladder of a plan (a narrower product column or a wider text block, never a changed relation)
+const COLUMN_STEP = 0.025; const BLOCK_STEP = 0.07; const MAX_RELAX_STEPS = 12;
+// a relaxation may never change the visual weight the plan states: the product slot keeps this multiple of the area of the largest text slot (a dominant product stays dominant by area)
+const DOMINANCE_RATIO = Object.freeze({ DOMINANT: 2.5, STRONG: 1.5, BALANCED: 1.0, QUIET: 0.5 });
 const GAP = 0.04; const GAP_IN = 0.012; const MIN_SCALE = 0.55; const BLOCK_WIDTH = 0.72;
 const r4 = (n) => Math.round(n * 10000) / 10000;
 
@@ -106,13 +110,18 @@ export class CompositionNotRealizable extends Error {
  * A layout recipe from a plan. Deterministic, pure. Throws CompositionNotRealizable for a relation the solver cannot guarantee (a layer overlapping another), for a text stack that cannot fit its region
  * at a legible proportion, or for a recipe that would break the invariants of the presets.
  */
-export function synthesizeRecipe(plan) {
+export function synthesizeRecipe(plan, { step = 0 } = {}) {
   if (plan.overlap_permission !== OVERLAP_PERMISSION.NONE) throw new CompositionNotRealizable('OVERLAP_IS_NOT_GUARANTEED_BY_THE_SOLVER');
   const [pw, ph] = PRODUCT_SIZE[plan.visual_weight.PRODUCT];
   const adjacency = plan.text_adjacency; const { horizontal, vertical } = plan.product_anchor;
   const sideways = adjacency === TEXT_ADJACENCY.BESIDE || adjacency === TEXT_ADJACENCY.STAGGERED;
   // product slot
-  const w = sideways ? Math.min(pw, 0.56) : Math.min(pw + 0.2, 0.9);
+  let w = sideways ? Math.min(pw, 0.56) : Math.min(pw + 0.2, 0.9);
+  // RELAXATION: the relations of the plan never change, only the measured proportion of the text column, one bounded step at a time, so that the REAL approved words can fit (the solver decides)
+  if (step > 0) {
+    if (sideways) w = r4(w - (COLUMN_STEP * step));
+    else if (plan.alignment_family === 'CENTER' || BLOCK_WIDTH + (BLOCK_STEP * step) > 1 + 1e-9) throw new CompositionNotRealizable('NO_FURTHER_RELAXATION_PRESERVES_THE_RELATIONS', { step });
+  }
   const h = sideways ? ph + 0.18 : Math.min(ph, 0.5);
   const px = horizontal === 'START' ? 0 : (horizontal === 'END' ? 1 - w : (1 - w) / 2);
   let py;
@@ -124,7 +133,7 @@ export function synthesizeRecipe(plan) {
   let region;
   if (sideways) region = horizontal === 'START' ? { x: w + GAP, y: 0.04, w: 1 - w - GAP, h: 0.92 } : { x: 0, y: 0.04, w: 1 - w - GAP, h: 0.92 };
   else {
-    const blockW = plan.alignment_family === 'CENTER' ? 1 : BLOCK_WIDTH;
+    const blockW = plan.alignment_family === 'CENTER' ? 1 : Math.min(1, r4(BLOCK_WIDTH + (BLOCK_STEP * step)));
     const x = plan.alignment_family === 'END' ? 1 - blockW : 0;
     region = adjacency === TEXT_ADJACENCY.ABOVE ? { x, y: 0.02, w: blockW, h: Math.max(0, py - GAP - 0.02) } : { x, y: product.y + product.h + GAP, w: blockW, h: Math.max(0, 0.98 - (product.y + product.h + GAP)) };
   }
@@ -157,15 +166,34 @@ export function synthesizeRecipe(plan) {
       y += sh;
     });
   });
+  if (step > 0) {
+    const area = (slot) => slot.w * slot.h;
+    const largestText = Math.max(...slots.filter((slot) => slot.role !== 'PRODUCT').map(area));
+    if (area(slots[0]) < DOMINANCE_RATIO[plan.visual_weight.PRODUCT] * largestText) throw new CompositionNotRealizable('NO_FURTHER_RELAXATION_PRESERVES_THE_RELATIONS', { step, reason: 'THE_PRODUCT_WOULD_LOSE_THE_VISUAL_WEIGHT_THE_PLAN_STATES' });
+  }
   const hash = createHash('sha256').update(JSON.stringify(slots)).digest('hex').slice(0, 10);
-  const recipe = { recipe_id: `SYNTH_${hash}`, description: 'synthesized from a relational composition plan', margin_ratio: 0.06, mirror_on_rtl: false, text_alignment: plan.alignment_family, slots };
+  const recipe = { recipe_id: `SYNTH_${hash}`, description: step ? `synthesized from a relational composition plan (text proportion relaxed by ${step} step${step > 1 ? 's' : ''})` : 'synthesized from a relational composition plan', margin_ratio: 0.06, mirror_on_rtl: false, text_alignment: plan.alignment_family, slots };
   try { assertValidLayoutRecipe(recipe); } catch (error) { throw new CompositionNotRealizable('THE_SYNTHESIZED_RECIPE_BREAKS_A_LAYOUT_INVARIANT', { reason: error.message }); }
   return deepFreeze(recipe);
 }
 
-/** The recipe of a plan, or an EXPLICIT fallback to a preset (never silent): { recipe, source, reason }. */
+/**
+ * The deterministic ladder of recipes of a plan: step 0 is the plan as stated, each further step keeps every relation and flexes only the proportion of the text column, until no relaxation
+ * can preserve the relations. The first step is required (it throws like synthesizeRecipe); the production runtime tries the steps in order against the REAL approved texts.
+ */
+export function synthesizeRecipeLadder(plan) {
+  const ladder = [{ step: 0, relaxation: 'NONE', recipe: synthesizeRecipe(plan) }];
+  for (let step = 1; step <= MAX_RELAX_STEPS; step += 1) {
+    let recipe;
+    try { recipe = synthesizeRecipe(plan, { step }); } catch (error) { if (error instanceof CompositionNotRealizable) break; throw error; }
+    ladder.push({ step, relaxation: 'TEXT_PROPORTION_RELAXED', recipe });
+  }
+  return deepFreeze(ladder);
+}
+
+/** The recipe of a plan, or an EXPLICIT fallback to a preset (never silent): { recipe, ladder, source, reason }. */
 export function composeLayout({ plan, fallbackRecipeId = null }) {
-  try { return { recipe: synthesizeRecipe(plan), recipe_id: null, source: 'SYNTHESIZED', reason: null }; } catch (error) {
+  try { const ladder = synthesizeRecipeLadder(plan); return { recipe: ladder[0].recipe, ladder, recipe_id: null, source: 'SYNTHESIZED', reason: null }; } catch (error) {
     if (!(error instanceof CompositionNotRealizable)) throw error;
     return { recipe: null, recipe_id: fallbackRecipeId, source: fallbackRecipeId ? 'PRESET_FALLBACK' : 'NONE', reason: error.problem };
   }

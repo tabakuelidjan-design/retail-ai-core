@@ -103,28 +103,42 @@ export async function runProductPreservingCreative({
   const planLayout = ({ providerId, size }) => {
     const roles = copy.items.map((i) => i.text_role);
     // a plan's synthesized recipe is used only if it has a slot for every approved text; otherwise the preset of the direction is used, and the choice says so (never a silent substitution)
-    const synthesized = creativePlan?.layout_choice?.recipe ?? null;
-    const covers = synthesized && roles.every((role) => synthesized.slots.some((s) => s.role === role));
+    const ladder = creativePlan?.layout_choice?.ladder ?? [];
+    const attempts = [];
     const solveWith = (chosen, explicit) => solveRecipeLayout({
       at, ids, direction, format, brand, copyItems: copy.items, cutoutRef, cutoutSize: { width: segmentation.width_px, height: segmentation.height_px }, environmentRef, providerId, size, fonts, claimRefs, recipeId: chosen.recipe_id, ...(explicit ? { recipe: explicit } : {}),
     });
-    if (covers) {
-      // the solver decides whether the plan is realizable for the real approved texts; if it is not, the preset of the direction takes over and says why
-      const attempt = solveWith({ recipe_id: synthesized.recipe_id }, synthesized);
-      if (attempt.placeable) return { recipe: { recipe_id: synthesized.recipe_id, rule: 'RECIPE_SYNTHESIZED_FROM_THE_COMPOSITION_PLAN', considered: [], source: 'SYNTHESIZED' }, document: attempt.document, assets: attempt.assets, solved: attempt.solved, ok: true };
+    // the relational plan is tried FIRST, as a bounded ladder of recipes that keep every relation and flex only the text proportion; the REAL solver decides on the REAL approved texts
+    for (const rung of ladder) {
+      const recipeOfRung = rung.recipe;
+      if (!roles.every((role) => recipeOfRung.slots.some((s) => s.role === role))) { attempts.push({ recipe_id: recipeOfRung.recipe_id, step: rung.step, relaxation: rung.relaxation, outcome: 'SKIPPED_NO_SLOT_FOR_AN_APPROVED_TEXT' }); continue; }
+      const attempt = solveWith({ recipe_id: recipeOfRung.recipe_id }, recipeOfRung);
+      attempts.push({ recipe_id: recipeOfRung.recipe_id, step: rung.step, relaxation: rung.relaxation, outcome: attempt.placeable ? 'SOLVED' : 'NOT_SOLVED', violations: attempt.placeable ? [] : attempt.solved.violations.map((v) => ({ code: v.code, layers: v.layers, reasons: v.reasons ?? null })), unplaced: attempt.placeable ? [] : attempt.solved.unplaced });
+      if (attempt.placeable) return { recipe: { recipe_id: recipeOfRung.recipe_id, rule: 'RECIPE_SYNTHESIZED_FROM_THE_COMPOSITION_PLAN', considered: [], source: 'SYNTHESIZED', relaxation: rung.relaxation, relaxation_step: rung.step }, document: attempt.document, assets: attempt.assets, solved: attempt.solved, ok: true, attempts };
     }
-    const fallbackReason = !creativePlan ? null : (!synthesized ? (creativePlan.layout_choice?.reason ?? 'NO_SYNTHESIZED_RECIPE') : (covers ? 'THE_SYNTHESIZED_RECIPE_DID_NOT_SOLVE_FOR_THE_APPROVED_TEXTS' : 'THE_SYNTHESIZED_RECIPE_HAS_NO_SLOT_FOR_AN_APPROVED_TEXT'));
+    let fallbackReason = null;
+    if (creativePlan) {
+      if (!ladder.length) fallbackReason = creativePlan.layout_choice?.reason ?? 'NO_SYNTHESIZED_RECIPE';
+      else fallbackReason = attempts.every((x) => x.outcome.startsWith('SKIPPED')) ? 'THE_SYNTHESIZED_RECIPE_HAS_NO_SLOT_FOR_AN_APPROVED_TEXT' : 'THE_SYNTHESIZED_RECIPE_DID_NOT_SOLVE_FOR_THE_APPROVED_TEXTS';
+    }
     const recipe = { ...selectLayoutRecipe(direction, roles), source: creativePlan ? 'PRESET_FALLBACK' : 'PRESET', ...(creativePlan ? { fallback_reason: fallbackReason } : {}) };
-    if (!recipe.recipe_id) return { recipe, ok: false };
+    if (!recipe.recipe_id) return { recipe: creativePlan ? { ...recipe, preset_reason: recipe.reason, reason: 'NO_EXECUTABLE_LAYOUT_FOR_THE_COMPOSITION' } : recipe, ok: false, attempts };
     const { document, assets, solved, placeable: ok } = solveRecipeLayout({
       at, ids, direction, format, brand, copyItems: copy.items, cutoutRef, cutoutSize: { width: segmentation.width_px, height: segmentation.height_px }, environmentRef, providerId, size, fonts, claimRefs, recipeId: recipe.recipe_id,
     });
-    return { recipe, document, assets, solved, ok };
+    return { recipe, document, assets, solved, ok, attempts };
   };
-  const recordLayout = ({ recipe, solved }) => {
+  // when no layout exists, the record says what was tried: every rung of the relational ladder with the solver's own reasons, then the preset fallback and why it had nothing to offer
+  const noLayout = (planned) => {
+    if (!creativePlan) return {};
+    const detail = { layout_attempts: planned.attempts, preset_fallback: { attempted: true, reason: planned.recipe.preset_reason ?? null, spatial_intent: direction.spatial_intent } };
+    ledger.record({ decision: DECISION.LAYOUT_RECIPE, decided_by: COMPONENT.LAYOUT_PLANNER, rule: 'NO_EXECUTABLE_LAYOUT_FOR_THE_COMPOSITION', basis: [direction.direction_id], outcome: { source: 'NONE', spatial_intent: direction.spatial_intent, ...detail } });
+    return detail;
+  };
+  const recordLayout = ({ recipe, solved, attempts = [] }) => {
     ledger.record({
       decision: DECISION.LAYOUT_RECIPE, decided_by: COMPONENT.LAYOUT_PLANNER, rule: recipe.rule, basis: [direction.direction_id],
-      outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered, ...(creativePlan ? { source: recipe.source, fallback_reason: recipe.fallback_reason ?? null } : {}) },
+      outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered, ...(creativePlan ? { source: recipe.source, fallback_reason: recipe.fallback_reason ?? null, relaxation: recipe.relaxation ?? null, relaxation_step: recipe.relaxation_step ?? 0, attempts } : {}) },
     });
     const productLayer = solved.document.layers.find((l) => l.type === 'PRODUCT');
     ledger.record({
@@ -151,7 +165,7 @@ export async function runProductPreservingCreative({
       // the layout is solved with the real cut-out and the canvas-sized environment BEFORE the provider is paid: an unsolvable layout stops here, with its record
       if (segmentation) {
         const pre = planLayout({ providerId: 'pending-environment', size: canvas });
-        if (!pre.recipe.recipe_id) return stop(pre.recipe.reason, { spatial_intent: direction.spatial_intent, considered: pre.recipe.considered, before_environment_call: true });
+        if (!pre.recipe.recipe_id) return stop(pre.recipe.reason, { spatial_intent: direction.spatial_intent, considered: pre.recipe.considered, before_environment_call: true, ...noLayout(pre) });
         if (!pre.ok) { recordLayout(pre); return stop('THE_LAYOUT_COULD_NOT_BE_SOLVED', { violations: pre.solved.violations, unplaced: pre.solved.unplaced, before_environment_call: true }); }
       }
       let built;
@@ -182,7 +196,7 @@ export async function runProductPreservingCreative({
 
   // 5-6. layout planner (the recipe) and layout engine (placement of the product and of the text), now with the environment actually delivered
   const plan = planLayout({ providerId: environment.provenance.provider_id, size: { width: envPixels.width, height: envPixels.height } });
-  if (!plan.recipe.recipe_id) return stop(plan.recipe.reason, { spatial_intent: direction.spatial_intent, considered: plan.recipe.considered });
+  if (!plan.recipe.recipe_id) return stop(plan.recipe.reason, { spatial_intent: direction.spatial_intent, considered: plan.recipe.considered, ...noLayout(plan) });
   const { recipe, document, assets, solved } = plan;
   recordLayout(plan);
   // (the director's negative-space intent is realized in the ENVIRONMENT request - calm areas to set text on - not as a margin the layout engine reserves)
