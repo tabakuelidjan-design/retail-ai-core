@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { DIMENSIONS, DIMENSION_QUESTIONS, OUTCOME } from './dimensions.js';
 import {
-  CritiqueError, normalizeCritique, notMeasurableCritique,
+  CritiqueError, critiqueRuleStatements, normalizeCritique, notMeasurableCritique,
 } from './critique.js';
 
 // The Creative Critic: it looks at the actual RENDERED candidate PNG and judges perceptual / creative dimensions, through a vision-language model behind a PORT. The model is
@@ -22,6 +22,7 @@ export function buildCriticInstruction({ brief, dimensions = DIMENSIONS }) {
     'evidence: one or two concrete sentences about what is visible in the image that justifies the outcome. A judgment without visible evidence is not accepted.',
     'revision_hint: only for FAIL or REVIEW_REQUIRED. One sentence about the INTENT of a change in plain words (for example "give the supporting text a calmer, clearly secondary treatment"). Never coordinates, sizes, pixel or percentage values, font names or sizes, or colour codes.',
     'Never give a score, a rating, a number out of ten, a rank or a winner. Never say whether the image is approved or may be published: you give an opinion, a person decides.',
+    ...critiqueRuleStatements({ dimensions: DIMENSIONS.length }),
   ].join(' ');
   const questions = dimensions.map((d) => `- ${d}: ${DIMENSION_QUESTIONS[d]}`).join('\n');
   const user = [

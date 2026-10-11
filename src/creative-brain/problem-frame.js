@@ -1,4 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
+import { list, obj, renderSpec, text, validateAnswer } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
@@ -17,6 +18,12 @@ export const MAY_CHANGE = Object.freeze({
 });
 
 const MODEL_FIELDS = ['what_we_show', 'audience', 'understood_immediately', 'felt', 'remembered', 'commercial_objective', 'occasion_context', 'generic_risks', 'distinctive_levers', 'rationale'];
+/** The model's part of a frame: the contract the answer is validated against AND the contract the instruction states. */
+export const FRAME_SPEC = obj({
+  what_we_show: text(), audience: text(), understood_immediately: text(), felt: text(), remembered: text(), commercial_objective: text(), occasion_context: text(),
+  generic_risks: list(text({ max: 200 }), { min: 1, max: 5 }), distinctive_levers: list(text({ max: 200 }), { min: 1, max: 5 }), rationale: text(),
+});
+export const FRAME_CONTRACT = Object.freeze({ stage: 'FRAME', spec: FRAME_SPEC, rules: Object.freeze([]) });
 const FRAME_KEYS = ['frame_id', 'what_we_show', 'audience', 'understood_immediately', 'felt', 'remembered', 'commercial_objective', 'occasion_context', 'fixed', 'may_change', 'generic_risks', 'distinctive_levers', 'rationale'];
 
 /** OBSERVE: the facts of the brief that a frame may rest on. Pure; holds references and words, never pixels. */
@@ -47,28 +54,25 @@ export function fixedFrom(observation) {
   return fixed;
 }
 
-const textList = (value, where, max = 5) => listOf(value, where, { min: 1, max }, (v, w) => oneLine(v, w, { max: 200 }));
-
 /**
  * The canonical frame from the model's fields and the deterministic part. Refuses unknown or missing fields, numbers anywhere, text that is not one line.
  * @param {object} input { observation, model }
  */
 export function buildProblemFrame({ observation, model }) {
-  noNumbers(model, 'frame');
-  closed(model, MODEL_FIELDS, 'frame');
+  const v = validateAnswer(FRAME_CONTRACT, model, 'frame');
   const body = {
-    what_we_show: oneLine(model.what_we_show, 'frame.what_we_show'),
-    audience: oneLine(model.audience, 'frame.audience'),
-    understood_immediately: oneLine(model.understood_immediately, 'frame.understood_immediately'),
-    felt: oneLine(model.felt, 'frame.felt'),
-    remembered: oneLine(model.remembered, 'frame.remembered'),
-    commercial_objective: oneLine(model.commercial_objective, 'frame.commercial_objective'),
-    occasion_context: oneLine(model.occasion_context, 'frame.occasion_context'),
+    what_we_show: v.what_we_show,
+    audience: v.audience,
+    understood_immediately: v.understood_immediately,
+    felt: v.felt,
+    remembered: v.remembered,
+    commercial_objective: v.commercial_objective,
+    occasion_context: v.occasion_context,
     fixed: fixedFrom(observation),
     may_change: Object.values(MAY_CHANGE),
-    generic_risks: textList(model.generic_risks, 'frame.generic_risks'),
-    distinctive_levers: textList(model.distinctive_levers, 'frame.distinctive_levers'),
-    rationale: oneLine(model.rationale, 'frame.rationale'),
+    generic_risks: v.generic_risks,
+    distinctive_levers: v.distinctive_levers,
+    rationale: v.rationale,
   };
   return deepFreeze({ frame_id: deriveId('cpf', body), ...body });
 }
@@ -88,8 +92,8 @@ export function normalizeProblemFrame(frame) {
 export function buildFramerInstruction({ observation }) {
   const system = [
     'You are the Nordla problem framer. Before any idea is sought, you frame the creative problem for a product visual from the observation you are given.',
-    'Return ONLY one JSON object with exactly these keys: what_we_show, audience, understood_immediately, felt, remembered, commercial_objective, occasion_context, generic_risks, distinctive_levers, rationale.',
-    'Each of what_we_show, audience, understood_immediately, felt, remembered, commercial_objective, occasion_context and rationale is ONE line of plain text of at most 300 characters. generic_risks and distinctive_levers are lists of one to five short one-line texts.',
+    'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
+    ...renderSpec(FRAME_SPEC, 'answer'),
     'generic_risks name what would make the result generic or template-like for THIS product, audience and occasion; distinctive_levers name what could make it distinctive. occasion_context says what occasion or buying situation the product serves, or that none applies.',
     'You do not propose a concept, a layout or a scene here. You never use numbers. rationale is one concise sentence of why this framing, for the record; it is not a reasoning log.',
     'Reason with these principles of art direction:',
@@ -102,7 +106,7 @@ export function buildFramerInstruction({ observation }) {
 export function createProblemFramer({ complete }) {
   return Object.freeze({
     async frame({ observation }) {
-      const { value, meta } = await askAndNormalize({ complete, instruction: buildFramerInstruction({ observation }), stage: 'FRAME', schema: { keys: MODEL_FIELDS }, normalize: (raw) => buildProblemFrame({ observation, model: raw }) });
+      const { value, meta } = await askAndNormalize({ complete, instruction: buildFramerInstruction({ observation }), stage: 'FRAME', spec: FRAME_SPEC, normalize: (raw) => buildProblemFrame({ observation, model: raw }) });
       return { frame: value, meta };
     },
   });

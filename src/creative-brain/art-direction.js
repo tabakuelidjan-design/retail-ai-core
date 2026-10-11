@@ -1,5 +1,8 @@
 import { conceptualWords } from './concept.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
+import {
+  list, obj, renderRules, renderSpec, text, validateSpec, word,
+} from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import { assertNoSubstitute, SCENE_FORBIDDEN, SUBSTITUTE_LEXICON } from './substitutes.js';
 import {
@@ -29,19 +32,30 @@ export const ART_LIMITS = Object.freeze({
   text_max: 300, element_max: 140, reason_min: 12, reason_max: 220, secondary_max_items: 5, secondary_item_max: 140, noise_min_items: 1, noise_max_items: 8, noise_item_max: 140,
 });
 
+/** The art direction as a model states it: the contract the answer is validated against AND the contract the instruction states. */
+export const ART_SPEC = obj({
+  atmosphere: text({ geometry: true }), depth_model: word(DEPTH_MODEL), material_language: text({ geometry: true }), lighting_intent: text({ geometry: true }), visual_rhythm: word(VISUAL_RHYTHM),
+  product_relationship: word(PRODUCT_RELATIONSHIP), text_image_relationship: word(TEXT_IMAGE_RELATIONSHIP), realism: word(REALISM), emotional_temperature: word(EMOTIONAL_TEMPERATURE),
+  visual_tension: word(VISUAL_TENSION), negative_space_strategy: word(NEGATIVE_SPACE_STRATEGY),
+  narrative_elements: list(obj({ element: text({ max: ART_LIMITS.element_max, forbid: true }), reason: text({ min: ART_LIMITS.reason_min, max: ART_LIMITS.reason_max }), zone: word(SCENE_ZONE) }), { min: 0, max: MAX_NARRATIVE_ELEMENTS }),
+  permitted_secondary_elements: list(text({ max: ART_LIMITS.secondary_item_max, forbid: true }), { min: 0, max: ART_LIMITS.secondary_max_items }),
+  forbidden_decorative_noise: list(text({ max: ART_LIMITS.noise_item_max }), { min: ART_LIMITS.noise_min_items, max: ART_LIMITS.noise_max_items }),
+  rationale: text({ geometry: true }),
+});
+
 // a digit, a colour code or a unit is geometry or styling that belongs elsewhere
 const GEOMETRY_TEXT = /[0-9]|#[0-9a-f]{3,8}\b|\b(px|pt|em|rem)\b/i;
 
-function narrativeElement(value, where, concept) {
-  closed(value, ['element', 'reason', 'zone'], where);
-  const element = oneLine(value.element, `${where}.element`, { max: ART_LIMITS.element_max });
-  const reason = oneLine(value.reason, `${where}.reason`, { min: ART_LIMITS.reason_min, max: ART_LIMITS.reason_max });
-  assertNoSubstitute(element, `${where}.element`);
-  // the reason must be argued in the concept: it shares conceptual words with the concept's own text
+/** Each narrative element must be argued in the concept: its reason shares a significant word with the concept's own text. */
+function reasonInConcept(element, where, concept) {
   const conceptWords = new Set(conceptualWords([concept.central_idea, concept.visual_metaphor, concept.story, concept.emotional_intent].join(' ')));
-  if (!conceptualWords(reason).some((w) => conceptWords.has(w))) fail(BRAIN_ERROR.RULE_VIOLATION, `${where} has no reason in the concept`, where, { problem: 'ELEMENT_WITHOUT_REASON_IN_THE_CONCEPT' });
-  return { element, reason, zone: enumOf(value.zone, SCENE_ZONE, `${where}.zone`) };
+  if (!conceptualWords(element.reason).some((w) => conceptWords.has(w))) fail(BRAIN_ERROR.RULE_VIOLATION, `${where} has no reason in the concept`, where, { problem: 'ELEMENT_WITHOUT_REASON_IN_THE_CONCEPT' });
 }
+export const ART_RULES = Object.freeze([
+  { id: 'REASON_IN_THE_CONCEPT', statement: 'every narrative element needs a reason in the concept: the reason must contain at least one significant word that also appears in the concept\'s central_idea, visual_metaphor, story or emotional_intent (not a stop word), or the answer is refused.', check: (v, ctx) => v.narrative_elements.forEach((e, i) => reasonInConcept(e, `art_direction.narrative_elements[${i}]`, ctx.concept)) },
+  { enforcedBy: 'art-direction.js#normalizeArtDirection (appends SCENE_FORBIDDEN)', id: 'MANDATORY_NOISE', statement: 'Nordla always adds its own prohibitions (a substitute for the product, a phone, a case or any device, a competing hero object, a misleading commercial object, text, letters, logos or watermarks) to forbidden_decorative_noise: you do not need to repeat them.' },
+  { id: 'NO_OTHER_KEYS', statement: 'never include a key that is not listed above (no art_direction_id, concept_id or any other).', enforcedBy: 'closed spec (art-direction.js#normalizeArtDirection)' },
+]);
 
 /**
  * The ArtDirection of a selected concept, from a model's fields: closed, no figure, closed vocabularies, every narrative element argued in the concept and none a substitute for the product.
@@ -49,27 +63,25 @@ function narrativeElement(value, where, concept) {
  */
 export function normalizeArtDirection(raw, { concept }) {
   noNumbers(raw, 'art_direction');
-  closed(raw, MODEL_KEYS, 'art_direction');
-  for (const key of ['atmosphere', 'material_language', 'lighting_intent', 'rationale']) if (typeof raw[key] === 'string' && GEOMETRY_TEXT.test(raw[key])) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `art_direction.${key} holds a colour code or a unit`, `art_direction.${key}`);
-  const secondary = listOf(raw.permitted_secondary_elements, 'art_direction.permitted_secondary_elements', { min: 0, max: ART_LIMITS.secondary_max_items }, (v, w) => assertNoSubstitute(oneLine(v, w, { max: ART_LIMITS.secondary_item_max }), w));
-  const noise = listOf(raw.forbidden_decorative_noise, 'art_direction.forbidden_decorative_noise', { min: ART_LIMITS.noise_min_items, max: ART_LIMITS.noise_max_items }, (v, w) => oneLine(v, w, { max: ART_LIMITS.noise_item_max }));
+  const v = validateSpec(ART_SPEC, raw, 'art_direction');
+  for (const rule of ART_RULES) rule.check?.(v, { concept });
   const body = {
     concept_id: concept.concept_id,
-    atmosphere: oneLine(raw.atmosphere, 'art_direction.atmosphere'),
-    depth_model: enumOf(raw.depth_model, DEPTH_MODEL, 'art_direction.depth_model'),
-    material_language: oneLine(raw.material_language, 'art_direction.material_language'),
-    lighting_intent: oneLine(raw.lighting_intent, 'art_direction.lighting_intent'),
-    visual_rhythm: enumOf(raw.visual_rhythm, VISUAL_RHYTHM, 'art_direction.visual_rhythm'),
-    product_relationship: enumOf(raw.product_relationship, PRODUCT_RELATIONSHIP, 'art_direction.product_relationship'),
-    text_image_relationship: enumOf(raw.text_image_relationship, TEXT_IMAGE_RELATIONSHIP, 'art_direction.text_image_relationship'),
-    realism: enumOf(raw.realism, REALISM, 'art_direction.realism'),
-    emotional_temperature: enumOf(raw.emotional_temperature, EMOTIONAL_TEMPERATURE, 'art_direction.emotional_temperature'),
-    visual_tension: enumOf(raw.visual_tension, VISUAL_TENSION, 'art_direction.visual_tension'),
-    negative_space_strategy: enumOf(raw.negative_space_strategy, NEGATIVE_SPACE_STRATEGY, 'art_direction.negative_space_strategy'),
-    narrative_elements: listOf(raw.narrative_elements, 'art_direction.narrative_elements', { min: 0, max: MAX_NARRATIVE_ELEMENTS }, (v, w) => narrativeElement(v, w, concept)),
-    permitted_secondary_elements: secondary,
-    forbidden_decorative_noise: [...new Set([...noise, ...SCENE_FORBIDDEN])],
-    rationale: oneLine(raw.rationale, 'art_direction.rationale'),
+    atmosphere: v.atmosphere,
+    depth_model: v.depth_model,
+    material_language: v.material_language,
+    lighting_intent: v.lighting_intent,
+    visual_rhythm: v.visual_rhythm,
+    product_relationship: v.product_relationship,
+    text_image_relationship: v.text_image_relationship,
+    realism: v.realism,
+    emotional_temperature: v.emotional_temperature,
+    visual_tension: v.visual_tension,
+    negative_space_strategy: v.negative_space_strategy,
+    narrative_elements: v.narrative_elements,
+    permitted_secondary_elements: v.permitted_secondary_elements,
+    forbidden_decorative_noise: [...new Set([...v.forbidden_decorative_noise, ...SCENE_FORBIDDEN])],
+    rationale: v.rationale,
   };
   return deepFreeze({ art_direction_id: deriveId('art', body), ...body });
 }
@@ -78,16 +90,13 @@ export function buildArtDirectionInstruction({ frame, concept, hints = [] }) {
   const vocab = (e) => Object.values(e).join(' | ');
   const system = [
     'You are the Nordla art director. You turn the SELECTED concept into an art direction: semantic decisions only, never a coordinate, a size, a colour code or any number.',
-    `Return ONLY one JSON object with exactly these keys: ${MODEL_KEYS.join(', ')}.`,
-    `depth_model: ${vocab(DEPTH_MODEL)}. visual_rhythm: ${vocab(VISUAL_RHYTHM)}. product_relationship: ${vocab(PRODUCT_RELATIONSHIP)}. text_image_relationship: ${vocab(TEXT_IMAGE_RELATIONSHIP)}.`,
-    `realism: ${vocab(REALISM)}. emotional_temperature: ${vocab(EMOTIONAL_TEMPERATURE)}. visual_tension: ${vocab(VISUAL_TENSION)}. negative_space_strategy: ${vocab(NEGATIVE_SPACE_STRATEGY)}.`,
-    `narrative_elements is a list (at most ${MAX_NARRATIVE_ELEMENTS}) of { element, reason, zone } where zone is ${vocab(SCENE_ZONE)}; the reason must be argued in the concept. permitted_secondary_elements and forbidden_decorative_noise are lists of one-line texts.`,
-    `atmosphere, material_language, lighting_intent and rationale are ONE line of plain text of at most ${ART_LIMITS.text_max} characters, with no digit at all, no colour code and no unit. rationale is one concise sentence of why, for the record; it is not a reasoning log.`,
-    `narrative_elements: each element is one line of at most ${ART_LIMITS.element_max} characters and each reason one line of ${ART_LIMITS.reason_min} to ${ART_LIMITS.reason_max} characters. permitted_secondary_elements: ${0} to ${ART_LIMITS.secondary_max_items} texts of at most ${ART_LIMITS.secondary_item_max} characters. forbidden_decorative_noise: ${ART_LIMITS.noise_min_items} to ${ART_LIMITS.noise_max_items} texts of at most ${ART_LIMITS.noise_item_max} characters (what must NOT appear as decoration; you may name anything there).`,
+    'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
+    ...renderSpec(ART_SPEC, 'answer'),
+    'rationale is one concise sentence of why, for the record; it is not a reasoning log. forbidden_decorative_noise is what must NOT appear as decoration: you may name anything there.',
     'The real product is protected merchant pixels placed by the system. The scene may be rich if the concept calls for it, and it must leave a calm area for the product, but it may never contain, show or describe the product or anything that could stand in for it or compete with it.',
     `Nordla REFUSES the whole answer if any narrative element or permitted secondary element contains one of these words (whole words, plurals included, English or French): product and devices: ${SUBSTITUTE_LEXICON.product_and_devices.join(', ')}; branding, price and text: ${SUBSTITUTE_LEXICON.branding_price_and_text.join(', ')}; competing hero: ${SUBSTITUTE_LEXICON.competing_hero.join(', ')}. This is about the WORD, even in a metaphor ("suggesting a screen" is refused).`,
     'If the concept\'s idea involves such an object (a screen, a device, a case, a label), express it WITHOUT naming it: through light, material, gesture, a trace, or an empty place where the system will add the real product.',
-    'Every element needs a reason in the concept: no arbitrary decoration. The reason of each narrative element must contain at least one significant word that also appears in the concept\'s central_idea, visual_metaphor, story or emotional_intent (not a stop word), or the answer is refused.',
+    ...renderRules(ART_RULES),
     ...(hints.length ? ['This is a REVISION of an earlier art direction for the same concept. Improve it on these points (intents only, never coordinates or sizes):', ...hints.map((h) => `- ${h}`)] : []),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.ART_DIRECT })),
@@ -101,7 +110,7 @@ export function createArtDirector({ complete }) {
     async direct({ frame, concept, hints = [] }) {
       const { value, meta } = await askAndNormalize({
         complete, instruction: buildArtDirectionInstruction({ frame, concept, hints }), stage: 'ART_DIRECT',
-        schema: { keys: MODEL_KEYS, children: { narrative_elements: { items: { keys: ['element', 'reason', 'zone'] } } } }, normalize: (raw) => normalizeArtDirection(raw, { concept }),
+        spec: ART_SPEC, normalize: (raw) => normalizeArtDirection(raw, { concept }),
       });
       return { art_direction: value, meta };
     },

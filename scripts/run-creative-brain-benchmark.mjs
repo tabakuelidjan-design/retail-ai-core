@@ -25,6 +25,7 @@ import { createBrandGuardianGate } from '../src/creative-runtime/index.js';
 import {
   BENCHMARK_ID, createFileStore, runCheck, runExplain, runLive,
 } from '../src/creative-brain-benchmark/index.js';
+import { checkReadiness } from '../src/creative-brain-benchmark/readiness.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
 
@@ -59,6 +60,7 @@ if (!mode) {
     const outputStore = new FileOutputStore(path.join(outDir, 'outputs'));
 
     const deps = {
+      readiness: () => checkReadiness(),
       store,
       journal,
       now: () => new Date().toISOString(),

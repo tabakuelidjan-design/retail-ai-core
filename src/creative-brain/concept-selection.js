@@ -1,7 +1,10 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
+import {
+  list, obj, renderRules, renderSpec, text, validateSpec, word,
+} from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
-  BRAIN_ERROR, closed, deepFreeze, enumOf, fail, listOf, noNumbers, oneLine,
+  BRAIN_ERROR, closed, deepFreeze, enumOf, fail, isPlain, listOf, noNumbers, oneLine,
 } from './validation.js';
 
 // SELECT CONCEPT. Concepts are compared on named criteria, each judged in words (MEETS / PARTIAL / FAILS / NOT_ASSESSED) with evidence; there is no number and no beauty score. Nordla derives the
@@ -48,25 +51,33 @@ const RANK = Object.freeze({ MEETS: 2, PARTIAL: 1, FAILS: 0, NOT_ASSESSED: 0 });
 /** The judgment of one concept: every criterion exactly once, in words, with evidence. */
 export function normalizeEvaluation(raw, where = 'evaluation') {
   noNumbers(raw, where);
-  closed(raw, ['concept_id', 'criteria'], where);
+  // an optional key given as null (a stored evaluation) is an absent key
+  const prepared = isPlain(raw) && Array.isArray(raw.criteria) ? { ...raw, criteria: raw.criteria.map((c) => (isPlain(c) && c.refinement == null ? Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'refinement')) : c)) } : raw;
+  const checked = validateSpec(EVALUATION_SPEC, prepared, where);
   const seen = new Map();
-  listOf(raw.criteria, `${where}.criteria`, { min: 0, max: CRITERIA.length }, (c, w) => {
-    noNumbers(c, w);
-    if (!c || typeof c !== 'object') fail(BRAIN_ERROR.MALFORMED, `${w} must be an object`, w);
-    for (const key of Object.keys(c)) if (!['criterion', 'outcome', 'evidence', 'refinement'].includes(key)) fail(BRAIN_ERROR.UNKNOWN_KEY, `${w}.${key} is not part of this contract`, `${w}.${key}`);
-    const criterion = enumOf(c.criterion, CRITERION, `${w}.criterion`);
-    if (seen.has(criterion)) fail(BRAIN_ERROR.RULE_VIOLATION, `${w}.criterion repeats a criterion`, `${w}.criterion`);
-    const outcome = enumOf(c.outcome, OUTCOME, `${w}.outcome`);
-    const assessed = outcome !== OUTCOME.NOT_ASSESSED;
-    const evidence = assessed ? oneLine(c.evidence, `${w}.evidence`, { min: 12, max: 240 }) : oneLine(c.evidence ?? 'Not assessed.', `${w}.evidence`, { max: 240 });
-    const refinement = c.refinement == null || c.refinement === '' ? null : oneLine(c.refinement, `${w}.refinement`, { min: 8, max: 240 });
-    seen.set(criterion, { criterion, outcome, evidence, refinement });
-    return criterion;
+  checked.criteria.forEach((c, i) => {
+    const w = `${where}.criteria[${i}]`;
+    if (seen.has(c.criterion)) fail(BRAIN_ERROR.RULE_VIOLATION, `${w}.criterion repeats a criterion`, `${w}.criterion`);
+    const assessed = c.outcome !== OUTCOME.NOT_ASSESSED;
+    if (assessed && (c.evidence === undefined || c.evidence.length < EVIDENCE_MIN)) fail(BRAIN_ERROR.TEXT_INVALID, `${w}.evidence must be one line of ${EVIDENCE_MIN}..240 characters`, `${w}.evidence`);
+    seen.set(c.criterion, { criterion: c.criterion, outcome: c.outcome, evidence: assessed ? c.evidence : (c.evidence ?? 'Not assessed.'), refinement: c.refinement ?? null });
   });
   // a criterion the model did not judge was not assessed: never a guessed pass
   const criteria = CRITERIA.map((criterion) => seen.get(criterion) ?? { criterion, outcome: OUTCOME.NOT_ASSESSED, evidence: 'The model gave no judgment for this criterion.', refinement: null });
-  return deepFreeze({ concept_id: oneLine(raw.concept_id, `${where}.concept_id`, { max: 80 }), criteria });
+  return deepFreeze({ concept_id: checked.concept_id, criteria });
 }
+
+/** One concept's judgment as a model states it: the contract the answer is validated against AND the contract the instruction states. */
+export const CRITERION_JUDGMENT_SPEC = obj({ criterion: word(CRITERION), outcome: word(OUTCOME), evidence: text({ max: 240 }), refinement: text({ min: 8, max: 240 }) }, { optional: ['evidence', 'refinement'] });
+export const EVALUATION_SPEC = obj({ concept_id: text({ max: 80 }), criteria: list(CRITERION_JUDGMENT_SPEC, { min: 0, max: CRITERIA.length }) });
+export const evaluationsAnswerSpec = (count) => obj({ evaluations: list(EVALUATION_SPEC, { min: 1, max: count }) });
+export const EVIDENCE_MIN = 12;
+export const SELECTION_RULES = Object.freeze([
+  { enforcedBy: 'concept-selection.js#selectConcept', id: 'ONE_EVALUATION_PER_CONCEPT', statement: 'give exactly one evaluation for each concept of the round, with its concept_id written exactly as it is given. An evaluation of a concept that is not in the round, or two evaluations of the same concept, is refused.' },
+  { enforcedBy: 'concept-selection.js#normalizeEvaluation', id: 'EACH_CRITERION_AT_MOST_ONCE', statement: `each of the ${CRITERIA.length} criteria appears at most once per concept. A criterion you leave out is treated as NOT_ASSESSED, never as a pass.` },
+  { enforcedBy: 'concept-selection.js#normalizeEvaluation', id: 'EVIDENCE_WHEN_ASSESSED', statement: `evidence is required (${EVIDENCE_MIN} to 240 characters, concrete) for every outcome except NOT_ASSESSED, where it may be left out. refinement is optional (8 to 240 characters, only meaningful for PARTIAL or FAILS); leave the key out rather than write null.` },
+  { id: 'NO_DECISION_KEYS', statement: 'never add a key that is not listed above (no score, rank, winner, selected or decision): Nordla derives the decision.', enforcedBy: 'closed spec (concept-selection.js#normalizeEvaluation)' },
+]);
 
 const outcomeOf = (evaluation, criterion) => evaluation.criteria.find((c) => c.criterion === criterion).outcome;
 
@@ -135,8 +146,10 @@ export function selectConcept({ concepts, evaluations }) {
 export function buildEvaluationInstruction({ frame, concepts }) {
   const system = [
     'You are the Nordla concept selector. You compare creative concepts for one problem frame, criterion by criterion, in words.',
-    'Return ONLY one JSON object: { "evaluations": [ { "concept_id": "...", "criteria": [ { "criterion": "...", "outcome": "...", "evidence": "...", "refinement": "..." } ] } ] } with one evaluation per concept and one entry per criterion.',
-    'outcome is MEETS, PARTIAL, FAILS or NOT_ASSESSED. evidence is one concrete sentence (at least a few words) that justifies the outcome. refinement (optional, for PARTIAL or FAILS) is one sentence about what would make the concept stronger.',
+    'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
+    ...renderSpec(evaluationsAnswerSpec(concepts.length), 'answer'),
+    ...renderRules(SELECTION_RULES),
+    'outcome MEETS means the expectation is met, PARTIAL that it is arguable, FAILS that it clearly is not, NOT_ASSESSED that you cannot judge it.',
     'Never give a score, a number, a rank or a winner: Nordla derives the decision. Be demanding: a clean idea that any competitor could publish is not distinctive, and a concept that hides the product does not meet the commercial criteria.',
     'The criteria:',
     ...CRITERIA.map((c) => `- ${c}: ${CRITERION_QUESTIONS[c]}`),
@@ -146,16 +159,22 @@ export function buildEvaluationInstruction({ frame, concepts }) {
   return { system, user: JSON.stringify({ problem_frame: frame, concepts }) };
 }
 
+/** A model's whole answer for a round: closed, one evaluation per concept of the round, then Nordla's own decision. Everything that can refuse the answer happens here, so a refusal carries its evidence. */
+export function normalizeEvaluationsAnswer(raw, concepts) {
+  closed(raw, ['evaluations'], 'answer');
+  const evaluations = listOf(raw.evaluations, 'evaluations', { min: 1, max: concepts.length }, (e, w) => normalizeEvaluation(e, w));
+  return { evaluations, selection: selectConcept({ concepts, evaluations }) };
+}
+
 /** The SELECT stage: one model completion for the judgments, then Nordla's own decision. */
 export function createConceptSelector({ complete }) {
   return Object.freeze({
     async select({ frame, concepts }) {
-      const { value: evaluations, meta } = await askAndNormalize({
+      const { value, meta } = await askAndNormalize({
         complete, instruction: buildEvaluationInstruction({ frame, concepts }), stage: 'SELECT_CONCEPT',
-        schema: { keys: ['evaluations'], children: { evaluations: { items: { keys: ['concept_id', 'criteria'], children: { criteria: { items: { keys: ['criterion', 'outcome', 'evidence', 'refinement'], required: ['criterion', 'outcome', 'evidence'] } } } } } } },
-        normalize: (raw) => { closed(raw, ['evaluations'], 'answer'); return listOf(raw.evaluations, 'evaluations', { min: 1, max: concepts.length }, (e, w) => normalizeEvaluation(e, w)); },
+        spec: evaluationsAnswerSpec(concepts.length), normalize: (raw) => normalizeEvaluationsAnswer(raw, concepts),
       });
-      return { selection: selectConcept({ concepts, evaluations }), evaluations, meta };
+      return { selection: value.selection, evaluations: value.evaluations, meta };
     },
   });
 }

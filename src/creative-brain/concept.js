@@ -1,4 +1,7 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
+import {
+  list, obj, renderRules, renderSpec, text, validateSpec, word,
+} from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine, wordOverlap, wordsOf,
@@ -15,6 +18,12 @@ export const MESSAGE_ROLE = Object.freeze({ LEADS: 'LEADS', FOLLOWS: 'FOLLOWS', 
 
 const MODEL_KEYS = ['central_idea', 'visual_metaphor', 'story', 'emotional_intent', 'product_role', 'message_role', 'memory_hook', 'distinctiveness_reason', 'risks'];
 const CONCEPT_KEYS = ['concept_id', ...MODEL_KEYS];
+/** One concept as a model states it: the contract the answer is validated against AND the contract the instruction states. */
+export const CONCEPT_SPEC = obj({
+  central_idea: text(), visual_metaphor: text(), story: text(), emotional_intent: text(), product_role: word(CONCEPT_PRODUCT_ROLE), message_role: word(MESSAGE_ROLE),
+  memory_hook: text(), distinctiveness_reason: text(), risks: list(text({ max: 200 }), { min: 1, max: 4 }),
+});
+export const conceptsAnswerSpec = (count = { min: 3, max: 5 }) => obj({ concepts: list(CONCEPT_SPEC, { min: count.min, max: count.max }) });
 export const CONCEPT_COUNT = Object.freeze({ min: 3, max: 5 });
 
 // the vocabulary of EXECUTION (layout, colour, camera, background, alignment, treatment) in English and French: a concept is not made of these words
@@ -39,22 +48,29 @@ const conceptualOverlap = (a, b) => wordOverlap(conceptualWords(conceptText(a)).
 const MIN_CONCEPTUAL_WORDS = 6; // distinct conceptual words in the central idea and the metaphor together
 const MAX_CONCEPTUAL_OVERLAP = 0.4;
 const MAX_METAPHOR_OVERLAP = 0.5;
+export const CONCEPT_THRESHOLDS = Object.freeze({ min_conceptual_words: MIN_CONCEPTUAL_WORDS, max_conceptual_overlap: MAX_CONCEPTUAL_OVERLAP, max_metaphor_overlap: MAX_METAPHOR_OVERLAP });
+/** The rules a concept answer must also satisfy, stated to the model from the same constants the guards use. */
+export const CONCEPT_RULES = Object.freeze([
+  { enforcedBy: 'concept.js#normalizeConcept', id: 'CONCEPT_NEEDS_CONTENT', statement: `central_idea and visual_metaphor together must contain at least ${MIN_CONCEPTUAL_WORDS} distinct content words. These words describe execution and do NOT count as content: ${[...EXECUTION_WORDS].join(', ')}. A concept that is only a background, a colour, an alignment or a camera angle is refused.` },
+  { enforcedBy: 'concept.js#assertConceptsDistinct', id: 'CONCEPTS_ARE_DISTINCT', statement: `any two concepts (and any concept already rejected) must share less than ${Math.round(MAX_CONCEPTUAL_OVERLAP * 100)}% of their content words across central_idea, visual_metaphor, story and emotional_intent, and their visual_metaphor less than ${Math.round(MAX_METAPHOR_OVERLAP * 100)}%. The same concept twice is refused.` },
+  { id: 'NO_CONCEPT_ID', statement: 'never include a concept_id: Nordla derives it from the content. Never include any key that is not listed above.', enforcedBy: 'closed spec; a given concept_id must equal the derived one (concept.js#normalizeConcept)' },
+]);
 
 /** One concept from a model's fields: closed, no figure, one-line texts, closed vocabularies, and conceptual (not only a matter of execution). */
 export function normalizeConcept(raw, where = 'concept') {
   noNumbers(raw, where);
   const { concept_id: givenId, ...fields } = raw;
-  closed(fields, MODEL_KEYS, where);
+  const v = validateSpec(CONCEPT_SPEC, fields, where);
   const body = {
-    central_idea: oneLine(fields.central_idea, `${where}.central_idea`),
-    visual_metaphor: oneLine(fields.visual_metaphor, `${where}.visual_metaphor`),
-    story: oneLine(fields.story, `${where}.story`),
-    emotional_intent: oneLine(fields.emotional_intent, `${where}.emotional_intent`),
-    product_role: enumOf(fields.product_role, CONCEPT_PRODUCT_ROLE, `${where}.product_role`),
-    message_role: enumOf(fields.message_role, MESSAGE_ROLE, `${where}.message_role`),
-    memory_hook: oneLine(fields.memory_hook, `${where}.memory_hook`),
-    distinctiveness_reason: oneLine(fields.distinctiveness_reason, `${where}.distinctiveness_reason`),
-    risks: listOf(fields.risks, `${where}.risks`, { min: 1, max: 4 }, (v, w) => oneLine(v, w, { max: 200 })),
+    central_idea: v.central_idea,
+    visual_metaphor: v.visual_metaphor,
+    story: v.story,
+    emotional_intent: v.emotional_intent,
+    product_role: v.product_role,
+    message_role: v.message_role,
+    memory_hook: v.memory_hook,
+    distinctiveness_reason: v.distinctiveness_reason,
+    risks: v.risks,
   };
   const content = new Set([...conceptualWords(body.central_idea), ...conceptualWords(body.visual_metaphor)]);
   if (content.size < MIN_CONCEPTUAL_WORDS) fail(BRAIN_ERROR.NOT_DISTINCT, `${where} is not a concept: once layout, colour and camera words are removed almost nothing is left`, where, { problem: 'CONCEPT_IS_A_LAYOUT_VARIANT' });
@@ -93,8 +109,9 @@ export function normalizeConceptSet(rawList, { rejected = [], count = CONCEPT_CO
 export function buildConceptInstruction({ frame, rejected = [], refine = null, count = CONCEPT_COUNT }) {
   const system = [
     'You are the Nordla concept director. From the creative problem frame you invent several GENUINELY DIFFERENT concepts before any layout, scene or colour is chosen.',
-    `Return ONLY one JSON object: { "concepts": [ ... ] } with ${count.min === count.max ? `exactly ${count.min}` : `${count.min} to ${count.max}`} concepts. Each concept has exactly these keys: ${MODEL_KEYS.join(', ')}.`,
-    `product_role is one of: ${Object.values(CONCEPT_PRODUCT_ROLE).join(', ')}. message_role is one of: ${Object.values(MESSAGE_ROLE).join(', ')}. risks is a list of one to four short one-line texts. Every other value is ONE line of plain text of at most 300 characters.`,
+    `Return ONLY one JSON object with ${count.min === count.max ? `exactly ${count.min}` : `${count.min} to ${count.max}`} concepts, described exactly by these lines (Nordla refuses an answer that does not follow them):`,
+    ...renderSpec(conceptsAnswerSpec(count), 'answer'),
+    ...renderRules(CONCEPT_RULES),
     'Concepts must differ in their central idea, metaphor and story, not merely in background, colour, alignment or camera angle: a variation of layout is not a concept and will be refused. Every concept must lead back to the product.',
     'Do not reach for the image that usually comes with an occasion: argue the concept from the occasion\'s register, the relationship between giver and receiver and the moment in time, for this product.',
     'You never use numbers, coordinates or sizes. You never write the approved texts, prices or claims. Do not describe your reasoning: give the fields only.',
@@ -106,13 +123,19 @@ export function buildConceptInstruction({ frame, rejected = [], refine = null, c
   return { system, user: JSON.stringify({ problem_frame: frame }) };
 }
 
+/** A model's whole concept answer: closed, a bounded number of concepts, each a concept, all distinct. Everything that can refuse the answer happens here, so a refusal carries its evidence. */
+export function normalizeConceptsAnswer(raw, { rejected = [], count = CONCEPT_COUNT } = {}) {
+  closed(raw, ['concepts'], 'answer');
+  return normalizeConceptSet(raw.concepts, { rejected, count });
+}
+
 /** The IDEATE stage: one model completion, then the closed contract and the distinctness guard. */
 export function createConceptDirector({ complete, count = CONCEPT_COUNT }) {
   return Object.freeze({
     async ideate({ frame, rejected = [], refine = null }) {
       const { value, meta } = await askAndNormalize({
-        complete, instruction: buildConceptInstruction({ frame, rejected, refine, count }), stage: 'IDEATE', schema: { keys: ['concepts'], children: { concepts: { items: { keys: MODEL_KEYS } } } },
-        normalize: (raw) => { closed(raw, ['concepts'], 'answer'); return normalizeConceptSet(raw.concepts, { rejected, count }); },
+        complete, instruction: buildConceptInstruction({ frame, rejected, refine, count }), stage: 'IDEATE', spec: conceptsAnswerSpec(count),
+        normalize: (raw) => normalizeConceptsAnswer(raw, { rejected, count }),
       });
       return { concepts: value, meta };
     },

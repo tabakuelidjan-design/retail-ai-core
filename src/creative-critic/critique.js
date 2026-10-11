@@ -37,12 +37,16 @@ export class CritiqueError extends Error {
 
 const fail = (code, message, field) => { throw new CritiqueError(code, message, field); };
 
-const FORBIDDEN_KEYS = Object.freeze([
+export const FORBIDDEN_KEYS = Object.freeze([
   'score', 'scores', 'rating', 'ratings', 'rank', 'ranking', 'beauty', 'beauty_score', 'points', 'weight', 'weights', 'winner', 'best', 'overall_score', 'confidence', 'confidence_score',
   'model', 'model_id', 'provider', 'provider_id', 'prompt', 'system_prompt', 'temperature', 'seed', 'api_key', 'endpoint', 'request_id', 'usage', 'cost', 'tokens',
   'approved', 'approve', 'approval', 'publish', 'published', 'ship', 'shipped', 'owner_approved',
 ]);
 const OUTCOMES = new Set(Object.values(OUTCOME));
+/** The categories the forbidden keys fall into, in words (the instruction states the categories; a test checks that every forbidden key belongs to one). */
+export const FORBIDDEN_KEY_CATEGORIES = Object.freeze(['a score, a rating, points, weights, a rank, a winner or a confidence', 'an approval or a publication', 'a model, a provider, a prompt, a seed, a key, an endpoint, a request, usage, a cost or tokens']);
+/** The limits of a critique, as named constants: the validator enforces them AND the critic instructions state them. */
+export const CRITIQUE_LIMITS = Object.freeze({ evidence_min: 12, evidence_max: 500, hint_min: 8, hint_max: 300 });
 const DIMENSION_KEYS = ['dimension', 'outcome', 'evidence', 'revision_hint'];
 
 // a score hidden in words ("8/10", "score: 7", "rated 4 out of 5") is still a score
@@ -75,7 +79,7 @@ function assertPlain(value, path) {
 
 /** A revision hint must be semantic: what to change in terms of intent, never where, how big or in which font. */
 export function assertSemanticHint(hint, field = 'revision_hint') {
-  const value = text(hint, field, { min: 8, max: 300, code: CRITIQUE_ERROR.HINT_NOT_SEMANTIC });
+  const value = text(hint, field, { min: CRITIQUE_LIMITS.hint_min, max: CRITIQUE_LIMITS.hint_max, code: CRITIQUE_ERROR.HINT_NOT_SEMANTIC });
   if (NOT_SEMANTIC.test(value)) fail(CRITIQUE_ERROR.HINT_NOT_SEMANTIC, `${field} is not semantic (no coordinates, sizes, fonts or colour codes)`, field);
   return value;
 }
@@ -100,9 +104,9 @@ export function normalizeCritique(raw, context = {}) {
     if (seen.has(d.dimension)) fail(CRITIQUE_ERROR.DUPLICATE_DIMENSION, `${at}.dimension repeats a dimension`, `${at}.dimension`);
     if (!OUTCOMES.has(d.outcome)) fail(CRITIQUE_ERROR.UNKNOWN_OUTCOME, `${at}.outcome must be PASS, FAIL, REVIEW_REQUIRED or NOT_MEASURABLE`, `${at}.outcome`);
     const judged = d.outcome !== OUTCOME.NOT_MEASURABLE;
-    if (judged && (typeof d.evidence !== 'string' || d.evidence.trim().length < 12)) fail(CRITIQUE_ERROR.EVIDENCE_MISSING, `${at}.evidence: a judgment needs visual evidence in words`, `${at}.evidence`);
+    if (judged && (typeof d.evidence !== 'string' || d.evidence.trim().length < CRITIQUE_LIMITS.evidence_min)) fail(CRITIQUE_ERROR.EVIDENCE_MISSING, `${at}.evidence: a judgment needs visual evidence in words`, `${at}.evidence`);
     const evidence = typeof d.evidence === 'string' && d.evidence.trim()
-      ? text(d.evidence, `${at}.evidence`, { min: 3, max: 500 })
+      ? text(d.evidence, `${at}.evidence`, { min: 3, max: CRITIQUE_LIMITS.evidence_max })
       : 'No visual evidence was given for this dimension.';
     const needsHint = d.outcome === OUTCOME.FAIL || d.outcome === OUTCOME.REVIEW_REQUIRED;
     const hint = d.revision_hint == null || d.revision_hint === '' ? null : assertSemanticHint(d.revision_hint, `${at}.revision_hint`);
@@ -159,4 +163,18 @@ export function finalizeVerdict({ critique, deterministic = {} }) {
     owner_review_blockers: [...deterministicBlockers.map((b) => `${b.gate}=${b.outcome}`), ...(creativeStatus === CREATIVE_STATUS.CREATIVE_FAIL ? ['CREATIVE_FAIL'] : [])],
     owner_approval: 'PENDING',
   });
+}
+
+/**
+ * The rules a critique answer must satisfy, as statements for the instruction, from the constants the validators use. `dimensions`: how many dimensions exist; `evidenceMax`: the evidence limit of
+ * this critic; `forbiddenKeys`: whether the critic refuses the named forbidden keys (the 14-dimension critique does).
+ */
+export function critiqueRuleStatements({ dimensions, evidenceMax = CRITIQUE_LIMITS.evidence_max, evidenceMin = CRITIQUE_LIMITS.evidence_min, forbiddenKeys = true } = {}) {
+  return [
+    `Nordla refuses the whole answer if it breaks one of these rules. The answer is ONE JSON object with exactly one key, "dimensions": a list of at most ${dimensions} entries, one per dimension, each dimension at most once. A dimension you leave out is treated as NOT_MEASURABLE, never as a pass.`,
+    'Each entry has only the keys dimension, outcome, evidence and revision_hint; any other key is refused. outcome is exactly one of PASS, FAIL, REVIEW_REQUIRED, NOT_MEASURABLE.',
+    `evidence is required for PASS, FAIL and REVIEW_REQUIRED: at least ${evidenceMin} and at most ${evidenceMax} characters, with no URL and no control character.`,
+    `Use no JSON number and no true or false anywhere in the answer${forbiddenKeys ? `, and no key that names ${FORBIDDEN_KEY_CATEGORIES.join(', ')}` : ''}. A score hidden in words is refused too ("8/10", "score: 7", "rated 4 out of 5", "12 points").`,
+    `revision_hint is allowed only for FAIL or REVIEW_REQUIRED, ${CRITIQUE_LIMITS.hint_min} to ${CRITIQUE_LIMITS.hint_max} characters, and states the INTENT of a change: no coordinate, size, percentage, pixel or point value, font setting or colour code (refused examples: "20% larger", "x = 40", "font-size", "#ff8800", "1080 by 1350").`,
+  ];
 }

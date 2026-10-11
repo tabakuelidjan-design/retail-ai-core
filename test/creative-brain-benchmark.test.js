@@ -23,74 +23,10 @@ import {
 
 // THE CREATIVE BRAIN BENCHMARK RUNNER (`// BB-N` markers): fakes only, no network, no credential, no provider.
 
-const AT = '2026-10-12T09:00:00.000Z';
-const PALE = artDirectionAnswer({
-  narrative_elements: [
-    { element: 'a pair of worn tools laid aside at the edge of the bench', reason: 'they show the maker has just finished, the care taken in the making', zone: 'FOREGROUND' },
-    { element: 'a pale window far behind the bench', reason: 'it places the finished piece at dusk, the quiet end of the work', zone: 'BACKGROUND' },
-  ],
-});
-const BELOW = compositionAnswer({ text_adjacency: 'BELOW', product_anchor: { horizontal: 'CENTER', vertical: 'UPPER' }, alignment_family: 'START' });
-const PICKS = [{}, { CONCEPT_STRENGTH: 'PARTIAL' }, { DISTINCTIVENESS: 'FAILS' }];
-const selectAnswer = (list, picks = PICKS) => evaluationsAnswer(normalizeConceptSet(list), picks);
+import {
+  AT, BELOW, live, PALE, PICKS, selectAnswer, world,
+} from './creative-brain-benchmark-world.js';
 
-/** A complete fake world. `answers` overrides the scripted Brain answers; `execution` / `concept` set critic outcomes per candidate (arrays of outcome maps). */
-function world({
-  answers = {}, execution = [{}, {}], concept = [{}, {}], guardian = GUARDIAN_PASS, credentials = { present: true, valid: true, missing: [] }, store = createMemoryStore(), vlmAllowed = true, brief = buildBrief(), pixelsOf = null, hardCeilingEur,
-} = {}) {
-  const trace = []; const portArgs = []; const budgets = []; const instructions = []; const vlmCalls = []; const envRequests = [];
-  const script = scriptedPort({
-    frame: [frameAnswer()], ideate: [{ concepts: CONCEPTS }], select: [selectAnswer(CONCEPTS)], art_direct: [PALE], compose: [BELOW], ...answers,
-  });
-  const env = fakeEnvironmentPort({ pixelsOf });
-  let candidateNo = 0;
-  const deps = {
-    store,
-    journal: new MemoryCallJournal(),
-    now: () => AT,
-    ...(hardCeilingEur === undefined ? {} : { hardCeilingEur }),
-    credentials: () => credentials,
-    loadInputs: async () => ({ brief, fonts, expression: BRAND.expression }),
-    ports: {
-      brainPort: (args) => async (instruction) => {
-        if (!portArgs.includes(args)) portArgs.push(args);
-        const out = await script.complete(instruction);
-        trace.push(script.calls.at(-1).stage); instructions.push(instruction);
-        return out;
-      },
-      environmentPort: ({ budget }) => ({
-        budget,
-        async generate(input) { if (!budgets.includes(budget)) budgets.push(budget); trace.push('environment'); envRequests.push(input.request); return env.generate(input); },
-      }),
-      vlm: ({ candidateRef }) => {
-        if (!vlmAllowed) throw Object.assign(new Error('EXTERNAL_MEDIA_SHARING_NOT_AUTHORIZED'), { code: 'EXTERNAL_MEDIA_SHARING_NOT_AUTHORIZED' });
-        return {
-          invoke: async (req) => {
-            const isConcept = /concept critic/.test(req.system);
-            if (!isConcept) candidateNo += 1;
-            const index = Math.min(candidateNo, 2) - 1;
-            const outcomes = (isConcept ? concept : execution)[index] ?? {};
-            trace.push(isConcept ? 'concept_critic' : 'execution_critic'); vlmCalls.push({ candidateRef, system: req.system, user: req.user });
-            const dims = isConcept ? CONCEPT_DIMENSIONS : DIMENSIONS;
-            return {
-              text: JSON.stringify({
-                dimensions: dims.map((dimension) => {
-                  const outcome = outcomes[dimension] ?? 'PASS';
-                  return { dimension, outcome, evidence: 'Concrete visible evidence for this judgment.', ...(outcome === 'FAIL' || outcome === 'REVIEW_REQUIRED' ? { revision_hint: 'Give the idea more presence in plain words.' } : {}) };
-                }),
-              }),
-              model: 'fake-vlm', request_id: `vlm-${vlmCalls.length}`,
-            };
-          },
-        };
-      },
-      guardian: () => guardian,
-    },
-  };
-  return { deps, trace, portArgs, budgets, instructions, vlmCalls, envRequests, script, env, store };
-}
-
-const live = (w) => runLive(w.deps, { confirmed: true });
 
 test('BB-1 --check makes no network call, reports the worst case, and writes nothing but a probe', async () => {
   const w = world();

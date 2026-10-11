@@ -96,6 +96,10 @@ export async function prepare(deps) {
   const check = (name, ok, detail = null) => { report.checks.push({ name, ok, detail }); return ok; };
   const blocked = (reason) => ({ ok: false, report: { ...report, status: `BLOCKED: ${reason}` } });
 
+  // the live-readiness gate fails closed: no verdict, or any verdict but READY, blocks the run (the other checks are offline and still reported, so one --check shows everything at once)
+  const readiness = deps.readiness ? deps.readiness() : { ready: false, status: 'NOT_WIRED', reasons: ['the readiness gate is not wired'] };
+  const gateOpen = check('CREATIVE_BRAIN_CONTRACT_PARITY_READY: contract/prompt parity, the full suite, the mutation sweep, the Node 20 and 24 clean clones and CI are recorded for this exact code', readiness.ready === true, { status: readiness.status, reasons: readiness.reasons });
+
   const credentials = deps.credentials();
   if (!check('credentials present', credentials.present, credentials.present ? null : { missing_environment_variables: credentials.missing })) return blocked('CREDENTIALS_NOT_PROVISIONED');
   if (!check('credentials and region valid', credentials.valid, credentials.detail ?? null)) return blocked('CONFIG_INVALID');
@@ -126,6 +130,7 @@ export async function prepare(deps) {
   const cost = worstCase({ canvas: brief.format.canvas, criticChars });
   if (!check('the worst-case cost is under the hard ceiling', cost.max_spend_eur <= (deps.hardCeilingEur ?? HARD_CEILING_EUR), { ...cost, hard_ceiling_eur: deps.hardCeilingEur ?? HARD_CEILING_EUR })) return blocked('WORST_CASE_COST_ABOVE_THE_CEILING');
   report.worst_case = cost;
+  if (!gateOpen) return blocked('CONTRACT_PARITY_NOT_READY');
   return { ok: true, report, ctx: { inputs, cost, briefs } };
 }
 
@@ -171,16 +176,19 @@ export async function runLive(deps, { confirmed = false } = {}) {
   const persist = () => deps.store.writeJson('summary.json', summary());
   let currentStage = 'BRAIN_PORT';
   let brain = null;
+  let textCalls = 0; // every attempt of the Brain port, successful or not
   try {
     const brainComplete = deps.ports.brainPort({ budget, journal, maxCalls: cost.calls.text });
-    brain = createCreativeBrain({ complete: brainComplete, ledger: brainLedger, bounds: { concept_rounds: BOUNDS.concept_rounds, concepts_per_round: BOUNDS.concepts_per_round } });
+    const counted = async (instruction) => { textCalls += 1; return brainComplete(instruction); };
+    brain = createCreativeBrain({ complete: counted, ledger: brainLedger, bounds: { concept_rounds: BOUNDS.concept_rounds, concepts_per_round: BOUNDS.concepts_per_round } });
 
     currentStage = 'CREATIVE_BRAIN_PLAN';
     const planned = await brain.plan({ brief });
     record.problem_frame = planned.problem_frame ?? planned.plan?.problem_frame ?? null;
     record.concept_rounds = planned.rounds ?? planned.plan?.rounds ?? [];
     if (planned.status !== 'PLANNED') {
-      record.final = { state: RESULT_STATE.BLOCKED, reason: BRAIN_FAILURE.NO_CONCEPT_MEETS_BAR, classification: BRAIN_FAILURE.VALID_CREATIVE_BRAIN_REJECTION, stopped_at: 'SELECT_CONCEPT', note: 'no concept met the bar within the bounded rounds: nothing was produced (a valid rejection, the bar is not lowered)', owner_approval: OWNER_APPROVAL };
+      record.provider_calls = { text: textCalls, image: 0, vision: 0, total: textCalls };
+      record.final = { state: RESULT_STATE.BLOCKED, reason: BRAIN_FAILURE.NO_CONCEPT_MEETS_BAR, provider_calls: record.provider_calls, cost: budget.snapshot(), classification: BRAIN_FAILURE.VALID_CREATIVE_BRAIN_REJECTION, stopped_at: 'SELECT_CONCEPT', note: 'no concept met the bar within the bounded rounds: nothing was produced (a valid rejection, the bar is not lowered)', owner_approval: OWNER_APPROVAL };
       await persist();
       return { ...report, status: RESULT_STATE.BLOCKED, final: record.final, owner_approval: OWNER_APPROVAL };
     }
@@ -215,10 +223,14 @@ export async function runLive(deps, { confirmed = false } = {}) {
     record.partial_plan = { concept: partial.concept ?? null, art_direction: partial.art_direction ?? null, composition: partial.composition ?? null };
   }
 
+  // every stop reports what was called and what it cost
+  record.provider_calls = { text: textCalls, image: record.candidates.filter((c) => c.environment).length, vision: record.candidates.filter((c) => c.critique).length * 2 };
+  record.provider_calls.total = record.provider_calls.text + record.provider_calls.image + record.provider_calls.vision;
+  if (record.error) { record.error.provider_calls = record.provider_calls; record.error.cost = budget.snapshot(); }
   // the final state is the state of the last candidate that exists (a failure while preparing a recovery does not hide a candidate the owner can review); with no candidate it is BLOCKED
   const last = record.candidates.at(-1) ?? null;
   const state = last ? last.state : RESULT_STATE.BLOCKED;
-  record.final = { state, reason: record.error ? record.error.cause : (last?.reason ?? null), stopped_at: record.error ? (record.error.brain_stage ?? record.error.stage) : null, stopped_round: record.error?.brain_round ?? null, stopped_early: Boolean(record.error), candidate: last?.n ?? null, owner_approval: OWNER_APPROVAL };
+  record.final = { state, provider_calls: record.provider_calls, cost: budget.snapshot(), reason: record.error ? record.error.cause : (last?.reason ?? null), stopped_at: record.error ? (record.error.brain_stage ?? record.error.stage) : null, stopped_round: record.error?.brain_round ?? null, stopped_early: Boolean(record.error), candidate: last?.n ?? null, owner_approval: OWNER_APPROVAL };
   assertFinalState(record.final.state);
   record.manual_creative_steering = 'NONE';
   await persist();

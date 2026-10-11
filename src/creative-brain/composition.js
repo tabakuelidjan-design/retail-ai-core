@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 
 import { assertValidLayoutRecipe } from '../creative-intelligence/layout-recipes.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
+import {
+  list, map, obj, renderRules, renderSpec, text, validateSpec, word,
+} from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
@@ -32,37 +35,57 @@ const PLAN_KEYS = ['composition_id', ...MODEL_KEYS];
 
 const rank = (w) => ['QUIET', 'BALANCED', 'STRONG', 'DOMINANT'].indexOf(w);
 
+/** The composition plan as a model states it: the contract the answer is validated against AND the contract the instruction states. */
+export const COMPOSITION_SPEC = obj({
+  hero_relationship: word(HERO_RELATIONSHIP),
+  product_anchor: obj({ horizontal: word(ANCHOR_HORIZONTAL), vertical: word(ANCHOR_VERTICAL) }),
+  text_adjacency: word(TEXT_ADJACENCY),
+  alignment_family: word(ALIGNMENT_FAMILY),
+  visual_weight: map(FLOW_ROLE, word(WEIGHT), { min: 2, max: 5 }),
+  grouping: list(list(word(FLOW_ROLE), { min: 1, max: 4 }), { min: 1, max: 4 }),
+  overlap_permission: word(OVERLAP_PERMISSION),
+  negative_space_reservation: list(obj({ region: word(RESERVE_REGION), extent: word(RESERVE_EXTENT) }), { min: 0, max: 3 }),
+  narrative_flow: list(word(FLOW_ROLE), { min: 2, max: 5 }),
+  rationale: text(),
+});
+
+const violation = (message, field) => fail(BRAIN_ERROR.RULE_VIOLATION, message, field);
+/** The rules that hold between the fields of a plan, other than the weight relations (those are RELATION_RULES below). */
+export const COMPOSITION_RULES = Object.freeze([
+  { id: 'FLOW_ROLES_ARE_UNIQUE', statement: 'narrative_flow lists each role at most once.', check: (v) => { if (new Set(v.narrative_flow).size !== v.narrative_flow.length) violation('the narrative flow lists a role twice', 'composition.narrative_flow'); } },
+  { id: 'FLOW_INCLUDES_THE_PRODUCT', statement: 'narrative_flow includes PRODUCT exactly once.', check: (v) => { if (!v.narrative_flow.includes('PRODUCT')) violation('the narrative flow includes the product', 'composition.narrative_flow'); } },
+  {
+    id: 'WEIGHTS_NAME_EXACTLY_THE_FLOW_ROLES', statement: 'visual_weight has exactly one entry for each role of narrative_flow: no role missing, no role added.',
+    check: (v) => { if (JSON.stringify(Object.keys(v.visual_weight).sort()) !== JSON.stringify([...v.narrative_flow].sort())) violation('visual_weight names exactly the roles of the flow', 'composition.visual_weight'); },
+  },
+  {
+    id: 'GROUPING_PARTITIONS_THE_TEXT_ROLES', statement: 'grouping is a list of groups that together contain each TEXT role of narrative_flow (every role except PRODUCT) exactly once, and never PRODUCT.',
+    check: (v) => {
+      const grouped = v.grouping.flat(); const textRoles = v.narrative_flow.filter((r) => r !== 'PRODUCT');
+      if (JSON.stringify([...grouped].sort()) !== JSON.stringify([...textRoles].sort())) violation('the grouping partitions the text roles of the flow, each exactly once', 'composition.grouping');
+    },
+  },
+  { id: 'NO_OTHER_KEYS', statement: 'never include a key that is not listed above. Do not include composition_id. No coordinate, size, margin or number anywhere.', enforcedBy: 'closed spec and noNumbers (composition.js#normalizeCompositionPlan)' },
+]);
+
 /** A relational plan from a model's fields: closed, no figure, complete and consistent (the relations must not contradict each other). */
 export function normalizeCompositionPlan(raw) {
   noNumbers(raw, 'composition');
   const { composition_id: givenId, ...fields } = raw;
-  closed(fields, MODEL_KEYS, 'composition');
-  closed(fields.product_anchor, ['horizontal', 'vertical'], 'composition.product_anchor');
-  const flow = listOf(fields.narrative_flow, 'composition.narrative_flow', { min: 2, max: 5 }, (v, w) => enumOf(v, FLOW_ROLE, w));
-  if (new Set(flow).size !== flow.length) fail(BRAIN_ERROR.RULE_VIOLATION, 'the narrative flow lists a role twice', 'composition.narrative_flow');
-  if (!flow.includes('PRODUCT')) fail(BRAIN_ERROR.RULE_VIOLATION, 'the narrative flow includes the product', 'composition.narrative_flow');
-  if (!isObject(fields.visual_weight)) fail(BRAIN_ERROR.MALFORMED, 'composition.visual_weight must be an object', 'composition.visual_weight');
-  const weightKeys = Object.keys(fields.visual_weight).sort();
-  if (JSON.stringify(weightKeys) !== JSON.stringify([...flow].sort())) fail(BRAIN_ERROR.RULE_VIOLATION, 'visual_weight names exactly the roles of the flow', 'composition.visual_weight');
-  const visualWeight = Object.fromEntries(flow.map((role) => [role, enumOf(fields.visual_weight[role], WEIGHT, `composition.visual_weight.${role}`)]));
-  const textRoles = flow.filter((r) => r !== 'PRODUCT');
-  const grouping = listOf(fields.grouping, 'composition.grouping', { min: 1, max: 4 }, (g, w) => listOf(g, w, { min: 1, max: 4 }, (role, ww) => enumOf(role, FLOW_ROLE, ww)));
-  const grouped = grouping.flat();
-  if (JSON.stringify([...grouped].sort()) !== JSON.stringify([...textRoles].sort())) fail(BRAIN_ERROR.RULE_VIOLATION, 'the grouping partitions the text roles of the flow, each exactly once', 'composition.grouping');
+  const v = validateSpec(COMPOSITION_SPEC, fields, 'composition');
+  for (const rule of COMPOSITION_RULES) rule.check?.(v);
+  const flow = v.narrative_flow;
   const body = {
-    hero_relationship: enumOf(fields.hero_relationship, HERO_RELATIONSHIP, 'composition.hero_relationship'),
-    product_anchor: { horizontal: enumOf(fields.product_anchor.horizontal, ANCHOR_HORIZONTAL, 'composition.product_anchor.horizontal'), vertical: enumOf(fields.product_anchor.vertical, ANCHOR_VERTICAL, 'composition.product_anchor.vertical') },
-    text_adjacency: enumOf(fields.text_adjacency, TEXT_ADJACENCY, 'composition.text_adjacency'),
-    alignment_family: enumOf(fields.alignment_family, ALIGNMENT_FAMILY, 'composition.alignment_family'),
-    visual_weight: visualWeight,
-    grouping,
-    overlap_permission: enumOf(fields.overlap_permission, OVERLAP_PERMISSION, 'composition.overlap_permission'),
-    negative_space_reservation: listOf(fields.negative_space_reservation, 'composition.negative_space_reservation', { min: 0, max: 3 }, (r, w) => {
-      closed(r, ['region', 'extent'], w);
-      return { region: enumOf(r.region, RESERVE_REGION, `${w}.region`), extent: enumOf(r.extent, RESERVE_EXTENT, `${w}.extent`) };
-    }),
+    hero_relationship: v.hero_relationship,
+    product_anchor: { horizontal: v.product_anchor.horizontal, vertical: v.product_anchor.vertical },
+    text_adjacency: v.text_adjacency,
+    alignment_family: v.alignment_family,
+    visual_weight: Object.fromEntries(flow.map((role) => [role, v.visual_weight[role]])),
+    grouping: v.grouping,
+    overlap_permission: v.overlap_permission,
+    negative_space_reservation: v.negative_space_reservation,
     narrative_flow: flow,
-    rationale: oneLine(fields.rationale, 'composition.rationale'),
+    rationale: v.rationale,
   };
   assertConsistent(body);
   const id = deriveId('cmp', body);
@@ -74,7 +97,7 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 // The relations a plan must keep, as DATA: one table that the validator enforces AND that the COMPOSE instruction prints, so what the model is told and what Nordla checks cannot drift apart.
 // `needs` says in words what the weights and anchors must be; `holds(plan)` is the check; `problem` is the name the refusal carries.
-const RELATION_RULES = Object.freeze([
+export const RELATION_RULES = Object.freeze([
   {
     when: (p) => p.hero_relationship === HERO_RELATIONSHIP.PRODUCT_DOMINATES, label: 'hero_relationship PRODUCT_DOMINATES',
     meaning: 'the product is the clear first read', needs: 'visual_weight.PRODUCT is DOMINANT',
@@ -236,10 +259,9 @@ export function buildCompositionInstruction({ frame, concept, artDirection, hint
   const vocab = (e) => Object.values(e).join(' | ');
   const system = [
     'You are the Nordla composition planner. From the art direction you state the RELATIONS of the composition; you never give a coordinate, a size, a margin or any number: a deterministic solver finds the geometry.',
-    `Return ONLY one JSON object with exactly these keys: ${MODEL_KEYS.join(', ')}.`,
-    `hero_relationship: ${vocab(HERO_RELATIONSHIP)}. text_adjacency: ${vocab(TEXT_ADJACENCY)}. alignment_family: ${vocab(ALIGNMENT_FAMILY)}. overlap_permission: ${vocab(OVERLAP_PERMISSION)}.`,
-    `product_anchor is { horizontal: ${vocab(ANCHOR_HORIZONTAL)}, vertical: ${vocab(ANCHOR_VERTICAL)} }. visual_weight maps every role of the flow to ${vocab(WEIGHT)}.`,
-    `narrative_flow is the reading order, a list of ${vocab(FLOW_ROLE)} that includes PRODUCT once. grouping is a list of groups (lists of text roles) that partitions the text roles of the flow. negative_space_reservation is a list (at most three) of { region: ${vocab(RESERVE_REGION)}, extent: ${vocab(RESERVE_EXTENT)} }.`,
+    'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
+    ...renderSpec(COMPOSITION_SPEC, 'answer'),
+    ...renderRules(COMPOSITION_RULES),
     'The relations must agree with each other, and Nordla refuses a plan whose relations contradict. Before you answer, check your plan against EVERY rule that applies to the values you chose:',
     ...RELATION_RULES.map((r) => `- ${r.label}: ${r.meaning}. Needs: ${r.needs}.`),
     'The values of hero_relationship are about reading order and weight in the composition, and visual_weight must say the same thing. Avoid the default centred stack unless the concept needs it.',
@@ -258,7 +280,7 @@ export function createCompositionPlanner({ complete }) {
     async plan({ frame, concept, artDirection, hints = [], approvedRoles = null }) {
       const { value, meta } = await askAndNormalize({
         complete, instruction: buildCompositionInstruction({ frame, concept, artDirection, hints, approvedRoles }), stage: 'COMPOSE',
-        schema: { keys: MODEL_KEYS, children: { product_anchor: { keys: ['horizontal', 'vertical'] }, negative_space_reservation: { items: { keys: ['region', 'extent'] } } } }, normalize: (raw) => normalizeCompositionPlan(raw),
+        spec: COMPOSITION_SPEC, normalize: (raw) => normalizeCompositionPlan(raw),
       });
       return { composition: value, meta };
     },

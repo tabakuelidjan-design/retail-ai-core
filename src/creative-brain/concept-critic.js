@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { assertSemanticHint } from '../creative-critic/critique.js';
+import { assertSemanticHint, CRITIQUE_LIMITS, critiqueRuleStatements } from '../creative-critic/critique.js';
 import { OUTCOME } from '../creative-critic/dimensions.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import { parseJsonObject } from './model-port.js';
@@ -49,7 +49,8 @@ export function normalizeConceptCritique(raw, { candidate_ref: ref, candidate_sh
     if (seen.has(dimension)) fail(BRAIN_ERROR.RULE_VIOLATION, `${where}.dimension repeats a dimension`, `${where}.dimension`);
     const outcome = enumOf(d.outcome, Object.fromEntries(OUTCOMES.map((o) => [o, o])), `${where}.outcome`);
     const judged = outcome !== OUTCOME.NOT_MEASURABLE;
-    const evidence = judged ? oneLine(d.evidence, `${where}.evidence`, { min: 12, max: 400 }) : oneLine(d.evidence || 'No visual evidence was given.', `${where}.evidence`, { max: 400 });
+    const evidence = judged ? oneLine(d.evidence, `${where}.evidence`, { min: CRITIQUE_LIMITS.evidence_min, max: 400 }) : oneLine(d.evidence || 'No visual evidence was given.', `${where}.evidence`, { max: 400 });
+    if (/https?:\/\//i.test(evidence)) fail(BRAIN_ERROR.TEXT_INVALID, `${where}.evidence holds a URL`, `${where}.evidence`);
     if (SCORE_IN_TEXT.test(evidence)) fail(BRAIN_ERROR.NUMERIC_VALUE, `${where}.evidence holds a numeric score`, `${where}.evidence`);
     const asks = outcome === OUTCOME.FAIL || outcome === OUTCOME.REVIEW_REQUIRED;
     const hint = d.revision_hint == null || d.revision_hint === '' ? null : assertSemanticHint(d.revision_hint, `${where}.revision_hint`);
@@ -71,6 +72,7 @@ export function buildConceptCriticInstruction({ brief = {} } = {}) {
     'Return ONLY one JSON object: { "dimensions": [ { "dimension": "...", "outcome": "...", "evidence": "...", "revision_hint": "..." } ] } with exactly one entry per dimension listed below.',
     'outcome is PASS, FAIL, REVIEW_REQUIRED or NOT_MEASURABLE. evidence is one or two concrete sentences about what is visible. revision_hint (only for FAIL or REVIEW_REQUIRED) is one sentence about the INTENT of a change in plain words: never coordinates, sizes, pixel or percentage values, font names or colour codes.',
     'Never give a score, a rating, a number out of ten or a winner. Never say whether the image is approved: you give an opinion, a person decides.',
+    ...critiqueRuleStatements({ dimensions: CONCEPT_DIMENSIONS.length, evidenceMax: 400, forbiddenKeys: false }),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.CRITIQUE, domains: ['STORYTELLING', 'DISTINCTIVENESS', 'OCCASION_INTELLIGENCE', 'PREMIUM_CRAFT'] })),
   ].join('\n');

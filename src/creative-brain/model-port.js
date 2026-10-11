@@ -1,3 +1,4 @@
+import { normalizeNearMisses, REPAIR_KIND } from './contract.js';
 import { BRAIN_ERROR, BrainError, fail } from './validation.js';
 
 // How a Creative Brain stage talks to a language model, behind a PORT: `complete({ system, user }) -> { text, model?, request_id? }`. The instruction is an adapter-level PROJECTION of canonical Nordla state
@@ -72,15 +73,19 @@ export function repairNearMissKeys(value, schema, repairs = [], path = 'answer')
  * One completion, then the stage's normalization, with the evidence a diagnosis needs: if normalization refuses the answer, the error carries `evidence` ({ stage, request_id, model,
  * key_repairs, raw_answer (bounded) }) so that a failed stage can be reconstructed from the record alone. Returns { value, meta }.
  */
-export async function askAndNormalize({ complete, instruction, stage, schema = null, normalize }) {
+export async function askAndNormalize({ complete, instruction, stage, schema = null, spec = null, normalize }) {
   if (typeof complete !== 'function') throw new TypeError(`${stage} needs a language-model port`);
   let reply;
   try { reply = await complete(instruction); } catch (cause) { throw new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed`, stage, safeCause(cause)); }
-  const meta = { model: reply?.model ?? null, request_id: reply?.request_id ?? null, key_repairs: [] };
-  const evidence = { stage, request_id: meta.request_id, model: meta.model, key_repairs: meta.key_repairs, raw_answer: String(reply?.text ?? '').slice(0, 8000) };
+  const meta = { model: reply?.model ?? null, request_id: reply?.request_id ?? null, key_repairs: [], repairs: [] };
+  const evidence = { stage, request_id: meta.request_id, model: meta.model, key_repairs: meta.key_repairs, repairs: meta.repairs, raw_answer: String(reply?.text ?? '').slice(0, 8000) };
   try {
     const parsed = parseJsonObject(reply?.text, stage);
-    const raw = schema ? repairNearMissKeys(parsed, schema, meta.key_repairs, stage) : parsed;
+    let raw = parsed;
+    if (spec) {
+      raw = normalizeNearMisses(spec, parsed, meta.repairs, stage);
+      for (const r of meta.repairs) if (r.kind === REPAIR_KIND.KEY_NEAR_MISS) meta.key_repairs.push({ path: r.path, from: r.from, to: r.to });
+    } else if (schema) raw = repairNearMissKeys(parsed, schema, meta.key_repairs, stage);
     return { value: normalize(raw), meta };
   } catch (error) {
     if (error && typeof error === 'object') error.evidence = evidence;
