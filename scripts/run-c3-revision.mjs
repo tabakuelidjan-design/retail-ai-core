@@ -59,8 +59,9 @@ try {
     const events = await readEvents(path.join(outDir, 'provider-calls.jsonl'));
     const result = { status: stored.status, reason: stored.reason, ledger: stored.ledger, png_sha256: stored.png?.sha256 ?? null, preflight: stored.preflight, fidelity: stored.fidelity, guardian: stored.guardian };
     report.stored_status = stored.status; report.stored_reason = stored.reason;
-    report.stop = describeStop({ result });
-    report.execution_chain = buildExecutionChain({ result, events });
+    // a run that threw stored its own classified stop and chain (the error is not in the record); an older record is explained from its ledger and journal
+    report.stop = stored.stop ?? describeStop({ result });
+    report.execution_chain = stored.execution_chain ?? buildExecutionChain({ result, events });
     report.provider_calls = events.filter((e) => e.event === 'SUCCEEDED' || e.event === 'FAILED').map((e) => ({ operation: e.operation ?? 'REVISION_DIRECTOR_COMPLETION', model: e.model, event: e.event, request_id: e.request_id ?? null, cost_eur: e.actual_cost_eur ?? e.estimated_cost_eur ?? null, latency_ms: e.latency_ms ?? null, reason: e.reason ?? null }));
     report.cost_eur_total = stored.budget?.settled_eur ?? null;
     finish('EXPLAINED', 0);

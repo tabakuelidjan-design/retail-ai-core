@@ -136,3 +136,27 @@ test('SS-5 the revision script reports the real stage: no hard-coded gate messag
   assert.match(source, /mode === 'explain'/);
   assert.doesNotMatch(source, /process\.exit\(/);
 });
+
+test('SS-6 --explain reports the stop and chain a run stored (a run that threw has no result to derive them from), and derives them for older records', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises');
+  const os = await import('node:os'); const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nordla-explain-'));
+  try {
+    const dir = path.join(root, 'creative-run-001', 'attempt-x');
+    await mkdir(dir, { recursive: true });
+    const run = () => spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/run-c3-revision.mjs', import.meta.url)), '--explain', '--dir=attempt-x'], { env: { PATH: process.env.PATH, NORDLA_PRIVATE_DIR: root }, encoding: 'utf8' });
+    const stored = { status: 'BLOCKED: RUNTIME_ERROR', ledger: [], stop: { cause: 'REVISION_DIRECTOR_PROVIDER_FAILURE', stage: 'REVISION_DIRECTOR_CALL', status: 'STOPPED_AT_REVISION_DIRECTOR_CALL: REVISION_DIRECTOR_PROVIDER_FAILURE', reached_gates: false }, execution_chain: [{ n: 1, step: 'Revision Director call', state: 'SENT', detail: null }, { n: 2, step: 'Revision Director provider result', state: 'FAIL', detail: 'FROM-THE-STORED-CHAIN' }] };
+    await writeFile(path.join(dir, 'summary.json'), JSON.stringify(stored));
+    await writeFile(path.join(dir, 'provider-calls.jsonl'), `${JSON.stringify({ event: 'FAILED', operation_id: 'o', model: 'm', reason: 'TIMEOUT' })}\n`);
+    const out = run();
+    assert.equal(out.status, 0);
+    const report = JSON.parse(out.stdout);
+    assert.equal(report.stop.cause, 'REVISION_DIRECTOR_PROVIDER_FAILURE');
+    assert.equal(report.execution_chain[1].detail, 'FROM-THE-STORED-CHAIN');
+    // an older record without a stored stop: derived from its ledger and reason
+    await writeFile(path.join(dir, 'summary.json'), JSON.stringify({ status: 'BLOCKED', reason: 'THE_LAYOUT_COULD_NOT_BE_SOLVED', ledger: [] }));
+    assert.equal(JSON.parse(run().stdout).stop.cause, 'LAYOUT_CAPABILITY_LIMIT');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
