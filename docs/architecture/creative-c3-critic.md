@@ -129,5 +129,14 @@ material, light, atmosphere, spatial structure, hierarchy and type; it cannot ad
 
 ## Known gaps (reported, not hidden)
 
+- **UNRESOLVED CI / determinism issue (parked 2026-10-11): the product mask is not always deterministic on Node 24.**
+  - *Failing test:* `test/creative-intelligence-product-mask.test.js`, "The mask and the cut-out are deterministic, and a mask it cannot trust is flagged, never hidden" (the PM-6 assertion: two calls of `buildProductMask` on the same input give the same alpha plane).
+  - *Where / when it reproduced:* intermittently on GitHub Actions, Node 24 only (Node 20 never), on a fresh runner (one failure with a readable annotation: first call hash `96d2f81b…`, a later call `fe46f8d3…`); it did NOT reproduce locally on Windows, nor 60/60 runs in a Node 24.21 container; it DID reproduce in a Node 24.21 container limited to one CPU with 12 parallel processes (about 2 of 24 processes, again `96d2f81b…` on the first call and `fe46f8d3…` on a later one).
+  - *Symptom:* within one process the fitted boundary polygon (and so the alpha plane and the quality evidence) differs between an early call and a later one; the bounds are identical. No flag-free single run showed it.
+  - *Root cause: NOT proven.* Ruled out by experiment: `x ** 2` versus `x * x`, `Math.hypot / sin / cos / atan2 / acos / tan / sqrt`, Float32 stores (no cold/hot difference on this CPU); the code uses no randomness, clock or I/O. A stage-by-stage probe did not diverge. Timing-dependent behaviour (JIT tier-up under CPU pressure) is suspected, nothing more.
+  - *Why it does not block the single-run Candidate 3 experiment:* a live run builds the mask once per process (the cold path), the cut-out hash is taken from those bytes, and the identity Fidelity gate measures the delivered PNG against the real photograph, so a few differing boundary pixels between two runs cannot pass an unfaithful product. The risk is reproducibility and audit (two runs of the same input may differ slightly), not fidelity of a delivered candidate.
+  - *Follow-up target (after Candidate 3, a separate task):* reproduce deterministically (V8 tier flags under CPU limits on Node 24), bisect `buildProductMask` stage by stage, fix the arithmetic or the algorithm, then make PM-6 a stress test across tiers.
+
+
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.
 - Whether a revised direction is sufficient to move the layout depends on the recipes available (five today): the Director can change the spatial intent, the hierarchy and the environment, not invent a layout.
