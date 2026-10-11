@@ -424,7 +424,7 @@ test('BB-19 the command line: no network in --check, no secret in the output, th
   assert.equal(JSON.parse(explain.stdout).status, 'BLOCKED: NO_BENCHMARK_RECORD');
 });
 
-const noisy = (size) => new Uint8Array(new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs><pattern id="p" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#000"/><rect x="8" y="8" width="8" height="8" fill="#000"/></pattern></defs><rect width="100%" height="100%" fill="#fff"/><rect width="100%" height="100%" fill="url(#p)"/></svg>`).render().asPng());
+const noisy = (size) => new Uint8Array(new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><rect width="100%" height="100%" fill="#d8d8d8"/><circle cx="${size.width / 2}" cy="${size.height * 0.6}" r="${size.width * 0.22}" fill="#202020"/></svg>`).render().asPng()); // an object where the product is placed
 
 test('BB-20 a candidate stopped BEFORE the image is BLOCKED; one stopped AFTER the image was paid for is a TECHNICAL_FAIL', async () => {
   const glow = artDirectionAnswer({
@@ -495,4 +495,19 @@ test('BB-23 the Brain port sends a thinking-off, bounded, text-only PUBLIC reque
   assert.deepEqual(journal.list().map((e) => e.event), ['RESERVED', 'SUCCEEDED']);
   assert.doesNotMatch(JSON.stringify(journal.list()), /sk-test/);
   assert.equal(port.calls(), 1);
+});
+
+// a rich scene: a grained, strongly textured counter everywhere, with narrative props at the bottom corners, far from the reserved product zone
+const rich = (size) => new Uint8Array(new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs><pattern id="g" width="6" height="5" patternUnits="userSpaceOnUse"><rect width="6" height="5" fill="#8a8a8a"/><rect width="6" height="2" fill="#5c5c5c"/><rect x="3" width="2" height="5" fill="#a8a8a8"/></pattern></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="70" cy="${size.height - 70}" r="60" fill="#202020"/><rect x="${size.width - 150}" y="${size.height - 160}" width="130" height="140" fill="#303030"/></svg>`).render().asPng());
+
+test('BB-24 a rich scene with a clean integration zone passes the zone gate: texture and props outside the zone are not failures', async () => {
+  const w = world({ pixelsOf: rich });
+  await live(w);
+  const summary = await w.store.readJson('summary.json');
+  const gate = summary.candidates[0].runtime_ledger.find((e) => e.decision === 'ENVIRONMENT_SUITABILITY');
+  assert.ok(gate, 'the suitability gate ran');
+  assert.equal(gate.outcome.suitable, true);
+  assert.ok(gate.outcome.measured.strong_edge_share > gate.outcome.limit.max_strong_edge_share, 'the surface IS edge-rich at pixel scale');
+  assert.ok(gate.outcome.measured.structure_share <= gate.outcome.limit.max_structure_share);
+  assert.notEqual(summary.candidates[0].reason, 'ENVIRONMENT_NOT_EMPTY');
 });

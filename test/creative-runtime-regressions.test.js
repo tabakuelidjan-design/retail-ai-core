@@ -101,7 +101,7 @@ test('A provider that draws an object in the environment is refused before compo
   // RG-7 refused by the suitability gate, before preflight, render or fidelity
   assert.equal(result.status, 'BLOCKED');
   assert.equal(result.reason, 'ENVIRONMENT_NOT_EMPTY');
-  assert.ok(result.suitability.measured.strong_edge_share > result.suitability.limit.max_strong_edge_share);
+  assert.ok(result.suitability.measured.structure_share > result.suitability.limit.max_structure_share);
   const gate = result.ledger.find((e) => e.decision === DECISION.ENVIRONMENT_SUITABILITY);
   assert.equal(gate.decided_by, COMPONENT.ENVIRONMENT_SUITABILITY_GATE);
   assert.equal(gate.outcome.suitable, false);
@@ -139,12 +139,14 @@ test('The environment request names nothing it must not draw, refuses display st
   assert.deepEqual(displayStructuresIn('soft light on a stone slab and a marble plinth'), ['slab', 'plinth']);
   assert.deepEqual(displayStructuresIn('a seamless stand-alone backdrop'), []);
   assert.throws(() => buildEnvironmentRequest({ direction: { ...direction, visual_intent: 'a stone plinth in soft light' }, expression, canvas: { width: 1080, height: 1350 } }), (e) => e.code === 'DIRECTION_ASKS_FOR_A_DISPLAY_STRUCTURE');
-  // RG-13 the suitability measure: a calm gradient passes, a textured block fails, an unmeasurable zone is not suitable
+  // RG-13 the suitability measure: a calm gradient passes, a block of OBJECT structure fails, per-pixel texture is not structure, an unmeasurable zone is not suitable
   const calm = { width: 400, height: 400, pixels: Uint8Array.from({ length: 400 * 400 * 4 }, (_, i) => (i % 4 === 3 ? 255 : 150 + ((Math.floor(i / 4) % 400) >> 6))) };
   const box = { x: 100, y: 100, width: 200, height: 200 };
   assert.equal(assessEnvironment({ environment: calm, productBox: box }).suitable, true);
-  const busy = { ...calm, pixels: Uint8Array.from(calm.pixels).map((v, i) => (i % 4 === 3 ? 255 : (((Math.floor(i / 4) * 2654435761) >>> 24) % 2 ? 20 : 235))) };
-  assert.equal(assessEnvironment({ environment: busy, productBox: box }).suitable, false);
-  assert.ok(zoneStructure(busy, box).strong_edge_share > 0.5);
+  const grain = { ...calm, pixels: Uint8Array.from(calm.pixels).map((v, i) => (i % 4 === 3 ? 255 : (((Math.floor(i / 4) * 2654435761) >>> 24) % 2 ? 100 : 170))) };
+  assert.ok(zoneStructure(grain, box).strong_edge_share > 0.5); // pixel-scale texture is edge-rich ...
+  assert.equal(assessEnvironment({ environment: grain, productBox: box }).suitable, true); // ... and is not an object
+  const object = { ...calm, pixels: Uint8Array.from(calm.pixels).map((v, i) => { const px = Math.floor(i / 4); const x = px % 400; const y = Math.floor(px / 400); return i % 4 === 3 ? 255 : ((x > 150 && x < 250 && y > 150 && y < 250) ? 20 : v); }) };
+  assert.equal(assessEnvironment({ environment: object, productBox: box }).suitable, false);
   assert.equal(assessEnvironment({ environment: calm, productBox: { x: 900, y: 900, width: 50, height: 50 } }).suitable, false);
 });
