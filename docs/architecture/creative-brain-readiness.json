@@ -1,11 +1,11 @@
 {
-  "verified_commit": "1ae64fc50b60170e5e816112b8f6bbb422f9e9a5",
-  "code_hash": "b78893f6826af9a233e08be706ab3d69674446b0",
-  "full_suite": { "tests": 2032, "pass": 2032, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 79, "killed": 77, "survivors_documented": 2, "note": "contract layer, parity, gate, runner (38); protocol repair (19); answer shape and envelope (12); duplicate-key scanner and structural envelope (10, two survivors closed by new tests). Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and pushing a Set instead of null for an array in the duplicate-key scanner (a string inside an array is never followed by a colon)." },
+  "verified_commit": "1094a9179a5f4f36acf96ddd97dd5b6d883085b3",
+  "code_hash": "6624acb3fdde6c15bdc5befbe92e0a7aea1a92f4",
+  "full_suite": { "tests": 2039, "pass": 2039, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
+  "mutation": { "total": 90, "killed": 88, "survivors_documented": 2, "note": "79 earlier (contract layer, parity, gate, runner, protocol repair, answer shape, envelope, duplicate keys) + 11 for generation-time JSON mode (one survivor, a prompt check limited to the system text, closed by a new test). Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and a Set instead of null for arrays in the duplicate-key scanner." },
   "clean_clones": {
-    "node20": { "tests": 2032, "pass": 2030, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2032, "pass": 2030, "fail": 0, "skipped": 2 }
+    "node20": { "tests": 2039, "pass": 2037, "fail": 0, "skipped": 2 },
+    "node24": { "tests": 2039, "pass": 2037, "fail": 0, "skipped": 2 }
   },
-  "ci": { "status": "success", "run": 38178707158 }
+  "ci": { "status": "success", "run": 38181613269 }
 }
