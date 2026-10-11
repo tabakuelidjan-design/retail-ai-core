@@ -115,6 +115,18 @@ invited a heavily veined surface. The request builder now (generic, English and 
 (`scene-wording.js`; the direction itself is untouched, the contact shadow is Nordla's deterministic rule), no longer forwards brand statements about a focal point or shadows, asks for an even, matte, finely
 grained surface without veining, cracks or relief, and names the objects a stone surface invites (bowl, vase, vessel, sculpture, rock...) in the negative prompt only. The gate was not touched.
 
+## Creative ambition of a revision (Revision Cycle 2, Candidate 3)
+
+`src/creative-critic/ambition.js`. A person may use a reference creative to say "this is the level of ambition expected"; the reference is never an input. The revision Director of cycle 2 receives a
+**canonical, generic** statement of that level (`CREATIVE_AMBITION`): attempt a conceptual leap rather than a clean-up, invent its own concept from the brief and the brand, express it only through what the
+pipeline can execute (environment surface / light / atmosphere, spatial intent, hierarchy, typographic character), keep the real product and the approved texts fixed, and judge its own direction against six
+qualities: `CONCEPT_STRENGTH`, `NARRATIVE_COHESION`, `EMOTIONAL_RESONANCE`, `EDITORIAL_SOPHISTICATION`, `DISTINCTIVENESS`, `WOW_FACTOR`. Nothing in it names a subject, motif, colour, typeface, product or
+occasion, and the Director refuses anything that is not exactly the canonical object. An ambitious revision must also be a leap, not a clean-up: a structural change **and** at least two rewritten descriptive
+fields. These qualities are reasoning targets of the Director; they are **not** critic dimensions (the critic's closed 14 are unchanged), so the critic does not measure them.
+
+**Limit stated honestly:** the environment contract is a text-only, product-free, object-free surface and backdrop, and the product is a deterministic composite. A conceptual leap is therefore bounded to
+material, light, atmosphere, spatial structure, hierarchy and type; it cannot add a narrative object to the scene.
+
 ## Known gaps (reported, not hidden)
 
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.

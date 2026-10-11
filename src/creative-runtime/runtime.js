@@ -41,7 +41,7 @@ const blocked = (reason, extra = {}) => Object.freeze({ status: 'BLOCKED', reaso
  *  ledger    the decision ledger
  */
 export async function runProductPreservingCreative({
-  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null,
+  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null, ambition = null,
 }) {
   const { ids, asset, brand } = brief;
   const format = { ...brief.format };
@@ -75,7 +75,7 @@ export async function runProductPreservingCreative({
     evidence.capability = capability;
   }
   const { directions } = revision
-    ? await agents.revision_director.invoke({ ...directorInput, revision, capability }, directorContext)
+    ? await agents.revision_director.invoke({ ...directorInput, revision, capability, ...(ambition ? { ambition } : {}) }, directorContext)
     : await agents.director.invoke(directorInput, directorContext);
   const direction = directions[0];
   evidence.direction = direction;

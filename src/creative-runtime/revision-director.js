@@ -1,6 +1,7 @@
 import { AGENT_ROLE, defineCreativeAgent } from '../creative-intelligence/index.js';
 import { NOT_SEMANTIC } from '../creative-critic/critique.js';
 import { REVISION_INTENT } from '../creative-critic/revision.js';
+import { CREATIVE_AMBITION, isCanonicalAmbition } from '../creative-critic/ambition.js';
 import { COMPONENT, DECISION } from './ledger.js';
 import { buildDirectorInstruction } from './agents.js';
 import { assessDirectionExecutable, executableSpatialIntents, normalizeLayoutCapabilityProfile } from './layout-capability.js';
@@ -20,7 +21,7 @@ export class RevisionInputError extends Error {
 }
 const refuse = (code, message, field) => { throw new RevisionInputError(code, message, field); };
 
-const INPUT_KEYS = ['brief', 'ids', 'revision', 'capability'];
+const INPUT_KEYS = ['brief', 'ids', 'revision', 'capability', 'ambition'];
 const REVISION_KEYS = ['previous_direction', 'candidate_evidence', 'critique', 'revision_request'];
 const DIRECTION_FIELDS = ['concept', 'copy_intent', 'visual_intent', 'product_role', 'spatial_intent', 'negative_space_intent', 'hierarchy'];
 const EVIDENCE_KEYS = ['candidate_sha256', 'recipe_id', 'spatial_intent', 'text_roles', 'product_height_share', 'plate_used', 'preflight', 'fidelity', 'guardian'];
@@ -87,7 +88,7 @@ export function normalizeRevisionEvidence(revision) {
 }
 
 /** What the revision Director model receives: the standard Director instruction plus the revision rules; the evidence is the canonical, normalized one. */
-export function buildRevisionInstruction({ brief, evidence, constants, capability = null }) {
+export function buildRevisionInstruction({ brief, evidence, constants, capability = null, ambition = null }) {
   const base = buildDirectorInstruction({ brief, constants });
   const system = [
     base.system,
@@ -95,12 +96,14 @@ export function buildRevisionInstruction({ brief, evidence, constants, capabilit
     'Decide a NEW direction that addresses the intents: change what must change in the idea, the spatial intent, the negative space, the hierarchy and the environment, and keep what already works.',
     'Do not repeat the previous direction. Never use coordinates, sizes, pixel or percentage values, font names or sizes, or colour codes; decide the idea, the runtime decides the details.',
     'Return ONLY the same JSON object with the same keys as before.',
+    ...(ambition ? [ambition.instruction] : []),
     ...(capability ? ['Your direction must be EXECUTABLE by the layout capabilities you are given: choose a spatial_intent whose entry has executable true, and keep every approved text role in the hierarchy. The layout planner verifies this afterwards and refuses anything else.'] : []),
   ].join(' ');
   const user = JSON.stringify({
     brief: brief.public_facts, approved_text_roles: brief.approved_text_roles, format: brief.format, brand_expression: brief.expression,
     previous_direction: evidence.previous_direction, previous_candidate: evidence.candidate_evidence, critique: evidence.critique, revision_intents: evidence.revision_intents,
     ...(capability ? { layout_capabilities: capability } : {}),
+    ...(ambition ? { creative_ambition: ambition } : {}),
   });
   return { system, user };
 }
@@ -110,11 +113,13 @@ const similarity = (a, b) => { const x = tokens(a); const y = tokens(b); if (!x.
 const TEXT_SIMILARITY_LIMIT = 0.7;
 
 /** The fields that changed between two directions, and whether the change is meaningful: a structural field changed, or at least two of the three descriptive fields rewritten. */
-export function directionDelta(previous, next) {
+export function directionDelta(previous, next, { ambitious = false } = {}) {
   const structural = ['product_role', 'spatial_intent', 'negative_space_intent'].filter((k) => previous[k] !== next[k]);
   if (JSON.stringify(previous.hierarchy) !== JSON.stringify(next.hierarchy)) structural.push('hierarchy');
   const descriptive = ['concept', 'copy_intent', 'visual_intent'].filter((k) => similarity(previous[k], next[k]) < TEXT_SIMILARITY_LIMIT);
-  return Object.freeze({ structural, descriptive, meaningful: structural.length >= 1 || descriptive.length >= 2 });
+  // an ambitious revision must be a leap, not a clean-up: a structural change AND a rewritten idea (at least two descriptive fields)
+  const meaningful = ambitious ? structural.length >= 1 && descriptive.length >= 2 : structural.length >= 1 || descriptive.length >= 2;
+  return Object.freeze({ structural, descriptive, meaningful });
 }
 
 function parseJsonObject(text) {
@@ -136,7 +141,10 @@ export function createRevisionDirector({ ledger, complete, constants }) {
     if (input.capability === undefined) throw Object.assign(new Error('a revision needs the layout capability profile'), { code: 'REVISION_CAPABILITY_REQUIRED' });
     const capability = normalizeLayoutCapabilityProfile(input.capability);
     if (!executableSpatialIntents(capability).length) throw Object.assign(new Error('no spatial intent can carry the approved texts'), { code: 'NO_EXECUTABLE_LAYOUT_CAPABILITY' });
-    const reply = await complete(buildRevisionInstruction({ brief, evidence, constants, capability }));
+    // the creative ambition, when asked for, is exactly the canonical statement of the level expected (nothing else can enter through it)
+    if (input.ambition !== undefined && !isCanonicalAmbition(input.ambition)) throw Object.assign(new Error('the creative ambition is not the canonical one'), { code: 'REVISION_AMBITION_NOT_CANONICAL' });
+    const ambition = input.ambition === undefined ? null : CREATIVE_AMBITION;
+    const reply = await complete(buildRevisionInstruction({ brief, evidence, constants, capability, ambition }));
     const raw = parseJsonObject(reply.text);
     const extra = Object.keys(raw).filter((k) => !DIRECTION_FIELDS.includes(k));
     if (extra.length) throw new Error('the revision Director returned fields that are not part of a direction');
@@ -144,7 +152,7 @@ export function createRevisionDirector({ ledger, complete, constants }) {
     // the planner stays authoritative; this only refuses, before any composition, a direction the capabilities already say cannot be executed
     const executable = assessDirectionExecutable(capability, raw);
     if (!executable.executable) throw Object.assign(new Error('the revised direction cannot be executed by any layout recipe'), { code: 'REVISION_DIRECTION_NOT_EXECUTABLE', reasons: executable.reasons });
-    const delta = directionDelta(evidence.previous_direction, raw);
+    const delta = directionDelta(evidence.previous_direction, raw, { ambitious: ambition !== null });
     if (!delta.meaningful) throw Object.assign(new Error('the revised direction does not differ meaningfully from the previous one'), { code: 'REVISED_DIRECTION_NOT_DIFFERENT' });
     const direction = {
       merchant_id: ids.merchant_id,
@@ -159,7 +167,7 @@ export function createRevisionDirector({ ledger, complete, constants }) {
     const basis = [ids.brief_ref, evidence.critique.critique_id];
     ledger.record({
       decision: DECISION.REVISION_DIRECTION, decided_by: COMPONENT.REVISION_DIRECTOR, rule: 'DIRECTION_REVISED_FROM_CANONICAL_EVIDENCE_AND_SEMANTIC_INTENTS', basis,
-      outcome: { intents: evidence.revision_intents.map((i) => i.intent), changed_structural: delta.structural, changed_descriptive: delta.descriptive },
+      outcome: { intents: evidence.revision_intents.map((i) => i.intent), changed_structural: delta.structural, changed_descriptive: delta.descriptive, ambition: ambition !== null },
     });
     ledger.record({
       decision: DECISION.CREATIVE_DIRECTION, decided_by: COMPONENT.REVISION_DIRECTOR, rule: 'REVISED_DIRECTION', basis,

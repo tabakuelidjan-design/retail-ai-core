@@ -26,7 +26,7 @@ import {
   buildCandidateEvidence, buildRevisionInstruction, createApprovedCopyAgent, createBrandGuardianGate, createCreativeDirector, createDecisionLedger, createLocalProductSegmenter, createProductAssetAnalyst,
   buildExecutionChain, computeLayoutCapabilityProfile, executableSpatialIntents, createRevisionDirector, createVisualProductionDirector, describeStop, DIRECTOR_CONSTANTS, normalizeRevisionEvidence, runProductPreservingCreative,
 } from '../src/creative-runtime/index.js';
-import { buildRevisionRequest, createCreativeCritic, finalizeVerdict } from '../src/creative-critic/index.js';
+import { buildRevisionRequest, CREATIVE_AMBITION, createCreativeCritic, finalizeVerdict } from '../src/creative-critic/index.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
 
@@ -153,9 +153,9 @@ try {
   // the revision instruction as the model would receive it (built, never sent in --check): only its size and digest are reported
   const instruction = buildRevisionInstruction({
     brief: { public_facts: brief.public_facts, approved_text_roles: [...new Set([...claims.map((c) => c.role), ...brief.approved_copy.map((c) => c.role)])], format: { content_kind: 'IMAGE', aspect_ratio: '4:5', canvas: brief.format.canvas }, expression },
-    evidence: normalizeRevisionEvidence(revision), constants: DIRECTOR_CONSTANTS, capability,
+    evidence: normalizeRevisionEvidence(revision), constants: DIRECTOR_CONSTANTS, capability, ambition: CYCLE === 2 ? CREATIVE_AMBITION : null,
   });
-  check('revision instruction built', true, { system_chars: instruction.system.length, user_chars: instruction.user.length, user_sha256_prefix: sha256(instruction.user).slice(0, 12) });
+  check(CYCLE === 2 ? 'revision instruction built (with the creative ambition: a conceptual leap, six generic qualities, no reference content)' : 'revision instruction built', true, { system_chars: instruction.system.length, user_chars: instruction.user.length, user_sha256_prefix: sha256(instruction.user).slice(0, 12) });
   if (mode === 'check') finish('READY_FOR_ONE_REVISION_CYCLE (nothing was sent)', 0);
 
   // ---- exactly one live cycle (three billable calls), guarded by a lock that code never releases
@@ -189,7 +189,7 @@ try {
 
   let result;
   try {
-    result = await runProductPreservingCreative({ at, brief, fonts, agents, ports, ledger, guardian, revision });
+    result = await runProductPreservingCreative({ at, brief, fonts, agents, ports, ledger, guardian, revision, ...(CYCLE === 2 ? { ambition: CREATIVE_AMBITION } : {}) });
   } catch (error) {
     const cause = error.detail?.cause ?? {};
     report.runtime_error = { code: error.code ?? null, role: error.detail?.role ?? null, cause_name: cause.name ?? null, cause_code: cause.code ?? error.code ?? null, status: cause.status ?? error.status ?? null, request_id: cause.request_id ?? error.requestId ?? null, message: error.message };
