@@ -157,7 +157,7 @@ export function assembleDocument({
       min_font_size: Math.round(canvas.width * TYPE_SCALE.min_size_of_canvas_width),
       line_height: 1.15,
       tracking: 0,
-      alignment: centered ? 'CENTER' : 'START',
+      alignment: format.text_alignment ?? (centered ? 'CENTER' : 'START'),
       max_lines: TYPE_SCALE.max_lines[item.text_role],
       color: Object.values(brand.colors)[0],
       box: { padding: 0, vertical_align: 'TOP' },
@@ -208,14 +208,14 @@ export function assembleDocument({
  * profile says is executable is decided by the very same code that will place the layout.
  */
 export function solveRecipeLayout({
-  at, ids, direction, format, brand, copyItems, cutoutRef, cutoutSize, environmentRef, providerId, size, fonts, claimRefs, recipeId,
+  at, ids, direction, format, brand, copyItems, cutoutRef, cutoutSize, environmentRef, providerId, size, fonts, claimRefs, recipeId, recipe = null,
 }) {
   const document = assembleDocument({
-    at, ids, direction, format: { ...format, recipe_id: recipeId }, brand, copyItems,
+    at, ids, direction, format: { ...format, recipe_id: recipeId, ...(recipe ? { text_alignment: recipe.text_alignment } : {}) }, brand, copyItems,
     product: { cutout_ref: cutoutRef }, environment: { ref: environmentRef, provider_id: providerId }, fonts, assetRefs: [cutoutRef, environmentRef], claimRefs,
   });
   const assets = { [cutoutRef]: { width_px: cutoutSize.width, height_px: cutoutSize.height }, [environmentRef]: { width_px: size.width, height_px: size.height } };
-  const solved = CI.solveLayout({ document, recipe_id: recipeId, fonts, assets, created_at: at });
+  const solved = CI.solveLayout({ document, ...(recipe ? { recipe } : { recipe_id: recipeId }), fonts, assets, created_at: at });
   // a layer the layout engine could not place (no slot for its role) is never rendered at its default box: the plan is not placeable
   const placeable = solved.status === 'SOLVED' && !solved.unplaced.some((u) => ['PRODUCT', 'TEXT'].includes(solved.document.layers.find((l) => l.id === u.layer_id)?.type));
   return { document, assets, solved, placeable };

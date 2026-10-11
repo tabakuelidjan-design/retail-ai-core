@@ -19,6 +19,15 @@ export const COMPONENT = Object.freeze({
   PREFLIGHT: 'nordla:creative-preflight@1',
   BRAND_GUARDIAN: 'nordla:brand-guardian@1',
   REVISION_DIRECTOR: 'nordla:revision-director@1',
+  CREATIVE_OBSERVER: 'nordla:creative-observer@1',
+  PROBLEM_FRAMER: 'nordla:problem-framer@1',
+  CONCEPT_DIRECTOR: 'nordla:concept-director@1',
+  CONCEPT_SELECTOR: 'nordla:concept-selector@1',
+  ART_DIRECTOR: 'nordla:art-director@1',
+  SCENE_COMPOSER: 'nordla:scene-composer@1',
+  COMPOSITION_PLANNER: 'nordla:composition-planner@1',
+  PRODUCTION_STRATEGIST: 'nordla:production-strategist@1',
+  CREATIVE_RECOVERY: 'nordla:creative-recovery@1',
 });
 
 export const DECISION = Object.freeze({
@@ -39,6 +48,15 @@ export const DECISION = Object.freeze({
   BRAND_GUARDIAN: 'BRAND_GUARDIAN',
   REVISION_DIRECTION: 'REVISION_DIRECTION',
   DIRECTION_REFUSED: 'DIRECTION_REFUSED',
+  OBSERVATION: 'OBSERVATION',
+  PROBLEM_FRAME: 'PROBLEM_FRAME',
+  CONCEPT_ROUND: 'CONCEPT_ROUND',
+  CONCEPT_SELECTION: 'CONCEPT_SELECTION',
+  ART_DIRECTION: 'ART_DIRECTION',
+  SCENE_SPEC: 'SCENE_SPEC',
+  COMPOSITION_PLAN: 'COMPOSITION_PLAN',
+  PRODUCTION_PLAN: 'PRODUCTION_PLAN',
+  RECOVERY_DECISION: 'RECOVERY_DECISION',
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));

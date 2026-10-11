@@ -13,7 +13,7 @@ import {
 } from './constants.js';
 import { reviseDesignDocument } from './design-document.js';
 import { layerBounds } from './layers.js';
-import { getLayoutRecipe } from './layout-recipes.js';
+import { assertValidLayoutRecipe, getLayoutRecipe } from './layout-recipes.js';
 import { fitText } from './typography.js';
 import {
   area, contains, deepFreeze, enumValue, fail, intersects, iso, number,
@@ -137,9 +137,10 @@ const slotRoleOf = (layer) => {
  * asset_ref to its real pixel size ({ width_px, height_px }) so products and logos keep their exact aspect ratio.
  */
 export function solveLayout({
-  document, recipe_id: recipeId, fonts, assets = {}, negative_space: negativeSpace = NEGATIVE_SPACE.NONE, created_at: createdAt,
+  document, recipe_id: recipeId, recipe: givenRecipe = null, fonts, assets = {}, negative_space: negativeSpace = NEGATIVE_SPACE.NONE, created_at: createdAt,
 } = {}) {
-  const recipe = getLayoutRecipe(recipeId);
+  // a preset by id, or a recipe given explicitly (synthesized from a composition plan): the latter must satisfy the invariants of the presets before anything is placed
+  const recipe = givenRecipe ? assertValidLayoutRecipe(givenRecipe) : getLayoutRecipe(recipeId);
   if (!recipe) fail(E.LAYOUT_RECIPE_UNKNOWN, 'unknown layout recipe', { field: 'recipe_id' });
   if (!fonts || typeof fonts.get !== 'function') fail(E.LAYOUT_INPUT_INVALID, 'a font registry is required', { field: 'fonts' });
   const at = iso(createdAt, 'created_at');

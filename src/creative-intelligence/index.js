@@ -27,7 +27,7 @@ export {
 export {
   normalizeDesignDocument, buildDesignDocument, reviseDesignDocument, layerAssetRefs,
 } from './design-document.js';
-export { LAYOUT_RECIPES, LAYOUT_RECIPE_IDS, getLayoutRecipe } from './layout-recipes.js';
+export { LAYOUT_RECIPES, LAYOUT_RECIPE_IDS, getLayoutRecipe, assertValidLayoutRecipe } from './layout-recipes.js';
 export { solveLayout, computeUsableRect, evaluateConstraints } from './layout-engine.js';
 export {
   createFontRegistry, normalizeFontMetrics, measureText, breakLines, layoutText, fitText, positionLines, lineAnchor, scriptsOf, SHAPING,

@@ -86,4 +86,32 @@ export const LAYOUT_RECIPES = deepFreeze({
 });
 
 export const LAYOUT_RECIPE_IDS = Object.freeze(Object.keys(LAYOUT_RECIPES));
+
+/**
+ * A recipe that is not one of the presets (for example synthesized from a relational composition plan) must satisfy the same invariants the presets satisfy: slots as fractions of the usable area, inside
+ * it, with a positive size, one slot per role, never overlapping, media slots stating their alignment. Returns the recipe; throws a plain Error naming the first defect.
+ */
+export function assertValidLayoutRecipe(recipe) {
+  const bad = (message) => { throw Object.assign(new Error(`invalid layout recipe: ${message}`), { code: 'LAYOUT_RECIPE_INVALID' }); };
+  if (!recipe || typeof recipe.recipe_id !== 'string' || !recipe.recipe_id) bad('a recipe has an id');
+  if (!(recipe.margin_ratio >= 0 && recipe.margin_ratio <= 0.2)) bad('margin_ratio is a small fraction');
+  if (!Array.isArray(recipe.slots) || recipe.slots.length < 1) bad('a recipe has slots');
+  const EPS = 1e-9;
+  const seen = new Set();
+  for (const s of recipe.slots) {
+    if (typeof s.role !== 'string' || seen.has(s.role)) bad('one slot per role');
+    seen.add(s.role);
+    for (const k of ['x', 'y', 'w', 'h']) if (typeof s[k] !== 'number' || !Number.isFinite(s[k])) bad(`slot ${s.role} has a numeric ${k}`);
+    if (s.w <= 0 || s.h <= 0) bad(`slot ${s.role} has a positive size`);
+    if (s.x < -EPS || s.y < -EPS || s.x + s.w > 1 + EPS || s.y + s.h > 1 + EPS) bad(`slot ${s.role} lies inside the usable area`);
+    if (['PRODUCT', 'LOGO'].includes(s.role) && !['START', 'CENTER', 'END'].includes(s.align)) bad(`media slot ${s.role} states its alignment`);
+  }
+  for (let i = 0; i < recipe.slots.length; i += 1) {
+    for (let j = i + 1; j < recipe.slots.length; j += 1) {
+      const a = recipe.slots[i]; const b = recipe.slots[j];
+      if (a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS) bad(`slots ${a.role} and ${b.role} overlap`);
+    }
+  }
+  return recipe;
+}
 export const getLayoutRecipe = (id) => LAYOUT_RECIPES[id] ?? null;

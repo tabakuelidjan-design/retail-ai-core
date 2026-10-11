@@ -4,7 +4,9 @@ import * as CI from '../creative-intelligence/index.js';
 import * as P from '../creative-intelligence/production.js';
 import { evaluateHardFidelityGate, requiredChecksFromInvariants } from '../creative-fidelity/fidelity-gates.js';
 import { COMPONENT, DECISION, manualSteeringReport } from './ledger.js';
-import { buildEnvironmentRequest } from './request-builder.js';
+import { directionFromPlan } from '../creative-brain/brain.js';
+import { describeZone, projectSceneRequest } from '../creative-brain/scene-composer.js';
+import { buildEnvironmentRequest, forbiddenVisualsIn } from './request-builder.js';
 import {
   backdropSamples, choosePlate, chooseTextColor, plateLayer, selectLayoutRecipe, solveRecipeLayout,
 } from './layout-plan.js';
@@ -41,7 +43,7 @@ const blocked = (reason, extra = {}) => Object.freeze({ status: 'BLOCKED', reaso
  *  ledger    the decision ledger
  */
 export async function runProductPreservingCreative({
-  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null, ambition = null,
+  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null, ambition = null, creativePlan = null,
 }) {
   const { ids, asset, brand } = brief;
   const format = { ...brief.format };
@@ -66,19 +68,28 @@ export async function runProductPreservingCreative({
     ids: { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, asset_refs: [asset.ref], claim_refs: claimRefs, evidence_refs: [] },
   };
   const directorContext = { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, claim_refs: claimRefs };
-  if (revision && !agents.revision_director) return stop('A_REVISION_NEEDS_A_REVISION_DIRECTOR');
+  if (revision && !creativePlan && !agents.revision_director) return stop('A_REVISION_NEEDS_A_REVISION_DIRECTOR');
   // a revision is told what the layout can execute for the approved copy, BEFORE it chooses; with nothing executable it does not even ask the model
   let capability = null;
-  if (revision) {
+  if (revision && !creativePlan) {
     try { capability = computeLayoutCapabilityProfile({ at, brief, fonts }); } catch (error) { return stop('NO_EXECUTABLE_LAYOUT_CAPABILITY', { message: error.code ?? error.message }); }
     if (!executableSpatialIntents(capability).length) return stop('NO_EXECUTABLE_LAYOUT_CAPABILITY', { capability });
     evidence.capability = capability;
   }
-  const { directions } = revision
+  // a Creative Brain plan directs the run: its canonical direction (validated by the C1 contract) replaces the Director's, and nothing downstream is bypassed
+  const { directions } = creativePlan
+    ? { directions: [directionFromPlan({ plan: creativePlan, ids: { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref }, assetRef: asset.ref, claimRefs })] }
+    : revision
     ? await agents.revision_director.invoke({ ...directorInput, revision, capability, ...(ambition ? { ambition } : {}) }, directorContext)
     : await agents.director.invoke(directorInput, directorContext);
   const direction = directions[0];
   evidence.direction = direction;
+  if (creativePlan) {
+    ledger.record({
+      decision: DECISION.CREATIVE_DIRECTION, decided_by: COMPONENT.CREATIVE_DIRECTOR, rule: 'CREATIVE_BRAIN_PLAN_PROJECTED_TO_THE_CANONICAL_DIRECTION', basis: [creativePlan.plan_id],
+      outcome: { direction_id: direction.direction_id, plan_id: creativePlan.plan_id, concept_id: creativePlan.concept.concept_id, composition_id: creativePlan.composition.composition_id, scene_id: creativePlan.scene.scene_id },
+    });
+  }
 
   // 3. approved copy for the roles of the hierarchy
   const copy = await agents.copy.invoke({ hierarchy: direction.hierarchy, approved_copy: brief.approved_copy, claims: brief.claims }, { claim_refs: claimRefs });
@@ -90,7 +101,20 @@ export async function runProductPreservingCreative({
   const environmentRef = `asset://runtime/${ids.brief_ref.replace(/[^A-Za-z0-9_.-]/g, '-')}/environment`;
   let segmentation = null; let environment = null;
   const planLayout = ({ providerId, size }) => {
-    const recipe = selectLayoutRecipe(direction, copy.items.map((i) => i.text_role));
+    const roles = copy.items.map((i) => i.text_role);
+    // a plan's synthesized recipe is used only if it has a slot for every approved text; otherwise the preset of the direction is used, and the choice says so (never a silent substitution)
+    const synthesized = creativePlan?.layout_choice?.recipe ?? null;
+    const covers = synthesized && roles.every((role) => synthesized.slots.some((s) => s.role === role));
+    const solveWith = (chosen, explicit) => solveRecipeLayout({
+      at, ids, direction, format, brand, copyItems: copy.items, cutoutRef, cutoutSize: { width: segmentation.width_px, height: segmentation.height_px }, environmentRef, providerId, size, fonts, claimRefs, recipeId: chosen.recipe_id, ...(explicit ? { recipe: explicit } : {}),
+    });
+    if (covers) {
+      // the solver decides whether the plan is realizable for the real approved texts; if it is not, the preset of the direction takes over and says why
+      const attempt = solveWith({ recipe_id: synthesized.recipe_id }, synthesized);
+      if (attempt.placeable) return { recipe: { recipe_id: synthesized.recipe_id, rule: 'RECIPE_SYNTHESIZED_FROM_THE_COMPOSITION_PLAN', considered: [], source: 'SYNTHESIZED' }, document: attempt.document, assets: attempt.assets, solved: attempt.solved, ok: true };
+    }
+    const fallbackReason = !creativePlan ? null : (!synthesized ? (creativePlan.layout_choice?.reason ?? 'NO_SYNTHESIZED_RECIPE') : (covers ? 'THE_SYNTHESIZED_RECIPE_DID_NOT_SOLVE_FOR_THE_APPROVED_TEXTS' : 'THE_SYNTHESIZED_RECIPE_HAS_NO_SLOT_FOR_AN_APPROVED_TEXT'));
+    const recipe = { ...selectLayoutRecipe(direction, roles), source: creativePlan ? 'PRESET_FALLBACK' : 'PRESET', ...(creativePlan ? { fallback_reason: fallbackReason } : {}) };
     if (!recipe.recipe_id) return { recipe, ok: false };
     const { document, assets, solved, placeable: ok } = solveRecipeLayout({
       at, ids, direction, format, brand, copyItems: copy.items, cutoutRef, cutoutSize: { width: segmentation.width_px, height: segmentation.height_px }, environmentRef, providerId, size, fonts, claimRefs, recipeId: recipe.recipe_id,
@@ -100,7 +124,7 @@ export async function runProductPreservingCreative({
   const recordLayout = ({ recipe, solved }) => {
     ledger.record({
       decision: DECISION.LAYOUT_RECIPE, decided_by: COMPONENT.LAYOUT_PLANNER, rule: recipe.rule, basis: [direction.direction_id],
-      outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered },
+      outcome: { recipe_id: recipe.recipe_id, spatial_intent: direction.spatial_intent, product_role: direction.product_role, considered: recipe.considered, ...(creativePlan ? { source: recipe.source, fallback_reason: recipe.fallback_reason ?? null } : {}) },
     });
     const productLayer = solved.document.layers.find((l) => l.type === 'PRODUCT');
     ledger.record({
@@ -131,7 +155,20 @@ export async function runProductPreservingCreative({
         if (!pre.ok) { recordLayout(pre); return stop('THE_LAYOUT_COULD_NOT_BE_SOLVED', { violations: pre.solved.violations, unplaced: pre.solved.unplaced, before_environment_call: true }); }
       }
       let built;
-      try { built = buildEnvironmentRequest({ direction, expression: brand.expression, canvas, ledger }); } catch (error) { return stop(error.code ?? 'ENVIRONMENT_REQUEST_REFUSED', { message: error.message }); }
+      try {
+        if (creativePlan) {
+          // the scene of the plan, with the integration zone where the layout has just placed the real product (described in words, never coordinates); text only, no product pixel
+          const pre = planLayout({ providerId: 'pending-environment', size: canvas });
+          const zone = describeZone(pre.solved.document.layers.find((l) => l.type === 'PRODUCT').geometry, canvas);
+          built = projectSceneRequest({ scene: creativePlan.scene, zone, canvas });
+          const forbidden = forbiddenVisualsIn(built.prompt, brand.expression);
+          if (forbidden.length) throw Object.assign(new Error(`the scene asks for visuals the brand forbids: ${forbidden.join(', ')}`), { code: 'SCENE_VIOLATES_BRAND_FORBIDDEN_VISUALS' });
+          ledger.record({
+            decision: DECISION.PROVIDER_REQUEST_CONSTRUCTION, decided_by: COMPONENT.PROVIDER_REQUEST_BUILDER, rule: 'SCENE_SPEC_PROJECTED_WITH_A_RESERVED_INTEGRATION_ZONE', basis: [creativePlan.scene.scene_id],
+            outcome: { lane: 'ENVIRONMENT', size: built.size, carries_input_asset: false, forbidden_objects_only_in_the_negative_prompt: true, brand_forbidden_terms_checked: true, integration_zone: zone, scene_layers: creativePlan.scene.layers.length },
+          });
+        } else built = buildEnvironmentRequest({ direction, expression: brand.expression, canvas, ledger });
+      } catch (error) { return stop(error.code ?? 'ENVIRONMENT_REQUEST_REFUSED', { message: error.message }); }
       environment = await ports.environment.generate({ request: { ...built, capability: 'IMAGE_GENERATE', purpose: 'BACKGROUND', input_asset_refs: [] }, expected_size: canvas });
       evidence.environment = environment.provenance;
     } else {

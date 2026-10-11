@@ -292,7 +292,7 @@ test('RV-10 there is no manual creative steering path: a revision needs its Dire
   // the runtime accepts no layout, colour or size override: its parameters are the brief, the agents, the ports and the evidence
   const source = await readFile(new URL('../src/creative-runtime/runtime.js', import.meta.url), 'utf8');
   const params = source.slice(source.indexOf('runProductPreservingCreative({') + 'runProductPreservingCreative({'.length, source.indexOf('}) {')).split(',').map((p) => p.trim().split('=')[0].trim()).filter(Boolean);
-  assert.deepEqual(params, ['at', 'brief', 'fonts', 'agents', 'ports', 'ledger', 'guardian', 'revision', 'ambition']);
+  assert.deepEqual(params, ['at', 'brief', 'fonts', 'agents', 'ports', 'ledger', 'guardian', 'revision', 'ambition', 'creativePlan']); // creativePlan: a numberless Creative Brain plan (docs/architecture/creative-brain.md), never a layout, colour or size
   // the candidate evidence holds facts, never geometry
   const evidence = buildCandidateEvidence({ result, candidate_sha256: result.png_sha256 });
   assert.doesNotMatch(JSON.stringify(evidence), /"(x|y|width|height|box|geometry|font_size|color)"/);
