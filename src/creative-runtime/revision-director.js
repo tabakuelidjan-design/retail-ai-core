@@ -3,6 +3,7 @@ import { NOT_SEMANTIC } from '../creative-critic/critique.js';
 import { REVISION_INTENT } from '../creative-critic/revision.js';
 import { COMPONENT, DECISION } from './ledger.js';
 import { buildDirectorInstruction } from './agents.js';
+import { assessDirectionExecutable, executableSpatialIntents, normalizeLayoutCapabilityProfile } from './layout-capability.js';
 
 // The revision-side Creative Director. A revision is a NEW creative direction decided by the Director from CANONICAL evidence only:
 //   - the original creative brief (public facts, approved text roles, format, the brand's expression system)
@@ -19,7 +20,7 @@ export class RevisionInputError extends Error {
 }
 const refuse = (code, message, field) => { throw new RevisionInputError(code, message, field); };
 
-const INPUT_KEYS = ['brief', 'ids', 'revision'];
+const INPUT_KEYS = ['brief', 'ids', 'revision', 'capability'];
 const REVISION_KEYS = ['previous_direction', 'candidate_evidence', 'critique', 'revision_request'];
 const DIRECTION_FIELDS = ['concept', 'copy_intent', 'visual_intent', 'product_role', 'spatial_intent', 'negative_space_intent', 'hierarchy'];
 const EVIDENCE_KEYS = ['candidate_sha256', 'recipe_id', 'spatial_intent', 'text_roles', 'product_height_share', 'plate_used', 'preflight', 'fidelity', 'guardian'];
@@ -86,7 +87,7 @@ export function normalizeRevisionEvidence(revision) {
 }
 
 /** What the revision Director model receives: the standard Director instruction plus the revision rules; the evidence is the canonical, normalized one. */
-export function buildRevisionInstruction({ brief, evidence, constants }) {
+export function buildRevisionInstruction({ brief, evidence, constants, capability = null }) {
   const base = buildDirectorInstruction({ brief, constants });
   const system = [
     base.system,
@@ -94,10 +95,12 @@ export function buildRevisionInstruction({ brief, evidence, constants }) {
     'Decide a NEW direction that addresses the intents: change what must change in the idea, the spatial intent, the negative space, the hierarchy and the environment, and keep what already works.',
     'Do not repeat the previous direction. Never use coordinates, sizes, pixel or percentage values, font names or sizes, or colour codes; decide the idea, the runtime decides the details.',
     'Return ONLY the same JSON object with the same keys as before.',
+    ...(capability ? ['Your direction must be EXECUTABLE by the layout capabilities you are given: choose a spatial_intent whose entry has executable true, and keep every approved text role in the hierarchy. The layout planner verifies this afterwards and refuses anything else.'] : []),
   ].join(' ');
   const user = JSON.stringify({
     brief: brief.public_facts, approved_text_roles: brief.approved_text_roles, format: brief.format, brand_expression: brief.expression,
     previous_direction: evidence.previous_direction, previous_candidate: evidence.candidate_evidence, critique: evidence.critique, revision_intents: evidence.revision_intents,
+    ...(capability ? { layout_capabilities: capability } : {}),
   });
   return { system, user };
 }
@@ -129,11 +132,18 @@ export function createRevisionDirector({ ledger, complete, constants }) {
     onlyKeys(input, INPUT_KEYS, 'input');
     const { brief, ids, revision } = input;
     const evidence = normalizeRevisionEvidence(revision);
-    const reply = await complete(buildRevisionInstruction({ brief, evidence, constants }));
+    // the layout capabilities of the current recipe set, for the approved copy: without one executable spatial intent there is nothing a revision could be realized with, and the model is not consulted
+    if (input.capability === undefined) throw Object.assign(new Error('a revision needs the layout capability profile'), { code: 'REVISION_CAPABILITY_REQUIRED' });
+    const capability = normalizeLayoutCapabilityProfile(input.capability);
+    if (!executableSpatialIntents(capability).length) throw Object.assign(new Error('no spatial intent can carry the approved texts'), { code: 'NO_EXECUTABLE_LAYOUT_CAPABILITY' });
+    const reply = await complete(buildRevisionInstruction({ brief, evidence, constants, capability }));
     const raw = parseJsonObject(reply.text);
     const extra = Object.keys(raw).filter((k) => !DIRECTION_FIELDS.includes(k));
     if (extra.length) throw new Error('the revision Director returned fields that are not part of a direction');
     for (const k of ['concept', 'copy_intent', 'visual_intent']) assertSemanticText(raw[k], `revised_direction.${k}`);
+    // the planner stays authoritative; this only refuses, before any composition, a direction the capabilities already say cannot be executed
+    const executable = assessDirectionExecutable(capability, raw);
+    if (!executable.executable) throw Object.assign(new Error('the revised direction cannot be executed by any layout recipe'), { code: 'REVISION_DIRECTION_NOT_EXECUTABLE', reasons: executable.reasons });
     const delta = directionDelta(evidence.previous_direction, raw);
     if (!delta.meaningful) throw Object.assign(new Error('the revised direction does not differ meaningfully from the previous one'), { code: 'REVISED_DIRECTION_NOT_DIFFERENT' });
     const direction = {

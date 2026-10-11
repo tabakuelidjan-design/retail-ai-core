@@ -84,7 +84,7 @@ test('RV-1 the revision Director receives only canonical evidence and the semant
   assert.equal(s2.prompts.length, 0, 'the initial Director is not consulted during a revision');
   assert.equal(s2.revisionPrompts.length, 1);
   const payload = JSON.parse(s2.revisionPrompts[0].user);
-  assert.deepEqual(Object.keys(payload).sort(), ['approved_text_roles', 'brand_expression', 'brief', 'critique', 'format', 'previous_candidate', 'previous_direction', 'revision_intents']);
+  assert.deepEqual(Object.keys(payload).sort(), ['approved_text_roles', 'brand_expression', 'brief', 'critique', 'format', 'layout_capabilities', 'previous_candidate', 'previous_direction', 'revision_intents']);
   assert.deepEqual(payload.revision_intents.map((i) => i.intent), revisionRequest.intents.map((i) => i.intent));
   assert.ok(payload.revision_intents.every((i) => Object.values(C.REVISION_INTENT).includes(i.intent)));
   assert.deepEqual(Object.keys(payload.previous_candidate).sort(), ['candidate_sha256', 'fidelity', 'guardian', 'plate_used', 'preflight', 'product_height_share', 'recipe_id', 'spatial_intent', 'text_roles']);

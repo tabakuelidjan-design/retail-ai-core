@@ -24,7 +24,7 @@ import {
 } from '../src/marketing-creative/alibaba/index.js';
 import {
   buildCandidateEvidence, buildRevisionInstruction, createApprovedCopyAgent, createBrandGuardianGate, createCreativeDirector, createDecisionLedger, createLocalProductSegmenter, createProductAssetAnalyst,
-  buildExecutionChain, createRevisionDirector, createVisualProductionDirector, describeStop, DIRECTOR_CONSTANTS, normalizeRevisionEvidence, runProductPreservingCreative,
+  buildExecutionChain, computeLayoutCapabilityProfile, executableSpatialIntents, createRevisionDirector, createVisualProductionDirector, describeStop, DIRECTOR_CONSTANTS, normalizeRevisionEvidence, runProductPreservingCreative,
 } from '../src/creative-runtime/index.js';
 import { buildRevisionRequest, createCreativeCritic, finalizeVerdict } from '../src/creative-critic/index.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
@@ -128,10 +128,14 @@ try {
   };
   const dry = await createLocalProductSegmenter({ ledger: createDecisionLedger() }).segment({ asset: brief.asset, annotations: brief.identity_annotations });
   if (!check('local segmentation dry-run is confident', dry.quality.confident)) finish('BLOCKED: SEGMENTATION_LOW_CONFIDENCE', 3);
+  // what the layout can execute for the approved copy (the Director is told this before it chooses; with nothing executable no provider call is made)
+  const capability = computeLayoutCapabilityProfile({ at: new Date().toISOString(), brief, fonts });
+  const executable = executableSpatialIntents(capability);
+  if (!check('at least one spatial intent can carry every approved text', executable.length > 0, { executable_spatial_intents: executable, not_executable: capability.spatial_intents.filter((s) => !s.executable).map((s) => s.spatial_intent) })) finish('BLOCKED: NO_EXECUTABLE_LAYOUT_CAPABILITY', 3);
   // the revision instruction as the model would receive it (built, never sent in --check): only its size and digest are reported
   const instruction = buildRevisionInstruction({
     brief: { public_facts: brief.public_facts, approved_text_roles: [...new Set([...claims.map((c) => c.role), ...brief.approved_copy.map((c) => c.role)])], format: { content_kind: 'IMAGE', aspect_ratio: '4:5', canvas: brief.format.canvas }, expression },
-    evidence: normalizeRevisionEvidence(revision), constants: DIRECTOR_CONSTANTS,
+    evidence: normalizeRevisionEvidence(revision), constants: DIRECTOR_CONSTANTS, capability,
   });
   check('revision instruction built', true, { system_chars: instruction.system.length, user_chars: instruction.user.length, user_sha256_prefix: sha256(instruction.user).slice(0, 12) });
   if (mode === 'check') finish('READY_FOR_ONE_REVISION_CYCLE (nothing was sent)', 0);

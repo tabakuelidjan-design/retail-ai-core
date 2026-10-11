@@ -6,9 +6,10 @@ import { evaluateHardFidelityGate, requiredChecksFromInvariants } from '../creat
 import { COMPONENT, DECISION, manualSteeringReport } from './ledger.js';
 import { buildEnvironmentRequest } from './request-builder.js';
 import {
-  assembleDocument, backdropSamples, choosePlate, chooseTextColor, plateLayer, selectLayoutRecipe,
+  backdropSamples, choosePlate, chooseTextColor, plateLayer, selectLayoutRecipe, solveRecipeLayout,
 } from './layout-plan.js';
 import { assessEnvironment } from './environment-suitability.js';
+import { computeLayoutCapabilityProfile, executableSpatialIntents } from './layout-capability.js';
 
 // The product-preserving creative runtime. One run, from the Creative Brief to a candidate PNG, with every decision made by a Nordla component and recorded:
 //
@@ -66,8 +67,15 @@ export async function runProductPreservingCreative({
   };
   const directorContext = { merchant_id: ids.merchant_id, brand_id: ids.brand_id, brief_ref: ids.brief_ref, claim_refs: claimRefs };
   if (revision && !agents.revision_director) return stop('A_REVISION_NEEDS_A_REVISION_DIRECTOR');
+  // a revision is told what the layout can execute for the approved copy, BEFORE it chooses; with nothing executable it does not even ask the model
+  let capability = null;
+  if (revision) {
+    try { capability = computeLayoutCapabilityProfile({ at, brief, fonts }); } catch (error) { return stop('NO_EXECUTABLE_LAYOUT_CAPABILITY', { message: error.code ?? error.message }); }
+    if (!executableSpatialIntents(capability).length) return stop('NO_EXECUTABLE_LAYOUT_CAPABILITY', { capability });
+    evidence.capability = capability;
+  }
   const { directions } = revision
-    ? await agents.revision_director.invoke({ ...directorInput, revision }, directorContext)
+    ? await agents.revision_director.invoke({ ...directorInput, revision, capability }, directorContext)
     : await agents.director.invoke(directorInput, directorContext);
   const direction = directions[0];
   evidence.direction = direction;
@@ -84,14 +92,9 @@ export async function runProductPreservingCreative({
   const planLayout = ({ providerId, size }) => {
     const recipe = selectLayoutRecipe(direction, copy.items.map((i) => i.text_role));
     if (!recipe.recipe_id) return { recipe, ok: false };
-    const document = assembleDocument({
-      at, ids, direction, format: { ...format, recipe_id: recipe.recipe_id }, brand, copyItems: copy.items,
-      product: { cutout_ref: cutoutRef }, environment: { ref: environmentRef, provider_id: providerId }, fonts, assetRefs: [cutoutRef, environmentRef], claimRefs,
+    const { document, assets, solved, placeable: ok } = solveRecipeLayout({
+      at, ids, direction, format, brand, copyItems: copy.items, cutoutRef, cutoutSize: { width: segmentation.width_px, height: segmentation.height_px }, environmentRef, providerId, size, fonts, claimRefs, recipeId: recipe.recipe_id,
     });
-    const assets = { [cutoutRef]: { width_px: segmentation.width_px, height_px: segmentation.height_px }, [environmentRef]: { width_px: size.width, height_px: size.height } };
-    const solved = CI.solveLayout({ document, recipe_id: recipe.recipe_id, fonts, assets, created_at: at });
-    // a layer the layout engine could not place (no slot for its role) is never rendered at its default box: the run stops
-    const ok = solved.status === 'SOLVED' && !solved.unplaced.some((u) => ['PRODUCT', 'TEXT'].includes(solved.document.layers.find((l) => l.id === u.layer_id)?.type));
     return { recipe, document, assets, solved, ok };
   };
   const recordLayout = ({ recipe, solved }) => {

@@ -141,16 +141,22 @@ export function createCreativeDirector({ ledger, complete, constants }) {
 const ROLE_FOR_CLAIM = Object.freeze({ PRICE: 'PRICE', SUBHEADLINE: 'SUBHEADLINE', CTA: 'CTA', LEGAL: 'LEGAL' });
 
 /** The approved texts that fill the roles of the director's hierarchy. A role with no approved text stays empty: nothing is written. */
+/** The approved texts that fill the given roles (pure: the same rule the agent applies, reusable to ask what the approved copy is without taking a decision). */
+export function selectApprovedCopy({ hierarchy, approvedCopy, claims }) {
+  const items = []; const unfilled = [];
+  for (const role of hierarchy.filter((r) => r !== 'PRODUCT' && r !== 'LOGO')) {
+    const claim = claims.find((c) => ROLE_FOR_CLAIM[c.role] === role);
+    const copy = approvedCopy.find((c) => c.role === role);
+    if (claim) items.push({ text_role: role, content: claim.wording, text_kind: TEXT_KIND.CLAIM_BEARING, claim_ref: claim.ref });
+    else if (copy) items.push({ text_role: role, content: copy.content, text_kind: TEXT_KIND.NON_CLAIM_CREATIVE_TEXT, claim_ref: null });
+    else unfilled.push(role);
+  }
+  return { items, unfilled };
+}
+
 export function createApprovedCopyAgent({ ledger }) {
   return defineCreativeAgent(AGENT_ROLE.COPY_CLAIMS_AGENT, ({ hierarchy, approved_copy: approvedCopy, claims }) => {
-    const items = []; const unfilled = [];
-    for (const role of hierarchy.filter((r) => r !== 'PRODUCT' && r !== 'LOGO')) {
-      const claim = claims.find((c) => ROLE_FOR_CLAIM[c.role] === role);
-      const copy = approvedCopy.find((c) => c.role === role);
-      if (claim) items.push({ text_role: role, content: claim.wording, text_kind: TEXT_KIND.CLAIM_BEARING, claim_ref: claim.ref });
-      else if (copy) items.push({ text_role: role, content: copy.content, text_kind: TEXT_KIND.NON_CLAIM_CREATIVE_TEXT, claim_ref: null });
-      else unfilled.push(role);
-    }
+    const { items, unfilled } = selectApprovedCopy({ hierarchy, approvedCopy, claims });
     ledger.record({
       decision: DECISION.COPY_SELECTION, decided_by: COMPONENT.APPROVED_COPY_AGENT, rule: 'ONLY_APPROVED_TEXT_FILLS_THE_HIERARCHY', basis: items.map((i) => i.claim_ref).filter(Boolean),
       outcome: { filled_roles: items.map((i) => i.text_role), unfilled_roles: unfilled },

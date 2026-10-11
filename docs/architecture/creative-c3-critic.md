@@ -83,6 +83,21 @@ bug and not a HABB-specific problem). Two runtime defects were found and fixed g
 the canvas size), and a stop is reported by its real stage and one classified cause (`stop-stage.js`, `--explain`), never as a failure of gates that did not run. The layout rules were not
 changed to make this direction pass.
 
+## Layout Capability Profile (what the Revision Director may choose)
+
+`src/creative-runtime/layout-capability.js`. The Revision Director is told, before it chooses, what the deterministic layout can execute for the **approved copy** of the brief. The profile is
+**derived, not declared**: each recipe is solved with the same function the runtime uses to place the real layout (`solveRecipeLayout`), and only the abstract outcome is kept
+(schema `layout-capability@1`):
+
+- `text_roles[]`: `{ role, line_policy: SINGLE_LINE | MULTI_LINE }` (from the type rules).
+- `recipes[]`: `{ recipe_id, supported_roles[], role_fit: { ROLE: FITS | DOES_NOT_FIT | NO_SLOT }, complete }`.
+- `spatial_intents[]`: `{ spatial_intent, recipes[], usable_roles[], executable }`, where `executable` means one recipe of the intent carries **every** approved text.
+
+It holds no coordinate, size, count, font, colour, copy or brand value (a validator refuses any number or unknown key). Text slots never overlap, so feasibility of any subset of roles is the
+conjunction of the per-role fits. The Director must choose an executable spatial intent and keep every approved text role in its hierarchy (a revision never drops an approved message); a
+direction that is not executable is refused before composition (`REVISION_DIRECTION_NOT_EXECUTABLE`), and with **no** executable spatial intent the model is not consulted at all and no
+provider call is made (`NO_EXECUTABLE_LAYOUT_CAPABILITY`, a `LAYOUT_CAPABILITY_LIMIT`). The profile is advice: the planner remains authoritative and still solves the layout afterwards.
+
 ## Known gaps (reported, not hidden)
 
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.

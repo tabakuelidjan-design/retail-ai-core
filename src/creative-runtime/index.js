@@ -8,3 +8,4 @@ export * from './environment-suitability.js';
 export * from './guardian-gate.js';
 export * from './revision-director.js';
 export * from './stop-stage.js';
+export * from './layout-capability.js';
