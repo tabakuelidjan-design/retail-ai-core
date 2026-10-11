@@ -115,3 +115,19 @@ export function coreErrorOfBrainStop(stop, { tenant = null } = {}) {
   const category = BRAIN_CAUSE_MAP[stop?.cause] ?? C.FATAL_SYSTEM_ERROR;
   return makeCoreError({ category, code: stop?.cause ?? 'UNCLASSIFIED_BRAIN_STOP', domain_code: stop?.code ?? null, module: 'creative', stage: stop?.brain_stage ?? 'unknown', tenant, evidence_ref: stop?.evidence?.request_id ?? null, diagnostics: { field: stop?.field, problem: stop?.problem }, unmapped: !BRAIN_CAUSE_MAP[stop?.cause] });
 }
+
+/**
+ * Whether the Creative Brain is migrated onto Core resilience: every contract code, every Brain cause, every runtime stop cause and every creative recovery action has exactly one Core meaning, and the
+ * Brain's structured-output mechanics are Core's. Returns { migrated, gaps }.
+ */
+export function creativeMigrationReport(registry) {
+  const gaps = [];
+  for (const code of Object.values(BRAIN_ERROR)) {
+    const e = registry.classify(Object.assign(new Error(code), { code, detail: code === BRAIN_ERROR.PORT_FAILED ? { code: 'TIMEOUT' } : {} }), { module: 'creative', stage: 'probe' });
+    if (e.unmapped) gaps.push(`BRAIN_ERROR ${code}`);
+  }
+  for (const cause of Object.values(BRAIN_FAILURE)) if (!BRAIN_CAUSE_MAP[cause]) gaps.push(`BRAIN_FAILURE ${cause}`);
+  for (const cause of Object.values(ROOT_CAUSE)) if (!RUNTIME_CAUSE_MAP[cause]) gaps.push(`ROOT_CAUSE ${cause}`);
+  for (const action of Object.values(CREATIVE_RECOVERY)) if (!CREATIVE_ACTIONS[action]) gaps.push(`RECOVERY_ACTION ${action}`);
+  return { migrated: gaps.length === 0, gaps, mapped: { brain_error_codes: Object.values(BRAIN_ERROR).length, brain_failure_causes: Object.values(BRAIN_FAILURE).length, runtime_causes: Object.values(ROOT_CAUSE).length, recovery_actions: Object.values(CREATIVE_RECOVERY).length } };
+}
