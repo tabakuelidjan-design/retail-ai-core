@@ -1,7 +1,7 @@
 import { conceptualWords } from './concept.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import {
-  list, obj, renderRules, renderSpec, text, validateSpec, word,
+  list, obj, renderContract, renderRules, text, validateSpec, word,
 } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import { assertNoSubstitute, SCENE_FORBIDDEN, SUBSTITUTE_LEXICON } from './substitutes.js';
@@ -91,7 +91,7 @@ export function buildArtDirectionInstruction({ frame, concept, hints = [] }) {
   const system = [
     'You are the Nordla art director. You turn the SELECTED concept into an art direction: semantic decisions only, never a coordinate, a size, a colour code or any number.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
-    ...renderSpec(ART_SPEC, 'answer'),
+    ...renderContract(ART_SPEC, 'answer'),
     'rationale is one concise sentence of why, for the record; it is not a reasoning log. forbidden_decorative_noise is what must NOT appear as decoration: you may name anything there.',
     'The real product is protected merchant pixels placed by the system. The scene may be rich if the concept calls for it, and it must leave a calm area for the product, but it may never contain, show or describe the product or anything that could stand in for it or compete with it.',
     `Nordla REFUSES the whole answer if any narrative element or permitted secondary element contains one of these words (whole words, plurals included, English or French): product and devices: ${SUBSTITUTE_LEXICON.product_and_devices.join(', ')}; branding, price and text: ${SUBSTITUTE_LEXICON.branding_price_and_text.join(', ')}; competing hero: ${SUBSTITUTE_LEXICON.competing_hero.join(', ')}. This is about the WORD, even in a metaphor ("suggesting a screen" is refused).`,

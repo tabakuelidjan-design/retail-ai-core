@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { map, normalizeNearMisses, obj, text, validateAnswer, validateSpec, word } from '../src/creative-brain/contract.js';
-import { askAndNormalize } from '../src/creative-brain/model-port.js';
+import { askAndNormalize, findDuplicateKey } from '../src/creative-brain/model-port.js';
 import { codeHash } from '../src/creative-brain-benchmark/readiness.js';
 
 // The contract layer on its own (`// CL-N` markers): its edges, one by one.
@@ -64,4 +64,15 @@ test('CL-6 the code hash ignores fixtures and node_modules but not any other dir
   assert.equal(codeHash(root), before);
   mkdirSync(path.join(root, 'src', 'lib')); writeFileSync(path.join(root, 'src', 'lib', 'x.js'), 'x');
   assert.notEqual(codeHash(root), before);
+});
+
+test('CL-7 the duplicate-key scanner: the same name in different objects is fine, in one object it is a duplicate, and strings never confuse it', () => {
+  assert.equal(findDuplicateKey('{"a":1,"b":{"a":2},"c":[{"a":1},{"a":2}]}'), null); // nested and listed objects have their own keys
+  assert.deepEqual(findDuplicateKey('{"a":1,"b":{"a":2,"a":3}}'), { key: 'a', depth: 2 });
+  assert.deepEqual(findDuplicateKey('{"c":[{"a":1,"a":2}]}'), { key: 'a', depth: 3 });
+  assert.equal(findDuplicateKey('{"t":"x \\" , \\"a\\": 1 and {\\"a\\":2}","u":["a","a"]}'), null); // quotes, colons and braces inside strings; equal strings in a list
+  assert.deepEqual(findDuplicateKey('{"k\\"q":1,"k\\"q":2}'), { key: 'k"q', depth: 1 }); // an escaped quote inside a key
+  assert.equal(findDuplicateKey('{"a" : 1 , "b":2}'), null);
+  assert.equal(findDuplicateKey('{"a":"same","b":"same"}'), null); // equal VALUES are not duplicate keys
+  assert.deepEqual(findDuplicateKey('{"a" \n : 1 , "a"\t:2}'), { key: 'a', depth: 1 });
 });

@@ -300,6 +300,81 @@ test.before(async () => {
   NORMALIZE.exec = normalizeCritique; NORMALIZE.concept = normalizeConceptCritique; FORBIDDEN_KEYS_LIST = [...FORBIDDEN_KEYS];
 });
 
+// ---- PF-10: REAL MODEL FAILURE PATTERNS. Not "does a valid structure pass", but "what does a language model actually do wrong, and does the system recover it SAFELY or refuse it PRECISELY":
+// A = recoverable by a deterministic, journaled normalization (one call); B = unparseable text, recovered by the ONE protocol re-ask (two calls); C = refused with a precise code, never repaired, never re-asked (one call).
+const runSeq = (c, replies) => {
+  let n = 0;
+  return askAndNormalize({ complete: async () => { const text = replies[n]; n += 1; if (text === undefined) throw new Error('no reply'); return { text, model: 'fake', request_id: `r${n}` }; }, instruction: { system: 's', user: 'u' }, stage: c.stage, spec: c.spec, normalize: c.normalize }).then((r) => ({ ...r, calls: n }));
+};
+const FAILURES_A = {
+  fence: (t) => `\`\`\`json\n${t}\n\`\`\``,
+  prose_around: (t) => `Here is the answer you asked for:\n\n${t}\n\nI hope this helps, let me know if you want changes.`,
+  bom: (t) => `﻿${t}`,
+  pretty_tabs: (t) => JSON.stringify(JSON.parse(t), null, '\t'),
+  envelope_answer: (t) => JSON.stringify({ answer: JSON.parse(t) }),
+  envelope_response_cased: (t) => JSON.stringify({ Response: JSON.parse(t) }),
+  envelope_stage_name: (t) => JSON.stringify({ the_result_object: JSON.parse(t) }),
+};
+const FAILURES_B = {
+  trailing_comma: (t) => t.replace(/\}$/, ',}'),
+  truncated: (t) => t.slice(0, Math.max(10, t.length - 25)),
+  missing_closing_brace: (t) => t.slice(0, -1),
+  smart_quoted_keys: (t) => t.replace(/"([a-z_]+)":/, '“$1”:'),
+  single_quoted: (t) => t.replace(/"([a-z_]+)":/g, "'$1':"),
+  comment_inside: (t) => t.replace('{', '{ // the answer\n'),
+  unquoted_first_key: (t) => t.replace(/^\{"([a-z_]+)":/, '{$1:'),
+};
+
+test('PF-10 real model failure patterns, every spec stage: A is recovered in one call with a journal and the same value; B gets exactly one re-ask and is recovered; C is refused precisely, with no repair and no re-ask', async () => {
+  const specStages = STAGE_CONTRACTS.filter((c) => c.normalize);
+  assert.equal(specStages.length, 5);
+  for (const c of specStages) {
+    for (const seed of SEEDS.slice(0, 8)) {
+      const valid = validAnswer(c.stage, seed);
+      const expected = c.normalize(structuredClone(valid));
+      const text = JSON.stringify(valid);
+      for (const [name, damage] of Object.entries(FAILURES_A)) {
+        const r = await runSeq(c, [damage(text)]);
+        assert.deepEqual(r.value, expected, `${c.stage} A ${name}`);
+        assert.equal(r.calls, 1, `${c.stage} A ${name}`);
+        if (name.startsWith('envelope')) assert.deepEqual(r.meta.repairs.map((x) => x.kind), [REPAIR_KIND.ENVELOPE], `${c.stage} ${name}`);
+      }
+      for (const [name, damage] of Object.entries(FAILURES_B)) {
+        const broken = damage(text);
+        assert.throws(() => JSON.parse(broken.slice(broken.indexOf('{'), broken.lastIndexOf('}') + 1) || broken), `${c.stage} B ${name} must really be unparseable`);
+        const r = await runSeq(c, [broken, text]);
+        assert.deepEqual(r.value, expected, `${c.stage} B ${name}`);
+        assert.equal(r.calls, 2, `${c.stage} B ${name}`);
+        assert.equal(r.meta.protocol_repair.outcome, 'PARSED');
+        const twice = await runSeq(c, [broken, broken, text]).catch((e) => e);
+        assert.equal(twice.code, 'BRAIN_MALFORMED', `${c.stage} B ${name} twice`);
+        assert.equal(twice.evidence.protocol_repair.outcome, 'STILL_MALFORMED');
+      }
+      // C: refused precisely, in ONE call
+      const keys = Object.keys(valid);
+      const first = keys[0];
+      const refusals = [
+        ['duplicate key', text.replace('{', `{"${first}":${JSON.stringify(valid[first])},`), 'BRAIN_RULE_VIOLATION', /twice/],
+        ['extra key', JSON.stringify({ ...valid, explanation: 'because' }), 'BRAIN_UNKNOWN_KEY', /explanation/],
+        ['wrapper plus a sibling', JSON.stringify({ answer: valid, note: 'x' }), 'BRAIN_UNKNOWN_KEY', /answer|note/],
+        ['a key replaced by a number', JSON.stringify({ ...valid, [first]: 7 }), ['BRAIN_NUMERIC_VALUE', 'BRAIN_LIST_INVALID', 'BRAIN_TEXT_INVALID', 'BRAIN_ENUM_INVALID', 'BRAIN_MALFORMED'], /./], // refused as a wrong TYPE, whichever check sees it first
+        ['a key replaced by null', JSON.stringify({ ...valid, [first]: null }), null, /./],
+        ['a key dropped, nothing misspelled', JSON.stringify(Object.fromEntries(Object.entries(valid).filter(([k]) => k !== first))), 'BRAIN_MISSING_KEY', /./],
+        ['a list given as one string', JSON.stringify({ ...valid, ...Object.fromEntries(Object.entries(valid).filter(([, v]) => Array.isArray(v)).slice(0, 1).map(([k, v]) => [k, v.join('; ')])) }), null, /./],
+      ];
+      for (const [name, damaged, code, message] of refusals) {
+        if (name === 'a list given as one string' && !Object.values(valid).some(Array.isArray)) continue;
+        const e = await runSeq(c, [damaged, text]).then(() => null, (error) => error);
+        assert.ok(e, `${c.stage} C ${name} must be refused`);
+        if (code) assert.ok([].concat(code).includes(e.code), `${c.stage} C ${name}: ${e.code} ${e.message}`);
+        assert.match(e.message, message, `${c.stage} C ${name}`);
+        assert.equal(e.evidence.protocol_repair, undefined, `${c.stage} C ${name}: no re-ask for a parseable answer`);
+        assert.equal(e.evidence.raw_answer, damaged.slice(0, 8000), `${c.stage} C ${name}`); // the evidence is bounded
+      }
+    }
+  }
+});
+
 test('PF-9 the generated matrix document is current (it is regenerated from the audit, never edited by hand)', async () => {
   const committed = await readFile(new URL('../docs/architecture/creative-brain-contract-matrix.md', import.meta.url), 'utf8').catch(() => null);
   assert.ok(committed, 'run: node scripts/check-creative-brain-parity.mjs --write-matrix');

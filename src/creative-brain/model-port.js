@@ -19,11 +19,43 @@ export function safeCause(cause) {
   return out;
 }
 
-export function parseJsonObject(text, where = 'answer') {
+function jsonSlice(text, where) {
   const trimmed = String(text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const start = trimmed.indexOf('{'); const end = trimmed.lastIndexOf('}');
   if (start < 0 || end < start) fail(BRAIN_ERROR.MALFORMED, 'the model returned no JSON object', where);
-  try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
+  return trimmed.slice(start, end + 1);
+}
+
+export function parseJsonObject(text, where = 'answer') {
+  try { return JSON.parse(jsonSlice(text, where)); } catch (error) { if (error?.code === BRAIN_ERROR.MALFORMED) throw error; return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
+}
+
+/**
+ * JSON.parse silently keeps the LAST of two equal keys in one object, which would let the parser pick between two answers. Returns the first duplicated key (and where), or null. Valid JSON only.
+ */
+export function findDuplicateKey(text, where = 'answer') {
+  const s = jsonSlice(text, where);
+  const stack = [];
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s[i];
+    if (c === '{') stack.push(new Set());
+    else if (c === '[') stack.push(null);
+    else if (c === '}' || c === ']') stack.pop();
+    else if (c === '"') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
+      let k = j + 1;
+      while (k < s.length && /\s/.test(s[k])) k += 1;
+      const top = stack[stack.length - 1];
+      if (s[k] === ':' && top) {
+        const key = JSON.parse(s.slice(i, j + 1));
+        if (top.has(key)) return { key, depth: stack.length };
+        top.add(key);
+      }
+      i = j;
+    }
+  }
+  return null;
 }
 
 /**
@@ -127,6 +159,8 @@ export async function askAndNormalize({ complete, instruction, stage, schema = n
   }
   const meta = { model: reply?.model ?? null, request_id: reply?.request_id ?? null, key_repairs: [], repairs: [], ...(repair ? { protocol_repair: repair } : {}) };
   try {
+    const duplicate = findDuplicateKey(reply?.text, stage);
+    if (duplicate) fail(BRAIN_ERROR.RULE_VIOLATION, `${stage}: the key "${duplicate.key}" appears twice in one object, so the answer does not say which of the two values it means`, stage, { problem: 'DUPLICATE_KEY', words: [duplicate.key] });
     let raw = parsed;
     if (spec) {
       raw = normalizeNearMisses(spec, parsed, meta.repairs, stage);

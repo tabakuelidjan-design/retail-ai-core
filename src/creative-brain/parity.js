@@ -20,7 +20,7 @@ import {
 import {
   buildConceptCriticInstruction, CONCEPT_DIMENSIONS, normalizeConceptCritique,
 } from './concept-critic.js';
-import { renderSpec } from './contract.js';
+import { renderShape, renderSpec } from './contract.js';
 import {
   buildFramerInstruction, buildProblemFrame, FRAME_CONTRACT, FRAME_SPEC,
 } from './problem-frame.js';
@@ -90,6 +90,12 @@ const forbidFlags = (spec) => (spec.kind === 'text' ? (spec.forbid ? 1 : 0) : (s
 export function auditSpecStage(contract) {
   const { system } = contract.instruction();
   const rows = []; const failures = [];
+  // THE SHAPE: the model must be shown the exact JSON object (no wrapper key), not only a list of field descriptions
+  for (const line of renderShape(contract.spec)) {
+    const present = system.includes(line);
+    rows.push({ stage: contract.stage, kind: 'SHAPE', path: 'answer', rule: line.slice(0, 120), instruction: line.slice(0, 230), validator: contract.validator, stated: present });
+    if (!present) failures.push(`${contract.stage}: the instruction does not show the answer shape: "${line.slice(0, 80)}"`);
+  }
   for (const line of renderSpec(contract.spec, 'answer')) {
     const present = system.includes(line);
     rows.push({ stage: contract.stage, kind: 'FIELD', path: line.split(':')[0], rule: line, instruction: line, validator: contract.validator, stated: present });

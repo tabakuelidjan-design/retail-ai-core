@@ -1,5 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { list, obj, renderSpec, text, validateAnswer } from './contract.js';
+import { list, obj, renderContract, text, validateAnswer } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
@@ -93,7 +93,7 @@ export function buildFramerInstruction({ observation }) {
   const system = [
     'You are the Nordla problem framer. Before any idea is sought, you frame the creative problem for a product visual from the observation you are given.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
-    ...renderSpec(FRAME_SPEC, 'answer'),
+    ...renderContract(FRAME_SPEC, 'answer'),
     'generic_risks name what would make the result generic or template-like for THIS product, audience and occasion; distinctive_levers name what could make it distinctive. occasion_context says what occasion or buying situation the product serves, or that none applies.',
     'You do not propose a concept, a layout or a scene here. You never use numbers. rationale is one concise sentence of why this framing, for the record; it is not a reasoning log.',
     'Reason with these principles of art direction:',

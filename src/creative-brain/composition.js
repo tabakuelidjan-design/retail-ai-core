@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { assertValidLayoutRecipe } from '../creative-intelligence/layout-recipes.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import {
-  list, map, obj, renderRules, renderSpec, text, validateSpec, word,
+  list, map, obj, renderContract, renderRules, text, validateSpec, word,
 } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
@@ -260,7 +260,7 @@ export function buildCompositionInstruction({ frame, concept, artDirection, hint
   const system = [
     'You are the Nordla composition planner. From the art direction you state the RELATIONS of the composition; you never give a coordinate, a size, a margin or any number: a deterministic solver finds the geometry.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
-    ...renderSpec(COMPOSITION_SPEC, 'answer'),
+    ...renderContract(COMPOSITION_SPEC, 'answer'),
     ...renderRules(COMPOSITION_RULES),
     'The relations must agree with each other, and Nordla refuses a plan whose relations contradict. Before you answer, check your plan against EVERY rule that applies to the values you chose:',
     ...RELATION_RULES.map((r) => `- ${r.label}: ${r.meaning}. Needs: ${r.needs}.`),

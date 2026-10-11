@@ -1,6 +1,6 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import {
-  list, obj, renderRules, renderSpec, text, validateSpec, word,
+  list, obj, renderContract, renderRules, text, validateSpec, word,
 } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
@@ -110,7 +110,7 @@ export function buildConceptInstruction({ frame, rejected = [], refine = null, c
   const system = [
     'You are the Nordla concept director. From the creative problem frame you invent several GENUINELY DIFFERENT concepts before any layout, scene or colour is chosen.',
     `Return ONLY one JSON object with ${count.min === count.max ? `exactly ${count.min}` : `${count.min} to ${count.max}`} concepts, described exactly by these lines (Nordla refuses an answer that does not follow them):`,
-    ...renderSpec(conceptsAnswerSpec(count), 'answer'),
+    ...renderContract(conceptsAnswerSpec(count), 'answer'),
     ...renderRules(CONCEPT_RULES),
     'Concepts must differ in their central idea, metaphor and story, not merely in background, colour, alignment or camera angle: a variation of layout is not a concept and will be refused. Every concept must lead back to the product.',
     'Do not reach for the image that usually comes with an occasion: argue the concept from the occasion\'s register, the relationship between giver and receiver and the moment in time, for this product.',

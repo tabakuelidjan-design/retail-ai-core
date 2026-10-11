@@ -1,6 +1,6 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import {
-  list, obj, renderRules, renderSpec, text, validateSpec, word,
+  list, obj, renderContract, renderRules, text, validateSpec, word,
 } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
@@ -147,7 +147,7 @@ export function buildEvaluationInstruction({ frame, concepts }) {
   const system = [
     'You are the Nordla concept selector. You compare creative concepts for one problem frame, criterion by criterion, in words.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
-    ...renderSpec(evaluationsAnswerSpec(concepts.length), 'answer'),
+    ...renderContract(evaluationsAnswerSpec(concepts.length), 'answer'),
     ...renderRules(SELECTION_RULES),
     'outcome MEETS means the expectation is met, PARTIAL that it is arguable, FAILS that it clearly is not, NOT_ASSESSED that you cannot judge it.',
     'Never give a score, a number, a rank or a winner: Nordla derives the decision. Be demanding: a clean idea that any competitor could publish is not distinctive, and a concept that hides the product does not meet the commercial criteria.',

@@ -102,6 +102,29 @@ export function renderSpec(spec, name = 'answer', depth = 0) {
   return lines;
 }
 
+/** What a model sees first: the exact JSON shape of the answer, as a skeleton, and the statement that the dotted names below it are field names and not keys (a model once wrapped its answer in an "answer" key because of them). */
+const skeleton = (spec, indent = '') => {
+  const next = `${indent}  `;
+  switch (spec.kind) {
+    case 'text': return '"<one line of text>"';
+    case 'word': return `"<one of: ${Object.values(spec.vocab).join(' | ')}>"`;
+    case 'list': return `[${skeleton(spec.item, indent)}, ...]`;
+    case 'map': return `{ "<one of: ${Object.values(spec.keyVocab).join(' | ')}>": ${skeleton(spec.value, indent)}, ... }`;
+    case 'object': return `{\n${Object.entries(spec.fields).map(([key, child]) => `${next}"${key}": ${skeleton(child, next)}`).join(',\n')}\n${indent}}`;
+    default: return '""';
+  }
+};
+export function renderShape(spec) {
+  return [
+    'The answer is exactly this JSON object, and nothing else (no text before or after it). Its keys are at the TOP LEVEL of the object: there is no wrapper key around it (no "answer", no "result", no "response"). Every list is a JSON array in square brackets, every text a JSON string:',
+    ...skeleton(spec).split('\n'),
+    'The dotted names in the lines below (for example answer.audience) only NAME the fields to describe them: they are not keys, and the word "answer" is never a key.',
+  ];
+}
+
+/** The complete contract of an answer for an instruction: its shape, then every field, vocabulary, limit and count. */
+export const renderContract = (spec, name = 'answer') => [...renderShape(spec), ...renderSpec(spec, name)];
+
 /** The rules that a spec cannot express, as the lines of the instruction. */
 export const renderRules = (rules) => rules.map((r) => `RULE ${r.id}: ${r.statement}`);
 
@@ -109,7 +132,7 @@ export const renderRules = (rules) => rules.map((r) => `RULE ${r.id}: ${r.statem
 // It repairs only SYNTACTIC near misses, never a creative meaning: (1) a key misspelled within two edits when exactly one key is unknown and exactly one is missing (so no choice is made);
 // (2) line breaks, tabs and runs of blanks inside a one-line text; (3) another casing of a word of a closed vocabulary. It never chooses between contradictory values, never fills a missing value,
 // never turns one word of a vocabulary into a different one, never drops a relation. Every repair is returned as journal evidence: { path, kind, from, to }.
-export const REPAIR_KIND = Object.freeze({ KEY_NEAR_MISS: 'KEY_NEAR_MISS', WHITESPACE: 'WHITESPACE', WORD_CASE: 'WORD_CASE', OPTIONAL_EMPTY: 'OPTIONAL_EMPTY' });
+export const REPAIR_KIND = Object.freeze({ ENVELOPE: 'ENVELOPE', KEY_NEAR_MISS: 'KEY_NEAR_MISS', WHITESPACE: 'WHITESPACE', WORD_CASE: 'WORD_CASE', OPTIONAL_EMPTY: 'OPTIONAL_EMPTY' });
 const MAX_KEY_EDITS = 2;
 
 function editDistance(a, b) {
@@ -121,7 +144,20 @@ function editDistance(a, b) {
   return row[b.length];
 }
 
+// A wrapper around the whole answer ({"answer": {...}}): the SAME answer one level down. It is unwrapped only when the object has exactly ONE key that is not a field of the contract, the inside is a plain
+// object, and either the key is a generic envelope word or the inside already IS the contract's object (only its keys, every required one present): nothing is chosen, nothing is invented.
+const ENVELOPE_KEYS = Object.freeze(['answer', 'response', 'result', 'output', 'data']);
+
 export function normalizeNearMisses(spec, value, repairs = [], path = 'answer') {
+  if (spec.kind === 'object' && isPlain(value) && !/[.[]/.test(path)) {
+    const keys = Object.keys(value);
+    const inner = keys.length === 1 ? value[keys[0]] : null;
+    const fitsTheContract = isPlain(inner) && Object.keys(inner).every((k) => k in spec.fields) && Object.keys(spec.fields).every((k) => spec.optional.includes(k) || k in inner);
+    if (keys.length === 1 && !(keys[0] in spec.fields) && isPlain(inner) && (ENVELOPE_KEYS.includes(keys[0].trim().toLowerCase()) || fitsTheContract)) {
+      repairs.push({ path, kind: REPAIR_KIND.ENVELOPE, from: `{"${keys[0]}": {...}}`, to: 'the inner object' });
+      return normalizeNearMisses(spec, value[keys[0]], repairs, path);
+    }
+  }
   switch (spec.kind) {
     case 'text': {
       if (typeof value !== 'string' || !/[\r\n\t\u2028\u2029]/.test(value)) return value;
