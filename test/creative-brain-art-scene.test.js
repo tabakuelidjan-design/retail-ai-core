@@ -60,7 +60,7 @@ test('AS-4 nothing in the art direction may be, or stand in for, the product', (
 test('AS-5 the art director instruction is semantic, forbids substitutes, and a model cannot slip anything past the contract', async () => {
   const { system, user } = buildArtDirectionInstruction({ frame: frame(), concept: concept(), hints: ['let the light be more raking'] });
   assert.match(system, /never a coordinate, a size, a colour code or any number/);
-  assert.match(system, /never describe the product, a phone, a case/);
+  assert.match(system, /may never contain, show or describe the product/);
   assert.match(system, /REVISION of an earlier art direction/);
   assert.match(system, /let the light be more raking/);
   assert.deepEqual(Object.keys(JSON.parse(user)), ['problem_frame', 'concept']);

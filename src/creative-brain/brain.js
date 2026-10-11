@@ -162,6 +162,7 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
       ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [] });
       const picked = await conceptRounds({ frame, rejected });
       if (picked.status !== 'SELECTED') return deepFreeze({ status: picked.status, observation, problem_frame: frame, rounds: picked.rounds });
+      progress.concept = picked.concept;
       const rest = await fromConcept({ observation, frame, concept: picked.concept, productAssetRef: brief.asset.ref });
       return { status: 'PLANNED', plan: await atStage('PLAN_COHERENCE', null, async () => assemble({ observation, problem_frame: frame, rounds: picked.rounds, concept: picked.concept, ...rest })) };
     },
@@ -180,6 +181,7 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
         const rejected = [plan.concept, ...history.map((h) => h.concept).filter(Boolean)];
         const picked = await conceptRounds({ frame, rejected });
         if (picked.status !== 'SELECTED') return deepFreeze({ status: picked.status, diagnosis, rounds: picked.rounds });
+        progress.concept = picked.concept;
         const rest = await fromConcept({ observation, frame, concept: picked.concept, productAssetRef: brief.asset.ref, recovery: diagnosis });
         return { status: 'REPLANNED', diagnosis, plan: assemble({ observation, problem_frame: frame, rounds: picked.rounds, concept: picked.concept, ...rest }) };
       }

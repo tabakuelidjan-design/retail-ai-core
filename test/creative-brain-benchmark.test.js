@@ -594,3 +594,24 @@ test('BB-29 a contradictory composition names its relation, keeps the model answ
   assert.equal(w.envRequests.length, 0);
   assert.equal(w.vlmCalls.length, 0);
 });
+
+test('BB-30 a refused art direction names the field, the rule and the word, keeps the answer, and the record still shows the full selected concept', async () => {
+  const failed = artDirectionAnswer({
+    narrative_elements: [{ element: 'A flat luminous surface suggesting a screen left behind', reason: 'they show the maker has just finished, the care taken in the making', zone: 'BACKGROUND' }],
+  });
+  const w = world({ answers: { art_direct: [failed] } });
+  const r = await live(w);
+  assert.equal(r.status, RESULT_STATE.BLOCKED);
+  const s = await w.store.readJson('summary.json');
+  assert.deepEqual(
+    { reason: s.final.reason, stopped_at: s.final.stopped_at, cause: s.error.cause, problem: s.error.problem, words: s.error.words, field: s.error.field, code: s.error.code },
+    { reason: 'ART_DIRECTION_INVALID', stopped_at: 'ART_DIRECT', cause: 'ART_DIRECTION_INVALID', problem: 'SCENE_ELEMENT_SUBSTITUTES_THE_PRODUCT', words: ['screen'], field: 'art_direction.narrative_elements[0].element', code: 'BRAIN_FORBIDDEN_CONTENT' },
+  );
+  assert.equal(s.error.evidence.raw_answer, JSON.stringify(failed));
+  assert.ok(s.error.evidence.request_id);
+  assert.equal(s.partial_plan.concept.concept_id, s.concept_rounds[0].selection.concept_id);
+  assert.ok(s.partial_plan.concept.central_idea && s.partial_plan.concept.visual_metaphor && s.partial_plan.concept.story);
+  assert.equal(s.partial_plan.art_direction, null);
+  assert.equal(w.trace.filter((x) => x === 'art_direct').length, 1);
+  assert.equal(w.envRequests.length, 0);
+});

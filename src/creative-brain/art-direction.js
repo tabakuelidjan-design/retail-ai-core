@@ -1,7 +1,7 @@
 import { conceptualWords } from './concept.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
 import { askAndNormalize } from './model-port.js';
-import { assertNoSubstitute, SCENE_FORBIDDEN } from './substitutes.js';
+import { assertNoSubstitute, SCENE_FORBIDDEN, SUBSTITUTE_LEXICON } from './substitutes.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
 } from './validation.js';
@@ -24,14 +24,18 @@ const MODEL_KEYS = ['atmosphere', 'depth_model', 'material_language', 'lighting_
   'negative_space_strategy', 'narrative_elements', 'permitted_secondary_elements', 'forbidden_decorative_noise', 'rationale'];
 const KEYS = ['art_direction_id', 'concept_id', ...MODEL_KEYS];
 export const MAX_NARRATIVE_ELEMENTS = 6;
+// the limits of the contract, as named constants: the validator enforces them AND the ART_DIRECT instruction states them
+export const ART_LIMITS = Object.freeze({
+  text_max: 300, element_max: 140, reason_min: 12, reason_max: 220, secondary_max_items: 5, secondary_item_max: 140, noise_min_items: 1, noise_max_items: 8, noise_item_max: 140,
+});
 
 // a digit, a colour code or a unit is geometry or styling that belongs elsewhere
 const GEOMETRY_TEXT = /[0-9]|#[0-9a-f]{3,8}\b|\b(px|pt|em|rem)\b/i;
 
 function narrativeElement(value, where, concept) {
   closed(value, ['element', 'reason', 'zone'], where);
-  const element = oneLine(value.element, `${where}.element`, { max: 140 });
-  const reason = oneLine(value.reason, `${where}.reason`, { min: 12, max: 220 });
+  const element = oneLine(value.element, `${where}.element`, { max: ART_LIMITS.element_max });
+  const reason = oneLine(value.reason, `${where}.reason`, { min: ART_LIMITS.reason_min, max: ART_LIMITS.reason_max });
   assertNoSubstitute(element, `${where}.element`);
   // the reason must be argued in the concept: it shares conceptual words with the concept's own text
   const conceptWords = new Set(conceptualWords([concept.central_idea, concept.visual_metaphor, concept.story, concept.emotional_intent].join(' ')));
@@ -47,8 +51,8 @@ export function normalizeArtDirection(raw, { concept }) {
   noNumbers(raw, 'art_direction');
   closed(raw, MODEL_KEYS, 'art_direction');
   for (const key of ['atmosphere', 'material_language', 'lighting_intent', 'rationale']) if (typeof raw[key] === 'string' && GEOMETRY_TEXT.test(raw[key])) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `art_direction.${key} holds a colour code or a unit`, `art_direction.${key}`);
-  const secondary = listOf(raw.permitted_secondary_elements, 'art_direction.permitted_secondary_elements', { min: 0, max: 5 }, (v, w) => assertNoSubstitute(oneLine(v, w, { max: 140 }), w));
-  const noise = listOf(raw.forbidden_decorative_noise, 'art_direction.forbidden_decorative_noise', { min: 1, max: 8 }, (v, w) => oneLine(v, w, { max: 140 }));
+  const secondary = listOf(raw.permitted_secondary_elements, 'art_direction.permitted_secondary_elements', { min: 0, max: ART_LIMITS.secondary_max_items }, (v, w) => assertNoSubstitute(oneLine(v, w, { max: ART_LIMITS.secondary_item_max }), w));
+  const noise = listOf(raw.forbidden_decorative_noise, 'art_direction.forbidden_decorative_noise', { min: ART_LIMITS.noise_min_items, max: ART_LIMITS.noise_max_items }, (v, w) => oneLine(v, w, { max: ART_LIMITS.noise_item_max }));
   const body = {
     concept_id: concept.concept_id,
     atmosphere: oneLine(raw.atmosphere, 'art_direction.atmosphere'),
@@ -78,9 +82,12 @@ export function buildArtDirectionInstruction({ frame, concept, hints = [] }) {
     `depth_model: ${vocab(DEPTH_MODEL)}. visual_rhythm: ${vocab(VISUAL_RHYTHM)}. product_relationship: ${vocab(PRODUCT_RELATIONSHIP)}. text_image_relationship: ${vocab(TEXT_IMAGE_RELATIONSHIP)}.`,
     `realism: ${vocab(REALISM)}. emotional_temperature: ${vocab(EMOTIONAL_TEMPERATURE)}. visual_tension: ${vocab(VISUAL_TENSION)}. negative_space_strategy: ${vocab(NEGATIVE_SPACE_STRATEGY)}.`,
     `narrative_elements is a list (at most ${MAX_NARRATIVE_ELEMENTS}) of { element, reason, zone } where zone is ${vocab(SCENE_ZONE)}; the reason must be argued in the concept. permitted_secondary_elements and forbidden_decorative_noise are lists of one-line texts.`,
-    'atmosphere, material_language, lighting_intent and rationale are ONE line of plain text of at most 300 characters. rationale is one concise sentence of why, for the record; it is not a reasoning log.',
-    'The real product is protected merchant pixels placed by the system: never describe the product, a phone, a case, a device, a substitute for it, a competing hero object, text or a logo. The scene may be rich if the concept calls for it, and it must leave a calm area for the product.',
-    'Every element needs a reason in the concept: no arbitrary decoration.',
+    `atmosphere, material_language, lighting_intent and rationale are ONE line of plain text of at most ${ART_LIMITS.text_max} characters, with no digit at all, no colour code and no unit. rationale is one concise sentence of why, for the record; it is not a reasoning log.`,
+    `narrative_elements: each element is one line of at most ${ART_LIMITS.element_max} characters and each reason one line of ${ART_LIMITS.reason_min} to ${ART_LIMITS.reason_max} characters. permitted_secondary_elements: ${0} to ${ART_LIMITS.secondary_max_items} texts of at most ${ART_LIMITS.secondary_item_max} characters. forbidden_decorative_noise: ${ART_LIMITS.noise_min_items} to ${ART_LIMITS.noise_max_items} texts of at most ${ART_LIMITS.noise_item_max} characters (what must NOT appear as decoration; you may name anything there).`,
+    'The real product is protected merchant pixels placed by the system. The scene may be rich if the concept calls for it, and it must leave a calm area for the product, but it may never contain, show or describe the product or anything that could stand in for it or compete with it.',
+    `Nordla REFUSES the whole answer if any narrative element or permitted secondary element contains one of these words (whole words, plurals included, English or French): product and devices: ${SUBSTITUTE_LEXICON.product_and_devices.join(', ')}; branding, price and text: ${SUBSTITUTE_LEXICON.branding_price_and_text.join(', ')}; competing hero: ${SUBSTITUTE_LEXICON.competing_hero.join(', ')}. This is about the WORD, even in a metaphor ("suggesting a screen" is refused).`,
+    'If the concept\'s idea involves such an object (a screen, a device, a case, a label), express it WITHOUT naming it: through light, material, gesture, a trace, or an empty place where the system will add the real product.',
+    'Every element needs a reason in the concept: no arbitrary decoration. The reason of each narrative element must contain at least one significant word that also appears in the concept\'s central_idea, visual_metaphor, story or emotional_intent (not a stop word), or the answer is refused.',
     ...(hints.length ? ['This is a REVISION of an earlier art direction for the same concept. Improve it on these points (intents only, never coordinates or sizes):', ...hints.map((h) => `- ${h}`)] : []),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.ART_DIRECT })),

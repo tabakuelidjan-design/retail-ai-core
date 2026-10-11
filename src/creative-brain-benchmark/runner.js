@@ -77,7 +77,7 @@ const describeFailure = (error, stage) => {
   const brainStage = error?.brain_stage ?? null;
   const cause = classifyBrainFailure({ stage: brainStage, name: error?.name, code: error?.code, problem: error?.detail?.problem });
   return {
-    stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, problem: error?.detail?.problem ?? null, ...safeError(error),
+    stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, problem: error?.detail?.problem ?? null, words: error?.detail?.words ?? null, ...safeError(error),
     evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer } : null,
   };
 };
