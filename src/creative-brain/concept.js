@@ -1,5 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { askModel } from './model-port.js';
+import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine, wordOverlap, wordsOf,
 } from './validation.js';
@@ -110,9 +110,11 @@ export function buildConceptInstruction({ frame, rejected = [], refine = null, c
 export function createConceptDirector({ complete, count = CONCEPT_COUNT }) {
   return Object.freeze({
     async ideate({ frame, rejected = [], refine = null }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildConceptInstruction({ frame, rejected, refine, count }), stage: 'IDEATE' });
-      closed(raw, ['concepts'], 'answer');
-      return { concepts: normalizeConceptSet(raw.concepts, { rejected, count }), meta };
+      const { value, meta } = await askAndNormalize({
+        complete, instruction: buildConceptInstruction({ frame, rejected, refine, count }), stage: 'IDEATE', schema: { keys: ['concepts'], children: { concepts: { items: { keys: MODEL_KEYS } } } },
+        normalize: (raw) => { closed(raw, ['concepts'], 'answer'); return normalizeConceptSet(raw.concepts, { rejected, count }); },
+      });
+      return { concepts: value, meta };
     },
   });
 }

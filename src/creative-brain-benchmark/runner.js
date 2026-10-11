@@ -13,6 +13,7 @@ import {
   executableSpatialIntents, runProductPreservingCreative,
 } from '../creative-runtime/index.js';
 import { BRAIN_PORT_LIMITS } from '../marketing-creative/alibaba/qwen-brain-port.js';
+import { BRAIN_FAILURE, classifyBrainFailure } from './failure.js';
 
 // THE CREATIVE BRAIN LIVE BENCHMARK. This module wires the existing Creative Brain, end to end, into the product-preserving runtime and the critics, under fixed bounds. It makes NO creative
 // decision: every stage is the Brain's (or a deterministic gate's). It reads only the original brief, the real source asset and the brand package that its caller loads: never an earlier
@@ -70,6 +71,16 @@ export function worstCase({ canvas, criticChars, usdToEur = 1 }) {
 }
 
 const safeError = (error) => ({ code: error?.code ?? null, name: error?.name ?? null, field: error?.field ?? null, status: error?.status ?? error?.detail?.status ?? null, request_id: error?.requestId ?? error?.detail?.request_id ?? null, message: String(error?.message ?? '').slice(0, 300) });
+
+/** A stopped run names the exact stage, the round, one closed cause and the evidence of the failed model answer (bounded): never just "the plan stopped". */
+const describeFailure = (error, stage) => {
+  const brainStage = error?.brain_stage ?? null;
+  const cause = classifyBrainFailure({ stage: brainStage, name: error?.name, code: error?.code, problem: error?.detail?.problem });
+  return {
+    stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, ...safeError(error),
+    evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer } : null,
+  };
+};
 
 function criticBriefs({ brief, expression }) {
   const principles = Object.fromEntries(['photography', 'product_presentation', 'composition', 'layout_principles'].filter((k) => expression?.[k]).map((k) => [k, { principles: expression[k].principles, do: expression[k].do, dont: expression[k].dont }]));
@@ -168,7 +179,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
     record.problem_frame = planned.problem_frame ?? planned.plan?.problem_frame ?? null;
     record.concept_rounds = planned.rounds ?? planned.plan?.rounds ?? [];
     if (planned.status !== 'PLANNED') {
-      record.final = { state: RESULT_STATE.BLOCKED, reason: planned.status, note: 'no concept met the bar within the bounded rounds: nothing was produced' };
+      record.final = { state: RESULT_STATE.BLOCKED, reason: BRAIN_FAILURE.NO_CONCEPT_MEETS_BAR, classification: BRAIN_FAILURE.VALID_CREATIVE_BRAIN_REJECTION, stopped_at: 'SELECT_CONCEPT', note: 'no concept met the bar within the bounded rounds: nothing was produced (a valid rejection, the bar is not lowered)', owner_approval: OWNER_APPROVAL };
       await persist();
       return { ...report, status: RESULT_STATE.BLOCKED, final: record.final, owner_approval: OWNER_APPROVAL };
     }
@@ -195,13 +206,13 @@ export async function runLive(deps, { confirmed = false } = {}) {
       plan = replanned.plan;
     }
   } catch (error) {
-    record.error = { stage: currentStage, ...safeError(error) };
+    record.error = describeFailure(error, currentStage);
   }
 
   // the final state is the state of the last candidate that exists (a failure while preparing a recovery does not hide a candidate the owner can review); with no candidate it is BLOCKED
   const last = record.candidates.at(-1) ?? null;
   const state = last ? last.state : RESULT_STATE.BLOCKED;
-  record.final = { state, reason: record.error ? `STOPPED_AT_${record.error.stage}` : (last?.reason ?? null), stopped_early: Boolean(record.error), candidate: last?.n ?? null, owner_approval: OWNER_APPROVAL };
+  record.final = { state, reason: record.error ? record.error.cause : (last?.reason ?? null), stopped_at: record.error ? (record.error.brain_stage ?? record.error.stage) : null, stopped_round: record.error?.brain_round ?? null, stopped_early: Boolean(record.error), candidate: last?.n ?? null, owner_approval: OWNER_APPROVAL };
   assertFinalState(record.final.state);
   record.manual_creative_steering = 'NONE';
   await persist();

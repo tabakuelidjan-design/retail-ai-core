@@ -1,6 +1,6 @@
 import { conceptualWords } from './concept.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { askModel } from './model-port.js';
+import { askAndNormalize } from './model-port.js';
 import { assertNoSubstitute, SCENE_FORBIDDEN } from './substitutes.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
@@ -92,8 +92,11 @@ export function buildArtDirectionInstruction({ frame, concept, hints = [] }) {
 export function createArtDirector({ complete }) {
   return Object.freeze({
     async direct({ frame, concept, hints = [] }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildArtDirectionInstruction({ frame, concept, hints }), stage: 'ART_DIRECT' });
-      return { art_direction: normalizeArtDirection(raw, { concept }), meta };
+      const { value, meta } = await askAndNormalize({
+        complete, instruction: buildArtDirectionInstruction({ frame, concept, hints }), stage: 'ART_DIRECT',
+        schema: { keys: MODEL_KEYS, children: { narrative_elements: { items: { keys: ['element', 'reason', 'zone'] } } } }, normalize: (raw) => normalizeArtDirection(raw, { concept }),
+      });
+      return { art_direction: value, meta };
     },
   });
 }

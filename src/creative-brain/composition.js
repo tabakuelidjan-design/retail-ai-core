@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { assertValidLayoutRecipe } from '../creative-intelligence/layout-recipes.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { askModel } from './model-port.js';
+import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
 } from './validation.js';
@@ -221,8 +221,11 @@ export function buildCompositionInstruction({ frame, concept, artDirection, hint
 export function createCompositionPlanner({ complete }) {
   return Object.freeze({
     async plan({ frame, concept, artDirection, hints = [], approvedRoles = null }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildCompositionInstruction({ frame, concept, artDirection, hints, approvedRoles }), stage: 'COMPOSE' });
-      return { composition: normalizeCompositionPlan(raw), meta };
+      const { value, meta } = await askAndNormalize({
+        complete, instruction: buildCompositionInstruction({ frame, concept, artDirection, hints, approvedRoles }), stage: 'COMPOSE',
+        schema: { keys: MODEL_KEYS, children: { product_anchor: { keys: ['horizontal', 'vertical'] }, negative_space_reservation: { items: { keys: ['region', 'extent'] } } } }, normalize: (raw) => normalizeCompositionPlan(raw),
+      });
+      return { composition: value, meta };
     },
   });
 }

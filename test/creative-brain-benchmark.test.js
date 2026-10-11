@@ -511,3 +511,61 @@ test('BB-24 a rich scene with a clean integration zone passes the zone gate: tex
   assert.ok(gate.outcome.measured.structure_share <= gate.outcome.limit.max_structure_share);
   assert.notEqual(summary.candidates[0].reason, 'ENVIRONMENT_NOT_EMPTY');
 });
+
+// a concept answer whose first concept carries a misspelled key (the structure of the third live attempt)
+const typoed = (list, to = 'risisks') => list.map((c, i) => (i === 0 ? Object.fromEntries(Object.entries(c).map(([k, v]) => [k === 'risks' ? to : k, v])) : c));
+
+test('BB-25 a misspelled key of the contract no longer stops the benchmark: the repair is local, recorded, and changes nothing else', async () => {
+  const w = world({ answers: { ideate: [{ concepts: typoed(CONCEPTS) }] } });
+  const r = await live(w);
+  assert.equal(r.status, RESULT_STATE.READY_FOR_OWNER_REVIEW);
+  const s = await w.store.readJson('summary.json');
+  assert.deepEqual(s.brain_ledger.find((e) => e.decision === 'CONCEPT_ROUND').outcome.key_repairs, [{ path: 'IDEATE.concepts[0]', from: 'risisks', to: 'risks' }]);
+  assert.equal(w.trace.filter((x) => x === 'ideate').length, 1, 'no second call was made to repair it');
+});
+
+test('BB-26 a stopped plan names the exact stage, the round, one closed cause and keeps the model answer as evidence', async () => {
+  const answer = JSON.stringify({ concepts: typoed(CONCEPTS, 'hazards') });
+  const w = world({ answers: { ideate: [answer] } });
+  const r = await live(w);
+  assert.equal(r.status, RESULT_STATE.BLOCKED);
+  const s = await w.store.readJson('summary.json');
+  assert.equal(s.error.stage, 'CREATIVE_BRAIN_PLAN');
+  assert.equal(s.error.brain_stage, 'IDEATE');
+  assert.equal(s.error.brain_round, 1);
+  assert.equal(s.error.cause, 'CONCEPT_OUTPUT_INVALID');
+  assert.equal(s.error.code, 'BRAIN_UNKNOWN_KEY');
+  assert.equal(s.error.field, 'concepts[0].hazards');
+  assert.equal(s.error.evidence.raw_answer, answer);
+  assert.ok(s.error.evidence.request_id);
+  assert.deepEqual({ reason: s.final.reason, stopped_at: s.final.stopped_at, stopped_round: s.final.stopped_round }, { reason: 'CONCEPT_OUTPUT_INVALID', stopped_at: 'IDEATE', stopped_round: 1 });
+  assert.equal(w.envRequests.length, 0);
+  assert.equal(w.vlmCalls.length, 0);
+  const explained = await runExplain({ store: w.store });
+  assert.equal(explained.error.cause, 'CONCEPT_OUTPUT_INVALID');
+  assert.equal(explained.final.stopped_at, 'IDEATE');
+  assert.deepEqual(explained.brain_stages.filter((x) => x.reached).map((x) => x.stage), ['OBSERVE', 'FRAME']);
+});
+
+test('BB-27 a provider failure at each stage is named by its stage', async () => {
+  const cases = [['frame', 'PROBLEM_FRAME_INVALID', 'FRAME'], ['ideate', 'IDEATION_PROVIDER_FAILURE', 'IDEATE'], ['select', 'CONCEPT_SELECTION_PROVIDER_FAILURE', 'SELECT_CONCEPT'], ['art_direct', 'ART_DIRECTION_PROVIDER_FAILURE', 'ART_DIRECT'], ['compose', 'COMPOSITION_PLAN_INVALID', 'COMPOSE']];
+  for (const [stage, cause, brainStage] of cases) {
+    const w = world({ answers: { [stage]: [] } });
+    await live(w);
+    const s = await w.store.readJson('summary.json');
+    assert.deepEqual({ cause: s.error.cause, brain_stage: s.error.brain_stage, code: s.error.code }, { cause, brain_stage: brainStage, code: 'BRAIN_PORT_FAILED' }, stage);
+  }
+});
+
+test('BB-28 a Brain that rejects every concept is a VALID rejection, the second round starts on its own, and the bar is not lowered', async () => {
+  const rejectAll = [{ DISTINCTIVENESS: 'FAILS' }, { GENERIC_RISK: 'FAILS' }, { FEASIBILITY: 'FAILS' }];
+  const w = world({ answers: { ideate: [{ concepts: CONCEPTS }, { concepts: OTHER_CONCEPTS }], select: [selectAnswer(CONCEPTS, rejectAll), selectAnswer(OTHER_CONCEPTS, rejectAll)] } });
+  const r = await live(w);
+  assert.equal(r.status, RESULT_STATE.BLOCKED);
+  const s = await w.store.readJson('summary.json');
+  assert.equal(s.error, null);
+  assert.deepEqual({ reason: s.final.reason, classification: s.final.classification, stopped_at: s.final.stopped_at }, { reason: 'NO_CONCEPT_MEETS_BAR', classification: 'VALID_CREATIVE_BRAIN_REJECTION', stopped_at: 'SELECT_CONCEPT' });
+  assert.equal(s.concept_rounds.length, 2);
+  assert.ok(s.concept_rounds.every((round) => round.selection.outcome === 'REJECT_CONCEPT' && round.selection.decisions.every((d) => d.evidence.length > 20)));
+  assert.deepEqual(w.trace, ['frame', 'ideate', 'select', 'ideate', 'select']);
+});

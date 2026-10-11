@@ -1,5 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { askModel } from './model-port.js';
+import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, enumOf, fail, listOf, noNumbers, oneLine,
 } from './validation.js';
@@ -150,9 +150,11 @@ export function buildEvaluationInstruction({ frame, concepts }) {
 export function createConceptSelector({ complete }) {
   return Object.freeze({
     async select({ frame, concepts }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildEvaluationInstruction({ frame, concepts }), stage: 'SELECT_CONCEPT' });
-      closed(raw, ['evaluations'], 'answer');
-      const evaluations = listOf(raw.evaluations, 'evaluations', { min: 1, max: concepts.length }, (e, w) => normalizeEvaluation(e, w));
+      const { value: evaluations, meta } = await askAndNormalize({
+        complete, instruction: buildEvaluationInstruction({ frame, concepts }), stage: 'SELECT_CONCEPT',
+        schema: { keys: ['evaluations'], children: { evaluations: { items: { keys: ['concept_id', 'criteria'], children: { criteria: { items: { keys: ['criterion', 'outcome', 'evidence', 'refinement'], required: ['criterion', 'outcome', 'evidence'] } } } } } } },
+        normalize: (raw) => { closed(raw, ['evaluations'], 'answer'); return listOf(raw.evaluations, 'evaluations', { min: 1, max: concepts.length }, (e, w) => normalizeEvaluation(e, w)); },
+      });
       return { selection: selectConcept({ concepts, evaluations }), evaluations, meta };
     },
   });

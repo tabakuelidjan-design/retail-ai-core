@@ -1,5 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { askModel } from './model-port.js';
+import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
 } from './validation.js';
@@ -102,8 +102,8 @@ export function buildFramerInstruction({ observation }) {
 export function createProblemFramer({ complete }) {
   return Object.freeze({
     async frame({ observation }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildFramerInstruction({ observation }), stage: 'FRAME' });
-      return { frame: buildProblemFrame({ observation, model: raw }), meta };
+      const { value, meta } = await askAndNormalize({ complete, instruction: buildFramerInstruction({ observation }), stage: 'FRAME', schema: { keys: MODEL_FIELDS }, normalize: (raw) => buildProblemFrame({ observation, model: raw }) });
+      return { frame: value, meta };
     },
   });
 }

@@ -21,6 +21,14 @@ const MAX_CONCEPT_ROUNDS = 2;
 
 const ledgerRecord = (ledger, decision, component, rule, outcome) => ledger?.record({ decision, decided_by: component, rule, basis: [], outcome });
 
+/** Any failure of a stage names the stage (and the concept round) that failed: `error.brain_stage`, `error.brain_round`. A diagnosis never has to guess where a plan stopped. */
+async function atStage(stage, round, fn) {
+  try { return await fn(); } catch (error) {
+    if (error && typeof error === 'object' && !error.brain_stage) { error.brain_stage = stage; if (round != null) error.brain_round = round; }
+    throw error;
+  }
+}
+
 /** The approved text roles of a brief (what the composition must keep). */
 const approvedRolesOf = (observation) => observation.approved_text_roles;
 
@@ -94,10 +102,10 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
     for (let round = 1; round <= roundLimit; round += 1) {
       if (bounds && roundsUsed >= roundLimit) break;
       roundsUsed += 1;
-      const { concepts, meta: ideateMeta } = await director.ideate({ frame, rejected: against, refine: toRefine });
-      ledgerRecord(ledger, DECISION.CONCEPT_ROUND, COMPONENT.CONCEPT_DIRECTOR, 'GENUINELY_DISTINCT_CONCEPTS_BEFORE_ANY_LAYOUT', { round, concept_ids: concepts.map((c) => c.concept_id), model: ideateMeta.model, request_id: ideateMeta.request_id });
-      const { selection, evaluations, meta } = await selector.select({ frame, concepts });
-      ledgerRecord(ledger, DECISION.CONCEPT_SELECTION, COMPONENT.CONCEPT_SELECTOR, 'CRITERION_WORDS_WITHOUT_A_SCORE', { round, outcome: selection.outcome, concept_id: selection.concept_id, decisions: selection.decisions.map((d) => [d.concept_id, d.decision]), reasons: selection.reasons, model: meta.model, request_id: meta.request_id });
+      const { concepts, meta: ideateMeta } = await atStage('IDEATE', round, () => director.ideate({ frame, rejected: against, refine: toRefine }));
+      ledgerRecord(ledger, DECISION.CONCEPT_ROUND, COMPONENT.CONCEPT_DIRECTOR, 'GENUINELY_DISTINCT_CONCEPTS_BEFORE_ANY_LAYOUT', { round, concept_ids: concepts.map((c) => c.concept_id), model: ideateMeta.model, request_id: ideateMeta.request_id, key_repairs: ideateMeta.key_repairs ?? [] });
+      const { selection, evaluations, meta } = await atStage('SELECT_CONCEPT', round, () => selector.select({ frame, concepts }));
+      ledgerRecord(ledger, DECISION.CONCEPT_SELECTION, COMPONENT.CONCEPT_SELECTOR, 'CRITERION_WORDS_WITHOUT_A_SCORE', { round, outcome: selection.outcome, concept_id: selection.concept_id, decisions: selection.decisions.map((d) => [d.concept_id, d.decision]), reasons: selection.reasons, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [] });
       rounds.push({ round, concepts, selection, evaluations });
       if (selection.outcome === SELECTION.SELECT) return { status: 'SELECTED', concept: concepts.find((c) => c.concept_id === selection.concept_id), rounds };
       // the next round does not return to what was judged weak: rejected concepts are excluded, a promising one is refined
@@ -116,13 +124,13 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
 
   /** From a selected concept: art direction, composition, scene, production plan. */
   async function fromConcept({ observation, frame, concept, productAssetRef, artHints = [], composeHints = [], recovery = null, keep = {} }) {
-    const art = keep.art_direction ? { art_direction: keep.art_direction, meta: { model: null, request_id: null } } : await artDirector.direct({ frame, concept, hints: artHints });
-    if (!keep.art_direction) ledgerRecord(ledger, DECISION.ART_DIRECTION, COMPONENT.ART_DIRECTOR, 'SEMANTIC_ART_DIRECTION_OF_THE_SELECTED_CONCEPT', { art_direction_id: art.art_direction.art_direction_id, rationale: art.art_direction.rationale, model: art.meta.model, request_id: art.meta.request_id });
-    const comp = keep.composition ? { composition: keep.composition, meta: { model: null, request_id: null } } : await planner.plan({ frame, concept, artDirection: art.art_direction, hints: composeHints, approvedRoles: approvedRolesOf(observation) });
-    if (!keep.composition) ledgerRecord(ledger, DECISION.COMPOSITION_PLAN, COMPONENT.COMPOSITION_PLANNER, 'RELATIONAL_COMPOSITION_PLAN', { composition_id: comp.composition.composition_id, hero_relationship: comp.composition.hero_relationship, text_adjacency: comp.composition.text_adjacency, rationale: comp.composition.rationale, model: comp.meta.model, request_id: comp.meta.request_id });
-    const scene = composeScene({ artDirection: art.art_direction, productAssetRef });
+    const art = keep.art_direction ? { art_direction: keep.art_direction, meta: { model: null, request_id: null } } : await atStage('ART_DIRECT', null, () => artDirector.direct({ frame, concept, hints: artHints }));
+    if (!keep.art_direction) ledgerRecord(ledger, DECISION.ART_DIRECTION, COMPONENT.ART_DIRECTOR, 'SEMANTIC_ART_DIRECTION_OF_THE_SELECTED_CONCEPT', { art_direction_id: art.art_direction.art_direction_id, rationale: art.art_direction.rationale, model: art.meta.model, request_id: art.meta.request_id, key_repairs: art.meta.key_repairs ?? [] });
+    const comp = keep.composition ? { composition: keep.composition, meta: { model: null, request_id: null } } : await atStage('COMPOSE', null, () => planner.plan({ frame, concept, artDirection: art.art_direction, hints: composeHints, approvedRoles: approvedRolesOf(observation) }));
+    if (!keep.composition) ledgerRecord(ledger, DECISION.COMPOSITION_PLAN, COMPONENT.COMPOSITION_PLANNER, 'RELATIONAL_COMPOSITION_PLAN', { composition_id: comp.composition.composition_id, hero_relationship: comp.composition.hero_relationship, text_adjacency: comp.composition.text_adjacency, rationale: comp.composition.rationale, model: comp.meta.model, request_id: comp.meta.request_id, key_repairs: comp.meta.key_repairs ?? [] });
+    const scene = await atStage('SCENE', null, async () => composeScene({ artDirection: art.art_direction, productAssetRef }));
     ledgerRecord(ledger, DECISION.SCENE_SPEC, COMPONENT.SCENE_COMPOSER, 'SCENE_WITH_A_RESERVED_PRODUCT_INTEGRATION_ZONE', { scene_id: scene.scene_id, layers: scene.layers.length, protected_product: scene.protected_product.mode });
-    const production = planProduction({ artDirection: art.art_direction, scene, composition: comp.composition, recovery });
+    const production = await atStage('PRODUCTION_STRATEGY', null, async () => planProduction({ artDirection: art.art_direction, scene, composition: comp.composition, recovery }));
     ledgerRecord(ledger, DECISION.PRODUCTION_PLAN, COMPONENT.PRODUCTION_STRATEGIST, 'CAPABILITIES_FROM_THE_ART_DIRECTION', { production_plan_id: production.production_plan_id, required: production.required.map((r) => r.capability), unsupported: production.unsupported.map((u) => u.capability), executable: production.executable });
     return { art_direction: art.art_direction, composition: comp.composition, scene, production_plan: production };
   }
@@ -140,14 +148,14 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
     remainingConceptRounds: () => Math.max(0, roundLimit - roundsUsed),
     /** The first plan for a brief. Returns { status: 'PLANNED', plan } or { status: 'NO_CONCEPT_SELECTED', rounds } (nothing is produced from a round that selected nothing). */
     async plan({ brief, rejected = [] }) {
-      const observation = observeBrief({ brief });
+      const observation = await atStage('OBSERVE', null, async () => observeBrief({ brief }));
       ledgerRecord(ledger, DECISION.OBSERVATION, COMPONENT.CREATIVE_OBSERVER, 'DETERMINISTIC_READING_OF_THE_BRIEF', { approved_text_roles: observation.approved_text_roles, asset_origin: observation.asset_origin, claims: observation.claim_refs.length });
-      const { frame, meta } = await framer.frame({ observation });
-      ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id });
+      const { frame, meta } = await atStage('FRAME', null, () => framer.frame({ observation }));
+      ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [] });
       const picked = await conceptRounds({ frame, rejected });
       if (picked.status !== 'SELECTED') return deepFreeze({ status: picked.status, observation, problem_frame: frame, rounds: picked.rounds });
       const rest = await fromConcept({ observation, frame, concept: picked.concept, productAssetRef: brief.asset.ref });
-      return { status: 'PLANNED', plan: assemble({ observation, problem_frame: frame, rounds: picked.rounds, concept: picked.concept, ...rest }) };
+      return { status: 'PLANNED', plan: await atStage('PLAN_COHERENCE', null, async () => assemble({ observation, problem_frame: frame, rounds: picked.rounds, concept: picked.concept, ...rest })) };
     },
 
     /**
