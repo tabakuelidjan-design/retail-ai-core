@@ -1,4 +1,5 @@
 import { COMPONENT, DECISION } from './ledger.js';
+import { sceneWordingOf } from './scene-wording.js';
 
 // Provider request construction for the ENVIRONMENT lane: built by Nordla from the Creative Direction and the brand's photography / composition principles. The
 // request is ephemeral adapter data (it is never stored as canonical data, only its hash is recorded). It describes an EMPTY surface and backdrop: the real product is
@@ -53,14 +54,16 @@ export function buildEnvironmentRequest({ direction, expression, canvas, ledger 
     throw error;
   }
   // only the brand statements about the SCENE (light, surface, colour, space) go into the request: anything that talks about the product, the phone or the case would invite one
-  const aboutScene = (list) => (list ?? []).filter((s) => !/(^|[^a-z])(product|products|phone|case|cases|camera|personali[sz]ation|text|compos[a-z]*|generat[a-z]*)([^a-z]|$)/i.test(s));
+  const aboutScene = (list) => (list ?? []).filter((s) => !/(^|[^a-z])(product|products|phone|case|cases|camera|personali[sz]ation|text|compos[a-z]*|generat[a-z]*|focal|focus|subject|hero|shadows?)([^a-z]|$)/i.test(s));
+  // the scene wording of the direction, purified of any clause about the product, an object, a contact effect or a focal point (the direction itself is untouched)
+  const scene = sceneWordingOf(direction.visual_intent);
   const principles = aboutScene(expression?.photography?.principles);
   const dos = aboutScene(expression?.photography?.do);
   const donts = expression?.photography?.dont ?? [];
   const compositionDo = aboutScene(expression?.composition?.do);
   const space = NEGATIVE_SPACE_CLAUSE[direction.negative_space_intent] ?? null;
   const prompt = [
-    `A photograph of ${direction.visual_intent.replace(/[.\s]+$/, '')}, quiet and empty: a single continuous seamless surface meeting a plain backdrop, with nothing placed on it.`,
+    `A photograph of ${scene.text}, quiet and empty: a single continuous seamless surface meeting a plain backdrop, with nothing placed on it. The surface is even, matte and finely grained, without veining, cracks or relief.`,
     space ? `${space[0].toUpperCase()}${space.slice(1)}.` : null,
     compositionDo.length ? `Composition: ${compositionDo.slice(0, 3).join('; ')}.` : null,
     principles.length ? `Photography: ${principles.slice(0, 4).join('; ')}.` : null,
@@ -70,6 +73,8 @@ export function buildEnvironmentRequest({ direction, expression, canvas, ledger 
   const negative = [
     ...donts, 'product', 'phone', 'mobile phone', 'smartphone', 'phone case', 'camera lenses', 'device', 'object', 'object on the surface', 'pedestal', 'plinth', 'podium', 'slab',
     'stand', 'shelf', 'step', 'display', 'prop', 'person', 'hands', 'text', 'letters', 'logo', 'watermark',
+    // objects a stone or mineral surface invites, and relief that is structure rather than calm surface
+    'bowl', 'vase', 'vessel', 'container', 'sculpture', 'rock', 'boulder', 'ornament', 'decorative object', 'furniture', 'veining', 'cracks', 'rough relief',
   ].join(', ');
   const request = Object.freeze({ prompt, negative_prompt: negative, size: `${canvas.width}*${canvas.height}` });
   ledger?.record({
@@ -77,7 +82,7 @@ export function buildEnvironmentRequest({ direction, expression, canvas, ledger 
     basis: [direction.direction_id],
     outcome: {
       lane: 'ENVIRONMENT', size: request.size, carries_input_asset: false, forbidden_objects_only_in_the_negative_prompt: true, brand_forbidden_terms_checked: true,
-      display_structures_refused: true, negative_space_intent: direction.negative_space_intent,
+      display_structures_refused: true, negative_space_intent: direction.negative_space_intent, subject_clauses_dropped: scene.dropped,
     },
   });
   return request;

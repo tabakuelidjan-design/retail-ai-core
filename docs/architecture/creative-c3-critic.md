@@ -106,6 +106,15 @@ user instruction (brand expression 4.7k, critique 4.6k, capability profile 1.9k,
 is the intent hints repeated in the critique (about 0.9k characters), which is left as is (provenance over a 6% saving). The revision Director now has its own bounded timeout
 (`REVISION_DIRECTOR_TIMEOUT_MS` = 240 s, hard cap 300 s, never below the lane value), still one completion and no retry; text completions now journal their `usage` (reasoning tokens) and latency.
 
+## Environment request contract (third live attempt, 2026-10-11)
+
+The environment gate (`ENVIRONMENT_NOT_EMPTY`) was right: the image returned for the revised direction held a stone bowl at the centre (14.5% strong edges in the product zone against a 2% limit; the bare
+stone surface alone measured 6.1%, the backdrop 0%). The request had been primed: the Director's French scene wording was forwarded verbatim and spoke of a contact shadow "at the contact of the
+product" and of a contrast "to set the case apart" (the English-only product filter did not see it), the brand composition rule "create one clear focal point" was forwarded, and "stone / real material"
+invited a heavily veined surface. The request builder now (generic, English and French) drops every clause of the scene wording that speaks about the product, an object, a contact effect or a focal point
+(`scene-wording.js`; the direction itself is untouched, the contact shadow is Nordla's deterministic rule), no longer forwards brand statements about a focal point or shadows, asks for an even, matte, finely
+grained surface without veining, cracks or relief, and names the objects a stone surface invites (bowl, vase, vessel, sculpture, rock...) in the negative prompt only. The gate was not touched.
+
 ## Known gaps (reported, not hidden)
 
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.
