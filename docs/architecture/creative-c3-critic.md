@@ -98,6 +98,14 @@ conjunction of the per-role fits. The Director must choose an executable spatial
 direction that is not executable is refused before composition (`REVISION_DIRECTION_NOT_EXECUTABLE`), and with **no** executable spatial intent the model is not consulted at all and no
 provider call is made (`NO_EXECUTABLE_LAYOUT_CAPABILITY`, a `LAYOUT_CAPABILITY_LIMIT`). The profile is advice: the planner remains authoritative and still solves the layout afterwards.
 
+## Revision Director timeout (2026-10-11)
+
+The second live attempt of Revision Cycle 1 stopped at the revision Director completion: a **client-side** abort at the lane's 120 s default (no response, no request id). The call is non-streaming and
+leaves the model's default thinking on (the same lane's thinking-on completions took 64-68 s; a thinking-on vision call already exceeded 120 s once, then took 26 s with thinking off). The 14.6k-character
+user instruction (brand expression 4.7k, critique 4.6k, capability profile 1.9k, intents 1.7k) is not the driver: input tokens are cheap next to the reasoning output, and its only verified redundancy
+is the intent hints repeated in the critique (about 0.9k characters), which is left as is (provenance over a 6% saving). The revision Director now has its own bounded timeout
+(`REVISION_DIRECTOR_TIMEOUT_MS` = 240 s, hard cap 300 s, never below the lane value), still one completion and no retry; text completions now journal their `usage` (reasoning tokens) and latency.
+
 ## Known gaps (reported, not hidden)
 
 - Candidate 1 was produced before the Guardian existed in the runtime, so it keeps `guardian = NOT_EVALUATED`; every later candidate has a Guardian result.

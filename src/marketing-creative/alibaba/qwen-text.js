@@ -16,6 +16,7 @@ export async function createMarketingCopy({
   temperature = 0.7,
   maxTokens = 600,
   fetchImpl,
+  timeoutMs = config?.requestTimeoutMs,
 }) {
   requireAlibabaCreativeConfig(config);
   const policy = assertAlibabaExternalUse(dataPolicy);
@@ -43,11 +44,12 @@ export async function createMarketingCopy({
     data_class: policy.classification,
   });
 
+  const started = Date.now();
   try {
     const payload = await alibabaJsonRequest({
       url: alibabaCreativeEndpoints(config).chatCompletions,
       apiKey: config.apiKey,
-      timeoutMs: config.requestTimeoutMs,
+      timeoutMs,
       fetchImpl,
       body: {
         model: config.textModel,
@@ -83,6 +85,8 @@ export async function createMarketingCopy({
       request_id: payload?.id ?? payload?.request_id ?? null,
       status: 'SUCCEEDED',
       actual_cost_eur: actualEur,
+      usage: payload?.usage ?? null,
+      latency_ms: Date.now() - started,
       data_class: policy.classification,
     });
 
@@ -106,6 +110,7 @@ export async function createMarketingCopy({
       estimated_cost_eur: reservation.reserved_eur,
       data_class: policy.classification,
       reason: error?.code ?? 'REQUEST_FAILED',
+      latency_ms: Date.now() - started,
     });
     throw error;
   }

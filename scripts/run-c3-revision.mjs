@@ -19,7 +19,7 @@ import path from 'node:path';
 
 import * as P from '../src/creative-intelligence/production.js';
 import {
-  assessScopedExternalMediaUse, createQwenDirectorPort, createQwenVisionPort, deriveCandidateAuthorization, FileOutputStore, generateEnvironmentBackground, isHeaderSafeApiKey, JsonlCallJournal,
+  assessScopedExternalMediaUse, createQwenDirectorPort, REVISION_DIRECTOR_TIMEOUT_MS, createQwenVisionPort, deriveCandidateAuthorization, FileOutputStore, generateEnvironmentBackground, isHeaderSafeApiKey, JsonlCallJournal,
   loadAlibabaCreativeConfig, requireAlibabaCreativeConfig, SpendGuard, takeLiveCallLock,
 } from '../src/marketing-creative/alibaba/index.js';
 import {
@@ -151,7 +151,7 @@ try {
   const agents = {
     analyst: createProductAssetAnalyst({ ledger, expression }),
     director: createCreativeDirector({ ledger, complete: async () => { throw new Error('the initial Director is not used in a revision'); }, constants: DIRECTOR_CONSTANTS }),
-    revision_director: createRevisionDirector({ ledger, complete: createQwenDirectorPort({ config, budget, journal }), constants: DIRECTOR_CONSTANTS }),
+    revision_director: createRevisionDirector({ ledger, complete: createQwenDirectorPort({ config, budget, journal, timeoutMs: REVISION_DIRECTOR_TIMEOUT_MS }), constants: DIRECTOR_CONSTANTS }),
     copy: createApprovedCopyAgent({ ledger }),
     visual_director: createVisualProductionDirector({ ledger, expression }),
   };
