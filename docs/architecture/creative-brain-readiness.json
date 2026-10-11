@@ -1,11 +1,11 @@
 {
-  "verified_commit": "4c70f64c8a490d1ac7ae42ececa42846e0dbd10f",
-  "code_hash": "58c095f39c67f2ddafdfc8cbca353785ea8479f6",
-  "full_suite": { "tests": 2010, "pass": 2010, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 38, "killed": 38, "survivors_documented": 0, "note": "contract layer, parity audit, readiness gate, runner gate and call counts, near-miss journal" },
+  "verified_commit": "fdde0eec53ff37c7a114c8eb01308fd8891faea8",
+  "code_hash": "0521bfb248943bb55741a642ea864c81d6216a75",
+  "full_suite": { "tests": 2021, "pass": 2021, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
+  "mutation": { "total": 57, "killed": 56, "survivors_documented": 1, "note": "38 (contract layer, parity, gate, runner) + 19 (protocol repair). The one survivor is an equivalent mutant: parseJsonObject only ever throws BRAIN_MALFORMED, so the extra code check in the repair trigger is defensive and cannot change behaviour." },
   "clean_clones": {
-    "node20": { "tests": 2010, "pass": 2008, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2010, "pass": 2008, "fail": 0, "skipped": 2 }
+    "node20": { "tests": 2021, "pass": 2019, "fail": 0, "skipped": 2 },
+    "node24": { "tests": 2021, "pass": 2019, "fail": 0, "skipped": 2 }
   },
-  "ci": { "status": "success", "run": 38170813128 }
+  "ci": { "status": "success", "run": 38175863192 }
 }
