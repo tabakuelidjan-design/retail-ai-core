@@ -32,17 +32,29 @@ import { createBenchmarkResolver } from './benchmark-resources.mjs';
 
 const root = new URL('../', import.meta.url);
 const mode = process.argv.includes('--live') ? 'live' : (process.argv.includes('--check') ? 'check' : (process.argv.includes('--explain') ? 'explain' : null));
-const confirmed = process.argv.includes('--confirm-revision-cycle=1');
+// Cycle 1 revises Candidate 1 into Candidate 2; cycle 2 revises Candidate 2 into Candidate 3, the last candidate of a benchmark (MAX_CANDIDATES = 3): there is no cycle 3.
+const CYCLE = Number((process.argv.find((a) => a.startsWith('--cycle=')) ?? '--cycle=1').split('=')[1]);
+const ARG_ERRORS = []; // reported inside the guarded block (the script never ends by an uncaught error or process.exit)
+if (![1, 2].includes(CYCLE)) ARG_ERRORS.push('--cycle must be 1 or 2: a benchmark has at most three candidates');
+const confirmed = process.argv.includes(`--confirm-revision-cycle=${CYCLE}`);
+const TAG = `revision-00${CYCLE}`; // the output folder, lock and operation names of this cycle
+const NEW_N = `00${CYCLE + 1}`; // the candidate this cycle produces
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const json = (rel) => JSON.parse(readFileSync(new URL(rel, root), 'utf8'));
-const CRITIQUE_FILE = 'critique-002.json';
 // the semantic intents the owner approved as the input of this cycle (the scope of the authorization, not a creative decision): Nordla derived them from critique v2
 const APPROVED_INTENTS = ['INTEGRATE_PRICE_WITH_THE_COMPOSITION', 'ELEVATE_RETAIL_QUALITY', 'REDUCE_TEMPLATE_FEEL', 'IMPROVE_PRODUCT_ENVIRONMENT_INTEGRATION', 'CLARIFY_VISUAL_HIERARCHY', 'REFINE_TYPOGRAPHIC_COMPOSITION', 'REBALANCE_WHITESPACE', 'REBALANCE_COMPOSITION'];
 
 const runDir = process.env.NORDLA_PRIVATE_DIR ? path.join(process.env.NORDLA_PRIVATE_DIR, 'creative-run-001') : path.join(os.homedir(), 'nordla-private', 'c2-habb-benchmark-001', 'creative-run-001');
 const dirArg = process.argv.find((a) => a.startsWith('--dir='))?.split('=')[1];
-if (dirArg !== undefined && !/^[A-Za-z0-9._-]+$/.test(dirArg)) { console.error('--dir must be a folder name'); process.exitCode = 64; throw new Error('invalid --dir'); }
-const outDir = path.join(runDir, dirArg ?? 'revision-001');
+const FOLDER = /^[A-Za-z0-9._-]+$/;
+if (dirArg !== undefined && !FOLDER.test(dirArg)) ARG_ERRORS.push('--dir must be a folder name');
+const sourceDirArg = process.argv.find((a) => a.startsWith('--source-dir='))?.split('=')[1];
+if (sourceDirArg !== undefined && !FOLDER.test(sourceDirArg)) ARG_ERRORS.push('--source-dir must be a folder name');
+const outDir = path.join(runDir, dirArg ?? TAG);
+// what this cycle revises: the candidate, its run record and its critique (stored, never modified)
+const SOURCE = CYCLE === 1
+  ? { label: 'Candidate 1', dir: runDir, png: 'candidate.png', critique: 'critique-002.json' }
+  : { label: 'Candidate 2', dir: path.join(runDir, sourceDirArg ?? 'revision-001'), png: 'candidate-002.png', critique: 'critique.json' };
 const readEvents = async (file) => (await readFile(file, 'utf8').catch(() => '')).split(String.fromCharCode(10)).filter(Boolean).map((l) => JSON.parse(l));
 const report = { mode, status: null, checks: [], private_directory: outDir };
 // Never process.exit(): on Windows, Node 24 aborts with a libuv assertion when the process exits while an HTTPS fetch is closing. The exit code is set and the script unwinds.
@@ -51,7 +63,8 @@ const finish = (status, code) => { report.status = status; console.log(JSON.stri
 const check = (name, ok, detail = null) => { report.checks.push({ name, ok, detail }); return ok; };
 
 try {
-  if (!mode) { console.error('use --check (no network), --explain (offline) or --live --confirm-revision-cycle=1 (three billable calls)'); process.exitCode = 64; throw STOP; }
+  if (ARG_ERRORS.length) { console.error(ARG_ERRORS.join('; ')); process.exitCode = 64; throw STOP; }
+  if (!mode) { console.error('use --check (no network), --explain (offline) or --live --confirm-revision-cycle=N (three billable calls); --cycle=1 (default) or --cycle=2'); process.exitCode = 64; throw STOP; }
   if (mode === 'explain') {
     // read-only: the stored record of a revision run, explained from its own evidence
     const stored = await readFile(path.join(outDir, 'summary.json'), 'utf8').then(JSON.parse).catch(() => null);
@@ -66,7 +79,7 @@ try {
     report.cost_eur_total = stored.budget?.settled_eur ?? null;
     finish('EXPLAINED', 0);
   }
-  if (mode === 'live' && !confirmed) { console.error('a revision cycle needs the explicit human confirmation: --confirm-revision-cycle=1'); process.exitCode = 64; throw STOP; }
+  if (mode === 'live' && !confirmed) { console.error('a revision cycle needs the explicit human confirmation: --confirm-revision-cycle=' + CYCLE); process.exitCode = 64; throw STOP; }
 
   // ---- credentials (names only are reported, never a value)
   const config = loadAlibabaCreativeConfig(process.env);
@@ -77,21 +90,25 @@ try {
 
   // ---- Candidate 1 and critique v2 (stored, never modified)
   // Candidate 1 is identified by the hash its own run recorded (the owner's review is not consulted anywhere in this script)
-  const summary1 = await readFile(path.join(runDir, 'summary.json'), 'utf8').then(JSON.parse).catch(() => null);
+  const summary1 = await readFile(path.join(SOURCE.dir, 'summary.json'), 'utf8').then(JSON.parse).catch(() => null);
   if (!check('the previous direction and the Candidate 1 record exist', Boolean(summary1?.direction && summary1.ledger && /^[0-9a-f]{64}$/.test(summary1.png?.sha256 ?? '')))) finish('BLOCKED: CANDIDATE_1_RECORD_UNAVAILABLE', 3);
   const PINNED_SHA = summary1.png.sha256;
-  const png1 = await readFile(path.join(runDir, 'candidate.png')).then((b) => new Uint8Array(b)).catch(() => null);
+  const png1 = await readFile(path.join(SOURCE.dir, SOURCE.png)).then((b) => new Uint8Array(b)).catch(() => null);
   if (!check('Candidate 1 is available and matches the hash its run recorded', png1 !== null && sha256(png1) === PINNED_SHA)) finish('BLOCKED: CANDIDATE_1_UNAVAILABLE_OR_CHANGED', 3);
-  const stored = await readFile(path.join(runDir, CRITIQUE_FILE), 'utf8').then(JSON.parse).catch(() => null);
-  if (!check('critique v2 exists, is about Candidate 1 and is a CREATIVE_FAIL', stored?.critique?.candidate_sha256 === PINNED_SHA && stored.critique.schema_version === 'creative-critique@2' && stored.verdict?.creative_status === 'CREATIVE_FAIL')) finish('BLOCKED: CRITIQUE_V2_UNAVAILABLE', 3);
+  const stored = await readFile(path.join(SOURCE.dir, SOURCE.critique), 'utf8').then(JSON.parse).catch(() => null);
+  // a revision answers a critique that asks for one: CREATIVE_FAIL (cycle 1: the one that was approved) or, for the next cycle, any critique with FAIL or REVIEW_REQUIRED dimensions
+  const asksForRevision = CYCLE === 1 ? stored?.verdict?.creative_status === 'CREATIVE_FAIL' : ['CREATIVE_FAIL', 'REVIEW_REQUIRED'].includes(stored?.verdict?.creative_status);
+  if (!check(`the critique of ${SOURCE.label} exists, is about it and asks for a revision`, stored?.critique?.candidate_sha256 === PINNED_SHA && stored.critique.schema_version === 'creative-critique@2' && asksForRevision, { creative_status: stored?.verdict?.creative_status ?? null })) finish('BLOCKED: CRITIQUE_UNAVAILABLE_OR_NOT_ASKING_FOR_A_REVISION', 3);
 
   // ---- the semantic revision request, derived by Nordla from the critique; it must be the approved set
-  const revisionRequest = buildRevisionRequest({ critique: stored.critique, iteration: 1 });
+  const revisionRequest = buildRevisionRequest({ critique: stored.critique, iteration: CYCLE });
   const intents = revisionRequest.intents.map((i) => i.intent);
-  if (!check('the derived intents are exactly the approved ones', JSON.stringify([...intents].sort()) === JSON.stringify([...APPROVED_INTENTS].sort()), { intents })) finish('BLOCKED: REVISION_INTENTS_NOT_THE_APPROVED_SET', 3);
+  // cycle 1: exactly the approved set; cycle 2: whatever Nordla derives from the critique of Candidate 2 (non-empty), reported before any call
+  const intentsOk = CYCLE === 1 ? JSON.stringify([...intents].sort()) === JSON.stringify([...APPROVED_INTENTS].sort()) : intents.length > 0;
+  if (!check(CYCLE === 1 ? 'the derived intents are exactly the approved ones' : 'semantic intents derived from the critique of Candidate 2', intentsOk, { intents, dimensions: revisionRequest.intents.map((i) => [i.dimension, i.outcome]) })) finish('BLOCKED: REVISION_INTENTS_NOT_ACCEPTABLE', 3);
 
   // ---- the canonical evidence the revision Director will receive (anything non-semantic or foreign is refused here, before any call)
-  const candidateEvidence = buildCandidateEvidence({ result: { ledger: summary1.ledger, direction: summary1.direction, copy: summary1.copy, preflight: summary1.preflight, fidelity: summary1.fidelity ? { gate: summary1.fidelity.gate } : null, guardian: null }, candidate_sha256: PINNED_SHA });
+  const candidateEvidence = buildCandidateEvidence({ result: { ledger: summary1.ledger, direction: summary1.direction, copy: summary1.copy, preflight: summary1.preflight, fidelity: summary1.fidelity ? { gate: summary1.fidelity.gate } : null, guardian: summary1.guardian ?? null }, candidate_sha256: PINNED_SHA });
   let revision;
   try {
     revision = { previous_direction: summary1.direction, candidate_evidence: candidateEvidence, critique: stored.critique, revision_request: revisionRequest };
@@ -143,7 +160,7 @@ try {
 
   // ---- exactly one live cycle (three billable calls), guarded by a lock that code never releases
   await mkdir(outDir, { recursive: true });
-  try { await takeLiveCallLock(path.join(outDir, 'revision-001.lock')); } catch { check('single live revision lock', false, { lock: path.join(outDir, 'revision-001.lock') }); finish('BLOCKED: REVISION_CYCLE_ALREADY_ATTEMPTED', 3); }
+  try { await takeLiveCallLock(path.join(outDir, `${TAG}.lock`)); } catch { check('single live revision lock', false, { lock: path.join(outDir, `${TAG}.lock`) }); finish('BLOCKED: REVISION_CYCLE_ALREADY_ATTEMPTED', 3); }
   const at = new Date().toISOString();
   const budget = new SpendGuard({ maxSpendEur: 0.5, maxImages: 1, maxVideoSeconds: 0 });
   const journal = new JsonlCallJournal(path.join(outDir, 'provider-calls.jsonl'));
@@ -160,7 +177,7 @@ try {
     segmenter: createLocalProductSegmenter({ ledger }),
     environment: {
       async generate({ request }) {
-        const result = await generateEnvironmentBackground({ config, request, budget, journal, outputStore, operationId: 'c3-revision-001-environment' });
+        const result = await generateEnvironmentBackground({ config, request, budget, journal, outputStore, operationId: `c3-${TAG}-environment` });
         return {
           output_bytes: await outputStore.readBytes(result.output),
           provenance: { provider_id: result.provider_id, model: result.model, region: result.region, request_id: result.request_id, lane: result.lane, carries_input_asset: result.carries_input_asset, latency_ms: result.latency_ms, usage: result.usage, cost_eur_estimated: result.cost_eur_estimated, sha256: result.output.sha256, private_output: result.output.ref },
@@ -168,7 +185,7 @@ try {
       },
     },
   };
-  const guardian = createBrandGuardianGate({ tenant: brand.tenant, brandContext: brand.context, evaluatedAt: at, targetRef: 'candidate:habb-c3-revision-001-candidate-002' });
+  const guardian = createBrandGuardianGate({ tenant: brand.tenant, brandContext: brand.context, evaluatedAt: at, targetRef: `candidate:habb-c3-${TAG}-candidate-${NEW_N}` });
 
   let result;
   try {
@@ -183,7 +200,7 @@ try {
     await writeFile(path.join(outDir, 'summary.json'), JSON.stringify({ ...report, status: 'BLOCKED: RUNTIME_ERROR', budget: budget.snapshot(), ledger: ledger.entries() }, null, 2), { mode: 0o600 });
     finish(report.stop.status, 3);
   }
-  const png2Path = path.join(outDir, 'candidate-002.png');
+  const png2Path = path.join(outDir, `candidate-${NEW_N}.png`);
   const stopInfo = result.status === 'READY_FOR_REVIEW' ? null : describeStop({ result });
   const chain = buildExecutionChain({ result, events: await readEvents(path.join(outDir, 'provider-calls.jsonl')) });
   if (result.png_bytes) await writeFile(png2Path, result.png_bytes, { mode: 0o600 });
@@ -201,7 +218,7 @@ try {
   report.result = { status: result.status, png: summary.png, preflight: result.preflight?.status ?? null, fidelity_gate: result.fidelity?.gate ?? null, guardian: result.guardian?.outcome ?? null, steering: result.steering?.manual_creative_steering ?? null };
   report.execution_chain = chain;
   if (stopInfo) { report.stop = stopInfo; finish(stopInfo.status, result.status === 'FIDELITY_FAIL' ? 2 : 3); }
-  const candidateRef = 'candidate:habb-c3-revision-001-candidate-002';
+  const candidateRef = `candidate:habb-c3-${TAG}-candidate-${NEW_N}`;
   const candidateAuthorization = deriveCandidateAuthorization({ authorization, source_asset_sha256: payload.sha256, candidate_ref: candidateRef, candidate_sha256: result.png_sha256 });
   const cleared = assessScopedExternalMediaUse({ authorization: candidateAuthorization, asset: { ref: candidateRef, sha256: result.png_sha256 }, provider_id: 'alibaba-cloud-model-studio', region: config.region, purpose: authorization.purpose, operation: 'VISION_CRITIQUE' });
   if (!check('scoped clearance for VISION_CRITIQUE on Candidate 2', cleared.allowed)) finish('BLOCKED: EXTERNAL_MEDIA_SHARING_NOT_AUTHORIZED', 3);

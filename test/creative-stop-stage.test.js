@@ -160,3 +160,23 @@ test('SS-6 --explain reports the stop and chain a run stored (a run that threw h
     assert.equal(JSON.parse(run().stdout).stop.cause, 'LAYOUT_CAPABILITY_LIMIT');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('SS-7 the revision script runs cycles 1 and 2 only (Candidate 3 is the last candidate), each live cycle needs its own confirmation, and nothing is hard-wired to cycle 1', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../scripts/run-c3-revision.mjs', import.meta.url));
+  const run = (...args) => spawnSync(process.execPath, [script, ...args], { env: { PATH: process.env.PATH }, encoding: 'utf8' });
+  for (const cycle of ['0', '3', 'x']) {
+    const out = run('--check', `--cycle=${cycle}`);
+    assert.equal(out.status, 64, cycle);
+    assert.match(out.stderr, /--cycle must be 1 or 2/);
+  }
+  // a live cycle needs the confirmation of THAT cycle (the confirmation of another cycle does not count)
+  assert.equal(run('--live', '--cycle=2').status, 64);
+  assert.equal(run('--live', '--cycle=2', '--confirm-revision-cycle=1').status, 64);
+  assert.equal(run('--live', '--confirm-revision-cycle=2').status, 64);
+  const source = (await readFile(new URL('../scripts/run-c3-revision.mjs', import.meta.url), 'utf8')).replace(/\/\/.*$/gm, '');
+  for (const hardWired of ["'revision-001.lock'", "candidate-002.png')", "candidate:habb-c3-revision-001-candidate-002'"]) assert.ok(!source.includes(hardWired), hardWired);
+  assert.ok(source.includes('iteration: CYCLE'));
+  assert.ok(source.includes('--confirm-revision-cycle=${CYCLE}'));
+});
