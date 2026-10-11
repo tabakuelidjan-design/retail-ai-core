@@ -64,6 +64,8 @@ export function classifyRuntimeError(error) {
     if (cause.status != null || /Provider|Timeout|Throttl/i.test(cause.name ?? '') || ['TIMEOUT', 'access_denied'].includes(code)) return ROOT_CAUSE.REVISION_DIRECTOR_PROVIDER_FAILURE;
     return ROOT_CAUSE.REVISION_DIRECTION_INVALID;
   }
+  // a Creative Direction that breaks its canonical contract (an invalid or oversized field, a forbidden key...) is refused by the contract itself, outside the agent's own failure channel
+  if (/^CI_/.test(error?.code ?? '') && String(error?.detail?.field ?? '').startsWith('direction')) return ROOT_CAUSE.REVISION_DIRECTION_INVALID;
   // a port failure outside an agent: the environment provider is the only billable port of the runtime
   if (/ProviderError$/.test(error?.name ?? '') || error?.status != null || error?.requestId != null) return ROOT_CAUSE.ENVIRONMENT_PROVIDER_FAILURE;
   return ROOT_CAUSE.RUNTIME_REPORTING_DEFECT;
@@ -120,12 +122,21 @@ export function buildExecutionChain({ result = null, error = null, events = [] }
  * The one-line status of a run that did not produce a reviewable candidate. It names the real stopping stage; "did not pass the deterministic gates" is said ONLY when a candidate
  * existed and at least one of Preflight, Fidelity or Guardian actually ran and did not pass.
  */
+/** A short, safe detail of a thrown error: the code of the Director's own refusal (for example VISUAL_INTENT_TOO_LONG), or the contract code and field. Never a message, never a value. */
+export function errorDetail(error) {
+  const cause = error?.detail?.cause?.code;
+  if (typeof cause === 'string' && /^[A-Z0-9_]{3,60}$/.test(cause)) return cause;
+  const field = error?.detail?.field;
+  return typeof error?.code === 'string' && typeof field === 'string' && /^[a-z_.0-9\[\]]{1,60}$/.test(field) ? `${error.code}:${field}` : null;
+}
+
 export function describeStop({ result = null, error = null }) {
   const cause = error ? classifyRuntimeError(error) : classifyRuntimeStop(result);
+  const detail = error ? errorDetail(error) : (result?.reason ?? null);
   const gatesRan = Boolean(result?.png_sha256) && [result?.preflight?.status, result?.fidelity?.gate, result?.guardian?.outcome].some((g) => g != null);
   const stage = STAGE_FOR[cause];
   const status = gatesRan && [ROOT_CAUSE.PREFLIGHT_FAIL, ROOT_CAUSE.FIDELITY_FAIL, ROOT_CAUSE.GUARDIAN_FAIL].includes(cause)
     ? `${cause}: Candidate 2 did not pass the deterministic gates; the critic was not called`
-    : `STOPPED_AT_${stage}: ${cause}${result?.reason ? ` (${result.reason})` : ''}; no candidate reached the deterministic gates, the critic was not called`;
-  return Object.freeze({ cause, stage, status, reached_gates: gatesRan });
+    : `STOPPED_AT_${stage}: ${cause}${detail ? ` (${detail})` : ''}; no candidate reached the deterministic gates, the critic was not called`;
+  return Object.freeze({ cause, stage, detail, status, reached_gates: gatesRan });
 }

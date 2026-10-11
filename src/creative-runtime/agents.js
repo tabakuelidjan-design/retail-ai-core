@@ -1,5 +1,6 @@
 import { AGENT_ROLE, defineCreativeAgent, TEXT_KIND } from '../creative-intelligence/index.js';
 import { COMPONENT, DECISION } from './ledger.js';
+import { assertDirectionTextContract, DIRECTION_TEXT_RULE } from './direction-text-contract.js';
 
 // The Nordla agents of the product-preserving runtime. Each one is a C1 agent (defineCreativeAgent: its output crosses the trust boundary and is normalized by the
 // existing contracts) and records every decision in the ledger with its own component identity. Their rules rest on the brand's expression system and on the
@@ -92,6 +93,7 @@ export function buildDirectorInstruction({ brief, constants }) {
     `spatial_intent is one of: ${constants.SPATIAL_INTENT.join(', ')}.`,
     `negative_space_intent is one of: ${constants.NEGATIVE_SPACE.join(', ')}.`,
     `hierarchy is a list of roles in reading order, each one of: ${constants.HIERARCHY_ROLE.join(', ')}; it may only use roles the brief provides approved text for, plus PRODUCT.`,
+    DIRECTION_TEXT_RULE,
     'visual_intent describes ONLY the environment around the product (surface, light, atmosphere, colour restraint): the real product is composited afterwards and is never generated.',
     'You never write marketing copy, prices or claims, never choose a channel, budget or audience, and never mention anything the brand expression forbids.',
   ].join(' ');
@@ -118,6 +120,8 @@ export function createCreativeDirector({ ledger, complete, constants }) {
     const raw = parseJsonObject(reply.text);
     const extra = Object.keys(raw).filter((k) => !DIRECTION_FIELDS.includes(k));
     if (extra.length) throw new Error('the Creative Director returned fields that are not part of a direction');
+    // the canonical text contract, verified before acceptance: a violation is refused and measured, never shortened
+    assertDirectionTextContract({ raw, ledger, component: COMPONENT.CREATIVE_DIRECTOR });
     // identity, evidence and the constraints are decided by the runtime from the brief, never by the model
     const direction = {
       merchant_id: ids.merchant_id,

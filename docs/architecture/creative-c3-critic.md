@@ -127,6 +127,15 @@ fields. These qualities are reasoning targets of the Director; they are **not** 
 **Limit stated honestly:** the environment contract is a text-only, product-free, object-free surface and backdrop, and the product is a deterministic composite. A conceptual leap is therefore bounded to
 material, light, atmosphere, spatial structure, hierarchy and type; it cannot add a narrative object to the scene.
 
+## Creative Direction text contract (Revision Cycle 2, first live attempt)
+
+The revision Director answered successfully, but the canonical Creative Direction contract refused the answer afterwards (`direction.visual_intent must be 1..300 printable characters`), outside the agent's failure channel,
+so the run was reported as an unclassified defect and the raw length was not recorded (the contract message also covers empty and multi-line values). The Director instruction never stated the limit, for either Director (they
+share the same base instruction and the same output normalization). Now: the limit is a shared constant (`DIRECTION_TEXT_MAX_CHARS = 300`) stated in both instructions; `concept`, `copy_intent` and `visual_intent` are
+verified BEFORE acceptance (one line, 1..300 characters) and a violation is refused with a precise code (`VISUAL_INTENT_TOO_LONG`, `..._NOT_SINGLE_LINE`, `..._EMPTY`, `..._MISSING`), its measurements (field, problem,
+length, limit; never the text) go to the ledger as `DIRECTION_REFUSED`, and nothing is shortened (no approved canonical summarization step exists; shortening an idea changes it). The lane's structured-output mode
+documents JSON validity, not field lengths, so it is not relied on. A direction refused by the contract is classified `REVISION_DIRECTION_INVALID` at the stage `REVISED_CREATIVE_DIRECTION`.
+
 ## Known gaps (reported, not hidden)
 
 - **UNRESOLVED CI / determinism issue (parked 2026-10-11): the product mask is not always deterministic on Node 24.**

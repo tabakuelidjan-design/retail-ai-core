@@ -4,6 +4,7 @@ import { REVISION_INTENT } from '../creative-critic/revision.js';
 import { CREATIVE_AMBITION, isCanonicalAmbition } from '../creative-critic/ambition.js';
 import { COMPONENT, DECISION } from './ledger.js';
 import { buildDirectorInstruction } from './agents.js';
+import { assertDirectionTextContract } from './direction-text-contract.js';
 import { assessDirectionExecutable, executableSpatialIntents, normalizeLayoutCapabilityProfile } from './layout-capability.js';
 
 // The revision-side Creative Director. A revision is a NEW creative direction decided by the Director from CANONICAL evidence only:
@@ -148,6 +149,8 @@ export function createRevisionDirector({ ledger, complete, constants }) {
     const raw = parseJsonObject(reply.text);
     const extra = Object.keys(raw).filter((k) => !DIRECTION_FIELDS.includes(k));
     if (extra.length) throw new Error('the revision Director returned fields that are not part of a direction');
+    // the canonical text contract, verified before acceptance (and before anything is recorded as a revised direction): a violation is refused and measured, never shortened
+    assertDirectionTextContract({ raw, ledger, component: COMPONENT.REVISION_DIRECTOR });
     for (const k of ['concept', 'copy_intent', 'visual_intent']) assertSemanticText(raw[k], `revised_direction.${k}`);
     // the planner stays authoritative; this only refuses, before any composition, a direction the capabilities already say cannot be executed
     const executable = assessDirectionExecutable(capability, raw);

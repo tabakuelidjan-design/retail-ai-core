@@ -8,6 +8,9 @@ import {
   closedObject, deepFreeze, deriveId, enumValue, fail, refList, rejectKeysDeep, text, tokenList, uuid, ref,
 } from './validation.js';
 
+// the canonical limit of the three descriptive fields (concept, copy_intent, visual_intent); the Directors enforce it before an answer is accepted
+export const DIRECTION_TEXT_MAX_CHARS = 300;
+
 const KEYS = [
   'merchant_id', 'brand_id', 'brief_ref', 'concept', 'copy_intent', 'visual_intent', 'product_role', 'spatial_intent',
   'negative_space_intent', 'hierarchy', 'required_asset_refs', 'claim_refs', 'forbidden_transformations', 'evidence_refs',
@@ -29,9 +32,9 @@ export function normalizeCreativeDirection(input) {
     merchant_id: uuid(input.merchant_id, 'direction.merchant_id'),
     brand_id: uuid(input.brand_id, 'direction.brand_id'),
     brief_ref: ref(input.brief_ref, 'direction.brief_ref'),
-    concept: text(input.concept, 'direction.concept', { max: 300 }),
-    copy_intent: text(input.copy_intent, 'direction.copy_intent', { max: 300 }),
-    visual_intent: text(input.visual_intent, 'direction.visual_intent', { max: 300 }),
+    concept: text(input.concept, 'direction.concept', { max: DIRECTION_TEXT_MAX_CHARS }),
+    copy_intent: text(input.copy_intent, 'direction.copy_intent', { max: DIRECTION_TEXT_MAX_CHARS }),
+    visual_intent: text(input.visual_intent, 'direction.visual_intent', { max: DIRECTION_TEXT_MAX_CHARS }),
     product_role: productRole,
     spatial_intent: enumValue(input.spatial_intent, SPATIAL_INTENT, 'direction.spatial_intent'),
     negative_space_intent: enumValue(input.negative_space_intent, NEGATIVE_SPACE, 'direction.negative_space_intent'),
