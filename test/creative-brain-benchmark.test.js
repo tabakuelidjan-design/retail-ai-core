@@ -77,10 +77,10 @@ test('BB-3 the cost is bounded by construction: worst case from the bounds, a ha
   const tooBig = 'x'.repeat((BRAIN_PORT_LIMITS.max_input_tokens + 10) * 4);
   await assert.rejects(port({ system: tooBig, user: 'u' }), (e) => e.code === 'BRAIN_INPUT_TOO_LARGE');
   assert.equal(fetched, 0);
-  await assert.rejects(port({ system: 's', user: 'u' }));
-  await assert.rejects(port({ system: 's', user: 'u' }), (e) => e.code === 'BRAIN_CALL_LIMIT_REACHED');
+  await assert.rejects(port({ system: 'Answer as JSON.', user: 'u' }));
+  await assert.rejects(port({ system: 'Answer as JSON.', user: 'u' }), (e) => e.code === 'BRAIN_CALL_LIMIT_REACHED');
   const tight = createQwenBrainPort({ config, budget: new SpendGuard({ maxSpendEur: 0.001, maxImages: 0, maxVideoSeconds: 0 }), maxCalls: 2, fetchImpl });
-  await assert.rejects(tight({ system: 's', user: 'u' }), (e) => /BUDGET_EXCEEDED/.test(e.message));
+  await assert.rejects(tight({ system: 'Answer as JSON.', user: 'u' }), (e) => /BUDGET_EXCEEDED/.test(e.message));
   assert.throws(() => createQwenBrainPort({ config, budget: null }), TypeError);
 });
 
@@ -423,11 +423,12 @@ test('BB-23 the Brain port sends a thinking-off, bounded, text-only PUBLIC reque
   };
   const journal = new MemoryCallJournal();
   const port = createQwenBrainPort({ config, budget: new SpendGuard({ maxSpendEur: 1, maxImages: 0, maxVideoSeconds: 0 }), journal, maxCalls: 3, fetchImpl });
-  const out = await port({ system: 'system text', user: 'user text' });
+  const out = await port({ system: 'system text: answer with one JSON object', user: 'user text' });
   assert.equal(out.request_id, 'chatcmpl-brain-1');
   assert.equal(bodies[0].body.enable_thinking, false);
   assert.equal(bodies[0].body.max_tokens, BRAIN_PORT_LIMITS.max_output_tokens);
   assert.equal(bodies[0].body.model, 'qwen3.8-max');
+  assert.deepEqual(bodies[0].body.response_format, { type: 'json_object' });
   assert.deepEqual(bodies[0].body.messages.map((m) => m.role), ['system', 'user']);
   assert.ok(!JSON.stringify(bodies[0].body).includes('image_url'));
   assert.ok(journal.list().every((e) => e.data_class === 'PUBLIC'));

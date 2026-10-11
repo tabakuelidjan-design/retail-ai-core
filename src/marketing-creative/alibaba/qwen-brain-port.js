@@ -33,6 +33,7 @@ export function createQwenBrainPort({
       timeoutMs: Math.min(Math.max(timeoutMs, config?.requestTimeoutMs ?? 0), 300_000),
       fetchImpl,
       enableThinking: false,
+      responseFormat: 'json_object', // generation-time JSON mode for every structured Brain stage (syntax only: the canonical validators still judge the answer)
     });
     return { text: result.text, model: result.model, request_id: result.requestId, cost_eur: result.costEur };
   }, { calls: () => calls, max_calls: maxCalls });

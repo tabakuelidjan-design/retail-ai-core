@@ -86,3 +86,11 @@ Attempt 7 stopped at IDEATE: the provider returned text that is not parseable JS
 - **Root cause class: FRAME_CONTRACT_TOO_BRITTLE, caused by an instruction-rendering defect.** The parity pass proved every rule is *stated*; it did not prove the model is *shown the shape* it must emit, and the fuzz generated shape-correct objects and mutated one rule at a time, never a model's structural habits.
 - **Fixes (generic, all model stages).** (1) every instruction now shows the exact JSON skeleton, says there is no wrapper key and that dotted names are not keys (`renderShape`; the parity audit fails an instruction without it); (2) a lone wrapper around the whole answer is unwrapped and journaled (`ENVELOPE`) when it is a generic envelope word or when the inside is exactly the contract's object; (3) duplicate keys in one object are refused (JSON.parse silently keeps the last), never re-asked.
 - **Not done, recommended.** The provider port sends no `response_format`; compliance is prompt-only plus after-the-fact validation. See the structured-output recommendation in the incident report.
+
+## Generation-time JSON mode (`response_format: json_object`)
+
+Every Creative Brain text call (FRAME, IDEATE, SELECT_CONCEPT, ART_DIRECT, COMPOSE and the protocol-repair re-ask) is sent with `response_format: {"type": "json_object"}` by `createQwenBrainPort`; the vision critics and the Creative Director port are unchanged. The provider requires the word JSON in the prompt, so `createMarketingCopy` refuses a `json_object` call whose system or user text lacks it, before anything is reserved or sent; every stage instruction states JSON. The journal records `response_format`.
+
+`json_object` guarantees syntax only. It is not schema enforcement: the canonical validators, the shared near-miss layer, the semantic and cross-field rules and the single bounded protocol repair are unchanged, and the call and cost bounds did not move (18 text calls, EUR 0.95).
+
+**Follow-up, not done:** `json_schema` strict mode. Before migrating, verify on the Frankfurt endpoint that `qwen3.8-max` supports it, and the exact subset of JSON Schema it accepts (the English and Chinese help pages differ on Max models); then decide.

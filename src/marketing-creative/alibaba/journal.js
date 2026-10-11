@@ -24,6 +24,7 @@ function sanitizeEvent(event) {
     'input_sha256',
     'prompt_sha256',
     'clearance_id',
+    'response_format',
   ];
   const output = {};
   for (const key of allowed) {

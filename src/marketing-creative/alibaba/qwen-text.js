@@ -18,6 +18,7 @@ export async function createMarketingCopy({
   fetchImpl,
   timeoutMs = config?.requestTimeoutMs,
   enableThinking = undefined,
+  responseFormat = undefined,
 }) {
   requireAlibabaCreativeConfig(config);
   const policy = assertAlibabaExternalUse(dataPolicy);
@@ -29,6 +30,10 @@ export async function createMarketingCopy({
   }
 
   if (enableThinking !== undefined && typeof enableThinking !== 'boolean') throw new TypeError('enableThinking must be a boolean when given');
+  // generation-time JSON mode (`json_object`): the provider then returns a parseable JSON object. It guarantees the SYNTAX, never the schema: every caller still validates the answer. The provider refuses the
+  // request unless the prompt itself contains the word JSON, so this is checked here, before anything is reserved or sent.
+  if (responseFormat !== undefined && responseFormat !== 'json_object') throw new TypeError("responseFormat must be 'json_object' when given");
+  if (responseFormat === 'json_object' && !/json/i.test(`${systemPrompt} ${brief}`)) throw new TypeError('response_format json_object needs the word JSON in the prompt');
   const thinkingMode = enableThinking === undefined ? 'PROVIDER_DEFAULT' : (enableThinking ? 'ENABLED' : 'DISABLED');
   const estimatedInputTokens = estimateTextInputTokens(systemPrompt, brief);
   const reservation = budget.reserveText({
@@ -44,6 +49,7 @@ export async function createMarketingCopy({
     model: config.textModel,
     region: config.region,
     thinking: thinkingMode,
+    ...(responseFormat ? { response_format: responseFormat } : {}),
     estimated_cost_eur: reservation.reserved_eur,
     data_class: policy.classification,
   });
@@ -65,6 +71,7 @@ export async function createMarketingCopy({
         max_tokens: maxTokens,
         // the model's own default applies unless a caller states the thinking mode explicitly
         ...(enableThinking === undefined ? {} : { enable_thinking: enableThinking }),
+        ...(responseFormat ? { response_format: { type: responseFormat } } : {}),
       },
     });
 
