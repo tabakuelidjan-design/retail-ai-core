@@ -72,18 +72,51 @@ export function normalizeCompositionPlan(raw) {
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+// The relations a plan must keep, as DATA: one table that the validator enforces AND that the COMPOSE instruction prints, so what the model is told and what Nordla checks cannot drift apart.
+// `needs` says in words what the weights and anchors must be; `holds(plan)` is the check; `problem` is the name the refusal carries.
+const RELATION_RULES = Object.freeze([
+  {
+    when: (p) => p.hero_relationship === HERO_RELATIONSHIP.PRODUCT_DOMINATES, label: 'hero_relationship PRODUCT_DOMINATES',
+    meaning: 'the product is the clear first read', needs: 'visual_weight.PRODUCT is DOMINANT',
+    holds: (p) => p.visual_weight.PRODUCT === WEIGHT.DOMINANT, problem: 'PRODUCT_DOMINATES_NEEDS_A_DOMINANT_PRODUCT',
+  },
+  {
+    when: (p) => p.hero_relationship === HERO_RELATIONSHIP.PRODUCT_AND_HEADLINE_SHARE, label: 'hero_relationship PRODUCT_AND_HEADLINE_SHARE',
+    meaning: 'the product and the headline are read together, as equals', needs: 'visual_weight.PRODUCT and visual_weight.HEADLINE are both STRONG',
+    holds: (p) => p.visual_weight.PRODUCT === WEIGHT.STRONG && p.visual_weight.HEADLINE === WEIGHT.STRONG, problem: 'SHARED_HERO_NEEDS_A_STRONG_PRODUCT_AND_A_STRONG_HEADLINE',
+  },
+  {
+    when: (p) => p.hero_relationship === HERO_RELATIONSHIP.HEADLINE_LEADS_PRODUCT_ANSWERS, label: 'hero_relationship HEADLINE_LEADS_PRODUCT_ANSWERS',
+    meaning: 'the headline is read first and the product answers it', needs: 'visual_weight.HEADLINE is STRONG or DOMINANT and visual_weight.PRODUCT is at most STRONG',
+    holds: (p) => Boolean(p.visual_weight.HEADLINE) && rank(p.visual_weight.HEADLINE) >= rank(WEIGHT.STRONG) && rank(p.visual_weight.PRODUCT) <= rank(WEIGHT.STRONG), problem: 'A_LEADING_HEADLINE_NEEDS_A_STRONGER_HEADLINE_THAN_PRODUCT',
+  },
+  {
+    when: (p) => p.hero_relationship === HERO_RELATIONSHIP.PRODUCT_RECEDES_INTO_SCENE, label: 'hero_relationship PRODUCT_RECEDES_INTO_SCENE',
+    meaning: 'the scene and the words carry the image and the product sits quietly within it (this is a composition weight, NOT the same thing as the product being grounded in the scene, which is an art-direction relationship)',
+    needs: 'visual_weight.PRODUCT is BALANCED or QUIET', holds: (p) => rank(p.visual_weight.PRODUCT) <= rank(WEIGHT.BALANCED), problem: 'A_RECEDING_PRODUCT_IS_NOT_STRONG',
+  },
+  {
+    when: (p) => [TEXT_ADJACENCY.BESIDE, TEXT_ADJACENCY.STAGGERED].includes(p.text_adjacency), label: 'text_adjacency BESIDE or STAGGERED',
+    meaning: 'the text stands to the side of the product', needs: 'product_anchor.horizontal is START or END, never CENTER',
+    holds: (p) => p.product_anchor.horizontal !== ANCHOR_HORIZONTAL.CENTER, problem: 'A_TEXT_BESIDE_THE_PRODUCT_NEEDS_THE_PRODUCT_TO_ANCHOR_TO_A_SIDE',
+  },
+  {
+    when: (p) => p.text_adjacency === TEXT_ADJACENCY.ABOVE, label: 'text_adjacency ABOVE', meaning: 'the text stands above the product', needs: 'product_anchor.vertical is MIDDLE or LOWER, never UPPER',
+    holds: (p) => p.product_anchor.vertical !== ANCHOR_VERTICAL.UPPER, problem: 'TEXT_ABOVE_THE_PRODUCT_NEEDS_THE_PRODUCT_LOWER',
+  },
+  {
+    when: (p) => p.text_adjacency === TEXT_ADJACENCY.BELOW, label: 'text_adjacency BELOW', meaning: 'the text stands below the product', needs: 'product_anchor.vertical is UPPER or MIDDLE, never LOWER',
+    holds: (p) => p.product_anchor.vertical !== ANCHOR_VERTICAL.LOWER, problem: 'TEXT_BELOW_THE_PRODUCT_NEEDS_THE_PRODUCT_HIGHER',
+  },
+]);
+/** The names a refusal for contradictory relations can carry (what the runner classifies as COMPOSITION_RELATIONS_CONTRADICTORY). */
+export const RELATION_PROBLEMS = Object.freeze(RELATION_RULES.map((r) => r.problem));
+
 /** The relations of a plan must agree with each other. */
 function assertConsistent(plan) {
-  const w = plan.visual_weight; const p = w.PRODUCT; const h = w.HEADLINE;
-  const violation = (reason) => fail(BRAIN_ERROR.RULE_VIOLATION, 'the relations of the composition plan contradict each other', 'composition', { problem: reason });
-  if (plan.hero_relationship === HERO_RELATIONSHIP.PRODUCT_DOMINATES && p !== WEIGHT.DOMINANT) violation('PRODUCT_DOMINATES_NEEDS_A_DOMINANT_PRODUCT');
-  if (plan.hero_relationship === HERO_RELATIONSHIP.PRODUCT_AND_HEADLINE_SHARE && !(p === WEIGHT.STRONG && h === WEIGHT.STRONG)) violation('SHARED_HERO_NEEDS_A_STRONG_PRODUCT_AND_A_STRONG_HEADLINE');
-  if (plan.hero_relationship === HERO_RELATIONSHIP.HEADLINE_LEADS_PRODUCT_ANSWERS && !(h && rank(h) >= rank(WEIGHT.STRONG) && rank(p) <= rank(WEIGHT.STRONG))) violation('A_LEADING_HEADLINE_NEEDS_A_STRONGER_HEADLINE_THAN_PRODUCT');
-  if (plan.hero_relationship === HERO_RELATIONSHIP.PRODUCT_RECEDES_INTO_SCENE && rank(p) > rank(WEIGHT.BALANCED)) violation('A_RECEDING_PRODUCT_IS_NOT_STRONG');
-  const { horizontal, vertical } = plan.product_anchor;
-  if ([TEXT_ADJACENCY.BESIDE, TEXT_ADJACENCY.STAGGERED].includes(plan.text_adjacency) && horizontal === ANCHOR_HORIZONTAL.CENTER) violation('A_TEXT_BESIDE_THE_PRODUCT_NEEDS_THE_PRODUCT_TO_ANCHOR_TO_A_SIDE');
-  if (plan.text_adjacency === TEXT_ADJACENCY.ABOVE && vertical === ANCHOR_VERTICAL.UPPER) violation('TEXT_ABOVE_THE_PRODUCT_NEEDS_THE_PRODUCT_LOWER');
-  if (plan.text_adjacency === TEXT_ADJACENCY.BELOW && vertical === ANCHOR_VERTICAL.LOWER) violation('TEXT_BELOW_THE_PRODUCT_NEEDS_THE_PRODUCT_HIGHER');
+  for (const rule of RELATION_RULES) {
+    if (rule.when(plan) && !rule.holds(plan)) fail(BRAIN_ERROR.RULE_VIOLATION, 'the relations of the composition plan contradict each other', 'composition', { problem: rule.problem });
+  }
 }
 
 // ---- the deterministic synthesizer
@@ -207,7 +240,9 @@ export function buildCompositionInstruction({ frame, concept, artDirection, hint
     `hero_relationship: ${vocab(HERO_RELATIONSHIP)}. text_adjacency: ${vocab(TEXT_ADJACENCY)}. alignment_family: ${vocab(ALIGNMENT_FAMILY)}. overlap_permission: ${vocab(OVERLAP_PERMISSION)}.`,
     `product_anchor is { horizontal: ${vocab(ANCHOR_HORIZONTAL)}, vertical: ${vocab(ANCHOR_VERTICAL)} }. visual_weight maps every role of the flow to ${vocab(WEIGHT)}.`,
     `narrative_flow is the reading order, a list of ${vocab(FLOW_ROLE)} that includes PRODUCT once. grouping is a list of groups (lists of text roles) that partitions the text roles of the flow. negative_space_reservation is a list (at most three) of { region: ${vocab(RESERVE_REGION)}, extent: ${vocab(RESERVE_EXTENT)} }.`,
-    'The relations must agree with each other (a dominant product for PRODUCT_DOMINATES, a product anchored to a side when the text is beside it, text above only when the product is lower). Avoid the default centred stack unless the concept needs it.',
+    'The relations must agree with each other, and Nordla refuses a plan whose relations contradict. Before you answer, check your plan against EVERY rule that applies to the values you chose:',
+    ...RELATION_RULES.map((r) => `- ${r.label}: ${r.meaning}. Needs: ${r.needs}.`),
+    'The values of hero_relationship are about reading order and weight in the composition, and visual_weight must say the same thing. Avoid the default centred stack unless the concept needs it.',
     'rationale is one concise sentence of why, for the record.',
     approvedRoles ? `The approved copy provides exactly these text roles, and ALL of them must appear in the flow: ${approvedRoles.join(', ')}.` : 'Use only the text roles the approved copy provides.',
     ...(hints.length ? ['This is a RE-COMPOSITION of an earlier plan for the same concept and art direction. Plan the relations again to answer these points (intents only):', ...hints.map((h) => `- ${h}`)] : []),

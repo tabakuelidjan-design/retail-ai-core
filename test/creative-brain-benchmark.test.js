@@ -569,3 +569,28 @@ test('BB-28 a Brain that rejects every concept is a VALID rejection, the second 
   assert.ok(s.concept_rounds.every((round) => round.selection.outcome === 'REJECT_CONCEPT' && round.selection.decisions.every((d) => d.evidence.length > 20)));
   assert.deepEqual(w.trace, ['frame', 'ideate', 'select', 'ideate', 'select']);
 });
+
+test('BB-29 a contradictory composition names its relation, keeps the model answer, and the record still shows the concept, the selection and the art direction', async () => {
+  const contradictory = {
+    ...compositionAnswer({ text_adjacency: 'BELOW', product_anchor: { horizontal: 'CENTER', vertical: 'UPPER' } }), hero_relationship: 'PRODUCT_RECEDES_INTO_SCENE', visual_weight: { HEADLINE: 'STRONG', SUBHEADLINE: 'BALANCED', PRICE: 'QUIET', PRODUCT: 'DOMINANT' },
+  };
+  const w = world({ answers: { compose: [contradictory] } });
+  const r = await live(w);
+  assert.equal(r.status, RESULT_STATE.BLOCKED);
+  const s = await w.store.readJson('summary.json');
+  assert.deepEqual({ reason: s.final.reason, stopped_at: s.final.stopped_at, cause: s.error.cause, problem: s.error.problem, code: s.error.code }, { reason: 'COMPOSITION_RELATIONS_CONTRADICTORY', stopped_at: 'COMPOSE', cause: 'COMPOSITION_RELATIONS_CONTRADICTORY', problem: 'A_RECEDING_PRODUCT_IS_NOT_STRONG', code: 'BRAIN_RULE_VIOLATION' });
+  assert.equal(s.error.evidence.raw_answer, JSON.stringify(contradictory));
+  // the stopped plan is reconstructable from the record alone
+  assert.equal(s.concept_rounds.length, 1);
+  assert.equal(s.concept_rounds[0].selection.outcome, 'SELECT');
+  assert.equal(s.concept_rounds[0].concepts.length, 3);
+  assert.equal(s.partial_plan.concept.concept_id, s.concept_rounds[0].selection.concept_id);
+  assert.ok(s.partial_plan.concept.central_idea && s.partial_plan.concept.visual_metaphor);
+  assert.ok(s.partial_plan.art_direction.atmosphere && s.partial_plan.art_direction.narrative_elements);
+  assert.equal(s.partial_plan.composition, null);
+  assert.match(s.problem_frame.frame_id, /^cpf_/);
+  // exactly one composition call, no image, no critic
+  assert.equal(w.trace.filter((x) => x === 'compose').length, 1);
+  assert.equal(w.envRequests.length, 0);
+  assert.equal(w.vlmCalls.length, 0);
+});

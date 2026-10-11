@@ -109,10 +109,15 @@ test('SF-5 the stopping cause is one name of a closed list, by stage and code', 
   assert.equal(c('ART_DIRECT', 'BRAIN_PORT_FAILED'), BRAIN_FAILURE.ART_DIRECTION_PROVIDER_FAILURE);
   assert.equal(c('ART_DIRECT', 'BRAIN_FORBIDDEN_CONTENT'), BRAIN_FAILURE.ART_DIRECTION_INVALID);
   assert.equal(c('SCENE', 'BRAIN_FORBIDDEN_CONTENT'), BRAIN_FAILURE.ART_DIRECTION_INVALID);
-  for (const stage of ['COMPOSE', 'PRODUCTION_STRATEGY', 'PLAN_COHERENCE']) assert.equal(c(stage, 'BRAIN_RULE_VIOLATION'), BRAIN_FAILURE.COMPOSITION_PLAN_INVALID);
+  for (const stage of ['PRODUCTION_STRATEGY', 'PLAN_COHERENCE']) assert.equal(c(stage, 'BRAIN_RULE_VIOLATION'), BRAIN_FAILURE.COMPOSITION_PLAN_INVALID);
+  // the composition stage tells contradictory relations from an invalid output
+  assert.equal(c('COMPOSE', 'BRAIN_RULE_VIOLATION', 'BrainError', 'A_RECEDING_PRODUCT_IS_NOT_STRONG'), BRAIN_FAILURE.COMPOSITION_RELATIONS_CONTRADICTORY);
+  for (const code of ['BRAIN_UNKNOWN_KEY', 'BRAIN_ENUM_INVALID', 'BRAIN_MISSING_KEY', 'BRAIN_LIST_INVALID']) assert.equal(c('COMPOSE', code), BRAIN_FAILURE.COMPOSITION_OUTPUT_INVALID);
+  assert.equal(c('COMPOSE', 'BRAIN_RULE_VIOLATION'), BRAIN_FAILURE.COMPOSITION_OUTPUT_INVALID); // a flow or a grouping that does not hold together is an output defect, not a contradiction
+  assert.equal(c('COMPOSE', 'BRAIN_PORT_FAILED'), BRAIN_FAILURE.COMPOSITION_PLAN_INVALID);
   // anything that is not the Brain's own contract speaking, or a stage nobody tagged, is a wiring defect
   assert.equal(c('IDEATE', null, 'TypeError'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
   assert.equal(c(null, 'BRAIN_UNKNOWN_KEY'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
   assert.equal(c('OBSERVE', 'BRAIN_MALFORMED'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
-  assert.equal(Object.keys(BRAIN_FAILURE).length, 12);
+  assert.equal(Object.keys(BRAIN_FAILURE).length, 14);
 });

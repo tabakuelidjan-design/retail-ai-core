@@ -77,7 +77,7 @@ const describeFailure = (error, stage) => {
   const brainStage = error?.brain_stage ?? null;
   const cause = classifyBrainFailure({ stage: brainStage, name: error?.name, code: error?.code, problem: error?.detail?.problem });
   return {
-    stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, ...safeError(error),
+    stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, problem: error?.detail?.problem ?? null, ...safeError(error),
     evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer } : null,
   };
 };
@@ -170,9 +170,10 @@ export async function runLive(deps, { confirmed = false } = {}) {
   const summary = () => ({ ...report, ...record, budget: budget.snapshot(), brain_ledger: brainLedger.entries() });
   const persist = () => deps.store.writeJson('summary.json', summary());
   let currentStage = 'BRAIN_PORT';
+  let brain = null;
   try {
     const brainComplete = deps.ports.brainPort({ budget, journal, maxCalls: cost.calls.text });
-    const brain = createCreativeBrain({ complete: brainComplete, ledger: brainLedger, bounds: { concept_rounds: BOUNDS.concept_rounds, concepts_per_round: BOUNDS.concepts_per_round } });
+    brain = createCreativeBrain({ complete: brainComplete, ledger: brainLedger, bounds: { concept_rounds: BOUNDS.concept_rounds, concepts_per_round: BOUNDS.concepts_per_round } });
 
     currentStage = 'CREATIVE_BRAIN_PLAN';
     const planned = await brain.plan({ brief });
@@ -207,6 +208,11 @@ export async function runLive(deps, { confirmed = false } = {}) {
     }
   } catch (error) {
     record.error = describeFailure(error, currentStage);
+    // a plan that stopped still shows what it had produced: frame, concepts, selection, art direction (the full canonical fields)
+    const partial = brain?.progress() ?? {};
+    record.problem_frame ??= partial.problem_frame ?? null;
+    record.concept_rounds = record.concept_rounds?.length ? record.concept_rounds : (partial.rounds ?? []);
+    record.partial_plan = { concept: partial.concept ?? null, art_direction: partial.art_direction ?? null, composition: partial.composition ?? null };
   }
 
   // the final state is the state of the last candidate that exists (a failure while preparing a recovery does not hide a candidate the owner can review); with no candidate it is BLOCKED

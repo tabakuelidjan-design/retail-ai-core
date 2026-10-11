@@ -93,6 +93,8 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
   // with bounds, the number of concept rounds is a budget for the whole life of this brain (plan and recovery together); without, each call may use up to MAX_CONCEPT_ROUNDS
   const roundLimit = bounds ? bounds.concept_rounds : MAX_CONCEPT_ROUNDS;
   let roundsUsed = 0;
+  // what the plan has produced so far, kept for the record of a plan that stops (a stopped plan must still show its frame, its concepts, its selection and its art direction)
+  const progress = {};
   const selector = createConceptSelector({ complete: port('select') });
   const artDirector = createArtDirector({ complete: port('art_direct') });
   const planner = createCompositionPlanner({ complete: port('compose') });
@@ -107,6 +109,7 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
       const { selection, evaluations, meta } = await atStage('SELECT_CONCEPT', round, () => selector.select({ frame, concepts }));
       ledgerRecord(ledger, DECISION.CONCEPT_SELECTION, COMPONENT.CONCEPT_SELECTOR, 'CRITERION_WORDS_WITHOUT_A_SCORE', { round, outcome: selection.outcome, concept_id: selection.concept_id, decisions: selection.decisions.map((d) => [d.concept_id, d.decision]), reasons: selection.reasons, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [] });
       rounds.push({ round, concepts, selection, evaluations });
+      progress.rounds = [...(progress.rounds ?? []), rounds.at(-1)];
       if (selection.outcome === SELECTION.SELECT) return { status: 'SELECTED', concept: concepts.find((c) => c.concept_id === selection.concept_id), rounds };
       // the next round does not return to what was judged weak: rejected concepts are excluded, a promising one is refined
       if (selection.outcome === SELECTION.REFINE_CONCEPT) {
@@ -125,9 +128,11 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
   /** From a selected concept: art direction, composition, scene, production plan. */
   async function fromConcept({ observation, frame, concept, productAssetRef, artHints = [], composeHints = [], recovery = null, keep = {} }) {
     const art = keep.art_direction ? { art_direction: keep.art_direction, meta: { model: null, request_id: null } } : await atStage('ART_DIRECT', null, () => artDirector.direct({ frame, concept, hints: artHints }));
+    progress.concept = concept; progress.art_direction = art.art_direction;
     if (!keep.art_direction) ledgerRecord(ledger, DECISION.ART_DIRECTION, COMPONENT.ART_DIRECTOR, 'SEMANTIC_ART_DIRECTION_OF_THE_SELECTED_CONCEPT', { art_direction_id: art.art_direction.art_direction_id, rationale: art.art_direction.rationale, model: art.meta.model, request_id: art.meta.request_id, key_repairs: art.meta.key_repairs ?? [] });
     const comp = keep.composition ? { composition: keep.composition, meta: { model: null, request_id: null } } : await atStage('COMPOSE', null, () => planner.plan({ frame, concept, artDirection: art.art_direction, hints: composeHints, approvedRoles: approvedRolesOf(observation) }));
     if (!keep.composition) ledgerRecord(ledger, DECISION.COMPOSITION_PLAN, COMPONENT.COMPOSITION_PLANNER, 'RELATIONAL_COMPOSITION_PLAN', { composition_id: comp.composition.composition_id, hero_relationship: comp.composition.hero_relationship, text_adjacency: comp.composition.text_adjacency, rationale: comp.composition.rationale, model: comp.meta.model, request_id: comp.meta.request_id, key_repairs: comp.meta.key_repairs ?? [] });
+    progress.composition = comp.composition;
     const scene = await atStage('SCENE', null, async () => composeScene({ artDirection: art.art_direction, productAssetRef }));
     ledgerRecord(ledger, DECISION.SCENE_SPEC, COMPONENT.SCENE_COMPOSER, 'SCENE_WITH_A_RESERVED_PRODUCT_INTEGRATION_ZONE', { scene_id: scene.scene_id, layers: scene.layers.length, protected_product: scene.protected_product.mode });
     const production = await atStage('PRODUCTION_STRATEGY', null, async () => planProduction({ artDirection: art.art_direction, scene, composition: comp.composition, recovery }));
@@ -146,11 +151,14 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
   return Object.freeze({
     /** Concept rounds still available to this brain (only meaningful with bounds). */
     remainingConceptRounds: () => Math.max(0, roundLimit - roundsUsed),
+    /** What the plan had produced when it stopped: { problem_frame?, rounds?, concept?, art_direction?, composition? }. */
+    progress: () => ({ ...progress }),
     /** The first plan for a brief. Returns { status: 'PLANNED', plan } or { status: 'NO_CONCEPT_SELECTED', rounds } (nothing is produced from a round that selected nothing). */
     async plan({ brief, rejected = [] }) {
       const observation = await atStage('OBSERVE', null, async () => observeBrief({ brief }));
       ledgerRecord(ledger, DECISION.OBSERVATION, COMPONENT.CREATIVE_OBSERVER, 'DETERMINISTIC_READING_OF_THE_BRIEF', { approved_text_roles: observation.approved_text_roles, asset_origin: observation.asset_origin, claims: observation.claim_refs.length });
       const { frame, meta } = await atStage('FRAME', null, () => framer.frame({ observation }));
+      progress.problem_frame = frame;
       ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [] });
       const picked = await conceptRounds({ frame, rejected });
       if (picked.status !== 'SELECTED') return deepFreeze({ status: picked.status, observation, problem_frame: frame, rounds: picked.rounds });
