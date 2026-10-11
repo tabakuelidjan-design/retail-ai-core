@@ -15,3 +15,4 @@ export * from './live-call-lock.js';
 export * from './qwen-environment.js';
 export * from './qwen-director-port.js';
 export * from './qwen-vision.js';
+export * from './qwen-brain-port.js';

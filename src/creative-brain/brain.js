@@ -78,17 +78,22 @@ export function directionFromPlan({ plan, ids, assetRef, claimRefs = [] }) {
 /**
  * @param {object} deps { ports: { frame, ideate, select, art_direct, compose } (each a language-model port, or one shared `complete`), ledger }
  */
-export function createCreativeBrain({ ports, complete = null, ledger = null }) {
+export function createCreativeBrain({ ports, complete = null, ledger = null, bounds = null }) {
   const port = (name) => ports?.[name] ?? complete;
   const framer = createProblemFramer({ complete: port('frame') });
-  const director = createConceptDirector({ complete: port('ideate') });
+  const director = createConceptDirector({ complete: port('ideate'), ...(bounds ? { count: { min: bounds.concepts_per_round, max: bounds.concepts_per_round } } : {}) });
+  // with bounds, the number of concept rounds is a budget for the whole life of this brain (plan and recovery together); without, each call may use up to MAX_CONCEPT_ROUNDS
+  const roundLimit = bounds ? bounds.concept_rounds : MAX_CONCEPT_ROUNDS;
+  let roundsUsed = 0;
   const selector = createConceptSelector({ complete: port('select') });
   const artDirector = createArtDirector({ complete: port('art_direct') });
   const planner = createCompositionPlanner({ complete: port('compose') });
 
   async function conceptRounds({ frame, rejected = [], refine = null }) {
     let against = [...rejected]; let toRefine = refine; const rounds = [];
-    for (let round = 1; round <= MAX_CONCEPT_ROUNDS; round += 1) {
+    for (let round = 1; round <= roundLimit; round += 1) {
+      if (bounds && roundsUsed >= roundLimit) break;
+      roundsUsed += 1;
       const { concepts, meta: ideateMeta } = await director.ideate({ frame, rejected: against, refine: toRefine });
       ledgerRecord(ledger, DECISION.CONCEPT_ROUND, COMPONENT.CONCEPT_DIRECTOR, 'GENUINELY_DISTINCT_CONCEPTS_BEFORE_ANY_LAYOUT', { round, concept_ids: concepts.map((c) => c.concept_id), model: ideateMeta.model, request_id: ideateMeta.request_id });
       const { selection, evaluations, meta } = await selector.select({ frame, concepts });
@@ -131,6 +136,8 @@ export function createCreativeBrain({ ports, complete = null, ledger = null }) {
   };
 
   return Object.freeze({
+    /** Concept rounds still available to this brain (only meaningful with bounds). */
+    remainingConceptRounds: () => Math.max(0, roundLimit - roundsUsed),
     /** The first plan for a brief. Returns { status: 'PLANNED', plan } or { status: 'NO_CONCEPT_SELECTED', rounds } (nothing is produced from a round that selected nothing). */
     async plan({ brief, rejected = [] }) {
       const observation = observeBrief({ brief });

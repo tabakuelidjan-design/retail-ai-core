@@ -7,7 +7,7 @@ import {
   assertPlanCoherent, CONCEPT_DIMENSIONS, createCreativeBrain, normalizeConceptCritique, toDirectionFields,
 } from '../src/creative-brain/index.js';
 import {
-  artDirectionAnswer, brief as makeBrief, compositionAnswer, CONCEPTS, evaluationsAnswer, frameAnswer, scriptedPort,
+  artDirectionAnswer, brief as makeBrief, compositionAnswer, CONCEPTS, evaluationsAnswer, frameAnswer, OTHER_CONCEPTS as OTHER, scriptedPort,
 } from './creative-brain-world.js';
 
 // THE BRAIN (`// BR-N` markers): the stages run in order, each answers the one before, rejected concepts never come back, recovery redoes only what the failure calls for.
@@ -28,41 +28,6 @@ const conceptCritique = (outcomes = {}) => normalizeConceptCritique({
 }, ctx);
 
 // concept sets: the first is the shared fixture; a second round needs three NEW distinct concepts
-const OTHER = [
-  {
-    central_idea: 'A tide of everyday glances: the screen we look at all day finally washes ashore as something solid.',
-    visual_metaphor: 'Foam retreating from a smooth pebble beach, leaving one warm stone that was shaped for a single hand.',
-    story: 'Constant looking becomes keeping; the sea delivers a thing worth holding to the person who watched it for so long.',
-    emotional_intent: 'Calm gratitude and the relief of keeping something safe.',
-    product_role: 'DESTINATION_OF_THE_STORY',
-    message_role: 'FOLLOWS',
-    memory_hook: 'The single stone left behind by the retreating foam.',
-    distinctiveness_reason: 'It turns passive scrolling into a tactile arrival, specific to turning a picture into an object.',
-    risks: ['the sea can read as a stock holiday scene', 'foam could crowd the calm zone'],
-  },
-  {
-    central_idea: 'A shelf of small worlds, where one has just been finished and is still being admired by its maker.',
-    visual_metaphor: 'A curator lamp over a cabinet of tiny treasures, the newest piece set at the centre of the beam.',
-    story: 'A collection grows by one; the newest entry is the one that matters to somebody today.',
-    emotional_intent: 'Quiet delight and the pride of collecting what is personal.',
-    product_role: 'HERO_OF_THE_STORY',
-    message_role: 'LEADS',
-    memory_hook: 'The newest treasure in the circle of lamplight.',
-    distinctiveness_reason: 'It frames a personalised object as a collectable, which no stock template does.',
-    risks: ['too many treasures can steal the beam', 'a cabinet may feel antique'],
-  },
-  {
-    central_idea: 'Mail that carries a face: a small parcel opened in a hallway where a family has just got home.',
-    visual_metaphor: 'A hallway table by the front door, a half-opened wrapping paper and a note, daylight spilling across the floor.',
-    story: 'A parcel arrives for a loved one and is opened before the coat comes off; the reaction is the story.',
-    emotional_intent: 'Warm surprise and the joy of being remembered.',
-    product_role: 'PROOF_OF_THE_STORY',
-    message_role: 'EMBEDDED_IN_THE_STORY',
-    memory_hook: 'The wrapping paper opened before the coat is off.',
-    distinctiveness_reason: 'It places the gift in the moment of discovery rather than on a shelf.',
-    risks: ['hallway clutter can compete with the focal area', 'staged reactions look false'],
-  },
-];
 
 const withIds = async (list) => {
   const { normalizeConceptSet } = await import('../src/creative-brain/index.js');
@@ -225,4 +190,28 @@ test('BR-8 every ledger decision of the Brain belongs to a Nordla component: man
   assert.equal(report.manual_creative_steering, 'NONE');
   assert.ok(Object.values(report.attribution).every((components) => components.every((c) => /^nordla:[a-z-]+@1$/.test(c))));
   assert.throws(() => ledger.record({ decision: 'CONCEPT_SELECTION', decided_by: 'THE_OWNER' }), (e) => e.code === 'DECISION_NOT_ATTRIBUTABLE_TO_A_NORDLA_COMPONENT');
+});
+
+test('BR-9 with bounds, the concept rounds are a budget for the whole life of the brain: a re-conception gets only what planning left', async () => {
+  const first = await goodRound(CONCEPTS, [{}, { CONCEPT_STRENGTH: 'PARTIAL' }, { DISTINCTIVENESS: 'FAILS' }]);
+  const rejectAll = await goodRound(OTHER, [{ DISTINCTIVENESS: 'FAILS' }, { GENERIC_RISK: 'FAILS' }, { FEASIBILITY: 'FAILS' }]);
+  const port = scriptedPort({
+    frame: [frameAnswer()], ideate: [first.ideate, rejectAll.ideate, first.ideate], select: [first.select, rejectAll.select, first.select], art_direct: [artDirectionAnswer()], compose: [compositionAnswer()],
+  });
+  const brain = createCreativeBrain({ complete: port.complete, bounds: { concept_rounds: 2, concepts_per_round: 3 } });
+  assert.equal(brain.remainingConceptRounds(), 2);
+  const planned = await brain.plan({ brief: makeBrief() });
+  assert.equal(planned.status, 'PLANNED');
+  assert.equal(brain.remainingConceptRounds(), 1);
+  const out = await brain.replan({ brief: makeBrief(), plan: planned.plan, critique: critique14({}), conceptCritique: conceptCritique({ CONCEPT_STRENGTH: 'FAIL' }) });
+  assert.equal(out.status, 'NO_CONCEPT_SELECTED');
+  assert.equal(port.calls.filter((c) => c.stage === 'ideate').length, 2);
+  assert.equal(brain.remainingConceptRounds(), 0);
+  // nothing is left: a second re-conception makes no model call at all
+  const before = port.calls.length;
+  const again = await brain.replan({ brief: makeBrief(), plan: planned.plan, critique: critique14({}), conceptCritique: conceptCritique({ CONCEPT_STRENGTH: 'FAIL' }) });
+  assert.equal(again.status, 'NO_CONCEPT_SELECTED');
+  assert.equal(port.calls.length, before);
+  // the concepts per round are bounded too
+  assert.match(port.calls.find((c) => c.stage === 'ideate').instruction.system, /exactly 3 concepts/);
 });

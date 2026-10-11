@@ -83,17 +83,17 @@ export function assertConceptsDistinct(concepts, { against = [] } = {}) {
 }
 
 /** The set of concepts of a round: a bounded number, each a concept, all distinct (and distinct from the concepts already rejected). */
-export function normalizeConceptSet(rawList, { rejected = [] } = {}) {
-  const concepts = listOf(rawList, 'concepts', { min: CONCEPT_COUNT.min, max: CONCEPT_COUNT.max }, (raw, where) => normalizeConcept(raw, where));
+export function normalizeConceptSet(rawList, { rejected = [], count = CONCEPT_COUNT } = {}) {
+  const concepts = listOf(rawList, 'concepts', { min: count.min, max: count.max }, (raw, where) => normalizeConcept(raw, where));
   if (new Set(concepts.map((c) => c.concept_id)).size !== concepts.length) fail(BRAIN_ERROR.NOT_DISTINCT, 'the same concept appears twice', 'concepts', { problem: 'CONCEPTS_NOT_DISTINCT' });
   assertConceptsDistinct(concepts, { against: rejected });
   return deepFreeze(concepts);
 }
 
-export function buildConceptInstruction({ frame, rejected = [], refine = null }) {
+export function buildConceptInstruction({ frame, rejected = [], refine = null, count = CONCEPT_COUNT }) {
   const system = [
     'You are the Nordla concept director. From the creative problem frame you invent several GENUINELY DIFFERENT concepts before any layout, scene or colour is chosen.',
-    `Return ONLY one JSON object: { "concepts": [ ... ] } with ${CONCEPT_COUNT.min} to ${CONCEPT_COUNT.max} concepts. Each concept has exactly these keys: ${MODEL_KEYS.join(', ')}.`,
+    `Return ONLY one JSON object: { "concepts": [ ... ] } with ${count.min === count.max ? `exactly ${count.min}` : `${count.min} to ${count.max}`} concepts. Each concept has exactly these keys: ${MODEL_KEYS.join(', ')}.`,
     `product_role is one of: ${Object.values(CONCEPT_PRODUCT_ROLE).join(', ')}. message_role is one of: ${Object.values(MESSAGE_ROLE).join(', ')}. risks is a list of one to four short one-line texts. Every other value is ONE line of plain text of at most 300 characters.`,
     'Concepts must differ in their central idea, metaphor and story, not merely in background, colour, alignment or camera angle: a variation of layout is not a concept and will be refused. Every concept must lead back to the product.',
     'Do not reach for the image that usually comes with an occasion: argue the concept from the occasion\'s register, the relationship between giver and receiver and the moment in time, for this product.',
@@ -107,12 +107,12 @@ export function buildConceptInstruction({ frame, rejected = [], refine = null })
 }
 
 /** The IDEATE stage: one model completion, then the closed contract and the distinctness guard. */
-export function createConceptDirector({ complete }) {
+export function createConceptDirector({ complete, count = CONCEPT_COUNT }) {
   return Object.freeze({
     async ideate({ frame, rejected = [], refine = null }) {
-      const { raw, meta } = await askModel({ complete, instruction: buildConceptInstruction({ frame, rejected, refine }), stage: 'IDEATE' });
+      const { raw, meta } = await askModel({ complete, instruction: buildConceptInstruction({ frame, rejected, refine, count }), stage: 'IDEATE' });
       closed(raw, ['concepts'], 'answer');
-      return { concepts: normalizeConceptSet(raw.concepts, { rejected }), meta };
+      return { concepts: normalizeConceptSet(raw.concepts, { rejected, count }), meta };
     },
   });
 }
