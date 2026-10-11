@@ -1,11 +1,11 @@
 {
-  "verified_commit": "fdde0eec53ff37c7a114c8eb01308fd8891faea8",
-  "code_hash": "0521bfb248943bb55741a642ea864c81d6216a75",
-  "full_suite": { "tests": 2021, "pass": 2021, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 57, "killed": 56, "survivors_documented": 1, "note": "38 (contract layer, parity, gate, runner) + 19 (protocol repair). The one survivor is an equivalent mutant: parseJsonObject only ever throws BRAIN_MALFORMED, so the extra code check in the repair trigger is defensive and cannot change behaviour." },
+  "verified_commit": "1ae64fc50b60170e5e816112b8f6bbb422f9e9a5",
+  "code_hash": "b78893f6826af9a233e08be706ab3d69674446b0",
+  "full_suite": { "tests": 2032, "pass": 2032, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
+  "mutation": { "total": 79, "killed": 77, "survivors_documented": 2, "note": "contract layer, parity, gate, runner (38); protocol repair (19); answer shape and envelope (12); duplicate-key scanner and structural envelope (10, two survivors closed by new tests). Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and pushing a Set instead of null for an array in the duplicate-key scanner (a string inside an array is never followed by a colon)." },
   "clean_clones": {
-    "node20": { "tests": 2021, "pass": 2019, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2021, "pass": 2019, "fail": 0, "skipped": 2 }
+    "node20": { "tests": 2032, "pass": 2030, "fail": 0, "skipped": 2 },
+    "node24": { "tests": 2032, "pass": 2030, "fail": 0, "skipped": 2 }
   },
-  "ci": { "status": "success", "run": 38175863192 }
+  "ci": { "status": "success", "run": 38178707158 }
 }
