@@ -111,7 +111,7 @@ export class UnauthorizedRecoveryError extends Error {
 
 /**
  * The authorized actions of a category for a module. The module policy: `{ allow: { DOMAIN_RULE_VIOLATION: [..] }, extend: { CATEGORY: [..] }, forbid: { CATEGORY: [..] } }`.
- * `allow` replaces the list of DOMAIN_RULE_VIOLATION only; `extend` appends to any category except where FORBIDDEN; `forbid` removes (a module may always be stricter).
+ * `allow` replaces the list of DOMAIN_RULE_VIOLATION only; `extend` appends to any category except where FORBIDDEN; `forbid` removes (a module may always be stricter); `prefer` puts actions first.
  */
 export function authorizedActions(category, modulePolicy = null) {
   let list = [...(CORE_POLICY[category] ?? [])];
@@ -120,6 +120,9 @@ export function authorizedActions(category, modulePolicy = null) {
   const never = FORBIDDEN[category] ?? [];
   const stricter = modulePolicy?.forbid?.[category] ?? [];
   list = list.filter((a) => !never.includes(a) && !stricter.includes(a) && Object.values(A).includes(a));
+  // a module may put actions first (for example Finance asks the user before anything else)
+  const first = modulePolicy?.prefer?.[category] ?? [];
+  list.sort((x, y) => (first.includes(x) ? first.indexOf(x) : 99) - (first.includes(y) ? first.indexOf(y) : 99));
   // a terminal exit always exists: a category never ends up with nothing to do
   if (!list.some((a) => TERMINAL_ACTIONS.includes(a))) list.push(category === C.FATAL_SYSTEM_ERROR ? A.FATAL_STOP : A.GRACEFUL_BLOCK);
   return list;

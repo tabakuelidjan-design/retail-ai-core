@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+
+import { findDuplicateKey as coreFindDuplicateKey, jsonSlice as coreJsonSlice } from '../core-resilience/structured-output.js';
 import { normalizeNearMisses, REPAIR_KIND } from './contract.js';
 import { BRAIN_ERROR, BrainError, fail } from './validation.js';
 
@@ -20,55 +22,17 @@ export function safeCause(cause) {
 }
 
 function jsonSlice(text, where) {
-  const trimmed = String(text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  const start = trimmed.indexOf('{'); const end = trimmed.lastIndexOf('}');
-  if (start < 0 || end < start) fail(BRAIN_ERROR.MALFORMED, 'the model returned no JSON object', where);
-  return trimmed.slice(start, end + 1);
+  const slice = coreJsonSlice(text);
+  if (slice === null) fail(BRAIN_ERROR.MALFORMED, 'the model returned no JSON object', where);
+  return slice;
 }
 
 export function parseJsonObject(text, where = 'answer') {
   try { return JSON.parse(jsonSlice(text, where)); } catch (error) { if (error?.code === BRAIN_ERROR.MALFORMED) throw error; return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
 }
 
-/**
- * JSON.parse silently keeps the LAST of two equal keys in one object, which would let the parser pick between two answers. Returns the first duplicated key (and where), or null. Valid JSON only.
- */
-export function findDuplicateKey(text, where = 'answer') {
-  const s = jsonSlice(text, where);
-  const stack = [];
-  for (let i = 0; i < s.length; i += 1) {
-    const c = s[i];
-    if (c === '{') stack.push(new Set());
-    else if (c === '[') stack.push(null);
-    else if (c === '}' || c === ']') stack.pop();
-    else if (c === '"') {
-      let j = i + 1;
-      while (j < s.length && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
-      let k = j + 1;
-      while (k < s.length && /\s/.test(s[k])) k += 1;
-      const top = stack[stack.length - 1];
-      if (s[k] === ':' && top) {
-        const key = JSON.parse(s.slice(i, j + 1));
-        if (top.has(key)) return { key, depth: stack.length };
-        top.add(key);
-      }
-      i = j;
-    }
-  }
-  return null;
-}
-
-/**
- * One completion through the port. A failure of the port is a BrainError with the safe diagnostics only. Returns { raw, meta }.
- * @param {object} input { complete, instruction: { system, user }, stage }
- */
-export async function askModel({ complete, instruction, stage }) {
-  if (typeof complete !== 'function') throw new TypeError(`${stage} needs a language-model port`);
-  let reply;
-  try { reply = await complete(instruction); } catch (cause) { throw new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed`, stage, safeCause(cause)); }
-  const raw = parseJsonObject(reply?.text, stage);
-  return { raw, meta: { model: reply?.model ?? null, request_id: reply?.request_id ?? null } };
-}
+/** The duplicate-key scanner is Core's (src/core-resilience/structured-output.js); the Brain keeps its own signature (the `where` is ignored). */
+export const findDuplicateKey = (text) => coreFindDuplicateKey(text);
 
 // ---- near-miss key repair. A language model may misspell a key of the contract it was given ("risisks" for "risks"). The closed contract stays closed: only an UNAMBIGUOUS misspelling is
 // corrected, deterministically and locally (no second call): exactly one unknown key and one missing key that are within two edits of each other. Every repair is recorded as evidence; the
