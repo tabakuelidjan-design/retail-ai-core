@@ -82,7 +82,7 @@ test('DT-4 a successful completion journals its usage and latency (evidence of t
 
 test('DT-5 the revision script uses the dedicated timeout for the revision Director only', async () => {
   const revision = (await readFile(new URL('../scripts/run-c3-revision.mjs', import.meta.url), 'utf8')).replace(/\/\/.*$/gm, '');
-  assert.match(revision, /createRevisionDirector\(\{ ledger, complete: createQwenDirectorPort\(\{ config, budget, journal, timeoutMs: REVISION_DIRECTOR_TIMEOUT_MS \}\)/);
+  assert.match(revision, /createRevisionDirector\(\{ ledger, complete: createQwenDirectorPort\(\{ config, budget, journal, timeoutMs: REVISION_DIRECTOR_TIMEOUT_MS, enableThinking: false \}\)/);
   const initial = (await readFile(new URL('../scripts/run-c2-habb-creative.mjs', import.meta.url), 'utf8')).replace(/\/\/.*$/gm, '');
   assert.doesNotMatch(initial, /timeoutMs/);
 });

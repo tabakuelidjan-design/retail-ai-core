@@ -17,6 +17,7 @@ export async function createMarketingCopy({
   maxTokens = 600,
   fetchImpl,
   timeoutMs = config?.requestTimeoutMs,
+  enableThinking = undefined,
 }) {
   requireAlibabaCreativeConfig(config);
   const policy = assertAlibabaExternalUse(dataPolicy);
@@ -27,6 +28,8 @@ export async function createMarketingCopy({
     throw new RangeError('maxTokens must be between 1 and 4000');
   }
 
+  if (enableThinking !== undefined && typeof enableThinking !== 'boolean') throw new TypeError('enableThinking must be a boolean when given');
+  const thinkingMode = enableThinking === undefined ? 'PROVIDER_DEFAULT' : (enableThinking ? 'ENABLED' : 'DISABLED');
   const estimatedInputTokens = estimateTextInputTokens(systemPrompt, brief);
   const reservation = budget.reserveText({
     id: operationId,
@@ -40,6 +43,7 @@ export async function createMarketingCopy({
     provider: 'alibaba-model-studio',
     model: config.textModel,
     region: config.region,
+    thinking: thinkingMode,
     estimated_cost_eur: reservation.reserved_eur,
     data_class: policy.classification,
   });
@@ -59,6 +63,8 @@ export async function createMarketingCopy({
         ],
         temperature,
         max_tokens: maxTokens,
+        // the model's own default applies unless a caller states the thinking mode explicitly
+        ...(enableThinking === undefined ? {} : { enable_thinking: enableThinking }),
       },
     });
 
@@ -82,6 +88,7 @@ export async function createMarketingCopy({
       provider: 'alibaba-model-studio',
       model: config.textModel,
       region: config.region,
+      thinking: thinkingMode,
       request_id: payload?.id ?? payload?.request_id ?? null,
       status: 'SUCCEEDED',
       actual_cost_eur: actualEur,
@@ -105,6 +112,7 @@ export async function createMarketingCopy({
       provider: 'alibaba-model-studio',
       model: config.textModel,
       region: config.region,
+      thinking: thinkingMode,
       request_id: error?.requestId ?? null,
       status: 'FAILED',
       estimated_cost_eur: reservation.reserved_eur,

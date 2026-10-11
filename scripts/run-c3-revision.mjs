@@ -169,7 +169,7 @@ try {
   const agents = {
     analyst: createProductAssetAnalyst({ ledger, expression }),
     director: createCreativeDirector({ ledger, complete: async () => { throw new Error('the initial Director is not used in a revision'); }, constants: DIRECTOR_CONSTANTS }),
-    revision_director: createRevisionDirector({ ledger, complete: createQwenDirectorPort({ config, budget, journal, timeoutMs: REVISION_DIRECTOR_TIMEOUT_MS }), constants: DIRECTOR_CONSTANTS }),
+    revision_director: createRevisionDirector({ ledger, complete: createQwenDirectorPort({ config, budget, journal, timeoutMs: REVISION_DIRECTOR_TIMEOUT_MS, enableThinking: false }), constants: DIRECTOR_CONSTANTS }),
     copy: createApprovedCopyAgent({ ledger }),
     visual_director: createVisualProductionDirector({ ledger, expression }),
   };

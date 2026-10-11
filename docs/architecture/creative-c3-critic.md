@@ -136,6 +136,14 @@ verified BEFORE acceptance (one line, 1..300 characters) and a violation is refu
 length, limit; never the text) go to the ledger as `DIRECTION_REFUSED`, and nothing is shortened (no approved canonical summarization step exists; shortening an idea changes it). The lane's structured-output mode
 documents JSON validity, not field lengths, so it is not relied on. A direction refused by the contract is classified `REVISION_DIRECTION_INVALID` at the stage `REVISED_CREATIVE_DIRECTION`.
 
+## Revision Director call mode: thinking off (2026-10-11)
+
+Latency evidence of the revision Director completions (non-streaming, the model's default thinking): 63.7 s, 66.2 s, 67.7 s (cycle 1 attempts), 192.6 s and 189.6 s (cycle 1 and cycle 2 with the ambition, about 5.2-5.6k completion
+tokens), then a client TIMEOUT at the 240 s bound (cycle 2, second attempt, no response, nothing billed). The revision Director now sends `enable_thinking: false` (revision Director only; the initial Director keeps the
+provider default), with everything else unchanged: same model, same canonical evidence, same creative ambition and qualities, same 300-character direction limits, same 240 s hard-bounded timeout, one call, no retry.
+Text completions journal the thinking mode (`DISABLED` / `PROVIDER_DEFAULT`), usage and latency. These tests prove the contract and the call mode only: **whether thinking-off preserves creative quality is not
+assumed**; Candidate 3 is the empirical test, and a creatively weak direction will be recorded as evidence.
+
 ## Known gaps (reported, not hidden)
 
 - **UNRESOLVED CI / determinism issue (parked 2026-10-11): the product mask is not always deterministic on Node 24.**

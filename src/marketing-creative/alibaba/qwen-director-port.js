@@ -10,8 +10,9 @@ export const REVISION_DIRECTOR_TIMEOUT_MS = 240_000;
 export const DIRECTOR_TIMEOUT_CAP_MS = 300_000;
 
 export function createQwenDirectorPort({
-  config, budget, journal = null, fetchImpl = globalThis.fetch, maxTokens = 900, temperature = 0.4, timeoutMs = null,
+  config, budget, journal = null, fetchImpl = globalThis.fetch, maxTokens = 900, temperature = 0.4, timeoutMs = null, enableThinking = undefined,
 }) {
+  if (enableThinking !== undefined && typeof enableThinking !== 'boolean') throw new TypeError('enableThinking must be a boolean when given');
   if (timeoutMs !== null && (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > DIRECTOR_TIMEOUT_CAP_MS)) throw new RangeError(`timeoutMs must be between 1000 and ${DIRECTOR_TIMEOUT_CAP_MS}`);
   // never below the lane's configured timeout, never above the hard cap; without a dedicated value the lane's configured timeout applies unchanged
   const effectiveTimeoutMs = timeoutMs === null ? undefined : Math.min(Math.max(timeoutMs, config?.requestTimeoutMs ?? 0), DIRECTOR_TIMEOUT_CAP_MS);
@@ -30,7 +31,8 @@ export function createQwenDirectorPort({
       maxTokens,
       fetchImpl,
       ...(effectiveTimeoutMs === undefined ? {} : { timeoutMs: effectiveTimeoutMs }),
+      ...(enableThinking === undefined ? {} : { enableThinking }),
     });
     return { text: result.text, model: result.model, request_id: result.requestId, cost_eur: result.costEur };
-  }, { calls: () => calls, timeout_ms: effectiveTimeoutMs ?? config?.requestTimeoutMs ?? null });
+  }, { calls: () => calls, timeout_ms: effectiveTimeoutMs ?? config?.requestTimeoutMs ?? null, thinking: enableThinking === undefined ? 'PROVIDER_DEFAULT' : (enableThinking ? 'ENABLED' : 'DISABLED') });
 }
