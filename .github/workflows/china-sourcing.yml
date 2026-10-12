@@ -1,5 +1,6 @@
 name: china-sourcing
-# China Sourcing only. No secret, no provider, no network call to any provider: the ASR bench uses its fake provider, the tunnel e2e is never run.
+# China Sourcing only. It requires Node 24 (owner decision 2026-10-12). No secret, no provider, no network call to any provider:
+# the ASR bench uses its fake provider and the tunnel e2e is never run.
 on:
   push:
     branches: ['feature/china-sourcing-**']
@@ -13,18 +14,15 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [20, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '${{ matrix.node }}' }
+        with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
       - run: node --test test/sourcing-*.test.js
   e2e:
-    # Real-browser suites that need no provider. continue-on-error until they have been observed green on a Linux runner (they were written on Windows/Edge).
+    # Real-browser suites that need no provider. INFORMATIONAL (continue-on-error): written on Windows/Edge; on Linux Chromium the fieldmode checks 3, 4 and 18 fail
+    # (see docs/CHINA-SOURCING-RUNTIME.md). They must be understood before this job is made blocking.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true

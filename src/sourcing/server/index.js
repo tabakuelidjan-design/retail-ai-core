@@ -12,6 +12,7 @@ import { createFileStore } from '../store/file-store.js';
 import { createSafetyGateAdapter } from '../adapters/safety-gate.js';
 import { fetchEcb } from '../adapters/fx.js';
 import { createDisabledProvider, createVisionProvider } from '../adapters/ai-provider.js';
+import { assertSourcingRuntime } from '../runtime.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -24,6 +25,7 @@ async function ensureToken(env, dir) {
 }
 
 export async function startSourcingServer({ env = process.env, log = console.log, port = Number(env.SOURCING_PORT || 8787), dir = DATA_DIR, fetchImpl, ecb = () => fetchEcb(), allowedHosts = [] } = {}) {
+  assertSourcingRuntime(); // China Sourcing requires Node 24
   const host = env.SOURCING_HOST || '127.0.0.1';
   await mkdir(dir, { recursive: true });
   const token = await ensureToken(env, dir);
