@@ -235,7 +235,8 @@ test('CC-16 several channels make a campaign: one shared idea, a lane per channe
   const out = await world.planner.plan({ brief: campaignBrief(), request: campaignRequest({ channel: undefined, channels: ['INSTAGRAM', 'STORE_WINDOW', 'TIKTOK'], requested_format: undefined, requested_asset_count: undefined, copy: [{ copy_ref: 'copy://h', mode: 'COPY_LOCKED', role: 'HEADLINE', text: 'Vos souvenirs. Votre création.' }] }) });
   assert.equal(out.status, 'PLANNED');
   assert.deepEqual(out.campaign_plan.lanes.map((l) => [l.channel, l.format_kind]), [['INSTAGRAM', 'SINGLE_IMAGE'], ['STORE_WINDOW', 'POSTER'], ['TIKTOK', 'SHORT_VIDEO']]);
-  assert.deepEqual(out.campaign_plan.lanes[2].asset_plan_ids, []); assert.equal(out.campaign_plan.lanes[2].execution.status, 'PLANNED_NOT_EXECUTABLE');
+  assert.deepEqual(out.campaign_plan.lanes[2].asset_plan_ids, []); assert.deepEqual(out.campaign_plan.lanes[2].execution, { status: 'PLANNED_NOT_EXECUTABLE', reasons: ['VIDEO_PRODUCTION_NOT_AVAILABLE'] });
+  assert.equal(out.campaign_plan.lanes[2].diversity, null, 'a video lane has no assets to compare');
   assert.equal(out.asset_plans.length, 2); assert.equal(new Set(out.asset_plans.map((a) => a.shared.concept_id)).size, 1);
   assert.equal(world.port.count('frame'), 1); assert.equal(world.port.count('art_direct'), 1);
   assert.deepEqual(out.asset_plans.map((a) => a.aspect_ratio ?? a.canvas.width / a.canvas.height).length, 2);

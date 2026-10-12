@@ -102,6 +102,7 @@ test('CL-7 the planner is additive: nothing in the existing source imports it ex
 });
 
 test('CL-8 the slide capacities are measured with the real typography engine in the text-led spec, on every canvas and every density class', () => {
+  assert.equal(TEXT_LED_SPEC.safety_factor, 0.8, 'the safety factor behind every stated capacity');
   const font = fonts.get('font:runtime-fixture-sans');
   for (const resource of FORMAT_RESOURCES) {
     const caps = resource.slide_capacity;
