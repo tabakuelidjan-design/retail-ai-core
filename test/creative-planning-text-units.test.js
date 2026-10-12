@@ -76,6 +76,7 @@ test('TU-6 verifyVerbatim refuses an added, removed, reordered or overlapping sl
   assert.ok(!verifyVerbatim(text, [...good].reverse()), 'a reordered slice');
   assert.ok(!verifyVerbatim(text, [good[0], { start: good[0].start, end: good[0].end }, ...good.slice(1)]), 'an overlapping slice');
   assert.ok(!verifyVerbatim(`${text} extra`, good), 'a text with more words');
+  assert.ok(!verifyVerbatim('aa', [{ start: 0, end: 1 }, { start: 0, end: 1 }]), 'the same slice twice is an overlap even when the words add up');
   assert.equal(stripSpace(textOf(text, good)), stripSpace(text));
 });
 
@@ -87,4 +88,11 @@ test('TU-7 firstSentence and groupSlices keep the order and never cut a slice', 
   const groups = groupSlices(FR, slices, 90);
   assert.deepEqual(groups.flatMap((g) => g.slices), slices);
   for (const g of groups) assert.ok(g.chars <= 90 || g.slices.length === 1);
+});
+
+test('TU-8 a tiny piece is not cut off when a fuller one is available', () => {
+  const text = 'Oui. Une seconde phrase assez longue pour remplir la limite fixée ici même.';
+  const slices = sliceText(text, 60, 'fr');
+  assert.notEqual(text.slice(slices[0].start, slices[0].end), 'Oui.');
+  assert.ok(verifyVerbatim(text, slices));
 });

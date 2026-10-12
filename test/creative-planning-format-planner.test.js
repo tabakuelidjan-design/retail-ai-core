@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createDecisionLedger } from '../src/creative-runtime/ledger.js';
 import { BrainError } from '../src/creative-brain/validation.js';
 import {
-  briefForAsset, createContentFormatPlanner, createCopyAdapter, createCopyWriter, stripSpace,
+  assertLockedTextUnaltered, briefForAsset, createContentFormatPlanner, createCopyAdapter, createCopyWriter, requestFromBrief, stripSpace,
 } from '../src/creative-planning/index.js';
 import { buildBrief } from './runtime-world.js';
 import {
@@ -336,4 +336,70 @@ test('FP-24 the role capacity is exact: a headline of exactly the capacity stays
   const price = await planner().plan(request({ channel: 'STORE_WINDOW', constraints: [{ kind: 'ALL_TEXT_ON_ASSET' }], copy: [copy({ role: 'HEADLINE', text: over })] }));
   assert.equal(price.assets[0].slots[0].role, 'BODY'); assert.equal(price.executable, false);
   assert.ok(price.assets[0].execution.reasons.includes('ROLE_HAS_NO_LAYOUT_SLOT:BODY'));
+});
+
+test('FP-25 a sectioned text becomes a sequence only when it is long: a short sectioned text stays one asset with its caption', async () => {
+  const point = (n) => `Point ${n} : notre atelier de Namur imprime vos photos avec soin.`;
+  const short = [1, 2, 3, 4].map(point).join(String.fromCharCode(10, 10));
+  const plan = await planner().plan(request({ channel: 'SOCIAL_FEED', copy: [copy({ text: short })] }));
+  assert.equal(plan.format.kind, 'SINGLE_IMAGE'); assert.ok(plan.caption);
+});
+
+test('FP-26 a channel that has no static kind falls back to the generic digital kinds when the request cannot be honoured', async () => {
+  const plan = await planner().plan(request({ channel: 'TIKTOK', requested_format: 'SINGLE_IMAGE', constraints: [{ kind: 'ALL_TEXT_ON_ASSET' }], copy: [copy({ text: longText(300, 4) })] }));
+  assert.equal(plan.status, 'PLANNED'); assert.equal(plan.format.kind, 'CAROUSEL');
+});
+
+test('FP-27 a first sentence longer than the headline capacity is not promoted to the headline', async () => {
+  const sentence = `${'Une très longue première phrase '.repeat(6)}qui ne tient pas dans un titre.`;
+  const plan = await planner().plan(request({ channel: 'SOCIAL_FEED', copy: [copy({ text: `${sentence} Puis une seconde phrase courte.` })] }));
+  assert.equal(plan.assets[0].slots.length, 0); assert.ok(plan.caption.text.startsWith('Une très longue'));
+});
+
+test('FP-28 the guard on locked text really guards: a tampered distribution is refused', async () => {
+  const text = longText(60, 1);
+  const plan = await planner().plan(request({ channel: 'SOCIAL_FEED', copy: [copy({ text })] }));
+  const units = [{ unit_ref: 'copy://main', mode: 'COPY_LOCKED', text }];
+  assert.doesNotThrow(() => assertLockedTextUnaltered(units, plan.assets, plan.caption));
+  const dropped = { ...plan.caption, pieces: plan.caption.pieces.map((p) => ({ ...p, end: p.end - 20 })) };
+  assert.throws(() => assertLockedTextUnaltered(units, plan.assets, dropped), (e) => e.detail?.problem === 'LOCKED_TEXT_ALTERED');
+  const adapted = { ...plan.caption, pieces: plan.caption.pieces.map((p) => ({ ...p, origin: 'ADAPTED' })) };
+  assert.throws(() => assertLockedTextUnaltered(units, plan.assets, adapted), (e) => e.detail?.problem === 'LOCKED_TEXT_ALTERED');
+  assert.doesNotThrow(() => assertLockedTextUnaltered([{ ...units[0], mode: 'COPY_ADAPTABLE' }], plan.assets, adapted), 'an adaptable text may be adapted');
+});
+
+test('FP-29 a canvas beyond the current production limit is planned, not executable', async () => {
+  const huge = { format_ref: 'format://x/huge', canvas: { width: 4000, height: 4000, unit: 'px' }, medium: 'PHYSICAL' };
+  const plan = await planner().plan(request({ channel: 'PRINT', canvas: huge, copy: [copy({ role: 'HEADLINE', text: 'Titre' })] }));
+  assert.equal(plan.executable, false); assert.ok(plan.assets[0].execution.reasons.includes('CANVAS_EXCEEDS_THE_CURRENT_PRODUCTION_LIMIT'));
+  const ok = await planner().plan(request({ channel: 'PRINT', canvas: { ...huge, canvas: { width: 1240, height: 1748, unit: 'px' } }, copy: [copy({ role: 'HEADLINE', text: 'Titre' })] }));
+  assert.equal(ok.executable, true);
+});
+
+test('FP-30 two channels already make a campaign; a requested number of assets is a limit', async () => {
+  const two = await planner().plan(request({ channels: ['INSTAGRAM', 'STORE_WINDOW'] }));
+  assert.equal(two.format.kind, 'MULTI_ASSET_CAMPAIGN'); assert.equal(two.members.length, 2);
+  const capped = await planner().plan(request({ channel: 'SOCIAL_FEED', requested_format: 'CAROUSEL', requested_asset_count: 3, copy: [copy({ text: longText(300, 5) })] }));
+  assert.equal(capped.assets.length, 3); assert.ok(capped.caption, 'the rest goes to the caption');
+  const strict = await planner().plan(request({ channel: 'SOCIAL_FEED', requested_format: 'CAROUSEL', requested_asset_count: 3, constraints: [{ kind: 'ALL_TEXT_ON_ASSET' }], copy: [copy({ text: longText(300, 5) })] }));
+  assert.notEqual(strict.assets.length > 3, true);
+});
+
+test('FP-31 two texts nobody gave a role to take the headline and the subheadline, one each', async () => {
+  const plan = await planner().plan(request({ copy: [copy({ copy_ref: 'copy://a', text: 'Titre un' }), copy({ copy_ref: 'copy://b', text: 'Titre deux' })] }));
+  assert.deepEqual(plan.assets[0].slots.map((s) => [s.role, s.pieces.length]), [['HEADLINE', 1], ['SUBHEADLINE', 1]]);
+});
+
+test('FP-32 a story has no caption: its long text goes onto the frames', async () => {
+  const plan = await planner().plan(request({ channel: 'STORY', copy: [copy({ text: longText(150, 1) })] }));
+  assert.equal(plan.format.kind, 'STORY_SEQUENCE'); assert.equal(plan.caption, null); assert.ok(plan.assets.every((a) => a.aspect_ratio === '9:16'));
+});
+
+test('FP-33 a legacy brief keeps all its text on the one asset: it is never moved to a caption', async () => {
+  const brief = buildBrief();
+  brief.approved_copy = [{ ref: 'copy://t/h', role: 'HEADLINE', content: filler(150) }];
+  const req = requestFromBrief(brief);
+  assert.deepEqual(req.constraints.map((c) => c.kind), ['SINGLE_ASSET_ONLY', 'ALL_TEXT_ON_ASSET', 'FORMAT_IS_FIXED']);
+  const plan = await planner().plan(req);
+  assert.equal(plan.caption, null); assert.equal(plan.assets.length, 1); assert.equal(plan.executable, false);
 });

@@ -117,6 +117,22 @@ function layoutMulti({
   return { feasible: unplaced === 0 && assets.length <= maxAssets, unplaced, assets, caption };
 }
 
+/** The invariant that makes "locked text is never altered" a fact: for every locked unit, its placed pieces are consecutive slices that hold exactly its words. */
+export function assertLockedTextUnaltered(inventoryUnits, assets, caption) {
+  const all = [...assets.flatMap((a) => a.slots.flatMap((s) => s.pieces)), ...(caption?.pieces ?? [])];
+  for (const u of inventoryUnits) {
+    if (u.mode === COPY_MODE.COPY_GENERATABLE || !u.text) continue;
+    const mine = all.filter((p) => p.unit_ref === u.unit_ref);
+    if (!mine.length) continue;
+    const altered = mine.some((p) => p.origin !== PIECE_ORIGIN.LOCKED);
+    // a LOCKED text has no piece that is not its own words; an ADAPTABLE text that was adapted in part is not held to this
+    if (altered && u.mode === COPY_MODE.COPY_LOCKED) fail(BRAIN_ERROR.RULE_VIOLATION, 'a locked text was altered by the distribution', 'content_plan', { problem: 'LOCKED_TEXT_ALTERED', unit_ref: u.unit_ref });
+    if (altered) continue;
+    const slices = mine.map((p) => ({ start: p.start, end: p.end })).sort((a, b) => a.start - b.start);
+    if (!verifyVerbatim(u.text, slices)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a locked text was altered by the distribution', 'content_plan', { problem: 'LOCKED_TEXT_ALTERED', unit_ref: u.unit_ref });
+  }
+}
+
 const ASK = (code, field, question, options = [], blocking = true) => ({
   code, blocking, field, question, options,
 });
@@ -291,22 +307,6 @@ export function createContentFormatPlanner({
     return { text, chars: codePoints(text), words: measure(text, locale).words, pieces: sealed };
   };
 
-  /** The invariant that makes "locked text is never altered" a fact: for every locked unit, its placed pieces are consecutive slices that hold exactly its words. */
-  function assertLockedTextUnaltered(inventoryUnits, assets, caption) {
-    const all = [...assets.flatMap((a) => a.slots.flatMap((s) => s.pieces)), ...(caption?.pieces ?? [])];
-    for (const u of inventoryUnits) {
-      if (u.mode === COPY_MODE.COPY_GENERATABLE || !u.text) continue;
-      const mine = all.filter((p) => p.unit_ref === u.unit_ref);
-      if (!mine.length) continue;
-      const altered = mine.some((p) => p.origin !== PIECE_ORIGIN.LOCKED);
-      // a LOCKED text has no piece that is not its own words; an ADAPTABLE text that was adapted in part is not held to this
-      if (altered && u.mode === COPY_MODE.COPY_LOCKED) fail(BRAIN_ERROR.RULE_VIOLATION, 'a locked text was altered by the distribution', 'content_plan', { problem: 'LOCKED_TEXT_ALTERED', unit_ref: u.unit_ref });
-      if (altered) continue;
-      const slices = mine.map((p) => ({ start: p.start, end: p.end })).sort((a, b) => a.start - b.start);
-      if (!verifyVerbatim(u.text, slices)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a locked text was altered by the distribution', 'content_plan', { problem: 'LOCKED_TEXT_ALTERED', unit_ref: u.unit_ref });
-    }
-  }
-
   async function planInternal({ request, inventory, observations, force = null }) {
     const questions = [];
     const events = [];
@@ -438,7 +438,7 @@ export function createContentFormatPlanner({
       caption: result.caption,
       members: result.members,
       alternative: result.alternative,
-      executable: result.executable && !result.questions.some((q) => q.blocking),
+      executable: result.executable,
       execution: result.execution,
       questions: result.questions,
       events: result.events,
