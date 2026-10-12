@@ -1,13 +1,12 @@
 {
-  "verified_commit": "a64d7beea0230c878791dd53cea60849e151b31f",
+  "verified_commit": "10892c348e8d65aebc6032bc8cd1088f18b88bb6",
   "code_hash": "00dc3ec581296636f0487f481a697770336e4005",
   "full_suite": {
     "tests": 2284,
     "pass": 2282,
-    "fail": 2,
-    "skipped": 0,
-    "node": "24 (Windows)",
-    "note": "provisional: the two failures were CL-7 (fixed in a64d7be) and CR-6 (this attestation)"
+    "fail": 0,
+    "skipped": 2,
+    "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
     "total": 154,
@@ -18,18 +17,20 @@
   "clean_clones": {
     "node20": {
       "tests": 2284,
-      "pass": 2281,
-      "fail": 1,
+      "pass": 2282,
+      "fail": 0,
       "skipped": 2
     },
     "node24": {
       "tests": 2284,
-      "pass": 2280,
-      "fail": 2,
-      "skipped": 2
+      "pass": 2282,
+      "fail": 0,
+      "skipped": 2,
+      "note": "run with --test-concurrency=4: two earlier runs at the default concurrency each had one to two unrelated Finance/Marketing/segmenter tests time out under CPU load (each passes alone in the same container); the layered runtime tests added about four minutes of CPU"
     }
   },
   "ci": {
-    "status": "pending"
+    "status": "success",
+    "run": 38307717076
   }
 }

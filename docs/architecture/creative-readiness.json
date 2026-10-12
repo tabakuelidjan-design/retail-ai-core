@@ -1,5 +1,5 @@
 {
-  "verified_commit": "a64d7beea0230c878791dd53cea60849e151b31f",
+  "verified_commit": "10892c348e8d65aebc6032bc8cd1088f18b88bb6",
   "code_hash": "00dc3ec581296636f0487f481a697770336e4005",
   "components": [
     "PLANNING",
@@ -11,10 +11,9 @@
   "full_suite": {
     "tests": 2284,
     "pass": 2282,
-    "fail": 2,
-    "skipped": 0,
-    "node": "24 (Windows)",
-    "note": "provisional: the two failures were CL-7 (fixed in a64d7be) and CR-6 (this attestation)"
+    "fail": 0,
+    "skipped": 2,
+    "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
     "PLANNING": {
@@ -39,7 +38,7 @@
       "total": 112,
       "killed": 112,
       "survivors_documented": 0,
-      "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change."
+      "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change."
     },
     "LAYERED_RUNTIME": {
       "total": 137,
@@ -51,19 +50,21 @@
   "clean_clones": {
     "node20": {
       "tests": 2284,
-      "pass": 2281,
-      "fail": 1,
+      "pass": 2282,
+      "fail": 0,
       "skipped": 2
     },
     "node24": {
       "tests": 2284,
-      "pass": 2280,
-      "fail": 2,
-      "skipped": 2
+      "pass": 2282,
+      "fail": 0,
+      "skipped": 2,
+      "note": "run with --test-concurrency=4: two earlier runs at the default concurrency each had one to two unrelated Finance/Marketing/segmenter tests time out under CPU load (each passes alone in the same container); the layered runtime tests added about four minutes of CPU"
     }
   },
   "ci": {
-    "status": "pending"
+    "status": "success",
+    "run": 38307717076
   },
   "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning, layered production, layered runtime). PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged apart from additive exports); PRODUCTION and LAYERED_RUNTIME were swept again on the final code. The attestation commits themselves change documents only, which the code hash does not cover."
 }
