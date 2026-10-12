@@ -1,17 +1,14 @@
 {
-  "verified_commit": "5705fd199408c99401fab20b2677a1df874caee7",
-  "code_hash": "19322c1e60b3e5b54f845b8ac14e83d337b871a3",
+  "verified_commit": "9bccba322f4ee3f836a713f9b4a493130dabd766",
+  "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
   "components": [
     "PLANNING",
     "BRAIN",
-    "CAMPAIGN"
+    "CAMPAIGN",
+    "PRODUCTION"
   ],
   "full_suite": {
-    "tests": 2194,
-    "pass": 2194,
-    "fail": 0,
-    "skipped": 0,
-    "node": "24 (Windows)"
+    "pending": true
   },
   "mutation": {
     "PLANNING": {
@@ -21,35 +18,29 @@
       "note": "Phase 1 content planning (66: 65 killed, 1 equivalent - the standard format resources are all within the production limit) + Phase 2 changes to the planning (16: slide density, balanced distribution on sentences, preparation reuse, text-led spec; all killed after one round of new tests)."
     },
     "BRAIN": {
-      "total": 151,
-      "killed": 149,
+      "total": 154,
+      "killed": 152,
       "survivors_documented": 2,
-      "note": "149 earlier + 2 for the additive stage methods of the Brain (planFrame assessment gate, directArt without hints), all killed. Two equivalent mutants carried over: the extra BRAIN_MALFORMED check in the repair trigger and a Set instead of null for arrays in the duplicate-key scanner."
+      "note": "151 earlier (149 killed + 2 equivalents carried: the extra BRAIN_MALFORMED check in the repair trigger, a Set instead of null for arrays in the duplicate-key scanner) + 3 for the product look-alike lexicon and its print in the ART_DIRECT instruction, all killed."
     },
     "CAMPAIGN": {
       "total": 68,
       "killed": 68,
       "survivors_documented": 0,
       "note": "57 for the campaign planner, density classes, sequence, continuity and diversity, budget, working state and asset director + 11 for the combined readiness gate. A first sweep left 12 survivors in the campaign and 7 in the planning changes; each was killed by a new test (or its redundant branch was simplified) and the sweep was run again."
+    },
+    "PRODUCTION": {
+      "total": 112,
+      "killed": 112,
+      "survivors_documented": 0,
+      "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived."
     }
   },
   "clean_clones": {
-    "node20": {
-      "tests": 2194,
-      "pass": 2192,
-      "fail": 0,
-      "skipped": 2
-    },
-    "node24": {
-      "tests": 2194,
-      "pass": 2192,
-      "fail": 0,
-      "skipped": 2
-    }
+    "pending": true
   },
   "ci": {
-    "status": "success",
-    "run": 38274023386
+    "status": "pending"
   },
   "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning). The Node 20 clean clone failed once on an unrelated finance-hosting test while two containers and a mutation sweep shared the machine; it was green on the re-run alone and on the final commit."
 }

@@ -1,35 +1,19 @@
 {
-  "verified_commit": "5705fd199408c99401fab20b2677a1df874caee7",
-  "code_hash": "19322c1e60b3e5b54f845b8ac14e83d337b871a3",
+  "verified_commit": "9bccba322f4ee3f836a713f9b4a493130dabd766",
+  "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
   "full_suite": {
-    "tests": 2194,
-    "pass": 2194,
-    "fail": 0,
-    "skipped": 0,
-    "node": "24 (Windows)"
+    "pending": true
   },
   "mutation": {
-    "total": 151,
-    "killed": 149,
+    "total": 154,
+    "killed": 152,
     "survivors_documented": 2,
-    "note": "149 earlier + 2 for the additive stage methods of the Brain (planFrame assessment gate, directArt without hints), all killed. Two equivalent mutants carried over: the extra BRAIN_MALFORMED check in the repair trigger and a Set instead of null for arrays in the duplicate-key scanner."
+    "note": "151 earlier (149 killed + 2 equivalents carried: the extra BRAIN_MALFORMED check in the repair trigger, a Set instead of null for arrays in the duplicate-key scanner) + 3 for the product look-alike lexicon and its print in the ART_DIRECT instruction, all killed."
   },
   "clean_clones": {
-    "node20": {
-      "tests": 2194,
-      "pass": 2192,
-      "fail": 0,
-      "skipped": 2
-    },
-    "node24": {
-      "tests": 2194,
-      "pass": 2192,
-      "fail": 0,
-      "skipped": 2
-    }
+    "pending": true
   },
   "ci": {
-    "status": "success",
-    "run": 38274023386
+    "status": "pending"
   }
 }
