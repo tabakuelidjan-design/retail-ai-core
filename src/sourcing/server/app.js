@@ -9,6 +9,7 @@ import { pdfToText } from '../adapters/pdf.js';
 import { fxFor } from '../adapters/fx.js';
 import { callProvider, DATA_CLASS, ProviderPolicyError } from '../adapters/ai-provider.js';
 import { StoreError } from '../store/file-store.js';
+import { createVoiceAssets } from './voice-assets.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
@@ -17,7 +18,10 @@ const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into sm
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract)\/)?[a-z0-9-]+\.js)$/;
 
 const sameToken = (a, b) => { const x = Buffer.from(String(a ?? '')); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
-const SEC = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'cross-origin-opener-policy': 'same-origin', 'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
+const SEC = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin', 'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
+// The Moonshine runtime (embind) builds its bindings with new Function() and compiles WebAssembly: that needs 'unsafe-eval' + 'wasm-unsafe-eval'. It is granted ONLY to the voice worker script and the /voice/ runtime files (a worker's policy comes
+// from its own response), never to the page: the page keeps script-src 'self'.
+const VOICE_SEC = { ...SEC, 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'" };
 const json = (res, status, body, extra = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...SEC, ...extra }); res.end(JSON.stringify(body)); };
 async function readBody(req) {
   const chunks = []; let n = 0;
@@ -31,7 +35,7 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, store, safety = null, ecb = null, ai = null, uiDir, coreDir, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ token, store, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!token || String(token).length < 24) throw new Error('a token of at least 24 characters is required');
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -40,6 +44,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
   const fails = new Map();
   const blocked = (ip) => { const f = (fails.get(ip) ?? []).filter((t) => now().getTime() - t < FAIL_WINDOW_MS); fails.set(ip, f); return f.length >= FAIL_LIMIT; };
   const failed = (ip) => { const f = fails.get(ip) ?? []; f.push(now().getTime()); fails.set(ip, f); };
+  const voice = voiceDir ? createVoiceAssets({ dir: voiceDir, headers: VOICE_SEC }) : null; // the benchmarked Moonshine runtime + model, hash-checked, nothing else
   let shellCache = null;
   async function shellManifest() {
     if (shellCache) return shellCache;
@@ -47,7 +52,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
     return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(uiDir, '/')), ...(await walk(coreDir, '/core/'))])].sort() });
   }
   async function serveStatic(res, file, dir) {
-    try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...SEC }); res.end(data); }
+    try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...(file === 'voice-engine-worker.js' ? VOICE_SEC : SEC) }); res.end(data); }
     catch { json(res, 404, { error: 'NOT_FOUND' }); }
   }
   async function api(req, res, url) {
@@ -104,6 +109,7 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+      if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);

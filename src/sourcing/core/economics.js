@@ -34,6 +34,7 @@ export function unitEconomics(input) {
   const contribution = landedKnown ? net - landed - known : null;
   const pct = contribution === null ? null : contribution / net;
   const target = input.targetContributionPct === null || input.targetContributionPct === undefined ? null : Number(input.targetContributionPct) / 100;
+  const lowerBound = input.landedIsLowerBound === true; // the landed cost still misses cost components: the contribution can only be OVERSTATED
   const complete = landedKnown && unknownLines.length === 0;
   let classification = 'UNKNOWN';
   if (landedKnown && complete) classification = contribution < 0 ? 'UNATTRACTIVE' : target !== null && pct >= target ? 'ATTRACTIVE' : target === null ? 'BORDERLINE' : 'BORDERLINE';
@@ -42,10 +43,10 @@ export function unitEconomics(input) {
     status: complete ? 'COMPLETE' : landedKnown ? 'UPPER_BOUND' : 'INFORMATION_INSUFFICIENT',
     sellingPriceGrossMinor: gross, vatRatePct: Number(input.vatRatePct), netRevenueMinor: net, vatMinor: gross - net, landedPerUnitMinor: landedKnown ? landed : null,
     lines: priced, unknownLines, knownCostsMinor: known, contributionMinor: contribution, contributionPct: pct === null ? null : Math.round(pct * 10000) / 10000,
-    contributionIsUpperBound: landedKnown && !complete, targetContributionPct: input.targetContributionPct ?? null, classification,
+    contributionIsUpperBound: landedKnown && (!complete || lowerBound), landedIsLowerBound: landedKnown && lowerBound, targetContributionPct: input.targetContributionPct ?? null, classification,
     breakEvenGrossMinor: landedKnown ? breakEvenGross({ vatBps, landed, lines: priced }) : null,
     factClass: complete ? FACT_CLASS.CALCULATED_VALUE : FACT_CLASS.UNKNOWN,
-    warnings: [...(unknownLines.length ? [`FEES_UNKNOWN: ${unknownLines.join(', ')} are excluded - the contribution is an upper bound`] : []), ...(landedKnown ? [] : ['LANDED_COST_UNKNOWN'])],
+    warnings: [...(lowerBound && landedKnown ? ['LANDED_COST_IS_LOWER_BOUND: some import costs are not entered - the contribution is an upper bound'] : []), ...(unknownLines.length ? [`FEES_UNKNOWN: ${unknownLines.join(', ')} are excluded - the contribution is an upper bound`] : []), ...(landedKnown ? [] : ['LANDED_COST_UNKNOWN'])],
   };
 }
 
@@ -72,10 +73,11 @@ export function maxPurchasePrice({ landedInput, sale, targetContributionPct }) {
   const at = (priceMinor) => {
     const l = landedCost({ ...landedInput, supplier: { ...landedInput.supplier, unitPrice: priceMinor / 100 } });
     if (l.status === 'INFORMATION_INSUFFICIENT') return { l, e: null };
-    return { l, e: unitEconomics({ ...sale, landedPerUnitMinor: l.totals.landedPerUnitEurMinor, targetContributionPct }) };
+    return { l, e: unitEconomics({ ...sale, landedPerUnitMinor: l.totals.landedPerUnitEurMinor, landedIsLowerBound: l.isLowerBound, targetContributionPct }) };
   };
   const probe = at(100);
   if (!probe.e) return { status: 'INFORMATION_INSUFFICIENT', reason: `CRITICAL_COST_UNKNOWN: ${probe.l.criticalUnknown.filter((c) => c !== 'supplier.unitPrice').join(', ')}`, maxUnitPriceMinor: null };
+  if (probe.l.isLowerBound && !probe.e.unknownLines.length) return { status: 'UPPER_BOUND', reason: `COSTS_NOT_ENTERED: ${probe.l.unknownCostComponents.join(', ')} - the real maximum is LOWER`, unknownCostComponents: probe.l.unknownCostComponents, maxUnitPriceMinor: searchMax(at, targetContributionPct), upperBound: true, currency: landedInput.supplier.currency ?? 'EUR' };
   if (probe.e.unknownLines.length) return { status: 'UPPER_BOUND', reason: `FEES_UNKNOWN: ${probe.e.unknownLines.join(', ')}`, maxUnitPriceMinor: searchMax(at, targetContributionPct), upperBound: true, currency: landedInput.supplier.currency ?? 'EUR' };
   return { status: 'COMPLETE', maxUnitPriceMinor: searchMax(at, targetContributionPct), upperBound: false, currency: landedInput.supplier.currency ?? 'EUR' };
 }

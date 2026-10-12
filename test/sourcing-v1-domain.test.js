@@ -1,6 +1,7 @@
 // China Sourcing V1 foundation (P1 + P4 domain): provenance, candidate facts, conflicts, price tiers, conversation sessions, free questions, backward compatibility.
 // Invariants (hard): a supplier claim is not evidence; a candidate never changes the case before the user confirms it; a rejected candidate changes nothing; the original text is
 // never altered; a conflicting material fact is never overwritten silently; old V0 cases load and assess exactly as before.
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newCase, dispatch, assess } from '../src/sourcing/core/case.js';
@@ -157,7 +158,7 @@ test('price tiers: 100 -> 7.20, 300 -> 6.80, 500 -> 6.40 are stored as tiers and
 });
 
 test('price tiers reach the landed-cost engine through the existing quote path: same result as a plain single-price quote; below the first tier it fails closed', () => {
-  const common = [...ident({ name: 'Power bank', category: 'power_bank' }), ...importer, { type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, { type: 'CUSTOMS', customs: { chosenCode: '8507.60', duty: { ratePct: 2.7, kind: 'USER_ENTERED', source: 'owner' } } }, { type: 'SALE', sale: { sellingPriceGross: 21, vatRatePct: 21, targetContributionPct: 30 } }];
+  const common = [...ident({ name: 'Power bank', category: 'power_bank' }), ...importer, { type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { ...ZERO_COSTS, freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, { type: 'CUSTOMS', customs: { chosenCode: '8507.60', duty: { ratePct: 2.7, kind: 'USER_ENTERED', source: 'owner' } } }, { type: 'SALE', sale: { sellingPriceGross: 21, vatRatePct: 21, targetContributionPct: 30 } }];
   const tiered = build([...common, { type: 'QUOTE', quote: { currency: 'USD', qty: 300, moq: 100, incoterm: 'FOB', tiers: [{ minQty: '100', unitPrice: '7.20' }, { minQty: '300', unitPrice: '6.80' }, { minQty: '500', unitPrice: '6.40' }] } }]);
   const plain = build([...common, { type: 'QUOTE', quote: { unitPrice: '6.80', currency: 'USD', qty: 300, moq: 100, incoterm: 'FOB' } }]);
   assert.deepEqual(run(tiered).landed.totals, run(plain).landed.totals); assert.equal(run(tiered).landed.goods.totalEurMinor, run(plain).landed.goods.totalEurMinor);

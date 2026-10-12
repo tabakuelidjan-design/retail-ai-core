@@ -18,7 +18,7 @@ export function createIdentity({ workingName = '' } = {}) {
 export function addEvidence(identity, trait, ev) {
   if (!IDENTITY_RANK[ev.level]) throw new Error(`unknown identity level: ${ev.level}`);
   const next = clone(identity);
-  (next.evidence[trait] ??= []).push({ value: ev.value, level: ev.level, source: ev.source ?? { kind: 'unspecified' }, observedAt: ev.observedAt ?? now() });
+  (next.evidence[trait] ??= []).push({ value: ev.value, level: ev.level, source: ev.source ?? { kind: 'unspecified' }, observedAt: ev.observedAt ?? now(), ...(ev.confidence ? { confidence: ev.confidence } : {}) });
   return next;
 }
 

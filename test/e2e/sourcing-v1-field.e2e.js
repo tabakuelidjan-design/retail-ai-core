@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser, freePort } from './cdp.js';
 
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser(); if (!exe) { console.log('NO BROWSER FOUND (set SOURCING_E2E_BROWSER): nothing was run.'); process.exit(2); }
 const TOKEN = 'v1-field-token-0123456789-abcdef-xyz-1';
 const results = []; const check = async (name, fn) => { try { await fn(); results.push(true); console.log(`PASS  ${name}`); } catch (e) { results.push(false); console.log(`FAIL  ${name}\n      ${String(e.message).slice(0, 600)}`); } };
@@ -31,7 +32,7 @@ const act = (t, a, key, val) => { const sel = `[data-act="${a}"][data-key="${key
 await startServer();
 const errs = []; const browser = await new Browser(exe).launch(); browser.listeners.push((d) => { if (d.method === 'Runtime.exceptionThrown') errs.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text); });
 console.log(`Browser engine: ${exe}\n`);
-const t = await browser.tab(`${base}/#t=${TOKEN}`); await ready(t); await t.waitFor('window.nordlaSourcing?.state().online === true', 15000);
+const t = await browser.tab(`${base}/#t=${TOKEN}`, { preload: EXPERT_FIRST }); await ready(t); await t.waitFor('window.nordlaSourcing?.state().online === true', 15000);
 await t.waitFor('navigator.serviceWorker.ready.then(() => caches.keys()).then((k) => k.length > 0)', 20000);
 const EN = 'For 300 pcs we can do USD 6.80, FOB Shenzhen, 30% deposit and balance before shipment. MOQ is 100 pcs for the standard model. With your logo the MOQ is 300 pcs. We have CE and UN38.3. Model: PB-X200';
 

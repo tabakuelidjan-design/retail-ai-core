@@ -1,6 +1,7 @@
 // Adapters, persistence, the HTTP app, and the FIELD END-TO-END acceptance: one product photo -> probable category -> supplier price and MOQ -> critical questions ->
 // supplier documents uploaded and inspected -> regulatory / safety / customs / Amazon checks -> landed economics -> verdict with WHY, MISSING, DOCUMENTS TO REQUEST,
 // MAXIMUM PURCHASE PRICE and NEXT ACTION. Everything is synthetic and local: no network, no production service.
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -153,7 +154,7 @@ test('FIELD E2E: photo -> category -> price + MOQ -> questions -> documents insp
     // 6. customs, import costs, selling price, Amazon
     c = dispatch(c, { type: 'CUSTOMS', customs: { chosenCode: '8507.60', duty: { ratePct: 2.7, kind: 'USER_ENTERED' } } }, NOW);
     const fx = await s.call('/api/fx?currency=USD');
-    c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { freight: { total: 600, status: 'ESTIMATED' }, testing: { total: 400, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
+    c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { ...ZERO_COSTS, freight: { total: 600, status: 'ESTIMATED' }, testing: { total: 400, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
     c = dispatch(c, { type: 'SALE', sale: { sellingPriceGross: 24.99, vatRatePct: 21, targetContributionPct: 30 } }, NOW);
     c = dispatch(c, { type: 'CONTEXT', context: { channels: ['own_site', 'amazon'] } }, NOW);
     c = dispatch(c, { type: 'AMAZON_OBS', observation: { marketplace: 'amazon.be', price: '27.90', observedAt: '2026-10-02T09:00:00Z' } }, NOW);

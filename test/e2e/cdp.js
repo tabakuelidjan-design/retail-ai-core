@@ -12,10 +12,10 @@ export const freePort = () => new Promise((resolve) => { const s = net.createSer
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class Browser {
-  constructor(exe, profile = null) { this.exe = exe; this.profile = profile ?? mkdtempSync(join(tmpdir(), 'nordla-e2e-')); this.id = 0; this.pending = new Map(); this.listeners = []; }
+  constructor(exe, profile = null, extraArgs = []) { this.extraArgs = extraArgs; this.exe = exe; this.profile = profile ?? mkdtempSync(join(tmpdir(), 'nordla-e2e-')); this.id = 0; this.pending = new Map(); this.listeners = []; }
   async launch() {
     this.port = await freePort();
-    this.proc = spawn(this.exe, ['--headless=new', `--remote-debugging-port=${this.port}`, `--user-data-dir=${this.profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--disable-extensions', '--disable-background-networking', '--window-size=390,844', 'about:blank'], { stdio: 'ignore' });
+    this.proc = spawn(this.exe, ['--headless=new', `--remote-debugging-port=${this.port}`, `--user-data-dir=${this.profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--disable-extensions', '--disable-background-networking', '--window-size=390,844', ...this.extraArgs, 'about:blank'], { stdio: 'ignore' });
     let ver = null; for (let i = 0; i < 60 && !ver; i++) { try { ver = await (await fetch(`http://127.0.0.1:${this.port}/json/version`)).json(); } catch { await sleep(250); } }
     if (!ver) throw new Error('browser did not start');
     this.version = ver.Browser; this.ws = new WebSocket(ver.webSocketDebuggerUrl);
@@ -25,10 +25,11 @@ export class Browser {
   }
   send(method, params = {}, sessionId) { const id = ++this.id; this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); return new Promise((res, rej) => { this.pending.set(id, { res, rej }); setTimeout(() => { if (this.pending.has(id)) { this.pending.delete(id); rej(new Error(`timeout ${method}`)); } }, 30000); }); }
   /** Opens a tab with a phone-sized viewport. */
-  async tab(url = 'about:blank', { width = 390, height = 844 } = {}) {
+  async tab(url = 'about:blank', { width = 390, height = 844, preload = null } = {}) {
     const { targetId } = await this.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await this.send('Target.attachToTarget', { targetId, flatten: true });
     const t = { targetId, sessionId, b: this };
+    if (preload) await this.send('Page.addScriptToEvaluateOnNewDocument', { source: preload }, sessionId);
     await this.send('Page.enable', {}, sessionId); await this.send('Runtime.enable', {}, sessionId); await this.send('Network.enable', {}, sessionId);
     await this.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true }, sessionId);
     t.goto = async (u) => { await this.send('Page.navigate', { url: u }, sessionId); await sleep(300); };

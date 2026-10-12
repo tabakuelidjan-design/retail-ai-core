@@ -12,7 +12,9 @@ export const FACT_STATUS = Object.freeze({
   CONFLICT: 'CONFLICT',
 });
 export const CANDIDATE_STATE = Object.freeze({ PROPOSED: 'PROPOSED', CONFIRMED: 'CONFIRMED', CORRECTED: 'CORRECTED', REJECTED: 'REJECTED', CONFLICT: 'CONFLICT' });
-export const SPEAKER = Object.freeze({ SUPPLIER: 'supplier', ME: 'me' });
+/** UNKNOWN = speech picked up by a microphone whose speaker nobody has established. It is NEVER treated as the supplier: only the owner can attribute it (CONVERSATION_ATTRIBUTE). */
+export const SPEAKER = Object.freeze({ SUPPLIER: 'supplier', ME: 'me', UNKNOWN: 'unknown' });
+export const MODALITY = Object.freeze({ TEXT: 'TEXT', SPEECH: 'SPEECH' });
 export const DECIDED = new Set([CANDIDATE_STATE.CONFIRMED, CANDIDATE_STATE.CORRECTED, CANDIDATE_STATE.REJECTED]);
 
 /** The status a CONFIRMED statement can have. A conversation can never produce more than a claim (supplier) or a user-provided fact (the owner). */

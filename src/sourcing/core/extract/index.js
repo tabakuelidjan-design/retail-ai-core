@@ -2,6 +2,7 @@
 // never calls the network. Input: original text (+ language hint). Output: candidates (each pointing at an exact span of the original) and the text left unparsed.
 import { extractEn } from './en.js';
 import { extractZh } from './zh.js';
+import { extractSpec } from './spec.js';
 import { extractDocClaims } from './claims.js';
 import { EXTRACTOR_NAME, EXTRACTOR_VERSION, unparsedOf } from './shared.js';
 
@@ -18,7 +19,7 @@ export function detectLang(text) {
 export function extractFacts({ text, lang = 'auto' } = {}) {
   const t = String(text ?? ''); const l = lang === 'auto' ? detectLang(t) : lang;
   const hasCjk = (t.match(CJK) ?? []).length > 0;
-  const raw = [...extractEn(t, l), ...(hasCjk ? extractZh(t, l) : []), ...extractDocClaims(t, l)];
+  const raw = [...extractEn(t, l), ...(l === 'zh' ? [] : extractSpec(t, l)), ...(hasCjk ? extractZh(t, l) : []), ...extractDocClaims(t, l)];
   const seen = new Set(); const candidates = [];
   for (const c of raw) { const k = `${c.key}|${c.context}|${JSON.stringify(c.value)}`; if (seen.has(k)) continue; seen.add(k); candidates.push(c); }
   candidates.sort((a, b) => a.span[0] - b.span[0] || a.key.localeCompare(b.key));

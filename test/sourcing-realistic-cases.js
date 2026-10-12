@@ -1,6 +1,7 @@
 // Three realistic FIELD cases, played through the real server API and the real engines (synthetic names, models and documents). Used by the acceptance test and by the
 // document generator (docs/sourcing-field-acceptance.md). Each case: photo -> identity -> supplier -> price + MOQ -> documents -> questions -> compliance -> Safety Gate ->
 // customs -> Amazon observations -> landed cost -> maximum purchase price -> verdict -> offline reopen.
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import PDFDocument from 'pdfkit';
 import http from 'node:http';
 import { dirname, join } from 'node:path';
@@ -45,7 +46,7 @@ export const CASES = [
       c = dispatch(c, { type: 'PLACING', placing: { underOwnNameOrBrand: false, manufacturerEstablishedInEU: false, euAuthorisedRepresentative: false, substantialModification: false } }, NOW);
       c = dispatch(c, { type: 'QUOTE', quote: { unitPrice: '1.85', currency: 'USD', qty: 1200, moq: 1000, incoterm: 'FOB', leadTimeDays: 25, carton: '60x40x35 cm / 14 kg / 24 units' } }, NOW);
       const fx = await f.call('/api/fx?currency=USD');
-      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { freight: { total: 520, status: 'ESTIMATED' }, inboundLogistics: { total: 90, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
+      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { ...ZERO_COSTS, freight: { total: 520, status: 'ESTIMATED' }, inboundLogistics: { total: 90, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
       c = dispatch(c, { type: 'CUSTOMS', customs: { chosenCode: '4421.99', duty: { ratePct: 0, kind: 'USER_ENTERED', source: 'owner: ask the broker' } } }, NOW);
       c = dispatch(c, { type: 'AMAZON_OBS', observation: { marketplace: 'amazon.be', price: '9.99', asin: 'B0TEST0001', reviews: 340, rating: 4.3, source: 'MANUAL' } }, NOW);
       c = dispatch(c, { type: 'AMAZON_OBS', observation: { marketplace: 'amazon.fr', price: '10.49', reviews: 128, rating: 4.1 } }, NOW);
@@ -65,7 +66,7 @@ export const CASES = [
       c = dispatch(c, { type: 'PLACING', placing: { underOwnNameOrBrand: false, manufacturerEstablishedInEU: false, euAuthorisedRepresentative: false } }, NOW);
       c = dispatch(c, { type: 'QUOTE', quote: { unitPrice: '4.60', currency: 'USD', qty: 800, moq: 500, incoterm: 'FOB', leadTimeDays: 30 } }, NOW);
       const fx = await f.call('/api/fx?currency=USD');
-      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { freight: { total: 700, status: 'ESTIMATED' }, testing: { total: 450, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
+      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { ...ZERO_COSTS, freight: { total: 700, status: 'ESTIMATED' }, testing: { total: 450, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
       c = dispatch(c, { type: 'CUSTOMS', customs: { chosenCode: '8507.60', duty: { ratePct: 2.7, kind: 'USER_ENTERED', source: 'owner: ask the broker' } } }, NOW);
       // a native-text PDF Declaration of Conformity through the server; a battery report as typed-from-the-paper (no UN 38.3 yet)
       const dc = await pdfOf(eudoc({ model: 'PB-10S', product: 'Power bank', directives: ['2014/30/EU', '2011/65/EU'], standards: ['EN 55032:2015', 'EN 55035:2017', 'EN IEC 63000:2018'] }));
@@ -89,7 +90,7 @@ export const CASES = [
       c = dispatch(c, { type: 'PLACING', placing: { underOwnNameOrBrand: true, manufacturerEstablishedInEU: false, euAuthorisedRepresentative: false } }, NOW);
       c = dispatch(c, { type: 'QUOTE', quote: { unitPrice: '5.40', currency: 'USD', qty: 600, moq: 300, incoterm: 'EXW', leadTimeDays: 35 } }, NOW);
       const fx = await f.call('/api/fx?currency=USD');
-      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { originCharges: { total: 120, status: 'ESTIMATED' }, freight: { total: 480, status: 'ESTIMATED' }, testing: { total: 900, status: 'ESTIMATED' }, labelling: { total: 150, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
+      c = dispatch(c, { type: 'COSTS', costs: { fx: fx.body, costs: { ...ZERO_COSTS, originCharges: { total: 120, status: 'ESTIMATED' }, freight: { total: 480, status: 'ESTIMATED' }, testing: { total: 900, status: 'ESTIMATED' }, labelling: { total: 150, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }, NOW);
       c = dispatch(c, { type: 'CUSTOMS', customs: { chosenCode: '8518.30', duty: { ratePct: 0, kind: 'USER_ENTERED', source: 'owner: ask the broker' } } }, NOW);
       // the photo of the paper Declaration, read by the (fake, EU-hosted) reader after consent, then checked and confirmed by the owner
       const text = eudoc({ model: 'TWS-5', mfr: 'Dongguan Soundlet Audio Technology Co., Ltd', product: 'Bluetooth earbuds', directives: ['2014/53/EU', '2011/65/EU'], standards: ['ETSI EN 300 328', 'ETSI EN 301 489-17', 'EN 62368-1:2014', 'EN IEC 63000:2018'] });

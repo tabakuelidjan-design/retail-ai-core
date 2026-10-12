@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser, freePort } from './cdp.js';
 
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser();
 if (!exe) { console.log('NO BROWSER FOUND (Edge / Chrome / Chromium): set SOURCING_E2E_BROWSER. The offline cold-start test was NOT run.'); process.exit(2); }
 const TOKEN = 'e2e-field-token-0123456789-abcdef-xyz';
@@ -43,7 +44,7 @@ const profile = browser.profile; let tab;
 let caseName = 'Power bank 10000mAh E2E'; let caseId = null;
 
 await check('1. online install through the pairing link: token taken from the URL fragment, fragment cleared, server reachable', async () => {
-  tab = await browser.tab(`${base}/#t=${TOKEN}`); await ready(tab);
+  tab = await browser.tab(`${base}/#t=${TOKEN}`, { preload: EXPERT_FIRST }); await ready(tab);
   await tab.waitFor('window.nordlaSourcing?.state().online === true', 15000);
   ok(await tab.eval("location.hash === ''"), 'the token must not stay in the address bar');
   ok(await tab.eval("JSON.parse(localStorage.getItem('nordla.sourcing.token')).length >= 24"), 'token stored');
@@ -96,7 +97,7 @@ await check('8. APP CLOSED, SERVER STOPPED, BROWSER RESTARTED: the installed ent
   await tab.close(); await browser.close({ keepProfile: true }); await stopServer();
   let down = false; try { await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(2000) }); } catch { down = true; } ok(down, 'the server must really be down');
   browser = await new Browser(exe, profile).launch();
-  tab = await browser.tab('about:blank'); await tab.offline(true); await tab.goto(`${base}/?source=pwa`); await ready(tab);
+  tab = await browser.tab('about:blank', { preload: EXPERT_FIRST }); await tab.offline(true); await tab.goto(`${base}/?source=pwa`); await ready(tab);
   const name = await text(tab, '#case-name'); ok(name === caseName, `case name after cold start: "${name}"`);
   ok(await tab.eval("!!navigator.serviceWorker.controller"), 'the page is controlled by the service worker');
   ok(!(await tab.eval("document.body.innerText.includes('ERR_') || document.title === ''")), 'a browser error page was shown');
@@ -190,7 +191,7 @@ await check('17. REGRESSION (physical phone): through a Cloudflare-like HTTPS pr
   await new Promise((r) => proxy.listen(0, '127.0.0.1', r)); const pport = proxy.address().port;
   const b2 = await new Browser(exe).launch();
   try {
-    const t = await b2.tab(`http://127.0.0.1:${pport}/#t=${TOKEN2}`); await ready(t);
+    const t = await b2.tab(`http://127.0.0.1:${pport}/#t=${TOKEN2}`, { preload: EXPERT_FIRST }); await ready(t);
     await t.waitFor("window.nordlaSourcing?.state().online === true", 20000);
     const mode = await text(t, '#mode'); ok(mode === 'SERVER VERIFIED', `header: "${mode}"`);
     const bar = await t.waitFor("document.querySelector('#statusbar')?.innerText.includes('SAFETY GATE') && !document.querySelector('#statusbar').innerText.includes('NONE') ? document.querySelector('#statusbar').innerText : ''", 25000);
@@ -208,7 +209,7 @@ await check('18. REGRESSION (physical phone, Firefox): a NEW case typed into Qui
   const srv3 = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN3 }, log: () => {}, port: 0, dir: dir3, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-04', perEur: { USD: 1.08 } }) });
   const b3 = await new Browser(exe).launch(); b3.listeners.push((d) => { if (d.method === 'Runtime.exceptionThrown') errs.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text); });
   try {
-    const t = await b3.tab(`http://127.0.0.1:${srv3.port}/#t=${TOKEN3}`); await ready(t); await t.waitFor('window.nordlaSourcing?.state().server === "VERIFIED"', 20000);
+    const t = await b3.tab(`http://127.0.0.1:${srv3.port}/#t=${TOKEN3}`, { preload: EXPERT_FIRST }); await ready(t); await t.waitFor('window.nordlaSourcing?.state().server === "VERIFIED"', 20000);
     const QUICK = { name: 'Power bank', category: 'power_bank', unitPrice: '8', currency: 'USD', moq: '100', qty: '100', price: '21', target: '30', dest: 'own', freight: '', duty: '', fxRate: '', incoterm: '' };
     const typed = `const f = document.querySelector('form[data-form="quick"]'); for (const [k, v] of Object.entries(${JSON.stringify(QUICK)})) f.elements[k].value = v;`;
     const values = () => t.eval(`JSON.stringify(Object.fromEntries([...document.querySelector('form[data-form="quick"]').elements].filter((e) => e.name).map((e) => [e.name, e.value])))`);

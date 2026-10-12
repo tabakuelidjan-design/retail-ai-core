@@ -80,7 +80,7 @@ function evidenceLabel({ rules, gaps, contra, docs, identityConf }) {
 /**
  * @returns the decision card (all dimensions, hard blockers, verdict, why, what is missing, what blocks import / Amazon, max purchase price, next action).
  */
-export function decide({ identityConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon, role, quote, channels, questions, policy = DEFAULT_POLICY }) {
+export function decide({ identityConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon, role, quote, channels, questions, coverage = null, policy = DEFAULT_POLICY }) {
   const gaps = evidenceGaps(rules); const contra = contradictions(rules, docs);
   const marketability = marketabilityOf({ identityConf, rules, gaps, contra, safety });
   const safetyRisk = safetyRiskOf({ safety, rules }); const economics = economicsLabel(econ, policy); const evidence = evidenceLabel({ rules, gaps, contra, docs, identityConf });
@@ -95,6 +95,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   if (contra.length) B(BLOCKER.DOCUMENT_CONTRADICTS_CASE, 'HARD', `the documents supplied contradict the case or do not cover the regulation: ${contra.map((c) => c.label).slice(0, 3).join('; ')}`);
   if (amazonRequested && amazon.restricted === true) B(BLOCKER.AMAZON_CATEGORY_RESTRICTION, channels.length === 1 ? 'HARD' : 'CHANNEL', 'the category is restricted on Amazon for you');
   if (econ && econ.contributionMinor !== null && econ.contributionMinor < 0) B(BLOCKER.NEGATIVE_UNIT_ECONOMICS, 'HARD', `contribution per unit is ${fmt(econ.contributionMinor)}${econ.contributionIsUpperBound ? ' even before the unknown fees' : ''}`);
+  if (coverage && coverage.status === 'OUT_OF_COVERAGE' && coverage.severity === 'HARD') B(BLOCKER.LEGAL_REQUIREMENT_UNRESOLVED, 'HARD', `OUT OF RULEBOOK COVERAGE - do not conclude: ${coverage.reasons.join('; ')}. Get an expert opinion before any purchase.`);
   if (landed && landed.status === 'INFORMATION_INSUFFICIENT') B(BLOCKER.CRITICAL_COST_UNKNOWN, 'HARD', `critical cost input(s) unknown: ${landed.criticalUnknown.join(', ')}`);
   if ((rules.results ?? []).some((r) => r.ruleId === 'eu.medical_boundary' && r.status === 'APPLIES')) B(BLOCKER.LEGAL_REQUIREMENT_UNRESOLVED, 'HARD', 'a medical purpose is claimed: Nordla does not assess medical devices - get an expert classification before any purchase');
   if (role.status === 'UNRESOLVED' && role.ownBrand === null && (role.unresolved ?? []).some((u) => u.code !== 'EU_PARTY_UNKNOWN')) B(BLOCKER.ROLE_UNRESOLVED, 'CONDITION', 'whether you carry the manufacturer obligations is not decided yet (own brand, modification, repackaging or label changes): answer the role questions');
@@ -106,7 +107,10 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   const conditions = [];
   if (has(BLOCKER.REQUIRED_DOCUMENT_MISSING)) conditions.push('obtain the required documents BEFORE any deposit');
   if (identityConf.level === 'MEDIUM') conditions.push('confirm the product traits that are only assumed from the category');
+  if (landed && landed.isLowerBound) conditions.push(`import costs not entered (${landed.unknownCostComponents.map((u) => u.replace(/^costs\./, '')).join(', ')}): the landed cost is a LOWER BOUND and the maximum purchase price an UPPER BOUND - enter them (0 only if the cost is really zero) before relying on the margin`);
   if (economics === 'BORDERLINE') conditions.push('the margin is below the target: negotiate the price or accept the lower margin knowingly');
+  if (coverage && coverage.status === 'OUT_OF_COVERAGE' && coverage.severity === 'CONDITION') conditions.push(`OUT OF RULEBOOK COVERAGE - do not conclude: ${coverage.reasons.join('; ')}. The absence of an applicable rule is NOT a finding that nothing applies.`);
+  if (safety.stale === true && safety.status !== 'NOT_CHECKED') conditions.push(`the Safety Gate result is ${safety.ageDays === null || safety.ageDays === undefined ? 'of unknown age' : `${safety.ageDays} days old (limit ${policy.staleSafetyGateDays})`}: it is NOT current - re-verify online`);
   if (safety.status === 'NOT_CHECKED') conditions.push('the Safety Gate was not consulted: OFFLINE - VERIFICATION REQUIRED');
   if (safetyRisk === 'MEDIUM' && safety.status === 'SIMILAR_PRODUCT_RISK') conditions.push('similar products were notified in the Safety Gate: ask the supplier how their design avoids that hazard');
   const expert = (rules.results ?? []).filter((r) => r.status === 'APPLIES' && r.severity === 'HIGH' && r.requiresAuthorityConfirmation && r.jurisdiction !== 'AMAZON');
@@ -138,7 +142,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
     : verdict === VERDICT.CONDITIONAL_GO ? 'Continue the conversation, but do NOT pay a deposit until the conditions below are cleared. Ask for the missing documents and a sample now.'
     : 'Request a sample and the proforma invoice; agree a third-party inspection before final payment. Still a decision aid, not a guarantee.';
   return {
-    verdict, canCommitMoney: verdict === VERDICT.GO, dimensions: { identification: identityConf.level, marketability, amazonReadiness: amazonRequested ? amazon.readiness.status : 'NOT_REQUESTED', economics, supplierEvidence: evidence, safetyRisk },
+    verdict, canCommitMoney: verdict === VERDICT.GO, dimensions: { identification: identityConf.level, regulatoryCoverage: coverage?.status ?? 'NOT_ASSESSED', economicsIsUpperBound: landed?.isLowerBound === true, marketability, amazonReadiness: amazonRequested ? amazon.readiness.status : 'NOT_REQUESTED', economics, supplierEvidence: evidence, safetyRisk },
     hardBlockers: blockers.filter((b) => b.severity === 'HARD'), conditionBlockers: blockers.filter((b) => b.severity !== 'HARD'), conditions, why,
     adminObligations: adminObligations(rules), rulebookReview: { unreviewedApplicable: unrev.map((r) => ({ ruleId: r.ruleId, status: r.review.status })), allApplicableReviewed: unrev.length === 0 }, blocksImport, blocksAmazon, gaps, contradictions: contra, nextAction, maxPurchasePrice: maxPrice ?? null,
     note: 'Decision support only. Nordla is not a lawyer, customs authority, laboratory, certification body or Amazon approval authority.',

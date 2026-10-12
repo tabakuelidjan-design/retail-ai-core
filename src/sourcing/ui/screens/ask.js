@@ -1,10 +1,17 @@
 // ask screen (extracted from app.js, no behaviour change).
 import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from '../dom.js';
 import { S } from '../state.js';
+import { planConversation } from '/core/conversation-engine.js';
 
-export function askScreen(A) {
+function whyCard(A, c) {
+  if (!c) return ''; let p; try { p = planConversation(c, A); } catch { return ''; } const n = p.needs; const h = A.productHypothesis;
+  const row = (a) => `<div class="q-item"><b>${esc(a.questionId)}</b> <span class="small muted">${esc(a.dimension)} · score ${a.score}</span><div class="small">${esc(a.why?.fr ?? '')}</div><div class="small muted">${a.parts.map((x) => `${x.pts > 0 ? '+' : ''}${x.pts} ${esc(x.fr)}`).join(' | ')}</div></div>`;
+  const traits = h ? Object.entries(h.traits).filter(([, t]) => t.known || t.contradiction).map(([k, t]) => `${esc(k)} = ${t.contradiction ? 'CONTRADICTOIRE' : esc(String(t.value))} (${esc(t.status)}${t.sources.length ? ` : ${esc(t.sources.map((s) => `${s.source}/${s.level}${s.confidence ? '/' + s.confidence : ''}`).join(', '))}` : ''})`).join('<br>') : '';
+  return `<div class="card"><h2>WHY IS NORDLA ASKING THIS NOW?</h2><p class="small muted">Ranked information needs (explainable, deterministic). Applicability comes from the product traits and the case, not from a category checklist.</p>${n.asked.map(row).join('') || '<p class="muted">Nothing to ask.</p>'}${n.setAside.length ? `<h3>Set aside (not applicable)</h3>${n.setAside.map((a) => `<div class="small">${esc(a.questionId)} : ${esc(a.why?.fr ?? '')}</div>`).join('')}` : ''}${traits ? `<h3>Product hypothesis (traits with provenance)</h3><div class="small">${traits}</div>` : ''}</div>`;
+}
+export function askScreen(A, c) {
   const qs = A.questions;
-  return `<div class="card"><h2>ASK THE SUPPLIER NOW</h2><p class="small muted">Prioritised from what is still missing. ${qs.filter((q) => q.priority === 'P1').length} are P1 (they block the decision).</p><div class="row"><button class="btn" data-act="show-sup">Show to supplier (EN + 中文)</button><button class="btn sec" data-act="copy-sup">Copy</button></div></div>
+  return `${whyCard(A, c)}<div class="card"><h2>ASK THE SUPPLIER NOW</h2><p class="small muted">Prioritised from what is still missing. ${qs.filter((q) => q.priority === 'P1').length} are P1 (they block the decision).</p><div class="row"><button class="btn" data-act="show-sup">Show to supplier (EN + 中文)</button><button class="btn sec" data-act="copy-sup">Copy</button></div></div>
   <div class="card">${qs.map((q) => `<div class="q-item"><span class="pri ${q.priority}">${q.priority}</span><b>${esc(q.topic)}</b><div>${esc(q.en)}</div><div class="zh" lang="zh-Hans">${esc(q.zh)}</div><div class="small muted">${esc(q.why)}</div></div>`).join('')}</div>
   <p class="note">${esc(A.supplierSheet.note.en)}</p><div class="card"><h2>NEGOTIATION BRIEF</h2>${negotiation(A)}</div>`;
 }

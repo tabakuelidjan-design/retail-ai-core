@@ -1,3 +1,4 @@
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { landedCost, INCOTERMS } from '../src/sourcing/core/landed.js';
@@ -8,7 +9,7 @@ import { toMinor, pctToBps, applyBps } from '../src/sourcing/core/money.js';
 const input = () => ({
   supplier: { unitPrice: '4.20', currency: 'USD', qty: 1000, moq: 500, incoterm: 'FOB' },
   fx: { rate: 0.92, date: '2026-10-03', source: 'USER_ENTERED' },
-  costs: {
+  costs: { ...ZERO_COSTS,
     freight: { total: 450, status: 'KNOWN', source: 'forwarder quote' }, insurance: { ratePct: 0.3, status: 'ESTIMATED' },
     customsDuty: { ratePct: 3.7, status: 'KNOWN', source: 'user, from a tariff lookup' }, testing: { total: 300, status: 'KNOWN' }, labelling: { perUnit: 0.05, status: 'KNOWN' },
     epr: { perUnit: 0.1, min: 0.08, max: 0.15, status: 'ESTIMATED' },
@@ -43,7 +44,7 @@ test('landed cost: Incoterms decide what is already inside the price (CIF includ
   const cif = input(); cif.supplier.incoterm = 'CIF'; delete cif.costs.freight; delete cif.costs.insurance; const c = landedCost(cif);
   assert.equal(c.lines.find((l) => l.key === 'freight').status, 'INCLUDED_IN_PRICE'); assert.equal(c.customs.customsValueMinor, 386400, 'the CIF price IS the customs value');
   const ddp = input(); ddp.supplier.incoterm = 'DDP'; delete ddp.costs.customsDuty; const d = landedCost(ddp); assert.equal(d.customs.dutyStatus, 'INCLUDED_IN_PRICE'); assert.equal(d.criticalUnknown.length, 0);
-  const exw = input(); exw.supplier.incoterm = 'EXW'; assert.ok(landedCost(exw).unknown.includes('costs.originCharges'), 'EXW: origin charges are on the buyer and are listed when unknown');
+  const exw = input(); exw.supplier.incoterm = 'EXW'; delete exw.costs.originCharges; assert.ok(landedCost(exw).unknown.includes('costs.originCharges'), 'EXW: origin charges are on the buyer and are listed when unknown');
   assert.ok(Object.keys(INCOTERMS).includes('FOB'));
 });
 

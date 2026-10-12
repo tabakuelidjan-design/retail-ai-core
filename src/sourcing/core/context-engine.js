@@ -18,7 +18,7 @@ const ACTIVE = new Set(['OPEN', 'UNANSWERED']);
 // what is worth asking next to each subject (in this order). 's:' ids are the suggested commercial questions defined in phrases.js.
 const ADJACENT = {
   [T.COLOURS]: ['s:mixed_colours', 's:colours'], [T.PRICE]: ['s:price_tiers', 'price'], [T.MOQ]: ['s:price_tiers'], [T.PAYMENT]: ['s:payment'], [T.LEADTIME]: ['lead_time'],
-  [T.LOGISTICS]: ['carton', 'incoterm'], [T.IDENTITY]: ['model', 'manufacturer'], [T.DOCUMENTS]: ['docs-bundle'], [T.COMPLIANCE]: ['docs-bundle'], [T.CUSTOMISATION]: ['s:logo', 's:packaging'],
+  [T.LOGISTICS]: ['carton', 'incoterm'], [T.IDENTITY]: ['model', 'manufacturer', 'need:compat_models', 'need:capacity_battery', 'need:capacity_volume', 'need:contact_material', 'need:age_range'], [T.DOCUMENTS]: ['docs-bundle'], [T.COMPLIANCE]: ['docs-bundle'], [T.CUSTOMISATION]: ['s:logo', 's:packaging'],
 };
 const kc = (key, ctx) => (ctx && ctx !== 'product' ? `${key}@${ctx}` : key);
 const valueOf = (c) => c.correctedValue ?? c.value;

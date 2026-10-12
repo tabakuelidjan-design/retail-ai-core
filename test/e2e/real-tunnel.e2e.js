@@ -9,6 +9,7 @@ import { startPhoneMode } from '../../src/sourcing/server/phone.js';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser } from './cdp.js';
 
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser(); if (!exe) { console.log('NO BROWSER FOUND: set SOURCING_E2E_BROWSER. Nothing was run.'); process.exit(2); }
 const dir = mkdtempSync(join(tmpdir(), 'nordla-tunnel-')); const TOKEN = randomBytes(24).toString('hex');
 const IDX = '<?xml version="1.0"?><Safety-Gate><weeklyReport><reference>Report-2026-39</reference><publicationDate>02/10/2026</publicationDate><URL>https://x.test/api/download/weeklyReport/detail/xml/10000325?language=en,</URL></weeklyReport></Safety-Gate>';
@@ -18,7 +19,7 @@ const r = await startPhoneMode({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, 
 if (!r.tunnel) { console.log(`NO TUNNEL (${r.reason}). Nothing was exposed.`); await r.stop(); rmSync(dir, { recursive: true, force: true }); process.exit(2); }
 let code = 1; const b = await new Browser(exe).launch();
 try {
-  const t = await b.tab('about:blank'); const api = []; b.listeners.push((d) => { if (d.method === 'Network.responseReceived' && /\/api\//.test(d.params.response.url)) api.push(`${d.params.response.status} ${d.params.response.url.replace(/^https:\/\/[^/]+/, '')}`); });
+  const t = await b.tab('about:blank', { preload: EXPERT_FIRST }); const api = []; b.listeners.push((d) => { if (d.method === 'Network.responseReceived' && /\/api\//.test(d.params.response.url)) api.push(`${d.params.response.status} ${d.params.response.url.replace(/^https:\/\/[^/]+/, '')}`); });
   await t.goto(r.tunnel.link);
   await t.waitFor("window.nordlaSourcing?.state().server === 'VERIFIED'", 60000);
   const mode = await t.eval("document.querySelector('#mode').innerText"); const bar = await t.waitFor("/SAFETY GATE (LIVE|CACHED)/.test(document.querySelector('#statusbar').innerText) ? document.querySelector('#statusbar').innerText : ''", 30000);

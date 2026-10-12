@@ -1,6 +1,6 @@
 // Offline shell: on install the WHOLE app (page, script, style, every decision-engine module) is cached from /shell-manifest.json, so a case can be opened and worked with no
 // connection even if the first visit loaded modules before this worker took control. /api is never cached: live data stays live (the phone keeps its own Safety Gate copy).
-const CACHE = 'nordla-sourcing-v0-8';
+const CACHE = 'nordla-sourcing-v0-16';
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
@@ -12,7 +12,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/') || u.pathname === '/shell-manifest.json') return;
+  if (e.request.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/') || u.pathname.startsWith('/voice/') || u.pathname === '/shell-manifest.json') return; // /voice/ (runtime + model, ~66 MB) is left to the browser's own HTTP cache: no 3 s race, no copy in the shell cache
   // network first, but never wait more than 3 s (a slow connection is as good as none): then the cached copy
   e.respondWith((async () => {
     try {

@@ -1,5 +1,5 @@
 // decision screen (extracted from app.js, no behaviour change).
-import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from '../dom.js';
+import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT, coverageBanner } from '../dom.js';
 import { S } from '../state.js';
 import { numbersInner } from '../numbers.js';
 
@@ -8,11 +8,11 @@ export function decisionScreen(A, c) {
   const cur = q.currency ?? 'USD';
   const wi = S.whatIf;
   return `<section class="verdict v-${d.verdict}" aria-live="polite"><p class="q">SHOULD I CONTINUE WITH THIS PRODUCT?</p><div class="v">${esc(d.verdict.replace(/_/g, ' '))}</div><p class="a">${esc(en)} <span class="muted small">/ ${esc(fr)}</span></p><p style="margin:0">${esc(d.nextAction)}</p></section>
-  <div class="chips">${chip('Identification', dim.identification, dim.identification === 'HIGH' ? 'GREEN' : dim.identification === 'MEDIUM' ? 'AMBER' : 'RED')}${chip('EU / BE', dim.marketability)}${chip('Amazon', dim.amazonReadiness)}${chip('Economics', dim.economics)}${chip('Supplier evidence', dim.supplierEvidence)}${chip('Safety risk', dim.safetyRisk)}</div>
+  ${coverageBanner(A)}<div class="chips">${chip('Identification', dim.identification, dim.identification === 'HIGH' ? 'GREEN' : dim.identification === 'MEDIUM' ? 'AMBER' : 'RED')}${chip('EU / BE', dim.marketability)}${chip('Amazon', dim.amazonReadiness)}${chip('Economics', dim.economics)}${chip('Supplier evidence', dim.supplierEvidence)}${chip('Safety risk', dim.safetyRisk)}</div>
   ${(dim.supplierEvidence !== 'COMPLETE' || dim.identification !== 'HIGH') && d.verdict !== 'NO_GO' ? `<p class="note"><b>PRELIMINARY answer.</b> ${esc(dim.identification !== 'HIGH' ? 'The product is not fully identified yet. ' : '')}${esc(dim.supplierEvidence !== 'COMPLETE' ? 'Supplier documents are not complete or not checked yet: add them in Docs to firm it up.' : '')}</p>` : ''}
   <div class="card"><h2>AT A GLANCE</h2>${numbersInner(A, c)}
     <h3>Missing supplier documents</h3>${d.gaps.missingDocs.length ? list(d.gaps.missingDocs.slice(0, 4).map((m) => esc(m.label.replace(/\s*\(.*$/, '')))) : '<p class="muted small">none required that is missing</p>'}
-    <h3>Safety Gate</h3><p class="small">${chip('', A.safety.status, A.safety.status === 'EXACT_MATCH' || A.safety.status === 'PROBABLE_MATCH' ? 'RED' : A.safety.status === 'SIMILAR_PRODUCT_RISK' ? 'AMBER' : A.safety.status === 'NO_MATCH_FOUND' ? 'GREEN' : 'UNKNOWN')} ${chip('Data', A.dataMode.replace(/_/g, ' '), A.dataMode === 'LIVE_VERIFIED' ? 'GREEN' : A.dataMode === 'CACHED' ? 'AMBER' : 'RED')}${A.safety.status === 'NO_MATCH_FOUND' ? ' <span class="muted">no match does not prove safety</span>' : ''}</p>
+    <h3>Safety Gate</h3><p class="small">${chip('', A.safety.status, A.safety.status === 'EXACT_MATCH' || A.safety.status === 'PROBABLE_MATCH' ? 'RED' : A.safety.status === 'SIMILAR_PRODUCT_RISK' ? 'AMBER' : A.safety.status === 'NO_MATCH_FOUND' ? 'UNKNOWN' : 'UNKNOWN')}${A.safety.stale ? ' <span class="chip t-AMBER">STALE <b>' + (A.safety.ageDays ?? '?') + ' d</b></span>' : ''} ${chip('Data', A.dataMode.replace(/_/g, ' '), A.dataMode === 'LIVE_VERIFIED' ? 'GREEN' : A.dataMode === 'CACHED' ? 'AMBER' : 'RED')}${A.safety.status === 'NO_MATCH_FOUND' ? ' <span class="muted">no match does not prove safety</span>' : ''}</p>
     <h3>Regulatory uncertainty</h3>${d.rulebookReview.unreviewedApplicable.length ? list(d.rulebookReview.unreviewedApplicable.slice(0, 4).map((r) => esc(`${r.ruleId}: ${r.status.replace(/_/g, ' ')}`))) : '<p class="muted small">every applicable material rule is verified at least from its primary text (an expert still confirms your product)</p>'}
     <h3>Amazon (separate from EU legal marketability)</h3><p class="small">${chip('Amazon readiness', dim.amazonReadiness)} ${chip('EU / BE marketability', dim.marketability)}</p></div>
   ${d.hardBlockers.length ? `<div class="warn"><strong>Hard blockers</strong>${list(d.hardBlockers.map((b) => `<b>${esc(b.code.replace(/_/g, ' '))}</b> - ${esc(b.detail)}`))}</div>` : ''}

@@ -9,6 +9,7 @@ import { extractDocument, inspectDocument, crossCheckDocuments } from './docinsp
 import { matchSafetyGate } from './safety.js';
 import { hsCandidates, customsAssessment } from './customs.js';
 import { landedCost } from './landed.js';
+import { regulatoryCoverage } from './coverage.js';
 import { unitEconomics, maxPurchasePrice } from './economics.js';
 import { MoneyError, fmt } from './money.js';
 import { buildQuestions, supplierSheet, negotiationBrief } from './supplier.js';
@@ -19,6 +20,9 @@ import { readsOf } from './predicate.js';
 import { upgradeCase, CASE_SCHEMA } from './upgrade.js';
 import { effectiveQuote, normalizeTiers } from './offers.js';
 import * as conv from './conversation.js';
+import { observeProductSync, nameObserver, imageObserver } from './product-observer.js';
+import { recordObservation, buildProductHypothesis } from './product-hypothesis.js';
+import { recordSearchRequest, summarizeMarketEvidence } from './market-search.js';
 
 const DAY = 86400000;
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
@@ -49,12 +53,13 @@ function reduceInPlace(s, event, at) {
   const lvl = event.level ?? IDENTITY_LEVEL.USER_STATED;
   const sub = (ev) => { reduceInPlace(s, ev, at); s.events.push({ at, type: ev.type, summary: ev.summary ?? null }); };
   switch (event.type) {
-    case 'NAME': s.identity.workingName = String(event.name ?? ''); break;
+    case 'NAME': { s.identity.workingName = String(event.name ?? ''); const r = observeProductSync({ name: s.identity.workingName }, [nameObserver]).results[0]; recordObservation(s, r, at, { name: s.identity.workingName }); break; } // the name is a SIGNAL: the observer proposes traits (PROBABLE) from it
+    case 'PRODUCT_OBSERVED': { const o = event.observation ?? event; recordObservation(s, { observer: String(o.observer ?? ''), version: o.version ?? null, source: o.source, status: o.status ?? 'OK', observations: o.observations, hypotheses: o.hypotheses, note: o.note }, at, o.input ?? {}); break; } // an adapter (image model, barcode data...) reports through the SAME contract
     case 'CATEGORY': s.identity = applyCategory(s.identity, event.category, { level: lvl, source: event.source ?? { kind: 'user' } }); break;
     case 'TRAIT': s.identity = addEvidence(s.identity, event.trait, { value: event.value, level: lvl, source: event.source ?? { kind: 'user' }, observedAt: at }); break;
     case 'IDENTIFIER': s.identity = setIdentifier(s.identity, event.name, event.value, lvl, event.source ?? { kind: 'user' }); break;
     case 'ORIGIN': s.identity.countryOfOrigin = event.country ?? null; break;
-    case 'PHOTO': s.identity.photos.push({ ref: event.ref, note: event.note ?? null, at }); break;
+    case 'PHOTO': { s.identity.photos.push({ ref: event.ref, note: event.note ?? null, at }); const r = observeProductSync({ imageRef: event.ref }, [imageObserver]).results[0]; recordObservation(s, r, at, { imageRef: event.ref }); break; } // no image provider is approved: the observer says so, the photo is kept
     case 'PLACING': s.placing = { ...s.placing, ...event.placing }; break;
     case 'CONTEXT': s.context = { ...s.context, ...event.context }; break;
     case 'SUPPLIER': s.supplier = { ...s.supplier, ...event.supplier }; break;
@@ -97,6 +102,10 @@ function reduceInPlace(s, event, at) {
     case 'CONVERSATION_ITEM': conv.addItem(s, event, at); break;
     case 'CONVERSATION_FINISH': conv.finish(s, event, at); break;
     case 'CONVERSATION_DERIVE': conv.derive(s, event, at); break;
+    case 'CONVERSATION_ATTRIBUTE': conv.attribute(s, event, at); break;
+    case 'SPEECH_SEGMENT': conv.addSegment(s, event, at); break;
+    case 'MARKET_SEARCH': recordSearchRequest(s, event, at); break; // the OWNER asked (explicitly); the result of an approved provider or PROVIDER_NOT_CONFIGURED is recorded with its input and what would be sent
+    case 'TURN_CLOSE': conv.closeTurn(s, event, at); break;
     case 'CANDIDATE_CONFIRM': conv.confirm(s, event, at, sub); break;
     case 'CANDIDATE_CORRECT': conv.correct(s, event, at, sub); break;
     case 'CANDIDATES_CONFIRM_BATCH': conv.confirmBatch(s, event, at, sub); break;
@@ -128,7 +137,7 @@ const saleOf = (sale) => (sale && sale.sellingPriceGross && sale.vatRatePct !== 
 // a landed cost with a critical unknown is incomplete: it is never fed into the margin
 function economicsOf(sale, landed, target) {
   const sl = saleOf(sale); if (!sl) return { status: 'INFORMATION_INSUFFICIENT', reason: 'selling price or VAT rate not entered', classification: 'UNKNOWN', contributionMinor: null, contributionPct: null, targetContributionPct: target ?? null };
-  try { return unitEconomics({ ...sl, landedPerUnitMinor: landed && landed.status !== 'INFORMATION_INSUFFICIENT' ? (landed.totals?.landedPerUnitEurMinor ?? null) : null, targetContributionPct: target ?? null }); }
+  try { return unitEconomics({ ...sl, landedPerUnitMinor: landed && landed.status !== 'INFORMATION_INSUFFICIENT' ? (landed.totals?.landedPerUnitEurMinor ?? null) : null, landedIsLowerBound: landed?.isLowerBound === true, targetContributionPct: target ?? null }); }
   catch (e) { if (e instanceof MoneyError) return { status: 'INFORMATION_INSUFFICIENT', reason: e.code, classification: 'UNKNOWN', contributionMinor: null, contributionPct: null }; throw e; }
 }
 
@@ -179,7 +188,11 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   const crossChecks = crossCheckDocuments(docs);
   const rules = evaluateRules({ identity: id, context, rulebook, docs, now });
 
-  const safety = safetyOf(s, externals, identityFacts, now);
+  const safety0 = safetyOf(s, externals, identityFacts, now);
+  const coverage = regulatoryCoverage({ category: identityFacts.category, name: id.workingName, assumedTraits: idConf.assumedFromProfileOnly?.length ?? 0 });
+  const sgFetched = safety0.source?.fetchedAt ? Math.floor((now.getTime() - Date.parse(safety0.source.fetchedAt)) / DAY) : null;
+  const sgStale = safety0.source?.mode === 'CACHED' && (sgFetched === null || !Number.isFinite(sgFetched) || sgFetched > policy.staleSafetyGateDays); // a cached result of unknown or old date must never look current
+  const safety = { ...safety0, stale: sgStale, ageDays: sgFetched };
   const candidates = hsCandidates(id);
   const customs = customsAssessment({ candidates, chosenCode: s.customs?.chosenCode ?? null, duty: s.customs?.duty ?? null, bti: s.customs?.bti ?? null, now });
 
@@ -200,10 +213,10 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   if (maxPrice && maxPrice.maxUnitPriceMinor !== null && maxPrice.maxUnitPriceMinor !== undefined) maxPrice.display = fmt(maxPrice.maxUnitPriceMinor, maxPrice.currency);
 
   const marketabilityHint = null; void marketabilityHint;
-  const preDecision = decide({ identityConf: idConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon: { restricted: s.amazon.restricted, readiness: { status: 'UNKNOWN', open: [] }, economics: econAmazon }, role, quote: currentQuote(s), channels, questions: [], policy });
+  const preDecision = decide({ identityConf: idConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon: { restricted: s.amazon.restricted, readiness: { status: 'UNKNOWN', open: [] }, economics: econAmazon }, role, quote: currentQuote(s), channels, questions: [], coverage, policy });
   const readiness = amazonReadiness({ rules, channels, marketability: preDecision.dimensions.marketability, restricted: s.amazon.restricted });
   const questions = buildQuestions({ identity: id, role, rules, docs, landed, quote: { ...(currentQuote(s) ?? {}), ...(quoteOverride ?? {}) }, customs, channels });
-  const decision = decide({ identityConf: idConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon: { restricted: s.amazon.restricted, readiness, economics: econAmazon }, role, quote: currentQuote(s), channels, questions, policy });
+  const decision = decide({ identityConf: idConf, rules, docs, safety, customs, landed, econ, maxPrice, amazon: { restricted: s.amazon.restricted, readiness, economics: econAmazon }, role, quote: currentQuote(s), channels, questions, coverage, policy });
   const sgAge = safety.source?.newestPublication ? Math.floor((now.getTime() - Date.parse(safety.source.newestPublication)) / DAY) : null;
   if (priceBasis === 'ASSUMED' && econ.status !== 'INFORMATION_INSUFFICIENT') decision.conditions.push('the selling price is ASSUMED (no observed listing and not your target): the margin is only as good as that assumption');
   if (sgAge !== null && sgAge > 10) decision.conditions.push(`the newest Safety Gate weekly report ingested is ${sgAge} days old: refresh the cache`);
@@ -214,8 +227,10 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
     caseId: s.id, asOf: now.toISOString(), ruleBookVersion: rules.ruleBookVersion ?? RULE_VERSION,
     identity: { workingName: id.workingName, ...identityFacts, confidence: idConf, countryOfOrigin: id.countryOfOrigin, photos: id.photos.length },
     role, rules, documents: docs.map((d) => ({ id: d.id, fileName: d.fileName, docType: d.docType, claimedType: d.claimedType, textSource: d.textSource, confirmed: d.confirmed, evidenceState: documentEvidenceState(d), photoRef: d.photoRef, ocrText: d.textSource === 'OCR' ? d.text : undefined, consistency: d.inspection.consistency, findings: d.inspection.findings, note: d.inspection.note, models: d.extraction.models, standards: d.extraction.standards, dates: d.extraction.dates })), crossChecks,
-    safety, customs, landed, economics: econ, economicsAmazon: econAmazon, maxPurchasePrice: maxPrice, market, amazon: { ...readiness, restricted: s.amazon.restricted }, questions, supplierSheet: supplierSheet(questions), negotiation: brief, decision,
+    coverage, safety, customs, landed, economics: econ, economicsAmazon: econAmazon, maxPurchasePrice: maxPrice, market, amazon: { ...readiness, restricted: s.amazon.restricted }, questions, supplierSheet: supplierSheet(questions), negotiation: brief, decision,
   };
+  out.productHypothesis = buildProductHypothesis(s); // what Nordla believes the product is (traits with provenance); a view, not a new store of truth
+  out.marketPresence = summarizeMarketEvidence(s.marketSearches ?? [], { landedPerUnitEurMinor: landed?.totals?.landedPerUnitEurMinor ?? null }); // observed market evidence: context for the owner, it never changes the verdict
   out.evidence = evidenceLedger(s, out); out.freshness = freshnessOf(s, out, now); out.dataMode = dataModeOf(out);
   return out;
 }

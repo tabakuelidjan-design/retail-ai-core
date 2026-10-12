@@ -9,6 +9,11 @@ import { documentStatusOf, FACT_STATUS } from './provenance.js';
 import { conflictText } from './conversation.js';
 import { effectiveQuote } from './offers.js';
 import { describeFact, labelOf } from './candidate-view.js';
+import { needQuestions, rankNeeds, explainRanking } from './needs.js';
+import { marketIdentityGap } from './market-search.js';
+import { currentTopic } from './topics.js';
+import { evaluate } from './predicate.js';
+import { traitEnv } from './identity.js';
 import { REVIEW, DEFAULT_PROFILE, MARKET_PROFILES, SUGGESTED, frText, templateOf, docNameFr, conflictPhrases, reasonFr, shortFr, reviewFor } from './phrases.js';
 
 export { REVIEW };
@@ -60,9 +65,14 @@ export function planConversation(rawState, A, opts = {}) {
     const fr = frText(v.id, params) ?? v.en;
     if (v.id.startsWith('doc:') && !v.id.endsWith(':fix')) { docItems.push({ id: v.id, docType: v.docType, priority: v.priority, fr, en: v.en, zh: v.zh, why: v.why }); continue; }
     if (v.id === 'brand') continue; // the OWNER decides whether to sell under their own brand: an owner card below, not a supplier question
-    const zh = supplierText(profile, providers, fr, { text: v.zh, review: reviewFor(v.id, REVIEW.TECHNICAL_ONLY) });
-    const resolves = RESOLVES[v.id] ?? [];
-    const q = { id: v.id, source: tpl === 'doc_fix' ? 'ENGINE' : 'ENGINE', audience: 'SUPPLIER', dimension: tpl === 'doc_fix' ? 'DOCUMENTS' : (DIM_OF[v.id] ?? 'REGULATORY'), priority: v.priority, blocksOrder: (v.blocks ?? []).includes('IMPORT') || (v.blocks ?? []).includes('PRICE'), text: { fr, en: v.en }, supplier: { zh, en: v.en }, resolves, reason: { fr: reasonFr(v.id), en: v.why } };
+    let fr2 = fr; let en2 = v.en; let zhText = v.zh; let resolves = RESOLVES[v.id] ?? [];
+    if (v.id === 'price') { // the question asks for what is STILL missing: the MOQ stated => only the price; the price stated => only the MOQ (the Chinese clauses are the two halves of the same technically checked sentence)
+      const has2 = (ks) => ks.some((k) => confirmedKeys.has(k) || pendingKeys.has(k)); const moqKnown = has2(['quote.moq']); const priceKnown2 = has2(['quote.unitPrice', 'quote.tiers']); const halves = String(v.zh ?? '').match(/[^?？]+[?？]/g) ?? [v.zh];
+      if (moqKnown && !priceKnown2) { fr2 = `Quel est votre prix unitaire pour ${params.qty ? `${params.qty} pièces` : 'la quantité qui nous intéresse'} ?`; en2 = `What is your unit price for ${params.qty ? `${params.qty} units` : 'the quantity we are interested in'}?`; zhText = halves[0]; resolves = ['quote.unitPrice', 'quote.tiers']; }
+      else if (priceKnown2 && !moqKnown) { fr2 = 'Quel est le MOQ (quantité minimale de commande) ?'; en2 = 'What is the minimum order quantity (MOQ)?'; zhText = halves[1] ?? halves[0]; resolves = ['quote.moq']; }
+    }
+    const zh = supplierText(profile, providers, fr2, { text: zhText, review: reviewFor(v.id, REVIEW.TECHNICAL_ONLY) });
+    const q = { id: v.id, source: tpl === 'doc_fix' ? 'ENGINE' : 'ENGINE', audience: 'SUPPLIER', dimension: tpl === 'doc_fix' ? 'DOCUMENTS' : (DIM_OF[v.id] ?? 'REGULATORY'), priority: v.priority, blocksOrder: (v.blocks ?? []).includes('IMPORT') || (v.blocks ?? []).includes('PRICE'), text: { fr: fr2, en: en2 }, supplier: { zh, en: en2 }, resolves, reason: { fr: reasonFr(v.id), en: v.why } };
     if (tpl === 'doc_fix') docFixes.push(q); else add(q);
   }
   for (const q of docFixes) add(q);
@@ -86,8 +96,11 @@ export function planConversation(rawState, A, opts = {}) {
   suggest('payment', priceKnown && !quote?.payment?.depositPct);
   suggest('colours', priceKnown);
   suggest('mixed_colours', priceKnown && confirmed.some((c) => c.key === 'variant.colours' && Array.isArray(c.correctedValue ?? c.value) && (c.correctedValue ?? c.value).length > 1));
-  suggest('logo', priceKnown && st.placing?.underOwnNameOrBrand === true);
-  suggest('packaging', priceKnown && st.placing?.underOwnNameOrBrand === true);
+  const customisable = priceKnown && (st.placing?.underOwnNameOrBrand === true || evaluate({ trait: 'customisable', is: true }, traitEnv(st.identity, {})) === true);
+  suggest('logo', customisable);
+  suggest('packaging', customisable);
+  // product-specific needs (capacity, compatibility, food-contact material, age range): present only where the product's TRAITS say they matter
+  for (const nq of needQuestions(st, A)) add({ id: nq.id, source: 'NEED', audience: 'SUPPLIER', dimension: nq.dimension, priority: nq.priority, blocksOrder: false, text: nq.text, supplier: { zh: supplierText(profile, providers, nq.text.fr, null), en: nq.text.en }, resolves: nq.resolves, reason: nq.reason, needId: nq.needId });
 
   // ---- 3. contradictions ---------------------------------------------------------------------------------------------------------------------------------------------------------------
   const contradictions = [];
@@ -120,7 +133,9 @@ export function planConversation(rawState, A, opts = {}) {
 
   // ---- states, ordering, next ----------------------------------------------------------------------------------------------------------------------------------------------------------
   const out = qs.map((q, i) => { const base = q.forcedState ?? stateOf({ id: q.id, resolves: q.resolves, pendingKeys, log, items }); const state = base; return { ...q, state, repeat: state === 'UNANSWERED', short: { fr: shortFr(q.id) }, _i: i }; });
-  const order = (q) => PRIORITY[q.priority] + (DIM[q.dimension] ?? 9) * 10 + (q.audience === 'USER' ? 5 : 0) + (q.repeat ? 50 : 0) + q._i / 1000;
+  const ranking = rankNeeds({ st, A, questions: out, topicId: currentTopic(st).id, market: opts.market ?? marketIdentityGap(st) });
+  for (const q of out) { const n = ranking.byQuestion.get(q.id); if (n) { q.need = { needId: n.needId, dimension: n.dimension, applicability: n.applicability, score: n.score, why: n.why ?? null, parts: n.parts }; if (n.applicability === 'NOT_APPLICABLE') q.state = 'NOT_APPLICABLE'; else if (n.score === null && ACTIVE.has(q.state)) q.state = 'APPLICABILITY_UNKNOWN'; } }
+  const order = (q) => (q.need && q.need.score !== null && q.need.score !== undefined ? 1000 - q.need.score : 5000 + PRIORITY[q.priority] + (DIM[q.dimension] ?? 9) * 10 + (q.audience === 'USER' ? 5 : 0) + (q.repeat ? 50 : 0) + q._i / 1000);
   const candidates = out.filter((q) => ACTIVE.has(q.state) && q.source !== 'USER_FREE').sort((a, b) => order(a) - order(b));
   const questions = out.map(({ _i, forcedState, ...q }) => q).sort((a, b) => order({ ...a, _i: 0 }) - order({ ...b, _i: 0 }));
   const next = candidates[0] ? questions.find((q) => q.id === candidates[0].id) : null; const upcoming = candidates.slice(1, 4).map((c) => questions.find((q) => q.id === c.id));
@@ -141,11 +156,11 @@ export function planConversation(rawState, A, opts = {}) {
   const stage = !started ? 'START' : verdict !== 'INSUFFICIENT_INFORMATION' ? 'EVALUABLE' : missing.length + conflicts <= 3 ? 'ALMOST' : 'GATHERING';
   const message = progressMessage({ stage, n: missing.length, s: missingSupplier, u: missingUser, conflicts, pendingN, residual });
   const timeline = [
-    ...items.map((it) => ({ kind: it.speaker === 'supplier' ? 'SUPPLIER' : 'ME', at: it.at, id: it.id, original: it.original, lang: it.lang, convId: it.convId, derived: it.derived ?? [] })),
+    ...items.map((it) => ({ kind: it.speaker === 'supplier' ? 'SUPPLIER' : it.speaker === 'unknown' ? 'HEARD' : 'ME', at: it.at, id: it.id, original: it.original ?? null, modality: it.modality ?? 'TEXT', speaker: it.speaker, capture: it.capture ?? null, segments: it.segments ?? null, turn: it.turn ?? null, lang: it.lang, convId: it.convId, derived: it.derived ?? [] })),
     ...log.filter((e) => e.kind === 'SHOWN').map((e) => ({ kind: 'ASKED', at: e.at, id: e.id, questionId: e.questionId, texts: e.texts })),
     ...st.confirmBatches.map((b) => ({ kind: 'UNDERSTOOD', at: b.at, id: b.id, ids: b.ids, via: b.via })),
   ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  return { profile, userLang: opts.userLang ?? 'fr', questions, next, upcoming, known, resolved, contradictions, timeline, pending: { candidates: pendingN },
+  return { needs: explainRanking(ranking, 10), profile, userLang: opts.userLang ?? 'fr', questions, next, upcoming, known, resolved, contradictions, timeline, pending: { candidates: pendingN },
     summary: { stage, missingImportant: missing.length, missingSupplier, missingUser, conflicts, pending: pendingN, known: known.length, residual, message } };
 }
 

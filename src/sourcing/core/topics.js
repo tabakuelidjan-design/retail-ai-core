@@ -13,7 +13,7 @@ const T = TOPIC;
 
 /** The topic of a fact key. */
 export function topicOfKey(key) {
-  if (key.startsWith('identifier.')) return T.IDENTITY;
+  if (key.startsWith('identifier.') || key.startsWith('spec.')) return T.IDENTITY;
   if (key === 'quote.moq') return T.MOQ;
   if (['quote.unitPrice', 'quote.tiers', 'quote.currency', 'quote.samplePrice'].includes(key)) return T.PRICE;
   if (key.startsWith('variant.') || key === 'moq.mixedColours' || key === 'moq.perColour') return T.COLOURS;
@@ -44,7 +44,7 @@ export function topicOfItem(rawState, item) {
   const counts = new Map(); const evidence = [];
   for (const c of cands) { const t = topicOfKey(c.key); if (t === T.OTHER) continue; counts.set(t, (counts.get(t) ?? 0) + 1); evidence.push(c.id); }
   if (counts.size) { const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]); return { id: ranked[0][0], confidence: 'HIGH', source: 'FACTS', evidence, also: ranked.slice(1).map(([t]) => t) }; }
-  const text = String(item.original ?? ''); const hits = [];
+  const text = String(item.original ?? item.derived?.find((d) => d.kind === 'TRANSCRIPTION')?.text ?? ''); const hits = [];
   for (const [t, rx] of KEYWORDS) { const m = text.match(new RegExp(rx.source, `${rx.flags.replace('g', '')}g`)); if (m) hits.push([t, m.length]); }
   if (hits.length) { hits.sort((a, b) => b[1] - a[1]); return { id: hits[0][0], confidence: 'LOW', source: 'KEYWORDS', evidence: [`keyword:${hits[0][0]}`], also: hits.slice(1).map(([t]) => t) }; }
   return { id: T.OTHER, confidence: 'LOW', source: 'NONE', evidence: [], also: [] };

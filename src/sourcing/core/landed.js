@@ -36,7 +36,7 @@ const rangeOf = (spec, qty) => {
 
 /**
  * @param {object} input see docs/sourcing-field-mode.md
- * @returns {{ status: 'COMPLETE'|'RANGE'|'INFORMATION_INSUFFICIENT', quantity: number, lines: object[], goods: object, customs: object, importVat: object, totals: object,
+ * @returns {{ status: 'COMPLETE'|'RANGE'|'LOWER_BOUND'|'INFORMATION_INSUFFICIENT', quantity: number, lines: object[], goods: object, customs: object, importVat: object, totals: object,
  *             unknown: string[], criticalUnknown: string[], warnings: string[], factClass: string }}
  */
 export function landedCost(input) {
@@ -133,11 +133,15 @@ export function landedCost(input) {
     landedPerUnitEurMinor: landedTotal === null ? null : roundHalfAway(landedTotal / qty), rangeEurMinor: hasRange && landedTotal !== null ? { min: lo, max: hi, perUnit: { min: roundHalfAway(lo / qty), max: roundHalfAway(hi / qty) } } : null,
     importCostEurMinor: landedTotal === null ? null : landedTotal - goodsEur,
   };
-  const status = criticalUnknown.length ? 'INFORMATION_INSUFFICIENT' : hasRange ? 'RANGE' : 'COMPLETE';
+  // A cost line that the owner can enter and has not entered is NOT zero: the total is then a LOWER BOUND (never COMPLETE), and the unknown components stay listed.
+  const unknownCostComponents = unknown.filter((u) => /^costs\.(?:other\[|(?:originCharges|insurance|brokerage|inspection|testing|labelling|epr|inboundLogistics)$)/.test(u));
+  const isLowerBound = !criticalUnknown.length && unknownCostComponents.length > 0;
+  const status = criticalUnknown.length ? 'INFORMATION_INSUFFICIENT' : isLowerBound ? 'LOWER_BOUND' : hasRange ? 'RANGE' : 'COMPLETE';
   if (unknown.length && !criticalUnknown.length) warnings.push(`NON_CRITICAL_COSTS_UNKNOWN: ${unknown.join(', ')} (excluded from the total)`);
+  if (isLowerBound) warnings.push(`LOWER_BOUND: the real landed cost is HIGHER than shown - not entered: ${unknownCostComponents.map((u) => u.replace(/^costs\./, '')).join(', ')} (enter 0 only if the cost really is zero)`);
   return {
     status, quantity: qty, incoterm, lines, goods, customs: { customsValueMinor: customsValue, dutyMinor, dutyStatus, otherDutiesMinor: otherDutyMinor, dutiesIncludedByIncoterm: dutiesIncluded },
-    importVat, totals, unknown, criticalUnknown, warnings, factClass: status === 'INFORMATION_INSUFFICIENT' ? FACT_CLASS.UNKNOWN : FACT_CLASS.CALCULATED_VALUE,
+    importVat, totals, unknown, criticalUnknown, unknownCostComponents, isLowerBound, warnings, factClass: status === 'INFORMATION_INSUFFICIENT' ? FACT_CLASS.UNKNOWN : FACT_CLASS.CALCULATED_VALUE,
   };
 }
 function otherDutyMinorSafe(lines, otherDutyMinor) { return lines.some((l) => l.key.startsWith('otherDuty:') && l.status !== 'UNKNOWN') ? 0 : otherDutyMinor; }

@@ -1,4 +1,5 @@
 // Synthetic fixtures for the China-sourcing tests. Everything here is INVENTED (names, models, documents, alerts): no real supplier, lab or product.
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import { newCase, dispatch, assess } from '../src/sourcing/core/case.js';
 import { RULEBOOK } from '../src/sourcing/core/rulebook/index.js';
 import { KEY_TRAITS } from '../src/sourcing/core/taxonomy.js';
@@ -29,7 +30,7 @@ export const importer = [{ type: 'PLACING', placing: { underOwnNameOrBrand: fals
 export const ownBrand = [{ type: 'PLACING', placing: { underOwnNameOrBrand: true, manufacturerEstablishedInEU: false, euAuthorisedRepresentative: false, substantialModification: false } }];
 export const commercial = ({ unitPrice = 4.2, qty = 1000, moq = 500, price = 19.99, target = 30, duty = 2.7, code = '8504.40' } = {}) => [
   { type: 'QUOTE', quote: { unitPrice, currency: 'USD', qty, moq, incoterm: 'FOB', leadTimeDays: 20, carton: '40x30x30 cm / 12 kg / 50 units' } },
-  { type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } },
+  { type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { ...ZERO_COSTS, freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } },
   { type: 'CUSTOMS', customs: { chosenCode: code, duty: { ratePct: duty, kind: 'USER_ENTERED', source: 'owner' } } },
   { type: 'SALE', sale: { sellingPriceGross: price, vatRatePct: 21, targetContributionPct: target } },
 ];

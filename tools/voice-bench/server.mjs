@@ -4,17 +4,33 @@
 import http from 'node:http';
 import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, extname, normalize, resolve } from 'node:path';
-const HERE = new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'); const REPO = resolve(HERE, '../..'); const DATA = join(REPO, 'data/local/voice-bench');
-const MAPS = [['/vendor/', join(DATA, 'vendor')], ['/models/', join(DATA, 'models')], ['/corpus-audio/', join(DATA, 'corpus')], ['/nordla/', join(REPO, 'src/sourcing/core')], ['/bench/', join(HERE, 'corpus')], ['/', join(HERE, 'web')]];
+import { buildScript } from '../asr-bench/corpus.mjs';
+import { storeCanonical, saveReferences, sessionDir, FILES, verifyCanonical } from '../asr-bench/canonical.mjs';
+const HERE = new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'); const REPO = resolve(HERE, '../..'); const DATA = process.env.VOICE_BENCH_DATA ? resolve(process.env.VOICE_BENCH_DATA) : join(REPO, 'data/local/voice-bench');
+const MAPS = [['/vendor/', join(DATA, 'vendor')], ['/models/', join(DATA, 'models')], ['/corpus-audio/', join(DATA, 'corpus')], ['/field-selftest/', join(DATA, 'field-selftest')], ['/canonical/', join(DATA, 'canonical')], ['/nordla/', join(REPO, 'src/sourcing/core')], ['/bench/', join(HERE, 'corpus')], ['/', join(HERE, 'web')]];
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.wav': 'audio/wav', '.ort': 'application/octet-stream', '.onnx': 'application/octet-stream', '.bin': 'application/octet-stream', '.css': 'text/css' };
 const H = { 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin', 'cache-control': 'no-store' };
 const port = Number(process.argv[2] || 8801);
 http.createServer((q, s) => {
   const url = new URL(q.url, 'http://x'); let p = decodeURIComponent(url.pathname);
   if (q.method === 'POST' && p === '/api/result') { let b = ''; q.on('data', (d) => { b += d; if (b.length > 20e6) q.destroy(); }); q.on('end', () => { try { const j = JSON.parse(b); mkdirSync(join(DATA, 'results'), { recursive: true }); const name = String(url.searchParams.get('name') || 'result').replace(/[^A-Za-z0-9_.-]/g, '_'); writeFileSync(join(DATA, 'results', `${name}.json`), JSON.stringify(j, null, 1)); s.writeHead(200, H); s.end('ok'); } catch (e) { s.writeHead(400, H); s.end(String(e.message)); } }); return; }
+  // ---- CANONICAL RECORDING of the ASR physical benchmark (owner audio only, immutable once accepted, kept under data/local/voice-bench/canonical, outside git) ----
+  if (p === '/api/canon/script' && q.method === 'GET') { s.writeHead(200, { ...H, 'content-type': 'application/json' }); return s.end(JSON.stringify(buildScript())); }
+  if (p === '/api/canon/session' && q.method === 'GET') { try { const dir = sessionDir(join(DATA), String(url.searchParams.get('session') || '')); const read = (f) => JSON.parse(readFileSync(join(dir, f), 'utf8')); const refs = existsSync(join(dir, FILES.references)) ? read(FILES.references).references : {}; s.writeHead(200, { ...H, 'content-type': 'application/json' }); return s.end(JSON.stringify({ meta: read(FILES.meta), markers: read(FILES.markers), script: read(FILES.script), references: refs, verify: verifyCanonical(dir) })); } catch (e) { s.writeHead(404, H); return s.end(String(e.message)); } }
+  if (q.method === 'POST' && (p === '/api/canon/meta' || p === '/api/canon/audio' || p === '/api/canon/references')) {
+    const chunks = []; let n = 0; const limit = p === '/api/canon/audio' ? 160e6 : 5e6; q.on('data', (d) => { n += d.length; if (n > limit) q.destroy(); else chunks.push(d); });
+    q.on('end', () => { try {
+      const session = String(url.searchParams.get('session') || '').replace(/[^A-Za-z0-9_.-]/g, '_'); if (!session) throw Object.assign(new Error('session is required'), { status: 400 }); const body = Buffer.concat(chunks); const pending = join(DATA, 'canonical', '_pending'); mkdirSync(pending, { recursive: true });
+      if (p === '/api/canon/meta') { if (existsSync(join(DATA, 'canonical', session, FILES.audio))) throw Object.assign(new Error('this session already has an immutable canonical recording'), { code: 'EXISTS' }); writeFileSync(join(pending, `${session}.json`), body); s.writeHead(200, H); return s.end('ok'); }
+      if (p === '/api/canon/references') { saveReferences(DATA, session, JSON.parse(body.toString('utf8')).references ?? {}); s.writeHead(200, H); return s.end('ok'); }
+      const meta = JSON.parse(readFileSync(join(pending, `${session}.json`), 'utf8')); const r = storeCanonical(DATA, session, { wav: body, markers: meta.markers, script: buildScript(), device: meta.device, browserAudioProcessing: meta.browserAudioProcessing, clientSha256: meta.clientSha256 });
+      s.writeHead(200, { ...H, 'content-type': 'application/json' }); s.end(JSON.stringify({ ok: true, sha256: r.sha256, derived: r.derived }));
+    } catch (e) { s.writeHead(e.code === 'EXISTS' ? 409 : e.status ?? 400, H); s.end(String(e.message)); } }); return; }
+  if (q.method === 'POST' && p === '/api/audio') { const chunks = []; let n = 0; q.on('data', (d) => { n += d.length; if (n > 40e6) q.destroy(); else chunks.push(d); }); q.on('end', () => { try { const name = String(url.searchParams.get('name') || 'audio').replace(/[^A-Za-z0-9_.-]/g, '_'); mkdirSync(join(DATA, 'field-audio'), { recursive: true }); writeFileSync(join(DATA, 'field-audio', `${name}.wav`), Buffer.concat(chunks)); s.writeHead(200, H); s.end('ok'); } catch (e) { s.writeHead(400, H); s.end(String(e.message)); } }); return; } // opt-in audio of the owner's own test, kept on THIS PC only
   if (q.method !== 'GET' && q.method !== 'HEAD') { s.writeHead(405, H); return s.end(); }
   if (p.endsWith('/')) p += 'index.html'; let f = null;
   for (const [pre, dir] of MAPS) { if (p.startsWith(pre)) { const cand = normalize(join(dir, p.slice(pre.length))); if (cand.startsWith(normalize(dir)) && existsSync(cand) && statSync(cand).isFile()) { f = cand; break; } } }
   if (!f) { s.writeHead(404, H); return s.end('not found'); }
-  s.writeHead(200, { ...H, 'content-type': MIME[extname(f)] ?? 'application/octet-stream', 'content-length': statSync(f).size }); s.end(q.method === 'HEAD' ? undefined : readFileSync(f));
+  if (q.headers.range && extname(f) === '.wav') { const size = statSync(f).size; const m = /bytes=(\d*)-(\d*)/.exec(q.headers.range); const a = m && m[1] ? Number(m[1]) : 0; const b = m && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1; s.writeHead(206, { ...H, 'content-type': 'audio/wav', 'accept-ranges': 'bytes', 'content-range': `bytes ${a}-${b}/${size}`, 'content-length': b - a + 1 }); return s.end(readFileSync(f).subarray(a, b + 1)); }
+  s.writeHead(200, { ...H, ...(p.startsWith('/models/') || p.startsWith('/vendor/') ? { 'cache-control': 'private, max-age=86400' } : {}), 'content-type': MIME[extname(f)] ?? 'application/octet-stream', 'content-length': statSync(f).size }); s.end(q.method === 'HEAD' ? undefined : readFileSync(f)); // the ~110 MB of models/runtimes are cached by the phone after the first load
 }).listen(port, '127.0.0.1', () => console.log(`voice-bench on http://127.0.0.1:${port}`));

@@ -3,12 +3,14 @@
 // candidate reaches the case, compiled into the EXISTING events (QUOTE, IDENTIFIER, ...). Everything confirmed also lands in the ledger with its provenance. Reducers mutate the draft
 // state they are given (core/case.js clones before calling them) and are fully deterministic.
 import { extractFacts, detectLang } from './extract/index.js';
-import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, confirmedStatus, documentStatusOf } from './provenance.js';
+import { normalizeSpoken } from './extract/spoken.js';
+import { decideTurn, segmentsOf, turnText } from './turns.js';
+import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, MODALITY, confirmedStatus, documentStatusOf } from './provenance.js';
 import { findCandidateConflict, existingValue, documentModelConflicts } from './conflicts.js';
 import { effectiveQuote } from './offers.js';
 import { classifyCandidates } from './understanding.js';
 
-const nextId = (prefix, list) => `${prefix}-${list.length + 1}`;
+const nextId = (prefix, list) => { let m = list.length; for (const e of list) { const n = Number(String(e.id).slice(prefix.length + 1)); if (String(e.id).startsWith(`${prefix}-`) && Number.isFinite(n) && n > m) m = n; } return `${prefix}-${m + 1}`; }; // max + 1: unique even after a candidate was replaced
 const find = (list, id, what) => { const x = list.find((e) => e.id === id); if (!x) throw new Error(`unknown ${what}: ${id}`); return x; };
 const isEmpty = (v) => v === undefined || v === null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
 
@@ -17,8 +19,79 @@ export function start(s, ev, at) {
   s.conversations.push(conv);
 }
 
-export function addItem(s, ev, at) {
+/** SPEECH: a spoken statement captured by a microphone. There is NO original text: the item keeps only capture metadata (session, turn, times) and ONE machine TRANSCRIPTION (who produced it, which version,
+ *  review MACHINE). Facts proposed from it are MACHINE_DERIVED, capped at MEDIUM, never grouped. The speaker is UNKNOWN unless the owner says otherwise; no audio is stored. Provider-independent. */
+function addSpeechItem(s, ev, at) {
   const conv = find(s.conversations, ev.convId, 'conversation'); if (conv.status !== 'OPEN') throw new Error('this conversation is finished: start a new one');
+  const text = String(ev.text ?? '').trim(); if (!text) throw new Error('the transcription text is required');
+  // a one-shot spoken statement (no streaming context): ONE segment, a turn that is already CLOSED
+  closeOpenTurns(conv, at, 'NEW_ITEM');
+  const speaker = [SPEAKER.SUPPLIER, SPEAKER.ME].includes(ev.speaker) && ev.speakerBy === 'OWNER_DECISION' ? ev.speaker : SPEAKER.UNKNOWN;
+  const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text); const cap = ev.capture ?? {};
+  const item = newSpeechItem(conv, { at, speaker, lang, cap, firstSegmentAt: at }); const seg = { id: `${item.id}-s1`, text, startTime: null, duration: null, streamId: null, receivedAt: at, provider: ev.provider ?? null, version: ev.version ?? null, lang };
+  item.segments.push(seg); item.turn = { status: 'CLOSED', openedAt: at, lastSegmentAt: at, closedAt: at, closedBy: 'SINGLE_SEGMENT' }; conv.items.push(item); reextract(s, conv, item, at);
+}
+
+function newSpeechItem(conv, { at, speaker, lang, cap, firstSegmentAt }) {
+  return { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, speakerBy: speaker === SPEAKER.UNKNOWN ? 'UNKNOWN' : 'OWNER_DECISION', lang, modality: MODALITY.SPEECH, original: null,
+    capture: { sessionId: cap.sessionId ?? null, turn: Number.isFinite(cap.turn) ? cap.turn : conv.items.length + 1, startedAt: cap.startedAt ?? firstSegmentAt, endedAt: cap.endedAt ?? at },
+    turn: { status: 'OPEN', openedAt: at, lastSegmentAt: at, closedAt: null, closedBy: null }, segments: [], derived: [] };
+}
+
+/** Closes every OPEN turn of a conversation (or only `only`). A closed turn is the clean unit shown in the thread; its segments stay as they were received. */
+export function closeOpenTurns(conv, at, by, only = null) {
+  for (const it of conv.items) if (it.turn?.status === 'OPEN' && (!only || it.id === only)) { it.turn.status = 'CLOSED'; it.turn.closedAt = at; it.turn.closedBy = by; }
+}
+export function closeTurn(s, ev, at) { const conv = find(s.conversations, ev.convId, 'conversation'); closeOpenTurns(conv, at, String(ev.by ?? 'EXPLICIT'), ev.itemId ?? null); }
+
+/** One FINAL ASR segment. It CONTINUES the open turn of the same capture session or starts a new one (core/turns.js decides, from timing and punctuation). Segments are immutable. */
+export function addSegment(s, ev, at) {
+  const conv = find(s.conversations, ev.convId, 'conversation'); if (conv.status !== 'OPEN') throw new Error('this conversation is finished: start a new one');
+  const text = String(ev.text ?? '').trim(); if (!text) throw new Error('the transcription text is required');
+  const seg0 = ev.segment ?? {}; const cap = ev.capture ?? {}; const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
+  const openItem = [...conv.items].reverse().find((x) => x.modality === MODALITY.SPEECH && x.turn?.status === 'OPEN') ?? null;
+  const segment = { id: '', text, startTime: Number.isFinite(seg0.startTime) ? seg0.startTime : null, duration: Number.isFinite(seg0.duration) ? seg0.duration : null, streamId: seg0.streamId ?? null, receivedAt: seg0.receivedAt ?? at, provider: ev.provider ?? null, version: ev.version ?? null, lang };
+  const d = decideTurn({ open: openItem ? { segments: segmentsOf(openItem), sessionId: openItem.capture?.sessionId ?? null, speaker: openItem.speaker } : null, segment, sessionId: cap.sessionId ?? null, config: ev.turnConfig });
+  let item = openItem;
+  if (d.action === 'NEW') { if (openItem) closeOpenTurns(conv, at, d.reason, openItem.id); item = newSpeechItem(conv, { at: segment.receivedAt, speaker: SPEAKER.UNKNOWN, lang, cap, firstSegmentAt: segment.receivedAt }); conv.items.push(item); }
+  segment.id = `${item.id}-s${item.segments.length + 1}`; item.segments.push(segment); item.turn.lastSegmentAt = segment.receivedAt; item.capture.endedAt = segment.receivedAt; item.lang = lang;
+  reextract(s, conv, item, at);
+}
+
+/** Recomputes the transcription of a speech item from ALL its segments and re-proposes its facts. Facts the owner already decided are never touched; proposals that no longer appear are dropped;
+ *  each proposal records the segment ids it comes from (exact when the per-segment text maps onto the whole, otherwise the turn's segments up to the one that completed it, flagged APPROX). */
+function reextract(s, conv, item, at) {
+  const segs = item.segments; const joined = turnText(segs); const lang = item.lang && item.lang !== 'auto' ? item.lang : detectLang(joined);
+  let d = item.derived.find((x) => x.kind === 'TRANSCRIPTION');
+  if (!d) { d = { id: `${item.id}-d1`, kind: 'TRANSCRIPTION', lang, text: '', provider: segs[0]?.provider ?? null, ...(segs[0]?.version ? { version: String(segs[0].version) } : {}), review: 'MACHINE', at }; item.derived.push(d); }
+  d.text = joined; d.lang = lang; d.segmentIds = segs.map((x) => x.id); d.provider = segs[0]?.provider ?? d.provider; if (segs[0]?.version) d.version = String(segs[0].version);
+  const english = lang === 'en'; const per = english ? segs.map((x) => normalizeSpoken(x.text)) : segs.map((x) => String(x.text).trim()); const exText = english ? normalizeSpoken(joined) : joined;
+  if (exText !== joined) d.normalized = exText; else delete d.normalized;
+  const exact = per.join(' ') === exText; const offsets = []; if (exact) { let pos = 0; for (const p of per) { offsets.push([pos, pos + p.length]); pos += p.length + 1; } }
+  const r = extractFacts({ text: exText, lang }); const last = segs.at(-1);
+  const idsFor = (span) => { if (!exact || !Array.isArray(span)) return null; const ids = segs.filter((_, i) => offsets[i][0] < span[1] && offsets[i][1] > span[0]).map((x) => x.id); return ids.length ? ids : null; };
+  const kk = (c) => `${c.key}|${c.context ?? ''}|${JSON.stringify(c.value)}`;
+  const mine = s.candidates.filter((c) => c.itemId === item.id && c.basis === 'TRANSCRIPTION'); const byKey = new Map(mine.map((c) => [kk(c), c])); const fresh = new Set(r.candidates.map(kk));
+  for (const c of mine) if (c.state === CANDIDATE_STATE.PROPOSED && !fresh.has(kk(c))) s.candidates.splice(s.candidates.indexOf(c), 1);
+  for (const c of r.candidates) {
+    const ids = idsFor(c.span); const prov = ids ? { segmentIds: ids, segmentMapping: 'EXACT' } : { segmentIds: segs.map((x) => x.id), segmentMapping: 'APPROX', completedBySegment: last?.id ?? null };
+    const have = byKey.get(kk(c)); if (have) { if (have.state === CANDIDATE_STATE.PROPOSED) Object.assign(have, prov); continue; }
+    s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker: item.speaker, basis: 'TRANSCRIPTION', derivedId: d.id, ...prov, confidence: c.confidence === 'HIGH' ? 'MEDIUM' : c.confidence, flags: [...new Set([...(c.flags ?? []), 'MACHINE_DERIVED'])], state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
+  }
+}
+
+/** The OWNER establishes who spoke an item heard by the microphone. Until then its facts cannot be confirmed. Candidates of the item follow the decision. */
+export function attribute(s, ev, at) {
+  const conv = find(s.conversations, ev.convId, 'conversation'); const item = conv.items.find((x) => x.id === ev.itemId); if (!item) throw new Error(`unknown item: ${ev.itemId}`);
+  if (![SPEAKER.SUPPLIER, SPEAKER.ME].includes(ev.speaker)) throw new Error('the speaker must be supplier or me');
+  item.speaker = ev.speaker; item.speakerBy = 'OWNER_DECISION'; item.speakerAt = at; closeOpenTurns(conv, at, 'SPEAKER_ESTABLISHED', item.id);
+  for (const c of s.candidates) if (c.itemId === item.id && c.speaker === SPEAKER.UNKNOWN) c.speaker = ev.speaker;
+}
+
+export function addItem(s, ev, at) {
+  if (ev.modality === MODALITY.SPEECH) return addSpeechItem(s, ev, at);
+  const conv = find(s.conversations, ev.convId, 'conversation'); if (conv.status !== 'OPEN') throw new Error('this conversation is finished: start a new one');
+  closeOpenTurns(conv, at, 'TYPED_INPUT');
   const speaker = ev.speaker === SPEAKER.ME ? SPEAKER.ME : SPEAKER.SUPPLIER; const text = String(ev.text ?? ''); if (!text.trim()) throw new Error('text is required');
   const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
   const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [] }; conv.items.push(item);
@@ -34,7 +107,8 @@ export function derive(s, ev, at) {
   const d = { id: `${item.id}-d${item.derived.length + 1}`, kind: ev.kind, lang: ev.lang ?? null, text: String(ev.text), provider: ev.provider ?? null, ...(ev.version ? { version: String(ev.version) } : {}), review: ev.review ?? 'MACHINE', at }; item.derived.push(d);
   // OPTIONAL: propose facts from the derived text. They are tagged with their basis, capped at MEDIUM confidence and flagged MACHINE_DERIVED: they can never join a grouped confirmation and are confirmed one by one.
   if (ev.extract === true && ['TRANSCRIPTION', 'TRANSLATION'].includes(ev.kind)) {
-    const r = extractFacts({ text: d.text, lang: d.lang && d.lang !== 'auto' ? d.lang : detectLang(d.text) });
+    const exText = ev.kind === 'TRANSCRIPTION' && (d.lang ?? 'en') === 'en' ? normalizeSpoken(d.text) : d.text; if (exText !== d.text) d.normalized = exText; // numbers said as words are read as digits for extraction only; the stored transcription is untouched
+    const r = extractFacts({ text: exText, lang: d.lang && d.lang !== 'auto' ? d.lang : detectLang(d.text) });
     for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker: item.speaker, basis: ev.kind, derivedId: d.id, confidence: c.confidence === 'HIGH' ? 'MEDIUM' : c.confidence, flags: [...new Set([...(c.flags ?? []), 'MACHINE_DERIVED'])], state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
   }
 }
@@ -62,6 +136,7 @@ function compile(s, c, value, level, source) {
 }
 
 function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDecided = false, meta = null }) {
+  if (c.speaker === SPEAKER.UNKNOWN) throw new Error('this was heard by the microphone and nobody has said who spoke: say who spoke first (the supplier or you)');
   const status = confirmedStatus({ speaker: c.speaker, corrected });
   const level = corrected || c.speaker === SPEAKER.ME || ownerDecided ? 'USER_STATED' : 'SUPPLIER_CLAIMED';
   const source = { kind: 'conversation', convId: c.convId, itemId: c.itemId, candidateId: c.id };
@@ -125,7 +200,7 @@ export function resolve(s, ev, at, reduce) {
   cf.state = 'RESOLVED'; cf.resolution = ev.choice; cf.resolvedAt = at;
 }
 
-export function finish(s, ev, at) { const conv = find(s.conversations, ev.convId, 'conversation'); conv.status = 'FINISHED'; conv.finishedAt = at; }
+export function finish(s, ev, at) { const conv = find(s.conversations, ev.convId, 'conversation'); closeOpenTurns(conv, at, 'CONVERSATION_FINISHED'); conv.status = 'FINISHED'; conv.finishedAt = at; }
 
 // ---- free user questions -------------------------------------------------------------------------------------------------------------------------------------------------------
 export function addQuestion(s, ev, at) {
@@ -136,6 +211,7 @@ export function addQuestion(s, ev, at) {
 /** The engine's questions are recomputed from the case, so what was SHOWN to the supplier (and exactly in which words) or put aside is remembered here, append-only. */
 export function questionShown(s, ev, at) {
   const id = String(ev.questionId ?? ''); if (!id) throw new Error('questionId is required');
+  for (const c of s.conversations) if (c.status === 'OPEN') closeOpenTurns(c, at, 'QUESTION_SHOWN');
   s.questionLog.push({ id: nextId('ql', s.questionLog), questionId: id, kind: 'SHOWN', at, via: ev.via ?? 'SHOWN_TO_SUPPLIER', texts: ev.texts ?? null });
 }
 export function questionSkip(s, ev, at) { const id = String(ev.questionId ?? ''); if (!id) throw new Error('questionId is required'); s.questionLog.push({ id: nextId('ql', s.questionLog), questionId: id, kind: 'SKIPPED', at }); }

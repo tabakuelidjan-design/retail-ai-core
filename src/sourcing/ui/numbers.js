@@ -6,7 +6,7 @@ export function numbersInner(A, c) {
   const unknown = (L.unknown ?? []).map((u) => u.replace(/^costs\./, ''));
   return `<table>
     <tr><td>Supplier price now</td><td class="n"><b>${esc(q.unitPrice ?? '-')} ${esc(q.currency ?? '')}</b>${q.moq ? ` <span class="muted small">MOQ ${esc(q.moq)}</span>` : ''}${q.qty ? ` <span class="muted small">you buy ${esc(q.qty)}</span>` : ''}</td></tr>
-    <tr><td>Landed cost / unit</td><td class="n"><b>${esc(L.status === 'INFORMATION_INSUFFICIENT' ? 'UNKNOWN' : money(L.totals.landedPerUnitEurMinor))}</b> <span class="muted small">${esc(L.status.replace(/_/g, ' '))}</span></td></tr>
+    <tr><td>Landed cost / unit</td><td class="n"><b>${esc(L.status === 'INFORMATION_INSUFFICIENT' ? 'UNKNOWN' : `${L.isLowerBound ? '>= ' : ''}${money(L.totals.landedPerUnitEurMinor)}`)}</b> <span class="muted small">${esc(L.status.replace(/_/g, ' '))}</span></td></tr>
     <tr><td>Selling price (${esc(E.priceBasis ?? sl.priceBasis ?? 'TARGET')})</td><td class="n">${esc(E.sellingPriceGrossMinor != null ? money(E.sellingPriceGrossMinor) : '-')}${E.vatRatePct != null ? ` <span class="muted small">incl. ${esc(E.vatRatePct)}% VAT</span>` : ''}</td></tr>
     <tr><td>Profit / unit (before your own costs)</td><td class="n"><b>${esc(E.contributionMinor != null ? money(E.contributionMinor) : 'UNKNOWN')}</b>${E.contributionPct != null ? ` <span class="muted small">${(E.contributionPct * 100).toFixed(1)}%${E.contributionIsUpperBound ? ' upper bound' : ''}</span>` : ''}</td></tr>
     <tr><td>Your target margin</td><td class="n">${esc(sl.targetContributionPct != null && sl.targetContributionPct !== '' ? `${sl.targetContributionPct}%` : 'not set')}</td></tr>

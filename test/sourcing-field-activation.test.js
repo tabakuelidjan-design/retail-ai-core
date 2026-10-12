@@ -1,5 +1,6 @@
 // Field activation: offline capability matrix, money speed (every input moves the result), document evidence states, phone launcher (fake tunnel), security fail-closed.
 // The real-browser cold-start proof lives in test/e2e/sourcing-pwa.e2e.js (npm run sourcing:e2e).
+import { ZERO_COSTS } from './sourcing-zero-costs.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -52,9 +53,9 @@ const point = (extra = [], over = {}) => { const a = run(build([...base, ...extr
 test('money: every input the owner can change moves the landed cost, the profit and the maximum purchase price the right way', () => {
   const b = point();
   const cheaper = point([{ type: 'QUOTE', quote: { unitPrice: 3.2, currency: 'USD', qty: 1000, moq: 500, incoterm: 'FOB' } }]); assert.ok(cheaper.landed < b.landed && cheaper.contribution > b.contribution); assert.equal(cheaper.max, b.max, 'the maximum price does not depend on the current quote');
-  const dearerFreight = point([{ type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { freight: { total: 2400, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }]); assert.ok(dearerFreight.landed > b.landed && dearerFreight.max < b.max);
+  const dearerFreight = point([{ type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { ...ZERO_COSTS, freight: { total: 2400, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: true } } }]); assert.ok(dearerFreight.landed > b.landed && dearerFreight.max < b.max);
   const moreDuty = point([{ type: 'CUSTOMS', customs: { duty: { ratePct: 12, kind: 'USER_ENTERED' } } }]); assert.ok(moreDuty.landed > b.landed && moreDuty.max < b.max);
-  const nonRecoverableVat = point([{ type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: false } } }]); assert.ok(nonRecoverableVat.landed > b.landed, 'import VAT that cannot be recovered is a cost');
+  const nonRecoverableVat = point([{ type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { ...ZERO_COSTS, freight: { total: 600, status: 'ESTIMATED' } }, importVat: { ratePct: 21, recoverable: false } } }]); assert.ok(nonRecoverableVat.landed > b.landed, 'import VAT that cannot be recovered is a cost');
   const higherPrice = point([{ type: 'SALE', sale: { sellingPriceGross: 39.99, vatRatePct: 21, targetContributionPct: 30 } }]); assert.ok(higherPrice.contribution > b.contribution && higherPrice.max > b.max);
   const hungrier = point([{ type: 'SALE', sale: { sellingPriceGross: 24.99, vatRatePct: 21, targetContributionPct: 50 } }]); assert.ok(hungrier.max < b.max && hungrier.contribution === b.contribution);
   const moq = point([{ type: 'QUOTE', quote: { unitPrice: 4.2, currency: 'USD', qty: 300, moq: 500, incoterm: 'FOB' } }]); assert.ok(moq.a.landed.warnings.some((w) => /QUANTITY_BELOW_MOQ/.test(w)), 'buying under the MOQ is flagged');

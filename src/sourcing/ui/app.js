@@ -24,7 +24,12 @@ import { marketScreen } from './screens/market.js';
 import { moneyScreen } from './screens/money.js';
 import { fieldScreen } from './screens/field.js';
 import { validateCorrection } from '/core/candidate-view.js';
-import { fieldFirst, fmCompute, fmNav } from './screens/fieldfirst.js';
+import { fieldFirst, fmCompute, fmNav, fieldMissing } from './screens/fieldfirst.js';
+import { fieldSummaryText } from '/core/field-summary.js';
+import { createVoice } from './voice.js';
+import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
+import { buildProductHypothesis } from '/core/product-hypothesis.js';
+import { turnClosesAt } from '/core/turns.js';
 import { planContext } from '/core/context-engine.js';
 import { planConversation, answerEvents } from '/core/conversation-engine.js';
 import { groupUnderstanding } from '/core/understanding.js';
@@ -45,7 +50,9 @@ function externals() {
 const run = (state, extra = {}) => assess(state, { now: new Date(), externals: externals(), ...extra });
 
 function persist() { if (!ls.set('nordla.sourcing.cases', S.cases)) S.flash = 'Local storage is full: export the case (menu) before adding more photos.'; ls.set('nordla.sourcing.current', S.currentId); }
-function ensureCase() { if (!cur()) { const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; persist(); } }
+function ensureCase() { if (!cur()) { const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; persist(); } migrateObservation(); }
+/** A case named before the product observer existed has no name observation: replaying its NAME gives it one (same event, same result everywhere). */
+function migrateObservation() { const c = cur(); if (c && c.identity?.workingName && !(c.productObservations ?? []).some((o) => o.observer === 'name-cues')) { try { S.cases[S.currentId] = dispatch(c, { type: 'NAME', name: c.identity.workingName }, new Date()); persist(); } catch (e) { console.error(e); } } }
 
 /** Every change goes through here: event -> new state -> saved locally -> synced when a server is reachable. */
 function commit(event) {
@@ -158,13 +165,14 @@ function render() {
   document.body.classList.toggle('fm-mode', fm);
   $('#tabs').innerHTML = fm ? fmNav() : TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
-  let fmv = null; clearTimeout(S.fmTimer);
+  let fmv = null; clearTimeout(S.fmTimer); clearTimeout(S.turnTimer); S.fmStatus = status();
+  { const cfgT = ls.get('nordla.sourcing.turns', null); const t = Date.now(); const next = (c.conversations ?? []).flatMap((v) => v.items).map((i) => turnClosesAt(i, cfgT)).filter((x) => x !== null && x > t).sort((a, b) => a - b)[0]; if (next) S.turnTimer = setTimeout(render, next - t + 30); } // an open turn stops looking open after the silence
   if (fm && !S.error) { try { fmv = fmCompute(S.A, c); S.fmPrev = { caseId: c.id, state: fmv.state }; if (fmv.explicit && !fmv.show) S.flash = "Rien d'important à demander pour l'instant."; const wake = fmv.hold?.until ?? fmv.wake; if (wake) S.fmTimer = setTimeout(render, Math.max(50, wake - Date.now() + 30)); } catch (e) { S.error = e; console.error(e); } }
   paintHeader();
   const main = $('#screen'); const key = `${S.currentId}|${fm ? `field:${S.sheet ?? 'talk'}` : S.tab}`;
   const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
   const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
-  main.innerHTML = `${S.flash ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (a, k) => fieldFirst(a, k, fmv) : SCREENS[S.tab])(S.A, c)}`;
+  main.innerHTML = `${S.flash && !fm ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (a, k) => fieldFirst(a, k, fmv) : SCREENS[S.tab])(S.A, c)}`;
   if (!fm && S.returnMode === 'field') main.insertAdjacentHTML('afterbegin', '<div class="card"><button type="button" class="btn" data-act="mode-field">← Retour au mode terrain</button></div>');
   if (keep) restoreDrafts(main, drafts, focus);
 }
@@ -278,13 +286,25 @@ async function addDocument(form, d) {
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
 function setMode(m) { S.mode = m; S.returnMode = null; S.attach = false; S.sheet = null; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
 /** The supplier-facing screen for a question: the supplier's language BIG (never invented: when there is none the owner is told), the owner's French small. What was shown is remembered. */
-function showQuestion(id) {
+function showQuestion(id, lang = 'en') {
   const cx = planContext(cur(), S.A); const q = cx.all.find((x) => x.id === id) ?? cx.plan.questions.find((x) => x.id === id); if (!q || q.audience !== 'SUPPLIER') return; const zh = q.supplier.zh; const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
-  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Fermer</button><p class="small muted" style="margin-top:12px">Pour vous : ${esc(q.text.fr).replace(/\n/g, '<br>')}</p>${zh.text ? `<div class="show-sup" style="margin-top:12px"><p class="zh" lang="zh-Hans" style="white-space:pre-wrap">${esc(zh.text)}</p></div>` : `<div class="show-sup" style="margin-top:12px"><p style="white-space:pre-wrap">${esc(q.supplier.en ?? q.text.fr)}</p></div><p class="small muted">Pas de chinois disponible pour cette question : montrez ce texte à votre traducteur ou utilisez votre application de traduction.</p>`}`;
-  commit({ type: 'QUESTION_SHOWN', questionId: id, via: 'SHOWN_TO_SUPPLIER', texts: { fr: q.text.fr, zh: zh.text ?? null, zhReview: zh.review } });
+  const en = q.text.en ?? q.supplier.en ?? q.text.fr; const REV = { NATIVE_REVIEWED: '中文 : relue par un locuteur natif', TECHNICAL_ONLY: '中文 : relecture par un locuteur natif à faire', UNREVIEWED: '中文 : non relue par un locuteur natif', MACHINE: '中文 : traduction automatique', UNAVAILABLE: '' };
+  const main = lang === 'zh' && zh.text ? `<p class="zh" lang="zh-Hans" style="white-space:pre-wrap">${esc(zh.text)}</p><p class="small muted">${esc(REV[zh.review] ?? '')}</p>` : `<p lang="en" style="white-space:pre-wrap">${esc(en)}</p>`;
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Fermer</button><div class="show-sup" style="margin-top:16px">${main}</div><p class="small muted" style="margin-top:12px">Pour vous : ${esc(q.text.fr).replace(/\n/g, '<br>')}</p>`;
+  commit({ type: 'QUESTION_SHOWN', questionId: id, via: 'SHOWN_TO_SUPPLIER', texts: { en, fr: q.text.fr, zh: zh.text ?? null, zhReview: zh.review, shownAs: lang === 'zh' && zh.text ? 'zh' : 'en' } });
 }
 const FRIENDLY = [[/needs a correction/i, 'This one needs a correction first: use "Correct".'], [/already rejected/i, 'This one was already rejected.'], [/conflict/i, 'This one contradicts something already in the case: clarify it first.'], [/finished/i, 'This conversation is finished: start a new one.']];
 /** Business rules in the engine speak in sentences; the phone shows them as a plain message and keeps everything the owner typed. */
+// ---- FIELD VOICE: microphone -> on-device engine -> SPEECH items (speaker UNKNOWN, machine transcription) through the same pipeline as typed text. Audio is never stored or sent (see voice.js). ----
+S.voice = { state: 'idle', message: '' }; S.voicePartial = '';
+const openConversation = () => (cur()?.conversations ?? []).find((x) => x.status === 'OPEN') ?? null;
+const voice = createVoice({
+  onChange: ({ state, message }) => { S.voice = { state, message }; if ((state === 'paused' || state === 'idle') && openConversation()) { try { commit({ type: 'TURN_CLOSE', convId: openConversation().id, by: state === 'paused' ? 'PAUSE' : 'STOP' }); return; } catch (e) { console.error(e); } } if (S.mode === 'field') render(); },
+  onPartial: (t) => { S.voicePartial = t; const e = document.querySelector('.fm-partial'); if (e) { e.textContent = t; e.hidden = !t; } },
+  onLevel: (v) => document.querySelector('.fm-mic')?.classList.toggle('on', v),
+  onFinal: (x) => { const conv = openConversation(); if (!conv) return; try { commit({ type: 'SPEECH_SEGMENT', convId: conv.id, text: x.text, lang: x.lang, provider: x.provider, version: x.version, segment: x.segment, capture: { sessionId: x.capture.sessionId }, turnConfig: ls.get('nordla.sourcing.turns', null) }); } catch (e) { console.error(e); } },
+});
+window.nordlaVoice = voice; // diagnostics / tests only (state, pause, resume, stop)
 function guarded(fn) { try { return fn(); } catch (e) { S.flash = (FRIENDLY.find(([rx]) => rx.test(e.message)) ?? [null, `This could not be done (${e.message}).`])[1]; return render(); } }
 function showUserQuestion(id) {
   const q = (cur().userQuestions ?? []).find((x) => x.id === id); if (!q) return; const v = userQuestionView(q); const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
@@ -296,8 +316,18 @@ async function onClick(ev) {
   if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
   if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
-  if (act === 'fm-start') { S.flash = ''; return guarded(() => { if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); else render(); }); }
+  if (act === 'market-run') return void (async () => { const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const r = await searchMarket(input, null); commit({ type: 'MARKET_SEARCH', status: r.status, provider: r.provider ?? null, input, outgoing: outgoingFields(input), consent: true, evidence: r.evidence, note: r.note ?? null }); S.flash = r.status === 'PROVIDER_NOT_CONFIGURED' ? 'Aucun service de recherche n’est configuré : rien n’a été cherché ni envoyé. La demande est notée.' : ''; render(); })();
+  if (act === 'vc-start') return void voice.start();
+  if (act === 'vc-pause') return void voice.pause();
+  if (act === 'vc-resume') return void voice.resume();
+  if (act === 'attr-open') { S.attrItem = key; S.sheet = 'speaker'; S.flash = ''; return render(); }
+  if (act === 'attr') return guarded(() => { const conv = (cur().conversations ?? []).find((x) => x.items.some((i) => i.id === S.attrItem)); if (conv) commit({ type: 'CONVERSATION_ATTRIBUTE', convId: conv.id, itemId: S.attrItem, speaker: key }); S.sheet = null; S.attrItem = null; render(); });
+  if (act === 'fm-start') { S.flash = ''; const startVoice = () => { if (openConversation()) void voice.start(); }; guarded(() => { const typed = document.querySelector('form[data-form="fh-product"] input[name="name"]')?.value?.trim(); if (typed && !cur().identity.workingName) commit({ type: 'NAME', name: typed }); if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); else render(); }); startVoice(); return; }
   if (act === 'ask-now') { S.askNow = true; S.flash = ''; return render(); }
+  if (act === 'fm-menu') return openMenu();
+  if (act === 'fm-ask') { S.askId = key; S.sheet = 'ask'; S.flash = ''; return render(); }
+  if (act === 'fm-end') { await voice.stop(); return guarded(() => { const conv = (cur().conversations ?? []).find((x) => x.status === 'OPEN'); S.sheet = 'end'; S.flash = ''; if (conv) commit({ type: 'CONVERSATION_FINISH', convId: conv.id }); else render(); }); }
+  if (act === 'show-q-zh') return showQuestion(key, 'zh');
   if (act === 'mode-expert') return setMode('expert'); if (act === 'mode-field') return setMode('field');
   if (act === 'review-expert') { S.mode = 'expert'; S.tab = 'field'; S.fstep = 'capture'; S.returnMode = 'field'; render(); window.scrollTo(0, 0); return; }
   if (act === 'attach-toggle') { S.attach = !S.attach; return render(); }
@@ -314,7 +344,7 @@ async function onClick(ev) {
   });
   if (act === 'show-q') return showQuestion(key);
   if (act === 'conflict-ask') return showQuestion(`conflict:${key}`);
-  if (act === 'q-skip') return commit({ type: 'QUESTION_SKIP', questionId: key });
+  if (act === 'q-skip') { if (S.sheet === 'ask') S.sheet = null; return commit({ type: 'QUESTION_SKIP', questionId: key }); }
   if (act === 'uanswer') { const q = planConversation(cur(), S.A).questions.find((x) => x.id === key); if (!q) return render(); return guarded(() => { for (const e of answerEvents(cur(), q, val)) commit(e); }); }
   if (act === 'fstep') { S.fstep = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
   if (act === 'conv-start') return commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' });
@@ -338,6 +368,7 @@ async function onClick(ev) {
   if (act === 'sup-prev') { supIdx = Math.max(0, supIdx - 1); return showSupplier(); }
   if (act === 'sup-all') { supAll = !supAll; return showSupplier(); }
   if (act === 'what-works') return showCapabilities();
+  if (act === 'copy-summary') { try { await navigator.clipboard.writeText(fieldSummaryText(cur(), S.A, { missing: fieldMissing(cur(), planContext(cur(), S.A)) })); S.flash = 'Résumé copié.'; } catch { S.flash = "Copie impossible sur ce navigateur (presse-papiers refusé)."; } return render(); }
   if (act === 'copy-sup') { try { await navigator.clipboard.writeText(supplierText(S.A)); S.flash = 'Copied.'; } catch { S.flash = 'Copy is not available here: use "Show to supplier".'; } return render(); }
   if (act === 'close-overlay') { $('#overlay').hidden = true; $('#overlay').className = ''; return; }
   if (act === 'newcase') { discardDrafts = true; const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; S.tab = 'case'; persist(); closeOverlay(); return render(); }
@@ -382,7 +413,7 @@ async function onPhoto(ev) {
   try {
     const url = await downscale(file, 640, 0.7); const n = c.identity.photos.length; if (!(await putBlob(`photo:${c.id}.${n}`, url))) S.flash = 'Photo too large for the storage left on this phone: it was not saved.';
     commit({ type: 'PHOTO', ref: `photo-${n}`, note: file.name });
-    S.flash = 'Photo saved as EVIDENCE. Nordla does not recognise products by itself: choose what it is below (or in the category list) to confirm it.';
+    S.flash = S.mode === 'field' ? 'Photo enregistrée sur ce téléphone comme photo de référence du dossier. Nordla ne reconnaît pas le produit : dites-lui ce que c’est.' : 'Photo saved as EVIDENCE. Nordla does not recognise products by itself: choose what it is below (or in the category list) to confirm it.';
     if (S.token && S.online && S.ai?.enabled) {
       if (window.confirm(`Send this photo to ${S.ai.provider} (${S.ai.region}) to get a category SUGGESTION? Only the photo is sent. Cancel keeps it on this phone.`)) {
         try { const r = await api('/api/ai/describe', { method: 'POST', body: JSON.stringify({ imageBase64: url.split(',')[1], imageMime: 'image/jpeg', consent: true }) }); S.suggestions = r.suggestions ?? []; S.flash = S.suggestions.length ? 'AI SUGGESTED categories below: not a fact until you confirm.' : 'The reader could not tell what it is: choose the category yourself.'; } catch { S.flash = 'The reader could not be reached: choose the category yourself.'; }
