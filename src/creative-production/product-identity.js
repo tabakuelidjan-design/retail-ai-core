@@ -34,11 +34,12 @@ export const PRODUCT_FAMILIES = Object.freeze({
 
 const STOP = new Set(['pour', 'avec', 'for', 'with', 'voor', 'met', 'the', 'les', 'des', 'une', 'de', 'du', 'la', 'le', 'un', 'et', 'and', 'en', 'van', 'het', 'een']);
 const clean = (v) => (typeof v === 'string' ? v.normalize('NFC').replace(/\s+/g, ' ').trim() : '');
-const stem = (w) => w.replace(/(?:es|s)$/u, '');
+// a word and its plural forms: "gourdes" is "gourde" and "cups" is "cup"
+const forms = (w) => [w, w.replace(/s$/u, ''), w.replace(/es$/u, '')];
 
 /** The families a product description belongs to (by its words). */
 export function familiesOf(description) {
-  const tokens = new Set(wordsOf(description).flatMap((w) => [w, stem(w)]));
+  const tokens = new Set(wordsOf(description).flatMap(forms));
   return Object.entries(PRODUCT_FAMILIES).filter(([, f]) => f.triggers.some((t) => tokens.has(t))).map(([id]) => id);
 }
 
@@ -92,7 +93,7 @@ export function resolveProductIdentity({ brief, bytes = null, campaignProductRef
 }
 
 const wholeWordsIn = (text, list) => {
-  const words = new Set(wordsOf(text).flatMap((w) => [w, stem(w)]));
+  const words = new Set(wordsOf(text).flatMap(forms));
   return list.filter((w) => words.has(w));
 };
 

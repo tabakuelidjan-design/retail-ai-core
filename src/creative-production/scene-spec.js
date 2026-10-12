@@ -67,9 +67,11 @@ export function propRequest({
 const PROP_KIND = Object.freeze({ BACKGROUND: LAYER_KIND.PROP_BACKGROUND, MIDGROUND: LAYER_KIND.PROP_MIDGROUND, FOREGROUND: LAYER_KIND.PROP_FOREGROUND });
 
 /** The elements of the art direction an asset carries: as many as its composition holds, rotated by position so that the assets do not all carry the same, and a foreground one only where the composition allows it. */
-export function propsForAsset({ elements, composition, index }) {
+export function propsForAsset({
+  elements, composition, index, maxProps = PRODUCTION_POLICY.max_props_per_asset,
+}) {
   const rule = COMPOSITION_LAYERING[composition];
-  const limit = Math.min(rule.props, PRODUCTION_POLICY.max_props_per_asset);
+  const limit = Math.min(rule.props, maxProps);
   const usable = elements.filter((e) => e.zone !== 'FOREGROUND' || rule.foreground);
   const picked = [];
   for (let step = 0; step < usable.length && picked.length < limit; step += 1) {

@@ -21,7 +21,7 @@ import { selectTool } from './capability-router.js';
 const ART = {
   art_direction_id: 'cad_probe', atmosphere: 'A quiet morning workshop.', material_language: 'worn wood and matte paper.', lighting_intent: 'soft side light.', forbidden_decorative_noise: ['confetti'],
 };
-const sample = () => {
+export const productionSample = () => {
   const identity = resolveProductIdentity({
     brief: { ids: { product_ref: 'product://probe' }, asset: { ref: 'asset://probe', sha256: 'a'.repeat(40) }, public_facts: { product: 'Coque personnalisée pour téléphone' }, identity_annotations: { outline: [[0, 0], [1, 0], [1, 1]] } },
   });
@@ -73,7 +73,7 @@ const ATTEMPT_12 = Object.freeze([
 /** Each probe: [name, rule it enforces, true when the rule holds]. */
 function probes() {
   const out = [];
-  const base = sample();
+  const base = productionSample();
   const ctx = (extra = {}) => ({
     identity: base.identity, sharedLayers: base.shared, approvedWords: base.approvedWords, contentAsset: base.contentAsset, ...extra,
   });

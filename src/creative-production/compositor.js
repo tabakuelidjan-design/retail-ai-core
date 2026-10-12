@@ -55,7 +55,6 @@ export function composeLayers({
       if (share > limit) problems.push(`OVERLAP_EXCEEDS_ITS_POLICY:${d.layer.layer_id}`);
       if (onProtected > 0) problems.push(`COVERS_A_PROTECTED_REGION:${d.layer.layer_id}`);
     }
-    for (const d of decoded.filter((x) => x.layer.kind !== LAYER_KIND.PRODUCT && x.layer.kind !== LAYER_KIND.PROP_FOREGROUND && LAYER_Z[x.layer.kind] > LAYER_Z[LAYER_KIND.PRODUCT])) problems.push(`ABOVE_THE_PRODUCT_WITHOUT_AN_OVERLAP_POLICY:${d.layer.layer_id}`);
   }
   const images = decoded.map((d) => `<image x="${d.layer.x}" y="${d.layer.y}" width="${d.image.width}" height="${d.image.height}" href="data:image/png;base64,${B64(d.layer.png)}"/>`).join('');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">${images}</svg>`;

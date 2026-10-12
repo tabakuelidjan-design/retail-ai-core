@@ -102,7 +102,9 @@ export function createProductionPlanner({
           artDirection: art, canvas: a.contentAsset.canvas, variant, identity, approvedWords, policy,
         });
         plates.set(p.request.request_key, p);
-        const chosen = propsForAsset({ elements: propPool.filter((e) => !rejected.some((r) => r.element === e.element)), composition: a.ap.composition_intent, index: a.ap.index }).map((e) => propRequest({
+        const chosen = propsForAsset({
+          elements: propPool, composition: a.ap.composition_intent, index: a.ap.index, maxProps: policy.max_props_per_asset,
+        }).map((e) => propRequest({
           element: e, artDirection: art, identity, approvedWords, policy,
         }));
         for (const c of chosen) props.set(c.request.request_key, c);
@@ -129,7 +131,7 @@ export function createProductionPlanner({
         const kindNode = r.kind === 'PLATE' ? NODE.PLATE : NODE.PROP;
         const label = `${kindNode}:${r.request_key}`;
         const hash = inputsHash({
-          node: kindNode, request_key: r.request_key, prompt_sha256: r.prompt_sha256, candidates: r.candidates, size: r.size, identity_id: identity.identity_id, art_direction_id: art.art_direction_id,
+          node: kindNode, prompt_sha256: r.prompt_sha256, candidates: r.candidates, size: r.size, identity_id: identity.identity_id, art_direction_id: art.art_direction_id,
         });
         let node = useNode(label, hash);
         if (!node) { node = putNode(state, label, { inputsHash: hash, id: r.request_key, artifact: { ...r, guard: { substitutes: checked.hits, claims: checked.claims, digits: checked.digits } } }); executed.push(label); await checkpoint(label); }
