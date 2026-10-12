@@ -5,24 +5,25 @@ import { FORMAT_KIND, LIMITS, TEXT_ROLE } from './constants.js';
 //
 // TEXT CAPACITY is declared in CHARACTERS (a measure that does not depend on the script) for each text role of one asset, with its BASIS:
 //   MEASURED_AGAINST_THE_LAYOUT_ENGINE   the longest filler text that the real layout (fonts, type rules, recipes) places in one slot, with a 20% safety margin; a test re-measures it on every run
-//   DECLARED_PENDING_BODY_LAYOUT         a planning figure for a role that has NO layout slot yet (BODY): the planner uses it to decide how to split, and an asset that uses it is PLANNED, not executable
-// Capacity is a property of the format, not of a brand or a product.
+//   MEASURED_AGAINST_THE_TEXT_LED_LAYOUT_SPEC   the same measurement, with the real typography engine, for the body text of a slide in the text-led layout spec (text-led-spec.js), per density class; BODY has no
+//                                         layout recipe yet, so an asset that uses it is PLANNED, not executable, but the capacity is a measurement, no longer a declared ceiling
+// Capacity is a property of the format, not of a brand or a product. The slide capacities were measured with the widest fixture font and carry a 20% safety factor; a test re-measures them on every run.
 
-export const CAPACITY_BASIS = Object.freeze({ MEASURED: 'MEASURED_AGAINST_THE_LAYOUT_ENGINE', DECLARED: 'DECLARED_PENDING_BODY_LAYOUT' });
+export const CAPACITY_BASIS = Object.freeze({ MEASURED: 'MEASURED_AGAINST_THE_LAYOUT_ENGINE', MEASURED_LED: 'MEASURED_AGAINST_THE_TEXT_LED_LAYOUT_SPEC' });
 
 const measured = (chars) => Object.freeze({ chars, basis: CAPACITY_BASIS.MEASURED });
-const declared = (chars) => Object.freeze({ chars, basis: CAPACITY_BASIS.DECLARED });
-const NONE = Object.freeze({ chars: 0, basis: CAPACITY_BASIS.DECLARED });
+const led = (chars) => Object.freeze({ chars, basis: CAPACITY_BASIS.MEASURED_LED });
 
-const capacity = (body) => Object.freeze({
+// body = the capacity of a text shared with an image on a single canvas (HIGH); slide = the capacity of a slide of a sequence per density class
+const capacity = (slide) => Object.freeze({
   [TEXT_ROLE.HEADLINE]: measured(100),
   [TEXT_ROLE.SUBHEADLINE]: measured(50),
   [TEXT_ROLE.PRICE]: measured(28),
   [TEXT_ROLE.CTA]: measured(24),
-  [TEXT_ROLE.BODY]: body > 0 ? declared(body) : NONE,
+  [TEXT_ROLE.BODY]: led(slide.HIGH),
 });
 
-const resource = (format_ref, width, height, medium, aspect_ratio, kinds, body) => Object.freeze({
+const resource = (format_ref, width, height, medium, aspect_ratio, kinds, slide) => Object.freeze({
   format_ref,
   canvas: Object.freeze({ width, height, unit: 'px' }),
   medium,
@@ -31,16 +32,17 @@ const resource = (format_ref, width, height, medium, aspect_ratio, kinds, body) 
   forbidden_zones: Object.freeze([]),
   production_constraints: Object.freeze([]),
   kinds: Object.freeze(kinds),
-  text_capacity: capacity(body),
+  text_capacity: capacity(slide),
+  slide_capacity: Object.freeze({ MEDIUM: led(slide.MEDIUM), HIGH: led(slide.HIGH), TEXT_LED: led(slide.TEXT_LED) }),
   within_current_production_limit: width * height <= LIMITS.max_production_pixels,
 });
 
 export const FORMAT_RESOURCES = Object.freeze([
-  resource('format://nordla/standard/feed-portrait-1080x1350', 1080, 1350, 'DIGITAL', '4:5', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.CAROUSEL, FORMAT_KIND.MULTI_VISUAL_SERIES], 360),
-  resource('format://nordla/standard/feed-square-1080x1080', 1080, 1080, 'DIGITAL', '1:1', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.CAROUSEL, FORMAT_KIND.MULTI_VISUAL_SERIES], 280),
-  resource('format://nordla/standard/story-vertical-1080x1920', 1080, 1920, 'DIGITAL', '9:16', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.STORY_SEQUENCE], 280),
-  resource('format://nordla/standard/poster-portrait-1448x2048', 1448, 2048, 'PHYSICAL', '181:256', [FORMAT_KIND.POSTER, FORMAT_KIND.MULTI_VISUAL_SERIES], 600),
-  resource('format://nordla/standard/flyer-portrait-1240x1748', 1240, 1748, 'PHYSICAL', '310:437', [FORMAT_KIND.FLYER, FORMAT_KIND.MULTI_VISUAL_SERIES], 1200),
+  resource('format://nordla/standard/feed-portrait-1080x1350', 1080, 1350, 'DIGITAL', '4:5', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.CAROUSEL, FORMAT_KIND.MULTI_VISUAL_SERIES], { MEDIUM: 268, HIGH: 462, TEXT_LED: 614 }),
+  resource('format://nordla/standard/feed-square-1080x1080', 1080, 1080, 'DIGITAL', '1:1', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.CAROUSEL, FORMAT_KIND.MULTI_VISUAL_SERIES], { MEDIUM: 232, HIGH: 347, TEXT_LED: 499 }),
+  resource('format://nordla/standard/story-vertical-1080x1920', 1080, 1920, 'DIGITAL', '9:16', [FORMAT_KIND.SINGLE_IMAGE, FORMAT_KIND.STORY_SEQUENCE], { MEDIUM: 384, HIGH: 653, TEXT_LED: 923 }),
+  resource('format://nordla/standard/poster-portrait-1448x2048', 1448, 2048, 'PHYSICAL', '181:256', [FORMAT_KIND.POSTER, FORMAT_KIND.MULTI_VISUAL_SERIES], { MEDIUM: 308, HIGH: 499, TEXT_LED: 729 }),
+  resource('format://nordla/standard/flyer-portrait-1240x1748', 1240, 1748, 'PHYSICAL', '310:437', [FORMAT_KIND.FLYER, FORMAT_KIND.MULTI_VISUAL_SERIES], { MEDIUM: 308, HIGH: 539, TEXT_LED: 729 }),
 ]);
 
 /** The standard resource that serves a kind for a channel profile (the first, in this order, that lists the kind). */
@@ -67,6 +69,7 @@ export function callerResource(canvasFacts) {
     production_constraints: Object.freeze([...constraints]),
     kinds: closest.kinds,
     text_capacity: closest.text_capacity,
+    slide_capacity: closest.slide_capacity,
     within_current_production_limit: canvas.width * canvas.height <= LIMITS.max_production_pixels,
   });
 }

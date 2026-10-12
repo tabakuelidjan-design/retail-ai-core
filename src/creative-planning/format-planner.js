@@ -11,7 +11,7 @@ import { callerResource, FORMAT_RESOURCES, standardResourceFor } from './format-
 import { buildInventory } from './inventory.js';
 import { normalizeRequest, sourceBytesOf } from './request.js';
 import {
-  codePoints, firstSentence, measure, sliceText, verifyVerbatim,
+  codePoints, firstSentence, measure, sentenceAtoms, sliceText, verifyVerbatim,
 } from './text-units.js';
 import { understandInputs } from './understanding.js';
 
@@ -66,9 +66,39 @@ function layoutSingle({ units, captionAllowed, allText, bodyCap, locale }) {
   return { feasible: unplaced === 0, unplaced, assets: [{ asset_role: ASSET_ROLE.SINGLE, slots }], caption };
 }
 
+/**
+ * The best split of consecutive pieces into exactly `groups` groups: the largest group is as small as it can be, so the slides carry about the same amount of text (a linear partition). Null if there are
+ * fewer pieces than groups, or if the best split still has a group over `cap`.
+ */
+export function partitionPieces(pieces, groups, cap) {
+  const n = pieces.length;
+  if (groups < 1 || n < groups) return null;
+  const prefix = [0]; for (const p of pieces) prefix.push(prefix[prefix.length - 1] + p.chars);
+  const size = (i, j) => prefix[j] - prefix[i] + (j - i - 1); // pieces i..j-1 joined by one space
+  // the cost of a split is (the largest group, then the number of cuts that fall inside a paragraph): the slides are as even as possible and, among equal splits, cut where the author did
+  const better = (a, b) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+  const best = Array.from({ length: groups + 1 }, () => Array(n + 1).fill(null)); const cut = Array.from({ length: groups + 1 }, () => Array(n + 1).fill(0));
+  best[0][0] = [0, 0];
+  for (let g = 1; g <= groups; g += 1) {
+    for (let j = g; j <= n; j += 1) {
+      for (let i = g - 1; i < j; i += 1) {
+        if (!best[g - 1][i]) continue;
+        const inside = (i > 0 && !pieces[i - 1].paragraph_end) ? 1 : 0;
+        const cost = [Math.max(best[g - 1][i][0], size(i, j)), best[g - 1][i][1] + inside];
+        if (!best[g][j] || better(cost, best[g][j])) { best[g][j] = cost; cut[g][j] = i; }
+      }
+    }
+  }
+  if (!best[groups][n] || best[groups][n][0] > cap) return null;
+  const out = []; let j = n;
+  for (let g = groups; g >= 1; g -= 1) { const i = cut[g][j]; out.unshift({ pieces: pieces.slice(i, j), chars: size(i, j) }); j = i; }
+  return out;
+}
+
 function layoutMulti({
-  kind, units, bodyCap, maxAssets, requestedCount, captionAllowed, allText, locale,
+  kind, units, slideCap, maxAssets, requestedCount, captionAllowed, allText, locale,
 }) {
+  const bodyCap = slideCap;
   const heads = []; const closing = []; const body = []; const caption = [];
   for (const u of units) {
     if (u.role === TEXT_ROLE.HEADLINE || u.role === TEXT_ROLE.SUBHEADLINE) heads.push(u);
@@ -82,18 +112,22 @@ function layoutMulti({
     if (u.origin === PIECE_ORIGIN.LOCKED) {
       const base = u.range.start;
       const text = u.text.slice(u.range.start, u.range.end);
-      for (const s of sliceText(text, bodyCap, locale)) pieces.push(pieceOf(u, locale, { start: base + s.start, end: base + s.end }));
-    } else pieces.push(pieceOf(u, locale));
+      for (const a of sentenceAtoms(text, bodyCap, locale)) pieces.push({ ...pieceOf(u, locale, { start: base + a.start, end: base + a.end }), paragraph_end: a.paragraph_end });
+    } else pieces.push({ ...pieceOf(u, locale), paragraph_end: true });
   }
-  const groups = [];
+  let groups = [];
   for (const p of pieces) {
     const last = groups.at(-1);
     if (last && last.chars + 1 + p.chars <= bodyCap) { last.pieces.push(p); last.chars += 1 + p.chars; } else groups.push({ pieces: [p], chars: p.chars });
   }
+  // the slides carry about the same amount of text: the same number of groups, split evenly; a requested number of slides is honoured when the text can be split that far
+  const reservedCount = (heads.length ? 1 : 0) + (closing.length ? 1 : 0);
+  const wanted = requestedCount ? requestedCount - reservedCount : groups.length;
+  if (wanted >= 1 && wanted <= pieces.length) groups = partitionPieces(pieces, wanted, bodyCap) ?? groups;
   const make = (slotsOf, assetRole) => ({ asset_role: assetRole, slots: slotsOf });
   const assets = [];
   if (heads.length) { const s = emptySlots(); for (const u of heads) s[u.role].push(pieceOf(u, locale)); assets.push(make(s, ASSET_ROLE.COVER)); }
-  const bodyAssets = groups.map((g) => { const s = emptySlots(); s.BODY.push(...g.pieces); return make(s, ASSET_ROLE.CONTENT); });
+  const bodyAssets = groups.map((g) => { const s = emptySlots(); s.BODY.push(...g.pieces.map(({ paragraph_end: _p, ...rest }) => rest)); return make(s, ASSET_ROLE.CONTENT); });
   let closingAsset = null;
   if (closing.length) { const s = emptySlots(); for (const u of closing) s[u.role].push(pieceOf(u, locale)); closingAsset = make(s, ASSET_ROLE.CLOSING); }
   const reserved = assets.length + (closingAsset ? 1 : 0);
@@ -132,6 +166,10 @@ export function assertLockedTextUnaltered(inventoryUnits, assets, caption) {
     if (!verifyVerbatim(u.text, slices)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a locked text was altered by the distribution', 'content_plan', { problem: 'LOCKED_TEXT_ALTERED', unit_ref: u.unit_ref });
   }
 }
+
+const cloneUnit = (u) => ({
+  ...u, notes: [...u.notes], fact_refs: [...u.fact_refs], range: u.range ? { ...u.range } : null,
+});
 
 const ASK = (code, field, question, options = [], blocking = true) => ({
   code, blocking, field, question, options,
@@ -221,8 +259,10 @@ export function createContentFormatPlanner({
   function layoutFor({ kind, units, ctx, resource }) {
     const bodyCap = resource.text_capacity.BODY.chars;
     if (SINGLE_CANVAS_KINDS.includes(kind)) return layoutSingle({ units, captionAllowed: ctx.captionAllowed, allText: ctx.allText, bodyCap, locale: ctx.locale });
+    // the text a slide of a sequence carries is bounded by its density class (measured against the text-led layout spec); without a stated class a slide shares its space with the image (HIGH)
+    const slideCap = resource.slide_capacity[ctx.slideDensity ?? 'HIGH'].chars;
     return layoutMulti({
-      kind, units, bodyCap, maxAssets: Math.min(LIMITS.max_assets[kind] ?? 1, ctx.maxAssets), requestedCount: ctx.requestedCount, captionAllowed: ctx.captionAllowed, allText: ctx.allText, locale: ctx.locale,
+      kind, units, slideCap, maxAssets: Math.min(LIMITS.max_assets[kind] ?? 1, ctx.maxAssets), requestedCount: ctx.requestedCount, captionAllowed: ctx.captionAllowed, allText: ctx.allText, locale: ctx.locale,
     });
   }
 
@@ -330,15 +370,19 @@ export function createContentFormatPlanner({
     const channelDefaulted = !channels.length;
     const locale = request.locale;
     const base = {
-      locale, profile, profileName, channelDefaulted, captionAllowed: profile.caption, allText, singleOnly, maxAssets, fixed, requested, requestedCount: request.requested_asset_count, callerCanvas: request.canvas,
+      locale, profile, profileName, channelDefaulted, captionAllowed: profile.caption, allText, singleOnly, maxAssets, fixed, requested, requestedCount: request.requested_asset_count, callerCanvas: request.canvas, slideDensity: force?.slideDensity ?? request.slide_density,
     };
     const empty = (status) => ({
       status, kind: null, questions, events, assets: [], caption: null, members: [], alternative: null, format: null, density: densityReport(inventory, null, locale), executable: false, execution: null,
     });
     if (questions.some((q) => q.blocking)) return empty(PLAN_STATUS.NEEDS_USER_DECISION);
 
-    const prepared = workingUnits(inventory);
-    const fitted = await fitRoles({ units: prepared, request, inventory, events });
+    let fitted;
+    if (force?.fitted) {
+      // the roles, adaptations and generations were decided once (prepare); every plan from the same preparation works on its own copy of them
+      fitted = { units: force.fitted.units.map(cloneUnit), questions: [...force.fitted.questions] };
+      events.push(...force.fitted.events);
+    } else fitted = await fitRoles({ units: workingUnits(inventory), request, inventory, events });
     questions.push(...fitted.questions);
     if (questions.some((q) => q.blocking)) return empty(PLAN_STATUS.NEEDS_USER_DECISION);
     let units = fitted.units;
@@ -352,7 +396,7 @@ export function createContentFormatPlanner({
       const altRequested = request.requested_format && !VIDEO_KINDS.includes(request.requested_format) ? request.requested_format : null;
       const alternative = await planInternal({
         request, inventory, observations, force: {
-          noVideo: true, noCampaign: true, requested: altRequested, profileName: altProfileName, profile: channelProfileOf(altProfileName === 'SOCIAL_STORY' ? 'STORY' : channels[0] ?? null).profile, channels,
+          noVideo: true, noCampaign: true, requested: altRequested, profileName: altProfileName, profile: channelProfileOf(altProfileName === 'SOCIAL_STORY' ? 'STORY' : channels[0] ?? null).profile, channels, fitted: { units, questions: [], events: [] }, slideDensity: force?.slideDensity,
         },
       });
       const explicit = VIDEO_KINDS.includes(requested);
@@ -447,26 +491,49 @@ export function createContentFormatPlanner({
     return deepFreeze({ content_plan_id: deriveId('cpl', base), ...base });
   }
 
+  async function prepare(rawRequest) {
+    const request = normalizeRequest(rawRequest);
+    const observations = await understandInputs({ sources: request.sources, bytes: sourceBytesOf(rawRequest), ports: understanding, locale: request.locale });
+    record(ledger, DECISION.INPUT_UNDERSTANDING, COMPONENT.INPUT_UNDERSTANDING, 'ONE_NORMALIZED_OBSERVATION_PER_INPUT', { observations: observations.map((o) => [o.source_kind, o.analysis.status]) });
+    const inventory = buildInventory({ request, observations });
+    record(ledger, DECISION.CONTENT_ANALYSIS, COMPONENT.CONTENT_ANALYST, 'DETERMINISTIC_INVENTORY_BEFORE_ANY_FORMAT_DECISION', { inventory_id: inventory.inventory_id, units: inventory.totals.units, chars: inventory.totals.chars, words: inventory.totals.words });
+    // the roles of the texts, and the adaptations and generations the copy policy allows, are decided ONCE: every plan made from this preparation works on its own copy of them
+    const events = [];
+    const blocked = { ...request };
+    const fitted = (inventory.units.length === 0 && inventory.facts.length === 0) ? { units: [], questions: [] } : await fitRoles({ units: workingUnits(inventory), request: blocked, inventory, events });
+    return { request, observations, inventory, fitted: { units: fitted.units, questions: fitted.questions, events } };
+  }
+
+  async function planPrepared(prepared, options = {}) {
+    const { request, inventory, observations } = prepared;
+    const result = await planInternal({ request, inventory, observations, force: { fitted: prepared.fitted, ...options } });
+    assertLockedTextUnaltered(inventory.units, result.assets, result.caption);
+    const plan = seal({ request, inventory, observations, result });
+    if (!options.quiet) recordPlan(plan);
+    return plan;
+  }
+
+  /** The ledger rows of a content plan (a plan made `quiet` for exploration is recorded only if it is the one that is kept). */
+  function recordPlan(plan) {
+    record(ledger, DECISION.FORMAT_PLAN, COMPONENT.FORMAT_PLANNER, plan.format?.rule ?? 'NO_FORMAT_WITHOUT_A_DECISION', {
+      content_plan_id: plan.content_plan_id, status: plan.status, kind: plan.format?.kind ?? null, basis: plan.format?.basis ?? null, assets: plan.assets.length, caption: Boolean(plan.caption), executable: plan.executable, questions: plan.questions.map((q) => q.code),
+    });
+    for (const q of plan.questions) record(ledger, DECISION.CLARIFICATION, COMPONENT.FORMAT_PLANNER, 'ASK_ONLY_WHEN_MEANING_OR_A_HARD_CONSTRAINT_REQUIRES_IT', { code: q.code, blocking: q.blocking });
+  }
+
   return Object.freeze({
     /**
      * @param {object} rawRequest a content request (see request.js)
      * @returns {Promise<object>} the ContentPlan
      */
-    async plan(rawRequest) {
-      const request = normalizeRequest(rawRequest);
-      const observations = await understandInputs({ sources: request.sources, bytes: sourceBytesOf(rawRequest), ports: understanding, locale: request.locale });
-      record(ledger, DECISION.INPUT_UNDERSTANDING, COMPONENT.INPUT_UNDERSTANDING, 'ONE_NORMALIZED_OBSERVATION_PER_INPUT', { observations: observations.map((o) => [o.source_kind, o.analysis.status]) });
-      const inventory = buildInventory({ request, observations });
-      record(ledger, DECISION.CONTENT_ANALYSIS, COMPONENT.CONTENT_ANALYST, 'DETERMINISTIC_INVENTORY_BEFORE_ANY_FORMAT_DECISION', { inventory_id: inventory.inventory_id, units: inventory.totals.units, chars: inventory.totals.chars, words: inventory.totals.words });
-      const result = await planInternal({ request, inventory, observations });
-      assertLockedTextUnaltered(inventory.units, result.assets, result.caption);
-      const plan = seal({ request, inventory, observations, result });
-      record(ledger, DECISION.FORMAT_PLAN, COMPONENT.FORMAT_PLANNER, plan.format?.rule ?? 'NO_FORMAT_WITHOUT_A_DECISION', {
-        content_plan_id: plan.content_plan_id, status: plan.status, kind: plan.format?.kind ?? null, basis: plan.format?.basis ?? null, assets: plan.assets.length, caption: Boolean(plan.caption), executable: plan.executable, questions: plan.questions.map((q) => q.code),
-      });
-      for (const q of plan.questions) record(ledger, DECISION.CLARIFICATION, COMPONENT.FORMAT_PLANNER, 'ASK_ONLY_WHEN_MEANING_OR_A_HARD_CONSTRAINT_REQUIRES_IT', { code: q.code, blocking: q.blocking });
-      return plan;
-    },
+    async plan(rawRequest) { return planPrepared(await prepare(rawRequest)); },
+    /** The part of planning that may call a model (roles, adaptation, generation), done once. */
+    prepare,
+    /**
+     * A plan from a preparation: a pure decision, repeatable for another channel, density class or format without asking a model again.
+     * @param {object} options { slideDensity, channels, profileName, profile, requested }
+     */
+    planPrepared,
+    recordPlan,
   });
 }
-

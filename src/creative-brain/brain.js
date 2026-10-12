@@ -174,6 +174,36 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
       return { status: 'PLANNED', plan: await atStage('PLAN_COHERENCE', null, async () => assemble({ observation, problem_frame: frame, rounds: picked.rounds, concept: picked.concept, ...rest })) };
     },
 
+    // ---- THE SHARED STAGES OF A CAMPAIGN. A campaign of several assets thinks ONCE about the problem, the idea and the art direction, then plans each asset against them. These three methods are the same stages as in
+    // `plan`, exposed one by one so that a campaign can store each result and reuse it; `plan` itself is unchanged.
+
+    /** OBSERVE and FRAME for the brief of a campaign. Returns { status: 'FRAMED', observation, problem_frame } or the brief assessment (nothing is asked of a model for a brief that lacks what a frame needs). */
+    async planFrame({ brief }) {
+      const observation = await atStage('OBSERVE', null, async () => observeBrief({ brief }));
+      ledgerRecord(ledger, DECISION.OBSERVATION, COMPONENT.CREATIVE_OBSERVER, 'DETERMINISTIC_READING_OF_THE_BRIEF', { approved_text_roles: observation.approved_text_roles, asset_origin: observation.asset_origin, claims: observation.claim_refs.length });
+      const assessment = assessBrief({ brief });
+      if (assessment.status !== BRIEF_STATUS.PROCEED) return deepFreeze({ status: assessment.status, assessment, observation });
+      const { frame, meta } = await atStage('FRAME', null, () => framer.frame({ observation }));
+      progress.problem_frame = frame;
+      ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [], ...repairOf(meta) });
+      return deepFreeze({ status: 'FRAMED', observation, problem_frame: frame });
+    },
+
+    /** IDEATE and SELECT for a frame: the concept the whole campaign shares. Returns { status: 'SELECTED', concept, rounds } or { status: 'NO_CONCEPT_SELECTED', rounds }. */
+    async selectConcept({ frame, rejected = [] }) {
+      const picked = await conceptRounds({ frame, rejected });
+      if (picked.status === 'SELECTED') progress.concept = picked.concept;
+      return deepFreeze(picked);
+    },
+
+    /** ART DIRECT the shared concept: the art direction the whole campaign shares. */
+    async directArt({ frame, concept }) {
+      const art = await atStage('ART_DIRECT', null, () => artDirector.direct({ frame, concept, hints: [] }));
+      progress.concept = concept; progress.art_direction = art.art_direction;
+      ledgerRecord(ledger, DECISION.ART_DIRECTION, COMPONENT.ART_DIRECTOR, 'SEMANTIC_ART_DIRECTION_OF_THE_SELECTED_CONCEPT', { art_direction_id: art.art_direction.art_direction_id, rationale: art.art_direction.rationale, model: art.meta.model, request_id: art.meta.request_id, key_repairs: art.meta.key_repairs ?? [], ...repairOf(art.meta) });
+      return deepFreeze({ status: 'DIRECTED', art_direction: art.art_direction });
+    },
+
     /**
      * After a candidate was critiqued: diagnose the kind of failure and recover accordingly.
      * @param {object} input { brief, plan, critique, conceptCritique, history: [{ concept_id, action }] }

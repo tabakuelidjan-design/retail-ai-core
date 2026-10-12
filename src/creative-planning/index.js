@@ -8,3 +8,4 @@ export * from './copy-policy.js';
 export * from './format-planner.js';
 export * from './legacy-bridge.js';
 export * from './parity.js';
+export * from './text-led-spec.js';

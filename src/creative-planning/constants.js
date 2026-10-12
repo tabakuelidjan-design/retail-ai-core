@@ -49,6 +49,9 @@ export const ANALYSIS_STATUS = Object.freeze({ ANALYZED: 'ANALYZED', METADATA_ON
 /** Hard constraints of a request. MAX_ASSETS carries a number (a requested limit). */
 export const CONSTRAINT = Object.freeze({ ALL_TEXT_ON_ASSET: 'ALL_TEXT_ON_ASSET', SINGLE_ASSET_ONLY: 'SINGLE_ASSET_ONLY', FORMAT_IS_FIXED: 'FORMAT_IS_FIXED', MAX_ASSETS: 'MAX_ASSETS', NO_GENERATED_COPY: 'NO_GENERATED_COPY' });
 
+/** The density class of the text a slide of a sequence carries (a body class: a slide that deliberately says little uses the headline and subheadline roles). Capacity per class is measured per canvas. */
+export const SLIDE_DENSITY = Object.freeze({ MEDIUM: 'MEDIUM', HIGH: 'HIGH', TEXT_LED: 'TEXT_LED' });
+
 export const PLAN_STATUS = Object.freeze({ PLANNED: 'PLANNED', NEEDS_USER_DECISION: 'NEEDS_USER_DECISION' });
 export const EXECUTION = Object.freeze({ EXECUTABLE_NOW: 'EXECUTABLE_NOW', PLANNED_NOT_EXECUTABLE: 'PLANNED_NOT_EXECUTABLE' });
 export const EXECUTION_REASON = Object.freeze({

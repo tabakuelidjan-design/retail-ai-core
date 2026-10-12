@@ -107,7 +107,7 @@ export async function prepare(deps) {
 
   // the live-readiness gate fails closed: no verdict, or any verdict but READY, blocks the run (the other checks are offline and still reported, so one --check shows everything at once)
   const readiness = deps.readiness ? deps.readiness() : { ready: false, status: 'NOT_WIRED', reasons: ['the readiness gate is not wired'] };
-  const gateOpen = check('CREATIVE_BRAIN_CONTRACT_PARITY_READY: contract/prompt parity, the full suite, the mutation sweep, the Node 20 and 24 clean clones and CI are recorded for this exact code', readiness.ready === true, { status: readiness.status, reasons: readiness.reasons });
+  const gateOpen = check('CREATIVE_PIPELINE_READY: contract/prompt parity of the planning, the Brain and the campaign stages, the full suite, the mutation sweeps, the Node 20 and 24 clean clones and CI are recorded for this exact code', readiness.ready === true, { status: readiness.status, reasons: readiness.reasons });
 
   const credentials = deps.credentials();
   if (!check('credentials present', credentials.present, credentials.present ? null : { missing_environment_variables: credentials.missing })) return blocked('CREDENTIALS_NOT_PROVISIONED');

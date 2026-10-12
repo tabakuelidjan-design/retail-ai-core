@@ -26,7 +26,7 @@ import {
   BENCHMARK_ID, createFileStore, runCheck, runExplain, runLive,
 } from '../src/creative-brain-benchmark/index.js';
 import { environmentOperationId } from '../src/creative-brain-benchmark/runner.js';
-import { checkReadiness } from '../src/creative-brain-benchmark/readiness.js';
+import { checkCreativeReadiness } from '../src/creative-readiness/index.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
 
@@ -61,7 +61,7 @@ if (!mode) {
     const outputStore = new FileOutputStore(path.join(outDir, 'outputs'));
 
     const deps = {
-      readiness: () => checkReadiness(),
+      readiness: () => checkCreativeReadiness(),
       store,
       journal,
       now: () => new Date().toISOString(),

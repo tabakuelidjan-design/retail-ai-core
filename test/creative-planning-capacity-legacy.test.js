@@ -8,7 +8,7 @@ import { assessBrief, BRIEF_STATUS } from '../src/creative-brain/brief-assessmen
 import { computeLayoutCapabilityProfile } from '../src/creative-runtime/index.js';
 import { createDecisionLedger } from '../src/creative-runtime/ledger.js';
 import {
-  briefForAsset, CAPACITY_BASIS, createContentFormatPlanner, EXECUTABLE_ROLES, FORMAT_RESOURCES, LIMITS, ratioOf, requestFromBrief,
+  briefForAsset, CAPACITY_BASIS, createContentFormatPlanner, EXECUTABLE_ROLES, FORMAT_RESOURCES, fitsSlide, LIMITS, measureSlideCapacity, ratioOf, requestFromBrief, TEXT_LED_SPEC,
 } from '../src/creative-planning/index.js';
 import { buildBrief, fonts } from './runtime-world.js';
 import {
@@ -55,7 +55,7 @@ test('CL-4 format resources are well formed and the executable capacities are th
     assert.equal(r.canvas.unit, 'px'); assert.ok(r.within_current_production_limit === (r.canvas.width * r.canvas.height <= LIMITS.max_production_pixels));
     assert.ok(Object.isFrozen(r) && Object.isFrozen(r.canvas) && Object.isFrozen(r.text_capacity));
     for (const role of EXECUTABLE_ROLES) assert.deepEqual(r.text_capacity[role], FORMAT_RESOURCES[0].text_capacity[role]);
-    assert.equal(r.text_capacity.BODY.basis, CAPACITY_BASIS.DECLARED, 'a role with no layout slot is declared, never presented as measured');
+    assert.equal(r.text_capacity.BODY.basis, CAPACITY_BASIS.MEASURED_LED, 'a role with no layout recipe is measured against the text-led spec, and its asset stays planned');
   }
   assert.equal(new Set(FORMAT_RESOURCES.map((r) => r.format_ref)).size, FORMAT_RESOURCES.length);
   for (const kind of ['SINGLE_IMAGE', 'CAROUSEL', 'MULTI_VISUAL_SERIES', 'STORY_SEQUENCE', 'POSTER', 'FLYER']) assert.ok(FORMAT_RESOURCES.some((r) => r.kinds.includes(kind)), `a resource serves ${kind}`);
@@ -95,8 +95,24 @@ test('CL-6 a brief with no format is no longer a dead end on the planned path: t
   assert.equal(planned.format.aspect_ratio, '4:5'); assert.deepEqual(planned.format.canvas, { width: 1080, height: 1350, unit: 'px' });
 });
 
-test('CL-7 the planner is additive: nothing in the existing source imports it', () => {
+test('CL-7 the planner is additive: nothing in the existing source imports it except the campaign planner and the readiness gate built on it', () => {
   const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : [new URL(e.name, dir)]));
   const offenders = walk(new URL('../src/', import.meta.url)).filter((f) => f.pathname.endsWith('.js') && !f.pathname.includes('/creative-planning/') && readFileSync(f, 'utf8').includes('creative-planning/')).map((f) => f.pathname.split('/src/')[1]);
-  assert.deepEqual(offenders, []);
+  assert.deepEqual(offenders.filter((f) => !f.startsWith('creative-campaign/') && !f.startsWith('creative-readiness/')), []);
+});
+
+test('CL-8 the slide capacities are measured with the real typography engine in the text-led spec, on every canvas and every density class', () => {
+  const font = fonts.get('font:runtime-fixture-sans');
+  for (const resource of FORMAT_RESOURCES) {
+    const caps = resource.slide_capacity;
+    assert.ok(caps.MEDIUM.chars < caps.HIGH.chars && caps.HIGH.chars < caps.TEXT_LED.chars, `${resource.format_ref}: the classes grow`);
+    for (const density of ['MEDIUM', 'HIGH', 'TEXT_LED']) {
+      const { chars, basis } = caps[density];
+      assert.equal(basis, CAPACITY_BASIS.MEASURED_LED);
+      assert.ok(fitsSlide({ font, canvas: resource.canvas, density, chars }), `${resource.format_ref}/${density}: ${chars} characters fit`);
+      assert.ok(chars <= Math.floor(measureSlideCapacity({ font, canvas: resource.canvas, density }) * TEXT_LED_SPEC.safety_factor), `${resource.format_ref}/${density}: the capacity keeps the safety factor`);
+      assert.ok(!fitsSlide({ font, canvas: resource.canvas, density, chars: Math.ceil(chars * 1.6) }), `${resource.format_ref}/${density}: far beyond it does not fit`);
+    }
+    assert.equal(resource.text_capacity.BODY.chars, caps.HIGH.chars, 'a text shared with an image on one canvas is a HIGH slide');
+  }
 });

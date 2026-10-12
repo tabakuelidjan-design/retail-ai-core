@@ -34,6 +34,14 @@ on:
       - 'src/creative-critic/**'
       - 'src/creative-brain/**'
       - 'src/creative-planning/**'
+      - 'src/creative-campaign/**'
+      - 'src/creative-readiness/**'
+      - 'test/creative-campaign*.test.js'
+      - 'test/creative-readiness.test.js'
+      - 'docs/architecture/creative-campaign*.md'
+      - 'docs/architecture/creative-readiness.json'
+      - 'scripts/check-creative-campaign-parity.mjs'
+      - 'scripts/check-creative-readiness.mjs'
       - 'test/creative-planning*.test.js'
       - 'test/creative-planning-world.js'
       - 'docs/architecture/creative-planning*.md'
@@ -101,6 +109,14 @@ on:
       - 'src/creative-critic/**'
       - 'src/creative-brain/**'
       - 'src/creative-planning/**'
+      - 'src/creative-campaign/**'
+      - 'src/creative-readiness/**'
+      - 'test/creative-campaign*.test.js'
+      - 'test/creative-readiness.test.js'
+      - 'docs/architecture/creative-campaign*.md'
+      - 'docs/architecture/creative-readiness.json'
+      - 'scripts/check-creative-campaign-parity.mjs'
+      - 'scripts/check-creative-readiness.mjs'
       - 'test/creative-planning*.test.js'
       - 'test/creative-planning-world.js'
       - 'docs/architecture/creative-planning*.md'
@@ -161,8 +177,8 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Focused Creative Intelligence tests
-        run: bash scripts/ci-annotated-tests.sh node --test test/creative-intelligence*.test.js test/creative-brain*.test.js test/creative-planning*.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/creative-layout-capability.test.js test/creative-environment-request.test.js test/creative-ambition.test.js test/creative-revision-director-call-mode.test.js test/creative-direction-text-contract.test.js test/marketing-creative-alibaba-director-timeout.test.js test/resources*.test.js
+        run: bash scripts/ci-annotated-tests.sh node --test test/creative-intelligence*.test.js test/creative-brain*.test.js test/creative-planning*.test.js test/creative-campaign*.test.js test/creative-readiness.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/creative-layout-capability.test.js test/creative-environment-request.test.js test/creative-ambition.test.js test/creative-revision-director-call-mode.test.js test/creative-direction-text-contract.test.js test/marketing-creative-alibaba-director-timeout.test.js test/resources*.test.js
       - name: Branding, Creative Fidelity, Marketing and Creative Intelligence together
-        run: bash scripts/ci-annotated-tests.sh node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-brain*.test.js test/creative-planning*.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/creative-layout-capability.test.js test/creative-environment-request.test.js test/creative-ambition.test.js test/creative-revision-director-call-mode.test.js test/creative-direction-text-contract.test.js test/marketing-creative-alibaba-director-timeout.test.js test/resources*.test.js
+        run: bash scripts/ci-annotated-tests.sh node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-brain*.test.js test/creative-planning*.test.js test/creative-campaign*.test.js test/creative-readiness.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/creative-layout-capability.test.js test/creative-environment-request.test.js test/creative-ambition.test.js test/creative-revision-director-call-mode.test.js test/creative-direction-text-contract.test.js test/marketing-creative-alibaba-director-timeout.test.js test/resources*.test.js
       - name: Full suite (cross-domain non-regression)
         run: bash scripts/ci-annotated-tests.sh npm test

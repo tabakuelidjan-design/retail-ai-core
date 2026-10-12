@@ -3,7 +3,7 @@ import {
   BRAIN_ERROR, deepFreeze, enumOf, fail, isPlain, listOf, oneLine,
 } from '../creative-brain/validation.js';
 import {
-  COPY_MODE, CONSTRAINT, FACT_KIND, FACT_STATUS, FORMAT_KIND, GENERATION_PURPOSE, LIMITS, REFERENCE_ROLE, SCHEMA, SOURCE_KIND, TEXT_ROLE,
+  COPY_MODE, CONSTRAINT, FACT_KIND, FACT_STATUS, FORMAT_KIND, GENERATION_PURPOSE, LIMITS, REFERENCE_ROLE, SCHEMA, SLIDE_DENSITY, SOURCE_KIND, TEXT_ROLE,
 } from './constants.js';
 
 // THE CONTENT REQUEST: what a person (or the Marketing handoff) asks Nordla to make, before any format or canvas is chosen. It is plain data validated here, closed (exact keys, no unknown key) and
@@ -126,7 +126,7 @@ export const sourceBytesOf = (raw) => new Map((Array.isArray(raw?.sources) ? raw
 
 /** A request, validated and normalized. Throws a BrainError naming the field. */
 export function normalizeRequest(raw) {
-  exact(raw, ['request_ref', 'locale', 'objective', 'audience', 'channel', 'channels', 'requested_format', 'requested_asset_count', 'constraints', 'copy', 'facts', 'sources', 'canvas'], 'request', ['request_ref']);
+  exact(raw, ['request_ref', 'locale', 'objective', 'audience', 'channel', 'channels', 'requested_format', 'requested_asset_count', 'slide_density', 'constraints', 'copy', 'facts', 'sources', 'canvas'], 'request', ['request_ref']);
   const locale = raw.locale == null ? 'en' : oneLine(raw.locale, 'request.locale', { max: 35 });
   if (!LOCALE.test(locale)) fail(BRAIN_ERROR.RULE_VIOLATION, 'request.locale is not a language tag', 'request.locale');
   const channelList = listOf(raw.channels ?? (raw.channel ? [raw.channel] : []), 'request.channels', { max: LIMITS.channels }, (v, w) => oneLine(v, w, { max: 60 }));
@@ -146,6 +146,7 @@ export function normalizeRequest(raw) {
     channels: channelList,
     requested_format: raw.requested_format == null ? null : enumOf(raw.requested_format, FORMAT_KIND, 'request.requested_format'),
     requested_asset_count: raw.requested_asset_count == null ? null : wholeNumber(raw.requested_asset_count, 'request.requested_asset_count', { min: 1, max: 20 }),
+    slide_density: raw.slide_density == null ? null : enumOf(raw.slide_density, SLIDE_DENSITY, 'request.slide_density'),
     constraints,
     copy,
     facts,

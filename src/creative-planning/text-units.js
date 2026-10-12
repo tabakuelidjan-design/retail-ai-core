@@ -89,6 +89,28 @@ export function sliceText(text, maxChars, locale = 'en') {
   return slices;
 }
 
+
+/**
+ * The smallest units a text is distributed in: its sentences (a sentence longer than `maxChars` is cut at the best boundary inside it). Each unit is a slice; `paragraph_end` says that a paragraph ends after it,
+ * so a distribution can prefer to cut where the author did. Covers every non-whitespace character once, in order.
+ * @returns {{ start, end, paragraph_end }[]}
+ */
+export function sentenceAtoms(text, maxChars, locale = 'en') {
+  const source = String(text);
+  const paragraphBreaks = [...source.matchAll(/\n[^\S\n]*\n/gu)].map((m) => m.index);
+  // a paragraph ends after an atom if only whitespace lies between the atom and the next paragraph break
+  const endsParagraph = (end) => paragraphBreaks.some((b) => b >= end && /^\s*$/u.test(source.slice(end, b)));
+  const atoms = [];
+  for (const s of segmenterFor(locale, 'sentence').segment(source)) {
+    const slice = trimmedSlice(source, s.index, s.index + s.segment.length);
+    if (slice.end <= slice.start) continue;
+    if (lengthOf(source, slice) <= maxChars) { atoms.push({ ...slice, paragraph_end: false }); continue; }
+    for (const part of sliceText(source.slice(slice.start, slice.end), maxChars, locale)) atoms.push({ start: slice.start + part.start, end: slice.start + part.end, paragraph_end: false });
+  }
+  atoms.forEach((a, i) => { a.paragraph_end = i === atoms.length - 1 || endsParagraph(a.end); });
+  return atoms;
+}
+
 /** The first sentence of a text as a slice (null if the text is empty). */
 export function firstSentence(text, locale = 'en') {
   const source = String(text);
