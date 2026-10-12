@@ -176,3 +176,24 @@ test('CE-15 no live call can happen in the benchmark: the global fetch is never 
   try { await runChaos(SCENARIOS.slice(0, 60)); } finally { globalThis.fetch = real; }
   assert.equal(used, 0);
 });
+
+test('CE-16 a replan resumes from an EARLIER committed stage: that stage and everything after it is uncommitted and runs again, the stages before it do not', async () => {
+  const hub = createStateHub(); const ran = { a: 0, b: 0, c: 0 };
+  const stages = [
+    stage('a', async () => { ran.a += 1; return { a: ran.a }; }),
+    stage('b', async () => { ran.b += 1; return { b: ran.b }; }),
+    stage('c', async (ctx) => { ran.c += 1; if (ctx.input.fixed !== true) throw Object.assign(new Error('x'), { code: 'PROVIDER_CAPABILITY_UNAVAILABLE' }); return { c: ran.c }; }, { replannable: true, handlers: { replan: async () => ({ restartAt: 'b', patch: { fixed: true } }) } }),
+  ];
+  const report = await run(stages, { hub });
+  assert.equal(report.terminal_state, TERMINAL_STATE.COMPLETED);
+  assert.deepEqual(ran, { a: 1, b: 2, c: 2 }); // a kept, b and c redone
+  assert.deepEqual(hub.handle('t', 'r').get('b'), { b: 2 });
+});
+
+test('CE-17 a run that never reached a terminal state is reported as evidence loss by the harness', async () => {
+  const env = createEnv();
+  env.hub.open('ten-x', 'run-x').commit('a', 1); // opened, never terminated
+  const open = S('A', 'core', 'clean_input', {}, async () => ({ report: { tenant: 'ten-x', run_id: 'run-x', terminal_state: 'COMPLETED', recoveries: [], recovery_depth: 0, provider_calls: 0 } }));
+  const out = await runScenario(open, env);
+  assert.ok(out.problems.includes('EVIDENCE_LOSS'));
+});

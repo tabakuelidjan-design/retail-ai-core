@@ -182,3 +182,14 @@ test('CS-13 capabilities: only a DECLARED, AUTHORIZED, same-outcome, same-region
   assert.throws(() => reg.register({ id: 'x', data_class: 'SECRET' }), /data_class/);
   assert.throws(() => reg.register({ id: 'y', data_class: 'PUBLIC', equivalentTo: [{ id: 'z', outcome: 'BETTER' }] }), /outcome/);
 });
+
+test('CS-14 a retry that finally commits clears the partial evidence of the failed attempt; a wrapper whose key is a field of the contract is never unwrapped', () => {
+  const run = createStateHub().open('t', 'r');
+  run.abort('b', { half: 1 }, 'SOME_CODE');
+  assert.notEqual(run.partial('b'), null);
+  run.commit('b', { done: true });
+  assert.equal(run.partial('b'), null);
+  const keep = readStructuredReply('{"answer":{"x":1}}', { module: 'm', stage: 's', expectedKeys: ['answer', 'x'] });
+  assert.deepEqual(keep.value, { answer: { x: 1 } }); // "answer" is a field here: nothing to unwrap
+  assert.deepEqual(keep.repairs, []);
+});
