@@ -31,6 +31,8 @@ const NEGATIONS = Object.freeze(['not', 'no', 'never', 'without', 'ne', 'pas', '
 const wordsOf = (t) => String(t).toLowerCase().match(/[\p{L}\p{N}'’-]+/gu) ?? [];
 // a claim word is recognised with up to two letters of inflection (a plural, a feminine, a conjugation): "certifié", "certifiées" and "certifiée" are the same claim
 const claimWordsIn = (t) => new Set(wordsOf(t).map((w) => w.replace(/['’]/g, '')).map((w) => CLAIM_WORDS.find((c) => w === c || (w.startsWith(c) && w.length - c.length <= 2))).filter(Boolean));
+/** The claim, offer or guarantee words of a text (up to two letters of inflection). */
+export const claimWordsOf = (t) => [...claimWordsIn(t)];
 const negationsIn = (t) => new Set(wordsOf(t).filter((w) => NEGATIONS.includes(w)));
 const multiset = (list) => [...list].sort().join('\u0001');
 const figuresIn = (t) => String(t).match(FIGURE) ?? [];

@@ -51,7 +51,7 @@ test('PP-5 the validation contract states the rule precisely: measured figures a
 
 test('PP-6 the decisions of this phase are in the register, with their wording', () => {
   const register = readFileSync(new URL('../NORDLA-DECISION-REGISTER.md', import.meta.url), 'utf8');
-  for (const id of ['NDR-P17', 'NDR-P18', 'NDR-P19', 'NDR-P20', 'NDR-P21', 'NDR-P22']) assert.ok(register.includes(`| ${id} |`), id);
-  for (const phrase of ['COPY_LOCKED', 'COPY_ADAPTABLE', 'COPY_GENERATABLE', 'format is decided before the canvas', 'No opaque runtime fallback chain', 'EUR 2.00', 'cannot be a blind spot']) assert.ok(register.includes(phrase), phrase);
+  for (const id of ['NDR-P17', 'NDR-P18', 'NDR-P19', 'NDR-P20', 'NDR-P21', 'NDR-P22', 'NDR-P23']) assert.ok(register.includes(`| ${id} |`), id);
+  for (const phrase of ['COPY_LOCKED', 'COPY_ADAPTABLE', 'COPY_GENERATABLE', 'format is decided before the canvas', 'No opaque runtime fallback chain', 'EUR 2.00', 'cannot be a blind spot', 'never silently replaced by a visually similar substitute']) assert.ok(register.includes(phrase), phrase);
   assert.ok(register.includes('| NDR-D01 | Multi-model routing | DECIDED / DEFERRED |'), 'NDR-D01 is untouched');
 });

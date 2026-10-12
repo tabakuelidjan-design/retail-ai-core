@@ -35,6 +35,9 @@ export const COMPONENT = Object.freeze({
   COPY_WRITER: 'nordla:copy-writer@1',
   CAMPAIGN_PLANNER: 'nordla:campaign-planner@1',
   ASSET_DIRECTOR: 'nordla:asset-director@1',
+  PRODUCTION_PLANNER: 'nordla:production-planner@1',
+  PRODUCT_IDENTITY_GUARD: 'nordla:product-identity-guard@1',
+  PROVIDER_GATE: 'nordla:provider-gate@1',
 });
 
 export const DECISION = Object.freeze({
@@ -76,6 +79,10 @@ export const DECISION = Object.freeze({
   CONTINUITY_CONTRACT: 'CONTINUITY_CONTRACT',
   CAMPAIGN_BUDGET: 'CAMPAIGN_BUDGET',
   CAMPAIGN_CHECKPOINT: 'CAMPAIGN_CHECKPOINT',
+  PRODUCT_IDENTITY: 'PRODUCT_IDENTITY',
+  PRODUCTION_SPEC: 'PRODUCTION_SPEC',
+  PRODUCTION_BUDGET: 'PRODUCTION_BUDGET',
+  PROVIDER_GATE: 'PROVIDER_GATE',
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));

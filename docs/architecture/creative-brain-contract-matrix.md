@@ -139,7 +139,7 @@ Instruction sha256 `c87dcb59b88c30e4`. 45 rows, 0 parity failures.
 
 ## ART_DIRECT
 
-Instruction sha256 `0b258bbb4f88edcf`. 52 rows, 0 parity failures.
+Instruction sha256 `8fe620fd67f887a2`. 52 rows, 0 parity failures.
 
 | kind | path / rule id | instruction text | validator | enforced |
 |---|---|---|---|---|

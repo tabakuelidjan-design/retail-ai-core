@@ -10,6 +10,11 @@ export const SUBSTITUTE_LEXICON = Object.freeze({
     'camera', 'lens', 'screen', 'écran', 'merchandise', 'packaging', 'box', 'boîte',
   ]),
   branding_price_and_text: Object.freeze(['logo', 'brand', 'label', 'price', 'prix', 'text', 'texte', 'letter', 'lettre', 'caption', 'watermark', 'slogan']),
+  // what a model calls the product when it is told not to call it the product: the casing, the blank, the unfinished piece, the shell (Attempt 12 asked for "a bare polymer shell ... half its surface still untouched" and the
+  // generator drew exactly such a hero object). A scene never holds anything that could be taken for the real product, or for an earlier or unfinished version of it.
+  product_look_alikes: Object.freeze([
+    'shell', 'housing', 'casing', 'sleeve', 'bumper', 'blank', 'polymer', 'silicone', 'protector', 'étui', 'boîtier', 'hoesje', 'unprinted', 'unfinished', 'half finished',
+  ]),
   competing_hero: Object.freeze(['hero', 'héros', 'centrepiece', 'centerpiece', 'protagonist', 'protagoniste', 'focal', 'main subject', 'sujet principal']),
 });
 /** Every refused word or phrase, flat. */

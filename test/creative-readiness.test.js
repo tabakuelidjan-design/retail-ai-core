@@ -8,6 +8,7 @@ import {
 import { auditContractParity } from '../src/creative-brain/parity.js';
 import { auditPlanningParity } from '../src/creative-planning/parity.js';
 import { auditCampaignParity } from '../src/creative-campaign/parity.js';
+import { auditProductionParity } from '../src/creative-production/parity.js';
 
 // THE CREATIVE READINESS GATE (`// CR-N` markers): one verdict for the whole pipeline (planning, Brain, campaign), for the exact code hash. Offline, fakes only.
 
@@ -20,18 +21,20 @@ const good = (hash) => ({
   clean_clones: { node20: { tests: 100, pass: 100, fail: 0 }, node24: { tests: 100, pass: 100, fail: 0 } },
   ci: { status: 'success' },
 });
-const parities = { PLANNING: auditPlanningParity(), BRAIN: auditContractParity(), CAMPAIGN: auditCampaignParity() };
+const parities = {
+  PLANNING: auditPlanningParity(), BRAIN: auditContractParity(), CAMPAIGN: auditCampaignParity(), PRODUCTION: auditProductionParity(),
+};
 const gate = { ready: true, status: 'CREATIVE_BRAIN_CONTRACT_PARITY_READY', reasons: [] };
 const verdict = (over = {}) => evaluateCreativeReadiness({
   parities, brainGate: gate, attestation: good('h'), hash: 'h', ...over,
 });
 
 test('CR-1 the pipeline is READY only when every component parity, the Brain gate and the whole attestation hold for this exact code', () => {
-  assert.ok(Object.values(parities).every((p) => p.ready), 'the three real audits pass');
+  assert.ok(Object.values(parities).every((p) => p.ready), 'the four real audits pass');
   const ok = verdict();
   assert.deepEqual({ status: ok.status, ready: ok.ready, reasons: ok.reasons }, { status: CREATIVE_READY, ready: true, reasons: [] });
-  assert.equal(CREATIVE_READY, 'CREATIVE_PIPELINE_READY'); assert.deepEqual(ACTIVE_COMPONENTS, ['PLANNING', 'BRAIN', 'CAMPAIGN']);
-  assert.deepEqual(Object.keys(ok.components), ['PLANNING', 'BRAIN', 'CAMPAIGN']); assert.ok(Object.values(ok.components).every((c) => c.parity_ready && c.attested && c.mutation_complete));
+  assert.equal(CREATIVE_READY, 'CREATIVE_PIPELINE_READY'); assert.deepEqual(ACTIVE_COMPONENTS, ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION']);
+  assert.deepEqual(Object.keys(ok.components), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION']); assert.ok(Object.values(ok.components).every((c) => c.parity_ready && c.attested && c.mutation_complete));
 });
 
 test('CR-2 every missing or failing piece of evidence names itself, component by component, and refuses', () => {
@@ -41,12 +44,16 @@ test('CR-2 every missing or failing piece of evidence names itself, component by
     ['planning parity', { parities: { ...parities, PLANNING: broken } }, /PLANNING_PARITY_FAILS: STAGE/],
     ['brain parity', { parities: { ...parities, BRAIN: broken } }, /BRAIN_PARITY_FAILS: STAGE/],
     ['campaign parity', { parities: { ...parities, CAMPAIGN: broken } }, /CAMPAIGN_PARITY_FAILS: STAGE/],
-    ['campaign audit missing', { parities: { PLANNING: parities.PLANNING, BRAIN: parities.BRAIN } }, /CAMPAIGN_PARITY_FAILS: no audit/],
+    ['production parity', { parities: { ...parities, PRODUCTION: broken } }, /PRODUCTION_PARITY_FAILS: STAGE/],
+    ['campaign audit missing', { parities: { PLANNING: parities.PLANNING, BRAIN: parities.BRAIN, PRODUCTION: parities.PRODUCTION } }, /CAMPAIGN_PARITY_FAILS: no audit/],
+    ['production audit missing', { parities: { PLANNING: parities.PLANNING, BRAIN: parities.BRAIN, CAMPAIGN: parities.CAMPAIGN } }, /PRODUCTION_PARITY_FAILS: no audit/],
     ['brain gate', { brainGate: { ready: false, reasons: ['ATTESTATION_IS_FOR_OTHER_CODE'] } }, /BRAIN_GATE_NOT_READY: ATTESTATION_IS_FOR_OTHER_CODE/],
     ['no attestation', { attestation: null }, /NO_ATTESTATION/],
     ['other code', { attestation: good('other') }, /ATTESTATION_IS_FOR_OTHER_CODE/],
     ['planning not covered', { attestation: { ...good('h'), components: ['BRAIN', 'CAMPAIGN'] } }, /ATTESTATION_DOES_NOT_COVER:PLANNING/],
-    ['campaign not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN'] } }, /ATTESTATION_DOES_NOT_COVER:CAMPAIGN/],
+    ['campaign not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN', 'PRODUCTION'] } }, /ATTESTATION_DOES_NOT_COVER:CAMPAIGN/],
+    ['production not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN', 'CAMPAIGN'] } }, /ATTESTATION_DOES_NOT_COVER:PRODUCTION/],
+    ['production sweep absent', { attestation: { ...good('h'), mutation: mutation('PRODUCTION', undefined) } }, /MUTATION_SWEEP_NOT_COMPLETE_OR_SURVIVORS_UNDOCUMENTED:PRODUCTION/],
     ['no components at all', { attestation: { ...good('h'), components: undefined } }, /ATTESTATION_DOES_NOT_COVER:BRAIN/],
     ['suite red', { attestation: { ...good('h'), full_suite: { tests: 5, pass: 4, fail: 1 } } }, /FULL_SUITE_NOT_GREEN/],
     ['planning sweep incomplete', { attestation: { ...good('h'), mutation: mutation('PLANNING', { total: 10, killed: 8 }) } }, /MUTATION_SWEEP_NOT_COMPLETE_OR_SURVIVORS_UNDOCUMENTED:PLANNING/],
@@ -72,11 +79,11 @@ test('CR-3 a component added to the pipeline cannot be a blind spot: the gate re
 
 test('CR-4 the real gate audits all three components and keeps the Brain gate', () => {
   const real = checkCreativeReadiness({ attestationFile: new URL('./does-not-exist.json', import.meta.url).pathname });
-  assert.deepEqual(Object.keys(real.parity), ['PLANNING', 'BRAIN', 'CAMPAIGN']);
+  assert.deepEqual(Object.keys(real.parity), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION']);
   assert.ok(Object.values(real.parity).every((p) => p.ready && p.failures === 0 && p.rows > 0));
   assert.equal(real.ready, false); assert.ok(real.reasons.some((r) => /NO_ATTESTATION/.test(r)));
   assert.ok('brain_gate' in real && typeof real.brain_gate.ready === 'boolean', 'the Brain gate is still evaluated');
-  assert.deepEqual(Object.keys(COMPONENT).sort(), ['BRAIN', 'CAMPAIGN', 'PLANNING']);
+  assert.deepEqual(Object.keys(COMPONENT).sort(), ['BRAIN', 'CAMPAIGN', 'PLANNING', 'PRODUCTION']);
 });
 
 test('CR-5 the live benchmark is wired to the combined gate; the Brain gate stays available and unchanged', () => {
