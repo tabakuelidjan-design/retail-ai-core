@@ -41,7 +41,7 @@ test('BB-1 --check makes no network call, reports the worst case, and writes not
   assert.equal(w.vlmCalls.length, 0);
   assert.equal(w.store.files.size, 0);
   assert.deepEqual(report.bounds, BOUNDS);
-  assert.deepEqual(report.worst_case.calls, { text: 18, text_stage_calls: 9, text_protocol_repairs_max: 9, image: 2, vision: 4, total: 24 });
+  assert.deepEqual(report.worst_case.calls, { text: 13, text_stage_calls: 9, text_protocol_repairs_max: 4, image: 3, vision: 4, total: 20 });
   assert.ok(report.worst_case.cost_eur.total <= report.worst_case.max_spend_eur && report.worst_case.max_spend_eur <= HARD_CEILING_EUR);
   assert.ok(report.checks.every((c) => c.ok));
   assert.ok(report.checks.some((c) => /supported by a tool/.test(c.name)));
@@ -63,9 +63,9 @@ test('BB-3 the cost is bounded by construction: worst case from the bounds, a ha
   const c = worstCase({ canvas: { width: 1080, height: 1350 }, criticChars: 20000 });
   const stageCalls = 1 + (2 * BOUNDS.concept_rounds) + (2 * MAX_CANDIDATES);
   assert.equal(c.calls.text_stage_calls, stageCalls);
-  assert.equal(c.calls.text_protocol_repairs_max, stageCalls); // one protocol repair per stage at most
-  assert.equal(c.calls.text, 2 * stageCalls);
-  assert.equal(c.calls.image, MAX_CANDIDATES);
+  assert.equal(c.calls.text_protocol_repairs_max, BOUNDS.protocol_repairs_per_run); // one repair per stage at most, a few for the whole run
+  assert.equal(c.calls.text, stageCalls + BOUNDS.protocol_repairs_per_run);
+  assert.equal(c.calls.image, BOUNDS.environment_images_per_run); // up to three environment images per scene, shared by the whole run
   assert.equal(c.calls.vision, 2 * MAX_CANDIDATES);
   assert.ok(c.max_spend_eur >= c.cost_eur.total && c.max_spend_eur - c.cost_eur.total < 0.05 + 1e-9);
   assert.ok(c.max_spend_eur < HARD_CEILING_EUR);
@@ -377,15 +377,17 @@ test('BB-20 a candidate stopped BEFORE the image is BLOCKED; one stopped AFTER t
   const after = world({ pixelsOf: noisy });
   const r2 = await live(after);
   assert.equal(r2.status, RESULT_STATE.TECHNICAL_FAIL);
-  assert.equal((await after.store.readJson('summary.json')).candidates[0].reason, 'ENVIRONMENT_NOT_EMPTY');
+  // the provider drew something in the product zone in EVERY image of the bounded set: a precise provider limitation, after exactly three images, with no critic
+  assert.equal((await after.store.readJson('summary.json')).candidates[0].reason, 'PROVIDER_ENVIRONMENT_LIMITATION');
+  assert.equal(after.envRequests.length, 3);
   assert.equal(after.vlmCalls.length, 0);
 });
 
 test('BB-21 the limits given to the ports are the benchmark limits: calls, images, spend; a ceiling and a lock race stop the run', async () => {
   const w = world();
   await live(w);
-  assert.equal(w.portArgs[0].maxCalls, 18); // 9 stage calls + at most one protocol repair per stage
-  assert.equal(w.budgets[0].maxImages, MAX_CANDIDATES);
+  assert.equal(w.portArgs[0].maxCalls, 13); // 9 stage calls + at most four protocol repairs for the whole run
+  assert.equal(w.budgets[0].maxImages, BOUNDS.environment_images_per_run);
   assert.equal(w.budgets[0].maxVideoSeconds, 0);
   const cost = (await runCheck(world().deps)).worst_case;
   assert.equal(w.budgets[0].maxSpendEur, cost.max_spend_eur);

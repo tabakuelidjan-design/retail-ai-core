@@ -29,8 +29,13 @@ import { BRAIN_FAILURE, classifyBrainFailure } from './failure.js';
 // same concept. The result is never "PASS": it is one of four states, and the owner's approval is always PENDING.
 
 export const BENCHMARK_ID = 'creative-brain-benchmark-001';
-export const BOUNDS = Object.freeze({ concept_rounds: 2, concepts_per_round: 3, production_candidates_per_concept: 1, recovery_actions: 1 });
+// environment_candidates_per_scene: the bounded reliability recovery for a text-only provider that may draw an object in the product zone; environment_images_per_run: the whole run shares them (the recovery candidate gets what is left)
+export const BOUNDS = Object.freeze({ concept_rounds: 2, concepts_per_round: 3, production_candidates_per_concept: 1, recovery_actions: 1, environment_candidates_per_scene: 3, environment_images_per_run: 3, protocol_repairs_per_run: 4 });
 export const MAX_CANDIDATES = 1 + BOUNDS.recovery_actions;
+/** The operation id of the n-th environment image of a candidate: image 1 keeps the historical id, each further image has its own (a budget reservation id is never reused). */
+export const environmentOperationId = (operationId, candidateIndex = 1) => (candidateIndex > 1 ? `${operationId}-c${candidateIndex}` : operationId);
+/** The environment images a run has already paid for, counted from what each candidate recorded (not from the port: the bound must hold whatever the port does). */
+const imagesUsedBy = (candidates) => candidates.reduce((n, c) => n + (c.environment_candidates?.length ?? (c.environment ? 1 : 0)), 0);
 export const RESULT_STATE = Object.freeze({
   BLOCKED: 'BLOCKED',
   TECHNICAL_FAIL: 'TECHNICAL_FAIL',
@@ -55,9 +60,11 @@ const REQUIRED_CAPABILITIES = Object.freeze([
  */
 export function worstCase({ canvas, criticChars, usdToEur = 1 }) {
   const stageCalls = 1 + (2 * BOUNDS.concept_rounds) + (2 * MAX_CANDIDATES); // FRAME; IDEATE + SELECT per round; ART_DIRECT + COMPOSE per candidate
-  const protocolRepairs = stageCalls * PROTOCOL_REPAIR.max_reasks_per_stage; // each stage may re-ask ONCE when its answer is not parseable JSON, never otherwise
+  // each stage may re-ask ONCE when its answer is not parseable JSON, never otherwise, and the whole run shares a few of them (the port is bounded to the stage calls plus these): the three environment images of a scene
+  // would otherwise push the worst case over the hard ceiling
+  const protocolRepairs = Math.min(stageCalls * PROTOCOL_REPAIR.max_reasks_per_stage, BOUNDS.protocol_repairs_per_run);
   const text = stageCalls + protocolRepairs;
-  const image = MAX_CANDIDATES;
+  const image = BOUNDS.environment_images_per_run;
   const vision = 2 * MAX_CANDIDATES;
   const textEach = priceTextEur({ inputTokens: BRAIN_PORT_LIMITS.max_input_tokens, outputTokens: BRAIN_PORT_LIMITS.max_output_tokens, usdToEur });
   const imageEach = priceImagesEur({ n: 1, size: `${canvas.width}x${canvas.height}`, usdToEur });
@@ -170,7 +177,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
   try { await deps.store.takeLock(); } catch { return { ...report, status: 'BLOCKED: BENCHMARK_ALREADY_ATTEMPTED' }; }
 
   const at = deps.now();
-  const budget = new SpendGuard({ maxSpendEur: cost.max_spend_eur, maxImages: MAX_CANDIDATES, maxVideoSeconds: 0 });
+  const budget = new SpendGuard({ maxSpendEur: cost.max_spend_eur, maxImages: BOUNDS.environment_images_per_run, maxVideoSeconds: 0 });
   const journal = deps.journal;
   const brainLedger = createDecisionLedger();
   const record = { benchmark_id: BENCHMARK_ID, started_at: at, bounds: BOUNDS, worst_case: cost, owner_approval: OWNER_APPROVAL, manual_creative_steering: null, candidates: [], recovery: null, error: null };
@@ -207,7 +214,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
 
     for (let n = 1; n <= MAX_CANDIDATES; n += 1) {
       currentStage = `CANDIDATE_${n}`;
-      const candidate = await produceCandidate({ n, plan, deps, brief, fonts, expression, briefs, budget, journal, at });
+      const candidate = await produceCandidate({ n, plan, deps, brief, fonts, expression, briefs, budget, journal, at, imagesUsed: imagesUsedBy(record.candidates) });
       record.candidates.push(candidate);
       await persist();
       if (!candidate.recovery) break; // a technical failure or a blocked candidate was never critiqued: there is nothing to recover from
@@ -216,6 +223,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
       if (diagnosis.action === 'NONE') break;
       if (recovered || n >= MAX_CANDIDATES) { candidate.recovery.executed = false; candidate.recovery.not_executed_reason = 'THE_RECOVERY_BOUND_IS_REACHED'; break; }
       if (diagnosis.action !== 'RECONCEPT') { candidate.recovery.executed = false; candidate.recovery.not_executed_reason = 'ONE_PRODUCTION_CANDIDATE_PER_CONCEPT: the recommendation is recorded for the owner'; break; }
+      if (BOUNDS.environment_images_per_run - imagesUsedBy(record.candidates) < 1) { candidate.recovery.executed = false; candidate.recovery.not_executed_reason = 'NO_ENVIRONMENT_IMAGE_LEFT_IN_THE_RUN_BUDGET'; break; }
       if (brain.remainingConceptRounds() < 1) { candidate.recovery.executed = false; candidate.recovery.not_executed_reason = 'NO_CONCEPT_ROUND_LEFT_WITHIN_THE_BOUNDS'; break; }
       currentStage = 'CREATIVE_BRAIN_RECONCEPT';
       const replanned = await brain.replan({ brief, plan, critique: candidate.critique, conceptCritique: candidate.concept_critique, history: [] });
@@ -234,7 +242,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
   }
 
   // every stop reports what was called and what it cost
-  record.provider_calls = { text: textCalls, image: record.candidates.filter((c) => c.environment).length, vision: record.candidates.filter((c) => c.critique).length * 2 };
+  record.provider_calls = { text: textCalls, image: imagesUsedBy(record.candidates), vision: record.candidates.filter((c) => c.critique).length * 2 };
   record.provider_calls.total = record.provider_calls.text + record.provider_calls.image + record.provider_calls.vision;
   if (record.error) { record.error.provider_calls = record.provider_calls; record.error.cost = budget.snapshot(); }
   // the final state is the state of the last candidate that exists (a failure while preparing a recovery does not hide a candidate the owner can review); with no candidate it is BLOCKED
@@ -247,7 +255,7 @@ export async function runLive(deps, { confirmed = false } = {}) {
   return { ...report, status: state, final: record.final, candidates: record.candidates.map((c) => ({ n: c.n, state: c.state, concept_id: c.concept_id, png: c.png ? { sha256: c.png.sha256 } : null })), budget: budget.snapshot(), owner_approval: OWNER_APPROVAL };
 }
 
-async function produceCandidate({ n, plan, deps, brief, fonts, expression, briefs, budget, journal, at }) {
+async function produceCandidate({ n, plan, deps, brief, fonts, expression, briefs, budget, journal, at, imagesUsed = 0 }) {
   const tag = String(n).padStart(3, '0');
   const candidateRef = `candidate:${BENCHMARK_ID}-candidate-${tag}`;
   const ledger = createDecisionLedger();
@@ -260,11 +268,13 @@ async function produceCandidate({ n, plan, deps, brief, fonts, expression, brief
   const ports = { segmenter: createLocalProductSegmenter({ ledger }), environment: deps.ports.environmentPort({ budget, journal, operationId: `${BENCHMARK_ID}-environment-${tag}` }) };
   const guardian = deps.ports.guardian({ candidateRef, at });
   const brainPart = { plan_id: plan.plan_id, concept_id: plan.concept.concept_id, concept: plan.concept, art_direction: plan.art_direction, composition: plan.composition, scene: plan.scene, production_plan: plan.production_plan, layout_choice: { source: plan.layout_choice.source, recipe_id: plan.layout_choice.recipe?.recipe_id ?? plan.layout_choice.recipe_id, reason: plan.layout_choice.reason } };
-  const result = await runProductPreservingCreative({ at, brief, fonts, agents, ports, ledger, guardian, creativePlan: plan });
+  // the first candidate may use the whole bounded set of environments; the recovery candidate only what the run budget has left
+  const environmentCandidates = Math.max(1, Math.min(BOUNDS.environment_candidates_per_scene, BOUNDS.environment_images_per_run - imagesUsed));
+  const result = await runProductPreservingCreative({ at, brief, fonts, agents, ports, ledger, guardian, creativePlan: plan, environmentCandidates });
   const candidate = {
     n, ref: candidateRef, ...brainPart, runtime_status: result.status, reason: result.reason ?? null, runtime_ledger: result.ledger ?? ledger.entries(), steering: result.steering ?? null,
     preflight: result.preflight ? { status: result.preflight.status } : null, fidelity: result.fidelity ? { gate: result.fidelity.gate, failed: result.fidelity.failed } : null, guardian: result.guardian ? { outcome: result.guardian.outcome } : null,
-    environment: result.environment ?? null, png: null, state: null, critique: null, concept_critique: null, quality: null, verdict: null, recovery: null,
+    environment: result.environment ?? null, environment_candidates: result.environment_candidates ?? null, png: null, state: null, critique: null, concept_critique: null, quality: null, verdict: null, recovery: null,
   };
   const layout = ledger.of('LAYOUT_RECIPE')[0]?.outcome ?? null;
   candidate.layout = layout ? { source: layout.source, recipe_id: layout.recipe_id, fallback_reason: layout.fallback_reason ?? null } : null;

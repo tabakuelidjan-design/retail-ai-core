@@ -31,6 +31,9 @@ const CONSTANTS = Object.freeze({
 });
 export const DIRECTOR_CONSTANTS = CONSTANTS;
 
+/** The most environment images ONE scene may use: a bounded reliability recovery, never a loop (the provider is text-only and may draw an object in the reserved zone although it was asked not to). */
+export const MAX_ENVIRONMENT_CANDIDATES = 3;
+
 const blocked = (reason, extra = {}) => Object.freeze({ status: 'BLOCKED', reason, ...extra });
 
 /**
@@ -43,7 +46,7 @@ const blocked = (reason, extra = {}) => Object.freeze({ status: 'BLOCKED', reaso
  *  ledger    the decision ledger
  */
 export async function runProductPreservingCreative({
-  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null, ambition = null, creativePlan = null,
+  at, brief, fonts, agents, ports, ledger, guardian = null, revision = null, ambition = null, creativePlan = null, environmentCandidates = 1,
 }) {
   const { ids, asset, brand } = brief;
   const format = { ...brief.format };
@@ -183,8 +186,48 @@ export async function runProductPreservingCreative({
           });
         } else built = buildEnvironmentRequest({ direction, expression: brand.expression, canvas, ledger });
       } catch (error) { return stop(error.code ?? 'ENVIRONMENT_REQUEST_REFUSED', { message: error.message }); }
-      environment = await ports.environment.generate({ request: { ...built, capability: 'IMAGE_GENERATE', purpose: 'BACKGROUND', input_asset_refs: [] }, expected_size: canvas });
-      evidence.environment = environment.provenance;
+      const envRequest = { ...built, capability: 'IMAGE_GENERATE', purpose: 'BACKGROUND', input_asset_refs: [] };
+      const wanted = Number.isInteger(environmentCandidates) ? Math.max(1, Math.min(MAX_ENVIRONMENT_CANDIDATES, environmentCandidates)) : 1;
+      if (wanted === 1) {
+        environment = await ports.environment.generate({ request: envRequest, expected_size: canvas });
+        evidence.environment = environment.provenance;
+      } else {
+        // BOUNDED MULTI-ENVIRONMENT: the SAME scene, the SAME request (no change of concept, art direction or prompt), up to `wanted` images; each is judged alone by the deterministic product-zone gate and the
+        // FIRST one that passes wins (no aesthetic ranking, no hand-picking). If none passes, the run stops with a precise provider limitation. Never a fourth image.
+        const requestSha = createHash('sha256').update(JSON.stringify({ prompt: envRequest.prompt, negative_prompt: envRequest.negative_prompt, size: envRequest.size })).digest('hex');
+        const judge = (candidate) => {
+          let pixels;
+          try { pixels = P.decodePng(candidate.output_bytes); } catch { return { suitable: false, rejection: 'THE_ENVIRONMENT_IS_NOT_A_DECODABLE_PNG' }; }
+          if (pixels.width !== canvas.width || pixels.height !== canvas.height) return { suitable: false, rejection: 'THE_ENVIRONMENT_SIZE_DIFFERS_FROM_THE_CANVAS' };
+          const candidatePlan = planLayout({ providerId: candidate.provenance.provider_id, size: { width: pixels.width, height: pixels.height } });
+          if (!candidatePlan.recipe.recipe_id || !candidatePlan.ok) return { suitable: false, rejection: 'THE_LAYOUT_COULD_NOT_BE_SOLVED_FOR_THIS_ENVIRONMENT' };
+          const suitability = assessEnvironment({ environment: pixels, productBox: candidatePlan.solved.document.layers.find((l) => l.type === 'PRODUCT').geometry });
+          return { suitable: suitability.suitable, rejection: suitability.suitable ? null : 'ENVIRONMENT_NOT_EMPTY', suitability };
+        };
+        const tried = [];
+        let lastVerdict = null;
+        for (let index = 1; index <= wanted && !environment; index += 1) {
+          const candidate = await ports.environment.generate({ request: envRequest, expected_size: canvas, candidate_index: index });
+          const verdict = judge(candidate);
+          lastVerdict = verdict;
+          tried.push({ index, provenance: candidate.provenance, suitable: verdict.suitable, rejection: verdict.rejection, measured: verdict.suitability?.measured ?? null });
+          ledger.record({
+            decision: DECISION.ENVIRONMENT_CANDIDATE, decided_by: COMPONENT.ENVIRONMENT_SUITABILITY_GATE, rule: 'THE_FIRST_ENVIRONMENT_THAT_PASSES_THE_PRODUCT_ZONE_GATE_WINS_WITH_NO_RANKING', basis: [creativePlan?.scene?.scene_id ?? 'direction'],
+            outcome: {
+              candidate: index, of: wanted, request_sha256: requestSha, request_id: candidate.provenance.request_id, output_sha256: candidate.provenance.sha256, suitable: verdict.suitable, rejection: verdict.rejection,
+              zone: verdict.suitability?.zone ?? null, measured: verdict.suitability?.measured ?? null, limit: verdict.suitability?.limit ?? null, selected: verdict.suitable,
+            },
+          });
+          evidence.environment = candidate.provenance;
+          if (verdict.suitable) environment = candidate;
+        }
+        evidence.environment_candidates = tried;
+        if (!environment) {
+          // the final decision of the gate is still recorded (the last candidate's measurements), so the record is complete
+          ledger.record({ decision: DECISION.ENVIRONMENT_SUITABILITY, decided_by: COMPONENT.ENVIRONMENT_SUITABILITY_GATE, rule: 'NO_ENVIRONMENT_OF_THE_BOUNDED_SET_IS_A_CALM_SURFACE_WHERE_THE_PRODUCT_IS_PLACED', basis: [], outcome: { suitable: false, zone: lastVerdict?.suitability?.zone ?? null, measured: lastVerdict?.suitability?.measured ?? null, limit: lastVerdict?.suitability?.limit ?? null, candidates: tried.length } });
+          return stop('PROVIDER_ENVIRONMENT_LIMITATION', { candidates: tried.map((t) => ({ index: t.index, rejection: t.rejection, measured: t.measured, sha256: t.provenance?.sha256 ?? null })) });
+        }
+      }
     } else {
       return stop('UNSUPPORTED_CAPABILITY_IN_THIS_RUNTIME', { capability: request.capability });
     }
@@ -298,6 +341,7 @@ export async function runProductPreservingCreative({
     fidelity: { gate: gate.outcome, observations, failed },
     render: { render_mode: rendered.render_mode, typography_mode: rendered.typography_mode, resolutions: log.resolutions.length, image_draws: log.image_draws },
     environment: environment.provenance,
+    environment_candidates: evidence.environment_candidates ?? null, // the whole bounded set when more than one image was generated for the scene
     segmentation: { quality: segmentation.quality, cutout_sha256: segmentation.cutout_sha256 },
     direction,
     copy: copy.items,

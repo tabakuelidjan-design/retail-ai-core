@@ -25,6 +25,7 @@ import { createBrandGuardianGate } from '../src/creative-runtime/index.js';
 import {
   BENCHMARK_ID, createFileStore, runCheck, runExplain, runLive,
 } from '../src/creative-brain-benchmark/index.js';
+import { environmentOperationId } from '../src/creative-brain-benchmark/runner.js';
 import { checkReadiness } from '../src/creative-brain-benchmark/readiness.js';
 import { buildBrandPackage } from './build-benchmark-brand-package.mjs';
 import { createBenchmarkResolver } from './benchmark-resources.mjs';
@@ -98,8 +99,9 @@ if (!mode) {
       ports: {
         brainPort: ({ budget, journal: j, maxCalls }) => createQwenBrainPort({ config, budget, journal: j, maxCalls }),
         environmentPort: ({ budget, journal: j, operationId }) => ({
-          async generate({ request }) {
-            const result = await generateEnvironmentBackground({ config, request, budget, journal: j, outputStore, operationId });
+          async generate({ request, candidate_index: candidateIndex = 1 }) {
+            // candidate 1 keeps the historical operation id; each further candidate of the same scene has its own (a reservation id is never reused)
+            const result = await generateEnvironmentBackground({ config, request, budget, journal: j, outputStore, operationId: environmentOperationId(operationId, candidateIndex) });
             return {
               output_bytes: await outputStore.readBytes(result.output),
               provenance: {

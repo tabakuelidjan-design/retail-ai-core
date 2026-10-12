@@ -82,10 +82,12 @@ export function fakeEnvironmentPort({ pixelsOf = null } = {}) {
   const calls = [];
   return {
     calls,
-    async generate({ request, expected_size: size }) {
+    async generate({ request, expected_size: size, candidate_index: candidateIndex = 1 }) {
       calls.push(request);
-      const bytes = pixelsOf ? pixelsOf(size) : png(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0f2"/><stop offset="1" stop-color="#d4d9de"/></linearGradient></defs><rect width="${size.width}" height="${size.height}" fill="url(#g)"/></svg>`);
-      return { output_bytes: bytes, provenance: { provider_id: 'fake-environment-provider', model: 'fake', region: 'test', request_id: 'env-req-1', lane: 'ENVIRONMENT', carries_input_asset: false, sha256: sha(bytes) } };
+      // `pixelsOf(size, { candidate_index })` may return null to use the default calm environment
+      const custom = pixelsOf ? pixelsOf(size, { candidate_index: candidateIndex }) : null;
+      const bytes = custom ?? png(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0f2"/><stop offset="1" stop-color="#d4d9de"/></linearGradient></defs><rect width="${size.width}" height="${size.height}" fill="url(#g)"/></svg>`);
+      return { output_bytes: bytes, provenance: { provider_id: 'fake-environment-provider', model: 'fake', region: 'test', request_id: `env-req-${calls.length}`, lane: 'ENVIRONMENT', carries_input_asset: false, sha256: sha(bytes) } };
     },
   };
 }

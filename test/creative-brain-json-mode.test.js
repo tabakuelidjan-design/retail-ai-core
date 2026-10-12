@@ -90,7 +90,7 @@ test('JM-4 a whole Brain run through the port: every call of every stage sends j
   }
   const s = await w.store.readJson('summary.json');
   assert.equal(s.provider_calls.text, 5);
-  assert.equal(worstCase({ canvas: { width: 1080, height: 1350 }, criticChars: 6000 }).calls.text, 18); // the bounds did not move
+  assert.equal(worstCase({ canvas: { width: 1080, height: 1350 }, criticChars: 6000 }).calls.text, 13); // the stage calls plus the run's shared protocol repairs
 });
 
 test('JM-5 json_object does not bypass the validators: valid JSON with wrong keys, wrong enums or contradictory relations is still refused, each with its own cause', async () => {
