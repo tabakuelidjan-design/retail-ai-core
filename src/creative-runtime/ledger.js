@@ -28,6 +28,11 @@ export const COMPONENT = Object.freeze({
   COMPOSITION_PLANNER: 'nordla:composition-planner@1',
   PRODUCTION_STRATEGIST: 'nordla:production-strategist@1',
   CREATIVE_RECOVERY: 'nordla:creative-recovery@1',
+  INPUT_UNDERSTANDING: 'nordla:input-understanding@1',
+  CONTENT_ANALYST: 'nordla:content-analyst@1',
+  FORMAT_PLANNER: 'nordla:format-planner@1',
+  COPY_ADAPTER: 'nordla:copy-adapter@1',
+  COPY_WRITER: 'nordla:copy-writer@1',
 });
 
 export const DECISION = Object.freeze({
@@ -58,6 +63,12 @@ export const DECISION = Object.freeze({
   COMPOSITION_PLAN: 'COMPOSITION_PLAN',
   PRODUCTION_PLAN: 'PRODUCTION_PLAN',
   RECOVERY_DECISION: 'RECOVERY_DECISION',
+  INPUT_UNDERSTANDING: 'INPUT_UNDERSTANDING',
+  CONTENT_ANALYSIS: 'CONTENT_ANALYSIS',
+  FORMAT_PLAN: 'FORMAT_PLAN',
+  COPY_ADAPTATION: 'COPY_ADAPTATION',
+  COPY_GENERATION: 'COPY_GENERATION',
+  CLARIFICATION: 'CLARIFICATION',
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));

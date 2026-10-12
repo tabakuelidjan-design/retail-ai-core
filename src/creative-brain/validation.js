@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 
 // Shared validators of the Creative Brain contracts. Pure: no clock, no randomness, no I/O. A canonical Creative Brain object is a CLOSED object (exact keys), made of single-line text, closed
-// vocabularies and lists, with NO number anywhere (no coordinate, no size, no score, no count): geometry belongs to the deterministic solver and a judgment is a word with evidence, never a score.
+// vocabularies and lists. A contract that a language model AUTHORS holds NO number anywhere (no coordinate, no size, no score, no count): geometry belongs to the deterministic solver and a judgment is
+// a word with evidence, never a score. That is the rule `noNumbers` enforces on a model's answer. It is not a ban on figures in Nordla's own data: a deterministic system may state a MEASURED figure
+// (a word count, a line count, an information density, an asset count, a layout capacity, a cost, a confidence, a dimension it measured) in a contract it computes, and the planning contracts do.
+// What stays forbidden is a figure a model wrote: never a figure a model wrote, whether a geometry, a dimension, a cost or a factual value, without evidence.
 // Messages name the field, never the submitted value.
 
 export const BRAIN_ERROR = Object.freeze({
