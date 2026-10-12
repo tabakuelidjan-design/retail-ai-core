@@ -31,6 +31,13 @@ test('GP-2 plurals are recognised, in the description of the product and in the 
   assert.ok(detectSubstitutes({ text: 'a stack of mugs', identity: bottle }).some((h) => h.kind === 'FAMILY'));
 });
 
+test('GP-2b plural forms ending in -es are recognised too', () => {
+  const box = identityOf('Coffret cadeau en carton');
+  assert.equal(box.family, 'GIFT_BOX');
+  assert.ok(detectSubstitutes({ text: 'two boxes on the bench', identity: box }).some((h) => h.kind === 'FAMILY' && h.words.includes('box')));
+  assert.deepEqual(familiesOf('Des coffrets cadeaux'), ['GIFT_BOX']);
+});
+
 test('GP-3 when the family of a product is not resolved, every family its description matches applies', () => {
   const ambiguous = identityOf('Gourde et coque assorties');
   assert.equal(ambiguous.family, null);
@@ -116,6 +123,15 @@ test('GP-9 only the layers a specified scene uses are requested: a scene whose c
   assert.ok(result.scenes.some((s) => s.status === 'BLOCKED'));
   const used = new Set(result.scenes.filter((s) => s.status === 'SPECIFIED').flatMap((s) => s.layers.filter((l) => l.source === 'GENERATED').map((l) => l.request_key)));
   assert.ok(result.shared_layers.length > 0 && result.shared_layers.every((r) => used.has(r.request_key)), 'every requested layer is used by a scene that will be made');
+});
+
+test('GP-9b when no scene can carry its copy, nothing at all is requested from a generator', async () => {
+  const wide = 'x'.repeat(130);
+  const body = Array(24).fill(wide).join(' ');
+  const { result } = await produced({ assets: 6, requestOver: { copy: [{ copy_ref: 'copy://body', mode: 'COPY_LOCKED', text: body }] } }, { font: FONT });
+  assert.ok(result.scenes.length > 0 && result.scenes.every((s) => s.status === 'BLOCKED'));
+  assert.deepEqual(result.shared_layers, []); assert.equal(result.production.budget.generated_layers, 0);
+  assert.equal(result.production.copy_integrity.recoverable, true);
 });
 
 test('GP-10 a corrupted checkpoint is caught: a stored scene whose product is not the pinned one blocks the production', async () => {
