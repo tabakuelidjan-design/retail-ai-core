@@ -1,8 +1,12 @@
 {
-  "verified_commit": "9bccba322f4ee3f836a713f9b4a493130dabd766",
+  "verified_commit": "217f81774ccf061db8379797ccf4f546b88f9896",
   "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
   "full_suite": {
-    "pending": true
+    "tests": 2257,
+    "pass": 2257,
+    "fail": 0,
+    "skipped": 0,
+    "node": "24 (Windows)"
   },
   "mutation": {
     "total": 154,
@@ -11,9 +15,21 @@
     "note": "151 earlier (149 killed + 2 equivalents carried: the extra BRAIN_MALFORMED check in the repair trigger, a Set instead of null for arrays in the duplicate-key scanner) + 3 for the product look-alike lexicon and its print in the ART_DIRECT instruction, all killed."
   },
   "clean_clones": {
-    "pending": true
+    "node20": {
+      "tests": 2257,
+      "pass": 2255,
+      "fail": 0,
+      "skipped": 2
+    },
+    "node24": {
+      "tests": 2257,
+      "pass": 2255,
+      "fail": 0,
+      "skipped": 2
+    }
   },
   "ci": {
-    "status": "pending"
+    "status": "success",
+    "run": 38289570413
   }
 }

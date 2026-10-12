@@ -1,5 +1,5 @@
 {
-  "verified_commit": "9bccba322f4ee3f836a713f9b4a493130dabd766",
+  "verified_commit": "217f81774ccf061db8379797ccf4f546b88f9896",
   "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
   "components": [
     "PLANNING",
@@ -8,7 +8,11 @@
     "PRODUCTION"
   ],
   "full_suite": {
-    "pending": true
+    "tests": 2257,
+    "pass": 2257,
+    "fail": 0,
+    "skipped": 0,
+    "node": "24 (Windows)"
   },
   "mutation": {
     "PLANNING": {
@@ -37,10 +41,22 @@
     }
   },
   "clean_clones": {
-    "pending": true
+    "node20": {
+      "tests": 2257,
+      "pass": 2255,
+      "fail": 0,
+      "skipped": 2
+    },
+    "node24": {
+      "tests": 2257,
+      "pass": 2255,
+      "fail": 0,
+      "skipped": 2
+    }
   },
   "ci": {
-    "status": "pending"
+    "status": "success",
+    "run": 38289570413
   },
-  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning). The Node 20 clean clone failed once on an unrelated finance-hosting test while two containers and a mutation sweep shared the machine; it was green on the re-run alone and on the final commit."
+  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning, layered production). Mutation evidence per component: PLANNING and CAMPAIGN carry over from Phase 2 (their modules are unchanged except one additive export and the ledger enums); BRAIN and PRODUCTION were swept again on the final code. The attestation commits themselves change documents only, which the code hash does not cover."
 }
