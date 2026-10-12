@@ -1,11 +1,11 @@
 {
-  "verified_commit": "1094a9179a5f4f36acf96ddd97dd5b6d883085b3",
-  "code_hash": "6624acb3fdde6c15bdc5befbe92e0a7aea1a92f4",
-  "full_suite": { "tests": 2039, "pass": 2039, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 90, "killed": 88, "survivors_documented": 2, "note": "79 earlier (contract layer, parity, gate, runner, protocol repair, answer shape, envelope, duplicate keys) + 11 for generation-time JSON mode (one survivor, a prompt check limited to the system text, closed by a new test). Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and a Set instead of null for arrays in the duplicate-key scanner." },
+  "verified_commit": "91fd0edf909fdc482494dabe83d2d16466cb2961",
+  "code_hash": "bb11344ea46cbfcffa2108fd75c9a6ceb1d320f1",
+  "full_suite": { "tests": 2044, "pass": 2044, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
+  "mutation": { "total": 98, "killed": 96, "survivors_documented": 2, "note": "90 earlier (contract layer, parity, gate, runner, protocol repair, answer shape, envelope, duplicate keys, JSON mode) + 8 for the selection policy of incident 9, all killed. Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and a Set instead of null for arrays in the duplicate-key scanner." },
   "clean_clones": {
-    "node20": { "tests": 2039, "pass": 2037, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2039, "pass": 2037, "fail": 0, "skipped": 2 }
+    "node20": { "tests": 2044, "pass": 2042, "fail": 0, "skipped": 2 },
+    "node24": { "tests": 2044, "pass": 2042, "fail": 0, "skipped": 2, "note": "the first Node 24 run reported 1 failure (the test name was not captured by the script); a second full run of the same clean clone was 0 failures, and the product-mask test alone passed. Recorded as an unidentified intermittent failure; the parked product-mask flake is the known candidate, not proven." }
   },
-  "ci": { "status": "success", "run": 38181613269 }
+  "ci": { "status": "success", "run": 38206532250 }
 }
