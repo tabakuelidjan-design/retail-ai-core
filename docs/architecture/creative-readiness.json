@@ -1,18 +1,20 @@
 {
-  "verified_commit": "217f81774ccf061db8379797ccf4f546b88f9896",
-  "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
+  "verified_commit": "a64d7beea0230c878791dd53cea60849e151b31f",
+  "code_hash": "00dc3ec581296636f0487f481a697770336e4005",
   "components": [
     "PLANNING",
     "BRAIN",
     "CAMPAIGN",
-    "PRODUCTION"
+    "PRODUCTION",
+    "LAYERED_RUNTIME"
   ],
   "full_suite": {
-    "tests": 2257,
-    "pass": 2257,
-    "fail": 0,
+    "tests": 2284,
+    "pass": 2282,
+    "fail": 2,
     "skipped": 0,
-    "node": "24 (Windows)"
+    "node": "24 (Windows)",
+    "note": "provisional: the two failures were CL-7 (fixed in a64d7be) and CR-6 (this attestation)"
   },
   "mutation": {
     "PLANNING": {
@@ -37,26 +39,31 @@
       "total": 112,
       "killed": 112,
       "survivors_documented": 0,
-      "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived."
+      "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change."
+    },
+    "LAYERED_RUNTIME": {
+      "total": 137,
+      "killed": 130,
+      "survivors_documented": 7,
+      "note": "The layered runtime (runLayeredCreative), the plain-ground matte, the raster operations, the compositor under-composition mode, the readiness levels in the gate, the readiness verdict and the runtime parity probes: 138 mutants (137 without the no-op control). A first sweep killed 110; the 27 survivors were each answered by a new test (killed on the second and third sweeps) or documented here. Seven are documented, all equivalent or unreachable by construction: the foreground prop in the base under the product (the foreground band is above the product band, so the filter is the same), the plate band offset (z within its band, one plate), two props of one band (the production planner already refuses such a scene with PROVENANCE_BROKEN, so the runtime never sees it), an unmeasurable identity gate passing (a branch inherited from the single-image runtime that no fixture can reach), a failed preflight running (the same inherited branch; the layout engine honours the zones first), wired without its stages (the stage flags are constants that are all true in the real module; productionReadinessLevel tests them separately) and the always-true parity probe (a probe is a tautology unless the code it probes is broken, which the matte and runtime mutants do)."
     }
   },
   "clean_clones": {
     "node20": {
-      "tests": 2257,
-      "pass": 2255,
-      "fail": 0,
+      "tests": 2284,
+      "pass": 2281,
+      "fail": 1,
       "skipped": 2
     },
     "node24": {
-      "tests": 2257,
-      "pass": 2255,
-      "fail": 0,
+      "tests": 2284,
+      "pass": 2280,
+      "fail": 2,
       "skipped": 2
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38289570413
+    "status": "pending"
   },
-  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning, layered production). Mutation evidence per component: PLANNING and CAMPAIGN carry over from Phase 2 (their modules are unchanged except one additive export and the ledger enums); BRAIN and PRODUCTION were swept again on the final code. The attestation commits themselves change documents only, which the code hash does not cover."
+  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning, layered production, layered runtime). PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged apart from additive exports); PRODUCTION and LAYERED_RUNTIME were swept again on the final code. The attestation commits themselves change documents only, which the code hash does not cover."
 }

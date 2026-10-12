@@ -1,12 +1,13 @@
 {
-  "verified_commit": "217f81774ccf061db8379797ccf4f546b88f9896",
-  "code_hash": "86c6bddb3d7961109f63f1227ff6cbacc3713035",
+  "verified_commit": "a64d7beea0230c878791dd53cea60849e151b31f",
+  "code_hash": "00dc3ec581296636f0487f481a697770336e4005",
   "full_suite": {
-    "tests": 2257,
-    "pass": 2257,
-    "fail": 0,
+    "tests": 2284,
+    "pass": 2282,
+    "fail": 2,
     "skipped": 0,
-    "node": "24 (Windows)"
+    "node": "24 (Windows)",
+    "note": "provisional: the two failures were CL-7 (fixed in a64d7be) and CR-6 (this attestation)"
   },
   "mutation": {
     "total": 154,
@@ -16,20 +17,19 @@
   },
   "clean_clones": {
     "node20": {
-      "tests": 2257,
-      "pass": 2255,
-      "fail": 0,
+      "tests": 2284,
+      "pass": 2281,
+      "fail": 1,
       "skipped": 2
     },
     "node24": {
-      "tests": 2257,
-      "pass": 2255,
-      "fail": 0,
+      "tests": 2284,
+      "pass": 2280,
+      "fail": 2,
       "skipped": 2
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38289570413
+    "status": "pending"
   }
 }
