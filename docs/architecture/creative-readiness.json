@@ -1,0 +1,55 @@
+{
+  "verified_commit": "5705fd199408c99401fab20b2677a1df874caee7",
+  "code_hash": "19322c1e60b3e5b54f845b8ac14e83d337b871a3",
+  "components": [
+    "PLANNING",
+    "BRAIN",
+    "CAMPAIGN"
+  ],
+  "full_suite": {
+    "tests": 2194,
+    "pass": 2194,
+    "fail": 0,
+    "skipped": 0,
+    "node": "24 (Windows)"
+  },
+  "mutation": {
+    "PLANNING": {
+      "total": 82,
+      "killed": 81,
+      "survivors_documented": 1,
+      "note": "Phase 1 content planning (66: 65 killed, 1 equivalent - the standard format resources are all within the production limit) + Phase 2 changes to the planning (16: slide density, balanced distribution on sentences, preparation reuse, text-led spec; all killed after one round of new tests)."
+    },
+    "BRAIN": {
+      "total": 151,
+      "killed": 149,
+      "survivors_documented": 2,
+      "note": "149 earlier + 2 for the additive stage methods of the Brain (planFrame assessment gate, directArt without hints), all killed. Two equivalent mutants carried over: the extra BRAIN_MALFORMED check in the repair trigger and a Set instead of null for arrays in the duplicate-key scanner."
+    },
+    "CAMPAIGN": {
+      "total": 68,
+      "killed": 68,
+      "survivors_documented": 0,
+      "note": "57 for the campaign planner, density classes, sequence, continuity and diversity, budget, working state and asset director + 11 for the combined readiness gate. A first sweep left 12 survivors in the campaign and 7 in the planning changes; each was killed by a new test (or its redundant branch was simplified) and the sweep was run again."
+    }
+  },
+  "clean_clones": {
+    "node20": {
+      "tests": 2194,
+      "pass": 2192,
+      "fail": 0,
+      "skipped": 2
+    },
+    "node24": {
+      "tests": 2194,
+      "pass": 2192,
+      "fail": 0,
+      "skipped": 2
+    }
+  },
+  "ci": {
+    "status": "success",
+    "run": 38274023386
+  },
+  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning). The Node 20 clean clone failed once on an unrelated finance-hosting test while two containers and a mutation sweep shared the machine; it was green on the re-run alone and on the final commit."
+}

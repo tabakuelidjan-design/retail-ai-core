@@ -1,11 +1,35 @@
 {
-  "verified_commit": "f3af3b8762ccd563180ae3dff9b2eb1b59ec3f0a",
-  "code_hash": "73aa19556488a90b15d36071c02e8af14a43a287",
-  "full_suite": { "tests": 2134, "pass": 2134, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 215, "killed": 212, "survivors_documented": 3, "note": "149 earlier (through bounded multi-environment generation; the Creative Brain, runtime and gates are unchanged by Phase 1 except the ledger enums) + 66 for the Phase 1 content planning (format planner, text units, copy policy, request, input understanding, inventory, legacy bridge, capacity): 65 killed, 1 equivalent (the standard format resources are all within the production limit, so forcing the flag true changes nothing observable). A first sweep left 15 survivors; each was killed by a new test and the sweep was run again on the committed code. Three equivalent mutants carried: the extra BRAIN_MALFORMED check in the repair trigger, a Set instead of null for arrays in the duplicate-key scanner, and the planning production-limit flag." },
-  "clean_clones": {
-    "node20": { "tests": 2134, "pass": 2132, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2134, "pass": 2132, "fail": 0, "skipped": 2 }
+  "verified_commit": "5705fd199408c99401fab20b2677a1df874caee7",
+  "code_hash": "19322c1e60b3e5b54f845b8ac14e83d337b871a3",
+  "full_suite": {
+    "tests": 2194,
+    "pass": 2194,
+    "fail": 0,
+    "skipped": 0,
+    "node": "24 (Windows)"
   },
-  "ci": { "status": "success", "run": 38263921219 }
+  "mutation": {
+    "total": 151,
+    "killed": 149,
+    "survivors_documented": 2,
+    "note": "149 earlier + 2 for the additive stage methods of the Brain (planFrame assessment gate, directArt without hints), all killed. Two equivalent mutants carried over: the extra BRAIN_MALFORMED check in the repair trigger and a Set instead of null for arrays in the duplicate-key scanner."
+  },
+  "clean_clones": {
+    "node20": {
+      "tests": 2194,
+      "pass": 2192,
+      "fail": 0,
+      "skipped": 2
+    },
+    "node24": {
+      "tests": 2194,
+      "pass": 2192,
+      "fail": 0,
+      "skipped": 2
+    }
+  },
+  "ci": {
+    "status": "success",
+    "run": 38274023386
+  }
 }
