@@ -30,6 +30,32 @@ export function parseJsonObject(text, where = 'answer') {
   try { return JSON.parse(jsonSlice(text, where)); } catch (error) { if (error?.code === BRAIN_ERROR.MALFORMED) throw error; return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
 }
 
+// A key that is a name may carry an invisible character or another casing (a near miss the contract repairs); a key that holds a blank or punctuation, or is long, is prose.
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
+const isProseKey = (key) => { const bare = key.replace(INVISIBLE, ''); return bare.length > 64 || /[\s,;:.!?"'()[\]{}]/.test(bare); };
+/** The first key, at any depth, that is prose, not a name (a sentence, a clause, a stray fragment): an object whose keys are prose is a STRUCTURE THAT COLLAPSED, not an answer. */
+export function findCollapsedKey(value, path = 'answer') {
+  if (Array.isArray(value)) { for (const [i, v] of value.entries()) { const hit = findCollapsedKey(v, `${path}[${i}]`); if (hit) return hit; } return null; }
+  if (value === null || typeof value !== 'object') return null;
+  for (const [key, v] of Object.entries(value)) {
+    if (isProseKey(key)) return { path, key };
+    const hit = findCollapsedKey(v, `${path}.${key}`);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * One reply read as ONE JSON object whose keys are all identifiers. A model that drops the brackets of a short list can emit text that is still valid JSON ("a", "b" : "next" parses as a pair whose key is
+ * the sentence "b"): that is a syntax accident, never a creative choice, so it is as malformed as unparseable text and eligible for the one protocol repair.
+ */
+export function parseAnswer(text, where = 'answer') {
+  const parsed = parseJsonObject(text, where);
+  const collapsed = findCollapsedKey(parsed, where);
+  if (collapsed) fail(BRAIN_ERROR.MALFORMED, 'the model returned a structure that collapsed: a key is a sentence, not a name', where, { problem: 'STRUCTURE_COLLAPSED', at: collapsed.path });
+  return parsed;
+}
+
 /**
  * JSON.parse silently keeps the LAST of two equal keys in one object, which would let the parser pick between two answers. Returns the first duplicated key (and where), or null. Valid JSON only.
  */
@@ -138,7 +164,7 @@ export async function askAndNormalize({ complete, instruction, stage, schema = n
   let parsed;
   let repair = null;
   let originalBody = null;
-  try { parsed = parseJsonObject(reply?.text, stage); } catch (parseError) {
+  try { parsed = parseAnswer(reply?.text, stage); } catch (parseError) {
     const body = String(reply?.text ?? '');
     originalBody = body;
     if (parseError?.code !== BRAIN_ERROR.MALFORMED || body.trim() === '') throw withEvidence(parseError, stage, reply, [], [], null);
@@ -152,7 +178,7 @@ export async function askAndNormalize({ complete, instruction, stage, schema = n
       throw withEvidence(new BrainError(BRAIN_ERROR.PORT_FAILED, `${stage}: the language-model port failed during the protocol repair`, stage, safeCause(cause)), stage, original, [], [], repair, body);
     }
     repair.repair_request_id = reply?.request_id ?? null; repair.added_cost_eur = costOf(reply);
-    try { parsed = parseJsonObject(reply?.text, stage); repair.outcome = PROTOCOL_REPAIR.outcome.PARSED; } catch (second) {
+    try { parsed = parseAnswer(reply?.text, stage); repair.outcome = PROTOCOL_REPAIR.outcome.PARSED; } catch (second) {
       repair.outcome = PROTOCOL_REPAIR.outcome.STILL_MALFORMED;
       throw withEvidence(second, stage, reply, [], [], repair, body);
     }

@@ -1,4 +1,5 @@
 import { normalizeCreativeDirection } from '../creative-intelligence/creative-direction.js';
+import { assessBrief, BRIEF_STATUS } from './brief-assessment.js';
 import { createArtDirector } from './art-direction.js';
 import { composeLayout, createCompositionPlanner } from './composition.js';
 import { createConceptDirector } from './concept.js';
@@ -160,6 +161,9 @@ export function createCreativeBrain({ ports, complete = null, ledger = null, bou
     async plan({ brief, rejected = [] }) {
       const observation = await atStage('OBSERVE', null, async () => observeBrief({ brief }));
       ledgerRecord(ledger, DECISION.OBSERVATION, COMPONENT.CREATIVE_OBSERVER, 'DETERMINISTIC_READING_OF_THE_BRIEF', { approved_text_roles: observation.approved_text_roles, asset_origin: observation.asset_origin, claims: observation.claim_refs.length });
+      // a brief that lacks what a frame needs, or contradicts itself, gets a precise question and costs nothing: no model is asked, nothing is invented
+      const assessment = assessBrief({ brief });
+      if (assessment.status !== BRIEF_STATUS.PROCEED) return deepFreeze({ status: assessment.status, assessment, observation });
       const { frame, meta } = await atStage('FRAME', null, () => framer.frame({ observation }));
       progress.problem_frame = frame;
       ledgerRecord(ledger, DECISION.PROBLEM_FRAME, COMPONENT.PROBLEM_FRAMER, 'FRAME_BEFORE_IDEATION', { frame_id: frame.frame_id, rationale: frame.rationale, model: meta.model, request_id: meta.request_id, key_repairs: meta.key_repairs ?? [], ...repairOf(meta) });

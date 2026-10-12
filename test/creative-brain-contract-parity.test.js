@@ -327,6 +327,7 @@ const FAILURES_B = {
 
 test('PF-10 real model failure patterns, every spec stage: A is recovered in one call with a journal and the same value; B gets exactly one re-ask and is recovered; C is refused precisely, with no repair and no re-ask', async () => {
   const specStages = STAGE_CONTRACTS.filter((c) => c.normalize);
+  const collapsedChecked = new Set();
   assert.equal(specStages.length, 5);
   for (const c of specStages) {
     for (const seed of SEEDS.slice(0, 8)) {
@@ -349,6 +350,23 @@ test('PF-10 real model failure patterns, every spec stage: A is recovered in one
         const twice = await runSeq(c, [broken, broken, text]).catch((e) => e);
         assert.equal(twice.code, 'BRAIN_MALFORMED', `${c.stage} B ${name} twice`);
         assert.equal(twice.evidence.protocol_repair.outcome, 'STILL_MALFORMED');
+      }
+      // D: a list written WITHOUT its brackets that still parses ("a", "b" : "next" is a pair whose key is a sentence): a collapsed structure, repaired by the ONE re-ask, never silently accepted
+      const validKeys = Object.keys(valid);
+      const listKey = validKeys.find((k) => Array.isArray(valid[k]) && valid[k].length >= 2 && valid[k].every((v) => typeof v === 'string') && /\s/.test(valid[k][1]));
+      if (listKey) {
+        collapsedChecked.add(c.stage);
+        const nextKey = validKeys[validKeys.indexOf(listKey) + 1] ?? validKeys[0];
+        const parts = Object.entries(valid).map(([k, v]) => (k === listKey ? `${JSON.stringify(k)}:${JSON.stringify(v[0])},${JSON.stringify(v[1])} : ${JSON.stringify(nextKey)}` : `${JSON.stringify(k)}:${JSON.stringify(v)}`));
+        const collapsed = `{${parts.join(',')}}`;
+        JSON.parse(collapsed); // it really IS valid JSON: that is the point
+        const fixed = await runSeq(c, [collapsed, text]);
+        assert.deepEqual(fixed.value, expected, `${c.stage} D collapsed list`);
+        assert.equal(fixed.calls, 2, `${c.stage} D collapsed list`);
+        assert.equal(fixed.meta.protocol_repair.outcome, 'PARSED');
+        const again = await runSeq(c, [collapsed, collapsed, text]).catch((e) => e);
+        assert.equal(again.code, 'BRAIN_MALFORMED', `${c.stage} D twice`);
+        assert.equal(again.detail.problem, 'STRUCTURE_COLLAPSED');
       }
       // C: refused precisely, in ONE call
       const keys = Object.keys(valid);
@@ -373,6 +391,7 @@ test('PF-10 real model failure patterns, every spec stage: A is recovered in one
       }
     }
   }
+  assert.ok(collapsedChecked.has('FRAME'), `the collapsed-list class was exercised on ${[...collapsedChecked]}`);
 });
 
 test('PF-9 the generated matrix document is current (it is regenerated from the audit, never edited by hand)', async () => {

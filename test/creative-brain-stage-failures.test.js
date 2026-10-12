@@ -119,5 +119,5 @@ test('SF-5 the stopping cause is one name of a closed list, by stage and code', 
   assert.equal(c('IDEATE', null, 'TypeError'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
   assert.equal(c(null, 'BRAIN_UNKNOWN_KEY'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
   assert.equal(c('OBSERVE', 'BRAIN_MALFORMED'), BRAIN_FAILURE.CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT);
-  assert.equal(Object.keys(BRAIN_FAILURE).length, 14);
+  assert.equal(Object.keys(BRAIN_FAILURE).length, 16); // 14 plus the two causes a brief can have before any model is asked
 });

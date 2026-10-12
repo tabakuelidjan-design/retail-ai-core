@@ -1,5 +1,5 @@
 import { principlesAsText, principlesFor, REASONING_STAGE } from './knowledge.js';
-import { list, obj, renderContract, text, validateAnswer } from './contract.js';
+import { list, obj, renderContract, renderRules, text, validateAnswer } from './contract.js';
 import { askAndNormalize } from './model-port.js';
 import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, listOf, noNumbers, oneLine,
@@ -23,7 +23,17 @@ export const FRAME_SPEC = obj({
   what_we_show: text(), audience: text(), understood_immediately: text(), felt: text(), remembered: text(), commercial_objective: text(), occasion_context: text(),
   generic_risks: list(text({ max: 200 }), { min: 1, max: 5 }), distinctive_levers: list(text({ max: 200 }), { min: 1, max: 5 }), rationale: text(),
 });
-export const FRAME_CONTRACT = Object.freeze({ stage: 'FRAME', spec: FRAME_SPEC, rules: Object.freeze([]) });
+// What the brief may simply not say. An audience, a commercial objective and an occasion are FACTS of the brief; a framer that is forced to state them invents them. When the brief does not give one, the honest value
+// is UNKNOWN (a later stage and the person see it as unknown). The other fields are the framer's own judgment or are derived from what the brief does give, so they are always stated.
+export const UNKNOWN = 'UNKNOWN';
+export const MAY_BE_UNKNOWN = Object.freeze(['audience', 'commercial_objective', 'occasion_context']);
+const UNKNOWN_WORDING = /^\s*(?:unknown|n\/a|not (?:stated|specified|given|provided|applicable)|unspecified|none stated)\.?\s*$/i;
+export const FRAME_RULES = Object.freeze([
+  { id: 'UNKNOWN_IS_HONEST', enforcedBy: 'problem-frame.js#buildProblemFrame', statement: `audience, commercial_objective and occasion_context are facts the brief may not give: when it does not, write exactly ${UNKNOWN} for that field and never invent one. Every other field you always state.` },
+]);
+export const FRAME_CONTRACT = Object.freeze({ stage: 'FRAME', spec: FRAME_SPEC, rules: FRAME_RULES });
+/** The fields of a frame that the framer marked UNKNOWN. */
+export const frameUnknowns = (frame) => MAY_BE_UNKNOWN.filter((k) => frame[k] === UNKNOWN);
 const FRAME_KEYS = ['frame_id', 'what_we_show', 'audience', 'understood_immediately', 'felt', 'remembered', 'commercial_objective', 'occasion_context', 'fixed', 'may_change', 'generic_risks', 'distinctive_levers', 'rationale'];
 
 /** OBSERVE: the facts of the brief that a frame may rest on. Pure; holds references and words, never pixels. */
@@ -60,6 +70,7 @@ export function fixedFrom(observation) {
  */
 export function buildProblemFrame({ observation, model }) {
   const v = validateAnswer(FRAME_CONTRACT, model, 'frame');
+  for (const key of MAY_BE_UNKNOWN) if (UNKNOWN_WORDING.test(v[key])) v[key] = UNKNOWN; // another way of saying "the brief does not say" is the same statement
   const body = {
     what_we_show: v.what_we_show,
     audience: v.audience,
@@ -94,6 +105,7 @@ export function buildFramerInstruction({ observation }) {
     'You are the Nordla problem framer. Before any idea is sought, you frame the creative problem for a product visual from the observation you are given.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
     ...renderContract(FRAME_SPEC, 'answer'),
+    ...renderRules(FRAME_RULES),
     'generic_risks name what would make the result generic or template-like for THIS product, audience and occasion; distinctive_levers name what could make it distinctive. occasion_context says what occasion or buying situation the product serves, or that none applies.',
     'You do not propose a concept, a layout or a scene here. You never use numbers. rationale is one concise sentence of why this framing, for the record; it is not a reasoning log.',
     'Reason with these principles of art direction:',

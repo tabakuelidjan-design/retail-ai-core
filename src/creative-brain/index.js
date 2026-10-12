@@ -14,3 +14,4 @@ export * from './concept-critic.js';
 export * from './recovery.js';
 export * from './brain.js';
 export * from './contract.js';
+export * from './brief-assessment.js';

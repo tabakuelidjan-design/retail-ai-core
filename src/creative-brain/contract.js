@@ -64,7 +64,7 @@ export function validateSpec(spec, value, where) {
 export function validateAnswer({ spec, rules = [] }, value, where, ctx = {}) {
   noNumbers(value, where);
   const out = validateSpec(spec, value, where);
-  for (const rule of rules) rule.check(out, ctx, where);
+  for (const rule of rules) rule.check?.(out, ctx, where); // a rule enforced elsewhere (enforcedBy) has no check here
   return out;
 }
 
@@ -108,7 +108,7 @@ const skeleton = (spec, indent = '') => {
   switch (spec.kind) {
     case 'text': return '"<one line of text>"';
     case 'word': return `"<one of: ${Object.values(spec.vocab).join(' | ')}>"`;
-    case 'list': return `[${skeleton(spec.item, indent)}, ...]`;
+    case 'list': return `[${skeleton(spec.item, indent)}, ${skeleton(spec.item, indent)}, ...]`; // two items shown: a list is always written inside square brackets, however short
     case 'map': return `{ "<one of: ${Object.values(spec.keyVocab).join(' | ')}>": ${skeleton(spec.value, indent)}, ... }`;
     case 'object': return `{\n${Object.entries(spec.fields).map(([key, child]) => `${next}"${key}": ${skeleton(child, next)}`).join(',\n')}\n${indent}}`;
     default: return '""';

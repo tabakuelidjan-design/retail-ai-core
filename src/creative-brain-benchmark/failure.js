@@ -18,6 +18,8 @@ export const BRAIN_FAILURE = Object.freeze({
   COMPOSITION_PLAN_INVALID: 'COMPOSITION_PLAN_INVALID',
   CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT: 'CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT',
   VALID_CREATIVE_BRAIN_REJECTION: 'VALID_CREATIVE_BRAIN_REJECTION',
+  BRIEF_NEEDS_CLARIFICATION: 'BRIEF_NEEDS_CLARIFICATION', // the brief lacks what a frame needs: a question, not a guess, and no model call
+  BRIEF_CONTRADICTORY: 'BRIEF_CONTRADICTORY', // the brief contradicts itself: a question, not a choice
 });
 
 /** @param {object} input { stage, name, code, problem } : the Brain stage that failed (error.brain_stage) and the safe facts of its error */

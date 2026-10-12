@@ -188,6 +188,14 @@ export async function runLive(deps, { confirmed = false } = {}) {
     const planned = await brain.plan({ brief });
     record.problem_frame = planned.problem_frame ?? planned.plan?.problem_frame ?? null;
     record.concept_rounds = planned.rounds ?? planned.plan?.rounds ?? [];
+    if (planned.assessment) {
+      // the brief itself needs a person before any model is asked
+      const contradictory = planned.status === 'USER_CONTRADICTION';
+      record.provider_calls = { text: textCalls, image: 0, vision: 0, total: textCalls };
+      record.final = { state: RESULT_STATE.BLOCKED, reason: contradictory ? BRAIN_FAILURE.BRIEF_CONTRADICTORY : BRAIN_FAILURE.BRIEF_NEEDS_CLARIFICATION, provider_calls: record.provider_calls, cost: budget.snapshot(), stopped_at: 'OBSERVE', questions: planned.assessment.issues.map((i) => ({ code: i.code, field: i.field, question: i.question })), note: 'the brief needs an answer from a person before the Brain can frame it: nothing was asked of any model and nothing was invented', owner_approval: OWNER_APPROVAL };
+      await persist();
+      return { ...report, status: RESULT_STATE.BLOCKED, final: record.final, owner_approval: OWNER_APPROVAL };
+    }
     if (planned.status !== 'PLANNED') {
       record.provider_calls = { text: textCalls, image: 0, vision: 0, total: textCalls };
       record.final = { state: RESULT_STATE.BLOCKED, reason: BRAIN_FAILURE.NO_CONCEPT_MEETS_BAR, provider_calls: record.provider_calls, cost: budget.snapshot(), classification: BRAIN_FAILURE.VALID_CREATIVE_BRAIN_REJECTION, stopped_at: 'SELECT_CONCEPT', note: 'no concept met the bar within the bounded rounds: nothing was produced (a valid rejection, the bar is not lowered)', owner_approval: OWNER_APPROVAL };
