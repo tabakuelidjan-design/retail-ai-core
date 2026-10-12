@@ -8,3 +8,5 @@ export * from './production-planner.js';
 export * from './compositor.js';
 export * from './gate.js';
 export * from './parity.js';
+export * from './raster-ops.js';
+export * from './prop-matte.js';

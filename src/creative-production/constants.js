@@ -110,3 +110,47 @@ export const PRODUCTION_UNIT_COSTS = Object.freeze({
   vision_critic_eur: 0.01,
   image_eur_by_size_class: Object.freeze({ UP_TO_1024: 0.034, ABOVE_1024: 0.069 }),
 });
+
+/** Declared policy of the layered RUNTIME: how a cut-out prop is sized and placed around the real product, and how far a foreground prop is pulled over the product corner (the compositor then MEASURES the overlap). */
+export const LAYERED_RUNTIME_POLICY = Object.freeze({
+  prop_height_share: Object.freeze({ BACKGROUND: 0.16, MIDGROUND: 0.2, FOREGROUND: 0.14 }),
+  margin_of_width: 0.04,
+  clearance_of_width: 0.02,
+  foreground_inset: 0.25,
+});
+
+/** The plain-ground matte of a generated prop, declared: the ground must be plain, the object single, whole and of a plausible size. A prop that fails is refused; the matte is never relaxed to pass. */
+export const MATTE_POLICY = Object.freeze({
+  ring_of_min_side: 0.02,
+  ring_tolerance: 24,
+  ring_min_share: 0.98,
+  ground_low: 18,
+  ground_high: 40,
+  max_stray_share: 0.05,
+  min_area_share: 0.02,
+  max_area_share: 0.6,
+});
+
+/** Why a layered run stops. Every stop is explicit and names what replanning is needed; no stop is answered by another strategy on the spot. */
+export const LAYERED_BLOCK = Object.freeze({
+  SCENE_NOT_SPECIFIED: 'SCENE_NOT_SPECIFIED',
+  PRODUCT_IDENTITY_NOT_VERIFIED: 'PRODUCT_IDENTITY_NOT_VERIFIED',
+  PRODUCT_ASSET_DOES_NOT_MATCH_THE_IDENTITY: 'PRODUCT_ASSET_DOES_NOT_MATCH_THE_IDENTITY',
+  PROVIDER_GATE_NOT_OPEN: 'PROVIDER_GATE_NOT_OPEN',
+  TOOL_DIFFERS_FROM_THE_SELECTED_TOOL: 'TOOL_DIFFERS_FROM_THE_SELECTED_TOOL',
+  PRODUCTION_BLOCKED_BY_BUDGET: 'PRODUCTION_BLOCKED_BY_BUDGET',
+  SEGMENTATION_LOW_CONFIDENCE: 'SEGMENTATION_LOW_CONFIDENCE',
+  NO_EXECUTABLE_LAYOUT: 'NO_EXECUTABLE_LAYOUT',
+  THE_LAYOUT_COULD_NOT_BE_SOLVED: 'THE_LAYOUT_COULD_NOT_BE_SOLVED',
+  GENERATED_LAYER_REJECTED: 'GENERATED_LAYER_REJECTED',
+  NO_ROOM_FOR_A_PROP: 'NO_ROOM_FOR_A_PROP',
+  COMPOSITION_REFUSED: 'COMPOSITION_REFUSED',
+  LOCKED_TEXT_ALTERED: 'LOCKED_TEXT_ALTERED',
+  TEXT_ROLE_NOT_EXECUTABLE: 'TEXT_ROLE_NOT_EXECUTABLE',
+  NO_BRAND_COLOUR_PAIR_READS: 'NO_BRAND_COLOUR_PAIR_READS',
+  THE_PRODUCT_PRESERVING_RUNTIME_NEEDS_A_COMPOSITE_STRATEGY: 'THE_PRODUCT_PRESERVING_RUNTIME_NEEDS_A_COMPOSITE_STRATEGY',
+});
+
+export const READINESS_LEVEL = Object.freeze({
+  NOT_READY: 'NOT_READY', CONTRACT_READY: 'CONTRACT_READY', IMPLEMENTATION_READY: 'IMPLEMENTATION_READY', RUNTIME_EXECUTABLE: 'RUNTIME_EXECUTABLE',
+});

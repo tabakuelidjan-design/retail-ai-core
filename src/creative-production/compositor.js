@@ -15,16 +15,18 @@ const B64 = (bytes) => Buffer.from(bytes).toString('base64');
 const inside = (x, y, r) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
 
 /**
+ * `requireProduct: false` composes the layers UNDER the product only (the plate and the background and midground props); the product is then drawn by the deterministic renderer and a layer at or above the product is refused.
  * @param {object} input { canvas: { width, height }, layers: [{ layer_id, kind, z, png, x, y, overlap? }], protectedRegions: [{ x, y, width, height }] (in canvas pixels), rasterize? (the rasterizer; tests inject a faulty one) }
  * @returns {{ status: 'COMPOSED'|'REFUSED', png, report }}
  */
 export function composeLayers({
-  canvas, layers, protectedRegions = [], rasterize = rasterizeToPixels,
+  canvas, layers, protectedRegions = [], rasterize = rasterizeToPixels, requireProduct = true,
 }) {
   const problems = [];
   const sorted = [...layers].sort((a, b) => a.z - b.z);
   const products = sorted.filter((l) => l.kind === LAYER_KIND.PRODUCT);
-  if (products.length !== 1) problems.push('EXACTLY_ONE_PRODUCT_LAYER');
+  if (requireProduct ? products.length !== 1 : products.length !== 0) problems.push(requireProduct ? 'EXACTLY_ONE_PRODUCT_LAYER' : 'NO_PRODUCT_LAYER_IN_AN_UNDER_COMPOSITION');
+  if (!requireProduct && sorted.some((l) => LAYER_Z[l.kind] >= LAYER_Z[LAYER_KIND.PRODUCT])) problems.push('A_LAYER_AT_OR_ABOVE_THE_PRODUCT_IN_AN_UNDER_COMPOSITION');
   sorted.forEach((l, i) => {
     if (l.kind === LAYER_KIND.TEXT) problems.push('TEXT_IS_NOT_DRAWN_HERE');
     if (Math.floor(l.z / 10) * 10 !== LAYER_Z[l.kind]) problems.push(`Z_NOT_IN_THE_BAND:${l.layer_id}`);

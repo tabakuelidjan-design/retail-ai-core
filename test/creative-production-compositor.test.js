@@ -87,7 +87,7 @@ test('LC-7 transparent pixels of a layer cover nothing: a prop cut out of its gr
 test('PG-1 the provider gate fails closed on every condition, names each, and never calls a provider', async () => {
   const { result } = await produced({ assets: 5 });
   const ready = { ready: true, status: 'CREATIVE_PIPELINE_READY' };
-  const open = (over = {}) => evaluateProviderGate({ production: result, readiness: ready, compositorWired: true, ...over });
+  const open = (over = {}) => evaluateProviderGate({ production: result, readiness: ready, ...over });
   assert.equal(open().status, GATE_STATUS.READY_PENDING_OWNER_GO); assert.deepEqual(open().reasons, [GATE_REASON.OWNER_GO_PENDING]);
   assert.equal(open({ ownerGo: true }).status, GATE_STATUS.OPEN_BY_OWNER); assert.deepEqual(open({ ownerGo: true }).reasons, []);
   assert.equal(open().provider_calls, 0); assert.equal(open({ ownerGo: true }).provider_calls, 0);
@@ -96,7 +96,7 @@ test('PG-1 the provider gate fails closed on every condition, names each, and ne
     ['no readiness', { readiness: null }, GATE_REASON.PIPELINE_NOT_READY],
     ['readiness not ready', { readiness: { ready: false, status: 'NOT_READY' } }, GATE_REASON.PIPELINE_NOT_READY],
     ['readiness ready but another status', { readiness: { ready: true, status: 'CREATIVE_BRAIN_CONTRACT_PARITY_READY' } }, GATE_REASON.PIPELINE_NOT_READY],
-    ['compositor not wired', { compositorWired: false }, GATE_REASON.COMPOSITOR_NOT_WIRED_TO_THE_RUNTIME],
+    ['compositor not wired', { runtime: { wired: false } }, GATE_REASON.COMPOSITOR_NOT_WIRED_TO_THE_RUNTIME],
     ['identity not verified', { production: { ...result, product_identity: { ...result.product_identity, status: 'AMBIGUOUS' } } }, GATE_REASON.PRODUCT_IDENTITY_NOT_VERIFIED],
     ['a scene not specified', { production: { ...result, scenes: [{ ...result.scenes[0], status: 'BLOCKED' }, ...result.scenes.slice(1)] } }, GATE_REASON.PRODUCTION_NOT_SPECIFIED],
     ['production blocked', { production: { ...result, status: 'BLOCKED' } }, GATE_REASON.PRODUCTION_NOT_SPECIFIED],
@@ -107,7 +107,7 @@ test('PG-1 the provider gate fails closed on every condition, names each, and ne
     assert.equal(g.status, GATE_STATUS.NOT_READY, name); assert.ok(g.reasons.includes(reason), `${name}: ${g.reasons}`);
   }
   assert.equal(open().compositorWired, undefined);
-  assert.equal(evaluateProviderGate({ production: result, readiness: ready }).status, GATE_STATUS.NOT_READY, 'the default is closed');
+  assert.equal(evaluateProviderGate({ production: result }).status, GATE_STATUS.NOT_READY, 'the default is closed');
   assert.match(open().gate_id, /^gat_/);
 });
 
@@ -115,7 +115,21 @@ test('PG-2 an unverified product keeps the gate shut even with everything else i
   const { result } = await produced({}, { productionBrief: null });
   const { campaign, brief, request, planner } = await produced({ assets: 5 });
   const intentOnly = await planner.plan({ campaignResult: campaign, brief: { ...brief, identity_annotations: {} }, request });
-  const g = evaluateProviderGate({ production: intentOnly, readiness: { ready: true, status: 'CREATIVE_PIPELINE_READY' }, compositorWired: true, ownerGo: true });
+  const g = evaluateProviderGate({ production: intentOnly, readiness: { ready: true, status: 'CREATIVE_PIPELINE_READY' }, ownerGo: true });
   assert.equal(g.status, 'NOT_READY'); assert.ok(g.reasons.includes('PRODUCT_IDENTITY_NOT_VERIFIED') && g.reasons.includes('PRODUCTION_NOT_SPECIFIED'));
   assert.equal(result.status, 'SPECIFIED');
+});
+
+test('LC-8 an under-the-product composition has no product and nothing at or above it', () => {
+  const plate = { layer_id: 'plate', kind: 'PLATE', z: 0, png: solid(40, 40, [200, 200, 200, 255]), x: 0, y: 0 };
+  const product = { layer_id: 'product', kind: 'PRODUCT', z: 30, png: solid(10, 10, [10, 20, 30, 255]), x: 5, y: 5 };
+  const foreground = { layer_id: 'fg', kind: 'PROP_FOREGROUND', z: 40, png: solid(6, 6, [90, 0, 0, 255]), x: 20, y: 20 };
+  const ok = composeLayers({ canvas: { width: 40, height: 40 }, layers: [plate], requireProduct: false });
+  assert.equal(ok.status, 'COMPOSED'); assert.deepEqual(ok.report.problems, []);
+  const withProduct = composeLayers({ canvas: { width: 40, height: 40 }, layers: [plate, product], requireProduct: false });
+  assert.equal(withProduct.status, 'REFUSED'); assert.ok(withProduct.report.problems.includes('NO_PRODUCT_LAYER_IN_AN_UNDER_COMPOSITION') && withProduct.report.problems.includes('A_LAYER_AT_OR_ABOVE_THE_PRODUCT_IN_AN_UNDER_COMPOSITION'));
+  const withForeground = composeLayers({ canvas: { width: 40, height: 40 }, layers: [plate, foreground], requireProduct: false });
+  assert.equal(withForeground.status, 'REFUSED'); assert.deepEqual(withForeground.report.problems, ['A_LAYER_AT_OR_ABOVE_THE_PRODUCT_IN_AN_UNDER_COMPOSITION']);
+  // the default still asks for exactly one product
+  assert.deepEqual(composeLayers({ canvas: { width: 40, height: 40 }, layers: [plate] }).report.problems, ['EXACTLY_ONE_PRODUCT_LAYER']);
 });

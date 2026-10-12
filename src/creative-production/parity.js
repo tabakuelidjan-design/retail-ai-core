@@ -6,7 +6,10 @@ import {
   GATE_REASON, LAYER_KIND, LAYER_SOURCE, PRODUCT_STATUS, PRODUCTION_STATUS,
 } from './constants.js';
 import { reassemble, recoverLockedCopy, sha256Text } from './copy-integrity.js';
-import { evaluateProviderGate } from './gate.js';
+import { encodePng } from '../creative-intelligence/png-encode.js';
+import { describeLayeredRuntime } from '../creative-runtime/layered-runtime.js';
+import { evaluateProviderGate, productionReadinessLevel } from './gate.js';
+import { matteProp } from './prop-matte.js';
 import { detectSubstitutes, resolveProductIdentity } from './product-identity.js';
 import { estimateProduction, reserveProduction } from './production-cost.js';
 import {
@@ -44,6 +47,14 @@ export const productionSample = () => {
   return {
     identity, scene, shared, contentAsset, approvedWords,
   };
+};
+
+/** A 64 x 64 prop fixture: a plain ground with the given rectangles (x0, y0, x1, y1, grey). */
+const fixtureProp = (rects) => {
+  const pixels = new Uint8Array(64 * 64 * 4);
+  for (let i = 0; i < 64 * 64; i += 1) pixels.set([230, 226, 218, 255], i * 4);
+  for (const [x0, y0, x1, y1, v] of rects) for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) pixels.set([v, v, v, 255], (y * 64 + x) * 4);
+  return encodePng({ width: 64, height: 64, pixels });
 };
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -105,6 +116,17 @@ function probes() {
   const routed = selectTool('ENVIRONMENT_PLATE_GENERATION', { dataClass: 'PUBLIC', sideMax: 1350 });
   out.push(['A capability is routed to one explicit tool and passes over the others', 'THE_TOOL_IS_CHOSEN_IN_THE_PLAN', routed.selected?.tool_id === 'text-to-image/primary' && routed.execution_policy === 'ONLY_THE_SELECTED_TOOL' && routed.candidates.length === 2]);
   out.push(['A capability with no admissible tool has none, not a guess', 'NO_TOOL_IS_AN_EXPLICIT_STATE', selectTool('ENVIRONMENT_PLATE_GENERATION', { dataClass: 'PRIVATE', sideMax: 1350 }).selected === null]);
+  // the layered production is executable from the runtime: the stages are really called, and there is no single-image fallback
+  const runtime = describeLayeredRuntime();
+  out.push(['The creative runtime executes a layered scene through every stage', 'THE_LAYERED_RUNTIME_IS_REACHABLE', runtime.wired === true && runtime.entry === 'runLayeredCreative' && Object.values(runtime.stages).every(Boolean) && productionReadinessLevel({ parityOk: true, runtime }).runtime_executable === true]);
+  out.push(['The layered runtime has no fallback to the single-image generator', 'THE_LAYERED_RUNTIME_NEVER_FALLS_BACK', runtime.single_image_fallback === false && productionReadinessLevel({ parityOk: true, runtime: { ...runtime, single_image_fallback: true } }).runtime_executable === false]);
+  out.push(['A runtime with a missing stage is not reported executable', 'AN_UNWIRED_STAGE_IS_NOT_REPORTED_AS_WIRED', productionReadinessLevel({ parityOk: true, runtime: { ...runtime, stages: { ...runtime.stages, compositor: false } } }).runtime_executable === false && evaluateProviderGate({ production: null, readiness: null, runtime: { ...runtime, wired: false } }).reasons.includes(GATE_REASON.COMPOSITOR_NOT_WIRED_TO_THE_RUNTIME)]);
+  // a generated prop is untrusted: one object on a plain ground passes, a second object or an object off the frame does not
+  const single = matteProp({ png: fixtureProp([[20, 20, 44, 44, 60]]) });
+  const two = matteProp({ png: fixtureProp([[8, 20, 22, 44, 60], [40, 20, 54, 44, 60]]) });
+  const off = matteProp({ png: fixtureProp([[0, 10, 40, 50, 60]]) });
+  out.push(['A prop alone on a plain ground is cut out', 'A_GENERATED_PROP_IS_CUT_OUT_ONLY_FROM_A_PLAIN_GROUND', single.ok === true && single.width === 24 && single.height === 24]);
+  out.push(['A second object or an object off the frame refuses the prop', 'A_BAD_PROP_IS_REFUSED_BEFORE_COMPOSITION', two.ok === false && two.reasons.includes('MORE_THAN_ONE_OBJECT') && off.ok === false && off.reasons.includes('THE_OBJECT_TOUCHES_THE_FRAME')]);
   // the provider gate fails closed
   const gate = evaluateProviderGate({ production: null, readiness: null });
   out.push(['The provider gate fails closed and never calls a provider', 'THE_PROVIDER_GATE_FAILS_CLOSED', gate.status === 'NOT_READY' && gate.provider_calls === 0 && gate.reasons.includes(GATE_REASON.PIPELINE_NOT_READY)]);
@@ -120,8 +142,16 @@ export const PRODUCTION_STAGES = Object.freeze([
   { stage: 'PRODUCTION_COST', model: false, derivation: 'estimateProduction and reserveProduction: every line reserved before it is incurred against a hard ceiling', validator: 'src/creative-production/production-cost.js#reserveProduction' },
   { stage: 'PRODUCTION_STATE', model: false, derivation: 'the production planner: nodes stored with the hash of their inputs, reused only when it is unchanged', validator: 'src/creative-production/production-planner.js#createProductionPlanner' },
   { stage: 'LAYER_COMPOSITOR', model: false, derivation: 'composeLayers: pixel-exact z-ordered composition of the raster layers with measured, bounded overlap', validator: 'src/creative-production/compositor.js#composeLayers' },
+  { stage: 'PROP_MATTE', model: false, derivation: 'matteProp: a generated prop is cut out of its plain ground or refused with the measurement that failed', validator: 'src/creative-production/prop-matte.js#matteProp' },
+  { stage: 'LAYERED_RUNTIME', model: false, derivation: 'runLayeredCreative: a specified scene is executed end to end through the gates of the single-image runtime; only the selected tool runs; a stop names its replanning', validator: 'src/creative-runtime/layered-runtime.js#describeLayeredRuntime' },
   { stage: 'PROVIDER_GATE', model: false, derivation: 'evaluateProviderGate: fails closed; never calls a provider', validator: 'src/creative-production/gate.js#evaluateProviderGate' },
 ]);
+
+/** The rules of the layered runtime, a component of its own in the combined readiness gate (the probes are the same ones the production audit runs). */
+export const LAYERED_RUNTIME_RULES = Object.freeze([
+  'THE_LAYERED_RUNTIME_IS_REACHABLE', 'THE_LAYERED_RUNTIME_NEVER_FALLS_BACK', 'AN_UNWIRED_STAGE_IS_NOT_REPORTED_AS_WIRED', 'A_GENERATED_PROP_IS_CUT_OUT_ONLY_FROM_A_PLAIN_GROUND', 'A_BAD_PROP_IS_REFUSED_BEFORE_COMPOSITION',
+]);
+const LAYERED_RUNTIME_STAGES = Object.freeze(['PROP_MATTE', 'LAYERED_RUNTIME']);
 
 export function auditProductionParity() {
   const rows = []; const failures = [];
@@ -134,6 +164,14 @@ export function auditProductionParity() {
   const stages = PRODUCTION_STAGES.map((s) => ({ stage: s.stage, model: false, derivation: s.derivation }));
   for (const s of PRODUCTION_STAGES) rows.push({ stage: s.stage, kind: 'DETERMINISTIC', path: s.stage, rule: s.derivation, instruction: null, validator: s.validator, stated: null });
   return { ready: failures.length === 0, stages, rows, failures };
+}
+
+export function auditLayeredRuntimeParity() {
+  const all = auditProductionParity();
+  const rows = all.rows.filter((r) => (r.kind === 'PROBE' && LAYERED_RUNTIME_RULES.includes(r.path)) || LAYERED_RUNTIME_STAGES.includes(r.stage));
+  const failures = all.failures.filter((f) => LAYERED_RUNTIME_RULES.some((r) => f.startsWith(`${r}:`)));
+  for (const rule of LAYERED_RUNTIME_RULES) if (!rows.some((r) => r.path === rule)) failures.push(`${rule}: the rule has no probe`);
+  return { ready: failures.length === 0, stages: all.stages.filter((s) => LAYERED_RUNTIME_STAGES.includes(s.stage)), rows, failures };
 }
 
 export function renderProductionContractMatrix(audit = auditProductionParity()) {

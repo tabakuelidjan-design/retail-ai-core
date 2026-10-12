@@ -57,20 +57,49 @@ Every node is stored with the hash of its inputs (asset plan id, shared layer ke
 
 ## 7. Raster compositor
 
-`composeLayers` composes the raster layers in the explicit z-order, pixel-exact, and **measures** the overlap of every foreground layer and the integrity of the product pixels; it refuses (and returns no image) when an overlap exceeds its policy, a protected region is covered, the structure is not a scene or the product pixels changed. Text is not drawn there. It is a tested library, not yet wired to the runtime, and the gate says so.
+`composeLayers` composes the raster layers in the explicit z-order, pixel-exact, and **measures** the overlap of every foreground layer and the integrity of the product pixels; it refuses (and returns no image) when an overlap exceeds its policy, a protected region is covered, the structure is not a scene or the product pixels changed. Text is not drawn there. With `requireProduct: false` it composes the layers UNDER the product only (the plate and the background and midground props) and refuses any layer at or above the product. It is called by the layered runtime (section 11).
 
 ## 8. Provider gate and readiness
 
-`evaluateProviderGate` fails closed: product identity VERIFIED, every scene SPECIFIED, budget within ceiling, **`CREATIVE_PIPELINE_READY`**, the compositor wired, and the owner's go. It never calls a provider. The combined readiness gate now has a fourth component, **PRODUCTION**: its parity is a mechanical probe of every production rule, and the attestation must name it and carry its mutation sweep for the exact code hash.
+`evaluateProviderGate` fails closed: product identity VERIFIED, every scene SPECIFIED, budget within ceiling, **`CREATIVE_PIPELINE_READY`**, the layered runtime wired (read from what `describeLayeredRuntime()` really calls, never declared), and the owner's go. It never calls a provider. The combined readiness gate has five components: PLANNING, BRAIN, CAMPAIGN, PRODUCTION and **LAYERED_RUNTIME**; the attestation must name each and carry its mutation sweep for the exact code hash.
+
+The layered production has three honest levels (`productionReadinessLevel`): **CONTRACT_READY** (the specification and its rules hold: the production parity audit), **IMPLEMENTATION_READY** (every stage exists as tested code), **RUNTIME_EXECUTABLE** (the creative runtime can run a scene end to end through them: the entry exists, every stage is called, there is no single-image fallback). The combined verdict reports the level and is NOT_READY below RUNTIME_EXECUTABLE (`LAYERED_PRODUCTION_NOT_RUNTIME_EXECUTABLE`).
 
 ## 9. Files
 
 | New | `src/creative-production/{constants,product-identity,capability-router,copy-integrity,scene-spec,production-cost,production-planner,compositor,gate,parity,index}.js`, `scripts/check-creative-production-parity.mjs`, `docs/architecture/creative-production-contract-matrix.md` (generated), tests `test/creative-production*.test.js` |
 |---|---|
 | Changed | `src/creative-brain/substitutes.js` (lexicon), `src/creative-brain/art-direction.js` (the instruction prints the new group), `src/creative-planning/copy-policy.js` (one export), `src/creative-runtime/ledger.js`, `src/creative-readiness/index.js` (PRODUCTION), the Brain contract matrix (regenerated), `NORDLA-DECISION-REGISTER.md` (NDR-P23), the CI workflow paths |
+| Closure (executable) | new `src/creative-runtime/layered-runtime.js`, `src/creative-production/{prop-matte,raster-ops}.js`; changed `src/creative-production/{compositor,gate,parity,constants,index}.js`, `src/creative-runtime/{ledger,index}.js` (additive), `src/creative-readiness/index.js` (LAYERED_RUNTIME and the readiness level), `NORDLA-DECISION-REGISTER.md` (NDR-P24); tests `test/creative-layered-runtime{,-world}.js`, `test/creative-production-matte.test.js` |
 
 ## 10. Blast radius, rollback, what is not here
 
-The production module is additive: nothing in the existing source imports it except the readiness gate; it imports no runtime and no provider (tests LG-2). The single-image path is untouched (the Phase 1 golden test and LG-1). The Brain lexicon change is the only behaviour change outside the module, and it only refuses more. Rollback: revert the merge of the branch.
+The production module is additive: nothing in the existing source imports it except the readiness gate; it imports no runtime and no provider (tests LG-2). The single-image path is untouched (the Phase 1 golden test, LG-1 and LR-11: `runtime.js` is byte-for-byte unchanged). The Brain lexicon change is the only behaviour change outside the module, and it only refuses more. Rollback: revert the merge of the branch.
 
-Not in this phase: any provider call, any generated image, wiring the compositor and the typography to the runtime, REFINE / masked editing (Phase 4), general segmentation and realistic integration (Phase 5), video, upscale, multi-reference.
+Not in this phase: any provider call, any generated image, REFINE / masked editing (Phase 4), general segmentation and realistic integration (Phase 5), video, upscale, multi-reference.
+
+## 11. The layered runtime (executable)
+
+`runLayeredCreative` (`src/creative-runtime/layered-runtime.js`) executes ONE specified scene of the production planner and returns ONE candidate, through the gates of the single-image runtime. It is **opt-in by being called**: a run that names `runProductPreservingCreative` is unchanged, and nothing here falls back to it.
+
+```
+scene specification + ProductIdentity + the real product asset
+  -> tools of the specification checked (only the selected tool is executed; a live port needs an OPEN provider gate)
+  -> analyst: COMPOSITE only          -> planned text typeset (roles, claims)      -> local segmentation of the REAL product (low confidence: stop)
+  -> layout solved on the REAL planned text  (a text that does not fit stops the run: never cut, rewritten, compressed)
+  -> budget RESERVED for every generated layer not already in the shared store   (before the first provider call; past the ceiling: stop, zero calls)
+  -> plate, props: each candidate judged ALONE by its own gate (plate: decodable, size, opaque, product-zone suitability; prop: plain-ground matte), first that passes wins, bounded set
+  -> props placed around the product (declared policy)  -> LAYER COMPOSITOR: full z-ordered stack (overlap, protected regions, product pixels) and the base under the product
+  -> deterministic typography: colours measured on the composed stack; the renderer draws base, the real product, bounded foreground props, then the planned text
+  -> preflight -> identity fidelity gate on the delivered PNG -> Brand Guardian
+```
+
+Z-order of the document: plate < background and midground props (the base) < the real product < bounded foreground prop (IMAGE layer) < text. The product pixels come only from the segmenter's cut-out of the pinned asset; a generated request carries no product pixel.
+
+**Layout of the text.** The headline, subheadline, price and call to action use the preset recipes. A BODY alone uses `bodySlideRecipe(densityClass)` (the product above, the body in the region of its density class, typeset with the typography its capacity was measured with). A BODY with another role, or a role with no recipe, has no layout: `NO_EXECUTABLE_LAYOUT`.
+
+**Stops** (`LAYERED_BLOCK`): every stop is a `BLOCKED` result with the reason, the evidence and the replanning it needs (`replan`), a `LAYERED_REPLAN` ledger record and `fallback_to_single_image: false`. A stop is never answered by another tool, another capability or the single-image generator on the spot: changing strategy is a replanning decision (a new specification and a new id).
+
+**Reuse.** Every paid candidate is kept in the shared layer store; a later scene that needs the same plate or prop judges the stored candidates again for its own geometry at no cost and asks the provider only for the candidates the bounded set still allows, within its own reservation.
+
+**Known limits** (reported, not worked around): the foreground prop has one declared anchor (a refused composition is a stop, not a search for another place); the identity gate can refuse a scene whose props resemble the product (`INSTANCE_COUNT`), as it is meant to; a text over 600 characters is not a document the typography can hold (`TEXT_ROLE_NOT_EXECUTABLE`).

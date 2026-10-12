@@ -381,12 +381,12 @@ test('LG-1 the legacy single-image flow is untouched: a single asset, a campaign
   assert.equal(store.saves(), 0, 'nothing was stored for any of them');
 });
 
-test('LG-2 the production is additive and offline: nothing in the existing source imports it, and it imports no runtime and no provider', async () => {
+test('LG-2 the production is additive and offline: only the readiness gate and the layered runtime import it, the single-image runtime knows nothing of it, and it imports no single-image runtime and no provider', async () => {
   const { readdirSync, readFileSync } = await import('node:fs');
   const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : [new URL(e.name, dir)]));
   const files = walk(new URL('../src/', import.meta.url)).filter((f) => f.pathname.endsWith('.js'));
   const importers = files.filter((f) => !f.pathname.includes('/creative-production/') && readFileSync(f, 'utf8').includes('creative-production/')).map((f) => f.pathname.split('/src/')[1]);
-  assert.deepEqual(importers.filter((f) => !f.startsWith('creative-readiness/')), []);
+  assert.deepEqual(importers.filter((f) => !f.startsWith('creative-readiness/') && f !== 'creative-runtime/layered-runtime.js'), []);
   for (const f of files.filter((x) => x.pathname.includes('/creative-production/'))) {
     const text = readFileSync(f, 'utf8');
     assert.ok(!/from '\.\.\/creative-runtime\/(runtime|index|agents|request-builder)\.js'/.test(text), `${f.pathname} imports no runtime`);

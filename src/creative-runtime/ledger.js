@@ -38,6 +38,10 @@ export const COMPONENT = Object.freeze({
   PRODUCTION_PLANNER: 'nordla:production-planner@1',
   PRODUCT_IDENTITY_GUARD: 'nordla:product-identity-guard@1',
   PROVIDER_GATE: 'nordla:provider-gate@1',
+  LAYERED_PRODUCTION_RUNTIME: 'nordla:layered-production-runtime@1',
+  LAYER_COMPOSITOR: 'nordla:layer-compositor@1',
+  PROP_MATTE_GATE: 'nordla:prop-matte-gate@1',
+  PLATE_GATE: 'nordla:plate-gate@1',
 });
 
 export const DECISION = Object.freeze({
@@ -83,6 +87,13 @@ export const DECISION = Object.freeze({
   PRODUCTION_SPEC: 'PRODUCTION_SPEC',
   PRODUCTION_BUDGET: 'PRODUCTION_BUDGET',
   PROVIDER_GATE: 'PROVIDER_GATE',
+  LAYER_BUDGET_RESERVATION: 'LAYER_BUDGET_RESERVATION', // reserved BEFORE any provider work of the scene
+  LAYER_TOOL: 'LAYER_TOOL', // the tool a generated layer is produced with, as selected by the scene specification
+  LAYER_GENERATION: 'LAYER_GENERATION', // one candidate of a generated layer, with its gate
+  LAYER_REUSE: 'LAYER_REUSE', // a generated layer served from the shared layers, no provider work
+  LAYER_PLACEMENT: 'LAYER_PLACEMENT',
+  LAYER_COMPOSITION: 'LAYER_COMPOSITION',
+  LAYERED_REPLAN: 'LAYERED_REPLAN', // the run stopped: what must be replanned (never answered by another strategy on the spot)
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));
