@@ -44,6 +44,11 @@ export const SELECTION = Object.freeze({ SELECT: 'SELECT', REFINE_CONCEPT: 'REFI
 const DECISION = Object.freeze({ SELECT: 'SELECT', REFINE_CONCEPT: 'REFINE_CONCEPT', REJECT_CONCEPT: 'REJECT_CONCEPT' });
 
 const BLOCKING = Object.freeze([CRITERION.RELEVANCE_TO_BRIEF, CRITERION.BRAND_COMPATIBILITY, CRITERION.FEASIBILITY, CRITERION.COMMERCIAL_CLARITY, CRITERION.PRODUCT_RELATIONSHIP]);
+// The concept stage cannot SEE two of the blocking criteria: brand compatibility needs the brand rules (which the selector is not given) and commercial clarity needs the layout and the typeset offer (which do not
+// exist yet). Later deterministic gates verify them (the brand guardian; the approved text, claims and price typeset exactly; the execution critic). So at this stage a FAILS on them still blocks (a judged failure is
+// evidence) and a PARTIAL still counts toward the partial limit, but the ABSENCE of a judgment is not a veto: in the first live run that reached a decided round the selector left both unjudged on every concept, so nothing
+// could ever be selected (a gate nobody can pass is a contradiction, not a high bar). The criteria the selector CAN judge (relevance, feasibility, product relationship) still block when unjudged.
+const JUDGEABLE_BLOCKING = Object.freeze(BLOCKING.filter((c) => c !== CRITERION.BRAND_COMPATIBILITY && c !== CRITERION.COMMERCIAL_CLARITY));
 const DECISIVE_CREATIVE = Object.freeze([CRITERION.CONCEPT_STRENGTH, CRITERION.DISTINCTIVENESS, CRITERION.GENERIC_RISK]);
 const MAX_PARTIAL_TO_SELECT = 2;
 const RANK = Object.freeze({ MEETS: 2, PARTIAL: 1, FAILS: 0, NOT_ASSESSED: 0 });
@@ -88,7 +93,7 @@ export function decideConcept(evaluation) {
   const partials = outcomes.filter((o) => o === OUTCOME.PARTIAL).length;
   const blockingFail = BLOCKING.some((c) => outcomeOf(evaluation, c) === OUTCOME.FAILS);
   const decisiveFail = DECISIVE_CREATIVE.some((c) => outcomeOf(evaluation, c) === OUTCOME.FAILS);
-  const blockingUnassessed = BLOCKING.some((c) => outcomeOf(evaluation, c) === OUTCOME.NOT_ASSESSED);
+  const blockingUnassessed = JUDGEABLE_BLOCKING.some((c) => outcomeOf(evaluation, c) === OUTCOME.NOT_ASSESSED);
   // (only two criteria are neither blocking nor decisive, so three failures always include a blocking or decisive one)
   if (blockingFail || decisiveFail) return DECISION.REJECT_CONCEPT;
   const strong = outcomeOf(evaluation, CRITERION.CONCEPT_STRENGTH) === OUTCOME.MEETS && outcomeOf(evaluation, CRITERION.DISTINCTIVENESS) === OUTCOME.MEETS;
@@ -150,6 +155,7 @@ export function buildEvaluationInstruction({ frame, concepts }) {
     ...renderContract(evaluationsAnswerSpec(concepts.length), 'answer'),
     ...renderRules(SELECTION_RULES),
     'outcome MEETS means the expectation is met, PARTIAL that it is arguable, FAILS that it clearly is not, NOT_ASSESSED that you cannot judge it.',
+    'Judge only from what you are given. BRAND_COMPATIBILITY depends on brand rules you do not have, and COMMERCIAL_CLARITY on a layout that does not exist yet (later deterministic gates verify both): judge them only if the concept clearly breaks or clearly protects them, otherwise answer NOT_ASSESSED rather than guess.',
     'Never give a score, a number, a rank or a winner: Nordla derives the decision. Be demanding: a clean idea that any competitor could publish is not distinctive, and a concept that hides the product does not meet the commercial criteria.',
     'The criteria:',
     ...CRITERIA.map((c) => `- ${c}: ${CRITERION_QUESTIONS[c]}`),

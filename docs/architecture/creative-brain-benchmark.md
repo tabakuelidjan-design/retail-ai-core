@@ -94,3 +94,9 @@ Every Creative Brain text call (FRAME, IDEATE, SELECT_CONCEPT, ART_DIRECT, COMPO
 `json_object` guarantees syntax only. It is not schema enforcement: the canonical validators, the shared near-miss layer, the semantic and cross-field rules and the single bounded protocol repair are unchanged, and the call and cost bounds did not move (18 text calls, EUR 0.95).
 
 **Follow-up, not done:** `json_schema` strict mode. Before migrating, verify on the Frankfurt endpoint that `qwen3.8-max` supports it, and the exact subset of JSON Schema it accepts (the English and Chinese help pages differ on Max models); then decide.
+
+## Incident 9: NO_CONCEPT_MEETS_BAR after two decided rounds (cost EUR 0.0439, 5 text calls, no image)
+
+The Brain reached a decided round for the first time and refused every concept. The words were good: in round 2 one concept had seven MEETS and one PARTIAL. The cause was not creative. `BRAND_COMPATIBILITY` and `COMMERCIAL_CLARITY` were BLOCKING-when-unjudged, yet the selector is given no brand rules and no layout, so it left them unjudged on all six concepts and `decideConcept` could never return SELECT. A gate nobody can pass is a contradiction, not a high bar.
+
+Fix (generic, no number, no merchant rule): a judged FAILS on those two criteria still rejects, a judged PARTIAL still counts toward the partial limit, and the creative bar (strength, distinctiveness, generic risk) is untouched; only the ABSENCE of a judgment on a criterion that the later deterministic gates verify (brand guardian; approved text, claims and price typeset exactly; execution critic) is no longer a veto. The judgeable blocking criteria (relevance, feasibility, product relationship) still block when unjudged. The selector is told to judge only from what it is given. Known and unchanged: when several concepts meet the bar and none dominates, the round is NO_CLEAR_WINNER and all are set aside; a head-to-head tie-break is a recommendation, not implemented.
