@@ -1,11 +1,11 @@
 {
-  "verified_commit": "91fd0edf909fdc482494dabe83d2d16466cb2961",
-  "code_hash": "bb11344ea46cbfcffa2108fd75c9a6ceb1d320f1",
-  "full_suite": { "tests": 2044, "pass": 2044, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
-  "mutation": { "total": 98, "killed": 96, "survivors_documented": 2, "note": "90 earlier (contract layer, parity, gate, runner, protocol repair, answer shape, envelope, duplicate keys, JSON mode) + 8 for the selection policy of incident 9, all killed. Two equivalent mutants: the extra BRAIN_MALFORMED check in the repair trigger, and a Set instead of null for arrays in the duplicate-key scanner." },
+  "verified_commit": "2c9b95f8527e5d1d624570c6cc494f17d072712d",
+  "code_hash": "f8859e746e3665d438b344caf3cdf335a2b164ce",
+  "full_suite": { "tests": 2052, "pass": 2052, "fail": 0, "skipped": 0, "node": "24 (Windows)" },
+  "mutation": { "total": 126, "killed": 124, "survivors_documented": 2, "note": "98 earlier (through the selection policy of incident 9) + 28 for incident 10 (collapsed-structure detection, UNKNOWN handling, brief assessment, runner gate), all killed after six edge-case tests were added. Two equivalent mutants carried over: the extra BRAIN_MALFORMED check in the repair trigger, and a Set instead of null for arrays in the duplicate-key scanner." },
   "clean_clones": {
-    "node20": { "tests": 2044, "pass": 2042, "fail": 0, "skipped": 2 },
-    "node24": { "tests": 2044, "pass": 2042, "fail": 0, "skipped": 2, "note": "the first Node 24 run reported 1 failure (the test name was not captured by the script); a second full run of the same clean clone was 0 failures, and the product-mask test alone passed. Recorded as an unidentified intermittent failure; the parked product-mask flake is the known candidate, not proven." }
+    "node20": { "tests": 2052, "pass": 2050, "fail": 0, "skipped": 2 },
+    "node24": { "tests": 2052, "pass": 2050, "fail": 0, "skipped": 2 }
   },
-  "ci": { "status": "success", "run": 38206532250 }
+  "ci": { "status": "success", "run": 38219291958 }
 }
