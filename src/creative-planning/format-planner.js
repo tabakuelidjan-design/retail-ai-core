@@ -68,11 +68,11 @@ function layoutSingle({ units, captionAllowed, allText, bodyCap, locale }) {
 
 /**
  * The best split of consecutive pieces into exactly `groups` groups: the largest group is as small as it can be, so the slides carry about the same amount of text (a linear partition). Null if there are
- * fewer pieces than groups, or if the best split still has a group over `cap`.
+ * fewer pieces than groups (no split exists), or if the best split still has a group over `cap`.
  */
 export function partitionPieces(pieces, groups, cap) {
   const n = pieces.length;
-  if (groups < 1 || n < groups) return null;
+  if (groups < 1) return null;
   const prefix = [0]; for (const p of pieces) prefix.push(prefix[prefix.length - 1] + p.chars);
   const size = (i, j) => prefix[j] - prefix[i] + (j - i - 1); // pieces i..j-1 joined by one space
   // the cost of a split is (the largest group, then the number of cuts that fall inside a paragraph): the slides are as even as possible and, among equal splits, cut where the author did

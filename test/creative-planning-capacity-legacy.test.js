@@ -110,7 +110,7 @@ test('CL-8 the slide capacities are measured with the real typography engine in 
       const { chars, basis } = caps[density];
       assert.equal(basis, CAPACITY_BASIS.MEASURED_LED);
       assert.ok(fitsSlide({ font, canvas: resource.canvas, density, chars }), `${resource.format_ref}/${density}: ${chars} characters fit`);
-      assert.ok(chars <= Math.floor(measureSlideCapacity({ font, canvas: resource.canvas, density }) * TEXT_LED_SPEC.safety_factor), `${resource.format_ref}/${density}: the capacity keeps the safety factor`);
+      assert.ok(chars <= Math.floor(measureSlideCapacity({ font, canvas: resource.canvas, density }) * 0.8), `${resource.format_ref}/${density}: the capacity keeps the safety factor`);
       assert.ok(!fitsSlide({ font, canvas: resource.canvas, density, chars: Math.ceil(chars * 1.6) }), `${resource.format_ref}/${density}: far beyond it does not fit`);
     }
     assert.equal(resource.text_capacity.BODY.chars, caps.HIGH.chars, 'a text shared with an image on one canvas is a HIGH slide');

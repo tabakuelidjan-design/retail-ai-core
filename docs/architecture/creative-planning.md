@@ -53,7 +53,7 @@ A person is asked (`QUESTION_CODE`) only for a hard-constraint conflict, text th
 
 ### Canvas after format
 
-The format kind is decided first. Each asset then gets its canvas from a deterministic **format resource** (`format-resources.js`: feed 4:5 and 1:1, story 9:16, poster, flyer) or from a canvas the caller supplied. Text capacity per role is declared in characters with its basis: executable roles are `MEASURED_AGAINST_THE_LAYOUT_ENGINE` (re-measured by test CL-1 against the real layout), BODY is `DECLARED_PENDING_BODY_LAYOUT` (no layout slot yet, so an asset that uses it is planned, not executable).
+The format kind is decided first. Each asset then gets its canvas from a deterministic **format resource** (`format-resources.js`: feed 4:5 and 1:1, story 9:16, poster, flyer) or from a canvas the caller supplied. Text capacity per role is stated in characters with its basis: the executable roles are `MEASURED_AGAINST_THE_LAYOUT_ENGINE` (re-measured by test CL-1 against the real layout); BODY, which has no layout recipe yet, is `MEASURED_AGAINST_THE_TEXT_LED_LAYOUT_SPEC` (Phase 2, test CL-8: the real typography engine in a text-led layout described as data), per density class, so an asset that uses it is planned, not executable, but its capacity is a measurement. The 360 / 280 character figures of the first version of this phase were provisional ceilings and are replaced by these measurements.
 
 ### Honest execution status
 

@@ -2,7 +2,7 @@ import { safeCause } from '../creative-brain/model-port.js';
 import { observeBrief } from '../creative-brain/problem-frame.js';
 import { deepFreeze, deriveId } from '../creative-brain/validation.js';
 import {
-  callerResource, EXECUTION, EXECUTION_REASON, FACT_KIND, FORMAT_KIND, FORMAT_RESOURCES, MULTI_ASSET_KINDS, normalizeRequest, PLAN_STATUS, USABLE_FACT_STATUS, VIDEO_KINDS,
+  callerResource, EXECUTION, EXECUTION_REASON, FACT_KIND, FORMAT_KIND, FORMAT_RESOURCES, MULTI_ASSET_KINDS, normalizeRequest, PLAN_STATUS, USABLE_FACT_STATUS,
 } from '../creative-planning/index.js';
 import { COMPONENT, DECISION } from '../creative-runtime/ledger.js';
 import {
@@ -58,9 +58,8 @@ export function createCampaignPlanner({
 }) {
   async function chooseLane(prepared, laneOptions, request) {
     // the smallest text density that holds all the text on the assets; a stated density is kept as stated. When the format was not requested, a heavier density can turn a single image with a caption into a
-    // sequence, so every class is tried; when a single-asset format was requested, nothing is tried further.
+    // sequence, so every class is tried (a requested single-asset format that fits gives the same plan in every class).
     const classes = request.slide_density ? [request.slide_density] : ['MEDIUM', 'HIGH', 'TEXT_LED'];
-    const explicitSingle = request.requested_format && !SEQUENCE_KINDS.has(request.requested_format) && request.requested_format !== FORMAT_KIND.MULTI_ASSET_CAMPAIGN;
     const tried = [];
     for (const slideDensity of classes) {
       const plan = await contentPlanner.planPrepared(prepared, { ...laneOptions, slideDensity, quiet: true });
@@ -68,7 +67,6 @@ export function createCampaignPlanner({
       tried.push(candidate);
       if (plan.status !== PLAN_STATUS.PLANNED) break;
       const sequence = SEQUENCE_KINDS.has(plan.format?.kind);
-      if (!sequence && explicitSingle) break;
       if (sequence && plan.caption === null && (request.requested_asset_count ? plan.assets.length === request.requested_asset_count : true)) break;
     }
     const sequences = tried.filter((t) => t.plan.status === PLAN_STATUS.PLANNED && SEQUENCE_KINDS.has(t.plan.format?.kind));
@@ -172,7 +170,8 @@ export function createCampaignPlanner({
     for (const [laneIndex, lane] of lanes.entries()) {
       const contentAssets = lane.plan.assets;
       const kind = lane.plan.format?.kind;
-      if (VIDEO_KINDS.includes(kind) || !contentAssets.length) {
+      // a video lane has no assets: its storyboard and its production are later phases
+      if (!contentAssets.length) {
         laneRecords.push({
           lane_id: lane.lane_id, channel: lane.channel, format_kind: kind, content_plan_id: lane.plan.content_plan_id, asset_plan_ids: [], execution: lane.plan.execution ?? { status: EXECUTION.PLANNED_NOT_EXECUTABLE, reasons: [EXECUTION_REASON.VIDEO_PRODUCTION_NOT_AVAILABLE] }, diversity: null, objective_kind: null, slide_density: null,
         });
