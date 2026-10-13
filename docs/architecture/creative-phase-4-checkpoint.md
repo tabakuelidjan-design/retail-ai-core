@@ -9,7 +9,7 @@ Purpose: a durable, self-contained statement of where Creative stands after Phas
 | Repository / worktree | `retail-ai-core`, worktree `C:\Users\etaba\Desktop\retail-ai-core-creative-phase4-wt` |
 | Branch | `feature/creative-phase-4-refine-layer-repair` (pushed, worktree clean) |
 | Built from | `9f30628` (Phase 3 closure, branch `feature/creative-phase-3-layered-scene-production`, untouched) |
-| Phase 4 tip at checkpoint | `f9fa326` (this file is committed after it) |
+| Phase 4 tip | `6180161` (closure; this checkpoint was first written at `484606a` and updated afterwards) |
 | Code commit that was verified | `2c4fa34476351a2cda8af2b61acf09ea78c0cdb5` |
 | Code hash in the attestation | `44bded3f87508cb8809ca9a96c27711af2ac8ee9` |
 | Not merged anywhere | no merge to `main`, no rebase of shared history, no force push |
@@ -21,7 +21,7 @@ Purpose: a durable, self-contained statement of where Creative stands after Phas
 | 1 Content Format Planner | complete, attested |
 | 2 Multi-asset / carousel planner | complete, attested |
 | 3 Layered scene production (architecture + executable runtime) | complete, attested (`9f30628`, CI success run 38307717076 recorded by the Phase 3 session) |
-| **4 Executable REFINE + layer repair + masked-edit interface** | **complete in code and tests; combined readiness NOT_READY only because the CI run is unread (see §7)** |
+| **4 Executable REFINE + layer repair + masked-edit interface** | **CLOSED: combined readiness `CREATIVE_PIPELINE_READY` (CI verified, see §5 and §7)** |
 | 5 General segmentation + realistic integration | NOT STARTED (owner stop condition: do not start without an explicit order) |
 | Video, upscale, multi-reference, new image providers, live HABB benchmarks | out of scope until after Phase 5 |
 
@@ -55,7 +55,7 @@ Additive changes to existing files: `src/creative-runtime/layered-runtime.js` (s
 | Phase 1–3 tests | green (whole suite) |
 | Provider calls / live images | 0 / 0 |
 | Mutation (in-house operator harness, outside the repo) | REFINE 510 mutants, 459 killed, 51 documented; layered-runtime additions: 17 run (timeboxed), 16 killed, 1 documented unreachable; **remaining runtime hooks NOT swept** (asserted by RF-2/5/10/17/21/27/28, which is not a mutation result) |
-| CI | workflow `creative-intelligence-v1.yml` runs on the push; **result unread** (no GitHub CLI, private repo) |
+| CI | **Creative Intelligence V1 run 38398261230 on `9d919d2`: Node 24 success, Node 20 success** (all three test steps). Earlier runs: `38375680186` failed only on CR-6 (expected before the attestation); `38378696554` had Node 24 success and Node 20 cancelled by the 15-minute job limit, so the limit was raised to 30 (`9d919d2`). Marketing V1 was not triggered for this code (path filters); its two commands passed inside the run above; its own last run (`0cbae0d`) predates the attestation and failed. The repository is PUBLIC: the Actions API is readable without credentials (60 requests per hour: poll sparingly). |
 
 Documented survivors (51 in REFINE): 19 nullish defaults (`??`→`||`, left operand is only null/undefined/object), 28 conjunctions inside the parity audit's own probes (each conjunct asserted by PL/PE/RF), 3 equivalent PNG-mask-reader shapes, 1 equivalent policy-key merge.
 
@@ -70,7 +70,8 @@ Documented survivors (51 in REFINE): 19 nullish defaults (`??`→`||`, left oper
 
 ## 7. Known issues / open items (nothing hidden)
 
-* **CI unread.** `creative-readiness.json` has `ci.status: unknown`; the combined verdict is `NOT_READY` with the single reason `CI_NOT_SUCCESS_YET` (the Brain gate repeats it). Reading the run and recording it as success (with the run id) is the only step left to reach `CREATIVE_PIPELINE_READY` for this code. Do not mark it success without reading the run.
+* CI was read and recorded (`ci.status: success`, run 38398261230); `node scripts/check-creative-readiness.mjs` prints `CREATIVE_PIPELINE_READY`. The closure commit `6180161` changes only the two readiness JSON files (the code hash `44bded3f…` is unchanged); the run started by that push repeats the same tests.
+* Masked-edit provider integration and live-image validation remain INCOMPLETE by design (interface only; every image is drawn by a test).
 * Mutation coverage of the runtime hooks is partial (see §5).
 * A repair regenerates at most 2 layers and strictly fewer than the scene has; a foreground prop has one declared anchor family; repositioning follows the fixed ladder; relight / contact shadow / grading are Phase 5.
 * Harness lesson (for anyone repeating a sweep): run fast pure suites per mutant; end-to-end scenarios cost ~15–75 s per mutant. `RF_SCENARIOS=<list>` builds only the scenarios a run needs.
@@ -78,8 +79,8 @@ Documented survivors (51 in REFINE): 19 nullish defaults (`??`→`||`, left oper
 
 ## 8. Exact next steps
 
-1. Read the GitHub Actions run for `feature/creative-phase-4-refine-layer-repair` (workflow *Creative Intelligence V1*). If green: set `ci: { status: "success", run: <id> }` in `docs/architecture/creative-readiness.json` and `creative-brain-readiness.json` (documents only; the code hash is unaffected), run `node scripts/check-creative-readiness.mjs` and expect `CREATIVE_PIPELINE_READY`.
-2. Owner decision: merge order for Phase 3 → Phase 4 (nothing is merged).
+1. (Done) CI read and recorded; readiness is `CREATIVE_PIPELINE_READY`.
+2. Owner decision, nothing merged: Phase 4 is a linear descendant of Phase 3 (`9f30628`); `main` (`a9d0e2f`, 2026-09-21) is its ancestor and the branch is 334 commits ahead (826 files) because the lineage carries all the Nordla work since then, not only Creative. Safe sequence: tags at `9f30628` and the final SHA; PR Phase 3 → main, then PR Phase 4 → main, merge commits (no squash / rebase / force push); CI green on both Node versions for the exact commit; re-run the readiness check and confirm CI on main after each merge; rollback by reverting the merge commit.
 3. Only on an explicit owner order: Phase 5 (generic segmentation port + deterministic fixtures; contact shadow as a separate recomputable layer; bounded grading and relight under declared fidelity tolerances; fail closed outside tolerance; no new paid provider; no weakening of identity protection). Then focused tests → mutation → full suite → clean clones Node 20 + 24 → CI → attestation, one heavy job at a time.
 4. If a masked-edit provider is ever approved: connect it behind `ports.maskedEdit` (needs `edit()` and a non-empty `tool_id`), through an OPEN provider gate, with the protected-pixel output check already in place; add it as a new scope only with its own plan rules and tests.
 
