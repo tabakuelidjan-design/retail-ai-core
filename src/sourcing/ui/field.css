@@ -112,3 +112,15 @@ body.fm-mode:has(.fm.started){padding-bottom:calc(104px + env(safe-area-inset-bo
   body.fm-mode:has(.fm-sheet.tall) .tabs{padding-right:468px}
 }
 .fm-tray .fm-en{font-size:16px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}.fm-tray .fm-fr{white-space:nowrap}.fm-tray .fm-sug{padding:8px 12px 8px 14px}
+
+
+/* Field Mode: keep the first action tappable above the fixed 84px navigation
+   when a focused input reduces the available viewport height. */
+@media (max-height:560px) and (max-width:699px){
+  .fm.home .fm-start{padding-top:6px}
+  .fm.home .fm-hlp{font-size:12px;line-height:1.25;margin-bottom:6px}
+  .fm.home .fm-cam{height:44px;margin-bottom:6px;border-radius:14px}
+  .fm.home .fm-go{position:relative;bottom:auto;min-height:60px;border-radius:20px;z-index:10}
+}
+/* A decorative chevron must not enlarge the product card or overflow a narrow screen. */
+.fm-prod[data-act] > svg{width:20px;height:20px;flex:0 0 20px;overflow:hidden}
