@@ -51,7 +51,7 @@ function scoreForeground(rgba, ground) {
 }
 
 /** Fill enclosed gaps that are too small to be a real hole (pinholes); keep real holes (a handle, a ring) transparent. Returns { filled, holes }. */
-function resolveHoles(hard, width, height, raw) {
+function resolveHoles(hard, width, height, raw, area) {
   const outside = new Uint8Array(hard.length); const stack = [];
   const seed = (i) => { if (!hard[i] && !outside[i]) { outside[i] = 1; stack.push(i); } };
   for (let x = 0; x < width; x += 1) { seed(x); seed((height - 1) * width + x); }
@@ -71,7 +71,7 @@ function resolveHoles(hard, width, height, raw) {
   }
   const { list: realGaps, labels: realLabels } = labelComponents(gap, width, height);
   for (const g of realGaps) {
-    if (g.area <= S.pinhole_px) { // a speck: a ground-coloured print dot or an anti-aliasing accident, never a real opening
+    if (g.area <= Math.max(S.pinhole_px, S.hole_min_share * area)) { // a speck or a small ground-coloured spot (a print dot, a specular highlight on a glossy part): never an opening that matters
       for (let i = 0; i < realLabels.length; i += 1) if (realLabels[i] === g.id) filled[i] = 1;
     } else holes.push({ area: g.area, x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 });
   }
@@ -194,7 +194,7 @@ export function analyseLocal(rgba) {
   const first = labelComponents(hard0, width, height);
   const minArea = Math.max(2, S.min_component_share * width * height);
   const kept = first.list.filter((c) => c.area >= minArea);
-  const fragments = first.list.length - kept.length;
+  const fragments = first.list.length - kept.length; const fragmentArea = first.list.filter((c) => c.area < minArea).reduce((t, c) => t + c.area, 0);
   if (!kept.length) return fail(SEG_REASON.NO_FOREGROUND, { evidence: { plain_share: plain, fragments } });
 
   // 1. objects: the connected components (an object lying wholly inside another object's silhouette is part of it: a print inside a frame), with touching objects split into their own labels
@@ -222,7 +222,7 @@ export function analyseLocal(rgba) {
     .sort((a, b) => b.area - a.area).map((o, i) => ({ ...o, id: `o${i + 1}` }));
   const significant = described.filter((o) => o.area >= S.significant_share * largest);
 
-  return Object.freeze({ width, height, ground, plain, score, raw, shadow, hard00, hard0, keep, described, significant, fragments, split: Boolean(split) });
+  return Object.freeze({ width, height, ground, plain, score, raw, shadow, hard00, hard0, keep, described, significant, fragments, fragmentArea, split: Boolean(split) });
 }
 
 /**
@@ -230,7 +230,7 @@ export function analyseLocal(rgba) {
  * @param {object} selection { mode: 'AUTO' (default) | 'IDS' ({ ids }) | 'POINT' ({ point: [x, y] }) | 'BOX' ({ box: {x0,y0,x1,y1}, allow_cut? }) | 'GROUP' (every object, explicit), semi_transparent?: boolean }
  */
 export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
-  const { width, height, ground, plain, score, raw, shadow, hard00, hard0, keep, described, significant, fragments } = an;
+  const { width, height, ground, plain, score, raw, shadow, hard00, hard0, keep, described, significant, fragments, fragmentArea } = an;
   const split = an.split ? {} : null;
   const fail = failResult;
   // 2. the selection: explicit, or refused when ambiguous
@@ -262,7 +262,7 @@ export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
   const others = new Uint8Array(keep.length);
   for (const o of described) if (!chosen.includes(o)) for (let i = 0; i < others.length; i += 1) if (o.plane[i]) others[i] = 1;
   const selArea = sel.reduce((n, v) => n + v, 0);
-  const { filled, holes } = resolveHoles(sel, width, height, raw);
+  const { filled, holes } = resolveHoles(sel, width, height, raw, selArea);
   const grown = dilate(filled, width, height, 2);
   const nearOthers = dilate(others, width, height, 1);
   // The alpha: inside the product (eroded core) it is opaque unless semi-transparency is declared; on the boundary band it is UNMIXED (the pixel is c * product + (1 - c) * ground, with the product colour
@@ -298,7 +298,7 @@ export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
     ground_plain: clamp((plain - 0.6) / 0.4, 0, 1),
     contrast,
     edge_definition: clamp(eq.partial_share * 2 + eq.hard_share * 1.2, 0, 1),
-    fragments: clamp(1 - fragments / 25, 0, 1),
+    fragments: clamp(1 - (fragmentArea / Math.max(1, selArea)) / S.fragment_area_share_max, 0, 1), // the AREA of the dropped specks against the product's, not their count (a photograph has dust)
     not_cropped: chosen.some((o) => o.touches_border) ? 0.5 : 1,
   };
   const confidence = Math.min(...Object.values(factors));

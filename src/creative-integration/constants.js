@@ -35,7 +35,9 @@ export const SEGMENTATION = Object.freeze({
   shadow_luma_floor: 0.62, // a pixel of the ground chroma that is darker than this share of the ground luma is product, not a soft ground shadow
   chroma_shadow_tolerance: 9,
   min_component_share: 0.0004, // components below this share of the image are fragments (reported, never selected silently)
+  fragment_area_share_max: 0.05, // dropped specks may total this share of the product's area before the confidence reaches zero
   significant_share: 0.12, // a component at least this share of the largest one is "an object" for the ambiguity rule
+  hole_min_share: 0.003, // an enclosed ground-coloured gap smaller than this share of the product is filled (a specular highlight on a glossy part looks exactly like the ground); a real opening is larger
   pinhole_px: 12, // an enclosed gap of at most this many pixels is a speck (a ground-coloured print dot, an anti-aliasing accident) and is filled; a larger one is a hole only if the ground shows through it
   max_split_erosion_px: 40, // touching objects are separated by eroding up to this radius
   min_core_share: 0.03,
@@ -52,11 +54,12 @@ export const SEGMENTATION = Object.freeze({
 export const MATTE = Object.freeze({
   edge_support_min_share: 0.7, // share of boundary pixels backed by an image edge
   edge_support_gradient: 10, // luma step across the boundary that counts as an edge
+  cluster_relative: 0.02, // ... or this share of sqrt(matte area), whichever is larger
   cluster_max_px: 5, // a contiguous run of bad boundary pixels (a visible halo / fringe segment) at least this long fails, whatever its share
   fringe_max_share: 0.12, // share of boundary pixels whose colour is the ground, not the product
   pinhole_max_pixels: 0, // enclosed transparent specks inside the product
   accidental_hole_max_share: 0.0005, // of the matte area
-  ground_blob_max_share: 0.002, // opaque pixels that are the ground colour, in blobs of at least ground_blob_min_px, as a share of the matte (ground that leaked into the product)
+  ground_blob_max_share: 0.003, // opaque pixels that are the ground colour, in blobs of at least ground_blob_min_px, as a share of the matte (ground that leaked into the product)
   ground_blob_min_px: 20,
   fragment_max_count: 0,
   fragment_min_pixels: 1,

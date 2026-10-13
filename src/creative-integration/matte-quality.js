@@ -13,7 +13,8 @@ import {
 // ALPHA_NOISE (a jagged alpha ramp).
 
 const dist = (p, i, g) => Math.hypot(p[i] - g[0], p[i + 1] - g[1], p[i + 2] - g[2]);
-const check = (code, value, limit, ok) => Object.freeze({ code, ok: Boolean(ok), value, limit });
+const check = (code, value, limit, ok, where = undefined) => Object.freeze({ code, ok: Boolean(ok), value, limit, ...(where ? { where } : {}) });
+const worst = (comps) => comps.sort((a, b) => b.area - a.area).slice(0, 3).map((c) => ({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, area: c.area }));
 const unmeasurable = (code, reason) => Object.freeze({ code, ok: false, value: null, limit: null, reason });
 
 /**
@@ -28,6 +29,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   for (let i = 0; i < n; i += 1) if (alpha[i] >= 128) { hard[i] = 1; area += 1; }
   if (!area) return Object.freeze({ valid: false, findings: [unmeasurable('MATTE_EMPTY', 'the matte has no opaque pixel')], measurements: { area } });
   const findings = [];
+  const runLimit = Math.max(M.cluster_max_px, M.cluster_relative * Math.sqrt(area)); // a defect is judged by its length relative to the size of the product (a 1-px step on a 1000-px edge is not a fringe)
   const ign = ignore ?? new Uint8Array(n);
   const ignNear = dilate(ign, width, height, 2); // the seam with another object: a pixel there is mixed with that object, not with the ground
 
@@ -65,9 +67,9 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
       const shadowLike = l < gl && l >= gl * S.shadow_luma_floor && Math.hypot(pixels[i * 4] - l - (g[0] - gl), pixels[i * 4 + 1] - l - (g[1] - gl), pixels[i * 4 + 2] - l - (g[2] - gl)) <= S.chroma_shadow_tolerance;
       if (d[i] <= S.t_lo || shadowLike) { bad += 1; badMask[i] = 1; }
     }
-    const share = tested ? bad / tested : 0; const run = Math.max(0, ...labelComponents(badMask, width, height).list.map((c) => c.area));
+    const share = tested ? bad / tested : 0; const runs = labelComponents(badMask, width, height).list; const run = Math.max(0, ...runs.map((c) => c.area));
     findings.push(check('FRINGE', share, M.fringe_max_share, share <= M.fringe_max_share));
-    findings.push(check('FRINGE_RUN', run, M.cluster_max_px, run < M.cluster_max_px));
+    findings.push(check('FRINGE_RUN', run, runLimit, run < runLimit, worst(runs)));
   }
 
   // enclosed transparent regions: pinholes and accidental holes
@@ -96,7 +98,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   else {
     const leak = new Uint8Array(n); for (let i = 0; i < n; i += 1) if (alpha[i] >= 250 && d[i] <= S.t_lo && !ign[i]) leak[i] = 1;
     const blobs = labelComponents(leak, width, height).list.filter((c) => c.area >= M.ground_blob_min_px); const px = blobs.reduce((t, c) => t + c.area, 0);
-    findings.push(check('GROUND_LEAK', px / area, M.ground_blob_max_share, px / area <= M.ground_blob_max_share));
+    findings.push(check('GROUND_LEAK', px / area, M.ground_blob_max_share, px / area <= M.ground_blob_max_share, worst(blobs)));
   }
 
   // FRAGMENTS
@@ -158,9 +160,9 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
       for (const q of [k - 1, k + 1, k - width, k + width]) if (q >= 0 && q < n) grad = Math.max(grad, Math.hypot(pixels[q * 4] - pixels[j], pixels[q * 4 + 1] - pixels[j + 1], pixels[q * 4 + 2] - pixels[j + 2]));
       if (Math.sqrt(r) > M.reconstruction_residual + M.reconstruction_gradient_gain * grad) { bad += 1; badMask[i] = 1; }
     }
-    const share = tested ? bad / tested : 0; const run = Math.max(0, ...labelComponents(badMask, width, height).list.map((c) => c.area));
+    const share = tested ? bad / tested : 0; const runs = labelComponents(badMask, width, height).list; const run = Math.max(0, ...runs.map((c) => c.area));
     findings.push(check('EDGE_RECONSTRUCTION', share, M.reconstruction_max_share, share <= M.reconstruction_max_share));
-    findings.push(check('EDGE_RECONSTRUCTION_RUN', run, M.cluster_max_px, run < M.cluster_max_px));
+    findings.push(check('EDGE_RECONSTRUCTION_RUN', run, runLimit, run < runLimit, worst(runs)));
   }
   {
     const noise = alphaExtremaShare(alpha, width, height);

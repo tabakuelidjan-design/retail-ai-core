@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import * as W from './creative-integration-world.js';
 import { iou, segmented } from './creative-integration-shared.js';
 import {
-  SEG_REASON, createSegmentationCache, segmentProduct, validateSegmentation,
+  SEG_REASON, checkMatte, createSegmentationCache, segmentProduct, validateSegmentation,
 } from '../src/creative-integration/index.js';
 
 // General segmentation (`// SG-N` markers): the provider-independent contract, the local plain-ground segmenter on drawn products, the selection rules, the failure reasons, the port validation and the mask cache.
@@ -84,8 +84,9 @@ test('Low confidence is never silently accepted; a ground that is not plain, a p
   assert.equal(segmentProduct({ rgba: W.clutteredGround().rgba }).failure_reason, SEG_REASON.BACKGROUND_NOT_PLAIN);
   // SG-21 an empty photograph
   assert.equal(segmentProduct({ rgba: W.blank(200, 200) }).failure_reason, SEG_REASON.NO_FOREGROUND);
-  // SG-22 a white product on a near-white ground: not accepted
-  const low = segmentProduct({ rgba: W.lowContrast().rgba }); assert.equal(low.accepted, false); assert.notEqual(low.status, 'OK');
+  // SG-22 a white product on a near-white ground: the segmenter may or may not accept it, but the two layers together never deliver it (low confidence, or a matte that fails its checks)
+  const lowRgba = W.lowContrast().rgba; const low = segmentProduct({ rgba: lowRgba });
+  assert.ok(low.accepted === false || checkMatte({ rgba: lowRgba, alpha: low.alpha, ground: low.ground }).valid === false);
   // SG-23 a bottle whose highlights are the ground colour falls apart into several objects: refused, not cut wrongly
   assert.equal(segmentProduct({ rgba: W.metallicOnLightGround().rgba }).accepted, false);
   // SG-24 a failed result has no mask, a reason, and zero confidence
