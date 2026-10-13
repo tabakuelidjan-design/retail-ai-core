@@ -7,6 +7,7 @@ import { auditCampaignParity } from '../creative-campaign/parity.js';
 import { auditPlanningParity } from '../creative-planning/parity.js';
 import { auditLayeredRuntimeParity, auditProductionParity } from '../creative-production/parity.js';
 import { productionReadinessLevel } from '../creative-production/gate.js';
+import { auditRefineParity } from '../creative-refine/parity.js';
 
 // THE CREATIVE READINESS GATE. A live Creative run is refused unless ONE explicit, offline verdict says CREATIVE_PIPELINE_READY. The pipeline is not the Creative Brain alone: it is the content planning in front of
 // it, the Brain, the campaign planning on top of it, the layered production that specifies what would be sent to a provider, and the layered RUNTIME that executes a scene through the gates. The layered
@@ -20,9 +21,9 @@ import { productionReadinessLevel } from '../creative-production/gate.js';
 export const CREATIVE_READY = 'CREATIVE_PIPELINE_READY';
 export const NOT_READY = 'NOT_READY';
 export const COMPONENT = Object.freeze({
-  PLANNING: 'PLANNING', BRAIN: 'BRAIN', CAMPAIGN: 'CAMPAIGN', PRODUCTION: 'PRODUCTION', LAYERED_RUNTIME: 'LAYERED_RUNTIME',
+  PLANNING: 'PLANNING', BRAIN: 'BRAIN', CAMPAIGN: 'CAMPAIGN', PRODUCTION: 'PRODUCTION', LAYERED_RUNTIME: 'LAYERED_RUNTIME', REFINE: 'REFINE',
 });
-export const ACTIVE_COMPONENTS = Object.freeze([COMPONENT.PLANNING, COMPONENT.BRAIN, COMPONENT.CAMPAIGN, COMPONENT.PRODUCTION, COMPONENT.LAYERED_RUNTIME]);
+export const ACTIVE_COMPONENTS = Object.freeze([COMPONENT.PLANNING, COMPONENT.BRAIN, COMPONENT.CAMPAIGN, COMPONENT.PRODUCTION, COMPONENT.LAYERED_RUNTIME, COMPONENT.REFINE]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const CREATIVE_ATTESTATION_PATH = path.join(ROOT, 'docs', 'architecture', 'creative-readiness.json');
 
@@ -64,17 +65,17 @@ export function evaluateCreativeReadiness({
 
 /** The live gate, with the three real parity audits, the Brain's own gate, the real code hash and the recorded attestation. */
 export function checkCreativeReadiness({ attestationFile = CREATIVE_ATTESTATION_PATH, root = ROOT, brainAttestationFile } = {}) {
-  const brain = auditContractParity(); const planning = auditPlanningParity(); const campaign = auditCampaignParity(); const production = auditProductionParity(); const layered = auditLayeredRuntimeParity();
+  const brain = auditContractParity(); const planning = auditPlanningParity(); const campaign = auditCampaignParity(); const production = auditProductionParity(); const layered = auditLayeredRuntimeParity(); const refine = auditRefineParity();
   const brainGate = checkBrainReadiness({ root, ...(brainAttestationFile ? { attestationFile: brainAttestationFile } : {}) });
   const verdict = evaluateCreativeReadiness({
     parities: {
-      [COMPONENT.BRAIN]: brain, [COMPONENT.PLANNING]: planning, [COMPONENT.CAMPAIGN]: campaign, [COMPONENT.PRODUCTION]: production, [COMPONENT.LAYERED_RUNTIME]: layered,
+      [COMPONENT.BRAIN]: brain, [COMPONENT.PLANNING]: planning, [COMPONENT.CAMPAIGN]: campaign, [COMPONENT.PRODUCTION]: production, [COMPONENT.LAYERED_RUNTIME]: layered, [COMPONENT.REFINE]: refine,
     },
     brainGate, attestation: readAttestation(attestationFile), hash: codeHash(root), levels: productionReadinessLevel({ parityOk: production.ready && layered.ready }),
   });
   return {
     ...verdict,
-    parity: Object.fromEntries([[COMPONENT.PLANNING, planning], [COMPONENT.BRAIN, brain], [COMPONENT.CAMPAIGN, campaign], [COMPONENT.PRODUCTION, production], [COMPONENT.LAYERED_RUNTIME, layered]].map(([c, p]) => [c, { ready: p.ready, stages: p.stages.length, rows: p.rows.length, failures: p.failures.length }])),
+    parity: Object.fromEntries([[COMPONENT.PLANNING, planning], [COMPONENT.BRAIN, brain], [COMPONENT.CAMPAIGN, campaign], [COMPONENT.PRODUCTION, production], [COMPONENT.LAYERED_RUNTIME, layered], [COMPONENT.REFINE, refine]].map(([c, p]) => [c, { ready: p.ready, stages: p.stages.length, rows: p.rows.length, failures: p.failures.length }])),
     brain_gate: { status: brainGate.status, ready: brainGate.ready },
   };
 }
