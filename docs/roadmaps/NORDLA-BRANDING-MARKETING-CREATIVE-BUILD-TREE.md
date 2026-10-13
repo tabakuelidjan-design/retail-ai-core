@@ -552,3 +552,25 @@ Jamais abonnement SaaS par client par défaut.
 - Ne pas activer Creative Intelligence en production avant validation Constitution/benchmark.
 - Toute nouvelle technologie doit battre la stack actuelle sur qualité, coût, liberté ou simplicité.
 
+
+
+---
+
+# Statut Creative — phases 1 à 5 (ajouté le 2026-10-14, historique ci-dessus conservé)
+
+Source de vérité détaillée : `docs/architecture/CREATIVE-1-5-FINAL-STATUS.md` (et le dossier `docs/architecture/creative-final/`).
+
+| Clé | Valeur |
+|---|---|
+| PHASE_1 (Content Format Planner) | CLOSED |
+| PHASE_2 (Multi-asset / carrousel / campagne) | CLOSED |
+| PHASE_3 (Layered Scene Production) | CLOSED |
+| PHASE_4 (REFINE / réparation par couche, interface d'édition masquée) | CLOSED |
+| PHASE_5 (Segmentation générale + intégration produit réaliste) | CLOSED (module bibliothèque ; **non câblé** au runtime en couches) |
+| MAIN_MERGE | NOT_DONE |
+| LIVE_PROVIDER_VALIDATION | NOT_DONE |
+| REAL_PRODUCT_MATRIX | PARTIAL (9 images réelles : 1 intégrée, 4 matte invalide, 4 refusées en amont) |
+| PRODUCTION_DEPLOYMENT | NOT_DONE |
+| CREATIVE_PIPELINE_READY | oui, au sens « 7 composants attestés séparément » — pas un test de bout en bout |
+
+Prochaine étape recommandée (non démarrée) : voir `creative-final/roadmap-before-after-trip.md`.

@@ -99,7 +99,7 @@ A connected masked-edit provider; general segmentation, contact shadow, relight 
 | Full suite, clean clone, Node 24 (docker, concurrency 4) | 2346 tests, 2343 passed, 2 skipped; the one failure was CR-6, which can only pass once the attestation names REFINE (passes on the attestation commit) |
 | Full suite, clean clone, Node 20 | identical |
 | Mutation (in-house harness) | REFINE: 510 mutants, 459 killed, 51 documented; layered-runtime additions: 17 run (timeboxed), 16 killed, 1 documented as unreachable; the rest of the runtime hooks were not swept and are covered by RF-2, RF-5, RF-10, RF-17, RF-21, RF-27, RF-28 |
-| CI | the workflow runs on this branch; its result could not be read from the work environment and is recorded as UNKNOWN, so the combined verdict stays `NOT_READY` on `CI_NOT_SUCCESS_YET` until it is recorded |
+| CI | Creative Intelligence V1 run 38398261230 (Node 20 and Node 24 success) on `9d919d2`, then run 38400493168 on the closure (Node 24 failed once on an unrelated intermittent test, then passed; Node 20 passed): recorded in `creative-phase-4-checkpoint.md` §5 and `creative-readiness.json`. (Earlier text of this row said UNKNOWN; superseded.) |
 | Provider calls / live images | 0 / 0 (every image is drawn by a test; the layer port is a fake) |
 
 Known limits (not worked around): the masked-edit capability has no provider; a repair regenerates at most two layers and strictly fewer than the scene has; a foreground prop has one declared anchor family; repositioning follows a fixed ladder (anchor 1, anchor 2 or inset 0.15, 0.05, then removal); relight, contact shadow and grading are Phase 5.

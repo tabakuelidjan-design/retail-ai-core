@@ -22,7 +22,7 @@ Purpose: a durable, self-contained statement of where Creative stands after Phas
 | 2 Multi-asset / carousel planner | complete, attested |
 | 3 Layered scene production (architecture + executable runtime) | complete, attested (`9f30628`, CI success run 38307717076 recorded by the Phase 3 session) |
 | **4 Executable REFINE + layer repair + masked-edit interface** | **CLOSED: combined readiness `CREATIVE_PIPELINE_READY` (CI verified, see §5 and §7)** |
-| 5 General segmentation + realistic integration | NOT STARTED (owner stop condition: do not start without an explicit order) |
+| 5 General segmentation + realistic integration | BUILT AND CLOSED after this checkpoint on `feature/creative-phase-5-integration` (CI success run 38477140859); see `creative-integration.md`, NDR-P26 and `CREATIVE-1-5-FINAL-STATUS.md` (written when this phase was still unstarted: the row above is history) |
 | Video, upscale, multi-reference, new image providers, live HABB benchmarks | out of scope until after Phase 5 |
 
 ## 3. What Phase 4 built
@@ -66,7 +66,7 @@ Documented survivors (51 in REFINE): 19 nullish defaults (`??`→`||`, left oper
 3. Masked editing is an **interface**, never a simulated capability, until a real tool is approved (NDR-D01 style explicit tool candidates).
 4. A named-but-unknown layer is never re-targeted to "the only prop" (found by the planner tests); a defect that names nothing may default only where there is a single candidate.
 5. The repair policy is a parameter (`policy` of `planRepair`), and two dead checks were removed — found by mutation analysis, not by review.
-6. Readiness: `REFINE` is a sixth active component; CI is recorded as `unknown`, **not** success, so the verdict stays honest.
+6. Readiness: `REFINE` is a sixth active component; CI was recorded as `unknown`, **not** success, so the verdict stayed honest (at the time; later recorded as success, §7).
 
 ## 7. Known issues / open items (nothing hidden)
 
@@ -81,7 +81,7 @@ Documented survivors (51 in REFINE): 19 nullish defaults (`??`→`||`, left oper
 
 1. (Done) CI read and recorded; readiness is `CREATIVE_PIPELINE_READY`.
 2. Owner decision, nothing merged: Phase 4 is a linear descendant of Phase 3 (`9f30628`); `main` (`a9d0e2f`, 2026-09-21) is its ancestor and the branch is 334 commits ahead (826 files) because the lineage carries all the Nordla work since then, not only Creative. Safe sequence: tags at `9f30628` and the final SHA; PR Phase 3 → main, then PR Phase 4 → main, merge commits (no squash / rebase / force push); CI green on both Node versions for the exact commit; re-run the readiness check and confirm CI on main after each merge; rollback by reverting the merge commit.
-3. Only on an explicit owner order: Phase 5 (generic segmentation port + deterministic fixtures; contact shadow as a separate recomputable layer; bounded grading and relight under declared fidelity tolerances; fail closed outside tolerance; no new paid provider; no weakening of identity protection). Then focused tests → mutation → full suite → clean clones Node 20 + 24 → CI → attestation, one heavy job at a time.
+3. (DONE later, on the owner's order: Phase 5 was built; see `CREATIVE-1-5-FINAL-STATUS.md`.) Original text: Phase 5 (generic segmentation port + deterministic fixtures; contact shadow as a separate recomputable layer; bounded grading and relight under declared fidelity tolerances; fail closed outside tolerance; no new paid provider; no weakening of identity protection). Then focused tests → mutation → full suite → clean clones Node 20 + 24 → CI → attestation, one heavy job at a time.
 4. If a masked-edit provider is ever approved: connect it behind `ports.maskedEdit` (needs `edit()` and a non-empty `tool_id`), through an OPEN provider gate, with the protected-pixel output check already in place; add it as a new scope only with its own plan rules and tests.
 
 Rules in force: no live provider calls, no live images, no Shopify/HABB changes, no changes to Core/Finance/Buying/China Sourcing from this branch, one heavy local task at a time.
