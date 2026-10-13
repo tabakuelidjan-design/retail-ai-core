@@ -31,6 +31,7 @@ import { fieldSummaryText } from '/core/field-summary.js';
 import { createVoice } from './voice.js';
 import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
 import { recoverySection, recoveryError } from './recover.js';
+import { activeMenuCase, applyLegacyReanalysis } from './menu-case.js';
 import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
 import { turnClosesAt } from '/core/turns.js';
@@ -190,13 +191,7 @@ function render() {
 // SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
 let salonInstance = null;
 const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu() }));
-// The Salon screen holds its own selected case. Menu actions must act on the case
-// VISIBLE to the owner, not a stale/blank case left in the global currentId.
-function menuCase() {
-  const id = S.mode === 'salon' ? salon().state().view.caseId : null;
-  return (id && S.cases[id]) || cur();
-}
-function focusMenuCase(c) { if (c && S.currentId !== c.id) { S.currentId = c.id; persist(); } }
+const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
 
@@ -348,22 +343,8 @@ async function onClick(ev) {
   if (act === 'fm-start') { S.flash = ''; const startVoice = () => { if (openConversation()) void voice.start(); }; guarded(() => { const typed = document.querySelector('form[data-form="fh-product"] input[name="name"]')?.value?.trim(); if (typed && !cur().identity.workingName) commit({ type: 'NAME', name: typed }); if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); else render(); }); startVoice(); return; }
   if (act === 'ask-now') { S.askNow = true; S.flash = ''; return render(); }
   if (act === 'notes-reanalyze-preview') { S.reanalysisTargetId = menuCase()?.id ?? null; S.reanalysisPrompt = true; S.reanalysisMessage = ''; return openMenu(); }
-  if (act === 'notes-reanalyze-cancel') { S.reanalysisPrompt = false; return openMenu(); }
-  if (act === 'notes-reanalyze-apply') return guarded(() => {
-    const c = S.cases[S.reanalysisTargetId] ?? menuCase();
-    S.reanalysisPrompt = false; S.reanalysisTargetId = null;
-    if (!c) { S.reanalysisMessage = 'Aucun dossier actif à réanalyser.'; return openMenu(); }
-    const count = (c.conversations ?? []).flatMap((conv) => conv.items ?? []).filter((item) => item.speaker === 'supplier' && typeof item.original === 'string' && item.original.trim()).length;
-    if (!count) { S.reanalysisMessage = `Aucune ancienne note fournisseur à relire dans « ${c.identity.workingName || c.id} ». Vérifiez le dossier actif.`; return openMenu(); }
-    const before = c.candidates.length;
-    focusMenuCase(c);
-    commit({ type: 'CONVERSATION_REANALYZE' });
-    const added = S.cases[c.id].candidates.length - before;
-    S.reanalysisMessage = added
-      ? `« ${c.identity.workingName || c.id} » : ${added} nouvelle(s) proposition(s) ajoutée(s) à vérifier. Aucun fait confirmé ou rejeté n’a changé.`
-      : `« ${c.identity.workingName || c.id} » : aucune nouvelle proposition. Les notes avaient déjà été lues.`;
-    return openMenu();
-  });
+  if (act === 'notes-reanalyze-cancel') { S.reanalysisPrompt = false; S.reanalysisTargetId = null; return openMenu(); }
+  if (act === 'notes-reanalyze-apply') return applyLegacyReanalysis({ S, menuCase, persist, commit, openMenu });
   if (act === 'fm-menu') return openMenu();
   if (act === 'fm-ask') { S.askId = key; S.sheet = 'ask'; S.flash = ''; return render(); }
   if (act === 'fm-end') { await voice.stop(); return guarded(() => { const conv = (cur().conversations ?? []).find((x) => x.status === 'OPEN'); S.sheet = 'end'; S.flash = ''; if (conv) commit({ type: 'CONVERSATION_FINISH', convId: conv.id }); else render(); }); }
