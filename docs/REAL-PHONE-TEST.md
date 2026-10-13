@@ -36,3 +36,7 @@ PASS only if steps 1-15 all behaved as written, nothing was lost or silently cha
 Write down for each failure: step number, what you pasted (or a screenshot), what you expected, what you saw. A wrong extraction of a real quote is the most valuable thing you can send back.
 
 Not tested by this flow (by design): PDF reading (needs the computer, online), voice, photo recognition, any provider.
+
+## Optional: check one real quote from the computer (read-only)
+`node tools/real-quote-check.mjs quote.txt [--source quote|chat] [--supplier NAME] [--product NAME] [--qty N] [--price P --vat V --target T] [--freight F] [--duty D] [--fx R] [--merchant habb]`
+Runs your pasted quote through the same pipeline and prints extracted facts with provenance, what stayed unknown, conflicts, deal numbers, evidence completeness, recommendation, ASK NEXT, negotiation and fit. Only the numbers you pass are used; nothing is stored and no network call is made. Send back any fact it got wrong.
