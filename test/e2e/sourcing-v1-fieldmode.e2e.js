@@ -163,7 +163,7 @@ await check('18. layout: the Field screen, its sheets and the bottom bar fit 375
       const r = await t.run(`${open} await __t.sleep(300);
         const over = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).length;
         const small = [...document.querySelectorAll('#screen button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 40 || r.width < 40); }).map((b) => (b.className + ':' + b.innerText.slice(0, 12))).join('|');
-        const offenders = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).slice(0,5).map(e => ({tag:e.tagName,cl:String(e.className).slice(0,100),r:Math.round(e.getBoundingClientRect().right),txt:e.textContent?.slice(0,60)})); return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, offenders, small };`);
+        const offenders = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).slice(0,5).map(e => ({tag:e.tagName,cl:String(e.className).slice(0,100),r:Math.round(e.getBoundingClientRect().right),txt:e.textContent?.slice(0,60),parent:e.parentElement?.outerHTML?.slice(0,250)})); return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, offenders, small };`);
       if (r.sideways || r.over || r.small.length) bad.push(`${w}x${h} ${v}: ${JSON.stringify(r)}`);
     }
   }
