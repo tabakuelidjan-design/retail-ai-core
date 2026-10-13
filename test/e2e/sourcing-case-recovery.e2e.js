@@ -129,7 +129,7 @@ try {
     await click(tab, '[data-act="notes-reanalyze-preview"]');
     await click(tab, '[data-act="notes-reanalyze-apply"]');
     const message = await overlay(tab);
-    ok(/batterie externe/.test(message) && /proposition\\(s\\) ajoutée\\(s\\)/.test(message), 'result is shown, named and not silently lost');
+    ok(message.includes('batterie externe') && message.includes('proposition(s) ajoutée(s)'), `result missing; actual overlay: ${message.slice(0, 800)}`);
     const local = (await phoneCases(tab)).find((c) => c.id === legacy.id);
     ok(local?.candidates.some((c) => c.key === 'identifier.model' && c.value === 'AB521' && c.state === 'PROPOSED'), 'model was recovered as a PROPOSAL');
     ok(local.candidates.some((c) => c.key === 'quote.unitPrice' && String(c.value) === '12' && c.state === 'PROPOSED'), 'price was recovered as a PROPOSAL');
