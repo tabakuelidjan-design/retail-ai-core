@@ -29,6 +29,8 @@ import { validateCorrection } from '/core/candidate-view.js';
 import { fieldFirst, fmCompute, fmNav, fieldMissing } from './screens/fieldfirst.js';
 import { fieldSummaryText } from '/core/field-summary.js';
 import { createVoice } from './voice.js';
+import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
+import { recoverySection, recoveryError } from './recover.js';
 import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
 import { turnClosesAt } from '/core/turns.js';
@@ -404,7 +406,11 @@ async function onClick(ev) {
   if (act === 'opencase') { discardDrafts = true; S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); return render(); }
   if (act === 'server-copy') { const sv = (S.conflicts ?? {})[key]; if (sv) { S.cases[sv.id] = sv; delete S.conflicts[key]; S.flash = ''; persist(); closeOverlay(); render(); } return; }
   if (act === 'keep-both') { const sv = (S.conflicts ?? {})[key]; const mine = S.cases[key]; if (sv && mine) { const copyId = `${key}-mine-${Date.now().toString(36)}`; const copy = { ...JSON.parse(JSON.stringify(mine)), id: copyId, rev: 0, identity: { ...mine.identity, workingName: `${mine.identity.workingName || 'Case'} (my copy)` } }; S.cases[copyId] = copy; S.cases[sv.id] = sv; delete S.conflicts[key]; markDirty(copyId); S.flash = 'Both copies are kept: the server copy under the original name and yours as "(my copy)".'; persist(); closeOverlay(); render(); queueSync(); } return; }
-  if (act === 'export') { const blob = new Blob([JSON.stringify(cur(), null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${cur().id}.json`; a.click(); return; }
+  if (act === 'rec-list') return recList();
+  if (act === 'rec-toggle') { const r = (S.rec ??= {}); (r.selected ??= {})[key] = t.checked; return openMenu(); }
+  if (act === 'rec-go') return recGo();
+  if (act === 'rec-keep' || act === 'rec-skip') return recDecide(key, act === 'rec-keep');
+  if (act === 'export') { const blob = new Blob([buildExport(cur(), getBlob)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${cur().id}.json`; a.click(); return; }
   if (act === 'gate-save') { S.token = $('#gate-tok').value.trim(); ls.set('nordla.sourcing.token', S.token); S.authFailed = false; await ping(); if (!S.authFailed) { await checkSafety(); queueSync(); } return render(); }
   if (act === 'gate-offline') { S.offlineChoice = true; ls.set('nordla.sourcing.offlineChoice', true); return render(); }
   if (act === 'fx') return fetchFx();
@@ -431,10 +437,55 @@ function showCapabilities() {
   o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>What works right now</h2><p class="small muted">${S.online ? 'Your server is reachable.' : 'Your server is NOT reachable: everything marked "works now" still works on this phone.'} Cached data is never shown as LIVE.</p>
   <table>${m.map((f) => `<tr><td>${esc(f.label)}<br><span class="muted small">${esc(f.note)}</span></td><td class="n"><span class="chip t-${f.availableNow ? 'GREEN' : 'RED'}">${f.availableNow ? 'works now' : 'not now'}</span><br><span class="muted small">${esc(f.class.replace(/_/g, ' '))}</span></td></tr>`).join('')}</table>`;
 }
+// ---- case recovery (explicit, selective, never overwrites) ---------------------------------------------------------------------------------------------------------------------
+// Reading is GET only. Nothing recovered is marked as changed, so the automatic sync never pushes it; a later edit is sent with the case's own revision, and the server answers 409 (never overwrites) if that moved on.
+async function storePhotos(photos) { for (const [k, v] of Object.entries(photos ?? {})) await putBlob(k, v); }
+async function recList() {
+  const r = (S.rec = { selected: {}, results: [], pending: [] });
+  try { r.list = (await api('/api/cases')).cases ?? []; } catch (e) { r.error = e.status === 401 ? 'Jeton refusé par le serveur.' : 'Le serveur ne répond pas : rien n’a été modifié.'; }
+  openMenu();
+}
+/** Adds what is new, reports what is already here, and queues anything that differs for the owner to decide. */
+async function recIngest(items, source) {
+  const r = (S.rec ??= {}); r.results ??= []; r.pending ??= [];
+  for (const { incoming, photos } of items) {
+    const [plan] = planRecovery(S.cases, [incoming]); const name = incoming.identity?.workingName || incoming.id;
+    if (plan.status === 'NEW') { const out = applyRecovery(S.cases, incoming, { source }); S.cases = out.cases; await storePhotos(photos); r.results.push(`« ${name} » récupéré.`); }
+    else if (plan.status === 'ALREADY_HERE') r.results.push(`« ${name} » est déjà sur ce téléphone, identique : rien à faire.`);
+    else if (plan.status === 'ALREADY_KEPT') r.results.push(`« ${name} » : cette copie est déjà gardée sous « ${S.cases[plan.keptAs]?.identity?.workingName ?? plan.keptAs} ».`);
+    else { r.pending = r.pending.filter((p) => p.id !== incoming.id); r.pending.push({ id: incoming.id, relation: plan.relation, incoming: plan.incoming, local: plan.local, raw: incoming, photos, source }); }
+  }
+  persist();
+}
+async function recGo() {
+  const r = S.rec; const ids = Object.keys(r.selected ?? {}).filter((k) => r.selected[k]); r.error = ''; r.results = []; const items = [];
+  for (const id of ids) {
+    try { const v = validateCase(await api(`/api/cases/${encodeURIComponent(id)}`)); if (v.ok) items.push({ incoming: v.case, photos: {} }); else r.results.push(`« ${id} » refusé : ${recoveryError(v.error)}`); }
+    catch { r.results.push(`« ${id} » n’a pas pu être lu sur le serveur : rien n’a été modifié.`); }
+  }
+  await recIngest(items, 'server'); r.selected = {}; openMenu();
+}
+async function recFile(file) {
+  const r = (S.rec ??= { results: [], pending: [] }); r.error = ''; r.results = [];
+  if (file.size > MAX_IMPORT_BYTES) { r.error = recoveryError('TOO_BIG'); return openMenu(); }
+  const p = parseImportText(await file.text());
+  if (!p.ok) r.error = recoveryError(p.error); else await recIngest([{ incoming: p.case, photos: p.photos }], 'file');
+  openMenu();
+}
+async function recDecide(id, keep) {
+  const r = S.rec; const p = (r.pending ?? []).find((x) => x.id === id); if (!p) return;
+  if (keep) {
+    const out = applyRecovery(S.cases, p.raw, { choice: 'keep-both', source: p.source }); S.cases = out.cases;
+    const mapped = Object.fromEntries(Object.entries(p.photos ?? {}).map(([k, v]) => [k.replace(`:${p.id}.`, `:${out.id}.`), v])); await storePhotos(mapped);
+    r.results.push(`« ${p.incoming.name || id} » : les deux copies sont gardées. Votre copie n’a pas été modifiée.`);
+  } else r.results.push(`« ${p.incoming.name || id} » : ignoré, rien n’a changé.`);
+  r.pending = r.pending.filter((x) => x.id !== id); persist(); openMenu();
+}
 function openMenu() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
   o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Salon (comparer)</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
   <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button><p class="small muted">Pour retrouver les informations oubliées dans des notes créées avant la correction : exportez d'abord ce dossier. La réanalyse n'ajoute que des propositions à confirmer, sans modifier les faits déjà acceptés ou rejetés.</p>${S.reanalysisMessage ? `<p class="small">${esc(S.reanalysisMessage)}</p>` : ''}${S.reanalysisPrompt ? `<p class="warn">Relire les notes originales du fournisseur dans cette fiche ? Aucun fait ne sera confirmé automatiquement.</p><button class="btn" data-act="notes-reanalyze-apply">Oui, ajouter les propositions</button> <button class="btn sec" data-act="notes-reanalyze-cancel">Annuler</button>` : '<button class="btn sec" data-act="notes-reanalyze-preview">Réanalyser les anciennes notes</button>'}`;
+  o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases }));
 }
 
 async function onPhoto(ev) {
@@ -455,7 +506,7 @@ async function onPhoto(ev) {
 (function pairingLink() { const m = /[#&]t=([A-Za-z0-9_-]{24,})/.exec(location.hash); if (!m) return; S.token = m[1]; ls.set('nordla.sourcing.token', S.token); S.authFailed = false; history.replaceState(null, '', location.pathname + location.search); })();
 document.addEventListener('input', (ev) => { const t = ev.target; if (t?.matches?.('textarea[data-draft="capture"]') && cur()) { (S.captureDraft ??= {})[cur().id] = t.value; ls.set('nordla.sourcing.capdraft', S.captureDraft); } });
 document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
-document.addEventListener('change', (ev) => { const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
+document.addEventListener('change', (ev) => { const fi = ev.target.closest?.('input[data-act="rec-file"]'); if (fi) { const f = fi.files?.[0]; fi.value = ''; if (f) recFile(f).catch(() => { (S.rec ??= {}).error = 'Ce fichier n’a pas pu être lu.'; openMenu(); }); return; } const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
 window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });
 setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // a verification expires: the header must not keep saying VERIFIED
