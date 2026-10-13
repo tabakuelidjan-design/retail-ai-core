@@ -1,5 +1,7 @@
 import { ARTIFACT as A, RELIGHT as R, SHADOW as SH } from './constants.js';
-import { dilate, labelComponents, lumaAt } from './pixels.js';
+import {
+  alphaExtremaShare, dilate, labelComponents, lumaAt,
+} from './pixels.js';
 
 // ARTIFACT DETECTION on the integrated scene. The product, the shadow and the plate are known separately, so every artifact is measured against what it should be:
 //   HALO                 the ring just outside the product differs from the plate by more than the shadow explains          FLOATING_OBJECT       the product does not touch its support, or the contact is not darkened
@@ -86,12 +88,7 @@ export function detectArtifacts({ plate, composite, placed, shadow = null, geome
 
   // ALPHA_NOISE of the placed alpha ramp
   {
-    let sum = 0; let n = 0; const pw = placed.rgba.width; const ph = placed.rgba.height; const a = placed.rgba.pixels;
-    for (let y = 1; y < ph - 1; y += 1) for (let x = 1; x < pw - 1; x += 1) {
-      const i = (y * pw + x) * 4 + 3; const v = a[i]; if (v <= 8 || v >= 247) continue;
-      sum += Math.abs(v - (a[i - 4] + a[i + 4] + a[i - pw * 4] + a[i + pw * 4]) / 4) / 255; n += 1;
-    }
-    const noise = n ? sum / n : 0;
+    const noise = alphaExtremaShare(placed.rgba.pixels, placed.rgba.width, placed.rgba.height, 4, 3);
     findings.push(check('ALPHA_NOISE', noise, A.alpha_noise_max, noise <= A.alpha_noise_max));
   }
   return Object.freeze({ clean: findings.every((f) => f.ok), findings: Object.freeze(findings) });

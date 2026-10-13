@@ -1,7 +1,7 @@
 import { MATTE as M, SEGMENTATION as S } from './constants.js';
 import { learnGround } from './segmentation.js';
 import {
-  boundaryOf, dilate, erode, isRgba, labelComponents, lumaAt, nearestSource,
+  alphaExtremaShare, boundaryOf, dilate, erode, isRgba, labelComponents, lumaAt, nearestSource,
 } from './pixels.js';
 
 // DETERMINISTIC MATTE QUALITY. A matte (alpha plane) is judged against the SOURCE pixels it was cut from, never against itself. Every check returns { code, ok, value, limit }; a check that cannot be
@@ -29,6 +29,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   if (!area) return Object.freeze({ valid: false, findings: [unmeasurable('MATTE_EMPTY', 'the matte has no opaque pixel')], measurements: { area } });
   const findings = [];
   const ign = ignore ?? new Uint8Array(n);
+  const ignNear = dilate(ign, width, height, 2); // the seam with another object: a pixel there is mixed with that object, not with the ground
 
   // ground distance of every source pixel
   const d = new Float32Array(n);
@@ -59,7 +60,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
     const gl = 0.299 * g[0] + 0.587 * g[1] + 0.114 * g[2]; let bad = 0; let tested = 0; const badMask = new Uint8Array(n);
     const band = dilate(edge, width, height, 1);
     for (let i = 0; i < n; i += 1) {
-      if (!band[i] || !hard[i] || alpha[i] < 200) continue; tested += 1;
+      if (!band[i] || !hard[i] || alpha[i] < 200 || ignNear[i]) continue; tested += 1;
       const l = lumaAt(pixels, i * 4);
       const shadowLike = l < gl && l >= gl * S.shadow_luma_floor && Math.hypot(pixels[i * 4] - l - (g[0] - gl), pixels[i * 4 + 1] - l - (g[1] - gl), pixels[i * 4 + 2] - l - (g[2] - gl)) <= S.chroma_shadow_tolerance;
       if (d[i] <= S.t_lo || shadowLike) { bad += 1; badMask[i] = 1; }
@@ -93,7 +94,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   // GROUND_LEAK: opaque pixels that are the ground colour, in blobs (ground that was kept inside the product, e.g. a notch between a handle and the body)
   if (!groundKnown) findings.push(unmeasurable('GROUND_LEAK', 'the ground is not plain'));
   else {
-    const leak = new Uint8Array(n); for (let i = 0; i < n; i += 1) if (alpha[i] >= 250 && d[i] <= S.t_lo / 2 && !ign[i]) leak[i] = 1;
+    const leak = new Uint8Array(n); for (let i = 0; i < n; i += 1) if (alpha[i] >= 250 && d[i] <= S.t_lo && !ign[i]) leak[i] = 1;
     const blobs = labelComponents(leak, width, height).list.filter((c) => c.area >= M.ground_blob_min_px); const px = blobs.reduce((t, c) => t + c.area, 0);
     findings.push(check('GROUND_LEAK', px / area, M.ground_blob_max_share, px / area <= M.ground_blob_max_share));
   }
@@ -113,9 +114,12 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   } else {
     const evidence = new Uint8Array(n);
     for (let i = 0; i < n; i += 1) if (near[i] && !ign[i] && d[i] >= (S.t_lo + S.t_hi) / 2) evidence[i] = 1;
-    // MISSING_THIN_PARTS: evidence pixels beside the matte (within 3 px) that the matte dropped
-    const reach = dilate(hard, width, height, 3); let missing = 0;
-    for (let i = 0; i < n; i += 1) if (evidence[i] && !hard[i] && alpha[i] < 16 && d[i] >= S.t_hi && reach[i]) missing += 1; // dropped, and clearly the product (not a faint anti-aliasing pixel)
+    // MISSING_THIN_PARTS: product evidence the matte dropped (alpha ~ 0, clearly not the ground) and that is connected to the matte: the WHOLE dropped structure counts, not only the pixels beside the matte
+    const reach = dilate(hard, width, height, 3); const dropped = new Uint8Array(n);
+    for (let i = 0; i < n; i += 1) if (!hard[i] && alpha[i] < 16 && d[i] >= S.t_hi && !ignNear[i]) dropped[i] = 1;
+    const parts = labelComponents(dropped, width, height); const touching = new Set();
+    for (let i = 0; i < n; i += 1) if (dropped[i] && reach[i]) touching.add(parts.labels[i]);
+    const missing = parts.list.filter((c) => touching.has(c.id)).reduce((t, c) => t + c.area, 0);
     findings.push(check('MISSING_THIN_PARTS', missing / area, M.missing_thin_max_share, missing / area <= M.missing_thin_max_share));
     // BOUNDARY_OFFSET: matte beyond the evidence (+) minus evidence beyond the matte (-), in a band around the boundary, per boundary pixel
     const inner = erode(hard, width, height, 8); let plus = 0; let minus = 0;
@@ -143,7 +147,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
   if (!groundKnown) findings.push(unmeasurable('EDGE_RECONSTRUCTION', 'the ground is not plain'));
   else {
     const core = erode(hard, width, height, 2); const band = new Uint8Array(n); const reach = dilate(hard, width, height, 3);
-    for (let i = 0; i < n; i += 1) if (reach[i] && !core[i] && !ign[i]) band[i] = 1;
+    for (let i = 0; i < n; i += 1) if (reach[i] && !core[i] && !ignNear[i]) band[i] = 1;
     const near = nearestSource(core, band, width, height, 4); let bad = 0; let tested = 0; const badMask = new Uint8Array(n);
     for (let i = 0; i < n; i += 1) {
       if (!band[i] || near[i] < 0) continue; const j = near[i] * 4; const a = alpha[i] / 255; tested += 1;
@@ -159,12 +163,7 @@ export function checkMatte({ rgba, alpha, ground = null, declared = {}, ignore =
     findings.push(check('EDGE_RECONSTRUCTION_RUN', run, M.cluster_max_px, run < M.cluster_max_px));
   }
   {
-    let sum = 0; let cnt = 0;
-    for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
-      const i = y * width + x; const a = alpha[i]; if (a <= 8 || a >= 247) continue;
-      sum += Math.abs(a - (alpha[i - 1] + alpha[i + 1] + alpha[i - width] + alpha[i + width]) / 4) / 255; cnt += 1;
-    }
-    const noise = cnt ? sum / cnt : 0;
+    const noise = alphaExtremaShare(alpha, width, height);
     findings.push(check('ALPHA_NOISE', noise, M.alpha_noise_max, noise <= M.alpha_noise_max));
   }
 

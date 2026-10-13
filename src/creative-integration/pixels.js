@@ -167,3 +167,14 @@ export function nearestSource(sources, region, width, height, maxDepth) {
   }
   return near;
 }
+
+/** The share of partially transparent pixels (8..247) that are strict local extrema of alpha against all four neighbours (by at least 24): a clean anti-aliased edge is monotonic across the boundary, a jagged one is not. */
+export function alphaExtremaShare(alpha, width, height, stride = 1, offset = 0) {
+  let partial = 0; let extrema = 0; const at = (x, y) => alpha[(y * width + x) * stride + offset];
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    const a = at(x, y); if (a <= 8 || a >= 247) continue; partial += 1;
+    const nb = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+    if (nb.every((v) => a >= v + 24) || nb.every((v) => a <= v - 24)) extrema += 1;
+  }
+  return partial ? extrema / partial : 0;
+}

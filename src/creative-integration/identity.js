@@ -25,7 +25,7 @@ function detailField(img, radius) {
 
 function hueDeg(r, g, b) {
   const mx = Math.max(r, g, b); const mn = Math.min(r, g, b); const d = mx - mn;
-  if (d < 1e-6) return null;
+  if (d < 1e-6 || d / mx < 0.12) return null; // a (nearly) neutral colour has no meaningful hue
   let h; if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
   return ((h * 60) + 360) % 360;
 }

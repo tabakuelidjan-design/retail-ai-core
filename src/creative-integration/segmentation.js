@@ -252,7 +252,7 @@ export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
       if ((x > 0 && keep[i - 1] && !inBox(x - 1, y)) || (x < width - 1 && keep[i + 1] && !inBox(x + 1, y)) || (y > 0 && keep[i - width] && !inBox(x, y - 1)) || (y < height - 1 && keep[i + width] && !inBox(x, y + 1))) cut += 1;
     }
     if (cut > 0 && selection.allow_cut !== true) return fail(SEG_REASON.SELECTION_TOUCHES_OTHER_OBJECT, { evidence: { cut_pixels: cut }, components: described.map(({ plane, ...o }) => ({ ...o })) });
-    chosen = described.filter((o) => o.plane.some((v, i) => v && inBox(i % width, (i - (i % width)) / width))).map((o) => ({ ...o, plane: o.plane.map((v, i) => (v && inBox(i % width, (i - (i % width)) / width) ? 1 : 0)) }));
+    chosen = described.filter((o) => o.plane.some((v, i) => v && inBox(i % width, (i - (i % width)) / width))).map((o) => { const plane = o.plane.map((v, i) => (v && inBox(i % width, (i - (i % width)) / width) ? 1 : 0)); return { ...describe(plane, width, height, o.id), plane }; });
   } else return fail(SEG_REASON.INVALID_INPUT, { evidence: { mode } });
   if (!chosen.length || (mode === 'IDS' && chosen.length !== (selection.ids ?? []).length)) return fail(SEG_REASON.SELECTION_NOT_FOUND, { components: described.map(({ plane, ...o }) => o) });
 

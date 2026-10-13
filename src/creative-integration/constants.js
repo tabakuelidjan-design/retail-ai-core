@@ -67,7 +67,7 @@ export const MATTE = Object.freeze({
   reconstruction_residual: 16, // a boundary pixel farther than this (RGB distance) from alpha * product + (1 - alpha) * ground is not explained by the matte
   reconstruction_gradient_gain: 3, // extra tolerance per unit of local colour gradient of the product
   reconstruction_max_share: 0.1,
-  alpha_noise_max: 0.3, // mean absolute alpha second difference along the boundary band, 0..1 of 255
+  alpha_noise_max: 0.15, // share of partial-alpha pixels that are strict local extrema (a clean anti-aliased edge is monotonic across the boundary)
 });
 
 export const IDENTITY = Object.freeze({
@@ -77,19 +77,20 @@ export const IDENTITY = Object.freeze({
   tile_grid: 8,
   min_tile_variance: 4e-4,
   detail_blur_radius: 6,
-  chromaticity_shift_max: 0.035, // L1 shift of the mean normalised colour (r, g, b over r + g + b): the product's colour identity, independent of exposure (the exposure is bounded by RELIGHT)
-  hue_shift_max_deg: 8,
+  chromaticity_shift_max: 0.08, // L1 shift of the mean normalised colour (r, g, b over r + g + b): the product's colour identity, independent of exposure (the exposure is bounded by RELIGHT)
+  hue_shift_max_deg: 10,
   duplicate_alpha_components_equal: true,
 });
 
 export const RELIGHT = Object.freeze({
   exposure_ev: 0.4, // |EV| bound
   local_gain: 0.15, // |gain gradient| across the product along the light axis
-  temperature: 0.08, // |per-channel gain difference| for temperature
-  tint: 0.05,
-  saturation: 0.15, // |saturation change|, 0 = unchanged
+  temperature: 0.06, // |per-channel gain difference| for temperature
+  tint: 0.04,
+  saturation: 0.1, // |saturation change|, 0 = unchanged
   max_luma_change: 0.22, // the largest change of any interior pixel luma, as a share of 255 (a bound on highlights / shadows)
-  clip_share_max: 0.005, // share of interior pixels newly clipped at 0 / 255
+  clip_tolerance_levels: 8, // a channel that would pass 0 / 255 by more than this has lost information (a rounding of a near-white is not a clip)
+  clip_share_max: 0.005, // share of interior pixels that lost information to clipping
 });
 
 export const GRADE = Object.freeze({
@@ -127,7 +128,7 @@ export const ARTIFACT = Object.freeze({
   halo_ring_px: 3,
   halo_luma_delta: 10, // the ring around the product differs from the plate by more than this (0..255) without being shadow
   halo_max_share: 0.08,
-  alpha_noise_max: 0.4, // placed (scaled) alpha ramp
+  alpha_noise_max: 0.2, // placed (scaled) alpha ramp, same measure
 });
 
 export const PERFORMANCE = Object.freeze({ cache_max_entries: 32 });

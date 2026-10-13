@@ -40,13 +40,14 @@ export function relightProduct({ cutout, request = {} }) {
   let minP = Infinity; let maxP = -Infinity; const proj = new Float32Array(n);
   for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) { const p = (x - width / 2) * lx + (y - height / 2) * ly; proj[y * width + x] = p; if (p < minP) minP = p; if (p > maxP) maxP = p; }
   const half = Math.max(1e-6, (maxP - minP) / 2);
-  const out = new Uint8Array(pixels.length); const gainEv = 2 ** ev;
+  const out = new Uint8Array(pixels.length); const gainEv = 2 ** ev; const lost = new Uint8Array(n); // lost[i] = 1: a channel would have gone more than clip_tolerance_levels beyond 0 / 255 (information lost, not a rounding of a near-white)
   for (let i = 0; i < n; i += 1) {
     const q = i * 4; out[q + 3] = pixels[q + 3];
     if (pixels[q + 3] === 0) continue;
     const gain = gainEv * (1 + lg * clamp(proj[i] / half, -1, 1));
     let r = pixels[q] * gain * (1 + temp); let g = pixels[q + 1] * gain * (1 + tint); let b = pixels[q + 2] * gain * (1 - temp);
     if (sat) { const l = 0.299 * r + 0.587 * g + 0.114 * b; r = l + (r - l) * (1 + sat); g = l + (g - l) * (1 + sat); b = l + (b - l) * (1 + sat); }
+    if (Math.max(r - 255, g - 255, b - 255, -r, -g, -b) > R.clip_tolerance_levels) lost[i] = 1;
     out[q] = clamp(Math.round(r), 0, 255); out[q + 1] = clamp(Math.round(g), 0, 255); out[q + 2] = clamp(Math.round(b), 0, 255);
   }
   // measured bounds, on the interior
@@ -55,8 +56,7 @@ export function relightProduct({ cutout, request = {} }) {
   for (let i = 0; i < n; i += 1) {
     if (!core[i]) continue; tested += 1; const q = i * 4;
     maxChange = Math.max(maxChange, Math.abs(lumaAt(out, q) - lumaAt(pixels, q)) / 255);
-    const was = (c) => pixels[q + c] === 0 || pixels[q + c] === 255; const is = (c) => out[q + c] === 0 || out[q + c] === 255;
-    if ([0, 1, 2].some((c) => is(c) && !was(c))) clipped += 1;
+    if (lost[i]) clipped += 1;
   }
   const measured = Object.freeze({ max_luma_change: maxChange, new_clip_share: tested ? clipped / tested : 0 });
   const bad = [];
