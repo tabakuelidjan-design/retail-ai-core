@@ -143,3 +143,53 @@ test('8. NO DUPLICATE, NO OVERWRITE: the same text imported twice is one offer; 
   const rev = dispatch(c, { type: 'OFFER_IMPORT', source: 'PASTED_QUOTE', text: 'prix 11$, MOQ 50, Modele AB521', supplier: 'Sonny', revision: true }, at(12)); assert.equal(rev.offers.length, 2); assert.equal(rev.offers[0].id, c.offers[0].id); assert.equal(rev.offers[0].candidateIds.length, c.offers[0].candidateIds.length, 'offer 1 is intact');
   assert.equal(rev.quotes.length, c.quotes.length, 'importing proposes: it does not change the case quote by itself'); assert.equal(factOf(rev, 'MOQ').value, 60);
 });
+
+
+// A saved Xiaomi dossier created BEFORE the extractor fix has neither the model nor
+// the misspelled-capacity candidate, even though both strings remain in the original.
+// Recovery must be additive, explicit and idempotent: never rewrite the supplier
+// message, existing confirmations, a rejection, the quote, or any audit history.
+test('9. existing Sonny JSON recovers ONLY missing proposals by explicit reanalysis, without touching decided facts', () => {
+  let legacy = terrain();
+  legacy = { ...legacy, candidates: legacy.candidates.filter((c) => !['identifier.model', 'spec.capacity'].includes(c.key)) };
+  const original = JSON.parse(JSON.stringify(legacy)); const oldCandidates = JSON.stringify(original.candidates);
+  const oldLedger = JSON.stringify(original.ledger); const oldQuote = JSON.stringify(original.quotes);
+  const oldHistory = JSON.stringify(original.factAudit); const oldOffer = JSON.stringify(original.offers);
+  let restored = upgradeCase(JSON.parse(JSON.stringify(original))); // genuine persisted JSON round-trip
+  assert.equal(board(restored).MODEL.state, FACT_STATE.MISSING, 'an old saved case is not rewritten by a simple reload');
+  restored = dispatch(restored, { type: 'CONVERSATION_REANALYZE' }, at(8));
+  assert.equal(restored.candidates.length, original.candidates.length + 2);
+  const model = restored.candidates.find((c) => c.key === 'identifier.model');
+  const cap = restored.candidates.find((c) => c.key === 'spec.capacity');
+  assert.equal(model.value, 'AB521'); assert.equal(model.state, 'PROPOSED');
+  assert.equal(cap.value, null); assert.equal(cap.state, 'PROPOSED'); assert.equal(cap.needsCorrection, true);
+  assert.equal(cap.rawText, '10000mAp'); assert.equal(cap.recovery.kind, 'OWNER_INITIATED_REANALYSIS');
+  assert.equal(JSON.stringify(restored.candidates.slice(0, original.candidates.length)), oldCandidates);
+  assert.equal(JSON.stringify(restored.ledger), oldLedger); assert.equal(JSON.stringify(restored.quotes), oldQuote);
+  assert.equal(JSON.stringify(restored.factAudit), oldHistory); assert.equal(JSON.stringify(restored.offers), oldOffer);
+  assert.equal(restored.conversations[0].items[0].original, SONNY);
+  assert.equal(restored.supplier.name, 'Sonny'); assert.equal(restored.identity.identifiers.model, null);
+  assert.deepEqual(caseFacts(restored).map((f) => f.fact_type), ['MOQ']);
+  assert.equal(board(restored).MODEL.state, FACT_STATE.PROPOSED);
+  assert.equal(board(restored).CAPACITY.state, FACT_STATE.AMBIGUOUS);
+  const count = restored.candidates.length;
+  const twice = dispatch(restored, { type: 'CONVERSATION_REANALYZE' }, at(9));
+  assert.equal(twice.candidates.length, count, 'repeated reanalysis never duplicates proposals');
+  const reopened = upgradeCase(JSON.parse(JSON.stringify(twice)));
+  assert.equal(board(reopened).MODEL.proposedValueText, 'AB521');
+  assert.equal(factOf(reopened, 'MOQ').value, 60);
+});
+
+test('10. recovery respects prior rejection and does not reinterpret the owner’s notes', () => {
+  let c = terrain();
+  const price = c.candidates.find((x) => x.key === 'quote.unitPrice');
+  c = dispatch(c, { type: 'CANDIDATE_REJECT', id: price.id }, at(5));
+  const conv = c.conversations.at(-1);
+  c = dispatch(c, { type: 'CONVERSATION_ITEM', convId: conv.id, speaker: 'me', text: 'Modele ZZ999', extract: false }, at(6));
+  const length = c.candidates.length;
+  c = dispatch(c, { type: 'CONVERSATION_REANALYZE' }, at(7));
+  assert.equal(c.candidates.length, length, 'no resurrection of rejected price or extraction of own words');
+  assert.equal(c.candidates.find((x) => x.id === price.id).state, 'REJECTED');
+  assert.equal(c.candidates.some((x) => x.key === 'identifier.model' && x.value === 'ZZ999'), false);
+  assert.equal(c.ledger.some((e) => e.key === 'quote.unitPrice'), false);
+});
