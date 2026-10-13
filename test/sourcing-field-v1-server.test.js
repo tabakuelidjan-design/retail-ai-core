@@ -36,6 +36,6 @@ test('the Field V1 files are served (whitelisted folders only) and listed in the
     for (const f of ['/core/field/offer-import.js', '/core/field/derived.js', '/core/field/workspace.js', '/core/field/engine.js', '/screens/salon.js', '/screens/salon-views.js', '/salon.css']) assert.equal((await fetch(s.base + f)).status, 200, f);
     assert.equal((await fetch(s.base + '/core/field/..%2f..%2fserver%2fapp.js')).status, 404);
     assert.equal((await fetch(s.base + '/core/field/nested/x.js')).status, 404); assert.equal((await fetch(s.base + '/config/merchants/habb/sourcing-fit.json')).status, 404, 'the merchant data file is not a static asset: it is served only through the token route');
-    const man = await (await fetch(s.base + '/shell-manifest.json')).json(); for (const f of ['/core/field/engine.js', '/core/field/revisions.js', '/screens/salon.js', '/salon.css']) assert.ok(man.files.includes(f), `${f} must be cached for offline use`);
+    const man = await (await fetch(s.base + '/shell-manifest.json')).json(); for (const f of ['/core/field/engine.js', '/core/field/revisions.js', '/screens/salon.js', '/screens/salon-fr.js', '/salon.css']) assert.ok(man.files.includes(f), `${f} must be cached for offline use`);
   } finally { await s.close(); }
 });

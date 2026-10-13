@@ -54,3 +54,14 @@ body.sl-mode .tabs button{font-size:12.5px;min-height:56px;padding:6px 2px}
 @media (prefers-color-scheme:dark){.sl-ccard{background:var(--sl-card)}.sl-btn.pri,.sl-pick[aria-pressed=true],.sl-seg[aria-pressed=true],.sl-tabs button[aria-selected=true]{color:#0e1622}}
 @media (min-width:700px){.sl-ccards{display:grid;grid-template-columns:1fr 1fr}}
 .sl-fh .sl-pill{flex:none;white-space:nowrap}.sl-fh>b{flex:1}
+
+/* real-phone fix #1: blocked summary, ask-next cards */
+.sl-blk { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--sl-bad, #b3261e); border-left-width: 5px; border-radius: 8px; background: color-mix(in srgb, var(--sl-bad, #b3261e) 8%, transparent); }
+.sl-blkt { margin: 0 0 4px; }
+.sl-blkl { margin: 0 0 6px; padding-left: 1.1em; }
+.sl-blkd > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.sl-tag { display: inline-block; margin: 2px 0 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
+.sl-tag.t-conf { color: var(--sl-bad, #b3261e); } .sl-tag.t-calc { color: var(--sl-warn, #8a5a00); } .sl-tag.t-imp { color: var(--sl-mute, #555); }
+.sl-lang { margin: 6px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .04em; opacity: .7; }
+.sl-q .sl-qen, .sl-q .sl-qzh { margin: 2px 0 4px; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+.sl-zhwarn { font-size: 12px; }

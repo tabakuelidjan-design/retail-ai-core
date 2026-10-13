@@ -7,8 +7,7 @@ import { newCase, dispatch } from '../src/sourcing/core/case.js';
 import { offerDraft } from '../src/sourcing/core/field/offer-import.js';
 import { describeCandidate } from '../src/sourcing/core/candidate-view.js';
 
-// Reconstructed from the facts reported after the phone test (price 11 $, 3 colours blue/white/black, 45 W, 20000 mAh, 4 outputs, in stock, MOQ 24 pcs corrected to 11 pcs).
-export const REAL_PHONE_TEXT = 'prix 11 $\n3 couleurs blue white black\n45W\n20000mAh\n4 sortie\ndéjà on stock\nMOQ 24 pcs';
+import { REAL_PHONE_TEXT } from './sourcing-field-v1-phone-fixture.js';
 const facts = (text) => extractFacts({ text }).candidates;
 const one = (text, key, context) => { const l = facts(text).filter((c) => c.key === key && (context === undefined || c.context === context)); return l.length ? l[0] : null; };
 const val = (text, key) => one(text, key)?.value;
@@ -86,7 +85,7 @@ test('8. W is power, never a price (and Wh stays energy)', () => {
   const t = '45W'; assert.deepEqual(val(t, 'spec.power'), { amount: 45, unit: 'W' }); assert.equal(one(t, 'quote.unitPrice'), null);
   for (const [s, a] of [['45 W', 45], ['puissance 45W', 45], ['power 45 watts', 45], ['65w', 65], ['20W max', 20]]) assert.equal(val(s, 'spec.power')?.amount, a, s);
   assert.equal(one('37Wh', 'spec.power'), null); assert.deepEqual(val('37Wh', 'spec.capacity'), { amount: 37, unit: 'Wh' });
-  assert.equal(one('2 pcs w/ logo', 'spec.power'), null);
+  assert.equal(one('2 pcs w/ logo', 'spec.power'), null); assert.equal(one('5 w/ logo', 'spec.power'), null, 'w/ is "with", not watts'); assert.equal(one('$ 45W', 'quote.unitPrice'), null, 'a rating after a symbol is not a price'); assert.equal(one('$ 3 colors blue white', 'quote.unitPrice'), null, 'a count after a symbol is not a price');
 });
 
 test('price notations', () => {
@@ -115,6 +114,7 @@ test('9. colour lists, any separator, English or French', () => {
 test('10. stock wording variants', () => {
   for (const t of ['in stock', 'en stock', 'already in stock', 'déjà en stock', 'déjà on stock', 'ready stock', 'stock available', 'stock ready', 'In-Stock', 'stock disponible']) assert.equal(val(t, 'offer.stockStatus'), 'IN_STOCK', t);
   for (const t of ['out of stock', 'not in stock', 'pas en stock', 'no stock', 'rupture de stock']) assert.equal(val(t, 'offer.stockStatus'), 'OUT_OF_STOCK', t);
+  for (const t of ['not yet in stock', 'pas encore en stock', 'pas du tout en stock']) assert.notEqual(val(t, 'offer.stockStatus'), 'IN_STOCK', `${t}: a negation is never read as IN_STOCK`);
   for (const t of ['stock', 'stocks are growing', 'is it in stock?', 'si en stock']) assert.equal(one(t, 'offer.stockStatus'), null, `${t}: no claim`);
 });
 

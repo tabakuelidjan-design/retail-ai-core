@@ -54,14 +54,14 @@ try {
     const sel = await t.eval("[...document.querySelectorAll('.sl-card')].map((c) => [c.dataset.case, c.classList.contains('sel')])"); const extra = sel.find(([id, s]) => s && !['A', 'B', 'C', 'D', 'E'].includes(id)); if (extra) await t.eval(`document.querySelector('.sl-pick[data-key="${extra[0]}"]').click()`); await sleep(200);
     const need = ['A', 'B', 'C', 'D', 'E'].filter((id) => !sel.find(([x, s]) => x === id && s)); for (const id of need) await t.eval(`document.querySelector('.sl-pick[data-key="${id}"]')?.click()`); await sleep(200);
     await click(t, '.sl-bar [data-act="sl-compare"]', 900); await t.eval("document.querySelectorAll('details.sl-sec').forEach((d) => d.open = true)"); await sleep(300); const txt = await html(t);
-    ok(/Comparaison/.test(txt) && /Résumé/.test(txt) && /Aucun gagnant au seul prix/.test(txt), txt.slice(0, 200)); ok(/le plus bas prix annoncé, pas la meilleure offre/.test(txt)); ok(/EXW excludes origin charges/.test(txt)); ok(/en attente de votre décision/.test(txt) && /aucun achat ni paiement/.test(txt));
+    ok(/Comparaison/.test(txt) && /Résumé/.test(txt) && /Aucun gagnant au seul prix/.test(txt), txt.slice(0, 200)); ok(/le plus bas prix annoncé, pas la meilleure offre/.test(txt)); ok(/EXW exclut les frais d'origine/.test(txt)); ok(/en attente de votre décision/.test(txt) && /aucun achat ni paiement/.test(txt));
     ok((await t.eval("document.querySelectorAll('.sl-ccard').length")) === 5, 'five cards'); ok((await t.eval("document.querySelectorAll('details.sl-sec').length")) === 8, 'eight sections'); await noOverflow(t, 'compare');
     const order = await t.eval("[...document.querySelectorAll('details.sl-sec')].map((d) => d.dataset.sec).join(',')"); ok(order === 'summary,cards,decisive,risks,economics,evidence,askNext,recommendation', order);
   });
 
   await check('5. SAVE the comparison, then ASK and NEGOTIATE on one supplier: two to five questions, Chinese marked not native-reviewed, a walk-away price, no autonomous action', async () => {
     await click(t, '[data-act="sl-save-cmp"]', 700); ok(/Comparaison enregistrée/.test(await html(t)));
-    await click(t, '[data-act="sl-open-case"][data-key="B"]', 700); await click(t, '[data-act="sl-ask"][data-key="B"]', 800); let txt = await html(t); const n = await t.eval("document.querySelectorAll('.sl-q').length"); ok(n >= 2 && n <= 5, `questions: ${n}`); ok(/pas relue par un locuteur natif/.test(txt)); await noOverflow(t, 'ask');
+    await click(t, '[data-act="sl-open-case"][data-key="B"]', 700); await click(t, '[data-act="sl-ask"][data-key="B"]', 800); let txt = await html(t); const n = await t.eval("document.querySelectorAll('.sl-q').length"); ok(n >= 2 && n <= 5, `questions: ${n}`); ok(/pas relue? par un locuteur natif/i.test(txt)); ok(/Bloquant pour/.test(txt) && /Copier/.test(txt) && !/Écouter/.test(txt), 'compact ask cards'); await noOverflow(t, 'ask');
     await click(t, '[data-act="sl-nav"][data-key="neg"]', 800); txt = await html(t); ok(/Limite \(prix d'achat max\)/i.test(txt) && /ne négocie pas à votre place/i.test(txt), txt.slice(0, 300)); await noOverflow(t, 'negotiate');
   });
 
