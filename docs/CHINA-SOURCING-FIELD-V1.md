@@ -3,6 +3,8 @@
 One workflow, not a set of features: **see -> capture -> understand -> verify -> compare -> know what is missing -> know what to ask -> negotiate -> update the offer -> see what changed -> get a sourcing recommendation -> save -> resume.**
 It sits on the existing case, evidence ledger, conversation engine and P11-lite comparison. Nothing there was redesigned; Field V1 adds derived views over them.
 
+Merchant profile: chosen explicitly with `SOURCING_MERCHANT_ID=<id>` (reads `config/merchants/<id>/sourcing-fit.json`) or `SOURCING_MERCHANT_PROFILE=<file>`; with neither, no profile is loaded and the fit says so. The sourcing source names no merchant (tested). Real-device flow: `docs/REAL-PHONE-TEST.md`; owner inputs still needed: `docs/HABB-SOURCING-PROFILE-INPUTS.md`.
+
 Phone: Mode terrain -> **Salon** (menu or the "Salon" button of the guided screen). Everything below works offline; the server only keeps a merged copy.
 
 ## Layers (all pure, isomorphic, in `src/sourcing/core/field/`)
