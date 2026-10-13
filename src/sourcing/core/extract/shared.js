@@ -7,6 +7,8 @@ export const INCOTERMS = ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP'
 export const PLACES = new Set(['Shenzhen', 'Ningbo', 'Shanghai', 'Guangzhou', 'Qingdao', 'Xiamen', 'Tianjin', 'Yantian', 'Shekou', 'Dalian', 'Hong Kong', 'Dongguan', 'Foshan', 'Zhongshan', 'Yiwu', 'Nansha', 'Huizhou']);
 export const ZH_PLACES = { 深圳: 'Shenzhen', 宁波: 'Ningbo', 上海: 'Shanghai', 广州: 'Guangzhou', 青岛: 'Qingdao', 厦门: 'Xiamen', 天津: 'Tianjin', 盐田: 'Yantian', 蛇口: 'Shekou', 大连: 'Dalian', 香港: 'Hong Kong', 东莞: 'Dongguan', 佛山: 'Foshan', 中山: 'Zhongshan', 义乌: 'Yiwu', 南沙: 'Nansha', 惠州: 'Huizhou' };
 export const COLOURS = { black: 'black', white: 'white', blue: 'blue', red: 'red', green: 'green', pink: 'pink', purple: 'purple', yellow: 'yellow', orange: 'orange', grey: 'grey', gray: 'grey', silver: 'silver', gold: 'gold', brown: 'brown', navy: 'navy', beige: 'beige', transparent: 'transparent' };
+/** Colour words read in a field note, English and French. "or" (gold) is deliberately absent: it is a conjunction. */
+export const COLOUR_WORDS = { ...COLOURS, noir: 'black', noire: 'black', blanc: 'white', blanche: 'white', bleu: 'blue', bleue: 'blue', rouge: 'red', vert: 'green', verte: 'green', rose: 'pink', violet: 'purple', jaune: 'yellow', gris: 'grey', grise: 'grey', argent: 'silver', marron: 'brown' };
 export const ZH_COLOURS = { 黑: 'black', 白: 'white', 蓝: 'blue', 红: 'red', 绿: 'green', 粉: 'pink', 紫: 'purple', 黄: 'yellow', 橙: 'orange', 灰: 'grey', 银: 'silver', 金: 'gold', 棕: 'brown' };
 
 /** Document claims: the token found in the text -> the claim key. A claim is NEVER a received document. */

@@ -178,9 +178,9 @@ export function attributeNameEvents(state, offerId, name, speaker) {
 export const SECTIONS = Object.freeze({
   identity: ['identifier.model', 'identifier.brand', 'identifier.manufacturer', 'supplier.type'],
   price: ['quote.currency', 'quote.unitPrice', 'quote.tiers', 'quote.moq'],
-  logistics: ['quote.incoterm', 'quote.port', 'quote.leadTime', 'offer.productionDays', 'offer.shippingMethod', 'carton.qty', 'carton.dimensions', 'carton.grossWeight', 'carton.netWeight'],
+  logistics: ['quote.incoterm', 'quote.port', 'quote.leadTime', 'offer.productionDays', 'offer.shippingMethod', 'carton.qty', 'carton.dimensions', 'carton.grossWeight', 'carton.netWeight', 'offer.stockStatus'],
   samples: ['quote.samplePrice', 'offer.sampleRefund', 'offer.sampleDays'],
-  specs: ['spec.material', 'product.dimensions', 'spec.capacity', 'spec.compatibility', 'spec.ageRange', 'variant.colours', 'variant.colourCount'],
+  specs: ['spec.material', 'product.dimensions', 'spec.capacity', 'spec.power', 'spec.outputCount', 'spec.compatibility', 'spec.ageRange', 'variant.colours', 'variant.colourCount'],
   packaging: ['offer.packaging', 'offer.accessories'],
   claims: [], // docClaim.*
   payment: ['payment.depositPct', 'payment.balancePct', 'payment.balanceDue', 'offer.paymentMethods'],

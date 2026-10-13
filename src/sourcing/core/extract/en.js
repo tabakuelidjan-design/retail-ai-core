@@ -1,10 +1,16 @@
 // English deterministic extraction. Narrow, high-value patterns only; nothing is inferred beyond what the words say, and every guess-like step is flagged.
 import { parseNumberToken } from './numbers.js';
-import { INCOTERMS, PLACES, COLOURS, segments, sentences, within, boundaryBetween, mk, currencyOf } from './shared.js';
+import { INCOTERMS, PLACES, COLOUR_WORDS, segments, sentences, within, boundaryBetween, mk, currencyOf } from './shared.js';
 
 const CUR = '(?:US\\$|USD|RMB|CNY|EUR|[$¥￥€])'; const NUM = '\\d[\\d.,]*\\d|\\d';
-const RX_PRICE_A = new RegExp(`(${CUR})\\s?(${NUM})`, 'gi');
+// a number followed by one of these is a count, a rating or a duration, never a price ("$ 3 colors", "$ 45W")
+const NOT_MONEY = '(?!\\d|[.,]\\d)(?!\\s?(?:colou?rs?\\b|couleurs?\\b|ports?\\b|outputs?\\b|sorties?\\b|days?\\b|jours?\\b|w(?![A-Za-z])|mah\\b|wh\\b|%))';
+const RX_PRICE_A = new RegExp(`(${CUR})\\s?(${NUM})${NOT_MONEY}`, 'gi');
 const RX_PRICE_B = new RegExp(`(?<![A-Za-z0-9.,])(${NUM})\\s?(USD|RMB|CNY|EUR|dollars?|yuan|euros?)\\b`, 'gi');
+// "11$" / "11 $": the symbol AFTER the number (not when the symbol starts the next price: "50 $8"), and not the quantity of an MOQ
+const RX_PRICE_C = new RegExp(`(?<![A-Za-z0-9.,])(?<!(?:moq|qty|quantity|minimum)\\s{0,3}[:=]?\\s{0,3})(${NUM})\\s?(US\\$|[$¥￥€])(?!\\d)`, 'gi');
+// a labelled price: "prix 11", "price: 11 usd", "unit price 11 $". The currency is optional and is NOT guessed when it is absent.
+const RX_PRICE_K = new RegExp(`(?<![A-Za-z])(?:prix(?:\\s+unitaire)?|price|unit\\s+price|pu|tarif)\\s*[:=]?\\s*(?!${CUR})(${NUM})(?!\\d|[.,]\\d)(?!\\s?(?:pcs?\\b|pieces?\\b|units?\\b|sets?\\b|colou?rs?\\b|couleurs?\\b|days?\\b|jours?\\b|w(?![A-Za-z])|mah\\b|%))(?:\\s?(USD|RMB|CNY|EUR|dollars?|yuan|euros?|US\\$|[$¥￥€])(?![A-Za-z0-9]))?`, 'gi');
 const UNIT = '(?:pcs?|pieces?|units?|sets?)';
 // a price-table row may be written as a RANGE ("100-299pcs", "300 to 499 pcs"): the threshold of the tier is the LOWER bound; a range written backwards is passed on unparsed so a person decides
 const RX_QTY = new RegExp(`(?<![A-Za-z0-9.,])(?:(\\d[\\d,]*)\\s?(?:-|–|—|~|to)\\s?)?(\\d[\\d,]*)\\s?\\+?\\s?${UNIT}\\b(?:\\s?\\+)?`, 'gi');
@@ -14,6 +20,10 @@ export function priceTokens(text) {
   const out = [];
   for (const m of text.matchAll(RX_PRICE_A)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[1], num: m[2] });
   for (const m of text.matchAll(RX_PRICE_B)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2], num: m[1] });
+  for (const m of text.matchAll(RX_PRICE_C)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2], num: m[1] });
+  for (const m of text.matchAll(RX_PRICE_K)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2] ?? null, num: m[1], labelled: true });
+  const LABEL = /(?<![A-Za-z])(?:samples?(?:\s+(?:price|cost))?|échantillons?|echantillons?)\s*[:=]?\s*$/i;
+  for (const t of out) { if (t.labelled) continue; const l = LABEL.exec(text.slice(Math.max(0, t.start - 24), t.start)); if (l) t.start -= l[0].length; }
   return out.sort((a, b) => a.start - b.start).filter((t, i, a) => !a.slice(0, i).some((p) => p.start < t.end && t.start < p.end));
 }
 export function qtyTokens(text) {
@@ -66,9 +76,10 @@ function pairTiers(text, prices, qtys) {
   return { pairs, used: usedP };
 }
 
+const title = (w) => String(w).toLowerCase().replace(/\b[a-z]/g, (x) => x.toUpperCase());
 const moqContext = (seg, sent, singleMoq) => {
   const cue = (s) => (/per\s*colou?r/i.test(s) ? 'per_colour' : /logo|custom|OEM|ODM|print|brand/i.test(s) ? (/packag/i.test(s) && !/logo/i.test(s) ? 'custom_packaging' : 'custom_logo') : /packag/i.test(s) ? 'custom_packaging' : /sample/i.test(s) ? 'sample' : null);
-  return cue(seg) ?? (singleMoq ? cue(sent) : null) ?? 'product';
+  return cue(seg) ?? (singleMoq ? (() => { const c = cue(sent); return c === 'sample' ? null : c; })() : null) ?? 'product';
 };
 
 export function extractEn(text, lang) {
@@ -77,7 +88,9 @@ export function extractEn(text, lang) {
 
   // ---- tiers (quantity -> price pairs), then lone prices ----
   const tierPrices = prices.filter((p) => !SKIP_PRICE_CLAUSE.test(within(segs, p.start).text) && !/sample/i.test(within(sents, p.start).text));
-  const { pairs, used } = pairTiers(text, tierPrices, qtys);
+  let { pairs, used } = pairTiers(text, tierPrices, qtys);
+  // "11 usd moq 24pcs" / "$8/pc MOQ 50": ONE price beside ONE minimum order is a unit price and a MOQ, not a price table (a table needs two rows)
+  if (pairs.length === 1 && /\b(?:MOQ|min(?:imum)?\.?)(?![A-Za-z])[\s:=]*(?:of|is)?[\s:=]*$/i.test(text.slice(Math.max(0, pairs[0].q.start - 16), pairs[0].q.start))) { pairs = []; used = new Set(); }
   const priceCand = (p, extra) => { const n = parseNumberToken(p.num, 'price'); return { n, amb: n.ambiguous, ...extra }; };
   if (pairs.length) {
     const start = Math.min(...pairs.map((x) => Math.min(x.q.start, x.p.start))); const end = Math.max(...pairs.map((x) => Math.max(x.q.end, x.p.end)));
@@ -91,7 +104,7 @@ export function extractEn(text, lang) {
     if (/sample/i.test(sent) && !SKIP_PRICE_CLAUSE.test(seg)) { const n = parseNumberToken(p.num, 'price'); out.push(mk(text, lang, 'quote.samplePrice', n.value, p.start, p.end, { context: 'sample', needsCorrection: n.ambiguous, flags: n.flags, ...(n.suggestion ? { suggestion: n.suggestion } : {}), reason: 'sample price' })); continue; }
     if (SKIP_PRICE_CLAUSE.test(seg)) continue;
     const n = parseNumberToken(p.num, 'price');
-    out.push(mk(text, lang, 'quote.unitPrice', n.value, p.start, p.end, { confidence: n.ambiguous ? 'LOW' : 'HIGH', flags: n.flags, needsCorrection: n.ambiguous, ...(n.suggestion ? { suggestion: n.suggestion } : {}), reason: 'price with currency' }));
+    out.push(mk(text, lang, 'quote.unitPrice', n.value, p.start, p.end, { confidence: n.ambiguous ? 'LOW' : 'HIGH', flags: [...n.flags, ...(p.cur ? [] : ['CURRENCY_NOT_STATED'])], needsCorrection: n.ambiguous, ...(n.suggestion ? { suggestion: n.suggestion } : {}), reason: 'price with currency' }));
   }
   void priceCand;
   if (prices.length) { // currency: one candidate per distinct currency, flagged when only a symbol told us
@@ -101,7 +114,7 @@ export function extractEn(text, lang) {
 
   // ---- MOQ ----
   const moqs = [];
-  for (const m of text.matchAll(/\b(?:MOQ|minimum order(?: quantity)?|min\.? order(?: quantity)?)\b\s*(?:is|of|:|=|-|are)?\s*(?:about|around|at least)?\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)?/gi)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+  for (const m of text.matchAll(/(?:\bMOQ(?![A-Za-z])|\bminimum order(?: quantity)?\b|\bmin\.? order(?: quantity)?\b)\s*(?:is|of|:|=|-|are)?\s*(?:about|around|at least)?\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)?/gi)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
   for (const m of text.matchAll(/(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)\b/gi)) if (!moqs.some((x) => x.start < m.index + m[0].length && m.index < x.end)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
   for (const mo of moqs) {
     const seg = within(segs, mo.start).text; const sent = within(sents, mo.start); const same = moqs.filter((x) => x.start >= sent.start && x.start <= sent.end).length === 1;
@@ -111,14 +124,18 @@ export function extractEn(text, lang) {
   }
 
   // ---- Incoterm + place ----
-  for (const m of text.matchAll(/(?<![A-Za-z0-9])(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)(?![A-Za-z0-9])/g)) {
+  const incoMatches = [...text.matchAll(/(?<![A-Za-z0-9])(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)(?![A-Za-z0-9])/g)];
+  // trade-show notes are typed in lower case ("exw guangzhou"): the seven common terms are read in any case, but only with a KNOWN place right after (a lone "dap"/"cif" is just a word)
+  for (const m of text.matchAll(/(?<![A-Za-z0-9])(exw|fca|fob|cfr|cif|dap|ddp)(?![A-Za-z0-9])/gi)) { if (incoMatches.some((x) => x.index === m.index)) continue; const nx = /^\s*[,:-]?\s*([A-Za-z]+(?:\s[A-Za-z]+)?)/.exec(text.slice(m.index + m[0].length)); const w = nx && (PLACES.has(title(nx[1])) ? nx[1] : PLACES.has(title(nx[1].split(' ')[0])) ? nx[1].split(' ')[0] : null); if (w) incoMatches.push({ 0: m[0], 1: m[0].toUpperCase(), index: m.index, lower: true }); }
+  incoMatches.sort((a, b) => a.index - b.index);
+  for (const m of incoMatches) {
     if (!INCOTERMS.includes(m[1])) continue;
-    out.push(mk(text, lang, 'quote.incoterm', m[1], m.index, m.index + m[0].length, { confidence: 'HIGH', reason: 'Incoterm' }));
-    const after = text.slice(m.index + m[0].length); const pm = /^\s*[,:-]?\s*([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/.exec(after);
+    out.push(mk(text, lang, 'quote.incoterm', m[1], m.index, m.index + m[0].length, { confidence: m.lower ? 'MEDIUM' : 'HIGH', reason: 'Incoterm' }));
+    const after = text.slice(m.index + m[0].length); const pm = m.lower ? (() => { const nx = /^\s*[,:-]?\s*([A-Za-z]+(?:\s[A-Za-z]+)?)/.exec(after); if (!nx) return null; const one = nx[1].split(' ')[0]; const whole = PLACES.has(title(nx[1])); const v = whole ? nx[1] : one; return PLACES.has(title(v)) ? Object.assign([nx[0], title(v)], { index: nx.index }) : null; })() : /^\s*[,:-]?\s*([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/.exec(after);
     if (pm) {
       let place = pm[1]; const STOP = /^(Port|Price|And|With|Is|At|For|The|Please|We|Our|USD|RMB|EUR|CNY|MOQ|Payment|Delivery|Lead|Total)$/;
       const words = place.split(' '); if (STOP.test(words[0])) continue; if (words.length > 1 && STOP.test(words[1])) place = words[0];
-      const off = m.index + m[0].length + pm[0].indexOf(pm[1]); const listed = PLACES.has(place);
+      const off = m.index + m[0].length + pm[0].toLowerCase().indexOf(pm[1].toLowerCase()); const listed = PLACES.has(place);
       out.push(mk(text, lang, 'quote.port', place, off, off + place.length, { confidence: listed ? 'HIGH' : 'MEDIUM', flags: listed ? [] : ['UNLISTED_PLACE'], reason: 'place after Incoterm' }));
     }
   }
@@ -140,14 +157,16 @@ export function extractEn(text, lang) {
   if (lt) { const wk = /^w/i.test(lt[3]); const lo = Number(lt[1]) * (wk ? 7 : 1); const hi = Number(lt[2] ?? lt[1]) * (wk ? 7 : 1); out.push(mk(text, lang, 'quote.leadTime', { min: String(lo), max: String(hi), unit: 'days' }, lt.index, lt.index + lt[0].length, { flags: wk ? ['WEEKS_CONVERTED'] : [], reason: 'lead time' })); }
 
   // ---- colours ----
-  const COL = Object.keys(COLOURS).join('|');
-  const cl = new RegExp(`(?:colou?rs?(?:\\s+(?:available|are|include|we have))?\\s*[:\\-]?\\s*|available in\\s+)((?:${COL})(?:\\s*(?:,|and|&|/|or)\\s*(?:${COL}))*)`, 'i').exec(text);
-  if (cl) { const list = [...cl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + cl[1].length, { reason: 'colour list' })); }
-  if (!cl) { // a list of two or more colours after "we have / we offer / comes in": proposed with a lower confidence (it may describe something else)
-    const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+((?:${COL})(?:\\s*(?:,|and|&|/|or)\\s*(?:${COL}))+)`, 'i').exec(text);
-    if (bl) { const list = [...bl[1].toLowerCase().matchAll(new RegExp(COL, 'g'))].map((x) => COLOURS[x[0]]); const s0 = bl.index + bl[0].indexOf(bl[1]); out.push(mk(text, lang, 'variant.colours', [...new Set(list)], s0, s0 + bl[1].length, { confidence: new Set(list).size >= 3 ? 'HIGH' : 'MEDIUM', reason: 'colour list after "we have"' })); }
+  const COL = Object.keys(COLOUR_WORDS).sort((a, b) => b.length - a.length).join('|'); const W = `(?<![A-Za-z])(?:${COL})(?![A-Za-z])`; const SEP = '(?:\\s*(?:[,/&]|\\band\\b|\\bor\\b|\\bet\\b|\\bou\\b)\\s*|\\s+)'; const LIST = `${W}(?:${SEP}${W})*`;
+  const coloursOf = (str) => [...new Set([...str.toLowerCase().matchAll(new RegExp(W, 'g'))].map((x) => COLOUR_WORDS[x[0]]))];
+  const cl = new RegExp(`(?:(?:colou?rs?|couleurs?)(?:\\s+(?:available|are|include|we have|disponibles?))?\\s*[:\\-]?\\s*|available in\\s+)(${LIST})`, 'i').exec(text);
+  if (cl) { const list = coloursOf(cl[1]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + cl[1].length, { reason: 'colour list' })); }
+  if (!cl) { // "Black and white are available" is a sentence, not a list: a list joined by a WORD needs three colours. A list of colours after "we have / we offer / comes in", or two or more colour words in a row ("blue white black", "bleu blanc noir"): proposed, never a lone colour word
+    const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+(${LIST})`, 'i').exec(text);
+    const run = bl ?? new RegExp(`(${LIST})`, 'i').exec(text); const g = run && (bl ? run[1] : run[1]);
+    if (g) { const list = coloursOf(g); const worded = /\b(?:and|or|et|ou)\b/i.test(g); if ((list.length >= 2 && (!worded || list.length >= 3)) || (bl && list.length >= 1)) { const s0 = run.index + run[0].indexOf(g); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + g.length, { confidence: list.length >= 3 ? 'HIGH' : 'MEDIUM', reason: bl ? 'colour list after "we have"' : 'colour words in a row' })); } }
   }
-  const cc = /(?<!per\s)\b(\d{1,2})\s+colou?rs?\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
+  const cc = /(?<!(?:per|par)\s)\b(\d{1,2})\s+(?:colou?rs?|couleurs?)\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
   for (const seg of segs) {
     const neg = /\b(?:cannot|can't|can not|couldn't|unable to|no|not|don't|do not)\s+(?:be\s+)?mix(?:ed|ing)?|\bcolou?rs?\s+(?:cannot|can't|can not)\s+be\s+mix(?:ed)?/i.exec(seg.text);
     const pos = neg ? null : /\b(?:can|could|may|able to|allowed to|ok to)\s+(?:be\s+)?mix(?:ed)?\b|\bmix(?:ed|ing)?\s+(?:the\s+)?colou?rs?\b|\bcolou?rs?\s+(?:can|could)\s+be\s+mix(?:ed)?\b|\bmixed colou?rs?\s+(?:is |are )?(?:ok|okay|fine|accepted|possible)\b/i.exec(seg.text);
@@ -165,7 +184,7 @@ export function extractEn(text, lang) {
   const nw = /(?:N\.?\s?W\.?|net\s+weight)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(kgs?|g)\b/i.exec(text); if (nw) out.push(mk(text, lang, 'carton.netWeight', { amount: nw[1], unit: /^kg/i.test(nw[2]) ? 'kg' : 'g' }, nw.index, nw.index + nw[0].length, { reason: 'net weight' }));
 
   // ---- identifiers: preserved EXACTLY as written ----
-  const mm = /\b(model(?:\s+(?:no\.?|number|name|type))?|type(?:\s+no\.?)?|item\s+(?:no\.?|number)|part\s+(?:no\.?|number)|P\/N|article\s+(?:no\.?|number))\s*[:#=]?\s*(?:is\s+)?([A-Za-z0-9][A-Za-z0-9\-_/.]*[A-Za-z0-9]|[A-Za-z0-9])(?:\s([A-Z]\d+[A-Za-z]?)\b)?/i.exec(text);
+  const mm = /\b(model(?:\s+(?:no\.?|number|name|type))?|mod[eè]le|r[eé]f(?:[eé]rence)?\.?|type(?:\s+no\.?)?|item\s+(?:no\.?|number)|part\s+(?:no\.?|number)|P\/N|article\s+(?:no\.?|number))\s*[:#=]?\s*(?:is\s+)?([A-Za-z0-9][A-Za-z0-9\-_/.]*[A-Za-z0-9]|[A-Za-z0-9])(?:\s([A-Z]\d+[A-Za-z]?)\b)?/i.exec(text);
   if (mm) {
     let val = mm[3] && /^[A-Za-z]{1,4}$/.test(mm[2]) ? `${mm[2]} ${mm[3]}` : mm[2]; val = val.replace(/[.\-_/]+$/, '');
     if (/\d/.test(val) && val.length >= 3 && !/^\d{1,3}$/.test(val)) { const s0 = mm.index + mm[0].indexOf(val, mm[1].length); out.push(mk(text, lang, 'identifier.model', val, s0, s0 + val.length, { confidence: /^model/i.test(mm[1]) ? 'HIGH' : 'MEDIUM', reason: 'model identifier, kept as written' })); }
