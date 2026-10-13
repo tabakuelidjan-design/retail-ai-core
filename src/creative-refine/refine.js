@@ -39,7 +39,7 @@ export function diffArtifacts(before, after) {
   };
 }
 
-const mergePolicy = (base = {}, over = {}) => ({
+export const mergePolicy = (base = {}, over = {}) => ({
   ...base,
   ...over,
   ...(base.drop_layers || over.drop_layers ? { drop_layers: [...new Set([...(base.drop_layers ?? []), ...(over.drop_layers ?? [])])].sort() } : {}),
@@ -56,11 +56,12 @@ const mergePolicy = (base = {}, over = {}) => ({
  *  store      the shared layers the candidate was produced with (never modified: the repair works on a copy)
  *  budget     the layer budget of the production (optional: without it the repair has a budget of its own)
  *  memory     the refine memory (optional)
+ *  runtime    the layered runtime to run (default: runLayeredCreative; a test may inject a fake to exercise the executor's decisions alone)
  *  allowedScopes  restricts the repair to these scopes (optional; a scope that does not exist, such as a full regeneration, is refused)
  * @returns RepairResult
  */
 export async function refineCreative({
-  candidate, defects = null, run, store = createLayerStore(), budget = null, memory = createRefineMemory(), allowedScopes = null,
+  candidate, defects = null, run, store = createLayerStore(), budget = null, memory = createRefineMemory(), allowedScopes = null, runtime = runLayeredCreative,
 }) {
   const ledger = run.ledger;
   const sceneId = run.scene_id;
@@ -94,7 +95,7 @@ export async function refineCreative({
   const before = budget ? budget.snapshot() : { provider_calls: 0, spent_eur: 0 };
   const policy = mergePolicy(run.policy ?? {}, plan.overrides.policy);
   ledger.record({ decision: DECISION.REFINE_EXECUTION, decided_by: component, rule: 'ONLY_THE_INVALIDATED_NODES_ARE_RECOMPUTED', basis: [plan.plan_id], outcome: { scope: plan.scope, steps: plan.steps.map((s) => ({ scope: s.scope, target: s.target, action: s.action.type })), invalidated: plan.invalidated, reused: plan.reused, max_provider_calls: plan.cost.max_provider_calls } });
-  const rerun = await runLayeredCreative({ ...run, store: repairStore, policy, ...(budget ? { budget } : {}) });
+  const rerun = await runtime({ ...run, store: repairStore, policy, ...(budget ? { budget } : {}) });
   const after = rerun.budget ?? { provider_calls: 0, spent_eur: 0 };
   const cost = { provider_calls: after.provider_calls - before.provider_calls, spent_eur: Math.round((after.spent_eur - before.spent_eur) * 1e9) / 1e9, max_provider_calls: plan.cost.max_provider_calls, regenerated_layers: plan.cost.regenerated_layers };
   const attempt = (outcome, reason, extra = {}) => {
