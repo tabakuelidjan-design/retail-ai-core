@@ -90,3 +90,16 @@ The refine imports the layered runtime; nothing outside the readiness gate impor
 ## 10. Not in this phase
 
 A connected masked-edit provider; general segmentation, contact shadow, relight and grading (Phase 5); any live provider call; video, upscale, multi-reference composition.
+
+## 11. Verification (recorded in `creative-readiness.json`)
+
+| Check | Result |
+|---|---|
+| Focused suites | `creative-refine.test.js` RF-1 to RF-28 (real layered runtime, real gates, compositor and typography, fake layer port), `creative-refine-planner.test.js` + `-edges` (PL, PE), `-executor` (EX, fake runtime), `-store` (ST), `-parity` (RP), `creative-readiness.test.js` |
+| Full suite, clean clone, Node 24 (docker, concurrency 4) | 2346 tests, 2343 passed, 2 skipped; the one failure was CR-6, which can only pass once the attestation names REFINE (passes on the attestation commit) |
+| Full suite, clean clone, Node 20 | identical |
+| Mutation (in-house harness) | REFINE: 510 mutants, 459 killed, 51 documented; layered-runtime additions: 17 run (timeboxed), 16 killed, 1 documented as unreachable; the rest of the runtime hooks were not swept and are covered by RF-2, RF-5, RF-10, RF-17, RF-21, RF-27, RF-28 |
+| CI | the workflow runs on this branch; its result could not be read from the work environment and is recorded as UNKNOWN, so the combined verdict stays `NOT_READY` on `CI_NOT_SUCCESS_YET` until it is recorded |
+| Provider calls / live images | 0 / 0 (every image is drawn by a test; the layer port is a fake) |
+
+Known limits (not worked around): the masked-edit capability has no provider; a repair regenerates at most two layers and strictly fewer than the scene has; a foreground prop has one declared anchor family; repositioning follows a fixed ladder (anchor 1, anchor 2 or inset 0.15, 0.05, then removal); relight, contact shadow and grading are Phase 5.

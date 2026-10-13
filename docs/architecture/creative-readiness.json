@@ -1,19 +1,21 @@
 {
-  "verified_commit": "10892c348e8d65aebc6032bc8cd1088f18b88bb6",
-  "code_hash": "00dc3ec581296636f0487f481a697770336e4005",
+  "verified_commit": "2c4fa34476351a2cda8af2b61acf09ea78c0cdb5",
+  "code_hash": "44bded3f87508cb8809ca9a96c27711af2ac8ee9",
   "components": [
     "PLANNING",
     "BRAIN",
     "CAMPAIGN",
     "PRODUCTION",
-    "LAYERED_RUNTIME"
+    "LAYERED_RUNTIME",
+    "REFINE"
   ],
   "full_suite": {
-    "tests": 2284,
-    "pass": 2282,
+    "tests": 2346,
+    "pass": 2344,
     "fail": 0,
     "skipped": 2,
-    "node": "24 (clean clone, docker, test concurrency 4)"
+    "node": "24 (clean clone, docker, test concurrency 4)",
+    "note": "The clean-clone run of the code commit had 2343 passing and ONE failure, CR-6 (the committed attestation must name REFINE), which can only pass once this attestation exists: it was run again, alone, on the attestation commit and passes (2344 = 2343 + CR-6)."
   },
   "mutation": {
     "PLANNING": {
@@ -41,30 +43,37 @@
       "note": "Product identity and substitute detection, capability routing, text integrity, scene specification, production planner and cost, layer compositor, provider gate, and the production part of the readiness gate. A first sweep left 26 survivors; each was killed by a new test (one real defect was found by them: plural forms of family words) or its redundant branch was removed, and the sweep was run again until no mutant survived. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change. Phase 3 closure: the groups of the files that changed (compositor under-composition mode, provider gate readiness level, readiness gate, production parity probes) were swept again on the final code: compositor 12/12, gate 8/8, readiness 2/2 killed; the other groups cover modules that did not change."
     },
     "LAYERED_RUNTIME": {
-      "total": 137,
-      "killed": 130,
-      "survivors_documented": 7,
-      "note": "The layered runtime (runLayeredCreative), the plain-ground matte, the raster operations, the compositor under-composition mode, the readiness levels in the gate, the readiness verdict and the runtime parity probes: 138 mutants (137 without the no-op control). A first sweep killed 110; the 27 survivors were each answered by a new test (killed on the second and third sweeps) or documented here. Seven are documented, all equivalent or unreachable by construction: the foreground prop in the base under the product (the foreground band is above the product band, so the filter is the same), the plate band offset (z within its band, one plate), two props of one band (the production planner already refuses such a scene with PROVENANCE_BROKEN, so the runtime never sees it), an unmeasurable identity gate passing (a branch inherited from the single-image runtime that no fixture can reach), a failed preflight running (the same inherited branch; the layout engine honours the zones first), wired without its stages (the stage flags are constants that are all true in the real module; productionReadinessLevel tests them separately) and the always-true parity probe (a probe is a tautology unless the code it probes is broken, which the matte and runtime mutants do)."
+      "total": 154,
+      "killed": 146,
+      "survivors_documented": 8,
+      "note": "The layered runtime (runLayeredCreative), the plain-ground matte, the raster operations, the compositor under-composition mode, the readiness levels in the gate, the readiness verdict and the runtime parity probes: 138 mutants (137 without the no-op control). A first sweep killed 110; the 27 survivors were each answered by a new test (killed on the second and third sweeps) or documented here. Seven are documented, all equivalent or unreachable by construction: the foreground prop in the base under the product (the foreground band is above the product band, so the filter is the same), the plate band offset (z within its band, one plate), two props of one band (the production planner already refuses such a scene with PROVENANCE_BROKEN, so the runtime never sees it), an unmeasurable identity gate passing (a branch inherited from the single-image runtime that no fixture can reach), a failed preflight running (the same inherited branch; the layout engine honours the zones first), wired without its stages (the stage flags are constants that are all true in the real module; productionReadinessLevel tests them separately) and the always-true parity probe (a probe is a tautology unless the code it probes is broken, which the matte and runtime mutants do). PHASE 4 additions to the runtime (the shared layer store with reject / allowance / fork / export, the policy hooks drop_layers / anchors / typography, the layered artifact): the store and the artifact are swept with the REFINE component (below). A TIMEBOXED targeted sweep of the policy hooks and the repair allowance ran 17 mutants: 9 killed at once, 8 survived the first chain; 4 of those were then killed by the end-to-end repair tests and the Phase 3 tests LR-8 / LR-16 / LR-20, 3 real gaps (the prop-tool check of the runtime, an allowance of one candidate in the reservation and in the loop) got tests RF-27 / RF-28 that kill them, and 1 is documented as unreachable (in the top-up reservation, the clause that the key is not already reserved is implied by the cached candidates being non-empty). The remaining mutants of the hooks (the anchor override, the forced typography plate, the contents of the layered artifact) were NOT swept: they are asserted by RF-2, RF-5, RF-10, RF-17 and RF-21 (hashes of every layer, positions, plate, composite) but that is not a mutation result."
+    },
+    "REFINE": {
+      "total": 510,
+      "killed": 459,
+      "survivors_documented": 51,
+      "note": "The refine (src/creative-refine) swept with an in-house operator harness (comparisons, boolean and logical operators, negations, array methods, early returns, constants), against fast pure suites (PL, PE, EX, ST, RP; no image) : 454 mutants of the planner, defects, dependency map, masked-edit contract, memory, constants and parity audit, then 56 of the executor and the shared layer store. First pass 395 + 52 killed; the survivors were analysed, 9 + 3 real gaps got guard tests that kill them (re-run and killed), the planner policy became a parameter, dead checks were removed and the executor was made testable with an injectable runtime. DOCUMENTED (51): 19 nullish defaults (?? to ||: the left operand is only ever null, undefined or an object / array), 28 conjunctions inside the probes of the parity audit itself (each conjunct is asserted by its own PL / PE / RF test), 3 equivalent shapes in the PNG-mask reader (a row past the buffer, a -1 / -2 sentinel), 1 equivalent merge (a policy key present on one side only is already kept by the spread). Not covered by mutation: the end-to-end behaviour, which is asserted by RF-1 to RF-28 (real layered runtime, real gates, real compositor and typography)."
     }
   },
   "clean_clones": {
     "node20": {
-      "tests": 2284,
-      "pass": 2282,
-      "fail": 0,
-      "skipped": 2
-    },
-    "node24": {
-      "tests": 2284,
-      "pass": 2282,
+      "tests": 2346,
+      "pass": 2344,
       "fail": 0,
       "skipped": 2,
-      "note": "run with --test-concurrency=4: two earlier runs at the default concurrency each had one to two unrelated Finance/Marketing/segmenter tests time out under CPU load (each passes alone in the same container); the layered runtime tests added about four minutes of CPU"
+      "note": "docker node:20.20, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
+    },
+    "node24": {
+      "tests": 2346,
+      "pass": 2344,
+      "fail": 0,
+      "skipped": 2,
+      "note": "docker node:24.21, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38307717076
+    "status": "unknown",
+    "note": "The workflow runs on every push of this branch (paths include src/creative-refine). Its result could not be read from this environment (no GitHub CLI, private repository): it is NOT recorded as success. The combined verdict therefore stays NOT_READY on CI_NOT_SUCCESS_YET until the run is read and recorded."
   },
-  "note": "One attestation for the whole active Creative pipeline (content planning, Creative Brain, campaign planning, layered production, layered runtime). PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged apart from additive exports); PRODUCTION and LAYERED_RUNTIME were swept again on the final code. The attestation commits themselves change documents only, which the code hash does not cover."
+  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime and (Phase 4) the executable REFINE. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover."
 }
