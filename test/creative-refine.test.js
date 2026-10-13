@@ -16,8 +16,11 @@ import {
 // THE EXECUTABLE REFINE (`// RF-N`). A layered scene is produced once; a local defect is then repaired by the SMALLEST scope that answers it. Every test runs the real layered runtime (real gates, compositor, typography) behind a
 // fake layer port that records every call. No provider, no network, no cost.
 
+// RF_SCENARIOS (a comma list of B, A_PROP, A_PLATE, A_TYPE, B_FG) builds only the scenarios a run needs: a mutation sweep runs a few tests at a time. Unset: every scenario (the normal run).
+const WANT = process.env.RF_SCENARIOS === undefined ? null : new Set(process.env.RF_SCENARIOS.split(',').filter(Boolean));
+const want = (name) => WANT === null || WANT.has(name);
 const A = await firstRun(); // the headline scene: plate + background prop + the real product + text
-const B = await firstRun({ index: FOREGROUND_SCENE, foreground: true }); // plate + background prop + the real product + a bounded foreground prop + text
+const B = want('B') || want('B_FG') ? await firstRun({ index: FOREGROUND_SCENE, foreground: true }) : null; // plate + background prop + the real product + a bounded foreground prop + text
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const prop = (S, kind = null) => S.candidate.artifact.nodes.props.find((p) => !kind || p.kind === kind);
 const callsOf = (S) => S.port.calls.map((c) => `${c.kind}#${c.candidate_index}`);
@@ -27,16 +30,16 @@ const before = (S) => callsOf(S).length;
 const sha16 = (x) => x.slice(0, 16);
 
 assert.equal(A.candidate.status, 'READY_FOR_REVIEW', JSON.stringify([A.candidate.reason, A.candidate.fidelity?.failed]));
-assert.equal(B.candidate.status, 'READY_FOR_REVIEW', JSON.stringify([B.candidate.reason, B.candidate.fidelity?.failed]));
+if (B) assert.equal(B.candidate.status, 'READY_FOR_REVIEW', JSON.stringify([B.candidate.reason, B.candidate.fidelity?.failed]));
 
 const aCalls0 = before(A);
-const A_PROP = await doRefine(A, [badProp(A)]);
+const A_PROP = want('A_PROP') ? await doRefine(A, [badProp(A)]) : null;
 const aCalls1 = before(A);
-const A_PLATE = await doRefine(A, [createDefectRegion({ kind: DEFECT_KIND.PLATE_UNSUITABLE })]);
+const A_PLATE = want('A_PLATE') ? await doRefine(A, [createDefectRegion({ kind: DEFECT_KIND.PLATE_UNSUITABLE })]) : null;
 const aCalls2 = before(A);
-const A_TYPE = await doRefine(A, [createDefectRegion({ kind: DEFECT_KIND.TEXT_ILLEGIBLE })]);
+const A_TYPE = want('A_TYPE') ? await doRefine(A, [createDefectRegion({ kind: DEFECT_KIND.TEXT_ILLEGIBLE })]) : null;
 const aCalls3 = before(A);
-const B_FG = await doRefine(B, [badProp(B, 'PROP_FOREGROUND')]);
+const B_FG = want('B_FG') ? await doRefine(B, [badProp(B, 'PROP_FOREGROUND')]) : null;
 
 test('RF-1 one bad prop changes only that prop layer (and what is composed from it): one new candidate of that prop, nothing else is generated', () => {
   const r = A_PROP;

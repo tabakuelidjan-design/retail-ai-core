@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { encodePng } from '../src/creative-intelligence/png-encode.js';
 import {
-  attributeDefect, buildLayerDependencyMap, createDefectRegion, createRefineMemory, DEFECT_KIND, DefectError, dependentsOfNodes, describeMaskedEditCapability, planRepair, protectedRegionsIntact, REFINE_POLICY, REPAIR_BLOCK,
+  attributeDefect, buildLayerDependencyMap, createDefectRegion, createRefineMemory, DEFECT_KIND, DefectError, dependentsOfNodes, describeMaskedEditCapability, planRepair, protectedRegionsIntact, REFINE_POLICY, REPAIR_BLOCK, requestMaskedEdit,
   validateMaskedEditRequest,
 } from '../src/creative-refine/index.js';
 import { refineSample } from '../src/creative-refine/parity.js';
@@ -101,4 +101,33 @@ test('PE-4 the masked-edit contract at its edges: rectangles, masks as images, t
   assert.equal(intact(8, 5, { x: 6.5, y: 5, width: 2, height: 2 }), false, 'a fractional region is widened to whole pixels (6 to 8)'); assert.equal(intact(9, 5, { x: 6.5, y: 5, width: 2, height: 2 }), true);
   assert.equal(intact(6, 5, { x: 6.5, y: 5, width: 2, height: 2 }), false, 'the start is rounded down'); assert.equal(intact(5, 5, { x: 6.5, y: 5, width: 2, height: 2 }), true);
   assert.deepEqual(protectedRegionsIntact({ source: src, output: src, protectedRegions: [] }), { intact: true });
+});
+
+test('PE-5 the last guards: a free layer is priced at zero, each operand of a request is checked alone, a run of a mask is read whole, a size mismatch on either axis is seen', async () => {
+  const mid = d(DEFECT_KIND.PROP_UNUSABLE, { layer_id: 'lyr_mid' });
+  assert.deepEqual(plan([mid], { pricing: { prk_mid: 0 } }).cost.lines[0], { request_key: 'prk_mid', max_candidates: 2, unit_eur: 0, max_eur: 0 }, 'a tool that costs nothing costs nothing; it is not unknown');
+  const props = (list) => { const a = art(); a.nodes.props = list.map(([id, kind, box]) => ({ node_id: `PROP:${id}`, layer_id: id, kind, request_key: `prk_${id}`, candidate_sha256: '2'.repeat(40), placed_sha256: '3'.repeat(40), box, z: 20 })); return a; };
+  const at = (a) => attributeDefect(a, d(DEFECT_KIND.PROP_UNUSABLE, { region: { x: 98, y: 998, width: 4, height: 4 } })).node_id; const away = { x: 1000, y: 10, width: 10, height: 10 };
+  assert.equal(at(props([['bg', 'PROP_BACKGROUND', away]])), 'PLATE:plk_probe', 'a background prop that is not at the place does not own it');
+  assert.equal(at(props([['bg', 'PROP_BACKGROUND', away], ['m1', 'PROP_MIDGROUND', away]])), 'PLATE:plk_probe');
+  const good = { source_image: { sha256: 'a'.repeat(40), width: 10, height: 10 }, mask: { width: 10, height: 10, regions: [{ x: 0, y: 0, width: 2, height: 2 }] }, instruction: 'x', protected_regions: [{ x: 5, y: 5, width: 3, height: 3 }], expected_output_class: 'PLATE', provenance: { requested_by: 'r' }, cost_estimate_eur: 0.01 };
+  const problems = (over) => validateMaskedEditRequest({ ...good, ...over }).problems; const SRC = 'SOURCE_IMAGE_NEEDS_SHA256_WIDTH_HEIGHT'; const PROV = 'PROVENANCE_REQUIRED';
+  for (const source_image of [undefined, null, { sha256: 1, width: 10, height: 10 }, { sha256: 'a', width: 'x', height: 10 }, { sha256: 'a', width: 10, height: NaN }, { sha256: 'a', width: 10 }, { width: 10, height: 10 }]) assert.ok(problems({ source_image }).includes(SRC), JSON.stringify(source_image));
+  for (const provenance of [undefined, null, 'by me', 7, {}, { requested_by: '' }, { requested_by: null }]) assert.ok(problems({ provenance }).includes(PROV), JSON.stringify(provenance));
+  assert.ok(!problems({ provenance: { requested_by: 'someone', extra: 1 } }).includes(PROV));
+  // a PNG mask: a run is read from its first pixel (even at the left edge), to the end of the row, and the next row's first pixel never extends it
+  const mask = (cells) => { const px = new Uint8Array(10 * 10 * 4); for (let i = 0; i < 100; i += 1) px.set([0, 0, 0, 255], i * 4); for (const [x, y] of cells) px.set([255, 255, 255, 255], (y * 10 + x) * 4); return encodePng({ width: 10, height: 10, pixels: px }); };
+  const touched = (cells, cell) => validateMaskedEditRequest({ ...good, mask: { width: 10, height: 10, png: mask(cells) }, protected_regions: [{ ...cell, width: 1, height: 1 }] }).problems.includes('MASK_TOUCHES_A_PROTECTED_REGION');
+  assert.equal(touched([[0, 4], [1, 4], [2, 4]], { x: 0, y: 4 }), true, 'the first pixel of a run that starts at the left edge');
+  assert.equal(touched([[0, 4], [1, 4], [2, 4]], { x: 1, y: 4 }), true); assert.equal(touched([[0, 4], [1, 4], [2, 4]], { x: 2, y: 4 }), true); assert.equal(touched([[0, 4], [1, 4], [2, 4]], { x: 3, y: 4 }), false);
+  assert.equal(touched([[9, 4], [0, 5]], { x: 9, y: 4 }), true, 'a run that ends at the right edge is closed there, whatever the first pixel of the next row is');
+  assert.equal(touched([[8, 4], [9, 4], [0, 5], [1, 5]], { x: 8, y: 4 }), true); assert.equal(touched([[8, 4], [9, 4], [0, 5], [1, 5]], { x: 1, y: 5 }), true);
+  // the size of an output is compared on BOTH axes
+  const base = new Uint8Array(10 * 10 * 4); const src = encodePng({ width: 10, height: 10, pixels: base });
+  assert.deepEqual(protectedRegionsIntact({ source: src, output: encodePng({ width: 20, height: 10, pixels: new Uint8Array(20 * 10 * 4) }), protectedRegions: [] }), { intact: false, reason: 'OUTPUT_SIZE_DIFFERS' });
+  assert.deepEqual(protectedRegionsIntact({ source: src, output: encodePng({ width: 10, height: 20, pixels: new Uint8Array(10 * 20 * 4) }), protectedRegions: [] }), { intact: false, reason: 'OUTPUT_SIZE_DIFFERS' });
+  // an output that changed a protected pixel was produced (executed) and is refused
+  const request = { ...good, source_image: { sha256: 'a'.repeat(40), width: 10, height: 10 } }; const tampered = new Uint8Array(base); tampered.set([9, 9, 9, 255], (5 * 10 + 5) * 4);
+  const out = await requestMaskedEdit({ ports: { maskedEdit: { tool_id: 't', async edit() { return { output_bytes: encodePng({ width: 10, height: 10, pixels: tampered }) }; } } }, request, sourcePng: src, gate: { status: 'OPEN_BY_OWNER' } });
+  assert.deepEqual([out.status, out.executed, out.reason, out.output], ['REJECTED', true, 'OUTPUT_CHANGED_A_PROTECTED_REGION', null]);
 });
