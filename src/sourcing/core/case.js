@@ -104,6 +104,7 @@ function reduceInPlace(s, event, at) {
     case 'DECISION_RECORDED': s.decisions.push(event.entry); break;
     case 'CONVERSATION_START': conv.start(s, event, at); break;
     case 'CONVERSATION_ITEM': conv.addItem(s, event, at); break;
+    case 'CONVERSATION_REANALYZE': conv.reanalyzeStoredNotes(s, event, at); break;
     case 'CONVERSATION_FINISH': conv.finish(s, event, at); break;
     case 'CONVERSATION_DERIVE': conv.derive(s, event, at); break;
     case 'CONVERSATION_ATTRIBUTE': conv.attribute(s, event, at); break;
