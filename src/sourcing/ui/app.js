@@ -31,6 +31,7 @@ import { fieldSummaryText } from '/core/field-summary.js';
 import { createVoice } from './voice.js';
 import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
 import { recoverySection, recoveryError } from './recover.js';
+import { activeMenuCase, applyLegacyReanalysis } from './menu-case.js';
 import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
 import { turnClosesAt } from '/core/turns.js';
@@ -190,6 +191,7 @@ function render() {
 // SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
 let salonInstance = null;
 const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu() }));
+const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
 
@@ -340,20 +342,9 @@ async function onClick(ev) {
   if (act === 'attr') return guarded(() => { const conv = (cur().conversations ?? []).find((x) => x.items.some((i) => i.id === S.attrItem)); if (conv) commit({ type: 'CONVERSATION_ATTRIBUTE', convId: conv.id, itemId: S.attrItem, speaker: key }); S.sheet = null; S.attrItem = null; render(); });
   if (act === 'fm-start') { S.flash = ''; const startVoice = () => { if (openConversation()) void voice.start(); }; guarded(() => { const typed = document.querySelector('form[data-form="fh-product"] input[name="name"]')?.value?.trim(); if (typed && !cur().identity.workingName) commit({ type: 'NAME', name: typed }); if (!(cur().conversations ?? []).some((x) => x.status === 'OPEN')) commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' }); else render(); }); startVoice(); return; }
   if (act === 'ask-now') { S.askNow = true; S.flash = ''; return render(); }
-  if (act === 'notes-reanalyze-preview') { S.reanalysisPrompt = true; S.reanalysisMessage = ''; return openMenu(); }
-  if (act === 'notes-reanalyze-cancel') { S.reanalysisPrompt = false; return openMenu(); }
-  if (act === 'notes-reanalyze-apply') return guarded(() => {
-    const count = (cur().conversations ?? []).flatMap((conv) => conv.items).filter((item) => item.speaker === 'supplier' && typeof item.original === 'string' && item.original.trim()).length;
-    S.reanalysisPrompt = false;
-    if (!count) { S.reanalysisMessage = 'Aucune ancienne note fournisseur à relire dans cette fiche.'; return openMenu(); }
-    const before = cur().candidates.length;
-    commit({ type: 'CONVERSATION_REANALYZE' });
-    const added = cur().candidates.length - before;
-    S.reanalysisMessage = added
-      ? `${added} nouvelle(s) proposition(s) ajoutée(s) à vérifier. Aucun fait confirmé ou rejeté n’a changé.`
-      : 'Aucune nouvelle proposition : les notes de cette fiche avaient déjà été lues.';
-    return openMenu();
-  });
+  if (act === 'notes-reanalyze-preview') { S.reanalysisTargetId = menuCase()?.id ?? null; S.reanalysisPrompt = true; S.reanalysisMessage = ''; return openMenu(); }
+  if (act === 'notes-reanalyze-cancel') { S.reanalysisPrompt = false; S.reanalysisTargetId = null; return openMenu(); }
+  if (act === 'notes-reanalyze-apply') return applyLegacyReanalysis({ S, menuCase, persist, commit, openMenu });
   if (act === 'fm-menu') return openMenu();
   if (act === 'fm-ask') { S.askId = key; S.sheet = 'ask'; S.flash = ''; return render(); }
   if (act === 'fm-end') { await voice.stop(); return guarded(() => { const conv = (cur().conversations ?? []).find((x) => x.status === 'OPEN'); S.sheet = 'end'; S.flash = ''; if (conv) commit({ type: 'CONVERSATION_FINISH', convId: conv.id }); else render(); }); }
@@ -403,14 +394,14 @@ async function onClick(ev) {
   if (act === 'copy-sup') { try { await navigator.clipboard.writeText(supplierText(S.A)); S.flash = 'Copied.'; } catch { S.flash = 'Copy is not available here: use "Show to supplier".'; } return render(); }
   if (act === 'close-overlay') { $('#overlay').hidden = true; $('#overlay').className = ''; return; }
   if (act === 'newcase') { discardDrafts = true; const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; S.tab = 'case'; persist(); closeOverlay(); return render(); }
-  if (act === 'opencase') { discardDrafts = true; S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); return render(); }
+  if (act === 'opencase') { if (!S.cases[key]) return; discardDrafts = true; S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); if (S.mode === 'salon') return salon().openCase(key); return render(); }
   if (act === 'server-copy') { const sv = (S.conflicts ?? {})[key]; if (sv) { S.cases[sv.id] = sv; delete S.conflicts[key]; S.flash = ''; persist(); closeOverlay(); render(); } return; }
   if (act === 'keep-both') { const sv = (S.conflicts ?? {})[key]; const mine = S.cases[key]; if (sv && mine) { const copyId = `${key}-mine-${Date.now().toString(36)}`; const copy = { ...JSON.parse(JSON.stringify(mine)), id: copyId, rev: 0, identity: { ...mine.identity, workingName: `${mine.identity.workingName || 'Case'} (my copy)` } }; S.cases[copyId] = copy; S.cases[sv.id] = sv; delete S.conflicts[key]; markDirty(copyId); S.flash = 'Both copies are kept: the server copy under the original name and yours as "(my copy)".'; persist(); closeOverlay(); render(); queueSync(); } return; }
   if (act === 'rec-list') return recList();
   if (act === 'rec-toggle') { const r = (S.rec ??= {}); (r.selected ??= {})[key] = t.checked; return openMenu(); }
   if (act === 'rec-go') return recGo();
   if (act === 'rec-keep' || act === 'rec-skip') return recDecide(key, act === 'rec-keep');
-  if (act === 'export') { const blob = new Blob([buildExport(cur(), getBlob)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${cur().id}.json`; a.click(); return; }
+  if (act === 'export') { const c = menuCase(); if (!c) return; const blob = new Blob([buildExport(c, getBlob)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${c.id}.json`; a.click(); return; }
   if (act === 'gate-save') { S.token = $('#gate-tok').value.trim(); ls.set('nordla.sourcing.token', S.token); S.authFailed = false; await ping(); if (!S.authFailed) { await checkSafety(); queueSync(); } return render(); }
   if (act === 'gate-offline') { S.offlineChoice = true; ls.set('nordla.sourcing.offlineChoice', true); return render(); }
   if (act === 'fx') return fetchFx();
@@ -483,9 +474,11 @@ async function recDecide(id, keep) {
 }
 function openMenu() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
-  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Salon (comparer)</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
-  <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button><p class="small muted">Pour retrouver les informations oubliées dans des notes créées avant la correction : exportez d'abord ce dossier. La réanalyse n'ajoute que des propositions à confirmer, sans modifier les faits déjà acceptés ou rejetés.</p>${S.reanalysisMessage ? `<p class="small">${esc(S.reanalysisMessage)}</p>` : ''}${S.reanalysisPrompt ? `<p class="warn">Relire les notes originales du fournisseur dans cette fiche ? Aucun fait ne sera confirmé automatiquement.</p><button class="btn" data-act="notes-reanalyze-apply">Oui, ajouter les propositions</button> <button class="btn sec" data-act="notes-reanalyze-cancel">Annuler</button>` : '<button class="btn sec" data-act="notes-reanalyze-preview">Réanalyser les anciennes notes</button>'}`;
+  const active = menuCase();
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button>${active ? `<p class="small"><b>Dossier actif : ${esc(active.identity.workingName || active.id)}</b> — ${esc(active.supplier?.name || 'Fournisseur non renseigné')}</p>` : ''}${S.reanalysisMessage ? `<p class="warn" role="status">${esc(S.reanalysisMessage)}</p>` : ''}<h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Salon (comparer)</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
+  <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button><p class="small muted">Pour retrouver les informations oubliées dans des notes créées avant la correction : exportez d'abord ce dossier. La réanalyse n'ajoute que des propositions à confirmer, sans modifier les faits déjà acceptés ou rejetés.</p>${S.reanalysisPrompt ? `<p class="warn">Relire les notes originales du fournisseur dans cette fiche ? Aucun fait ne sera confirmé automatiquement.</p><button class="btn" data-act="notes-reanalyze-apply">Oui, ajouter les propositions</button> <button class="btn sec" data-act="notes-reanalyze-cancel">Annuler</button>` : '<button class="btn sec" data-act="notes-reanalyze-preview">Réanalyser les anciennes notes</button>'}`;
   o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases }));
+  if (S.reanalysisMessage) o.scrollTop = 0; // never hide the result below a long case list
 }
 
 async function onPhoto(ev) {
