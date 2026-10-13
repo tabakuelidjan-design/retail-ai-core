@@ -4,7 +4,7 @@ name: china-sourcing
 on:
   push:
     branches: ['feature/china-sourcing-**']
-    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
+    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
   pull_request:
     paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']
   workflow_dispatch: {}
@@ -34,6 +34,8 @@ jobs:
       - run: npm run sourcing:e2e
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run sourcing:e2e:fieldmode
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:fieldv1
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run asr:e2e
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }

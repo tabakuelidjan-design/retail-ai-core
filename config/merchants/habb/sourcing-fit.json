@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "merchantId": "habb",
+  "displayName": "HABB",
+  "status": "DRAFT_FOR_OWNER_REVIEW",
+  "note": "Merchant DATA read by the generic merchant-fit engine (src/sourcing/core/field/merchant-fit.js). Nothing here is code. Lists are built from the HABB description (personalised gifts + UV printing, shop in Namur + habb.be) and from general UV-printing practice; the owner must confirm or change every value. A value left null is NOT a default: the matching dimension stays UNKNOWN/PARTIAL and says what the owner still has to set.",
+  "giftability": {
+    "giftCategoryIds": ["gift_decor_generic", "water_bottle", "tableware_glass_ceramic", "household_general", "jewelry_costume", "phone_case"],
+    "cues": ["gift", "set", "box", "souvenir", "keepsake", "coaster", "tumbler", "mug", "frame", "keychain", "ornament", "notebook", "cadeau", "礼品", "礼盒"]
+  },
+  "personalization": {
+    "cues": ["blank", "sublimation", "engrav", "custom", "customis", "customiz", "personalis", "personaliz", "logo", "oem", "odm", "private label", "uv print", "定制", "空白"],
+    "supplierCustomizationKeys": ["offer.customization"]
+  },
+  "uvPrint": {
+    "basis": "general UV flatbed practice (rigid, smooth surfaces print well; soft, porous or textile surfaces need another process). To be confirmed by HABB production.",
+    "compatibleMaterials": ["stainless steel", "aluminium", "aluminum", "aluminium alloy", "zinc alloy", "metal", "brass", "copper", "glass", "acrylic", "abs", "abs plastic", "plastic", "pp", "pet", "pvc", "wood", "bamboo", "ceramic", "pu leather", "leather", "cardboard", "paper"],
+    "difficultMaterials": [
+      { "material": "silicone", "why": "soft, low-energy surface: needs a primer or another process" },
+      { "material": "tpu", "why": "flexible surface: ink may crack" },
+      { "material": "rubber", "why": "flexible surface" },
+      { "material": "cotton", "why": "textile: UV flatbed is not the process" },
+      { "material": "polyester", "why": "textile: UV flatbed is not the process" },
+      { "material": "nylon", "why": "textile or flexible: UV flatbed is not the process" }
+    ]
+  },
+  "retailPrice": { "bandGrossEur": null, "note": "owner to set { min, max } (VAT included) for the price range HABB sells in" },
+  "margin": { "minContributionPct": null, "note": "the margin target is entered per case (sale.targetContributionPct); this is only a floor if the owner wants one for every case" },
+  "storage": { "maxVolumePerUnitCm3": null, "note": "owner to set: the largest unit volume HABB is willing to stock" },
+  "shipping": { "fragileMaterials": ["glass", "ceramic"], "maxWeightPerUnitG": null, "note": "owner to set the heaviest unit that is still practical to post" },
+  "novelty": { "note": "needs market observations (Amazon listings, searches). Without them: UNKNOWN" },
+  "bundle": {
+    "cues": ["set", "kit", "bundle", "pack", "pair", "gift box", "coffret"],
+    "complementaryCategoryIds": ["gift_decor_generic", "water_bottle", "tableware_glass_ceramic"]
+  },
+  "seasonality": {
+    "seasons": [
+      { "id": "christmas", "label": "Christmas", "cues": ["christmas", "xmas", "noel", "noël", "santa", "圣诞"] },
+      { "id": "valentines", "label": "Valentine's Day", "cues": ["valentine", "love", "couple", "heart", "情人节"] },
+      { "id": "mothers_day", "label": "Mother's Day", "cues": ["mother", "mum", "mom", "maman", "母亲节"] },
+      { "id": "fathers_day", "label": "Father's Day", "cues": ["father", "dad", "papa", "父亲节"] },
+      { "id": "back_to_school", "label": "Back to school", "cues": ["school", "student", "teacher", "rentrée", "文具"] },
+      { "id": "wedding", "label": "Wedding", "cues": ["wedding", "bride", "groom", "mariage", "婚"] },
+      { "id": "birth", "label": "Birth", "cues": ["baby", "birth", "newborn", "naissance", "婴"] }
+    ]
+  },
+  "assortment": { "existingCategoryIds": ["gift_decor_generic", "water_bottle", "tableware_glass_ceramic"], "note": "owner to confirm the categories HABB already sells" },
+  "negotiation": { "targetBelowMaxPct": 15, "note": "the opening target is this percentage below the maximum purchase price (editable). It is an arithmetic step, not a forecast of what a supplier will accept." }
+}

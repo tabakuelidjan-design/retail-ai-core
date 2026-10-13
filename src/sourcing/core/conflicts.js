@@ -41,6 +41,18 @@ export function existingValue(state, key, context = 'product') {
 }
 const lastLedger = (state, key, context) => (state.ledger ?? []).filter((e) => e.key === key && e.context === context).at(-1)?.value ?? null;
 
+// Negotiable commercial terms (price, MOQ, lead time, Incoterm, payment, packaging...). When the owner imports an UPDATED offer, a new value for one of them is a new revision of the offer, not a contradiction.
+// A product FACT (model, material, certificates, dimensions) that changes is never absorbed this way: it is a CONFLICT a person must resolve. Two different values inside the SAME offer are still a conflict.
+const NEGOTIABLE = new Set(['quote.unitPrice', 'quote.tiers', 'quote.moq', 'quote.leadTime', 'quote.incoterm', 'quote.port', 'quote.currency', 'quote.samplePrice', 'payment.depositPct', 'payment.balancePct', 'payment.balanceDue', 'offer.packaging', 'offer.productionDays', 'offer.customization', 'offer.paymentMethods', 'offer.sampleRefund', 'offer.sampleDays', 'offer.accessories', 'offer.shippingMethod', 'offer.warranty']);
+/** True when `cand` (from an UPDATED offer) replaces a DIFFERENT value that came from another offer or from the form. */
+export function supersedesExisting(state, cand, value) {
+  if (cand.supersedes !== true || !NEGOTIABLE.has(cand.key)) return false;
+  const have = existingValue(state, cand.key, cand.context); if (have === null || have === undefined || have === '') return false;
+  const incoming = cand.key === 'quote.leadTime' && value && typeof value === 'object' ? value.max : value; if (same(have, incoming)) return false;
+  const last = (state.ledger ?? []).filter((e) => e.key === cand.key && e.context === cand.context).at(-1);
+  return !(last && cand.offerId && last.offerId === cand.offerId); // the existing value was stated in THIS very offer: that is a contradiction, not an update
+}
+
 /** @returns {null | { type: 'MODEL_MISMATCH'|'VALUE', key: string, existing: any }} */
 export function findCandidateConflict(state, cand, value) {
   if (cand.key.startsWith('docClaim.')) { // a statement that flips between "we have it" and "we do not have it" contradicts itself; claimed -> promised -> claimed is just progress
@@ -48,6 +60,7 @@ export function findCandidateConflict(state, cand, value) {
   }
   const have = existingValue(state, cand.key, cand.context);
   if (have === null || have === undefined || have === '') return null;
+  if (supersedesExisting(state, cand, value)) return null;
   const incoming = cand.key === 'quote.leadTime' && value && typeof value === 'object' ? value.max : value;
   if (same(have, incoming)) return null;
   return { type: cand.key === 'identifier.model' ? 'MODEL_MISMATCH' : 'VALUE', key: cand.key, existing: have };

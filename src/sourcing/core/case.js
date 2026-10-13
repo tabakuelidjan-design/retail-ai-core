@@ -20,6 +20,8 @@ import { readsOf } from './predicate.js';
 import { upgradeCase, CASE_SCHEMA } from './upgrade.js';
 import { effectiveQuote, normalizeTiers } from './offers.js';
 import * as conv from './conversation.js';
+import { applyOfferImport } from './field/offer-import.js';
+import { applyExternalEvidence, applySampleRecord } from './field/external-evidence.js';
 import { observeProductSync, nameObserver, imageObserver } from './product-observer.js';
 import { recordObservation, buildProductHypothesis } from './product-hypothesis.js';
 import { recordSearchRequest, summarizeMarketEvidence } from './market-search.js';
@@ -34,7 +36,7 @@ export function newCase({ id, name = '', now = new Date() } = {}) {
     identity: createIdentity({ workingName: name }), placing: {}, context: { market: 'EU-BE', channels: ['own_site'], consumerSales: true },
     supplier: {}, quotes: [], costs: {}, sale: null, saleAmazon: null, documents: [], safetySnapshot: null, customs: {}, amazon: { observations: [], restricted: null }, notes: [], decisions: [], events: [],
     // V1 (schema 2): supplier conversations, candidate facts, the confirmed-fact ledger, conflicts, supplier document statements, the owner's own questions
-    conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [],
+    conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [], offers: [],
     // conversation memory: which question was shown / skipped (with the exact texts shown), and the grouped confirmations (with the list the owner saw)
     questionLog: [], confirmBatches: [],
   };
@@ -51,7 +53,7 @@ export function dispatch(state, event, now = new Date()) {
 /** The reducer proper: mutates the (already cloned) draft state. Candidate confirmation compiles into the SAME events below, applied through `sub` and logged one by one. */
 function reduceInPlace(s, event, at) {
   const lvl = event.level ?? IDENTITY_LEVEL.USER_STATED;
-  const sub = (ev) => { reduceInPlace(s, ev, at); s.events.push({ at, type: ev.type, summary: ev.summary ?? null }); };
+  const sub = (ev) => { reduceInPlace(s, ev, at); s.events.push({ at, type: ev.type, summary: ev.summary ?? null, ...(ev.ref ? { ref: ev.ref } : {}) }); };
   switch (event.type) {
     case 'NAME': { s.identity.workingName = String(event.name ?? ''); const r = observeProductSync({ name: s.identity.workingName }, [nameObserver]).results[0]; recordObservation(s, r, at, { name: s.identity.workingName }); break; } // the name is a SIGNAL: the observer proposes traits (PROBABLE) from it
     case 'PRODUCT_OBSERVED': { const o = event.observation ?? event; recordObservation(s, { observer: String(o.observer ?? ''), version: o.version ?? null, source: o.source, status: o.status ?? 'OK', observations: o.observations, hypotheses: o.hypotheses, note: o.note }, at, o.input ?? {}); break; } // an adapter (image model, barcode data...) reports through the SAME contract
@@ -115,6 +117,13 @@ function reduceInPlace(s, event, at) {
     case 'QUESTION_SKIP': conv.questionSkip(s, event, at); break;
     case 'QUESTION_ADD': conv.addQuestion(s, event, at); break;
     case 'QUESTION_STATE': conv.questionState(s, event); break;
+    case 'OFFER_IMPORT': applyOfferImport(s, event, at); break; // a supplier offer (pasted quote / chat / PDF text / typed): recorded over the same evidence machinery, every fact proposed for review
+    case 'PLAN_QTY': { // the quantity the OWNER plans to buy (not a supplier term): applied to every quote so that every revision is read at the same quantity
+      const n = Number(String(event.qty ?? '').replace(/\s/g, '')); if (!Number.isInteger(n) || n <= 0) throw new Error('the planned quantity must be a whole number above zero');
+      s.context = { ...s.context, plannedQty: n }; s.quotes = s.quotes.map((q) => ({ ...q, qty: n })); break;
+    }
+    case 'EXTERNAL_EVIDENCE': applyExternalEvidence(s, event, at); break; // a provider's statement about the supplier / product: stored with source and date, never above ESTIMATED unless the provider is registered
+    case 'SAMPLE_RECORD': applySampleRecord(s, event, at); break; // the sample lifecycle (requested / received / evaluated): evidence about quality
     case 'DOC_CLAIM': s.documentLedger.push({ id: `dc-${s.documentLedger.length + 1}`, claim: event.claim, status: event.status, source: event.source ?? null, at }); break; // a supplier STATEMENT about a document: never a received document
     default: throw new Error(`unknown case event: ${event.type}`);
   }
@@ -233,6 +242,14 @@ export function assess(state, { now = new Date(), externals = {}, rulebook = RUL
   out.marketPresence = summarizeMarketEvidence(s.marketSearches ?? [], { landedPerUnitEurMinor: landed?.totals?.landedPerUnitEurMinor ?? null }); // observed market evidence: context for the owner, it never changes the verdict
   out.evidence = evidenceLedger(s, out); out.freshness = freshnessOf(s, out, now); out.dataMode = dataModeOf(out);
   return out;
+}
+
+/** Economics ONLY (landed cost + unit economics) for a different supplier quote: the very functions assess() uses, without the regulatory passes. Used to price tiers and scenarios quickly. */
+export function economicsScenario(state, quoteOverride = null) {
+  const landedInput = landedInputOf(state, quoteOverride); let landed;
+  try { landed = landedCost(landedInput); } catch (e) { if (e instanceof MoneyError) landed = { status: 'INFORMATION_INSUFFICIENT', criticalUnknown: [e.code], unknown: [e.code], lines: [], totals: { landedPerUnitEurMinor: null }, warnings: [] }; else throw e; }
+  const econ = economicsOf(state.sale, landed, state.sale?.targetContributionPct ?? null);
+  return { landed, economics: econ, input: landedInput };
 }
 
 /** WHAT IF: recompute the whole case with a different supplier quote, without touching the stored case. */

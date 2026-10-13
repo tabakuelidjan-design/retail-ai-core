@@ -2,8 +2,8 @@
 // what a product is compatible with, the age range. Narrow patterns only; nothing is inferred beyond the words. Each candidate points at an exact span, like every other extracted fact.
 import { mk } from './shared.js';
 
-const CAP = /(?<![A-Za-z0-9.,])(\d[\d,]*(?:\.\d+)?)\s?(mAh|Wh|ml|cl|litres?|liters?|oz)\b/gi;
-const MATERIAL = /\b(?:materials?\s*(?:is|are|:|=)?|made\s+(?:of|from)|made\s+in)\s+((?:food[- ]grade\s+)?(?:stainless steel(?:\s*(?:304|316))?|silicone|tpu|tpe|abs|polypropylene|pp|pet|tritan|glass|ceramic|aluminium|aluminum|leather|pu leather|cotton|polyester|bamboo|wood|zinc alloy|plastic))\b/gi;
+const CAP = /(?<![A-Za-z0-9.,])(\d+(?:,\d+)*(?:\.\d+)?)\s?(mAh|Wh|ml|cl|litres?|liters?|oz)\b/gi;
+const MATERIAL = /\b(?:materials?\s*(?:is|are|:|=)?|made\s+(?:of|from)|made\s+in)\s+((?:food[- ]grade\s+)?(?:stainless steel(?:\s*(?:201|304|316))?|silicone|tpu|tpe|abs|polypropylene|pp|pet|pvc|eva|tritan|glass|ceramic|aluminium|aluminum|leather|pu leather|cotton|polyester|nylon|bamboo|wood|zinc alloy|brass|copper|iron|rubber|acrylic|cardboard|paper|metal|plastic)(?:\s+(?:alloy|plastic|resin|fabric|steel|leather))?)\b/gi;
 const COMPAT = /\b(?:compatible with|compatibility\s*(?:is|:)?|fits?|suitable for|designed for)\s+((?:iphone|galaxy|samsung|pixel|xiaomi|redmi|huawei|oppo|oneplus|ipad|airpods|macbook)[A-Za-z0-9 +/-]{0,38}?)(?=[.,;:!?]|\s+(?:and|with|in|we|but|only)\b|$)/gi;
 const AGE_PLUS = /\b(\d{1,2})\s?\+\s?(?:years?|yrs?|y)\b|\b(?:ages?|aged|for\s+(?:children|kids)\s+(?:over|above|aged|from))\s+(\d{1,2})(?:\s*(?:to|-)\s*(\d{1,2}))?\b/gi;
 

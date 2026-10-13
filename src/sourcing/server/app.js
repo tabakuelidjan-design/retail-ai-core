@@ -13,9 +13,9 @@ import { createVoiceAssets } from './voice-assets.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
-const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
-const CORE_FILE = /^\/core\/((?:(?:rulebook|extract)\/)?[a-z0-9-]+\.js)$/;
+const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
 const sameToken = (a, b) => { const x = Buffer.from(String(a ?? '')); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
 const SEC = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin', 'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
@@ -35,7 +35,7 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, store, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ token, store, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!token || String(token).length < 24) throw new Error('a token of at least 24 characters is required');
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -66,6 +66,10 @@ export function createSourcingApp({ token, store, safety = null, ecb = null, ai 
     if (c && m === 'GET') { const s = await store.get(c[1]); return s ? json(res, 200, s) : json(res, 404, { error: 'NOT_FOUND' }); }
     if (c && m === 'PUT') { const body = await readBody(req); if (body.id !== c[1]) return json(res, 400, { error: 'ID_MISMATCH' }); try { return json(res, 200, await store.save(body)); } catch (e) { if (e instanceof StoreError && e.code === 'CONFLICT') return json(res, 409, { error: 'CONFLICT', server: e.server }); throw e; } }
     if (c && m === 'DELETE') return json(res, 200, { removed: await store.remove(c[1]) });
+    // ---- Field V1: the workspace (saved comparisons, recommendation history, ask progress) and the merchant profile (DATA the fit engine reads). A stale save is MERGED, never refused or overwritten.
+    if (p === '/api/field/workspace' && m === 'GET') return workspace ? json(res, 200, await workspace.get()) : json(res, 503, { error: 'NO_WORKSPACE_STORE' });
+    if (p === '/api/field/workspace' && m === 'PUT') { if (!workspace) return json(res, 503, { error: 'NO_WORKSPACE_STORE' }); const body = await readBody(req); if (!body || body.schema !== 1 || typeof body.comparisons !== 'object' || typeof body.snapshots !== 'object') return json(res, 400, { error: 'WORKSPACE_INVALID' }); return json(res, 200, await workspace.save(body)); }
+    if (p === '/api/field/merchant-profile' && m === 'GET') return merchantProfile ? json(res, 200, merchantProfile) : json(res, 404, { error: 'NO_MERCHANT_PROFILE' });
     if (p === '/api/safety/check' && m === 'POST') {
       const { identity } = await readBody(req); if (!identity) return json(res, 400, { error: 'IDENTITY_REQUIRED' });
       const { alerts, source } = safety ? await safety.get() : { alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED', fetchedAt: null } };

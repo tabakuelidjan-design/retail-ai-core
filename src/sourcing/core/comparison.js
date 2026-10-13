@@ -119,7 +119,7 @@ export const DIMENSIONS = Object.freeze([
   { key: 'terms', label: 'Shipping and payment terms', labelFr: "Conditions d'expédition et de paiement", numeric: false },
 ]);
 
-function cellsOf(c, a) {
+export function cellsOf(c, a) {
   const id = c.state.id;
   return { unitPrice: priceCell(c), moq: moqCell(c), landedCost: landedCell(a, id), maxPurchasePrice: maxPriceCell(a, id), margin: marginCell(a, id), compliance: complianceCell(a, id), evidenceStrength: evidenceCell(a, id), contradictions: contradictionCell(c, a), missingEvidence: missingEvidenceCell(a, id), leadTime: leadCell(c), terms: termsCell(c) };
 }

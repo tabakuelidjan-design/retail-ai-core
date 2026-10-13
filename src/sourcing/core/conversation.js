@@ -6,11 +6,11 @@ import { extractFacts, detectLang } from './extract/index.js';
 import { normalizeSpoken } from './extract/spoken.js';
 import { decideTurn, segmentsOf, turnText } from './turns.js';
 import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, MODALITY, confirmedStatus, documentStatusOf } from './provenance.js';
-import { findCandidateConflict, existingValue, documentModelConflicts } from './conflicts.js';
+import { findCandidateConflict, existingValue, documentModelConflicts, supersedesExisting } from './conflicts.js';
 import { effectiveQuote } from './offers.js';
 import { classifyCandidates } from './understanding.js';
 
-const nextId = (prefix, list) => { let m = list.length; for (const e of list) { const n = Number(String(e.id).slice(prefix.length + 1)); if (String(e.id).startsWith(`${prefix}-`) && Number.isFinite(n) && n > m) m = n; } return `${prefix}-${m + 1}`; }; // max + 1: unique even after a candidate was replaced
+export const nextId = (prefix, list) => { let m = list.length; for (const e of list) { const n = Number(String(e.id).slice(prefix.length + 1)); if (String(e.id).startsWith(`${prefix}-`) && Number.isFinite(n) && n > m) m = n; } return `${prefix}-${m + 1}`; }; // max + 1: unique even after a candidate was replaced
 const find = (list, id, what) => { const x = list.find((e) => e.id === id); if (!x) throw new Error(`unknown ${what}: ${id}`); return x; };
 const isEmpty = (v) => v === undefined || v === null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
 
@@ -85,16 +85,22 @@ export function attribute(s, ev, at) {
   const conv = find(s.conversations, ev.convId, 'conversation'); const item = conv.items.find((x) => x.id === ev.itemId); if (!item) throw new Error(`unknown item: ${ev.itemId}`);
   if (![SPEAKER.SUPPLIER, SPEAKER.ME].includes(ev.speaker)) throw new Error('the speaker must be supplier or me');
   item.speaker = ev.speaker; item.speakerBy = 'OWNER_DECISION'; item.speakerAt = at; closeOpenTurns(conv, at, 'SPEAKER_ESTABLISHED', item.id);
-  for (const c of s.candidates) if (c.itemId === item.id && c.speaker === SPEAKER.UNKNOWN) c.speaker = ev.speaker;
+  for (const c of s.candidates) if (c.itemId === item.id && c.speaker === SPEAKER.UNKNOWN) {
+    c.speaker = ev.speaker;
+    // a line of an IMPORTED chat that turns out to be the owner's own: it is evidence of what the owner said, never a proposal about what the supplier offers
+    if (ev.speaker === SPEAKER.ME && c.offerId && c.state === CANDIDATE_STATE.PROPOSED) { c.state = CANDIDATE_STATE.REJECTED; c.decidedAt = at; c.decidedBy = 'system'; c.rejectedReason = 'a line written by the owner, not by the supplier'; }
+  }
 }
 
 export function addItem(s, ev, at) {
   if (ev.modality === MODALITY.SPEECH) return addSpeechItem(s, ev, at);
   const conv = find(s.conversations, ev.convId, 'conversation'); if (conv.status !== 'OPEN') throw new Error('this conversation is finished: start a new one');
   closeOpenTurns(conv, at, 'TYPED_INPUT');
-  const speaker = ev.speaker === SPEAKER.ME ? SPEAKER.ME : SPEAKER.SUPPLIER; const text = String(ev.text ?? ''); if (!text.trim()) throw new Error('text is required');
+  // an item whose speaker nobody established (a pasted chat with unfamiliar names) stays UNKNOWN: its facts cannot be confirmed until the owner says who spoke (CONVERSATION_ATTRIBUTE)
+  const speaker = ev.speaker === SPEAKER.ME ? SPEAKER.ME : ev.speaker === SPEAKER.UNKNOWN ? SPEAKER.UNKNOWN : SPEAKER.SUPPLIER; const text = String(ev.text ?? ''); if (!text.trim()) throw new Error('text is required');
   const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
-  const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [] }; conv.items.push(item);
+  const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [], ...(speaker === SPEAKER.UNKNOWN ? { speakerBy: 'UNKNOWN' } : {}), ...(ev.source ? { source: String(ev.source) } : {}) }; conv.items.push(item);
+  if (ev.extract === false) return; // the text is kept as the original (for example the owner's own lines of a pasted chat) and nothing is proposed from it
   const r = extractFacts({ text, lang });
   for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, basis: 'ORIGINAL', state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
 }
@@ -115,7 +121,7 @@ export function derive(s, ev, at) {
 
 // ---- compile a confirmed candidate into EXISTING events -----------------------------------------------------------------------------------------------------------------------
 function compile(s, c, value, level, source) {
-  const k = c.key; const prev = s.quotes.at(-1) ?? null; const base = prev ? { ...prev } : {}; delete base.at; const quote = (patch, drop = []) => { const q = { ...base, ...patch }; for (const d of drop) delete q[d]; return [{ type: 'QUOTE', quote: q, summary: `from conversation (${c.id}): ${k}` }]; };
+  const k = c.key; const prev = s.quotes.at(-1) ?? null; const base = prev ? { ...prev } : (s.context?.plannedQty ? { qty: s.context.plannedQty } : {}); delete base.at; const quote = (patch, drop = []) => { const q = { ...base, ...patch }; for (const d of drop) delete q[d]; return [{ type: 'QUOTE', quote: q, summary: `from conversation (${c.id}): ${k}`, ref: { candidateId: c.id, offerId: c.offerId ?? null, key: k } }]; };
   switch (k) {
     case 'identifier.model': case 'identifier.brand': case 'identifier.manufacturer': return [{ type: 'IDENTIFIER', name: k.split('.')[1], value: String(value), level, source, summary: `from conversation (${c.id}): ${k}` }];
     case 'quote.unitPrice': return quote({ unitPrice: String(value) }, ['tiers']); // an explicit single price replaces the tiers
@@ -140,9 +146,10 @@ function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDec
   const status = confirmedStatus({ speaker: c.speaker, corrected });
   const level = corrected || c.speaker === SPEAKER.ME || ownerDecided ? 'USER_STATED' : 'SUPPLIER_CLAIMED';
   const source = { kind: 'conversation', convId: c.convId, itemId: c.itemId, candidateId: c.id };
-  const same = !c.key.startsWith('docClaim.') && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
+  const superseding = supersedesExisting(s, c, value); const previousValue = superseding ? existingValue(s, c.key, c.context) : undefined; // an UPDATED offer: a negotiable term legitimately changes; the earlier value stays in the ledger
+  const same = !c.key.startsWith('docClaim.') && !superseding && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
   if (!same) for (const e of compile(s, c, value, level, source)) reduce(e);
-  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, basis: c.basis ?? 'ORIGINAL', corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}) });
+  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, basis: c.basis ?? 'ORIGINAL', corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}), ...(c.offerId ? { offerId: c.offerId } : {}), ...(superseding ? { supersedes: true, previousValue } : {}) });
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 

@@ -6,7 +6,8 @@ const CUR = '(?:US\\$|USD|RMB|CNY|EUR|[$¥￥€])'; const NUM = '\\d[\\d.,]*\\d
 const RX_PRICE_A = new RegExp(`(${CUR})\\s?(${NUM})`, 'gi');
 const RX_PRICE_B = new RegExp(`(?<![A-Za-z0-9.,])(${NUM})\\s?(USD|RMB|CNY|EUR|dollars?|yuan|euros?)\\b`, 'gi');
 const UNIT = '(?:pcs?|pieces?|units?|sets?)';
-const RX_QTY = new RegExp(`(?<![A-Za-z0-9.,])(\\d[\\d,]*)\\s?\\+?\\s?${UNIT}\\b`, 'gi');
+// a price-table row may be written as a RANGE ("100-299pcs", "300 to 499 pcs"): the threshold of the tier is the LOWER bound; a range written backwards is passed on unparsed so a person decides
+const RX_QTY = new RegExp(`(?<![A-Za-z0-9.,])(?:(\\d[\\d,]*)\\s?(?:-|–|—|~|to)\\s?)?(\\d[\\d,]*)\\s?\\+?\\s?${UNIT}\\b(?:\\s?\\+)?`, 'gi');
 const SKIP_PRICE_CLAUSE = /freight|shipping|tooling|\bmou?ld\b|set-?up|deposit|prepay|\bDHL\b|\bexpress\b|logo fee|insurance/i;
 
 export function priceTokens(text) {
@@ -23,7 +24,8 @@ export function qtyTokens(text) {
     if (/^\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)/i.test(after)) continue;
     if (/^\s*(?:per|\/|in (?:a|one)|each)\s*(?:master\s+)?(?:carton|ctn|box|colou?r)/i.test(after)) continue;
     if (/(?:carton|ctn|box)\s*(?:of|:|=)\s*$/i.test(before)) continue;
-    out.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+    const lo = m[1] === undefined ? null : Number(m[1].replace(/,/g, '')); const hi = Number(m[2].replace(/,/g, ''));
+    out.push({ start: m.index, end: m.index + m[0].length, num: m[1] === undefined ? m[2] : (lo <= hi ? m[1] : `${m[1]}-${m[2]}`) });
   }
   return out;
 }
@@ -99,8 +101,8 @@ export function extractEn(text, lang) {
 
   // ---- MOQ ----
   const moqs = [];
-  for (const m of text.matchAll(/\b(?:MOQ|minimum order(?: quantity)?|min\.? order(?: quantity)?)\b\s*(?:is|of|:|=|-|are)?\s*(?:about|around|at least)?\s*(\d[\d,]*)\s*(?:pcs?|pieces?|units?|sets?)?/gi)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
-  for (const m of text.matchAll(/(\d[\d,]*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)\b/gi)) if (!moqs.some((x) => x.start < m.index + m[0].length && m.index < x.end)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+  for (const m of text.matchAll(/\b(?:MOQ|minimum order(?: quantity)?|min\.? order(?: quantity)?)\b\s*(?:is|of|:|=|-|are)?\s*(?:about|around|at least)?\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)?/gi)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+  for (const m of text.matchAll(/(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)\b/gi)) if (!moqs.some((x) => x.start < m.index + m[0].length && m.index < x.end)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
   for (const mo of moqs) {
     const seg = within(segs, mo.start).text; const sent = within(sents, mo.start); const same = moqs.filter((x) => x.start >= sent.start && x.start <= sent.end).length === 1;
     if (/per\s*colou?r/i.test(seg) && /MOQ\s+per/i.test(text.slice(mo.start, mo.end + 12))) continue; // handled as moq.perColour
@@ -151,11 +153,11 @@ export function extractEn(text, lang) {
     const pos = neg ? null : /\b(?:can|could|may|able to|allowed to|ok to)\s+(?:be\s+)?mix(?:ed)?\b|\bmix(?:ed|ing)?\s+(?:the\s+)?colou?rs?\b|\bcolou?rs?\s+(?:can|could)\s+be\s+mix(?:ed)?\b|\bmixed colou?rs?\s+(?:is |are )?(?:ok|okay|fine|accepted|possible)\b/i.exec(seg.text);
     const m = neg ?? pos; if (m) out.push(mk(text, lang, 'moq.mixedColours', !neg, seg.start + m.index, seg.start + m.index + m[0].length, { reason: neg ? 'mixing refused' : 'mixing allowed' }));
   }
-  const pc = /(\d[\d,]*)\s*(?:pcs?|pieces?|units?)?\s*(?:per|each|\/)\s*colou?rs?\b/i.exec(text) ?? /MOQ\s+per\s+colou?rs?\s*(?:is|:|=)?\s*(\d[\d,]*)/i.exec(text);
+  const pc = /(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?)?\s*(?:per|each|\/)\s*colou?rs?\b/i.exec(text) ?? /MOQ\s+per\s+colou?rs?\s*(?:is|:|=)?\s*(\d+(?:,\d+)*)/i.exec(text);
   if (pc) { const n = parseNumberToken(pc[1], 'quantity'); out.push(mk(text, lang, 'moq.perColour', n.value, pc.index, pc.index + pc[0].length, { needsCorrection: n.ambiguous, flags: n.flags, reason: 'minimum per colour' })); }
 
   // ---- carton ----
-  const cq = /(\d[\d,]*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:per|\/|in (?:a|one)|each)\s*(?:master\s+)?(?:carton|ctn|box)\b/i.exec(text) ?? /\b(?:carton|ctn|box)\s*(?:of|:|=)\s*(\d[\d,]*)\s*(?:pcs?|pieces?|units?)?/i.exec(text);
+  const cq = /(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:per|\/|in (?:a|one)|each)\s*(?:master\s+)?(?:carton|ctn|box)\b/i.exec(text) ?? /\b(?:carton|ctn|box)\s*(?:of|:|=)\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?)?/i.exec(text);
   if (cq) { const n = parseNumberToken(cq[1], 'quantity'); out.push(mk(text, lang, 'carton.qty', n.value, cq.index, cq.index + cq[0].length, { needsCorrection: n.ambiguous, flags: n.flags, reason: 'units per carton' })); }
   const dim = /(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(cm|mm|m)\b/i.exec(text);
   if (dim) { const isCarton = /carton|ctn|packing|box|size|dimension/i.test(within(segs, dim.index).text) && /carton|ctn|packing|box/i.test(within(segs, dim.index).text); out.push(mk(text, lang, isCarton ? 'carton.dimensions' : 'product.dimensions', { l: dim[1], w: dim[2], h: dim[3], unit: dim[4].toLowerCase() }, dim.index, dim.index + dim[0].length, { reason: 'three dimensions' })); }

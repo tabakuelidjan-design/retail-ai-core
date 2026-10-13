@@ -23,6 +23,7 @@ import { rulesScreen } from './screens/rules.js';
 import { marketScreen } from './screens/market.js';
 import { moneyScreen } from './screens/money.js';
 import { fieldScreen } from './screens/field.js';
+import { createSalon } from './screens/salon.js';
 import { validateCorrection } from '/core/candidate-view.js';
 import { fieldFirst, fmCompute, fmNav, fieldMissing } from './screens/fieldfirst.js';
 import { fieldSummaryText } from '/core/field-summary.js';
@@ -83,7 +84,7 @@ async function ping() {
     if (!S.authFailed && !S.lockedOut && dirty.size) scheduleRetry();
   }
   paintHeader(); if (S.authFailed || was !== S.online) render();
-  if (S.online) { refreshAi(); if (!was || dirty.size) sync(); autoSafety(); }
+  if (S.online) { refreshAi(); if (!was || dirty.size) sync(); autoSafety(); try { const sa = salon(); sa.loadProfile(); sa.syncWs(); } catch { /* the salon keeps working from the phone */ } }
 }
 /** Once the server is verified, the phone fetches the Safety Gate copy by itself when it has none (or only an old one): the owner should not have to find a button. */
 function autoSafety() {
@@ -161,8 +162,14 @@ let lastRenderKey = null; let discardDrafts = false;
 function render() {
   ensureCase(); const c = cur();
   if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
-  const fm = S.mode === 'field';
-  document.body.classList.toggle('fm-mode', fm);
+  const fm = S.mode === 'field'; const sl = S.mode === 'salon';
+  document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
+  if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
+    $('#tabs').innerHTML = salon().nav(); try { paintHeader(); } catch { /* ignore */ }
+    const main = $('#screen'); const key = `salon|${salon().state().view.name}|${salon().state().view.caseId ?? ''}|${salon().state().view.offerId ?? ''}`; const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
+    const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
+    main.innerHTML = salon().render(); salon().paint(); if (keep) restoreDrafts(main, drafts, focus); return;
+  }
   $('#tabs').innerHTML = fm ? fmNav() : TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
   let fmv = null; clearTimeout(S.fmTimer); clearTimeout(S.turnTimer); S.fmStatus = status();
@@ -177,6 +184,9 @@ function render() {
   if (keep) restoreDrafts(main, drafts, focus);
 }
 
+// SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
+let salonInstance = null;
+const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu() }));
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.'));
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
@@ -184,6 +194,7 @@ const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 
 // what was typed is submitted into the case: the next screen shows the case, not the old draft
 async function onSubmit(ev) {
   const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); if (!S.quiet) discardDrafts = true; const name = f.dataset.form; const c = cur();
+  if (name.startsWith('sl-')) { discardDrafts = false; return salon().submit(f, d); }
   if (name === 'compose') { // FIELD MODE: one box; the conversation starts by itself
     const text = String(d.text ?? ''); if (!text.trim()) { S.flash = 'Écrivez ou collez ce que dit le fournisseur.'; discardDrafts = false; return render(); }
     const prev = S.captureDraft?.[c.id] ?? ''; (S.captureDraft ??= {})[c.id] = ''; ls.set('nordla.sourcing.capdraft', S.captureDraft);
@@ -312,6 +323,8 @@ function showUserQuestion(id) {
 }
 async function onClick(ev) {
   const t = ev.target.closest('[data-act]'); if (!t) return; const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined;
+  if (act.startsWith('sl-')) { if (act === 'sl-menu') return openMenu(); return salon().click(ev, t); }
+  if (act === 'mode-salon') return setMode('salon');
   if (act === 'ftab') { if (key === 'expert') return setMode('expert'); S.fview = key; S.sheet = null; S.flash = ''; render(); window.scrollTo(0, 0); return; }
   if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
@@ -404,7 +417,7 @@ function showCapabilities() {
 }
 function openMenu() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
-  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button><h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Salon (comparer)</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
   <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button>`;
 }
 
