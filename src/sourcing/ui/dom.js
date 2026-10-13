@@ -1,6 +1,7 @@
 // Small DOM/format helpers shared by the screens (extracted from app.js, no change). Pure string builders: nothing here touches state.
 import { fmt } from '/core/money.js';
 import { effectiveQuote } from '/core/offers.js';
+import { expertQuote } from '/core/case-facts.js';
 
 export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,4 +14,4 @@ export const VERDICT_TEXT = { GO: ['Yes - continue', 'Oui, continuer'], CONDITIO
 export const field = (name, label, val = '', attrs = '') => `<label>${esc(label)}<input name="${name}" value="${esc(val)}" ${attrs}></label>`;
 export const selectOf = (name, label, opts, val = '') => `<label>${esc(label)}<select name="${name}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
 export const seg = (act, key, current, opts = [[true, 'Yes'], [false, 'No']]) => `<div class="seg">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-key="${esc(key)}" data-val="${esc(JSON.stringify(v))}" aria-pressed="${current === v}">${l}</button>`).join('')}</div>`;
-export const quoteOf = (c) => effectiveQuote(c.quotes.at(-1) ?? {}); // with price tiers: the unit price for the quantity considered (a V0 quote is returned untouched)
+export const quoteOf = (c) => expertQuote(c); // read through CaseFacts: Expert shows the same facts as Terrain and Salon (effectiveQuote is applied inside) // with price tiers: the unit price for the quantity considered (a V0 quote is returned untouched)

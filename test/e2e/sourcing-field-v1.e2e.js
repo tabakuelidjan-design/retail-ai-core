@@ -72,6 +72,18 @@ try {
     const c = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c.B.offers.length >= 2, 'both offers of B are on record');
   });
 
+  await check('6b. ONE state, THREE modes: correct the MOQ in the Salon (Faits tab); Expert (Quick) and Terrain show the same value; nothing is overwritten; it survives a reload', async () => {
+    await click(t, '[data-act="sl-case-tab"][data-key="facts"]', 600); // step 6 left the Salon on the fiche of supplier B
+    let txt = await html(t); ok(/Faits/.test(txt) && /Minimum de commande \(MOQ\)/.test(txt) && /dit par le fournisseur/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'facts');
+    await click(t, '[data-act="sl-fact-edit"][data-key="MOQ"]', 500); await setv(t, 'form[data-form="sl-fact"] input[name="value"]', '777'); await click(t, 'form[data-form="sl-fact"] button[type="submit"]', 700); txt = await html(t); ok(/777 pièces/.test(txt) && /saisi ou corrigé par vous/.test(txt), txt.slice(0, 400)); ok(/Historique \(\d+\)/.test(txt), 'history');
+    const c1 = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c1.B.quotes.at(-1).moq === 777 && c1.B.ledger.filter((e) => e.key === 'quote.moq').length >= 2, 'the case holds 777 and the earlier values are still in the ledger');
+    const openMenu = async () => { await t.eval(`(() => { const b = document.querySelector('[data-act=sl-menu], [data-act=menu]'); if (!b) throw new Error('no menu button'); b.click(); })()`); await sleep(400); };
+    await click(t, '[data-act="sl-nav"][data-key="home"]', 500); await openMenu(); await click(t, '[data-act="mode-expert"]', 700); await click(t, '[data-act="tab"][data-key="quick"]', 500); const quick = await t.eval("document.querySelector('input[name=\"moq\"]')?.value ?? null"); ok(quick === '777', `Expert shows ${quick}`);
+    await click(t, '[data-act="mode-field"]', 800); const ff = await t.eval("(() => { const b = document.querySelector('[data-act=\"fm-sheet\"][data-key=\"summary\"]'); if (b) b.click(); return !!b; })()"); await sleep(600); const sheet = await t.eval("document.querySelector('.fm-sheet')?.innerText ?? document.body.innerText"); ok(ff ? /777/.test(sheet) : true, `Terrain summary: ${sheet.slice(0, 300)}`);
+    await t.eval("localStorage.setItem('nordla.sourcing.mode', '\"salon\"')"); // back to the Salon for the next checks (the mode is only a view)
+    await t.eval('location.reload()'); await ready(t); await sleep(900); const back = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(back.B.quotes.at(-1).moq === 777, 'after a reload the case still holds 777'); await noOverflow(t, 'after reload'); await click(t, '.sl-cardmain[data-key="B"]', 700); // back on the fiche of B, where the next check expects the owner to be
+  });
+
   await check('7. CLOSE and RESUME: reload, the saved comparison and the last place are back; no network request leaves the phone except the app itself', async () => {
     await sleep(1500); await t.goto(`${base}/`); await ready(t); await sleep(800); let txt = await html(t); ok(/Bloque|Seule|Offre|offre|Prix/.test(txt), 'the app reopens exactly where the owner was (a case view): ' + txt.slice(0, 120)); await click(t, '[data-act="sl-nav"][data-key="home"]'); txt = await html(t); ok(/Comparaisons enregistrées/.test(txt), txt.slice(0, 300));
     await click(t, '[data-act="sl-compare"][data-key]', 900); txt = await html(t); ok(/Comparaison/.test(txt) && (await t.eval("document.querySelectorAll('.sl-ccard').length")) === 5); await noOverflow(t, 'compare-resumed');

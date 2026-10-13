@@ -9,6 +9,7 @@ import { createFieldEngine } from '../src/sourcing/core/field/engine.js';
 import { newCase, dispatch } from '../src/sourcing/core/case.js';
 import { offerDraft } from '../src/sourcing/core/field/offer-import.js';
 import { PROFILE, EXT, NOW } from './sourcing-field-v1-fixtures.js';
+import { caseFacts, auditCase } from '../src/sourcing/core/case-facts.js';
 import { REAL_PHONE_TEXT } from './sourcing-field-v1-phone-fixture.js';
 
 const V = await loadSalonViews();
@@ -28,7 +29,7 @@ test('UI_LANGUAGE_FR: no screen of the Salon shows an English sentence or a raw 
   const scan = (label, html) => { for (const l of englishIn(html)) left.set(l, label); };
   for (const [id, c] of Object.entries(cases)) for (const [tag, e] of Object.entries(E)) {
     const v = e.caseView(c, null); const hist = e.suppliers([c], null)[0];
-    for (const tab of ['sum', 'truth', 'fit', 'deal', 'changed', 'mem', 'more']) scan(`case:${id}:${tab}:${tag}`, V.caseHtml({ info: info(c), tab, v, history: hist }));
+    for (const tab of ['sum', 'facts', 'truth', 'fit', 'deal', 'changed', 'mem', 'more']) scan(`case:${id}:${tab}:${tag}`, V.caseHtml({ info: info(c), tab, v, history: hist, factsView: { facts: caseFacts(c), audit: auditCase(c), observations: [], editing: tab === 'facts' ? 'MOQ' : null, caseId: c.id } }));
     scan(`ask:${id}`, V.askHtml({ info: info(c), ask: v.askNow })); scan(`neg:${id}:${tag}`, V.negotiateHtml({ info: info(c), plan: v.negotiation }));
     scan(`review:${id}`, V.reviewHtml({ draft: offerDraft(c, c.offers.at(-1).id), caseInfo: info(c), groupableIds: [], conflicts: [], unknownNames: [], correcting: null }));
   }

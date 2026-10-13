@@ -7,6 +7,7 @@ import { extractFacts, detectLang } from '../extract/index.js';
 import { mk } from '../extract/shared.js';
 import * as conv from '../conversation.js';
 import { CANDIDATE_STATE, SPEAKER, FACT_STATUS } from '../provenance.js';
+import { caseFacts, typeOfKey, sameFactValue } from '../case-facts.js';
 
 export const OFFER_SOURCE = Object.freeze({ PASTED_QUOTE: 'PASTED_QUOTE', CHAT: 'CHAT', PDF_TEXT: 'PDF_TEXT', MANUAL: 'MANUAL', EXTRACTED: 'EXTRACTED' });
 export const IMPORTER_VERSION = 'offer-import-1';
@@ -197,10 +198,14 @@ const statusOf = (c) => (c.state === CANDIDATE_STATE.CORRECTED ? FACT_STATUS.USE
 /** Pure view: the normalized draft of one offer, built from the candidates / ledger / conflicts that already exist. Nothing here is stored. */
 export function offerDraft(state, offerId) {
   const o = (state.offers ?? []).find((x) => x.id === offerId); if (!o) return null;
+  const current = new Map(caseFacts(state).map((f) => [f.key, f]));
   const cands = state.candidates.filter((c) => c.offerId === o.id);
   const fields = cands.map((c) => {
     const led = state.ledger.find((e) => e.source?.candidateId === c.id) ?? null; const cf = state.conflicts.find((x) => x.candidateId === c.id && x.state === 'OPEN') ?? null;
-    return { id: c.id, key: c.key, context: c.context, section: sectionOf(c.key), value: c.correctedValue ?? c.value, originalValue: c.value, status: statusOf(c), review: REVIEW(c), rawText: c.rawText, span: c.span, speaker: c.speaker, flags: c.flags ?? [], needsCorrection: c.needsCorrection === true, confidence: c.confidence, supersedes: c.supersedes === true, ledgerId: led?.id ?? null, conflictId: cf?.id ?? null, itemId: c.itemId };
+    const curF = typeOfKey(c.key) ? current.get(c.key) ?? null : null; const mine = c.correctedValue ?? c.value; const decided = c.state === CANDIDATE_STATE.CONFIRMED || c.state === CANDIDATE_STATE.CORRECTED;
+    // THIS screen reviews what one offer said; the case may hold something else today (a later offer, a later correction). The current fact is shown beside it so the two can never be mistaken for each other.
+    const currentFact = curF ? { fact_type: curF.fact_type, value: curF.value, unit: curF.unit, source_type: curF.source_type, review_status: curF.review_status, revision: curF.revision } : null; const historical = decided && currentFact !== null && !sameFactValue(c.key, mine, currentFact.value);
+    return { id: c.id, key: c.key, context: c.context, section: sectionOf(c.key), current: currentFact, historical, reverted: c.correctionReverted ?? null, value: c.correctedValue ?? c.value, originalValue: c.value, status: statusOf(c), review: REVIEW(c), rawText: c.rawText, span: c.span, speaker: c.speaker, flags: c.flags ?? [], needsCorrection: c.needsCorrection === true, confidence: c.confidence, supersedes: c.supersedes === true, ledgerId: led?.id ?? null, conflictId: cf?.id ?? null, itemId: c.itemId };
   });
   const live = fields.filter((f) => f.status !== 'REJECTED');
   const unknown = EXPECTED_KEYS.filter((alt) => !alt.split('|').some((k) => live.some((f) => f.key === k && f.context === 'product'))).map((alt) => ({ key: alt.split('|')[0], alternatives: alt.split('|'), status: FACT_STATUS.UNKNOWN, value: null, section: sectionOf(alt.split('|')[0]) }));
@@ -208,7 +213,7 @@ export function offerDraft(state, offerId) {
   const count = (st) => fields.filter((f) => f.review.state === st).length;
   return { id: o.id, seq: o.seq, kind: o.kind, source: o.source, importedAt: o.importedAt, supplier: o.supplier, previousOfferId: o.previousOfferId, textHash: o.textHash, chars: o.chars, speakerAssumed: o.speakerAssumed === true,
     fields, sections, unknown, unparsed: o.unparsed ?? [], counts: { total: fields.length, pending: count('PENDING'), confirmed: count('CONFIRMED'), corrected: count('CORRECTED'), rejected: count('REJECTED'), conflict: count('CONFLICT') },
-    complete: fields.length > 0 && fields.every((f) => f.review.state !== 'PENDING'), unknownSpeakers: [...new Set(state.conversations.find((c) => c.id === o.convId)?.items.filter((i) => i.speaker === SPEAKER.UNKNOWN).map((i) => i.speakerName ?? '(unnamed)') ?? [])], noVerified: true };
+    isLatest: (state.offers ?? []).at(-1)?.id === o.id, complete: fields.length > 0 && fields.every((f) => f.review.state !== 'PENDING'), unknownSpeakers: [...new Set(state.conversations.find((c) => c.id === o.convId)?.items.filter((i) => i.speaker === SPEAKER.UNKNOWN).map((i) => i.speakerName ?? '(unnamed)') ?? [])], noVerified: true };
 }
 export const listOffers = (state) => (state.offers ?? []).map((o) => ({ id: o.id, seq: o.seq, kind: o.kind, source: o.source, importedAt: o.importedAt, supplier: o.supplier, previousOfferId: o.previousOfferId }));
 export { detectLang };

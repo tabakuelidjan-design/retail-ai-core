@@ -14,6 +14,7 @@ import { $, esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT 
 import { S, cur } from './state.js';
 import { formKey, captureDrafts, restoreDrafts } from './draft.js';
 import { numbersInner } from './numbers.js';
+import { num, quoteFormEvent, quickQuoteEvent } from '/core/form-events.js';
 import { decisionScreen } from './screens/decision.js';
 import { quickScreen } from './screens/quick.js';
 import { caseScreen } from './screens/case.js';
@@ -188,7 +189,6 @@ function render() {
 let salonInstance = null;
 const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu() }));
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
-const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.'));
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
 
 // what was typed is submitted into the case: the next screen shows the case, not the old draft
@@ -218,6 +218,7 @@ async function onSubmit(ev) {
     if (!String(d.text ?? '').trim()) { S.flash = 'Type your question first.'; discardDrafts = false; return render(); }
     return commit({ type: 'QUESTION_ADD', text: d.text, lang: d.lang || 'en' });
   }
+  if (name === 'fact-correct') { try { S.correctingFact = null; return commit({ type: 'FACT_CORRECT', factType: f.dataset.id, value: d.value, mode: 'terrain' }); } catch (e) { S.correctingFact = f.dataset.id; S.flash = e.message; discardDrafts = false; return render(); } }
   if (name === 'cand-correct') {
     const cand = (c.candidates ?? []).find((x) => x.id === f.dataset.id); if (!cand) return render();
     const v = validateCorrection(cand.key, d.value, S.mode === 'field' ? 'fr' : 'en'); if (!v.ok) { S.flash = v.error; discardDrafts = false; return render(); }
@@ -226,7 +227,7 @@ async function onSubmit(ev) {
   if (name === 'product') {
     const e = (event) => { S.cases[S.currentId] = dispatch(cur(), event, new Date()); };
     if (d.name !== c.identity.workingName) e({ type: 'NAME', name: d.name });
-    for (const k of ['model', 'brand', 'manufacturer', 'gtin']) if (d[k] && d[k] !== (cur().identity.identifiers[k] ?? '')) e({ type: 'IDENTIFIER', name: k, value: d[k].trim() });
+    for (const k of ['model', 'brand', 'manufacturer', 'gtin']) if (d[k] && d[k] !== (cur().identity.identifiers[k] ?? '')) e({ type: 'IDENTIFIER', origin: 'expert', name: k, value: d[k].trim() });
     if (d.category) e({ type: 'CATEGORY', category: d.category });
     persist(); return commit({ type: 'NOTE', text: 'product updated' });
   }
@@ -238,7 +239,7 @@ async function onSubmit(ev) {
     return commit({ type: 'NOTE', text: 'ratings updated' });
   }
   if (name === 'supplier') return commit({ type: 'SUPPLIER', supplier: d });
-  if (name === 'quote') return commit({ type: 'QUOTE', quote: { unitPrice: num(d.unitPrice), currency: d.currency, qty: num(d.qty) ? Number(num(d.qty)) : null, moq: num(d.moq) ? Number(num(d.moq)) : null, incoterm: d.incoterm || null, leadTimeDays: num(d.leadTimeDays), carton: d.carton || null } });
+  if (name === 'quote') return commit(quoteFormEvent(d));
   if (name === 'costs') {
     const costs = {}; for (const k of ['freight', 'insurance', 'originCharges', 'brokerage', 'testing', 'inspection', 'labelling', 'epr', 'inboundLogistics']) { const s = lineSpec(d[k]); if (s) costs[k] = s; }
     return commit({ type: 'COSTS', costs: { fx: num(d.fxRate) ? { rate: num(d.fxRate), date: d.fxDate || new Date().toISOString().slice(0, 10), source: 'USER_ENTERED' } : undefined, costs, importVat: num(d.importVat) ? { ratePct: num(d.importVat), recoverable: d.vatRecoverable === 'on' } : undefined } });
@@ -249,7 +250,7 @@ async function onSubmit(ev) {
     const e = (event) => { S.cases[S.currentId] = dispatch(cur(), event, new Date()); };
     if (d.name !== cur().identity.workingName) e({ type: 'NAME', name: d.name });
     if (d.category) e({ type: 'CATEGORY', category: d.category });
-    if (num(d.unitPrice) !== null) e({ type: 'QUOTE', quote: { unitPrice: num(d.unitPrice), currency: d.currency, qty: num(d.qty) ? Number(num(d.qty)) : (num(d.moq) ? Number(num(d.moq)) : null), moq: num(d.moq) ? Number(num(d.moq)) : null, incoterm: d.incoterm || null } });
+    const qe = quickQuoteEvent(d); if (qe) e(qe);
     const costs = {}; if (num(d.freight) !== null) costs.freight = { total: num(d.freight), status: 'ESTIMATED' };
     if (num(d.fxRate) !== null) ls.set('nordla.sourcing.lastFx', num(d.fxRate));
     e({ type: 'COSTS', costs: { fx: num(d.fxRate) ? { rate: num(d.fxRate), date: new Date().toISOString().slice(0, 10), source: 'USER_ENTERED' } : cur().costs.fx, costs: { ...(cur().costs.costs ?? {}), ...costs }, importVat: cur().costs.importVat ?? { ratePct: '21', recoverable: true } } });
@@ -362,6 +363,7 @@ async function onClick(ev) {
   if (act === 'fstep') { S.fstep = key; S.flash = ''; render(); window.scrollTo(0, 0); return; }
   if (act === 'conv-start') return commit({ type: 'CONVERSATION_START', supplierRef: cur().supplier?.name ?? null, lang: 'auto' });
   if (act === 'conv-finish') return commit({ type: 'CONVERSATION_FINISH', convId: key });
+  if (act === 'fact-correct-open') { S.correctingFact = S.correctingFact === key ? null : key; return render(); }
   if (act === 'cand-correct-open') { S.correcting = S.correcting === key ? null : key; return render(); }
   if (act === 'cand-confirm') return guarded(() => commit({ type: 'CANDIDATE_CONFIRM', id: key }));
   if (act === 'cand-reject') return guarded(() => commit({ type: 'CANDIDATE_REJECT', id: key }));

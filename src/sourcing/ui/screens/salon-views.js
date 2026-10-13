@@ -70,7 +70,8 @@ export function reviewHtml({ draft, caseInfo, groupableIds, conflicts, unknownNa
     const st = f.review.state; const label = labelOf(f.key, f.context, 'fr'); const open = correcting === f.id;
     return `<li class="sl-fact ${cls(st)}"><div class="sl-fh"><b>${esc(label)}</b>${pill(REVIEW_FR[st] ?? st, `rv-${st}`)}</div>
       <div class="sl-fv">${f.needsCorrection && f.value === null ? `<em>à corriger : « ${esc(f.rawText)} »</em>` : esc(valueText(f))}${st === 'CORRECTED' ? ` <small>(le fournisseur disait : ${esc(valueText({ ...f, value: f.originalValue }))})</small>` : ''}</div>
-      <div class="sl-fs">« ${esc(f.rawText)} » · ${esc(f.status === 'USER_PROVIDED' ? 'corrigé par vous' : 'dit par le fournisseur')}</div>
+      <div class="sl-fs">« ${esc(f.rawText)} » · ${esc(f.status === 'USER_PROVIDED' ? 'corrigé par vous' : 'dit par le fournisseur')}${f.reverted ? ' · correction annulée' : ''}</div>
+      ${f.historical ? `<p class="sl-hist"><b>Archive de cette offre.</b> Valeur actuelle du dossier : <b>${esc(factValueText(f.current))}</b> (${esc(SOURCE_FR[f.current.source_type] ?? f.current.source_type)}). ${btn('Voir et corriger le fait actuel', 'sl-open-fact', f.current.fact_type, '', 'ghost')}</p>` : ''}
       ${st === 'PENDING' ? `<div class="sl-acts">${f.needsCorrection ? '' : btn('Confirmer', 'sl-confirm', f.id, '', 'pri')}${btn('Corriger', 'sl-correct-open', f.id)}${btn('Rejeter', 'sl-reject', f.id, '', 'ghost')}</div>` : ''}
       ${open ? `<form data-form="sl-correct" data-id="${esc(f.id)}" class="sl-inline"><input type="hidden" name="id" value="${esc(f.id)}"><input name="value" inputmode="${/price|moq|Pct|Qty/i.test(f.key) ? 'decimal' : 'text'}" placeholder="Valeur exacte" autofocus><button class="sl-btn pri" type="submit">OK</button></form>` : ''}</li>`;
   }).join('');
@@ -81,12 +82,43 @@ export function reviewHtml({ draft, caseInfo, groupableIds, conflicts, unknownNa
   const c = draft.counts;
   return `<div class="sl"><header class="sl-hd"><h1>Relire l'offre</h1>${btn('Terminé', 'sl-open-case', caseInfo.caseId, '', 'pri')}</header>${flash ? `<p class="sl-flash">${esc(flash)}</p>` : ''}
     <p class="sl-ctx"><b>${esc(caseInfo.supplier ?? caseInfo.title)}</b> · offre ${draft.seq}${draft.kind === 'REVISION' ? ' (mise à jour)' : ''} · ${c.total} fait${c.total > 1 ? 's' : ''} : ${c.pending} à relire, ${c.confirmed + c.corrected} validés, ${c.rejected} rejetés</p>
+    ${draft.isLatest ? '' : `<p class="sl-flash">Ancienne offre (n°${draft.seq}) : lecture d'archive. Le dossier s'appuie aujourd'hui sur l'offre la plus récente ; l'onglet « Faits » montre les valeurs actuelles.</p>`}
     <p class="sl-note">Tout ce que dit le fournisseur reste une <b>déclaration</b> : rien ici n'est vérifié.</p>${draft.speakerAssumed ? '<p class="sl-flash">Le chat n\'indique pas qui écrit : on suppose que c\'est le fournisseur. Vérifiez.</p>' : ''}${attr}${conf}
     ${groupableIds.length ? `<div class="sl-bar sl-top">${btn(`Tout confirmer (${groupableIds.length} faits clairs)`, 'sl-confirm-all', draft.id, '', 'pri big')}</div>` : ''}${secs || '<p class="sl-empty">Rien n\'a pu être lu dans ce texte. Il est conservé tel quel ; saisissez les chiffres à la main.</p>'}${unk}
     ${draft.unparsed.length ? `<details class="sl-sec"><summary>Texte non compris (${draft.unparsed.length})</summary><p class="sl-fs sl-orig" translate="no">${draft.unparsed.map(esc).join(' · ')}</p></details>` : ''}</div>`;
 }
 
 // ---- case ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// ---- FACTS: the current value of every fact, where it comes from, and the way to change it (one authoritative state; Terrain and Expert show the same values) ------------------------------------------------------
+export const SOURCE_FR = { USER_PROVIDED: 'saisi ou corrigé par vous', SUPPLIER_CLAIM: 'dit par le fournisseur', IMAGE_OBSERVED: 'lu sur une photo', DOCUMENT_OBSERVED: 'lu dans un document', SYSTEM_DERIVED: 'calculé par Nordla', VERIFIED: 'vérifié', UNATTRIBUTED_LEGACY: 'origine non tracée' };
+export const REVIEW_STATUS_FR = { NOT_REVIEWED: 'pas relu', CONFIRMED: 'confirmé', CORRECTED: 'corrigé par vous', REVERTED: 'correction annulée', REJECTED: 'rejeté', CONFLICT: 'contradiction' };
+const MODE_FR = { terrain: 'mode terrain', expert: 'mode expert', salon: 'Salon', system: 'Nordla' };
+export function factValueText(f) {
+  const v = f.value; const u = f.unit; if (v === null || v === undefined) return 'inconnu';
+  if (v === 'IN_STOCK') return 'en stock'; if (v === 'OUT_OF_STOCK') return 'pas en stock';
+  if (Array.isArray(v)) return v.join(', '); if (typeof v === 'object') return v.amount !== undefined ? `${v.amount} ${v.unit ?? ''}`.trim() : v.max !== undefined ? `${v.max} jours` : JSON.stringify(v);
+  return `${v}${f.fact_type === 'MOQ' ? ' pièces' : f.fact_type === 'PRICE' && u ? ` ${u}` : f.fact_type === 'LEAD_TIME' ? ' jours' : f.fact_type === 'OUTPUT_COUNT' ? ' sorties' : ''}`;
+}
+const ALWAYS = ['PRICE', 'CURRENCY', 'MOQ', 'MODEL', 'LEAD_TIME', 'INCOTERM', 'MATERIAL', 'PACKAGING'];
+const FACT_LABELS = { PRICE: 'Prix unitaire', CURRENCY: 'Devise', MOQ: 'Minimum de commande (MOQ)', MODEL: 'Modèle', LEAD_TIME: 'Délai de production', INCOTERM: 'Incoterm', MATERIAL: 'Matière', PACKAGING: 'Emballage', POWER: 'Puissance', CAPACITY: 'Capacité', OUTPUT_COUNT: 'Nombre de sorties', COLOURS: 'Couleurs', STOCK_STATUS: 'Stock', PORT: 'Port ou lieu' };
+const HINT = { PRICE: 'ex. 6.80', CURRENCY: 'USD, CNY ou EUR', MOQ: 'ex. 500', MODEL: 'tel qu\'écrit', LEAD_TIME: 'jours, ex. 20', INCOTERM: 'EXW, FOB, DAP…', MATERIAL: 'ex. acier inox 304', PACKAGING: 'ex. sachet OPP', POWER: 'watts, ex. 45', CAPACITY: 'ex. 20000 mAh', OUTPUT_COUNT: 'ex. 4', COLOURS: 'ex. bleu, blanc, noir', STOCK_STATUS: 'IN_STOCK ou OUT_OF_STOCK', PORT: 'ex. Ningbo' };
+const fmtAt = (at) => (at ? String(at).slice(0, 16).replace('T', ' ') : '');
+export function factsHtml({ facts, audit = [], observations = [], editing = null, caseId }) {
+  const have = new Map(facts.map((f) => [f.fact_type, f])); const order = [...ALWAYS, ...facts.map((f) => f.fact_type).filter((t) => !ALWAYS.includes(t))];
+  const form = (t, f) => `<form data-form="sl-fact" data-id="${esc(t)}" class="sl-inline"><input type="hidden" name="caseId" value="${esc(caseId)}"><input type="hidden" name="factType" value="${esc(t)}"><input name="value" ${/PRICE|MOQ|LEAD|OUTPUT|POWER/.test(t) ? 'inputmode="decimal"' : ''} value="" placeholder="${esc(HINT[t] ?? 'Valeur exacte')}" autocomplete="off" autofocus><button class="sl-btn pri" type="submit">OK</button></form>${f ? `<small class="sl-fs">Valeur actuelle : ${esc(factValueText(f))}. L'ancienne valeur reste dans l'historique.</small>` : ''}`;
+  const rows = order.map((t) => { const f = have.get(t);
+    if (!f) return `<li class="sl-fact UNKNOWN"><div class="sl-fh"><b>${esc(FACT_LABELS[t])}</b>${pill('inconnu', 'rv-UNKNOWN')}</div><div class="sl-acts">${btn('Saisir', 'sl-fact-edit', t, '', 'ghost')}</div>${editing === t ? form(t, null) : ''}</li>`;
+    const ref = f.source_reference ?? {}; const src = [SOURCE_FR[f.source_type] ?? f.source_type, ref.offerId ? `offre ${ref.offerId.slice(-4)}` : null, ref.mode ? MODE_FR[ref.mode] : null, ref.origin && !ref.mode ? MODE_FR[ref.origin] : null].filter(Boolean).join(' · ');
+    const mine = f.ledger_id && f.source_type === 'USER_PROVIDED' && f.provenance?.corrected; const hist = f.history ?? [];
+    return `<li class="sl-fact ${cls(f.review_status)}"><div class="sl-fh"><b>${esc(f.label)}</b>${pill(REVIEW_STATUS_FR[f.review_status] ?? f.review_status, `rv-${f.review_status}`)}</div>
+      <div class="sl-fv">${esc(factValueText(f))}</div><div class="sl-fs">${esc(src)}${f.created_at ? ` · ${esc(fmtAt(f.created_at))}` : ''} · version ${f.revision || '?'}${f.ledger_id ? '' : ' · <b>origine non tracée</b>'}</div>
+      ${ref.rawText ? `<div class="sl-fs">« ${esc(ref.rawText)} »</div>` : ''}${f.provenance?.previousValue !== null && f.provenance?.previousValue !== undefined ? `<div class="sl-fs">avant : ${esc(factValueText({ ...f, value: f.provenance.previousValue }))}</div>` : ''}
+      <div class="sl-acts">${btn('Corriger', 'sl-fact-edit', t)}${mine ? btn('Annuler ma correction', 'sl-fact-revert', f.ledger_id, '', 'ghost') : ''}</div>${editing === t ? form(t, f) : ''}
+      ${hist.length > 1 ? `<details class="sl-sec"><summary>Historique (${hist.length})</summary><ul class="sl-list">${hist.map((h) => `<li>${esc(factValueText({ ...f, value: h.value }))} · ${esc(SOURCE_FR[h.source_type] ?? h.source_type)}${h.voided ? ' · annulée' : ''} · ${esc(fmtAt(h.created_at))}${h.provenance?.reason ? ` · ${esc(h.provenance.reason)}` : ''}</li>`).join('')}</ul></details>` : ''}</li>`; }).join('');
+  const alerts = audit.filter((a) => a.kind !== 'UNATTRIBUTED_VALUE').map((a) => `<div class="sl-conf"><b>${a.kind === 'CORRECTION_EQUALS_PRICE' ? 'Correction à vérifier' : 'Ancienne correction'}</b><p>${esc(FACT_LABELS[a.fact_type] ?? a.key)} : le fournisseur disait ${esc(String(a.originalValue))}, une correction à ${esc(String(a.correctedValue))} a été enregistrée${a.offerId ? ' sur une ancienne offre' : ''}${a.kind === 'STALE_CORRECTION' ? `, mais le dossier indique aujourd'hui ${esc(String(a.currentValue))}` : ' : cette valeur est égale au prix unitaire, elle a peut-être été saisie au mauvais endroit'}.</p>${a.ledgerId ? `<div class="sl-acts">${btn('Annuler cette correction', 'sl-fact-revert', a.ledgerId)}</div>` : ''}</div>`).join('');
+  const obs = observations.filter((o) => o.state === 'PROPOSED').map((o) => `<li class="sl-fact"><div class="sl-fh"><b>${esc(FACT_LABELS[o.factType] ?? o.key)}</b>${pill(SOURCE_FR[o.sourceType] ?? o.sourceType, 'warn')}</div><div class="sl-fv">${esc(factValueText({ fact_type: o.factType, value: o.value }))}</div><div class="sl-fs">Pas encore un fait du dossier : à accepter ou ignorer.</div><div class="sl-acts">${btn('Accepter', 'sl-obs-accept', o.id, '', 'pri')}</div></li>`).join('');
+  return `${alerts}${obs ? `<h3 class="sl-h3">Lu mais pas encore accepté</h3><ul class="sl-facts">${obs}</ul>` : ''}<ul class="sl-facts">${rows}</ul><p class="sl-hint">Ce sont les mêmes valeurs que dans les modes terrain et expert. Une correction ajoute une version : rien n'est effacé.</p>`;
+}
 const UNKNOWN_FR = (x) => ({ 'unit price': 'prix unitaire', MOQ: 'MOQ', Incoterm: 'Incoterm', 'landed cost': 'coût rendu', 'maximum purchase price': "prix d'achat maximum", 'sample cost': "coût de l'échantillon", 'target purchase price': "prix cible", margin: 'marge', cash: 'cash' }[x] ?? fr(x));
 const SAMPLE_FR = { NONE: 'aucun', REQUESTED: 'demandé', RECEIVED: 'reçu', EVALUATED: 'évalué' };
 const VERDICT_SAMPLE_FR = { PASS: 'OK', CONCERNS: 'réserves', FAIL: 'échec' };
@@ -150,15 +182,15 @@ export function memoryHtml(h) {
     ${h.promisedCertificates.length ? `<h3 class="sl-h3">Documents annoncés</h3><ul class="sl-list">${h.promisedCertificates.map((c) => `<li>${esc(DOC_NAME_FR[c.claim] ?? c.claim)} : ${esc(DOC_STATE_FR[c.current] ?? c.current)}${c.matched ? ' (document reçu, au bon modèle)' : ''}</li>`).join('')}</ul>` : ''}
     ${h.previousRecommendations.length ? `<h3 class="sl-h3">Recommandations passées</h3><ul class="sl-list">${h.previousRecommendations.map((r) => `<li>${esc(REC_FR[r.value] ?? r.value)} · ${esc(String(r.at).slice(0, 16).replace('T', ' '))}</li>`).join('')}</ul>` : ''}`;
 }
-export function caseHtml({ info, tab, v, history, flash = '' }) {
+export function caseHtml({ info, tab, v, history, flash = '', factsView = null }) {
   const rec = v.recommendation; const ev = v.evidenceStatus; const top = v.askNow.items.slice(0, 3);
   const head = `<div class="sl-sum"><div class="sl-row">${pill(`Seule : ${REC_FR[rec.value]}`, `rec-${rec.value}`)}${pill(EV_FR[ev.evidenceCompleteness], `ev-${ev.evidenceCompleteness}`)}${pill(FIT_FR[v.merchantFit.label] ?? '', `fit-${v.merchantFit.label}`)}</div>
     <p class="sl-why">${esc(fr(rec.why))}. <small>Cette recommandation concerne cette offre prise seule ; la comparaison peut conclure autrement. Elle attend votre décision : rien n'est acheté ni payé.</small></p>
     ${blockerHtml(ev, v.assessment)}${ev.whatWouldImprove.length ? `<p class="sl-imp"><b>Pour améliorer :</b> ${esc(frList(ev.whatWouldImprove.slice(0, 3)))}</p>` : ''}</div>
     <div class="sl-acts main">${btn('Demander', 'sl-ask', info.caseId, '', 'pri')}${btn('Négocier', 'sl-neg', info.caseId)}${btn("Mettre à jour l'offre", 'sl-update-offer', info.caseId)}${btn('Relire', 'sl-review', info.caseId, '', 'ghost')}</div>`;
-  const tabs = [['sum', 'Résumé'], ['truth', 'Fournisseur'], ['fit', 'Fit'], ['deal', 'Chiffres'], ['changed', 'Changements'], ['mem', 'Historique'], ['more', 'Plus']];
+  const tabs = [['sum', 'Résumé'], ['facts', 'Faits'], ['truth', 'Fournisseur'], ['fit', 'Fit'], ['deal', 'Chiffres'], ['changed', 'Changements'], ['mem', 'Historique'], ['more', 'Plus']];
   const nav = `<div class="sl-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-act="sl-case-tab" data-key="${k}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>`;
-  const body = tab === 'truth' ? truthHtml(v.truthCard) : tab === 'fit' ? fitHtml(v.merchantFit) : tab === 'deal' ? dealHtml(v.deal) : tab === 'changed' ? changedHtml(v.whatChanged) : tab === 'mem' ? memoryHtml(history) : tab === 'more' ? moreHtml(info, v) : `<h3 class="sl-h3">À demander maintenant</h3>${askListHtml(v.askNow, info.caseId, true)}`;
+  const body = tab === 'facts' ? factsHtml(factsView ?? { facts: [], audit: [], observations: [], editing: null, caseId: info.caseId }) : tab === 'truth' ? truthHtml(v.truthCard) : tab === 'fit' ? fitHtml(v.merchantFit) : tab === 'deal' ? dealHtml(v.deal) : tab === 'changed' ? changedHtml(v.whatChanged) : tab === 'mem' ? memoryHtml(history) : tab === 'more' ? moreHtml(info, v) : `<h3 class="sl-h3">À demander maintenant</h3>${askListHtml(v.askNow, info.caseId, true)}`;
   return `<div class="sl"><header class="sl-hd"><div><h1>${esc(info.supplier ?? 'Fournisseur')}</h1><p class="sl-sub">${esc(info.title)}</p></div>${btn('Fermer', 'sl-nav', 'home', '', 'ghost')}</header>${flash ? `<p class="sl-flash">${esc(flash)}</p>` : ''}${head}${nav}<div class="sl-pane">${body}</div></div>`;
 }
 function moreHtml(info, v) {

@@ -157,14 +157,14 @@ export function extractEn(text, lang) {
   if (lt) { const wk = /^w/i.test(lt[3]); const lo = Number(lt[1]) * (wk ? 7 : 1); const hi = Number(lt[2] ?? lt[1]) * (wk ? 7 : 1); out.push(mk(text, lang, 'quote.leadTime', { min: String(lo), max: String(hi), unit: 'days' }, lt.index, lt.index + lt[0].length, { flags: wk ? ['WEEKS_CONVERTED'] : [], reason: 'lead time' })); }
 
   // ---- colours ----
-  const COL = Object.keys(COLOUR_WORDS).sort((a, b) => b.length - a.length).join('|'); const W = `(?<![A-Za-z])(?:${COL})(?![A-Za-z])`; const SEP = '(?:\\s*(?:[,/&]|\\band\\b|\\bor\\b|\\bet\\b|\\bou\\b)\\s*|\\s+)'; const LIST = `${W}(?:${SEP}${W})*`;
+  const COL = Object.keys(COLOUR_WORDS).sort((a, b) => b.length - a.length).join('|'); const W = `(?<![A-Za-z])(?:${COL})(?![A-Za-z])`; const SEP = '(?:\\s*(?:[,/&]|\\band\\b|\\bor\\b|\\bet\\b|\\bou\\b|\\ben\\b)\\s*|\\s+)'; const LIST = `${W}(?:${SEP}${W})*`;
   const coloursOf = (str) => [...new Set([...str.toLowerCase().matchAll(new RegExp(W, 'g'))].map((x) => COLOUR_WORDS[x[0]]))];
   const cl = new RegExp(`(?:(?:colou?rs?|couleurs?)(?:\\s+(?:available|are|include|we have|disponibles?))?\\s*[:\\-]?\\s*|available in\\s+)(${LIST})`, 'i').exec(text);
   if (cl) { const list = coloursOf(cl[1]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + cl[1].length, { reason: 'colour list' })); }
   if (!cl) { // "Black and white are available" is a sentence, not a list: a list joined by a WORD needs three colours. A list of colours after "we have / we offer / comes in", or two or more colour words in a row ("blue white black", "bleu blanc noir"): proposed, never a lone colour word
     const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+(${LIST})`, 'i').exec(text);
     const run = bl ?? new RegExp(`(${LIST})`, 'i').exec(text); const g = run && (bl ? run[1] : run[1]);
-    if (g) { const list = coloursOf(g); const worded = /\b(?:and|or|et|ou)\b/i.test(g); if ((list.length >= 2 && (!worded || list.length >= 3)) || (bl && list.length >= 1)) { const s0 = run.index + run[0].indexOf(g); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + g.length, { confidence: list.length >= 3 ? 'HIGH' : 'MEDIUM', reason: bl ? 'colour list after "we have"' : 'colour words in a row' })); } }
+    if (g) { const list = coloursOf(g); const worded = /\b(?:and|or|et|ou|en)\b/i.test(g); if ((list.length >= 2 && (!worded || list.length >= 3)) || (bl && list.length >= 1)) { const s0 = run.index + run[0].indexOf(g); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + g.length, { confidence: list.length >= 3 ? 'HIGH' : 'MEDIUM', reason: bl ? 'colour list after "we have"' : 'colour words in a row' })); } }
   }
   const cc = /(?<!(?:per|par)\s)\b(\d{1,2})\s+(?:colou?rs?|couleurs?)\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
   for (const seg of segs) {

@@ -8,6 +8,7 @@ import { classifyCandidates } from '/core/understanding.js';
 import { describeConflict, validateCorrection } from '/core/candidate-view.js';
 import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison, setAskState } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
+import { caseFacts, auditCase, observationsOf } from '/core/case-facts.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -15,12 +16,12 @@ import * as V from './salon-views.js';
 const VIEW_KEY = 'nordla.sourcing.salon.view'; const PROFILE_KEY = 'nordla.sourcing.merchantProfile'; const WS_BLOB = 'field-workspace'; const WS_DIRTY = 'nordla.sourcing.wsDirty';
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.').trim());
 const FRIENDLY = [[/who spoke/, 'Dites d\'abord qui a écrit cette ligne (fournisseur ou vous).'], [/needs a correction/, 'Ce chiffre est ambigu : corrigez-le avant de le confirmer.'], [/planned quantity/, 'La quantité doit être un nombre entier supérieur à zéro.'], [/at least one value or some text/, 'Collez un texte ou saisissez au moins une valeur.'], [/text is required|needs some text/, 'Collez un texte.']];
-const friendly = (e) => (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1];
+const friendly = (e) => (/^(Tapez|Utilisez|Valeurs possibles)/.test(String(e?.message ?? '')) ? e.message : (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1]);
 
 export function createSalon(ctx) {
   const { S, ls } = ctx;
   let view = ls.get(VIEW_KEY, { name: 'home' }); let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
-  let capMode = 'quote'; let correcting = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
+  let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
   const save = () => { ls.set(VIEW_KEY, { ...view, selected }); };
   const profile = () => ls.get(PROFILE_KEY, null);
   const eng = () => { const p = profile(); if (!engine || engineProfile !== p) { engine = createFieldEngine({ profile: p, externals: () => ctx.externals(), now: () => new Date() }); engineProfile = p; } return engine; };
@@ -69,7 +70,7 @@ export function createSalon(ctx) {
       if (view.name === 'capture') { const info = view.caseId && caseOf(view.caseId) ? infoOf(caseOf(view.caseId)) : null; return V.captureHtml({ caseInfo: info, mode: capMode, flash, online: S.online }); }
       if (view.name === 'review') { const c = caseOf(view.caseId); const oid = view.offerId ?? c?.offers?.at(-1)?.id; if (!c || !oid) return home(cases, e); const d = offerDraft(c, oid); const groupable = classifyCandidates(c).group.filter((x) => x.offerId === oid).map((x) => x.id);
         const conflicts = c.conflicts.filter((x) => x.state === 'OPEN' && c.candidates.some((k) => k.id === x.candidateId && k.offerId === oid)).map((x) => describeConflict(x)); return V.reviewHtml({ draft: d, caseInfo: infoOf(c), groupableIds: groupable, conflicts, unknownNames: d.unknownSpeakers.filter((n) => n !== '(unnamed)'), correcting, flash }); }
-      if (view.name === 'case' || view.name === 'changed') { const c = caseOf(view.caseId); if (!c) return home(cases, e); const r = e.caseView(c, ws); const sup = e.suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null; return V.caseHtml({ info: infoOf(c), tab: view.tab ?? 'sum', v: r, history: sup, flash }); }
+      if (view.name === 'case' || view.name === 'changed') { const c = caseOf(view.caseId); if (!c) return home(cases, e); const r = e.caseView(c, ws); const sup = e.suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null; return V.caseHtml({ info: infoOf(c), tab: view.tab ?? 'sum', v: r, history: sup, flash, factsView: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id } }); }
       if (view.name === 'ask') { const c = caseOf(view.caseId); if (!c) return home(cases, e, 'Choisissez un fournisseur pour préparer ses questions.'); const r = e.caseView(c, ws, ['askNow']); const html = V.askHtml({ info: infoOf(c), ask: r.askNow, flash }); return showQ ? html + V.showHtml({ item: r.askNow.items.find((i) => i.id === showQ) ?? r.askNow.items[0] }) : html; }
       if (view.name === 'negotiate') { const c = caseOf(view.caseId); if (!c) return home(cases, e, 'Choisissez un fournisseur pour préparer la négociation.'); const r = e.caseView(c, ws, ['negotiation']); return V.negotiateHtml({ info: infoOf(c), plan: r.negotiation }); }
       if (view.name === 'compare') {
@@ -102,7 +103,11 @@ export function createSalon(ctx) {
           const id = lastCaseId(); if (!id) { flash = 'Capturez d\'abord un fournisseur.'; return go({ name: 'home' }); } return go({ name: key === 'ask' ? 'ask' : 'negotiate', caseId: id });
         }
         case 'sl-resume': { const v = ws.views; return go({ name: v.lastScreen === 'review' ? 'case' : v.lastScreen, caseId: v.lastCaseId, cmpId: v.lastScreen === 'compare' ? v.lastComparisonId : null }); }
-        case 'sl-open-case': return go({ name: 'case', caseId: key, tab: 'sum' });
+        case 'sl-open-case': editingFact = null; return go({ name: 'case', caseId: key, tab: 'sum' });
+        case 'sl-open-fact': editingFact = key; return go({ name: 'case', caseId: view.caseId, tab: 'facts' });
+        case 'sl-fact-edit': editingFact = editingFact === key ? null : key; return ctx.render();
+        case 'sl-fact-revert': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_REVERT', ledgerId: key, mode: 'salon', reason: 'correction annulée par le propriétaire' }]); flash = 'Correction annulée : l\'historique est conservé.'; return ctx.render(); }
+        case 'sl-obs-accept': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_ACCEPT', observationId: key, mode: 'salon' }]); return ctx.render(); }
         case 'sl-case-tab': view = { ...view, tab: key }; save(); return ctx.render();
         case 'sl-sel': { selected = selected.includes(key) ? selected.filter((x) => x !== key) : [...selected, key].slice(-MAX_CANDIDATES); save(); return ctx.render(); }
         case 'sl-compare': { const def = key ? ws.comparisons[key] : null; if (def) { selected = def.caseIds.slice(); return go({ name: 'compare', cmpId: key }); } return go({ name: 'compare', cmpId: null }); }
@@ -134,6 +139,7 @@ export function createSalon(ctx) {
     try {
       if (name === 'sl-capture') return capture(d);
       if (name === 'sl-correct') { const c = must(view.caseId); const cand = c.candidates.find((x) => x.id === d.id); const v = validateCorrection(cand.key, d.value, 'fr'); if (!v.ok) { flash = v.error; return ctx.render(); } correcting = null; commit(c.id, [{ type: 'CANDIDATE_CORRECT', id: d.id, value: v.value }]); return ctx.render(); }
+      if (name === 'sl-fact') { const c = must(d.caseId); commit(c.id, [{ type: 'FACT_CORRECT', factType: d.factType, value: d.value, mode: 'salon' }]); editingFact = null; flash = 'Valeur enregistrée : l\'ancienne reste dans l\'historique.'; return ctx.render(); }
       if (name === 'sl-numbers') return numbers(d);
     } catch (e) { flash = friendly(e); ctx.render(); }
     return undefined;

@@ -120,7 +120,7 @@ export function derive(s, ev, at) {
 }
 
 // ---- compile a confirmed candidate into EXISTING events -----------------------------------------------------------------------------------------------------------------------
-function compile(s, c, value, level, source) {
+export function compile(s, c, value, level, source) {
   const k = c.key; const prev = s.quotes.at(-1) ?? null; const base = prev ? { ...prev } : (s.context?.plannedQty ? { qty: s.context.plannedQty } : {}); delete base.at; const quote = (patch, drop = []) => { const q = { ...base, ...patch }; for (const d of drop) delete q[d]; return [{ type: 'QUOTE', quote: q, summary: `from conversation (${c.id}): ${k}`, ref: { candidateId: c.id, offerId: c.offerId ?? null, key: k } }]; };
   switch (k) {
     case 'identifier.model': case 'identifier.brand': case 'identifier.manufacturer': return [{ type: 'IDENTIFIER', name: k.split('.')[1], value: String(value), level, source, summary: `from conversation (${c.id}): ${k}` }];

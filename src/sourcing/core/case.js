@@ -21,6 +21,7 @@ import { upgradeCase, CASE_SCHEMA } from './upgrade.js';
 import { effectiveQuote, normalizeTiers } from './offers.js';
 import * as conv from './conversation.js';
 import { applyOfferImport } from './field/offer-import.js';
+import { applyFactEvent, ledgerFormQuote, ledgerFormIdentifier } from './case-facts.js';
 import { applyExternalEvidence, applySampleRecord } from './field/external-evidence.js';
 import { observeProductSync, nameObserver, imageObserver } from './product-observer.js';
 import { recordObservation, buildProductHypothesis } from './product-hypothesis.js';
@@ -36,7 +37,7 @@ export function newCase({ id, name = '', now = new Date() } = {}) {
     identity: createIdentity({ workingName: name }), placing: {}, context: { market: 'EU-BE', channels: ['own_site'], consumerSales: true },
     supplier: {}, quotes: [], costs: {}, sale: null, saleAmazon: null, documents: [], safetySnapshot: null, customs: {}, amazon: { observations: [], restricted: null }, notes: [], decisions: [], events: [],
     // V1 (schema 2): supplier conversations, candidate facts, the confirmed-fact ledger, conflicts, supplier document statements, the owner's own questions
-    conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [], offers: [],
+    conversations: [], candidates: [], ledger: [], conflicts: [], documentLedger: [], userQuestions: [], offers: [], factAudit: [], factObservations: [],
     // conversation memory: which question was shown / skipped (with the exact texts shown), and the grouped confirmations (with the list the owner saw)
     questionLog: [], confirmBatches: [],
   };
@@ -59,7 +60,7 @@ function reduceInPlace(s, event, at) {
     case 'PRODUCT_OBSERVED': { const o = event.observation ?? event; recordObservation(s, { observer: String(o.observer ?? ''), version: o.version ?? null, source: o.source, status: o.status ?? 'OK', observations: o.observations, hypotheses: o.hypotheses, note: o.note }, at, o.input ?? {}); break; } // an adapter (image model, barcode data...) reports through the SAME contract
     case 'CATEGORY': s.identity = applyCategory(s.identity, event.category, { level: lvl, source: event.source ?? { kind: 'user' } }); break;
     case 'TRAIT': s.identity = addEvidence(s.identity, event.trait, { value: event.value, level: lvl, source: event.source ?? { kind: 'user' }, observedAt: at }); break;
-    case 'IDENTIFIER': s.identity = setIdentifier(s.identity, event.name, event.value, lvl, event.source ?? { kind: 'user' }); break;
+    case 'IDENTIFIER': if (event.origin) ledgerFormIdentifier(s, event.name, event.value, at, event.origin); s.identity = setIdentifier(s.identity, event.name, event.value, lvl, event.source ?? { kind: 'user' }); break;
     case 'ORIGIN': s.identity.countryOfOrigin = event.country ?? null; break;
     case 'PHOTO': { s.identity.photos.push({ ref: event.ref, note: event.note ?? null, at }); const r = observeProductSync({ imageRef: event.ref }, [imageObserver]).results[0]; recordObservation(s, r, at, { imageRef: event.ref }); break; } // no image provider is approved: the observer says so, the photo is kept
     case 'PLACING': s.placing = { ...s.placing, ...event.placing }; break;
@@ -67,13 +68,14 @@ function reduceInPlace(s, event, at) {
     case 'SUPPLIER': s.supplier = { ...s.supplier, ...event.supplier }; break;
     case 'QUOTE': { // V1 fields (port, payment, price tiers) survive a V0 form save; typing a DIFFERENT unit price replaces the tiers (an explicit single price wins)
       const prev = s.quotes.at(-1); const nq = { ...event.quote };
-      if (prev) for (const k of ['port', 'payment', 'tiers']) if (nq[k] === undefined && prev[k] !== undefined) {
+      if (prev) for (const k of ['port', 'payment', 'tiers', 'leadTimeDays', 'carton']) if (nq[k] === undefined && prev[k] !== undefined) { // a field the form does not have (Quick has no lead time) is kept; a field the form sends empty (null) is an explicit clear
         if (k === 'tiers' && nq.unitPrice !== undefined && nq.unitPrice !== '' && normalizeTiers(prev.tiers).length) { // the form may still show an earlier tier price (stale after a quantity change): a price equal to ANY quoted tier price is not an explicit override
           const typed = Number(String(nq.unitPrice).replace(',', '.')); const known = [Number(String(effectiveQuote(prev).unitPrice).replace(',', '.')), ...normalizeTiers(prev.tiers).map((t) => Number(t.unitPrice))];
           if (!known.includes(typed)) continue;
         }
         nq[k] = prev[k];
       }
+      if (event.origin) ledgerFormQuote(s, prev, nq, at, event.origin); // a quote TYPED in a form: only the fields that changed are the owner's edit (a prefilled field saved again is not)
       s.quotes.push({ ...nq, at }); break;
     }
     case 'COSTS': s.costs = { ...s.costs, ...event.costs }; break;
@@ -122,6 +124,7 @@ function reduceInPlace(s, event, at) {
       const n = Number(String(event.qty ?? '').replace(/\s/g, '')); if (!Number.isInteger(n) || n <= 0) throw new Error('the planned quantity must be a whole number above zero');
       s.context = { ...s.context, plannedQty: n }; s.quotes = s.quotes.map((q) => ({ ...q, qty: n })); break;
     }
+    case 'FACT_CORRECT': case 'FACT_REVERT': case 'FACT_OBSERVE': case 'FACT_ACCEPT': applyFactEvent(s, event, at, sub); break; // the ONE way any mode changes or observes a fact (core/case-facts.js)
     case 'EXTERNAL_EVIDENCE': applyExternalEvidence(s, event, at); break; // a provider's statement about the supplier / product: stored with source and date, never above ESTIMATED unless the provider is registered
     case 'SAMPLE_RECORD': applySampleRecord(s, event, at); break; // the sample lifecycle (requested / received / evaluated): evidence about quality
     case 'DOC_CLAIM': s.documentLedger.push({ id: `dc-${s.documentLedger.length + 1}`, claim: event.claim, status: event.status, source: event.source ?? null, at }); break; // a supplier STATEMENT about a document: never a received document

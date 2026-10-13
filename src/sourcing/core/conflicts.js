@@ -26,6 +26,7 @@ export function documentModelConflicts(state) {
 }
 
 const numEq = (a, b) => { const x = Number(String(a).replace(',', '.')); const y = Number(String(b).replace(',', '.')); return Number.isFinite(x) && Number.isFinite(y) && x === y; };
+export const sameValue = (a, b) => same(a, b);
 const same = (a, b) => (typeof a === 'object' || typeof b === 'object' ? JSON.stringify(a) === JSON.stringify(b) : String(a) === String(b) || numEq(a, b));
 
 /** What the case holds today for a candidate key (null = nothing, so nothing can conflict). */

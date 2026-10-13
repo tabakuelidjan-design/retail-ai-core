@@ -104,7 +104,7 @@ test('output count', () => {
 });
 
 test('9. colour lists, any separator, English or French', () => {
-  for (const t of ['blue white black', 'bleu blanc noir', 'blue / white / black', 'blue, white and black', '3 colors blue white black', '3 couleurs blue white black', 'couleurs: bleu, blanc, noir']) assert.deepEqual(val(t, 'variant.colours'), ['blue', 'white', 'black'], t);
+  for (const t of ['blue white black', 'bleu blanc noir', 'blue / white / black', 'blue, white and black', '3 colors blue white black', '3 couleurs blue white black', 'couleurs: bleu, blanc, noir', '3 couleurs blue, white en black']) assert.deepEqual(val(t, 'variant.colours'), ['blue', 'white', 'black'], t);
   assert.equal(val('3 couleurs blue white black', 'variant.colourCount'), '3');
   assert.equal(one('bluetooth speaker', 'variant.colours'), null, 'a colour word inside another word is not a colour');
   assert.equal(one('black', 'variant.colours'), null, 'a lone colour word is not proposed (too ambiguous)');

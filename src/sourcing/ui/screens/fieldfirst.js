@@ -8,6 +8,7 @@
 // and translations (item.derived), so a future audio entry replaces or completes the text entry without rebuilding this screen. No microphone, model or provider is used here.
 import { esc, VERDICT_TEXT, coverageBanner } from '../dom.js';
 import { S } from '../state.js';
+import { caseFacts } from '/core/case-facts.js';
 import { getBlob, ls } from '../storage.js';
 import { suggestCategories } from '/core/case.js';
 import { CATEGORIES } from '/core/taxonomy.js';
@@ -164,15 +165,16 @@ const section = (title, body, first = false) => `<div class="fm-k2 ${first ? 'fi
 const li = (g, text) => `<div class="fm-li"><span class="fm-g">${g}</span><span>${text}</span></div>`;
 
 function proposedCands(c) { return c.candidates.filter((x) => x.state === 'PROPOSED'); }
-function factRows(c) {
-  const led = (k) => [...(c.ledger ?? [])].reverse().find((e) => k.includes(e.key) && e.context === 'product');
+export function factRows(c) {
+  // Terrain reads the same CaseFacts as Expert and Salon (a value typed in Quick or corrected in the Salon shows here at once); the ledger is only the fallback for keys that are not facts of their own (price tiers)
+  const facts = caseFacts(c); const led = (k) => { const f = facts.find((x) => k.includes(x.key)); return f ? { key: f.key, value: f.value, status: f.source_type, factType: f.fact_type } : [...(c.ledger ?? [])].reverse().find((e) => k.includes(e.key) && e.context === 'product'); };
   const prop = (k) => [...proposedCands(c)].reverse().find((x) => k.includes(x.key));
   const SPEC = [['Prix indicatif', ['quote.tiers', 'quote.unitPrice'], 'tag'], ['MOQ', ['quote.moq'], 'box'], ['Délai de production', ['quote.leadTime'], 'clock'], ['Incoterm', ['quote.incoterm'], 'ship'], ['Paiement', ['payment.depositPct'], 'cash'], ['Couleurs', ['variant.colours'], 'palette'], ['Référence', ['identifier.model'], 'hash']];
   const rows = []; const attn = new Set(groupUnderstanding(c).attention.filter((a) => ['CONFLICT', 'AMBIGUOUS', 'DUPLICATE'].includes(a.reason)).map((a) => a.candidate.id));
-  const cur = (c.ledger ?? []).find((e) => e.key === 'quote.currency')?.value ?? proposedCands(c).find((x) => x.key === 'quote.currency')?.value; const withCur = (k, t) => (cur && /^quote.(tiers|unitPrice)/.test(k) && typeof cur === 'string' ? `${t} ${cur}` : t);
+  const cur = facts.find((x) => x.key === 'quote.currency')?.value ?? proposedCands(c).find((x) => x.key === 'quote.currency')?.value; const withCur = (k, t) => (cur && /^quote.(tiers|unitPrice)/.test(k) && typeof cur === 'string' ? `${t} ${cur}` : t);
   for (const [label, keys, ic] of SPEC) {
     const l = led(keys); const p = prop(keys);
-    if (l) rows.push(`<div class="fm-kv"><span class="fm-kic">${ICON[ic]}</span><span class="fm-l">${label}</span><span class="fm-v"><b>${esc(withCur(l.key, describeFact({ key: l.key, value: l.value, context: 'product' }, 'fr').valueText))}</b>${OK}${l.status === 'SUPPLIER_CLAIM' ? '<small>dit par le fournisseur, confirmé par vous</small>' : ''}</span></div>`);
+    if (l) rows.push(`<div class="fm-kv"><span class="fm-kic">${ICON[ic]}</span><span class="fm-l">${label}</span><span class="fm-v"><b>${esc(withCur(l.key, describeFact({ key: l.key, value: l.value, context: 'product' }, 'fr').valueText))}</b>${OK}${l.status === 'SUPPLIER_CLAIM' ? '<small>dit par le fournisseur, confirmé par vous</small>' : l.status === 'USER_PROVIDED' ? '<small>saisi ou corrigé par vous</small>' : l.status === 'IMAGE_OBSERVED' ? '<small>lu sur la photo, accepté par vous</small>' : l.status === 'DOCUMENT_OBSERVED' ? '<small>lu dans un document, accepté par vous</small>' : ''}${l.factType ? btn('Corriger', 'fact-correct-open', l.factType, 'fm-cf') : ''}${l.factType && S.correctingFact === l.factType ? `<form data-form="fact-correct" data-id="${l.factType}" style="display:flex;gap:6px;margin-top:6px"><input name="value" autocomplete="off" placeholder="Valeur exacte" autofocus style="flex:1;min-width:0;font-size:16px"><button class="fm-btn" type="submit">OK</button></form>` : ''}</span></div>`);
     else if (p) { const d = describeCandidate(p, 'fr'); const unk = p.speaker === 'unknown'; const machine = (p.flags ?? []).includes('MACHINE_DERIVED'); const flagged = attn.has(p.id) || p.needsCorrection || p.confidence === 'LOW' || (p.flags ?? []).some((f) => ['AMBIGUOUS_NUMBER', 'DUPLICATE_THRESHOLD'].includes(f)); const who = unk ? 'entendu au micro, locuteur inconnu' : p.speaker === 'me' ? `dit par vous${machine ? ', transcription automatique' : ''}` : `annoncé par le fournisseur${machine ? ', transcription automatique' : ''}`; rows.push(`<div class="fm-kv"><span class="fm-kic">${ICON[ic]}</span><span class="fm-l">${label}</span><span class="fm-v"><b>${esc(withCur(p.key, d.valueText))}</b>${CL}<small>${who}${flagged && !unk ? ' : à vérifier' : ''}</small>${unk ? btn('Qui parlait ?', 'attr-open', p.itemId, 'fm-cf') : flagged ? btn('À vérifier', 'fm-sheet', 'conflict', 'fm-cf') : btn('Confirmer', 'cand-confirm', p.id, 'fm-cf')}</span></div>`); }
   }
   // document statements: their own states, never ✓
