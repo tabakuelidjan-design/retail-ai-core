@@ -22,6 +22,9 @@ export function createSalon(ctx) {
   const { S, ls } = ctx;
   let view = ls.get(VIEW_KEY, { name: 'home' }); let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
   let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
+  // Salon's persisted view can be showing a case different from the global current case.
+  // Keep the active case aligned even after restarting the phone app; selection is not an edit.
+  if (view.caseId && S.cases[view.caseId] && S.currentId !== view.caseId) { S.currentId = view.caseId; ctx.persist(); }
   const save = () => { ls.set(VIEW_KEY, { ...view, selected }); };
   const profile = () => ls.get(PROFILE_KEY, null);
   const eng = () => { const p = profile(); if (!engine || engineProfile !== p) { engine = createFieldEngine({ profile: p, externals: () => ctx.externals(), now: () => new Date() }); engineProfile = p; } return engine; };
@@ -51,7 +54,7 @@ export function createSalon(ctx) {
     touchCase(id); S.currentId = id; ctx.persist(); ctx.markDirty(id); ctx.queueSync();
     try { ws = eng().record(ws, S.cases[id]).ws; saveWs(ws); } catch (e) { console.error(e); }
   };
-  const go = (next) => { view = { ...view, ...next }; save(); flash = ''; remember(); ctx.render(); window.scrollTo(0, 0); };
+  const go = (next) => { view = { ...view, ...next }; if (view.caseId && S.cases[view.caseId] && S.currentId !== view.caseId) { S.currentId = view.caseId; ctx.persist(); } save(); flash = ''; remember(); ctx.render(); window.scrollTo(0, 0); };
   const remember = () => { ws = eng().setView(ws, { lastCaseId: view.caseId ?? null, lastComparisonId: view.cmpId ?? null, lastScreen: view.name }); saveWs(ws); };
 
   // ---- rendering ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -183,5 +186,5 @@ export function createSalon(ctx) {
   }
   document.addEventListener('change', onFile);
 
-  return { render, nav, click, submit, paint, syncWs, loadProfile, remember, state: () => ({ view, selected, wsRev: ws.rev }), workspace: () => ws, engine: eng };
+  return { render, nav, click, submit, paint, syncWs, loadProfile, remember, openCase: (id) => { if (S.cases[id]) go({ name: 'case', caseId: id, tab: 'sum' }); }, state: () => ({ view, selected, wsRev: ws.rev }), workspace: () => ws, engine: eng };
 }
