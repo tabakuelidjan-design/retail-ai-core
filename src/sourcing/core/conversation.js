@@ -105,6 +105,38 @@ export function addItem(s, ev, at) {
   for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, basis: 'ORIGINAL', state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
 }
 
+/** An explicit owner-requested re-reading of ORIGINAL supplier notes stored by an older extractor.
+ * Only ADD new PROPOSED candidates for keys/contexts absent from the same item. Never alter
+ * accepted, corrected, rejected or conflicting candidates, ledger, quote, originals or offers.
+ * NOT a load-time migration: old case decisions and deliberate extraction skips stay untouched
+ * until the owner chooses to re-read those notes. No machine-derived text is replayed.
+ */
+export function reanalyzeStoredNotes(s, ev, at) {
+  const selected = ev.itemId ?? null;
+  let found = false; let added = 0;
+  for (const conv of s.conversations ?? []) {
+    if (ev.convId && conv.id !== ev.convId) continue;
+    for (const item of conv.items ?? []) {
+      if (selected && item.id !== selected) continue;
+      found = true;
+      if (item.speaker !== SPEAKER.SUPPLIER || typeof item.original !== 'string' || !item.original.trim() || item.modality === MODALITY.SPEECH) continue;
+      const existing = new Set(s.candidates.filter((c) => c.convId === conv.id && c.itemId === item.id && (!c.basis || c.basis === 'ORIGINAL'))
+        .map((c) => `${c.key}|${c.context ?? 'product'}`));
+      const ex = extractFacts({ text: item.original, lang: item.lang || 'auto' });
+      for (const c of ex.candidates) {
+        const k = `${c.key}|${c.context ?? 'product'}`;
+        if (existing.has(k)) continue; // includes REJECTED: never resurrect an owner-rejected fact
+        s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id,
+          speaker: item.speaker, basis: 'ORIGINAL', state: CANDIDATE_STATE.PROPOSED,
+          proposedAt: at, recovery: { kind: 'OWNER_INITIATED_REANALYSIS', at } });
+        existing.add(k); added += 1;
+      }
+    }
+  }
+  if (selected && !found) throw new Error(`unknown conversation item: ${selected}`);
+  return added;
+}
+
 /** A transcription (audio -> text) or a translation of a supplier item: DERIVED data kept next to the original, with who produced it and its review state. The original text/audio reference
  *  is never touched and nothing is proposed from a derivation by itself (facts come from the original or from the owner). This is the seam for the future interpreter. */
 export function derive(s, ev, at) {
