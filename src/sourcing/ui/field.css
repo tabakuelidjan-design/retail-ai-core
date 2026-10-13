@@ -120,7 +120,7 @@ body.fm-mode:has(.fm.started){padding-bottom:calc(104px + env(safe-area-inset-bo
   .fm.home .fm-start{padding-top:6px}
   .fm.home .fm-hlp{font-size:12px;line-height:1.25;margin-bottom:6px}
   .fm.home .fm-cam{height:44px;margin-bottom:6px;border-radius:14px}
-  .fm.home .fm-go{position:relative;bottom:auto;min-height:60px;border-radius:20px;z-index:10}
+  .fm.home .fm-go{position:fixed;left:18px;right:18px;width:auto;max-width:604px;margin-inline:auto;bottom:calc(96px + env(safe-area-inset-bottom));min-height:60px;border-radius:20px;z-index:10}
 }
 /* A decorative chevron must not enlarge the product card or overflow a narrow screen. */
 .fm-prod[data-act] > svg{width:20px;height:20px;flex:0 0 20px;overflow:hidden}
