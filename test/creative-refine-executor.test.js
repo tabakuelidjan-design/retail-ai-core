@@ -180,6 +180,8 @@ test('EX-9 the digest of a node, and the difference between two artifacts, ignor
   b.nodes.text_style.push({ node_id: 'TEXT_STYLE:BODY', role: 'BODY', color: '#000', font_size: 1, plate: false, style_sha256: 'b'.repeat(40) });
   const diff = diffArtifacts(a, b);
   assert.deepEqual(diff.removed, ['PROP:lyr_fg']); assert.deepEqual(diff.added, ['TEXT:BODY', 'TEXT_STYLE:BODY']); assert.deepEqual(diff.changed, ['PROP:lyr_mid']);
+  assert.ok(!diff.unchanged.includes('PROP:lyr_fg') && !diff.unchanged.includes('TEXT:BODY') && !diff.unchanged.includes('PROP:lyr_mid'), 'a removed, an added and a changed node are never unchanged');
+  assert.deepEqual(diff.unchanged, Object.keys(nodeDigests(a)).filter((id) => !['PROP:lyr_mid', 'PROP:lyr_fg'].includes(id)).sort());
   assert.ok(diff.unchanged.includes('PRODUCT') && diff.unchanged.includes('PLATE:plk_probe')); assert.deepEqual(diffArtifacts(a, a), { changed: [], added: [], removed: [], unchanged: Object.keys(d).sort() });
   assert.equal(diffArtifacts(a, {}), null); assert.equal(diffArtifacts({}, a), null);
 });
