@@ -19,6 +19,10 @@ Le téléphone garde ses dossiers dans le stockage du navigateur, **par adresse*
 - Un dossier récupéré n'est **jamais** marqué « modifié » : aucune sauvegarde automatique. S'il est modifié plus tard, la sauvegarde part avec sa révision ; si le serveur a avancé → 409, rien n'est écrasé.
 - Fichiers refusés : non JSON, > 8 Mo, identifiant invalide, schéma plus récent, clés `__proto__`/`constructor`/`prototype`, collections mal formées.
 
+## Correction de la synchronisation (anomalie confirmée par test)
+Avant correction, `sync()` marquait **le dossier ouvert** comme modifié à chaque cycle. Un test navigateur l'a reproduit : un téléphone fraîchement appairé envoyait son dossier vide, et un dossier récupéré (Sonny) ou importé, simplement ouvert puis reconnecté, produisait un PUT (révision du serveur +1, fichier réécrit, dossier importé créé sur le serveur).
+Maintenant : seuls les dossiers marqués par une modification explicite (`commit()`, Salon, « garder les deux ») sont envoyés. Ouvrir, récupérer, importer, changer de dossier, redémarrer ou se reconnecter n'envoie rien. La liste « modifiés » écrite par une ancienne version reste honorée. Limite : une modification faite sur un ancien téléphone **sans jeton**, avant cette version, n'était pas dans cette liste et ne sera plus envoyée d'office : exportez-la.
+
 ## Limites (honnêtes)
 - **Photos** : elles sont dans le stockage du téléphone (IndexedDB), pas sur le serveur. Une récupération depuis le serveur restitue le dossier avec ses références de photos, pas les images. Les images ne reviennent que via un export fait avec cette version, ou si l'ancien téléphone n'a pas été vidé.
 - Un dossier créé sur le téléphone puis jamais synchronisé n'existe nulle part ailleurs : sans export, il n'est pas récupérable.

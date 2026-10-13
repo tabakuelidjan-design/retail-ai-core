@@ -62,7 +62,7 @@ function migrateObservation() { const c = cur(); if (c && c.identity?.workingNam
 function commit(event) {
   S.cases[S.currentId] = dispatch(cur(), event, new Date()); S.whatIf = null;
   try { const a = run(cur()); S.cases[S.currentId] = recordDecision(cur(), a, new Date()); } catch { /* shown by render */ }
-  if (S.token) markDirty(S.currentId); // marked at once and kept on the phone: closing the app before the sync runs must not lose the change
+  markDirty(S.currentId); // an explicit change: marked at once and kept on the phone (token or not), so closing the app before the sync runs, or editing offline, never loses it
   persist(); if (S.quiet) paintLive(); else render(); queueSync();
 }
 /** Autosave while typing numbers: the results strip updates in place (no re-render, so the keyboard and the focus stay where they are). */
@@ -87,7 +87,7 @@ async function ping() {
     if (!S.authFailed && !S.lockedOut && dirty.size) scheduleRetry();
   }
   paintHeader(); if (S.authFailed || was !== S.online) render();
-  if (S.online) { refreshAi(); if (!was || dirty.size) sync(); autoSafety(); try { const sa = salon(); sa.loadProfile(); sa.syncWs(); } catch { /* the salon keeps working from the phone */ } }
+  if (S.online) { refreshAi(); if (dirty.size) sync(); autoSafety(); try { const sa = salon(); sa.loadProfile(); sa.syncWs(); } catch { /* the salon keeps working from the phone */ } }
 }
 /** Once the server is verified, the phone fetches the Safety Gate copy by itself when it has none (or only an old one): the owner should not have to find a button. */
 function autoSafety() {
@@ -100,12 +100,12 @@ let syncTimer = null;
 function queueSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 800); }
 const dirty = new Set(ls.get('nordla.sourcing.dirty', []));
 const markDirty = (id) => { dirty.add(id); ls.set('nordla.sourcing.dirty', [...dirty]); };
-/** Pushes every case changed while offline (and the current one). Edits made while a request is in flight are kept (the case is marked changed again); a case changed
+/** Pushes every case the owner changed (marked by commit(), kept across restarts) and nothing else: never the case that is merely open. Edits made while a request is in flight are kept (the case is marked changed again); a case changed
  *  elsewhere is NEVER overwritten: it is reported and the owner chooses (take the server copy, or keep both). */
 let syncing = false;
 async function sync() {
-  if (!S.token || !cur() || syncing) return;
-  syncing = true; markDirty(cur().id);
+  if (!S.token || syncing || !dirty.size) return; // ONLY cases the owner changed are sent: opening, recovering, importing, switching or restarting never marks a case
+  syncing = true;
   try {
     for (const id of [...dirty]) {
       const c = S.cases[id]; if (!c) { dirty.delete(id); continue; }

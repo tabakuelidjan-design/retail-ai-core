@@ -134,7 +134,7 @@ test('8. recovering marks nothing as changed: the app code for recovery has no s
   const block = src.slice(a, b);
   assert.doesNotMatch(block, /markDirty|queueSync|sync\(\)|method:\s*'(PUT|POST|DELETE)'/, 'recovery only reads (GET) and stores locally');
   assert.match(block, /api\('\/api\/cases'\)/); assert.match(block, /api\(`\/api\/cases\/\$\{encodeURIComponent\(id\)\}`\)/);
-  const sw = await readFile(new URL('../src/sourcing/ui/sw.js', import.meta.url), 'utf8'); assert.match(sw, /nordla-sourcing-v1-field-6/, 'the installed phone app refreshes');
+  const sw = await readFile(new URL('../src/sourcing/ui/sw.js', import.meta.url), 'utf8'); assert.match(sw, /nordla-sourcing-v1-field-7/, 'the installed phone app refreshes');
 });
 
 test('9. EXPORT / IMPORT of a JSON: a case that never reached the server round-trips whole, with the photos the phone holds', () => {
@@ -182,4 +182,13 @@ test('13. the menu section: nothing is ticked by default, the button stays disab
   assert.match(pend, /Garder les deux/); assert.match(pend, /Ignorer/); assert.match(pend, /Rien n’a été remplacé/); assert.match(pend, /Sur ce téléphone/); assert.match(pend, /Importer un fichier exporté/);
   assert.match(pend, /data-act="rec-list" disabled/, 'the server list needs a reachable server');
   assert.match(html, /photos ne sont pas stockées sur le serveur/);
+});
+
+test('14. the sync sends only cases the owner changed: sync() never marks the open case, commit() always marks the edited one', async () => {
+  const src = await readFile(new URL('../src/sourcing/ui/app.js', import.meta.url), 'utf8');
+  const a = src.indexOf('async function sync()'); const b = src.indexOf('async function checkSafety'); const body = src.slice(a, b);
+  assert.doesNotMatch(body.split('for (const id of')[0], /markDirty\(/, 'sync() must not mark the current case before sending');
+  assert.match(body, /!dirty\.size\) return/, 'nothing marked = nothing sent');
+  assert.match(src, /function commit\(event\) \{[^]*?markDirty\(S\.currentId\);/, 'an explicit change is marked, token or not');
+  assert.doesNotMatch(src.slice(src.indexOf('async function ping()'), src.indexOf('function autoSafety')), /!was \|\| dirty\.size/, 'reconnecting alone does not start a sync');
 });

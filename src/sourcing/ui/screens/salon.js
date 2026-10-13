@@ -48,7 +48,7 @@ export function createSalon(ctx) {
   const touchCase = (id) => { try { const a = assess(S.cases[id], { now: new Date(), externals: ctx.externals() }); S.cases[id] = recordDecision(S.cases[id], a, new Date()); } catch { /* the screen shows what it can */ } };
   const commit = (id, events) => {
     for (const e of events) S.cases[id] = dispatch(S.cases[id], e, new Date());
-    touchCase(id); S.currentId = id; ctx.persist(); if (S.token) ctx.markDirty(id); ctx.queueSync();
+    touchCase(id); S.currentId = id; ctx.persist(); ctx.markDirty(id); ctx.queueSync();
     try { ws = eng().record(ws, S.cases[id]).ws; saveWs(ws); } catch (e) { console.error(e); }
   };
   const go = (next) => { view = { ...view, ...next }; save(); flash = ''; remember(); ctx.render(); window.scrollTo(0, 0); };

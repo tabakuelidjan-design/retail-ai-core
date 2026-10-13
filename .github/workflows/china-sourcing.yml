@@ -87,3 +87,16 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run sourcing:e2e:recovery
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-reconnect:
+    # BLOCKING: a recovered / imported / merely opened case is never written to the server (reconnection, case switch, restart, old phone); explicit edits, offline editing and the 409 guard still work.
+    name: e2e reconnect (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:reconnect
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
