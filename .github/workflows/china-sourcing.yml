@@ -49,11 +49,10 @@ jobs:
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
 
   e2e-fieldmode:
-    # INFORMATIONAL, TEMPORARILY: guided Field Mode. Checks 3, 4 and 18 are KNOWN to fail on Linux Chromium (docs/CHINA-SOURCING-RUNTIME.md); the job shows as failed on purpose. Make it blocking once they are understood.
-    name: e2e fieldmode (informational, 3 known failures)
+    # BLOCKING: guided Field Mode, 19/19 verified on Linux Chromium at 94bcb22.
+    name: e2e fieldmode (blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

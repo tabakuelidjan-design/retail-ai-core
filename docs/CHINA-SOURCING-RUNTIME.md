@@ -24,9 +24,9 @@ How it is enforced (China Sourcing only):
 |---|---|---|
 | `sourcing:e2e:v1`, service-worker readiness wait (20 s) | failed 2 of 3 runs on a cold Edge, passed the third | intermittent (timing) |
 | `sourcing:e2e:voice`, check 6 ("locuteur inconnu") | failed once, passed on the next runs | intermittent |
-| `sourcing:e2e:fieldmode` checks 3, 4, 18 | fail on Linux Chromium in Docker (Node 24 as well as Node 20); pass on Windows with Edge | environment-specific (Linux/Chromium), cause not investigated |
+| `sourcing:e2e:fieldmode` checks 3, 4, 18 | Resolved on Linux Chromium by short-viewport start-button positioning and narrow-card SVG constraints; 19/19 confirmed in Actions run 38405470946 (Node 24). | resolved, blocking CI |
 | `sourcing:e2e:voice` | cannot run on a clean clone: it needs the local voice-bench model files (git-ignored) | environment |
 | `real-tunnel` e2e | never run in CI: it opens a Cloudflare tunnel | by design |
 | Finance `finance-accountant-export` VOLUME, `finance-treasury` PERFORMANCE | wall-clock bounds ("around/well under a second"); sensitive to CPU load (and to Node 20) | known wall-clock class, not sourcing |
 
-The `e2e` job of the CI workflow is therefore informational (`continue-on-error`) until the Linux/Chromium differences are understood.
+The CI workflow runs separate jobs for Field V1 (blocking), Guided Field Mode (blocking), PWA (informational), and ASR (informational). The previous Linux/Chromium Guided Field Mode failures are fixed and must not be reclassified as informational.

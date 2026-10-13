@@ -56,7 +56,7 @@ await check('2. FIRST SCREEN: the product card, "Photographier le produit" acces
 // REGRESSION (physical review, Xiaomi / Firefox Android): with a short visible viewport (soft keyboard open after typing the name, small screen, large text) the fixed bottom bar covered "Démarrer la
 // conversation": the finger hit "Conversation" (a no-op) and the button seemed dead. Programmatic .click() cannot see this: this check uses REAL touch hit-testing (Input.dispatchTouchEvent).
 const touchTap = async (sel) => { const p = JSON.parse(await t.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return JSON.stringify([r.left + r.width / 2, r.top + r.height / 2]); })()`)); await browser.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p[0], y: p[1] }] }, t.sessionId); await browser.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, t.sessionId); await t.run('await __t.sleep(700); return 1;'); };
-const startHit = (t2) => t2.eval(`(() => { const e = document.querySelector('[data-act="fm-start"]'); const r = e.getBoundingClientRect(); const o = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(o) ? 'ok' : (o?.className ?? 'none'); })()`);
+const startHit = (t2) => t2.eval(`(() => { const e = document.querySelector('[data-act="fm-start"]'); const r = e.getBoundingClientRect(); const o = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(o) ? 'ok' : JSON.stringify({blockedBy:o?.outerHTML?.slice(0,260),button: {top:r.top,bottom:r.bottom,left:r.left,right:r.right},viewport:{w:innerWidth,h:innerHeight},nav:document.querySelector('#tabs')?.getBoundingClientRect().toJSON(),scrollY}); })()`);
 
 await check('3. a photo shows in the card (kept, never invented); the name typed (NOT validated with OK) is not lost when the conversation starts', async () => {
   await t.run(PNG); ok(await has(t, '.fm-ph img, .fm-card img, img.fm-photo'), 'photo shown in the card'); ok(/Reprendre la photo/.test(await text(t)), 'retake offered'); const c0 = await kase(t); ok((c0.identity.photos?.length ?? 0) === 1, 'photo kept');
@@ -163,7 +163,7 @@ await check('18. layout: the Field screen, its sheets and the bottom bar fit 375
       const r = await t.run(`${open} await __t.sleep(300);
         const over = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).length;
         const small = [...document.querySelectorAll('#screen button, #tabs button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 40 || r.width < 40); }).map((b) => (b.className + ':' + b.innerText.slice(0, 12))).join('|');
-        return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, small };`);
+        const offenders = [...document.querySelectorAll('#screen *')].filter((e) => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('table, pre')).slice(0,5).map(e => ({tag:e.tagName,cl:String(e.className).slice(0,100),r:Math.round(e.getBoundingClientRect().right),txt:e.textContent?.slice(0,60),parent:e.parentElement?.outerHTML?.slice(0,250)})); return { sideways: document.documentElement.scrollWidth > window.innerWidth + 1, over, offenders, small };`);
       if (r.sideways || r.over || r.small.length) bad.push(`${w}x${h} ${v}: ${JSON.stringify(r)}`);
     }
   }
