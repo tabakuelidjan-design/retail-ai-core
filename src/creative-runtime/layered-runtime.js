@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { deepFreeze } from '../creative-brain/validation.js';
+
 import * as CI from '../creative-intelligence/index.js';
 import * as P from '../creative-intelligence/production.js';
 import { decodePng } from '../creative-intelligence/png-pixels.js';
@@ -79,14 +81,41 @@ function solveLayered({
 }
 
 /** The generated layers of a campaign, shared by its scenes: every candidate that was paid for is kept (and judged again, for free, by the scene that reuses it). */
-export function createLayerStore() {
-  const entries = new Map();
-  return Object.freeze({
-    candidates: (key) => [...(entries.get(key) ?? [])],
+export function createLayerStore(initial = null) {
+  const entries = new Map(); // key -> every candidate ever paid for (a rejected one stays, so the numbering and the bound never reuse an index)
+  const rejected = new Map(); // key -> Set of sha256 the REFINE declared unusable
+  const allowance = new Map(); // key -> extra candidates a REFINE may pay for, beyond the bound of the specification
+  const store = {
+    /** The candidates still usable: a candidate rejected by a REFINE is never offered again. */
+    candidates: (key) => (entries.get(key) ?? []).filter((c) => !rejected.get(key)?.has(sha256(c.bytes))),
+    /** Every candidate ever paid for, rejected or not. */
+    count: (key) => (entries.get(key) ?? []).length,
     add(key, candidate) { if (!entries.has(key)) entries.set(key, []); entries.get(key).push(candidate); },
+    reject(key, digest, extra = 0) {
+      if (!(entries.get(key) ?? []).some((c) => sha256(c.bytes) === digest)) return false;
+      if (!rejected.has(key)) rejected.set(key, new Set());
+      rejected.get(key).add(digest); allowance.set(key, Math.max(allowance.get(key) ?? 0, extra)); return true;
+    },
+    rejected: (key) => [...(rejected.get(key) ?? [])],
+    allowance: (key) => allowance.get(key) ?? 0,
     keys: () => [...entries.keys()],
     size: () => entries.size,
-  });
+    /** An independent copy: a repair works on the copy and the original is replaced only when the repair is accepted. */
+    fork: () => createLayerStore(store.export()),
+    /** Plain JSON (bytes as base64): a working state that can be saved and resumed in another process. */
+    export: () => ({
+      schema: 'layer-store@1',
+      entries: Object.fromEntries([...entries.entries()].map(([k, list]) => [k, list.map((c) => ({ index: c.index, bytes_b64: Buffer.from(c.bytes).toString('base64'), provenance: c.provenance ?? null }))])),
+      rejected: Object.fromEntries([...rejected.entries()].map(([k, s]) => [k, [...s]])),
+      allowance: Object.fromEntries(allowance.entries()),
+    }),
+  };
+  if (initial) {
+    for (const [k, list] of Object.entries(initial.entries ?? {})) for (const c of list) store.add(k, { index: c.index, bytes: new Uint8Array(Buffer.from(c.bytes_b64, 'base64')), provenance: c.provenance ?? null });
+    for (const [k, list] of Object.entries(initial.rejected ?? {})) { rejected.set(k, new Set(list)); }
+    for (const [k, n] of Object.entries(initial.allowance ?? {})) allowance.set(k, n);
+  }
+  return Object.freeze(store);
 }
 
 /**
@@ -168,12 +197,16 @@ export async function runLayeredCreative({
   if (asset.sha256 !== identity.sha256 || asset.ref !== identity.asset_ref || sha256(asset.bytes) !== identity.sha256) return stop(BLOCK.PRODUCT_ASSET_DOES_NOT_MATCH_THE_IDENTITY, {}, 'VERIFY_THE_PRODUCT_IDENTITY');
   const canvas = scene.canvas;
   const requests = new Map(production.shared_layers.map((r) => [r.request_key, r]));
+  // a REFINE may drop ONE OR MORE PROPS of the scene (never the plate, the product or a text): the others are untouched
+  const dropIds = new Set(policy.drop_layers ?? []);
+  for (const id of dropIds) { const l = scene.layers.find((x) => x.layer_id === id); if (!l || ![LAYER_KIND.PROP_BACKGROUND, LAYER_KIND.PROP_MIDGROUND, LAYER_KIND.PROP_FOREGROUND].includes(l.kind)) return stop(BLOCK.LAYER_CANNOT_BE_DROPPED, { detail: { layer_id: id, kind: l?.kind ?? null } }, 'REPLAN_THE_SCENE'); }
+  const sceneLayers = scene.layers.filter((l) => !dropIds.has(l.layer_id));
 
   // ---- 1. the tools of the specification are the tools executed: a provider port that is not the selected tool, or a local tool other than the implemented one, stops the run before any work
   const toolOf = (capability) => scene.tools.find((t) => t.capability === capability)?.selected ?? null;
   const toolProblems = [];
   for (const [capability, implemented] of Object.entries(LAYERED_LOCAL_TOOLS)) { const selected = toolOf(capability); if (selected && selected.tool_id !== implemented) toolProblems.push({ capability, selected: selected.tool_id, executed: implemented }); }
-  const usesProps = scene.layers.some((l) => l.kind.startsWith('PROP_'));
+  const usesProps = sceneLayers.some((l) => l.kind.startsWith('PROP_'));
   for (const capability of PROVIDER_CAPABILITIES) {
     if (capability === CAP.PROP_ON_PLAIN_GROUND_GENERATION && !usesProps) continue;
     const selected = toolOf(capability);
@@ -192,7 +225,7 @@ export async function runLayeredCreative({
   }, { merchant_id: ids.merchant_id, brand_id: ids.brand_id });
   if (analysis.product_understanding.transformation_policy.mode !== 'COMPOSITE') return stop(BLOCK.THE_PRODUCT_PRESERVING_RUNTIME_NEEDS_A_COMPOSITE_STRATEGY, { preservation_mode: analysis.product_understanding.transformation_policy.mode });
   ledger.record({ decision: DECISION.CREATIVE_DIRECTION, decided_by: COMPONENT.PRODUCTION_PLANNER, rule: 'THE_SCENE_SPECIFICATION_IS_THE_DIRECTION', basis: [scene.scene_id], outcome: { scene_id: scene.scene_id, composition_intent: scene.intent.composition_intent, imagery_intent: scene.intent.imagery_intent, narrative_role: scene.intent.narrative_role } });
-  ledger.record({ decision: DECISION.BACKGROUND_STRATEGY, decided_by: component, rule: 'LAYERED_PLATE_PROPS_REAL_PRODUCT_TEXT', basis: [scene.scene_id], outcome: { layers: scene.layers.map((l) => ({ kind: l.kind, z: l.z, source: l.source })) } });
+  ledger.record({ decision: DECISION.BACKGROUND_STRATEGY, decided_by: component, rule: 'LAYERED_PLATE_PROPS_REAL_PRODUCT_TEXT', basis: [scene.scene_id], outcome: { layers: sceneLayers.map((l) => ({ kind: l.kind, z: l.z, source: l.source })), ...(dropIds.size ? { dropped: [...dropIds] } : {}) } });
 
   // ---- 3. the text of the scene: the planned text, as it is
   const claimRefs = brief.claims.map((c) => c.ref);
@@ -249,7 +282,7 @@ export async function runLayeredCreative({
   ledger.record({ decision: DECISION.TYPOGRAPHY_PLACEMENT, decided_by: COMPONENT.LAYOUT_ENGINE, rule: 'RECIPE_SLOTS_AND_TEXT_FITTING', basis: [recipe.recipe_id], outcome: { texts: texts.map((t) => ({ role: t.text_role, box: t.geometry, font_size: t.font_size })), unplaced: solved.unplaced, violations: solved.violations } });
 
   // ---- 6. the generated layers of the scene, from the specification
-  const generated = scene.layers.filter((l) => l.source === 'GENERATED').map((l) => ({ layer: l, request: requests.get(l.request_key) }));
+  const generated = sceneLayers.filter((l) => l.source === 'GENERATED').map((l) => ({ layer: l, request: requests.get(l.request_key) }));
   if (generated.some((g) => !g.request)) return stop(BLOCK.SCENE_NOT_SPECIFIED, { detail: 'A_GENERATED_LAYER_HAS_NO_REQUEST' }, 'REPLAN_THE_PRODUCTION_FROM_ITS_BLOCKS');
   layerBudget = budget ?? createLayerBudget({ production });
   evidence.layers = [];
@@ -260,9 +293,10 @@ export async function runLayeredCreative({
   try {
     for (const g of toGenerate) {
       const unit = layerBudget.unit_costs.image_eur_by_size_class[g.request.size_class];
-      const eur = round(g.request.candidates * unit);
+      const candidates = store.allowance(g.request.request_key) > 0 ? store.allowance(g.request.request_key) : g.request.candidates; // a REFINE pays only for its own allowance
+      const eur = round(candidates * unit);
       layerBudget.reserve(`GENERATED_LAYER:${g.request.request_key}`, eur);
-      reservedRows.push({ request_key: g.request.request_key, candidates: g.request.candidates, unit_eur: unit, eur });
+      reservedRows.push({ request_key: g.request.request_key, candidates, unit_eur: unit, eur });
     }
   } catch (error) {
     if (!(error instanceof CampaignBudgetError)) throw error;
@@ -311,25 +345,26 @@ export async function runLayeredCreative({
     if (cached.length && accepted.has(request.request_key)) {
       ledger.record({ decision: DECISION.LAYER_REUSE, decided_by: component, rule: 'A_SHARED_LAYER_IS_PRODUCED_ONCE', basis: [request.request_key], outcome: { request_key: request.request_key, kind: request.kind, provider_calls: 0, scene_id: scene.scene_id } });
     }
-    // more candidates only for a layer with room left in its bounded set, and only within what was reserved for it
-    let produced = cached.length;
-    while (!accepted.has(request.request_key) && produced < request.candidates) {
+    // more candidates only for a layer with room left in its bounded set (or in the allowance a REFINE gave it), and only within what was reserved for it
+    const room = store.allowance(request.request_key) > 0 ? store.allowance(request.request_key) : request.candidates - cached.length;
+    let producedHere = 0;
+    while (!accepted.has(request.request_key) && producedHere < room) {
       if (cached.length && !reservedRows.some((r) => r.request_key === request.request_key)) {
         const unit = layerBudget.unit_costs.image_eur_by_size_class[request.size_class];
-        try { layerBudget.reserve(`GENERATED_LAYER:${request.request_key}:MORE`, round((request.candidates - produced) * unit)); } catch (error) {
+        try { layerBudget.reserve(`GENERATED_LAYER:${request.request_key}:MORE`, round((room - producedHere) * unit)); } catch (error) {
           if (!(error instanceof CampaignBudgetError)) throw error;
           return stop(BLOCK.PRODUCTION_BLOCKED_BY_BUDGET, { detail: error.detail }, 'RAISE_THE_CEILING_OR_REUSE_MORE_LAYERS');
         }
-        reservedRows.push({ request_key: request.request_key, candidates: request.candidates - produced, unit_eur: unit, eur: round((request.candidates - produced) * unit) });
+        reservedRows.push({ request_key: request.request_key, candidates: room - producedHere, unit_eur: unit, eur: round((room - producedHere) * unit) });
       }
       ledger.record({
         decision: DECISION.PROVIDER_REQUEST_CONSTRUCTION, decided_by: COMPONENT.PROVIDER_REQUEST_BUILDER, rule: 'THE_REQUEST_OF_THE_SPECIFICATION_CARRIES_NO_PRODUCT_PIXEL', basis: [request.request_key],
-        outcome: { kind: request.kind, size: request.size, carries_input_asset: request.carries_input_asset, prompt_sha256: request.prompt_sha256, candidate: produced + 1 },
+        outcome: { kind: request.kind, size: request.size, carries_input_asset: request.carries_input_asset, prompt_sha256: request.prompt_sha256, candidate: store.count(request.request_key) + 1 },
       });
-      const out = await ports.layers.generate({ request: { ...request, capability: request.capability, input_asset_refs: [] }, expected_size: request.size, candidate_index: produced + 1 });
-      produced += 1;
+      const out = await ports.layers.generate({ request: { ...request, capability: request.capability, input_asset_refs: [] }, expected_size: request.size, candidate_index: store.count(request.request_key) + 1 });
+      producedHere += 1;
       layerBudget.spend(layerBudget.unit_costs.image_eur_by_size_class[request.size_class]);
-      const candidate = { index: produced, bytes: out.output_bytes, provenance: out.provenance };
+      const candidate = { index: store.count(request.request_key) + 1, bytes: out.output_bytes, provenance: out.provenance };
       store.add(request.request_key, candidate);
       consider(candidate, 'GENERATED');
     }
@@ -368,12 +403,14 @@ export async function runLayeredCreative({
         { x: margin, y: Math.round(canvas.height * 0.5) }, { x: canvas.width - margin - placed.width, y: Math.round(canvas.height * 0.5) },
         { x: margin, y: margin }, { x: canvas.width - margin - placed.width, y: margin },
       ];
-      at2 = anchors.find((a) => a.x >= 0 && a.y >= 0 && a.x + placed.width <= canvas.width && a.y + placed.height <= canvas.height && !occupied.some((o) => intersects({ ...a, width: placed.width, height: placed.height }, o)));
+      const anchorOverride = policy.anchors?.[layer.layer_id];
+      const tryAnchors = Number.isInteger(anchorOverride) ? [anchors[anchorOverride]].filter(Boolean) : anchors; // a REFINE names ONE anchor: it is tried alone, never searched around
+      at2 = tryAnchors.find((a) => a.x >= 0 && a.y >= 0 && a.x + placed.width <= canvas.width && a.y + placed.height <= canvas.height && !occupied.some((o) => intersects({ ...a, width: placed.width, height: placed.height }, o)));
       if (!at2) return stop(BLOCK.NO_ROOM_FOR_A_PROP, { detail: { request_key: request.request_key, zone: request.zone, reason: 'NO_FREE_PLACE_AROUND_THE_PRODUCT_AND_THE_TEXT' } }, 'REPLAN_THE_COMPOSITION_OR_DROP_THE_PROP');
       occupied.push({ ...at2, width: placed.width, height: placed.height });
     }
     const slot = slotsByKind.get(layer.kind) ?? 0; slotsByKind.set(layer.kind, slot + 1);
-    const raster = { layer_id: layer.layer_id, kind: layer.kind, z: LAYER_Z[layer.kind] + slot, png: placed.png, x: at2.x, y: at2.y, ...(layer.overlap ? { overlap: layer.overlap } : {}) };
+    const raster = { layer_id: layer.layer_id, kind: layer.kind, z: LAYER_Z[layer.kind] + slot, png: placed.png, x: at2.x, y: at2.y, w: placed.width, h: placed.height, ...(layer.overlap ? { overlap: layer.overlap } : {}) };
     rasterLayers.push(raster);
     if (layer.kind === LAYER_KIND.PROP_FOREGROUND) foregroundDraws.push({ ...raster, ref: `asset://runtime/${briefKey}/${scene.scene_id}/foreground-${slot}`, width: placed.width, height: placed.height });
     ledger.record({ decision: DECISION.LAYER_PLACEMENT, decided_by: component, rule: 'DECLARED_PLACEMENT_POLICY_AROUND_THE_REAL_PRODUCT', basis: [layer.layer_id], outcome: { kind: layer.kind, box: { x: at2.x, y: at2.y, width: placed.width, height: placed.height }, source_sha256: sha256(got.candidate.bytes) } });
@@ -398,6 +435,7 @@ export async function runLayeredCreative({
   if (under.status !== 'COMPOSED') return stop(BLOCK.COMPOSITION_REFUSED, { detail: { problems: under.report.problems } }, 'REPLAN_THE_COMPOSITION');
 
   // ---- 8. typography: the colour of each text from the brand tokens against what is really behind it (the composed stack)
+  const forcePlate = policy.typography?.plate_behind_text === true;
   const backdropPixels = decodePng(stack.png);
   const measuredBackdrops = {};
   const plates = [];
@@ -407,7 +445,7 @@ export async function runLayeredCreative({
     const backdrops = backdropSamples(backdropPixels, l.geometry);
     measuredBackdrops[l.id] = backdrops;
     const pick = chooseTextColor({ textRole: l.text_role, backdrops, tokens: brand.colors });
-    if (pick.contrast >= 4.5) return { ...l, color: pick.hex, _choice: { role: l.text_role, token: pick.token, worst_contrast: pick.contrast, candidates: pick.candidates } };
+    if (!forcePlate && pick.contrast >= 4.5) return { ...l, color: pick.hex, _choice: { role: l.text_role, token: pick.token, worst_contrast: pick.contrast, candidates: pick.candidates } };
     plateChoice = plateChoice ?? choosePlate({ tokens: brand.colors });
     if (!plateChoice) return { ...l, _noPair: true };
     const tokens = Object.fromEntries(Object.entries(brand.colors).filter(([token]) => token !== plateChoice.plate_token));
@@ -433,8 +471,30 @@ export async function runLayeredCreative({
   const catalogue = { ...assets, ...Object.fromEntries(foregroundDraws.map((f) => [f.ref, { width_px: f.width, height_px: f.height }])) };
   const preflight = CI.runCreativePreflight(finalDocument, { fonts, assets: catalogue, approved_claim_refs: claimRefs, approved_texts: approvedTexts, measured_backdrops: measuredBackdrops });
   ledger.record({ decision: DECISION.PREFLIGHT, decided_by: COMPONENT.PREFLIGHT, rule: 'EXISTING_PREFLIGHT_CHECKS', basis: [], outcome: { status: preflight.status, checks: preflight.checks.map((c) => `${c.code}=${c.status}`) } });
+  const makeArtifact = (pngSha) => {
+    const plateReq = plateAccepted.request;
+    const propNodes = rasterLayers.filter((r) => r.kind !== LAYER_KIND.PLATE).map((r) => {
+      const g = generated.find((x) => x.layer.layer_id === r.layer_id); const key = g.request.request_key;
+      return { node_id: `PROP:${r.layer_id}`, layer_id: r.layer_id, kind: r.kind, request_key: key, candidate_sha256: sha256(accepted.get(key).candidate.bytes), placed_sha256: sha256(r.png), box: { x: r.x, y: r.y, width: r.w, height: r.h }, z: r.z };
+    });
+    const styleOf = (l) => ({ role: l.text_role, color: l.color ?? null, font_size: l.font_size, plate: plates.some((pl) => pl.id === `plate-${l.text_role.toLowerCase()}`) });
+    return deepFreeze({
+      schema: 'layered-artifact@1', scene_id: scene.scene_id, canvas: { width: canvas.width, height: canvas.height },
+      tools: { selected: scene.tools.map((t) => ({ capability: t.capability, tool_id: t.selected.tool_id })), executed: ports.layers?.executes ? { ...ports.layers.executes } : null },
+      nodes: {
+        plate: { node_id: `PLATE:${plateReq.request_key}`, request_key: plateReq.request_key, candidate_sha256: sha256(plateAccepted.candidate.bytes), box: { x: 0, y: 0, width: canvas.width, height: canvas.height } },
+        props: propNodes,
+        product: { node_id: 'PRODUCT', cutout_sha256: segmentation.cutout_sha256, placed_sha256: sha256(placedProduct.png), rect: productRect },
+        text: exactness.map((e) => ({ node_id: `TEXT:${e.role}`, role: e.role, layer_id: e.layer_id, text_sha256: e.planned_sha256, geometry: texts.find((t) => t.text_role === e.role).geometry })),
+        text_style: colored.filter((l) => l.type === 'TEXT').map((l) => { const st = styleOf(l); return { node_id: `TEXT_STYLE:${l.text_role}`, ...st, style_sha256: sha256Text(JSON.stringify(st)) }; }),
+        composite: { base_sha256: sha256(under.png), stack_sha256: sha256(stack.png) },
+        render: { png_sha256: pngSha },
+      },
+      protected_regions: protectedRegions,
+    });
+  };
   const base = { ...evidence, budget: layerBudget.snapshot(), provider_calls: layerBudget.snapshot().provider_calls };
-  if (preflight.status !== 'PASS') return Object.freeze({ status: 'PREFLIGHT_FAIL', ...base, preflight: { status: preflight.status, checks: preflight.checks }, document: finalDocument, ledger: ledger.entries(), steering: manualSteeringReport(ledger) });
+  if (preflight.status !== 'PASS') return Object.freeze({ status: 'PREFLIGHT_FAIL', ...base, artifact: makeArtifact(null), preflight: { status: preflight.status, checks: preflight.checks }, document: finalDocument, ledger: ledger.entries(), steering: manualSteeringReport(ledger) });
 
   const foregroundByRef = new Map(foregroundDraws.map((f) => [f.ref, f.png]));
   const bytesFor = (ref) => (ref === cutoutRef ? segmentation.cutout_png : (ref === baseRef ? under.png : (foregroundByRef.get(ref) ?? null)));
@@ -478,6 +538,7 @@ export async function runLayeredCreative({
     ...(status === 'BLOCKED' && fidelity.outcome === 'PASS' && !guardianResult ? { reason: 'BRAND_GUARDIAN_NOT_CONFIGURED' } : {}),
     ...base,
     fallback_to_single_image: false,
+    artifact: makeArtifact(png.sha256),
     png_bytes: png.bytes,
     png_sha256: png.sha256,
     width: png.width,

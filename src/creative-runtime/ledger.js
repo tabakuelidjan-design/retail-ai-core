@@ -42,6 +42,9 @@ export const COMPONENT = Object.freeze({
   LAYER_COMPOSITOR: 'nordla:layer-compositor@1',
   PROP_MATTE_GATE: 'nordla:prop-matte-gate@1',
   PLATE_GATE: 'nordla:plate-gate@1',
+  REFINE_PLANNER: 'nordla:refine-planner@1',
+  REFINE_EXECUTOR: 'nordla:refine-executor@1',
+  MASKED_EDIT_CAPABILITY: 'nordla:masked-edit-capability@1',
 });
 
 export const DECISION = Object.freeze({
@@ -94,6 +97,11 @@ export const DECISION = Object.freeze({
   LAYER_PLACEMENT: 'LAYER_PLACEMENT',
   LAYER_COMPOSITION: 'LAYER_COMPOSITION',
   LAYERED_REPLAN: 'LAYERED_REPLAN', // the run stopped: what must be replanned (never answered by another strategy on the spot)
+  REFINE_DEFECTS: 'REFINE_DEFECTS', // the defects a refine was asked to repair, attributed to layers
+  REFINE_PLAN: 'REFINE_PLAN', // the smallest valid repair: scope, invalidated and reused nodes, cost; or why none is valid
+  REFINE_EXECUTION: 'REFINE_EXECUTION', // the repair that was run, and what it was checked against
+  REFINE_RESULT: 'REFINE_RESULT', // accepted, or rejected with the original kept
+  MASKED_EDIT_REQUEST: 'MASKED_EDIT_REQUEST', // a request to the masked-edit capability, and whether a provider is connected
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));
