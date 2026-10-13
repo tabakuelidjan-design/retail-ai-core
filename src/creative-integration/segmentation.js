@@ -264,7 +264,7 @@ export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
   const selArea = sel.reduce((n, v) => n + v, 0);
   const { filled, holes } = resolveHoles(sel, width, height, raw, selArea);
   const grown = dilate(filled, width, height, 2);
-  const nearOthers = dilate(others, width, height, 1);
+  const nearOthers = dilate(others, width, height, S.seam_px); // the seam with a non-selected object: its colour bleeds into the first pixels of the selected edge, so they are not taken
   // The alpha: inside the product (eroded core) it is opaque unless semi-transparency is declared; on the boundary band it is UNMIXED (the pixel is c * product + (1 - c) * ground, with the product colour
   // taken from the nearest core pixel), so a soft edge keeps its real coverage instead of being thresholded. A boundary pixel that is not such a mixture falls back to the colour-distance ramp.
   const semiDeclared = selection?.semi_transparent === true;
@@ -272,7 +272,7 @@ export function segmentFromAnalysis(rgba, an, selection = { mode: 'AUTO' }) {
   const nearest = nearestSource(core, grown, width, height, 6);
   const alpha = new Uint8Array(sel.length); let semi = 0; let interior = 0; const px = rgba.pixels;
   for (let i = 0; i < alpha.length; i += 1) {
-    if (!grown[i] || (nearOthers[i] && !filled[i])) continue;
+    if (!grown[i] || (nearOthers[i] && !core[i])) continue;
     if (core[i]) { alpha[i] = semiDeclared ? Math.round(255 * Math.max(score[i], hard00[i] ? 0.5 : 1)) : 255; continue; }
     if (filled[i] && hard00[i] === 0 && score[i] < 0.5) { alpha[i] = 255; continue; } // a bridged sliver or an enclosed pinhole
     const j = nearest[i]; let a = filled[i] ? Math.max(score[i], 0.5) : score[i];

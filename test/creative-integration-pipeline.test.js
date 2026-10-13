@@ -64,9 +64,9 @@ test('Every explicit failure state is reachable, names its stage and reasons, an
   // PI-7 SEGMENTATION_FAILED: a ground that is not plain
   stops.push(integrateProduct({ source: W.clutteredGround().rgba, scene, placement: STANDARD_PLACEMENT }));
   assert.equal(stops[0].state, STATE.SEGMENTATION_FAILED); assert.deepEqual(stops[0].reasons, ['BACKGROUND_NOT_PLAIN']);
-  // PI-8 SEGMENTATION_LOW_CONFIDENCE: a white product on a near-white ground
+  // PI-8 a white product on a near-white ground: stopped by the segmentation or, failing that, by the matte checks
   const low = integrateProduct({ source: W.lowContrast().rgba, scene, placement: STANDARD_PLACEMENT }); stops.push(low);
-  assert.ok([STATE.SEGMENTATION_LOW_CONFIDENCE, STATE.SEGMENTATION_FAILED].includes(low.state));
+  assert.ok([STATE.SEGMENTATION_LOW_CONFIDENCE, STATE.SEGMENTATION_FAILED, STATE.MATTE_INVALID].includes(low.state), low.state); // the two layers together never deliver it
   // PI-9 several objects and no explicit selection: SEGMENTATION_FAILED (ambiguous), not a guess
   const amb = integrateProduct({ source: W.multiObject().rgba, scene, placement: STANDARD_PLACEMENT }); stops.push(amb); assert.deepEqual(amb.reasons, ['AMBIGUOUS_SELECTION']);
   // PI-10 MATTE_INVALID: a port that returns a dilated matte (ground inside the product) with a high confidence

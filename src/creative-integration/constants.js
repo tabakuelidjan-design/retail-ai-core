@@ -46,6 +46,7 @@ export const SEGMENTATION = Object.freeze({
   hole_ground_share: 0.5, // an enclosed gap is a real hole only if at least this share of it is clearly the ground colour
   sliver_min_length_px: 24, // ... and at least this long (the apex of a round hole is a short sliver too)
   sliver_min_elongation: 4, // a bridge is kept only if its bounding box is at least this many times longer than wide
+  seam_px: 2, // boundary pixels this close to a non-selected object are dropped
   bridge_px: 5, // gaps up to 2 x this between foreground on both sides are bridged
   min_confidence: 0.6,
   semi_transparent_floor: 0.08,

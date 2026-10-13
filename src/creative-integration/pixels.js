@@ -40,21 +40,27 @@ export function boxBlur(plane, width, height, radius, passes = 3) {
   return src;
 }
 
-/** Binary erosion (4-neighbourhood) of a 0/1 plane, `radius` iterations. */
-export function erode(mask, width, height, radius) {
-  let cur = Uint8Array.from(mask);
-  for (let k = 0; k < radius; k += 1) {
-    const next = new Uint8Array(cur.length);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const i = y * width + x;
-        if (!cur[i]) continue;
-        if (x > 0 && y > 0 && x < width - 1 && y < height - 1 && cur[i - 1] && cur[i + 1] && cur[i - width] && cur[i + width]) next[i] = 1;
-      }
-    }
-    cur = next;
+/** L1 (4-neighbour) distance of every mask pixel to the nearest non-mask pixel, the image border counting as non-mask (so a pixel on the border has distance 1). Two passes, O(N). */
+export function distanceInside(mask, width, height) {
+  const dt = new Uint16Array(mask.length); const BIG = 65000;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    const i = y * width + x; if (!mask[i]) continue;
+    const up = y > 0 ? dt[i - width] : 0; const left = x > 0 ? dt[i - 1] : 0;
+    dt[i] = Math.min(up, left, BIG) + 1;
   }
-  return cur;
+  for (let y = height - 1; y >= 0; y -= 1) for (let x = width - 1; x >= 0; x -= 1) {
+    const i = y * width + x; if (!mask[i]) continue;
+    const down = y < height - 1 ? dt[i + width] : 0; const right = x < width - 1 ? dt[i + 1] : 0;
+    dt[i] = Math.min(dt[i], down + 1, right + 1);
+  }
+  return dt;
+}
+
+/** Binary erosion (4-neighbourhood), `radius` steps; the image border counts as outside. Exactly the iterated erosion, computed from one distance transform. */
+export function erode(mask, width, height, radius) {
+  const dt = distanceInside(mask, width, height); const out = new Uint8Array(mask.length);
+  for (let i = 0; i < out.length; i += 1) out[i] = dt[i] > radius ? 1 : 0;
+  return out;
 }
 
 export function dilate(mask, width, height, radius) {
