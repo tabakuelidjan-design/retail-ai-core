@@ -437,3 +437,28 @@ test('RF-24 the artifact and the repair are deterministic and plain: the same de
   assert.ok(A_PROP.ledger.some((e) => e.decision === 'REFINE_PLAN') && A_PROP.ledger.some((e) => e.decision === 'REFINE_EXECUTION') && A_PROP.ledger.some((e) => e.decision === 'REFINE_RESULT' && e.outcome.status === 'REPAIRED'));
   assert.equal(A_PROP.candidate.steering.manual_creative_steering, 'NONE');
 });
+
+test('RF-25 an upstream defect through the executor is a replan request: nothing is run, nothing is paid, nothing is remembered as an attempt, the original is kept', async () => {
+  const calls = before(A); const memory = createRefineMemory();
+  const r = await doRefine(A, [createDefectRegion({ kind: DEFECT_KIND.UPSTREAM_CONCEPT })], { memory });
+  assert.equal(r.status, 'REPLAN_REQUIRED'); assert.deepEqual(r.replan.upstream_nodes, ['ART_DIRECTION', 'CONCEPT']); assert.equal(r.original_kept, true); assert.equal(r.plan.status, 'REPLAN_REQUIRED');
+  assert.equal(before(A), calls); assert.deepEqual(memory.attempts(A.candidate.artifact.scene_id), []); assert.equal(r.fallback_to_full_regeneration, false);
+  assert.ok(r.ledger.some((e) => e.decision === 'REFINE_PLAN' && e.outcome.status === 'REPLAN_REQUIRED' && e.outcome.replan.upstream_nodes.includes('CONCEPT')));
+  // a delivered candidate with no defect has nothing to repair; a gate finding with no owner is refused, never guessed
+  const none = await refineCreative({ candidate: A.candidate, run: A.run, store: A.store });
+  assert.equal(none.status, 'BLOCKED'); assert.equal(none.block.code, REPAIR_BLOCK.NO_DEFECT); assert.equal(before(A), calls);
+});
+
+test('RF-26 a repair may use its whole allowance: a second candidate that is refused and a third that is accepted is a repair of exactly two calls, and it is remembered', async () => {
+  const { propOnBusyGround, propOnGround } = await import('./creative-layered-runtime-world.js');
+  const port = scriptedPort({ prop: ({ candidate_index: n }) => (n === 2 ? propOnBusyGround() : propOnGround({ colour: ['#7a4b2a', '#2a6b4a', '#4a2a6b'][n - 1] ?? '#6b4a2a' })) });
+  const T = await firstRun({ port }); const memory = createRefineMemory(); const calls = port.calls.length;
+  const r = await doRefine(T, [badProp(T)], { memory });
+  assert.equal(r.status, 'REPAIRED', JSON.stringify([r.block, r.plan?.block]));
+  assert.deepEqual(port.calls.slice(calls).map((c) => `${c.kind}#${c.candidate_index}`), ['PROP#2', 'PROP#3']); assert.equal(r.cost.provider_calls, 2); assert.equal(r.cost.provider_calls, r.plan.cost.max_provider_calls);
+  const unit = WORLD.result.production.budget.unit_costs.image_eur_by_size_class.UP_TO_1024; assert.equal(r.cost.spent_eur, Math.round(2 * unit * 1e9) / 1e9);
+  assert.notEqual(r.after.nodes.props[0].candidate_sha256, prop(T).candidate_sha256);
+  const entry = memory.attempts(T.candidate.artifact.scene_id)[0];
+  assert.deepEqual([entry.outcome, entry.reason, entry.scope, entry.plan_id, entry.fingerprint], ['REPAIRED', null, ['PROP_REPAIR'], r.plan.plan_id, r.plan.fingerprint]); assert.equal(entry.cost.provider_calls, 2); assert.equal(entry.before, T.candidate.artifact.nodes.render.png_sha256); assert.equal(entry.after, r.after.nodes.render.png_sha256);
+  assert.equal(r.memory.schema, 'refine-memory@1'); assert.equal(r.store.count(prop(T).request_key), 3); assert.deepEqual(r.store.rejected(prop(T).request_key), [prop(T).candidate_sha256]);
+});

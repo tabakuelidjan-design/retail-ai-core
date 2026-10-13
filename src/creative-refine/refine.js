@@ -110,17 +110,17 @@ export async function refineCreative({
 
   // ---- the repair is checked against its plan, node by node
   const diff = diffArtifacts(artifact, rerun.artifact);
-  const allowed = new Set(plan.invalidated);
-  const outside = [...diff.changed, ...diff.added, ...diff.removed].filter((id) => !allowed.has(id));
-  const protectedChanged = plan.protected.filter((id) => diff.changed.includes(id) || diff.removed.includes(id));
-  const productIdentical = JSON.stringify(artifact.nodes.product) === JSON.stringify(rerun.artifact.nodes.product);
-  const textIdentical = JSON.stringify(artifact.nodes.text) === JSON.stringify(rerun.artifact.nodes.text);
-  if (outside.length || protectedChanged.length || !productIdentical || !textIdentical || cost.provider_calls > plan.cost.max_provider_calls) {
-    attempt('REJECTED', REPAIR_BLOCK.REPAIR_OUTSIDE_ITS_SCOPE, { outside, protected_changed: protectedChanged, product_identical: productIdentical, locked_copy_identical: textIdentical, provider_calls: cost.provider_calls });
-    return result('BLOCKED', { plan, block: { code: REPAIR_BLOCK.REPAIR_OUTSIDE_ITS_SCOPE, detail: { outside, protected_changed: protectedChanged, product_identical: productIdentical, locked_copy_identical: textIdentical, provider_calls: cost.provider_calls }, replan: 'REPLAN_THE_SCENE' }, cost });
+  const allowed = new Set(plan.invalidated.filter((id) => !plan.protected.includes(id))); // a protected node (the product, the locked text) is never allowed to change, whatever the plan says
+  const touched = [...diff.changed, ...diff.added, ...diff.removed];
+  const outside = touched.filter((id) => !allowed.has(id));
+  const productIdentical = !touched.includes(artifact.nodes.product.node_id);
+  const textIdentical = !touched.some((id) => id.startsWith('TEXT:'));
+  if (outside.length || cost.provider_calls > plan.cost.max_provider_calls) {
+    const detail = { outside, product_identical: productIdentical, locked_copy_identical: textIdentical, provider_calls: cost.provider_calls, max_provider_calls: plan.cost.max_provider_calls };
+    attempt('REJECTED', REPAIR_BLOCK.REPAIR_OUTSIDE_ITS_SCOPE, detail);
+    return result('BLOCKED', { plan, block: { code: REPAIR_BLOCK.REPAIR_OUTSIDE_ITS_SCOPE, detail, replan: 'REPLAN_THE_SCENE' }, cost });
   }
-  const targets = plan.steps.map((s) => (s.target === 'TEXT_STYLE' ? null : s.target)).filter(Boolean);
-  const effective = diff.changed.length + diff.added.length + diff.removed.length > 0 && (targets.length === 0 ? diff.changed.some((id) => id.startsWith('TEXT_STYLE:')) || diff.changed.includes('COMPOSITE_STACK') : targets.some((t) => diff.changed.includes(t) || diff.removed.includes(t) || t === 'COMPOSITE_STACK'));
+  const effective = touched.length > 0; // the changes are all inside the plan: a repair that changed nothing did nothing
   if (!effective) {
     attempt('NOT_REPAIRED', REPAIR_BLOCK.REPAIR_HAD_NO_EFFECT);
     return result('NOT_REPAIRED', { plan, block: { code: REPAIR_BLOCK.REPAIR_HAD_NO_EFFECT, detail: { changed: diff.changed }, replan: 'REPLAN_THE_SCENE' }, cost });
