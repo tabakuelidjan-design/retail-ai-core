@@ -79,8 +79,17 @@
     }
   },
   "ci": {
-    "status": "unknown",
-    "note": "Phase 5 branch not pushed/read yet at the time of this record: CI is NOT claimed. The previous (Phase 4) CI record was run 38400493168 on 6180161."
+    "status": "success",
+    "run": 38477140859,
+    "workflow": "Creative Intelligence V1",
+    "commit": "41ea4becbbb24700debd1c802c59e176aef7275c",
+    "node20": "success (job 115570498983)",
+    "node24": "success (job 115570500450)",
+    "marketing_v1": {
+      "run": 38477140804,
+      "conclusion": "success"
+    },
+    "note": "Read from the public GitHub Actions API on 2026-10-14, attempt 1, no re-run needed. The code is the code verified at 08b683c (code hash bf5ea85e...); the commit differs only by the two attestation files, which are outside the code hash."
   },
-  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime and (Phase 4) the executable REFINE. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover. PHASE 5: INTEGRATION (general segmentation and realistic product integration) is the seventh active component; CI for the Phase 5 code is recorded as unknown until read."
+  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime and (Phase 4) the executable REFINE. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover. PHASE 5: INTEGRATION (general segmentation and realistic product integration) is the seventh active component; CI for the Phase 5 code: success (run 38477140859, Node 20 and 24)."
 }
