@@ -57,6 +57,12 @@ test('The cut-out holds the SOURCE pixels, exactly, wherever the mask is fully o
 test('The mask and the cut-out are deterministic, and a mask it cannot trust is flagged, never hidden', () => {
   // PM-6 the same input gives the same mask and the same cut-out bytes
   const again = P.buildProductMask({ rgba, inner_outline: outline });
+  if (sha(again.alpha) !== sha(mask.alpha)) {
+    const third = P.buildProductMask({ rgba, inner_outline: outline });
+    const diffs = [];
+    for (let i = 0; i < mask.alpha.length; i += 1) if (mask.alpha[i] !== again.alpha[i]) { if (diffs.length < 12) diffs.push({ x: i % SW, y: Math.floor(i / SW), initial: mask.alpha[i], again: again.alpha[i], third: third.alpha[i] }); }
+    console.error('PM-6 DIAGNOSTIC', JSON.stringify({ node: process.version, inputSha: sha(rgba.pixels), outlineSha: sha(Buffer.from(JSON.stringify(outline))), first: sha(mask.alpha), again: sha(again.alpha), third: sha(third.alpha), firstBounds: mask.bounds, againBounds: again.bounds, firstQuality: mask.quality, againQuality: again.quality, diffs }));
+  }
   assert.equal(sha(again.alpha), sha(mask.alpha));
   assert.equal(sha(P.makeProductCutout({ rgba, mask: again }).png_bytes), sha(P.makeProductCutout({ rgba, mask }).png_bytes));
   // PM-7 a photograph with no edge at all (a flat grey) cannot be trusted: not confident
