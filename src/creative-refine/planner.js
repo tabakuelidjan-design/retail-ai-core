@@ -20,7 +20,6 @@ const PROP_KINDS = new Set([DEFECT_KIND.PROP_UNUSABLE, DEFECT_KIND.PROP_RESEMBLE
 const PLACEMENT_KINDS = new Set([DEFECT_KIND.PROP_OVERLAP, DEFECT_KIND.PROP_NO_ROOM]);
 const MAX_REPOSITIONS = 2;
 const FOREGROUND_INSETS = Object.freeze([0.15, 0.05]); // a smaller inset pulls a foreground prop LESS over the product corner
-const NON_FOREGROUND_ANCHORS = 6; // the declared anchors around the product (the runtime tries them alone when one is named)
 
 const blocked = (code, detail, replan, defects = []) => Object.freeze({ schema: SCHEMA.plan, status: 'BLOCKED', block: Object.freeze({ code, detail, replan }), scope: [], steps: [], defects, invalidated: [], reused: [], overrides: null, cost: null });
 
@@ -79,7 +78,8 @@ export function planRepair({
       if (owner !== n.plate.node_id) return blocked(REPAIR_BLOCK.DEFECT_NOT_ATTRIBUTABLE, { defect: d.defect_id, kind: d.kind, owner }, 'NAME_THE_LAYER_OR_THE_REGION_OF_THE_DEFECT', defects);
       addStep({ scope: REPAIR_SCOPE.PLATE_REPAIR, target: n.plate.node_id, request_key: n.plate.request_key, action: { type: 'REPLACE_WITH_A_NEW_CANDIDATE', reject_candidate_sha256: n.plate.candidate_sha256 } });
     } else if (d.kind === DEFECT_KIND.TEXT_ILLEGIBLE) {
-      if (n.text_style.length && n.text_style.every((s) => s.plate)) return blocked(REPAIR_BLOCK.REPEATED_FAILED_REPAIR, { defect: d.defect_id, reason: 'TYPOGRAPHY_ALREADY_ON_A_PLATE' }, 'REPLAN_THE_PLATE_OR_THE_BRAND_COLOURS', defects);
+      if (n.text_style.length === 0) return blocked(REPAIR_BLOCK.DEFECT_NOT_ATTRIBUTABLE, { defect: d.defect_id, reason: 'the scene has no text style to repair' }, 'NAME_THE_LAYER_OR_THE_REGION_OF_THE_DEFECT', defects);
+      if (n.text_style.every((s) => s.plate)) return blocked(REPAIR_BLOCK.REPEATED_FAILED_REPAIR, { defect: d.defect_id, reason: 'TYPOGRAPHY_ALREADY_ON_A_PLATE' }, 'REPLAN_THE_PLATE_OR_THE_BRAND_COLOURS', defects);
       addStep({ scope: REPAIR_SCOPE.TYPOGRAPHY_REPAIR, target: 'TEXT_STYLE', action: { type: 'BRAND_PLATE_BEHIND_THE_TEXT' } });
     } else if (PLACEMENT_KINDS.has(d.kind) || (d.kind === DEFECT_KIND.COMPOSITION_REFUSED && owner?.startsWith('PROP:'))) {
       const prop = n.props.find((p) => p.node_id === owner);
@@ -126,7 +126,7 @@ export function planRepair({
   const overrides = { reject: regenerate.map((s) => ({ request_key: s.request_key, candidate_sha256: s.action.reject_candidate_sha256 })), allowance: Object.fromEntries(regeneratedKeys.map((k) => [k, REFINE_POLICY.repair_candidates_per_layer])), policy: {} };
   const drop = steps.filter((s) => s.action.type === 'REMOVE').map((s) => s.layer_id);
   if (drop.length) overrides.policy.drop_layers = drop.sort();
-  const anchors = Object.fromEntries(steps.filter((s) => s.action.type === 'REPOSITION' && s.action.anchor !== undefined).map((s) => [s.layer_id, s.action.anchor % NON_FOREGROUND_ANCHORS]));
+  const anchors = Object.fromEntries(steps.filter((s) => s.action.type === 'REPOSITION' && s.action.anchor !== undefined).map((s) => [s.layer_id, s.action.anchor]));
   if (Object.keys(anchors).length) overrides.policy.anchors = anchors;
   const insets = steps.filter((s) => s.action.type === 'REPOSITION' && s.action.foreground_inset !== undefined).map((s) => s.action.foreground_inset);
   if (insets.length) overrides.policy.placement = { foreground_inset: Math.min(...insets) };
