@@ -124,3 +124,8 @@ body.fm-mode:has(.fm.started){padding-bottom:calc(104px + env(safe-area-inset-bo
 }
 /* A decorative chevron must not enlarge the product card or overflow a narrow screen. */
 .fm-prod[data-act] > svg{width:20px;height:20px;flex:0 0 20px;overflow:hidden}
+
+/* Keep the contradiction banner's text and two icons inside narrow viewports. */
+.fm-alert{min-width:0;max-width:100%;box-sizing:border-box}
+.fm-alert .fm-at{min-width:0;overflow-wrap:anywhere}
+.fm-alert > svg{flex:0 0 22px;width:22px;height:22px}
