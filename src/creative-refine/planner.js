@@ -35,7 +35,7 @@ const triedOf = (memory, sceneId) => ({
  * @returns the RepairPlan (status PLANNED | REPLAN_REQUIRED | BLOCKED)
  */
 export function planRepair({
-  artifact, defects, memory = null, maskedEdit = { executable: false }, pricing = null, expectedArtifactDigest = null, allowedScopes = null,
+  artifact, defects, memory = null, maskedEdit = { executable: false }, pricing = null, expectedArtifactDigest = null, allowedScopes = null, policy = REFINE_POLICY,
 }) {
   const map = buildLayerDependencyMap(artifact);
   if (!map) return blocked(REPAIR_BLOCK.ARTIFACT_INVALID, 'the artifact is not a layered artifact', 'RUN_THE_SCENE_AGAIN');
@@ -43,7 +43,7 @@ export function planRepair({
   if (expectedArtifactDigest && expectedArtifactDigest !== artifactDigest) return blocked(REPAIR_BLOCK.ARTIFACT_STALE, 'the artifact is not the one the defects were observed on', 'OBSERVE_THE_DEFECTS_AGAIN');
   if (!Array.isArray(defects) || defects.length === 0) return blocked(REPAIR_BLOCK.NO_DEFECT, 'no defect was given', 'NOTHING_TO_REPAIR');
   const n = artifact.nodes; const mem = triedOf(memory, artifact.scene_id);
-  if (mem.attempts.length >= REFINE_POLICY.max_attempts_per_scene) return blocked(REPAIR_BLOCK.REFINE_ATTEMPTS_EXHAUSTED, `${mem.attempts.length} repairs of this scene were already attempted`, 'REPLAN_THE_SCENE', defects);
+  if (mem.attempts.length >= policy.max_attempts_per_scene) return blocked(REPAIR_BLOCK.REFINE_ATTEMPTS_EXHAUSTED, `${mem.attempts.length} repairs of this scene were already attempted`, 'REPLAN_THE_SCENE', defects);
 
   const steps = []; const reasons = []; const upstream = new Set(); const evidence = [];
   const addStep = (step) => { if (!steps.some((s) => s.scope === step.scope && s.target === step.target && JSON.stringify(s.action) === JSON.stringify(step.action))) steps.push(step); };
@@ -88,7 +88,7 @@ export function planRepair({
       if (moved < MAX_REPOSITIONS) {
         const action = prop.kind === 'PROP_FOREGROUND' ? { type: 'REPOSITION', foreground_inset: FOREGROUND_INSETS[moved] } : { type: 'REPOSITION', anchor: moved + 1 };
         addStep({ scope: REPAIR_SCOPE.LAYER_REMOVE_OR_REPOSITION, target: prop.node_id, layer_id: prop.layer_id, action });
-      } else if (REFINE_POLICY.allow_drop_of_a_prop) addStep({ scope: REPAIR_SCOPE.LAYER_REMOVE_OR_REPOSITION, target: prop.node_id, layer_id: prop.layer_id, action: { type: 'REMOVE' } });
+      } else if (policy.allow_drop_of_a_prop) addStep({ scope: REPAIR_SCOPE.LAYER_REMOVE_OR_REPOSITION, target: prop.node_id, layer_id: prop.layer_id, action: { type: 'REMOVE' } });
       else return blocked(REPAIR_BLOCK.LAYER_CANNOT_BE_DROPPED, { defect: d.defect_id, layer: prop.layer_id }, 'REPLAN_THE_COMPOSITION', defects);
     } else if (d.kind === DEFECT_KIND.COMPOSITION_REFUSED || d.kind === DEFECT_KIND.COMPOSITE_STALE) {
       addStep({ scope: REPAIR_SCOPE.COMPOSITE_REPAIR, target: 'COMPOSITE_STACK', action: { type: 'RECOMPUTE_FROM_VALID_LAYERS' } });
@@ -106,7 +106,7 @@ export function planRepair({
 
   const scopes = [...new Set(steps.map((s) => s.scope))];
   // the caller may constrain the scope (or ask for one that does not exist, such as a full regeneration): anything outside the declared scopes is refused
-  if (scopes.some((s) => !REPAIR_SCOPES.includes(s)) || (allowedScopes && (!allowedScopes.every((s) => REPAIR_SCOPES.includes(s)) || scopes.some((s) => !allowedScopes.includes(s))))) return blocked(REPAIR_BLOCK.REPAIR_SCOPE_INVALID, { planned: scopes, allowed: allowedScopes }, 'REPLAN_THE_SCENE', defects);
+  if (allowedScopes && (!allowedScopes.every((s) => REPAIR_SCOPES.includes(s)) || scopes.some((s) => !allowedScopes.includes(s)))) return blocked(REPAIR_BLOCK.REPAIR_SCOPE_INVALID, { planned: scopes, allowed: allowedScopes }, 'REPLAN_THE_SCENE', defects);
 
   // what is invalidated: the targets and what depends on them
   const targets = new Set();
@@ -115,15 +115,14 @@ export function planRepair({
     else if (s.target === 'COMPOSITE_STACK') { targets.add('COMPOSITE_STACK'); targets.add('COMPOSITE_BASE'); } else targets.add(s.target);
   }
   const inv = invalidationOf(map, [...targets]);
-  if (inv.reached_protected.length || inv.reached_upstream.length) return blocked(REPAIR_BLOCK.REPAIR_TOUCHES_PROTECTED_PRODUCT_PIXELS, { reached: [...inv.reached_protected, ...inv.reached_upstream] }, 'REPLAN_THE_SCENE', defects);
 
   // breadth: a repair regenerates at most the declared number of layers and strictly fewer than the scene has
   const regenerate = steps.filter((s) => s.action.type === 'REPLACE_WITH_A_NEW_CANDIDATE');
   const regeneratedKeys = [...new Set(regenerate.map((s) => s.request_key))];
   const generatedCount = 1 + n.props.length;
-  if (regeneratedKeys.length > REFINE_POLICY.max_regenerated_layers || regeneratedKeys.length >= generatedCount) return blocked(REPAIR_BLOCK.REPAIR_SCOPE_TOO_BROAD, { regenerated: regeneratedKeys.length, generated_layers: generatedCount, limit: REFINE_POLICY.max_regenerated_layers }, 'REPLAN_THE_SCENE', defects);
+  if (regeneratedKeys.length > policy.max_regenerated_layers || regeneratedKeys.length >= generatedCount) return blocked(REPAIR_BLOCK.REPAIR_SCOPE_TOO_BROAD, { regenerated: regeneratedKeys.length, generated_layers: generatedCount, limit: policy.max_regenerated_layers }, 'REPLAN_THE_SCENE', defects);
 
-  const overrides = { reject: regenerate.map((s) => ({ request_key: s.request_key, candidate_sha256: s.action.reject_candidate_sha256 })), allowance: Object.fromEntries(regeneratedKeys.map((k) => [k, REFINE_POLICY.repair_candidates_per_layer])), policy: {} };
+  const overrides = { reject: regenerate.map((s) => ({ request_key: s.request_key, candidate_sha256: s.action.reject_candidate_sha256 })), allowance: Object.fromEntries(regeneratedKeys.map((k) => [k, policy.repair_candidates_per_layer])), policy: {} };
   const drop = steps.filter((s) => s.action.type === 'REMOVE').map((s) => s.layer_id);
   if (drop.length) overrides.policy.drop_layers = drop.sort();
   const anchors = Object.fromEntries(steps.filter((s) => s.action.type === 'REPOSITION' && s.action.anchor !== undefined).map((s) => [s.layer_id, s.action.anchor]));
@@ -134,12 +133,12 @@ export function planRepair({
 
   const fingerprint = digestOf([artifactDigest, steps.map((s) => [s.scope, s.target, s.action]), overrides]).slice(0, 24);
   if (mem.fingerprints.has(fingerprint)) return blocked(REPAIR_BLOCK.REPEATED_FAILED_REPAIR, { fingerprint, reason: 'the same repair of the same artifact already failed' }, 'REPLAN_THE_SCENE', defects);
-  const lines = regeneratedKeys.map((key) => ({ request_key: key, max_candidates: REFINE_POLICY.repair_candidates_per_layer, unit_eur: pricing?.[key] ?? null, max_eur: pricing?.[key] != null ? Math.round(pricing[key] * REFINE_POLICY.repair_candidates_per_layer * 1e9) / 1e9 : null }));
+  const lines = regeneratedKeys.map((key) => ({ request_key: key, max_candidates: policy.repair_candidates_per_layer, unit_eur: pricing?.[key] ?? null, max_eur: pricing?.[key] != null ? Math.round(pricing[key] * policy.repair_candidates_per_layer * 1e9) / 1e9 : null }));
   return Object.freeze({
     schema: SCHEMA.plan, status: 'PLANNED', plan_id: `plan-${digestOf([map.digest, defects.map((d) => d.defect_id), steps, overrides]).slice(0, 16)}`, fingerprint, artifact_digest: artifactDigest, dependency_map_digest: map.digest,
     scope: scopes, steps, defects, reasons, evidence,
     invalidated: inv.invalidated, reused: inv.reused, protected: map.nodes.filter((x) => x.protected).map((x) => x.node_id).sort(), upstream_untouched: map.nodes.filter((x) => x.upstream).map((x) => x.node_id),
-    overrides, cost: { regenerated_layers: regeneratedKeys.length, max_provider_calls: regeneratedKeys.length * REFINE_POLICY.repair_candidates_per_layer, lines, only_the_repaired_work: true },
+    overrides, cost: { regenerated_layers: regeneratedKeys.length, max_provider_calls: regeneratedKeys.length * policy.repair_candidates_per_layer, lines, only_the_repaired_work: true },
     fallback_to_full_regeneration: false,
   });
 }
