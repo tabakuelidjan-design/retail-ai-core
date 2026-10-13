@@ -111,7 +111,6 @@ try {
     // but only MOQ 60 had been extracted and confirmed.
     const legacy = sonny('sonny-salon-legacy');
     legacy.candidates = legacy.candidates.filter((c) => c.key === 'quote.moq');
-    legacy.offers[0].candidateIds = legacy.candidates.map((c) => c.id);
     await importFile(tab, 'sonny-legacy.json', JSON.stringify(legacy));
     await click(tab, '[data-act="mode-salon"]');
     await click(tab, '[data-act="sl-open-case"][data-key="sonny-salon-legacy"]');
