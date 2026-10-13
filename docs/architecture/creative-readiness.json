@@ -1,21 +1,22 @@
 {
-  "verified_commit": "2c4fa34476351a2cda8af2b61acf09ea78c0cdb5",
-  "code_hash": "44bded3f87508cb8809ca9a96c27711af2ac8ee9",
+  "verified_commit": "08b683cb8126a55f85df9b19a7bbee1cd146cf64",
+  "code_hash": "bf5ea85e03856959dcd15b3b05496c5041222ea2",
   "components": [
     "PLANNING",
     "BRAIN",
     "CAMPAIGN",
     "PRODUCTION",
     "LAYERED_RUNTIME",
-    "REFINE"
+    "REFINE",
+    "INTEGRATION"
   ],
   "full_suite": {
-    "tests": 2346,
-    "pass": 2344,
+    "tests": 2385,
+    "pass": 2383,
     "fail": 0,
     "skipped": 2,
-    "node": "24 (clean clone, docker, test concurrency 4)",
-    "note": "The clean-clone run of the code commit had 2343 passing and ONE failure, CR-6 (the committed attestation must name REFINE), which can only pass once this attestation exists: it was run again, alone, on the attestation commit and passes (2344 = 2343 + CR-6)."
+    "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)",
+    "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
     "PLANNING": {
@@ -53,53 +54,33 @@
       "killed": 459,
       "survivors_documented": 51,
       "note": "The refine (src/creative-refine) swept with an in-house operator harness (comparisons, boolean and logical operators, negations, array methods, early returns, constants), against fast pure suites (PL, PE, EX, ST, RP; no image) : 454 mutants of the planner, defects, dependency map, masked-edit contract, memory, constants and parity audit, then 56 of the executor and the shared layer store. First pass 395 + 52 killed; the survivors were analysed, 9 + 3 real gaps got guard tests that kill them (re-run and killed), the planner policy became a parameter, dead checks were removed and the executor was made testable with an injectable runtime. DOCUMENTED (51): 19 nullish defaults (?? to ||: the left operand is only ever null, undefined or an object / array), 28 conjunctions inside the probes of the parity audit itself (each conjunct is asserted by its own PL / PE / RF test), 3 equivalent shapes in the PNG-mask reader (a row past the buffer, a -1 / -2 sentinel), 1 equivalent merge (a policy key present on one side only is already kept by the spread). Not covered by mutation: the end-to-end behaviour, which is asserted by RF-1 to RF-28 (real layered runtime, real gates, real compositor and typography)."
+    },
+    "INTEGRATION": {
+      "total": 484,
+      "killed": 275,
+      "survivors_documented": 209,
+      "note": "TARGETED sweep (owner rule: identity decisions, fail-closed thresholds, routing; no sweep of image-processing plumbing) with the in-house operator harness: 484 mutants of identity.js, relight.js (bounds, clip measure, grade proposal), placement.js, the shadow request check, the segmentation contract (validate / port / cache) and the integrate.js routing, against the fast suites (identity, matte, segmentation, shadow, pipeline). First pass 227 killed / 257 survived; the 69 logical survivors were analysed, real gaps got guard tests (creative-integration-guards.test.js, GD-1..GD-25: identity fail-closed on size / interior / each channel, every contract violation alone, the reasons being exactly the failed checks, declarations reaching the segmenter and the matte check, placement and shadow-request decisions, hue for every dominant channel) and the survivors were re-run: 275 killed in total. DOCUMENTED (209): 188 numeric-literal and boundary mutants in pixel arithmetic (+1 on a constant, < to <=, >= to >) of the image plumbing, which the owner told us not to sweep, asserted only qualitatively; 21 equivalent or unreachable by construction: the redundant size guard of sameAlpha (the size is checked before), the constant alpha_exact switch, the semi-transparent interior redundancy in the detail mask (interior is a subset of alpha >= 128), two hue-angle branch flips whose effect is also caught by the chromaticity check, the exact-equality boundary of the chromaticity / hue limits, extent +-1 in the placement boxes (7), and three integrate.js flips of the identity-risk branch (relight bounds imply identity, so the branch is defence in depth and not reachable with an explicit grade within the bounds) and of the colour-not-measurable branch (unreachable once segmentation succeeded). Kill rate 57 %: stated, not hidden. Not mutation-covered: segmentation internals (analysis, split, unmix), matte-quality internals, shadow geometry, visual output, which are asserted by SG / MQ / SH / AR / PI tests on drawn products."
     }
   },
   "clean_clones": {
     "node20": {
-      "tests": 2346,
-      "pass": 2344,
+      "tests": 2385,
+      "pass": 2383,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:20.20, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
+      "note": "docker node:20.20, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
     },
     "node24": {
-      "tests": 2346,
-      "pass": 2344,
+      "tests": 2385,
+      "pass": 2383,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:24.21, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
+      "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38400493168,
-    "workflow": "Creative Intelligence V1",
-    "commit": "6180161b69c39a43e4bde8d1b7610aba0a6b20de",
-    "node20": "success",
-    "node24": "success (attempt 2)",
-    "attempts": [
-      {
-        "attempt": 1,
-        "node20": "success",
-        "node24": "failure",
-        "failing_test": "test/creative-intelligence-product-mask.test.js:57 (PM-6), assertion at line 60: sha(again.alpha) !== sha(mask.alpha), a comparison of two consecutive calls of buildProductMask on the same input in one process"
-      },
-      {
-        "attempt": 2,
-        "node20": "success (kept from attempt 1)",
-        "node24": "success",
-        "note": "only the failed Node 24 job was re-run; all three test steps passed (job 115490812316)"
-      }
-    ],
-    "earlier_green_run": {
-      "run": 38398261230,
-      "commit": "9d919d2f84af16f1f838afe127ea108555f07d80",
-      "node20": "success",
-      "node24": "success"
-    },
-    "classification_of_attempt_1": "Intermittent, cause NOT proven. The code under test (src/creative-intelligence/**) and the test are unchanged since Phase 3 (9f30628) and the closure commit differs from the previous green commit only in the two readiness JSON files. The failure did not reproduce locally in 1200 calls under CPU contention nor in 20 fresh runs, and the same test passed on the same code in the previous run, in the Node 20 job of the same run, and in attempt 2. Not caused by Phase 4. Recorded, not explained.",
-    "note": "Read from the GitHub Actions API on 2026-10-13. The code is the code verified at 2c4fa34; later commits change only documents and the job timeout of the workflow (15 to 30 minutes). Marketing V1 was not triggered for this code (path filters); its two commands ran green inside this workflow. Masked-edit provider integration and live-image validation remain incomplete by design."
+    "status": "unknown",
+    "note": "Phase 5 branch not pushed/read yet at the time of this record: CI is NOT claimed. The previous (Phase 4) CI record was run 38400493168 on 6180161."
   },
-  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime and (Phase 4) the executable REFINE. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover."
+  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime and (Phase 4) the executable REFINE. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover. PHASE 5: INTEGRATION (general segmentation and realistic product integration) is the seventh active component; CI for the Phase 5 code is recorded as unknown until read."
 }

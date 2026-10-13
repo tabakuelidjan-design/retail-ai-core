@@ -1,13 +1,13 @@
 {
-  "verified_commit": "2c4fa34476351a2cda8af2b61acf09ea78c0cdb5",
-  "code_hash": "44bded3f87508cb8809ca9a96c27711af2ac8ee9",
+  "verified_commit": "08b683cb8126a55f85df9b19a7bbee1cd146cf64",
+  "code_hash": "bf5ea85e03856959dcd15b3b05496c5041222ea2",
   "full_suite": {
-    "tests": 2346,
-    "pass": 2344,
+    "tests": 2385,
+    "pass": 2383,
     "fail": 0,
     "skipped": 2,
-    "node": "24 (clean clone, docker, test concurrency 4)",
-    "note": "The clean-clone run of the code commit had 2343 passing and ONE failure, CR-6 (the committed attestation must name REFINE), which can only pass once this attestation exists: it was run again, alone, on the attestation commit and passes (2344 = 2343 + CR-6)."
+    "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)",
+    "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
     "total": 154,
@@ -17,48 +17,22 @@
   },
   "clean_clones": {
     "node20": {
-      "tests": 2346,
-      "pass": 2344,
+      "tests": 2385,
+      "pass": 2383,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:20.20, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
+      "note": "docker node:20.20, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
     },
     "node24": {
-      "tests": 2346,
-      "pass": 2344,
+      "tests": 2385,
+      "pass": 2383,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:24.21, clean clone of the code commit, test concurrency 4: 2343 passed, the only failure CR-6 (expected until this attestation, see full_suite)"
+      "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38400493168,
-    "workflow": "Creative Intelligence V1",
-    "commit": "6180161b69c39a43e4bde8d1b7610aba0a6b20de",
-    "node20": "success",
-    "node24": "success (attempt 2)",
-    "attempts": [
-      {
-        "attempt": 1,
-        "node20": "success",
-        "node24": "failure",
-        "failing_test": "test/creative-intelligence-product-mask.test.js:57 (PM-6), assertion at line 60: sha(again.alpha) !== sha(mask.alpha), a comparison of two consecutive calls of buildProductMask on the same input in one process"
-      },
-      {
-        "attempt": 2,
-        "node20": "success (kept from attempt 1)",
-        "node24": "success",
-        "note": "only the failed Node 24 job was re-run; all three test steps passed (job 115490812316)"
-      }
-    ],
-    "earlier_green_run": {
-      "run": 38398261230,
-      "commit": "9d919d2f84af16f1f838afe127ea108555f07d80",
-      "node20": "success",
-      "node24": "success"
-    },
-    "classification_of_attempt_1": "Intermittent, cause NOT proven. The code under test (src/creative-intelligence/**) and the test are unchanged since Phase 3 (9f30628) and the closure commit differs from the previous green commit only in the two readiness JSON files. The failure did not reproduce locally in 1200 calls under CPU contention nor in 20 fresh runs, and the same test passed on the same code in the previous run, in the Node 20 job of the same run, and in attempt 2. Not caused by Phase 4. Recorded, not explained.",
-    "note": "Read from the GitHub Actions API on 2026-10-13. The code is the code verified at 2c4fa34; later commits change only documents and the job timeout of the workflow (15 to 30 minutes). Marketing V1 was not triggered for this code (path filters); its two commands ran green inside this workflow. Masked-edit provider integration and live-image validation remain incomplete by design."
+    "status": "unknown",
+    "note": "Phase 5 branch not pushed/read yet at the time of this record: CI is NOT claimed. The previous (Phase 4) CI record was run 38400493168 on 6180161."
   }
 }
