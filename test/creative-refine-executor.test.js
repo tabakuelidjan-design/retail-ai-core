@@ -141,6 +141,9 @@ test('EX-7 a repair that changed nothing did nothing; a layer that leaves with i
   const r = await go(E, { runtime: fake(E, { edit: (a) => a }), memory });
   assert.deepEqual([r.status, r.block.code, r.block.detail, r.block.replan, r.original_kept], ['NOT_REPAIRED', REPAIR_BLOCK.REPAIR_HAD_NO_EFFECT, { changed: [] }, 'REPLAN_THE_SCENE', true]);
   assert.deepEqual([memory.attempts('scn_probe')[0].outcome, memory.attempts('scn_probe')[0].reason], ['NOT_REPAIRED', REPAIR_BLOCK.REPAIR_HAD_NO_EFFECT]);
+  // a repair that changed ONE node (the render) is a repair
+  const one = env(); const single = await go(one, { runtime: fake(one, { edit: (a) => { a.nodes.render.png_sha256 = '9'.repeat(40); return a; }, budget: { provider_calls: 1, spent_eur: 0.034 } }) });
+  assert.equal(single.status, 'REPAIRED'); assert.deepEqual(single.layer_diff.changed, ['RENDER']);
   // removing the prop is what a REMOVE plan asks for
   const ladder = createRefineMemory();
   for (let i = 0; i < 2; i += 1) ladder.record('scn_probe', { plan_id: `p${i}`, fingerprint: `f${i}`, outcome: 'NOT_REPAIRED', steps: [{ scope: 'LAYER_REMOVE_OR_REPOSITION', target: 'PROP:lyr_mid', action: 'REPOSITION' }] });
@@ -151,6 +154,7 @@ test('EX-7 a repair that changed nothing did nothing; a layer that leaves with i
 
 test('EX-8 the policy given to the runtime is the original policy with the overrides of the plan merged in; the allowed scopes and the gate findings are honoured', async () => {
   assert.deepEqual(mergePolicy(), {}); assert.deepEqual(mergePolicy({ a: 1 }), { a: 1 }); assert.deepEqual(mergePolicy(undefined, { b: 2 }), { b: 2 });
+  assert.deepEqual(mergePolicy({ drop_layers: ['b'] }, { anchors: { y: 2 } }), { drop_layers: ['b'], anchors: { y: 2 } }, 'a key on one side only is kept as it is');
   assert.deepEqual(mergePolicy({ drop_layers: ['b', 'a'], anchors: { x: 1 }, placement: { m: 1, n: 2 }, typography: { p: 1 }, keep: true }, { drop_layers: ['c', 'a'], anchors: { y: 2 }, placement: { n: 9 }, typography: { q: 2 } }),
     { drop_layers: ['a', 'b', 'c'], anchors: { x: 1, y: 2 }, placement: { m: 1, n: 9 }, typography: { p: 1, q: 2 }, keep: true });
   assert.deepEqual(mergePolicy({ placement: { m: 1 } }, {}), { placement: { m: 1 } }); assert.deepEqual(mergePolicy({}, { anchors: { y: 2 } }), { anchors: { y: 2 } }); assert.deepEqual(mergePolicy({ drop_layers: ['z'] }, {}), { drop_layers: ['z'] });

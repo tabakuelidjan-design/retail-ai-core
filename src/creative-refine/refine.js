@@ -35,18 +35,16 @@ export function diffArtifacts(before, after) {
     changed: ids.filter((id) => id in a && id in b && a[id] !== b[id]),
     added: ids.filter((id) => !(id in a) && id in b),
     removed: ids.filter((id) => id in a && !(id in b)),
-    unchanged: ids.filter((id) => id in a && id in b && a[id] === b[id]),
+    unchanged: ids.filter((id) => id in a && a[id] === b[id]),
   };
 }
 
-export const mergePolicy = (base = {}, over = {}) => ({
-  ...base,
-  ...over,
-  ...(base.drop_layers || over.drop_layers ? { drop_layers: [...new Set([...(base.drop_layers ?? []), ...(over.drop_layers ?? [])])].sort() } : {}),
-  ...(base.anchors || over.anchors ? { anchors: { ...(base.anchors ?? {}), ...(over.anchors ?? {}) } } : {}),
-  ...(base.placement || over.placement ? { placement: { ...(base.placement ?? {}), ...(over.placement ?? {}) } } : {}),
-  ...(base.typography || over.typography ? { typography: { ...(base.typography ?? {}), ...(over.typography ?? {}) } } : {}),
-});
+export const mergePolicy = (base = {}, over = {}) => {
+  const out = { ...base, ...over };
+  if (base.drop_layers && over.drop_layers) out.drop_layers = [...new Set([...base.drop_layers, ...over.drop_layers])].sort();
+  for (const key of ['anchors', 'placement', 'typography']) if (base[key] && over[key]) out[key] = { ...base[key], ...over[key] };
+  return out;
+};
 
 /**
  * @param {object} input
