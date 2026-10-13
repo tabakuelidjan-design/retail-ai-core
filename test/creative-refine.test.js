@@ -449,6 +449,28 @@ test('RF-25 an upstream defect through the executor is a replan request: nothing
   assert.equal(none.status, 'BLOCKED'); assert.equal(none.block.code, REPAIR_BLOCK.NO_DEFECT); assert.equal(before(A), calls);
 });
 
+test('RF-27 the layered runtime itself refuses a prop tool other than the one the specification selected, before any call (the check a repair relies on)', async () => {
+  const other = scriptedPort({ executes: { ENVIRONMENT_PLATE_GENERATION: 'text-to-image/primary', PROP_ON_PLAIN_GROUND_GENERATION: 'text-to-image/secondary' } });
+  const h = layeredHarness({ layerPort: other });
+  const r = await runLayeredCreative({ ...A.run, agents: h.agents, ports: h.ports, ledger: h.ledger, store: createLayerStore() });
+  assert.equal(r.status, 'BLOCKED'); assert.equal(r.reason, 'TOOL_DIFFERS_FROM_THE_SELECTED_TOOL'); assert.equal(r.provider_calls, 0); assert.equal(other.calls.length, 0);
+  assert.deepEqual(r.detail, [{ capability: 'PROP_ON_PLAIN_GROUND_GENERATION', selected: 'text-to-image/primary', executed: 'text-to-image/secondary' }]);
+});
+
+test('RF-28 an allowance of ONE candidate is exactly one call and one reserved candidate: used when it is good, and a stop after exactly one call when it is refused', async () => {
+  const { propOnBusyGround, propOnGround } = await import('./creative-layered-runtime-world.js');
+  for (const good of [true, false]) {
+    const port = scriptedPort({ prop: ({ candidate_index: n }) => (n === 1 || good ? propOnGround({ colour: n === 1 ? '#7a4b2a' : '#2a6b4a' }) : propOnBusyGround()) });
+    const T = await firstRun({ port }); const store = T.store.fork(); store.reject(prop(T).request_key, prop(T).candidate_sha256, 1);
+    const calls = port.calls.length; const h = layeredHarness({ layerPort: port });
+    const r = await runLayeredCreative({ ...T.run, agents: h.agents, ports: h.ports, ledger: h.ledger, store });
+    assert.equal(port.calls.length - calls, 1, 'one call, never two'); assert.deepEqual(port.calls.slice(calls).map((c) => c.candidate_index), [2]);
+    const reserved = r.ledger.find((e) => e.decision === 'LAYER_BUDGET_RESERVATION').outcome.layers ?? [];
+    assert.deepEqual(reserved.map((l) => [l.request_key, l.candidates]), [[prop(T).request_key, 1]], 'one candidate reserved, not the two of the specification');
+    if (good) assert.equal(r.status, 'READY_FOR_REVIEW'); else { assert.equal(r.status, 'BLOCKED'); assert.equal(r.reason, 'GENERATED_LAYER_REJECTED'); }
+  }
+});
+
 test('RF-26 a repair may use its whole allowance: a second candidate that is refused and a third that is accepted is a repair of exactly two calls, and it is remembered', async () => {
   const { propOnBusyGround, propOnGround } = await import('./creative-layered-runtime-world.js');
   const port = scriptedPort({ prop: ({ candidate_index: n }) => (n === 2 ? propOnBusyGround() : propOnGround({ colour: ['#7a4b2a', '#2a6b4a', '#4a2a6b'][n - 1] ?? '#6b4a2a' })) });
