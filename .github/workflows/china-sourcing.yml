@@ -20,9 +20,23 @@ jobs:
         with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
       - run: node --test test/sourcing-*.test.js
-  e2e:
-    # Real-browser suites that need no provider. INFORMATIONAL (continue-on-error): written on Windows/Edge; on Linux Chromium the fieldmode checks 3, 4 and 18 fail
-    # (see docs/CHINA-SOURCING-RUNTIME.md). They must be understood before this job is made blocking.
+  # Real-browser suites that need no provider, one job each so that a failure names its suite and never skips another.
+  e2e-fieldv1:
+    # BLOCKING: the Field V1 / three-mode Salon suite at 390 px (cold offline start included).
+    name: e2e fieldv1 (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:fieldv1
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-pwa:
+    # INFORMATIONAL (as before): written on Windows/Edge; passes 18/18 on Linux Chromium today.
+    name: e2e pwa (informational)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true
@@ -33,9 +47,31 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run sourcing:e2e
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-fieldmode:
+    # INFORMATIONAL, TEMPORARILY: guided Field Mode. Checks 3, 4 and 18 are KNOWN to fail on Linux Chromium (docs/CHINA-SOURCING-RUNTIME.md); the job shows as failed on purpose. Make it blocking once they are understood.
+    name: e2e fieldmode (informational, 3 known failures)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
       - run: npm run sourcing:e2e:fieldmode
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
-      - run: npm run sourcing:e2e:fieldv1
-        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-asr:
+    # INFORMATIONAL (as before): ASR lab with its fake provider; never ran in CI so far.
+    name: e2e asr (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
       - run: npm run asr:e2e
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
