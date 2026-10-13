@@ -106,6 +106,48 @@ try {
   await check('11. 390 px: the recovery section fits the screen width (no horizontal scroll)', async () => {
     await click(tab, '[data-act="rec-list"]'); ok(await tab.eval("document.documentElement.scrollWidth <= window.innerWidth + 1"), 'no horizontal overflow');
   });
+  await check('12. Salon -> Sonny: reanalysis and export target the VISIBLE case, not a stale empty case; result is visible', async () => {
+    // Reproduce the REAL Xiaomi legacy situation: the original quote was retained,
+    // but only MOQ 60 had been extracted and confirmed.
+    const legacy = sonny('sonny-salon-legacy');
+    legacy.candidates = legacy.candidates.filter((c) => c.key === 'quote.moq');
+    legacy.offers[0].candidateIds = legacy.candidates.map((c) => c.id);
+    await importFile(tab, 'sonny-legacy.json', JSON.stringify(legacy));
+    await click(tab, '[data-act="mode-salon"]');
+    await click(tab, '[data-act="sl-open-case"][data-key="sonny-salon-legacy"]');
+    ok((await tab.eval("localStorage.getItem('nordla.sourcing.current')")) === legacy.id, 'Salon selection aligns the global current case');
+
+    // A global-menu NEW CASE action used to leave Salon visually on Sonny while
+    // the global currentId pointed to a blank starter case.
+    await openMenu(tab);
+    await click(tab, '[data-act="newcase"]');
+    const blankId = await tab.eval("localStorage.getItem('nordla.sourcing.current')");
+    ok(blankId !== legacy.id, 'stale blank global current-case situation recreated');
+    ok(/Sonny/.test(await tab.eval("document.querySelector('#screen').innerText")), 'Salon still visibly displays Sonny');
+
+    await openMenu(tab);
+    ok(/Dossier actif : batterie externe/.test(await overlay(tab)), 'menu names the VISIBLE active dossier');
+    await click(tab, '[data-act="notes-reanalyze-preview"]');
+    await click(tab, '[data-act="notes-reanalyze-apply"]');
+    const message = await overlay(tab);
+    ok(/batterie externe/.test(message) && /proposition\\(s\\) ajoutée\\(s\\)/.test(message), 'result is shown, named and not silently lost');
+    const local = (await phoneCases(tab)).find((c) => c.id === legacy.id);
+    ok(local?.candidates.some((c) => c.key === 'identifier.model' && c.value === 'AB521' && c.state === 'PROPOSED'), 'model was recovered as a PROPOSAL');
+    ok(local.candidates.some((c) => c.key === 'quote.unitPrice' && String(c.value) === '12' && c.state === 'PROPOSED'), 'price was recovered as a PROPOSAL');
+    ok(local.candidates.some((c) => c.key === 'spec.power' && c.state === 'PROPOSED'), 'power was recovered as a PROPOSAL');
+    ok(local.candidates.find((c) => c.key === 'quote.moq').state === 'CONFIRMED', 'existing confirmation is untouched');
+    ok((await phoneCases(tab)).find((c) => c.id === blankId).candidates.length === 0, 'blank dossier was not reanalysed or polluted');
+
+    // The export button belongs to the same visible dossier, never the blank one.
+    const exportData = await tab.run(`const oldUrl = URL.createObjectURL, oldClick = HTMLAnchorElement.prototype.click;
+      URL.createObjectURL = (blob) => { window.__sourcingExportBlob = blob; return 'blob:test'; };
+      HTMLAnchorElement.prototype.click = function () { window.__sourcingExportName = this.download; };
+      document.querySelector('[data-act="export"]').click();
+      URL.createObjectURL = oldUrl; HTMLAnchorElement.prototype.click = oldClick;
+      return { name: window.__sourcingExportName, json: await window.__sourcingExportBlob.text() };`);
+    const exported = JSON.parse(exportData.json);
+    ok(exportData.name === 'nordla-case-sonny-salon-legacy.json' && exported.case.id === legacy.id, 'export is the visible Sonny dossier, not the empty case');
+  });
 } finally {
   await tab?.close(); await browser.close(); await new Promise((r) => server.server.close(r)); server.server.closeAllConnections?.(); rmSync(dir, { recursive: true, force: true });
 }
