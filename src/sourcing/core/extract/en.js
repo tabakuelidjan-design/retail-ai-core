@@ -184,10 +184,11 @@ export function extractEn(text, lang) {
   const nw = /(?:N\.?\s?W\.?|net\s+weight)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(kgs?|g)\b/i.exec(text); if (nw) out.push(mk(text, lang, 'carton.netWeight', { amount: nw[1], unit: /^kg/i.test(nw[2]) ? 'kg' : 'g' }, nw.index, nw.index + nw[0].length, { reason: 'net weight' }));
 
   // ---- identifiers: preserved EXACTLY as written ----
-  const mm = /\b(model(?:\s+(?:no\.?|number|name|type))?|mod[eè]le|r[eé]f(?:[eé]rence)?\.?|type(?:\s+no\.?)?|item\s+(?:no\.?|number)|part\s+(?:no\.?|number)|P\/N|article\s+(?:no\.?|number))\s*[:#=]?\s*(?:is\s+)?([A-Za-z0-9][A-Za-z0-9\-_/.]*[A-Za-z0-9]|[A-Za-z0-9])(?:\s([A-Z]\d+[A-Za-z]?)\b)?/i.exec(text);
+  // the label must be a WHOLE word: "Modele" used to match the shorter "model" first and read the value as "e" (so no model was found at all); the longer French spellings come first and a letter may not follow the label
+  const mm = /\b(mod[eè]le(?:\s+(?:no\.?|n°|num[eé]ro|nom))?|model(?:\s+(?:no\.?|number|name|type))?|r[eé]f(?:[eé]rence)?\.?|type(?:\s+no\.?)?|item\s+(?:no\.?|number)|part\s+(?:no\.?|number)|P\/N|article\s+(?:no\.?|number))(?![A-Za-z\u00C0-\u017F])\s*[:#=]?\s*(?:is\s+)?([A-Za-z0-9][A-Za-z0-9\-_/.]*[A-Za-z0-9]|[A-Za-z0-9])(?:\s([A-Z]\d+[A-Za-z]?)\b)?/i.exec(text);
   if (mm) {
     let val = mm[3] && /^[A-Za-z]{1,4}$/.test(mm[2]) ? `${mm[2]} ${mm[3]}` : mm[2]; val = val.replace(/[.\-_/]+$/, '');
-    if (/\d/.test(val) && val.length >= 3 && !/^\d{1,3}$/.test(val)) { const s0 = mm.index + mm[0].indexOf(val, mm[1].length); out.push(mk(text, lang, 'identifier.model', val, s0, s0 + val.length, { confidence: /^model/i.test(mm[1]) ? 'HIGH' : 'MEDIUM', reason: 'model identifier, kept as written' })); }
+    if (/\d/.test(val) && val.length >= 3 && !/^\d{1,3}$/.test(val)) { const s0 = mm.index + mm[0].indexOf(val, mm[1].length); out.push(mk(text, lang, 'identifier.model', val, s0, s0 + val.length, { confidence: /^mod/i.test(mm[1]) ? 'HIGH' : 'MEDIUM', reason: 'model identifier, kept as written' })); }
   }
   if (!out.some((c) => c.key === 'identifier.model')) { // no label: only a code-shaped word at the very START of the message ("PB-X200. MOQ is 50 pcs."), proposed LOW with a warning
     const um = /^\s*([A-Z]{1,5}-?[A-Z]?\d{2,5}[A-Z]{0,2}(?:[-/][A-Z0-9]+)?)(?=[\s.,;:!?]|$)/.exec(text);

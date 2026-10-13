@@ -4,6 +4,7 @@
 import { planConversation } from '../conversation-engine.js';
 import { TEMPLATES } from '../supplier.js';
 import { REVIEW, reviewFor, NATIVE_REVIEW } from '../phrases.js';
+import { describeCandidate } from '../candidate-view.js';
 
 export const ASK_MIN = 2;
 export const ASK_MAX = 5;
@@ -23,6 +24,13 @@ const FR_WHY = {
   LEAD_TIME: 'le délai est nécessaire avant de s’engager', PAYMENT: 'les conditions de paiement décident de l’argent exposé avant livraison', SAMPLE: 'un échantillon permet de vérifier avant un acompte', CARTON: 'les données du carton servent à estimer le transport', OTHER: 'utile pour la décision',
 };
 
+// A fact the supplier ALREADY gave (extracted, not yet confirmed by the owner) is not asked again: the list proposes to VERIFY it instead. Nothing is confirmed here.
+const VERIFIABLE = new Set(['identifier.model', 'identifier.manufacturer', 'quote.unitPrice', 'quote.tiers', 'quote.moq', 'quote.incoterm', 'quote.leadTime', 'spec.material']);
+function verifyRow(q, state, i) {
+  const c = state.candidates.filter((x) => x.state === 'PROPOSED' && (q.resolves ?? []).includes(x.key) && VERIFIABLE.has(x.key)).at(-1); if (!c) return null;
+  const en = describeCandidate(c, 'en'); const fr = describeCandidate(c, 'fr'); const shown = c.needsCorrection && (c.value === null || c.value === undefined) ? `"${c.rawText}" (unclear)` : en.valueText; const shownFr = c.needsCorrection && (c.value === null || c.value === undefined) ? `« ${c.rawText} » (ambigu)` : fr.valueText;
+  return { q: { id: q.id, source: 'VERIFY', audience: 'SUPPLIER', dimension: q.dimension, priority: q.priority, state: 'OPEN', text: { fr: `Vérifier avec le fournisseur : ${fr.label} ${shownFr}`, en: `Please confirm: ${en.label} ${shown}.` }, supplier: { en: `Please confirm: ${en.label} ${shown}.` }, resolves: q.resolves, need: { score: null }, verify: { candidateId: c.id, key: c.key, valueText: shownFr, needsCorrection: c.needsCorrection === true } }, i };
+}
 function classify(q, state) {
   if (q.source === 'CONFLICT') return /^quote\.(unitPrice|tiers|currency|moq)/.test(state.conflicts.find((x) => x.id === q.conflictId)?.key ?? '') ? 'CONFLICT_PRICE' : 'CONFLICT';
   if (q.id === 'model' || q.id === 'manufacturer') return 'IDENTITY';
@@ -45,14 +53,15 @@ export function askNow(state, a, { max = ASK_MAX, min = ASK_MIN, askState = {}, 
   // the material of the product is a basic question for any product (the engine asks it only for textiles): added here, only while it is genuinely unknown
   const materialKnown = state.ledger.some((e) => e.key === 'spec.material') || pending.has('spec.material');
   const extra = []; if (!materialKnown) { const t = TEMPLATES.materials; extra.push({ id: 'field:material', source: 'FIELD', audience: 'SUPPLIER', dimension: 'SPECIFICATION', priority: 'P2', state: 'OPEN', text: { fr: 'De quelle matière est fait le produit (matière principale, revêtement, peinture) ?', en: t.en }, supplier: { zh: { text: t.zh, review: reviewFor('materials', REVIEW.TECHNICAL_ONLY), lang: 'zh' }, en: t.en }, resolves: ['spec.material'], need: { score: null } }); }
-  const all = [...rows.map((r) => r.q), ...extra].map((q, i) => {
-    const cls = classify(q, state); const w = IMPACT[cls] ?? IMPACT.OTHER; const eng = q.need?.score ?? 0;
-    return { q, cls, weight: cls === 'OTHER' ? Math.min(IMPACT.OTHER + eng / 10, 59) : w, engineScore: eng, i };
+  const verifying = plan.questions.filter((q) => q.audience === 'SUPPLIER' && q.state === 'ANSWER_PENDING').map((q, i) => verifyRow(q, state, i)).filter(Boolean).map((r) => r.q);
+  const all = [...rows.map((r) => r.q), ...verifying, ...extra].map((q, i) => {
+    const cls = q.source === 'VERIFY' ? classify({ ...q, source: 'ENGINE' }, state) : classify(q, state); const w = IMPACT[cls] ?? IMPACT.OTHER; const eng = q.need?.score ?? 0;
+    return { q, cls, weight: cls === 'OTHER' ? Math.min(IMPACT.OTHER + eng / 10, 59) : w - (q.source === 'VERIFY' ? 0.5 : 0), engineScore: eng, i };
   }).sort((x, y) => y.weight - x.weight || y.engineScore - x.engineScore || x.i - y.i);
   const chosen = []; for (const r of all) { if (chosen.length >= max) break; if (chosen.length >= min && r.weight < 45) break; chosen.push(r); }
   const items = chosen.map((r, k) => {
     const zh = r.q.supplier?.zh ?? null; const st = askState[r.q.id]?.state ?? (r.q.state === 'UNANSWERED' ? 'ASKED_NO_ANSWER' : 'OPEN');
-    return { rank: k + 1, id: r.q.id, kind: r.cls, weight: r.weight, source: r.q.source, why: WHY[r.cls] ?? WHY.OTHER, whyFr: FR_WHY[r.cls] ?? FR_WHY.OTHER, fr: r.q.text.fr ?? null, en: r.q.text.en ?? r.q.supplier?.en ?? null,
+    return { rank: k + 1, id: r.q.id, kind: r.cls, weight: r.weight, source: r.q.source, ...(r.q.verify ? { verify: r.q.verify } : {}), why: WHY[r.cls] ?? WHY.OTHER, whyFr: FR_WHY[r.cls] ?? FR_WHY.OTHER, fr: r.q.text.fr ?? null, en: r.q.text.en ?? r.q.supplier?.en ?? null,
       zh: zh && zh.text ? { text: zh.text, review: zh.review, lang: zh.lang ?? 'zh', nativeReviewed: zh.review === REVIEW.NATIVE_REVIEWED } : null, zhNote: zh && zh.text ? null : 'No Chinese sentence available for this question: none is invented.',
       state: st, repeat: r.q.repeat === true, resolves: r.q.resolves ?? [], docs: r.q.items?.map((x) => ({ id: x.id, docType: x.docType })) ?? null };
   });

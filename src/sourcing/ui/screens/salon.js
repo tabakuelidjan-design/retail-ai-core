@@ -8,7 +8,7 @@ import { classifyCandidates } from '/core/understanding.js';
 import { describeConflict, validateCorrection } from '/core/candidate-view.js';
 import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison, setAskState } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
-import { caseFacts, auditCase, observationsOf } from '/core/case-facts.js';
+import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -70,7 +70,7 @@ export function createSalon(ctx) {
       if (view.name === 'capture') { const info = view.caseId && caseOf(view.caseId) ? infoOf(caseOf(view.caseId)) : null; return V.captureHtml({ caseInfo: info, mode: capMode, flash, online: S.online }); }
       if (view.name === 'review') { const c = caseOf(view.caseId); const oid = view.offerId ?? c?.offers?.at(-1)?.id; if (!c || !oid) return home(cases, e); const d = offerDraft(c, oid); const groupable = classifyCandidates(c).group.filter((x) => x.offerId === oid).map((x) => x.id);
         const conflicts = c.conflicts.filter((x) => x.state === 'OPEN' && c.candidates.some((k) => k.id === x.candidateId && k.offerId === oid)).map((x) => describeConflict(x)); return V.reviewHtml({ draft: d, caseInfo: infoOf(c), groupableIds: groupable, conflicts, unknownNames: d.unknownSpeakers.filter((n) => n !== '(unnamed)'), correcting, flash }); }
-      if (view.name === 'case' || view.name === 'changed') { const c = caseOf(view.caseId); if (!c) return home(cases, e); const r = e.caseView(c, ws); const sup = e.suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null; return V.caseHtml({ info: infoOf(c), tab: view.tab ?? 'sum', v: r, history: sup, flash, factsView: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id } }); }
+      if (view.name === 'case' || view.name === 'changed') { const c = caseOf(view.caseId); if (!c) return home(cases, e); const r = e.caseView(c, ws); const sup = e.suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null; return V.caseHtml({ info: infoOf(c), tab: view.tab ?? 'sum', v: r, history: sup, flash, factsView: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id, board: factStatusBoard(c, { locale: 'fr' }), correcting } }); }
       if (view.name === 'ask') { const c = caseOf(view.caseId); if (!c) return home(cases, e, 'Choisissez un fournisseur pour préparer ses questions.'); const r = e.caseView(c, ws, ['askNow']); const html = V.askHtml({ info: infoOf(c), ask: r.askNow, flash }); return showQ ? html + V.showHtml({ item: r.askNow.items.find((i) => i.id === showQ) ?? r.askNow.items[0] }) : html; }
       if (view.name === 'negotiate') { const c = caseOf(view.caseId); if (!c) return home(cases, e, 'Choisissez un fournisseur pour préparer la négociation.'); const r = e.caseView(c, ws, ['negotiation']); return V.negotiateHtml({ info: infoOf(c), plan: r.negotiation }); }
       if (view.name === 'compare') {

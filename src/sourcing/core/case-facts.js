@@ -8,6 +8,7 @@
 import { existingValue, sameValue } from './conflicts.js';
 import { compile } from './conversation.js';
 import { effectiveQuote } from './offers.js';
+import { describeCandidate, describeFact, labelOf } from './candidate-view.js';
 
 /** Where a fact comes from. A review ACTION (confirm / correct / revert) is NOT a source: it is review_status. */
 export const SOURCE_TYPE = Object.freeze({ USER_PROVIDED: 'USER_PROVIDED', SUPPLIER_CLAIM: 'SUPPLIER_CLAIM', IMAGE_OBSERVED: 'IMAGE_OBSERVED', DOCUMENT_OBSERVED: 'DOCUMENT_OBSERVED', SYSTEM_DERIVED: 'SYSTEM_DERIVED', VERIFIED: 'VERIFIED', UNATTRIBUTED_LEGACY: 'UNATTRIBUTED_LEGACY' });
@@ -33,7 +34,7 @@ export const FACT_TYPES = Object.freeze({
   MATERIAL: { key: 'spec.material', label: 'Matière', parse: text },
   PACKAGING: { key: 'offer.packaging', label: 'Emballage', parse: text },
   POWER: { key: 'spec.power', contexts: ['power'], label: 'Puissance', unit: 'W', parse: (v) => { const r = dec(v); return r.ok ? { ok: true, value: { amount: Number(r.value), unit: 'W' } } : r; } },
-  CAPACITY: { key: 'spec.capacity', contexts: ['mah', 'wh', 'volume'], label: 'Capacité', unit: 'mAh', parse: (v) => { const m = /^(\d+(?:\.\d+)?)\s*(mAh|Wh|ml)$/i.exec(num(v)); return m ? { ok: true, value: { amount: Number(m[1]), unit: m[2].toLowerCase() === 'mah' ? 'mAh' : m[2].toLowerCase() === 'wh' ? 'Wh' : 'ml' } } : { ok: false, error: 'Tapez la capacité avec son unité (par exemple 20000 mAh).' }; } },
+  CAPACITY: { key: 'spec.capacity', contexts: ['mah', 'wh', 'volume', 'unit_unknown'], label: 'Capacité', unit: 'mAh', parse: (v) => { const m = /^(\d+(?:\.\d+)?)\s*(mAh|Wh|ml)$/i.exec(num(v)); return m ? { ok: true, value: { amount: Number(m[1]), unit: m[2].toLowerCase() === 'mah' ? 'mAh' : m[2].toLowerCase() === 'wh' ? 'Wh' : 'ml' } } : { ok: false, error: 'Tapez la capacité avec son unité (par exemple 20000 mAh).' }; } },
   OUTPUT_COUNT: { key: 'spec.outputCount', label: 'Nombre de sorties', parse: int },
   COLOURS: { key: 'variant.colours', label: 'Couleurs', parse: (v) => { const l = [...new Set(num(v).toLowerCase().split(/[,/;&]|\s+(?:and|et|en|ou|or)\s+|\s+/).map((x) => x.trim()).filter(Boolean))]; return l.length ? { ok: true, value: l } : { ok: false, error: 'Tapez les couleurs.' }; } },
   STOCK_STATUS: { key: 'offer.stockStatus', label: 'Stock', parse: oneOf(['IN_STOCK', 'OUT_OF_STOCK']) },
@@ -87,6 +88,25 @@ export function expertQuote(state) {
 export const factOf = (state, type) => caseFacts(state, { types: [type] })[0] ?? null;
 /** the value of every fact type as a plain map (what a form shows) */
 export const factValues = (state) => Object.fromEntries(caseFacts(state).map((f) => [f.fact_type, f.value]));
+
+/**
+ * THE status of every fact in every mode: CONFIRMED (a fact of the case, with its source), PROPOSED ("à confirmer": the supplier said it, nobody confirmed it), AMBIGUOUS (proposed but the value or its unit is unclear: a person must correct it)
+ * or MISSING. Pure; nothing here confirms anything. Terrain, Expert and Salon show THIS list, so a value extracted from the supplier's words is visible everywhere as soon as it is proposed.
+ */
+export const FACT_STATE = Object.freeze({ CONFIRMED: 'CONFIRMED', PROPOSED: 'PROPOSED', AMBIGUOUS: 'AMBIGUOUS', MISSING: 'MISSING' });
+export function factStatusBoard(state, { locale = 'fr', types = Object.keys(FACT_TYPES) } = {}) {
+  const facts = new Map(caseFacts(state).map((f) => [f.fact_type, f]));
+  return types.map((type) => {
+    const def = FACT_TYPES[type]; const f = facts.get(type); const ctxs = def.contexts ?? ['product'];
+    const pend = (state.candidates ?? []).filter((c) => c.state === 'PROPOSED' && c.key === def.key && ctxs.includes(c.context)).at(-1) ?? null;
+    const view = pend ? describeCandidate(pend, locale) : null; const ambiguous = pend ? pend.needsCorrection === true : false;
+    const differs = f && pend ? !sameFactValue(def.key, pend.correctedValue ?? pend.value, f.value) : false;
+    const state_ = f ? FACT_STATE.CONFIRMED : pend ? (ambiguous ? FACT_STATE.AMBIGUOUS : FACT_STATE.PROPOSED) : FACT_STATE.MISSING;
+    return { fact_type: type, key: def.key, label: view?.label ?? labelOf(def.key, 'product', locale), state: state_,
+      value: f ? f.value : null, valueText: f ? describeFact({ key: def.key, value: f.value, context: f.context ?? 'product' }, locale).valueText : view ? view.valueText : null, source_type: f ? f.source_type : pend ? SOURCE_TYPE.SUPPLIER_CLAIM : null,
+      candidateId: pend?.id ?? null, proposedValueText: view ? view.valueText : null, proposedDiffers: differs, rawText: pend?.rawText ?? f?.source_reference?.rawText ?? null, warnings: view?.warnings ?? [], canConfirm: pend ? view.canConfirm : false, canCorrect: pend ? view.canCorrect : true };
+  });
+}
 
 /** Facts read from a photo or a document that nobody accepted yet. They are NOT facts of the case until the owner accepts them, and they are never presented as something the supplier said. */
 export const observationsOf = (state) => (state.factObservations ?? []).map((o) => ({ ...o }));

@@ -30,7 +30,7 @@ export function fieldComparison(set, derived) {
     cheapest: deals.cheapestQuote ? { ...deals.cheapestQuote, note: 'the lowest quoted unit price - not the best offer' } : { caseId: null, note: 'quotes cannot be compared (missing prices or different currencies)' },
     bestLanded: deals.bestLanded ? { ...deals.bestLanded, provisional: deals.provisional } : { caseId: null, note: 'no landed cost can be compared yet' },
     blocked, weakEvidence: weak, contradictions: contradicting,
-    askNext: cands.map((c) => ({ caseId: c.caseId, name: short(c), items: (D(c.caseId).askNow?.items ?? []).slice(0, 3).map((i) => ({ id: i.id, kind: i.kind, en: i.en, fr: i.fr, why: i.why, zh: i.zh })) })),
+    askNext: cands.map((c) => ({ caseId: c.caseId, name: short(c), items: (D(c.caseId).askNow?.items ?? []).slice(0, 3).map((i) => ({ id: i.id, kind: i.kind, en: i.en, fr: i.fr, why: i.why, zh: i.zh, ...(i.verify ? { verify: i.verify } : {}) })) })),
   };
   // ---- decisive differences ---------------------------------------------------------------------------------------------------------------------------------------------------------------
   const decisive = [];
