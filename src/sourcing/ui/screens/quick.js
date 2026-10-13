@@ -5,6 +5,7 @@ import { CATEGORIES } from '/core/taxonomy.js';
 import { effective } from '/core/identity.js';
 import { suggestCategories } from '/core/case.js';
 import { ls } from '../storage.js';
+import { factBoardCard } from '../fact-board.js';
 
 export const QUICK_TRAITS = [['battery.present', 'Has a battery?'], ['radio.present', 'Bluetooth / Wi-Fi?'], ['electrical.present', 'Electrical / electronic?'], ['childrenUse', 'For children?'], ['foodContact', 'Touches food or drink?']];
 export function quickScreen(A, c) {
@@ -12,7 +13,7 @@ export function quickScreen(A, c) {
   const lastFx = ls.get('nordla.sourcing.lastFx', null);
   const dest = c.context.channels.includes('amazon') ? (c.context.channels.includes('own_site') ? 'both' : 'amazon') : 'own';
   const gotAnswer = c.quotes.length > 0;
-  return `<div class="card"><h2>QUICK ANSWER (stand in front of the supplier)</h2><p class="small muted">Six fields, one answer. It uses the same engine and the same case: you deepen it later (documents, rules). Nothing here is guessed: what you leave blank stays UNKNOWN.</p>
+  return `${factBoardCard(c)}<div class="card"><h2>QUICK ANSWER (stand in front of the supplier)</h2><p class="small muted">Six fields, one answer. It uses the same engine and the same case: you deepen it later (documents, rules). Nothing here is guessed: what you leave blank stays UNKNOWN.</p>
   <form data-form="quick">${field('name', '1. What is it? (name or what the label says)', id.workingName, 'autocomplete="off"')}
     ${selectOf('category', '2. Category (you confirm)', [['', cat.known ? `(keep: ${CATEGORIES[cat.value]?.label ?? cat.value})` : '- choose -'], ...Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])], '')}
     ${sugg.length ? `<p class="small muted">Probably: ${sugg.map((x) => esc(x.label)).join(' / ')}</p>` : ''}

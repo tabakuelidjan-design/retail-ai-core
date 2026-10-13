@@ -9,6 +9,8 @@ const AGE_PLUS = /\b(\d{1,2})\s?\+\s?(?:years?|yrs?|y)\b|\b(?:ages?|aged|for\s+(
 
 // field-note forms: "45W", "65 w", "power 45 watts" (W followed by "/", a letter or a digit is something else: "w/ logo", "Wh"); "4 sorties", "4 outputs", "4 ports", "sorties: 4"; "capacité 20000" (no unit)
 const POWER = /(?<![A-Za-z0-9.,])(?:(?:puissance|power|watt(?:age)?)\s*[:=]?\s*)?(\d+(?:\.\d+)?)\s?(?:W|watts?)(?![A-Za-z0-9/])/gi;
+// a battery capacity written with a unit that is almost, but not, "mAh" (mAp, mAn...): the number is real, the UNIT is not known. It is proposed as AMBIGUOUS (no value, a person types the right one); the unit is never silently "fixed".
+const CAP_ODD_UNIT = /(?<![A-Za-z0-9.,])(\d+(?:,\d{3})*)\s?(m[aA][a-gi-zA-GI-Z])(?![A-Za-z0-9])/g;
 const OUTPUTS_A = /(?<![A-Za-z0-9.,])(\d{1,2})\s?(?:sorties?|outputs?(?:\s+ports?)?|ports?)(?![A-Za-z])/gi;
 const OUTPUTS_B = /\b(?:sorties?|outputs?|ports?)\s*[:=]\s*(\d{1,2})(?![\dA-Za-z.,])/gi;
 const CAP_NO_UNIT = /\b(?:capacit(?:y|é|e)|capacity)\s*[:=]?\s*(\d+(?:,\d{3})*)(?![\dA-Za-z.,])/gi;
@@ -27,6 +29,7 @@ export function extractSpec(text, lang = 'en') {
     out.push(mk(t, lang, 'spec.capacity', { amount, unit }, m.index, m.index + m[0].length, { confidence: 'HIGH', reason: ratingTight ? 'battery capacity' : 'volume', context: unit === 'mAh' ? 'mah' : unit === 'Wh' ? 'wh' : 'volume' })); // one context per measure: 10 000 mAh and 37 Wh describe the same battery, they never contradict each other
   }
   for (const m of t.matchAll(CAP_NO_UNIT)) { const hit = out.some((c) => c.key === 'spec.capacity' && c.span[0] <= m.index + m[0].length && m.index <= c.span[1]); if (hit) continue; out.push(mk(t, lang, 'spec.capacity', null, m.index, m.index + m[0].length, { confidence: 'LOW', context: 'unit_unknown', needsCorrection: true, flags: ['UNIT_NOT_STATED'], reason: 'capacity without a unit' })); }
+  for (const m of t.matchAll(CAP_ODD_UNIT)) out.push(mk(t, lang, 'spec.capacity', null, m.index, m.index + m[0].length, { confidence: 'LOW', context: 'unit_unknown', needsCorrection: true, flags: ['UNIT_UNRECOGNISED'], reason: 'capacity with an unrecognised unit' }));
   for (const m of t.matchAll(POWER)) out.push(mk(t, lang, 'spec.power', { amount: Number(m[1]), unit: 'W' }, m.index, m.index + m[0].length, { reason: 'power in watts', context: 'power' }));
   for (const re of [OUTPUTS_A, OUTPUTS_B]) for (const m of t.matchAll(re)) { if (Number(m[1]) < 1) continue; out.push(mk(t, lang, 'spec.outputCount', String(Number(m[1])), m.index, m.index + m[0].length, { confidence: 'MEDIUM', reason: 'number of outputs' })); }
   const noStock = []; for (const m of t.matchAll(OUT_OF_STOCK)) { noStock.push([m.index, m.index + m[0].length]); out.push(mk(t, lang, 'offer.stockStatus', 'OUT_OF_STOCK', m.index, m.index + m[0].length, { confidence: 'MEDIUM', reason: 'stock statement' })); }

@@ -1,4 +1,5 @@
 // case screen (extracted from app.js, no behaviour change).
+import { factBoardCard } from '../fact-board.js';
 import { esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from '../dom.js';
 import { S } from '../state.js';
 import { CATEGORIES } from '/core/taxonomy.js';
@@ -12,7 +13,7 @@ export function caseScreen(A, c) {
   const level = (t) => { const e = effective(id, t); return e.known ? (e.level === 'PROBABLE' ? 'assumed from category' : e.level.toLowerCase().replace(/_/g, ' ')) : e.contradiction ? 'CONTRADICTORY' : 'unknown'; };
   const photos = id.photos.map((p, i) => { const d = getBlob(`photo:${c.id}.${i}`); return d ? `<img src="${esc(d)}" alt="product photo ${i + 1}" style="width:96px;height:96px;object-fit:cover;border-radius:8px;margin-right:6px">` : `<span class="chip">photo ${i + 1}</span>`; }).join('');
   const radioOn = effective(id, 'radio.present').value === true;
-  return `<div class="card"><h2>PRODUCT</h2><form data-form="product">${field('name', 'What is it? (name, or what the label says)', id.workingName, 'autocomplete="off"')}
+  return `${factBoardCard(c)}<div class="card"><h2>PRODUCT</h2><form data-form="product">${field('name', 'What is it? (name, or what the label says)', id.workingName, 'autocomplete="off"')}
     <div class="row">${field('model', 'Model number', id.identifiers.model ?? '')}${field('brand', 'Brand', id.identifiers.brand ?? '')}</div>${field('manufacturer', 'Manufacturer (legal name on label)', id.identifiers.manufacturer ?? '')}${field('gtin', 'Barcode (GTIN / EAN)', id.identifiers.gtin ?? '', 'inputmode="numeric"')}
     ${selectOf('category', 'Category (probable - you confirm)', [['', cat.known ? '(keep)' : '- choose -'], ...Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])], '')}<button class="btn" style="margin-top:10px">Save product</button></form>
     ${sugg.length ? `<p class="small muted">From the name, probably: ${sugg.map((s) => `<button type="button" class="btn sec" data-act="cat" data-key="${esc(s.id)}" style="min-height:36px;padding:4px 10px;margin:2px">${esc(s.label)}</button>`).join('')}</p>` : ''}
