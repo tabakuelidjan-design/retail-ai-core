@@ -3,6 +3,20 @@
 Statut : **proposition pour décision**. Aucun serveur, abonnement, secret ou migration n'a été créé. Rien n'est fusionné dans `main`.
 Date : 2026-10-14. Les prix sont des **estimations tirées de sources tierces, à vérifier sur les pages officielles** avant toute souscription.
 
+> ## Mise à jour 2026-10-14 (décisions du propriétaire) — lire en premier
+>
+> **Correction du §1.** La première version a été rédigée à partir d'un `main` périmé : sa section « existant » est **fausse**. La référence est `origin/integration/nordla-pre-china` @ `4c07586` (lue en lecture seule, non fusionnée ici). Elle contient notamment :
+> - **China Sourcing** (`src/sourcing/server/index.js`, `phone.js`, PWA + service worker + sync, workflow CI Node 24) ; exige Node 24 (`src/sourcing/runtime.js`), documenté dans `docs/CHINA-SOURCING-RUNTIME.md`.
+> - **Finance** (`src/finance/server/index.js`, jeton `FINANCE_DASHBOARD_TOKEN`), **Analytics** (`src/analytics-premium/server/`, mode hébergé Railway : hôtes autorisés, jeton Basic, limitation de débit, HSTS), **Growth** (`src/growth/server/`).
+> - **`railway.json` existant** (`startCommand: node src/service-start.js`, redémarrage sur échec) : des déploiements Railway existent déjà, c'est la plateforme actuelle de Finance.
+> - **35 migrations Supabase** (identité/sessions/membres, `merchant_id`, `merchant_connectors`, connexions fournisseurs, etc.), contre 7 dans la première version.
+> - `engines: >=20` global ; Node 24 dans `china-sourcing.yml` et `finance-pg.yml`, Node 20 dans plusieurs autres workflows. Aucun changement global de version n'est fait sans caractériser Finance, Analytics, Growth et les déploiements Railway.
+> - Le module de sync hors ligne de China Sourcing existe déjà : il n'est pas reconstruit.
+>
+> **Décisions** : Railway en priorité (Hetzner seulement avec justification écrite) ; cible `app.nordla.app` (domaines `nordla.app`/`nordla.eu` chez Porkbun, DNS non modifié sans accord) ; Supabase reste la base, pas de second PostgreSQL ; migrations réversibles testées uniquement en environnement isolé ; aucune dépense ni mise en production sans accord explicite.
+>
+> **Non fait à ce jour** : l'inventaire Railway (aucun accès : pas de CLI, de jeton ni de connecteur dans cette session) ; la reprise sur `origin/claude/nordla-core-p0` (branche non publiée, et le merge d'intégration a été refusé par la protection de la session). Les §2 à §7 ci-dessous sont à relire à la lumière de ces décisions : la recommandation Hetzner y est **remplacée** par Railway-first.
+
 ## 1. Audit de l'existant (Mission 1)
 
 ### Ce que l'audit a pu établir
