@@ -47,6 +47,7 @@ export function stateOf({ id, resolves, pendingKeys, log, items }) {
   const later = items.some((it) => it.speaker === 'supplier' && it.at > last.at);
   if (last.kind === 'SHOWN') return later ? 'UNANSWERED' : 'ASKED';
   if (last.kind === 'SKIPPED') return later ? 'OPEN' : 'SKIPPED';
+  if (last.kind === 'ANSWERED') return 'ANSWERED'; // an answer was recorded for it (the facts it holds are PROPOSED until the owner decides; a new SHOWN asks it again)
   return 'OPEN';
 }
 

@@ -99,7 +99,9 @@ export function addItem(s, ev, at) {
   // an item whose speaker nobody established (a pasted chat with unfamiliar names) stays UNKNOWN: its facts cannot be confirmed until the owner says who spoke (CONVERSATION_ATTRIBUTE)
   const speaker = ev.speaker === SPEAKER.ME ? SPEAKER.ME : ev.speaker === SPEAKER.UNKNOWN ? SPEAKER.UNKNOWN : SPEAKER.SUPPLIER; const text = String(ev.text ?? ''); if (!text.trim()) throw new Error('text is required');
   const lang = ev.lang && ev.lang !== 'auto' ? ev.lang : detectLang(text);
-  const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [], ...(speaker === SPEAKER.UNKNOWN ? { speakerBy: 'UNKNOWN' } : {}), ...(ev.source ? { source: String(ev.source) } : {}) }; conv.items.push(item);
+  const answers = ev.answersQuestion ? String(ev.answersQuestion) : null; // the owner typed this as the ANSWER to a question that was asked: the link is kept (question id -> item id), append-only
+  const item = { id: `${conv.id}-i${conv.items.length + 1}`, at, speaker, lang, original: text, derived: [], ...(speaker === SPEAKER.UNKNOWN ? { speakerBy: 'UNKNOWN' } : {}), ...(ev.source ? { source: String(ev.source) } : {}), ...(answers ? { answersQuestion: answers } : {}) }; conv.items.push(item);
+  if (answers) s.questionLog.push({ id: nextId('ql', s.questionLog), questionId: answers, kind: 'ANSWERED', at, itemId: item.id, convId: conv.id, ...(ev.questionText ? { questionText: String(ev.questionText).slice(0, 300) } : {}) });
   if (ev.extract === false) return; // the text is kept as the original (for example the owner's own lines of a pasted chat) and nothing is proposed from it
   const r = extractFacts({ text, lang });
   for (const c of r.candidates) s.candidates.push({ ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker, basis: 'ORIGINAL', state: CANDIDATE_STATE.PROPOSED, proposedAt: at });
