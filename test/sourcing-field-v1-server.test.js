@@ -7,10 +7,11 @@ import { createMemoryStore } from '../src/sourcing/store/file-store.js';
 import { createMemoryWorkspaceStore } from '../src/sourcing/store/workspace-store.js';
 import { newWorkspace, setAskState } from '../src/sourcing/core/field/workspace.js';
 import { PROFILE } from './sourcing-field-v1-fixtures.js';
+import { fileURLToPath } from 'node:url';
 
 const TOKEN = 'unit-test-token-0123456789-abcdef';
 async function start({ withWs = true, profile = PROFILE } = {}) {
-  const app = createSourcingApp({ token: TOKEN, store: createMemoryStore(), workspace: withWs ? createMemoryWorkspaceStore() : null, merchantProfile: profile, uiDir: new URL('../src/sourcing/ui/', import.meta.url).pathname, coreDir: new URL('../src/sourcing/core/', import.meta.url).pathname });
+  const app = createSourcingApp({ token: TOKEN, store: createMemoryStore(), workspace: withWs ? createMemoryWorkspaceStore() : null, merchantProfile: profile, uiDir: fileURLToPath(new URL('../src/sourcing/ui/', import.meta.url)), coreDir: fileURLToPath(new URL('../src/sourcing/core/', import.meta.url)) });
   const server = http.createServer(app.handler); await new Promise((r) => server.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (path, { method = 'GET', body, token = TOKEN } = {}) => { const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...(token ? { 'x-sourcing-token': token } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); return { status: r.status, body: await r.json().catch(() => null) }; };
   return { call, base, close: () => new Promise((r) => { server.close(r); server.closeAllConnections?.(); }) };

@@ -12,6 +12,7 @@ import { newCase, dispatch, assess } from '../src/sourcing/core/case.js';
 import { auditCase } from '../src/sourcing/core/case-facts.js';
 import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, digest, describe as describeCase, photoKeysFor, EXPORT_FORMAT } from '../src/sourcing/core/recovery.js';
 import { loadUi } from './sourcing-ui-load.js';
+import { fileURLToPath } from 'node:url';
 
 const { recoverySection } = await loadUi('recover.js');
 const TOKEN = 'unit-test-token-0123456789-abcdef';
@@ -32,7 +33,7 @@ function sonny(id = 'sonny') {
 
 async function start() {
   const dir = await mkdtemp(join(tmpdir(), 'nordla-rec-')); const store = createFileStore(dir);
-  const app = createSourcingApp({ token: TOKEN, store, workspace: null, merchantProfile: null, uiDir: new URL('../src/sourcing/ui/', import.meta.url).pathname, coreDir: new URL('../src/sourcing/core/', import.meta.url).pathname });
+  const app = createSourcingApp({ token: TOKEN, store, workspace: null, merchantProfile: null, uiDir: fileURLToPath(new URL('../src/sourcing/ui/', import.meta.url)), coreDir: fileURLToPath(new URL('../src/sourcing/core/', import.meta.url)) });
   const server = http.createServer(app.handler); await new Promise((r) => server.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (path, { method = 'GET', body } = {}) => { const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-sourcing-token': TOKEN }, body: body === undefined ? undefined : JSON.stringify(body) }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
   const file = (id) => readFile(join(dir, `${id}.json`), 'utf8');

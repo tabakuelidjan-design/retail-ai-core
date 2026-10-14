@@ -16,6 +16,7 @@ import { createMemoryStore, createFileStore, StoreError } from '../src/sourcing/
 import { createSourcingApp } from '../src/sourcing/server/app.js';
 import { newCase, dispatch, assess, suggestCategories, safetyFacts, safetyKey, recordDecision } from '../src/sourcing/core/case.js';
 import { NOW, MFR, eudoc, testReport, docsFor, LIVE_CLEAN } from './sourcing-fixtures.js';
+import { fileURLToPath } from 'node:url';
 
 const IDX = `<?xml version="1.0"?><!-- comment --><Safety-Gate><weeklyReport><reference>Report-2026-9</reference><publicationDate>06/03/2026</publicationDate><URL>https://x.test/api/download/weeklyReport/detail/xml/10000295?language=en&amp;search=A,</URL></weeklyReport><weeklyReport><reference>Report-2026-39</reference><publicationDate>02/10/2026</publicationDate><URL>https://x.test/api/download/weeklyReport/detail/xml/10000325?language=en&amp;search=B,</URL></weeklyReport></Safety-Gate>`;
 const REP = (n) => `<?xml version="1.0"?><alerts><alert><caseNumber>SR/0000${n}/26</caseNumber><category>Electrical appliances</category><product>USB charger</product><brand>Acme</brand><name>Charger &amp; cable</name><type_numberOfModel>CH-${n}</type_numberOfModel><barcode xsi:nil="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"/><riskType>Electric shock</riskType><danger>Insulation fails</danger><countryOfOrigin>China</countryOfOrigin><level>Serious risk</level></alert></alerts>`;
@@ -87,7 +88,7 @@ const TOKEN = 'unit-test-token-0123456789-abcdef';
 async function startApp({ safetyAlerts = [], mode = 'LIVE_VERIFIED', ai = createDisabledProvider() } = {}) {
   const store = createMemoryStore();
   const safety = { get: async () => ({ alerts: safetyAlerts, source: { mode, fetchedAt: NOW.toISOString(), coverage: 'synthetic' } }), refresh: async () => ({ ok: true, added: 0 }) };
-  const app = createSourcingApp({ token: TOKEN, store, safety, ai, ecb: async () => ({ date: '2026-10-02', perEur: { USD: 1.08 } }), uiDir: new URL('../src/sourcing/ui/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), coreDir: new URL('../src/sourcing/core/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1') });
+  const app = createSourcingApp({ token: TOKEN, store, safety, ai, ecb: async () => ({ date: '2026-10-02', perEur: { USD: 1.08 } }), uiDir: fileURLToPath(new URL('../src/sourcing/ui/', import.meta.url)), coreDir: fileURLToPath(new URL('../src/sourcing/core/', import.meta.url)) });
   const server = http.createServer(app.handler); await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (path, { method = 'GET', body, token = TOKEN } = {}) => { const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...(token ? { 'x-sourcing-token': token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, body: await r.json().catch(() => null), headers: r.headers }; };

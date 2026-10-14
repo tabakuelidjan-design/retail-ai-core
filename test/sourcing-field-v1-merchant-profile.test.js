@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveMerchantProfilePath, loadMerchantProfile } from '../src/sourcing/server/merchant-profile.js';
 import { startSourcingServer } from '../src/sourcing/server/index.js';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 test('no environment, no profile: nothing is defaulted', async () => {
   assert.deepEqual(resolveMerchantProfilePath({}, ROOT), { path: null, source: 'NONE' }); const r = await loadMerchantProfile({}, ROOT); assert.equal(r.profile, null);
 });
