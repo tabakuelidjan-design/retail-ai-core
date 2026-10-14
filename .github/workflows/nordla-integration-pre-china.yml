@@ -1,7 +1,8 @@
 name: nordla-integration-pre-china
 # The cross-module integration branch. It merges lines that each have their own workflow, so this job runs the integration tests first (fast diagnosis) and then the suite.
 #  - Node 24: the WHOLE suite (China Sourcing requires Node 24, owner decision 2026-10-12: its runtime guard refuses Node 20 with a coded error).
-#  - Node 20 (the repository engine floor): the whole suite EXCEPT test/sourcing-*, which cannot run on Node 20 by that same decision. Nothing else is excluded.
+#  - Node 20 (the repository engine floor): the whole suite EXCEPT test/sourcing-* (cannot run on Node 20 by that same decision) and test/growth-browser.test.js (uses the global WebSocket, absent
+#    on Node 20: it throws a ReferenceError and then hangs the job where Chrome exists; it runs on Node 24). Nothing else is excluded.
 #    Each file runs in its own process with its own time cap, 4 at a time, and every failure or slow file is reported as an annotation naming the file, so a stuck
 #    file is named instead of the whole job being cancelled by the job limit.
 # No secret, no provider, no network: every module runs over fakes.
@@ -43,7 +44,11 @@ jobs:
           }
           export -f one
           : > /tmp/results.txt
-          ls test/*.test.js | grep -v '^test/sourcing-' | xargs -P 4 -I{} bash -c 'one {}'
+          ls test/*.test.js | grep -v -e '^test/sourcing-' -e '^test/growth-browser.test.js -I{} bash -c 'one {}'
+          echo "files run: $(wc -l < /tmp/results.txt)"
+          sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest on node 20::$f ${d}s (exit $rc)"; done
+          ! grep -q -v '^0 ' /tmp/results.txt
+ | xargs -P 4 -I{} bash -c 'one {}'
           echo "files run: $(wc -l < /tmp/results.txt)"
           sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest on node 20::$f ${d}s (exit $rc)"; done
           ! grep -q -v '^0 ' /tmp/results.txt
