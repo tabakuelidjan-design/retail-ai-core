@@ -95,3 +95,22 @@ test('11. the fiche offers five tabs, the heavy panes are one level down in "Plu
   const all = JSON.stringify([N.FICHE_TABS, N.NOTE_MODES, N.FILTERS, N.ST, N.LADDER]); assert.doesNotMatch(all, /Guided|Quick|Verdict|Rules|Market|Money|Proposed|Confirmed/);
 });
 test('12. the ladder of states is stated once, in this order', () => { const order = [...N.LADDER.matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1]); assert.deepEqual(order, ['Question posée', 'Réponse notée', 'Proposée', 'Confirmée', 'Vérifiée']); });
+
+// ---- ONE INTERFACE (owner decision, option B): parity of the former modes ---------------------------------------------------------------------------------------------------------------------------------------
+import { readFileSync } from 'node:fs';
+const ui = (f) => readFileSync(new URL(`../src/sourcing/ui/${f}`, import.meta.url), 'utf8');
+test('13. PARITY: every screen of the former Expert mode, and the live (guided) conversation, has an entry inside the unified navigation', () => {
+  const tabsLine = ui('app.js').split('\n').find((l) => l.startsWith('const TABS = ')); const expertKeys = [...tabsLine.matchAll(/\['(\w+)', '[^']+'\]/g)].map((m) => m[1]); assert.equal(expertKeys.length, 9, 'the nine former expert tabs');
+  for (const k of [...expertKeys, 'live']) { assert.ok(N.EXPERT_KEYS.includes(k), `${k} has a French label and a place`); assert.match(N.expertMenu('c1'), new RegExp(`data-act="sl-embed" data-key="${k}"`)); }
+  assert.equal(N.EXPERT_KEYS.length, expertKeys.length + 1); for (const k of N.EXPERT_KEYS) assert.ok(N.EXPERT_LABELS[k] && N.EXPERT_HINTS[k], k);
+  assert.match(ui('screens/salon.js'), /case 'sl-embed'/); assert.match(ui('app.js'), /embedded: embeddedHtml/);
+});
+test('14. no mode switch is offered anywhere in the screens; the legacy mode code is KEPT but only reachable through the diagnostic flag', () => {
+  const more = N.moreHtml({ sync: { kind: 'local', label: 'Sur ce téléphone', detail: '' }, comparisons: [], active: { id: 'c1', supplier: { name: 'Sonny' }, identity: { workingName: 'batterie' } }, conflicts: 0, serverSet: false });
+  assert.doesNotMatch(more, /Mode guidé|Mode expert|sl-mode|mode-field|mode-expert/); assert.match(more, /Analyses expertes/);
+  const state = ui('state.js'); assert.match(state, /LEGACY_UI/); assert.match(state, /nordla\.sourcing\.legacyUi/); const app = ui('app.js'); for (const kept of ["act === 'mode-field'", "act === 'mode-expert'", 'fieldFirst', 'fmNav']) assert.ok(app.includes(kept), `legacy code kept: ${kept}`);
+  for (const f of ['screens/field.js', 'screens/fieldfirst.js', 'screens/fieldhome.js', 'screens/decision.js', 'screens/money.js', 'screens/quick.js']) assert.ok(ui(f).length > 500, `${f} is not removed`);
+});
+test('15. the sheet reaches the expert sections where they are needed (compliance and calculations from Aperçu / Chiffres, documents from the note, conversation from the notes)', () => {
+  const nx = ui('screens/nx.js'); for (const needle of ["'sl-embed', 'compliance'", "'sl-embed', 'money'", "'sl-embed', 'quick'", "'sl-embed', 'docs'", "'sl-embed', 'live'"]) assert.ok(nx.includes(needle), needle);
+});

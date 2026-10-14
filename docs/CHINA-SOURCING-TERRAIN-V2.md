@@ -1,21 +1,21 @@
-# China Sourcing — Nordla Terrain (mobile UI V2)
+# China Sourcing — Nordla, one interface (mobile UI V2)
 
 Branch `feature/china-sourcing-mobile-ux-v2`, from `79c511f` (tip of `feature/china-sourcing-salon-reanalysis-fix`). Nothing is merged; `main` is untouched.
-This file records what was built, what is reused, what the tests prove, and what is **not** proven (physical phone). Screenshots in `docs/terrain-v2/` are **real captures of the running app** in a Chromium engine at 390 px
+**Owner decision (option B): one interface.** The former Terrain (guided), Salon and Expert modes are no longer three interfaces: their capabilities live inside the one Nordla navigation, where they are needed. Their code is kept (progressive migration; parity is verified by the legacy suites, §9) and is reachable only through a diagnostic flag. This file records what was built, what is reused, what the tests prove, and what is **not** proven (physical phone). Screenshots in `docs/terrain-v2/` are **real captures of the running app** in a Chromium engine at 390 px
 (`SOURCING_E2E_SHOTS=<dir> npm run sourcing:e2e:terrain`); they are not photographs of a physical Xiaomi.
 
 ## 1. What the owner sees
 
-One navigation, five entries (bottom bar): **Accueil · Fournisseurs · Noter · Visites · Plus**. No second tab system next to it (the old English tabs belong to the expert mode, reachable explicitly from *Plus*).
+One navigation, five entries (bottom bar): **Accueil · Fournisseurs · Noter · Visites · Plus**. There is **no mode switch anywhere**. The detailed screens of the former Expert and Guided modes (*Analyses expertes*, *Conversation en direct*) open **inside** this navigation, with a back arrow to the supplier sheet and the same bar below.
 
 | Screen | Purpose |
 |---|---|
 | **Accueil** | search, four quick actions (Prendre une note, Nouveau fournisseur, Poser une question, Comparer), what is left to do (to confirm / answers awaited / contradictions), three recent files, "Reprendre" |
 | **Fournisseurs** | cards (photo or initials, product, price, landed cost, evidence, follow-ups), live search, filters (Tous, À confirmer, En attente, Contradictions), `+` to select 2–5 offers to compare |
-| **Fiche fournisseur** | hero + two actions (Prendre une note, Poser une question) + five tabs: **Aperçu** (short), **Infos** (what is proposed / confirmed, with sources), **Questions**, **Chiffres**, **Plus** (Négocier, Conformité et risques, Adéquation, Ce qui a changé, Historique, Échantillon, Mettre à jour l'offre, Relire, vue expert) |
+| **Fiche fournisseur** | hero + two actions (Prendre une note, Poser une question) + five tabs: **Aperçu** (short), **Infos** (what is proposed / confirmed, with sources), **Questions**, **Chiffres**, **Plus** (Négocier, Conformité et risques, Adéquation, Ce qui a changé, Historique, Échantillon, Mettre à jour l'offre, Relire, **Analyses expertes**) |
 | **Prise de note** | one box, who speaks (fournisseur / moi), modes Note · Photo · Audio · Document; the proposals read from what was just saved appear **on the same screen** |
 | **Visites** | suppliers by day with what is left for each ("À poursuivre" / "Tous") |
-| **Plus** | save / sync state in French, retry, export with a clear message, server token, recovery, offline matrix, saved comparisons, the vocabulary of states, guided and expert modes |
+| **Plus** | save / sync state in French, retry, export with a clear message, server token, recovery, re-reading old notes, offline matrix, saved comparisons, the vocabulary of states, the expert analyses of the active file |
 
 ## 2. The priority defect: a question's answer is now recorded where the question is asked
 
@@ -65,6 +65,30 @@ The validated image is a design reference, not a spec. Kept: structure, hierarch
 | 4 Prise de note: Note · Photo · Audio · Document, chips Prix · MOQ · Caractéristiques | Note · Photo · Audio · Document | the chips are replaced by the proposals read from the note, with their sources |
 | 5 Visites: À venir / Visités / Favoris, by day | À poursuivre / Tous, by day | no schedule or favourites exist; the useful axis is "what is left to do" |
 
+## 6b. One interface: where each former mode now lives (parity matrix)
+
+| Former mode / screen | Now, inside the one navigation | Reached from |
+|---|---|---|
+| Expert **Quick** | Analyses expertes › Saisie rapide | Fiche › Chiffres; Fiche › Plus |
+| Expert **Verdict** | Analyses expertes › Verdict (+ the short verdict in Aperçu) | Fiche › Plus |
+| Expert **Case** | Analyses expertes › Dossier produit | Fiche › Plus |
+| Expert **Ask** | Fiche › **Questions** (with answer entry) + Analyses expertes › Questions (expert) | Fiche tab; Plus |
+| Expert **Docs** | Note › Document › « Ajouter un document (analyse détaillée) » = Analyses expertes › Documents | Prise de note; Fiche › Plus |
+| Expert **Rules** | Fiche › Plus › Conformité et risques; Analyses expertes › Règles et conformité | Aperçu › « Conformité en détail » |
+| Expert **Market** | Analyses expertes › Marché | Fiche › Plus |
+| Expert **Money** | Analyses expertes › Argent et coûts (+ Chiffres tab) | Aperçu / Chiffres › « Calculs détaillés » |
+| Expert **Guided** (step capture) | Analyses expertes › Capture détaillée | Fiche › Plus |
+| Guided **Conversation** (timeline, microphone, compose, what Nordla understood, end) | **Conversation en direct** inside the sheet; typed / dictated notes also from **Noter** | Aperçu › « Toute la conversation »; Fiche › Plus |
+| Guided **Scanner / Ajouter** (photo, document) | Noter › Photo / Document | Noter |
+| Guided **Écrire** | Noter › Note | Noter |
+| Guided **ask now / show the question** | Fiche › Questions (Montrer, Copier, Noter la réponse) | Fiche |
+| Salon (capture, review, comparison, ask, negotiate, update, what changed, memory, sample) | unchanged engines, new screens | see §1 |
+| Menu ☰ (cases, server token, recovery, re-read old notes, export, offline matrix) | Plus + « Réglages et sauvegarde » sheet; the list of cases is « Fournisseurs » | Plus |
+
+Content caveat: the expert sections keep their current texts (partly English, e.g. Money, Verdict). They are technical analysis panes; translating them is a later, separate step.
+
+Retirement of the legacy mode code is **not** done: `LEGACY_UI` (`nordla.sourcing.legacyUi`) keeps it executable for the parity suites (`sourcing:e2e`, `:v1`, `:fieldmode`, `:recovery`, `:reconnect`). It can be removed once the physical-phone test of the unified interface is signed off.
+
 ## 7. Tests (Node 24)
 
 See `docs/REAL-PHONE-TEST-TERRAIN-V2.md` for the procedure and the results table at the end of the session report. Commands:
@@ -76,7 +100,7 @@ npm run sourcing:e2e:fieldv1                 # the existing Salon loop (offers, 
 npm run sourcing:e2e                         # PWA, expert mode, conflict, layout (375 / 390 / 430)
 ```
 
-The `uiGen` migration (`nordla.sourcing.uiGen = terrain-v2`) opens Terrain once on first launch of this generation; older e2e seeds were updated to stay in the mode they test. The service-worker cache name changed (`nordla-sourcing-terrain-v2-1`) so installed phones refresh.
+Without `nordla.sourcing.legacyUi = true` the app is always the unified interface (whatever mode an old install had stored); the legacy e2e suites set that flag to keep testing the old code paths. The service-worker cache name changed (`nordla-sourcing-terrain-v2-1`) so installed phones refresh.
 
 ## 8. Not verified / incomplete
 
@@ -84,4 +108,5 @@ The `uiGen` migration (`nordla.sourcing.uiGen = terrain-v2`) opens Terrain once 
 * Voice: the code path (probe, start, pause, stop, attribution) is wired but **cannot be exercised without the speech model files** (git-ignored, ~65 MB). Needs a physical test.
 * The detailed comparison page keeps its existing layout inside the new shell (not redesigned).
 * No dark-mode review beyond the shared tokens.
+* The expert sections are not translated (see §6b).
 * PDF reading still needs the server (online), as before.

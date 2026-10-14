@@ -34,7 +34,7 @@ await api('/api/cases/sonny', { method: 'PUT', body: JSON.stringify(sonny('sonny
 const serverState = () => ({ sonny: hash('sonny'), trip2: hash('trip2'), never: hash('never-synced') });
 const baseline = serverState();
 
-const PRELOAD = `try { localStorage.setItem('nordla.sourcing.uiGen', '"terrain-v2"'); localStorage.setItem('nordla.sourcing.modeDefault', '"field-v1"'); localStorage.setItem('nordla.sourcing.mode', '"expert"'); } catch (e) {}
+const PRELOAD = `try { localStorage.setItem('nordla.sourcing.legacyUi', 'true'); localStorage.setItem('nordla.sourcing.modeDefault', '"field-v1"'); localStorage.setItem('nordla.sourcing.mode', '"expert"'); } catch (e) {}
   (() => { const of = window.fetch; window.fetch = function (u, o) { try { const m = (o && o.method) || 'GET'; if (m !== 'GET' && String(u).includes('/api/cases')) { const a = JSON.parse(sessionStorage.getItem('__w') || '[]'); a.push([m, String(u)]); sessionStorage.setItem('__w', JSON.stringify(a)); } } catch (e) {} return of.apply(this, arguments); }; })();`;
 const HELPERS = `window.__t = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)), fill: (form, vals) => { const f = document.querySelector('form[data-form="' + form + '"]'); for (const [k, v] of Object.entries(vals)) f.elements[k].value = v; f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); } }; 'ok'`;
 const ready = async (t) => { await t.waitFor("document.readyState === 'complete' && !!document.querySelector('#tabs') && document.querySelector('#tabs').children.length > 0", 20000); await t.eval(HELPERS); };

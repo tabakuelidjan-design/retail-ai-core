@@ -9,7 +9,7 @@ import { startPhoneMode } from '../../src/sourcing/server/phone.js';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser } from './cdp.js';
 
-const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.uiGen', '\"terrain-v2\"'); localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.legacyUi', 'true'); localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser(); if (!exe) { console.log('NO BROWSER FOUND: set SOURCING_E2E_BROWSER. Nothing was run.'); process.exit(2); }
 const dir = mkdtempSync(join(tmpdir(), 'nordla-tunnel-')); const TOKEN = randomBytes(24).toString('hex');
 const IDX = '<?xml version="1.0"?><Safety-Gate><weeklyReport><reference>Report-2026-39</reference><publicationDate>02/10/2026</publicationDate><URL>https://x.test/api/download/weeklyReport/detail/xml/10000325?language=en,</URL></weeklyReport></Safety-Gate>';

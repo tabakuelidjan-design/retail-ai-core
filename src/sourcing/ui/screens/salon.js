@@ -21,7 +21,7 @@ const VIEW_KEY = 'nordla.sourcing.salon.view'; const PROFILE_KEY = 'nordla.sourc
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.').trim());
 const FRIENDLY = [[/who spoke/, 'Dites d\'abord qui a écrit cette ligne (fournisseur ou vous).'], [/needs a correction/, 'Ce chiffre est ambigu : corrigez-le avant de le confirmer.'], [/planned quantity/, 'La quantité doit être un nombre entier supérieur à zéro.'], [/at least one value or some text/, 'Collez un texte ou saisissez au moins une valeur.'], [/text is required|needs some text/, 'Collez un texte.'], [/already rejected/, 'Cette information a déjà été rejetée.'], [/conflict/, 'Cette information contredit quelque chose du dossier : levez d\'abord la contradiction.'], [/finished/, 'Cette conversation est terminée : commencez-en une nouvelle.']];
 const friendly = (e) => (/^(Tapez|Utilisez|Valeurs possibles)/.test(String(e?.message ?? '')) ? e.message : (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1]);
-const MAIN_NAV = { home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more' };
+const MAIN_NAV = { home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
 const NAV_ITEMS = [['home', 'Accueil', 'home'], ['suppliers', 'Fournisseurs', 'suppliers'], ['note', 'Noter', 'note'], ['visits', 'Visites', 'visits'], ['more', 'Plus', 'more']];
 const CONFLICT_FR = { OLD: (l) => l.replace(/^Keep the earlier value/, 'Garder la valeur précédente'), NEW: (l) => l.replace(/^Use the new value/, 'Utiliser la nouvelle valeur') };
 const HELP_FR = { MODEL_MISMATCH: 'Vérifiez le modèle exact sur le produit ou sur le papier. Les modèles sont comparés caractère par caractère.', OTHER: 'L\'une des deux valeurs peut concerner un autre cas (par exemple avec votre logo). Demandez au fournisseur si vous hésitez.' };
@@ -32,6 +32,7 @@ export function createSalon(ctx) {
   let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
   let filter = 'all'; let query = ''; let visitFilter = 'open'; let noteMode = view.noteMode ?? 'text'; let speaker = 'supplier'; let answering = null; let panels = {}; let lastNote = null; let confirmingServer = null; let pickFor = null; let voiceAvail = null; let voiceProbe = false;
   if (!MAIN_NAV[view.name] && !['capture', 'review', 'negotiate'].includes(view.name)) view = { name: 'home' };
+  if (['live', 'expert'].includes(view.name) && !(view.caseId && S.cases[view.caseId])) view = { name: 'home' };
   // Salon's persisted view can be showing a case different from the global current case. Keep the active case aligned even after restarting the phone app; selection is not an edit.
   if (view.caseId && S.cases[view.caseId] && S.currentId !== view.caseId) { S.currentId = view.caseId; ctx.persist(); }
   const save = () => { ls.set(VIEW_KEY, { ...view, selected, noteMode }); };
@@ -162,6 +163,7 @@ export function createSalon(ctx) {
       if (name === 'more') return N.moreHtml({ sync: sync(), comparisons: listComparisons(ws), active: caseOf(view.caseId) ?? allCases()[0] ?? null, conflicts: Object.keys(S.conflicts ?? {}).length, serverSet: Boolean(S.token), flash: takeFlash() });
       if (name === 'sync') return N.syncHtml({ versions: ctx.conflictVersions(), confirmingServer, flash: takeFlash() });
       if (name === 'note') return noteScreen(cases);
+      if (name === 'live' || name === 'expert') return embeddedScreen(name);
       if (name === 'capture') { const info = view.caseId && caseOf(view.caseId) ? infoOf(caseOf(view.caseId)) : null; return V.captureHtml({ caseInfo: info, mode: capMode, flash, online: S.online }); }
       if (name === 'review') { const c = caseOf(view.caseId); const oid = view.offerId ?? c?.offers?.at(-1)?.id; if (!c || !oid) return homeFallback(); const d = offerDraft(c, oid); const groupable = classifyCandidates(c).group.filter((x) => x.offerId === oid).map((x) => x.id);
         const conflicts = c.conflicts.filter((x) => x.state === 'OPEN' && c.candidates.some((k) => k.id === x.candidateId && k.offerId === oid)).map((x) => describeConflict(x)); return V.reviewHtml({ draft: d, caseInfo: infoOf(c), groupableIds: groupable, conflicts, unknownNames: d.unknownSpeakers.filter((n) => n !== '(unnamed)'), correcting, flash }); }
@@ -191,6 +193,12 @@ export function createSalon(ctx) {
     return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, board: [], lastNotes: notesOf(c, 2), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
   }
 
+  /** The detailed engine screens of the former Expert / Guided modes, inside the one navigation, for the supplier whose sheet the owner came from. */
+  function embeddedScreen(name) {
+    const c = caseOf(view.caseId); if (!c) { flash = 'Choisissez un fournisseur.'; view = { ...view, name: 'suppliers' }; return render(); }
+    S.currentId = c.id; const html = ctx.embedded(name === 'live' ? 'live' : S.tab); const f = takeFlash(); // the live conversation shows its own toast
+    return N.embeddedHtml({ info: infoOf(c), kind: name, current: S.tab, html, flash: name === 'live' ? '' : f, sync: sync(c.id), conflicts: Object.keys(S.conflicts ?? {}).length });
+  }
   function noteScreen(cases) {
     let id = view.caseId && caseOf(view.caseId) ? view.caseId : lastCaseId();
     if (!id) { flash = 'Créez d\'abord un fournisseur : un nom suffit.'; view = { ...view, name: 'new' }; return render(); }
@@ -200,7 +208,7 @@ export function createSalon(ctx) {
     if (noteMode === 'voice') probeVoice();
     return N.noteHtml({ info, mode: noteMode, flash: takeFlash(), speaker, draft: draftOf(`note:${id}`), proposals: `${prop}${more}`, notes: notesOf(c, 4), photos: photosOf(c), voice: voiceModel(c), online: S.online, conflicts: Object.keys(S.conflicts ?? {}).length });
   }
-  function paint() { const main = document.querySelector('#screen'); for (const d of main.querySelectorAll('details[data-sec]')) if (openSecs.has(d.dataset.sec)) d.open = openSecs.get(d.dataset.sec); }
+  function paint() { const main = document.querySelector('#screen'); const row = main.querySelector('.nx-chips.scroll'); const on = row?.querySelector('.nx-chip[aria-pressed=true]'); if (row && on) row.scrollLeft = Math.max(0, on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2); for (const d of main.querySelectorAll('details[data-sec]')) if (openSecs.has(d.dataset.sec)) d.open = openSecs.get(d.dataset.sec); }
   document.addEventListener('toggle', (ev) => { const d = ev.target; if (d?.matches?.('details[data-sec]')) openSecs.set(d.dataset.sec, d.open); }, true);
   // live search: only the list is replaced, so the keyboard and the caret stay where they are; drafts of notes and answers are saved as they are typed (a call, a lock screen or a reload never loses them)
   document.addEventListener('input', (ev) => {
@@ -276,8 +284,8 @@ export function createSalon(ctx) {
         case 'sl-voice-pause': await ctx.voice().pause(); return ctx.render();
         case 'sl-voice-stop': await ctx.voice().stop(); return ctx.render();
         case 'sl-sample': commit(key, [{ type: 'SAMPLE_RECORD', ...val }]); return ctx.render();
-        case 'sl-expert': { S.currentId = key; ctx.persist(); return ctx.setMode(val); }
-        case 'sl-mode': return ctx.setMode(key);
+        case 'sl-embed': return openEmbedded(key, t.dataset.case || view.caseId || lastCaseId());
+        case 'sl-expert': return openEmbedded('decision', key);
         // SYNC, BACKUP
         case 'sl-conf-keep': return ctx.keepBoth(key, () => { flash = 'Les deux versions sont conservées : le dossier du serveur sous son nom, le vôtre sous « (ma copie) ».'; }).then(() => go({ name: Object.keys(S.conflicts ?? {}).length ? 'sync' : 'suppliers' }));
         case 'sl-conf-server': confirmingServer = key || null; return ctx.render();
@@ -367,5 +375,10 @@ export function createSalon(ctx) {
   const overlayHtml = () => { if (!showQ) return ''; const c = caseOf(showQ.caseId); if (!c) return ''; const q = questionOf(c, showQ.id); return q ? N.showHtml({ item: { id: q.id, caseId: c.id, en: q.en, fr: q.fr, zh: q.zh } }) : ''; };
   const renderWithOverlay = () => `${render()}${overlayHtml()}`;
 
-  return { render: renderWithOverlay, nav, click, submit, paint, syncWs, loadProfile, remember, openCase: (id) => { if (S.cases[id]) go({ name: 'case', caseId: id, tab: 'sum' }); }, state: () => ({ view, selected, wsRev: ws.rev }), workspace: () => ws, engine: eng };
+  /** Opens a detailed screen ('live' = the live conversation, otherwise an expert section) INSIDE the navigation, for a case. */
+  function openEmbedded(kind, caseId = null) {
+    const id = caseId && caseOf(caseId) ? caseId : lastCaseId(); if (!id) { flash = 'Créez d\'abord un fournisseur : un nom suffit.'; return go({ name: 'new' }); }
+    S.currentId = id; S.sheet = null; S.flash = ''; if (kind !== 'live') S.tab = kind; return go({ name: kind === 'live' ? 'live' : 'expert', caseId: id });
+  }
+  return { render: renderWithOverlay, nav, click, submit, paint, syncWs, loadProfile, remember, openCase: (id) => { if (S.cases[id]) go({ name: 'case', caseId: id, tab: 'sum' }); }, openEmbedded, goHome: () => go({ name: 'home', caseId: null }), state: () => ({ view, selected, wsRev: ws.rev }), workspace: () => ws, engine: eng };
 }

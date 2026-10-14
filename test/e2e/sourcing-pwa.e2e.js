@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser, freePort } from './cdp.js';
 
-const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.uiGen', '\"terrain-v2\"'); localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.legacyUi', 'true'); localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser();
 if (!exe) { console.log('NO BROWSER FOUND (Edge / Chrome / Chromium): set SOURCING_E2E_BROWSER. The offline cold-start test was NOT run.'); process.exit(2); }
 const TOKEN = 'e2e-field-token-0123456789-abcdef-xyz';

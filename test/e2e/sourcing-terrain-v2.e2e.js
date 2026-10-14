@@ -159,9 +159,21 @@ try {
     const c = await sonny(t); ok(c.ledger.some((e) => e.key === 'spec.capacity' && e.status === 'USER_PROVIDED'), 'the correction survived'); await click(t, '#tabs [data-key="home"]', 500); ok(/Reprendre/.test(await text(t)) || /Dossiers récents/.test(await text(t))); await shot(t, 'accueil-dossiers', 390);
   });
 
-  await check('18. ADVANCED MODES stay reachable and operational, explicitly, from Plus; the way back is one tap', async () => {
-    await click(t, '#tabs [data-key="more"]', 500); await clickText(t, '.nx-menu button', 'Mode expert', 800); let txt = await text(t, '#tabs'); ok(/Verdict|Case|Rules/.test(txt), 'expert tabs: ' + txt.slice(0, 80)); await click(t, '#btn-cases', 500); await clickText(t, '#overlay button', 'Nordla (écran principal)', 700); ok((await t.eval("document.querySelectorAll('#tabs button').length")) === 5 && /Accueil/.test(await text(t, '#tabs')), 'back in Nordla');
-    await click(t, '#tabs [data-key="more"]', 500); await clickText(t, '.nx-menu button', 'Mode guidé', 800); ok(/Nordla écoute|Écouter|Écrire|batterie|Sonny/.test(await text(t)) || (await text(t, '#tabs')).length > 0, 'guided mode opens'); await click(t, '#btn-cases', 500); await clickText(t, '#overlay button', 'Nordla (écran principal)', 700);
+  await check('18. ONE INTERFACE: no mode switch exists; every capability of the former Guided and Expert modes opens INSIDE the same navigation (the five-entry bar never changes), from the sheet and from where it is needed', async () => {
+    await click(t, '#tabs [data-key="more"]', 500); let txt = await text(t); ok(!/Mode guidé|Mode expert|Modes avancés/.test(txt), 'Plus no longer offers modes'); ok(/Analyses expertes/.test(txt), 'expert analyses listed for the active file');
+    await click(t, '#tabs [data-key="suppliers"]', 500); await click(t, `.nx-cardmain[data-key="${(await sonny(t)).id}"]`, 700);
+    // contextual access, where the owner needs it
+    ok(/Conformité en détail/.test(await text(t)) && /Calculs détaillés/.test(await text(t)) && /Toute la conversation/.test(await text(t)), 'Aperçu links to compliance, calculations and the conversation');
+    await clickText(t, '.nx-tabs button', 'Chiffres', 450); ok(/Calculs détaillés/.test(await text(t)) && /Saisie rapide/.test(await text(t)), 'Chiffres links to detailed calculations and quick entry');
+    await clickText(t, '.nx-tabs button', 'Plus', 450); const sections = ['live', 'field', 'quick', 'decision', 'case', 'ask', 'docs', 'compliance', 'market', 'money'];
+    for (const k of sections) { await click(t, `[data-act="sl-embed"][data-key="${k}"]`, 700); const body = await text(t); ok(body.length > 120, `${k} renders`); ok((await t.eval("document.querySelectorAll('#tabs button').length")) === 5 && /Accueil/.test(await text(t, '#tabs')), `${k}: the same five-entry bar`); ok(await t.eval("!document.body.classList.contains('fm-mode') && document.body.classList.contains('sl-mode')"), `${k}: still the one interface`); await noOverflow(t, `section ${k}`); await click(t, '.nx-iconbtn', 500); await clickText(t, '.nx-tabs button', 'Plus', 350); }
+    // the live conversation works inside the sheet: write to the supplier file from there
+    await click(t, '[data-act="sl-embed"][data-key="live"]', 700); txt = await text(t); ok(/Conversation/.test(txt) && /Écouter|Nordla écoute|Micro/.test(txt), 'live conversation controls: ' + txt.slice(0, 160)); await shot(t, 'conversation-en-direct', 390);
+    // a quick entry from the expert section is saved in the same case and shown by the unified Infos tab
+    await click(t, '.nx-chip[data-key="quick"]', 700); ok(await t.eval("!!document.querySelector('input[name=\"moq\"]')"), 'quick entry form'); await setv(t, 'input[name="moq"]', '88'); await click(t, 'form[data-form="quick"] button.btn', 1200);
+    await click(t, '.nx-iconbtn', 600); await clickText(t, '.nx-tabs button', 'Infos', 500); ok(/88 pièces/.test(await text(t)), 'the value typed in the expert section appears in Infos: ' + (await text(t)).slice(0, 200));
+    const c = await sonny(t); ok(c.quotes.at(-1).moq === 88 && c.ledger.some((e) => e.key === 'quote.moq' && e.status === 'USER_PROVIDED'), 'recorded once, attributed to the owner, older values kept'); ok(c.ledger.filter((e) => e.key === 'quote.moq').length >= 2, 'history kept');
+    await shot(t, 'analyse-experte', 390);
   });
 
   await check('19. WIDTHS: every main screen has no horizontal overflow and no control under 44 px at 375 px and at 360 px (the narrow Android width)', async () => {

@@ -26,7 +26,7 @@ Everything marked "browser-tested" below passes in a Chromium engine at 390 and 
 | 11 | (Optional, needs the computer) Open the same pairing link in a computer browser, edit Sonny there (add a note), then add a note on the phone. | A red **Conflit de synchronisation** banner appears by itself. **Voir les différences**: both versions, what each side added. **Garder les deux** keeps both (« (ma copie) »). The replace button asks a second question and says nothing is lost. |
 | 12 | Create a second supplier, then **Fournisseurs** → `+` on both → **Comparer**. **Plus** → **Exporter le dossier actif**. | The comparison opens; "Aucun gagnant au seul prix". The export says the file name, its size and what it contains. |
 | 13 | Close the app completely, reopen it. | It reopens where you were; an unsent draft in the note box is back. |
-| 14 | **Plus** → **Mode expert** (then the ☰ button → **Nordla (écran principal)**). | The advanced screens still work; one tap brings you back. |
+| 14 | Fiche Sonny → **Plus** → **Analyses expertes**: open **Conversation en direct**, **Verdict**, **Argent et coûts**, **Saisie rapide** (type a MOQ, validate), **Règles et conformité**. Also from the fiche: Aperçu › **Conformité en détail**, Chiffres › **Calculs détaillés**. | Each opens **inside** Nordla: the same five-entry bar stays at the bottom and the back arrow returns to the sheet. There is no mode switch anywhere. The MOQ typed in *Saisie rapide* shows in the fiche tab **Infos**. (These panes keep their current, partly English, texts.) |
 
 ## Pass / fail
 PASS only if steps 1–14 behaved as written, nothing was lost or silently changed, nothing proposed became a fact without your tap, and nothing said "vérifiée" about a supplier's word.

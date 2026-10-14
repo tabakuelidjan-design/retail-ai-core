@@ -11,7 +11,7 @@ import { capabilityMatrix } from '/core/capabilities.js';
 import { headerStatus } from '/core/status.js';
 import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js';
 import { $, esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from './dom.js';
-import { S, cur } from './state.js';
+import { S, cur, LEGACY_UI } from './state.js';
 import { formKey, captureDrafts, restoreDrafts } from './draft.js';
 import { numbersInner } from './numbers.js';
 import { num, quoteFormEvent, quickQuoteEvent } from '/core/form-events.js';
@@ -32,6 +32,7 @@ import { createVoice } from './voice.js';
 import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
 import { recoverySection, recoveryError } from './recover.js';
 import { createSyncHelpers } from './sync-state.js';
+import { createEmbedded, settingsHtml } from './embedded.js';
 import { activeMenuCase, applyLegacyReanalysis } from './menu-case.js';
 import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
@@ -40,7 +41,6 @@ import { planContext } from '/core/context-engine.js';
 import { planConversation, answerEvents } from '/core/conversation-engine.js';
 import { groupUnderstanding } from '/core/understanding.js';
 import { userQuestionView } from '/core/conversation.js';
-
 
 const TABS = [['field', 'Guided'], ['quick', 'Quick'], ['decision', 'Verdict'], ['case', 'Case'], ['ask', 'Ask'], ['docs', 'Docs'], ['compliance', 'Rules'], ['market', 'Market'], ['money', 'Money']];
 
@@ -144,9 +144,6 @@ async function fetchFx() {
   catch { S.flash = 'The rate could not be fetched: type it by hand.'; render(); }
 }
 
-
-
-
 const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScreen, case: caseScreen, ask: askScreen, docs: docsScreen, compliance: rulesScreen, market: marketScreen, money: moneyScreen };
 
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -190,9 +187,11 @@ function render() {
   if (keep) restoreDrafts(main, drafts, focus);
 }
 
+const embeddedHtml = createEmbedded({ S, ls, cur, run, status, render: () => render(), SCREENS, fmNav, fieldFirst, fmCompute, turnClosesAt, esc });
+
 // SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
 let salonInstance = null;
-const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
+const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), embedded: embeddedHtml, expertSections: () => TABS, syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
 
 const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport });
 
@@ -305,7 +304,7 @@ async function addDocument(form, d) {
 }
 
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
-function setMode(m) { S.mode = m; S.returnMode = null; S.attach = false; S.sheet = null; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
+function setMode(m) { if (!LEGACY_UI) { closeOverlay(); S.flash = ''; if (m === 'field') return salon().openEmbedded('live'); if (m === 'expert') return salon().openEmbedded('decision'); return salon().goHome(); } S.mode = m; S.returnMode = null; S.attach = false; S.sheet = null; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
 /** The supplier-facing screen for a question: the supplier's language BIG (never invented: when there is none the owner is told), the owner's French small. What was shown is remembered. */
 function showQuestion(id, lang = 'en') {
   const cx = planContext(cur(), S.A); const q = cx.all.find((x) => x.id === id) ?? cx.plan.questions.find((x) => x.id === id); if (!q || q.audience !== 'SUPPLIER') return; const zh = q.supplier.zh; const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup';
@@ -335,6 +334,8 @@ async function onClick(ev) {
   const t = ev.target.closest('[data-act]'); if (!t) return; const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined;
   if (act.startsWith('sl-')) { if (act === 'sl-menu') return openMenu(); return salon().click(ev, t); }
   if (act === 'mode-salon') return setMode('salon');
+  if (!LEGACY_UI && act === 'review-expert') { S.fstep = 'capture'; return salon().openEmbedded('field'); }
+  if (!LEGACY_UI && act === 'attach-doc') { S.attach = false; S.flash = ''; return salon().openEmbedded('docs'); }
   if (act === 'ftab') { if (key === 'expert') return setMode('expert'); S.fview = key; S.sheet = null; S.flash = ''; render(); window.scrollTo(0, 0); return; }
   if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
@@ -477,7 +478,10 @@ async function recDecide(id, keep) {
   } else r.results.push(`« ${p.incoming.name || id} » : ignoré, rien n’a changé.`);
   r.pending = r.pending.filter((x) => x.id !== id); persist(); openMenu();
 }
+/** Réglages et sauvegarde: the one sheet behind "Plus" (see embedded.js). */
+function openSettings() { const o = $('#overlay'); o.hidden = false; o.className = 'show'; o.innerHTML = settingsHtml({ S, active: menuCase(), esc }); o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases })); if (S.reanalysisMessage) o.scrollTop = 0; }
 function openMenu() {
+  if (!LEGACY_UI) return openSettings();
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
   const active = menuCase();
   o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button>${active ? `<p class="small"><b>Dossier actif : ${esc(active.identity.workingName || active.id)}</b> — ${esc(active.supplier?.name || 'Fournisseur non renseigné')}</p>` : ''}${S.reanalysisMessage ? `<p class="warn" role="status">${esc(S.reanalysisMessage)}</p>` : ''}<h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Nordla (écran principal)</button><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode guidé</button><button class="btn ${S.mode === 'expert' ? '' : 'sec'}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Nordla est l'écran principal. Le mode guidé montre seulement la conversation ; le mode expert garde tous les écrans du moteur.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}

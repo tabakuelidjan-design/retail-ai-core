@@ -34,11 +34,12 @@ const PNG = `const c = document.createElement('canvas'); c.width = 300; c.height
 await startServer();
 const errs = []; const browser = await new Browser(exe).launch(); browser.listeners.push((d) => { if (d.method === 'Runtime.exceptionThrown') errs.push(d.params.exceptionDetails.exception?.description ?? d.params.exceptionDetails.text); });
 console.log(`Browser engine: ${exe}\n`);
-const t = await browser.tab(`${base}/#t=${TOKEN}`); await ready(t); await t.waitFor('window.nordlaSourcing?.state().online === true', 15000); await t.waitFor('navigator.serviceWorker.ready.then(() => caches.keys()).then((k) => k.length > 0)', 20000);
+// LEGACY PARITY SUITE: the guided mode is no longer an interface of its own (its screens live inside Nordla); its code is kept and checked here behind the diagnostic flag until parity is proven and it is retired.
+const LEGACY = "if (!localStorage.getItem('nordla.sourcing.legacyUi')) { localStorage.setItem('nordla.sourcing.legacyUi', 'true'); localStorage.setItem('nordla.sourcing.mode', '\"field\"'); }";
+const t = await browser.tab(`${base}/#t=${TOKEN}`, { preload: LEGACY }); await ready(t); await t.waitFor('window.nordlaSourcing?.state().online === true', 15000); await t.waitFor('navigator.serviceWorker.ready.then(() => caches.keys()).then((k) => k.length > 0)', 20000);
 
-await check('1. NORDLA (Terrain) is the default entry with its one bottom bar; the GUIDED mode is explicit (Plus) with three entries and no expert tabs; Expert is one tap away in the menu and comes back; the choice persists across a reload', async () => {
-  ok((await navLabels(t)) === 'Accueil,Fournisseurs,Noter,Visites,Plus', 'Terrain by default: ' + await navLabels(t));
-  await tap(t, '#tabs [data-key="more"]'); await tap(t, '[data-act="sl-mode"][data-key="field"]'); ok((await navLabels(t)) === 'Conversation,Scanner / Ajouter,Écrire', 'guided mode from Plus: ' + await navLabels(t));
+await check('1. FIELD MODE is the default entry (three entries, no expert tabs); Expert is one tap away in the menu and comes back; the choice persists across a reload', async () => {
+  ok((await navLabels(t)) === 'Conversation,Scanner / Ajouter,Écrire', 'Field by default: ' + await navLabels(t));
   await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-expert"]'); ok((await navLabels(t)) === 'Guided,Quick,Verdict,Case,Ask,Docs,Rules,Market,Money', 'expert reachable: ' + await navLabels(t));
   await t.goto(`${base}/`); await ready(t); ok((await navLabels(t)).startsWith('Guided'), 'the owner own choice sticks');
   await tap(t, '#btn-cases'); await tap(t, '[data-act="mode-field"]'); ok((await navLabels(t)) === 'Conversation,Scanner / Ajouter,Écrire', await navLabels(t));
