@@ -1,12 +1,12 @@
 {
-  "verified_commit": "08b683cb8126a55f85df9b19a7bbee1cd146cf64",
-  "code_hash": "bf5ea85e03856959dcd15b3b05496c5041222ea2",
+  "verified_commit": "753cb420795e8ed887e7c9cbf66df4d9a5aae6d1",
+  "code_hash": "ee53466eb0e3c9009d41111dcd251e25c12f0c88",
   "full_suite": {
-    "tests": 2385,
-    "pass": 2383,
+    "tests": 2424,
+    "pass": 2422,
     "fail": 0,
     "skipped": 2,
-    "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)",
+    "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)",
     "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
@@ -17,31 +17,22 @@
   },
   "clean_clones": {
     "node20": {
-      "tests": 2385,
-      "pass": 2383,
+      "tests": 2424,
+      "pass": 2422,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:20.20, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
+      "note": "docker node:20.20, clean clone of the code commit 753cb42, test concurrency 4: 2420 passed, two failures: CR-6 (expected until this attestation names END_TO_END) and finance-hosting \"missing Railway token fails startup safely\" (a 15 s child-process timeout under the 35-minute full-suite load, unrelated to Creative; it passes alone 10/10 on node:20). Both run again alone and pass: 2420 + 2 = 2422"
     },
     "node24": {
-      "tests": 2385,
-      "pass": 2383,
+      "tests": 2424,
+      "pass": 2422,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
+      "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38477140859,
-    "workflow": "Creative Intelligence V1",
-    "commit": "41ea4becbbb24700debd1c802c59e176aef7275c",
-    "node20": "success (job 115570498983)",
-    "node24": "success (job 115570500450)",
-    "marketing_v1": {
-      "run": 38477140804,
-      "conclusion": "success"
-    },
-    "note": "Read from the public GitHub Actions API on 2026-10-14, attempt 1, no re-run needed. The code is the code verified at 08b683c (code hash bf5ea85e...); the commit differs only by the two attestation files, which are outside the code hash."
+    "status": "unknown",
+    "note": "Not read yet: recorded as success only after the Creative Intelligence V1 run on the pushed commit is read from the public GitHub Actions API."
   }
 }

@@ -1,6 +1,6 @@
 {
-  "verified_commit": "08b683cb8126a55f85df9b19a7bbee1cd146cf64",
-  "code_hash": "bf5ea85e03856959dcd15b3b05496c5041222ea2",
+  "verified_commit": "753cb420795e8ed887e7c9cbf66df4d9a5aae6d1",
+  "code_hash": "ee53466eb0e3c9009d41111dcd251e25c12f0c88",
   "components": [
     "PLANNING",
     "BRAIN",
@@ -8,14 +8,15 @@
     "PRODUCTION",
     "LAYERED_RUNTIME",
     "REFINE",
-    "INTEGRATION"
+    "INTEGRATION",
+    "END_TO_END"
   ],
   "full_suite": {
-    "tests": 2385,
-    "pass": 2383,
+    "tests": 2424,
+    "pass": 2422,
     "fail": 0,
     "skipped": 2,
-    "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)",
+    "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)",
     "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
@@ -60,36 +61,43 @@
       "killed": 275,
       "survivors_documented": 209,
       "note": "TARGETED sweep (owner rule: identity decisions, fail-closed thresholds, routing; no sweep of image-processing plumbing) with the in-house operator harness: 484 mutants of identity.js, relight.js (bounds, clip measure, grade proposal), placement.js, the shadow request check, the segmentation contract (validate / port / cache) and the integrate.js routing, against the fast suites (identity, matte, segmentation, shadow, pipeline). First pass 227 killed / 257 survived; the 69 logical survivors were analysed, real gaps got guard tests (creative-integration-guards.test.js, GD-1..GD-25: identity fail-closed on size / interior / each channel, every contract violation alone, the reasons being exactly the failed checks, declarations reaching the segmenter and the matte check, placement and shadow-request decisions, hue for every dominant channel) and the survivors were re-run: 275 killed in total. DOCUMENTED (209): 188 numeric-literal and boundary mutants in pixel arithmetic (+1 on a constant, < to <=, >= to >) of the image plumbing, which the owner told us not to sweep, asserted only qualitatively; 21 equivalent or unreachable by construction: the redundant size guard of sameAlpha (the size is checked before), the constant alpha_exact switch, the semi-transparent interior redundancy in the detail mask (interior is a subset of alpha >= 128), two hue-angle branch flips whose effect is also caught by the chromaticity check, the exact-equality boundary of the chromaticity / hue limits, extent +-1 in the placement boxes (7), and three integrate.js flips of the identity-risk branch (relight bounds imply identity, so the branch is defence in depth and not reachable with an explicit grade within the bounds) and of the colour-not-measurable branch (unreachable once segmentation succeeded). Kill rate 57 %: stated, not hidden. Not mutation-covered: segmentation internals (analysis, split, unmix), matte-quality internals, shadow geometry, visual output, which are asserted by SG / MQ / SH / AR / PI tests on drawn products."
+    },
+    "END_TO_END": {
+      "total": 356,
+      "killed": 155,
+      "survivors_documented": 201,
+      "note": "TARGETED sweep (routing, fail-closed decisions, budget enforcement, operation-id uniqueness, checkpoint invalidation, provenance/identity) of src/creative-e2e/run-context.js (72 mutants), src/creative-integration/native-alpha.js (255) and the routing/gate decisions of src/creative-e2e/e2e.js (29), with the in-house operator harness. First sweep: 132 killed, 224 survivors; two rounds of guard tests (EG-1..13, RT-27..30) killed 23 more and one unreachable state was deleted. The 201 survivors are classified in docs/architecture/creative-end-to-end.md 11.3: 185 in the native-alpha quality validation (107 are +-1 on a calibrated numeric limit, 78 are loop-bound no-ops, findings-list-only changes before a return fail(), or branches duplicated by an independent check), 12 in the run context (4 equivalent because of the 1e-12 tolerance, the rest trace counters and cosmetic ledger text), 4 in e2e.js (headline-code priority when two gates fail, ceiling 0 caught one step later, a critic estimate constant). The +-1 boundaries of the native-alpha limits are NOT pinned by tests (recommended for later); no routing, budget, operation-id, checkpoint or identity decision survives."
     }
   },
   "clean_clones": {
     "node20": {
-      "tests": 2385,
-      "pass": 2383,
+      "tests": 2424,
+      "pass": 2422,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:20.20, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
+      "note": "docker node:20.20, clean clone of the code commit 753cb42, test concurrency 4: 2420 passed, two failures: CR-6 (expected until this attestation names END_TO_END) and finance-hosting \"missing Railway token fails startup safely\" (a 15 s child-process timeout under the 35-minute full-suite load, unrelated to Creative; it passes alone 10/10 on node:20). Both run again alone and pass: 2420 + 2 = 2422"
     },
     "node24": {
-      "tests": 2385,
-      "pass": 2383,
+      "tests": 2424,
+      "pass": 2422,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:24.21, clean clone of the code commit 08b683c, test concurrency 4: 2382 passed, the only failure CR-6 (expected until this attestation names INTEGRATION; it was run again alone on the attestation and passes: 2382 + CR-6 = 2383)"
+      "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38477140859,
-    "workflow": "Creative Intelligence V1",
-    "commit": "41ea4becbbb24700debd1c802c59e176aef7275c",
-    "node20": "success (job 115570498983)",
-    "node24": "success (job 115570500450)",
-    "marketing_v1": {
-      "run": 38477140804,
-      "conclusion": "success"
-    },
-    "note": "Read from the public GitHub Actions API on 2026-10-14, attempt 1, no re-run needed. The code is the code verified at 08b683c (code hash bf5ea85e...); the commit differs only by the two attestation files, which are outside the code hash."
+    "status": "unknown",
+    "note": "Not read yet: recorded as success only after the Creative Intelligence V1 run on the pushed commit is read from the public GitHub Actions API."
   },
-  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime, (Phase 4) the executable REFINE and (Phase 5) the INTEGRATION component. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover. PHASE 5: INTEGRATION (general segmentation and realistic product integration) is the seventh active component; CI for the Phase 5 code: success (run 38477140859, Node 20 and 24)."
+  "note": "One attestation for the whole active Creative pipeline: content planning, Creative Brain, campaign planning, layered production, layered runtime, (Phase 4) the executable REFINE and (Phase 5) the INTEGRATION component. PLANNING, BRAIN and CAMPAIGN carry over (their modules are unchanged); PRODUCTION carries over (one block code added); LAYERED_RUNTIME and REFINE were swept again on the final code as described. The attestation commits themselves change documents only, which the code hash does not cover. PHASE 5: INTEGRATION (general segmentation and realistic product integration) is the seventh active component; CI for the Phase 5 code: success (run 38477140859, Node 20 and 24). END_TO_END (the single opt-in entry point runCreativeEndToEnd) joined as a component; provider-free only: providers_connected is empty and live_validation is NOT_DONE, so CREATIVE_PROVIDER_READY and CREATIVE_LIVE_VALIDATED are NO.",
+  "end_to_end": {
+    "provider_free_fixture": "PASS",
+    "entry_point": "runCreativeEndToEnd",
+    "live_provider_calls": 0,
+    "note": "Provider-free fixture (scripted fakes): request to final asset, NEEDS_OWNER_REVIEW with named warnings; resume, budget, operation ids, native alpha, refine, routing and legacy golden proven by test/creative-e2e*.test.js."
+  },
+  "providers_connected": [],
+  "live_validation": {
+    "status": "NOT_DONE"
+  }
 }
