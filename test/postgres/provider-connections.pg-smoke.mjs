@@ -26,6 +26,21 @@ if (docker(['version', '--format', '{{.Server.Version}}']).status !== 0) {
   process.exit(2);
 }
 
+/** Each migration file is applied in ONE transaction, as the Supabase CLI does (a migration may rely on it: SET LOCAL, LOCK TABLE). */
+const inTransaction = (text) => `begin;\n${text}\n;\ncommit;\n`;
+const sleepMs = (ms) => spawnSync(process.execPath, ['-e', `setTimeout(()=>{},${ms})`]);
+/**
+ * The Supabase image initialises PostgreSQL, STOPS it, and starts the final server: a connection accepted before that last start is cut ("the database system is shutting down").
+ * Wait until the log shows the server ready twice (init server, final server), then until queries keep working.
+ */
+function waitForFinalServer(name, probe) {
+  const readyCount = () => { const r = docker(['logs', name]); return ((r.stdout ?? '') + (r.stderr ?? '')).split('database system is ready to accept connections').length - 1; };
+  for (let i = 0; i < 120 && readyCount() < 2; i += 1) sleepMs(2000);
+  sleepMs(3000);
+  for (let i = 0; i < 30; i += 1) { if (probe() && (sleepMs(1500), probe())) return true; sleepMs(1000); }
+  return false;
+}
+
 const PSQL = ['exec', '-i', NAME, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'];
 /** Runs SQL through psql in the container. ok=false (with stderr) when PostgreSQL raises an error. */
 function sql(text) {
@@ -59,7 +74,7 @@ docker(['rm', '-f', NAME]);
 const run = docker(['run', '-d', '--name', NAME, '-e', 'POSTGRES_PASSWORD=smoke', IMAGE]);
 if (run.status !== 0) { console.error(`STOP: cannot start ${IMAGE} (${run.stderr.trim()})`); process.exit(2); }
 try {
-  for (let i = 0; i < 90; i += 1) { if (sql('select 1').ok) { spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},2000)']); if (sql('select 1').ok) break; } spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},2000)']); }
+  waitForFinalServer(NAME, () => sql('select 1').ok);
   accepts('PostgreSQL is running (Supabase image)', sql('select version()'));
   check('the REAL Supabase Vault extension is available', sql("select 1 from pg_extension where extname = 'supabase_vault'").out === '1' || sql('create extension if not exists supabase_vault').ok);
   const probe = sql("select vault.create_secret('probe-value-xyz', 'probe-' || gen_random_uuid()::text)");
@@ -73,7 +88,7 @@ try {
   const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
   let chainOk = true; let failed = '';
   for (const file of files) {
-    const r = sql(readFileSync(`${MIGRATIONS}${file}`, 'utf8'));
+    const r = sql(inTransaction(readFileSync(`${MIGRATIONS}${file}`, 'utf8')));
     if (!r.ok) { chainOk = false; failed = `${file}: ${r.err.split('\n')[0]}`; break; }
   }
   check(`all ${files.length} migrations apply in order (including 20261009200000_provider_connections.sql)`, chainOk, failed);

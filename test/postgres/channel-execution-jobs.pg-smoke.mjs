@@ -1,4 +1,4 @@
-// REAL PostgreSQL smoke test of supabase/migrations/20261009100000_channel_execution_jobs.sql.
+// REAL PostgreSQL (the Supabase image: auth, storage and the platform roles exist) smoke test of supabase/migrations/20261009100000_channel_execution_jobs.sql.
 //
 // No simulation: it starts a throwaway postgres:17 container, applies EVERY migration of the repository in order (the real chain), then
 // checks the constraints, triggers and compare-and-set behaviour of channel_execution_jobs with real SQL, including two concurrent
@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MIGRATIONS = `${ROOT}supabase/migrations/`;
 const NAME = 'nordla-pg-smoke-activation';
-const DB = 'activation_smoke';
+const IMAGE = process.env.PG_SMOKE_IMAGE ?? 'supabase/postgres:17.6.1.054';
+const DB = 'postgres'; // the Supabase schemas (auth, storage, vault) live in the postgres database: a created database would not have them
 const results = [];
 
 const docker = (args, input) => spawnSync('docker', args, { input, encoding: 'utf8' });
@@ -26,6 +27,21 @@ if (docker(['version', '--format', '{{.Server.Version}}']).status !== 0) {
 }
 
 /** Runs SQL through psql in the container. ok=false (with stderr) when PostgreSQL raises an error. */
+/** Each migration file is applied in ONE transaction, as the Supabase CLI does (a migration may rely on it: SET LOCAL, LOCK TABLE). */
+const inTransaction = (text) => `begin;\n${text}\n;\ncommit;\n`;
+const sleepMs = (ms) => spawnSync(process.execPath, ['-e', `setTimeout(()=>{},${ms})`]);
+/**
+ * The Supabase image initialises PostgreSQL, STOPS it, and starts the final server: a connection accepted before that last start is cut ("the database system is shutting down").
+ * Wait until the log shows the server ready twice (init server, final server), then until queries keep working.
+ */
+function waitForFinalServer(name, probe) {
+  const readyCount = () => { const r = docker(['logs', name]); return ((r.stdout ?? '') + (r.stderr ?? '')).split('database system is ready to accept connections').length - 1; };
+  for (let i = 0; i < 120 && readyCount() < 2; i += 1) sleepMs(2000);
+  sleepMs(3000);
+  for (let i = 0; i < 30; i += 1) { if (probe() && (sleepMs(1500), probe())) return true; sleepMs(1000); }
+  return false;
+}
+
 function sql(text, { db = DB } = {}) {
   const r = docker(['exec', '-i', NAME, 'psql', '-U', 'postgres', '-d', db, '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'], text);
   return { ok: r.status === 0, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
@@ -47,24 +63,23 @@ const accepts = (name, r) => check(name, r.ok, r.err.split('\n')[0]);
 
 // ------------------------------------------------------------------ environment
 docker(['rm', '-f', NAME]);
-const run = docker(['run', '-d', '--name', NAME, '-e', 'POSTGRES_PASSWORD=smoke', 'postgres:17']);
-if (run.status !== 0) { console.error(`STOP: cannot start postgres:17 (${run.stderr.trim()})`); process.exit(2); }
+const run = docker(['run', '-d', '--name', NAME, '-e', 'POSTGRES_PASSWORD=smoke', IMAGE]);
+if (run.status !== 0) { console.error(`STOP: cannot start ${IMAGE} (${run.stderr.trim()})`); process.exit(2); }
 try {
-  for (let i = 0; i < 60 && docker(['exec', NAME, 'pg_isready', '-U', 'postgres']).status !== 0; i += 1) spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},1000)']);
-  // pg_isready is true before the final restart of the entrypoint: wait until a real query works twice in a row
-  for (let i = 0; i < 60; i += 1) { if (sql('select 1', { db: 'postgres' }).ok) { spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},1500)']); if (sql('select 1', { db: 'postgres' }).ok) break; } spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},1000)']); }
-  accepts('PostgreSQL 17 is running', sql('select version()', { db: 'postgres' }));
-  accepts('create database', sql(`create database ${DB}`, { db: 'postgres' }));
-  sql('create schema storage; create table storage.buckets (id text primary key, name text, public boolean default false, file_size_limit bigint, allowed_mime_types text[]); create table storage.objects (id uuid default gen_random_uuid() primary key, bucket_id text, name text);');
+  waitForFinalServer(NAME, () => sql('select 1', { db: 'postgres' }).ok);
+  accepts('PostgreSQL is running (Supabase image)', sql('select version()', { db: 'postgres' }));
+  accepts('the Supabase platform schemas exist (auth, storage)', sql("select count(*) = 2 from information_schema.schemata where schema_name in ('auth','storage')"));
+  // the image ships a minimal storage schema: add only the columns an unrelated finance migration uses (as the provider smoke does)
+  spawnSync('docker', ['exec', '-i', '-e', 'PGPASSWORD=smoke', NAME, 'psql', '-U', 'supabase_admin', '-h', 'localhost', '-d', 'postgres', '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1'], { input: 'create schema if not exists storage; create table if not exists storage.buckets (id text primary key, name text); create table if not exists storage.objects (id uuid default gen_random_uuid() primary key, bucket_id text, name text); alter table storage.buckets add column if not exists public boolean default false, add column if not exists file_size_limit bigint, add column if not exists allowed_mime_types text[];', encoding: 'utf8' });
 
   // ---------------------------------------------------------------- the real migration chain
   const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
   let chainOk = true; let failed = '';
   for (const file of files) {
-    const r = sql(readFileSync(`${MIGRATIONS}${file}`, 'utf8'));
+    const r = sql(inTransaction(readFileSync(`${MIGRATIONS}${file}`, 'utf8')));
     if (!r.ok) { chainOk = false; failed = `${file}: ${r.err.split('\n')[0]}`; break; }
   }
-  check(`all ${files.length} migrations apply in order on PostgreSQL (including 20261009100000_channel_execution_jobs.sql)`, chainOk, failed);
+  check(`all ${files.length} migrations apply in order on the Supabase image (including 20261009100000_channel_execution_jobs.sql)`, chainOk, failed);
   if (!chainOk) throw new Error('migration chain failed');
 
   // ---------------------------------------------------------------- seed (real tables)
