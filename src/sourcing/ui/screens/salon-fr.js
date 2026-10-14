@@ -160,6 +160,12 @@ const RULES2 = [
   [/^(.+?): (CONDITIONAL_GO|GO|NO_GO|INSUFFICIENT_INFORMATION|NEEDS_EXPERT_REVIEW) - blocked by (.+?) \((\d+) conditions?\)$/, (m) => `${m[1]} : ${VERDICT_FR[m[2]] ?? m[2]} — bloqué par ${m[3].split(', ').map((c) => BLOCK_CODE_FR[c] ?? c).join(', ')} (${m[4]} ${PLURAL(m[4], 'condition', 'conditions')})`],
   [/^(.+?): (CONDITIONAL_GO|GO|NO_GO|INSUFFICIENT_INFORMATION|NEEDS_EXPERT_REVIEW)$/, (m) => `${m[1]} : ${VERDICT_FR[m[2]] ?? m[2]}`],
   [/^(\d+) required documents?(?:\(s\))? missing or not usable, e\.g\. (.+)$/, (m, t) => `${m[1]} ${PLURAL(m[1], 'document exigé manque ou est inutilisable', 'documents exigés manquent ou sont inutilisables')}, par exemple : ${splitTop(m[2], '; ').map(t).join(' ; ')}`],
+  [/^technical identification is incomplete: the product category is not confirmed(?: \((?:(\d+) key safety traits unresolved|the key safety traits are only assumed)\))?$/, (m) => `identification technique incomplète : la catégorie du produit n'est pas confirmée${m[1] ? ` (${m[1]} caractéristiques de sécurité à établir)` : /only assumed/.test(m[0]) ? ' (les caractéristiques de sécurité ne sont que supposées)' : ''}`],
+  [/^technical identification is incomplete: (\d+) key trait\(s\) are not established$/, (m) => `identification technique incomplète : ${m[1]} caractéristique${m[1] > 1 ? 's' : ''} clé${m[1] > 1 ? 's' : ''} non établie${m[1] > 1 ? 's' : ''}`],
+  [/^confirm the product category$/, () => 'confirmer la catégorie du produit'], [/^establish the missing product traits$/, () => 'établir les caractéristiques manquantes du produit'], [/^confirm, correct or reject the proposed model number$/, () => 'confirmer, corriger ou rejeter le numéro de modèle proposé'], [/^find out which model number is the right one$/, () => 'savoir quel numéro de modèle est le bon'],
+  [/^the exact model number is not known yet$/, () => "le numéro de modèle exact n'est pas encore connu"],
+  [/^a model number was proposed \((.+)\) but not confirmed yet$/, (m) => `un numéro de modèle est proposé (${m[1]}) mais pas encore confirmé`],
+  [/^the model numbers contradict each other \((.+)\)$/, (m) => `les numéros de modèle se contredisent (${m[1]})`],
   [/^identification is LOW: (\d+) key trait\(s\) unresolved, no category$/, (m) => `identification faible : ${m[1]} caractéristiques clés non résolues, aucune catégorie`],
   [/^identification is (\w+): (\d+) key trait\(s\) unresolved(?:, (.+))?$/, (m) => `identification ${({ LOW: 'faible', MEDIUM: 'moyenne', HIGH: 'élevée' })[m[1]] ?? m[1]} : ${m[2]} caractéristiques clés non résolues`],
   [/^cannot decide yet whether these regimes apply: (.+)$/, (m) => `impossible de dire pour l'instant si ces régimes s'appliquent : ${m[1].split(', ').map((x) => REGIME_FR[x] ?? x).join(', ')}`],
@@ -183,8 +189,8 @@ const VERDICT_FR = { CONDITIONAL_GO: 'feu vert sous conditions', GO: 'feu vert',
 /** split at the top level only: commas and semicolons inside parentheses stay in their phrase */
 function splitTop(str, sep) { const out = []; let depth = 0; let cur = ''; for (let i = 0; i < str.length; i += 1) { const ch = str[i]; if (ch === '(') depth += 1; if (ch === ')') depth = Math.max(0, depth - 1); if (!depth && str.startsWith(sep, i)) { out.push(cur); cur = ''; i += sep.length - 1; } else cur += ch; } out.push(cur); return out.map((x) => x.trim()).filter(Boolean); }
 export const BLOCK_CODE_FR = Object.freeze({
-  PRODUCT_IDENTITY_UNRESOLVED: 'produit non identifié', LEGAL_REQUIREMENT_UNRESOLVED: 'règles applicables non déterminées', CRITICAL_COST_UNKNOWN: 'coûts critiques inconnus', REQUIRED_DOCUMENT_MISSING: 'documents de conformité manquants', DOCUMENT_CONTRADICTS_CASE: 'document contraire au dossier',
-  ROLE_UNRESOLVED: 'votre rôle (marque, modification) non décidé', PRODUCT_NOT_IDENTIFIED: 'modèle exact manquant', NO_PRICE: 'prix unitaire manquant', LANDED_UNKNOWN: 'coût rendu inconnu', OPEN_CONTRADICTION: 'contradiction ouverte',
+  PRODUCT_IDENTITY_UNRESOLVED: 'identification technique incomplète', MODEL_NOT_ESTABLISHED: 'numéro de modèle inconnu', MODEL_NOT_CONFIRMED: 'numéro de modèle à confirmer', MODEL_CONTRADICTORY: 'numéros de modèle contradictoires', LEGAL_REQUIREMENT_UNRESOLVED: 'règles applicables non déterminées', CRITICAL_COST_UNKNOWN: 'coûts critiques inconnus', REQUIRED_DOCUMENT_MISSING: 'documents de conformité manquants', DOCUMENT_CONTRADICTS_CASE: 'document contraire au dossier',
+  ROLE_UNRESOLVED: 'votre rôle (marque, modification) non décidé', PRODUCT_NOT_IDENTIFIED: 'numéro de modèle inconnu', NO_PRICE: 'prix unitaire manquant', LANDED_UNKNOWN: 'coût rendu inconnu', OPEN_CONTRADICTION: 'contradiction ouverte',
 });
 
 /** French for ONE engine sentence (or a short phrase). Unknown text is returned unchanged. */

@@ -2,7 +2,7 @@
 // files run in the tests and on the server), the HTML from nx.js (the five validated screens) and salon-views.js (the detailed panes it reuses). Everything here works OFFLINE: cases and the workspace live on the phone,
 // the server only keeps a copy (and a merge) when it is reachable. No provider is ever called from this screen.
 // Rule of this file: a question's state, an answer and a fact's state each live in the CASE (append-only events), never in a second place. The workspace keeps views, comparisons and snapshots only.
-import { newCase, dispatch, assess, recordDecision } from '/core/case.js';
+import { newCase, dispatch, assess, recordDecision, suggestCategories } from '/core/case.js';
 import { createFieldEngine } from '/core/field/engine.js';
 import { offerDraft, attributeNameEvents } from '/core/field/offer-import.js';
 import { classifyCandidates } from '/core/understanding.js';
@@ -13,6 +13,7 @@ import { sampleState } from '/core/field/external-evidence.js';
 import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
 import { priceOfCase, priceWording } from '/core/price-display.js';
 import { rawTextOf, currentTextOf, revisionsOf } from '/core/provenance.js';
+import { CATEGORIES } from '/core/taxonomy.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -23,6 +24,7 @@ const VIEW_KEY = 'nordla.sourcing.salon.view'; const PROFILE_KEY = 'nordla.sourc
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.').trim());
 const FRIENDLY = [[/who spoke/, 'Dites d\'abord qui a écrit cette ligne (fournisseur ou vous).'], [/needs a correction/, 'Ce chiffre est ambigu : corrigez-le avant de le confirmer.'], [/planned quantity/, 'La quantité doit être un nombre entier supérieur à zéro.'], [/at least one value or some text/, 'Collez un texte ou saisissez au moins une valeur.'], [/text is required|needs some text/, 'Collez un texte.'], [/already rejected/, 'Cette information a déjà été rejetée.'], [/conflict/, 'Cette information contredit quelque chose du dossier : levez d\'abord la contradiction.'], [/finished/, 'Cette conversation est terminée : commencez-en une nouvelle.']];
 const friendly = (e) => (/^(Tapez|Utilisez|Valeurs possibles)/.test(String(e?.message ?? '')) ? e.message : (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1]);
+const CATEGORY_FR = { household_general: 'Article ménager (non électrique)', kitchenware_plastic: 'Ustensile / boîte alimentaire en plastique', water_bottle: 'Gourde / bouteille', tableware_glass_ceramic: 'Vaisselle verre / céramique', usb_charger: 'Chargeur ou adaptateur USB / secteur', power_bank: 'Batterie externe (power bank)', bluetooth_speaker: 'Enceinte Bluetooth / sans fil', bluetooth_earbuds: 'Écouteurs / casque Bluetooth', led_lamp_mains: 'Lampe LED (secteur)', usb_cable: 'Câble USB / de charge', phone_case: 'Coque / accessoire de téléphone (passif)', toy_plastic: 'Jouet (plastique / mécanique)', plush_toy: 'Peluche', textile_adult: 'Vêtement / textile adulte', textile_children: 'Vêtement / textile enfant', cosmetic_product: 'Cosmétique / soin', jewelry_costume: 'Bijou fantaisie / accessoire', ppe_item: 'Équipement de protection (EPI)', battery_standalone: 'Pile / accumulateur seul', small_appliance_mains: 'Petit appareil secteur', gift_decor_generic: 'Déco / cadeau / papeterie', pet_product: 'Article pour animaux' };
 const MAIN_NAV = { thread: 'suppliers', home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
 const NAV_ITEMS = [['home', 'Accueil', 'home'], ['suppliers', 'Fournisseurs', 'suppliers'], ['note', 'Noter', 'note'], ['visits', 'Visites', 'visits'], ['more', 'Plus', 'more']];
 const CONFLICT_FR = { OLD: (l) => l.replace(/^Keep the earlier value/, 'Garder la valeur précédente'), NEW: (l) => l.replace(/^Use the new value/, 'Utiliser la nouvelle valeur') };
@@ -206,7 +208,7 @@ export function createSalon(ctx) {
     const proposedAll = (c.candidates ?? []).filter((k) => k.state === 'PROPOSED'); const ids = new Set((c.candidates ?? []).map((k) => k.id));
     const factsView = { facts: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id, board: [], correcting }, cands: proposedAll, conflicts: conflictsOf(c, ids), correcting, history: eng().suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null };
     const sc = sync(c.id);
-    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, board: [], lastNotes: notesOf(c, 2), strip: stripOf(c), now: Date.now(), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
+    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, cats: catChoices(c), board: [], lastNotes: notesOf(c, 2), strip: stripOf(c), now: Date.now(), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
   }
 
   /** The detailed engine screens of the former Expert / Guided modes, inside the one navigation, for the supplier whose sheet the owner came from. */
@@ -240,6 +242,8 @@ export function createSalon(ctx) {
   /** the sentence being corrected takes the focus and stays in view (also when the phone's keyboard opens and shrinks the visible area) */
   const focusEdit = () => requestAnimationFrame(() => { const f = document.getElementById('nx-edit'); const ta = document.getElementById('nx-edit-text'); if (!f || !ta) return; f.scrollIntoView({ block: 'center' }); ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch { /* not a text field */ } });
   if (typeof window !== 'undefined' && window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (document.activeElement?.id === 'nx-edit-text') document.getElementById('nx-edit')?.scrollIntoView({ block: 'center' }); });
+  /** the categories the owner may confirm for this product; the one suggested from the product name is preselected (a suggestion only: the owner decides) */
+  const catChoices = (c) => ({ options: Object.keys(CATEGORIES).map((id) => ({ id, label: CATEGORY_FR[id] ?? CATEGORIES[id].label })).sort((a, b) => a.label.localeCompare(b.label, 'fr')), suggested: suggestCategories(c.identity?.workingName ?? '')[0]?.id ?? null });
   const must = (id) => { const c = caseOf(id); if (!c) throw new Error('unknown case'); return c; };
   const lastCaseId = () => view.caseId && caseOf(view.caseId) ? view.caseId : (ws.views.lastCaseId && caseOf(ws.views.lastCaseId) ? ws.views.lastCaseId : allCases()[0]?.id ?? null);
   async function click(ev, t) {
@@ -351,6 +355,7 @@ export function createSalon(ctx) {
         const rev = revisionsOf(S.cases[c.id].conversations.find((x) => x.id === d.convId)?.items.find((x) => x.id === d.itemId)).at(-1); const n = rev?.proposed?.length ?? 0;
         flash = ok(`Correction enregistrée. L'original est conservé.${n ? ` ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : à confirmer.` : ''}`); return ctx.render();
       }
+      if (name === 'sl-category') { const c = must(d.caseId); const category = String(d.category ?? ''); if (!CATEGORIES[category]) { flash = 'Choisissez la catégorie du produit.'; return ctx.render(); } commit(c.id, [{ type: 'CATEGORY', category, source: { kind: 'user', note: 'confirmed by the owner from the blocker list' } }]); flash = ok(`Catégorie confirmée : ${CATEGORY_FR[category] ?? category}. Les caractéristiques qu'elle suppose restent « supposées » jusqu'à votre confirmation.`); return ctx.render(); }
       if (name === 'sl-own-q') { const text = String(d.text ?? '').trim(); if (!text) { flash = 'Écrivez votre question.'; return ctx.render(); } commit(d.caseId, [{ type: 'QUESTION_ADD', text, lang: 'auto' }]); setDraft('ownq', ''); flash = ok('Question ajoutée.'); return ctx.render(); }
       if (name === 'sl-capture') return capture(d);
       if (name === 'sl-correct') { const c = must(view.caseId); const cand = c.candidates.find((x) => x.id === d.id); const v = validateCorrection(cand.key, d.value, 'fr'); if (!v.ok) { flash = v.error; return ctx.render(); } correcting = null; commit(c.id, [{ type: 'CANDIDATE_CORRECT', id: d.id, value: v.value }]); return ctx.render(); }

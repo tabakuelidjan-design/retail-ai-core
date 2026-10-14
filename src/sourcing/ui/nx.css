@@ -195,3 +195,9 @@ body.sl-mode .nx .st-corr{background:var(--nx-accent-soft);color:var(--nx-accent
 body.sl-mode .nx .nx-impact{border-left:4px solid var(--nx-warn);background:var(--nx-warn-soft);border-radius:var(--r-ctl);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s1);font-size:14.5px;line-height:20px;color:var(--nx-ink)}
 body.sl-mode .nx .nx-impact b{color:var(--nx-warn)}
 body.sl-mode .nx .nx-thread .nx-item{padding:var(--s3) var(--s4)}
+/* ---- identification gaps in the blocker detail: the category decision and the direct links ------------------------------------------------------------------------------------------------ */
+body.sl-mode .nx .nx-catform{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0}
+body.sl-mode .nx .nx-catform label{font-size:14px;line-height:20px;font-weight:600;color:var(--nx-ink2)}
+body.sl-mode .nx .nx-catform select{min-height:48px;font:inherit;font-size:16px;padding:0 var(--s3);border:1px solid var(--nx-line);border-radius:var(--r-ctl);background:var(--nx-card);color:var(--nx-ink)}
+body.sl-mode .nx .nx-catform .nx-btn{min-height:48px;width:100%;margin:0}
+body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0}

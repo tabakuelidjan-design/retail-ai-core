@@ -37,6 +37,12 @@ Everything marked "browser-tested" below passes in a Chromium engine at 390 and 
 | 18 | **Annuler** après avoir tapé : rien ne change. Corrigez une **note tapée** (prix, devise, MOQ, modèle, quantité) : les propositions suivent le nouveau texte, sans doublon. | L'ancienne proposition disparaît des propositions ; une proposition que vous aviez **rejetée** ne revient pas ; un fait **déjà confirmé** n'est pas modifié (un bloc « À décider » l'indique, la confirmation de la nouvelle valeur ouvre la question de contradiction habituelle). |
 | 19 | Fiche → **Questions** → corrigez une **réponse déjà enregistrée**. Fiche → Aperçu → **Toute la conversation** : corrigez une phrase plus ancienne. | Chaque phrase a **Corriger** ; la correction se fait sur place, l'original reste consultable, le lien avec la question est conservé. |
 
+## Modèle connu, identification technique (Remax / Sonny)
+| # | Do | Expected |
+|---|---|---|
+| 20 | Fiche Remax (modèle **Fc-02** confirmé) ou Sonny (**AB521**) → touchez le bandeau rouge « points bloquants ». | Le bandeau ne dit **jamais** « Modèle exact » : il dit **Identification technique incomplète**, et le détail commence par « Numéro de modèle Fc-02 : connu … cela ne prouve ni l'identification technique ni la conformité ». |
+| 21 | Dans le détail : **Catégorie du produit** (« Batterie externe » suggérée, rien n'est choisi à votre place) → **Confirmer la catégorie**. | La ligne d'identification disparaît ; restent les vrais blocages (coûts d'import, documents de conformité). Le modèle n'est **pas** redemandé. |
+
 ## Pass / fail
 PASS only if steps 1–14 behaved as written, nothing was lost or silently changed, nothing proposed became a fact without your tap, and nothing said "vérifiée" about a supplier's word.
 For each failure write: step number, a screenshot, what you expected, what you saw, and the phone model / Android / browser versions.

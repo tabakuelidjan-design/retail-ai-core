@@ -44,7 +44,7 @@ test('UI_LANGUAGE_FR: the sentences the phone test showed are now French; the co
   const text = visible(html).join('\n');
   for (const en of ['assessment cannot conclude yet', 'landed cost unknown', 'no usable unit price', 'get the exact model number', 'get a clear unit price', 'questions before leaving the stand', 'lower-impact', 'evidence too weak', 'margin unknown']) assert.ok(!text.includes(en), `still English: ${en}`);
   assert.match(text, /l'évaluation ne peut pas encore conclure/); assert.match(text, /coût rendu inconnu/); assert.match(text, /aucun prix unitaire utilisable/); assert.match(text, /obtenir le numéro de modèle exact/); assert.match(text, /\d+ questions? avant de quitter le stand/); assert.match(text, /moins importantes? peuvent? attendre|moins importante peut attendre/); assert.match(text, /preuves trop faibles/); assert.match(text, /marge inconnue/);
-  assert.equal(v.evidenceStatus.blocking[0], 'the exact product (model) is not established', 'the engine sentence (and its contract) is untouched'); assert.equal(v.assessment.decision.verdict, 'INSUFFICIENT_INFORMATION'); assert.ok(v.askNow.message.includes('before leaving the stand'));
+  assert.equal(v.evidenceStatus.blocking[0], 'the exact model number is not known yet', 'the engine sentence for an ABSENT model number (a known model is never reported as missing)'); assert.equal(v.assessment.decision.verdict, 'INSUFFICIENT_INFORMATION'); assert.ok(v.askNow.message.includes('before leaving the stand'));
   assert.equal(fr('a sentence that no rule knows'), 'a sentence that no rule knows', 'an unknown sentence is returned unchanged (and the coverage test above then fails)');
 });
 
@@ -52,14 +52,15 @@ test('COMPLIANCE_MOBILE_SUMMARY: first level = a title and 2-4 short words; ever
   const E = engines().noProfile; const c = phoneCase(); const v = E.caseView(c, null);
   const sum = V.blockerSummary(v.evidenceStatus, v.assessment);
   assert.match(sum.title, /^Bloqué — \d+ éléments? critiques? (manquants?|à régler)$/); assert.ok(sum.labels.length >= 2 && sum.labels.length <= 4, `short list: ${sum.labels}`);
-  for (const l of ['Modèle exact', 'Prix unitaire']) assert.ok(sum.labels.includes(l), l);
+  for (const l of ['Modèle et identification technique', 'Prix unitaire']) assert.ok(sum.labels.includes(l), l);
   assert.equal(sum.labels.length, new Set(sum.labels).size, 'no duplicate word');
   const html = V.blockerHtml(v.evidenceStatus, v.assessment); assert.match(html, /<details class="sl-blkd"><summary>Voir les détails<\/summary>/);
   const first = html.slice(0, html.indexOf('<details')); assert.ok(visible(first).join(' ').length < 200, 'the first level is short enough for a phone');
   // nothing was dropped: every engine reason, every hard blocker code and its detail are in the disclosure
   const det = html.slice(html.indexOf('<details')); const dt = visible(det).join('\n');
-  for (const b of v.evidenceStatus.blocking) assert.ok(dt.includes(fr(b)), `blocking reason kept: ${b}`);
-  for (const b of v.assessment.decision.hardBlockers) { const label = BLOCK_CODE_FR[b.code]; assert.ok(label, `a French label exists for ${b.code}`); assert.ok(dt.toLowerCase().includes(label.toLowerCase()), `hard blocker kept in the details: ${b.code}`); assert.ok(dt.includes(fr(b.detail)), `its detail is kept: ${b.detail}`); }
+  const IDENT = new Set(['MODEL_NOT_ESTABLISHED', 'MODEL_NOT_CONFIRMED', 'MODEL_CONTRADICTORY', 'PRODUCT_IDENTITY_UNRESOLVED']); // the identification gaps are told ONCE, with their exact cause, in their own French lines (not repeated under two codes)
+  v.evidenceStatus.blocking.forEach((b, i) => { if (IDENT.has(v.evidenceStatus.blockingCodes[i])) assert.ok(/Numéro de modèle|Identification technique incomplète/.test(dt), `identification gap explained: ${b}`); else assert.ok(dt.includes(fr(b)), `blocking reason kept: ${b}`); });
+  for (const b of v.assessment.decision.hardBlockers) { if (IDENT.has(b.code)) { assert.ok(/Identification technique incomplète/.test(dt), 'the technical identification gap is explained'); continue; } const label = BLOCK_CODE_FR[b.code]; assert.ok(label, `a French label exists for ${b.code}`); assert.ok(dt.toLowerCase().includes(label.toLowerCase()), `hard blocker kept in the details: ${b.code}`); assert.ok(dt.includes(fr(b.detail)), `its detail is kept: ${b.detail}`); }
   assert.equal(v.assessment.decision.canCommitMoney, false); assert.ok(v.assessment.decision.hardBlockers.length >= 3, 'no gate was weakened: the three hard blockers are still produced by the engine');
   assert.ok(V.caseHtml({ info: info(c), tab: 'sum', v, history: null }).includes('class="sl-blk"'), 'the case summary uses the compact block');
   // required documents (the standards) stay reachable: China Day case D lacks the food-contact declaration and the migration report
