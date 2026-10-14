@@ -14,6 +14,7 @@ import {
 } from '../creative-runtime/index.js';
 import { BRAIN_PORT_LIMITS } from '../marketing-creative/alibaba/qwen-brain-port.js';
 import { BRAIN_FAILURE, classifyBrainFailure } from './failure.js';
+import { coreErrorOfBrainStop } from '../core-resilience/adapters/creative.js';
 
 // THE CREATIVE BRAIN LIVE BENCHMARK. This module wires the existing Creative Brain, end to end, into the product-preserving runtime and the critics, under fixed bounds. It makes NO creative
 // decision: every stage is the Brain's (or a deterministic gate's). It reads only the original brief, the real source asset and the brand package that its caller loads: never an earlier
@@ -85,8 +86,11 @@ const safeError = (error) => ({ code: error?.code ?? null, name: error?.name ?? 
 const describeFailure = (error, stage) => {
   const brainStage = error?.brain_stage ?? null;
   const cause = classifyBrainFailure({ stage: brainStage, name: error?.name, code: error?.code, problem: error?.detail?.problem });
+  const core = coreErrorOfBrainStop({ cause, code: error?.code, brain_stage: brainStage });
   return {
     stage, brain_stage: brainStage, brain_round: error?.brain_round ?? null, cause, problem: error?.detail?.problem ?? null, words: error?.detail?.words ?? null, ...safeError(error),
+    // the same stop on the Core resilience taxonomy: Core owns the mechanics, the Creative Brain keeps its cause
+    core_resilience: { category: core.category, recoverable: core.recoverable, code: core.code },
     evidence: error?.evidence ? { stage: error.evidence.stage, request_id: error.evidence.request_id, model: error.evidence.model, key_repairs: error.evidence.key_repairs, raw_answer: error.evidence.raw_answer, protocol_repair: error.evidence.protocol_repair ?? null } : null,
   };
 };

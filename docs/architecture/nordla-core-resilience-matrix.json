@@ -1,0 +1,763 @@
+{
+  "schema": "nordla-core-resilience-matrix@1",
+  "categories": {
+    "PROTOCOL_ERROR": {
+      "recoverable_default": "YES",
+      "core_authorized_actions": [
+        "NORMALIZE",
+        "REASK_PROVIDER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "NORMALIZE",
+          "REASK_PROVIDER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "INPUT_INVALID": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "NORMALIZE",
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "NORMALIZE",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "MISSING_INFORMATION": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "NORMALIZE",
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "NORMALIZE",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "USER_CONTRADICTION": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "NORMALIZE",
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "NORMALIZE",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "RECOVERABLE_EXECUTION_ERROR": {
+      "recoverable_default": "YES",
+      "core_authorized_actions": [
+        "RETRY_SAFE_OPERATION",
+        "REPLAN",
+        "ROLLBACK",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "RETRY_SAFE_OPERATION",
+          "REPLAN",
+          "ROLLBACK",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "ROLLBACK",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "TOOL_CAPABILITY_LIMIT": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "REPLAN",
+        "SWITCH_CAPABILITY",
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "REPLAN",
+          "SWITCH_CAPABILITY",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "PROVIDER_FAILURE": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "RETRY_SAFE_OPERATION",
+        "SWITCH_CAPABILITY",
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "RETRY_SAFE_OPERATION",
+          "SWITCH_CAPABILITY",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "RETRY_SAFE_OPERATION",
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "DOMAIN_RULE_VIOLATION": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "ASK_USER",
+        "GRACEFUL_BLOCK"
+      ],
+      "never_allowed_even_by_a_module": [],
+      "effective": {
+        "creative": [
+          "REPLAN",
+          "GRACEFUL_BLOCK"
+        ],
+        "finance": [
+          "ASK_USER",
+          "GRACEFUL_BLOCK"
+        ]
+      }
+    },
+    "SAFETY_OR_FIDELITY_BLOCK": {
+      "recoverable_default": "NO",
+      "core_authorized_actions": [
+        "GRACEFUL_BLOCK",
+        "ASK_USER",
+        "FATAL_STOP"
+      ],
+      "never_allowed_even_by_a_module": [
+        "NORMALIZE",
+        "REASK_PROVIDER",
+        "RETRY_SAFE_OPERATION",
+        "SWITCH_CAPABILITY",
+        "ROLLBACK"
+      ],
+      "effective": {
+        "creative": [
+          "GRACEFUL_BLOCK",
+          "ASK_USER",
+          "FATAL_STOP"
+        ],
+        "finance": [
+          "GRACEFUL_BLOCK",
+          "ASK_USER",
+          "FATAL_STOP"
+        ]
+      }
+    },
+    "STATE_INTEGRITY_ERROR": {
+      "recoverable_default": "CONDITIONAL",
+      "core_authorized_actions": [
+        "ROLLBACK",
+        "FATAL_STOP"
+      ],
+      "never_allowed_even_by_a_module": [
+        "NORMALIZE",
+        "REASK_PROVIDER",
+        "RETRY_SAFE_OPERATION",
+        "REPLAN",
+        "SWITCH_CAPABILITY",
+        "ASK_USER"
+      ],
+      "effective": {
+        "creative": [
+          "ROLLBACK",
+          "FATAL_STOP"
+        ],
+        "finance": [
+          "ROLLBACK",
+          "FATAL_STOP"
+        ]
+      }
+    },
+    "FATAL_SYSTEM_ERROR": {
+      "recoverable_default": "NO",
+      "core_authorized_actions": [
+        "FATAL_STOP"
+      ],
+      "never_allowed_even_by_a_module": [
+        "NORMALIZE",
+        "REASK_PROVIDER",
+        "RETRY_SAFE_OPERATION",
+        "REPLAN",
+        "SWITCH_CAPABILITY",
+        "ASK_USER",
+        "ROLLBACK"
+      ],
+      "effective": {
+        "creative": [
+          "FATAL_STOP"
+        ],
+        "finance": [
+          "FATAL_STOP"
+        ]
+      }
+    }
+  },
+  "recovery_actions": [
+    "NORMALIZE",
+    "REASK_PROVIDER",
+    "RETRY_SAFE_OPERATION",
+    "REPLAN",
+    "SWITCH_CAPABILITY",
+    "ASK_USER",
+    "GRACEFUL_BLOCK",
+    "ROLLBACK",
+    "FATAL_STOP"
+  ],
+  "terminal_actions": [
+    "ASK_USER",
+    "GRACEFUL_BLOCK",
+    "ROLLBACK",
+    "FATAL_STOP"
+  ],
+  "terminal_states": [
+    "COMPLETED",
+    "NEEDS_USER",
+    "BLOCKED_GRACEFULLY",
+    "ROLLED_BACK",
+    "FATAL",
+    "RECOVERY_EXHAUSTED"
+  ],
+  "default_recovery_limits": {
+    "provider_repairs": 1,
+    "safe_retries": 2,
+    "replans": 1,
+    "capability_switches": 1,
+    "depth": 4,
+    "cost_eur": "UNLIMITED",
+    "elapsed_ms": "UNLIMITED"
+  },
+  "protocol_subcodes": {
+    "PROVIDER_DUPLICATE_KEYS": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_EMPTY_BODY": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_INVALID_IMAGE": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_MALFORMED_CRITIC": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_MALFORMED_JSON": {
+      "reask": true,
+      "normalize": false
+    },
+    "PROVIDER_MISSING_KEY": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_NO_JSON_OBJECT": {
+      "reask": true,
+      "normalize": false
+    },
+    "PROVIDER_UNKNOWN_KEY": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_WRAPPED_ANSWER": {
+      "reask": false,
+      "normalize": true
+    },
+    "PROVIDER_WRONG_ENUM": {
+      "reask": false,
+      "normalize": false
+    },
+    "PROVIDER_WRONG_TYPE": {
+      "reask": false,
+      "normalize": false
+    }
+  },
+  "provider_subcodes": {
+    "PROVIDER_AUTH": {
+      "transient": false
+    },
+    "PROVIDER_NETWORK": {
+      "transient": true
+    },
+    "PROVIDER_RATE_LIMITED": {
+      "transient": true
+    },
+    "PROVIDER_REFUSAL": {
+      "transient": false
+    },
+    "PROVIDER_REJECTED": {
+      "transient": false
+    },
+    "PROVIDER_SERVER_ERROR": {
+      "transient": true
+    },
+    "PROVIDER_TIMEOUT": {
+      "transient": true
+    },
+    "PROVIDER_UNAVAILABLE": {
+      "transient": true
+    },
+    "PROVIDER_UNKNOWN": {
+      "transient": false
+    }
+  },
+  "core_code_table": {
+    "CORE_CHECKPOINT_OVERWRITE": "STATE_INTEGRITY_ERROR",
+    "CORE_EFFECT_OUTCOME_UNKNOWN": "STATE_INTEGRITY_ERROR",
+    "CORE_ENGINE_FAULT": "FATAL_SYSTEM_ERROR",
+    "CORE_RECOVERY_BUDGET_REFUSED": "FATAL_SYSTEM_ERROR",
+    "CORE_RECOVERY_LOOP_GUARD": "FATAL_SYSTEM_ERROR",
+    "CORE_REPLAN_TARGET_INVALID": "TOOL_CAPABILITY_LIMIT",
+    "CORE_RUN_IDENTITY_INVALID": "STATE_INTEGRITY_ERROR",
+    "CORE_RUN_NOT_FOUND_FOR_TENANT": "STATE_INTEGRITY_ERROR",
+    "CORE_TENANT_MISMATCH": "STATE_INTEGRITY_ERROR",
+    "CORE_UNAUTHORIZED_RECOVERY": "FATAL_SYSTEM_ERROR",
+    "CORE_UNKNOWN_FACT": "INPUT_INVALID",
+    "INPUT_AMBIGUOUS": "INPUT_INVALID",
+    "INPUT_COLLECTION_MISSING": "MISSING_INFORMATION",
+    "INPUT_NOT_USABLE": "INPUT_INVALID",
+    "INPUT_REQUIRED_FIELD_MISSING": "MISSING_INFORMATION",
+    "INPUT_TOO_LONG": "INPUT_INVALID",
+    "PROVIDER_AUTH": "PROVIDER_FAILURE",
+    "PROVIDER_CAPABILITY_UNAVAILABLE": "TOOL_CAPABILITY_LIMIT",
+    "PROVIDER_DUPLICATE_KEYS": "PROTOCOL_ERROR",
+    "PROVIDER_EMPTY_BODY": "PROTOCOL_ERROR",
+    "PROVIDER_INVALID_IMAGE": "PROTOCOL_ERROR",
+    "PROVIDER_MALFORMED_CRITIC": "PROTOCOL_ERROR",
+    "PROVIDER_MALFORMED_JSON": "PROTOCOL_ERROR",
+    "PROVIDER_MISSING_KEY": "PROTOCOL_ERROR",
+    "PROVIDER_NETWORK": "PROVIDER_FAILURE",
+    "PROVIDER_NO_JSON_OBJECT": "PROTOCOL_ERROR",
+    "PROVIDER_RATE_LIMITED": "PROVIDER_FAILURE",
+    "PROVIDER_REFUSAL": "PROVIDER_FAILURE",
+    "PROVIDER_REJECTED": "PROVIDER_FAILURE",
+    "PROVIDER_SERVER_ERROR": "PROVIDER_FAILURE",
+    "PROVIDER_TIMEOUT": "PROVIDER_FAILURE",
+    "PROVIDER_UNAVAILABLE": "PROVIDER_FAILURE",
+    "PROVIDER_UNKNOWN": "PROVIDER_FAILURE",
+    "PROVIDER_UNKNOWN_KEY": "PROTOCOL_ERROR",
+    "PROVIDER_WRAPPED_ANSWER": "PROTOCOL_ERROR",
+    "PROVIDER_WRONG_ENUM": "PROTOCOL_ERROR",
+    "PROVIDER_WRONG_TYPE": "PROTOCOL_ERROR",
+    "USER_STATEMENTS_CONTRADICT": "USER_CONTRADICTION"
+  },
+  "modules": {
+    "creative": {
+      "contract_codes": {
+        "BRAIN_ENUM_INVALID": "PROTOCOL_ERROR",
+        "BRAIN_FORBIDDEN_CONTENT": "DOMAIN_RULE_VIOLATION",
+        "BRAIN_LIST_INVALID": "PROTOCOL_ERROR",
+        "BRAIN_MALFORMED": "PROTOCOL_ERROR",
+        "BRAIN_MISSING_KEY": "PROTOCOL_ERROR",
+        "BRAIN_NOT_DISTINCT": "DOMAIN_RULE_VIOLATION",
+        "BRAIN_NUMERIC_VALUE": "PROTOCOL_ERROR",
+        "BRAIN_PORT_FAILED": "PROVIDER_FAILURE",
+        "BRAIN_TEXT_INVALID": "PROTOCOL_ERROR",
+        "BRAIN_UNKNOWN_KEY": "PROTOCOL_ERROR"
+      },
+      "brain_causes": {
+        "ART_DIRECTION_INVALID": "PROTOCOL_ERROR",
+        "ART_DIRECTION_PROVIDER_FAILURE": "PROVIDER_FAILURE",
+        "BRIEF_CONTRADICTORY": "USER_CONTRADICTION",
+        "BRIEF_NEEDS_CLARIFICATION": "MISSING_INFORMATION",
+        "COMPOSITION_OUTPUT_INVALID": "PROTOCOL_ERROR",
+        "COMPOSITION_PLAN_INVALID": "PROTOCOL_ERROR",
+        "COMPOSITION_RELATIONS_CONTRADICTORY": "DOMAIN_RULE_VIOLATION",
+        "CONCEPTS_NOT_DISTINCT": "DOMAIN_RULE_VIOLATION",
+        "CONCEPT_OUTPUT_INVALID": "PROTOCOL_ERROR",
+        "CONCEPT_SELECTION_INVALID": "PROTOCOL_ERROR",
+        "CONCEPT_SELECTION_PROVIDER_FAILURE": "PROVIDER_FAILURE",
+        "CREATIVE_BRAIN_RUNTIME_WIRING_DEFECT": "FATAL_SYSTEM_ERROR",
+        "IDEATION_PROVIDER_FAILURE": "PROVIDER_FAILURE",
+        "NO_CONCEPT_MEETS_BAR": "DOMAIN_RULE_VIOLATION",
+        "PROBLEM_FRAME_INVALID": "PROTOCOL_ERROR",
+        "VALID_CREATIVE_BRAIN_REJECTION": "DOMAIN_RULE_VIOLATION"
+      },
+      "runtime_causes": {
+        "DESIGN_DOCUMENT_FAILURE": "RECOVERABLE_EXECUTION_ERROR",
+        "ENVIRONMENT_NOT_EMPTY": "SAFETY_OR_FIDELITY_BLOCK",
+        "ENVIRONMENT_PROVIDER_FAILURE": "PROVIDER_FAILURE",
+        "FIDELITY_FAIL": "SAFETY_OR_FIDELITY_BLOCK",
+        "GUARDIAN_FAIL": "SAFETY_OR_FIDELITY_BLOCK",
+        "LAYOUT_CAPABILITY_LIMIT": "TOOL_CAPABILITY_LIMIT",
+        "PREFLIGHT_FAIL": "DOMAIN_RULE_VIOLATION",
+        "PROVIDER_ENVIRONMENT_LIMITATION": "TOOL_CAPABILITY_LIMIT",
+        "RENDER_FAILURE": "RECOVERABLE_EXECUTION_ERROR",
+        "REVISION_DIRECTION_INVALID": "PROTOCOL_ERROR",
+        "REVISION_DIRECTOR_PROVIDER_FAILURE": "PROVIDER_FAILURE",
+        "REVISION_NOT_MEANINGFULLY_DIFFERENT": "DOMAIN_RULE_VIOLATION",
+        "RUNTIME_REPORTING_DEFECT": "FATAL_SYSTEM_ERROR",
+        "VISUAL_PRODUCTION_PLAN_FAILURE": "TOOL_CAPABILITY_LIMIT"
+      },
+      "domain_actions": {
+        "RECONCEPT": {
+          "core": "REPLAN",
+          "scope": "IDEATE"
+        },
+        "RECOMPOSE": {
+          "core": "REPLAN",
+          "scope": "COMPOSE"
+        },
+        "REFINE": {
+          "core": "REPLAN",
+          "scope": "PRODUCTION"
+        }
+      },
+      "dependencies": [
+        {
+          "stage": "OBSERVE",
+          "reads": [
+            "product",
+            "brand",
+            "format"
+          ]
+        },
+        {
+          "stage": "FRAME",
+          "reads": [
+            "OBSERVE",
+            "audience",
+            "occasion"
+          ]
+        },
+        {
+          "stage": "IDEATE",
+          "reads": [
+            "FRAME"
+          ]
+        },
+        {
+          "stage": "SELECT_CONCEPT",
+          "reads": [
+            "IDEATE"
+          ]
+        },
+        {
+          "stage": "ART_DIRECT",
+          "reads": [
+            "SELECT_CONCEPT",
+            "brand"
+          ]
+        },
+        {
+          "stage": "COMPOSE",
+          "reads": [
+            "ART_DIRECT",
+            "headline",
+            "claim",
+            "price",
+            "format"
+          ]
+        },
+        {
+          "stage": "SCENE",
+          "reads": [
+            "ART_DIRECT",
+            "COMPOSE"
+          ]
+        },
+        {
+          "stage": "PRODUCTION_STRATEGY",
+          "reads": [
+            "SCENE",
+            "COMPOSE",
+            "product"
+          ]
+        },
+        {
+          "stage": "PRODUCTION",
+          "reads": [
+            "PRODUCTION_STRATEGY",
+            "headline",
+            "claim",
+            "price"
+          ]
+        },
+        {
+          "stage": "CRITICS",
+          "reads": [
+            "PRODUCTION"
+          ]
+        }
+      ]
+    },
+    "finance": {
+      "codes": {
+        "ALLOCATION_AMOUNT_INVALID": "INPUT_INVALID",
+        "ALLOCATION_DUPLICATE_TARGET": "DOMAIN_RULE_VIOLATION",
+        "ALLOCATION_NOT_FOUND": "INPUT_INVALID",
+        "ALLOCATION_ON_REVERSAL": "DOMAIN_RULE_VIOLATION",
+        "AMOUNT_INVALID": "INPUT_INVALID",
+        "APPEND_ONLY_TABLE": "DOMAIN_RULE_VIOLATION",
+        "APPROVAL_REQUIRES_A_MERCHANT_ACTOR": "SAFETY_OR_FIDELITY_BLOCK",
+        "ARTIFACT_CLASSIFICATION_INVALID": "INPUT_INVALID",
+        "ARTIFACT_HASH_INVALID": "INPUT_INVALID",
+        "ARTIFACT_KIND_INVALID": "INPUT_INVALID",
+        "ARTIFACT_NOT_FOUND": "INPUT_INVALID",
+        "ARTIFACT_ORIGINAL_EXISTS_WITH_OTHER_CONTENT": "DOMAIN_RULE_VIOLATION",
+        "ARTIFACT_OWNER_REQUIRED": "DOMAIN_RULE_VIOLATION",
+        "ARTIFACT_SIZE_INVALID": "INPUT_INVALID",
+        "ARTIFACT_STORAGE_FAILED": "DOMAIN_RULE_VIOLATION",
+        "ARTIFACT_STORAGE_REF_REQUIRED": "DOMAIN_RULE_VIOLATION",
+        "ATTACHMENT_ALREADY_PRESENT": "DOMAIN_RULE_VIOLATION",
+        "ATTACHMENT_EMPTY": "INPUT_INVALID",
+        "ATTACHMENT_NOT_FOUND": "INPUT_INVALID",
+        "ATTACHMENT_REMOVE_FAILED": "DOMAIN_RULE_VIOLATION",
+        "ATTACHMENT_STORE_FAILED": "DOMAIN_RULE_VIOLATION",
+        "ATTACHMENT_TOO_LARGE": "INPUT_INVALID",
+        "ATTACHMENT_TYPE_NOT_ALLOWED": "INPUT_INVALID",
+        "BANK_ADAPTER_INCOMPLETE": "DOMAIN_RULE_VIOLATION",
+        "BANK_ADAPTER_MUST_BE_READ_ONLY": "DOMAIN_RULE_VIOLATION",
+        "BANK_ADAPTER_SCOPE_NOT_READ_ONLY": "DOMAIN_RULE_VIOLATION",
+        "BANK_CONSENT_EXPIRED": "DOMAIN_RULE_VIOLATION",
+        "BANK_CONSENT_REVOKED": "DOMAIN_RULE_VIOLATION",
+        "BANK_CSV_COLUMNS_NOT_FOUND": "INPUT_INVALID",
+        "BANK_CSV_EMPTY": "INPUT_INVALID",
+        "BANK_CSV_ENCODING_INVALID": "INPUT_INVALID",
+        "BANK_CSV_ROWS_INVALID": "INPUT_INVALID",
+        "BANK_CURRENCY_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "BANK_DIRECTION_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "BANK_IMPORT_FAILED_NOTHING_SAVED": "DOMAIN_RULE_VIOLATION",
+        "BANK_NOTHING_TO_UNRECONCILE": "DOMAIN_RULE_VIOLATION",
+        "BANK_NOT_CONFIGURED": "TOOL_CAPABILITY_LIMIT",
+        "BANK_NOT_CONNECTED": "DOMAIN_RULE_VIOLATION",
+        "BANK_OVER_RECONCILED": "DOMAIN_RULE_VIOLATION",
+        "BANK_PAYMENT_IS_A_REVERSAL": "DOMAIN_RULE_VIOLATION",
+        "BANK_PAYMENT_OVER_RECONCILED": "DOMAIN_RULE_VIOLATION",
+        "BANK_RECONCILE_NOTHING_TO_DO": "DOMAIN_RULE_VIOLATION",
+        "BANK_RECONCILIATION_NOT_FOUND": "INPUT_INVALID",
+        "BANK_SCOPE_NOT_READ_ONLY": "DOMAIN_RULE_VIOLATION",
+        "BANK_STATUS_IS_DERIVED": "DOMAIN_RULE_VIOLATION",
+        "BANK_TRANSACTION_ALREADY_HANDLED": "DOMAIN_RULE_VIOLATION",
+        "BANK_TRANSACTION_INVALID": "INPUT_INVALID",
+        "BANK_TRANSACTION_IS_IMMUTABLE": "DOMAIN_RULE_VIOLATION",
+        "BANK_TRANSACTION_NOT_FOUND": "INPUT_INVALID",
+        "BANK_TX_NOT_FOUND": "INPUT_INVALID",
+        "BANK_UNRECONCILE_EXCEEDS": "DOMAIN_RULE_VIOLATION",
+        "BANK_UNRECONCILE_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "BANK_VAULT_NOT_CONFIGURED": "DOMAIN_RULE_VIOLATION",
+        "CAPTURE_ORIGIN_INVALID": "INPUT_INVALID",
+        "CASH_AMOUNT_INVALID": "INPUT_INVALID",
+        "CASH_DATE_INVALID": "INPUT_INVALID",
+        "CASH_KIND_INVALID": "INPUT_INVALID",
+        "CERTAIN_DUPLICATE_CANNOT_BE_DISMISSED": "DOMAIN_RULE_VIOLATION",
+        "COMPANY_ALREADY_EXISTS": "DOMAIN_RULE_VIOLATION",
+        "COMPANY_NOT_FOUND": "INPUT_INVALID",
+        "CONCURRENT_MODIFICATION": "STATE_INTEGRITY_ERROR",
+        "CONVERSION_FAILED": "DOMAIN_RULE_VIOLATION",
+        "CONVERSION_TOTALS_DIFFER_FROM_QUOTE": "DOMAIN_RULE_VIOLATION",
+        "CORRECTION_EXCEEDS_PAID": "DOMAIN_RULE_VIOLATION",
+        "CORRECTION_REQUIRES_A_REFERENCE": "DOMAIN_RULE_VIOLATION",
+        "CREDIT_CURRENCY_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "CREDIT_EXCEEDS_INVOICE": "DOMAIN_RULE_VIOLATION",
+        "CREDIT_INVOICE_NOT_FOUND": "INPUT_INVALID",
+        "CREDIT_INVOICE_NOT_ISSUED": "DOMAIN_RULE_VIOLATION",
+        "CREDIT_NOTE_INVALID": "INPUT_INVALID",
+        "CREDIT_NOTE_IS_NOT_PAYABLE": "DOMAIN_RULE_VIOLATION",
+        "CREDIT_WITHOUT_INVOICE": "DOMAIN_RULE_VIOLATION",
+        "CROSS_MERCHANT_REFERENCE": "DOMAIN_RULE_VIOLATION",
+        "CURRENCY_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "CURRENCY_MISSING": "DOMAIN_RULE_VIOLATION",
+        "DECISION_INVALID": "INPUT_INVALID",
+        "DECISION_REQUIRED_APPLIED_OR_NOT": "DOMAIN_RULE_VIOLATION",
+        "DIRECTION_INVALID": "INPUT_INVALID",
+        "DIRECTION_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "DISCOUNT_EXCEEDS_LINE_AMOUNT": "DOMAIN_RULE_VIOLATION",
+        "DOCUMENT_LOCKED": "DOMAIN_RULE_VIOLATION",
+        "DOCUMENT_NOT_FOUND": "INPUT_INVALID",
+        "DOCUMENT_NUMBER_REQUIRED": "DOMAIN_RULE_VIOLATION",
+        "DOCUMENT_TYPE_INVALID": "INPUT_INVALID",
+        "DUPLICATE_ATTACHMENT": "DOMAIN_RULE_VIOLATION",
+        "DUPLICATE_DECISION_INVALID": "INPUT_INVALID",
+        "DUPLICATE_DOCUMENT_NUMBER": "DOMAIN_RULE_VIOLATION",
+        "DUPLICATE_NOT_FOUND": "INPUT_INVALID",
+        "DUPLICATE_SUPPLIER_INVOICE": "DOMAIN_RULE_VIOLATION",
+        "IDEMPOTENCY_KEY_INVALID": "INPUT_INVALID",
+        "IDEMPOTENCY_KEY_REQUIRED": "DOMAIN_RULE_VIOLATION",
+        "IDEMPOTENCY_KEY_REUSED": "DOMAIN_RULE_VIOLATION",
+        "INBOUND_NOT_IN_REVIEW": "DOMAIN_RULE_VIOLATION",
+        "INBOX_ITEM_IS_IMMUTABLE": "DOMAIN_RULE_VIOLATION",
+        "INBOX_ITEM_NOT_FOUND": "INPUT_INVALID",
+        "INPUT_INVALID": "INPUT_INVALID",
+        "INVALID_TRANSITION": "DOMAIN_RULE_VIOLATION",
+        "INVOICE_HAS_PAYMENTS": "DOMAIN_RULE_VIOLATION",
+        "INVOICE_NOT_OPEN_FOR_PAYMENT": "DOMAIN_RULE_VIOLATION",
+        "ISSUED_DOCUMENTS_CANNOT_BE_CANCELLED": "DOMAIN_RULE_VIOLATION",
+        "ISSUED_DOCUMENTS_CANNOT_BE_DELETED": "DOMAIN_RULE_VIOLATION",
+        "ITEM_REJECTED": "DOMAIN_RULE_VIOLATION",
+        "LOCKED_DOCUMENT_CANNOT_CHANGE": "DOMAIN_RULE_VIOLATION",
+        "NOT_AN_INVOICE": "DOMAIN_RULE_VIOLATION",
+        "NOT_A_CAPTURED_EXPENSE": "DOMAIN_RULE_VIOLATION",
+        "NOT_A_QUOTE": "DOMAIN_RULE_VIOLATION",
+        "NOT_READY_FOR_APPROVAL": "DOMAIN_RULE_VIOLATION",
+        "NOT_READY_TO_ISSUE": "DOMAIN_RULE_VIOLATION",
+        "NOT_READY_TO_VALIDATE": "DOMAIN_RULE_VIOLATION",
+        "NO_DUE_CONFLICT_TO_ACKNOWLEDGE": "DOMAIN_RULE_VIOLATION",
+        "ONLY_DRAFT_CAN_BE_EDITED": "DOMAIN_RULE_VIOLATION",
+        "ONLY_ISSUED_INVOICES_AND_CREDIT_NOTES_ARE_ARCHIVED": "DOMAIN_RULE_VIOLATION",
+        "ONLY_ISSUED_INVOICES_CAN_BE_CREDITED": "DOMAIN_RULE_VIOLATION",
+        "ONLY_LOCKED_DOCUMENTS_CHANGE_STATUS_THIS_WAY": "DOMAIN_RULE_VIOLATION",
+        "ONLY_UNVALIDATED_ITEMS_CAN_BE_EDITED": "DOMAIN_RULE_VIOLATION",
+        "PAID_ON_INVALID": "INPUT_INVALID",
+        "PAID_REQUIRES_ALLOCATIONS": "DOMAIN_RULE_VIOLATION",
+        "PAYMENTS_APPLY_TO_INVOICES": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_ALREADY_REVERSED": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_AMOUNT_INVALID": "INPUT_INVALID",
+        "PAYMENT_DATE_INVALID": "INPUT_INVALID",
+        "PAYMENT_EXCEEDS_REMAINING": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_METHOD_INVALID": "INPUT_INVALID",
+        "PAYMENT_NOT_FOUND": "INPUT_INVALID",
+        "PAYMENT_OVER_ALLOCATED": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_REFERENCE_INVALID": "INPUT_INVALID",
+        "PAYMENT_REFERENCE_NOT_UNIQUE": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_REFERENCE_ONLY_ON_PDF_ORIGINAL": "DOMAIN_RULE_VIOLATION",
+        "PAYMENT_SOURCE_INVALID": "INPUT_INVALID",
+        "PEPPOL_DOCUMENT_CHANGED": "DOMAIN_RULE_VIOLATION",
+        "PEPPOL_INVALID_INITIAL_STATE": "DOMAIN_RULE_VIOLATION",
+        "PEPPOL_INVALID_TRANSITION": "DOMAIN_RULE_VIOLATION",
+        "PEPPOL_MESSAGE_NOT_FOUND": "INPUT_INVALID",
+        "PEPPOL_NOT_READY": "DOMAIN_RULE_VIOLATION",
+        "PROFILE_HASH_INVALID": "INPUT_INVALID",
+        "QUOTES_HAVE_NO_APPROVAL_STEP": "DOMAIN_RULE_VIOLATION",
+        "QUOTE_ALREADY_CONVERTED": "DOMAIN_RULE_VIOLATION",
+        "QUOTE_NOT_READY": "DOMAIN_RULE_VIOLATION",
+        "REASON_REQUIRED": "MISSING_INFORMATION",
+        "RECEIVER_NOT_ON_PEPPOL": "DOMAIN_RULE_VIOLATION",
+        "REFUND_EXCEEDS_CREDIT_NOTE": "DOMAIN_RULE_VIOLATION",
+        "REFUND_EXCEEDS_PAYMENT": "DOMAIN_RULE_VIOLATION",
+        "REFUND_EXCEEDS_REFUNDABLE": "DOMAIN_RULE_VIOLATION",
+        "REFUND_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_BREAKS_REFUND": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_EXCEEDS_ALLOCATION": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_EXCEEDS_PAYMENT": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_OF_REVERSAL": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_PAYMENT_ALLOCATED": "DOMAIN_RULE_VIOLATION",
+        "REVERSAL_PAYMENT_RECONCILED": "DOMAIN_RULE_VIOLATION",
+        "SENDING_REQUIRES_A_MERCHANT_ACTOR": "SAFETY_OR_FIDELITY_BLOCK",
+        "SOURCE_INVALID": "INPUT_INVALID",
+        "SOURCE_ORDER_ALREADY_INVOICED": "DOMAIN_RULE_VIOLATION",
+        "STOCK_MOVEMENT_IS_IMMUTABLE": "DOMAIN_RULE_VIOLATION",
+        "STOCK_MOVEMENT_NOT_FOUND": "INPUT_INVALID",
+        "STOCK_MOVEMENT_STATE_CHANGED": "STATE_INTEGRITY_ERROR",
+        "SUPPLIER_INVOICE_NOT_PAYABLE": "DOMAIN_RULE_VIOLATION",
+        "TARGET_NOT_FOUND": "INPUT_INVALID",
+        "TARGET_NOT_OPEN": "DOMAIN_RULE_VIOLATION",
+        "THIS_STEP_REQUIRES_A_MERCHANT_ACTOR": "SAFETY_OR_FIDELITY_BLOCK",
+        "USE_SEND_QUOTE": "INPUT_INVALID",
+        "WEBHOOK_AUTHENTICATION_FAILED": "DOMAIN_RULE_VIOLATION",
+        "WRONG_RECIPIENT": "DOMAIN_RULE_VIOLATION"
+      }
+    },
+    "activation": {
+      "codes": {
+        "ACCOUNT_INVALID": "PROVIDER_FAILURE",
+        "ACT_CONNECTOR_AMBIGUOUS": "INPUT_INVALID",
+        "ACT_CONNECTOR_EXTERNAL_ID_REQUIRED": "INPUT_INVALID",
+        "ACT_CONNECTOR_KIND_UNSUPPORTED": "INPUT_INVALID",
+        "ACT_CONNECTOR_MERCHANT_MISMATCH": "STATE_INTEGRITY_ERROR",
+        "ACT_CONNECTOR_NOT_FOUND": "INPUT_INVALID",
+        "ACT_CREDENTIAL_PROVIDER_REQUIRED": "INPUT_INVALID",
+        "ACT_FORBIDDEN_FIELD": "INPUT_INVALID",
+        "ACT_IDEMPOTENCY_CONFLICT": "STATE_INTEGRITY_ERROR",
+        "ACT_INVALID_FIELD": "INPUT_INVALID",
+        "ACT_INVALID_TIMESTAMP": "INPUT_INVALID",
+        "ACT_JOB_INVALID_TRANSITION": "DOMAIN_RULE_VIOLATION",
+        "ACT_JOB_NOT_FOUND": "INPUT_INVALID",
+        "ACT_JOB_SCOPE_MISMATCH": "STATE_INTEGRITY_ERROR",
+        "ACT_JOB_STATE_CONFLICT": "STATE_INTEGRITY_ERROR",
+        "ACT_M4_NOTHING_PUBLISHED": "DOMAIN_RULE_VIOLATION",
+        "ACT_M4_RECEIPT_SCOPE_MISMATCH": "STATE_INTEGRITY_ERROR",
+        "ACT_MEDIA_LOCATION_REFUSED": "DOMAIN_RULE_VIOLATION",
+        "ACT_MEDIA_NOT_COMPATIBLE": "DOMAIN_RULE_VIOLATION",
+        "ACT_MEDIA_TRANSPORT_MISSING": "INPUT_INVALID",
+        "ACT_ORDER_DELIVERY_MISSING": "INPUT_INVALID",
+        "ACT_ORDER_DELIVERY_UNKNOWN": "DOMAIN_RULE_VIOLATION",
+        "ACT_ORDER_DERIVED_MISMATCH": "STATE_INTEGRITY_ERROR",
+        "ACT_ORDER_DUPLICATE_DELIVERY": "DOMAIN_RULE_VIOLATION",
+        "ACT_ORDER_INVALID_EXPIRY": "INPUT_INVALID",
+        "ACT_ORDER_INVALID_MODE": "INPUT_INVALID",
+        "ACT_ORDER_OUTLIVES_GOVERNING": "DOMAIN_RULE_VIOLATION",
+        "ACT_ORDER_PROVIDER_MISMATCH": "DOMAIN_RULE_VIOLATION",
+        "ACT_ORDER_PUBLISH_AT_OUTSIDE_WINDOW": "DOMAIN_RULE_VIOLATION",
+        "ACT_ORDER_PUBLISH_AT_REQUIRED": "INPUT_INVALID",
+        "ACT_ORDER_SCOPE_MISMATCH": "STATE_INTEGRITY_ERROR",
+        "ACT_PROVIDER_OPTIONS_INVALID": "INPUT_INVALID",
+        "ACT_PROVIDER_OPTION_NOT_APPROVED": "DOMAIN_RULE_VIOLATION",
+        "ACT_RECEIPT_NOT_PUBLISHED": "DOMAIN_RULE_VIOLATION",
+        "ACT_RECEIPT_PROVIDER_REF_REQUIRED": "INPUT_INVALID",
+        "ACT_RECEIPT_PUBLISHED_AT_REQUIRED": "INPUT_INVALID",
+        "ACT_RECONCILIATION_REF_REQUIRED": "INPUT_INVALID",
+        "ACT_SECRET_LEAK": "SAFETY_OR_FIDELITY_BLOCK",
+        "ACT_STORE_FAILED": "RECOVERABLE_EXECUTION_ERROR",
+        "ACT_UNKNOWN_KEY": "INPUT_INVALID",
+        "AUTH_INVALID": "PROVIDER_FAILURE",
+        "CAPABILITY_UNSUPPORTED": "TOOL_CAPABILITY_LIMIT",
+        "DAILY_LIMIT_REACHED": "PROVIDER_FAILURE",
+        "INVALID_PAYLOAD": "INPUT_INVALID",
+        "MEDIA_INVALID": "INPUT_INVALID",
+        "PERMANENT_REJECTION": "PROVIDER_FAILURE",
+        "POLICY_VIOLATION": "SAFETY_OR_FIDELITY_BLOCK",
+        "PRIVACY_MISMATCH": "SAFETY_OR_FIDELITY_BLOCK",
+        "PRIVATE_ONLY_RESTRICTION": "SAFETY_OR_FIDELITY_BLOCK",
+        "PROCESSING_TRANSIENT": "PROVIDER_FAILURE",
+        "PROVIDER_UNAVAILABLE": "PROVIDER_FAILURE",
+        "PUBLISH_RESULT_UNKNOWN": "STATE_INTEGRITY_ERROR",
+        "RATE_LIMITED": "PROVIDER_FAILURE",
+        "SCOPE_MISSING": "PROVIDER_FAILURE",
+        "TIMEOUT": "PROVIDER_FAILURE"
+      }
+    }
+  }
+}
