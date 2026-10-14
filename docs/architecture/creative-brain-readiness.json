@@ -32,7 +32,17 @@
     }
   },
   "ci": {
-    "status": "unknown",
-    "note": "Not read yet: recorded as success only after the Creative Intelligence V1 run on the pushed commit is read from the public GitHub Actions API."
+    "status": "success",
+    "run": 38567102429,
+    "workflow": "Creative Intelligence V1",
+    "commit": "1544392e16cd885e3307fd6b9717f1d23296d7a1",
+    "node20": "success (job 115862461424)",
+    "node24": "success (job 115862461865)",
+    "marketing_v1": {
+      "run": 38564056956,
+      "conclusion": "success",
+      "note": "run on the previous commit 4162bec of the same branch (the docs-only commit does not trigger it)"
+    },
+    "note": "Read from the public GitHub Actions API on 2026-10-14. The code is the code verified at 086fae1 (code hash 7033e198...); this commit differs only by the two attestation files and docs, which are outside the code hash. DISCLOSURE: the first run on this branch (38564056939, commit 4162bec, same code) FAILED on Node 24 in an existing test, RF-2 (test/creative-refine.test.js:57, a repair reported REPAIR_OUTSIDE_ITS_SCOPE with the PRODUCT node changed); Node 20 passed, both clean-clone Docker runs on Node 24 and Node 20 passed, three local reruns passed, and the rerun of the same code (this run, attempt 1 of a new commit) passed. The cause is NOT explained; it is recorded as an unexplained intermittent failure of an existing real-render test, to be investigated, not as fixed."
   }
 }
