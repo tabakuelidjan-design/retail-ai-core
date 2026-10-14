@@ -1,0 +1,27 @@
+name: nordla-integration-pre-china
+# The cross-module integration branch. It merges lines that each have their own workflow, so this job runs the integration tests first (fast diagnosis) and then the
+# WHOLE suite on Node 24 (China Sourcing requires it) and Node 20 (the repository engine floor). No secret, no provider, no network: every module runs over fakes.
+on:
+  push:
+    branches: ['integration/**']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  suite:
+    name: full suite (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm ci --no-audit --no-fund
+      - name: Integration contracts and the three cross-module workflows
+        run: node --test test/integration-contracts.test.js test/integration-workflows.test.js
+      - name: Full suite (cross-module non-regression)
+        run: npm test

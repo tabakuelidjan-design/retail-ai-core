@@ -12,7 +12,7 @@ export const MAPPINGS = deepFreeze({
   buying_basis: { QUOTED: P.SUPPLIER_CLAIM, ESTIMATED: P.ESTIMATED, ASSUMPTION: P.ESTIMATED, MISSING: P.UNKNOWN },
   // src/marketing/provenance.js EVIDENCE_KINDS (lowercase) and src/branding/constants.js EVIDENCE_PROVENANCE
   marketing_evidence_kind: { observed: P.SYSTEM_DERIVED, derived: P.SYSTEM_DERIVED, attributed: P.ESTIMATED, inferred: P.ESTIMATED, unavailable: P.UNKNOWN },
-  // src/creative-planning/constants.js FACT_STATUS
+  // Creative planning constants, FACT_STATUS
   creative_fact_status: { VERIFIED: P.VERIFIED, APPROVED_CLAIM: P.USER_PROVIDED, ESTIMATE: P.ESTIMATED, UNKNOWN: P.UNKNOWN },
   // src/metrics/costs.js COST_STATUS
   metrics_cost_status: { VERIFIED: P.VERIFIED, UNVERIFIED: P.USER_PROVIDED, ESTIMATED: P.ESTIMATED, STALE: P.ESTIMATED, MISSING: P.UNKNOWN },
