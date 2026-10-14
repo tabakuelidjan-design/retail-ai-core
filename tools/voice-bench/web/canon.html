@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Enregistrement canonique (LAB)</title>
+<style>
+:root{--bg:#f6f3ef;--ink:#1b2433;--muted:#64605d;--navy:#10223b;--card:#fdfbf8;--line:#e5ded5;--red:#c0392b;--ok:#2e7d4f}
+*{box-sizing:border-box}body{margin:0;font:17px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:14px 16px 100px}
+h1{font:700 21px/1.2 Georgia,serif;margin:4px 0 2px}.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}
+button{font:600 19px system-ui;border:0;border-radius:18px;padding:18px 20px;min-height:60px;width:100%;margin:8px 0;background:#ece8e5;color:var(--ink)}
+button.go{background:var(--navy);color:#fff}button.rec{background:var(--red);color:#fff}button.ok{background:var(--ok);color:#fff}button:disabled{opacity:.4}
+.cat{font:700 11px system-ui;letter-spacing:.09em;color:#9a5b00}.say{font:700 30px/1.2 system-ui;margin:8px 0;color:var(--navy);word-break:break-word}.hint{font-size:20px;color:var(--ink);margin:4px 0}
+.bar{position:sticky;top:0;background:var(--bg);padding:8px 0;display:flex;justify-content:space-between;font:600 15px system-ui;z-index:2}.dot{color:var(--red)}
+label{display:block;margin:10px 0;font-size:15px}input[type=text]{font:17px system-ui;padding:10px;border:1px solid var(--line);border-radius:10px;width:100%}
+.meter{height:10px;background:#e5ded5;border-radius:6px;overflow:hidden}.meter i{display:block;height:100%;background:var(--ok);width:0}
+pre{white-space:pre-wrap;word-break:break-word;background:#f0ece7;border-radius:10px;padding:10px;font-size:12px;max-height:200px;overflow:auto}
+audio{width:100%;margin:8px 0}.small{font-size:13px;color:var(--muted)}
+</style></head>
+<body>
+<h1>Enregistrement canonique</h1><p class="sub">LAB · un seul enregistrement, de bout en bout, qui servira à TOUS les moteurs · ta voix uniquement · reste sur ce PC</p>
+<div id="stage"></div>
+<div class="card"><b>Journal</b><pre id="log"></pre></div>
+<script type="module" src="canon.js"></script>
+</body></html>

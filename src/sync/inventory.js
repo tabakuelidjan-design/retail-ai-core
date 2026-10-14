@@ -10,6 +10,7 @@
 // snapshots are inserted together at the end, so a cycle costs a handful of requests instead of two per pair.
 
 import { VARIANT_INVENTORY_COST_PAGE_QUERY } from '../shopify/queries.js';
+import { requireTimeZone } from '../metrics/profile.js';
 import { extractAvailableQuantity, normalizeInventorySnapshot, shouldWriteInventorySnapshot } from './normalize.js';
 import { insertInChunks } from './batch.js';
 
@@ -47,7 +48,7 @@ export async function loadRecentLatestSnapshots(supabase, merchantId, now) {
  */
 export async function syncInventory({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
-  const timeZone = opts.timeZone ?? 'UTC';
+  const timeZone = requireTimeZone(opts.timeZone, 'syncInventory');
   const summary = { variantsChecked: 0, snapshotsWritten: 0, snapshotsSkippedSameDay: 0, errors: [] };
 
   // Local lookup tables: source_id -> local id, for variants and locations

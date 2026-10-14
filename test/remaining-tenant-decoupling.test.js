@@ -77,7 +77,7 @@ const TOOLS = {
 for (const [name, run] of Object.entries(TOOLS)) {
   test(`${name}: valid merchant, Shopify absent -> built from Nordla data only; zero Shopify client, zero network; A only`, () => noNetwork(async (hits) => {
     const s = await twoMerchants(); const t = trap();
-    const r = await run(s, { NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: t.factory });
+    const r = await run(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: t.factory });
     assert.equal(r.merchantId, A); assert.equal(leaks(r.output, 'Beta'), false, 'no B data'); assert.equal(t.calls.created, 0); assert.deepEqual(hits, []);
     if (name !== 'buying') assert.deepEqual(r.output.tenant, { merchant_id: A });
     if (name === 'buying') assert.equal(r.output.input_status.sales_reconciliation.status, 'NOT_CONFIGURED');
@@ -85,14 +85,14 @@ for (const [name, run] of Object.entries(TOOLS)) {
 
   test(`${name}: two merchants - NORDLA_MERCHANT_ID=B reads only B (and the reverse holds)`, async () => {
     const s = await twoMerchants();
-    const rb = await run(s, { NORDLA_MERCHANT_ID: B }, { outDir: await tmp(), createClient: trap().factory });
+    const rb = await run(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: B }, { outDir: await tmp(), createClient: trap().factory });
     assert.equal(rb.merchantId, B); assert.equal(leaks(rb.output, 'Alpha'), false);
-    const ra = await run(s, { NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: trap().factory });
+    const ra = await run(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: trap().factory });
     assert.equal(leaks(ra.output, 'Beta'), false);
   });
 
   test(`${name}: unknown / missing / malformed NORDLA_MERCHANT_ID -> refused cleanly, nothing written, no Shopify`, async () => {
-    for (const env of [{ NORDLA_MERCHANT_ID: UNKNOWN, ...SHOPIFY_ENV }, { ...SHOPIFY_ENV }, { NORDLA_MERCHANT_ID: 'nope' }]) {
+    for (const env of [{ MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: UNKNOWN, ...SHOPIFY_ENV }, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: 'nope' }]) {
       const s = await twoMerchants(); const dir = await tmp(); const t = trap();
       await assert.rejects(run(s, env, { outDir: dir, createClient: t.factory }), (e) => [T.MERCHANT_NOT_FOUND, T.MERCHANT_ID_MISSING, T.MERCHANT_ID_INVALID].includes(e.code));
       assert.deepEqual(s.writes, []); assert.deepEqual(await readdir(dir), []); assert.equal(t.calls.created, 0);
@@ -103,15 +103,15 @@ for (const [name, run] of Object.entries(TOOLS)) {
     const one = createFakeSupabase(); await one.insert('merchants', [{ id: A, name: 'Only' }]);
     await assert.rejects(run(one, {}, { outDir: await tmp(), createClient: trap().factory }), (e) => e.code === T.MERCHANT_ID_MISSING);
     const empty = createFakeSupabase();
-    await assert.rejects(run(empty, { NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: trap().factory }), (e) => e.code === T.MERCHANT_NOT_FOUND);
+    await assert.rejects(run(empty, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, { outDir: await tmp(), createClient: trap().factory }), (e) => e.code === T.MERCHANT_NOT_FOUND);
     assert.equal((empty._tables.get('merchants') ?? []).length, 0);
   });
 
   test(`${name}: legacy lookup only when explicitly enabled - resolved through merchant_connectors (not merchants.source_id), logged`, async () => {
     const s = await twoMerchants();
-    const r = await run(s, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory });
+    const r = await run(s, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory });
     assert.equal(r.merchantId, B, 'SYN-B is B\'s connector; B\'s merchants.source_id is LEGACY-B');
-    await assert.rejects(run(s, { ...SHOPIFY_ENV }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory }), (e) => e.code === T.MERCHANT_ID_MISSING);
+    await assert.rejects(run(s, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory }), (e) => e.code === T.MERCHANT_ID_MISSING);
   });
 }
 
@@ -124,23 +124,23 @@ for (const [name, feature] of Object.entries(SHOPIFY_FEATURES)) {
   const status = (v) => v.status ?? (name === 'marketing --validate' ? 'CHECKED' : v.status);
   test(`${name}: the tenant's own shop -> Shopify is read (after the identity check)`, async () => {
     const s = await twoMerchants(); const shop = shopAs(SHOP_A);
-    const v = await feature(s, { NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shop.factory);
+    const v = await feature(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shop.factory);
     assert.equal(status(v), 'CHECKED'); assert.ok(shop.calls.identity >= 1 && shop.calls.business >= 1);
   });
   test(`${name}: no credentials, or credentials but no shopify connector for the tenant -> NOT_CONFIGURED, no Shopify call`, async () => {
     const s = await twoMerchants(); const t = trap();
-    assert.equal((await feature(s, { NORDLA_MERCHANT_ID: A }, t.factory)).status, 'NOT_CONFIGURED');
+    assert.equal((await feature(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, t.factory)).status, 'NOT_CONFIGURED');
     const noConn = await twoMerchants({ connectors: [[B, SHOP_B]] });
-    const v = await feature(noConn, { NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, t.factory);
+    const v = await feature(noConn, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, t.factory);
     assert.equal(v.status, 'NOT_CONFIGURED'); assert.equal(v.reason, 'NO_SHOPIFY_CONNECTOR_FOR_TENANT'); assert.equal(t.calls.created, 0);
   });
   test(`${name}: Shopify down -> UNAVAILABLE, the tool still produces its Nordla facts`, async () => {
     const s = await twoMerchants();
-    assert.equal((await feature(s, { NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shopAs(SHOP_A, { down: true }).factory)).status, 'UNAVAILABLE');
+    assert.equal((await feature(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shopAs(SHOP_A, { down: true }).factory)).status, 'UNAVAILABLE');
   });
   test(`${name}: another merchant's shop (B's) behind the credentials for A -> MISCONFIGURED, no business query sent, nothing written`, async () => {
     const s = await twoMerchants(); const shop = shopAs(SHOP_B);
-    const v = await feature(s, { NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shop.factory);
+    const v = await feature(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A, ...SHOPIFY_ENV }, shop.factory);
     assert.equal(v.status, 'MISCONFIGURED'); assert.equal(shop.calls.business, 0, 'no data read from the wrong shop');
     assert.deepEqual(s.writes, []);
   });
@@ -148,7 +148,7 @@ for (const [name, feature] of Object.entries(SHOPIFY_FEATURES)) {
 
 test('marketing --write-flags writes data_quality_flags for the resolved merchant only (never B), and marketing never writes merchants', async () => {
   const s = await twoMerchants();
-  await TOOLS.marketing(s, { NORDLA_MERCHANT_ID: A }, { argv: ['--write-flags'], outDir: await tmp(), createClient: trap().factory });
+  await TOOLS.marketing(s, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, { argv: ['--write-flags'], outDir: await tmp(), createClient: trap().factory });
   assert.ok(s.writes.every((w) => w.table === 'data_quality_flags'), JSON.stringify(s.writes));
   assert.ok((s._tables.get('data_quality_flags') ?? []).every((f) => f.merchant_id === A));
 });

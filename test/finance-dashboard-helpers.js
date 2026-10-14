@@ -26,7 +26,7 @@ export function makeRetail() {
   data.orderLines = data.orderLines.map((l) => ({ ...l, tax_rate_bp: 2100 }));
   const ledger = buildLedger(data, { config: mergeConfig({}) });
   const refs = new Map(data.orders.map((o, i) => [o.id, String(1001 + i)]));
-  return { data, ledger, retail: createRetailAccess({ loadRetail: async () => ({ data, ledger }), listOrderRefs: async () => refs, ttlMs: 0 }) };
+  return { data, ledger, retail: createRetailAccess({ loadRetail: async () => ({ data, ledger }), listOrderRefs: async () => refs, ttlMs: 0, timeZone: 'UTC' }) };
 }
 
 /** @param {{merchantId?: string, store?: object, settings?: object, retail?: object|null, today?: string, lookupProviders?: Function, audit?: Function}} o */

@@ -63,6 +63,8 @@ export async function loadBrief(reportsDir) {
     topProducts: p.slice(0, 3).map((x) => ({ key: x.product_key, title: x.title, netSalesExTax: x.net_sales_ex_tax, unitsSold: x.units_sold, costStatus: x.cost_status, imageUrl: x.image_url ?? null })),
     // Real previous-period AOV when the report holds a comparison (same figures as "Ce qui a changé").
     aovComparison: s?.comparison?.available && s.comparison.delta?.aov_ex_tax_pct != null ? { value: s.aov_ex_tax, previous: s.comparison.previous.aov_ex_tax, pct: s.comparison.delta.aov_ex_tax_pct } : null,
+    // Every exclusion of the report (test, status, cancelled, other currency, refunds on excluded orders): surfaced to the page, never hidden.
+    dataNotes: { exclusions: report.order_history?.orders_excluded ?? null },
     missingCapabilities: [...(s?.comparison?.available ? [] : ['PERIOD_OVER_PERIOD_COMPARISON']), 'DECLINE_INSIGHT_DETECTION', 'DORMANT_CUSTOMER_METRIC', 'CUSTOM_DATE_RANGE_QUERY'],
   };
 }

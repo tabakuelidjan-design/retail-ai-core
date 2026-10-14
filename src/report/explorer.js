@@ -9,19 +9,24 @@
 //  - Categories are the catalogue's own `product_type`; an empty type is reported as name = null ("uncategorised").
 
 import { aggregate, aggregateShipping, computeSalesMetrics, windowFacts } from '../metrics/sales.js';
+import { requireTimeZone } from '../metrics/profile.js';
 import { buildProductPerformance, productKeyOf } from '../metrics/products.js';
-import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow } from '../metrics/windows.js';
+import { dayBucketsOfWindow, inWindow, comparisonCoverage, previousEquivalentWindow, dayIndexer } from '../metrics/windows.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
-const pct = (now, before) => (before > 0 ? round4((now - before) / before) : null);
+// Exported so the assistant tools compare two periods with EXACTLY the engine's convention (ratio, null without a positive baseline; absolute delta to 2 decimals).
+export const pct = (now, before) => (before > 0 ? round4((now - before) / before) : null);
+export const absDelta = (c, p) => (c == null || p == null ? null : round2(c - p));
 const DAY = 86400000;
 
-function mondayOf(dateStr) {
+const mondayCache = new Map();
+function mondayOfUncached(dateStr) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   const back = (d.getUTCDay() + 6) % 7; // Monday = 0
   return new Date(d.getTime() - back * DAY).toISOString().slice(0, 10);
 }
+function mondayOf(dateStr) { let m = mondayCache.get(dateStr); if (m === undefined) { m = mondayOfUncached(dateStr); mondayCache.set(dateStr, m); } return m; }
 
 /** Weekly buckets summed from the real daily series (Monday-based weeks; `days` = how many days of that week are in the window). */
 export function weeklySeries(daily) {
@@ -64,6 +69,9 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
 
   const cur = summarize(win);
   const prev = prevWin ? summarize(prevWin) : null;
+  // A customer is ACTIVE in a window only if they ORDERED in it. A refund issued in the window on an earlier order creates a customer slot (the money
+  // belongs to the period) but that customer is not active and has no order of the window.
+  const activeCount = (sum) => [...sum.customers.values()].filter((c) => c.orders.size > 0).length;
 
   // Shipping is reported beside the product KPIs, never folded into them (product KPIs intentionally represent product lines only).
   const curFacts = windowFacts(ledger, win);
@@ -79,10 +87,10 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
     order_count: cur.orders.length,
     units_sold: cur.total.units_sold,
     aov_ex_tax: cur.orders.length ? round2(cur.total.net_sales_ex_tax / cur.orders.length) : null,
-    active_customers: cur.customers.size,
+    active_customers: activeCount(cur),
     identified_orders: cur.identifiedOrderCount,
     identified_share: cur.orders.length ? round4(cur.identifiedOrderCount / cur.orders.length) : null,
-    previous: prev ? { net_sales_ex_tax: prev.total.net_sales_ex_tax, order_count: prev.orders.length, units_sold: prev.total.units_sold, aov_ex_tax: prev.orders.length ? round2(prev.total.net_sales_ex_tax / prev.orders.length) : null, active_customers: prev.customers.size } : null,
+    previous: prev ? { net_sales_ex_tax: prev.total.net_sales_ex_tax, order_count: prev.orders.length, units_sold: prev.total.units_sold, aov_ex_tax: prev.orders.length ? round2(prev.total.net_sales_ex_tax / prev.orders.length) : null, active_customers: activeCount(prev) } : null,
   };
   kpis.delta = prev ? {
     net_sales_ex_tax_pct: pct(kpis.net_sales_ex_tax, kpis.previous.net_sales_ex_tax),
@@ -118,11 +126,11 @@ export function buildExplorer({ ledger, data, windows, now, config, dailySeries,
   });
 
   // ---- top customers (pseudonymous labels only) ----
-  const customerRows = [...cur.customers.entries()].map(([key, c]) => {
+  const customerRows = [...cur.customers.entries()].filter(([, c]) => c.orders.size > 0).map(([key, c]) => {
     const a = aggregate(c.lines, c.refunds, config);
     return { label: `#${key.slice(0, 4).toUpperCase()}`, net_sales_ex_tax: a.net_sales_ex_tax, order_count: c.orders.size };
   }).sort((a, b) => b.net_sales_ex_tax - a.net_sales_ex_tax || b.order_count - a.order_count).slice(0, 5);
-  const top_customers = { status: cur.customers.size ? 'OK' : 'UNAVAILABLE', identified_share: kpis.identified_share, rows: customerRows };
+  const top_customers = { status: activeCount(cur) ? 'OK' : 'UNAVAILABLE', identified_share: kpis.identified_share, rows: customerRows };
 
   const daily = (dailySeries ?? []).map((d) => ({ date: d.date, net_sales_ex_tax: d.net_sales_ex_tax, order_count: d.order_count }));
 
@@ -291,20 +299,23 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
   const median = (arr) => { if (!arr.length) return null; const x = [...arr].sort((a, b) => a - b); const m = x.length >> 1; return round2(x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2); };
 
   function segments(sum) {
-    const list = [...sum.customers.entries()].map(([key, cust]) => ({ key, cust, type: classify(cust) }));
+    const everyone = [...sum.customers.entries()].map(([key, cust]) => ({ key, cust, type: classify(cust) }));
+    const list = everyone.filter((x) => x.cust.orders.size > 0); // ACTIVE customers: they ordered in the window
+    const refundOnlyRows = everyone.filter((x) => x.cust.orders.size === 0); // refund on an earlier order only: money of the period, not an active customer
     const group = (type) => {
       const rows = list.filter((x) => x.type === type);
       const lines = rows.flatMap((x) => x.cust.lines); const refunds = rows.flatMap((x) => x.cust.refunds);
       return { customers: rows.length, orders: rows.reduce((a, x) => a + x.cust.orders.size, 0), net_sales_ex_tax: aggregate(lines, refunds, config).net_sales_ex_tax };
     };
-    const allLines = list.flatMap((x) => x.cust.lines); const allRefunds = list.flatMap((x) => x.cust.refunds);
+    const allLines = everyone.flatMap((x) => x.cust.lines); const allRefunds = everyone.flatMap((x) => x.cust.refunds);
+    const refund_only = { customers: refundOnlyRows.length, net_sales_ex_tax: aggregate(refundOnlyRows.flatMap((x) => x.cust.lines), refundOnlyRows.flatMap((x) => x.cust.refunds), config).net_sales_ex_tax };
     return {
       active: list.length,
       identified_orders: sum.identifiedOrderCount,
       order_count: sum.orders.length,
       identified_share: sum.orders.length ? round4(sum.identifiedOrderCount / sum.orders.length) : null,
       identified_net_sales_ex_tax: aggregate(allLines, allRefunds, config).net_sales_ex_tax,
-      new: group('new'), returning: group('returning'), unknown: group('unknown'), list,
+      new: group('new'), returning: group('returning'), unknown: group('unknown'), refund_only, list,
     };
   }
   const curSeg = segments(cur);
@@ -357,9 +368,10 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
   for (const b of dayBuckets) {
     const wk = mondayOf(b.localStart);
     if (!weeks.has(wk)) weeks.set(wk, { week_start: wk, days: 0, active: new Set(), fresh: new Set() });
-    const w = weeks.get(wk); w.days += 1;
-    for (const x of curSeg.list) for (const m of x.cust.meta) if (inWindow(m.at, b)) { w.active.add(x.key); if (m.idx === 1) w.fresh.add(x.key); }
+    weeks.get(wk).days += 1;
   }
+  const customerDay = dayIndexer(dayBuckets); // one pass over the customers' orders instead of days x customers x orders
+  for (const x of curSeg.list) for (const m of x.cust.meta) { const i = customerDay(m.at); if (i < 0) continue; const w = weeks.get(mondayOf(dayBuckets[i].localStart)); w.active.add(x.key); if (m.idx === 1) w.fresh.add(x.key); }
   const weekly = [...weeks.values()].map((w) => ({ week_start: w.week_start, days: w.days, active: w.active.size, new: w.fresh.size }));
 
   const cohort = {
@@ -370,7 +382,7 @@ function buildCustomersBlock({ ledger, data, windows, now, config, timeZone, cur
 
   return {
     coverage: { identified_orders: curSeg.identified_orders, orders: curSeg.order_count, identified_share: curSeg.identified_share, previous_identified_share: previous?.identified_share ?? null },
-    kpis: { active: curSeg.active, new: curSeg.new.customers, returning: curSeg.returning.customers, unknown: curSeg.unknown.customers, identified_net_sales_ex_tax: curSeg.identified_net_sales_ex_tax, previous, delta },
+    kpis: { active: curSeg.active, new: curSeg.new.customers, returning: curSeg.returning.customers, unknown: curSeg.unknown.customers, refund_only: curSeg.refund_only, identified_net_sales_ex_tax: curSeg.identified_net_sales_ex_tax, previous, delta },
     segments: { new: strip(curSeg.new), returning: strip(curSeg.returning), unknown: strip(curSeg.unknown) },
     top, frequency: dist, value, recency, weekly, cohort,
   };
@@ -398,8 +410,12 @@ const TIME_BUCKETS = [
   { key: 'evening', from: 18, to: 24 },  // 18:00-23:59
 ];
 
+const hourFormatters = new Map();
 function localHour(date, timeZone) {
-  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: timeZone || 'UTC', hour: '2-digit', hourCycle: 'h23' }).format(date));
+  requireTimeZone(timeZone, 'explorer');
+  let f = hourFormatters.get(timeZone);
+  if (!f) { f = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }); hourFormatters.set(timeZone, f); }
+  return Number(f.format(date));
 }
 
 function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, lineById }) {
@@ -446,7 +462,8 @@ function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, line
   const { orders, lines, refunds } = windowFacts(ledger, win);
   const bucketOfOrder = new Map();
   const slots = new Map(TIME_BUCKETS.map((b) => [b.key, { lines: [], refunds: [], orders: 0 }]));
-  for (const o of orders) {
+  // No time zone given = time of day is UNAVAILABLE (reported as such); it is never computed on an assumed UTC day.
+  for (const o of timeZone ? orders : []) {
     const at = new Date(o.orderedAt);
     if (Number.isNaN(at.getTime())) continue;
     const h = localHour(at, timeZone);
@@ -458,7 +475,8 @@ function buildPeriodBlock({ ledger, config, win, daily, timeZone, rawOrder, line
   for (const r of refunds) { const ln = lineById.get(r.orderLineId); const k = ln ? bucketOfOrder.get(ln.orderId) : null; if (k) slots.get(k).refunds.push(r); }
   const timed = [...bucketOfOrder.keys()].length;
   const time_of_day = {
-    time_zone: timeZone || 'UTC',
+    time_zone: timeZone ? requireTimeZone(timeZone, 'explorer') : null,
+    ...(timeZone ? {} : { available: false, reason: 'TIMEZONE_NOT_PROVIDED' }),
     timed_orders: timed,
     total_orders: orders.length,
     buckets: TIME_BUCKETS.map((b) => ({ key: b.key, from_hour: b.from, to_hour: b.to, order_count: slots.get(b.key).orders, net_sales_ex_tax: aggregate(slots.get(b.key).lines, slots.get(b.key).refunds, config).net_sales_ex_tax })),
@@ -480,7 +498,7 @@ function buildComparisonBlock({ ledger, config, now, timeZone, cur, prev, kpis, 
   const pv = kpis.previous;
   if (!pv || !timeZone) return null;
 
-  const delta = (c, p) => (c == null || p == null ? null : round2(c - p));
+  const delta = absDelta;
   const kpi = (key, c, p) => ({ key, current: c, previous: p, delta_abs: delta(c, p), delta_pct: c != null && p != null ? pct(c, p) : null });
   const kpiRows = [
     kpi('net_sales_ex_tax', kpis.net_sales_ex_tax, pv.net_sales_ex_tax),
@@ -612,16 +630,19 @@ function buildChannelsBlock({ ledger, data, windows, now, config, timeZone, win,
   const dayBuckets = dayBucketsOfWindow(win);
   const weekOf = (b) => mondayOf(b.localStart);
   const weekKeys = []; for (const b of dayBuckets) { const w = weekOf(b); if (!weekKeys.includes(w)) weekKeys.push(w); }
-  const daysInWeek = (w) => dayBuckets.filter((b) => weekOf(b) === w).length;
-  const weeklyOf = (c) => weekKeys.map((w) => {
-    const bs = dayBuckets.filter((b) => weekOf(b) === w);
-    let net = 0; let n = 0;
-    for (const b of bs) {
-      const lines = c.lines.filter((l) => inWindow(l.orderedAt, b)); const refunds = c.refunds.filter((r) => inWindow(r.refundedAt, b));
-      net += aggregate(lines, refunds, config).net_sales_ex_tax; n += c.orders.filter((o) => inWindow(o.orderedAt, b)).length;
-    }
-    return { week_start: w, days: daysInWeek(w), net_sales_ex_tax: round2(net), order_count: n };
-  });
+  const daysPerWeek = new Map(); for (const b of dayBuckets) daysPerWeek.set(weekOf(b), (daysPerWeek.get(weekOf(b)) ?? 0) + 1);
+  const daysInWeek = (w) => daysPerWeek.get(w) ?? 0;
+  const bucketOf = dayIndexer(dayBuckets);
+  // one pass over the channel's rows (binary search to their day) instead of days x rows; the per-day aggregate and its order are unchanged
+  const weeklyOf = (c) => {
+    const perDay = dayBuckets.map(() => ({ lines: [], refunds: [], orders: 0 }));
+    for (const l of c.lines) { const i = bucketOf(l.orderedAt); if (i >= 0) perDay[i].lines.push(l); }
+    for (const r of c.refunds) { const i = bucketOf(r.refundedAt); if (i >= 0) perDay[i].refunds.push(r); }
+    for (const o of c.orders) { const i = bucketOf(o.orderedAt); if (i >= 0) perDay[i].orders += 1; }
+    const netOfWeek = new Map(); const ordersOfWeek = new Map();
+    dayBuckets.forEach((b, i) => { const w = weekOf(b); netOfWeek.set(w, (netOfWeek.get(w) ?? 0) + aggregate(perDay[i].lines, perDay[i].refunds, config).net_sales_ex_tax); ordersOfWeek.set(w, (ordersOfWeek.get(w) ?? 0) + perDay[i].orders); });
+    return weekKeys.map((w) => ({ week_start: w, days: daysPerWeek.get(w), net_sales_ex_tax: round2(netOfWeek.get(w) ?? 0), order_count: ordersOfWeek.get(w) ?? 0 }));
+  };
 
   // classification of identified customers (same definitions as the Clients tab)
   const classify = (meta) => (meta.some((m) => m.idx === 1) ? 'new' : meta.some((m) => m.idx != null && m.idx > 1) || meta.length >= 2 ? 'returning' : 'unknown');

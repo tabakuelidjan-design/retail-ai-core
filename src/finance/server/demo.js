@@ -97,11 +97,15 @@ async function seedDemo({ store, attachmentStore, settings, cfg }) {
   }
 }
 
+const DEMO_TIME_ZONE = 'Europe/Brussels';
+const demoStart = Date.now();
+const demoNow = () => new Date(Date.parse('2026-09-21T10:00:00.000Z') + (Date.now() - demoStart)).toISOString();
+
 export async function startDemo(port = PORT) {
   const data = demoData();
   const cfg = mergeConfig({});
   const ledger = buildLedger(data, { config: cfg });
-  const retail = createRetailAccess({ loadRetail: async () => ({ data, ledger }), listOrderRefs: async () => new Map(data.orders.map((o, i) => [o.id, String(1001 + i)])) });
+  const retail = createRetailAccess({ timeZone: DEMO_TIME_ZONE, loadRetail: async () => ({ data, ledger }), listOrderRefs: async () => new Map(data.orders.map((o, i) => [o.id, String(1001 + i)])) });
   let settings = validateSettings({
     seller: { name: 'Demo Seller SRL', vatNumber: 'BE0000000097', enterpriseNumber: '0000.000.097', iban: 'BE68 5390 0754 7034', email: 'billing@demo-seller.example', address: { street: 'Rue de la Demo 1', postalCode: '5000', city: 'Namur', countryCode: 'BE' } },
     vat: { allowedRatesPercent: ['21', '12', '6', '0'] }, defaults: { language: 'fr', paymentTermsDays: 30, paymentTerms: 'Payable sous 30 jours par virement bancaire' },
@@ -114,7 +118,8 @@ export async function startDemo(port = PORT) {
   const app = createFinanceApp({
     merchantId: MERCHANT, store, attachmentStore, token: DEMO_TOKEN, cookieName: 'fin_demo_sid',
     stockApplier: { async hasScope() { return true; }, async lookup(id) { return { inventoryItemId: `item-${id}`, tracked: true }; }, async adjust(a) { stockCalls.push(a); return { ok: true, adjustmentId: `demo://adjustment/${stockCalls.length}` }; } }, retail, retailConfig: cfg, timeZone: 'UTC',
-    clock: { now: () => new Date().toISOString(), today: () => '2026-09-21' },
+    // Demo time: starts on the demo day (21/09/2026, 10:00 UTC) and moves forward in real time; `today` derives from it in the merchant zone.
+    timeZone: DEMO_TIME_ZONE, clock: { now: demoNow },
     retailHistory: async () => ({ completeFrom: '2026-05-11', storeCreatedOn: '2026-05-11', lastSyncedAt: '2026-10-05T00:00:00.000Z' }),
     settings: { load: async () => structuredClone(settings), save: async (s) => { settings = structuredClone(s); }, saveLogo: async () => null },
     // Synthetic providers so the search can be tried without any network: three made-up companies, one of them not VAT-registered.

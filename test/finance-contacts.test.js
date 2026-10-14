@@ -77,7 +77,7 @@ const m = (c) => (c / 100).toFixed(2);
 test('ROLES: a company with only a locked sales document is a customer, never a supplier', () => {
   const company = { id: 'c1', name: 'Client A', kind: 'business', vatNumber: null };
   const salesDocs = [{ doc: { customer: { companyId: 'c1' }, lockedAt: '2026-01-01', status: 'ISSUED', type: 'invoice', issueDate: '2026-01-01', totals: { grossCents: 1000 } }, payments: [], creditNotes: [] }];
-  const [row] = buildContacts({ companies: [company], salesDocs, supplierInvoices: [], m });
+  const [row] = buildContacts({ companies: [company], salesDocs, supplierInvoices: [], m, timeZone: 'UTC' });
   assert.equal(row.isCustomer, true); assert.equal(row.isSupplier, false);
   assert.equal(row.customerDocumentCount, 1); assert.equal(row.supplierDocumentCount, 0);
 });
@@ -85,7 +85,7 @@ test('ROLES: a company with only a locked sales document is a customer, never a 
 test('ROLES: a company with only a linked supplier invoice is a supplier, never a customer', () => {
   const company = { id: 'c1', name: 'Supplier A', kind: 'business', vatNumber: null };
   const supplierInvoices = [{ id: 's1', supplierCompanyId: 'c1', status: 'TO_PAY', grossCents: 500, receivedAt: '2026-01-01T00:00:00Z', issueDate: '2026-01-01' }];
-  const [row] = buildContacts({ companies: [company], salesDocs: [], supplierInvoices, m });
+  const [row] = buildContacts({ companies: [company], salesDocs: [], supplierInvoices, m, timeZone: 'UTC' });
   assert.equal(row.isCustomer, false); assert.equal(row.isSupplier, true);
   assert.equal(row.amountPayable, '5.00');
 });
@@ -94,7 +94,7 @@ test('ROLES: a company with both a sales document and a supplier invoice is Clie
   const company = { id: 'c1', name: 'Both', kind: 'business', vatNumber: null };
   const salesDocs = [{ doc: { customer: { companyId: 'c1' }, lockedAt: '2026-01-01', status: 'ISSUED', type: 'invoice', issueDate: '2026-01-01', totals: { grossCents: 1000 } }, payments: [], creditNotes: [] }];
   const supplierInvoices = [{ id: 's1', supplierCompanyId: 'c1', status: 'TO_PAY', grossCents: 500, receivedAt: '2026-01-01T00:00:00Z', issueDate: '2026-01-01' }];
-  const rows = buildContacts({ companies: [company], salesDocs, supplierInvoices, m });
+  const rows = buildContacts({ companies: [company], salesDocs, supplierInvoices, m, timeZone: 'UTC' });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].isCustomer, true); assert.equal(rows[0].isSupplier, true);
 });
@@ -102,7 +102,7 @@ test('ROLES: a company with both a sales document and a supplier invoice is Clie
 test('ROLES: a draft-only sales document does not establish the customer role', () => {
   const company = { id: 'c1', name: 'Draft only', kind: 'business', vatNumber: null };
   const salesDocs = [{ doc: { customer: { companyId: 'c1' }, lockedAt: null, status: 'DRAFT', type: 'invoice', issueDate: null, totals: null }, payments: [], creditNotes: [] }];
-  const [row] = buildContacts({ companies: [company], salesDocs, supplierInvoices: [], m });
+  const [row] = buildContacts({ companies: [company], salesDocs, supplierInvoices: [], m, timeZone: 'UTC' });
   assert.equal(row.isCustomer, false);
 });
 

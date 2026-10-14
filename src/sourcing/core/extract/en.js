@@ -1,0 +1,201 @@
+// English deterministic extraction. Narrow, high-value patterns only; nothing is inferred beyond what the words say, and every guess-like step is flagged.
+import { parseNumberToken } from './numbers.js';
+import { INCOTERMS, PLACES, COLOUR_WORDS, segments, sentences, within, boundaryBetween, mk, currencyOf } from './shared.js';
+
+const CUR = '(?:US\\$|USD|RMB|CNY|EUR|[$¥￥€])'; const NUM = '\\d[\\d.,]*\\d|\\d';
+// a number followed by one of these is a count, a rating or a duration, never a price ("$ 3 colors", "$ 45W")
+const NOT_MONEY = '(?!\\d|[.,]\\d)(?!\\s?(?:colou?rs?\\b|couleurs?\\b|ports?\\b|outputs?\\b|sorties?\\b|days?\\b|jours?\\b|w(?![A-Za-z])|mah\\b|wh\\b|%))';
+const RX_PRICE_A = new RegExp(`(${CUR})\\s?(${NUM})${NOT_MONEY}`, 'gi');
+const RX_PRICE_B = new RegExp(`(?<![A-Za-z0-9.,])(${NUM})\\s?(USD|RMB|CNY|EUR|dollars?|yuan|euros?)\\b`, 'gi');
+// "11$" / "11 $": the symbol AFTER the number (not when the symbol starts the next price: "50 $8"), and not the quantity of an MOQ
+const RX_PRICE_C = new RegExp(`(?<![A-Za-z0-9.,])(?<!(?:moq|qty|quantity|minimum)\\s{0,3}[:=]?\\s{0,3})(${NUM})\\s?(US\\$|[$¥￥€])(?!\\d)`, 'gi');
+// a labelled price: "prix 11", "price: 11 usd", "unit price 11 $". The currency is optional and is NOT guessed when it is absent.
+const RX_PRICE_K = new RegExp(`(?<![A-Za-z])(?:prix(?:\\s+unitaire)?|price|unit\\s+price|pu|tarif)\\s*[:=]?\\s*(?!${CUR})(${NUM})(?!\\d|[.,]\\d)(?!\\s?(?:pcs?\\b|pieces?\\b|units?\\b|sets?\\b|colou?rs?\\b|couleurs?\\b|days?\\b|jours?\\b|w(?![A-Za-z])|mah\\b|%))(?:\\s?(USD|RMB|CNY|EUR|dollars?|yuan|euros?|US\\$|[$¥￥€])(?![A-Za-z0-9]))?`, 'gi');
+const UNIT = '(?:pcs?|pieces?|units?|sets?)';
+// a price-table row may be written as a RANGE ("100-299pcs", "300 to 499 pcs"): the threshold of the tier is the LOWER bound; a range written backwards is passed on unparsed so a person decides
+const RX_QTY = new RegExp(`(?<![A-Za-z0-9.,])(?:(\\d[\\d,]*)\\s?(?:-|–|—|~|to)\\s?)?(\\d[\\d,]*)\\s?\\+?\\s?${UNIT}\\b(?:\\s?\\+)?`, 'gi');
+const SKIP_PRICE_CLAUSE = /freight|shipping|tooling|\bmou?ld\b|set-?up|deposit|prepay|\bDHL\b|\bexpress\b|logo fee|insurance/i;
+
+export function priceTokens(text) {
+  const out = [];
+  for (const m of text.matchAll(RX_PRICE_A)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[1], num: m[2] });
+  for (const m of text.matchAll(RX_PRICE_B)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2], num: m[1] });
+  for (const m of text.matchAll(RX_PRICE_C)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2], num: m[1] });
+  for (const m of text.matchAll(RX_PRICE_K)) out.push({ start: m.index, end: m.index + m[0].length, cur: m[2] ?? null, num: m[1], labelled: true });
+  const LABEL = /(?<![A-Za-z])(?:samples?(?:\s+(?:price|cost))?|échantillons?|echantillons?)\s*[:=]?\s*$/i;
+  for (const t of out) { if (t.labelled) continue; const l = LABEL.exec(text.slice(Math.max(0, t.start - 24), t.start)); if (l) t.start -= l[0].length; }
+  return out.sort((a, b) => a.start - b.start).filter((t, i, a) => !a.slice(0, i).some((p) => p.start < t.end && t.start < p.end));
+}
+export function qtyTokens(text) {
+  const out = [];
+  for (const m of text.matchAll(RX_QTY)) {
+    const before = text.slice(Math.max(0, m.index - 22), m.index); const after = text.slice(m.index + m[0].length, m.index + m[0].length + 22);
+    if (/(?:MOQ|minimum(?: order)?(?: quantity)?)[\s:=]*(?:is|of|are)?[\s:=]*(?:about|around|at least)?\s*$/i.test(before)) continue;
+    if (/^\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)/i.test(after)) continue;
+    if (/^\s*(?:per|\/|in (?:a|one)|each)\s*(?:master\s+)?(?:carton|ctn|box|colou?r)/i.test(after)) continue;
+    if (/(?:carton|ctn|box)\s*(?:of|:|=)\s*$/i.test(before)) continue;
+    const lo = m[1] === undefined ? null : Number(m[1].replace(/,/g, '')); const hi = Number(m[2].replace(/,/g, ''));
+    out.push({ start: m.index, end: m.index + m[0].length, num: m[1] === undefined ? m[2] : (lo <= hi ? m[1] : `${m[1]}-${m[2]}`) });
+  }
+  return out;
+}
+
+/**
+ * Binds each price to ITS quantity. A price can be written BEFORE its quantity ("USD 8 for 50 pcs", "$7.20/pc at 100", "$8/pc MOQ 50") or AFTER it ("50 pcs: $8", "For 300 pcs we can do USD 6.80").
+ * The old rule paired every quantity with the NEXT price, so in "USD 8 for 50 pcs, USD 7.20 for 100 pcs" the 50 stole the 7.20 that belongs to 100. Now every possible binding is an explicit edge with a
+ * strength (a connective such as "for/at/MOQ", or a separator such as ":" and "=", beats mere adjacency, which beats a bare comma) and the strongest edges win, each price and each quantity used once.
+ * A price never crosses a sentence boundary to reach a quantity.
+ */
+const CONNECT = '(?:for|at|from|over|above|x|min(?:imum)?\\.?|MOQ|if you (?:buy|order)|when you (?:buy|order)|if (?:buying|ordering)|when (?:buying|ordering))';
+const RX_FWD = new RegExp(`^\\s*(?:(?:\\/|per\\s+)\\s*[A-Za-z]+\\s*)?(?:each\\s+)?(?:,\\s*)?${CONNECT}\\s+(?:the\\s+)?(\\d{1,3}(?:,\\d{3})+|\\d+)(\\s*\\+)?(\\s*${UNIT}\\b)?`, 'id');
+const SEP_STRONG = /^[\s]*(?:[:=\-–—→@]|->|=>)[\s]*(?:(?:we can do|can do|is|at|price|each|only)\s*)*$|^\s*(?:(?:we can do|can do|is|at|price is|price|each|only)\s+)+$/i;
+const BARE_OK = /^\s*(?:$|[,;.)]|and\b|or\b|\/)/i; // a bare number after a connective counts as a quantity only when the next word is not a unit of something else
+function pairTiers(text, prices, qtys) {
+  const edges = []; const fwdQty = new Map();
+  const qtyAt = (start, end, num) => { const hit = qtys.find((q) => q.start === start) ?? fwdQty.get(start); if (hit) return hit; const q = { start, end, num, bare: true }; fwdQty.set(start, q); return q; };
+  for (const p of prices) {
+    const rest = text.slice(p.end); const m = RX_FWD.exec(rest);
+    if (m) {
+      const numStart = p.end + m.indices[1][0]; const withUnit = !!m[3]; const after = rest.slice(m[0].length);
+      if (withUnit || BARE_OK.test(after) || /^\s*(?:US\$|USD|RMB|CNY|EUR|[$¥￥€])/i.test(after)) {
+        const end = p.end + m[0].length; const q = qtyAt(numStart, end, m[1]);
+        if (!boundaryBetween(text, p.end, numStart)) edges.push({ p, q, strength: 3, dist: numStart - p.end });
+      }
+    }
+  }
+  for (const q of qtys) {
+    for (const p of prices) {
+      if (p.start < q.end) continue; const between = text.slice(q.end, p.start); if (between.length > 60 || boundaryBetween(text, q.end, p.start)) continue;
+      const strength = SEP_STRONG.test(between) ? 3 : /^\s*$/.test(between) ? 2 : /^\s*,\s*$/.test(between) ? 1 : 0;
+      if (strength) edges.push({ p, q, strength, dist: p.start - q.end });
+    }
+  }
+  edges.sort((a, b) => b.strength - a.strength || a.dist - b.dist || a.q.start - b.q.start);
+  const usedP = new Set(); const usedQ = new Set(); const pairs = [];
+  for (const e of edges) { if (usedP.has(e.p) || usedQ.has(e.q.start)) continue; usedP.add(e.p); usedQ.add(e.q.start); pairs.push({ q: e.q, p: e.p }); }
+  return { pairs, used: usedP };
+}
+
+const title = (w) => String(w).toLowerCase().replace(/\b[a-z]/g, (x) => x.toUpperCase());
+const moqContext = (seg, sent, singleMoq) => {
+  const cue = (s) => (/per\s*colou?r/i.test(s) ? 'per_colour' : /logo|custom|OEM|ODM|print|brand/i.test(s) ? (/packag/i.test(s) && !/logo/i.test(s) ? 'custom_packaging' : 'custom_logo') : /packag/i.test(s) ? 'custom_packaging' : /sample/i.test(s) ? 'sample' : null);
+  return cue(seg) ?? (singleMoq ? (() => { const c = cue(sent); return c === 'sample' ? null : c; })() : null) ?? 'product';
+};
+
+export function extractEn(text, lang) {
+  const out = []; const segs = segments(text); const sents = sentences(text);
+  const prices = priceTokens(text); const qtys = qtyTokens(text);
+
+  // ---- tiers (quantity -> price pairs), then lone prices ----
+  const tierPrices = prices.filter((p) => !SKIP_PRICE_CLAUSE.test(within(segs, p.start).text) && !/sample/i.test(within(sents, p.start).text));
+  let { pairs, used } = pairTiers(text, tierPrices, qtys);
+  // "11 usd moq 24pcs" / "$8/pc MOQ 50": ONE price beside ONE minimum order is a unit price and a MOQ, not a price table (a table needs two rows)
+  if (pairs.length === 1 && /\b(?:MOQ|min(?:imum)?\.?)(?![A-Za-z])[\s:=]*(?:of|is)?[\s:=]*$/i.test(text.slice(Math.max(0, pairs[0].q.start - 16), pairs[0].q.start))) { pairs = []; used = new Set(); }
+  const priceCand = (p, extra) => { const n = parseNumberToken(p.num, 'price'); return { n, amb: n.ambiguous, ...extra }; };
+  if (pairs.length) {
+    const start = Math.min(...pairs.map((x) => Math.min(x.q.start, x.p.start))); const end = Math.max(...pairs.map((x) => Math.max(x.q.end, x.p.end)));
+    const rows = pairs.map(({ q, p }) => ({ qn: parseNumberToken(q.num, 'quantity'), pn: parseNumberToken(p.num, 'price'), p })).sort((a, b) => (a.qn.value === null || b.qn.value === null ? 0 : Number(a.qn.value) - Number(b.qn.value)));
+    const amb = rows.some((r) => r.qn.ambiguous || r.pn.ambiguous); const dup = rows.some((r, i) => r.qn.value !== null && rows.findIndex((x) => x.qn.value === r.qn.value) !== i);
+    out.push(mk(text, lang, 'quote.tiers', rows.map((r) => ({ minQty: r.qn.value, unitPrice: r.pn.value })), start, end, { confidence: rows.every((r) => !/^[$¥￥€]$/.test(r.p.cur)) ? 'HIGH' : 'MEDIUM', flags: [...(amb ? ['AMBIGUOUS_NUMBER'] : []), ...(dup ? ['DUPLICATE_THRESHOLD'] : [])], needsCorrection: amb || dup, reason: 'quantity-price pairs' }));
+  }
+  for (const p of prices) {
+    if (used.has(p)) continue;
+    const seg = within(segs, p.start).text; const sent = within(sents, p.start).text;
+    if (/sample/i.test(sent) && !SKIP_PRICE_CLAUSE.test(seg)) { const n = parseNumberToken(p.num, 'price'); out.push(mk(text, lang, 'quote.samplePrice', n.value, p.start, p.end, { context: 'sample', needsCorrection: n.ambiguous, flags: n.flags, ...(n.suggestion ? { suggestion: n.suggestion } : {}), reason: 'sample price' })); continue; }
+    if (SKIP_PRICE_CLAUSE.test(seg)) continue;
+    const n = parseNumberToken(p.num, 'price');
+    out.push(mk(text, lang, 'quote.unitPrice', n.value, p.start, p.end, { confidence: n.ambiguous ? 'LOW' : 'HIGH', flags: [...n.flags, ...(p.cur ? [] : ['CURRENCY_NOT_STATED'])], needsCorrection: n.ambiguous, ...(n.suggestion ? { suggestion: n.suggestion } : {}), reason: 'price with currency' }));
+  }
+  void priceCand;
+  if (prices.length) { // currency: one candidate per distinct currency, flagged when only a symbol told us
+    const seen = new Set();
+    for (const p of prices) { const c = currencyOf(p.cur); if (!c || seen.has(c.code)) continue; seen.add(c.code); const ambiguous = c.symbol; out.push(mk(text, lang, 'quote.currency', c.code, p.start, p.end, { confidence: ambiguous ? 'MEDIUM' : 'HIGH', flags: [...(ambiguous ? ['CURRENCY_FROM_SYMBOL'] : []), ...(seen.size > 1 ? ['MULTIPLE_CURRENCIES'] : [])], reason: 'currency' })); }
+  }
+
+  // ---- MOQ ----
+  const moqs = [];
+  for (const m of text.matchAll(/(?:\bMOQ(?![A-Za-z])|\bminimum order(?: quantity)?\b|\bmin\.? order(?: quantity)?\b)\s*(?:is|of|:|=|-|are)?\s*(?:about|around|at least)?\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)?/gi)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+  for (const m of text.matchAll(/(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:is\s+)?(?:minimum|MOQ|min\.?\s*order)\b/gi)) if (!moqs.some((x) => x.start < m.index + m[0].length && m.index < x.end)) moqs.push({ start: m.index, end: m.index + m[0].length, num: m[1] });
+  for (const mo of moqs) {
+    const seg = within(segs, mo.start).text; const sent = within(sents, mo.start); const same = moqs.filter((x) => x.start >= sent.start && x.start <= sent.end).length === 1;
+    if (/per\s*colou?r/i.test(seg) && /MOQ\s+per/i.test(text.slice(mo.start, mo.end + 12))) continue; // handled as moq.perColour
+    const n = parseNumberToken(mo.num, 'quantity'); const ctx = moqContext(seg, sent.text, same);
+    out.push(mk(text, lang, 'quote.moq', n.value, mo.start, mo.end, { context: ctx, needsCorrection: n.ambiguous, flags: n.flags, confidence: n.ambiguous ? 'LOW' : 'HIGH', reason: 'minimum order quantity' }));
+  }
+
+  // ---- Incoterm + place ----
+  const incoMatches = [...text.matchAll(/(?<![A-Za-z0-9])(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)(?![A-Za-z0-9])/g)];
+  // trade-show notes are typed in lower case ("exw guangzhou"): the seven common terms are read in any case, but only with a KNOWN place right after (a lone "dap"/"cif" is just a word)
+  for (const m of text.matchAll(/(?<![A-Za-z0-9])(exw|fca|fob|cfr|cif|dap|ddp)(?![A-Za-z0-9])/gi)) { if (incoMatches.some((x) => x.index === m.index)) continue; const nx = /^\s*[,:-]?\s*([A-Za-z]+(?:\s[A-Za-z]+)?)/.exec(text.slice(m.index + m[0].length)); const w = nx && (PLACES.has(title(nx[1])) ? nx[1] : PLACES.has(title(nx[1].split(' ')[0])) ? nx[1].split(' ')[0] : null); if (w) incoMatches.push({ 0: m[0], 1: m[0].toUpperCase(), index: m.index, lower: true }); }
+  incoMatches.sort((a, b) => a.index - b.index);
+  for (const m of incoMatches) {
+    if (!INCOTERMS.includes(m[1])) continue;
+    out.push(mk(text, lang, 'quote.incoterm', m[1], m.index, m.index + m[0].length, { confidence: m.lower ? 'MEDIUM' : 'HIGH', reason: 'Incoterm' }));
+    const after = text.slice(m.index + m[0].length); const pm = m.lower ? (() => { const nx = /^\s*[,:-]?\s*([A-Za-z]+(?:\s[A-Za-z]+)?)/.exec(after); if (!nx) return null; const one = nx[1].split(' ')[0]; const whole = PLACES.has(title(nx[1])); const v = whole ? nx[1] : one; return PLACES.has(title(v)) ? Object.assign([nx[0], title(v)], { index: nx.index }) : null; })() : /^\s*[,:-]?\s*([A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)/.exec(after);
+    if (pm) {
+      let place = pm[1]; const STOP = /^(Port|Price|And|With|Is|At|For|The|Please|We|Our|USD|RMB|EUR|CNY|MOQ|Payment|Delivery|Lead|Total)$/;
+      const words = place.split(' '); if (STOP.test(words[0])) continue; if (words.length > 1 && STOP.test(words[1])) place = words[0];
+      const off = m.index + m[0].length + pm[0].toLowerCase().indexOf(pm[1].toLowerCase()); const listed = PLACES.has(place);
+      out.push(mk(text, lang, 'quote.port', place, off, off + place.length, { confidence: listed ? 'HIGH' : 'MEDIUM', flags: listed ? [] : ['UNLISTED_PLACE'], reason: 'place after Incoterm' }));
+    }
+  }
+
+  // ---- payment ----
+  let dep = null; let bal = null;
+  const mDep = /(\d{1,3})\s?%\s*(?:T\/T\s*)?(?:as\s+)?(?:deposit|down\s?payment|advance|prepay(?:ment)?|in advance)/i.exec(text) ?? /(?:deposit|down\s?payment|advance(?: payment)?)\s*(?:of|:|is|=)?\s*(\d{1,3})\s?%/i.exec(text);
+  const mBal = /(\d{1,3})\s?%\s*(?:balance|before shipment|against\s+(?:copy of\s+)?B\/?L|after\s+(?:inspection|production)|on delivery|at shipment|before delivery)/i.exec(text) ?? /balance\s*(?:of|:|is|=)?\s*(\d{1,3})\s?%/i.exec(text);
+  const mSlash = !mDep && !mBal ? /\b(?:payment(?:\s+terms?)?|T\/T|terms)\b[^.\n]{0,25}?(\d{1,3})\s?%?\s*\/\s*(\d{1,3})\s?%?/i.exec(text) : null;
+  if (mDep) { dep = Number(mDep[1]); out.push(mk(text, lang, 'payment.depositPct', mDep[1], mDep.index, mDep.index + mDep[0].length, { reason: 'deposit percentage' })); }
+  if (mSlash) { dep = Number(mSlash[1]); bal = Number(mSlash[2]); const bad = dep + bal !== 100; out.push(mk(text, lang, 'payment.depositPct', mSlash[1], mSlash.index, mSlash.index + mSlash[0].length, { reason: 'payment split a/b', needsCorrection: bad, flags: bad ? ['SUM_NOT_100'] : [] })); out.push(mk(text, lang, 'payment.balancePct', mSlash[2], mSlash.index, mSlash.index + mSlash[0].length, { reason: 'payment split a/b', needsCorrection: bad, flags: bad ? ['SUM_NOT_100'] : [] })); }
+  if (mBal) { bal = Number(mBal[1]); const bad = dep !== null && dep + bal !== 100; out.push(mk(text, lang, 'payment.balancePct', mBal[1], mBal.index, mBal.index + mBal[0].length, { reason: 'balance percentage', needsCorrection: bad, flags: bad ? ['SUM_NOT_100'] : [] })); }
+  else if (dep !== null && !mSlash) { const w = /\bbalance\b/i.exec(text); if (w) out.push(mk(text, lang, 'payment.balancePct', String(100 - dep), w.index, w.index + w[0].length, { confidence: 'MEDIUM', flags: ['DERIVED'], reason: '100 minus the stated deposit' })); }
+  const due = /(?:balance|remaining|rest|\d{1,3}\s?%)[^.\n]{0,25}?\b(before shipment|before delivery|against\s+(?:copy of\s+)?B\/?L|after inspection|on delivery|at shipment|before loading)\b/i.exec(text);
+  if (due) { const i = due.index + due[0].toLowerCase().lastIndexOf(due[1].toLowerCase()); out.push(mk(text, lang, 'payment.balanceDue', due[1].toLowerCase().replace(/\s+/g, ' ').replace('b/l', 'B/L').replace('bl', 'B/L'), i, i + due[1].length, { reason: 'when the balance is due' })); }
+
+  // ---- lead time ----
+  const lt = /(?:lead\s?time|production(?:\s+(?:time|period|cycle))?|delivery(?:\s+time)?|ready in|ready within|ship(?:ped|ment)?(?:\s+(?:in|within))?|within)\s*(?:is|of|:|=)?\s*(?:about|around|approx\.?)?\s*(\d{1,3})(?:\s?(?:-|–|to)\s?(\d{1,3}))?\s*(?:(?:working|business|calendar)\s+)?(days?|weeks?)/i.exec(text) ?? /(\d{1,3})(?:\s?(?:-|–|to)\s?(\d{1,3}))?\s*(?:(?:working|business|calendar)\s+)?(days?|weeks?)\s+(?:of\s+)?(?:lead\s?time|production|delivery)/i.exec(text);
+  if (lt) { const wk = /^w/i.test(lt[3]); const lo = Number(lt[1]) * (wk ? 7 : 1); const hi = Number(lt[2] ?? lt[1]) * (wk ? 7 : 1); out.push(mk(text, lang, 'quote.leadTime', { min: String(lo), max: String(hi), unit: 'days' }, lt.index, lt.index + lt[0].length, { flags: wk ? ['WEEKS_CONVERTED'] : [], reason: 'lead time' })); }
+
+  // ---- colours ----
+  const COL = Object.keys(COLOUR_WORDS).sort((a, b) => b.length - a.length).join('|'); const W = `(?<![A-Za-z])(?:${COL})(?![A-Za-z])`; const SEP = '(?:\\s*(?:[,/&]|\\band\\b|\\bor\\b|\\bet\\b|\\bou\\b|\\ben\\b)\\s*|\\s+)'; const LIST = `${W}(?:${SEP}${W})*`;
+  const coloursOf = (str) => [...new Set([...str.toLowerCase().matchAll(new RegExp(W, 'g'))].map((x) => COLOUR_WORDS[x[0]]))];
+  const cl = new RegExp(`(?:(?:colou?rs?|couleurs?)(?:\\s+(?:available|are|include|we have|disponibles?))?\\s*[:\\-]?\\s*|available in\\s+)(${LIST})`, 'i').exec(text);
+  if (cl) { const list = coloursOf(cl[1]); const s0 = cl.index + cl[0].indexOf(cl[1]); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + cl[1].length, { reason: 'colour list' })); }
+  if (!cl) { // "Black and white are available" is a sentence, not a list: a list joined by a WORD needs three colours. A list of colours after "we have / we offer / comes in", or two or more colour words in a row ("blue white black", "bleu blanc noir"): proposed, never a lone colour word
+    const bl = new RegExp(`(?:we have|we offer|we do|comes? in|are available in|is available in)\\s+(${LIST})`, 'i').exec(text);
+    const run = bl ?? new RegExp(`(${LIST})`, 'i').exec(text); const g = run && (bl ? run[1] : run[1]);
+    if (g) { const list = coloursOf(g); const worded = /\b(?:and|or|et|ou|en)\b/i.test(g); if ((list.length >= 2 && (!worded || list.length >= 3)) || (bl && list.length >= 1)) { const s0 = run.index + run[0].indexOf(g); out.push(mk(text, lang, 'variant.colours', list, s0, s0 + g.length, { confidence: list.length >= 3 ? 'HIGH' : 'MEDIUM', reason: bl ? 'colour list after "we have"' : 'colour words in a row' })); } }
+  }
+  const cc = /(?<!(?:per|par)\s)\b(\d{1,2})\s+(?:colou?rs?|couleurs?)\b/i.exec(text); if (cc) out.push(mk(text, lang, 'variant.colourCount', cc[1], cc.index, cc.index + cc[0].length, { reason: 'colour count' }));
+  for (const seg of segs) {
+    const neg = /\b(?:cannot|can't|can not|couldn't|unable to|no|not|don't|do not)\s+(?:be\s+)?mix(?:ed|ing)?|\bcolou?rs?\s+(?:cannot|can't|can not)\s+be\s+mix(?:ed)?/i.exec(seg.text);
+    const pos = neg ? null : /\b(?:can|could|may|able to|allowed to|ok to)\s+(?:be\s+)?mix(?:ed)?\b|\bmix(?:ed|ing)?\s+(?:the\s+)?colou?rs?\b|\bcolou?rs?\s+(?:can|could)\s+be\s+mix(?:ed)?\b|\bmixed colou?rs?\s+(?:is |are )?(?:ok|okay|fine|accepted|possible)\b/i.exec(seg.text);
+    const m = neg ?? pos; if (m) out.push(mk(text, lang, 'moq.mixedColours', !neg, seg.start + m.index, seg.start + m.index + m[0].length, { reason: neg ? 'mixing refused' : 'mixing allowed' }));
+  }
+  const pc = /(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?)?\s*(?:per|each|\/)\s*colou?rs?\b/i.exec(text) ?? /MOQ\s+per\s+colou?rs?\s*(?:is|:|=)?\s*(\d+(?:,\d+)*)/i.exec(text);
+  if (pc) { const n = parseNumberToken(pc[1], 'quantity'); out.push(mk(text, lang, 'moq.perColour', n.value, pc.index, pc.index + pc[0].length, { needsCorrection: n.ambiguous, flags: n.flags, reason: 'minimum per colour' })); }
+
+  // ---- carton ----
+  const cq = /(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?|sets?)\s*(?:per|\/|in (?:a|one)|each)\s*(?:master\s+)?(?:carton|ctn|box)\b/i.exec(text) ?? /\b(?:carton|ctn|box)\s*(?:of|:|=)\s*(\d+(?:,\d+)*)\s*(?:pcs?|pieces?|units?)?/i.exec(text);
+  if (cq) { const n = parseNumberToken(cq[1], 'quantity'); out.push(mk(text, lang, 'carton.qty', n.value, cq.index, cq.index + cq[0].length, { needsCorrection: n.ambiguous, flags: n.flags, reason: 'units per carton' })); }
+  const dim = /(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(cm|mm|m)\b/i.exec(text);
+  if (dim) { const isCarton = /carton|ctn|packing|box|size|dimension/i.test(within(segs, dim.index).text) && /carton|ctn|packing|box/i.test(within(segs, dim.index).text); out.push(mk(text, lang, isCarton ? 'carton.dimensions' : 'product.dimensions', { l: dim[1], w: dim[2], h: dim[3], unit: dim[4].toLowerCase() }, dim.index, dim.index + dim[0].length, { reason: 'three dimensions' })); }
+  const gw = /(?:G\.?\s?W\.?|gross\s+weight)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(kgs?|g)\b/i.exec(text); if (gw) out.push(mk(text, lang, 'carton.grossWeight', { amount: gw[1], unit: /^kg/i.test(gw[2]) ? 'kg' : 'g' }, gw.index, gw.index + gw[0].length, { reason: 'gross weight' }));
+  const nw = /(?:N\.?\s?W\.?|net\s+weight)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(kgs?|g)\b/i.exec(text); if (nw) out.push(mk(text, lang, 'carton.netWeight', { amount: nw[1], unit: /^kg/i.test(nw[2]) ? 'kg' : 'g' }, nw.index, nw.index + nw[0].length, { reason: 'net weight' }));
+
+  // ---- identifiers: preserved EXACTLY as written ----
+  // the label must be a WHOLE word: "Modele" used to match the shorter "model" first and read the value as "e" (so no model was found at all); the longer French spellings come first and a letter may not follow the label
+  const mm = /\b(mod[eè]le(?:\s+(?:no\.?|n°|num[eé]ro|nom))?|model(?:\s+(?:no\.?|number|name|type))?|r[eé]f(?:[eé]rence)?\.?|type(?:\s+no\.?)?|item\s+(?:no\.?|number)|part\s+(?:no\.?|number)|P\/N|article\s+(?:no\.?|number))(?![A-Za-z\u00C0-\u017F])\s*[:#=]?\s*(?:is\s+)?([A-Za-z0-9][A-Za-z0-9\-_/.]*[A-Za-z0-9]|[A-Za-z0-9])(?:\s([A-Z]\d+[A-Za-z]?)\b)?/i.exec(text);
+  if (mm) {
+    let val = mm[3] && /^[A-Za-z]{1,4}$/.test(mm[2]) ? `${mm[2]} ${mm[3]}` : mm[2]; val = val.replace(/[.\-_/]+$/, '');
+    if (/\d/.test(val) && val.length >= 3 && !/^\d{1,3}$/.test(val)) { const s0 = mm.index + mm[0].indexOf(val, mm[1].length); out.push(mk(text, lang, 'identifier.model', val, s0, s0 + val.length, { confidence: /^mod/i.test(mm[1]) ? 'HIGH' : 'MEDIUM', reason: 'model identifier, kept as written' })); }
+  }
+  if (!out.some((c) => c.key === 'identifier.model')) { // no label: only a code-shaped word at the very START of the message ("PB-X200. MOQ is 50 pcs."), proposed LOW with a warning
+    const um = /^\s*([A-Z]{1,5}-?[A-Z]?\d{2,5}[A-Z]{0,2}(?:[-/][A-Z0-9]+)?)(?=[\s.,;:!?]|$)/.exec(text);
+    if (um && !/^(?:UN|IEC|ISO|EN|ETSI|ASTM|IP|USB|HDMI|RJ|LED|GB|CE|FCC)-?\d/.test(um[1])) { const s0 = um.index + um[0].indexOf(um[1]); out.push(mk(text, lang, 'identifier.model', um[1], s0, s0 + um[1].length, { confidence: 'LOW', flags: ['UNLABELLED_IDENTIFIER'], reason: 'a code at the start of the message, kept as written' })); }
+  }
+  const br = /\bbrand(?:\s+name)?\s*[:=]\s*([^\n,;.]{2,40})/i.exec(text); if (br) { const s0 = br.index + br[0].indexOf(br[1]); out.push(mk(text, lang, 'identifier.brand', br[1].trim(), s0, s0 + br[1].trim().length, { confidence: 'MEDIUM', reason: 'brand' })); }
+  const mf = /\b(?:manufacturer|factory name|company name)\s*[:=]\s*([^\n,;]{3,60})/i.exec(text); if (mf) { const s0 = mf.index + mf[0].indexOf(mf[1]); out.push(mk(text, lang, 'identifier.manufacturer', mf[1].trim(), s0, s0 + mf[1].trim().length, { confidence: 'MEDIUM', reason: 'manufacturer name' })); }
+
+  return out;
+}

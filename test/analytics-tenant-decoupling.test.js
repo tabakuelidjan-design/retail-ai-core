@@ -62,7 +62,7 @@ const ENDPOINTS = ['/api/brief', '/api/what-changed', '/api/explorer', '/api/pro
 /** Report for `merchant`, then the real server bound to it; returns every endpoint's body plus a POST /api/ask. */
 async function serveFor(s, merchant, { env = {}, trap = shopifyTrap(), ask = 'Quel est mon chiffre d’affaires des 30 derniers jours ?' } = {}) {
   const dir = await tmp();
-  const fullEnv = { NORDLA_MERCHANT_ID: merchant, ANALYTICS_PREMIUM_PORT: String(await freePort()), ...env };
+  const fullEnv = { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: merchant, ANALYTICS_PREMIUM_PORT: String(await freePort()), ...env };
   await runReport({ mode: 'report', env: fullEnv, supabase: s, outDir: dir, log: quiet, createClient: trap.factory });
   const { server } = await startAnalyticsServer({ env: fullEnv, supabase: s, reportsDir: dir, log: quiet, createClient: trap.factory });
   const base = `http://127.0.0.1:${fullEnv.ANALYTICS_PREMIUM_PORT}`;
@@ -117,7 +117,7 @@ test('two merchants, NORDLA_MERCHANT_ID=A: Overview, What changed, Explorer, Pro
 // 2
 test('unknown or missing NORDLA_MERCHANT_ID: server start and report refused cleanly, port never opened, no file written', async () => {
   const s = await twoMerchants();
-  for (const env of [{ NORDLA_MERCHANT_ID: UNKNOWN }, {}]) {
+  for (const env of [{ MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: UNKNOWN }, {}]) {
     const dir = await tmp(); const port = await freePort();
     await assert.rejects(runReport({ mode: 'report', env, supabase: s, outDir: dir, log: quiet }), (e) => [T.MERCHANT_NOT_FOUND, T.MERCHANT_ID_MISSING].includes(e.code));
     assert.deepEqual(await readdir(dir), []);
@@ -173,7 +173,7 @@ test('no merchant is ever created or changed by Analytics (report + serving are 
   assert.equal(JSON.stringify(s._tables.get('merchants')), before);
   assert.deepEqual(s.writes.slice(writesBefore), [], 'report mode + every page: zero database writes');
   const empty = createFakeSupabase();
-  await assert.rejects(runReport({ mode: 'report', env: { NORDLA_MERCHANT_ID: A }, supabase: empty, outDir: await tmp(), log: quiet }), (e) => e.code === T.MERCHANT_NOT_FOUND);
+  await assert.rejects(runReport({ mode: 'report', env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, supabase: empty, outDir: await tmp(), log: quiet }), (e) => e.code === T.MERCHANT_NOT_FOUND);
   assert.equal((empty._tables.get('merchants') ?? []).length, 0);
 }));
 
@@ -181,7 +181,9 @@ test('no merchant is ever created or changed by Analytics (report + serving are 
 test('no "only merchant" logic left: one merchant + no NORDLA_MERCHANT_ID is refused; the source has no single-merchant or Shopify identity path', async () => {
   const one = createFakeSupabase(); await one.insert('merchants', [{ id: A, name: 'Only' }]);
   await assert.rejects(startAnalyticsServer({ env: { ANALYTICS_PREMIUM_PORT: String(await freePort()) }, supabase: one, reportsDir: await tmp(), log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
-  const files = ['src/report/index.js', ...readdirSync(new URL('../src/analytics-premium/server/', import.meta.url)).map((f) => `src/analytics-premium/server/${f}`)];
+  // every source file of the Analytics server, subfolders included (ai/, tools/ appeared with the Ask work)
+  const walk = (rel) => readdirSync(new URL(`../${rel}/`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${rel}/${e.name}`) : e.name.endsWith('.js') ? [`${rel}/${e.name}`] : []));
+  const files = ['src/report/index.js', ...walk('src/analytics-premium/server')];
   for (const f of files) {
     const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /MERCHANT_NOT_UNIQUE|limit: '2'|merchants\[0\]|source_system: 'eq\.shopify'/, `${f}: single-merchant / Shopify identity logic`);
@@ -191,15 +193,15 @@ test('no "only merchant" logic left: one merchant + no NORDLA_MERCHANT_ID is ref
 
 test('legacy fallback (ADR): off -> refused; explicitly on and no NORDLA_MERCHANT_ID -> tenant via merchant_connectors (not merchants.source_id), logged', async () => {
   const s = await twoMerchants(); const dir = await tmp();
-  await assert.rejects(runReport({ mode: 'report', env: { ...SHOPIFY_ENV }, supabase: s, outDir: dir, log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
+  await assert.rejects(runReport({ mode: 'report', env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, supabase: s, outDir: dir, log: quiet }), (e) => e.code === T.MERCHANT_ID_MISSING);
   const lines = [];
   const shopB = () => ({ graphql: async () => ({ shop: { id: 'gid://shopify/Shop/SYN-B' } }) });
-  const r = await runReport({ mode: 'report', env: { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, supabase: s, outDir: dir, log: (l) => lines.push(l), createClient: shopB });
+  const r = await runReport({ mode: 'report', env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, supabase: s, outDir: dir, log: (l) => lines.push(l), createClient: shopB });
   assert.equal(r.merchantId, B);
   assert.ok(lines.some((l) => /tenant source = legacy_shopify/.test(l)) && lines.some((l) => /WARNING/.test(l)));
 });
 
 test('the Shopify-comparison modes say so explicitly when Shopify is not configured; "report" never needs it', async () => {
   const s = await twoMerchants();
-  for (const mode of ['validate', 'triage', 'demand']) await assert.rejects(runReport({ mode, env: { NORDLA_MERCHANT_ID: A }, supabase: s, outDir: await tmp(), log: quiet }), (e) => e.code === 'SHOPIFY_NOT_CONFIGURED', mode);
+  for (const mode of ['validate', 'triage', 'demand']) await assert.rejects(runReport({ mode, env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, supabase: s, outDir: await tmp(), log: quiet }), (e) => e.code === 'SHOPIFY_NOT_CONFIGURED', mode);
 });

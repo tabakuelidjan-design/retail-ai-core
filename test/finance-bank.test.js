@@ -7,6 +7,7 @@ import { createMemoryStore } from '../src/finance/memory-store.js';
 import { structuredCommunication } from '../src/finance/pdf.js';
 import { suggestForCredit, suggestForDebit } from '../src/finance/reconcile.js';
 import { buildTreasury } from '../src/finance/treasury.js';
+import { createMerchantClock } from '../src/finance/civil-date.js';
 import { baseSettings, invoiceBody, startApp } from './finance-dashboard-helpers.js';
 
 // SYNTHETIC only: invented customers, invented IBAN, an invented token.
@@ -172,7 +173,7 @@ test('matching rules (pure): invoice number in the text, name+amount, unrelated 
 });
 test('tenant isolation: another merchant cannot confirm or see a transaction', async () => {
   const store = createMemoryStore(); const { createBankService } = await import('../src/finance/bank-service.js');
-  const mk = (merchantId) => createBankService({ store, merchantId, adapter: createFakeBankAdapter(), vault: createConsentVault({ store, merchantId, key: KEY }), finance: { listInvoices: async () => [], recordPayment: async () => ({}) }, inbox: { list: async () => [], pay: async () => ({}), markToPay: async () => ({}) } });
+  const mk = (merchantId) => createBankService({ store, merchantId, adapter: createFakeBankAdapter(), vault: createConsentVault({ store, merchantId, key: KEY }), finance: { listInvoices: async () => [], recordPayment: async () => ({}) }, inbox: { list: async () => [], pay: async () => ({}), markToPay: async () => ({}) }, clock: createMerchantClock({ timeZone: 'UTC' }) });
   const a = mk('m1'); const b = mk('m2'); const m = { type: 'merchant' };
   const { row } = await store.insertBankTransaction({ merchantId: 'm1', accountId: 'x', providerTxId: '1', date: '2026-09-01', amountCents: 100, status: 'NEW' });
   assert.equal((await b.transactions()).length, 0); await assert.rejects(() => b.confirm(row.id, { documentId: 'd' }, m), /BANK_TRANSACTION_NOT_FOUND/); assert.equal((await a.transactions()).length, 1);

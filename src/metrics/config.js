@@ -12,7 +12,10 @@ export const HIERARCHY_VERSION = 'H1.1';
 
 export const DEFAULT_CONFIG = {
   // Orders in these financial statuses are not sales (never fulfilled/paid).
-  excludedOrderStatuses: ['VOIDED'],
+  // EXPIRED: the payment window lapsed, the order never became a sale. PENDING and AUTHORIZED stay sales (payment is still expected / authorized).
+  excludedOrderStatuses: ['VOIDED', 'EXPIRED'],
+  // A cancelled order (Shopify cancelledAt) is not a sale; its refunds are not counted either. Both exclusions are counted and surfaced.
+  excludeCancelledOrders: true,
   // 'no_recovery': a refunded unit's cost stays in COGS (refund != restock).
   // 'restocked': refunded units are treated as returned to stock, cost recovered.
   cogsRefundTreatment: 'no_recovery',

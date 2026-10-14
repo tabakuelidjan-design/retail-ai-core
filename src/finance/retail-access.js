@@ -2,6 +2,7 @@
 // linkage checks and the accountant pack. It exposes NO customer data: an order is shown by reference, date, channel, total and
 // item titles only. Nothing here recomputes sales: totals come from the Phase 2A ledger via orderTotalsFromLedger.
 
+import { civilDateIn } from './civil-date.js';
 import { orderTotalsFromLedger } from './linking.js';
 
 const CHANNEL_LABEL = { pos: 'POS', web: 'Online', online_store: 'Online' };
@@ -40,7 +41,7 @@ function catalogRows(data, onlyVariantId = null) {
 }
 
 /** @param {{loadRetail: (sinceDate?: string) => Promise<{ledger: object, data: object}>, listOrderRefs?: () => Promise<Map<string,string>>, ttlMs?: number, nowMs?: () => number}} deps */
-export function createRetailAccess({ loadRetail, listOrderRefs = async () => new Map(), ttlMs = 60_000, nowMs = () => Date.now() }) {
+export function createRetailAccess({ loadRetail, listOrderRefs = async () => new Map(), ttlMs = 60_000, nowMs = () => Date.now(), timeZone = null }) {
   // One cache entry PER window (sinceDate), not a single slot: /api/actions reads the current quarter AND the full history, so a
   // single slot evicted one with the other and every Home visit reloaded both. Concurrent callers of the same window share the load
   // in flight. A failed load is never cached. At most MAX_WINDOWS windows are kept (oldest dropped).
@@ -71,6 +72,7 @@ export function createRetailAccess({ loadRetail, listOrderRefs = async () => new
      * @param {Map<string, {id: string, number: string|null, status: string}>} invoicedByOrder orders already covered by an active invoice
      */
     async searchOrders(f = {}, invoicedByOrder = new Map()) {
+      if (!timeZone) throw new TypeError('createRetailAccess: a time zone is required to date orders');
       const { ledger, data } = await get();
       const totals = orderTotalsFromLedger(ledger);
       const refs = await listOrderRefs();
@@ -80,7 +82,7 @@ export function createRetailAccess({ loadRetail, listOrderRefs = async () => new
       const q = (f.q ?? '').trim().toLowerCase();
       const rows = [...totals.values()].map((t) => {
         const items = itemsOf.get(t.orderId) ?? [];
-        const date = t.at.toISOString().slice(0, 10);
+        const date = civilDateIn(t.at, timeZone); // the merchant's day of the order, not the UTC day
         return {
           sourceOrderId: t.orderId, ref: refs.get(t.orderId) ?? t.orderId.slice(0, 8), date,
           channel: CHANNEL_LABEL[channelOf.get(t.orderId)] ?? String(channelOf.get(t.orderId) ?? 'Other'),

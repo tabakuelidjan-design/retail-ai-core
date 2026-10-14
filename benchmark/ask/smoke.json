@@ -1,0 +1,13 @@
+{
+  "_comment": "The smoke test: the SAME 3 cases for every provider, one repetition, with hard caps so that a format/retry problem cannot cause a large number of calls. Nothing here changes a case or the scoring.",
+  "cases": ["S01", "M03", "P01"],
+  "repeats": 1,
+  "maxRequests": 12,
+  "maxCostUsd": 1.0,
+  "expectedRequestsPerProvider": 5,
+  "why": {
+    "S01": "simple, one tool: plan (premises: []) then explanation - the basic contract end to end",
+    "M03": "several tools in one plan (products + channels), then explanation - multi-tool planning and a larger explanation",
+    "P01": "false premise (sales did not drop): a non-empty premises array in the plan, Nordla's own evidence checks, no explanation requested - the premise machinery"
+  }
+}

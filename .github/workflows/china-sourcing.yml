@@ -1,0 +1,117 @@
+name: china-sourcing
+# China Sourcing only. It requires Node 24 (owner decision 2026-10-12). No secret, no provider, no network call to any provider:
+# the ASR bench uses its fake provider and the tunnel e2e is never run.
+on:
+  push:
+    branches: ['feature/china-sourcing-**']
+    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
+  pull_request:
+    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: node --test test/sourcing-*.test.js
+  # Real-browser suites that need no provider, one job each so that a failure names its suite and never skips another.
+  e2e-fieldv1:
+    # BLOCKING: the Field V1 / three-mode Salon suite at 390 px (cold offline start included).
+    name: e2e fieldv1 (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:fieldv1
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-terrain:
+    # BLOCKING: Nordla Terrain (mobile UI V2) at 390 and 375 px: the Sonny scenario, answers recorded on the question card, sync conflict, offline, reopen.
+    name: e2e terrain v2 (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:terrain
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:price
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-pwa:
+    # INFORMATIONAL (as before): written on Windows/Edge; passes 18/18 on Linux Chromium today.
+    name: e2e pwa (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-fieldmode:
+    # BLOCKING: guided Field Mode, 19/19 verified on Linux Chromium at 94bcb22.
+    name: e2e fieldmode (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:fieldmode
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-asr:
+    # INFORMATIONAL (as before): ASR lab with its fake provider; never ran in CI so far.
+    name: e2e asr (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run asr:e2e
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-recovery:
+    # BLOCKING: "Récupérer mes dossiers" at 390 px (empty phone after an address change, selective recovery, JSON import, keep-both, no automatic save).
+    name: e2e recovery (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:recovery
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-reconnect:
+    # BLOCKING: a recovered / imported / merely opened case is never written to the server (reconnection, case switch, restart, old phone); explicit edits, offline editing and the 409 guard still work.
+    name: e2e reconnect (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:reconnect
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }

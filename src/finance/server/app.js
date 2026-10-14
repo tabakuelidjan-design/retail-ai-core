@@ -18,6 +18,7 @@ import { createStaticAssets } from './static-assets.js';
 import { createRequestReadCache } from './request-read-cache.js';
 import { createSessionStore } from './session-store.js';
 import { buildAccountantPack } from '../accountant-pack.js';
+import { createMerchantClock } from '../civil-date.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
 import { createCatalogPicker } from '../catalog.js';
 import { createStockService } from '../stock.js';
@@ -25,19 +26,28 @@ import { settlement as settlementOf } from '../document.js';
 import { buildAccountantPackage, resolvePeriod } from '../accountant-package.js';
 import { NoMailAdapter, MailError, accountantMessage, buildEml } from '../mail.js';
 import { buildActions } from '../actions.js';
+import { createTreasuryService } from '../treasury-service.js';
+import { createLegalArtifacts } from '../legal-artifacts.js';
+import { createPeppolService } from '../peppol-service.js';
+import { NoPeppolProvider, legacyAdapterAsProvider } from '../peppol-provider.js';
+import { endpointOf } from '../peppol.js';
+import { createAccountantExportService } from '../accountant-export-service.js';
+import { verifyExportPackage } from '../accountant-export.js';
+import { TreasuryError } from '../treasury-engine.js';
 import { createBankService } from '../bank-service.js';
 import { NoBankAdapter, createConsentVault, loadVaultKey } from '../bank.js';
 import { connectorStatus } from '../connectors.js';
-import { NullAccessPointAdapter, PEPPOL_STATUSES, prepareTransmission, transmissionEvent } from '../peppol.js';
+import { NullAccessPointAdapter, prepareTransmission } from '../peppol.js';
+import { OUT_STATES } from '../legal-ledger.js';
 import { INBOX_ADAPTERS, INBOX_STATUSES, createInboxService, createMemoryAttachmentStore, defaultExtractor, validationErrors, validationErrorsFor } from '../inbox.js';
-import { civilDateIn, dueViewOf } from '../payables/index.js';
+import { dueViewOf } from '../payables/index.js';
 import { eurOfSupplier, eurPaidOfSupplier, isNative } from '../currency.js';
 import { DOCUMENT_TYPES, accountingSign, checkPurchaseDocument, documentTypeOf, purchaseModelOf } from '../purchase-document.js';
 import { refundRows } from '../refund-rows.js';
 import { CATEGORIES, PACK_ACTION, originalOf, pdfOf, analyzePack, buildCategoryPackage, buildPackComptable, categoryFromStoredZip, changesSince, fingerprintOf, historyFromEvents, nextVersion, normalizeInclude, packLabel, previewCounts } from '../pack-comptable.js';
 import { NoRegistry, NoSearchProvider, createCbeApiProvider, createCompanySearch, createPeppolDirectoryProvider } from '../company-search.js';
 import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, validateForIssue } from '../document.js';
-import { cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentInput, cleanVat, isDate } from '../input.js';
+import { cleanBankReconcile, cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentCommand, cleanPaymentFollowUp, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
@@ -51,13 +61,13 @@ import { LOGO_DIR, configFromSettings, missingForInvoicing, parseLogoDataUrl, sa
 import { validateVat } from '../vat.js';
 
 const UI = new URL('../ui/', import.meta.url);
-const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/bank-connect.js': ['bank-connect.js', 'text/javascript; charset=utf-8'], '/bank-csv.js': ['bank-csv.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
+const STATIC = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/style.css': ['style.css', 'text/css; charset=utf-8'], '/nordla-tokens.css': ['nordla-tokens.css', 'text/css; charset=utf-8'], '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'], '/views-workspace.js': ['views-workspace.js', 'text/javascript; charset=utf-8'], '/bank-connect.js': ['bank-connect.js', 'text/javascript; charset=utf-8'], '/bank-csv.js': ['bank-csv.js', 'text/javascript; charset=utf-8'], '/views-contacts.js': ['views-contacts.js', 'text/javascript; charset=utf-8'], '/views-pack.js': ['views-pack.js', 'text/javascript; charset=utf-8'], '/civil-date.js': ['civil-date.js', 'text/javascript; charset=utf-8'], '/lang-fr.js': ['lang-fr.js', 'text/javascript; charset=utf-8'], '/lang-nl.js': ['lang-nl.js', 'text/javascript; charset=utf-8'] };
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
-const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND'];
-const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED'];
+const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND', 'TARGET_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'ALLOCATION_NOT_FOUND'];
+const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED', 'PAYMENT_OVER_ALLOCATED', 'REVERSAL_EXCEEDS_ALLOCATION', 'REVERSAL_EXCEEDS_PAYMENT', 'CORRECTION_EXCEEDS_PAID', 'CURRENCY_MISSING', 'CREDIT_CURRENCY_MISMATCH', 'PAYMENT_METHOD_INVALID', 'PAYMENT_SOURCE_INVALID', 'IDEMPOTENCY_KEY_INVALID', 'REFUND_EXCEEDS_CREDIT_NOTE', 'REFUND_EXCEEDS_REFUNDABLE', 'REFUND_EXCEEDS_PAYMENT', 'REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE', 'ALLOCATION_DUPLICATE_TARGET', 'CURRENCY_MISMATCH'];
 
 class HttpError extends Error { constructor(status, code, extra) { super(code); this.status = status; this.code = code; this.extra = extra ?? null; } }
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -73,7 +83,8 @@ export function createFinanceApp(deps) {
   const readCache = createRequestReadCache();
   const store = readCache.wrap(deps.store);
   if (!token || String(token).length < 24) throw new Error('FINANCE_DASHBOARD_TOKEN must be set (at least 24 characters)');
-  const clock = deps.clock ?? { now: () => new Date().toISOString(), today: () => new Date().toISOString().slice(0, 10) };
+  // ONE clock: `now` is a UTC instant, `today` the merchant's civil date at that instant (../civil-date.js). Every business date below comes from it.
+  const clock = createMerchantClock({ now: deps.clock?.now, timeZone });
   const audit = deps.audit ?? (async () => {});
   // Same get/set/has/delete as before; persisted (hashed ids) when the launcher gives a persistence, so a redeploy keeps people signed in.
   const sessions = createSessionStore({ persistence: deps.sessionPersistence ?? null });
@@ -111,6 +122,10 @@ export function createFinanceApp(deps) {
     const ledgerProvider = async () => (retail ? (await retail.ledgerData()).ledger : null);
     const stock = stockFor(settings);
     const hooks = {
+      onIssued: async (doc) => {
+        const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await store.getDocument(doc.relatedDocumentId).catch(() => null))?.number ?? null : null;
+        await legalServices(settings).legal.archiveIssued(doc, { atIssue: true, originalNumber: original, branding: settings.branding });
+      },
       restockDecisionNeeded: (doc, inv) => (settings.stock?.mode === 'off' ? false : stock.restockDecisionNeeded(doc, inv)),
       afterIssue: async (doc) => {
         if (!settings.stock || settings.stock.mode === 'off') return; // stock sync is off: no ledger writes (enabling it later reconciles already issued documents)
@@ -121,6 +136,14 @@ export function createFinanceApp(deps) {
     };
     return { settings, stock, svc: createFinanceService({ store, config, clock: { now: clock.now, today: clock.today }, ledgerProvider, hooks }) };
   }
+  // Legal artifacts and Peppol, behind the provider contract (no provider selected: the null provider transmits nothing and pretends nothing)
+  const peppolProvider = () => deps.peppolProvider ?? (deps.accessPoint ? legacyAdapterAsProvider(deps.accessPoint) : NoPeppolProvider);
+  const legalServices = (settings) => {
+    const legal = createLegalArtifacts({ store, merchantId, storage: attachmentStore, clock, renderPdf: renderDocumentPdf, audit, defaultBuyerReference: settings.peppol?.defaultBuyerReference ?? 'document_number' });
+    const own = endpointOf({ address: { countryCode: 'BE' }, enterpriseNumber: settings.seller?.enterpriseNumber, vatNumber: settings.seller?.vatNumber });
+    const peppol = createPeppolService({ store, merchantId, provider: peppolProvider(), legal, storage: attachmentStore, inbox: inboxFor(), clock, ownEndpoints: own ? [`${own.scheme}:${own.id}`] : [] });
+    return { legal, peppol };
+  };
   const stockFor = (settings) => createStockService({ store, merchantId, retail, applier: deps.stockApplier ?? null, getSettings: async () => settings, now: clock.now, audit });
 
   const fields = (errors) => { throw new HttpError(422, 'INPUT_INVALID', { fields: errors }); };
@@ -181,6 +204,7 @@ export function createFinanceApp(deps) {
     const payments = doc.type === 'invoice' ? await store.listPayments(doc.id) : [];
     const readiness = !doc.lockedAt ? await svc.readiness(doc) : null;
     const events = await svc.events(id);
+    const peppolMsg = (await store.listPeppolMessages({ merchantId, documentId: id }))[0] ?? null;
     const safeMoves = async (documentId) => { try { return await store.listStockMovements({ merchantId, documentId }); } catch { return []; } }; // the ledger may not exist yet
     const stockMovements = ['invoice', 'credit_note'].includes(doc.type) && doc.lockedAt ? await safeMoves(doc.id) : [];
     const stockInvoice = doc.type === 'invoice' ? doc : null;
@@ -189,15 +213,19 @@ export function createFinanceApp(deps) {
     const source = doc.sourceOrderId && retail ? await retail.getOrder(doc.sourceOrderId, await invoicedMap()).catch(() => null) : null;
     return {
       ...rowOf(doc, v.settlement ?? null, today), doc, totals: totalsView(doc), settlement: v.settlement ?? null, integrity: v.integrity,
-      settlementView: v.settlement ? { gross: disp(v.settlement.grossCents, doc), credited: disp(v.settlement.creditedCents, doc), paid: disp(v.settlement.paidCents, doc), remaining: disp(v.settlement.remainingCents, doc) } : null,
+      settlementView: v.settlement ? { gross: disp(v.settlement.grossCents, doc), credited: disp(v.settlement.creditedCents, doc), paid: disp(v.settlement.paidCents, doc), remaining: disp(v.settlement.remainingCents, doc),
+        effectiveDue: disp(v.settlement.effectiveDueCents, doc), refunded: disp(v.settlement.refundedCents, doc), retained: disp(v.settlement.retainedCents, doc), refundable: disp(v.settlement.refundableCents, doc) } : null,
+      // the credit note's own refund truth (what can still be handed back) and the refunds already made for an invoice: derived by the service, never rebuilt by the interface
+      refund: v.refund ? { ...v.refund, max: disp(v.refund.maxCents, doc), refunded: disp(v.refund.refundedCents, doc), payments: v.refund.payments.map((p) => ({ ...p, amount: disp(p.amountCents, doc) })) } : null,
+      refunds: (v.refunds ?? []).map((p) => ({ ...p, amount: disp(p.amountCents, doc) })),
       stockMovements, hadStockMovements: soldMovements.some((m) => m.kind === 'SALE_DECREMENT' && m.status !== 'SKIPPED'),
       readiness, events, payments: payments.map((p) => ({ ...p, amount: disp(p.amountCents, doc) })), creditNotes: creditNotes.map((c) => rowOf(c, null, today)),
       related: related ? { id: related.id, type: related.type, number: related.number } : null,
       convertedInvoice: doc.convertedInvoiceId ? (() => { const i = all.find((d) => d.id === doc.convertedInvoiceId); return i ? { id: i.id, number: i.number, status: i.status } : null; })() : null,
-      sourceOrder: source, actions: actionsFor(doc, v.settlement ?? null, credited),
+      sourceOrder: source, actions: [...actionsFor(doc, v.settlement ?? null, credited), ...(v.refund?.maxCents > 0 ? ['refund'] : [])],
       nextNumber: !doc.lockedAt && doc.status !== 'CANCELLED' ? await svc.peekNextNumber(doc.type, doc.issueDate ?? today).catch(() => null) : null,
       revenueNote: doc.revenueBasis === 'linked_source_order' ? 'LINKED: this invoice documents an existing shop/POS sale. It does NOT create additional revenue.' : doc.revenueBasis === 'standalone_b2b' ? 'STANDALONE: this is a new B2B sale outside the shop. It is ADDITIVE revenue.' : null,
-      peppol: { ...(peppolStateOf(events) ?? { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SENT', 'DELIVERED'].includes(peppolStateOf(events)?.status), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
+      peppol: { ...(peppolMsg ? { status: peppolMsg.state, at: peppolMsg.submittedAt ?? peppolMsg.queuedAt, providerMessageId: peppolMsg.providerMessageId, detail: peppolMsg.errorCode } : { status: apConfigured() ? 'NOT_SENT' : 'NOT_CONFIGURED' }), configured: apConfigured(), transmitted: ['SUBMITTED', 'DELIVERED'].includes(peppolMsg?.state), canSend: apConfigured() && settings.peppol.topology.mode !== 'undecided' && !!doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type), topologyConfirmed: settings.peppol.topology.mode !== 'undecided', note: apConfigured() ? null : 'No Peppol Access Point is configured. Nothing is sent externally.' },
       sellerReady: missingForInvoicing(settings).length === 0,
     };
   }
@@ -257,7 +285,7 @@ export function createFinanceApp(deps) {
     // not a period aggregate. `rec.invoices` only holds OPEN ones (buildReceivables drops paid invoices
     // entirely), so "paid" is derived separately here the same way buildReceivables derives status.
     const lockedInvoices = nonQuote.filter(({ doc }) => doc.type === 'invoice' && doc.lockedAt && doc.status !== 'CANCELLED');
-    const paidInvoices = lockedInvoices.filter(({ doc, payments: pays, creditNotes }) => effectiveStatus(doc, settlement(doc, pays, creditNotes), today) === 'PAID');
+    const paidInvoices = lockedInvoices.filter(({ doc, payments: pays, creditNotes, refunds }) => effectiveStatus(doc, settlement(doc, pays, creditNotes, refunds), today) === 'PAID');
     const paidCents = paidInvoices.reduce((a, { doc }) => a + doc.totals.grossCents, 0);
     const invoiceStatus = {
       paid: { count: paidInvoices.length, cents: paidCents, amount: m(paidCents) },
@@ -461,7 +489,7 @@ export function createFinanceApp(deps) {
     const status = q.get('status');
     const today = clock.today();
     const docs = await loadDocsForReports(store, merchantId);
-    let rows = docs.filter(({ doc }) => (!type || doc.type === type)).map(({ doc, payments, creditNotes }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null, today));
+    let rows = docs.filter(({ doc }) => (!type || doc.type === type)).map(({ doc, payments, creditNotes, refunds }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null, today));
     if (status) rows = rows.filter((r) => (status === 'OVERDUE' ? r.effectiveStatus === 'OVERDUE' : r.status === status));
     const text = (q.get('q') ?? '').trim().toLowerCase();
     if (text) rows = rows.filter((r) => `${r.number ?? ''} ${r.customer ?? ''}`.toLowerCase().includes(text));
@@ -526,28 +554,101 @@ export function createFinanceApp(deps) {
     const id = idParam(ctx.m[1]);
     const { payment, errors, note } = cleanPaymentInput(ctx.body);
     if (errors.length) fields(errors);
+    const headerKey = String(ctx.req.headers['idempotency-key'] ?? ''); // the Idempotency-Key header wins over the body field
+    if (/^[A-Za-z0-9_.:-]{8,120}$/.test(headerKey)) payment.idempotencyKey = headerKey;
     const { svc, settings } = await servicesFor();
     const saved = await svc.recordPayment(id, payment, actor);
     if (note) await store.appendEvent({ documentId: id, merchantId, actor, action: 'PAYMENT_NOTE', fromStatus: null, toStatus: null, detail: { paymentId: saved.id, note }, at: clock.now() });
     json(ctx.res, 201, await detail(svc, settings, id));
   });
 
+  // ---------- payments: commands that EXPRESS AN INTENTION (receive, pay, allocate, reverse, void, refund). The interface never writes a financial field: it sends the intention,
+  // the service + database decide, and the answer carries the derived truth (status, allocated, unallocated, every allocation and reversal). ----------
+  const keyFrom = (ctx, command) => { const h = String(ctx.req.headers['idempotency-key'] ?? ''); if (/^[A-Za-z0-9_.:-]{8,120}$/.test(h)) command.idempotencyKey = h; return command; }; // the header wins over the body field
+  const paymentView = async (p) => {
+    const lang = (await settingsIo.load()).defaults?.language ?? 'fr'; const fm = (c) => money(c, lang); // the merchant's own number format, like every other amount of the interface
+    const docs = new Map((await store.listDocuments({ merchantId })).map((d) => [d.id, d]));
+    const sups = p.direction === 'OUT' ? new Map((await store.listSupplierInvoices(merchantId)).map((s) => [s.id, s])) : new Map();
+    const target = (a) => { const d = a.customerDocumentId ? docs.get(a.customerDocumentId) : null; const s = a.supplierInvoiceId ? sups.get(a.supplierInvoiceId) : null;
+      return { documentId: a.customerDocumentId, supplierInvoiceId: a.supplierInvoiceId, number: d?.number ?? s?.invoiceNumber ?? null, documentType: d?.type ?? null, party: d?.customer?.name ?? s?.supplierName ?? null }; };
+    return { id: p.id, direction: p.direction, kind: p.direction === 'IN' ? 'RECEIPT' : p.allocations.some((a) => a.customerDocumentId) || p.refundOfPaymentId ? 'REFUND' : 'SUPPLIER_PAYMENT', status: p.status,
+      amountCents: p.amountCents, amount: fm(p.amountCents), currency: p.currency, paidOn: p.paidOn, method: p.method, reference: p.reference, source: p.source, externalReference: p.externalReference, structuredReference: p.structuredReference, bankReference: p.bankReference,
+      refundOfPaymentId: p.refundOfPaymentId, allocatedCents: p.allocatedCents, allocated: fm(p.allocatedCents), unallocatedCents: p.unallocatedCents, unallocated: fm(p.unallocatedCents), reversedCents: p.reversedCents,
+      allocations: p.allocations.map((a) => ({ id: a.id, amountCents: a.amountCents, amount: fm(a.amountCents), reversesAllocationId: a.reversesAllocationId, reason: a.reason, createdAt: a.createdAt, ...target(a) })),
+      reversals: p.reversals.map((r) => ({ id: r.id, amountCents: r.amountCents, amount: fm(r.amountCents), paidOn: r.paidOn, reason: r.reference, createdAt: r.createdAt })),
+      createdAt: p.createdAt, actor: p.actor ? { type: p.actor.type, id: p.actor.id ?? null } : null, idempotencyKey: p.idempotencyKey,
+      canAllocate: p.status === 'UNALLOCATED' || p.status === 'PARTIALLY_ALLOCATED', canVoid: p.status !== 'REVERSED' && !p.reversalOfId };
+  };
+  const answer = async (ctx, status, r) => json(ctx.res, status, { duplicate: r.duplicate === true, payment: await paymentView(r.payment) });
+  on('GET', '/api/payments', async (ctx) => {
+    const { svc } = await servicesFor(); const q = ctx.url.searchParams; const direction = ['IN', 'OUT'].includes(q.get('direction')) ? q.get('direction') : undefined;
+    const rows = await svc.payments.list({ direction, unallocated: q.get('unallocated') === '1' });
+    json(ctx.res, 200, { rows: await Promise.all(rows.map(paymentView)) });
+  });
+  on('GET', `/api/payments/${P}`, async (ctx) => { const { svc } = await servicesFor(); json(ctx.res, 200, { payment: await paymentView(await svc.payments.get(idParam(ctx.m[1]))) }); });
+  on('POST', '/api/payments', async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 201, await svc.payments.receive(keyFrom(ctx, command), actor)); });
+  on('POST', '/api/supplier-payments', async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 201, await svc.payments.pay(keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payments/${P}/allocate`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsAllocations: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.allocate(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payments/${P}/void`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsReason: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.voidPayment(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/payment-allocations/${P}/reverse`, async (ctx) => { const { command, errors } = cleanPaymentFollowUp(ctx.body, { needsReason: true }); if (errors.length) fields(errors); const { svc } = await servicesFor(); await answer(ctx, 200, await svc.payments.reverseAllocation(idParam(ctx.m[1]), keyFrom(ctx, command), actor)); });
+  on('POST', `/api/documents/${P}/refund`, async (ctx) => { const { command, errors } = cleanPaymentCommand(ctx.body, { allocations: false }); if (errors.length) fields(errors); const { svc, settings } = await servicesFor(); const id = idParam(ctx.m[1]); const r = await svc.payments.refund(id, keyFrom(ctx, command), actor); json(ctx.res, 201, { duplicate: r.duplicate === true, payment: await paymentView(r.payment), document: await detail(svc, settings, id) }); });
+
   on('GET', `/api/documents/${P}/pdf`, async (ctx) => {
     const { svc, settings } = await servicesFor();
     const v = await svc.view(idParam(ctx.m[1]));
     const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
-    const buf = await renderDocumentPdf(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding });
+    let buf = null; let archived = null;
+    if (v.doc.lockedAt) { const o = await legalServices(settings).legal.originalPdf(v.doc.id).catch(() => null); if (o?.verified) { buf = o.data; archived = o.artifact.classification; } }
+    buf ??= await renderDocumentPdf(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding });
     const name = safeName(`${v.doc.type}_${v.doc.number ?? 'draft'}`);
-    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store' });
+    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': archived ?? 'REGENERATED_ON_DEMAND' });
   });
+
+  // ---------- Belgian compliance, legal artifacts, Peppol ----------
+  const messageView = (m) => (m ? { id: m.id, state: m.state, attempts: m.attempts, provider: m.provider, receiver: m.receiverEndpoint, queuedAt: m.queuedAt, submittedAt: m.submittedAt, deliveredAt: m.deliveredAt, errorCode: m.errorCode } : null);
+  const artView = (a) => (a ? { id: a.id, kind: a.kind, classification: a.classification, sha256: a.sha256, sizeBytes: a.sizeBytes, mediaType: a.mediaType, fileName: a.fileName, createdAt: a.createdAt, retentionClass: a.retentionClass } : null);
+  on('GET', `/api/documents/${P}/compliance`, async (ctx) => {
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const c = v.doc.lockedAt ? await legal.compliance(v.doc.id) : null; const messages = await store.listPeppolMessages({ merchantId, documentId: v.doc.id });
+    json(ctx.res, 200, { documentId: v.doc.id, issued: !!v.doc.lockedAt, archived: !!c, routing: c?.routing ?? null, paymentReference: c?.paymentReference ?? null, sellerProfileVersion: c?.sellerProfileVersion ?? null, pdf: artView(c?.pdf), structured: artView(c?.structured), validation: c?.validation ?? null, peppol: messageView(messages[0]) });
+  });
+  const download = (kind) => async (ctx) => {
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const o = await (kind === 'xml' ? legal.structuredOriginal(v.doc.id) : legal.originalPdf(v.doc.id)); if (!o.verified) throw new HttpError(409, 'ARTIFACT_INTEGRITY_FAILED', { problem: o.problem });
+    send(ctx.res, 200, o.data, { 'Content-Type': kind === 'xml' ? 'application/xml; charset=utf-8' : 'application/pdf', 'Content-Disposition': `attachment; filename="${o.artifact.fileName}"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': o.artifact.classification, 'X-Nordla-Sha256': o.artifact.sha256 });
+  };
+  on('GET', `/api/documents/${P}/original-pdf`, download('pdf'));
+  on('GET', `/api/documents/${P}/structured-original`, download('xml'));
+  on('POST', `/api/documents/${P}/archive`, async (ctx) => { // repair for a document issued before archiving existed: the PDF is then a REGENERATED_COPY and no structured "original" is invented
+    const { svc, settings } = await servicesFor(); const v = await svc.view(idParam(ctx.m[1])); const { legal } = legalServices(settings);
+    const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
+    const r = await legal.archiveIssued(v.doc, { atIssue: false, originalNumber: original, settlement: v.settlement ?? null, branding: settings.branding, actor }); json(ctx.res, 200, { archived: true, duplicate: r.duplicate, pdf: artView(r.pdf) });
+  });
+  on('POST', '/api/peppol/dispatch', async (ctx) => { const { settings } = await servicesFor(); json(ctx.res, 200, await legalServices(settings).peppol.dispatchQueued({})); });
+  on('POST', `/api/peppol/messages/${P}/refresh`, async (ctx) => { const { settings } = await servicesFor(); json(ctx.res, 200, await legalServices(settings).peppol.refreshStatus(idParam(ctx.m[1]))); });
+  on('POST', `/api/peppol/messages/${P}/retry`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.retry(idParam(ctx.m[1])); json(ctx.res, 200, { state: r.state, requeued: r.requeued }); });
+  on('GET', '/api/peppol/inbound', async (ctx) => {
+    const { settings } = await servicesFor(); const rows = await store.listPeppolMessages({ merchantId, direction: 'IN' }); const inboxRows = new Map((await store.listSupplierInvoices(merchantId)).map((r) => [r.id, r])); void settings;
+    json(ctx.res, 200, { rows: rows.map((m) => { const s = m.supplierInvoiceId ? inboxRows.get(m.supplierInvoiceId) : null; return { id: m.id, state: m.state, receivedAt: m.receivedAt, sender: m.senderEndpoint, duplicateOf: m.duplicateOf, validation: m.validation ? { ok: m.validation.ok, fatal: m.validation.fatal, warnings: m.validation.warnings, findings: (m.validation.findings ?? []).slice(0, 10) } : null, supplierInvoiceId: m.supplierInvoiceId,
+      supplier: s?.supplierName ?? null, number: s?.invoiceNumber ?? null, date: s?.issueDate ?? null, grossCents: s?.grossCents ?? null, currency: s?.currency ?? null }; }) });
+  });
+  on('POST', `/api/peppol/inbound/${P}/accept`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.accept(idParam(ctx.m[1]), actor); json(ctx.res, 200, { state: r.message.state }); });
+  on('POST', `/api/peppol/inbound/${P}/review`, async (ctx) => { const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.moveToReview(idParam(ctx.m[1]), actor); json(ctx.res, 200, { state: r.message.state }); });
+  on('POST', `/api/peppol/inbound/${P}/reject`, async (ctx) => { const reason = sanitizeText(ctx.body?.reason, 300); if (!reason) fields([{ field: 'reason', code: 'REQUIRED' }]); const { settings } = await servicesFor(); const r = await legalServices(settings).peppol.reject(idParam(ctx.m[1]), reason, actor); json(ctx.res, 200, { state: r.message.state }); });
+  // the provider calls this itself: no session, no CSRF; its OWN authentication is verified by the adapter before anything is read
+  on('POST', '/api/peppol/webhook', async (ctx) => { const { settings } = await servicesFor(); const raw = ctx.rawBody ?? Buffer.from(typeof ctx.body?.payload === 'string' ? ctx.body.payload : ''); const r = await legalServices(settings).peppol.handleWebhook({ headers: ctx.req.headers, body: raw, providerMessageId: ctx.body?.providerMessageId, sender: ctx.body?.sender, receiver: ctx.body?.receiver }); json(ctx.res, 200, { duplicate: r.duplicate }); }, { public: true, bodyLimit: 6_000_000 });
+
 
   on('GET', `/api/documents/${P}/ubl`, async (ctx) => {
     const { svc, settings } = await servicesFor();
     const doc = await svc.get(idParam(ctx.m[1]));
     const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await svc.get(doc.relatedDocumentId).catch(() => null))?.number : null;
+    // the archived structured ORIGINAL when there is one (exact bytes); otherwise a preview built from the snapshot, labelled as such
+    const o = doc.lockedAt ? await legalServices(settings).legal.structuredOriginal(doc.id).catch(() => null) : null;
+    if (o?.verified) return send(ctx.res, 200, o.data, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'X-Nordla-Artifact': o.artifact.classification, 'Cache-Control': 'no-store' });
     const r = prepareTransmission(doc, { originalNumber: original, defaultBuyerReference: settings.peppol.defaultBuyerReference });
     if (!r.payloadXml) throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: r.errors, transmitted: false });
-    send(ctx.res, 200, r.payloadXml, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'Cache-Control': 'no-store' });
+    send(ctx.res, 200, r.payloadXml, { 'Content-Type': 'application/xml; charset=utf-8', 'Content-Disposition': `attachment; filename="${safeName(doc.number)}.ubl.xml"`, 'X-Peppol-Transmitted': 'false', 'X-Nordla-Artifact': 'PREVIEW', 'Cache-Control': 'no-store' });
   });
 
   // ---------- companies ----------
@@ -601,7 +702,7 @@ export function createFinanceApp(deps) {
     const pays = docs.flatMap(({ payments }) => payments);
     json(ctx.res, 200, {
       company: c,
-      documents: docs.map(({ doc, payments, creditNotes }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes) : null, today)).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate))),
+      documents: docs.map(({ doc, payments, creditNotes, refunds }) => rowOf(doc, doc.type === 'invoice' ? settlement(doc, payments, creditNotes, refunds) : null, today)).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate))),
       outstandingCents: rec.unpaid.outstandingCents, overdueCents: rec.overdue.outstandingCents,
       payments: { count: pays.filter((p) => p.amountCents > 0).length, totalPaidCents: pays.reduce((a, p) => a + p.amountCents, 0), lastPaidOn: pays.map((p) => p.paidOn).sort().at(-1) ?? null },
       credit: { scoring: 'NOT_IMPLEMENTED', note: 'No credit-risk or solvency scoring exists in this module.' },
@@ -620,7 +721,7 @@ export function createFinanceApp(deps) {
     const q = (ctx.url.searchParams.get('q') ?? '').trim().toLowerCase();
     const m = (c) => money(c, settings.defaults.language);
     const [companies, salesDocs, supplierInvoices] = await Promise.all([svc.listCompanies(), loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m, today: clock.today() });
+    let rows = buildContacts({ companies, salesDocs, supplierInvoices, m, today: clock.today(), timeZone });
     if (role === 'archived') rows = rows.filter((r) => r.archived);
     else {
       rows = rows.filter((r) => !r.archived);
@@ -638,7 +739,7 @@ export function createFinanceApp(deps) {
     const c = await svc.getCompany(idParam(ctx.m[1])); // throws COMPANY_NOT_FOUND - same tenant check as /api/companies/:id
     const m = (c2) => money(c2, settings.defaults.language);
     const [salesDocs, supplierInvoices] = await Promise.all([loadDocsForReports(store, merchantId), store.listSupplierInvoices(merchantId)]);
-    json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today() }));
+    json(ctx.res, 200, contactDetail(c, { salesDocs, supplierInvoices, m, today: clock.today(), timeZone }));
   });
   // Contacts V1: archive/restore - never a destructive delete, and never touches any other field or any
   // linked document. Reuses the same tenant-scoped svc.getCompany() check every other company route uses.
@@ -749,21 +850,43 @@ export function createFinanceApp(deps) {
   const bankFor = async () => {
     const { svc } = await servicesFor();
     const vault = createConsentVault({ store, merchantId, key: deps.bankVaultKey !== undefined ? deps.bankVaultKey : loadVaultKey(), now: clock.now });
-    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock: { ...clock, today: merchantToday }, audit,
-      finance: { listInvoices: () => loadDocsForReports(store, merchantId), recordPayment: (id, payment, a) => { const c = cleanPaymentInput(payment); if (c.errors.length) throw new HttpError(422, 'INPUT_INVALID', { fields: c.errors }); return svc.recordPayment(id, c.payment, a); } } });
+    return createBankService({ store, merchantId, adapter: bankAdapter(), vault, inbox: inboxFor(), clock, audit,
+      finance: { listInvoices: () => loadDocsForReports(store, merchantId), settleInvoices: async (ids, a) => { for (const id of ids) await svc.resettle(id, a); } } }); // the bank never writes a payment itself: it reconciles through the store's atomic RPC, then the invoice statuses are re-derived
   };
-  const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents });
+  // Treasury is READ-ONLY and DERIVED: the same sources the other engines own, computed in treasury-engine.js. The UI never recomputes a figure.
+  const treasuryFor = async () => { const { settings } = await servicesFor(); return createTreasuryService({ store, merchantId, clock, currency: settings.defaults.currency,
+    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, inbox: inboxFor() }); };
+  const txView = (t) => ({ id: t.id, date: t.date, amountCents: t.amountCents, amount: formatCents(t.amountCents), currency: t.currency, counterpartyName: t.counterpartyName, reference: t.reference, structuredReference: t.structuredReference, source: t.source, status: t.status, matchedKind: t.matchedKind, matchedDocumentId: t.matchedDocumentId, matchedAmountCents: t.matchedAmountCents,
+    // the DERIVED truth (the legacy status/matched_* above are only a mirror): what is reconciled, set aside, left; the account; the bank's own references
+    direction: t.direction ?? (t.amountCents >= 0 ? 'IN' : 'OUT'), reconciliationStatus: t.reconciliationStatus ?? null, reconciledCents: t.reconciledCents ?? 0, ignoredCents: t.ignoredCents ?? 0, remainingCents: t.remainingCents ?? Math.abs(t.amountCents), remaining: formatCents(t.remainingCents ?? Math.abs(t.amountCents)),
+    bankAccountId: t.bankAccountId ?? null, bankReference: t.bankReference ?? null, counterpartyAccountMasked: t.counterpartyAccountMasked ?? null, valueDate: t.valueDate ?? null, reconciliations: t.reconciliations ?? undefined });
   on('GET', '/api/bank/status', async (ctx) => json(ctx.res, 200, await (await bankFor()).status()));
   on('GET', '/api/bank/transactions', async (ctx) => { const st = ctx.url.searchParams.get('status'); json(ctx.res, 200, { rows: (await (await bankFor()).transactions(['NEW', 'MATCHED', 'IGNORED'].includes(st) ? { status: st } : {})).map(txView) }); });
+  on('GET', '/api/bank/accounts', async (ctx) => json(ctx.res, 200, { rows: await (await bankFor()).accounts() }));
+  on('GET', `/api/bank/transactions/${P}`, async (ctx) => json(ctx.res, 200, { transaction: txView(await (await bankFor()).transaction(idParam(ctx.m[1]))) }));
   on('GET', '/api/bank/suggestions', async (ctx) => json(ctx.res, 200, { rows: (await (await bankFor()).suggestions()).map((s) => ({ ...s, transaction: txView(s.transaction) })) }));
   on('POST', '/api/bank/sync', async (ctx) => json(ctx.res, 200, await (await bankFor()).sync({})));
   on('POST', '/api/bank/import-csv/preview', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text.trim()) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).previewCsv(text)); }, { bodyLimit: 4_000_000 });
-  on('POST', '/api/bank/import-csv', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).importCsv(text)); }, { bodyLimit: 4_000_000 });
+  on('POST', '/api/bank/import-csv', async (ctx) => { const text = typeof ctx.body?.csv === 'string' ? ctx.body.csv : ''; if (!text) fields([{ field: 'csv', code: 'REQUIRED' }]); json(ctx.res, 200, await (await bankFor()).importCsv(text, { allowPartial: ctx.body?.allowPartial === true })); }, { bodyLimit: 4_000_000 });
   on('POST', `/api/bank/transactions/${P}/confirm`, async (ctx) => {
     const b = ctx.body ?? {}; const cents = b.amount === undefined || b.amount === '' ? undefined : toCents(String(b.amount));
-    json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined }, actor));
+    json(ctx.res, 200, await (await bankFor()).confirm(idParam(ctx.m[1]), { documentId: typeof b.documentId === 'string' && ID.test(b.documentId) ? b.documentId : undefined, itemId: typeof b.itemId === 'string' && ID.test(b.itemId) ? b.itemId : undefined, amountCents: Number.isInteger(cents) ? cents : undefined, idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined, suggestion: b.fromSuggestion === true ? true : undefined }, actor));
   });
-  on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => json(ctx.res, 200, txView(await (await bankFor()).ignore(idParam(ctx.m[1]), actor))));
+  // explicit reconciliation commands: link existing payments, or create the payment AND link it in one transaction; take back; set aside. Every one is idempotent per key.
+  on('POST', `/api/bank/transactions/${P}/reconcile`, async (ctx) => {
+    const { command, errors } = cleanBankReconcile(ctx.body); if (errors.length) fields(errors);
+    const h = String(ctx.req.headers['idempotency-key'] ?? ''); if (/^[A-Za-z0-9_.:-]{8,200}$/.test(h)) command.idempotencyKey = h;
+    const r = await (await bankFor()).reconcile(idParam(ctx.m[1]), command, actor); json(ctx.res, 200, { duplicate: r.duplicate, transaction: txView(r.transaction), paymentId: r.payment?.id ?? null });
+  });
+  on('POST', `/api/bank/transactions/${P}/unreconcile`, async (ctx) => {
+    const b = ctx.body ?? {}; const reason = sanitizeText(b.reason, 300); if (!reason) fields([{ field: 'reason', code: 'REQUIRED' }]);
+    const ids = Array.isArray(b.reconciliationIds) ? b.reconciliationIds.filter((x) => typeof x === 'string' && ID.test(x)).slice(0, 50) : undefined;
+    const r = await (await bankFor()).unreconcile(idParam(ctx.m[1]), { reconciliationIds: ids, reason, idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined }, actor); json(ctx.res, 200, { duplicate: r.duplicate, transaction: txView(r.transaction) });
+  });
+  on('POST', `/api/bank/transactions/${P}/ignore`, async (ctx) => {
+    const b = ctx.body ?? {}; const c = b.amount === undefined || b.amount === '' ? null : toCents(String(b.amount));
+    const r = await (await bankFor()).ignore(idParam(ctx.m[1]), { amountCents: Number.isInteger(c) ? c : null, reason: sanitizeText(b.reason, 300), idempotencyKey: /^[A-Za-z0-9_.:-]{8,200}$/.test(String(b.idempotencyKey ?? '')) ? b.idempotencyKey : undefined }, actor); json(ctx.res, 200, txView(r));
+  });
   // The provider sends the user back to the app root with ?code&state (or ?error): an OAuth redirect URI cannot carry a #fragment. The scheme is https
   // whenever the app runs behind HTTPS (hosted). Only a well-formed https authorization URL is ever returned to the browser; the state is returned so
   // the browser can check it on return. No token ever leaves the vault.
@@ -782,11 +905,15 @@ export function createFinanceApp(deps) {
   on('POST', '/api/bank/disconnect', async (ctx) => json(ctx.res, 200, await (await bankFor()).disconnect(actor)));
   on('POST', '/api/cash/counts', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).confirmCashCount({ amountCents: Number.isInteger(c) ? c : NaN, countedOn: ctx.body?.countedOn, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
   on('POST', '/api/cash/movements', async (ctx) => { const c = toCents(String(ctx.body?.amount ?? '')); json(ctx.res, 201, await (await bankFor()).addCashMovement({ kind: ctx.body?.kind, amountCents: Number.isInteger(c) ? c : NaN, date: ctx.body?.date, note: sanitizeText(ctx.body?.note, 200) }, actor)); });
+  on('GET', '/api/treasury/position', async (ctx) => json(ctx.res, 200, await (await treasuryFor()).position()));
+  on('GET', '/api/treasury/forecast', async (ctx) => { const h = ctx.url.searchParams.get('horizon'); json(ctx.res, 200, await (await treasuryFor()).forecast({ horizonDays: h ? Number(h) : undefined })); });
+  on('GET', '/api/treasury/explain', async (ctx) => { const id = ctx.url.searchParams.get('id'); if (!id) fields([{ field: 'id', code: 'REQUIRED' }]); json(ctx.res, 200, await (await treasuryFor()).explainItem(id)); });
+  on('POST', '/api/treasury/scenario', async (ctx) => json(ctx.res, 200, await (await treasuryFor()).scenario(ctx.body?.hypotheses))); // pure computation: nothing is written, whatever the body says
   on('GET', '/api/treasury', async (ctx) => {
     const { settings } = await servicesFor(); const bank = await bankFor();
     const horizonDays = [30, 60, 90].includes(Number(ctx.url.searchParams.get('horizon'))) ? Number(ctx.url.searchParams.get('horizon')) : 7;
     // Treasury, bank status and per-account balances are independent reads: fetched in parallel.
-    const [t, status, balances] = await Promise.all([bank.treasury({ currency: settings.defaults.currency, horizonDays }), bank.status().catch(() => null), store.listBankBalances(merchantId).catch(() => [])]);
+    const [t, status, balances] = await Promise.all([(await treasuryFor()).legacyView({ currency: settings.defaults.currency, horizonDays }), bank.status().catch(() => null), store.listBankBalances(merchantId).catch(() => [])]);
     const m = (c) => (c == null ? null : money(c, settings.defaults.language));
     // Per-account balances for the dashboard's "Comptes bancaires" list - real rows from fin_bank_balances,
     // never fabricated placeholder accounts. Empty when nothing is connected (the UI shows a proper empty state).
@@ -831,40 +958,41 @@ export function createFinanceApp(deps) {
 
   // ---------- Peppol: provider-neutral states and topology. Nothing is transmitted without a configured Access Point AND the merchant's approval. ----------
   const accessPoint = () => deps.accessPoint ?? NullAccessPointAdapter;
-  const apConfigured = () => accessPoint().name !== 'none';
+  const apConfigured = () => peppolProvider().name !== 'none';
+  const PEPPOL_STATES = OUT_STATES;
   const peppolStateOf = (events) => { const last = [...events].reverse().find((e) => /^PEPPOL_/.test(e.action)); return last ? { status: last.action.replace('PEPPOL_', ''), at: last.at, providerMessageId: last.detail?.providerMessageId ?? null, detail: last.detail?.detail ?? null } : null; };
   on('GET', '/api/peppol/status', async (ctx) => {
-    const settings = await settingsIo.load();
+    const settings = await settingsIo.load(); const queue = apConfigured() ? await legalServices(settings).peppol.observability() : null;
     json(ctx.res, 200, {
-      outgoing: { configured: apConfigured(), adapter: accessPoint().name }, incoming: { configured: false, note: 'RECEIVING_DEPENDS_ON_CONFIRMED_TOPOLOGY' }, states: PEPPOL_STATUSES, topology: settings.peppol.topology,
+      outgoing: { configured: apConfigured(), adapter: peppolProvider().name }, incoming: { configured: apConfigured(), note: 'RECEIVING_DEPENDS_ON_CONFIRMED_TOPOLOGY' }, states: PEPPOL_STATES, topology: settings.peppol.topology, queue,
       questions: ['WHO_OWNS_THE_RECEIVING_REGISTRATION', 'IS_CODABOX_VOILA_THE_RECEIVER', 'DOES_IT_EXPOSE_AN_EXPORT_OR_API', 'SEND_ONLY_OR_INTEGRATE_EXISTING'],
       warning: 'DO_NOT_REGISTER_A_SECOND_RECEIVING_ACCESS_POINT_BEFORE_THE_TOPOLOGY_IS_CONFIRMED', decided: settings.peppol.topology.mode !== 'undecided',
     });
   });
   const peppolDoc = async (ctx) => { const { svc, settings } = await servicesFor(); const doc = await svc.get(idParam(ctx.m[1])); return { svc, settings, doc }; };
+  // The send: approval, a configured provider and a confirmed topology are still required. The document that travels is the archived STRUCTURED ORIGINAL (official validation passed);
+  // one logical document = one message (never twice); "accepted by the provider" is SUBMITTED, not delivered.
   on('POST', `/api/documents/${P}/peppol/send`, async (ctx) => {
     const { svc, settings, doc } = await peppolDoc(ctx);
     if (ctx.body?.approve !== true) throw new HttpError(422, 'APPROVAL_REQUIRED');
     if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
     if (settings.peppol.topology.mode === 'undecided') throw new HttpError(409, 'PEPPOL_TOPOLOGY_NOT_CONFIRMED');
     if (!doc.lockedAt || !['invoice', 'credit_note'].includes(doc.type)) throw new HttpError(409, 'ONLY_ISSUED_INVOICES_AND_CREDIT_NOTES_CAN_BE_SENT');
-    const events = await svc.events(doc.id);
-    if (peppolStateOf(events) && ['SENT', 'DELIVERED'].includes(peppolStateOf(events).status)) throw new HttpError(409, 'ALREADY_SENT_VIA_PEPPOL');
+    const { peppol } = legalServices(settings);
+    const prior = (await store.listPeppolMessages({ merchantId, documentId: doc.id }))[0];
+    if (prior && ['QUEUED', 'SUBMITTING', 'SUBMITTED', 'DELIVERED'].includes(prior.state)) throw new HttpError(409, 'ALREADY_SENT_VIA_PEPPOL');
     const original = doc.type === 'credit_note' && doc.relatedDocumentId ? (await svc.get(doc.relatedDocumentId).catch(() => null))?.number : null;
-    const prepared = prepareTransmission(doc, { originalNumber: original, defaultBuyerReference: settings.peppol.defaultBuyerReference });
-    if (prepared.status !== 'PREPARED') throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: prepared.errors, transmitted: false });
     await audit({ at: clock.now(), action: 'PEPPOL_SEND_APPROVED', detail: { documentId: doc.id, number: doc.number } });
-    let r; try { r = await accessPoint().submit({ payloadXml: prepared.payloadXml, sender: prepared.sender, receiver: prepared.receiver, documentNumber: doc.number }); } catch (e) { await store.appendEvent({ ...transmissionEvent(doc.id, merchantId, { status: 'FAILED', at: clock.now(), detail: String(e.message).slice(0, 120) }) }); throw new HttpError(502, 'PEPPOL_SEND_FAILED'); }
-    await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: 'SENT', at: clock.now(), providerMessageId: r.providerMessageId ?? null }));
-    json(ctx.res, 200, { status: 'SENT', providerMessageId: r.providerMessageId ?? null });
+    let q; try { q = await peppol.queue(doc, { actor, originalNumber: original }); } catch (e) { if (e instanceof FinanceError && e.code === 'PEPPOL_NOT_READY') throw new HttpError(422, 'PEPPOL_NOT_READY', { errors: e.errors ?? [], transmitted: false }); throw e; }
+    const d = await peppol.dispatch(q.message.id);
+    if (d.state === 'SUBMISSION_FAILED') throw new HttpError(502, 'PEPPOL_SUBMISSION_FAILED', { code: d.message.errorCode, transmitted: false });
+    json(ctx.res, 200, { status: d.state, state: d.state, providerMessageId: d.message.providerMessageId ?? null, unknownOutcome: d.unknown === true, transmitted: ['SUBMITTED', 'DELIVERED'].includes(d.state) });
   });
   on('POST', `/api/documents/${P}/peppol/refresh`, async (ctx) => {
-    const { svc, doc } = await peppolDoc(ctx);
+    const { settings, doc } = await peppolDoc(ctx);
     if (!apConfigured()) throw new HttpError(409, 'PEPPOL_ACCESS_POINT_NOT_CONFIGURED');
-    const cur = peppolStateOf(await svc.events(doc.id)); if (!cur?.providerMessageId) throw new HttpError(409, 'NOTHING_SENT_YET');
-    const s = await accessPoint().fetchStatus(cur.providerMessageId);
-    if (PEPPOL_STATUSES.includes(s.status) && s.status !== cur.status) await store.appendEvent(transmissionEvent(doc.id, merchantId, { status: s.status, at: s.at ?? clock.now(), providerMessageId: cur.providerMessageId, detail: s.detail ?? null }));
-    json(ctx.res, 200, { status: s.status });
+    const m = (await store.listPeppolMessages({ merchantId, documentId: doc.id }))[0]; if (!m || !m.providerMessageId) throw new HttpError(409, 'NOTHING_SENT_YET');
+    const r = await legalServices(settings).peppol.refreshStatus(m.id); json(ctx.res, 200, { status: r.state, changed: r.changed });
   });
 
   // ---------- Finance Inbox + Purchases: private attachments, human review, no mailbox access ----------
@@ -873,12 +1001,13 @@ export function createFinanceApp(deps) {
   const ownIdentity = async () => { const s = (await settingsIo.load()).seller ?? {}; return { vatNumbers: [s.vatNumber].filter(Boolean), enterpriseNumbers: [s.enterpriseNumber].filter(Boolean), ibans: [s.iban].filter(Boolean), names: [s.name].filter(Boolean) }; };
   const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
   // the merchant's civil date (their configured time zone), for every day-based reading of a due date; never the server's zone
-  const merchantToday = () => civilDateIn(new Date(clock.now()), timeZone);
   // `today` = the merchant's civil date, computed once per request by a list (not once per purchase: each computation builds an Intl formatter)
-  const itemView = (raw, today = merchantToday()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
+  const itemView = (raw, today = clock.today()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
     id: r.id, source: r.source, status: r.status, supplierName: r.supplierName, supplierVatNumber: r.supplierVatNumber, supplierCompanyId: r.supplierCompanyId, invoiceNumber: r.invoiceNumber, issueDate: r.issueDate, dueDate: r.dueDate,
     netCents: r.netCents, vatCents: r.vatCents, grossCents: r.grossCents, currency: r.currency, paymentReference: r.paymentReference, fileName: r.fileName, contentType: r.contentType, sizeBytes: r.sizeBytes, receivedAt: r.receivedAt,
     fromAddress: r.fromAddress, subject: r.subject, extraction: r.extraction, validatedAt: r.validatedAt, paidAt: r.paidAt, paidReference: r.paidReference, rejectedReason: r.rejectedReason, hasFile: !!r.attachmentRef,
+    // the payment truth of a supplier document: derived from its allocations (paymentStatus / allocatedCents / remainingCents), never an input; paidAt/paidReference only mirror a full payment
+    paymentStatus: r.paymentStatus, allocatedCents: r.allocatedCents ?? 0, remainingCents: r.grossCents == null ? null : Math.max(0, r.grossCents - (r.allocatedCents ?? 0)),
     due: dueViewOf(raw, { today }),   // phase 4.7: origin / terms / divergence / the two derived status axes / days remaining (derived, never stored)
     net: r.netCents == null ? null : formatCents(r.netCents), vat: r.vatCents == null ? null : formatCents(r.vatCents), gross: r.grossCents == null ? null : formatCents(r.grossCents),
     errors: validationErrorsFor(raw),
@@ -917,7 +1046,7 @@ export function createFinanceApp(deps) {
     const st = ctx.url.searchParams.get('scope');
     const f = st === 'purchases' ? { statuses: ['VALIDATED', 'TO_PAY', 'PAID'] } : st === 'inbox' ? { statuses: ['RECEIVED', 'TO_REVIEW', 'REJECTED'] } : {};
     const status = ctx.url.searchParams.get('status'); if (status && INBOX_STATUSES.includes(status)) f.status = status;
-    const today = merchantToday(); json(ctx.res, 200, { rows: (await inboxFor().list(f)).map((raw) => itemView(raw, today)) });
+    const today = clock.today(); json(ctx.res, 200, { rows: (await inboxFor().list(f)).map((raw) => itemView(raw, today)) });
   });
   // Upload as JSON (base64): sniffed, size-limited, stored privately, extracted, then left TO_REVIEW for a person. Same file twice = same record.
   on('POST', '/api/inbox/upload', async (ctx) => {
@@ -972,7 +1101,7 @@ export function createFinanceApp(deps) {
   inboxAct('reopen', (i, id) => i.reopen(id, actor));
   inboxAct('acknowledge-due-conflict', (i, id) => i.acknowledgeDueConflict(id, actor));
   inboxAct('reject', (i, id, b) => i.reject(id, sanitizeText(b.reason, 300), actor));
-  inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100) }, actor); });
+  inboxAct('pay', (i, id, b) => { const c = toCents(String(b.amount ?? '')); const k = typeof b.idempotencyKey === 'string' && /^[A-Za-z0-9_.:-]{8,120}$/.test(b.idempotencyKey) ? b.idempotencyKey : undefined; return i.pay(id, { paidOn: isDate(b.paidOn) ? b.paidOn : null, amountCents: Number.isInteger(c) ? c : null, reference: sanitizeText(b.reference, 100), idempotencyKey: k }, actor); });
   // Phase 1 (Contact foundation): link/unlink a supplier invoice to a fin_companies contact. { contactId: "<uuid>" }
   // links; { contactId: null } (or omitted) unlinks. The tenant check on the contact happens here (via the same
   // svc.getCompany() every other company lookup uses) because inbox.js's service has no access to the company store.
@@ -998,8 +1127,8 @@ export function createFinanceApp(deps) {
     const all = await loadDocsForReports(store, merchantId);
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
-      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
+      .map(({ doc, payments, creditNotes, refunds }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes, refunds) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const supplierInvoices = ((await store.listSupplierInvoices?.()) ?? []).filter((s) => inRange(s.issue_date ?? s.issueDate, period.start, period.end)).map((s) => ({ supplierName: s.supplier_name ?? s.supplierName, supplierVatNumber: s.supplier_vat_number ?? s.supplierVatNumber, invoiceNumber: s.invoice_number ?? s.invoiceNumber, issueDate: s.issue_date ?? s.issueDate, dueDate: s.due_date ?? s.dueDate, netCents: Number(s.net_cents ?? s.netCents), vatCents: Number(s.vat_cents ?? s.vatCents), grossCents: Number(s.gross_cents ?? s.grossCents), status: s.status ?? s.payment_status ?? s.paymentStatus, source: s.source, attachmentRef: s.attachment_ref ?? s.attachmentRef }));
     const acc = settings.accountant;
     const built = await buildAccountantPackage({ pack, period, docs, refunds, supplierInvoices, merchantName: settings.seller.name ?? '', filePrefix: 'Comptabilite', namePrefix: acc.packageName || undefined, branding: settings.branding, generatedAt: clock.now() });
@@ -1042,6 +1171,22 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, { status: 'SENT', messageId: r.messageId ?? null, sentAt: p.sentAt });
   });
 
+  // ---------- Accountant export (data package): CSV + manifest + SHA-256 + README + missing-artifacts. Read-only on the truths; the package is in memory only and expires. ----------
+  const exportsMem = new Map();
+  const exportFor = async () => { const settings = await settingsIo.load(); return createAccountantExportService({ store, merchantId, clock, merchant: { name: settings.seller?.name ?? null }, attachments: attachmentStore, inbox: inboxFor(), sourceSchemaVersion: '20261005090000',
+    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, renderPdf: async (doc, x) => renderDocumentPdf(doc, { settlement: x.settlement ?? null, branding: settings.branding }), cashCurrency: settings.defaults.currency }); };
+  const periodSpec = (src) => { const g = (k) => (src instanceof URLSearchParams ? src.get(k) : src?.[k]); return { kind: g('kind'), year: g('year'), month: g('month'), quarter: g('quarter'), from: g('from'), to: g('to') }; };
+  const exportPeriodGuard = async (fn) => { try { return await fn(); } catch (e) { if (e?.code === 'PERIOD_INVALID') fields([{ field: 'period', code: 'PERIOD_INVALID' }]); throw e; } };
+  on('GET', '/api/accountant-export/preview', async (ctx) => json(ctx.res, 200, await exportPeriodGuard(async () => (await exportFor()).preview(periodSpec(ctx.url.searchParams)))));
+  on('GET', '/api/accountant-export/history', async (ctx) => json(ctx.res, 200, { rows: await (await exportFor()).history() }));
+  on('POST', '/api/accountant-export/generate', async (ctx) => {
+    for (const [k, v] of exportsMem) if (v.expires < Date.now()) exportsMem.delete(k);
+    const r = await exportPeriodGuard(async () => (await exportFor()).generate(periodSpec(ctx.body), { includeDocuments: ctx.body?.includeDocuments !== false, actor }));
+    exportsMem.set(r.record.exportId, { zip: r.zip, fileName: r.fileName, expires: Date.now() + 30 * 60_000 });
+    json(ctx.res, 200, { ...r.summary, exportId: r.record.exportId, fileName: r.fileName, sha256: r.sha256, size: r.size, verified: verifyExportPackage(r.zip).ok, downloadUrl: `/api/accountant-export/${r.record.exportId}/download` });
+  }, { bodyLimit: 100_000 });
+  on('GET', `/api/accountant-export/${P}/download`, async (ctx) => { const p = exportsMem.get(idParam(ctx.m[1])); if (!p || p.expires < Date.now()) throw new HttpError(404, 'PACKAGE_NOT_FOUND'); send(ctx.res, 200, p.zip, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${p.fileName}"`, 'Cache-Control': 'no-store' }); });
+
   // ---------- Pack comptable v1: prepare -> control -> complete -> download (complete pack or one category at a time) ----------
   const periodFromQuery = (q) => ({ kind: q.get('kind'), year: Number(q.get('year')), quarter: Number(q.get('quarter')), month: Number(q.get('month')), from: q.get('from'), to: q.get('to') });
   /** Everything the pack is built from, read once. `withFiles` also fetches the stored attachments (needed to build files, not to show the page). */
@@ -1053,8 +1198,8 @@ export function createFinanceApp(deps) {
     const all = await loadDocsForReports(store, merchantId);
     const byId = new Map(all.map((x) => [x.doc.id, x.doc]));
     const docs = all.filter(({ doc }) => doc.lockedAt && ['invoice', 'credit_note'].includes(doc.type) && doc.currency === pack.currency && inRange(doc.issueDate, period.start, period.end))
-      .map(({ doc, payments, creditNotes }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
-    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end));
+      .map(({ doc, payments, creditNotes, refunds }) => ({ doc, settlement: doc.type === 'invoice' ? settlementOf(doc, payments, creditNotes, refunds) : null, originalNumber: doc.type === 'credit_note' ? byId.get(doc.relatedDocumentId)?.number ?? null : null }));
+    const refunds = refundRows(data, (d) => inRange(d, period.start, period.end), timeZone);
     const rows = (await store.listSupplierInvoices(merchantId)).filter((r) => r.status !== 'REJECTED');
     const purchases = rows.filter((r) => inRange(r.issueDate, period.start, period.end)).map((r) => ({ ...r }));
     if (withFiles) {
@@ -1228,7 +1373,7 @@ export function createFinanceApp(deps) {
 
   // ---------- settings ----------
   const publicSettings = (s) => ({ ...s, branding: { ...s.branding, logoPath: undefined, hasLogo: !!s.branding.logoPath }, peppol: { ...s.peppol, provider: null, status: 'NOT_CONFIGURED' } });
-  async function settingsPayload() { const s = await settingsIo.load(); return { settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }; }
+  async function settingsPayload() { const s = await settingsIo.load(); return { timeZone, settings: publicSettings(s), missing: missingForInvoicing(s), vatRegimes: ['domestic', 'intra_eu_b2b_exempt', 'reverse_charge', 'export_outside_eu', 'vat_exempt_small_business'] }; }
   on('GET', '/api/settings', async (ctx) => json(ctx.res, 200, await settingsPayload()));
   on('PUT', '/api/settings', async (ctx) => {
     const cur = await settingsIo.load();
@@ -1263,6 +1408,7 @@ export function createFinanceApp(deps) {
       const status = NOT_FOUND_CODES.includes(e.code) ? 404 : UNPROCESSABLE.includes(e.code) ? 422 : e.code === 'BANK_IMPORT_FAILED_NOTHING_SAVED' ? 503 : 409;
       return json(res, status, { error: { code: e.code, message: e.detail ?? null, ...(e.existing ? { existing: e.existing } : {}) } }); // existing: the document a refused duplicate would repeat
     }
+    if (e instanceof TreasuryError) return json(res, /NOT_FOUND$/.test(e.code) ? 404 : 422, { error: { code: e.code, message: e.detail ?? null } });
     console.error('finance dashboard internal error:', e?.message);
     return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
   }

@@ -1,0 +1,255 @@
+// NORDLA TERRAIN (mobile V2): pure HTML builders for the five main screens of the validated direction - Accueil, Fournisseurs, Fiche fournisseur, Prise de note, Suivi des visites - plus "Plus" (sync, backup,
+// comparisons, advanced modes) and the sync-conflict screen. Like salon-views.js they take view models computed by the core / the controller (salon.js) and return strings: no state, no events, nothing
+// computed here that the core already knows. French for the owner; the supplier-facing sentences (English / Chinese) are shown as the core wrote them. Designed for 375-390 px, one hand, targets >= 44 px.
+// The vocabulary of states is fixed and never mixed: a question is "à poser", "posée" or "réponse notée"; a fact is "proposée", "confirmée", "corrigée" or "vérifiée" (only an official source is "vérifiée").
+import { esc } from '../dom.js';
+import { describeCandidate as describeCandidateRaw, labelOf } from '/core/candidate-view.js';
+import { fr } from './salon-fr.js';
+import { pill, btn, val, askTitle, askTag, factsHtml, truthHtml, fitHtml, dealHtml, changedHtml, memoryHtml, negotiateHtml, numbersForm, blockerSummary, EV_FR, REC_FR, factValueText } from './salon-views.js';
+
+// ---- icons: small stroke icons drawn for Nordla (no third-party artwork) ------------------------------------------------------------------------------------------------------------------------------
+const P = { home: 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10', suppliers: 'M4 21V5l8-2v18M12 8h8v13M4 21h16M7 9h2M7 13h2M7 17h2M15 12h2M15 16h2', note: 'M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4', visits: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4', more: 'M5 12h.01M12 12h.01M19 12h.01',
+  search: 'M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 11a3.5 3.5 0 100 7 3.5 3.5 0 000-7z', mic: 'M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3zM6 11a6 6 0 0012 0M12 17v4', doc: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
+  back: 'M15 5l-7 7 7 7', plus: 'M12 5v14M5 12h14', check: 'M5 12l4 4 10-10', alert: 'M12 4l9 16H3zM12 10v4M12 17h.01', ask: 'M12 3a9 9 0 100 18 9 9 0 000-18zM9.5 9.5a2.5 2.5 0 115 0c0 1.8-2.5 2-2.5 3.5M12 17h.01', compare: 'M7 4v16M17 4v16M3 8l4-4 4 4M13 16l4 4 4-4', close: 'M6 6l12 12M18 6L6 18', chev: 'M9 5l7 7-7 7', sync: 'M20 11a8 8 0 00-14-4M4 4v4h4M4 13a8 8 0 0014 4M20 20v-4h-4' };
+export const ic = (n, cls = '') => `<svg class="nx-ic ${cls}" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${P[n] ?? ''}"/></svg>`;
+
+// ---- vocabulary ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const ST = Object.freeze({ toAsk: 'À poser', asked: 'Posée · en attente', answered: 'Réponse notée', proposed: 'Proposée · à confirmer', ambiguous: 'Ambiguë · à corriger', confirmed: 'Confirmée', corrected: 'Corrigée par vous', rejected: 'Rejetée', verified: 'Vérifiée', unknown: 'Inconnue' });
+export const LADDER = '<ol class="nx-ladder" aria-label="Les états d\'une information"><li><b>Question posée</b><span>vous l\'avez demandée</span></li><li><b>Réponse notée</b><span>vous l\'avez enregistrée</span></li><li><b>Proposée</b><span>Nordla l\'a lue, rien n\'est acquis</span></li><li><b>Confirmée</b><span>vous l\'avez validée</span></li><li><b>Vérifiée</b><span>une source officielle ou une preuve indépendante la confirme</span></li></ol>';
+const HINT_BY_KEY = { 'quote.unitPrice': 'ex. 12.50', 'quote.moq': 'ex. 500', 'quote.currency': 'USD, CNY ou EUR', 'spec.capacity': 'ex. 10000 mAh', 'identifier.model': 'tel qu\'écrit', 'quote.incoterm': 'EXW, FOB, DAP…', 'quote.port': 'ex. Ningbo' };
+const numericKey = (k) => /unitPrice|moq|samplePrice|qty|colourCount/.test(k);
+const fmtDay = (iso, now) => { const d = new Date(iso); if (Number.isNaN(d.getTime())) return ''; const dayKey = (x) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; const n = new Date(now); const y = new Date(n.getTime() - 864e5); return dayKey(d) === dayKey(n) ? "Aujourd'hui" : dayKey(d) === dayKey(y) ? 'Hier' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); };
+const fmtTime = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+const initials = (s) => String(s ?? '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+
+// ---- shell pieces -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/** The ONE place that words the save / sync state. It only says "à jour" when the controller could confirm it (server verified, nothing waiting, no conflict). */
+export function syncChip(sync) {
+  const k = sync?.kind ?? 'local'; const icon = k === 'conflict' ? 'alert' : k === 'synced' ? 'check' : 'sync';
+  return `<button type="button" class="nx-sync k-${esc(k)}" data-act="sl-nav" data-key="more" aria-label="État de la sauvegarde : ${esc(sync?.label ?? '')}">${ic(icon)}<span>${esc(sync?.label ?? '')}</span></button>`;
+}
+export const brandBar = (sync) => `<header class="nx-brand"><img src="/icon.svg" alt="" width="40" height="40" class="nx-logo"><div class="nx-wm"><b>Nordla</b><small>CHINA SOURCING</small></div>${syncChip(sync)}</header>`;
+export const pageBar = ({ title, sub = '', back = null, right = '' }) => `<header class="nx-bar">${back ? `<button type="button" class="nx-iconbtn" data-act="${esc(back.act)}"${back.key !== undefined ? ` data-key="${esc(back.key)}"` : ''} aria-label="${esc(back.label ?? 'Retour')}">${ic('back')}</button>` : ''}<div class="nx-bt">${title ? `<h1>${esc(title)}</h1>` : ''}${sub ? `<p>${esc(sub)}</p>` : ''}</div>${right}</header>`;
+/** A message: a string is a notice (amber); { text, kind: 'ok' } is a confirmation (green, with a check). */
+export const flashHtml = (f) => { if (!f) return ''; const text = typeof f === 'string' ? f : f.text; const ok = typeof f === 'object' && f.kind === 'ok'; return text ? `<p class="nx-flash${ok ? ' ok' : ''}" role="status">${ok ? ic('check') : ''}<span>${esc(text)}</span></p>` : ''; };
+/** A sync conflict is never hidden: this banner sits on every main screen until the owner has chosen. */
+export const conflictBanner = (n) => (n ? `<div class="nx-alert" role="alert"><b>${ic('alert')} Conflit de synchronisation</b><p>${n > 1 ? `${n} dossiers ont été modifiés à la fois sur ce téléphone et sur le serveur.` : 'Un dossier a été modifié à la fois sur ce téléphone et sur le serveur.'} Rien n'a été écrasé : les deux versions sont conservées.</p>${btn('Voir les différences', 'sl-nav', 'sync', '', 'pri')}</div>` : '');
+const thumb = (url, name) => (url ? `<img class="nx-th" src="${esc(url)}" alt="" loading="lazy">` : `<span class="nx-th nx-ph0" aria-hidden="true">${esc(initials(name))}</span>`);
+/** Relative time, only from a real timestamp. */
+export const ago = (iso, now) => { const m = Math.round((now - Date.parse(iso)) / 60000); if (!Number.isFinite(m) || m < 0) return ''; if (m < 2) return "à l'instant"; if (m < 60) return `il y a ${m} min`; const h = Math.round(m / 60); if (h < 24) return `il y a ${h} h`; const d = Math.round(h / 24); return d === 1 ? 'hier' : `il y a ${d} j`; };
+/** The ONE status line of a supplier: what is waiting for the owner, most important first (nothing waiting = nothing said in lists). */
+export function stateOf(o) { if (o.conflicts) return { tone: 'bad', text: plural(o.conflicts, 'contradiction à lever', 'contradictions à lever') }; if (o.waiting) return { tone: '', text: `${o.waiting} réponse${o.waiting > 1 ? 's' : ''} attendue${o.waiting > 1 ? 's' : ''}` }; if (o.pending) return { tone: '', text: `${o.pending} information${o.pending > 1 ? 's' : ''} à confirmer` }; return null; }
+export const flagsOf = (o) => { const st = stateOf(o); return st ? [pill(st.text, st.tone === 'bad' ? 'bad' : 'warn')] : []; };
+/** What is CONFIRMED about a supplier, in one line (price, MOQ, model): nothing is shown that nobody confirmed. */
+export const factsLine = (f) => { const parts = []; const p = f?.price;
+  if (p && p.status === 'CONFIRMED') parts.push(`<b>${esc(p.text)}</b>`);
+  else if (p && p.status === 'CURRENCY_TO_CONFIRM') parts.push(`<b>${esc(p.amount)}</b> <span class="nx-pw">— devise à confirmer</span>`);
+  else if (p && p.status === 'PRICE_TO_CONFIRM') parts.push(`<span class="nx-pw">${esc(p.text)}</span>`);
+  if (f?.moq) parts.push(`MOQ ${esc(f.moq)}`); if (f?.model) parts.push(esc(f.model)); return parts.length ? `<span class="nx-facts">${parts.join(' · ')}</span>` : '<span class="nx-none">Rien de confirmé</span>'; };
+
+// ---- supplier cards ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export function supplierCards(list, selected = [], { compact = false } = {}) {
+  if (!list.length) return '<p class="nx-empty">Aucun fournisseur ne correspond.</p>';
+  const sel = new Set(selected);
+  return list.map((o) => { const st = stateOf(o); return `<article class="nx-card${sel.has(o.caseId) ? ' sel' : ''}" data-case="${esc(o.caseId)}"><button type="button" class="nx-cardmain" data-act="sl-open-case" data-key="${esc(o.caseId)}" aria-label="Ouvrir ${esc(o.supplier ?? o.title)}">${thumb(o.photo, o.supplier ?? o.title)}
+    <span class="nx-ct"><b>${esc(o.supplier ?? 'Fournisseur sans nom')}</b><span class="nx-sub">${esc(o.title)}</span>${factsLine(o.facts)}${st ? `<span class="nx-state ${st.tone}"><i class="nx-dot ${st.tone}"></i>${esc(st.text)}</span>` : ''}</span></button>${compact ? '' : `<button type="button" class="nx-pick" data-act="sl-sel" data-key="${esc(o.caseId)}" aria-pressed="${sel.has(o.caseId)}" aria-label="Comparer ${esc(o.supplier ?? o.title)}">${ic('check')}</button>`}</article>`; }).join('');
+}
+
+// ---- 1. ACCUEIL -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export function homeHtml({ overview, sync, counts, conflicts = 0, flash = '', now = Date.now() }) {
+  const tile = (icon, label, act, key = '') => `<button type="button" class="nx-tile" data-act="${esc(act)}"${key !== '' ? ` data-key="${esc(key)}"` : ''}>${ic(icon)}<span>${esc(label)}</span></button>`;
+  const todo = [counts.toConfirm ? [counts.toConfirm, counts.toConfirm > 1 ? 'informations à confirmer' : 'information à confirmer', 'confirm'] : null, counts.waiting ? [counts.waiting, counts.waiting > 1 ? 'réponses attendues' : 'réponse attendue', 'waiting'] : null, counts.conflicts ? [counts.conflicts, counts.conflicts > 1 ? 'contradictions à lever' : 'contradiction à lever', 'conflict'] : null].filter(Boolean)
+    .map(([n, t, key]) => `<button type="button" class="nx-todo" data-act="sl-nav-filter" data-key="${key}"><b>${n}</b><span>${esc(t)}</span>${ic('chev')}</button>`).join('');
+  const last = overview[0]; const rest = overview.slice(1, 4);
+  // ONE dominant block: continue with the last supplier, or start the first visit
+  const hero = last ? `<section class="nx-hero2" aria-label="Dernier fournisseur"><span class="nx-cap">Dernier fournisseur${last.updatedAt ? ` · ${esc(ago(last.updatedAt, now))}` : ''}</span>
+      <div class="nx-h2id">${thumb(last.photo, last.supplier ?? last.title)}<div><h2>${esc(last.supplier ?? 'Fournisseur sans nom')}</h2><p>${esc(last.title)}</p></div></div>
+      ${last.lastText ? `<p class="nx-h2meta">« ${esc(last.lastText)} »</p>` : ''}${btn('Prendre une note', 'sl-note-open', last.caseId, '', 'pri big')}<button type="button" class="nx-link" data-act="sl-open-case" data-key="${esc(last.caseId)}">Ouvrir la fiche</button></section>`
+    : `<section class="nx-hero2 empty"><span class="nx-cap">Votre visite</span><h2>Commencez par un fournisseur</h2><p>Un nom ou un produit suffit. Notez ensuite ce qu'il dit : Nordla propose, vous confirmez.</p>${btn('Nouveau fournisseur', 'sl-nav', 'new', '', 'pri big')}</section>`;
+  return `<div class="nx">${brandBar(sync)}${conflictBanner(conflicts)}${flashHtml(flash)}
+    <form data-form="sl-search" class="nx-searchf" role="search"><label class="nx-search">${ic('search')}<input type="search" name="q" placeholder="Rechercher un fournisseur…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher"></label></form>
+    ${hero}${last ? `<div class="nx-tiles">${tile('plus', 'Nouveau fournisseur', 'sl-nav', 'new')}${tile('ask', 'Poser une question', 'sl-ask', '')}${tile('compare', 'Comparer', 'sl-nav', 'compare')}</div>` : ''}
+    ${todo ? `<h2 class="nx-h">À poursuivre</h2><div class="nx-todos">${todo}</div>` : ''}
+    ${rest.length ? `<h2 class="nx-h">Autres dossiers <button type="button" class="nx-link" data-act="sl-nav" data-key="suppliers">Voir tout</button></h2>${supplierCards(rest, [], { compact: true })}` : ''}</div>`;
+}
+
+// ---- NOUVEAU FOURNISSEUR (the shortest way to start: a name, optionally a product) ------------------------------------------------------------------------------------------------------------------------------------
+export function newHtml({ flash = '' }) {
+  return `<div class="nx">${pageBar({ title: 'Nouveau fournisseur', back: { act: 'sl-nav', key: 'home' } })}${flashHtml(flash)}
+    <form data-form="sl-new" class="nx-form" autocomplete="off"><label>Fournisseur<input name="supplier" placeholder="Nom, stand ou contact (ex. Sonny)" autocapitalize="words" enterkeyhint="next"></label><label>Produit<input name="product" placeholder="ex. batterie externe" enterkeyhint="done"></label>
+      <p class="nx-hint">Un nom ou un produit suffit. Tout ce qui manque reste <b>inconnu</b>, jamais inventé.</p><button type="submit" class="nx-btn pri big">Créer et prendre une note</button></form>
+    <div class="nx-sec"><p class="nx-hint">Vous avez déjà un devis ou un chat WeChat ? Nordla en extrait les termes, vous les relisez un par un.</p>${btn('Coller un devis ou un chat', 'sl-nav', 'capture', '', 'big')}</div></div>`;
+}
+
+// ---- 2. FOURNISSEURS -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const FILTERS = [['all', 'Tous'], ['confirm', 'À confirmer'], ['waiting', 'En attente'], ['conflict', 'Contradictions']];
+export function suppliersHtml({ overview, total, selected, filter, query, sync, conflicts = 0, counts, flash = '' }) {
+  // a filter with nothing behind it is not offered (less noise), unless it is the active one
+  const chips = FILTERS.map(([k, l]) => { const n = k === 'confirm' ? counts.cases.confirm : k === 'waiting' ? counts.cases.waiting : k === 'conflict' ? counts.cases.conflict : total; if (k !== 'all' && !n && filter !== k) return ''; return `<button type="button" class="nx-chip" data-act="sl-filter" data-key="${k}" aria-pressed="${filter === k}">${l}${k !== 'all' ? ` <b>${n}</b>` : ''}</button>`; }).join('');
+  const bar = selected.length >= 2 ? `<div class="nx-bar2"><span><b>${selected.length}</b> choisis</span>${btn(`Comparer (${selected.length})`, 'sl-compare', '', '', 'pri')}</div>` : selected.length === 1 ? '<p class="nx-hint">Choisissez au moins un autre fournisseur pour comparer.</p>' : (total >= 2 ? '<p class="nx-hint">Touchez le cercle d\'un fournisseur pour le comparer (2 à 5).</p>' : '');
+  return `<div class="nx">${pageBar({ title: 'Fournisseurs', sub: `${plural(total, 'fournisseur', 'fournisseurs')}`, right: syncChip(sync) })}${conflictBanner(conflicts)}${flashHtml(flash)}
+    <label class="nx-search">${ic('search')}<input type="search" name="q" data-nx-search value="${esc(query)}" placeholder="Rechercher un fournisseur…" autocomplete="off" aria-label="Rechercher"></label>
+    ${(chips.match(/<button/g) ?? []).length > 1 ? `<div class="nx-chips" role="group" aria-label="Filtrer">${chips}</div>` : ''}<div id="nx-list">${supplierCards(overview, selected)}</div>${bar}
+    <button type="button" class="nx-fab" data-act="sl-nav" data-key="new" aria-label="Nouveau fournisseur">${ic('plus')}<span>Fournisseur</span></button></div>`;
+}
+
+/** A candidate is always describable: if the core cannot word its value (a legacy or odd record), the supplier's own words are shown instead - the screen never fails on one proposal. */
+const describeCandidate = (c, locale) => { try { return describeCandidateRaw(c, locale); } catch { return { id: c.id, key: c.key, label: labelOf(c.key, c.context, locale), valueText: c.correctedValue !== undefined ? factValueText({ fact_type: '', value: c.correctedValue }) : `« ${c.rawText ?? ''} »`, from: c.rawText, lang: c.lang, kind: 'FACT', note: null, warnings: [], canConfirm: !c.needsCorrection, canCorrect: true }; } };
+// ---- proposals: what Nordla read in the supplier's words. Never a fact until the owner decides. ------------------------------------------------------------------------------------------------------------------
+/** @param cands candidates of ONE note / answer (already filtered); decided ones are shown briefly so the owner sees the outcome without leaving the screen */
+export function proposalsHtml({ cands, conflicts = [], correcting = null, groupIds = [], caseId, title = null }) {
+  const open = cands.filter((c) => c.state === 'PROPOSED'); const done = cands.filter((c) => c.state !== 'PROPOSED' && c.state !== 'CONFLICT');
+  const row = (c) => { const d = describeCandidate(c, 'fr'); const amb = c.needsCorrection === true; const isOpen = correcting === c.id;
+    return `<li class="nx-prop${amb ? ' amb' : ''}" data-cand="${esc(c.id)}"><div class="nx-ph"><b>${esc(d.label)}</b><span class="nx-st ${amb ? 'st-amb' : 'st-prop'}">${amb ? ST.ambiguous : ST.proposed}</span></div>
+      <div class="nx-pv">${amb ? `À corriger : « ${esc(c.rawText)} »` : esc(d.valueText)}</div><div class="nx-pq">« ${esc(c.rawText)} » · dit par le fournisseur</div>${d.warnings.map((w) => `<small class="nx-warn">${esc(w)}</small>`).join('')}
+      <div class="nx-acts">${d.canConfirm ? btn('Confirmer', 'sl-confirm', c.id, '', 'pri') : ''}${btn('Corriger', 'sl-correct-open', c.id)}${btn('Rejeter', 'sl-reject', c.id, '', 'ghost')}</div>
+      ${isOpen ? `<form data-form="sl-correct" data-id="${esc(c.id)}" class="nx-inline"><input type="hidden" name="id" value="${esc(c.id)}"><input name="value" inputmode="${numericKey(c.key) ? 'decimal' : 'text'}" placeholder="${esc(HINT_BY_KEY[c.key] ?? 'Valeur exacte')}" autocomplete="off" autofocus aria-label="Valeur corrigée"><button class="nx-btn pri" type="submit">OK</button></form>` : ''}</li>`; };
+  const doneRow = (c) => { const d = describeCandidate(c, 'fr'); const was = c.state === 'CORRECTED' ? ` <small>(le fournisseur disait « ${esc(c.rawText)} »)</small>` : '';
+    const st = c.state === 'CONFIRMED' ? ST.confirmed : c.state === 'CORRECTED' ? ST.corrected : ST.rejected; const shown = c.state === 'CORRECTED' && c.correctedValue !== undefined ? factValueText({ fact_type: '', value: c.correctedValue }) : d.valueText;
+    return `<li class="nx-done ${esc(c.state)}"><span class="nx-st st-${c.state === 'REJECTED' ? 'rej' : 'ok'}">${st}</span> <b>${esc(d.label)}</b> ${c.state === 'REJECTED' ? `<s>${esc(d.valueText)}</s>` : esc(shown)}${was}</li>`; };
+  const conf = conflicts.map((c) => `<div class="nx-conf"><b>${ic('alert')} Contradiction</b><p>${esc(c.title)}</p><p class="nx-hint">${esc(c.help)}</p><div class="nx-acts">${c.choices.map((ch) => btn(ch.label, 'sl-resolve', c.id, val(ch.choice))).join('')}</div></div>`).join('');
+  if (!cands.length && !conflicts.length) return '';
+  return `<section class="nx-props" aria-label="Informations proposées">${title ? `<h3 class="nx-h3">${esc(title)}</h3>` : ''}${conf}${groupIds.length >= 2 ? `<div class="nx-acts">${btn(`Confirmer les ${groupIds.length} informations claires`, 'sl-confirm-note', caseId, val(groupIds), 'pri big')}</div><p class="nx-hint">Seules les informations sans ambiguïté sont incluses. Chacune reste « dite par le fournisseur » : rien n'est vérifié.</p>` : ''}${open.length ? `<ul class="nx-list">${open.map(row).join('')}</ul>` : ''}
+    ${done.length ? `<ul class="nx-dones">${done.map(doneRow).join('')}</ul>` : ''}</section>`;
+}
+
+// ---- questions ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+const zhBlock = (zh, note) => (zh ? `<p class="nx-lang">中文</p><p class="zh nx-zh" lang="zh-Hans">${esc(zh.text)}</p>` : `<small class="nx-hint">${esc(fr(note ?? 'Pas de phrase chinoise disponible : aucune n\'est inventée.'))}</small>`);
+/** A question card: the question (English, then Chinese, to read or to show), then ONE obvious action - note the answer RIGHT THERE. Montrer / Copier / Passer are secondary. */
+export function questionCard(q, { caseId, answering = false, panel = '', draft = '' }) {
+  const longQ = String(q.en ?? '').length > 220;
+  const stateLabel = q.state === 'ASKED' ? ST.asked : q.state === 'ANSWERED' ? ST.answered : q.state === 'ASKED_NO_ANSWER' || q.state === 'UNANSWERED' ? 'Posée · sans réponse' : ST.toAsk;
+  const composer = answering ? `<form data-form="sl-answer" class="nx-answer" data-id="${esc(q.id)}"><input type="hidden" name="caseId" value="${esc(caseId)}"><input type="hidden" name="qid" value="${esc(q.id)}"><input type="hidden" name="qtitle" value="${esc(q.title)}">
+      <label for="ans-${esc(q.id)}">Réponse du fournisseur</label><textarea id="ans-${esc(q.id)}" name="text" rows="4" placeholder="Notez sa réponse telle qu'il la donne : prix, MOQ, modèle…" data-nx-draft="ans:${esc(q.id)}" autofocus>${esc(draft)}</textarea>
+      <div class="nx-acts"><button type="submit" class="nx-btn pri">Enregistrer la réponse</button>${btn('Annuler', 'sl-answer-close', q.id, '', 'ghost')}</div></form>` : '';
+  const body = longQ ? `<p class="nx-lang">EN</p><p class="nx-en" lang="en">${esc(String(q.en).split('\n')[0])}</p><details class="nx-more"><summary>Voir toute la demande (anglais et chinois)</summary><p class="nx-en" lang="en" style="white-space:pre-wrap;font-size:16px;line-height:24px">${esc(q.en)}</p><hr>${zhBlock(q.zh, q.zhNote)}</details>`
+    : `<p class="nx-lang">EN</p><p class="nx-en" lang="en">${esc(q.en ?? q.fr ?? '')}</p>${q.zh ? `<hr>${zhBlock(q.zh, q.zhNote)}` : `<p style="margin-top:8px">${zhBlock(q.zh, q.zhNote)}</p>`}`;
+  return `<li class="nx-q st-${esc(q.state)}" data-q="${esc(q.id)}"><div class="nx-ph"><b class="nx-qtitle">${esc(q.title)}</b><span class="nx-st st-q${esc(q.state)}">${esc(stateLabel)}</span></div>${q.tag ? `<span class="nx-tag t-${esc(q.tagKind)}">${esc(q.tag)}</span>` : ''}
+    <div class="nx-qtext">${body}</div>
+    ${answering ? '' : `<div class="nx-acts">${q.show === false ? '<span></span>' : btn('Montrer', 'sl-show', q.id, ` data-case="${esc(caseId)}"`)}${btn('Noter la réponse', 'sl-answer-open', q.id, ` data-case="${esc(caseId)}"`, 'pri')}</div><div class="nx-acts nx-sec2">${btn('Copier', 'sl-copy', q.id, ` data-case="${esc(caseId)}"`, 'ghost')}${q.skippable === false ? '' : btn('Passer', 'sl-q-skip', q.id, ` data-case="${esc(caseId)}"`, 'ghost')}</div>`}${composer}${panel}</li>`;
+}
+export function questionsPane({ info, groups, answering, panels, drafts, ownDraft = '' }) {
+  const list = (items) => `<ul class="nx-list nx-qs">${items.map((q) => questionCard(q, { caseId: info.caseId, answering: answering === q.id, panel: panels[q.id] ?? '', draft: drafts[q.id] ?? '' })).join('')}</ul>`;
+  const lead = groups.answered.find((a) => panels[a.qid]); const rest = groups.answered.filter((a) => a !== lead);
+  // the answer that was just SAVED: shown as saved (check, time, the words as typed), with what Nordla read from it right under
+  const leadRow = (a) => `<li class="nx-ans nx-lead"><div class="nx-savedhead">${ic('check')} Réponse enregistrée<small>${esc(a.when ?? '')}</small></div><p class="nx-cap" style="margin-top:8px">${esc(a.title)}</p><p class="nx-quote">${esc(a.excerpt)}</p>${panels[a.qid] ?? ''}</li>`;
+  const ansRow = (a) => `<li class="nx-ans"><div class="nx-ph"><b class="nx-qtitle">${esc(a.title)}</b><span class="nx-st st-qANSWERED">${ST.answered}</span></div><p class="nx-quote">${esc(a.excerpt)}</p><div class="nx-row">${a.pending ? pill(`${a.pending} à confirmer`, 'warn') : pill('tout est traité', 'rv-CONFIRMED')}${a.pending ? btn('Voir', 'sl-case-tab', 'facts', '', 'ghost') : ''}</div></li>`;
+  return `${lead ? `<ul class="nx-list">${leadRow(lead)}</ul>` : ''}
+    ${groups.toAsk.length ? `<h3 class="nx-h3">À poser maintenant</h3>${list(groups.toAsk)}` : (groups.waiting.length || lead ? '' : `<p class="nx-empty">${esc(groups.message)}</p>`)}
+    ${groups.waiting.length ? `<h3 class="nx-h3">Posées · en attente de réponse</h3>${list(groups.waiting)}` : ''}${groups.own.length ? `<h3 class="nx-h3">Vos questions</h3>${list(groups.own)}` : ''}${rest.length ? `<h3 class="nx-h3">Réponses notées</h3><ul class="nx-list">${rest.map(ansRow).join('')}</ul>` : ''}
+    <form data-form="sl-own-q" class="nx-form nx-ownq"><input type="hidden" name="caseId" value="${esc(info.caseId)}"><label>Ma propre question<input name="text" placeholder="Écrivez-la, en anglais si possible" value="${esc(ownDraft)}" data-nx-draft="ownq" autocomplete="off"></label><button class="nx-btn" type="submit">Ajouter la question</button></form>
+    ${groups.chineseNote ? `<p class="nx-hint">${esc(fr(groups.chineseNote))}</p>` : ''}`;
+}
+export const showHtml = ({ item }) => `<div class="sl-showq"><button type="button" class="nx-btn" data-act="sl-show-close">Fermer</button><p class="sl-qen big" lang="en">${esc(item.en ?? item.fr ?? '')}</p>${item.zh ? `<p class="zh sl-qzh big" lang="zh-Hans">${esc(item.zh.text)}</p><small>Phrase fixe, pas relue par un locuteur natif.</small>` : '<small>Pas de phrase chinoise disponible pour cette question.</small>'}${item.canAsk === false ? '' : `<div class="nx-acts nx-stick">${btn('Posée : noter la réponse', 'sl-asked-answer', item.id, ` data-case="${esc(item.caseId)}"`, 'pri big')}</div>`}</div>`;
+
+// ---- ANALYSES EXPERTES and LIVE CONVERSATION: the former Expert / Guided screens, inside the one navigation ----------------------------------------------------------------------------------------------------------------
+export const EXPERT_LABELS = Object.freeze({ live: 'Conversation en direct', field: 'Capture détaillée', quick: 'Saisie rapide', decision: 'Verdict', case: 'Dossier produit', ask: 'Questions (expert)', docs: 'Documents', compliance: 'Règles et conformité', market: 'Marché', money: 'Argent et coûts' });
+export const EXPERT_HINTS = Object.freeze({ live: 'Parler ou écrire avec le fournisseur, dictée, photo, ce que Nordla a compris', field: 'Les étapes de capture complètes', quick: 'Le formulaire rapide prix / MOQ / coûts', decision: 'Le verdict et ses raisons', case: 'Produit, fournisseur, catégorie, identifiants', ask: 'La liste complète des questions du moteur', docs: 'Ajouter et lire un document, contrôles de cohérence', compliance: 'Le détail des règles applicables', market: 'Recherche de marché (rien n\'est envoyé sans votre accord)', money: 'Coût rendu, marge, cash, paliers' });
+export const EXPERT_KEYS = Object.freeze(Object.keys(EXPERT_LABELS));
+export function embeddedHtml({ info, kind, current, html, flash = '', sync, conflicts = 0 }) {
+  const chips = EXPERT_KEYS.map((k) => `<button type="button" class="nx-chip" data-act="sl-embed" data-key="${k}" data-case="${esc(info.caseId)}" aria-pressed="${(kind === 'live' ? 'live' : current) === k}">${esc(EXPERT_LABELS[k])}</button>`).join('');
+  return `<div class="nx">${pageBar({ title: kind === 'live' ? EXPERT_LABELS.live : 'Analyses expertes', sub: `${info.supplier ?? 'Fournisseur'} · ${info.title}`, back: { act: 'sl-open-case', key: info.caseId, label: 'Retour à la fiche' }, right: syncChip(sync) })}${conflictBanner(conflicts)}${flashHtml(flash)}
+    <div class="nx-chips scroll" role="group" aria-label="Sections">${chips}</div><div class="nx-expert ${kind === 'live' ? 'is-live' : ''}">${html}</div></div>`;
+}
+
+// ---- 3. FICHE FOURNISSEUR ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const FICHE_TABS = [['sum', 'Aperçu'], ['facts', 'Infos'], ['ask', 'Questions'], ['deal', 'Chiffres'], ['more', 'Plus']];
+const MORE_ROWS = [['neg', 'Négocier', 'Objectif, limite et leviers'], ['risk', 'Conformité et risques', 'Documents, règles européennes, risques'], ['fit', 'Adéquation avec votre activité', 'Ce que votre profil permet'], ['changed', 'Ce qui a changé', 'Entre deux offres'], ['mem', 'Historique du fournisseur', 'Promesses et changements'], ['sample', 'Échantillon', 'Demandé, reçu, évalué']];
+const moreMenu = (info) => `<ul class="nx-menu">${MORE_ROWS.map(([k, l, h]) => `<li><button type="button" data-act="sl-more-open" data-key="${k}"><span><b>${esc(l)}</b><small>${esc(h)}</small></span>${ic('chev')}</button></li>`).join('')}
+  <li><button type="button" data-act="sl-update-offer" data-key="${esc(info.caseId)}"><span><b>Mettre à jour l'offre</b><small>Coller un nouveau devis : l'ancien est conservé</small></span>${ic('chev')}</button></li><li><button type="button" data-act="sl-review" data-key="${esc(info.caseId)}"><span><b>Relire la dernière offre</b><small>Confirmer, corriger ou rejeter ses informations</small></span>${ic('chev')}</button></li></ul>
+  <h3 class="nx-h3">Analyses expertes</h3>${expertMenu(info.caseId)}`;
+export const expertMenu = (caseId) => `<ul class="nx-menu">${EXPERT_KEYS.map((k) => `<li><button type="button" data-act="sl-embed" data-key="${k}" data-case="${esc(caseId)}"><span><b>${esc(EXPERT_LABELS[k])}</b><small>${esc(EXPERT_HINTS[k])}</small></span>${ic('chev')}</button></li>`).join('')}</ul>`;
+const RECWORD = { BUY_CANDIDATE: ['Candidat à l\'achat', 'ok'], INVESTIGATE: ['À creuser', ''], PASS: ['À écarter', 'bad'] };
+/** The short reading of the engine's explanation: its first clause; the full text stays one tap away. */
+const firstClause = (t) => { const x = String(t).split(/\s*;\s*/)[0].replace(/\s+/g, ' ').trim(); const c = x.length > 130 ? `${x.slice(0, 127).replace(/\s+\S*$/, '')}…` : x; return c.charAt(0).toUpperCase() + c.slice(1); };
+const blockRow = (ev, a) => { const b = blockerSummary(ev, a); if (!b) return ''; const n = b.labels.length;
+  return `<details class="nx-block"><summary><i class="nx-dot bad"></i><span><b>${n > 1 ? `${n} points bloquants` : '1 point bloquant'}</b><small>${esc(b.labels.join(' · '))}</small></span>${ic('chev')}</summary><div class="body">${b.details.length ? `<ul>${b.details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}${b.docs.length ? `<h4>Documents à obtenir</h4><ul>${b.docs.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}</div></details>`; };
+const linkRow = (label, hint, act, key, extra = '') => `<li><button type="button" data-act="${esc(act)}" data-key="${esc(key)}"${extra}><span><b>${esc(label)}</b><small>${esc(hint)}</small></span>${ic('chev')}</button></li>`;
+export function ficheHtml({ info, v, tab, sub, flash, sync, conflicts, photos, questionsHtml, factsView, board, lastNotes, counts, negotiation, strip = [], now = Date.now() }) {
+  const rec = v.recommendation; const ev = v.evidenceStatus; const [recWord, recTone] = RECWORD[rec.value] ?? [REC_FR[rec.value], ''];
+  const actions = `<div class="nx-two">${btn('Prendre une note', 'sl-note-open', info.caseId, '', 'pri')}${btn('Poser une question', 'sl-case-tab', 'ask', '')}</div>`;
+  const stripHtml = `<div class="nx-strip" aria-label="Informations essentielles">${strip.map((c) => `<div><small>${esc(c.label)}</small><span class="v ${c.state === 'proposed' ? 'prop' : c.state === 'unknown' ? 'unk' : ''}">${c.state === 'unknown' ? 'inconnu' : esc(c.value)}</span>${c.note ? `<small class="nx-pw">— ${esc(c.note)}</small>` : c.state === 'proposed' ? '<small>à confirmer</small>' : ''}${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</div>`).join('')}</div>`;
+  const todo = [counts.toConfirm ? `<button type="button" class="nx-todo" data-act="sl-case-tab" data-key="facts"><b>${counts.toConfirm}</b><span>${counts.toConfirm > 1 ? 'informations à confirmer' : 'information à confirmer'}</span>${ic('chev')}</button>` : '', counts.waiting ? `<button type="button" class="nx-todo" data-act="sl-case-tab" data-key="ask"><b>${counts.waiting}</b><span>${counts.waiting > 1 ? 'réponses attendues' : 'réponse attendue'}</span>${ic('chev')}</button>` : '', counts.conflicts ? `<button type="button" class="nx-todo" data-act="sl-case-tab" data-key="facts"><b>${counts.conflicts}</b><span>${counts.conflicts > 1 ? 'contradictions à lever' : 'contradiction à lever'}</span>${ic('chev')}</button>` : ''].join('');
+  const sum = `<section class="nx-brief"><div class="nx-brow"><span class="nx-vd"><i class="nx-dot ${recTone}"></i>Seule : ${esc(recWord)}</span><span class="nx-st">${esc(EV_FR[ev.evidenceCompleteness] ?? '')}</span></div>
+      <p>${esc(firstClause(fr(rec.why)))}.</p><details><summary>Pourquoi cet avis ?</summary><p>${esc(fr(rec.why))}.</p><p class="nx-hint">Avis sur cette offre prise seule. Il attend votre décision : rien n'est acheté ni payé.</p></details></section>
+    ${blockRow(ev, v.assessment)}${todo ? `<div class="nx-todos" style="margin-bottom:12px">${todo}</div>` : ''}
+    <ul class="nx-menu">${linkRow('Conformité en détail', 'Documents, règles européennes, risques', 'sl-embed', 'compliance', ` data-case="${esc(info.caseId)}"`)}${linkRow('Calculs détaillés', 'Coût rendu, marge, cash', 'sl-embed', 'money', ` data-case="${esc(info.caseId)}"`)}</ul>
+    ${lastNotes.length ? `<h3 class="nx-h3">Dernière note</h3><ul class="nx-list">${lastNotes.slice(0, 1).map((n) => `<li class="nx-note"><small>${esc(n.when)} · ${esc(n.who)}</small><p style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden">${esc(n.text)}</p></li>`).join('')}</ul><button type="button" class="nx-link" data-act="sl-embed" data-key="live" data-case="${esc(info.caseId)}">Toute la conversation ›</button>` : ''}
+    ${photos.length ? `<h3 class="nx-h3">Photos de référence</h3><div class="nx-photos">${photos.map((u) => `<img src="${esc(u)}" alt="Photo de référence" loading="lazy">`).join('')}</div>` : ''}`;
+  const more = sub ? subPane(sub, { info, v, negotiation, factsView }) : moreMenu(info);
+  const body = tab === 'facts' ? `${proposalsHtml({ cands: factsView.cands, conflicts: factsView.conflicts, correcting: factsView.correcting, groupIds: [], caseId: info.caseId, title: factsView.cands.some((c) => c.state === 'PROPOSED') ? 'À confirmer' : null })}<h3 class="nx-h3">Ce que Nordla sait</h3>${factsHtml(factsView.facts)}${LADDER}`
+    : tab === 'ask' ? questionsHtml : tab === 'deal' ? `${dealHtml(v.deal)}<h3 class="nx-h3">Vos chiffres</h3>${numbersForm(info)}<div class="nx-acts nx-ctx">${btn('Calculs détaillés', 'sl-embed', 'money', ` data-case="${esc(info.caseId)}"`, 'ghost')}${btn('Saisie rapide', 'sl-embed', 'quick', ` data-case="${esc(info.caseId)}"`, 'ghost')}</div>` : tab === 'more' ? more : sum;
+  const tabs = `<div class="nx-tabs" role="tablist" aria-label="Sections de la fiche">${FICHE_TABS.map(([k, l]) => `<button type="button" role="tab" data-act="sl-case-tab" data-key="${k}" aria-selected="${tab === k}">${l}${(k === 'facts' && counts.toConfirm) || (k === 'ask' && counts.waiting) ? '<i class="nx-dot"></i>' : ''}</button>`).join('')}</div>`;
+  const hero = `<div class="nx-hero">${photos[0] ? `<img class="nx-heroimg" src="${esc(photos[0])}" alt="">` : `<div class="nx-heroimg nx-ph0">${esc(initials(info.supplier ?? info.title))}</div>`}<div class="nx-ht"><h2>${esc(info.supplier ?? 'Fournisseur sans nom')}</h2><p>${esc(info.title)}</p><div class="nx-row">${syncChipSmall(sync)}</div></div></div>`;
+  return `<div class="nx">${pageBar({ title: '', back: { act: 'sl-nav', key: 'suppliers', label: 'Retour aux fournisseurs' }, right: '' })}${conflictBanner(conflicts)}${flashHtml(flash)}${hero}${stripHtml}${actions}${tabs}<div class="nx-pane">${sub && tab === 'more' ? `<button type="button" class="nx-link back" data-act="sl-more-open" data-key="">‹ Plus</button>` : ''}${body}</div></div>`;
+}
+const syncChipSmall = (s) => `<span class="nx-mini k-${esc(s?.caseKind ?? 'local')}">${esc(s?.caseLabel ?? '')}</span>`;
+function subPane(sub, { info, v, negotiation, factsView }) {
+  if (sub === 'neg') return negotiateHtml({ info, plan: negotiation, embedded: true });
+  if (sub === 'risk') return truthHtml(v.truthCard);
+  if (sub === 'fit') return fitHtml(v.merchantFit);
+  if (sub === 'changed') return changedHtml(v.whatChanged);
+  if (sub === 'mem') return memoryHtml(factsView.history);
+  if (sub === 'sample') { const smp = info.sample; return `<p class="nx-hint">${esc(smp.status === 'NONE' ? 'Aucun échantillon enregistré.' : `Échantillon : ${smp.status}${smp.verdict ? ` (${smp.verdict})` : ''}`)}</p><div class="nx-acts">${btn('Demandé', 'sl-sample', info.caseId, val({ status: 'REQUESTED' }))}${btn('Reçu', 'sl-sample', info.caseId, val({ status: 'RECEIVED' }))}${btn('OK', 'sl-sample', info.caseId, val({ status: 'EVALUATED', verdict: 'PASS' }))}${btn('Réserves', 'sl-sample', info.caseId, val({ status: 'EVALUATED', verdict: 'CONCERNS' }))}${btn('Échec', 'sl-sample', info.caseId, val({ status: 'EVALUATED', verdict: 'FAIL' }))}</div>`; }
+  return '';
+}
+
+// ---- 4. PRISE DE NOTE --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export const NOTE_MODES = [['text', 'Note', 'note'], ['photo', 'Photo', 'camera'], ['voice', 'Audio', 'mic'], ['doc', 'Document', 'doc']];
+export function noteHtml({ info, mode, flash, speaker, draft, proposals, notes, photos, voice, online, conflicts = 0 }) {
+  const modes = `<div class="nx-modes" role="tablist" aria-label="Type de saisie">${NOTE_MODES.map(([k, l, i]) => `<button type="button" role="tab" data-act="sl-note-mode" data-key="${k}" aria-selected="${mode === k}">${ic(i)}<span>${l}</span></button>`).join('')}</div>`;
+  const spk = `<div class="nx-field"><span class="nx-cap">Qui parle ?</span><div class="nx-seg" role="group" aria-label="Qui parle ?"><button type="button" data-act="sl-note-speaker" data-key="supplier" aria-pressed="${speaker !== 'me'}">Le fournisseur</button><button type="button" data-act="sl-note-speaker" data-key="me" aria-pressed="${speaker === 'me'}">Moi</button></div></div>`;
+  const text = `<form data-form="sl-note" id="nx-note" class="nx-noteform"><input type="hidden" name="caseId" value="${esc(info.caseId)}"><input type="hidden" name="speaker" value="${esc(speaker === 'me' ? 'me' : 'supplier')}">${spk}
+      <label class="nx-sr" for="nx-text">Ce que dit le fournisseur</label><textarea id="nx-text" name="text" rows="7" placeholder="Ce que dit le fournisseur : modèle, prix, MOQ, puissance, couleurs…" data-nx-draft="note:${esc(info.caseId)}">${esc(draft)}</textarea>
+      <div class="nx-savebar"><button type="submit" class="nx-btn pri big">Enregistrer la note</button></div><p class="nx-hint">Votre texte est gardé tel quel. Nordla en tire des <b>propositions</b> : rien n'est confirmé sans vous.</p></form>`;
+  const photo = `<div class="nx-pane2"><label class="nx-bigpick">${ic('camera')}<b>Photographier le produit</b><small>La photo reste sur ce téléphone, rattachée à ${esc(info.supplier ?? info.title)}.</small><input type="file" accept="image/*" capture="environment" data-act="sl-note-photo"></label>
+      ${photos.length ? `<div class="nx-photos">${photos.map((u) => `<img src="${esc(u)}" alt="Photo de référence" loading="lazy">`).join('')}</div>` : '<p class="nx-hint">Aucune photo pour ce dossier.</p>'}<p class="nx-hint">Nordla ne reconnaît pas le produit sur la photo : elle sert de référence. Notez ce que c'est dans une note.</p></div>`;
+  const voicePane = `<div class="nx-pane2">${voice.available ? `<div class="nx-voice st-${esc(voice.state)}"><button type="button" class="nx-mic" data-act="${voice.state === 'listening' ? 'sl-voice-pause' : 'sl-voice-start'}" aria-label="${voice.state === 'listening' ? 'Mettre en pause' : 'Écouter'}">${ic('mic')}</button><b>${esc(voice.title)}</b><small>${esc(voice.message)}</small>${voice.state === 'listening' || voice.state === 'paused' ? btn('Terminer', 'sl-voice-stop', '', '', '') : ''}</div>` : `<div class="nx-voice off">${ic('mic')}<b>Dictée indisponible</b><small>${esc(voice.message)}</small></div>`}<p class="nx-hint">Dictée en anglais seulement. Chaque phrase dictée reste d'abord <b>sans locuteur</b> : dites si c'est le fournisseur ou vous avant de pouvoir en confirmer un chiffre.</p>${voice.items.length ? `<ul class="nx-list">${voice.items.map((i) => `<li class="nx-note"><small>${esc(i.when)} · phrase dictée</small><p lang="en">${esc(i.text)}</p>${i.unknown ? `<div class="nx-acts">${btn('Le fournisseur', 'sl-attr-item', i.id, val('supplier'), 'pri')}${btn('Moi', 'sl-attr-item', i.id, val('me'))}</div>` : `<small>Attribuée : ${i.speaker === 'me' ? 'vous' : 'le fournisseur'}</small>`}</li>`).join('')}</ul>` : ''}</div>`;
+  const doc = `<div class="nx-pane2"><p class="nx-hint">Un devis, un chat WeChat ou un PDF : Nordla en extrait les termes, vous les relisez un par un.</p>${btn('Coller un devis ou un chat', 'sl-update-offer', info.caseId, '', 'pri big')}<div style="height:8px"></div>${btn('Ajouter un document (analyse détaillée)', 'sl-embed', 'docs', ` data-case="${esc(info.caseId)}"`, 'big')}<p class="nx-hint">${online ? 'La lecture d\'un PDF passe par votre serveur.' : 'Hors ligne : un PDF ne peut pas être lu ici. Collez son texte.'}</p></div>`;
+  const notesList = notes.length ? `<h3 class="nx-h3">Notes de ce dossier</h3><ul class="nx-list">${notes.map((n) => `<li class="nx-note"><small>${esc(n.when)} · ${esc(n.who)}${n.answers ? ` · réponse à « ${esc(n.answers)} »` : ''}</small><p>${esc(n.text)}</p></li>`).join('')}</ul>` : '';
+  return `<div class="nx">${pageBar({ title: 'Nouvelle note', back: { act: 'sl-note-close', key: info.caseId, label: 'Fermer' } })}${conflictBanner(conflicts)}${flashHtml(flash)}
+    <div class="nx-who"><span class="nx-th nx-ph0">${esc(initials(info.supplier ?? info.title))}</span><div><small>Note pour</small><b>${esc(info.supplier ?? 'Fournisseur sans nom')}</b><small>${esc(info.title)}</small></div>${btn('Changer', 'sl-note-change', '', '', 'ghost')}</div>${modes}
+    ${mode === 'photo' ? photo : mode === 'voice' ? voicePane : mode === 'doc' ? doc : text}${proposals}${notesList}</div>`;
+}
+
+// ---- 5. SUIVI DES VISITES ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export function visitsHtml({ items, filter, now, sync, conflicts = 0, flash = '' }) {
+  const shown = filter === 'open' ? items.filter((o) => o.pending || o.conflicts || o.waiting) : items;
+  const days = []; for (const o of shown) { const d = fmtDay(o.updatedAt, now); const g = days.at(-1); if (g && g.day === d) g.list.push(o); else days.push({ day: d, list: [o] }); }
+  const row = (o) => { const st = stateOf(o); return `<li><button type="button" class="nx-visit" data-act="sl-open-case" data-key="${esc(o.caseId)}">${thumb(o.photo, o.supplier ?? o.title)}<span class="nx-ct"><b>${esc(o.supplier ?? 'Fournisseur sans nom')}</b><span class="nx-sub">${esc(o.title)}</span>${st ? `<span class="nx-state ${st.tone}"><i class="nx-dot ${st.tone}"></i>${esc(st.text)}</span>` : '<span class="nx-state ok"><i class="nx-dot ok"></i>Tout est traité</span>'}</span><time datetime="${esc(o.updatedAt)}">${esc(fmtTime(o.updatedAt))}</time></button></li>`; };
+  const empty = items.length === 0
+    ? `<div class="nx-empty2">${ic('visits')}<h2>Aucune visite pour l'instant</h2><p>Les fournisseurs que vous créez ou auprès desquels vous prenez une note apparaissent ici, par jour.</p>${btn('Nouveau fournisseur', 'sl-nav', 'new', '', 'pri')}</div>`
+    : `<div class="nx-empty2">${ic('check')}<h2>Rien à poursuivre</h2><p>Toutes les informations sont traitées. Touchez « Tous » pour revoir vos visites.</p></div>`;
+  return `<div class="nx">${pageBar({ title: 'Mes visites', sub: items.length ? `${plural(items.length, 'fournisseur visité', 'fournisseurs visités')}` : '', right: syncChip(sync) })}${conflictBanner(conflicts)}${flashHtml(flash)}
+    ${items.length ? `<div class="nx-seg" role="group" aria-label="Filtrer" style="margin-bottom:8px"><button type="button" data-act="sl-visit-filter" data-key="open" aria-pressed="${filter === 'open'}">À poursuivre</button><button type="button" data-act="sl-visit-filter" data-key="all" aria-pressed="${filter === 'all'}">Tous</button></div>` : ''}
+    ${days.length ? days.map((g) => `<h2 class="nx-h">${esc(g.day.charAt(0).toUpperCase() + g.day.slice(1))}</h2><ul class="nx-list nx-visits">${g.list.map(row).join('')}</ul>`).join('') : empty}</div>`;
+}
+
+// ---- PLUS ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+export function moreHtml({ sync, comparisons, active, conflicts, serverSet, flash = '' }) {
+  const row = (act, label, hint, key = '', extra = '') => `<li><button type="button" data-act="${esc(act)}"${key !== '' ? ` data-key="${esc(key)}"` : ''}${extra}><span><b>${esc(label)}</b>${hint ? `<small>${esc(hint)}</small>` : ''}</span>${ic('chev')}</button></li>`;
+  const cmp = comparisons.length ? `<ul class="nx-menu">${comparisons.map((c) => row('sl-compare', c.name ?? `${c.caseIds.length} fournisseurs`, `${c.summary?.headline ?? ''}`.slice(0, 80), c.id)).join('')}</ul>` : '<p class="nx-hint">Aucune comparaison enregistrée.</p>';
+  return `<div class="nx">${pageBar({ title: 'Plus' })}${conflictBanner(conflicts)}${flashHtml(flash)}
+    <section class="nx-sec"><h2 class="nx-h">Sauvegarde et synchronisation</h2><div class="nx-syncbox k-${esc(sync.kind)}"><b>${ic(sync.kind === 'synced' ? 'check' : sync.kind === 'conflict' ? 'alert' : 'sync')} ${esc(sync.label)}</b><p>${esc(sync.detail)}</p></div>
+      <div class="nx-acts">${serverSet ? btn('Réessayer maintenant', 'sl-sync-now', '', '', 'pri') : ''}${active ? btn('Exporter le dossier actif', 'sl-export', active.id) : ''}</div>
+      <ul class="nx-menu">${row('sl-server', 'Serveur et jeton d\'accès', serverSet ? 'Modifier les réglages du serveur' : 'Ajouter le jeton pour garder les dossiers sur votre serveur')}${row('sl-recover', 'Récupérer des dossiers', 'Depuis le serveur ou un fichier exporté, sans rien écraser')}${row('sl-reanalyze', 'Relire les anciennes notes', 'Retrouver des informations oubliées dans d\'anciennes notes : seulement des propositions, rien n\'est confirmé')}${row('sl-capabilities', 'Ce qui marche hors ligne', 'Ce qui fonctionne sans réseau, et ce qui a besoin du serveur')}</ul></section>
+    <section class="nx-sec"><h2 class="nx-h">Comparer</h2>${cmp}${btn('Choisir des fournisseurs à comparer', 'sl-nav', 'suppliers', '', '')}</section>
+    <section class="nx-sec"><h2 class="nx-h">Comprendre les états</h2>${LADDER}</section>
+    ${active ? `<section class="nx-sec"><h2 class="nx-h">Analyses expertes · ${esc(active.supplier?.name ?? active.identity?.workingName ?? '')}</h2><p class="nx-hint">Les écrans détaillés du moteur, pour le dossier actif. Ils se trouvent aussi dans la fiche du fournisseur, onglet « Plus ».</p>${expertMenu(active.id)}</section>` : ''}</div>`;
+}
+
+// ---- SYNC CONFLICTS: both versions side by side, in French, nothing replaced without a second, explicit tap ----------------------------------------------------------------------------------------------------
+export function syncHtml({ versions, confirmingServer = null, flash = '' }) {
+  const col = (t, v) => `<div class="nx-ver"><h3>${esc(t)}</h3><dl><div><dt>Modifié</dt><dd>${esc(v.updatedText)}</dd></div><div><dt>Notes</dt><dd>${v.notes}</dd></div><div><dt>Offres</dt><dd>${v.offers}</dd></div><div><dt>Infos confirmées</dt><dd>${v.facts}</dd></div></dl></div>`;
+  const diff = (d) => `<tr><th scope="row">${esc(d.label)}</th><td>${esc(d.mine)}</td><td>${esc(d.server)}</td></tr>`;
+  const one = (x) => `<article class="nx-conflict"><h2>${esc(x.title)}</h2><p>Ce dossier a été modifié ailleurs (un autre téléphone ou le serveur) pendant que vous le modifiiez ici. <b>Rien n'a été écrasé.</b></p>
+      <div class="nx-vers">${col('Sur ce téléphone', x.mine)}${col('Sur le serveur', x.server)}</div>
+      ${x.onlyMine.length ? `<h3 class="nx-h3">Ajouté seulement sur ce téléphone</h3><ul class="nx-diffl">${x.onlyMine.map((e) => `<li><small>${esc(e.kind)}</small>${esc(e.text)}</li>`).join('')}</ul>` : ''}${x.onlyServer.length ? `<h3 class="nx-h3">Ajouté seulement sur le serveur</h3><ul class="nx-diffl">${x.onlyServer.map((e) => `<li class="srv"><small>${esc(e.kind)}</small>${esc(e.text)}</li>`).join('')}</ul>` : ''}
+      ${x.diffs.length ? `<h3 class="nx-h3">Informations confirmées qui diffèrent</h3><table class="nx-diff"><thead><tr><th></th><th>Téléphone</th><th>Serveur</th></tr></thead><tbody>${x.diffs.map(diff).join('')}</tbody></table>` : '<p class="nx-hint">Les informations confirmées sont identiques des deux côtés.</p>'}
+      ${confirmingServer === x.id ? `<div class="nx-confirm" role="alertdialog" aria-label="Confirmer le remplacement"><p><b>Remplacer ma version par celle du serveur ?</b></p><p>Votre version sera d'abord copiée dans un dossier « (ma version avant remplacement) » : rien ne sera perdu.</p><div class="nx-acts">${btn('Oui, remplacer', 'sl-conf-server-go', x.id, '', 'pri')}${btn('Annuler', 'sl-conf-server', '', '', 'ghost')}</div></div>`
+        : `<div class="nx-acts">${btn('Garder les deux (recommandé)', 'sl-conf-keep', x.id, '', 'pri big')}${btn('Prendre la version du serveur…', 'sl-conf-server', x.id, '', 'big')}</div><p class="nx-hint">« Garder les deux » conserve le dossier du serveur sous son nom et le vôtre sous « (ma copie) ». Vous pourrez les comparer et supprimer la copie inutile.</p>`}</article>`;
+  return `<div class="nx">${pageBar({ title: 'Conflits de synchronisation', back: { act: 'sl-nav', key: 'more', label: 'Retour' } })}${flashHtml(flash)}${versions.length ? versions.map(one).join('') : '<p class="nx-empty">Aucun conflit : tout est à jour.</p>'}</div>`;
+}
+
+export { askTitle, askTag };

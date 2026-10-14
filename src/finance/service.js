@@ -3,9 +3,14 @@
 // merchant action and is refused for a non-merchant actor. Nothing here contacts an external system.
 
 import {
-  FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment,
+  FinanceError, acceptQuote, canonicalSnapshot, deepFreeze, makeNumberPlaceholder, applyStatus, cancelDraft, convertQuoteToInvoice, createDraft, creditNoteFromInvoice, decide, effectiveStatus, makePayment, payableOf,
   markSent, rejectQuote, sendQuote, settledStatus, settlement, submitForApproval, updateDraft, validateForIssue, verifyIntegrity,
 } from './document.js';
+import { randomUUID } from 'node:crypto';
+import { requireClock } from './civil-date.js';
+import { toCents } from './money.js';
+import { standingAllocations } from './payment-ledger.js';
+import { createPayments } from './payments.js';
 import { checkLinkage, orderTotalsFromLedger } from './linking.js';
 import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
 
@@ -14,8 +19,8 @@ import { DEFAULT_NUMBERING, formatNumber } from './numbering.js';
  * config: { merchantId, seller, numbering?, vat: { allowedRatesBp[] }, defaults?: { currency, language, paymentTermsDays, paymentTerms }, linking?: { dupWindowDays, toleranceCents } }
  */
 export function createFinanceService({ store, config, clock, ledgerProvider = async () => null, hooks = {} }) {
-  const now = clock?.now ?? (() => new Date().toISOString());
-  const today = clock?.today ?? (() => new Date().toISOString().slice(0, 10));
+  requireClock(clock, 'createFinanceService');
+  const { now, today } = clock;
   const vatConfig = config.vat ?? { allowedRatesBp: [] };
   const numbering = { ...DEFAULT_NUMBERING, ...(config.numbering ?? {}) };
   const ctx = { vatConfig };
@@ -30,6 +35,19 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     return seal(saved);
   };
   const relatedCreditNotes = async (invoice) => (await store.listDocuments({ merchantId: config.merchantId, type: 'credit_note', relatedDocumentId: invoice.id }));
+  /** Money handed back for the credit notes of an invoice: the allocations to those credit notes (negative = a reversed refund). */
+  const refundsOf = async (creditNotes) => { const out = []; for (const c of creditNotes) out.push(...(await store.listPayments(c.id))); return out; };
+
+  /** A negative payment is a correction: reverse the most recent standing allocations up to the amount (all or nothing, one atomic call, idempotent per key). */
+  async function correct(invoice, p, key, actor) {
+    const already = (await store.listAllocations({ merchantId: config.merchantId, customerDocumentId: invoice.id })).filter((a) => a.amountCents < 0 && a.idempotencyKey.startsWith(`${key}:`));
+    if (already.length) return { id: already[0].paymentId, documentId: invoice.id, merchantId: invoice.merchantId, amountCents: already.reduce((s, a) => s + a.amountCents, 0), paidOn: p.paidOn, method: p.method, reference: p.reference, duplicate: true };
+    let need = -p.amountCents; const items = [];
+    for (const a of standingAllocations(await store.listAllocations({ merchantId: config.merchantId, customerDocumentId: invoice.id }), { customerDocumentId: invoice.id })) { if (need <= 0) break; const take = Math.min(need, a.remainingCents); items.push({ allocationId: a.id, amountCents: take }); need -= take; }
+    if (need > 0) throw new FinanceError('CORRECTION_EXCEEDS_PAID', `${-p.amountCents} > paid`);
+    const r = await store.reverseAllocations({ merchantId: config.merchantId, key, items, reason: p.reference, actor, at: now() });
+    return { id: r.reversals[0].paymentId, documentId: invoice.id, merchantId: invoice.merchantId, amountCents: p.amountCents, paidOn: p.paidOn, method: p.method, reference: p.reference, duplicate: r.duplicate };
+  }
 
   async function linkage(doc) {
     const ledger = await ledgerProvider();
@@ -46,7 +64,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     return { ready: errors.length === 0 && l.errors.length === 0, errors: [...errors, ...l.errors], warnings: l.warnings, checks: l.checks };
   }
 
-  return {
+  const service = {
     readiness,
 
     async create(input, actor) {
@@ -93,6 +111,8 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
       if (saved.type === 'credit_note' && saved.relatedDocumentId) await this.resettle(saved.relatedDocumentId, actor);
       // stock: recorded once per document line (idempotent); a failure never undoes an issued document, it is audited and can be reconciled
       if (hooks.afterIssue) { try { await hooks.afterIssue(saved); } catch (e) { await store.appendEvent({ documentId: saved.id, merchantId: config.merchantId, actor, action: 'STOCK_HOOK_FAILED', fromStatus: saved.status, toStatus: saved.status, detail: { error: String(e.code ?? e.message).slice(0, 120) }, at: now() }); } }
+      // legal archive (PDF original, structured original, compliance record): a failure never undoes an issued document, it is audited and the archive can be repeated (idempotent)
+      if (hooks.onIssued) { try { await hooks.onIssued(saved, { actor }); } catch (e) { await store.appendEvent({ documentId: saved.id, merchantId: config.merchantId, actor, action: 'ARCHIVE_HOOK_FAILED', fromStatus: saved.status, toStatus: saved.status, detail: { error: String(e?.message ?? e).slice(0, 200) }, at: now() }); } }
       return saved;
     },
 
@@ -131,32 +151,75 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     },
 
     // ---- payments / status ----
+    /**
+     * Record a customer payment. The DATABASE is the authority (ceiling under a row lock, idempotency, atomic registry + allocation + audit event);
+     * the checks below only give early, friendly errors. IDEMPOTENCY: the caller's key (or a fresh one) identifies the operation; a retry with the same key
+     * returns the operation that already committed (duplicate: true), even if the invoice has meanwhile become PAID. A negative amount is a correction:
+     * it reverses the most recent standing allocations (the registry is append-only, nothing is ever deleted).
+     */
     async recordPayment(invoiceId, payment, actor) {
       const invoice = await must(invoiceId);
+      const key = payment.idempotencyKey ?? randomUUID();
+      const shape = (r) => ({ id: r.payment.id, documentId: invoiceId, merchantId: invoice.merchantId, amountCents: r.payment.amountCents, paidOn: r.payment.paidOn, method: r.payment.method, reference: r.payment.reference, duplicate: r.duplicate === true });
+      const done = await store.getPaymentByKey(config.merchantId, key);
+      if (done) { // an operation with this key already committed: same request => the same result, a different request => refused
+        const standing = done.allocations.filter((x) => x.amountCents > 0); const a = standing[0]; const cents = toCents(payment.amount); // reversals appended later do not change what the request was
+        if (standing.length !== 1 || a.customerDocumentId !== invoiceId || done.payment.amountCents !== cents || done.payment.paidOn !== payment.paidOn) throw new FinanceError('IDEMPOTENCY_KEY_REUSED', key);
+        await this.resettle(invoiceId, actor);
+        return shape({ payment: done.payment, duplicate: true });
+      }
       const [payments, credits] = [await store.listPayments(invoiceId), await relatedCreditNotes(invoice)];
-      const p = makePayment(invoice, payments, credits, { ...payment, actor });
-      const saved = await store.addPayment(p);
-      await store.appendEvent({ documentId: invoiceId, merchantId: invoice.merchantId, actor, action: 'RECORD_PAYMENT', fromStatus: invoice.status, toStatus: invoice.status, detail: { amountCents: p.amountCents, method: p.method, paidOn: p.paidOn }, at: now() });
+      const p = makePayment(invoice, payments, credits, { ...payment, actor, refunds: await refundsOf(credits) }); // validation + friendly errors (negative = correction, see below)
+      if (p.amountCents < 0) { const out = await correct(invoice, p, key, actor); await this.resettle(invoiceId, actor); return out; }
+      const r = await store.recordPayment({ merchantId: invoice.merchantId, key, direction: 'IN', amountCents: p.amountCents, currency: invoice.currency, paidOn: p.paidOn, method: p.method, reference: p.reference, actor, at: now(),
+        allocations: [{ customerDocumentId: invoiceId, amountCents: p.amountCents }] });
       await this.resettle(invoiceId, actor);
-      return saved;
+      return shape(r);
+    },
+
+    /** Take back (all or part of) one allocation of an invoice. Idempotent per key; nothing is deleted: a negative allocation linked to the original is appended. */
+    async reversePayment(invoiceId, { allocationId, amountCents = null, reason, idempotencyKey }, actor) {
+      await must(invoiceId);
+      if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED');
+      const r = await store.reverseAllocations({ merchantId: config.merchantId, key: idempotencyKey ?? randomUUID(), items: [{ allocationId, amountCents }], reason: String(reason).slice(0, 300), actor, at: now() });
+      await this.resettle(invoiceId, actor);
+      return r;
+    },
+
+    /** A payment entered by mistake: every allocation still standing is reversed and the payment itself is reversed (it stays in the history). */
+    async voidPayment(paymentId, { reason, idempotencyKey }, actor) {
+      if (!String(reason ?? '').trim()) throw new FinanceError('REASON_REQUIRED');
+      const touched = [...new Set((await store.listAllocations({ merchantId: config.merchantId })).filter((a) => a.paymentId === paymentId && a.customerDocumentId).map((a) => a.customerDocumentId))];
+      const r = await store.voidPayment({ merchantId: config.merchantId, key: idempotencyKey ?? randomUUID(), paymentId, on: today(), reason: String(reason).slice(0, 300), actor, at: now() });
+      for (const id of touched) await this.resettle(id, actor);
+      return r;
     },
 
     /** Re-derive the stored lifecycle status from payments and credit notes (call after either changes). */
     async resettle(invoiceId, actor) {
-      const prev = await must(invoiceId);
-      if (prev.type !== 'invoice' || !prev.lockedAt) return prev;
-      const s = settlement(prev, await store.listPayments(invoiceId), await relatedCreditNotes(prev));
-      const status = settledStatus(prev, s);
-      if (status === prev.status) return prev;
-      const { doc, event } = applyStatus(prev, status, { actor, at: now(), reason: 'settlement' });
-      return persist(doc, prev, event);
+      // The stored status is only a mirror of the payment truth and is re-derived idempotently. Money has ALREADY been committed when this runs, so a lost race on the mirror
+      // (another payment re-derived it first) must never surface as a failure of that payment: re-read, re-derive, and try again.
+      for (let attempt = 0; ; attempt += 1) {
+        const prev = await must(invoiceId);
+        if (prev.type !== 'invoice' || !prev.lockedAt) return prev;
+        const credits = await relatedCreditNotes(prev); const s = settlement(prev, await store.listPayments(invoiceId), credits, await refundsOf(credits));
+        const status = settledStatus(prev, s);
+        if (status === prev.status) return prev;
+        const { doc, event } = applyStatus(prev, status, { actor, at: now(), reason: 'settlement' });
+        try { return await persist(doc, prev, event); } catch (e) { if (e?.code !== 'CONCURRENT_MODIFICATION' || attempt >= 12) throw e; }
+      }
     },
 
     async view(id) {
       const doc = await must(id);
+      if (doc.type === 'credit_note' && doc.lockedAt && doc.relatedDocumentId) { // what can still be handed back for this credit note (the interface never recomputes it)
+        const invoice = await must(doc.relatedDocumentId); const credits = await relatedCreditNotes(invoice); const refunds = await refundsOf(credits);
+        const s = settlement(invoice, await store.listPayments(invoice.id), credits, refunds); const done = refunds.filter((r) => r.documentId === doc.id).reduce((a, r) => a + r.amountCents, 0);
+        return { doc, integrity: verifyIntegrity(doc), refund: { invoiceId: invoice.id, creditNoteCents: payableOf(doc.totals), refundedCents: done, remainingOnCreditNoteCents: payableOf(doc.totals) - done, refundableOnInvoiceCents: s.refundableCents, maxCents: Math.max(0, Math.min(payableOf(doc.totals) - done, s.refundableCents)), payments: refunds.filter((r) => r.documentId === doc.id) } };
+      }
       if (doc.type !== 'invoice') return { doc, integrity: verifyIntegrity(doc) };
-      const s = settlement(doc, await store.listPayments(id), await relatedCreditNotes(doc));
-      return { doc, settlement: s, effectiveStatus: effectiveStatus(doc, s, today()), integrity: verifyIntegrity(doc) };
+      const credits = await relatedCreditNotes(doc); const refunds = await refundsOf(credits); const s = settlement(doc, await store.listPayments(id), credits, refunds);
+      return { doc, settlement: s, refunds, effectiveStatus: effectiveStatus(doc, s, today()), integrity: verifyIntegrity(doc) };
     },
     // ---- company directory (merchant-scoped) ----
     listCompanies: () => store.listCompanies(config.merchantId),
@@ -197,4 +260,7 @@ export function createFinanceService({ store, config, clock, ledgerProvider = as
     get: must,
     ctx,
   };
+  // the payment commands (receive, allocate, reverse, void, refund, list): one business API for the interface; invoice statuses are re-derived after every money movement
+  service.payments = createPayments({ store, merchantId: config.merchantId, now, today, defaultCurrency: config.defaults?.currency ?? 'EUR', settleInvoices: async (ids, actor) => { for (const id of ids) await service.resettle(id, actor); } });
+  return service;
 }

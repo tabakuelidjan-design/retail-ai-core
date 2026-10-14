@@ -18,7 +18,7 @@
 // - not implemented now, to avoid over-engineering for 45 rows.
 
 import { historySearchQuery } from './history.js';
-import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY } from '../shopify/queries.js';
+import { ORDERS_PAGE_QUERY, ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY, NESTED_PAGE_QUERIES } from '../shopify/queries.js';
 import { normalizeOrderAttribution } from '../marketing/adapters/shopify.js';
 import { normalizeOrder, normalizeOrderLine, normalizeRefund, normalizeRefundLine } from './normalize.js';
 import { upsertInChunks } from './batch.js';
@@ -30,6 +30,21 @@ export function sixtyDayWindowQuery(now = new Date()) {
   const cutoff = new Date(now.getTime() - SIXTY_DAYS_MS);
   return `created_at:>=${cutoff.toISOString().slice(0, 10)}`;
 }
+
+/**
+ * Catch-up search (Analyses Phase 0, defect A): orders UPDATED inside the 60-day window but CREATED before it. A refund issued later on an older order
+ * only shows up here. Without the read_all_orders scope Shopify exposes no order older than 60 days, so this pass is simply empty; with it, the refund
+ * is ingested instead of being frozen at the last in-window sync. Behaviour against live Shopify is not verified by the offline tests.
+ */
+export function refundCatchUpQuery(now = new Date()) {
+  const cutoff = new Date(now.getTime() - SIXTY_DAYS_MS).toISOString().slice(0, 10);
+  return `updated_at:>=${cutoff} AND created_at:<${cutoff}`;
+}
+
+const emptyCounters = () => ({
+  ordersFetched: 0, ordersUpserted: 0, attributionRowsFetched: 0, attributionRowsUpserted: 0, orderLinesFetched: 0, orderLinesUpserted: 0,
+  refundsFetched: 0, refundsUpserted: 0, refundLinesFetched: 0, refundLinesUpserted: 0, orderLinesWithoutVariant: 0, ordersWithoutLocation: 0, errors: [],
+});
 
 /**
  * @param {{graphql: Function}} shopify
@@ -61,23 +76,34 @@ export async function syncOrders({ shopify, supabase }, opts) {
 
   // opts.since (YYYY-MM-DD) widens the window for a backfill; the caller has already verified the read_all_orders scope (planOrdersSync).
   const searchQuery = opts.since ? historySearchQuery(opts.since) : sixtyDayWindowQuery(now);
-  let cursor = null;
-  let hasNextPage = true;
+  const ctx = { opts, locationIdBySourceId, variantIdBySourceId };
 
-  while (hasNextPage) {
-    let page;
-    try {
-      page = await shopify.graphql(opts.customerKeySecret ? ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY : ORDERS_PAGE_QUERY, { cursor, searchQuery });
-    } catch (err) {
-      summary.errors.push(`fetch: ${err.message}`);
-      break;
+  async function pass(query, counters, errorPrefix) {
+    let cursor = null;
+    let hasNextPage = true;
+    while (hasNextPage) {
+      let page;
+      try {
+        page = await shopify.graphql(opts.customerKeySecret ? ORDERS_PAGE_QUERY_WITH_CUSTOMER_KEY : ORDERS_PAGE_QUERY, { cursor, searchQuery: query });
+      } catch (err) {
+        summary.errors.push(`${errorPrefix}${err.message}`);
+        return;
+      }
+      const nodes = page.orders.edges.map((e) => e.node);
+      for (const node of nodes) await completeNestedConnections(shopify, node, counters);
+      await writeOrdersPage(supabase, nodes, { ...ctx, summary: counters });
+      hasNextPage = page.orders.pageInfo.hasNextPage;
+      cursor = page.orders.pageInfo.endCursor;
     }
+  }
 
-    const orderNodes = page.orders.edges.map((e) => e.node);
-    await writeOrdersPage(supabase, orderNodes, { opts, summary, locationIdBySourceId, variantIdBySourceId });
+  await pass(searchQuery, summary, 'fetch: ');
 
-    hasNextPage = page.orders.pageInfo.hasNextPage;
-    cursor = page.orders.pageInfo.endCursor;
+  // Refund catch-up: opt-in per call (the production runner turns it on), only in the default (recent) mode. Its counters are separate so the main-pass figures keep their meaning.
+  if (!opts.since && opts.refundCatchUp === true) {
+    summary.catchUp = emptyCounters();
+    await pass(refundCatchUpQuery(now), summary.catchUp, 'catch-up: ');
+    for (const e of summary.catchUp.errors) summary.errors.push(`catch-up: ${e}`);
   }
 
   return summary;
@@ -154,4 +180,36 @@ async function writeOrdersPage(supabase, orderNodes, { opts, summary, locationId
   summary.refundLinesUpserted += refundLineRows.length;
 
   summary.ordersUpserted += orderNodes.length;
+}
+
+/**
+ * Completes every nested connection of an order node that Shopify cut at its first page (lineItems 50, shippingLines 10, refundLineItems 50,
+ * refundShippingLines 10). Nodes without pageInfo (older payloads) are left as they are. A page that cannot be read is NEVER ignored: the order is
+ * flagged `linesTruncated` (stored as lines_truncated), counted in the summary and reported in its errors, so Data Health can lower confidence.
+ */
+export async function completeNestedConnections(shopify, orderNode, summary) {
+  let truncated = false;
+  async function complete(connection, parentId, kind) {
+    let info = connection?.pageInfo;
+    while (info?.hasNextPage) {
+      try {
+        const page = await shopify.graphql(NESTED_PAGE_QUERIES[kind], { id: parentId, cursor: info.endCursor });
+        const next = (page.order ?? page.node)?.[kind];
+        if (!next) throw new Error('empty page');
+        connection.edges.push(...next.edges);
+        info = next.pageInfo; connection.pageInfo = info;
+      } catch (err) {
+        summary.errors.push(`truncated: ${kind} of ${parentId} incomplete (${err.message})`);
+        truncated = true;
+        return;
+      }
+    }
+  }
+  await complete(orderNode.lineItems, orderNode.id, 'lineItems');
+  await complete(orderNode.shippingLines, orderNode.id, 'shippingLines');
+  for (const refund of orderNode.refunds ?? []) {
+    await complete(refund.refundLineItems, refund.id, 'refundLineItems');
+    await complete(refund.refundShippingLines, refund.id, 'refundShippingLines');
+  }
+  if (truncated) { orderNode.linesTruncated = true; summary.ordersTruncated = (summary.ordersTruncated ?? 0) + 1; }
 }

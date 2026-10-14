@@ -42,7 +42,7 @@ test('costs: first run, steady run, changed costs and a failed page write the sa
   const dbs = await twoDatabases();
   const costRows = (db) => withoutIds(db._tables.get('product_costs') ?? []);
 
-  const first = await runBoth(dbs, referenceSyncProductCosts, syncProductCosts, { now: new Date('2026-09-26T08:00:00Z') });
+  const first = await runBoth(dbs, referenceSyncProductCosts, syncProductCosts, { timeZone: 'UTC', now: new Date('2026-09-26T08:00:00Z') });
   assert.equal(costRows(dbs.batched).length, 283);
   assert.deepEqual(costRows(dbs.batched), costRows(dbs.reference));
   report('costs, first run (283 new rows)', first);
@@ -84,7 +84,7 @@ test('costs: the latest row is chosen by effective_from, whatever order the hist
       { variant_id: 'var-2', merchant_id: MERCHANT_ID, unit_cost: 3.5, currency: 'EUR', effective_from: '2026-09-01T00:00:00.000Z', source: 'manual_entry', validation_status: 'verified' },
     ]);
   }
-  await runBoth(dbs, referenceSyncProductCosts, syncProductCosts, { now: new Date('2026-09-26T08:00:00Z') });
+  await runBoth(dbs, referenceSyncProductCosts, syncProductCosts, { timeZone: 'UTC', now: new Date('2026-09-26T08:00:00Z') });
   const rows = withoutIds(dbs.batched._tables.get('product_costs'));
   assert.deepEqual(rows, withoutIds(dbs.reference._tables.get('product_costs')));
   // var-1 (2.50 latest, unchanged) gets no row; var-2's latest is a manual entry, so a Shopify row is written.
@@ -152,7 +152,7 @@ test('inventory: a snapshot dated after now (clock skew) is still the latest one
       { variant_id: 'var-18', location_id: 'loc-1', quantity: 1, synced_at: '2026-09-26T05:00:00.000Z', merchant_id: 'other-merchant' },
     ]);
   }
-  const { after } = await runBoth(dbs, referenceSyncInventory, syncInventory, { now: new Date('2026-09-26T08:00:00Z') });
+  const { after } = await runBoth(dbs, referenceSyncInventory, syncInventory, { timeZone: 'UTC', now: new Date('2026-09-26T08:00:00Z') });
   assert.deepEqual(snapshotRows(dbs.batched), snapshotRows(dbs.reference));
   assert.equal(snapshotRows(dbs.batched).length, 4 + 343); // only var-6 / loc-1 already has today's snapshot
   assert.equal(after, 4);

@@ -5,6 +5,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { BP, divRound, fromScaled, lineGrossCents, percentOfCents, toCents, toPriceMicro, toQtyMilli, percentToBp } from './money.js';
 import { validateVat, vatBreakdown, VAT_REGIMES } from './vat.js';
+import { invoiceAmounts, sumCents } from './amounts.js';
+import { isPaymentMethod } from './payment-methods.js';
 
 export const DOC_TYPES = ['quote', 'invoice', 'credit_note'];
 export const REVENUE_BASES = ['linked_source_order', 'standalone_b2b'];
@@ -333,34 +335,54 @@ export function creditNoteFromInvoice(invoice, { creditNoteId, reason, lines, ex
 }
 
 // ---------- payments and settlement ----------
-/** Amounts owed on an invoice after credit notes and payments. */
-export function settlement(invoice, payments, creditNotes = []) {
-  const credited = creditedCents(creditNotes);
-  const paid = payments.reduce((a, p) => a + p.amountCents, 0);
-  const due = payableOf(invoice.totals); // tax-inclusive total + explicit rounding amount
-  const payable = Math.max(0, due - credited);
-  return { grossCents: due, creditedCents: credited, payableCents: payable, paidCents: paid, remainingCents: Math.max(0, payable - paid), overpaidCents: Math.max(0, paid - payable) };
+/**
+ * Amounts of an invoice. The ONE definition is amounts.js (document_total, credited, effective_due, allocated, refunded, retained, remaining_due, refundable);
+ * the legacy names are kept: grossCents = document_total, payableCents = effective_due, paidCents = allocated, remainingCents = remaining_due, overpaidCents = refundable.
+ * `payments` = the allocations to the invoice (negative = reversal), `refunds` = the allocations to its credit notes (money handed back).
+ */
+export function settlement(invoice, payments, creditNotes = [], refunds = []) {
+  const a = invoiceAmounts({ documentTotal: payableOf(invoice.totals), credited: creditedCents(creditNotes), allocated: sumCents(payments), refunded: sumCents(refunds) });
+  return { grossCents: a.documentTotal, creditedCents: a.credited, payableCents: a.effectiveDue, paidCents: a.allocated, remainingCents: a.remainingDue, overpaidCents: a.refundable,
+    documentTotalCents: a.documentTotal, effectiveDueCents: a.effectiveDue, allocatedCents: a.allocated, refundedCents: a.refunded, retainedCents: a.retained, refundableCents: a.refundable };
 }
 
 /** Lifecycle status implied by settlement (never OVERDUE: that is derived, see effectiveStatus). */
 export function settledStatus(invoice, s) {
   if (s.creditedCents >= s.grossCents) return 'CREDITED';
   if (s.payableCents > 0 && s.remainingCents === 0) return 'PAID';
-  if (s.paidCents > 0) return 'PARTIALLY_PAID';
+  if ((s.retainedCents ?? s.paidCents) > 0) return 'PARTIALLY_PAID';
   return invoice.status === 'PARTIALLY_PAID' || invoice.status === 'PAID' ? 'SENT' : invoice.status;
 }
 
 /** Validate and shape a manual payment. The invoice status is re-derived by the service after saving it. */
-export function makePayment(invoice, payments, creditNotes, { amount, paidOn, method, reference, actor }) {
+export function makePayment(invoice, payments, creditNotes, { amount, paidOn, method, reference, actor, refunds = [] }) {
   if (invoice.type !== 'invoice') throw new FinanceError('PAYMENTS_APPLY_TO_INVOICES');
   if (!['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(invoice.status)) throw new FinanceError('INVOICE_NOT_OPEN_FOR_PAYMENT', invoice.status);
   const amountCents = toCents(amount);
   if (amountCents === null || amountCents === 0) throw new FinanceError('PAYMENT_AMOUNT_INVALID');
   if (!isDate(paidOn)) throw new FinanceError('PAYMENT_DATE_INVALID');
+  if (method != null && !isPaymentMethod(method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(method));
   if (amountCents < 0 && !reference) throw new FinanceError('CORRECTION_REQUIRES_A_REFERENCE');
-  const s = settlement(invoice, payments, creditNotes);
+  const s = settlement(invoice, payments, creditNotes, refunds);
   if (amountCents > s.remainingCents) throw new FinanceError('PAYMENT_EXCEEDS_REMAINING', `${amountCents} > ${s.remainingCents} (cents)`);
   return { documentId: invoice.id, merchantId: invoice.merchantId, amountCents, paidOn, method: method ?? 'unspecified', reference: reference ?? null, actor };
+}
+
+/**
+ * Validate and shape a refund: money handed back to the customer FOR an issued credit note. A credit note never creates a bank movement by itself; this is the explicit,
+ * separate act. Ceilings: the credit note (cumulative refunds <= its amount) and the invoice (refund <= refundable = what was paid beyond what is still due).
+ */
+export function makeRefund(creditNote, invoice, creditNotes, payments, refunds, { amount, paidOn, method, reference, actor }) {
+  if (creditNote.type !== 'credit_note' || !creditNote.lockedAt || !invoice || invoice.type !== 'invoice') throw new FinanceError('REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE');
+  const amountCents = toCents(amount);
+  if (amountCents === null || amountCents <= 0) throw new FinanceError('PAYMENT_AMOUNT_INVALID');
+  if (!isDate(paidOn)) throw new FinanceError('PAYMENT_DATE_INVALID');
+  if (method != null && !isPaymentMethod(method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(method));
+  const s = settlement(invoice, payments, creditNotes, refunds);
+  const already = sumCents(refunds.filter((r) => r.documentId === creditNote.id));
+  if (already + amountCents > payableOf(creditNote.totals)) throw new FinanceError('REFUND_EXCEEDS_CREDIT_NOTE', `${amountCents} > ${payableOf(creditNote.totals) - already} (cents)`);
+  if (amountCents > s.refundableCents) throw new FinanceError('REFUND_EXCEEDS_REFUNDABLE', `${amountCents} > ${s.refundableCents} (cents)`);
+  return { documentId: creditNote.id, invoiceId: invoice.id, merchantId: creditNote.merchantId, amountCents, paidOn, method: method ?? 'unspecified', reference: reference ?? null, actor };
 }
 
 /** OVERDUE is derived from the due date and what remains, never stored. */

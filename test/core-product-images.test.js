@@ -115,7 +115,7 @@ function tenantDb() {
   const writes = []; for (const m of ['insert', 'upsert', 'update', 'delete']) { const o = s[m].bind(s); s[m] = async (t, ...r) => { writes.push(t); return o(t, ...r); }; }
   s.writes = writes; return s;
 }
-const run = (s, merchant, createClient) => runSync({ mode: 'all', env: { NORDLA_MERCHANT_ID: merchant, ...ENV }, supabase: s, createClient, log: () => {}, logError: () => {}, customerKeySecret: () => null, coverage: { read: async () => null, write: async () => {} } });
+const run = (s, merchant, createClient) => runSync({ mode: 'all', env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: merchant, ...ENV }, supabase: s, createClient, log: () => {}, logError: () => {}, customerKeySecret: () => null, coverage: { read: async () => null, write: async () => {} } });
 
 test('two merchants: each merchant\'s images land on its own products only (no leak), through the guarded runSync', async () => {
   const s = tenantDb();

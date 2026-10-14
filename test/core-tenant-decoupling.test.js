@@ -73,7 +73,7 @@ const merchantIdsIn = (s, table) => [...new Set(s.rows(table).map((r) => r.merch
 // 1 + 11 + 12a
 test('valid merchant + its own shop: full sync SUCCESS, every row and the sync_runs row belong to that merchant, merchants untouched', async () => {
   const s = db(); const before = s.snapshot('merchants'); const shop = shopifyAs(SHOP_A);
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop });
   assert.equal(r.status, 'SUCCESS'); assert.equal(r.exitCode, 0); assert.equal(r.merchantId, A.id);
   for (const t of ['locations', 'products', 'variants', 'inventory_snapshots', 'product_costs', 'orders', 'order_lines', 'refunds']) {
     assert.ok(s.rows(t).length > 0, `${t} written`); assert.deepEqual(merchantIdsIn(s, t), [A.id], `${t} only for A`);
@@ -84,7 +84,7 @@ test('valid merchant + its own shop: full sync SUCCESS, every row and the sync_r
 
 // 2
 test('unknown or missing NORDLA_MERCHANT_ID: refused before any write (not even sync_runs), Shopify never contacted', async () => {
-  for (const env of [{ NORDLA_MERCHANT_ID: UNKNOWN_ID, ...SHOPIFY_ENV }, { ...SHOPIFY_ENV }, { NORDLA_MERCHANT_ID: 'not-a-uuid', ...SHOPIFY_ENV }]) {
+  for (const env of [{ MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: UNKNOWN_ID, ...SHOPIFY_ENV }, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: 'not-a-uuid', ...SHOPIFY_ENV }]) {
     const s = db();
     const r = await sync(s, { env });
     assert.equal(r.status, 'REFUSED'); assert.equal(r.exitCode, 1); assert.equal(r.merchantId, null);
@@ -96,19 +96,19 @@ test('unknown or missing NORDLA_MERCHANT_ID: refused before any write (not even 
 test('Shopify not configured: the Shopify job is skipped (NOT_CONFIGURED, exit 0) - no write, no shop invented, existing data kept', async () => {
   const s = db(); s._tables.set('orders', [{ id: 'o-old', merchant_id: A.id, source_system: 'shopify', source_id: 'gid://shopify/Order/OLD' }]);
   const before = JSON.stringify([...s._tables]);
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id } });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id } });
   assert.equal(r.status, 'SKIPPED'); assert.equal(r.exitCode, 0); assert.equal(r.state, 'NOT_CONFIGURED'); assert.equal(r.reason, 'NO_SHOPIFY_CREDENTIALS');
   assert.deepEqual(s.writes, []); assert.equal(JSON.stringify([...s._tables]), before);
   // a connector explicitly NOT_CONFIGURED in merchant_connectors is skipped the same way
   const s2 = db({ connectors: [['c-a', A.id, SHOP_A, 'NOT_CONFIGURED']] });
-  const r2 = await sync(s2, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
+  const r2 = await sync(s2, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
   assert.equal(r2.status, 'SKIPPED'); assert.equal(r2.reason, 'CONNECTOR_NOT_CONFIGURED'); assert.deepEqual(s2.writes, []);
 });
 
 // 4
 test('Shopify unavailable: controlled FAILED run for the tenant (UNAVAILABLE), zero data write, merchant intact', async () => {
   const s = db(); const before = s.snapshot('merchants');
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A, { down: true }) });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A, { down: true }) });
   assert.equal(r.status, 'FAILED'); assert.equal(r.exitCode, 1); assert.equal(r.state, 'UNAVAILABLE');
   assert.deepEqual(dataWrites(s), []);
   assert.deepEqual(s.rows('sync_runs').map((x) => [x.merchant_id, x.status, x.error]), [[A.id, 'FAILED', 'UNAVAILABLE: SHOPIFY_ERROR']]);
@@ -118,7 +118,7 @@ test('Shopify unavailable: controlled FAILED run for the tenant (UNAVAILABLE), z
 // 5
 test('wrong shop behind the credentials (linked to nobody): MISCONFIGURED, zero data write', async () => {
   const s = db();
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs('gid://shopify/Shop/NOBODY') });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs('gid://shopify/Shop/NOBODY') });
   assert.equal(r.state, 'MISCONFIGURED'); assert.equal(r.reason, 'SHOP_NOT_LINKED_TO_TENANT'); assert.equal(r.status, 'FAILED');
   assert.deepEqual(dataWrites(s), []);
   assert.deepEqual(s.rows('sync_runs').map((x) => [x.merchant_id, x.status, x.error]), [[A.id, 'FAILED', 'MISCONFIGURED: SHOP_NOT_LINKED_TO_TENANT']]);
@@ -127,7 +127,7 @@ test('wrong shop behind the credentials (linked to nobody): MISCONFIGURED, zero 
 // 6
 test('merchant B\'s shop used with merchant A: MISCONFIGURED (SHOP_LINKED_TO_ANOTHER_MERCHANT), zero write for A and for B', async () => {
   const s = db();
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_B) });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_B) });
   assert.equal(r.state, 'MISCONFIGURED'); assert.equal(r.reason, 'SHOP_LINKED_TO_ANOTHER_MERCHANT');
   assert.deepEqual(dataWrites(s), []);
   assert.ok(s.rows('sync_runs').every((x) => x.merchant_id === A.id), 'the FAILED trace is A\'s own, never B\'s');
@@ -136,14 +136,14 @@ test('merchant B\'s shop used with merchant A: MISCONFIGURED (SHOP_LINKED_TO_ANO
 
 test('credentials present but the tenant has no shopify connector: MISCONFIGURED, zero data write', async () => {
   const s = db({ connectors: [['c-b', B.id, SHOP_B]] });
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
   assert.equal(r.reason, 'NO_SHOPIFY_CONNECTOR_FOR_TENANT'); assert.deepEqual(dataWrites(s), []);
 });
 
 // 7
 test('two merchants: only NORDLA_MERCHANT_ID is synced - B with B\'s shop writes only B, A stays empty', async () => {
   const s = db();
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_B) });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_B) });
   assert.equal(r.status, 'SUCCESS'); assert.equal(r.merchantId, B.id);
   for (const t of ['products', 'variants', 'orders', 'order_lines', 'inventory_snapshots', 'sync_runs']) assert.deepEqual(merchantIdsIn(s, t), [B.id], t);
 });
@@ -152,9 +152,9 @@ test('two merchants: only NORDLA_MERCHANT_ID is synced - B with B\'s shop writes
 test('no merchant is ever created by the sync, and there is no "only merchant" logic left (behaviour + source)', async () => {
   // behaviour: exactly one merchant, no NORDLA_MERCHANT_ID, a valid shop -> refused, never "the only merchant"; empty table -> nothing created
   const one = db({ merchants: [A], connectors: [['c-a', A.id, SHOP_A]] });
-  assert.equal((await sync(one, { env: { ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'REFUSED'); assert.deepEqual(one.writes, []);
+  assert.equal((await sync(one, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'REFUSED'); assert.deepEqual(one.writes, []);
   const empty = db({ merchants: [], connectors: [] });
-  await sync(empty, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
+  await sync(empty, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) });
   assert.equal(empty.rows('merchants').length, 0); assert.deepEqual(empty.writes, []);
   // source: nothing under src/sync reads or writes the merchants table any more, nor normalizeMerchant, nor SHOP_QUERY-as-identity
   const dir = new URL('../src/sync/', import.meta.url);
@@ -168,7 +168,7 @@ test('no merchant is ever created by the sync, and there is no "only merchant" l
 
 // 10
 test('recovery after a Shopify outage: FAILED run, then the next cycle succeeds normally for the same tenant', async () => {
-  const s = db(); const env = { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV };
+  const s = db(); const env = { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV };
   const t1 = new Date('2026-09-27T10:00:00Z'); const t2 = new Date('2026-09-27T10:15:00Z');
   assert.equal((await sync(s, { env, shop: shopifyAs(SHOP_A, { down: true }), now: () => t1 })).status, 'FAILED');
   assert.equal((await sync(s, { env, shop: shopifyAs(SHOP_A), now: () => t2 })).status, 'SUCCESS');
@@ -182,7 +182,7 @@ test('a failure in the middle of the sync (Shopify drops on an orders page) ends
   const vol = volumeShopify({ orders: CLEAN_ORDERS, failAtCursor: 'o2' });
   const base = shopifyAs(SHOP_A);
   const shop = { createClient: () => ({ graphql: (q, v) => (q.includes('orders(') ? vol.graphql(q, v) : base.createClient().graphql(q, v)) }) };
-  const r = await sync(s, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop });
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop });
   assert.equal(r.status, 'FAILED');
   for (const t of DATA_TABLES) assert.ok(merchantIdsIn(s, t).every((m) => m === A.id), t);
   assert.deepEqual(s.rows('sync_runs').map((x) => [x.merchant_id, x.status]), [[A.id, 'FAILED']]);
@@ -198,7 +198,7 @@ test('HABB historical behaviour kept: runSync("all") with a valid connector leav
   await syncProductCosts({ shopify: shop, supabase: oldFlow }, { merchantId: A.id });
   await syncOrders({ shopify: shop, supabase: oldFlow }, { merchantId: A.id, customerKeySecret: null, since: null });
   const newFlow = db();
-  assert.equal((await sync(newFlow, { env: { NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'SUCCESS');
+  assert.equal((await sync(newFlow, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'SUCCESS');
   assert.deepEqual(project(newFlow), project(oldFlow));
   for (const t of DATA_TABLES) assert.equal(newFlow.rows(t).length, oldFlow.rows(t).length, t);
 });
@@ -206,14 +206,14 @@ test('HABB historical behaviour kept: runSync("all") with a valid connector leav
 // ---------- legacy fallback (ADR: explicit, transitional, logged, via merchant_connectors) ----------
 test('legacy fallback: off -> refused; on and no NORDLA_MERCHANT_ID -> tenant via merchant_connectors (not merchants.source_id), logged', async () => {
   const off = db();
-  assert.equal((await sync(off, { env: { ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'REFUSED'); assert.deepEqual(off.writes, []);
+  assert.equal((await sync(off, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'REFUSED'); assert.deepEqual(off.writes, []);
   const on = db(); const lines = [];
-  const r = await sync(on, { env: { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs(SHOP_A), log: (...a) => lines.push(a.join(' ')) });
+  const r = await sync(on, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs(SHOP_A), log: (...a) => lines.push(a.join(' ')) });
   assert.equal(r.status, 'SUCCESS'); assert.equal(r.merchantId, A.id);
   assert.notEqual(A.source_id, SHOP_A, 'merchants.source_id is not what matched');
   assert.ok(lines.some((l) => /tenant source = legacy_shopify/.test(l)) && lines.some((l) => /WARNING/.test(l)));
   const unknown = db();
-  assert.equal((await sync(unknown, { env: { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs('gid://shopify/Shop/NOBODY') })).status, 'REFUSED');
+  assert.equal((await sync(unknown, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs('gid://shopify/Shop/NOBODY') })).status, 'REFUSED');
   assert.deepEqual(unknown.writes, []);
 });
 

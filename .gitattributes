@@ -1,2 +1,4 @@
 # Pinned font files and their licence texts are verified byte for byte against SHA-256: never convert line endings.
 resources/fonts/** -text
+# Official validation artifacts are third-party, verbatim, hash-pinned (vendor/MANIFEST.json): Git must never convert their line endings or diff them as text.
+vendor/** -text -diff

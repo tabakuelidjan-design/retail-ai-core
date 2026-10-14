@@ -21,3 +21,7 @@ artifacts/private/
 
 # Local Alibaba Model Studio credentials/config - never commit
 config/marketing-creative.alibaba.env
+
+# benchmark run reports
+benchmark/ask/results/
+benchmark/ask/adapters/configs/*.local.json

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const git = (args) => execSync(`git ${args}`, { cwd: ROOT, encoding: 'utf8' });
 const files = git('ls-files --cached --others --exclude-standard').split('\n').filter(Boolean);
-const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf)$/i.test(f) && !f.endsWith('package-lock.json')
+const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf)$/i.test(f) && !f.endsWith('package-lock.json') && !f.startsWith('vendor/')
   // published sha-256 checksums of the committed test-fixture fonts (provenance inventory, not secrets)
   && f !== 'test/fixtures/fonts/FONTS.json'
   // sha-256 checksums of the supplied merchant source documents (evidence provenance, not secrets)
@@ -28,7 +28,9 @@ const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf
   && f !== 'docs/architecture/creative-pre-c2-foundation.md'
   && !/^resources\/fonts\/[a-z0-9-]+\/manifest\.json$/.test(f));
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
-const contents = new Map(textFiles.map((f) => [f, read(f)]));
+// The ONLY 64-hex strings allowed outside vendor/ are public integrity pins of official artifacts (not secrets): the pinned hash of vendor/MANIFEST.json and the hash of the OASIS UBL 2.1 archive. Anything else is still refused.
+const PUBLIC_PINS = ['7eef9d66aea8f94c0fbe9ecad7b94396b1432319a27e8b52df78f3c00910076b', '60b80d76394a8a2add90723ecb8e0e2e9d826775de9749df37a72d60703f86ed'];
+const contents = new Map(textFiles.map((f) => [f, PUBLIC_PINS.reduce((t, p) => t.split(p).join('<public-pin>'), read(f))]));
 
 const PATTERNS = {
   'a 64-character hex string (hash or key)': /\b[0-9a-f]{64}\b/,

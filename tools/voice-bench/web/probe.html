@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voice bench probe</title>
+<style>body{font:14px/1.4 system-ui;margin:12px}pre{white-space:pre-wrap;word-break:break-word;background:#f3f1ee;padding:10px;border-radius:8px;font-size:12px}button{font:600 18px system-ui;padding:14px 20px;border-radius:12px;border:0;background:#10223b;color:#fff}</style></head>
+<body><h3>Voice benchmark: engine probe</h3><p>Isolated test page (nothing from Nordla). It checks WebAssembly support, loads the approved engines from local files and transcribes one synthetic English clip (LAB test). Keep this page in the foreground until it says DONE.</p>
+<button id="go">Run probe</button> <span id="st"></span><pre id="log"></pre><script type="module" src="probe.js"></script></body></html>

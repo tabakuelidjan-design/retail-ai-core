@@ -5,16 +5,21 @@
 //   amount          the TOTAL refund
 // and the source order reference (for example "#1065"), so the accountant can find the order.
 
+import { civilDateIn } from './civil-date.js';
+
 const num = (x) => Number(x ?? 0);
 const r2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const fmt = (x) => String(r2(x));
 
-/** @param {{refunds?: object[], refundLines?: object[], orders?: object[]}} data raw retail rows @param {(isoDate: string) => boolean} inRange */
-export function refundRows(data, inRange) {
+/** @param {{refunds?: object[], refundLines?: object[], orders?: object[]}} data raw retail rows @param {(isoDate: string) => boolean} inRange
+ *  @param {string} timeZone the merchant's zone: a refund is dated by the merchant's day of `refunded_at`, not its UTC day */
+export function refundRows(data, inRange, timeZone) {
+  if (!timeZone) throw new TypeError('refundRows: a time zone is required to date refunds');
+  const dayOf = (r) => (r.refunded_at ? civilDateIn(r.refunded_at, timeZone) : null);
   const orderById = new Map((data.orders ?? []).map((o) => [o.id, o]));
   const linesByRefund = new Map();
   for (const l of data.refundLines ?? []) (linesByRefund.get(l.refund_id) ?? linesByRefund.set(l.refund_id, []).get(l.refund_id)).push(l);
-  return (data.refunds ?? []).filter((r) => inRange(String(r.refunded_at).slice(0, 10))).map((r) => {
+  return (data.refunds ?? []).filter((r) => { const d = dayOf(r); return d !== null && inRange(d); }).map((r) => {
     const order = orderById.get(r.order_id);
     const taxesIncluded = order ? order.taxes_included !== false : true;
     const product = (linesByRefund.get(r.id) ?? []).reduce((a, l) => a + num(l.amount) + (taxesIncluded ? 0 : num(l.tax_amount)), 0);
@@ -22,7 +27,7 @@ export function refundRows(data, inRange) {
     const shipping = shippingCaptured ? num(r.shipping_subtotal) + num(r.shipping_tax) : null;
     const total = num(r.amount);
     return {
-      date: String(r.refunded_at).slice(0, 10), orderRef: order?.order_name ?? null,
+      date: dayOf(r), orderRef: order?.order_name ?? null,
       amount: fmt(total), productAmount: fmt(product), shippingAmount: shipping === null ? null : fmt(shipping), otherAmount: fmt(total - product - (shipping ?? 0)), shippingCaptured,
     };
   });

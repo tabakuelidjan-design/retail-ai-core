@@ -172,7 +172,7 @@ test('backward compatibility: contacts with no declared role keep exactly the ro
   const sale = (companyId) => ({ doc: { id: `d-${companyId}`, type: 'invoice', customer: { companyId }, lockedAt: '2026-09-01T10:00:00Z', status: 'ISSUED', issueDate: '2026-09-01', dueDate: '2026-10-01', totals: { grossCents: 12100 } }, payments: [], creditNotes: [] });
   const salesDocs = [sale('cust'), sale('both')];
   const supplierInvoices = [{ id: 's1', supplierCompanyId: 'supp', status: 'VALIDATED', grossCents: 500 }, { id: 's2', supplierCompanyId: 'both', status: 'TO_PAY', grossCents: 700 }];
-  const rows = buildContacts({ companies: legacy, salesDocs, supplierInvoices, m, today: '2026-09-26' });
+  const rows = buildContacts({ companies: legacy, salesDocs, supplierInvoices, m, today: '2026-09-26', timeZone: 'UTC' });
   const role = (id) => { const r = rows.find((x) => x.id === id); return [r.isCustomer, r.isSupplier]; };
   assert.deepEqual(role('cust'), [true, false], 'a customer invoice keeps the Customer role');
   assert.deepEqual(role('supp'), [false, true], 'a supplier invoice keeps the Supplier role');

@@ -1,9 +1,16 @@
 // Merchant-timezone-aware reporting windows. The timezone is always a
 // parameter (merchant config); nothing here knows any specific merchant's zone.
 // Every window is a half-open interval [start, end) of UTC instants.
+import { requireTimeZone } from './profile.js';
+
+// Intl.DateTimeFormat construction costs ~100 microseconds: one formatter per zone is built once and reused (pure memoization, same output).
+const dayFormatters = new Map(); const offsetFormatters = new Map();
+const dayFormatter = (timeZone) => { let f = dayFormatters.get(timeZone); if (!f) { f = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }); dayFormatters.set(timeZone, f); } return f; };
+const offsetFormatter = (timeZone) => { let f = offsetFormatters.get(timeZone); if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); offsetFormatters.set(timeZone, f); } return f; };
 
 export function localDateString(instant, timeZone) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+  requireTimeZone(timeZone, 'localDateString');
+  return dayFormatter(timeZone).format(instant);
 }
 
 export function addDays(dateStr, days) {
@@ -12,10 +19,7 @@ export function addDays(dateStr, days) {
 }
 
 function offsetMs(instant, timeZone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(instant);
+  const parts = offsetFormatter(timeZone).formatToParts(instant);
   const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
   const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
@@ -23,6 +27,7 @@ function offsetMs(instant, timeZone) {
 
 /** The UTC instant at which local calendar date `dateStr` starts (00:00) in `timeZone`. DST-safe. */
 export function localMidnight(dateStr, timeZone) {
+  requireTimeZone(timeZone, 'localMidnight');
   const [y, m, d] = dateStr.split('-').map(Number);
   const guess = Date.UTC(y, m - 1, d);
   const first = guess - offsetMs(new Date(guess), timeZone);
@@ -174,5 +179,21 @@ export function previousEquivalentWindow(window) {
     key: `${window.key}_previous`, label: `Previous ${window.label ?? window.key}`, timeZone: window.timeZone,
     start: localMidnight(prevStart, window.timeZone), end: localMidnight(prevEnd, window.timeZone),
     localStart: prevStart, localEnd: prevEnd,
+  };
+}
+
+/**
+ * Maps an instant to the index of the day bucket that contains it (half-open [start, end)), or -1. `buckets` are consecutive day windows in
+ * ascending order (dayBucketsOfWindow). Binary search: replaces "for every day, filter every row" loops (days x rows) by one pass over the rows.
+ */
+export function dayIndexer(buckets) {
+  const starts = buckets.map((b) => b.start.getTime());
+  return (instant) => {
+    const t = instant instanceof Date ? instant.getTime() : new Date(instant).getTime();
+    if (Number.isNaN(t) || !buckets.length) return -1;
+    let lo = 0; let hi = starts.length;
+    while (lo < hi) { const mid = (lo + hi) >>> 1; if (starts[mid] <= t) lo = mid + 1; else hi = mid; }
+    const i = lo - 1;
+    return i >= 0 && t < buckets[i].end.getTime() ? i : -1;
   };
 }

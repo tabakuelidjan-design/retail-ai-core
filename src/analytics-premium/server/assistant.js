@@ -10,11 +10,14 @@
 // explanation status is honestly NOT_CONFIGURED (or UNKNOWN_PROVIDER when a name is set that has no adapter).
 
 import { readdir, readFile } from 'node:fs/promises';
+import { requireTimeZone } from '../../metrics/profile.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { servesTenant } from './tenant.js';
 import { localDateString } from '../../metrics/windows.js';
 import { MAX_SPAN_DAYS, periodReport } from './period-engine.js';
+import { createToolLayer } from './tools/index.js';
+import { createOrchestrator } from './ai/orchestrator.js';
 
 const REPORT_NAME = /^report-(\d{4}-\d{2}-\d{2})\.json$/;
 export const MAX_QUESTION = 500;
@@ -85,7 +88,7 @@ const dayBefore = (iso) => new Date(new Date(iso).getTime() - 1);
 export function figuresFor(intent, periodKey, report) {
   const s = report.sales?.[periodKey];
   if (!s) return { unavailable: 'PERIOD_NOT_IN_REPORT' };
-  const cur = report.currency ?? 'EUR';
+  const cur = report.currency ?? null;
   const num = (id, value, extra = {}) => ({ id, value, ...extra });
   if (intent === 'revenue') {
     const f = [num('net_sales_ex_tax', s.net_sales_ex_tax, { currency: cur }), num('net_sales_incl_tax', s.net_sales, { currency: cur })];
@@ -112,12 +115,25 @@ export const SUPPORTED_QUESTIONS = ['revenue', 'orders', 'units', 'aov', 'refund
  * @param {{reportsDir: string|URL, provider?: {name: string, explain: Function}|null, providerStatus?: string, timeoutMs?: number}} deps
  * @returns {Promise<{status: number, body: object}>}
  */
-export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date() }) {
+/**
+ * `provider` (legacy) only words the figures of the keyword path. `aiProvider` is the Phase 2 contract { plan, explain }: when it is configured, questions go through
+ * plan -> Nordla tools -> facts -> explain -> verify (ai/orchestrator.js); when it is absent - or when its planning fails - the deterministic keyword path below answers
+ * the simple questions exactly as before.
+ */
+export function createAssistant({ reportsDir, provider = null, providerStatus = provider ? 'OK' : 'NOT_CONFIGURED', timeoutMs = EXPLAIN_TIMEOUT_MS, now = () => new Date(), aiProvider = null, aiTimeoutMs, onDiagnostic }) {
+  const orchestrate = aiProvider ? createOrchestrator({ provider: aiProvider, tools: createToolLayer({ reportsDir, now }), ...(aiTimeoutMs ? { timeoutMs: aiTimeoutMs } : {}), ...(onDiagnostic ? { onDiagnostic } : {}) }) : null;
   // `selected` = the period chosen in the page ({period, from, to}); it is used only when the question does not name a period itself.
-  return async function ask({ question, lang = 'fr', selected = null }) {
+  return async function ask({ question, lang = 'fr', selected = null, history = [] }) {
     const text = typeof question === 'string' ? question.trim() : '';
     if (!text) return { status: 400, body: { error: { code: 'EMPTY_QUESTION' } } };
     if (text.length > MAX_QUESTION) return { status: 400, body: { error: { code: 'QUESTION_TOO_LONG', max: MAX_QUESTION } } };
+
+    let aiFailure = null;
+    if (orchestrate) {
+      const r = await orchestrate({ question: text, lang, history, selected });
+      if (r.status !== 'PLAN_FAILED') return { status: 200, body: { mode: 'ai', ...r } };
+      aiFailure = r.code; // the AI planner is unavailable or invalid: fall back to the deterministic keyword path, and say so
+    }
 
     const u = understand(text);
     if (!u.intent) return { status: 422, body: { error: { code: 'UNSUPPORTED_QUESTION', supported: SUPPORTED_QUESTIONS } } };
@@ -142,9 +158,9 @@ export function createAssistant({ reportsDir, provider = null, providerStatus = 
     const rep = { file: report.__file ?? String(report.generated_at ?? '').slice(0, 10), report };
     const pi = rep.report.period_info;
     const w = rep.report.sales[periodKey].window;
-    const tz = w?.timeZone ?? rep.report.merchant_timezone ?? 'UTC';
+    const tz = requireTimeZone(w?.timeZone ?? rep.report.merchant_timezone, 'ask');
     const period = pi ? { key: pi.key, start: pi.start, end: pi.end, days: pi.days, timeZone: pi.timeZone } : w ? { key: periodKey, start: localDateString(new Date(w.start), tz), end: localDateString(dayBefore(w.end), tz), timeZone: tz } : { key: periodKey };
-    const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? 'EUR', sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
+    const body = { intent: u.intent, period, figures: got.figures, currency: rep.report.currency ?? null, sources: [{ report: rep.file, generatedAt: rep.report.generated_at }], explanation: { status: providerStatus === 'OK' ? 'PENDING' : providerStatus } };
 
     if (provider && providerStatus === 'OK') {
       const ac = new AbortController(); let timer;
@@ -160,6 +176,7 @@ export function createAssistant({ reportsDir, provider = null, providerStatus = 
         body.explanation = { status: e?.code === 'TIMEOUT' ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE', provider: provider.name }; // explicit, never hidden; the provider's message is not exposed
       } finally { clearTimeout(timer); }
     }
+    if (aiFailure) body.ai = { status: 'UNAVAILABLE', code: aiFailure };
     return { status: 200, body };
   };
 }

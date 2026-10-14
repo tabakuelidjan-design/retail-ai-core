@@ -87,7 +87,9 @@ test('CATEGORIES: real counts per accounting category, empty ones stay empty (ne
   assert.equal((await c.post(`/api/inbox/${withReceipt.data.item.id}/validate`, {})).status, 200);
   await purchase(c, { invoiceNumber: 'NO-DOC', issueDate: '2026-08-03' });
   await a.store.insertBankTransaction({ merchantId: 'merchant-test-1', accountId: 'acc', providerTxId: 't1', date: '2026-08-05', amountCents: -5000, currency: 'EUR', counterpartyName: 'Fournisseur Un', reference: 'ref1', structuredReference: null, source: 'csv', status: 'NEW' });
-  await a.store.insertBankTransaction({ merchantId: 'merchant-test-1', accountId: 'acc', providerTxId: 't2', date: '2026-09-05', amountCents: 12100, currency: 'EUR', counterpartyName: 'Client', reference: 'ref2', structuredReference: null, source: 'csv', status: 'MATCHED' });
+  const t2 = (await a.store.insertBankTransaction({ merchantId: 'merchant-test-1', accountId: 'acc', providerTxId: 't2', date: '2026-09-05', amountCents: 12100, currency: 'EUR', counterpartyName: 'Client', reference: 'ref2', structuredReference: null, source: 'csv' }));
+  // a bank status is derived from real reconciliations (a hand-written MATCHED is refused): reconcile t2 for real, with the payment it funds
+  await a.store.reconcileAndPay({ merchantId: 'merchant-test-1', key: 'pack-t2', transactionId: t2.row.id, actor: { type: 'merchant', id: 'owner' }, at: '2026-09-06T08:00:00Z', payment: { amountCents: 12100, method: 'bank_transfer', allocations: [] } });
   const m = (await status(c)).model; const cat = (id) => m.categories.find((x) => x.id === id);
   assert.equal(cat('clients').count, 1); assert.equal(cat('clients').status, 'ready');
   assert.equal(cat('credit_notes').count, 0); assert.equal(cat('credit_notes').status, 'empty'); assert.equal(cat('credit_notes').downloadable, false);

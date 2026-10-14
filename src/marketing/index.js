@@ -9,6 +9,7 @@
 // VERIFIED shopify connector, and reports NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE explicitly instead of guessing.
 
 import { existsSync } from 'node:fs';
+import { resolveBusinessProfile } from '../metrics/profile.js';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -73,12 +74,12 @@ async function validateAgainstShopify(shopify, supabase, merchantId, range) {
 
 export async function runMarketingReport({ argv = [], env = process.env, supabase: injectedSupabase = null, createClient = null, now = new Date(), outDir = 'reports', log = console.log, coverage = readCoverage } = {}) {
   const opts = parseArgs(argv);
-  const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
   const policyPath = opts.policy ?? DEFAULTS.policy;
   const config = mergeConfig(existsSync(policyPath) ? JSON.parse(await readFile(policyPath, 'utf8')) : {});
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveToolTenant({ env, supabase, tool: 'marketing', log: (l) => log(l), createClient });
   const merchantId = tenant.merchantId;
+  const timeZone = (await resolveBusinessProfile({ supabase, merchantId, env })).timezone;
 
   const windows = buildWindows(now, timeZone);
   const data = await loadDataset(supabase, merchantId, { since: windows.available_window.start });

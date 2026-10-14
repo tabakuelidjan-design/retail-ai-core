@@ -12,6 +12,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
 import { mergeConfig } from '../metrics/config.js';
+import { applyProfileToConfig, resolveBusinessProfile } from '../metrics/profile.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
 import { buildWindows, inWindow } from '../metrics/windows.js';
@@ -40,11 +41,13 @@ async function shopifyFor(mode, env, createClient) {
 export async function runReport({ mode, env = process.env, supabase: injectedSupabase, now = new Date(), outDir = 'reports', log = console.log, createClient = null } = {}) {
   if (!MODES.includes(mode)) throw Object.assign(new Error(`Usage: node src/report/index.js <${MODES.join('|')}>`), { code: 'BAD_MODE' });
 
-  const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
-  const config = mergeConfig();
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveAnalyticsTenant({ env, supabase, log: (l) => log(l), createClient });
   const merchantId = tenant.merchantId;
+  // Business Profile: the time zone is mandatory (fail closed, before anything is read or written); the profile's explicit choices configure the metrics.
+  const profile = await resolveBusinessProfile({ supabase, merchantId, env });
+  const timeZone = profile.timezone;
+  const config = applyProfileToConfig(mergeConfig(), profile);
   const stamp = tenantStamp(merchantId);
   const shopify = SHOPIFY_MODES.includes(mode) && mode !== 'all' ? await shopifyFor(mode, env, createClient) : null;
   const written = [];
@@ -52,7 +55,7 @@ export async function runReport({ mode, env = process.env, supabase: injectedSup
 
   const windows = buildWindows(now, timeZone);
   const data = await loadDataset(supabase, merchantId, { since: windows.available_window.start });
-  const ledger = buildLedger(data, { config });
+  const ledger = buildLedger(data, { config, currency: profile.currency ?? undefined });
   const extras = {};
 
   if (mode === 'flags' || mode === 'all') {
@@ -111,7 +114,7 @@ export async function runReport({ mode, env = process.env, supabase: injectedSup
     // (right after the version) so the refresher can check ownership from the head of the file only.
     const fullSince = new Date(now.getTime() - 1100 * 24 * 60 * 60 * 1000);
     const full = await loadDataset(supabase, merchantId, { since: fullSince });
-    const snapshot = { version: 1, tenant: stamp, generated_at: now.toISOString(), time_zone: timeZone, currency: ledger.currency, data: full };
+    const snapshot = { version: 1, tenant: stamp, generated_at: now.toISOString(), time_zone: timeZone, currency: ledger.currency, business_profile: { timezone: profile.timezone, timezoneSource: profile.timezoneSource, currency: profile.currency, country: profile.country, excludedOrderStatuses: profile.excludedOrderStatuses, onlineChannelHandles: profile.onlineChannelHandles, posChannelHandles: profile.posChannelHandles, channelAliases: profile.channelAliases }, data: full };
     await writeFile(out('dataset.json.tmp'), JSON.stringify(snapshot));
     await rename(out('dataset.json.tmp'), out('dataset.json')); written.push('dataset.json');
     log(`dataset snapshot written to ${out('dataset.json')} (${full.orders.length} orders)`);

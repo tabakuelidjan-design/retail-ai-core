@@ -25,12 +25,28 @@
     "finance": "node --env-file=.env src/finance/cli.js",
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
     "finance:demo": "node src/finance/server/demo.js",
+    "sourcing": "node src/sourcing/server/index.js",
+    "sourcing:phone": "node src/sourcing/server/phone.js",
+    "sourcing:e2e": "node test/e2e/sourcing-pwa.e2e.js",
+    "sourcing:e2e:tunnel": "node test/e2e/real-tunnel.e2e.js",
+    "sourcing:e2e:recovery": "node test/e2e/sourcing-case-recovery.e2e.js",
+    "sourcing:e2e:reconnect": "node test/e2e/sourcing-recovery-reconnect.e2e.js",
+    "sourcing:e2e:v1": "node test/e2e/sourcing-v1-field.e2e.js",
+    "sourcing:e2e:fieldmode": "node test/e2e/sourcing-v1-fieldmode.e2e.js",
+    "sourcing:e2e:voice": "node test/e2e/sourcing-voice.e2e.js",
+    "sourcing:e2e:fieldv1": "node test/e2e/sourcing-field-v1.e2e.js",
+    "sourcing:bench:fieldv1": "node --test test/sourcing-field-v1-perf.test.js",
+    "sourcing:mutation:fieldv1": "node tools/field-v1-mutation.mjs",
+    "asr:e2e": "node test/e2e/asr-canon.e2e.js",
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
     "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
     "marketing-creative:smoke": "node src/marketing-creative/alibaba/smoke-cli.js",
     "marketing-creative:qwen-image": "node src/marketing-creative/alibaba/qwen-image-benchmark-cli.js",
     "marketing-creative:nano-banana-image": "node src/marketing-creative/gemini/nano-banana-image-benchmark-cli.js",
-    "marketing-creative:minimax-h3-video": "node src/marketing-creative/minimax/h3-video-benchmark-cli.js"
+    "marketing-creative:minimax-h3-video": "node src/marketing-creative/minimax/h3-video-benchmark-cli.js",
+    "benchmark:ask": "node benchmark/ask/run.js",
+    "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
+    "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js"
   },
   "engines": {
     "node": ">=20"
@@ -40,6 +56,11 @@
     "bidi-js": "1.1.0",
     "harfbuzzjs": "1.6.3",
     "pdfjs-dist": "4.10.38",
-    "pdfkit": "^0.20.2"
+    "pdfkit": "^0.20.2",
+    "saxon-js": "2.7.0",
+    "xmllint-wasm": "5.3.0"
+  },
+  "devDependencies": {
+    "xslt3": "2.7.0"
   }
 }

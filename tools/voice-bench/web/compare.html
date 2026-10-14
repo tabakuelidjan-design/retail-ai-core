@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comparaison vocale terrain (LAB)</title>
+<style>
+:root{--bg:#f6f3ef;--ink:#1b2433;--muted:#64605d;--navy:#10223b;--card:#fdfbf8;--line:#e5ded5;--ok:#2e7d4f;--warn:#9a5b00}
+body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:14px 16px 80px}
+h1{font:700 20px/1.2 Georgia,serif;margin:4px 0 2px}.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.say{font:600 24px/1.25 system-ui;margin:6px 0 10px;color:var(--navy)}
+.cat{font:700 11px system-ui;letter-spacing:.08em;color:var(--warn)}
+button{font:600 18px system-ui;border:0;border-radius:16px;padding:16px 18px;margin:6px 6px 6px 0;min-height:56px;background:#ece8e5;color:var(--ink)}
+button.go{background:var(--navy);color:#fff}button.rec{background:#c0392b;color:#fff}button:disabled{opacity:.45}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.eng{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px;min-height:60px;font-size:15px;word-break:break-word}
+.eng b{display:block;font-size:11px;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+.part{color:var(--muted);font-style:italic}.meta{font-size:12px;color:var(--muted);margin-top:4px}
+pre{white-space:pre-wrap;word-break:break-word;background:#f0ece7;border-radius:10px;padding:10px;font-size:12px;max-height:240px;overflow:auto}
+label{display:block;margin:8px 0;font-size:14px}
+.bar{height:8px;background:#e5ded5;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--navy);width:0}
+</style></head>
+<body>
+<h1>Comparaison vocale terrain</h1><p class="sub">LAB uniquement · Moonshine (tiny-streaming-en) contre Whisper (tiny int8) · même micro, même audio · rien n'est envoyé hors de ce serveur</p>
+<div class="card" id="setup">
+  <p>Parle <b>naturellement</b>, comme à un fournisseur : pas de prononciation « pour la machine ». Anglais seulement.</p>
+  <label><input type="checkbox" id="proc" checked> Traitement du micro par le navigateur (réduction de bruit, gain auto) : comme dans l'application</label>
+  <label><input type="checkbox" id="keep"> Garder l'audio de ce test sur le PC (pour rejouer d'autres moteurs plus tard)</label>
+  <button class="go" id="start">Charger les moteurs et le micro</button><span id="st"></span>
+  <div class="bar"><i id="bar"></i></div>
+</div>
+<div id="stage"></div>
+<div class="card"><b>Journal</b><pre id="log"></pre></div>
+<script type="module" src="compare.js"></script>
+</body></html>

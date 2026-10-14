@@ -26,6 +26,9 @@ export function buildReport({ ledger, now, timeZone, config, data }) {
       first_order_at: ledger.orders.length ? new Date(Math.min(...ledger.orders.map((o) => o.orderedAt))).toISOString() : null,
       last_order_at: ledger.orders.length ? new Date(Math.max(...ledger.orders.map((o) => o.orderedAt))).toISOString() : null,
       orders_excluded: ledger.excluded,
+      // unavailable / incomplete facts, surfaced: orders whose nested Shopify pages could not be completed, and the stock the inventory read does not cover
+      completeness: ledger.completeness,
+      stock_coverage: ledger.stockCoverage,
     },
     sales: {},
     products: {},

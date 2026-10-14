@@ -1,0 +1,810 @@
+{
+ "customer payments: partial, remaining, over-payment refused, paid, closed, audit events": [
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 3000,
+   "remaining": 4190,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 3000,
+   "refundable": 0
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
+  },
+  "INVOICE_NOT_OPEN_FOR_PAYMENT",
+  2
+ ],
+ "idempotency: a retry returns the committed payment, even once the invoice is PAID; a different request under the same key is refused": [
+  false,
+  true,
+  true,
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
+  },
+  "IDEMPOTENCY_KEY_REUSED",
+  1
+ ],
+ "corrections: a negative payment reverses the most recent allocations, is bounded by what was paid, and a retry does not correct twice": [
+  false,
+  true,
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 2000,
+   "remaining": 5190,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 2000,
+   "refundable": 0
+  },
+  "CORRECTION_EXCEEDS_PAID"
+ ],
+ "reversal and void: statuses are re-derived, reversals are idempotent and bounded, the history is kept": [
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
+  },
+  true,
+  true,
+  false,
+  true,
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 5190,
+   "remaining": 2000,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 5190,
+   "refundable": 0
+  },
+  "REVERSAL_EXCEEDS_ALLOCATION",
+  false,
+  true,
+  {
+   "status": "SENT",
+   "paid": 0,
+   "remaining": 7190,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 0,
+   "refundable": 0
+  },
+  "PAYMENT_ALREADY_REVERSED",
+  [
+   7190,
+   -2000,
+   -5190
+  ]
+ ],
+ "credit ceiling: the second full credit note cannot be issued, nor a third drafted; the invoice becomes CREDITED": [
+  "OK",
+  "CREDIT_EXCEEDS_INVOICE",
+  "CREDIT_EXCEEDS_INVOICE",
+  "CREDITED"
+ ],
+ "merchant isolation: B can neither pay, reverse, reference nor annotate what belongs to A": [
+  "TARGET_NOT_FOUND",
+  "ALLOCATION_NOT_FOUND",
+  "CROSS_MERCHANT_REFERENCE",
+  "CROSS_MERCHANT_REFERENCE",
+  true
+ ],
+ "supplier truth: PAID is derived (unpaid -> partially paid -> paid -> back), never written, nothing financial changes under payments": [
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "unpaid",
+   "allocated": 0,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAID_REQUIRES_ALLOCATIONS",
+  "PAID_REQUIRES_ALLOCATIONS",
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "part-2"
+  },
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 9100,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "INVOICE_HAS_PAYMENTS",
+  "INVOICE_HAS_PAYMENTS",
+  [
+   9100
+  ]
+ ],
+ "supplier payment through the inbox service: partial then full derives PAID, a retry is the same operation, nothing left to pay afterwards": [
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "virement"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-02",
+   "paidAmount": 12100,
+   "paidReference": "virement"
+  },
+  "PAYMENT_EXCEEDS_REMAINING",
+  2
+ ],
+ "customer: one payment across several invoices, the surplus stays unallocated, later allocation, over-allocation refused, several payments to one invoice, currency": [
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 25000,
+   "allocated": 19380,
+   "unallocated": 5620,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  [
+   "PAID",
+   "PAID",
+   "PARTIALLY_PAID"
+  ],
+  true,
+  true,
+  "PAYMENT_EXCEEDS_REMAINING",
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 25000,
+   "allocated": 21570,
+   "unallocated": 3430,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  true,
+  "PAID",
+  "PAYMENT_OVER_ALLOCATED",
+  {
+   "status": "ALLOCATED",
+   "amount": 25000,
+   "allocated": 25000,
+   "unallocated": 0,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  "PARTIALLY_PAID",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 0,
+   "due": 7190,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 0
+  },
+  "CURRENCY_MISMATCH",
+  "PAYMENT_METHOD_INVALID",
+  0,
+  {
+   "status": "UNALLOCATED",
+   "amount": 4000,
+   "allocated": 0,
+   "unallocated": 4000,
+   "reversed": 0,
+   "direction": "IN"
+  },
+  "provider:sumup",
+  "SU-123",
+  "bancontact",
+  1
+ ],
+ "credit notes and refunds: credit before payment, after partial payment, after full payment, partial refund, bounded refunds, retry, reversal interaction": [
+  {
+   "status": "ISSUED",
+   "paid": 0,
+   "remaining": 5980,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 0,
+   "refundable": 0
+  },
+  {
+   "status": "PAID",
+   "paid": 5980,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 5980,
+   "refundable": 0
+  },
+  "TARGET_NOT_OPEN",
+  {
+   "status": "PARTIALLY_PAID",
+   "paid": 3000,
+   "remaining": 2980,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 3000,
+   "refundable": 0
+  },
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 0,
+   "retained": 7190,
+   "refundable": 1210
+  },
+  1210,
+  false,
+  true,
+  true,
+  true,
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 1000,
+   "retained": 6190,
+   "refundable": 210
+  },
+  "REFUND_EXCEEDS_CREDIT_NOTE",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 1210,
+   "retained": 5980,
+   "refundable": 0
+  },
+  "REFUND_EXCEEDS_CREDIT_NOTE",
+  0,
+  "REVERSAL_BREAKS_REFUND",
+  {
+   "status": "PAID",
+   "paid": 7190,
+   "remaining": 0,
+   "credited": 1210,
+   "due": 5980,
+   "refunded": 210,
+   "retained": 6980,
+   "refundable": 1000
+  },
+  1000,
+  "REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE"
+ ],
+ "supplier: one payment across several invoices, surplus unallocated, later allocation, partial and multiple payments, reversal, retry": [
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 17100,
+   "unallocated": 2900,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 12100,
+   "paidAt": "2026-10-01",
+   "paidAmount": 12100,
+   "paidReference": null
+  },
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 18150,
+   "unallocated": 1850,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  {
+   "status": "PAID",
+   "paymentStatus": "paid",
+   "allocated": 6050,
+   "paidAt": "2026-10-01",
+   "paidAmount": 6050,
+   "paidReference": null
+  },
+  "PAYMENT_OVER_ALLOCATED",
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  {
+   "status": "PARTIALLY_ALLOCATED",
+   "amount": 20000,
+   "allocated": 17100,
+   "unallocated": 2900,
+   "reversed": 0,
+   "direction": "OUT"
+  },
+  true,
+  {
+   "status": "TO_PAY",
+   "paymentStatus": "partially_paid",
+   "allocated": 5000,
+   "paidAt": null,
+   "paidAmount": null,
+   "paidReference": null
+  },
+  "DOCUMENT_NOT_FOUND"
+ ],
+ "bank: accounts, identity, 1->1, 1->N, N->1, partial, unreconcile, ignore, ceilings, direction, currency, retries": [
+  [
+   9,
+   0,
+   2
+  ],
+  "BANK_CURRENCY_MISMATCH",
+  "BANK_TRANSACTION_INVALID",
+  [
+   [
+    "csv-import",
+    "CSV",
+    "EUR",
+    "ACTIVE"
+   ]
+  ],
+  [
+   false,
+   true,
+   true
+  ],
+  [
+   "RECONCILED",
+   10000,
+   0,
+   0,
+   "MATCHED"
+  ],
+  "IDEMPOTENCY_KEY_REUSED",
+  [
+   "RECONCILED",
+   30000,
+   0,
+   0,
+   "MATCHED"
+  ],
+  [
+   [
+    "RECONCILED",
+    10000,
+    0,
+    0,
+    "MATCHED"
+   ],
+   [
+    "RECONCILED",
+    5000,
+    0,
+    0,
+    "MATCHED"
+   ],
+   [
+    "RECONCILED",
+    15000,
+    0,
+    0,
+    "MATCHED"
+   ]
+  ],
+  "BANK_PAYMENT_OVER_RECONCILED",
+  [
+   "PARTIALLY_RECONCILED",
+   30000,
+   0,
+   20000,
+   "NEW"
+  ],
+  [
+   "RECONCILED",
+   50000,
+   0,
+   0,
+   "MATCHED"
+  ],
+  "BANK_OVER_RECONCILED",
+  "REVERSAL_PAYMENT_RECONCILED",
+  [
+   "PARTIALLY_RECONCILED",
+   6000,
+   0,
+   4000,
+   "NEW"
+  ],
+  "BANK_UNRECONCILE_EXCEEDS",
+  [
+   false,
+   true
+  ],
+  [
+   "PARTIALLY_RECONCILED",
+   6000,
+   0,
+   4000,
+   "NEW"
+  ],
+  [
+   "UNRECONCILED",
+   0,
+   0,
+   10000,
+   "NEW"
+  ],
+  [
+   -6000,
+   -4000,
+   10000
+  ],
+  false,
+  [
+   false,
+   true
+  ],
+  [
+   "IGNORED",
+   0,
+   500,
+   0,
+   "IGNORED"
+  ],
+  "BANK_OVER_RECONCILED",
+  [
+   "UNRECONCILED",
+   0,
+   0,
+   500,
+   "NEW"
+  ],
+  "BANK_DIRECTION_MISMATCH",
+  "BANK_DIRECTION_MISMATCH",
+  "BANK_CURRENCY_MISMATCH",
+  "PAYMENT_EXCEEDS_REMAINING",
+  0,
+  [
+   "UNRECONCILED",
+   0,
+   0,
+   20000,
+   "NEW"
+  ],
+  [
+   false,
+   true,
+   true,
+   "bank",
+   "t6",
+   "IN"
+  ],
+  [
+   "RECONCILED",
+   20000,
+   0,
+   0,
+   "MATCHED"
+  ],
+  1,
+  "IDEMPOTENCY_KEY_REUSED",
+  "BANK_TX_NOT_FOUND",
+  "PAYMENT_NOT_FOUND",
+  0,
+  "BANK_STATUS_IS_DERIVED",
+  "MATCHED"
+ ],
+ "treasury: position, forecast 7/30/90 and risk from real store facts (bank, cash, invoices with partial payments)": [
+  877000,
+  860000,
+  "FRESH",
+  [
+   [
+    "BANK_BALANCE",
+    842000
+   ],
+   [
+    "BANK_LATER_TRANSACTIONS",
+    -12000
+   ],
+   [
+    "CASH_COUNT",
+    35000
+   ],
+   [
+    "CASH_LATER_MOVEMENTS",
+    -5000
+   ]
+  ],
+  [
+   "SAME_DAY_TRANSACTIONS_NOT_COUNTED",
+   "UNRECONCILED_LATER_TRANSACTIONS"
+  ],
+  [
+   [
+    "CUSTOMER_INVOICE:INV1",
+    3190,
+    "2026-10-21",
+    "COMMITTED",
+    true,
+    4000
+   ],
+   [
+    "CUSTOMER_INVOICE:INV2",
+    7190,
+    "2026-10-21",
+    "COMMITTED",
+    true,
+    0
+   ]
+  ],
+  -500000,
+  false,
+  3
+ ],
+ "accountant export: package content from real store facts (invoices, payments, supplier, bank, cash)": [
+  {
+   "sales.csv": 1,
+   "credit-notes.csv": 0,
+   "purchases.csv": 1,
+   "payments.csv": 3,
+   "payment-allocations.csv": 2,
+   "refunds-reversals.csv": 0,
+   "bank-accounts.csv": 1,
+   "bank-transactions.csv": 2,
+   "bank-reconciliations.csv": 1,
+   "cash.csv": 2,
+   "vat-summary.csv": 3,
+   "missing-artifacts.csv": 2
+  },
+  [
+   [
+    "INV-2026-0001",
+    "71.90",
+    "40.00",
+    "31.90",
+    "PARTIALLY_PAID"
+   ]
+  ],
+  [
+   [
+    "121.00",
+    "50.00",
+    "71.00",
+    "PARTIALLY_PAID"
+   ]
+  ],
+  [
+   [
+    "ae-t1",
+    "100.00",
+    "PARTIALLY_RECONCILED",
+    "30.00",
+    "70.00"
+   ],
+   [
+    "ae-t2",
+    "7.00",
+    "UNRECONCILED",
+    "0.00",
+    "7.00"
+   ]
+  ],
+  [
+   [
+    "IN",
+    "30.00",
+    "0.00",
+    "30.00",
+    "30.00"
+   ],
+   [
+    "IN",
+    "40.00",
+    "40.00",
+    "0.00",
+    "0.00"
+   ],
+   [
+    "OUT",
+    "-50.00",
+    "50.00",
+    "0.00",
+    "0.00"
+   ]
+  ],
+  [
+   [
+    "COUNT",
+    "CONFIRMED_COUNT",
+    "350.00"
+   ],
+   [
+    "MOVEMENT",
+    "CASH_IN",
+    "10.00"
+   ]
+  ],
+  [
+   [
+    "PDF_NOT_ARCHIVED_AT_ISSUANCE",
+    1
+   ],
+   [
+    "PURCHASES_WITHOUT_VAT_RATE",
+    1
+   ],
+   [
+    "SOURCE_DOCUMENT_MISSING",
+    1
+   ],
+   [
+    "UNRECONCILED_BANK_TRANSACTIONS",
+    2
+   ]
+  ]
+ ],
+ "legal: artifacts (original per document, immutable classification, VCS), seller versions, Peppol messages (idempotency, compare-and-set, inbound dedup), isolation": [
+  [
+   false,
+   true,
+   true,
+   "FISCAL_DOCUMENT",
+   false
+  ],
+  "ARTIFACT_ORIGINAL_EXISTS_WITH_OTHER_CONTENT",
+  "PAYMENT_REFERENCE_NOT_UNIQUE",
+  "PAYMENT_REFERENCE_INVALID",
+  "ARTIFACT_CLASSIFICATION_INVALID",
+  "PAYMENT_REFERENCE_ONLY_ON_PDF_ORIGINAL",
+  "ARTIFACT_HASH_INVALID",
+  [
+   false,
+   true
+  ],
+  "ARTIFACT_ORIGINAL_EXISTS_WITH_OTHER_CONTENT",
+  [
+   [
+    "PDF_ORIGINAL",
+    "ORIGINAL"
+   ]
+  ],
+  [
+   "STRUCTURED_ORIGINAL"
+  ],
+  "CROSS_MERCHANT_REFERENCE",
+  0,
+  [
+   1,
+   true,
+   2,
+   1
+  ],
+  [
+   1,
+   2
+  ],
+  [
+   false,
+   true,
+   "QUEUED",
+   0
+  ],
+  "PEPPOL_DOCUMENT_CHANGED",
+  "PEPPOL_INVALID_INITIAL_STATE",
+  "CROSS_MERCHANT_REFERENCE",
+  [
+   true,
+   false,
+   1,
+   "SUBMITTING"
+  ],
+  "PEPPOL_INVALID_TRANSITION",
+  "PEPPOL_MESSAGE_NOT_FOUND",
+  [
+   true,
+   "pm-1",
+   "DELIVERED",
+   true
+  ],
+  "PEPPOL_INVALID_TRANSITION",
+  [
+   "VALIDATION_FAILED",
+   "VALIDATION_FAILED",
+   null
+  ],
+  "PEPPOL_INVALID_TRANSITION",
+  [
+   false,
+   true,
+   true,
+   "DUPLICATE",
+   true,
+   true,
+   false,
+   false
+  ],
+  [
+   "DUPLICATE",
+   "DUPLICATE",
+   "RECEIVED",
+   "RECEIVED"
+  ],
+  1,
+  [
+   "TO_REVIEW",
+   "ACCEPTED",
+   true
+  ],
+  "PEPPOL_INVALID_TRANSITION"
+ ]
+}

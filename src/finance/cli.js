@@ -11,7 +11,8 @@ import { join } from 'node:path';
 import { mergeConfig } from '../metrics/config.js';
 import { buildLedger } from '../metrics/ledger.js';
 import { loadDataset } from '../metrics/load.js';
-import { addDays } from '../metrics/windows.js';
+import { localMidnight } from '../metrics/windows.js';
+import { civilDateIn, createMerchantClock } from './civil-date.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
 import { resolveFinanceTenant } from './runtime.js';
 import { buildAccountantPack } from './accountant-pack.js';
@@ -67,14 +68,16 @@ async function boot() {
   let cache = null;
   const loadRetail = async (sinceDate) => {
     if (cache) return cache;
-    const since = new Date(`${sinceDate ?? addDays(new Date().toISOString().slice(0, 10), -400)}T00:00:00Z`);
+    // Lower bound of the load: the start of the merchant's first day (local midnight), else an instant 400 days back (a technical look-back, not a business date).
+    const since = sinceDate ? localMidnight(sinceDate, timeZone) : new Date(Date.now() - 400 * 86_400_000);
     const data = await loadDataset(supabase, merchant.id, { since });
     cache = { data, ledger: buildLedger(data, { config: retailConfig }) };
     return cache;
   };
   const config = { merchantId: merchant.id, seller: local.seller, vat: local.vat, defaults: local.defaults, numbering: local.numbering, linking: local.linking };
-  const svc = createFinanceService({ store, config, ledgerProvider: async () => (await loadRetail()).ledger });
-  return { local, store, svc, config, retailConfig, timeZone, loadRetail, merchant };
+  const clock = createMerchantClock({ timeZone });
+  const svc = createFinanceService({ store, config, clock, ledgerProvider: async () => (await loadRetail()).ledger });
+  return { local, store, svc, config, retailConfig, timeZone, clock, loadRetail, merchant };
 }
 
 async function main() {
@@ -115,7 +118,7 @@ async function main() {
     const days = Number(flag('days') ?? 30);
     const cutoff = Date.now() - days * 86400000;
     const totals = orderTotalsFromLedger(ledger);
-    return out([...totals.values()].filter((t) => t.at.getTime() >= cutoff).sort((a, b) => b.at - a.at).map((t) => ({ sourceOrderId: t.orderId, date: t.at.toISOString().slice(0, 10), total_incl_tax: formatCents(t.grossCents), refunded: formatCents(t.refundedCents) })));
+    return out([...totals.values()].filter((t) => t.at.getTime() >= cutoff).sort((a, b) => b.at - a.at).map((t) => ({ sourceOrderId: t.orderId, date: civilDateIn(t.at, ctx.timeZone), total_incl_tax: formatCents(t.grossCents), refunded: formatCents(t.refundedCents) })));
   }
 
   if (cmd === 'doc') {
@@ -174,7 +177,7 @@ async function main() {
   }
 
   if (cmd === 'receivables') {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = ctx.clock.today();
     return out(buildReceivables(await loadDocsForReports(store, ctx.merchant.id), { today }));
   }
 
@@ -182,7 +185,7 @@ async function main() {
     const period = { start: flag('from'), end: flag('to') };
     const { data, ledger } = await ctx.loadRetail(period.start);
     const docs = await loadDocsForReports(store, ctx.merchant.id);
-    const pack = buildAccountantPack({ ledger, rawOrders: data.orders, docs, period, timeZone: ctx.timeZone, now: new Date(), config: { ...ctx.retailConfig, finance: { linking: local.linking } }, today: new Date().toISOString().slice(0, 10), retailHistory: await readCoverage() });
+    const pack = buildAccountantPack({ ledger, rawOrders: data.orders, docs, period, timeZone: ctx.timeZone, now: new Date(), config: { ...ctx.retailConfig, finance: { linking: local.linking } }, today: ctx.clock.today(), retailHistory: await readCoverage() });
     const files = await writePackFiles(pack, OUT_DIR, { delimiter: typeof flag('delimiter') === 'string' ? flag('delimiter') : ',', branding: local.branding ?? {}, merchantName: local.seller?.name ?? '' });
     return out({ completeness: pack.completeness, reconciliation: pack.reconciliation, totals: Object.fromEntries(Object.entries(pack.totals).map(([k, v]) => [k, formatCents(v)])), anomalies: pack.anomalies.length, files: files.map((f) => join(OUT_DIR, f)) });
   }

@@ -1,0 +1,18 @@
+{
+  "note": "Field comparison test set (LAB). The owner speaks each line NATURALLY, as to a supplier (no pronunciation tuning for the recogniser). `expect` is what a perfect pipeline would understand; it is used by the evaluator only, never shown as a hint to the engines. Accent: the owner's own (REAL SPEAKER). Chinese-accented English: UNKNOWN (not tested). Mandarin: not supported / not tested.",
+  "prompts": [
+    { "id": "N1", "cat": "NORMAL", "say": "The minimum order quantity is one hundred pieces.", "expect": { "moq": "100" } },
+    { "id": "N2", "cat": "NORMAL", "say": "For five hundred pieces the price is six dollars.", "expect": { "tiers": [{ "minQty": "500", "unitPrice": "6" }] } },
+    { "id": "N3", "cat": "NORMAL", "say": "We have black, white, blue and pink.", "expect": { "colours": ["black", "white", "blue", "pink"] } },
+    { "id": "R1", "cat": "REFERENCE", "say": "RB nine eighty H B", "expect": { "identifier": "RB-980HB" } },
+    { "id": "R2", "cat": "REFERENCE", "say": "RB nine eight zero H B", "expect": { "identifier": "RB-980HB" } },
+    { "id": "R3", "cat": "REFERENCE", "say": "R B nine eight zero H B", "expect": { "identifier": "RB-980HB" } },
+    { "id": "R4", "cat": "REFERENCE", "say": "ZF zero twenty four", "expect": { "identifier": "ZF-024" } },
+    { "id": "R5", "cat": "REFERENCE", "say": "ZF zero four one", "expect": { "identifier": "ZF-041" } },
+    { "id": "R6", "cat": "REFERENCE", "say": "eight seven five five C", "expect": { "identifier": "8755C" } },
+    { "id": "R7", "cat": "REFERENCE", "say": "eight seven zero nine C", "expect": { "identifier": "8709C" } },
+    { "id": "M1", "cat": "MIXED", "say": "The model is RB nine eighty H B and the MOQ is one hundred pieces.", "expect": { "identifier": "RB-980HB", "moq": "100" } },
+    { "id": "M2", "cat": "MIXED", "say": "The reference is ZF zero twenty four and we have four colors.", "expect": { "identifier": "ZF-024", "colourCount": "4" } },
+    { "id": "C1", "cat": "CONTINUOUS", "say": null, "seconds": [30, 60], "topics": ["le modèle et sa référence", "le MOQ", "les prix par quantité", "les couleurs", "le délai de production", "le paiement (acompte / solde)", "l'emballage ou le logo"], "expect": {} }
+  ]
+}

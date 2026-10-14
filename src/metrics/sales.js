@@ -99,14 +99,39 @@ export function aggregate(lineFacts, refundFacts, config) {
   };
 }
 
+// Level 1 serving optimization (Analyses Phase 0 benchmark). windowFacts keeps its exact contract - the elements whose instant is in the half-open
+// window [start, end), in their ORIGINAL order - but no longer rescans every array for every window: each array is indexed ONCE by time (sorted
+// instants + original positions, kept in a WeakMap and rebuilt if the array length changes) and a window is a binary-searched slice.
+const timeIndexes = new WeakMap();
+const instantMs = (x) => (x instanceof Date ? x.getTime() : new Date(x).getTime());
+function timeIndex(items, timeOf) {
+  const cached = timeIndexes.get(items);
+  if (cached && cached.length === items.length) return cached;
+  const entries = [];
+  for (let i = 0; i < items.length; i += 1) { const t = instantMs(timeOf(items[i])); if (!Number.isNaN(t)) entries.push([t, i]); }
+  entries.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const built = { length: items.length, times: Float64Array.from(entries, (e) => e[0]), positions: Int32Array.from(entries, (e) => e[1]) };
+  timeIndexes.set(items, built);
+  return built;
+}
+const firstAtOrAfter = (times, t) => { let lo = 0; let hi = times.length; while (lo < hi) { const mid = (lo + hi) >>> 1; if (times[mid] < t) lo = mid + 1; else hi = mid; } return lo; };
+function within(items, timeOf, window) {
+  if (!items.length) return [];
+  const { times, positions } = timeIndex(items, timeOf);
+  const lo = firstAtOrAfter(times, window.start.getTime()); const hi = firstAtOrAfter(times, window.end.getTime());
+  if (hi <= lo) return [];
+  const picked = Array.from(positions.subarray(lo, hi)).sort((a, b) => a - b); // back to the original order
+  return picked.map((i) => items[i]);
+}
+
 export function windowFacts(ledger, window) {
   return {
-    shipping: (ledger.shippingFacts ?? []).filter((x) => inWindow(x.orderedAt, window)),
-    shippingRefunds: (ledger.shippingRefundFacts ?? []).filter((x) => inWindow(x.refundedAt, window)),
-    orders: ledger.orders.filter((o) => inWindow(o.orderedAt, window)),
-    lines: ledger.lineFacts.filter((l) => inWindow(l.orderedAt, window)),
-    refunds: ledger.refundFacts.filter((r) => inWindow(r.refundedAt, window)),
-    refundTotals: ledger.refundTotals.filter((r) => inWindow(r.refundedAt, window)),
+    shipping: within(ledger.shippingFacts ?? [], (x) => x.orderedAt, window),
+    shippingRefunds: within(ledger.shippingRefundFacts ?? [], (x) => x.refundedAt, window),
+    orders: within(ledger.orders, (o) => o.orderedAt, window),
+    lines: within(ledger.lineFacts, (l) => l.orderedAt, window),
+    refunds: within(ledger.refundFacts, (r) => r.refundedAt, window),
+    refundTotals: within(ledger.refundTotals, (r) => r.refundedAt, window),
   };
 }
 

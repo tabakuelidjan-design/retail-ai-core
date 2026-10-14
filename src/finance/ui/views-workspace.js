@@ -78,7 +78,7 @@ const dueNote = (it, acknowledge) => {
   if (conflictShown) {
     const ok = cf.state === 'ACKNOWLEDGED';
     rows.push(h('div', { class: `banner ${ok ? 'ok' : 'warn'} small due-conflict`, style: 'margin:8px 0' }, h('div', null, tt('Printed due date: {0}', cf.printed)), h('div', null, tt('Due date given by the payment terms: {0}', cf.computed)),
-      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', String(cf.acknowledgedAt || '').slice(0, 10)))
+      ok ? h('div', { class: 'muted' }, tt('Difference acknowledged on {0}', cf.acknowledgedAt ? civilDateIn(cf.acknowledgedAt, state.timeZone) : ''))
         : h('div', null, h('div', { style: 'margin:6px 0' }, tt('The printed date stays the due date. You must acknowledge the difference before validating.')), acknowledge ? h('button', { type: 'button', class: 'tool due-ack', style: 'height:auto;min-height:34px;padding:6px 11px;white-space:normal;text-align:left', on: { click: acknowledge } }, tt('Acknowledge the difference')) : null)));
   }
   if (d.divergence && !conflictShown) rows.push(h('div', { class: 'banner info small', style: 'margin:8px 0' }, tt('The printed due date differs from the one the payment terms give ({0}) by {1} day(s): check which one applies.', d.divergence.computed, Math.abs(d.divergence.days))));
@@ -286,7 +286,7 @@ function renderInboxDetail(host, id, opts = {}) {
       act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
     } else if (it.status === 'VALIDATED') { if (it.documentType !== 'CREDIT_NOTE') act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
     else if (it.status === 'TO_PAY') {
-      act.appendChild(h('button', { class: 'primary', on: { click: () => { const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Amount: {0} {1}', fmtMoney(it.grossCents, it.currency), '')), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: centsToInput(it.grossCents), reference: ref.value || undefined }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
+      act.appendChild(h('button', { class: 'primary', on: { click: () => { const idem = (globalThis.crypto?.randomUUID?.() ?? ('sp-' + Date.now() + '-' + Math.random().toString(36).slice(2))); const amt = h('input', { inputmode: 'decimal', value: centsToInput(it.remainingCents ?? it.grossCents) }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Still to pay: {0} {1}', fmtMoney(it.remainingCents ?? it.grossCents, it.currency), '')), h('div', { class: 'field' }, h('label', null, tt('Amount')), amt), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: amt.value, reference: ref.value || undefined, idempotencyKey: idem }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
       act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction')));
     } else if (it.status === 'PAID') act.appendChild(h('span', { class: 'muted' }, tt('Paid on {0}', it.paidAt || '')));
     body.appendChild(act);
@@ -352,7 +352,7 @@ const SALES_TYPE_OF = { invoices: 'invoice', quotes: 'quote', credit_notes: 'cre
 /** from/to (YYYY-MM-DD) for a named period, computed client-side purely to build query params - the server
  * remains the only authority on which documents actually fall in that range. */
 function periodRange(kind, custom) {
-  const now = new Date(); const y = now.getFullYear(); const m = now.getMonth();
+  const today = civilToday(state.timeZone); const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7)) - 1; // the merchant's month, not the browser's
   const iso = (d) => d.toISOString().slice(0, 10);
   const first = (yy, mm) => new Date(Date.UTC(yy, mm, 1));
   const last = (yy, mm) => new Date(Date.UTC(yy, mm + 1, 0));
@@ -685,6 +685,7 @@ async function viewInbox() {
   // sources
   const st = await api('GET', '/api/inbox/status');
   const SRC = { upload: 'File upload', email: 'Dedicated finance mailbox', peppol: 'Peppol invoices received' };
+  await peppolInboundCard(box);
   box.appendChild(h('div', { class: 'sources' }, st.adapters.map((a) => h('div', { class: `source ${a.configured ? 'on' : ''}` }, h('span', { class: 'dot2' }), h('span', null, tt(SRC[a.name] || a.name)), h('span', { class: 'chip mute' }, tt(a.configured ? 'Active' : 'NOT CONFIGURED'))))));
   // drop zone
   const input = h('input', { type: 'file', accept: '.pdf,.png,.jpg,.jpeg,.xml', multiple: true, style: 'display:none' });
@@ -803,16 +804,50 @@ function stockMovementsCard(d) {
 }
 function peppolCard(d, reload) {
   if (!d.peppol || !['invoice', 'credit_note'].includes(d.type) || !d.doc.lockedAt) return null;
-  const p = d.peppol; const STAT = { NOT_CONFIGURED: 'NOT CONFIGURED', NOT_SENT: 'Not sent', SENT: 'Sent', DELIVERED: 'Delivered', REJECTED: 'Rejected', FAILED: 'Failed', PREPARED: 'Prepared' };
-  const steps = ['NOT_SENT', 'SENT', 'DELIVERED']; const idx = Math.max(0, steps.indexOf(p.status === 'NOT_CONFIGURED' ? 'NOT_SENT' : p.status));
-  const bad = p.status === 'REJECTED' || p.status === 'FAILED';
+  // The labels say what is TRUE: "accepted by the provider" is not "delivered". Nothing here ever says "Sent" for a message that is only submitted.
+  const p = d.peppol; const STAT = { NOT_CONFIGURED: 'NOT CONFIGURED', NOT_SENT: 'Not sent', QUEUED: 'Queued', SUBMITTING: 'Sending...', SUBMITTED: 'Accepted by the Peppol provider (not yet delivered)', DELIVERED: 'Delivered', VALIDATION_FAILED: 'Invalid structured invoice: not sent', SUBMISSION_FAILED: 'Sending failed', DELIVERY_FAILED: 'Delivery failed' };
+  const STEP = { NOT_SENT: 'Not sent', QUEUED: 'Queued', SUBMITTED: 'Accepted by the provider', DELIVERED: 'Delivered' };
+  const steps = ['QUEUED', 'SUBMITTED', 'DELIVERED']; const at = p.status === 'SUBMITTING' ? 0 : steps.indexOf(p.status); const bad = ['VALIDATION_FAILED', 'SUBMISSION_FAILED', 'DELIVERY_FAILED'].includes(p.status);
+  const compliance = h('div', { class: 'compliance', style: 'margin-top:10px' });
+  loadCompliance(d, compliance, reload);
   return h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, 'Peppol'), h('span', { class: `chip ${p.status === 'DELIVERED' ? 'ok' : bad ? 'bad' : 'mute'}` }, tt(STAT[p.status] || p.status))),
-    h('ol', { class: 'stepper mini' }, steps.map((k, i) => h('li', { class: i < idx || (i === idx && p.status === 'DELIVERED') ? 'done' : i === idx ? 'current' : '' }, h('span', { class: 'sdot' }, String(i + 1)), h('span', null, tt(STAT[k]))))),
-    bad ? h('div', { class: 'banner warn small' }, tt('The Access Point reported a problem: {0}', p.detail || p.status)) : null,
+    h('ol', { class: 'stepper mini' }, steps.map((k, i) => h('li', { class: i < at || (i === at && p.status === 'DELIVERED') ? 'done' : i === at ? 'current' : '' }, h('span', { class: 'sdot' }, String(i + 1)), h('span', null, tt(STEP[k]))))),
+    bad ? h('div', { class: 'banner warn small' }, tt('The Peppol provider reported a problem: {0}', p.detail || p.status)) : null,
     p.note ? h('p', { class: 'muted small' }, tt(p.note)) : null,
     !p.topologyConfirmed && p.configured ? h('p', { class: 'muted small' }, tt('Confirm the Peppol topology in Settings before sending.')) : null,
-    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted, on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol Access Point. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast('Sent via Peppol', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
+    compliance,
+    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
       p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
+}
+// Belgian compliance of an issued document: the route decision (with its reason), the payment reference, the archived originals (exact bytes, hash) and the official validation result.
+const ROUTE_TEXT = { PEPPOL_REQUIRED: 'Structured invoice required (Peppol)', PEPPOL_PREFERRED: 'Peppol possible (voluntary)', B2G_STRUCTURED: 'Public authority: structured invoice', NON_STRUCTURED_ALLOWED: 'No structured invoice required', ALTERNATIVE_EN16931_AGREED: 'Alternative format agreed with the customer', MANUAL_REVIEW_REQUIRED: 'To review: facts are missing', COMPLIANCE_BLOCKED: 'Blocked: facts are missing' };
+const ARCHIVE_TEXT = { ORIGINAL: 'Original archived', REGENERATED: 'Regenerated copy (not the original)' };
+function loadCompliance(d, box, reload) {
+  api('GET', `/api/documents/${d.id}/compliance`).then((c) => {
+    clear(box); const kv = (k, v) => h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v));
+    if (c.routing) box.appendChild(kv(tt('Invoicing route'), tt(ROUTE_TEXT[c.routing.route] || c.routing.route)));
+    if (c.paymentReference) box.appendChild(kv(tt('Payment reference'), (() => { const x = c.paymentReference; return `+++${x.slice(0, 3)}/${x.slice(3, 7)}/${x.slice(7)}+++`; })()));
+    if (c.pdf) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('PDF')), h('span', null, h('span', { class: `chip ${c.pdf.classification === 'ORIGINAL' ? 'ok' : 'warn'}` }, tt(ARCHIVE_TEXT[c.pdf.classification])), ' ', h('a', { href: `/api/documents/${d.id}/original-pdf` }, tt('Download')))));
+    if (c.structured) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('Structured invoice')), h('span', null, h('span', { class: 'chip ok' }, tt('Original archived')), ' ', h('span', { class: 'muted small' }, c.structured.fileName), ' ', h('a', { href: `/api/documents/${d.id}/structured-original` }, tt('Download')))));
+    if (c.validation && c.validation.ok === false) box.appendChild(h('div', { class: 'banner warn small' }, h('strong', null, tt('The structured invoice did not pass the official checks')), h('ul', { class: 'plain' }, (c.validation.findings || c.validation.errors || []).slice(0, 5).map((f) => h('li', null, typeof f === 'string' ? f : `${f.ruleId}: ${f.message}`)))));
+    if (!c.archived) box.appendChild(h('div', { class: 'actions' }, h('span', { class: 'muted small' }, tt('No original is archived for this document.')), h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/archive`, {}); toast(tt('Archived (regenerated copy)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Archive now'))));
+  }).catch(() => {});
+}
+// Invoices received through Peppol: archived original, validation, duplicate status, review state. Receiving never validates anything: a person accepts or rejects.
+async function peppolInboundCard(box) {
+  let r; try { r = await api('GET', '/api/peppol/inbound'); } catch (e) { return; }
+  if (!r.rows.length) return;
+  const STATE = { RECEIVED: 'Received', TO_REVIEW: 'To review', ACCEPTED: 'Accepted', REJECTED: 'Rejected', VALIDATION_FAILED: 'Failed the official checks', DUPLICATE: 'Duplicate (ignored)' };
+  const card = h('div', { class: 'card', style: 'margin-top:14px;padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Invoices received through Peppol')));
+  const reload = () => { const parent = card.parentNode; peppolInboundCard(parent).then(() => card.remove()); };
+  r.rows.forEach((m) => card.appendChild(h('div', { class: 'kv', style: 'flex-wrap:wrap;gap:8px' },
+    h('span', null, [m.supplier || m.sender || '—', m.number, m.date].filter(Boolean).join(' · ')), h('strong', null, m.grossCents == null ? '' : fmtMoney(m.grossCents, m.currency)),
+    h('span', { class: `chip ${m.state === 'ACCEPTED' ? 'ok' : ['VALIDATION_FAILED', 'REJECTED'].includes(m.state) ? 'bad' : 'warn'}` }, tt(STATE[m.state] || m.state)),
+    m.state === 'VALIDATION_FAILED' && m.validation ? h('span', { class: 'muted small' }, (m.validation.findings || []).slice(0, 2).map((f) => f.ruleId).join(', ')) : null,
+    m.state === 'TO_REVIEW' ? h('span', { class: 'actions' }, h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/accept`, {}); toast(tt('Accepted'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Accept')),
+      h('button', { on: { click: () => { const reason = h('input', { placeholder: tr('Reason') }); modal(tt('Reject'), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason), (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/reject`, { reason: reason.value.trim() }); close(); reload(); } catch (e) { fail(e); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject'))) : null,
+    m.state === 'VALIDATION_FAILED' ? h('button', { on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/review`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Send to review anyway')) : null)));
+  box.appendChild(card);
 }
 
 // ---------- Bank & Treasury (strictly READ ONLY: balances and transactions only, never a payment or transfer) ----------
@@ -832,6 +867,18 @@ function treasuryCard(t) {
 // POST /api/bank/transactions/:id/confirm|ignore calls used before, now feeding the ledger's detail pane
 // instead of a flat inline row.
 const TX_STATUS_TEXT = { NEW: 'Unresolved', MATCHED: 'Justified', IGNORED: 'Ignored' };
+// The reconciliation state is DERIVED server-side from the reconciliation rows (never typed in): these are only its labels.
+const RECON_TEXT = { UNRECONCILED: 'Unreconciled', PARTIALLY_RECONCILED: 'Partially reconciled', RECONCILED: 'Reconciled', IGNORED: 'Set aside' };
+const FRESHNESS_TEXT = { FRESH: 'Up to date', STALE: 'Outdated', UNKNOWN: 'Unknown date' };
+const reconText = (t) => tt(RECON_TEXT[t.reconciliationStatus] || TX_STATUS_TEXT[t.status] || t.status);
+const fromCents = (c) => (c / 100).toFixed(2);
+/** One reason, one explicit action, one request (idempotent: a double click replays the same key). */
+function reasonModal(title, intro, { withAmount = null, needReason = true }, send) {
+  const key = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `k-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const reason = h('input', { placeholder: tr('Reason') }); const amount = withAmount == null ? null : h('input', { inputmode: 'decimal', value: fromCents(withAmount) });
+  modal(title, h('div', { style: 'display:grid;gap:10px' }, h('p', { class: 'muted small' }, intro), amount ? h('div', { class: 'field' }, h('label', null, tt('Amount')), amount) : null, needReason ? h('div', { class: 'field' }, h('label', null, tt('Reason')), reason) : null),
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await send({ key, reason: reason.value.trim(), amount: amount ? amount.value.trim() : null }); close(); } catch (e) { fail(e); } } } }, title), h('button', { on: { click: close } }, tt('Cancel'))]);
+}
 const MATCH_STATUS_TONE = { EXACT: 'ok', PROBABLE: 'ok', PARTIAL: 'warn', OVERPAYMENT: 'warn', AMBIGUOUS: 'warn', NO_MATCH: 'mute' };
 const MATCH_STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PARTIAL: 'Partial payment', OVERPAYMENT: 'Overpayment', AMBIGUOUS: 'Several candidates', NO_MATCH: 'No match' };
 function matchActions(s, reload) {
@@ -848,6 +895,22 @@ function matchActions(s, reload) {
   // choice would promise something it does not do.
   acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
   return acts;
+}
+/** Reconciliation panel of one transaction: derived amounts, the linked payments (with Unreconcile), and the two explicit commands. A suggestion never reconciles. */
+function reconBlock(t, reload) {
+  const box = h('div', { class: 'block' }, h('h3', null, tt('Reconciliation')),
+    h('div', { class: 'kv' }, h('span', null, tt('Reconciled amount')), h('strong', null, fmtMoney(t.reconciledCents || 0, t.currency))),
+    h('div', { class: 'kv' }, h('span', null, tt('Remaining to reconcile')), h('strong', null, fmtMoney(t.remainingCents ?? Math.abs(t.amountCents), t.currency))));
+  const list = h('div', { class: 'recon-list' }); box.appendChild(list);
+  api('GET', `/api/bank/transactions/${t.id}`).then((r) => {
+    const recs = r.transaction.reconciliations || []; const left = (x) => x.amountCents + recs.filter((y) => y.reversesId === x.id).reduce((a, y) => a + y.amountCents, 0);
+    recs.filter((x) => x.amountCents > 0 && left(x) > 0).forEach((x) => list.appendChild(h('div', { class: 'kv' }, h('span', null, x.kind === 'IGNORE' ? tt('Set aside on purpose') : tt('Reconciled with a payment')), h('strong', null, fmtMoney(left(x), t.currency)),
+      h('button', { class: 'small', on: { click: () => reasonModal(tt('Unreconcile'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { if (!v.reason) throw Object.assign(new Error('REQUIRED'), { code: 'REQUIRED' }); await api('POST', `/api/bank/transactions/${t.id}/unreconcile`, { reconciliationIds: [x.id], reason: v.reason, idempotencyKey: v.key }); toast(tt('Reconciliation cancelled.'), 'ok'); reload(); }) } }, tt('Unreconcile')))));
+  }).catch(() => {});
+  if ((t.remainingCents ?? 0) > 0) box.appendChild(h('div', { class: 'actions' },
+    h('button', { class: 'primary', on: { click: () => reasonModal(tt('Record the payment and reconcile'), tt('The payment is created and linked in one step. Nothing is allocated to an invoice here.'), { withAmount: t.remainingCents, needReason: false }, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/reconcile`, { create: { amount: v.amount, allocations: [] }, idempotencyKey: v.key }); toast(tt('Reconciled.'), 'ok'); reload(); }) } }, tt('Reconcile')),
+    h('button', { on: { click: () => reasonModal(tt('Set aside'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/ignore`, { reason: v.reason || undefined, idempotencyKey: v.key }); toast(tt('Set aside.'), 'ok'); reload(); }) } }, tt('Set aside'))));
+  return box;
 }
 /** "Connect a bank": always opens a real workflow - the automatic connection when a provider is configured, the CSV statement import otherwise. Never simulates a connection. */
 function openBankConnectModal(st, getCsvImporter) {
@@ -981,7 +1044,7 @@ async function viewBank() {
     const connCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, 'Bank connection'), h('span', { class: `chip ${st.state === 'ACTIVE' ? 'ok' : 'mute'}` }, tt(BANK_STATUS_TEXT[st.state] || st.state))));
     connCard.appendChild(h('div', { class: 'banner info small' }, tt('Read-only access only. This connection can never initiate a payment, a transfer or change a beneficiary.')));
     if (st.state === 'ACTIVE') {
-      connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, String(st.grantedAt).slice(0, 10))));
+      connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, (st.grantedAt ? civilDateIn(st.grantedAt, state.timeZone) : ''))));
       connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' },
         h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
         h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
@@ -992,13 +1055,20 @@ async function viewBank() {
     }
     box.appendChild(connCard);
     const cashCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
-    const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
+    const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
     cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
       h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
     box.appendChild(cashCard);
     // Real transaction ledger (index(4).html alignment) - shown regardless of a live bank connection (a CSV
     // import needs no connection at all, and its transactions still need reconciling). Replaces the previous
     // flat "suggestions only" list: every real transaction is browsable here, not only the unresolved ones.
+    const accountsCard = h('div', { class: 'card', style: 'padding:16px 18px;display:none' }); box.appendChild(accountsCard);
+    api('GET', '/api/bank/accounts').then((r) => { if (!r.rows.length) return; accountsCard.style.display = ''; accountsCard.appendChild(h('h2', { class: 'section-title' }, tt('Bank accounts')));
+      r.rows.forEach((a) => accountsCard.appendChild(h('div', { class: 'kv', style: 'flex-wrap:wrap;gap:6px' }, h('span', null, `${a.displayName || a.externalId}${a.ibanMasked ? ' · ' + a.ibanMasked : ''}`),
+        h('strong', null, a.balance ? fmtMoney(a.balance.amountCents, a.balance.currency) : tt('No balance observed')),
+        a.balance ? h('span', { class: `chip ${a.balance.freshness === 'FRESH' ? 'ok' : 'warn'}` }, `${tt('Balance observed {0}', a.balance.observedAt ? civilDateIn(a.balance.observedAt, state.timeZone) : tt('Unknown date'))} · ${tt(FRESHNESS_TEXT[a.balance.freshness])}`) : null,
+        a.toReconcile ? h('span', { class: 'muted small' }, tt('{0} to reconcile', a.toReconcile)) : null)));
+    }).catch(() => {});
     const ledgerCard = h('div', { class: 'card workspace-card' });
     box.appendChild(ledgerCard);
     let ledgerTab = 'to_justify'; let ledgerText = ''; let selectedTxId = null; let periodFrom = null; let periodTo = null;
@@ -1016,7 +1086,7 @@ async function viewBank() {
       if (kind === 'to_justify') return allTx.filter((t) => suggestionsById.has(t.id));
       if (kind === 'in') return allTx.filter((t) => t.amountCents >= 0);
       if (kind === 'out') return allTx.filter((t) => t.amountCents < 0);
-      if (kind === 'matched') return allTx.filter((t) => t.status === 'MATCHED');
+      if (kind === 'matched') return allTx.filter((t) => t.reconciliationStatus === 'RECONCILED');
       return allTx;
     }
     function drawLedgerTabs() {
@@ -1031,12 +1101,13 @@ async function viewBank() {
       txDetail.appendChild(h('div', { class: 'detail-head' }, h('div', null, h('h2', null, fmtMoney(t.amountCents, t.currency)), h('p', null, `${t.source ? tt(SOURCE_BADGE[t.source] || t.source) + ' · ' : ''}${t.date}`), h('p', null, t.counterpartyName || tt('Unknown')))));
       txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Details')),
         h('div', { class: 'kv' }, h('span', null, tt('Reference')), h('strong', null, t.reference || t.structuredReference || '—')),
-        h('div', { class: 'kv' }, h('span', null, tt('Status')), h('strong', null, tt(TX_STATUS_TEXT[t.status] || t.status)))));
+        h('div', { class: 'kv' }, h('span', null, tt('Status')), h('strong', null, reconText(t)))));
+      txDetail.appendChild(reconBlock(t, () => draw()));
       if (sug) {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')),
           h('div', { class: 'muted small', style: 'margin-bottom:8px' }, h('span', { class: `chip ${MATCH_STATUS_TONE[sug.status] || 'mute'}` }, tt(MATCH_STATUS_TEXT[sug.status] || sug.status))),
           matchActions(sug, () => draw())));
-      } else if (t.status === 'MATCHED') {
+      } else if (t.reconciliationStatus === 'RECONCILED') {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('This transaction is already justified.'))));
       } else {
         txDetail.appendChild(h('div', { class: 'block' }, h('h3', null, tt('Suggestion')), h('div', { class: 'muted small' }, tt('No match suggestion is available for this transaction yet.'))));
@@ -1054,7 +1125,7 @@ async function viewBank() {
       rows.forEach((t) => {
         if (t.date !== lastDay) { txList.appendChild(h('div', { class: 'day' }, t.date)); lastDay = t.date; }
         txList.appendChild(h('div', { class: `tx ${t.id === selectedTxId ? 'selected' : ''}`, on: { click: () => selectTx(t.id) } },
-          h('div', null, h('strong', null, t.counterpartyName || tt('Unknown')), h('small', null, [t.reference, suggestionsById.has(t.id) ? tt('To justify') : tt(TX_STATUS_TEXT[t.status] || t.status)].filter(Boolean).join(' · '))),
+          h('div', null, h('strong', null, t.counterpartyName || tt('Unknown')), h('small', null, [t.reference, suggestionsById.has(t.id) ? tt('To justify') : (t.reconciliationStatus === 'PARTIALLY_RECONCILED' ? `${reconText(t)} · ${tt('Remaining')} ${fmtMoney(t.remainingCents, t.currency)}` : reconText(t))].filter(Boolean).join(' · '))),
           h('div', { class: `amount ${t.amountCents >= 0 ? 'in' : ''}` }, `${t.amountCents >= 0 ? '+ ' : ''}${fmtMoney(t.amountCents, t.currency)}`)));
       });
     }
@@ -1078,64 +1149,99 @@ async function viewBank() {
   draw();
 }
 
+// ---------- Treasury V1: ONE derived read model (observed -> calculated -> forecast -> scenario). The page only displays what /api/treasury/* computed: it never recomputes a figure. ----------
+const T_CERTAINTY = { COMMITTED: 'Committed', EXPECTED: 'Expected', SCENARIO: 'Scenario' };
+const T_TREATMENT = { DUE_ON_DATE: '', OVERDUE_RECEIVABLE_NOT_IN_PROJECTION: 'Overdue receivable (not in the projection)', OVERDUE_PAYABLE_ASSUMED_PAID_TODAY: 'Overdue payable (counted today)', NO_DUE_DATE_NOT_IN_FORECAST: 'No due date (not in the forecast)', SCENARIO_HYPOTHESIS: 'Scenario hypothesis', OVERDUE_RECEIVABLE_COLLECTED_IN_SCENARIO: 'Overdue receivable collected in the scenario' };
+const T_SOURCE = { CUSTOMER_INVOICE: 'Customer invoice', SUPPLIER_INVOICE: 'Supplier invoice', MANUAL_SCENARIO: 'Scenario hypothesis', BANK: 'Bank', CASH: 'Cash' };
+const tchip = (kind, text) => h('span', { class: 'chip t-' + kind.toLowerCase() + ' ' + (kind === 'OBSERVED' ? 'ok' : kind === 'CALCULATED' ? 'mute' : kind === 'SCENARIO' ? 'warn' : '') }, text);
+const centsOfInput = (v) => { const n = Number(String(v).trim().replace(',', '.')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+function explainModal(id) {
+  api('GET', '/api/treasury/explain?id=' + encodeURIComponent(id)).then((x) => {
+    const ev = x.evidence; const cur = x.currency;
+    const rows = [[tt('Source'), tt(T_SOURCE[x.source.type] || x.source.type) + (x.source.label ? ' ' + x.source.label : '')], [tt('Counterparty'), x.source.counterparty || '—'], [tt('Due date'), x.dueDate || '—'], [tt('Amount'), fmtMoney(x.direction === 'OUT' ? -x.amountCents : x.amountCents, cur)]];
+    if (ev) { if (ev.grossCents != null) rows.push([tt('Document total'), fmtMoney(ev.grossCents, cur)]); if (ev.creditedCents) rows.push([tt('Credited'), fmtMoney(ev.creditedCents, cur)]); if (ev.paidCents) rows.push([tt('Already paid'), fmtMoney(ev.paidCents, cur)]); rows.push([tt('Remaining due'), fmtMoney(ev.remainingCents, cur)]); }
+    if (x.certainty) rows.push([tt('Certainty'), tt(T_CERTAINTY[x.certainty])]); if (T_TREATMENT[x.treatment]) rows.push([tt('Treatment'), tt(T_TREATMENT[x.treatment]) + (x.overdueDays ? ' · ' + tt('{0} day(s) overdue', x.overdueDays) : '')]);
+    modal(tt('Why this figure?'), h('div', { style: 'display:grid;gap:6px' }, rows.map(([k, v]) => h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v)))), (close) => [h('button', { on: { click: close } }, tt('Close'))]);
+  }).catch((e) => fail(e));
+}
+async function drawTreasuryV1(root) {
+  clear(root); root.appendChild(h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })));
+  let f; try { f = await api('GET', '/api/treasury/forecast'); } catch (e) { return fail(e, root); }
+  clear(root);
+  const warn = (w) => ({ STALE_BANK_BALANCE: 'Starting position is not fresh: the figures below rely on an old balance.', STARTING_POSITION_NOT_FRESH: null, STALE_CASH_COUNT: 'The last cash count is old.', NO_OBSERVED_CASH: 'No bank balance or cash count: there is no starting position, only flows.', ACCOUNT_WITHOUT_BALANCE: 'A bank account has no observed balance.', SAME_DAY_TRANSACTIONS_NOT_COUNTED: 'Transactions dated the day of the balance are not added (they may already be in it).', UNRECONCILED_LATER_TRANSACTIONS: 'Some recent bank transactions are not reconciled: a matching invoice may still look open.', CURRENCIES_NOT_CONSOLIDATED: 'Currencies are shown separately: no exchange rate is applied.', BANK_BALANCE_TIME_UNKNOWN: 'A bank balance has no observation time.' })[w.code];
+  const seen = new Set(); const notes = f.warnings.map((w) => warn(w)).filter((x) => x && !seen.has(x) && seen.add(x));
+  if (notes.length) root.appendChild(h('div', { class: 'banner warn small' }, notes.map((n) => h('div', null, tt(n)))));
+  const multi = f.currencies.length > 1;
+  f.currencies.forEach((cur) => {
+    const p = f.position[cur]; const fc = f.forecast[cur]; const sec = h('div', { class: 'card', style: 'padding:16px 18px;display:grid;gap:12px' }); root.appendChild(sec);
+    if (multi) sec.appendChild(h('h2', { class: 'section-title' }, cur));
+    const total = p?.calculated.totalCents ?? null;
+    sec.appendChild(h('div', { class: 'tmetric main' }, h('span', null, tt('Today'), ' ', tchip('CALCULATED', tt('Calculated'))), h('strong', null, total === null ? '—' : fmtMoney(total, cur)),
+      h('small', { class: 'muted' }, p ? (p.observed.totalCents === null ? '' : tt('Observed') + ' ' + fmtMoney(p.observed.totalCents, cur) + ' · ') + tt(FRESHNESS_TEXT[p.freshness]) : tt('No balance observed'))));
+    if (p) sec.appendChild(h('div', { class: 'muted small' }, p.components.map((c) => h('div', null, c.kind === 'BANK_BALANCE' ? tt('Bank {0}', c.sourceId) : c.kind === 'CASH_COUNT' ? tt('Cash counted {0}', c.countedOn) : c.kind === 'BANK_LATER_TRANSACTIONS' ? tt('Later bank transactions ({0})', c.count) : tt('Later cash movements ({0})', c.count), ': ', c.amountCents === null ? '—' : fmtMoney(c.amountCents, cur), ' ', tchip(c.basis === 'OBSERVED' ? 'OBSERVED' : 'CALCULATED', c.basis === 'OBSERVED' ? tt('Observed') : tt('Calculated')), c.ageHours != null ? h('span', null, ' · ', tt('{0} h ago', c.ageHours)) : null))));
+    sec.appendChild(h('div', { class: 'muted small' }, tt('Calculated = observed + later transactions. It is not a new bank balance.')));
+    const grid = h('div', { class: 'treasury-grid' }); sec.appendChild(grid);
+    [7, 30, 90].forEach((d) => { const x = fc.horizons[d]; const inC = x.receipts.committedCents + x.receipts.expectedCents + x.receipts.scenarioCents; const outC = x.payments.committedCents + x.payments.expectedCents + x.payments.scenarioCents;
+      grid.appendChild(h('div', { class: 'tmetric' }, h('span', null, tt('In {0} days', d), ' ', tchip('FORECAST', tt('Forecast'))), h('strong', null, x.projectedCents === null ? '—' : fmtMoney(x.projectedCents, cur)),
+        h('small', { class: 'muted' }, '+ ' + fmtMoney(inC, cur) + ' · − ' + fmtMoney(outC, cur)))); });
+    const r = fc.risk;
+    if (r.computable === false) sec.appendChild(h('div', { class: 'muted small' }, tt('Risk cannot be computed without a starting position.')));
+    else if (r.negative) sec.appendChild(h('div', { class: 'banner bad small' }, h('strong', null, tt('Cash risk')), h('div', null, tt('Negative from {0}: low point {1} on {2}, shortfall {3}.', r.firstNegativeDate, fmtMoney(r.minimumCents, cur), r.minimumDate, fmtMoney(r.deficitCents, cur))), r.causes.count ? h('div', null, tt('Main causes: {0} supplier payment(s) totalling {1}.', r.causes.count, fmtMoney(r.causes.totalCents, cur))) : null, r.recoveryDate ? h('div', null, tt('Back above zero on {0}.', r.recoveryDate)) : null));
+    else sec.appendChild(h('div', { class: 'muted small' }, tt('No negative position expected within 90 days.')));
+    const h90 = fc.horizons[90]; if (h90.excluded.count) sec.appendChild(h('div', { class: 'muted small' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(h90.excluded.overdueReceivablesCents, cur))));
+    if (h90.undated.count) sec.appendChild(h('div', { class: 'muted small' }, tt('{0} of supplier invoices have no due date and are not in the forecast.', fmtMoney(h90.undated.payablesCents, cur))));
+  });
+  // provenance: what explains the figures (click for the facts)
+  const items = f.items.filter((x) => x.sourceType !== 'MANUAL_SCENARIO'); const prov = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('What explains these figures')));
+  if (!items.length) prov.appendChild(h('div', { class: 'muted small' }, tt('Nothing is expected: no open invoice with a due date.')));
+  items.slice(0, 40).forEach((x) => prov.appendChild(h('div', { class: 'kv', style: 'cursor:pointer;flex-wrap:wrap;gap:6px', on: { click: () => explainModal(x.id) } }, h('span', null, x.date, ' · ', x.counterparty || x.label || '—', ' · ', tt(T_SOURCE[x.sourceType])), h('strong', null, fmtMoney(x.direction === 'OUT' ? -x.amountCents : x.amountCents, x.currency)),
+    h('span', { class: 'chip ' + (x.certainty === 'COMMITTED' ? 'ok' : 'warn') }, tt(T_CERTAINTY[x.certainty])), T_TREATMENT[x.treatment] ? h('span', { class: 'muted small' }, tt(T_TREATMENT[x.treatment])) : null)));
+  if (items.length > 40) prov.appendChild(h('div', { class: 'muted small' }, tt('{0} more items', items.length - 40)));
+  root.appendChild(prov);
+  root.appendChild(scenarioPanel(f));
+}
+function scenarioPanel(f) {
+  const card = h('div', { class: 'card', style: 'padding:16px 18px;display:grid;gap:10px' }, h('h2', { class: 'section-title' }, tt('What if?'), ' ', tchip('SCENARIO', tt('Scenario'))), h('div', { class: 'muted small' }, tt('Nothing is saved: this is a simulation. No payment, invoice or bank transaction is created.')));
+  const type = h('select', null, [['ADD_EXPENSE', 'I make a purchase'], ['DELAY_RECEIVABLE', 'A customer pays later'], ['DELAY_PAYABLE', 'I postpone a supplier invoice'], ['REDUCE_INFLOW', 'My expected inflows drop']].map(([v, l]) => h('option', { value: v }, tt(l))));
+  const amount = h('input', { placeholder: tr('Amount'), inputmode: 'decimal' }); const date = h('input', { type: 'date' }); const days = h('input', { type: 'number', value: '10', style: 'width:90px' }); const pct = h('input', { type: 'number', value: '20', style: 'width:90px' });
+  const pick = h('select', null); const out = h('div', null); const fields = h('div', { class: 'row r3', style: 'align-items:end' });
+  const opts = (dir) => f.items.filter((x) => x.direction === dir && x.sourceType !== 'MANUAL_SCENARIO').map((x) => h('option', { value: x.id }, `${x.counterparty || x.label || x.id} · ${x.date} · ${fmtMoney(x.amountCents, x.currency)}`));
+  const field = (label, el) => h('div', { class: 'field' }, h('label', null, label), el);
+  function drawFields() { clear(fields); const t = type.value; clear(pick);
+    if (t === 'ADD_EXPENSE') fields.append(field(tt('Amount'), amount), field(tt('Date'), date));
+    else if (t === 'REDUCE_INFLOW') fields.append(field(tt('Reduction (%)'), pct));
+    else { opts(t === 'DELAY_RECEIVABLE' ? 'IN' : 'OUT').forEach((o) => pick.appendChild(o)); fields.append(field(tt('Item'), pick), field(tt('Days later'), days)); } }
+  type.addEventListener('change', drawFields); drawFields();
+  const run = async () => {
+    const t = type.value; let hyp;
+    if (t === 'ADD_EXPENSE') hyp = { type: t, amountCents: centsOfInput(amount.value), date: date.value, label: tt('Purchase') };
+    else if (t === 'REDUCE_INFLOW') hyp = { type: t, percentBp: Math.round(Number(pct.value) * 100) };
+    else hyp = { type: t, id: pick.value, days: Number(days.value) };
+    try {
+      const r = await api('POST', '/api/treasury/scenario', { hypotheses: [hyp] }); clear(out);
+      f.currencies.forEach((cur) => { const b = r.baseline.forecast[cur]; const s = r.scenario.forecast[cur]; const d = r.delta[cur];
+        out.appendChild(h('div', { class: 'card', style: 'padding:12px 14px;margin-top:8px' }, f.currencies.length > 1 ? h('strong', null, cur) : null,
+          [7, 30, 90].map((n) => h('div', { class: 'kv' }, h('span', null, tt('In {0} days', n)), h('span', null, b.horizons[n].projectedCents === null ? '—' : fmtMoney(b.horizons[n].projectedCents, cur), ' → ', s.horizons[n].projectedCents === null ? '—' : fmtMoney(s.horizons[n].projectedCents, cur)), h('strong', null, d.horizons[n].projectedDeltaCents === null ? '' : (d.horizons[n].projectedDeltaCents > 0 ? '+ ' : '') + fmtMoney(d.horizons[n].projectedDeltaCents, cur)))),
+          d.risk.scenarioNegative ? h('div', { class: 'banner bad small' }, tt('With this hypothesis the position becomes negative on {0}.', d.risk.firstNegativeDate.scenario)) : h('div', { class: 'muted small' }, tt('No negative position in this scenario.')))); });
+    } catch (e) { fail(e, out); }
+  };
+  card.append(h('div', { class: 'row r2' }, field(tt('Hypothesis'), type)), fields, h('div', { class: 'actions' }, h('button', { class: 'primary', on: { click: run } }, tt('Run the scenario'))), out);
+  return card;
+}
+
 // ---------- Trésorerie: its own page, separate from Banque & Caisse - same real /api/treasury +
 // /api/overview/cashflow data the combined page used to show, split out per the mandate's own architecture. ----------
-const TREASURY_HORIZONS = [[30, '30 days'], [60, '60 days'], [90, '90 days']];
 async function viewTreasury() {
-  let horizon = 30;
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/treasury', shell);
-  const hzRow = h('div', { class: 'tabsrow' });
-  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.'))), hzRow));
+  shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Treasury')), h('div', { class: 'subtitle' }, tt('Visualise what is realised, what is committed and your projected position.')))));
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
-  const metricsRow = h('div', { class: 'treasury-grid' }); const warnBox = h('div', null); const workspace = h('div', { class: 'card treasury-workspace' });
-  metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
-  box.appendChild(metricsRow); box.appendChild(warnBox); box.appendChild(workspace);
-
-  function drawHzRow() {
-    clear(hzRow);
-    TREASURY_HORIZONS.forEach(([days, label]) => hzRow.appendChild(h('button', { type: 'button', class: `tab2 ${horizon === days ? 'on' : ''}`, on: { click: () => { if (horizon === days) return; horizon = days; drawHzRow(); loadHorizon(); } } }, tt(label))));
-  }
-  drawHzRow();
+  const v1 = h('div', { style: 'display:grid;gap:14px' }); const workspace = h('div', { class: 'card treasury-workspace' });
+  box.appendChild(v1); box.appendChild(workspace);
 
   const chartWrap = h('div', { class: 'tchart-wrap' },
     h('div', { class: 'section-head' }, h('div', null, h('h3', { class: 'section-title' }, 'Treasury position'), h('div', { class: 'section-sub' }, tt('Realised documented balance, last 12 months')))));
-  const projection = h('div', { class: 'projection' });
-  workspace.appendChild(chartWrap); workspace.appendChild(projection);
-
-  async function loadHorizon() {
-    metricsRow.replaceChildren(...[1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' }))));
-    clear(warnBox);
-    try {
-      const treasury = await api('GET', `/api/treasury?horizon=${horizon}`);
-      const tmetric = (label, value, cls) => h('div', { class: `tmetric ${cls || ''}` }, h('span', null, label), h('strong', null, value ?? '—'));
-      const withCurTreasury = (v) => (v == null ? null : `${v} ${treasury.currency}`);
-      metricsRow.replaceChildren(
-        tmetric(tt('Available today'), withCurTreasury(treasury.display.liquid), 'main'),
-        tmetric(tt('Receivable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.incoming)),
-        tmetric(tt('Payable in {0} days', treasury.horizonDays), withCurTreasury(treasury.display.outgoing)),
-        tmetric(tt('Projection'), withCurTreasury(treasury.display.projection)));
-      if (treasury.warnings?.length) warnBox.appendChild(h('div', { class: 'banner warn small' }, treasury.warnings.map((w) => h('div', null, tt(w === 'NO_BANK_BALANCE_AVAILABLE' ? 'No bank balance available: connect a bank or import a statement.' : w === 'NO_CASH_COUNT_CONFIRMED' ? 'No physical cash count confirmed yet.' : w)))));
-      clear(projection);
-      projection.appendChild(h('h3', { class: 'section-title', style: 'font-size:16px' }, tt('Projection')));
-      const proj = (label, note, amount, cls) => h('div', { class: 'proj' }, h('strong', null, label), h('span', null, h('em', null, note), h('b', { class: cls }, amount)));
-      try {
-        // Both figures come straight from /api/treasury's own `expected` block, which buildTreasury() already
-        // scopes to the selected horizonDays server-side - not a separate, fixed-window fetch. This is what
-        // makes the projection panel actually move when the 30/60/90-day toggle changes, instead of always
-        // showing the same fixed "due soon" window regardless of the selected horizon.
-        const cur = treasury.currency;
-        projection.appendChild(proj(tt('Expected customer invoices'), tt('{0} document(s)', treasury.expected.incomingCount), `+ ${treasury.display.incoming ?? fmtMoney(0, cur)}`, 'in'));
-        projection.appendChild(proj(tt('Supplier invoices to pay'), tt('{0} document(s)', treasury.expected.outgoingCount), `− ${treasury.display.outgoing ?? fmtMoney(0, cur)}`, 'out'));
-        if (treasury.assumed?.overdueReceivablesCents) projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('{0} of overdue receivables is NOT included in this projection (assumed, not expected).', fmtMoney(treasury.assumed.overdueReceivablesCents, cur))));
-        // VAT is deliberately not provisioned here: this product has no running VAT-due estimate outside the
-        // Accountant Pack's own per-period computation (see #/pack) - showing one here would be a second,
-        // parallel VAT figure the mandate explicitly asks not to invent.
-        projection.appendChild(h('div', { class: 'muted small', style: 'margin-top:10px' }, tt('VAT is not provisioned here - see the Accountant pack for the authoritative per-period VAT figure.')));
-        mount(projection, foreignNote(foreignCount(treasury.excluded)));
-      } catch (e) { projection.appendChild(h('div', { class: 'muted small' }, tt('Projection detail unavailable.'))); }
-    } catch (e) { fail(e, metricsRow); }
-  }
+  workspace.appendChild(chartWrap);
 
   // The 12-month realised-flow chart is deliberately independent of the horizon toggle: it always shows the
   // same real, already-closed months (from /api/overview/cashflow), never a projection - so it is fetched
@@ -1153,5 +1259,5 @@ async function viewTreasury() {
         card(tt('What moved the balance'), tt('Net change per month'), cashWaterfallChart(cf.rows, cf.currency), 'span2')));
     }
   } catch (e) { chartWrap.appendChild(h('div', { class: 'muted small' }, tt('Chart unavailable.'))); }
-  await loadHorizon();
+  await drawTreasuryV1(v1);
 }
