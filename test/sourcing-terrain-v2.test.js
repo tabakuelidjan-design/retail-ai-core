@@ -112,5 +112,5 @@ test('14. no mode switch is offered anywhere in the screens; the legacy mode cod
   for (const f of ['screens/field.js', 'screens/fieldfirst.js', 'screens/fieldhome.js', 'screens/decision.js', 'screens/money.js', 'screens/quick.js']) assert.ok(ui(f).length > 500, `${f} is not removed`);
 });
 test('15. the sheet reaches the expert sections where they are needed (compliance and calculations from Aperçu / Chiffres, documents from the note, conversation from the notes)', () => {
-  const nx = ui('screens/nx.js'); for (const needle of ["'sl-embed', 'compliance'", "'sl-embed', 'money'", "'sl-embed', 'quick'", "'sl-embed', 'docs'", 'data-key="live"']) assert.ok(nx.includes(needle), needle);
+  const nx = ui('screens/nx.js'); for (const needle of ["'sl-embed', 'compliance'", "'sl-embed', 'money'", "'sl-embed', 'quick'", "'sl-embed', 'docs'", 'data-act="sl-thread"']) assert.ok(nx.includes(needle), needle);
 });

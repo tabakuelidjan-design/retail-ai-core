@@ -5,7 +5,7 @@
 import { extractFacts, detectLang } from './extract/index.js';
 import { normalizeSpoken } from './extract/spoken.js';
 import { decideTurn, segmentsOf, turnText } from './turns.js';
-import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, MODALITY, confirmedStatus, documentStatusOf } from './provenance.js';
+import { CANDIDATE_STATE, FACT_STATUS, SPEAKER, MODALITY, confirmedStatus, documentStatusOf, rawTextOf, revisionsOf, currentTextOf } from './provenance.js';
 import { findCandidateConflict, existingValue, documentModelConflicts, supersedesExisting } from './conflicts.js';
 import { effectiveQuote } from './offers.js';
 import { classifyCandidates } from './understanding.js';
@@ -61,6 +61,7 @@ export function addSegment(s, ev, at) {
 /** Recomputes the transcription of a speech item from ALL its segments and re-proposes its facts. Facts the owner already decided are never touched; proposals that no longer appear are dropped;
  *  each proposal records the segment ids it comes from (exact when the per-segment text maps onto the whole, otherwise the turn's segments up to the one that completed it, flagged APPROX). */
 function reextract(s, conv, item, at) {
+  if (revisionsOf(item).length) return; // an item the owner corrected is read from HIS text (see reviseItem): the raw segments never bring their proposals back
   const segs = item.segments; const joined = turnText(segs); const lang = item.lang && item.lang !== 'auto' ? item.lang : detectLang(joined);
   let d = item.derived.find((x) => x.kind === 'TRANSCRIPTION');
   if (!d) { d = { id: `${item.id}-d1`, kind: 'TRANSCRIPTION', lang, text: '', provider: segs[0]?.provider ?? null, ...(segs[0]?.version ? { version: String(segs[0].version) } : {}), review: 'MACHINE', at }; item.derived.push(d); }
@@ -121,7 +122,7 @@ export function reanalyzeStoredNotes(s, ev, at) {
     for (const item of conv.items ?? []) {
       if (selected && item.id !== selected) continue;
       found = true;
-      if (item.speaker !== SPEAKER.SUPPLIER || typeof item.original !== 'string' || !item.original.trim() || item.modality === MODALITY.SPEECH) continue;
+      if (item.speaker !== SPEAKER.SUPPLIER || typeof item.original !== 'string' || !item.original.trim() || item.modality === MODALITY.SPEECH || revisionsOf(item).length) continue; // a corrected note is read from its correction, never from its raw words
       const existing = new Set(s.candidates.filter((c) => c.convId === conv.id && c.itemId === item.id && (!c.basis || c.basis === 'ORIGINAL'))
         .map((c) => `${c.key}|${c.context ?? 'product'}`));
       const ex = extractFacts({ text: item.original, lang: item.lang || 'auto' });
@@ -137,6 +138,38 @@ export function reanalyzeStoredNotes(s, ev, at) {
   }
   if (selected && !found) throw new Error(`unknown conversation item: ${selected}`);
   return added;
+}
+
+/**
+ * The OWNER corrects the text of one item (a typed note, a dictated sentence, a saved answer): ONE explicit, append-only REVISION next to the untouched raw words (typed original, or the machine transcription and its segments).
+ * The revision keeps its date, its source and the item it refers to; the speaker of the item does not change (the corrected text is NOT presented as something the supplier pronounced).
+ * The proposals that depend on the text are recomputed from the corrected text: a proposal still waiting is superseded when its words are gone; decided candidates (confirmed, corrected, rejected by the owner, in conflict) are NEVER touched; a rejected
+ * proposal is never brought back; the same value is never proposed twice. A correction that disagrees with a confirmed fact changes nothing: it is recorded as an IMPACT the owner must decide (the usual conflict question when the new value is confirmed).
+ */
+export function reviseItem(s, ev, at) {
+  const conv = find(s.conversations, ev.convId, 'conversation'); const item = conv.items.find((x) => x.id === ev.itemId); if (!item) throw new Error(`unknown item: ${ev.itemId}`);
+  const text = String(ev.text ?? '').replace(/\r\n/g, '\n').trim(); if (!text) throw new Error('the corrected text is required (a sentence cannot be corrected into nothing)');
+  const before = currentTextOf(item); if (text === before) return; // nothing changed: no empty revision
+  closeOpenTurns(conv, at, 'OWNER_CORRECTION', item.id); // a sentence being corrected is final: a late segment starts a new item and never changes this one
+  item.revisions ??= []; const id = `${item.id}-r${item.revisions.length + 1}`;
+  const speech = item.modality === MODALITY.SPEECH; const lang = (speech ? (item.lang && item.lang !== 'auto' ? item.lang : null) : item.lang) || detectLang(text);
+  const exText = speech && lang === 'en' ? normalizeSpoken(text) : text; const r = extractFacts({ text: exText, lang });
+  const kk = (c) => `${c.key}|${c.context ?? ''}|${JSON.stringify(c.value)}`; const fresh = new Set(r.candidates.map(kk));
+  const mine = s.candidates.filter((c) => c.itemId === item.id); const superseded = []; const impacts = [];
+  for (const c of mine) {
+    if (fresh.has(kk(c))) continue;
+    if (c.state === CANDIDATE_STATE.PROPOSED) { c.state = CANDIDATE_STATE.REJECTED; c.decidedAt = at; c.decidedBy = 'system'; c.rejectedReason = `the text was corrected by the owner (${id})`; c.supersededByRevision = id; superseded.push(c.id); }
+    else if (c.state === CANDIDATE_STATE.CONFIRMED || c.state === CANDIDATE_STATE.CORRECTED) impacts.push({ kind: 'CONFIRMED_FROM_OLD_TEXT', candidateId: c.id, key: c.key, context: c.context ?? 'product', confirmed: c.state === CANDIDATE_STATE.CORRECTED ? c.correctedValue : c.value });
+  }
+  const added = [];
+  for (const c of r.candidates) {
+    const same = mine.find((x) => kk(x) === kk(c)); // the same value from the same item: never proposed twice; a value the OWNER rejected stays rejected
+    if (same && !(same.state === CANDIDATE_STATE.REJECTED && same.decidedBy === 'system')) continue;
+    const nc = { ...c, id: nextId('cand', s.candidates), convId: conv.id, itemId: item.id, speaker: item.speaker, basis: 'REVISION', revisionId: id, state: CANDIDATE_STATE.PROPOSED, proposedAt: at, flags: [...new Set([...(c.flags ?? []), 'OWNER_CORRECTED_TEXT'])] };
+    const clash = findCandidateConflict(s, nc, nc.value); if (clash) impacts.push({ kind: 'DIFFERS_FROM_CONFIRMED', candidateId: nc.id, key: nc.key, context: nc.context ?? 'product', confirmed: clash.existing, proposed: nc.value });
+    s.candidates.push(nc); added.push(nc.id);
+  }
+  item.revisions.push({ id, at, kind: 'OWNER_CORRECTION', by: 'owner', source: String(ev.source ?? 'owner-edit'), ref: item.id, convId: conv.id, of: item.revisions.at(-1)?.id ?? 'RAW', previousText: before, text, rawText: rawTextOf(item), ...(ev.reason ? { reason: String(ev.reason).slice(0, 300) } : {}), proposed: added, superseded, impacts });
 }
 
 /** A transcription (audio -> text) or a translation of a supplier item: DERIVED data kept next to the original, with who produced it and its review state. The original text/audio reference
@@ -183,7 +216,7 @@ function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDec
   const superseding = supersedesExisting(s, c, value); const previousValue = superseding ? existingValue(s, c.key, c.context) : undefined; // an UPDATED offer: a negotiable term legitimately changes; the earlier value stays in the ledger
   const same = !c.key.startsWith('docClaim.') && !superseding && !isEmpty(existingValue(s, c.key, c.context)) && !findCandidateConflict(s, c, value); // the case already holds this value: corroboration only (a changed supplier STATEMENT about a document is always recorded)
   if (!same) for (const e of compile(s, c, value, level, source)) reduce(e);
-  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, basis: c.basis ?? 'ORIGINAL', corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}), ...(c.offerId ? { offerId: c.offerId } : {}), ...(superseding ? { supersedes: true, previousValue } : {}) });
+  s.ledger.push({ id: nextId('led', s.ledger), key: c.key, value, context: c.context, status, source: { convId: c.convId, itemId: c.itemId, candidateId: c.id }, lang: c.lang, rawText: c.rawText, span: c.span, confirmedAt: at, userConfirmed: true, basis: c.basis ?? 'ORIGINAL', ...(c.revisionId ? { revisionId: c.revisionId } : {}), corrected: !!corrected, ...(corrected ? { original: { value: c.value, rawText: c.rawText } } : {}), ...(conflictId ? { resolvedConflict: conflictId } : {}), ...(meta ? { via: meta.via, batchId: meta.batchId } : {}), ...(c.offerId ? { offerId: c.offerId } : {}), ...(superseding ? { supersedes: true, previousValue } : {}) });
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 

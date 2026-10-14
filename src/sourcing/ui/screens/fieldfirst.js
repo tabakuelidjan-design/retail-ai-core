@@ -9,6 +9,7 @@
 import { esc, VERDICT_TEXT, coverageBanner } from '../dom.js';
 import { S } from '../state.js';
 import { caseFacts } from '/core/case-facts.js';
+import { currentTextOf } from '/core/provenance.js';
 import { getBlob, ls } from '../storage.js';
 import { suggestCategories } from '/core/case.js';
 import { CATEGORIES } from '/core/taxonomy.js';
@@ -37,7 +38,7 @@ const OK = `<span class="fm-gl ok" title="confirmé par vous">${ICON.check}</spa
 const person = (bg, fg) => `<svg viewBox="0 0 44 44" width="100%" height="100%" aria-hidden="true"><rect width="44" height="44" fill="${bg}"/><circle cx="22" cy="17" r="7.5" fill="${fg}"/><path d="M7 44c1-10 7-15 15-15s14 5 15 15z" fill="${fg}"/></svg>`;
 const AV_SUP = person('#cbd7cf', '#456352'); const AV_ME = person('#d5d2e2', '#4e4a6b'); const AV_UNK = person('#e1ddd8', '#8d8680');
 /** The words of an item: the typed original, or the machine TRANSCRIPTION of a spoken one. */
-const textOf = (e) => e.original ?? (e.derived ?? []).find((d) => d.kind === 'TRANSCRIPTION')?.text ?? '';
+const textOf = (e) => currentTextOf(e); // the owner's correction when there is one (the raw words stay in the case)
 const isSpeech = (e) => e.modality === 'SPEECH';
 const heardTag = (e) => (isSpeech(e) ? '<span class="fm-d">dicté · transcription automatique</span>' : '');
 const EMPTY_PHOTO = `<div class="fm-ph-empty">${I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 34)}<span>Pas de photo</span></div>`;
