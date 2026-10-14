@@ -163,3 +163,28 @@ test('Request-level and planning-level stops', async () => {
   const out = await runCreativeEndToEnd({ run_id: 'run-rt-9', at: AT, ceiling_eur: 2, request: w6.request, brief: w6.brief, fonts: w6.fonts, font: w6.font, ports: w6.ports, guardian: w6.guardian, ledger, deps: { segment: async () => c.seg, runLayered: async () => c.layered }, resume: { layer_store: c.r.resume_state.layer_store } });
   assert.equal(out.ledger_reference.entries, ledger.entries().length); assert.ok(ledger.entries().some((e) => e.outcome?.event === 'OPERATION_SETTLED'));
 });
+
+test('Gate priority when several mandatory gates fail, the optional critic warning, and each part of an incomplete request (guards from the mutation sweep)', async () => {
+  const c = await captured(); const img = decodePng(c.layered.png_bytes); const rect = c.layered.product_rect;
+  const forge = (...fns) => { const px = Uint8Array.from(img.pixels); for (const f of fns) f(px); return encodePng({ width: img.width, height: img.height, pixels: px }); };
+  const invert = (px) => { for (let y = rect.y + 100; y < rect.y + 260; y += 1) for (let x = rect.x + 60; x < rect.x + 220; x += 1) { const i = (y * img.width + x) * 4; px[i] = 255 - px[i]; px[i + 1] = 255 - px[i + 1]; } };
+  const halo = (px) => { for (let y = rect.y - 3; y < rect.y + rect.height + 3; y += 1) for (const x of [rect.x - 2, rect.x - 1, rect.x + rect.width + 1, rect.x + rect.width]) { if (y < 0) continue; const i = (y * img.width + x) * 4; px[i] = 255; px[i + 1] = 255; px[i + 2] = 255; } };
+  const failedIds = (r) => r.gates.filter((g) => g.outcome === 'FAIL').map((g) => g.id).sort();
+  // RT-27 identity and artifacts both fail: the identity risk is the named stop
+  let r = (await run({}, { runLayered: async () => tamper(c, { png_bytes: forge(invert, halo) }) })).result;
+  assert.deepEqual(failedIds(r), ['INTEGRATION_ARTIFACTS', 'PRODUCT_DELIVERED_IDENTITY']); assert.equal(r.block.code, 'PRODUCT_IDENTITY_RISK');
+  // RT-28 placement and artifacts both fail: the placement is the named stop (it ranks above the artifacts)
+  r = (await run({}, { runLayered: async () => tamper(c, { png_bytes: forge(halo), product_rect: { x: -400, y: 10, width: 900, height: 1500 } }) })).result;
+  assert.ok(failedIds(r).includes('PLACEMENT')); assert.equal(r.block.code, 'PLACEMENT_INVALID');
+  // RT-29 a skipped optional critic is a warning, never a failure; the exact warning is named
+  r = (await run({}, {})).result; assert.ok(r.warnings.includes('VISION_CRITIC_SKIPPED_PROVIDER_NOT_CONNECTED')); assert.equal(gateOf(r, 'VISION_CRITIC').mandatory, false); assert.equal(gateOf(r, 'VISION_CRITIC').outcome, 'SKIPPED_PROVIDER_NOT_CONNECTED');
+  // RT-30 each part of an incomplete request is refused on its own, before any Brain call
+  for (const drop of ['bytes', 'ids', 'format']) {
+    const w = await e2eWorld(); const brief = { ...w.brief };
+    if (drop === 'bytes') brief.asset = { ...brief.asset, bytes: undefined }; else delete brief[drop];
+    const out = await runCreativeEndToEnd({ run_id: 'run-rt-g', at: AT, ceiling_eur: 2, request: w.request, brief, fonts: w.fonts, font: w.font, ports: w.ports, guardian: w.guardian });
+    assert.equal(out.state, E2E_STATE.BLOCKED, drop); assert.equal(out.block.code, 'REQUEST_INVALID', drop); assert.equal(out.provider_calls.length, 0, drop);
+  }
+  const w2 = await e2eWorld(); const none = await runCreativeEndToEnd({ run_id: 'run-rt-g', at: AT, ceiling_eur: 2, request: null, brief: w2.brief, fonts: w2.fonts, font: w2.font, ports: w2.ports, guardian: w2.guardian });
+  assert.equal(none.block.code, 'REQUEST_INVALID');
+});

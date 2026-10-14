@@ -52,3 +52,21 @@ test('Native alpha: a product cut by any border, and a refused image with its fi
   assert.equal(segmentNativeAlpha({ width: 1, height: 1, pixels: new Uint8Array(4) }).accepted, false); assert.equal(segmentNativeAlpha(undefined).accepted, false);
   assert.ok(Array.isArray(codes(opaque)));
 });
+
+test('Budget boundaries: exactly the ceiling is allowed, one cent more is refused; ceiling 0 is a valid run id of nothing', () => {
+  const mk = (ceiling_eur) => createRunContext({ run_id: 'run-guard-2', ceiling_eur, ledger: createDecisionLedger(), at: 'x' });
+  // EG-6 a ceiling of 0 is valid (a run that can spend nothing), a negative or non-finite one is not
+  assert.doesNotThrow(() => mk(0)); for (const bad of [-0.01, NaN, Infinity, undefined]) assert.throws(() => mk(bad), (e) => e.code === 'CEILING_INVALID', String(bad));
+  // EG-7 reserve exactly what is left: allowed; one more cent: refused before any state change
+  const c = mk(0.3); const a = c.budget.reserve('a', 0.3); assert.equal(c.budget.snapshot().available_eur, 0);
+  assert.throws(() => c.budget.reserve('b', 0.01), (e) => e.name === 'RunBudgetError'); assert.equal(c.budget.snapshot().reserved_eur, 0.3);
+  assert.doesNotThrow(() => c.budget.reserve('zero', 0));
+  // EG-8 settle exactly the reservation: allowed; above it: refused and nothing is spent
+  assert.throws(() => c.budget.settle(a, 0.31), (e) => e.code === 'SETTLEMENT_ABOVE_THE_RESERVATION'); assert.equal(c.budget.snapshot().spent_eur, 0);
+  c.budget.settle(a, 0.3); assert.equal(c.budget.snapshot().spent_eur, 0.3);
+  // EG-9 a negative or non-numeric reservation is refused
+  for (const bad of [-0.01, NaN, '0.1', undefined]) assert.throws(() => c.budget.reserve('bad', bad), (e) => e.code === 'RESERVATION_AMOUNT_INVALID', String(bad));
+  // EG-10 run id length: 3 and 64 characters are valid, 2 and 65 are not
+  for (const [n, ok] of [[2, false], [3, true], [64, true], [65, false]]) { const id = 'r'.repeat(n); if (ok) assert.doesNotThrow(() => createRunContext({ run_id: id, ceiling_eur: 1, ledger: null, at: 'x' })); else assert.throws(() => createRunContext({ run_id: id, ceiling_eur: 1, ledger: null, at: 'x' }), (e) => e.code === 'RUN_ID_INVALID'); }
+  assert.throws(() => createRunContext({ run_id: undefined, ceiling_eur: 1, ledger: null, at: 'x' }), (e) => e.code === 'RUN_ID_INVALID');
+});
