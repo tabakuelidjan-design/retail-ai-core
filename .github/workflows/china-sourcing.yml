@@ -3,7 +3,7 @@ name: china-sourcing
 # the ASR bench uses its fake provider and the tunnel e2e is never run.
 on:
   push:
-    branches: ['feature/china-sourcing-**']
+    branches: ['feature/china-sourcing-**', 'claude/nordla-core-p0']
     paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
   pull_request:
     paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']

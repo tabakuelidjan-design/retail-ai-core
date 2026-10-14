@@ -8,7 +8,7 @@ name: nordla-integration-pre-china
 # No secret, no provider, no network: every module runs over fakes.
 on:
   push:
-    branches: ['integration/**']
+    branches: ['integration/**', 'claude/nordla-core-p0']
   workflow_dispatch: {}
 permissions:
   contents: read

@@ -97,6 +97,20 @@ Machine-readable in `src/integration/ownership.js`.
 9. **Windows-only test failures** in 7 `sourcing-*` test files (`C:\C:\...` path from `new URL().pathname`) also fail on the untouched Sourcing branch on this machine; they are environmental, not caused by the merge.
 10. Creative quality limits (no live provider, no vision critic, placeholder plates) are unchanged by this work.
 
+### 6.1 Status after the Core P0 (branch `claude/nordla-core-p0`)
+
+| §6 item | Status |
+|---|---|
+| 1. Three landed-cost engines | Unchanged: owner decision (Finance as the only authority). |
+| 2. No persistence | Tables PREPARED, not applied: `supabase/migrations-pending/20261015090000_*` (+ RLS policies, fin_* search_path). Owner authorization required. |
+| 3. No PO / real incoming stock | Unchanged (out of P0 scope). |
+| 4. Two brief shapes | Unchanged. |
+| 5. Sourcing single-tenant, file based | `sourcing_cases` table with `merchant_id` prepared; hosted mode requires a named merchant. The server still uses files until the database is chosen. |
+| 6. Core resilience not merged | MERGED (`model-port.js` conflict resolved keeping both behaviours). Creative re-attestation PREPARED, not done: `docs/architecture/creative-readiness-reattestation-pending.md`. |
+| 7. Growth defaults to UTC | FIXED: the merchant zone is required (TIMEZONE_NOT_CONFIGURED / TIMEZONE_INVALID); the C8 guard exemption is removed. |
+| 8. Sourcing tip 933168c | MERGED (`feature/china-sourcing-mobile-ux-v2`, with 183267d and 90e1ecf). |
+| 9. Windows test failures | FIXED in the tests (`fileURLToPath`; guard test). Not re-run on Windows itself from here. |
+
 ## 7. Cross-line conflicts found and aligned (merge fixes)
 
 - Config unions (`package.json`, `.gitignore`, `.gitattributes`, finance-privacy filter) and a regenerated lockfile.
