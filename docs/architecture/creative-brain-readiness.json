@@ -32,7 +32,16 @@
     }
   },
   "ci": {
-    "status": "unknown",
-    "note": "Not read yet: recorded as success only after the Creative Intelligence V1 run on the pushed commit is read from the public GitHub Actions API."
+    "status": "success",
+    "run": 38521595004,
+    "workflow": "Creative Intelligence V1",
+    "commit": "3ff6d814dff4781b3ae1a779c2e5d9e6e50ae9e9",
+    "node20": "success (job 115712310638)",
+    "node24": "success (job 115712310216)",
+    "marketing_v1": {
+      "run": 38521594905,
+      "conclusion": "success"
+    },
+    "note": "Read from the public GitHub Actions API on 2026-10-14, attempt 1, no re-run needed. The code is the code verified at 753cb42 (code hash ee53466e...); the pushed commit differs only by the two attestation files, which are outside the code hash."
   }
 }
