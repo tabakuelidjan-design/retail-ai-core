@@ -25,7 +25,7 @@ export function uuid(value, field) {
 
 /** The tenant comes from the server context (the canonical resolver), never from a request parameter. */
 export function merchantOf(tenant) {
-  if (!isPlainObject(tenant) || !['session', 'env', 'legacy_shopify'].includes(tenant.source) || typeof tenant.merchantId !== 'string' || !UUID.test(tenant.merchantId)) {
+  if (!isPlainObject(tenant) || !['session', 'env'].includes(tenant.source) || typeof tenant.merchantId !== 'string' || !UUID.test(tenant.merchantId)) {
     fail(E.TENANT_INVALID, 'tenant must be the result of the canonical tenant resolver');
   }
   return tenant.merchantId.toLowerCase();

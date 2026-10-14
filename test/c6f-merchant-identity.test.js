@@ -137,7 +137,7 @@ test('merchant without Shopify: Finance runtime + hosted server start, pages ans
 
 test('merchant without Shopify: the Analytics report is built from Nordla data and the server starts (NO_SALES_SOURCE), zero Shopify', () => noNetwork(async (hits, real) => {
   const s = db(); const shop = shopAsA(); const dir = await tmp();
-  const r = await runReport({ mode: 'report', env: { NORDLA_MERCHANT_ID: B.id }, supabase: s, outDir: dir, log: quiet, createClient: shop.factory });
+  const r = await runReport({ mode: 'report', env: { NORDLA_MERCHANT_ID: B.id, MERCHANT_TIMEZONE: 'UTC' }, supabase: s, outDir: dir, log: quiet, createClient: shop.factory });
   assert.equal(r.merchantId, B.id);
   const port = await freePort();
   const { server } = await startAnalyticsServer({ env: { NORDLA_MERCHANT_ID: B.id, ANALYTICS_PREMIUM_PORT: String(port) }, supabase: s, reportsDir: dir, log: quiet, createClient: shop.factory });

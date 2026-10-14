@@ -110,6 +110,8 @@
     'Impact of this credit note': 'Impact van deze creditnota', 'Original invoice': 'Oorspronkelijke factuur', 'Credit note amount': 'Bedrag van de creditnota', 'Effect on balance': 'Effect op het saldo',
     '{0} owed on {1}': '{0} verschuldigd op {1}', 'VAT impact': 'Btw-impact', '{0} VAT reversed': '{0} btw teruggedraaid', 'Restock decision': 'Herbevoorradingsbeslissing', 'Refund': 'Terugbetaling',
     'Not linked yet': 'Nog niet gekoppeld', 'Not applicable (original sale did not decrement stock)': 'Niet van toepassing (oorspronkelijke verkoop verminderde de voorraad niet)',
+    'Not tracked separately - deducts from what the customer owes': 'Niet apart bijgehouden - komt in mindering op wat de klant verschuldigd is',
+
     'Decision pending': 'Beslissing in behandeling', 'Restocked': 'Herbevoorraad', 'Restock approved (processing)': 'Herbevoorrading goedgekeurd (in verwerking)', 'Not restocked (merchant declined)': 'Niet herbevoorraad (geweigerd door handelaar)',
     'Reason: {0}': 'Reden: {0}', 'Draft - this impact applies once the credit note is approved and issued.': 'Concept - deze impact geldt zodra de creditnota is goedgekeurd en uitgereikt.',
     'Customers': 'Klanten', 'Search an invoice, a client, a supplier...': 'Zoek een factuur, een klant, een leverancier...', 'Finance navigation': 'Financiën-navigatie', 'Notifications': 'Meldingen',

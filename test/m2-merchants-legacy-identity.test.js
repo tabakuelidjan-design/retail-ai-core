@@ -26,7 +26,7 @@ test('M1 and every migration before M2 are untouched; M2 is the latest; no destr
   const before = all.filter((f) => f < M2_FILE);
   assert.equal(before.length, 27);
   assert.equal(fp(before.map((f) => `${f}\n${read(`${MIGRATIONS}/${f}`)}`).join('\n')), '530550cd8181628a8939c8dd1a9338b3');
-  assert.equal(all.at(-1), M2_FILE, 'M2 is the latest migration');
+  assert.ok(all.includes(M2_FILE), 'M2 is present (migrations added after M2 by the other lines are allowed: the integration branch carries provider_connections and channel_execution_jobs)');
   assert.equal(existsSync(path.join(ROOT, MIGRATIONS, '20260929170000_merchants_drop_legacy_identity.sql')), false, 'the destructive draft is gone');
 });
 

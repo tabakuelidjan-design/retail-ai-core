@@ -81,7 +81,7 @@ function askDateTime(iso) {
 /** A fact / value with its unit: currency code -> money, ratio -> percent, count/days -> number, date -> localized date, text as is. */
 function askFmt(value, unit) {
   if (value == null) return t('common.dash');
-  if (unit === 'ratio') { try { return new Intl.NumberFormat(askLocale(), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value); } catch (e) { return `${(value * 100).toFixed(1)} %`; } }
+  if (unit === 'ratio') { try { return new Intl.NumberFormat(askLocale(), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value); } catch (e) { return String(value); } }
   if (unit === 'count' || unit === 'days') { try { return new Intl.NumberFormat(askLocale()).format(value); } catch (e) { return String(value); } }
   if (unit === 'date') return askDate(value);
   if (unit === 'text') return String(value);
