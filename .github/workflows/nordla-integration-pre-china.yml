@@ -1,6 +1,8 @@
 name: nordla-integration-pre-china
-# The cross-module integration branch. It merges lines that each have their own workflow, so this job runs the integration tests first (fast diagnosis) and then the
-# WHOLE suite on Node 24 (China Sourcing requires it) and Node 20 (the repository engine floor). No secret, no provider, no network: every module runs over fakes.
+# The cross-module integration branch. It merges lines that each have their own workflow, so this job runs the integration tests first (fast diagnosis) and then the suite.
+#  - Node 24: the WHOLE suite (China Sourcing requires Node 24, owner decision 2026-10-12: its runtime guard refuses Node 20 with a coded error).
+#  - Node 20 (the repository engine floor): the whole suite EXCEPT test/sourcing-*, which cannot run on Node 20 by that same decision. Nothing else is excluded.
+# No secret, no provider, no network: every module runs over fakes.
 on:
   push:
     branches: ['integration/**']
@@ -11,7 +13,7 @@ jobs:
   suite:
     name: full suite (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -23,5 +25,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Integration contracts and the three cross-module workflows
         run: node --test test/integration-contracts.test.js test/integration-workflows.test.js
-      - name: Full suite (cross-module non-regression)
-        run: npm test
+      - name: Full suite (Node 24)
+        if: matrix.node == 24
+        run: node --test test/*.test.js
+      - name: Suite without the Node-24-only Sourcing tests (Node 20)
+        if: matrix.node == 20
+        run: node --test $(ls test/*.test.js | grep -v '^test/sourcing-')
