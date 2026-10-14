@@ -45,7 +45,7 @@ export function createRunContext({
   }
   const reservedOf = () => round([...reservations.values()].filter((r) => r.state === 'RESERVED').reduce((t, r) => t + r.eur, 0));
   const available = () => round(ceiling - spent - reservedOf());
-  const snapshot = () => ({ ceiling_eur: ceiling, spent_eur: round(spent), reserved_eur: reservedOf(), available_eur: available(), operations: ops.length, provider_calls: ops.filter((o) => o.paid && o.state !== 'FAILED_BEFORE_CALL').length });
+  const snapshot = () => ({ ceiling_eur: ceiling, spent_eur: round(spent), reserved_eur: reservedOf(), available_eur: available(), operations: ops.length, provider_calls: ops.filter((o) => o.paid).length });
 
   const note = (event, outcome) => ledger?.record?.({ decision: 'E2E_RUN_EVENT', decided_by: 'nordla:creative-e2e-run-context@1', rule: 'ONE_RUN_ONE_BUDGET_ONE_OPERATION_ID_CHAIN', basis: [runId], outcome: { event, ...outcome } });
 
@@ -106,7 +106,7 @@ export function createRunContext({
       };
     },
     list: () => ops.map((o) => ({ ...o })),
-    providerCalls: () => ops.filter((o) => o.paid && o.state !== 'FAILED_BEFORE_CALL').map((o) => ({ id: o.id, kind: o.kind, key: o.key, state: o.state, estimate_eur: o.estimate_eur, actual_eur: o.actual_eur })),
+    providerCalls: () => ops.filter((o) => o.paid).map((o) => ({ id: o.id, kind: o.kind, key: o.key, state: o.state, estimate_eur: o.estimate_eur, actual_eur: o.actual_eur })),
     ids: () => ops.map((o) => o.id),
   });
 
