@@ -44,6 +44,12 @@ test('The budget is a state of its own: the ceiling refuses before the port is c
   // CS-3 enough money, a port that really fails: a TECHNICAL failure, not a budget one
   const broken = await e2eWorld({ request: single() }); broken.ports = { ...broken.ports, brainComplete: async () => { throw Object.assign(new Error('the model is down'), { code: 'MODEL_DOWN' }); } };
   const rb = await run(broken, { run_id: 'run-cs-p' }); assert.equal(rb.state, E2E_STATE.TECHNICAL_FAIL); assert.notEqual(rb.state, E2E_STATE.BUDGET_EXCEEDED);
+  // CS-3b a refine whose regeneration the ceiling refuses is BUDGET_EXCEEDED, not a refused repair; the original image is kept
+  const withProps = () => fakeLayerPort({ prop: ({ candidate_index: i }) => propOnGround({ colour: i > 1 ? '#3a6ea5' : '#7a4b2a' }) });
+  const wb0 = await e2eWorld({ request: single(), layerPort: withProps() }); const base0 = await run(wb0, { run_id: 'run-cs-rb0' });
+  const prop0 = base0.layers.props[0]; const dfx = createDefectRegion({ kind: DEFECT_KIND.PROP_UNUSABLE, source: DEFECT_SOURCE.OWNER_REGION, layer_id: prop0.layer_id, reason: 'the owner does not like this prop' });
+  const wb1 = await e2eWorld({ request: single(), layerPort: withProps() }); const rbud = await run(wb1, { run_id: 'run-cs-rb1', ceiling_eur: base0.budget.spent_eur + 0.001, options: { planner_ceiling_eur: 2, refine: { enabled: true, defects: [dfx] } } });
+  assert.equal(rbud.state, E2E_STATE.BUDGET_EXCEEDED, JSON.stringify(rbud.block ?? rbud.failure)); assert.equal(rbud.failure.code, 'BUDGET_EXCEEDED'); assert.equal(wb1.layers.calls.length, wb0.layers.calls.length, 'no image was regenerated'); assert.ok(rbud.budget.spent_eur <= base0.budget.spent_eur + 0.001);
   // a ceiling of nothing is refused at the door
   const none = await run(await e2eWorld({ request: single() }), { ceiling_eur: 0, run_id: 'run-cs-z' }); assert.equal(none.state, E2E_STATE.BUDGET_EXCEEDED); assert.equal(none.provider_calls.length, 0);
 });
@@ -77,7 +83,7 @@ test('Every approved claim ends with a stated disposition; nothing silently disa
   const w = await e2eWorld({ request: single() }); const r = await run(w, { run_id: 'run-cs-c1' });
   const byRef = Object.fromEntries(r.claims.map((c) => [c.ref, c]));
   assert.equal(byRef['claim://test/price'].disposition, 'NOT_USED'); assert.equal(byRef['claim://test/price'].reason, 'NOT_IN_THE_REQUEST_COPY_AND_NOT_FORCED_ONTO_THE_VISUAL'); assert.ok(r.warnings.includes('CLAIM_NOT_USED:claim://test/price'));
-  assert.equal(byRef['copy://test/headline'].kind, 'APPROVED_COPY'); assert.equal(r.gates.find((g) => g.id === 'CLAIM_DISPOSITION').outcome, 'PASS');
+  assert.equal(byRef['copy://test/headline'].kind, 'APPROVED_COPY'); assert.equal(r.gates.find((g) => g.id === 'CLAIM_DISPOSITION').outcome, 'PASS'); assert.equal(r.gates.find((g) => g.id === 'CLAIM_DISPOSITION').mandatory, true);
   // CS-7 declared METADATA_ONLY: carried as data only, no warning; declared NOT_USED: no warning either
   const w2 = await e2eWorld({ request: single() }); const r2 = await run(w2, { run_id: 'run-cs-c2', options: { claim_policy: { 'claim://test/price': 'METADATA_ONLY', 'claim://test/promise': 'NOT_USED' } } });
   assert.equal(r2.claims.find((c) => c.ref === 'claim://test/price').disposition, 'METADATA_ONLY'); assert.ok(!r2.warnings.some((x) => x.startsWith('CLAIM_NOT_USED:claim://test/price')) && !r2.warnings.includes('CLAIM_NOT_USED:claim://test/promise'));
@@ -104,7 +110,7 @@ test('A copy that contradicts the declared product is stopped before anything is
   const bank = e2eBrief({ public_facts: { product: 'Batterie externe Remax 20000 mAh', merchant: 'HABB, Namur' } });
   const w = await e2eWorld({ brief: bank, request: single({ copy: [{ copy_ref: 'copy://h', mode: 'COPY_LOCKED', text: 'Votre photo sur votre coque.' }] }) }); const r = await run(w, { run_id: 'run-cs-k1' });
   assert.equal(r.state, E2E_STATE.BLOCKED); assert.equal(r.block.code, 'PRODUCT_COPY_CONFLICT'); assert.equal(r.block.stage, 'REQUEST'); assert.equal(w.brainPort.calls.length, 0); assert.equal(r.provider_calls.length, 0); assert.equal(r.budget.spent_eur, 0);
-  assert.equal(r.gates.find((g) => g.id === 'PRODUCT_COPY_CONSISTENCY').outcome, 'FAIL'); assert.equal(r.consistency.findings[0].copy_says, 'PHONE_CASE'); assert.equal(r.final, null);
+  assert.equal(r.gates.find((g) => g.id === 'PRODUCT_COPY_CONSISTENCY').outcome, 'FAIL'); assert.equal(r.gates.find((g) => g.id === 'PRODUCT_COPY_CONSISTENCY').mandatory, true); assert.equal(r.consistency.findings[0].copy_says, 'PHONE_CASE'); assert.equal(r.final, null);
   // CS-12 the other way round: a charging claim on a phone case, from the approved claims of the brief
   const conflict = checkProductCopyConsistency({ brief: e2eBrief({ claims: [{ ref: 'claim://x', role: 'SUBHEADLINE', wording: '20 000 mAh d’autonomie' }] }), request: { copy: [] } });
   assert.equal(conflict.status, 'CONFLICT'); assert.equal(conflict.product_category, 'PHONE_CASE'); assert.ok(conflict.findings.every((f) => f.copy_says === 'POWER_BANK'));
