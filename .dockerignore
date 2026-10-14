@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+node_modules
+data
+reports
+docs
+test
+benchmark
+benchmarks
+artifacts
+supabase/.temp
+*.log

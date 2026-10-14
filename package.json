@@ -52,7 +52,7 @@
     "growth": "node src/growth/server/serve.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",

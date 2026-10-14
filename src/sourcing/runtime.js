@@ -1,5 +1,5 @@
 // China Sourcing requires Node 24 (owner decision 2026-10-12): the field tooling relies on the global WebSocket and the other runtime behaviour of Node 24.
-// The repository-wide `engines` field is deliberately NOT changed (it belongs to the whole repo, Railway included); the requirement is enforced here, for China Sourcing only.
+// Since the Nordla Core P0 the whole repository targets Node 24 (`engines` >=24, `.nvmrc`, Dockerfile); this guard stays so a wrong runtime is refused with a clear code before anything starts.
 export const REQUIRED_NODE_MAJOR = 24;
 
 export class SourcingRuntimeError extends Error { constructor(msg) { super(msg); this.code = 'SOURCING_NODE_UNSUPPORTED'; } }
