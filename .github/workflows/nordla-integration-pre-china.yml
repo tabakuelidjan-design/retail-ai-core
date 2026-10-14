@@ -48,5 +48,6 @@ jobs:
           ls test/*.test.js | grep -v -E "$EXCLUDE" | grep -v '^test/benchmark-' | xargs -P 4 -I{} bash -c 'one {}'
           ls test/benchmark-*.test.js | xargs -P 1 -I{} bash -c 'one {}'
           echo "files run: $(wc -l < /tmp/results.txt)"
-          sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest::$f ${d}s (exit $rc)"; done
+          sort -k2 -n -r /tmp/results.txt > /tmp/sorted.txt
+          head -8 /tmp/sorted.txt | while read rc d f; do echo "::notice title=slowest::$f ${d}s (exit $rc)"; done
           ! grep -q -v '^0 ' /tmp/results.txt
