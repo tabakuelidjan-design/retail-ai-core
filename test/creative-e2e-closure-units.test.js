@@ -92,3 +92,17 @@ test('The run context remembers the first reservation the ceiling refused, whate
   assert.throws(() => ctx.budget.reserve('d', 0.03), (e) => e.name === 'RunBudgetError'); assert.equal(ctx.budgetRefusal().label, 'c', 'the FIRST refusal is the one kept'); ctx.budget.release(first);
   assert.doesNotThrow(() => ctx.budget.reserve('e', 0.05)); // exactly what is left is allowed
 });
+
+test('Claim amounts are compared by value and unit, over every text of the plan (guards from the mutation sweep)', () => {
+  // CU-13 a thousands separator is not a decimal one: "1 000 €" is not "1,000 €" written another way ... it is, by value, so the other form is ALTERED
+  const brief = (wording) => ({ claims: [claim('c', wording)] });
+  assert.deepEqual(disp(brief('1 000 €'), plan([{ role: 'BODY', text: 'Seulement 1,000 €' }])).blocks.map((b) => b.code), ['CLAIM_ALTERED']);
+  assert.deepEqual(disp(brief('1 000 €'), plan([{ role: 'BODY', text: 'Seulement 1000 €' }])).blocks.map((b) => b.code), ['CLAIM_ALTERED']);
+  assert.deepEqual(disp(brief('1.234,50 €'), plan([{ role: 'BODY', text: 'Seulement 1234,5 €' }])).blocks.map((b) => b.code), ['CLAIM_ALTERED']);
+  assert.deepEqual(disp(brief('1 000 €'), plan([{ role: 'BODY', text: 'Seulement 1,5 €' }])).blocks, [], 'another value is simply another text');
+  // CU-14 one altered text among others is enough; one altered amount among exact-looking others too
+  assert.deepEqual(disp(brief('25,00 €'), [{ assets: [{ index: 0, slots: [{ role: 'BODY', text: 'Une offre' }, { role: 'BODY', text: 'Seulement 25 €' }] }], caption: null }]).blocks.map((b) => b.code), ['CLAIM_ALTERED']);
+  assert.deepEqual(disp(brief('25,00 €'), plan([{ role: 'BODY', text: 'de 12 € à 25 €' }])).blocks.map((b) => b.code), ['CLAIM_ALTERED']);
+  assert.deepEqual(disp(brief('25,00 €'), plan([{ role: 'BODY', text: 'de 12 € à 30 €' }])).blocks, []);
+  assert.deepEqual(disp(brief('25,00 €'), [{ assets: [{ index: 0, slots: [{ role: 'BODY', text: 'Une offre' }] }], caption: [{ text: 'Seulement 25 €' }] }]).blocks.map((b) => b.code), ['CLAIM_ALTERED'], 'the caption is read as well');
+});

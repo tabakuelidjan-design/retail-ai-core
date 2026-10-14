@@ -89,3 +89,15 @@ test('The campaign says when its assets do not share one product, concept and ar
   // CC-14 one ledger for the campaign: the campaign events are in the ledger it was given
   const ledger = createDecisionLedger(); await run([{}, {}, {}], { ledger }); const events = ledger.entries().filter((e) => e.outcome?.event?.startsWith?.('CAMPAIGN_')).map((e) => e.outcome.event); assert.deepEqual(events, ['CAMPAIGN_STARTED', 'CAMPAIGN_FINISHED']);
 });
+
+test('Campaign defaults, refusal shape, and the product is segmented once (guards from the mutation sweep)', async () => {
+  // CC-15 the default ceiling, and a refusal never carries a product
+  const seen = []; await runCreativeCampaign({ ...base, deps: { run: scripted([{ count: 1 }], seen) } }); assert.equal(seen[0].planner_ceiling, 2); assert.equal(seen[0].ceiling, 2);
+  const refused = await runCreativeCampaign({ ...base, campaign_run_id: 'x', deps: { run: scripted([{}]) } }); assert.deepEqual([refused.state, refused.fallback_to_generated_product, refused.campaign_id, refused.assets], [E2E_STATE.TECHNICAL_FAIL, false, null, []]);
+  // CC-16 the segmentation is shared: the same product is segmented once whatever the number of assets, a different product or mode is segmented again
+  let calls = 0; const segment = async (a) => { calls += 1; return { calls, mode: a.mode }; };
+  const rgba = (n) => ({ width: 2, height: 2, pixels: new Uint8Array([n, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]) });
+  const out = []; const run = async (input) => { out.push(await input.deps.segment({ rgba: rgba(1), mode: 'AUTO', selection: null }), await input.deps.segment({ rgba: rgba(1), mode: 'AUTO', selection: null })); out.push(await input.deps.segment({ rgba: rgba(2), mode: 'AUTO', selection: null })); out.push(await input.deps.segment({ rgba: rgba(1), mode: 'PHOTO', selection: null })); return scripted([{}, {}, {}])(input); };
+  await runCreativeCampaign({ ...base, ceiling_eur: 5, deps: { run, segment } });
+  assert.equal(calls, 3, 'one segmentation per distinct product and mode, whatever the assets'); assert.equal(out[0], out[1]); assert.equal(out[0], out[4]); assert.notEqual(out[2], out[0]); assert.notEqual(out[3], out[0]);
+});
