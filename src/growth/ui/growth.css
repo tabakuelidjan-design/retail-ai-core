@@ -1,0 +1,552 @@
+/* Nordla Growth - only what Analytics Premium's stylesheet (served as /style.css) does not already have.
+   Everything visual (cards, KPI tiles, tabs, tables, chips, rail, charts) comes from that stylesheet and the
+   shared tokens; this file adds the Growth grid, a few list-row details and small tone variants of existing
+   chips. Every selector is namespaced .gr-* (or scoped under one) so nothing here can leak into another module. */
+
+/* ---- grids (same 16px gaps and 900/560 breakpoints as Explorer; 2 columns from 901px, 3 from 1360px) ---- */
+.gr-grid { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-grid > .ex-card { display: flex; flex-direction: column; }
+@media (min-width: 901px) {
+  .gr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-grid > :first-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1360px) {
+  .gr-grid-main { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-grid-wide { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-grid > :first-child { grid-column: auto; }
+}
+
+/* ---- KPI row: 5 of Explorer's tiles. 5 columns when they fit, else 3 + 2 (full rows), 2, 1 ---- */
+.ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.gr-kpi-row > .ex-kpi { grid-column: span 2; }
+.gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: span 3; }
+@media (min-width: 1360px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .gr-kpi-row > .ex-kpi, .gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+  .gr-kpi-row .ex-kpi { gap: 12px; padding: 18px 16px; }
+  .gr-kpi-row .ex-kpi-ico { width: 46px; height: 46px; }
+  .gr-kpi-row .ex-kpi-ico .nordla-icon { width: 24px; height: 24px; }
+}
+@media (max-width: 900px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-kpi-row > .ex-kpi, .gr-kpi-row > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+  .gr-kpi-row > .ex-kpi:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .ex-kpi-row.gr-kpi-row { grid-template-columns: minmax(0, 1fr); }
+}
+.ex-delta.gr-kpi-note { display: block; }
+.gr-kpi-note strong { color: var(--chart-navy); margin-right: 4px; }
+.gr-kpi-note.good strong { color: var(--chart-positive); }
+.gr-kpi-note.warn strong { color: var(--chart-terracotta); }
+
+/* ---- card titles with their official icon (same weight/size as .ex-card-head h3) ---- */
+.gr-card-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+/* ---- Growth Pulse ---- */
+.gr-pulse-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 6px; }
+.gr-pulse-aside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--chart-slate); text-align: right; padding-bottom: 3px; }
+.gr-pulse-aside strong { font-size: 15px; font-weight: 700; color: var(--chart-navy); }
+.gr-pulse .nc-wrap, .gr-pulse > .nc-chart { margin-top: auto; }
+
+/* ---- list rows (Explorer's .ex-mover) ---- */
+.gr-row { align-items: flex-start; }
+.gr-row .ex-mover-name { line-height: 1.35; }
+.gr-wrap { line-height: 1.5; }
+.gr-ico { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 50%; background: #F4F6F8; display: grid; place-items: center; }
+.gr-ico .nordla-icon { width: 20px; height: 20px; }
+.gr-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; margin-top: 6px; background: var(--chart-slate); }
+.gr-dot.good { background: var(--chart-positive); }
+.gr-dot.warn { background: var(--chart-terracotta); }
+.gr-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; flex: 0 0 auto; font-size: 11.5px; }
+.gr-side strong { font-size: 14px; font-weight: 700; color: var(--chart-navy); white-space: nowrap; }
+.gr-muted { color: var(--chart-slate); font-size: 11.5px; }
+.gr-ink { color: var(--chart-navy); }
+.gr-pos { color: var(--chart-positive) !important; }
+.gr-att-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; }
+.gr-action { padding: 5px 10px; font-size: 12px; flex: 0 0 auto; white-space: nowrap; margin-left: auto; }
+.gr-action[disabled] { cursor: not-allowed; opacity: .75; }
+.ex-mover-delta .ex-chip { margin-top: 3px; }
+
+/* Tone variants of Explorer's .ex-chip (verified positive = green token, watch = terracotta tint = the default chip). */
+.ex-chip.gr-good { background: color-mix(in srgb, var(--chart-positive) 12%, #fff); color: var(--chart-positive); }
+.ex-chip.gr-warn { background: color-mix(in srgb, var(--chart-terracotta) 12%, #fff); color: var(--chart-terracotta); border: 1px solid color-mix(in srgb, var(--chart-terracotta) 35%, #fff); }
+
+/* ---- channel mark: the platform logo (pack v2) in a fixed 28px slot; monogram only as a fallback ---- */
+.gr-ch { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 8px; background: #F4F6F8; border: 1px solid var(--border); display: grid; place-items: center; font: 700 10px var(--font-ui); letter-spacing: .02em; color: var(--chart-navy); }
+/* Logo image: same 28px slot as the monogram, no tile behind it (transparent file), never stretched or cropped. */
+.gr-ch.gr-ch-logo { background: transparent; border-color: transparent; padding: 0; object-fit: contain; }
+.gr-ch-cell { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; line-height: 1.3; }
+.gr-unit { display: block; font-size: 10.5px; color: var(--chart-slate); }
+.gr-table { min-width: 380px; }
+.gr-table th, .gr-table td { padding-left: 8px; padding-right: 8px; }
+.ex-table.gr-table th { white-space: normal; line-height: 1.3; vertical-align: bottom; letter-spacing: .03em; }
+.gr-table td { padding-top: 9px; padding-bottom: 9px; }
+.gr-table td:nth-child(2) { min-width: 0; } /* Explorer's product-name column rule does not apply here */
+.gr-table th:first-child, .gr-table td:first-child { padding-left: 0; }
+.gr-table th:last-child, .gr-table td:last-child { padding-right: 0; }
+.gr-budget { max-width: 220px; margin: 7px 0 4px; }
+.gr-thumb { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; background: #F4F6F8; border: 1px solid var(--border); }
+.gr-thumb .gr-ch { border: 0; background: transparent; }
+
+/* ---- Store growth: three KPI sparklines side by side, stacking on narrow cards ---- */
+.gr-store-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px 18px; }
+.gr-store-metric { min-width: 0; padding: 4px 0; }
+.gr-store-value { font-family: var(--font-ui); font-size: 22px; font-weight: 700; color: var(--chart-navy); line-height: 1.2; margin: 4px 0 4px; }
+.gr-store-metric .kpi-spark { height: auto; margin-top: 8px; }
+
+/* ---- rail: the Nordla AI entry keeps the terracotta chip (Analytics' "Parle à Nordla" treatment) ---- */
+.nav-item.gr-ai .ico { background: var(--nordla-menu-active); }
+.nav-item.gr-ai.inert .ico { opacity: 1; }
+/* Secondary zone (Nordla AI, Settings) at the bottom of the rail; in the mobile bottom bar it takes one slot of five. */
+@media (min-width: 901px) { .sidebar .nav.gr-nav-foot { margin-top: auto; } }
+@media (max-width: 900px) { .nav-item.gr-desktop-only { display: none; } .sidebar .nav.gr-nav-foot { display: none; } }
+
+.gr-demo { white-space: nowrap; }
+/* Analytics' mobile topbar flattens .topbar-right (display: contents) and orders its children: keep the demo flag after the title. */
+@media (max-width: 900px) { .topbar-right .gr-demo { order: 1; } }
+.gr-demo-short { display: none; }
+@media (max-width: 560px) { .gr-demo-long { display: none; } .gr-demo-short { display: inline; } }
+
+@media (max-width: 560px) {
+  .gr-row { flex-wrap: wrap; }
+  .gr-row .ex-mover-main { flex: 1 1 0; }
+  .gr-side { align-items: flex-start; text-align: left; flex-direction: row; flex-wrap: wrap; gap: 4px 10px; flex-basis: 100%; padding-left: 48px; }
+  .gr-camps .gr-side, .gr-content .ex-mover-delta { padding-left: 40px; }
+  .gr-content .ex-mover-delta { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; text-align: left; }
+  .gr-pulse-aside { align-items: flex-start; text-align: left; }
+}
+
+/* ---- Growth icon pack (final): transparent 256px exports, same optical sizes as the official icons ---- */
+.gr-pack-icon { object-fit: contain; }
+
+/* ================= Opportunités page ================= */
+/* Pipeline + Nordla AI side by side only when the table fits (>=1360px); stacked below. */
+.gr-grid-pipe { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-grid-pipe > .ex-card { display: flex; flex-direction: column; }
+.gr-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* Segment bars: Explorer's .ex-conc-row.wide, with room for a signed percentage. */
+.gr-segments .ex-conc-row.wide { grid-template-columns: minmax(96px, 38%) minmax(0, 1fr) 48px; }
+@media (min-width: 1360px) { .gr-grid-pipe { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+
+.gr-card-desc { margin: -6px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--chart-slate); }
+.gr-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.gr-filters .ex-select { height: 34px; font-size: 12.5px; max-width: 100%; }
+.gr-pipe-table { min-width: 720px; }
+.gr-pipe-table td { padding-top: 8px; padding-bottom: 8px; }
+.gr-op-name { font-weight: 600; min-width: 150px; line-height: 1.35; }
+.gr-op-src { min-width: 90px; line-height: 1.35; }
+.gr-nowrap { white-space: nowrap; }
+.gr-conf { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 56px; }
+.gr-conf .ex-bar { width: 56px; margin-top: 0; height: 4px; }
+.gr-op-act { width: 32px; text-align: right; position: relative; } /* keeps the visually hidden header label inside the table's scroll box */
+.gr-more { border: 1px solid var(--border); background: #fff; color: var(--chart-slate); border-radius: 8px; width: 30px; height: 26px; display: inline-grid; place-items: center; cursor: not-allowed; opacity: .75; }
+.gr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.gr-small { font-size: 12.5px; }
+
+/* Impact vs effort: 2x2 matrix of existing chips inside hairline cells (no new chart style). */
+.gr-mx { display: grid; grid-template-columns: 18px minmax(0, 1fr); grid-template-rows: auto auto; gap: 6px 8px; }
+.gr-mx-y { grid-row: 1; display: flex; align-items: center; justify-content: center; }
+.gr-mx-y span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--chart-slate); }
+.gr-mx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gr-mx-cell { border: 1px solid var(--border); border-radius: 10px; padding: 10px 10px 12px; min-height: 92px; min-width: 0; background: #fff; }
+.gr-mx-cell.gr-mx-best { background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); border-color: color-mix(in srgb, var(--chart-terracotta) 30%, #fff); }
+.gr-mx-label { font-size: 11px; font-weight: 600; color: var(--chart-slate); margin-bottom: 8px; line-height: 1.3; }
+.gr-mx-items { display: flex; flex-wrap: wrap; gap: 5px; }
+.gr-mx-items .ex-chip { white-space: normal; }
+.gr-mx-x { grid-column: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--chart-slate); text-align: center; }
+
+/* Recent wins: objective line under each result (green when the target is reached). */
+.gr-win-target { font-size: 11.5px; color: var(--chart-slate); margin-top: 2px; }
+.gr-win-target.up { color: var(--chart-positive); }
+@media (max-width: 560px) {
+  .gr-filters .ex-select { flex: 1 1 150px; }
+  .gr-wins-card .gr-side { padding-left: 0; }
+}
+
+/* ---- Opportunités: detail icons (same optical sizes as the official icons: sm 16px, md 20px) ---- */
+.gr-op-srcin { display: inline-flex; align-items: center; gap: 6px; }
+.gr-op-prio { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.gr-th-ico, .gr-inline-ico { display: inline-flex; align-items: center; gap: 5px; }
+/* Header icon + label may stack (like the two-line headers), so the icon never widens the column. */
+.ex-table.gr-table .gr-th-ico { flex-wrap: wrap; row-gap: 2px; }
+.ex-table.gr-table th.num .gr-th-ico { justify-content: flex-end; }
+.gr-seg-label { gap: 8px; min-width: 0; }
+.gr-segments .ex-conc-row.wide { grid-template-columns: minmax(120px, 42%) minmax(0, 1fr) 48px; }
+
+/* ---- Opportunités: mini-curves in two KPI tiles, donut by source, pipeline by status ---- */
+.gr-kpi-row .ex-kpi-body:has(.gr-kpi-spark) { flex: 1 1 auto; }
+.gr-kpi-spark { height: auto; margin-top: 8px; }
+.gr-op-sources .nc-donut { flex-wrap: nowrap; gap: 18px; }
+.gr-op-sources .nc-donut-legend { gap: 8px; }
+.gr-status-row { grid-template-columns: minmax(110px, 36%) minmax(0, 1fr) auto; }
+.gr-status-val { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; white-space: nowrap; }
+.gr-status-val strong { font-size: 13px; color: var(--chart-navy); }
+.gr-status-val .gr-muted { font-size: 11px; }
+@media (max-width: 560px) { .gr-op-sources .nc-donut { flex-direction: column; align-items: center; } .gr-op-sources .nc-donut-legend { width: 100%; } }
+/* ================= Campagnes page ================= */
+.gr-cp-kpis .ex-kpi { min-height: 100%; }
+.gr-cp-trend-row { margin-bottom: 16px; }
+.gr-cp-trend-row > .ex-card { display: flex; flex-direction: column; }
+/* Campagnes only: a wider table column (the Opportunités grid is unchanged). */
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-cp { grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); } }
+/* Toolbar: search + filters + new-campaign button (Analytics' select / terracotta button, compact). */
+.gr-search { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; flex: 1 1 200px; min-width: 0; max-width: 300px; }
+.gr-search-input { border: 0; outline: 0; background: transparent; font: 500 12.5px var(--font-ui); color: var(--chart-navy); flex: 1; min-width: 0; height: 100%; }
+.gr-search:focus-within { border-color: var(--chart-slate); }
+.gr-cp-tools { align-items: center; }
+.gr-cp-new { min-height: 34px; padding: 0 14px; font-size: 12.5px; margin-left: auto; }
+.gr-cp-grid { min-width: 740px; }
+.gr-cp-name { min-width: 170px; }
+.gr-cp-camp { display: flex; align-items: center; gap: 10px; }
+.gr-cp-camp > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.3; }
+.gr-cp-sub { font-size: 11.5px; }
+.gr-cp-thumb { width: 34px; height: 34px; border-radius: 8px; flex: 0 0 auto; background: #F4F6F8; border: 1px solid var(--border); display: grid; place-items: center; }
+.gr-cp-ch { display: inline-flex; position: relative; }
+.gr-cp-perf { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.gr-cp-perf .ex-bar { width: 52px; margin-top: 0; }
+.gr-cp-perf strong { min-width: 40px; text-align: right; font-size: 12.5px; }
+/* "En cours": neutral navy tint (Nordla chart navy), next to the existing terracotta / muted chips. */
+.ex-chip.gr-info { background: color-mix(in srgb, var(--chart-navy) 8%, #fff); color: var(--chart-navy); }
+/* Performance by channel: logo, name + amount, Explorer bar, share. */
+.gr-cp-chrows { display: flex; flex-direction: column; gap: 12px; }
+.gr-cp-chrow { display: grid; grid-template-columns: 28px minmax(0, 1fr) 44px; align-items: center; gap: 12px; }
+.gr-cp-chname { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: var(--chart-navy); }
+.gr-cp-chname .gr-muted { font-weight: 500; white-space: nowrap; }
+.gr-cp-chmain .ex-bar { margin-top: 6px; }
+.gr-cp-chsub { margin-top: 4px; }
+.gr-cp-chpct { text-align: right; font-size: 13px; color: var(--chart-navy); }
+@media (max-width: 560px) {
+  .gr-search { max-width: none; flex-basis: 100%; }
+  .gr-cp-new { margin-left: 0; flex: 1 1 100%; }
+}
+
+/* ================= Potentiel produits page ================= */
+/* The list toolbar, pill filters, product rows (cards below 1024px), thumbnails and the detail drawer are copies of
+   Analytics > Produits (src/analytics-premium/ui/products.css: same values, .gr-pp-* names), so Growth keeps the Nordla
+   visual language without depending on another module's stylesheet. */
+/* "En baisse / Marge faible / Trop de retours": negative token tint, next to the existing good / warn / info chips. */
+.ex-chip.gr-bad { background: color-mix(in srgb, var(--chart-negative) 10%, #fff); color: var(--chart-negative); }
+/* KPI row: four tiles (4 columns, 2 below 1100px, 1 on phones). */
+.ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.gr-pp-kpis > .ex-kpi, .gr-pp-kpis > .ex-kpi:nth-child(n+4) { grid-column: auto; }
+@media (max-width: 1100px) { .ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-pp-kpis > .ex-kpi:last-child { grid-column: auto; } }
+@media (max-width: 560px) { .ex-kpi-row.gr-kpi-row.gr-pp-kpis { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-pp { grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr); align-items: start; } }
+
+.gr-pp-sub { font-size: 11.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-pp-name { font-weight: 600; color: var(--chart-navy); overflow-wrap: anywhere; line-height: 1.35; }
+.gr-pp-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gr-pp-na { color: var(--chart-slate); font-weight: 500; font-size: 12px; }
+.gr-pp-warn { color: var(--chart-terracotta); }
+.gr-pp-thumb { width: 40px; height: 40px; border-radius: 9px; border: 1px solid var(--border); background: #F4F6F8; object-fit: cover; display: block; flex: 0 0 auto; }
+.gr-pp-thumb.lg { width: 56px; height: 56px; border-radius: 12px; }
+.gr-pp-thumb.sm { width: 32px; height: 32px; border-radius: 8px; }
+span.gr-pp-thumb { display: grid; place-items: center; }
+
+/* toolbar: pills on their own line, then search + selects */
+.gr-pp-toolbar { display: grid; grid-template-columns: minmax(200px, 320px) minmax(0, 1fr); grid-template-areas: 'filters filters' 'search selects'; gap: 12px 14px; align-items: center; margin-bottom: 10px; }
+.gr-pp-search { grid-area: search; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; background: #F7F8FA; border: 1px solid #E5E7EB; border-radius: 10px; min-width: 0; }
+.gr-pp-search:focus-within { border-color: var(--chart-slate); background: #fff; }
+.gr-pp-search-input { border: 0; outline: 0; background: transparent; font: 500 13px var(--font-ui); color: var(--chart-navy); flex: 1; min-width: 0; height: 100%; }
+.gr-pp-search-input::placeholder { color: #8A94A3; }
+.gr-pp-selects { grid-area: selects; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.gr-pp-selects .ex-select { background: #F7F8FA; border-color: #E5E7EB; max-width: 220px; height: 38px; font-size: 12.5px; }
+.gr-pp-filters { grid-area: filters; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.gr-pp-filter { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid #E5E7EB; background: #fff; border-radius: 999px; font: 500 12.5px var(--font-ui); color: var(--chart-slate); cursor: pointer; white-space: nowrap; }
+.gr-pp-filter:hover { color: var(--chart-navy); }
+.gr-pp-filter.on { border-color: var(--chart-terracotta); color: var(--chart-navy); font-weight: 600; box-shadow: inset 0 0 0 1px var(--chart-terracotta); }
+.gr-pp-filter-n { font-size: 11px; font-weight: 600; color: var(--chart-slate); background: #F4F6F8; border-radius: 999px; padding: 0 6px; line-height: 1.6; }
+
+/* list: header + one grid row per product */
+.gr-pp-table { display: flex; flex-direction: column; }
+.gr-pp-thead, .gr-pp-row { display: grid; grid-template-columns: minmax(170px, 2.2fr) minmax(64px, .7fr) minmax(66px, .7fr) minmax(104px, .9fr) minmax(48px, .5fr) minmax(84px, .7fr) minmax(150px, 1.5fr) 28px; gap: 10px 12px; align-items: center; }
+.gr-pp-thead { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--chart-slate); line-height: 1.3; }
+.gr-pp-thead .num { text-align: right; }
+.gr-pp-row { width: 100%; padding: 10px; border: 0; border-bottom: 1px solid #eef0f3; background: transparent; text-align: left; font: 500 13px var(--font-ui); color: var(--chart-navy); cursor: pointer; }
+.gr-pp-row:last-child { border-bottom: 0; }
+.gr-pp-row:hover { background: #F7F8FA; }
+.gr-pp-row.sel { background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); box-shadow: inset 3px 0 0 var(--chart-terracotta); }
+.gr-pp-row:focus-visible, .gr-pp-filter:focus-visible, .gr-pp-item:focus-visible, .gr-pp-close:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 1px; }
+.gr-pp-c { min-width: 0; }
+.gr-pp-c-name { display: flex; align-items: center; gap: 12px; }
+.gr-pp-c-num, .gr-pp-c-evo { text-align: right; font-variant-numeric: tabular-nums; }
+.gr-pp-c-num .gr-pp-name-wrap { align-items: flex-end; }
+.gr-pp-c-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.gr-pp-signal { font-size: 11.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-pp-c-more { display: flex; justify-content: flex-end; }
+.gr-pp-dots { border: 1px solid var(--border); background: #fff; color: var(--chart-slate); border-radius: 8px; width: 28px; height: 24px; display: inline-grid; place-items: center; }
+.gr-pp-row:hover .gr-pp-dots { color: var(--chart-navy); }
+.gr-pp-evo { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.gr-pp-evo.up { color: var(--chart-positive); }
+.gr-pp-evo.down { color: var(--chart-negative); }
+.gr-pp-evo.none { color: var(--chart-slate); font-weight: 500; }
+.gr-pp-empty { font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); padding: 10px 0; }
+.gr-pp-empty ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* status chart: Explorer's bars with a label column wide enough for the longest status chip */
+.ex-conc-row.wide.gr-pp-status-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 24px; }
+.gr-pp-status-row .ex-chip { white-space: nowrap; }
+.gr-pp-status-row .gr-status-val { align-items: flex-end; }
+
+/* right column: product lists (push / protect) */
+.gr-pp-items { display: flex; flex-direction: column; }
+.gr-pp-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 6px; margin: 0 -6px; border: 0; border-bottom: 1px solid #eef0f3; border-radius: 8px; background: transparent; text-align: left; font: 500 12.5px var(--font-ui); color: var(--chart-navy); cursor: pointer; }
+.gr-pp-item:last-child { border-bottom: 0; }
+.gr-pp-item:hover { background: #F7F8FA; }
+.gr-pp-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gr-pp-item-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* detail drawer (Analytics > Produits' drawer) */
+body.gr-pp-lock { overflow: hidden; }
+.gr-pp-drawer-wrap { position: fixed; inset: 0; z-index: 40; }
+.gr-pp-backdrop { position: absolute; inset: 0; background: rgba(15, 39, 71, .28); }
+.gr-pp-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(500px, 100%); background: #fff; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.gr-pp-drawer-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.gr-pp-drawer-id { flex: 1; min-width: 0; }
+.gr-pp-drawer-id h2 { font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.25; color: var(--chart-navy); margin: 0; overflow-wrap: anywhere; }
+.gr-pp-drawer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; }
+.gr-pp-drawer-meta .ex-chip { white-space: normal; }
+.gr-pp-close { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #E5E7EB; background: #F7F8FA; color: var(--chart-navy); display: grid; place-items: center; cursor: pointer; flex: 0 0 auto; align-self: flex-start; font-size: 20px; line-height: 1; }
+.gr-pp-drawer-body { flex: 1; overflow-y: auto; padding: 4px 20px 28px; overscroll-behavior: contain; }
+.gr-pp-sec { padding: 16px 0; border-bottom: 1px solid #eef0f3; }
+.gr-pp-sec:last-child { border-bottom: 0; }
+.gr-pp-sec h3 { font-size: 14px; font-weight: 650; color: var(--chart-navy); margin: 0 0 10px; }
+.gr-pp-why { font-size: 13px; line-height: 1.55; color: var(--chart-navy); margin: 0 0 10px; }
+.gr-pp-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-pp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gr-pp-stat { display: flex; flex-direction: column; gap: 4px; background: #F7F8FA; border: 1px solid #E5E7EB; border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.gr-pp-stat-label { font-size: 11.5px; color: var(--chart-slate); }
+.gr-pp-stat-value { font-size: 16px; color: var(--chart-navy); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gr-pp-stat-note { font-size: 11.5px; line-height: 1.4; color: var(--chart-slate); }
+.gr-pp-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.gr-pp-action h3 { margin-bottom: 2px; }
+.gr-pp-action-text { font-size: 12.5px; line-height: 1.55; color: var(--chart-slate); margin: 0; }
+.gr-pp-action .gr-action { margin-left: 0; }
+
+@media (max-width: 900px) { .gr-pp-drawer-wrap { z-index: 60; } }
+@media (max-width: 1023px) {
+  .gr-pp-thead { display: none; }
+  .gr-pp-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; padding: 14px 12px; border: 1px solid #eef0f3; border-radius: 12px; margin-bottom: 8px; }
+  .gr-pp-row:last-child { border-bottom: 1px solid #eef0f3; }
+  .gr-pp-c-name, .gr-pp-c-status { grid-column: 1 / -1; }
+  .gr-pp-c-status { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .gr-pp-c-more { display: none; }
+  .gr-pp-c-num, .gr-pp-c-evo { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+  .gr-pp-c-num .gr-pp-name-wrap { align-items: flex-start; }
+  .gr-pp-c-num::before, .gr-pp-c-evo::before { content: attr(data-k); font-size: 11px; font-weight: 500; color: var(--chart-slate); }
+}
+@media (max-width: 560px) {
+  .gr-pp-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-pp-toolbar { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'filters' 'search' 'selects'; }
+  .gr-pp-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
+  .gr-pp-filters::-webkit-scrollbar { display: none; }
+  .gr-pp-selects { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .gr-pp-selects .ex-select { max-width: none; width: 100%; min-width: 0; }
+  .gr-pp-drawer { width: 100%; border-left: 0; }
+  .gr-pp-drawer-head { padding: 14px 16px; }
+  .gr-pp-drawer-body { padding: 4px 16px 24px; }
+}
+
+/* ================= Audience page ================= */
+/* Row 1: distribution, priority segments, signals (3 columns from 1360px, else distribution + priority side by side). */
+.gr-au-top { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-au-top > .ex-card { display: flex; flex-direction: column; min-width: 0; }
+@media (min-width: 901px) { .gr-au-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-au-top > .gr-au-signals { grid-column: 1 / -1; } }
+@media (min-width: 1360px) { .gr-au-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); } .gr-au-top > .gr-au-signals { grid-column: auto; } }
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-au { grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr); align-items: start; } }
+.gr-au-banner { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--chart-terracotta) 30%, #fff); background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); border-radius: 12px; font-size: 13px; line-height: 1.5; color: var(--chart-navy); }
+.gr-au-banner .nordla-icon { flex: 0 0 auto; margin-top: 1px; }
+
+/* Segment distribution: one stacked bar (segments are exclusive, they add up to 100 %) + legend. Nordla chart tokens only. */
+.gr-au-dist { display: flex; flex-direction: column; gap: 14px; }
+.gr-au-bar { display: flex; height: 44px; border-radius: 10px; overflow: hidden; background: var(--chart-soft-gray); }
+.gr-au-bar-seg { display: grid; place-items: center; min-width: 3px; flex-basis: 0; font: 600 12px var(--font-ui); color: #fff; white-space: nowrap; overflow: hidden; }
+.gr-au-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px 14px; }
+.gr-au-legend-item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.gr-au-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; }
+.gr-au-legend-text { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; color: var(--chart-navy); min-width: 0; line-height: 1.35; }
+.gr-au-legend-text strong { font-size: 12px; font-weight: 600; color: var(--chart-slate); }
+.gr-au-c-loyal { background: var(--chart-positive); }
+.gr-au-c-returning, .gr-au-c-o-returning { background: var(--chart-navy); }
+.gr-au-c-newReturned { background: color-mix(in srgb, var(--chart-navy) 60%, #fff); }
+.gr-au-c-new, .gr-au-c-o-new { background: var(--chart-slate); }
+.gr-au-c-reactivate { background: var(--chart-terracotta); }
+.gr-au-c-occasional { background: color-mix(in srgb, var(--chart-terracotta) 50%, #fff); }
+.gr-au-c-o-first_recorded_pos { background: color-mix(in srgb, var(--chart-slate) 45%, #fff); }
+.gr-au-c-unknown, .gr-au-c-o-unknown { background: color-mix(in srgb, var(--chart-slate) 25%, #fff); }
+.gr-au-bar .gr-au-c-unknown, .gr-au-bar .gr-au-c-o-unknown, .gr-au-bar .gr-au-c-o-first_recorded_pos { color: var(--chart-navy); }
+
+/* Priority segments: compact table with an arrow to the detail panel. */
+.gr-au-prio-table { min-width: 440px; table-layout: fixed; width: 100%; }
+.gr-au-prio-table th:nth-child(1) { width: 30%; } .gr-au-prio-table th:nth-child(2) { width: 10%; } .gr-au-prio-table th:nth-child(3) { width: 11%; }
+.gr-au-prio-table th:nth-child(4) { width: 23%; } .gr-au-prio-table th:nth-child(6) { width: 36px; }
+.ex-table.gr-au-prio-table th { white-space: normal; }
+.gr-au-prio-table td { white-space: normal; overflow-wrap: break-word; hyphens: auto; }
+.gr-au-prio-table .ex-chip { white-space: nowrap; }
+.gr-au-segcell { display: inline-flex; align-items: center; gap: 8px; line-height: 1.3; }
+.gr-au-segico { width: 30px; height: 30px; border-radius: 50%; background: #F4F6F8; display: grid; place-items: center; flex: 0 0 auto; }
+.gr-au-segico .nordla-icon { width: 18px; height: 18px; }
+.gr-au-actcell { font-size: 12.5px; color: var(--chart-slate); line-height: 1.35; }
+.gr-au-go { border: 0; background: transparent; color: var(--chart-slate); width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; cursor: pointer; }
+.gr-au-go:hover { background: #F4F6F8; color: var(--chart-navy); }
+.gr-au-go:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 1px; }
+
+/* Customer segments list: Produits Potentiels' rows with the Audience columns. */
+.gr-pp-thead.gr-au-thead, .gr-pp-row.gr-au-row { grid-template-columns: minmax(190px, 2.4fr) minmax(56px, .6fr) minmax(76px, .75fr) minmax(76px, .8fr) minmax(72px, .7fr) minmax(84px, .8fr) minmax(140px, 1.4fr) 28px; }
+.gr-au-row .gr-pp-c-name { gap: 10px; }
+.gr-au-list .ex-card-head .gr-action { margin-left: auto; }
+.gr-au-item { grid-template-columns: 36px minmax(0, 1fr) auto; align-items: flex-start; }
+.gr-au-item .gr-pp-item-main { gap: 3px; }
+.gr-au-item .gr-pp-item-side { flex-direction: row; align-items: center; color: var(--chart-slate); }
+.gr-au-static { cursor: default; }
+.gr-au-static:hover { background: transparent; }
+@media (max-width: 1023px) { .gr-pp-row.gr-au-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .gr-pp-row.gr-au-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-au-list .ex-card-head { flex-wrap: wrap; gap: 8px; }
+  .gr-au-legend { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* Priority table on phones: segment, size, status, open. Share of sales and action stay in the segment cards below. */
+  .gr-au-prio-table { min-width: 0; }
+  .gr-au-prio-table th:nth-child(3), .gr-au-prio-table td:nth-child(3), .gr-au-prio-table th:nth-child(5), .gr-au-prio-table td:nth-child(5) { display: none; }
+  .gr-au-prio-table th:nth-child(1) { width: auto; } .gr-au-prio-table th:nth-child(2) { width: 56px; } .gr-au-prio-table th:nth-child(4) { width: 112px; }
+}
+
+/* ================= Contenu page ================= */
+/* KPI tiles: 2 per row on phones (the check tiles are short), the first one full width. */
+@media (max-width: 560px) { .ex-kpi-row.gr-kpi-row.gr-ct-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gr-ct-kpis > .ex-kpi:first-child { grid-column: 1 / -1; } .gr-ct-kpis > .ex-kpi:last-child { grid-column: auto; } .gr-ct-kpis .ex-kpi { padding: 14px 12px; } }
+.gr-ct-top { margin-bottom: 16px; }
+.gr-ct-top > .ex-card { display: flex; flex-direction: column; }
+.gr-ct-prow { grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) 40px; }
+.gr-ct-prow strong { text-align: right; font-size: 13px; color: var(--chart-navy); }
+.gr-ct-clear { margin-bottom: 16px; }
+.gr-ct-clear p { margin: 4px 0 0; }
+/* Toolbar: search + three selects (status, problem, category). */
+.gr-ct-toolbar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 10px; }
+.gr-ct-toolbar .gr-pp-search { flex: 1 1 240px; max-width: 360px; }
+.gr-ct-selects { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.gr-ct-selects .ex-select { background: #F7F8FA; border-color: #E5E7EB; height: 38px; font-size: 12.5px; max-width: 220px; }
+/* List: Produits Potentiels' rows with the Contenu columns. */
+.gr-pp-thead.gr-ct-thead, .gr-pp-row.gr-ct-row { grid-template-columns: minmax(180px, 2fr) minmax(90px, .85fr) minmax(170px, 1.8fr) minmax(104px, .8fr) minmax(64px, .5fr) minmax(184px, 1fr) 28px; }
+.gr-ct-cat { font-size: 12.5px; overflow-wrap: anywhere; line-height: 1.35; }
+.gr-ct-c-problems { display: flex; flex-wrap: wrap; gap: 4px; }
+.gr-ct-c-problems .ex-chip, .gr-ct-c-status .ex-chip { white-space: nowrap; }
+.gr-ct-act { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 12px; white-space: nowrap; border-radius: 8px; }
+.gr-ct-chev { font-size: 16px; line-height: 1; }
+/* Detail panel: one tinted box per detected problem, numbered recommendations. */
+.gr-ct-issues { display: flex; flex-direction: column; gap: 8px; }
+.gr-ct-issue { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.45; color: var(--chart-navy); background: color-mix(in srgb, var(--chart-terracotta) 6%, #fff); border: 1px solid color-mix(in srgb, var(--chart-terracotta) 25%, #fff); }
+.gr-ct-issue.major { background: color-mix(in srgb, var(--chart-negative) 7%, #fff); border-color: color-mix(in srgb, var(--chart-negative) 28%, #fff); }
+.gr-ct-issue strong { font-size: 13px; }
+.gr-ct-reco { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--chart-navy); }
+.gr-ct-reco li { line-height: 1.45; }
+.gr-ct-reco li > span { display: block; margin-top: 2px; }
+@media (max-width: 1023px) {
+  .gr-pp-row.gr-ct-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-ct-row .gr-ct-c-problems, .gr-ct-row .gr-ct-c-act { grid-column: 1 / -1; }
+  .gr-ct-row .gr-ct-c-act { display: none; }
+  .gr-ct-row .gr-ct-cat { display: flex; flex-direction: column; gap: 2px; }
+  .gr-ct-row .gr-ct-cat::before { content: attr(data-k); font-size: 11px; font-weight: 500; color: var(--chart-slate); }
+  .gr-ct-row .gr-pp-c-num { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+}
+@media (max-width: 560px) {
+  .gr-ct-toolbar .gr-pp-search { max-width: none; flex-basis: 100%; }
+  .gr-ct-selects { margin-left: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; }
+  .gr-ct-selects .ex-select { max-width: none; width: 100%; min-width: 0; }
+  .gr-ct-selects .ex-select:last-child { grid-column: 1 / -1; }
+  .gr-ct-prow { grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 36px; }
+}
+
+/* ================= Croissance magasin page ================= */
+@media (min-width: 1360px) { .gr-grid-pipe.gr-grid-st { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; } }
+.gr-st-row { margin-bottom: 16px; }
+.gr-st-row > .ex-card { display: flex; flex-direction: column; min-width: 0; }
+.gr-st-perf .nc-wrap { margin-top: 4px; }
+.gr-st-dayrow { grid-template-columns: minmax(78px, 30%) minmax(0, 1fr) auto; }
+.gr-st-item { cursor: default; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: flex-start; }
+.gr-st-item:hover { background: transparent; }
+.gr-st-guard { margin-top: 3px; }
+.gr-st-guard .ex-chip { white-space: normal; }
+.gr-st-loctable { min-width: 0; }
+.gr-st-loctable td:first-child { overflow-wrap: anywhere; }
+.gr-st-src { grid-template-columns: minmax(0, 1fr) auto; }
+/* Pour aller plus loin: one full-width row, sources side by side from 901px. */
+@media (min-width: 901px) { .gr-st-future > .gr-pp-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; } .gr-st-future .gr-pp-item:last-child { border-bottom: 1px solid #eef0f3; } }
+@media (min-width: 1360px) { .gr-st-future > .gr-pp-items { grid-template-columns: repeat(4, minmax(0, 1fr)); } .gr-st-future .gr-pp-item { border-bottom: 0; align-items: flex-start; grid-template-columns: minmax(0, 1fr); } .gr-st-future .gr-pp-item-side { align-items: flex-start; } }
+.gr-st-loctable td:first-child { min-width: 90px; }
+.gr-st-empty { margin-bottom: 16px; }
+.gr-st-empty p { margin: 4px 0 0; }
+@media (max-width: 560px) {
+  .gr-st-dayrow { grid-template-columns: minmax(64px, 26%) minmax(0, 1fr) auto; }
+  .gr-st-perf .ex-card-head { flex-wrap: wrap; gap: 8px; }
+  .gr-st-perf .ex-card-head .ex-select { flex: 1 1 100%; width: 100%; }
+}
+
+/* ================= Mobile "Plus" menu (all Growth pages, below 901px only) ================= */
+.nav-item.gr-more-btn { display: none; border: 0; background: transparent; font-family: inherit; cursor: pointer; }
+.gr-more-ico svg { color: var(--chart-navy); }
+.gr-more-wrap { display: none; }
+@media (max-width: 900px) {
+  .nav-item.gr-more-btn { display: flex; }
+  .nav-item.gr-more-btn:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+  .gr-more-wrap { display: block; position: fixed; inset: 0; z-index: 30; }
+  .gr-more-backdrop { position: absolute; inset: 0; background: rgba(15, 39, 71, .28); }
+  .gr-more-panel { position: absolute; left: 12px; right: 12px; bottom: 80px; max-height: calc(100vh - 120px); overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 32px -12px rgba(16, 24, 40, .35); padding: 8px 8px 10px; }
+  .gr-more-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 10px; font-size: 14px; color: var(--chart-navy); }
+  .gr-more-close { width: 36px; height: 36px; border-radius: 10px; border: 1px solid #E5E7EB; background: #F7F8FA; color: var(--chart-navy); font-size: 20px; line-height: 1; cursor: pointer; }
+  .gr-more-list { display: flex; flex-direction: column; gap: 2px; }
+  .gr-more-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 12px; color: var(--chart-navy); text-decoration: none; font: 500 14px var(--font-ui); }
+  .gr-more-item:hover, .gr-more-item:focus-visible { background: #F7F8FA; }
+  .gr-more-item:focus-visible, .gr-more-close:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 1px; }
+  .gr-more-item.active { background: color-mix(in srgb, var(--chart-terracotta) 8%, #fff); box-shadow: inset 3px 0 0 var(--chart-terracotta); font-weight: 600; }
+  .gr-more-item.inert { color: var(--chart-slate); }
+  .gr-more-item.inert .gr-more-item-ico { opacity: .72; }
+  .gr-more-item-ico { width: 36px; height: 36px; border-radius: 10px; background: #F4F6F8; display: grid; place-items: center; flex: 0 0 auto; }
+  .gr-more-item-ico .nordla-icon { width: 22px; height: 22px; }
+  .gr-more-item-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .gr-more-soon { font-size: 11.5px; font-weight: 500; color: var(--chart-slate); }
+}
+
+/* ================= Shared page states (all Growth pages) ================= */
+.gr-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 180px; text-align: center; }
+.gr-state-loading { flex-direction: row; gap: 12px; color: var(--chart-slate); }
+.gr-state-title { font-size: 15px; color: var(--chart-navy); }
+.gr-state-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--chart-slate); max-width: 460px; }
+.gr-state-retry { padding: 8px 16px; font-size: 13px; }
+.gr-spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--chart-soft-gray); border-top-color: var(--chart-navy); animation: gr-spin .8s linear infinite; flex: 0 0 auto; }
+@keyframes gr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gr-spinner { animation: none; border-top-color: var(--chart-slate); } }
+
+/* Contenu between 1024 and 1180px: the Action column is hidden (the whole row already opens the same panel; the chevron stays),
+   so the list fits without a horizontal page scroll. Below 1024px the rows become cards (unchanged). */
+@media (min-width: 1024px) and (max-width: 1180px) {
+  .gr-pp-thead.gr-ct-thead, .gr-pp-row.gr-ct-row { grid-template-columns: minmax(170px, 2fr) minmax(84px, .8fr) minmax(160px, 1.8fr) minmax(100px, .8fr) minmax(60px, .5fr) 28px; }
+  .gr-pp-thead.gr-ct-thead > span:nth-child(6), .gr-ct-row .gr-ct-c-act { display: none; }
+}
+
+/* Mobile bar (2026-09-28): an item is never narrower than its longest word, so "Opportunités" / NL "Productpotentieel" no longer
+   run into the next item; items stay equal whenever there is room. Very small phones (<= 360px) get slightly tighter bar
+   margins so the widest language still fits without shrinking the labels or cutting a word. */
+@media (max-width: 900px) { .sidebar .nav-item { min-width: auto; } }
+@media (max-width: 360px) { .sidebar { padding-left: 2px; padding-right: 2px; } .sidebar .nav-item { padding-left: 1px; padding-right: 1px; } }
+/* Contenu / Croissance magasin KPI tiles on very small phones: two tiles per row leave ~50px next to the icon, which cut the
+   labels ("Commandes magasin") and pushed a note outside the page at 320px. The icon goes above the text there only. */
+@media (max-width: 360px) { .gr-ct-kpis .ex-kpi { flex-direction: column; align-items: flex-start; gap: 8px; } .gr-ct-kpis .ex-kpi-body { width: 100%; min-width: 0; } }
+
+/* ---------- Opportunités: priorities in three sections (À corriger maintenant / Opportunités commerciales / À surveiller) ---------- */
+.ex-kpi-row.gr-pr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .ex-kpi-row.gr-pr-kpis { grid-template-columns: minmax(0, 1fr); } }
+.gr-pr-sections { display: grid; gap: 16px; margin-bottom: 16px; grid-template-columns: minmax(0, 1fr); }
+.gr-pr-card { display: flex; flex-direction: column; }
+.gr-pr-intro { margin: -4px 0 6px; font-size: 12.5px; }
+.gr-pr-row .ex-mover-sub + .ex-mover-sub { margin-top: 4px; }
+.gr-pr-examples, .gr-pr-findings { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; min-width: 0; }
+.gr-pr-examples .ex-chip, .gr-pr-findings .ex-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.gr-pr-empty { display: flex; flex-direction: column; gap: 4px; }
+.gr-pr-empty ul { margin: 4px 0 0; }
+.gr-pr-foot { margin: 0 0 16px; }
+.gr-op-link { display: inline-flex; align-items: center; min-height: 24px; font-size: 12.5px; font-weight: 600; color: var(--chart-navy); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.gr-op-link:hover { color: var(--chart-terracotta); }
+.gr-op-link:focus-visible { outline: 2px solid var(--chart-terracotta); outline-offset: 2px; border-radius: 3px; }
+/* KPI note second line: short explanation (e.g. one product may need several corrections) */
+.gr-kpi-hint { margin-top: 2px; opacity: .85; }

@@ -1,0 +1,110 @@
+// Nordla identity - "do these credentials belong to this Supabase user?" (ADR 0004, Core C1b).
+//
+// Answers ONLY that question. It does not decide which merchant the person belongs to, which role they have or which modules they may
+// open (C2, C3), and it never creates a Nordla session: no session store is given to it, nothing is written to app_sessions, no
+// cookie exists here. The final order will be: C1b identity -> C2 membership + role -> C3 module enabled -> only then a session.
+//
+//   verify({ email, password, ip }) ->
+//     { ok: true,  identity: { userId } }
+//     { ok: false, error: 'INVALID_CREDENTIALS' }   unknown address, wrong password, refused account, malformed input: ONE answer
+//     { ok: false, error: 'RATE_LIMITED' }          too many failures: says neither which limit nor whether the account exists
+//     { ok: false, error: 'UNAVAILABLE' }           Supabase Auth or the attempt store cannot answer (fail closed)
+//
+// Journal (identity_events): AUTH_SUCCEEDED / AUTH_FAILED / AUTH_RATE_LIMITED / AUTH_UNAVAILABLE. Never an e-mail, a password, an IP
+// or a token. Failures carry only 16-hex prefixes of the keyed HMAC subjects (subjectRef / sourceRef): enough to see that several
+// failures share a subject, useless without the secret key. The merchant_id of an event is the merchant of the SERVICE where the
+// attempt happened (fixed at construction from the tenant resolver) - never a value sent by the caller, never an attribution of the
+// person to that merchant.
+
+import { randomUUID } from 'node:crypto';
+import { normalizeEmail } from './rate-limit.js';
+
+export const PUBLIC_ERRORS = Object.freeze(['INVALID_CREDENTIALS', 'RATE_LIMITED', 'UNAVAILABLE']);
+const ALLOWED_INPUT = new Set(['email', 'password', 'ip', 'correlationId']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ref = (hmac) => hmac.slice(0, 16);
+
+/**
+ * @param {{
+ *   gotrue: { verifyPassword(email: string, password: string): Promise<object> },
+ *   limiter: { subjects: Function, reserve: Function, settle: Function },
+ *   events: { record: Function },
+ *   service: { merchantId: string, module: string },   the calling service's own tenant (resolver) and name - journal context only
+ *   newId?: () => string,
+ * }} deps
+ */
+export function createIdentityVerifier({ gotrue, limiter, events, service, newId = randomUUID } = {}) {
+  if (!gotrue || !limiter || !events || !service || !UUID.test(String(service.merchantId ?? '')) || typeof service.module !== 'string') {
+    throw new TypeError('createIdentityVerifier needs gotrue, limiter, events and the service context { merchantId, module }');
+  }
+  const context = Object.freeze({ merchantId: service.merchantId.toLowerCase(), module: service.module });
+
+  const journal = (type, outcome, correlationId, extra = {}) => events.record({ ...context, type, outcome, correlationId, ...extra });
+  const quietly = async (p) => { try { await p; } catch { /* a failure answer never depends on the journal */ } };
+
+  /**
+   * @param {{ email: string, password: string, ip?: string, correlationId?: string }} input
+   * @param {{ authorize?: (userId: string, correlationId: string) => Promise<{ ok: true, value?: any } | { ok: false, unavailable?: boolean }> }} [hooks]
+   *   authorize (C3): runs AFTER a correct password and BEFORE the attempt is settled. A refusal is settled as a FAILURE (it counts
+   *   against the limits exactly like a wrong password, so a correct password without access can never be told apart by the
+   *   limiter's behaviour) and answered { ok: false, error: 'ACCESS_DENIED' } (internal; the public layer merges it).
+   */
+  async function verify(input = {}, { authorize = null } = {}) {
+    for (const k of Object.keys(input)) if (!ALLOWED_INPUT.has(k)) throw new TypeError(`verify() does not accept "${k}"`);
+    const { email, password, ip } = input;
+    const correlationId = UUID.test(String(input.correlationId ?? '')) ? input.correlationId : newId();
+    const s = limiter.subjects({ email, ip });
+    const refs = { subjectRef: ref(s.email), sourceRef: ref(s.ip) };
+
+    // 1. reserve the attempt in the database BEFORE Supabase is called (atomic across processes and instances)
+    let reservation;
+    try { reservation = await limiter.reserve(s); } catch {
+      await quietly(journal('AUTH_UNAVAILABLE', 'FAILURE', correlationId, { detail: { reason: 'RATE_LIMIT_STORE' } }));
+      return { ok: false, error: 'UNAVAILABLE' };
+    }
+    if (!reservation) {
+      await quietly(journal('AUTH_RATE_LIMITED', 'DENIED', correlationId, { detail: refs }));
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
+
+    // 2. verify, then 3. settle the reservation exactly once (an unexpected exception releases it; a crash lets it expire)
+    let settled = false;
+    const settle = async (outcome) => { settled = true; return limiter.settle(reservation, outcome); };
+    try {
+      const normalized = normalizeEmail(email);
+      const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '') : { ok: false, kind: 'INVALID' };
+
+      if (result.ok) {
+        try {
+          await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout } });
+        } catch { await quietly(settle('RELEASE')); return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
+        let authz = { ok: true, value: undefined };
+        if (authorize) { try { authz = await authorize(result.userId, correlationId); } catch { authz = { ok: false, unavailable: true }; } }
+        if (!authz || !authz.ok) {
+          if (authz?.unavailable) { await quietly(settle('RELEASE')); return { ok: false, error: 'UNAVAILABLE' }; }
+          let blockedNow = false;
+          try { blockedNow = (await settle('FAILURE')).blocked; } catch { /* still a refusal */ }
+          await quietly(journal('AUTH_FAILED', 'FAILURE', correlationId, { detail: { ...refs, blockedNow, reason: 'ACCESS_DENIED' } }));
+          return { ok: false, error: 'ACCESS_DENIED' };
+        }
+        await quietly(settle('SUCCESS')); // releases the reservation and resets this address's failures (never the IP's)
+        const identity = Object.freeze({ userId: result.userId });
+        return authorize ? { ok: true, identity, authorization: authz.value } : { ok: true, identity };
+      }
+      if (result.kind === 'UNAVAILABLE') {
+        await quietly(settle('RELEASE')); // not the person's fault: nothing is counted
+        await quietly(journal('AUTH_UNAVAILABLE', 'FAILURE', correlationId, { detail: { reason: result.reason } }));
+        return { ok: false, error: 'UNAVAILABLE' };
+      }
+      let blockedNow = false;
+      try { blockedNow = (await settle('FAILURE')).blocked; } catch { /* still a refusal; an unsettled reservation keeps counting until it expires */ }
+      await quietly(journal('AUTH_FAILED', 'FAILURE', correlationId, { detail: { ...refs, blockedNow } }));
+      return { ok: false, error: 'INVALID_CREDENTIALS' };
+    } finally {
+      if (!settled) await quietly(limiter.settle(reservation, 'RELEASE'));
+    }
+  }
+
+  // `context` lets a consumer (the C3 access service) refuse to be assembled with a verifier of another merchant or module.
+  return Object.freeze({ verify, context });
+}

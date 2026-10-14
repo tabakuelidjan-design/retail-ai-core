@@ -203,18 +203,19 @@ test('HABB historical behaviour kept: runSync("all") with a valid connector leav
   for (const t of DATA_TABLES) assert.equal(newFlow.rows(t).length, oldFlow.rows(t).length, t);
 });
 
-// ---------- legacy fallback (ADR: explicit, transitional, logged, via merchant_connectors) ----------
-test('legacy fallback: off -> refused; on and no NORDLA_MERCHANT_ID -> tenant via merchant_connectors (not merchants.source_id), logged', async () => {
-  const off = db();
-  assert.equal((await sync(off, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_A) })).status, 'REFUSED'); assert.deepEqual(off.writes, []);
-  const on = db(); const lines = [];
-  const r = await sync(on, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs(SHOP_A), log: (...a) => lines.push(a.join(' ')) });
-  assert.equal(r.status, 'SUCCESS'); assert.equal(r.merchantId, A.id);
-  assert.notEqual(A.source_id, SHOP_A, 'merchants.source_id is not what matched');
-  assert.ok(lines.some((l) => /tenant source = legacy_shopify/.test(l)) && lines.some((l) => /WARNING/.test(l)));
-  const unknown = db();
-  assert.equal((await sync(unknown, { env: { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop: shopifyAs('gid://shopify/Shop/NOBODY') })).status, 'REFUSED');
-  assert.deepEqual(unknown.writes, []);
+// ---------- removed legacy fallback (C6-F): Shopify never selects the tenant ----------
+test('C6-F: no NORDLA_MERCHANT_ID -> REFUSED before any Shopify call or write, even with the old switch on and a shop linked to A', async () => {
+  for (const env of [{ ...SHOPIFY_ENV }, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: '1' }]) {
+    const s = db(); const shop = shopifyAs(SHOP_A); const lines = [];
+    const r = await sync(s, { env, shop, log: (...a) => lines.push(a.join(' ')) });
+    assert.equal(r.status, 'REFUSED'); assert.deepEqual(s.writes, []);
+    assert.equal(shop.calls.created, 0, 'no Shopify client built'); assert.equal(shop.calls.queries, 0);
+    assert.ok(!lines.some((l) => /legacy_shopify|WARNING/.test(l)));
+  }
+  // A Shopify id stored in merchants.source_id does not select that merchant either.
+  const bySourceId = db(); const shop = shopifyAs(A.source_id);
+  assert.equal((await sync(bySourceId, { env: { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, shop })).status, 'REFUSED');
+  assert.deepEqual(bySourceId.writes, []); assert.equal(shop.calls.queries, 0);
 });
 
 // ---------- the central write guard ----------

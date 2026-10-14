@@ -89,27 +89,9 @@ function checkStatus(status) {
 const fromRow = (r) => Object.freeze({ id: r.id, merchantId: r.merchant_id, kind: r.kind, externalId: r.external_id ?? null, externalDomain: r.external_domain ?? null, status: r.status, config: r.config ?? {}, createdAt: r.created_at ?? null, updatedAt: r.updated_at ?? null });
 const isUniqueViolation = (e) => /HTTP 409|23505/.test(String(e?.message ?? ''));
 
-// ---------- backfill (mirror of the M1 SQL, used to document and test the rule) ----------
-/**
- * The Shopify connectors M1 creates: one per merchant whose source_system is 'shopify' and source_id is not blank, skipping any
- * (kind, external_id) already present. Pure: never mutates its inputs. The SQL in the migration is authoritative.
- * @param {Array<{id: string, source_system: string, source_id: string|null, source_domain: string|null}>} merchants
- * @param {Array<{kind: string, external_id: string|null}>} existingConnectors
- */
-export function planShopifyConnectorBackfill(merchants, existingConnectors = []) {
-  const taken = new Set(existingConnectors.filter((c) => c.external_id != null).map((c) => `${c.kind}\u0000${c.external_id}`));
-  const rows = [];
-  for (const m of merchants) {
-    if (m.source_system !== 'shopify' || m.source_id == null || String(m.source_id).trim() === '') continue;
-    const key = `shopify\u0000${m.source_id}`;
-    if (taken.has(key)) continue;
-    taken.add(key);
-    rows.push({ merchant_id: m.id, kind: 'shopify', external_id: m.source_id, external_domain: m.source_domain ?? null, status: 'CONFIGURED', config: {} });
-  }
-  return rows;
-}
-
 // ---------- repository ----------
+// (The JS mirror of the M1 backfill, which read merchants.source_*, is gone with M2: M1 is applied everywhere and its SQL stays the
+// authoritative record; nothing in src/ reads merchants' legacy identity columns any more.)
 /**
  * @param {{ supabase: { select: Function, insert: Function, update: Function } }} deps
  */

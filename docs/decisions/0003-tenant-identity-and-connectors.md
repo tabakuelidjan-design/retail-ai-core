@@ -1,7 +1,8 @@
 # ADR 0003: Nordla tenant identity is independent of Shopify; Shopify becomes an optional connector
 
-- **Status:** Accepted (architecture only - no code, no migration yet)
-- **Date:** 2026-09-27
+- **Status:** Accepted. **Built** in code and tests; **deployed on staging only**; **production NOT switched** (verified
+  2026-09-28, see section 12 - the "no code, no migration yet" wording of the original status is out of date).
+- **Date:** 2026-09-27 (state updated 2026-09-28, Core phase C0)
 - **Baseline audited:** Finance `21dc924` (production), Core `b7973dd` (production), Analytics `e593475` (production), Growth `feature/growth-campaigns`
 
 ## Context
@@ -77,8 +78,9 @@ A single module (planned: `src/tenant/`) is the only place any service obtains i
 1. **Authenticated session tenant** - future multi-tenant architecture: the tenant bound to the authenticated session or user.
    Not implemented now; the resolver interface must allow it without changing the modules.
 2. **`NORDLA_MERCHANT_ID`** - current single-tenant services (Finance, Core, Analytics): the explicit UUID of `merchants.id`.
-3. **Legacy Shopify lookup** - migration only, and only when `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` is explicitly enabled:
-   shop id -> `merchant_connectors (kind = 'shopify', external_id = shop id)` -> `merchant_id`. Logs a deprecation warning at every boot.
+3. ~~**Legacy Shopify lookup**~~ - **removed in C6-F.** It was migration only (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`, shop id ->
+   `merchant_connectors` -> `merchant_id`). Since C6-F the variable is not read, re-enables nothing, and the resolver refuses any
+   extra option (such as a shop reader) with a `TypeError`: Shopify can no longer discover or identify a merchant.
 
 There is **no implicit fallback**: never "the first merchant", never "the only merchant in the database".
 
@@ -88,8 +90,8 @@ There is **no implicit fallback**: never "the first merchant", never "the only m
 - Never selects a merchant automatically, never creates a merchant.
 - Fails cleanly with an explicit error when the id is missing, malformed or unknown and the mode requires it; it never falls back to
   another merchant.
-- Makes **no Shopify call** to determine identity (source 3 only during migration, behind the flag).
-- Returns `{ merchantId, source }` where `source` is `session | env | legacy_shopify`, so tests and logs can prove which path was used.
+- Makes **no Shopify call** to determine identity (since C6-F there is no Shopify path at all).
+- Returns `{ merchantId, source }` where `source` is `session | env`, so tests and logs can prove which path was used.
 
 ## 4. Connector contract
 
@@ -165,7 +167,7 @@ No change today (demonstration data). It uses the resolver as soon as it reads r
 |---|---|---|
 | `NORDLA_MERCHANT_ID` | UUID of `merchants.id` for a single-tenant service (Finance, Core, Analytics) | new; required once the switch is complete; not a secret |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` | Shopify connector configuration | optional for Finance/Analytics; required only by Core's Shopify sync |
-| `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` | enables resolver source 3 | transitional; off by default once the switch is done, then removed |
+| `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` | formerly enabled resolver source 3 | **removed in C6-F**: not read by any code; setting it has no effect |
 
 No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-environment configuration.
 
@@ -175,7 +177,13 @@ No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-enviro
   `source_system = 'shopify'` (`external_id = source_id`, `external_domain = source_domain`, `status = 'CONFIGURED'`).
   No existing merchant UUID changes, no business table changes, nothing deleted.
 - **M2 - much later, never part of the first switch:** make `merchants.source_system` / `source_id` optional and mark them deprecated,
-  only after every service uses the resolver and the fallback is removed. No column is dropped in M2.
+  only after every service uses the resolver and the fallback is removed. **No column is dropped in M2.**
+  `20260929170000_merchants_deprecate_legacy_identity.sql` keeps the three columns (`source_system`, `source_id`, `source_domain`) and
+  every existing value, drops only the NOT NULL of `source_system` / `source_id` (`source_domain` was already optional), keeps
+  `merchants_source_unique` (identical non-null identities still refused; several merchants with both values NULL accepted) and marks
+  the three columns `DEPRECATED`. The columns are kept temporarily for compatibility and a simple rollback (restore the two NOT NULL,
+  refused if a NULL exists - never an invented identity). Their eventual removal belongs to a separate, future migration, after a much
+  longer stable period and a new explicit owner decision. Procedure: `docs/runbooks/m2-merchants-legacy-identity.md`.
 
 ## 8. HABB switch order (exact)
 
@@ -186,17 +194,19 @@ No merchant-specific value is ever hardcoded; `NORDLA_MERCHANT_ID` is per-enviro
 5. Validate on staging (with the synthetic Shopify stub).
 6. Validate in production.
 7. Disable the Shopify fallback (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` off).
-8. Remove the fallback code - only later, in its own change.
+8. Remove the fallback code - only later, in its own change (C6-F: prepared locally on `feature/core-merchant-id-c6f`; deployed
+   only after Finance and Analytics run on `NORDLA_MERCHANT_ID` in production).
 
 ## 9. Rollback strategy
 
-- **M1:** additive; rollback = stop using the table (code falls back to the legacy flag); dropping it is optional because nothing else
-  references it.
+- **M1:** additive; rollback = stop using the table (before C6-F: code falls back to the legacy flag; after C6-F the Shopify
+  connector reports MISCONFIGURED without its row, identity is unaffected); dropping it is optional because nothing else references it.
 - **Code:** each step is its own branch and deployment; rollback = redeploy the previous known-good deployment on Railway
   (no force push), as for every Finance release.
 - **Configuration:** with the legacy flag still on, removing `NORDLA_MERCHANT_ID` returns a service to today's behaviour.
 - **Fallback removal (step 8)** is only done once production has run on `NORDLA_MERCHANT_ID` without the flag; until then every step
-  stays reversible.
+  stays reversible. After C6-F, a service without `NORDLA_MERCHANT_ID` refuses to start (no Shopify path left); rolling C6-F back
+  = redeploying the previous known-good code (`7fb9079`), whose fallback is off as long as the flag is unset.
 
 ## 10. Mandatory tests
 
@@ -221,6 +231,71 @@ Every implementation step must keep these green (staging uses the synthetic Shop
 - The Supabase service-role key sees every tenant; isolation relies on `merchant_id` filters in code (already tested).
 - Real multi-tenant isolation (tenant from the session, per-tenant storage for these files, RLS policies per tenant) is a separate,
   later project. Resolver source 1 is reserved for it.
+
+## 12. Real state and remaining switch steps (verified 2026-09-28, Core phase C0)
+
+Verified read-only: Git, full test suite (1256/1256 on `4c34896`), Railway deployments and variable *names*, SQL reads on both
+Supabase projects. No secret value was displayed.
+
+### 12.1 Built vs deployed
+
+| Item | Built (code + tests) | Staging | Production |
+|---|---|---|---|
+| Resolver `src/tenant/index.js` (env source; session reserved) | yes (`tenant-resolver.test.js`) | yes | **no** |
+| M1 `merchant_connectors` + Shopify backfill | yes (`merchant-connectors.test.js`) | yes (1 `shopify` connector, `CONFIGURED`) | **no** (table absent) |
+| Finance boot from `NORDLA_MERCHANT_ID` (step 4 of the original plan) | yes (`finance-tenant-decoupling.test.js`) | yes | **no** |
+| Core sync: tenant from resolver, shop checked against its connector, no merchant creation (step 5) | yes (`core-tenant-decoupling.test.js`) | yes | **no** |
+| Analytics tenant, no "only merchant" (step 6) | yes (`analytics-tenant-decoupling.test.js`) | yes | **no** |
+| CLI tools (buying, customers, marketing) through the resolver (step 7) | yes (`remaining-tenant-decoupling.test.js`) | yes (run locally) | n/a (not deployed services) |
+| `NORDLA_SERVICE` start dispatcher | yes (`service-start.test.js`) | yes | **no** |
+
+Production (Railway `app.nordla.app`, environment `production`), verified 2026-09-28:
+- Finance `21dc924`: `src/finance/runtime.js` calls Shopify `SHOP_QUERY` at boot and selects `merchants` by `source_id = shop.id`.
+- Core `b7973dd`: `src/sync/index.js` finds the merchant with `SHOP_QUERY`; `src/sync/catalog.js` **upserts `merchants` from the shop**
+  (`normalizeMerchant`), i.e. Core still creates/updates the tenant from Shopify.
+- Analytics `e593475`: `src/report/index.js` uses `SHOP_QUERY`; `src/analytics-premium/server/serve.js` still has the
+  "exactly one merchant" rule (`MERCHANT_NOT_UNIQUE`).
+- None of the three production services has `NORDLA_MERCHANT_ID` or `NORDLA_SERVICE`. **Deploying the current code chain without
+  `NORDLA_SERVICE` makes the service refuse to start** (by design): both variables must be set before the switch deployment.
+- Production database: 22 of the 23 repository migrations applied (all except `merchant_connectors`); no RLS policy anywhere.
+
+### 12.2 Legacy Shopify fallback - removed in C6-F
+
+The migration-only source 3 (`NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP`) was present in four places: `src/finance/runtime.js`,
+`src/sync/tenant-context.js`, `src/analytics-premium/server/tenant.js`, `src/tenant/tool-context.js`. C6-F removes it from the resolver
+and from all four callers; `test/c6f-merchant-identity.test.js` proves it for every entry point. `SHOP_QUERY` remains used only for the
+**connector** check of an already resolved merchant (`src/sync/tenant-context.js`, `src/connectors/shopify.js`), never to choose the
+tenant; `findMerchantByExternal` remains only to refuse linking one shop to two merchants and to explain a refused sync
+(`SHOP_LINKED_TO_ANOTHER_MERCHANT`), never to switch tenant.
+
+### 12.3 Remaining switch steps for HABB (Core phase C6)
+
+Status of the section 8 plan: steps 1-2 done on staging only; step 3 code built; steps 4-8 not done in production.
+
+1. Apply M1 (`merchant_connectors`) on production; verify the HABB `shopify` backfill row.
+2. Deploy the current chain to production Core, Finance and Analytics with `NORDLA_SERVICE` (`core` / `finance` / `analytics`) and
+   `NORDLA_MERCHANT_ID` (HABB's existing `merchants.id`) set **before** the deployment; one service at a time, rollback = redeploy the
+   previous commit.
+3. Validate: no identity `SHOP_QUERY` at boot, sync writes checked against the connector, Analytics without the single-merchant rule.
+4. Keep `NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP` unset (off); after a stable production period, remove the fallback code (own change:
+   C6-F, prepared locally, deployed only after the Finance and Analytics switches).
+5. Prepare M2 (make `merchants.source_system` / `source_id` optional, deprecated, nothing dropped - section 7; prepared locally on
+   `feature/core-merchant-cleanup-m2`, applied nowhere). **M2 must be finished before the
+   second external customer.**
+
+### 12.4 Ordering decision (owner, 2026-09-28)
+
+**C6 (this production switch) comes before C5 (public opening of Growth / Développement des ventes)**, including the internal HABB
+beta. The Core roadmap and the identity decisions are in ADR 0004 (sections 7, 11 and 12).
+
+### 12.5 Out-of-date documentation (flagged, cleanup in a separate small documentation commit)
+
+- Section 1.3, table row "Growth ... demonstration data only" and section 5.5 "No change today (demonstration data)": out of date.
+  Growth now reads the tenant's real synced data through the resolver (`src/growth/server/serve.js` + `resolveToolTenant`).
+- `src/growth/server/serve.js` header comment "Without it, the demonstration pages still work": out of date (code comment; not
+  changed in C0).
+- `supabase/migrations/20260926160000_finance_purchase_document_model.sql` header says "NOT APPLIED": it is applied on production and
+  staging (an applied migration is not rewritten; to be noted in the migration log instead).
 
 ## Consequences
 

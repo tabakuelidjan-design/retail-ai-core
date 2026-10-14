@@ -8,29 +8,17 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveTenant, readMerchantIdFromEnv, isLegacyShopifyLookupEnabled } from '../../tenant/index.js';
+import { resolveTenant } from '../../tenant/index.js';
 import { createConnectorRepository } from '../../tenant/connectors.js';
 
 export const SALES_CONNECTOR_KINDS = Object.freeze(['shopify', 'woocommerce', 'prestashop', 'odoo']);
-const LEGACY_TIMEOUT_MS = 10_000;
 
 /**
- * The Analytics tenant. The legacy Shopify lookup (merchant_connectors, never merchants.source_id) is offered to the resolver only when it
- * is explicitly enabled and no NORDLA_MERCHANT_ID is set; the Shopify modules are then imported lazily, so the normal path never loads them.
+ * The Analytics tenant: NORDLA_MERCHANT_ID through the shared resolver, nothing else (C6-F) - no Shopify module is even loaded here.
  */
-export async function resolveAnalyticsTenant({ env = process.env, supabase, log = console.log, createClient = null } = {}) {
-  let legacyShopify;
-  if (!readMerchantIdFromEnv(env) && isLegacyShopifyLookupEnabled(env)) {
-    const { hasShopifyCredentials, timeoutFetch } = await import('../../connectors/shopify.js');
-    if (hasShopifyCredentials(env)) {
-      const client = await import('../../shopify/client.js'); const { SHOP_QUERY } = await import('../../shopify/queries.js');
-      const create = createClient ?? client.createShopifyClient;
-      legacyShopify = { findShopId: async () => (await create(client.loadShopifyConfigFromEnv(env), { fetchImpl: timeoutFetch(LEGACY_TIMEOUT_MS) }).graphql(SHOP_QUERY))?.shop?.id };
-    }
-  }
-  const tenant = await resolveTenant({ supabase, env, legacyShopify, legacyTimeoutMs: LEGACY_TIMEOUT_MS });
+export async function resolveAnalyticsTenant({ env = process.env, supabase, log = console.log } = {}) {
+  const tenant = await resolveTenant({ supabase, env });
   log(`Analytics tenant: ${tenant.merchant.name} (tenant source = ${tenant.source})`);
-  if (tenant.source === 'legacy_shopify') log('WARNING: tenant resolved through the legacy Shopify lookup (migration only) - set NORDLA_MERCHANT_ID.');
   return tenant;
 }
 

@@ -6,6 +6,7 @@
 import { aggregate } from '../metrics/sales.js';
 import { buildCustomerLevel } from './customer-level.js';
 import { customerProvenance } from './provenance.js';
+import { isOnlineChannel, isPosChannel } from '../metrics/channels.js';
 
 const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 const round4 = (x) => Math.round(x * 10000) / 10000;
@@ -31,8 +32,6 @@ export function orderGroup(order, { online, pos }) {
 
 export function buildCustomerFacts({ ledger, data, now, config }) {
   const c = config.customers;
-  const online = new Set(config.marketing.onlineChannelHandles);
-  const posH = new Set(config.marketing.posChannelHandles);
   const rawById = new Map(data.orders.map((o) => [o.id, o]));
   const orders = ledger.orders.map((o) => ({ ...o, raw: rawById.get(o.id) })).filter((o) => o.raw);
   const first = orders.length ? new Date(Math.min(...orders.map((o) => o.orderedAt))) : null;
@@ -45,7 +44,8 @@ export function buildCustomerFacts({ ledger, data, now, config }) {
   ];
   const spanFact = { history_days: spanDays, first_order_date: window?.start ?? null, orders_in_scope: orders.length };
 
-  const groupOf = (o) => orderGroup(o.raw, { online: online.has(o.raw.channel_handle), pos: posH.has(o.raw.channel_handle) });
+  // Channel spellings with the same meaning (e.g. pos / point_of_sale) are compared normalized (metrics/channels.js).
+  const groupOf = (o) => orderGroup(o.raw, { online: isOnlineChannel(o.raw.channel_handle, config), pos: isPosChannel(o.raw.channel_handle, config) });
   const groupByOrder = new Map(orders.map((o) => [o.id, groupOf(o)]));
   const groupOfLine = new Map(ledger.lineFacts.map((l) => [l.orderLineId, groupByOrder.get(l.orderId)]));
 

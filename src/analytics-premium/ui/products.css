@@ -157,3 +157,5 @@ body.pr-lock { overflow: hidden; }
   .pr-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
   .pr-bar-row .ex-bar { grid-column: 1 / -1; grid-row: 2; }
 }
+/* fr-BE labels (2026-09-28): « Analyser les produits dans Exploration » is wider than 320 px on one line - wrap it on very small phones only. */
+@media (max-width: 360px) { .pr-link { white-space: normal; height: auto; min-height: 40px; padding: 8px 14px; text-align: center; line-height: 1.3; } }

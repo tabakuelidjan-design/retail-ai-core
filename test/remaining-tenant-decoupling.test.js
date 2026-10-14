@@ -107,11 +107,12 @@ for (const [name, run] of Object.entries(TOOLS)) {
     assert.equal((empty._tables.get('merchants') ?? []).length, 0);
   });
 
-  test(`${name}: legacy lookup only when explicitly enabled - resolved through merchant_connectors (not merchants.source_id), logged`, async () => {
-    const s = await twoMerchants();
-    const r = await run(s, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory });
-    assert.equal(r.merchantId, B, 'SYN-B is B\'s connector; B\'s merchants.source_id is LEGACY-B');
-    await assert.rejects(run(s, { MERCHANT_TIMEZONE: 'UTC', ...SHOPIFY_ENV }, { outDir: await tmp(), createClient: shopAs(SHOP_B).factory }), (e) => e.code === T.MERCHANT_ID_MISSING);
+  test(`${name}: C6-F - the removed legacy switch re-enables nothing; the shop linked to B never selects B, Shopify is not built`, async () => {
+    for (const env of [{ ...SHOPIFY_ENV }, { ...SHOPIFY_ENV, NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' }]) {
+      const s = await twoMerchants(); const shop = shopAs(SHOP_B); const dir = await tmp();
+      await assert.rejects(run(s, env, { outDir: dir, createClient: shop.factory }), (e) => e.code === T.MERCHANT_ID_MISSING);
+      assert.equal(shop.calls.created, 0); assert.deepEqual(s.writes, []); assert.deepEqual(await readdir(dir), []);
+    }
   });
 }
 

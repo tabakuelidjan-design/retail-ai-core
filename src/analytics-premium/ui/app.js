@@ -55,8 +55,14 @@ function dotsIcon(size = 14) {
 }
 const icon = (name, size) => svg(ICONS[name] || ICONS.spark, size);
 
-const fmtMoney = (v, cur) => (v == null ? t('common.dash') : `€ ${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`.replace('€', cur === 'EUR' ? '€' : cur || ''));
-const fmtPct = (v) => (v == null ? t('common.dash') : `${(v * 100).toFixed(1)}%`);
+// Amounts use the same formatters as Exploration / Clients / Produits (explorer.js, locale of the chosen language: fr-BE, nl-BE,
+// en-GB): totals in whole euros ("1 234 €"), per-order amounts such as the average basket with cents ("52,37 €").
+const fmtMoney = (v, cur) => (v == null ? t('common.dash') : exMoney(v, cur));
+const fmtMoneyCents = (v, cur) => (v == null ? t('common.dash') : exMoney2(v, cur));
+// Percentages, numbers and dates follow the chosen language's Belgian locale (fr-BE "72,2 %", nl-BE "72,2%", en-GB "72.2%").
+const fmtPct = (v, digits = 1) => (v == null ? t('common.dash') : new Intl.NumberFormat(chartTag(), { style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v));
+const fmtNum = (v, digits = 0) => new Intl.NumberFormat(chartTag(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v);
+const fmtDate = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString(chartTag(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : t('common.dash'));
 const fmtAgo = (iso) => {
   if (!iso) return t('common.dash');
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -127,7 +133,7 @@ function rankRow(p, cur, maxValue, shareOfTop) {
   return h('div', { class: 'rank-row' },
     rankThumb(p),
     h('div', { class: 'rank-main' },
-      h('div', { class: 'rank-name-row' }, h('span', { class: 'rank-name' }, p.title), h('span', { class: 'rank-share' }, `${shareOfTop}%`)),
+      h('div', { class: 'rank-name-row' }, h('span', { class: 'rank-name' }, p.title), h('span', { class: 'rank-share' }, fmtPct(shareOfTop / 100, 0))),
       h('div', { class: 'rank-bar-track' }, h('div', { class: 'rank-bar-fill', style: `width:${pct}%` }))),
     h('div', { class: 'rank-value' }, h('strong', null, fmtMoney(p.netSalesExTax, cur)), h('div', { class: 'empty-note', style: 'margin-top:3px' }, t('insight.units', p.unitsSold))));
 }
@@ -214,7 +220,7 @@ function kpiRow(brief) {
   return h('div', { class: 'kpi-grid' },
     kpiCard(t('kpi.netRevenue'), fmtMoney(k.netRevenue.value, brief.currency), null, sr?.netRevenue),
     kpiCard(t('kpi.orders'), k.orders.value ?? t('common.dash'), null, sr?.orders),
-    kpiCard(t('kpi.aov'), fmtMoney(k.aov.value, brief.currency), null, sr?.aov),
+    kpiCard(t('kpi.aov'), fmtMoneyCents(k.aov.value, brief.currency), null, sr?.aov),
     // The margin is only shown as a plain figure when it rests on verified costs; otherwise it is flagged partial with its coverage.
     kpiCard(t('kpi.grossMargin'), fmtPct(k.grossMargin.value), k.grossMargin.costCertain ? null : t('kpi.partialCostCoverage'), sr?.grossMargin,
       k.grossMargin.costCertain ? null : t('kpi.costCoverageDetail', covPct(k.grossMargin.costCoverage), covPct(k.grossMargin.verifiedCostCoverage))));
@@ -252,7 +258,7 @@ function watchSection(brief) {
     h('div', { class: 'watch-grid' },
       h('div', { class: 'watch-card' },
         h('span', { class: 'watch-ico ok' }, icon('up', 16)),
-        h('div', { class: 'watch-body' }, h('div', { class: 'watch-title' }, t('watch.aovTitle')), h('div', { class: 'watch-text' }, brief.aovComparison ? t('watch.aovCompared', fmtMoney(brief.aovComparison.value, brief.currency), fmtMoney(brief.aovComparison.previous, brief.currency), fmtSignedPct(brief.aovComparison.pct)) : t('watch.aovText'))),
+        h('div', { class: 'watch-body' }, h('div', { class: 'watch-title' }, t('watch.aovTitle')), h('div', { class: 'watch-text' }, brief.aovComparison ? t('watch.aovCompared', fmtMoneyCents(brief.aovComparison.value, brief.currency), fmtMoneyCents(brief.aovComparison.previous, brief.currency), fmtSignedPct(brief.aovComparison.pct)) : t('watch.aovText'))),
         aovChart ? h('div', { class: 'watch-spark' }, aovChart) : null),
       h('div', { class: 'watch-card' },
         h('span', { class: 'watch-ico warn' }, NordlaIcon.semantic('clientDormant', 'lg')),
@@ -276,7 +282,7 @@ function healthCard(brief) {
 
 // ---------- "Ce qui a changé" (What Changed) page - Step 2 ----------
 const joinNatural = (items) => (items.length <= 1 ? (items[0] ?? '') : items.length === 2 ? `${items[0]} ${t('common.and')} ${items[1]}` : `${items.slice(0, -1).join(', ')} ${t('common.and')} ${items[items.length - 1]}`);
-const fmtSignedPct = (v) => (v == null ? null : `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`);
+const fmtSignedPct = (v) => (v == null ? null : new Intl.NumberFormat(chartTag(), { style: 'percent', maximumFractionDigits: 0, signDisplay: 'always' }).format(v));
 const dirSuffix = (d) => (d === 'up' ? 'Up' : d === 'down' ? 'Down' : 'Flat');
 
 function wcHero() {
@@ -310,7 +316,7 @@ function wcInsightCard(data) {
     h('span', { class: `insight-badge ${ins.direction === 'down' ? 'bad' : ins.direction === 'up' ? 'good' : ''}` }, icon(ins.direction === 'down' ? 'down' : 'up', 13), t(`wc.badge${dir}`)),
     h('h2', { class: 'insight-title' }, t(`wc.headline${dir}`, deltaMoney)),
     shareLine ? h('p', { class: 'insight-sub' }, shareLine) : null,
-    h('p', { class: 'insight-body' }, t('wc.bodyText', ins.previousWindow.localStart, ins.previousWindow.localEnd, fmtMoney(ins.previousNetRevenue, data.currency), fmtMoney(ins.netRevenue, data.currency))),
+    h('p', { class: 'insight-body' }, t('wc.bodyText', fmtDate(ins.previousWindow.localStart), fmtDate(ins.previousWindow.localEnd), fmtMoney(ins.previousNetRevenue, data.currency), fmtMoney(ins.netRevenue, data.currency))),
     h('div', { class: 'insight-actions' },
       h('button', { class: 'btn-ghost', type: 'button', disabled: 'disabled', title: t('insight.seeWhyTitle') }, t('insight.seeWhy'), icon('up', 13)),
       h('button', { class: 'btn-primary-sm', type: 'button', disabled: 'disabled', title: t('insight.commandCenterTitle') }, NordlaIcon.semantic('commandCenter', 'sm'), t('insight.addToCommandCenter')),
@@ -341,8 +347,8 @@ function wcWatchSection(data) {
         h('div', { class: 'wc-watch-top' }, h('span', { class: `watch-ico ${dir === 'up' ? 'ok' : 'bad'}` }, icon(dir, 16)), h('div', { class: 'wc-watch-top-right' }, watchPill('watchlist'), h('button', { class: 'wc-watch-menu', type: 'button', disabled: 'disabled', title: t('wc.dismissTitle') }, dotsIcon(14)))),
         h('div', { class: 'watch-body' },
           h('div', { class: 'watch-title' }, t(dir === 'up' ? 'wc.watchAovUp' : 'wc.watchAovDown', Math.abs(Math.round(w.pct * 100)))),
-          h('div', { class: 'watch-text' }, t('wc.watchAovDetail', fmtMoney(w.previousValue, w.currency), fmtMoney(w.value, w.currency)))),
-        NordlaCharts.head({ title: t('kpi.aov'), value: fmtMoney(w.value, w.currency), delta: Math.round(w.pct * 1000) / 10, good: dir === 'up', vs: t('wc.vsPreviousPeriod'), small: true }),
+          h('div', { class: 'watch-text' }, t('wc.watchAovDetail', fmtMoneyCents(w.previousValue, w.currency), fmtMoneyCents(w.value, w.currency)))),
+        NordlaCharts.head({ title: t('kpi.aov'), value: fmtMoneyCents(w.value, w.currency), delta: Math.round(w.pct * 1000) / 10, good: dir === 'up', vs: t('wc.vsPreviousPeriod'), small: true }),
         chart ? h('div', { class: 'watch-spark' }, chart) : null));
     } else if (w.kind === 'movers') {
       // Mirrors the main insight's real direction (never its own independent read) - the point of
@@ -381,9 +387,9 @@ function otherChangeRow(c, currency) {
     return h('div', { class: 'wc-row' },
       h('span', { class: `wc-row-ico ${tone}` }, icon(c.deltaPp >= 0 ? 'up' : 'down', 14)),
       h('div', { class: 'wc-row-body' }, h('div', { class: 'wc-row-title' }, t('wc.rowGrossMarginTitle')),
-        h('div', { class: 'wc-row-text' }, t('wc.rowGrossMarginDetail', fmtPct(c.value).replace('%', ''), fmtPct(c.previousValue).replace('%', ''))),
+        h('div', { class: 'wc-row-text' }, t('wc.rowGrossMarginDetail', fmtNum(c.value * 100, 1), fmtNum(c.previousValue * 100, 1))),
         c.costCertain ? null : h('div', { class: 'wc-row-caveat' }, t('wc.marginCaveat', covPct(c.costCoverage), covPct(c.verifiedCostCoverage)))),
-      h('div', { class: 'wc-row-value' }, `${fmtPct(c.value)} vs ${fmtPct(c.previousValue)}`, h('span', { class: `wc-row-delta ${tone}` }, `${pp >= 0 ? '+' : ''}${pp}pp`)));
+      h('div', { class: 'wc-row-value' }, `${fmtPct(c.value)} vs ${fmtPct(c.previousValue)}`, h('span', { class: `wc-row-delta ${tone}` }, t('common.pp', `${pp >= 0 ? '+' : ''}${fmtNum(pp, 1)}`))));
   }
   if (c.kind === 'activeProducts') {
     return h('div', { class: 'wc-row' },

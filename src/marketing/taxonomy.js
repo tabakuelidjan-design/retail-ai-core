@@ -2,6 +2,8 @@
 // precedence; every result names the rule that fired and what kind of evidence it rests on.
 // Nothing here knows any platform: adapters hand over neutral fields.
 
+import { isOnlineChannel, isPosChannel } from '../metrics/channels.js';
+
 const lc = (v) => (v == null ? null : String(v).trim().toLowerCase() || null);
 const hostMatches = (value, patterns) => {
   const v = lc(value);
@@ -21,11 +23,12 @@ export function classifyOrder(order, touches, cfg) {
   const handle = lc(order.channel_handle) ?? lc(order.source_name);
   const base = { sub_channel: null, touch: null, campaign: null, issues: [] };
 
-  if (handle && m.posChannelHandles.includes(handle)) {
+  // Same-meaning spellings (pos / point_of_sale) are compared normalized (metrics/channels.js).
+  if (handle && isPosChannel(handle, cfg)) {
     const issues = touches?.last_visit ? ['POS_ORDER_HAS_VISIT_DATA'] : [];
     return { ...base, channel: 'pos', rule: 'order_channel:pos', evidence_kind: 'observed', issues };
   }
-  if (handle && !m.onlineChannelHandles.includes(handle)) {
+  if (handle && !isOnlineChannel(handle, cfg)) {
     return { ...base, channel: 'other_channel', sub_channel: handle, rule: 'order_channel:other', evidence_kind: 'observed' };
   }
   const visit = touches?.last_visit;
