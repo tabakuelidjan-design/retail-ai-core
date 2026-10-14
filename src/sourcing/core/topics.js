@@ -4,7 +4,7 @@
 // Chip symbols: ✓ confirmed BY THE USER (never "verified"), ◐ partly confirmed, ◌ the supplier says it (not confirmed by the user), ! to check, ? unknown.
 // Documents have their own states and never get a ✓: a claimed or received document is not an accepted proof.
 import { upgradeCase } from './upgrade.js';
-import { documentStatusOf, FACT_STATUS } from './provenance.js';
+import { documentStatusOf, FACT_STATUS, currentTextOf } from './provenance.js';
 import { findCandidateConflict } from './conflicts.js';
 import { effectiveQuote } from './offers.js';
 
@@ -44,7 +44,7 @@ export function topicOfItem(rawState, item) {
   const counts = new Map(); const evidence = [];
   for (const c of cands) { const t = topicOfKey(c.key); if (t === T.OTHER) continue; counts.set(t, (counts.get(t) ?? 0) + 1); evidence.push(c.id); }
   if (counts.size) { const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]); return { id: ranked[0][0], confidence: 'HIGH', source: 'FACTS', evidence, also: ranked.slice(1).map(([t]) => t) }; }
-  const text = String(item.original ?? item.derived?.find((d) => d.kind === 'TRANSCRIPTION')?.text ?? ''); const hits = [];
+  const text = String(currentTextOf(item)); const hits = [];
   for (const [t, rx] of KEYWORDS) { const m = text.match(new RegExp(rx.source, `${rx.flags.replace('g', '')}g`)); if (m) hits.push([t, m.length]); }
   if (hits.length) { hits.sort((a, b) => b[1] - a[1]); return { id: hits[0][0], confidence: 'LOW', source: 'KEYWORDS', evidence: [`keyword:${hits[0][0]}`], also: hits.slice(1).map(([t]) => t) }; }
   return { id: T.OTHER, confidence: 'LOW', source: 'NONE', evidence: [], also: [] };

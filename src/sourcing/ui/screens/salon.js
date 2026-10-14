@@ -2,16 +2,18 @@
 // files run in the tests and on the server), the HTML from nx.js (the five validated screens) and salon-views.js (the detailed panes it reuses). Everything here works OFFLINE: cases and the workspace live on the phone,
 // the server only keeps a copy (and a merge) when it is reachable. No provider is ever called from this screen.
 // Rule of this file: a question's state, an answer and a fact's state each live in the CASE (append-only events), never in a second place. The workspace keeps views, comparisons and snapshots only.
-import { newCase, dispatch, assess, recordDecision } from '/core/case.js';
+import { newCase, dispatch, assess, recordDecision, suggestCategories } from '/core/case.js';
 import { createFieldEngine } from '/core/field/engine.js';
 import { offerDraft, attributeNameEvents } from '/core/field/offer-import.js';
 import { classifyCandidates } from '/core/understanding.js';
-import { describeConflict, validateCorrection } from '/core/candidate-view.js';
+import { describeConflict, validateCorrection, labelOf } from '/core/candidate-view.js';
 import { planConversation } from '/core/conversation-engine.js';
 import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
 import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
 import { priceOfCase, priceWording } from '/core/price-display.js';
+import { rawTextOf, currentTextOf, revisionsOf } from '/core/provenance.js';
+import { CATEGORIES } from '/core/taxonomy.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -22,7 +24,8 @@ const VIEW_KEY = 'nordla.sourcing.salon.view'; const PROFILE_KEY = 'nordla.sourc
 const num = (v) => (v === '' || v === undefined || v === null ? null : String(v).replace(',', '.').trim());
 const FRIENDLY = [[/who spoke/, 'Dites d\'abord qui a écrit cette ligne (fournisseur ou vous).'], [/needs a correction/, 'Ce chiffre est ambigu : corrigez-le avant de le confirmer.'], [/planned quantity/, 'La quantité doit être un nombre entier supérieur à zéro.'], [/at least one value or some text/, 'Collez un texte ou saisissez au moins une valeur.'], [/text is required|needs some text/, 'Collez un texte.'], [/already rejected/, 'Cette information a déjà été rejetée.'], [/conflict/, 'Cette information contredit quelque chose du dossier : levez d\'abord la contradiction.'], [/finished/, 'Cette conversation est terminée : commencez-en une nouvelle.']];
 const friendly = (e) => (/^(Tapez|Utilisez|Valeurs possibles)/.test(String(e?.message ?? '')) ? e.message : (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1]);
-const MAIN_NAV = { home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
+const CATEGORY_FR = { household_general: 'Article ménager (non électrique)', kitchenware_plastic: 'Ustensile / boîte alimentaire en plastique', water_bottle: 'Gourde / bouteille', tableware_glass_ceramic: 'Vaisselle verre / céramique', usb_charger: 'Chargeur ou adaptateur USB / secteur', power_bank: 'Batterie externe (power bank)', bluetooth_speaker: 'Enceinte Bluetooth / sans fil', bluetooth_earbuds: 'Écouteurs / casque Bluetooth', led_lamp_mains: 'Lampe LED (secteur)', usb_cable: 'Câble USB / de charge', phone_case: 'Coque / accessoire de téléphone (passif)', toy_plastic: 'Jouet (plastique / mécanique)', plush_toy: 'Peluche', textile_adult: 'Vêtement / textile adulte', textile_children: 'Vêtement / textile enfant', cosmetic_product: 'Cosmétique / soin', jewelry_costume: 'Bijou fantaisie / accessoire', ppe_item: 'Équipement de protection (EPI)', battery_standalone: 'Pile / accumulateur seul', small_appliance_mains: 'Petit appareil secteur', gift_decor_generic: 'Déco / cadeau / papeterie', pet_product: 'Article pour animaux' };
+const MAIN_NAV = { thread: 'suppliers', home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
 const NAV_ITEMS = [['home', 'Accueil', 'home'], ['suppliers', 'Fournisseurs', 'suppliers'], ['note', 'Noter', 'note'], ['visits', 'Visites', 'visits'], ['more', 'Plus', 'more']];
 const CONFLICT_FR = { OLD: (l) => l.replace(/^Keep the earlier value/, 'Garder la valeur précédente'), NEW: (l) => l.replace(/^Use the new value/, 'Utiliser la nouvelle valeur') };
 const HELP_FR = { MODEL_MISMATCH: 'Vérifiez le modèle exact sur le produit ou sur le papier. Les modèles sont comparés caractère par caractère.', OTHER: 'L\'une des deux valeurs peut concerner un autre cas (par exemple avec votre logo). Demandez au fournisseur si vous hésitez.' };
@@ -31,7 +34,7 @@ export function createSalon(ctx) {
   const { S, ls } = ctx;
   let view = ls.get(VIEW_KEY, { name: 'home' }); let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
   let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
-  let filter = 'all'; let query = ''; let visitFilter = 'open'; let noteMode = view.noteMode ?? 'text'; let speaker = 'supplier'; let answering = null; let panels = {}; let lastNote = null; let confirmingServer = null; let pickFor = null; let voiceAvail = null; let voiceProbe = false;
+  let filter = 'all'; let query = ''; let visitFilter = 'open'; let noteMode = view.noteMode ?? 'text'; let speaker = 'supplier'; let answering = null; let editing = null; let panels = {}; let lastNote = null; let confirmingServer = null; let pickFor = null; let voiceAvail = null; let voiceProbe = false;
   if (!MAIN_NAV[view.name] && !['capture', 'review', 'negotiate'].includes(view.name)) view = { name: 'home' };
   if (['live', 'expert'].includes(view.name) && !(view.caseId && S.cases[view.caseId])) view = { name: 'home' };
   // Salon's persisted view can be showing a case different from the global current case. Keep the active case aligned even after restarting the phone app; selection is not an edit.
@@ -67,13 +70,13 @@ export function createSalon(ctx) {
     touchCase(id); S.currentId = id; ctx.persist(); ctx.markDirty(id); ctx.queueSync();
     try { ws = eng().record(ws, S.cases[id]).ws; saveWs(ws); } catch (e) { console.error(e); }
   };
-  const go = (next) => { view = { ...view, ...next }; if (view.caseId && S.cases[view.caseId] && S.currentId !== view.caseId) { S.currentId = view.caseId; ctx.persist(); } save(); flash = ''; remember(); ctx.render(); window.scrollTo(0, 0); };
+  const go = (next) => { editing = null; view = { ...view, ...next }; if (view.caseId && S.cases[view.caseId] && S.currentId !== view.caseId) { S.currentId = view.caseId; ctx.persist(); } save(); flash = ''; remember(); ctx.render(); window.scrollTo(0, 0); };
   const remember = () => { ws = eng().setView(ws, { lastCaseId: view.caseId ?? null, lastComparisonId: view.cmpId ?? null, lastScreen: view.name }); saveWs(ws); };
 
   // ---- what a case says about its own follow-ups (cached by case + revision: cheap on every render) ------------------------------------------------------------------------------------------------
   /** What is CONFIRMED (MOQ, model) and the PRICE worded with the state of its amount AND of its currency (core/price-display.js): the one line shown on the cards. Nothing proposed is shown as a fact. */
   const keyFacts = (c) => { try { const b = Object.fromEntries(factStatusBoard(c, { locale: 'fr', types: ['MOQ', 'MODEL'] }).map((x) => [x.fact_type, x])); return { price: priceOfCase(c), moq: b.MOQ.state === 'CONFIRMED' ? String(b.MOQ.value) : null, model: b.MODEL.state === 'CONFIRMED' ? String(b.MODEL.value) : null }; } catch { return { price: priceWording({}), moq: null, model: null }; } };
-  const lastTextOf = (c) => { const items = c.conversations.flatMap((x) => x.items).filter((i) => i.speaker !== 'unknown' || i.original); const it = items.sort((a, b) => String(b.at).localeCompare(String(a.at)))[0]; const t = it ? String(it.original ?? '').replace(/\s+/g, ' ').trim() : ''; return t.length > 110 ? `${t.slice(0, 107)}…` : t; };
+  const lastTextOf = (c) => { const items = c.conversations.flatMap((x) => x.items).filter((i) => i.speaker !== 'unknown' || i.original); const it = items.sort((a, b) => String(b.at).localeCompare(String(a.at)))[0]; const t = it ? String(currentTextOf(it) ?? '').replace(/\s+/g, ' ').trim() : ''; return t.length > 110 ? `${t.slice(0, 107)}…` : t; };
   /** The three essentials of the sheet (price, MOQ, model): confirmed, only proposed, or unknown - never a guess. A price says what is confirmed: "12 USD", "12 — devise à confirmer", "12 — prix à confirmer". */
   const stripOf = (c) => { const b = Object.fromEntries(factStatusBoard(c, { locale: 'fr' }).map((x) => [x.fact_type, x])); const one = (label, x, text) => (x.state === 'CONFIRMED' ? { label, value: text(x.valueText), state: 'confirmed' } : (x.state === 'PROPOSED' || x.state === 'AMBIGUOUS') && x.proposedValueText ? { label, value: x.state === 'AMBIGUOUS' ? 'à corriger' : text(x.proposedValueText), state: 'proposed' } : { label, value: '', state: 'unknown' });
     const p = priceOfCase(c); const price = p.status === 'CONFIRMED' ? { label: 'Prix', value: p.text, state: 'confirmed' } : p.status === 'UNKNOWN' ? { label: 'Prix', value: '', state: 'unknown' } : { label: 'Prix', value: p.currency ? `${p.amount} ${p.currency}` : p.amount, state: p.status === 'PRICE_TO_CONFIRM' ? 'proposed' : 'cur', note: p.note, sub: p.proposedCurrency ? `${p.proposedCurrency} proposée` : '' };
@@ -100,7 +103,7 @@ export function createSalon(ctx) {
     const own = (c.userQuestions ?? []).filter((u) => u.state !== 'ANSWERED').map((u) => ({ id: u.id, title: 'Votre question', tag: null, en: u.lang === 'en' ? u.text : null, fr: u.text, zh: null, zhNote: 'Votre question est montrée telle que vous l\'avez écrite : aucune traduction n\'est inventée.', state: u.state === 'ASKED' ? 'ASKED' : 'OPEN' }));
     const last = new Map(); for (const e of c.questionLog ?? []) if (e.kind === 'ANSWERED') last.set(e.questionId, e);
     const items = c.conversations.flatMap((x) => x.items); const titleOf = (qid) => plan.questions.find((q) => q.id === qid)?.short?.fr;
-    const answered = [...last.values()].map((e) => { const it = items.find((x) => x.id === e.itemId); const pend = (c.candidates ?? []).filter((k) => k.itemId === e.itemId && k.state === 'PROPOSED').length; return { qid: e.questionId, title: e.questionText ?? (titleOf(e.questionId) ?? e.questionId), excerpt: String(it?.original ?? '').slice(0, 280), pending: pend, at: e.at, when: whenOf(e.at) }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const answered = [...last.values()].map((e) => { const it = items.find((x) => x.id === e.itemId); const pend = (c.candidates ?? []).filter((k) => k.itemId === e.itemId && k.state === 'PROPOSED').length; return { qid: e.questionId, title: e.questionText ?? (titleOf(e.questionId) ?? e.questionId), excerpt: String(it ? currentTextOf(it) : '').slice(0, 280), item: it ? itemViewOf(c, e.convId ?? c.conversations.find((x) => x.items.includes(it))?.id, it) : null, pending: pend, at: e.at, when: whenOf(e.at) }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
     return { toAsk: v.askNow.items.map(toQ), waiting, own, answered, message: v.askNow.message, chineseNote: v.askNow.chineseNote };
   }
   const questionOf = (c, qid) => { const v = eng().caseView(c, ws, ['askNow']); const g = questionGroups(c, v); return [...g.toAsk, ...g.waiting, ...g.own].find((q) => q.id === qid) ?? null; };
@@ -119,8 +122,17 @@ export function createSalon(ctx) {
 
   // ---- notes ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   const whenOf = (at) => { const d = new Date(at); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
-  const textOfItem = (it) => (it.original ?? it.derived?.find((d) => d.kind === 'TRANSCRIPTION')?.text ?? '');
-  const notesOf = (c, n = 6) => c.conversations.flatMap((x) => x.items.map((it) => ({ ...it, convId: x.id }))).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, n).map((it) => ({ id: it.id, when: whenOf(it.at), who: it.speaker === 'me' ? 'vous' : it.speaker === 'supplier' ? 'le fournisseur' : 'locuteur à préciser', text: textOfItem(it), answers: it.answersQuestion ? (questionTitle(c, it.answersQuestion)) : null }));
+  /** one sentence of the conversation as the screens show it: the corrected text first, the raw words kept, what a correction puts in question, and whether it is being edited right now */
+  const itemViewOf = (c, convId, it) => {
+    const rev = revisionsOf(it); const d = it.derived?.find((x) => x.kind === 'TRANSCRIPTION'); const speech = it.modality === 'SPEECH'; const mine = editing === it.id;
+    const label = (k) => labelOf(k.key, k.context, 'fr'); const impacts = [];
+    for (const im of rev.at(-1)?.impacts ?? []) { const k = (c.candidates ?? []).find((x) => x.id === im.candidateId); if (!k) continue;
+      if (im.kind === 'DIFFERS_FROM_CONFIRMED' && k.state === 'PROPOSED') impacts.push(`${label(k)} : ${V.factValueText({ fact_type: '', value: im.confirmed })} est déjà confirmé, votre correction propose ${V.factValueText({ fact_type: '', value: im.proposed })}.`);
+      if (im.kind === 'CONFIRMED_FROM_OLD_TEXT' && k.state === 'CONFIRMED') impacts.push(`${label(k)} : ${V.factValueText({ fact_type: '', value: im.confirmed })} reste confirmé, mais il venait de l'ancien texte. Vérifiez-le.`); }
+    return { id: it.id, convId, caseId: c.id, lang: it.lang && it.lang !== 'auto' ? it.lang : undefined, when: whenOf(it.at), who: it.speaker === 'me' ? 'vous' : it.speaker === 'supplier' ? 'le fournisseur' : 'locuteur à préciser', text: currentTextOf(it), raw: rawTextOf(it), rawLabel: speech ? `Transcription brute${d?.provider ? ` (${/moonshine/i.test(d.provider) ? 'Moonshine' : d.provider})` : ''}` : 'Texte d\'origine',
+      revised: rev.length > 0, revisions: rev.map((r) => ({ when: whenOf(r.at), previous: r.previousText, text: r.text })), impacts, editing: mine, draft: mine ? draftOf(`edit:${it.id}`) : '', micPaused: mine && S.voice?.state === 'paused', kind: speech ? 'voice' : 'note', unknown: it.speaker === 'unknown', speaker: it.speaker, answers: it.answersQuestion ? questionTitle(c, it.answersQuestion) : null };
+  };
+  const notesOf = (c, n = 6) => c.conversations.flatMap((x) => x.items.map((it) => ({ it, convId: x.id }))).sort((a, b) => String(b.it.at).localeCompare(String(a.it.at))).slice(0, n).map(({ it, convId }) => itemViewOf(c, convId, it));
   const questionTitle = (c, qid) => { const e = (c.questionLog ?? []).find((x) => x.kind === 'ANSWERED' && x.questionId === qid && x.questionText); return e?.questionText ?? qid; };
   const openConv = (c) => (c.conversations ?? []).find((x) => x.status === 'OPEN') ?? null;
   /** The ONE way a typed note or answer enters a case: ensure an open conversation, then ONE item (speaker: supplier or owner), linked to the question it answers when there is one. */
@@ -145,7 +157,7 @@ export function createSalon(ctx) {
   function voiceModel(c) {
     const vs = S.voice ?? { state: 'idle', message: '' }; const mic = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
     const available = mic && voiceAvail?.ok === true; const msg = !mic ? 'Ce navigateur n\'autorise pas le microphone ici.' : voiceAvail === null ? (S.token && S.online ? 'Vérification du serveur…' : 'La dictée a besoin du serveur au premier lancement (téléchargement du modèle).') : voiceAvail.ok ? '' : voiceAvail.why;
-    const items = c.conversations.flatMap((x) => x.items.filter((it) => it.modality === 'SPEECH').map((it) => ({ id: it.id, convId: x.id, when: whenOf(it.at), text: textOfItem(it), speaker: it.speaker, unknown: it.speaker === 'unknown' }))).slice(-6).reverse();
+    const items = c.conversations.flatMap((x) => x.items.filter((it) => it.modality === 'SPEECH').map((it) => itemViewOf(c, x.id, it))).slice(-6).reverse();
     const title = { idle: 'Prêt à écouter', preparing: 'Préparation du micro…', listening: 'Nordla écoute', paused: 'En pause', denied: 'Micro refusé', error: 'Erreur' }[vs.state] ?? 'Prêt à écouter';
     return { available, state: vs.state, title, message: available ? (vs.message || 'Touchez le micro puis parlez normalement.') : msg, items };
   }
@@ -168,6 +180,7 @@ export function createSalon(ctx) {
       if (name === 'more') return N.moreHtml({ sync: sync(), comparisons: listComparisons(ws), active: caseOf(view.caseId) ?? allCases()[0] ?? null, conflicts: Object.keys(S.conflicts ?? {}).length, serverSet: Boolean(S.token), flash: takeFlash() });
       if (name === 'sync') return N.syncHtml({ versions: ctx.conflictVersions(), confirmingServer, flash: takeFlash() });
       if (name === 'note') return noteScreen(cases);
+      if (name === 'thread') { const c = caseOf(view.caseId); if (!c) return go({ name: 'suppliers' }); const sc = sync(); return N.threadHtml({ info: infoOf(c), items: c.conversations.flatMap((x) => x.items.map((it) => ({ it, convId: x.id }))).sort((a, b) => String(b.it.at).localeCompare(String(a.it.at))).map(({ it, convId }) => ({ ...itemViewOf(c, convId, it), panel: lastNote && lastNote.caseId === c.id && lastNote.itemId === it.id ? panelFor(c, it.id, 'Ce que Nordla a compris de cette phrase') : '' })), flash: takeFlash(), sync: sc, conflicts: Object.keys(S.conflicts ?? {}).length }); }
       if (name === 'live' || name === 'expert') return embeddedScreen(name);
       if (name === 'capture') { const info = view.caseId && caseOf(view.caseId) ? infoOf(caseOf(view.caseId)) : null; return V.captureHtml({ caseInfo: info, mode: capMode, flash, online: S.online }); }
       if (name === 'review') { const c = caseOf(view.caseId); const oid = view.offerId ?? c?.offers?.at(-1)?.id; if (!c || !oid) return homeFallback(); const d = offerDraft(c, oid); const groupable = classifyCandidates(c).group.filter((x) => x.offerId === oid).map((x) => x.id);
@@ -195,7 +208,7 @@ export function createSalon(ctx) {
     const proposedAll = (c.candidates ?? []).filter((k) => k.state === 'PROPOSED'); const ids = new Set((c.candidates ?? []).map((k) => k.id));
     const factsView = { facts: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id, board: [], correcting }, cands: proposedAll, conflicts: conflictsOf(c, ids), correcting, history: eng().suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null };
     const sc = sync(c.id);
-    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, board: [], lastNotes: notesOf(c, 2), strip: stripOf(c), now: Date.now(), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
+    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, cats: catChoices(c), board: [], lastNotes: notesOf(c, 2), strip: stripOf(c), now: Date.now(), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
   }
 
   /** The detailed engine screens of the former Expert / Guided modes, inside the one navigation, for the supplier whose sheet the owner came from. */
@@ -226,6 +239,11 @@ export function createSalon(ctx) {
   const reveal = (sel) => requestAnimationFrame(() => document.querySelector(sel)?.scrollIntoView({ block: 'start' }));
   /** the row of tabs scrolls sideways when the five labels do not fit: keep the active one in view, without moving the page */
   const centerTab = () => requestAnimationFrame(() => { const t = document.querySelector('.nx-tabs [aria-selected="true"]'); const r = t?.parentElement; if (r) r.scrollLeft = t.offsetLeft - (r.clientWidth - t.offsetWidth) / 2; });
+  /** the sentence being corrected takes the focus and stays in view (also when the phone's keyboard opens and shrinks the visible area) */
+  const focusEdit = () => requestAnimationFrame(() => { const f = document.getElementById('nx-edit'); const ta = document.getElementById('nx-edit-text'); if (!f || !ta) return; f.scrollIntoView({ block: 'center' }); ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch { /* not a text field */ } });
+  if (typeof window !== 'undefined' && window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (document.activeElement?.id === 'nx-edit-text') document.getElementById('nx-edit')?.scrollIntoView({ block: 'center' }); });
+  /** the categories the owner may confirm for this product; the one suggested from the product name is preselected (a suggestion only: the owner decides) */
+  const catChoices = (c) => ({ options: Object.keys(CATEGORIES).map((id) => ({ id, label: CATEGORY_FR[id] ?? CATEGORIES[id].label })).sort((a, b) => a.label.localeCompare(b.label, 'fr')), suggested: suggestCategories(c.identity?.workingName ?? '')[0]?.id ?? null });
   const must = (id) => { const c = caseOf(id); if (!c) throw new Error('unknown case'); return c; };
   const lastCaseId = () => view.caseId && caseOf(view.caseId) ? view.caseId : (ws.views.lastCaseId && caseOf(ws.views.lastCaseId) ? ws.views.lastCaseId : allCases()[0]?.id ?? null);
   async function click(ev, t) {
@@ -254,7 +272,7 @@ export function createSalon(ctx) {
         case 'sl-fact-edit': editingFact = editingFact === key ? null : key; return ctx.render();
         case 'sl-fact-revert': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_REVERT', ledgerId: key, mode: 'salon', reason: 'correction annulée par le propriétaire' }]); flash = 'Correction annulée : l\'historique est conservé.'; return ctx.render(); }
         case 'sl-obs-accept': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_ACCEPT', observationId: key, mode: 'salon' }]); return ctx.render(); }
-        case 'sl-case-tab': view = { ...view, name: view.name === 'review' ? 'case' : view.name === 'ask' || view.name === 'negotiate' || view.name === 'changed' ? 'case' : view.name, tab: key, sub: null }; save(); remember(); ctx.render(); centerTab(); return window.scrollTo(0, 0);
+        case 'sl-case-tab': view = { ...view, name: view.name === 'review' || view.name === 'thread' ? 'case' : view.name === 'ask' || view.name === 'negotiate' || view.name === 'changed' ? 'case' : view.name, tab: key, sub: null }; save(); remember(); ctx.render(); centerTab(); return window.scrollTo(0, 0);
         case 'sl-more-open': view = { ...view, name: 'case', tab: 'more', sub: key || null }; save(); ctx.render(); return window.scrollTo(0, 0);
         case 'sl-sel': { selected = selected.includes(key) ? selected.filter((x) => x !== key) : [...selected, key].slice(-MAX_CANDIDATES); save(); return ctx.render(); }
         case 'sl-compare': { const def = key ? ws.comparisons[key] : null; if (def) { selected = def.caseIds.slice(); return go({ name: 'compare', cmpId: key }); } return go({ name: 'compare', cmpId: null }); }
@@ -277,6 +295,10 @@ export function createSalon(ctx) {
         case 'sl-show': showQ = { id: key, caseId: cid }; return ctx.render();
         case 'sl-show-close': showQ = null; return ctx.render();
         case 'sl-asked-answer': { const c = must(cid); const q = questionOf(c, key); if (q && q.state === 'OPEN') commit(c.id, [/^uq-/.test(key) ? { type: 'QUESTION_STATE', id: key, state: 'ASKED' } : { type: 'QUESTION_SHOWN', questionId: key, via: 'SHOWN_TO_SUPPLIER', texts: { en: q.en ?? null, fr: q.fr ?? null, zh: q.zh?.text ?? null } }]); showQ = null; answering = key; return go({ name: 'case', caseId: cid, tab: 'ask', sub: null }); }
+        // CORRECT a sentence (typed note, dictation, saved answer, earlier history) IN PLACE: the field opens where the sentence is, the microphone pauses and only restarts on the owner's tap
+        case 'sl-item-edit': { const v = ctx.voice?.(); if (v && (v.state === 'listening' || v.state === 'preparing')) { await v.pause(); flash = 'Micro en pause pendant la correction : touchez le micro pour reprendre l\'écoute.'; } if (editing && editing !== key) setDraft(`edit:${editing}`, ''); editing = key; ctx.render(); focusEdit(); return; }
+        case 'sl-item-cancel': { if (editing) setDraft(`edit:${editing}`, ''); editing = null; return ctx.render(); }
+        case 'sl-thread': editing = null; return go({ name: 'thread', caseId: key });
         case 'sl-answer-open': answering = key; ctx.render(); requestAnimationFrame(() => { const ta = document.querySelector('.nx-answer textarea'); if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus({ preventScroll: true }); } }); return;
         case 'sl-answer-close': answering = null; return ctx.render();
         case 'sl-q-skip': { const c = must(cid); if (/^uq-/.test(key)) commit(c.id, [{ type: 'QUESTION_STATE', id: key, state: 'ANSWERED' }]); else commit(c.id, [{ type: 'QUESTION_SKIP', questionId: key }]); return ctx.render(); }
@@ -326,6 +348,14 @@ export function createSalon(ctx) {
         const item = recordNote(id, { text, who: 'supplier', qid: d.qid, qtitle: d.qtitle }); setDraft(`ans:${d.qid}`, ''); panels = { ...panels, [d.qid]: { caseId: id, itemId: item.id } }; answering = null;
         const n = itemCands(S.cases[id], item.id).length; flash = ok(n ? `Réponse enregistrée · ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : confirmez, corrigez ou rejetez chacune.` : 'Réponse enregistrée. Aucune information chiffrée reconnue : le texte est gardé tel quel.'); ctx.render(); return reveal('.nx-lead');
       }
+      if (name === 'sl-item-revise') {
+        const c = must(d.caseId); const text = String(d.text ?? '').trim(); if (!text) { flash = 'Le texte ne peut pas être vide : annulez pour garder la version actuelle.'; return ctx.render(); }
+        const it = c.conversations.find((x) => x.id === d.convId)?.items.find((x) => x.id === d.itemId); if (!it) throw new Error('unknown sentence'); if (text === currentTextOf(it)) { setDraft(`edit:${d.itemId}`, ''); editing = null; flash = 'Aucun changement : le texte est resté tel quel.'; return ctx.render(); }
+        commit(c.id, [{ type: 'CONVERSATION_REVISE', convId: d.convId, itemId: d.itemId, text, source: 'salon-inline' }]); setDraft(`edit:${d.itemId}`, ''); editing = null; lastNote = { caseId: c.id, itemId: d.itemId }; if (it.answersQuestion) panels = { ...panels, [it.answersQuestion]: { caseId: c.id, itemId: d.itemId } };
+        const rev = revisionsOf(S.cases[c.id].conversations.find((x) => x.id === d.convId)?.items.find((x) => x.id === d.itemId)).at(-1); const n = rev?.proposed?.length ?? 0;
+        flash = ok(`Correction enregistrée. L'original est conservé.${n ? ` ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : à confirmer.` : ''}`); return ctx.render();
+      }
+      if (name === 'sl-category') { const c = must(d.caseId); const category = String(d.category ?? ''); if (!CATEGORIES[category]) { flash = 'Choisissez la catégorie du produit.'; return ctx.render(); } commit(c.id, [{ type: 'CATEGORY', category, source: { kind: 'user', note: 'confirmed by the owner from the blocker list' } }]); flash = ok(`Catégorie confirmée : ${CATEGORY_FR[category] ?? category}. Les caractéristiques qu'elle suppose restent « supposées » jusqu'à votre confirmation.`); return ctx.render(); }
       if (name === 'sl-own-q') { const text = String(d.text ?? '').trim(); if (!text) { flash = 'Écrivez votre question.'; return ctx.render(); } commit(d.caseId, [{ type: 'QUESTION_ADD', text, lang: 'auto' }]); setDraft('ownq', ''); flash = ok('Question ajoutée.'); return ctx.render(); }
       if (name === 'sl-capture') return capture(d);
       if (name === 'sl-correct') { const c = must(view.caseId); const cand = c.candidates.find((x) => x.id === d.id); const v = validateCorrection(cand.key, d.value, 'fr'); if (!v.ok) { flash = v.error; return ctx.render(); } correcting = null; commit(c.id, [{ type: 'CANDIDATE_CORRECT', id: d.id, value: v.value }]); return ctx.render(); }

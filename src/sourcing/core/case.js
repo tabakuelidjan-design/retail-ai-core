@@ -108,6 +108,7 @@ function reduceInPlace(s, event, at) {
     case 'CONVERSATION_FINISH': conv.finish(s, event, at); break;
     case 'CONVERSATION_DERIVE': conv.derive(s, event, at); break;
     case 'CONVERSATION_ATTRIBUTE': conv.attribute(s, event, at); break;
+    case 'CONVERSATION_REVISE': conv.reviseItem(s, event, at); break;
     case 'SPEECH_SEGMENT': conv.addSegment(s, event, at); break;
     case 'MARKET_SEARCH': recordSearchRequest(s, event, at); break; // the OWNER asked (explicitly); the result of an approved provider or PROVIDER_NOT_CONFIGURED is recorded with its input and what would be sent
     case 'TURN_CLOSE': conv.closeTurn(s, event, at); break;

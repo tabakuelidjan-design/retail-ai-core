@@ -69,5 +69,11 @@ export function identificationConfidence(identity) {
   let level = 'LOW';
   if (cat.known && strong(cat) && model.known && resolvedStrong >= Math.ceil(KEY_TRAITS.length * 0.8)) level = 'HIGH';
   else if (cat.known && IDENTITY_RANK[cat.level] >= IDENTITY_RANK.SUPPLIER_CLAIMED && resolvedAny >= Math.ceil(KEY_TRAITS.length * 0.6)) level = 'MEDIUM'; // a category only GUESSED from a photo or text stays LOW until a person or the supplier confirms it
-  return { level, categoryKnown: cat.known, modelKnown: model.known, unresolvedTraits: unresolved, assumedFromProfileOnly: weak, contradictoryTraits: traits.filter((t) => t.contradiction).map((t) => t.trait) };
+  return { level, categoryKnown: cat.known, categoryLevel: cat.level ?? null, categoryConfirmed: cat.known && IDENTITY_RANK[cat.level] >= IDENTITY_RANK.SUPPLIER_CLAIMED, modelKnown: model.known, unresolvedTraits: unresolved, assumedFromProfileOnly: weak, contradictoryTraits: traits.filter((t) => t.contradiction).map((t) => t.trait) };
+}
+
+/** ONE sentence for "the technical identification is not enough yet" (category and safety traits): the evidence status and the decision use it, so the same gap is never worded (or counted) twice. A model number is a separate matter. */
+export function technicalGapText(conf) {
+  const n = conf.unresolvedTraits?.length ?? 0;
+  return `technical identification is incomplete: ${conf.categoryConfirmed ? `${n} key trait(s) are not established` : `the product category is not confirmed${n ? ` (${n} key safety traits unresolved)` : conf.assumedFromProfileOnly?.length ? ' (the key safety traits are only assumed)' : ''}`}`;
 }

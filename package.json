@@ -47,6 +47,8 @@
     "benchmark:ask": "node benchmark/ask/run.js",
     "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
+    "sourcing:e2e:revision": "node test/e2e/sourcing-item-revision.e2e.js",
+    "sourcing:e2e:identification": "node test/e2e/sourcing-identification.e2e.js",
     "growth": "node src/growth/server/serve.js"
   },
   "engines": {

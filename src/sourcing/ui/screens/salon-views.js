@@ -110,7 +110,7 @@ export function factsHtml({ facts, audit = [], observations = [], editing = null
   const form = (t, f) => `<form data-form="sl-fact" data-id="${esc(t)}" class="sl-inline"><input type="hidden" name="caseId" value="${esc(caseId)}"><input type="hidden" name="factType" value="${esc(t)}"><input name="value" ${/PRICE|MOQ|LEAD|OUTPUT|POWER/.test(t) ? 'inputmode="decimal"' : ''} value="" placeholder="${esc(HINT[t] ?? 'Valeur exacte')}" autocomplete="off" autofocus><button class="sl-btn pri" type="submit">OK</button></form>${f ? `<small class="sl-fs">Valeur actuelle : ${esc(factValueText(f))}. L'ancienne valeur reste dans l'historique.</small>` : ''}`;
   const rows = order.map((t) => { const f = have.get(t);
     if (!f) return `<li class="sl-fact UNKNOWN"><div class="sl-fh"><b>${esc(FACT_LABELS[t])}</b>${pill('inconnu', 'rv-UNKNOWN')}</div><div class="sl-acts">${btn('Saisir', 'sl-fact-edit', t, '', 'ghost')}</div>${editing === t ? form(t, null) : ''}</li>`;
-    const ref = f.source_reference ?? {}; const src = [SOURCE_FR[f.source_type] ?? f.source_type, ref.offerId ? `offre ${ref.offerId.slice(-4)}` : null, ref.mode ? MODE_FR[ref.mode] : null, ref.origin && !ref.mode ? MODE_FR[ref.origin] : null].filter(Boolean).join(' · ');
+    const ref = f.source_reference ?? {}; const src = [SOURCE_FR[f.source_type] ?? f.source_type, ref.offerId ? `offre ${ref.offerId.slice(-4)}` : null, ref.revisionId ? 'dans votre version corrigée du texte' : null, ref.mode ? MODE_FR[ref.mode] : null, ref.origin && !ref.mode ? MODE_FR[ref.origin] : null].filter(Boolean).join(' · ');
     const mine = f.ledger_id && f.source_type === 'USER_PROVIDED' && f.provenance?.corrected; const hist = f.history ?? [];
     return `<li class="sl-fact ${cls(f.review_status)}"><div class="sl-fh"><b>${esc(f.label)}</b>${pill(REVIEW_STATUS_FR[f.review_status] ?? f.review_status, `rv-${f.review_status}`)}</div>
       <div class="sl-fv">${esc(factValueText(f))}</div><div class="sl-fs">${esc(src)}${f.created_at ? ` · ${esc(fmtAt(f.created_at))}` : ''} · version ${f.revision || '?'}${f.ledger_id ? '' : ' · <b>origine non tracée</b>'}</div>
@@ -127,18 +127,38 @@ const UNKNOWN_FR = (x) => ({ 'unit price': 'prix unitaire', MOQ: 'MOQ', Incoterm
 const SAMPLE_FR = { NONE: 'aucun', REQUESTED: 'demandé', RECEIVED: 'reçu', EVALUATED: 'évalué' };
 const VERDICT_SAMPLE_FR = { PASS: 'OK', CONCERNS: 'réserves', FAIL: 'échec' };
 // The red "blocked" block, first level: a title and 2-4 short words; everything the engine knows stays one tap away (nothing is removed, no gate is weakened).
-const BLOCK_SHORT = { PRODUCT_NOT_IDENTIFIED: 'Modèle exact', PRODUCT_IDENTITY_UNRESOLVED: 'Modèle exact', NO_PRICE: 'Prix unitaire', LANDED_UNKNOWN: "Coûts d'import", CRITICAL_COST_UNKNOWN: "Coûts d'import", LEGAL_REQUIREMENT_UNRESOLVED: 'Règles applicables à déterminer', REQUIRED_DOCUMENT_MISSING: 'Documents de conformité', DOCUMENT_CONTRADICTS_CASE: 'Document contraire au modèle', OPEN_CONTRADICTION: 'Contradiction à lever' };
+const BLOCK_SHORT = { PRODUCT_NOT_IDENTIFIED: 'Numéro de modèle', MODEL_NOT_ESTABLISHED: 'Numéro de modèle', MODEL_NOT_CONFIRMED: 'Modèle à confirmer', MODEL_CONTRADICTORY: 'Modèles contradictoires', PRODUCT_IDENTITY_UNRESOLVED: 'Identification technique incomplète', NO_PRICE: 'Prix unitaire', LANDED_UNKNOWN: "Coûts d'import", CRITICAL_COST_UNKNOWN: "Coûts d'import", LEGAL_REQUIREMENT_UNRESOLVED: 'Règles applicables à déterminer', REQUIRED_DOCUMENT_MISSING: 'Documents de conformité', DOCUMENT_CONTRADICTS_CASE: 'Document contraire au modèle', OPEN_CONTRADICTION: 'Contradiction à lever' };
 const cap = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
+const TRAIT_FR = { 'electrical.present': 'électrique', 'battery.present': 'batterie', 'radio.present': 'radio', childrenUse: 'usage enfant', foodContact: 'contact alimentaire', cosmetic: 'cosmétique', ppe: 'protection individuelle (EPI)', textile: 'textile', medical: 'médical', chemicalMixture: 'mélange chimique' };
+const IDENT_CODES = new Set(['MODEL_NOT_ESTABLISHED', 'MODEL_NOT_CONFIRMED', 'MODEL_CONTRADICTORY', 'PRODUCT_IDENTITY_UNRESOLVED', 'PRODUCT_NOT_IDENTIFIED']);
+const MODEL_SRC_FR = { SUPPLIER_CLAIMED: 'annoncé par le fournisseur, accepté par vous', USER_STATED: 'saisi par vous', DOCUMENT: 'lu dans un document', VERIFIED: 'vérifié par une source indépendante' };
+/** The identification gaps in plain French, each told once with its real cause and the place where it is fixed. A known model never reads as missing; a known model never reads as proof of conformity. */
+export function identityLines(idn) {
+  const m = idn.model; const t = idn.technical; const lines = []; const actions = [];
+  if (m.state === 'ABSENT') { lines.push("Numéro de modèle : aucun n'est connu. Demandez-le au fournisseur."); actions.push({ label: 'Poser la question du modèle', act: 'sl-case-tab', key: 'ask' }); }
+  else if (m.state === 'PROPOSED') { lines.push(`Numéro de modèle : ${m.proposed.join(' / ')} est proposé mais pas encore confirmé. Confirmez-le, corrigez-le ou rejetez-le.`); actions.push({ label: 'Voir dans Infos', act: 'sl-case-tab', key: 'facts' }); }
+  else if (m.state === 'CONTRADICTORY') { lines.push(`Numéro de modèle : le fournisseur et le dossier ne s'accordent pas (${m.values.join(' / ')}). Décidez lequel est le bon.`); actions.push({ label: 'Voir dans Infos', act: 'sl-case-tab', key: 'facts' }); }
+  else lines.push(`Numéro de modèle ${m.value} : connu (${MODEL_SRC_FR[m.level] ?? 'accepté par vous'}). Cela ne prouve ni l'identification technique ni la conformité.`);
+  if (!t.complete) {
+    const traits = t.unresolved.map((x) => TRAIT_FR[x] ?? x);
+    const assumed = (t.assumed ?? []).map((x) => TRAIT_FR[x] ?? x);
+    if (!t.categoryConfirmed) lines.push(`Identification technique incomplète : la catégorie du produit n'est pas confirmée${traits.length ? `, donc ${traits.length} caractéristiques de sécurité restent à établir (${traits.join(', ')})` : assumed.length ? `, et les ${assumed.length} caractéristiques de sécurité (${assumed.join(', ')}) ne sont que supposées d'après le nom du produit` : ''}. Confirmez la catégorie : les caractéristiques qu'elle suppose resteront « supposées » jusqu'à votre confirmation.`);
+    else lines.push(`Identification technique incomplète : ${traits.length} caractéristique${traits.length > 1 ? 's' : ''} non établie${traits.length > 1 ? 's' : ''}${traits.length ? ` (${traits.join(', ')})` : ''}.`);
+  }
+  return { lines, actions, needsCategory: !t.complete && !t.categoryConfirmed };
+}
 export function blockerSummary(ev, a) {
-  const hard = a?.decision?.hardBlockers ?? []; const codes = [...new Set([...(ev?.blockingCodes ?? []), ...hard.map((b) => b.code)])];
-  const labels = [...new Set(codes.map((c) => BLOCK_SHORT[c] ?? cap(BLOCK_CODE_FR[c] ?? c.toLowerCase().replace(/_/g, ' '))))];
+  const hard = a?.decision?.hardBlockers ?? []; const codes = [...new Set([...(ev?.blockingCodes ?? []), ...hard.map((b) => b.code)])]; const idn = ev?.identification ?? null;
+  const modelCode = codes.some((c) => c === 'MODEL_NOT_ESTABLISHED' || c === 'MODEL_NOT_CONFIRMED' || c === 'MODEL_CONTRADICTORY' || c === 'PRODUCT_NOT_IDENTIFIED'); const techCode = codes.includes('PRODUCT_IDENTITY_UNRESOLVED');
+  const labels = [...new Set(codes.map((c) => (modelCode && techCode && IDENT_CODES.has(c) ? 'Modèle et identification technique' : (BLOCK_SHORT[c] ?? cap(BLOCK_CODE_FR[c] ?? c.toLowerCase().replace(/_/g, ' '))))))]; // both gaps at once share ONE short word at the first level (the details tell them apart)
   if (!labels.length && !(ev?.blocking ?? []).length) return null;
   const toFix = codes.some((c) => /CONTRADICT/.test(c)); const k = labels.length; const noun = k > 1 ? 'éléments critiques' : 'élément critique';
   const details = []; const seen = new Set(); const add = (t) => { const x = String(t); if (x && !seen.has(x)) { seen.add(x); details.push(x); } };
-  for (const t of ev?.blocking ?? []) add(fr(t));
-  for (const b of hard) add(`${cap(BLOCK_CODE_FR[b.code] ?? b.code)} : ${fr(b.detail)}`);
+  const idl = idn ? identityLines(idn) : null; if (idl) for (const l of idl.lines) add(l); // the identification gaps first, told once (the engine's own sentences for them are not repeated)
+  (ev?.blocking ?? []).forEach((t, i) => { if (!(idn && IDENT_CODES.has(ev.blockingCodes?.[i]))) add(fr(t)); });
+  for (const b of hard) if (!(idn && IDENT_CODES.has(b.code))) add(`${cap(BLOCK_CODE_FR[b.code] ?? b.code)} : ${fr(b.detail)}`);
   const docs = (a?.decision?.gaps?.missingDocs ?? []).map((m) => fr(String(m.label ?? m.docType ?? m)));
-  return { title: `Bloqué — ${k} ${noun} ${toFix ? 'à régler' : k > 1 ? 'manquants' : 'manquant'}`, labels, details, docs };
+  return { title: `Bloqué — ${k} ${noun} ${toFix ? 'à régler' : k > 1 ? 'manquants' : 'manquant'}`, labels, details, docs, actions: idl?.actions ?? [], needsCategory: idl?.needsCategory === true };
 }
 export function blockerHtml(ev, a) {
   const b = blockerSummary(ev, a); if (!b) return '';

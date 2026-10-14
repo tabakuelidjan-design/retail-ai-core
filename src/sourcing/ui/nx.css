@@ -172,3 +172,32 @@ body.sl-mode .tabs .nx-navnote{color:var(--nx-ink2)}body.sl-mode .tabs .nx-navno
 .nx-live .fm{margin:0}.nx-live .fm-hd{display:none}
 .nx-chips.scroll .nx-chip{flex:none}
 .nx-expert,.nx-expert *{overflow-wrap:normal;word-break:normal;min-width:auto}.nx-expert{overflow-x:auto}.nx-expert table{max-width:100%}.nx-expert input,.nx-expert select,.nx-expert textarea{max-width:100%}.nx-expert td,.nx-expert th{white-space:normal;overflow-wrap:break-word}.nx-expert .card{overflow-x:auto}
+
+/* ---- a sentence of the conversation: corrected text first, "Corriger" in place, the original one tap away ---------------------------------------------------------------------------------------- */
+body.sl-mode .nx .nx-item{display:flex;flex-direction:column;gap:var(--s2)}
+body.sl-mode .nx .nx-itext{font-size:16px;line-height:24px;color:var(--nx-ink);overflow-wrap:anywhere;white-space:pre-wrap}
+body.sl-mode .nx .nx-itext.nx-clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+body.sl-mode .nx .nx-fix{align-self:flex-start;display:inline-flex;align-items:center;gap:var(--s2);min-height:44px;padding:0 var(--s3);border:0;border-radius:var(--r-ctl);background:var(--nx-accent-soft);color:var(--nx-accent);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+body.sl-mode .nx .nx-fix .nx-ic{width:18px;height:18px}
+body.sl-mode .nx .nx-edit{display:flex;flex-direction:column;gap:var(--s2);scroll-margin:var(--s4) 0 calc(var(--nav-h) + var(--s5))}
+body.sl-mode .nx .nx-edit textarea{width:100%;min-height:112px;font-size:18px;line-height:26px;padding:var(--s3);border:2px solid var(--nx-accent);border-radius:var(--r-ctl);background:var(--nx-card);color:var(--nx-ink);resize:vertical}
+body.sl-mode .nx .nx-edacts{display:grid;grid-template-columns:1.5fr 1fr;gap:var(--s2)}
+body.sl-mode .nx .nx-edacts .nx-btn{min-height:52px;margin:0;width:100%;box-shadow:none}
+body.sl-mode .nx .nx-micnote{color:var(--nx-warn);font-weight:600}
+body.sl-mode .nx .nx-orig{border-radius:var(--r-ctl);background:var(--nx-bg);padding:0 var(--s3)}
+body.sl-mode .nx .nx-orig summary{min-height:44px;display:flex;align-items:center;color:var(--nx-accent);font-weight:600;cursor:pointer;list-style:none}
+body.sl-mode .nx .nx-orig summary::-webkit-details-marker{display:none}
+body.sl-mode .nx .nx-origtext{display:flex;flex-direction:column;gap:2px;font-size:15px;line-height:22px;color:var(--nx-ink2);padding-bottom:var(--s2);overflow-wrap:anywhere}
+body.sl-mode .nx .nx-revs{display:flex;flex-direction:column;gap:var(--s2);padding:0 0 var(--s2);list-style:none}
+body.sl-mode .nx .nx-revs li{display:flex;flex-direction:column;font-size:14px;line-height:20px;color:var(--nx-ink2)}
+body.sl-mode .nx .nx-orig>small{display:block;padding-bottom:var(--s2);color:var(--nx-mute)}
+body.sl-mode .nx .st-corr{background:var(--nx-accent-soft);color:var(--nx-accent)}
+body.sl-mode .nx .nx-impact{border-left:4px solid var(--nx-warn);background:var(--nx-warn-soft);border-radius:var(--r-ctl);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s1);font-size:14.5px;line-height:20px;color:var(--nx-ink)}
+body.sl-mode .nx .nx-impact b{color:var(--nx-warn)}
+body.sl-mode .nx .nx-thread .nx-item{padding:var(--s3) var(--s4)}
+/* ---- identification gaps in the blocker detail: the category decision and the direct links ------------------------------------------------------------------------------------------------ */
+body.sl-mode .nx .nx-catform{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0}
+body.sl-mode .nx .nx-catform label{font-size:14px;line-height:20px;font-weight:600;color:var(--nx-ink2)}
+body.sl-mode .nx .nx-catform select{min-height:48px;font:inherit;font-size:16px;padding:0 var(--s3);border:1px solid var(--nx-line);border-radius:var(--r-ctl);background:var(--nx-card);color:var(--nx-ink)}
+body.sl-mode .nx .nx-catform .nx-btn{min-height:48px;width:100%;margin:0}
+body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0}

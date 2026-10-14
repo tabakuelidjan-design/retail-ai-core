@@ -56,7 +56,7 @@ const sourceTypeOf = (e) => (e.sourceType ?? ({ SUPPLIER_CLAIM: SOURCE_TYPE.SUPP
 const reviewOf = (e) => (e.revertOf ? REVIEW_STATUS.REVERTED : e.corrected ? REVIEW_STATUS.CORRECTED : e.userConfirmed ? REVIEW_STATUS.CONFIRMED : REVIEW_STATUS.NOT_REVIEWED);
 const entryView = (state, e, n, prev) => ({
   ledger_id: e.id, value: e.value, source_type: sourceTypeOf(e), review_status: reviewOf(e), created_at: e.confirmedAt ?? e.at ?? null, revision: n, supersedes: prev?.id ?? null, voided: e.voided === true,
-  source_reference: { candidateId: e.source?.candidateId ?? null, convId: e.source?.convId ?? null, itemId: e.source?.itemId ?? null, offerId: e.offerId ?? null, rawText: e.rawText ?? null, span: e.span ?? null, mode: e.mode ?? e.source?.mode ?? null, origin: e.source?.origin ?? null, ref: e.ref ?? e.source?.ref ?? null },
+  source_reference: { revisionId: e.revisionId ?? null, candidateId: e.source?.candidateId ?? null, convId: e.source?.convId ?? null, itemId: e.source?.itemId ?? null, offerId: e.offerId ?? null, rawText: e.rawText ?? null, span: e.span ?? null, mode: e.mode ?? e.source?.mode ?? null, origin: e.source?.origin ?? null, ref: e.ref ?? e.source?.ref ?? null },
   provenance: { basis: e.basis ?? null, via: e.via ?? null, kind: e.source?.kind ?? null, corrected: e.corrected === true, original: e.original ?? null, previousValue: e.previousValue ?? null, reason: e.reason ?? null, revertOf: e.revertOf ?? null },
 });
 

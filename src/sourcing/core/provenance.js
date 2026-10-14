@@ -39,3 +39,11 @@ export function documentStatusOf(state, claim) {
   const matched = withModels.some((d) => d.extraction.models.some((m) => m === caseModel));
   return { claim, status: matched ? FACT_STATUS.DOCUMENT_MATCHED : 'MISMATCH', claimStatus: last?.status ?? null, received: docs.length, matched };
 }
+
+// ---- what an item SAYS: the raw words are never overwritten; an owner's correction is a revision stored next to them ------------------------------------------------------------------
+/** The raw words of an item exactly as they were captured: the typed original, or the machine transcription (Moonshine) built from its segments. Never changed by a correction. */
+export const rawTextOf = (item) => item?.original ?? (item?.derived ?? []).find((d) => d.kind === 'TRANSCRIPTION')?.text ?? '';
+export const revisionsOf = (item) => (Array.isArray(item?.revisions) ? item.revisions : []);
+/** The text shown as the main text: the owner's latest correction when there is one, else the raw words. */
+export const currentTextOf = (item) => { const r = revisionsOf(item).at(-1); return r ? r.text : rawTextOf(item); };
+export const isRevised = (item) => revisionsOf(item).length > 0;

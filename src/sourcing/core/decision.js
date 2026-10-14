@@ -2,6 +2,7 @@
 // blockers, and the WHY as a list of facts. INFORMATION INSUFFICIENT is a valid and frequent result.
 import { BLOCKER, VERDICT, TRAFFIC } from './levels.js';
 import { fmt } from './money.js';
+import { technicalGapText } from './identity.js';
 
 export const DEFAULT_POLICY = Object.freeze({
   unattractiveBelowTargetFraction: 0.5, // contribution below half of the target margin = UNATTRACTIVE at this price (a Nordla default, editable per case)
@@ -88,7 +89,7 @@ export function decide({ identityConf, rules, docs, safety, customs, landed, eco
   const unresolvedLegal = (rules.results ?? []).filter((r) => r.status === 'UNRESOLVED' && r.jurisdiction !== 'AMAZON' && ['eu.ce', 'eu.lvd', 'eu.emc', 'eu.red', 'eu.toys', 'eu.fcm', 'eu.cosmetics', 'eu.ppe', 'eu.batteries', 'eu.nlf_operator'].includes(r.ruleId));
   const blockers = [];
   const B = (code, severity, detail) => blockers.push({ code, severity, detail });
-  if (identityConf.level === 'LOW') B(BLOCKER.PRODUCT_IDENTITY_UNRESOLVED, 'HARD', `identification is LOW: ${identityConf.unresolvedTraits.length} key trait(s) unresolved${identityConf.categoryKnown ? '' : ', no category'}`);
+  if (identityConf.level === 'LOW') B(BLOCKER.PRODUCT_IDENTITY_UNRESOLVED, 'HARD', technicalGapText(identityConf)); // the same sentence as the evidence status: one gap, one wording
   if (unresolvedLegal.length) B(BLOCKER.LEGAL_REQUIREMENT_UNRESOLVED, 'HARD', `cannot decide yet whether these regimes apply: ${unresolvedLegal.map((r) => r.family).join(', ')}`);
   if (gaps.missingDocs.length) B(BLOCKER.REQUIRED_DOCUMENT_MISSING, 'HARD', `${gaps.missingDocs.length} required document(s) missing or not usable, e.g. ${gaps.missingDocs.slice(0, 2).map((m) => m.label.replace(/\s*\(.*$/, '').slice(0, 70)).join('; ')}`);
   if (['EXACT_MATCH', 'PROBABLE_MATCH'].includes(safety.status)) B(BLOCKER.SAFETY_ALERT_EXACT_MATCH, 'HARD', `Safety Gate ${safety.status === 'EXACT_MATCH' ? 'exact' : 'probable'} match: ${safety.matches[0]?.alertNumber ?? 'alert'} (${(safety.matches[0]?.hazards ?? []).join(', ') || 'hazard not classified'})`);
