@@ -136,3 +136,6 @@ Nothing here adds a provider or a tool. Each row is a defect observed on the rea
 | No text-layer raster | not a defect | no downstream path needs one: the compositor draws the text from its geometry, style node and text hash (`TEXT:` / `TEXT_STYLE:` nodes), and a typography repair re-renders from the style node (a `TYPOGRAPHY_REPAIR` changed only `RENDER` and `TEXT_STYLE`). A second raster would be a redundant copy that could drift from the geometry; geometry + hash stays authoritative. |
 
 Limits, stated: the campaign runs its assets one after the other (no parallelism); a campaign of N assets pays the planning once; the claim and consistency checks are deterministic text rules, not a reading of meaning; the Brain, the asset director and the layer generator are still scripted fakes in every test.
+
+### 12.1 Verification record of the closure
+Targeted mutation sweep of the new decision code: 160 mutants, 151 killed, 9 documented (4 equivalent in the amount parser, 3 in the run context — a trace counter and two comparisons carrying a 1e-12 tolerance —, 2 redundant fallbacks in the final-state mapping). Two real gaps found by the sweep were closed by tests. Full suite on clean clones of the code commit: Node 24 and Node 20, 2444 tests, 0 failed, 2 skipped.
