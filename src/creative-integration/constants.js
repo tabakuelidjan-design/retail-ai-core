@@ -62,7 +62,7 @@ export const NATIVE_ALPHA = Object.freeze({
   border_px: 2, border_clear_share: 0.98,
   max_soft_share: 0.08, // partially transparent pixels, of all non-transparent ones
   halo_px: 4, max_far_soft_share: 0.01, // soft pixels farther than this from the opaque core are a baked glow, not an edge
-  min_object_share: 0.0004, max_stray_pixels: 0, pinhole_px: 12, max_noise: 0.15,
+  min_object_share: 0.0004, max_stray_pixels: 0, pinhole_px: 12, max_noise: 0.15, zigzag_slack: 16, min_runs: 40, max_zigzag: 0.08,
 });
 
 export const MATTE = Object.freeze({

@@ -50,7 +50,11 @@ export function describeEndToEnd() {
 export async function runCreativeEndToEnd({
   run_id: runId, at, ceiling_eur: ceiling = 2, request, brief, fonts, font = null, ports = {}, guardian = null, options = {}, resume = null, ledger = createDecisionLedger(),
 }) {
-  const ctx = createRunContext({ run_id: runId, ceiling_eur: ceiling, ledger, at, resume: resume?.run_state ?? null });
+  let ctx;
+  try { ctx = createRunContext({ run_id: runId, ceiling_eur: ceiling, ledger, at, resume: resume?.run_state ?? null }); } catch (error) {
+    // the run itself could not be created (an invalid id, ceiling or resume state): a technical failure with no run to describe
+    return Object.freeze({ schema: 'creative-e2e-result@1', state: E2E_STATE.TECHNICAL_FAIL, run_id: runId ?? null, final: null, gates: [], budget: null, provider_calls: [], operation_ids: [], warnings: [], block: null, failure: { code: error?.code ?? 'ERROR', detail: error?.detail ?? null }, owner_approval: 'PENDING', fallback_to_generated_product: false, resume_state: null });
+  }
   const stages = {}; const warnings = []; const gates = [];
   const campaignStore = createMemoryCheckpointStore(resume?.campaign_store ?? null);
   let layerStore = createLayerStore(resume?.layer_store ?? null);
@@ -76,6 +80,8 @@ export async function runCreativeEndToEnd({
       integration: segmentationEval ? {
         state: segmentationEval.state, source_kind: segmentationEval.source_kind, reasons: segmentationEval.reasons, evidence: segmentationEval.stage_evidence ?? null, grade: 'NOT_APPLIED_IN_THE_LAYERED_FLOW', shadow: final?.integration_shadow ? { kind: final.integration_shadow.kind } : null,
       } : null,
+      layers: layeredResult?.artifact ? { plate: layeredResult.artifact.nodes.plate.node_id, props: layeredResult.artifact.nodes.props.map((x) => ({ node_id: x.node_id, layer_id: x.layer_id, kind: x.kind })), product: layeredResult.artifact.nodes.product.node_id, text: layeredResult.artifact.nodes.text.map((x) => x.node_id) } : null,
+      selection: { mode: options.selection?.mode ?? 'AUTO', ids: options.selection?.ids ?? null, product_ids: segmentationEval?.seg?.components?.filter((c) => c.selected).map((c) => c.id) ?? null },
       refine: refineSummary,
       gates, budget: ctx.budget.snapshot(), provider_calls: ctx.operations.providerCalls(), operation_ids: ctx.operations.ids(),
       ledger_reference: { run_id: runId, entries: ledger.entries().length, sha256: sha(ledger.entries().map((e) => e.decision ?? e.rule ?? '').join('|')) },
@@ -88,6 +94,7 @@ export async function runCreativeEndToEnd({
 
   try {
     // ---- REQUEST
+    if (!(ceiling > 0)) { ctx.setFailure({ stage: STAGE.REQUEST, code: 'BUDGET_EXCEEDED' }); return finish(E2E_STATE.BUDGET_EXCEEDED, { failure: { code: 'BUDGET_EXCEEDED', detail: { source: 'A_RUN_WITHOUT_BUDGET_CANNOT_DO_PAID_WORK', ceiling_eur: ceiling } } }); }
     const problems = [];
     if (!request || !brief?.asset?.bytes || !brief?.ids || !brief?.format) problems.push('REQUEST_OR_BRIEF_INCOMPLETE');
     if (typeof ports.brainComplete !== 'function') problems.push('NO_BRAIN_PORT');
@@ -132,6 +139,7 @@ export async function runCreativeEndToEnd({
     const assetDirector = ports.directorComplete ? createAssetDirector({ complete: ctx.wrapComplete(ports.directorComplete, OPERATION.ASSET_DIRECTOR_TEXT) }) : null;
     const planner = createCampaignPlanner({ brain, contentPlanner, assetDirector, ledger, store: campaignStore, ceilingEur: ceiling });
     campaign = await planner.plan({ brief: briefRun, request });
+    if ((campaign.questions ?? []).some((q) => q.code === 'CAMPAIGN_BUDGET_EXCEEDED')) { ctx.setFailure({ stage: STAGE.FORMAT_PLAN, code: 'BUDGET_EXCEEDED' }); stages[STAGE.FORMAT_PLAN] = { status: 'STOPPED' }; return finish(E2E_STATE.BUDGET_EXCEEDED, { failure: { code: 'BUDGET_EXCEEDED', detail: { source: 'THE_CAMPAIGN_PLANNER_ESTIMATE_EXCEEDS_THE_RUN_CEILING', ceiling_eur: ceiling, questions: campaign.questions } } }); }
     if (campaign.status !== 'PLANNED') return blocked(STAGE.FORMAT_PLAN, E2E_BLOCK.PLANNING_NOT_PLANNED, `campaign status ${campaign.status}`, 'ANSWER_THE_QUESTIONS_OR_FIX_THE_REQUEST', { questions: campaign.questions ?? [] });
     save(STAGE.FORMAT_PLAN, { request_ref: request.request_ref, copy: request.copy }, { content_plan_ids: campaign.campaign_plan.content_plan_ids, format: campaign.content_plans?.[0]?.format?.kind ?? null });
     save(STAGE.BRAIN_PLAN, { frame: campaign.campaign_plan.frame_id }, { frame_id: campaign.campaign_plan.frame_id, concept_id: campaign.campaign_plan.concept_id, art_direction_id: campaign.campaign_plan.art_direction_id, asset_plan_ids: campaign.campaign_plan.asset_plan_ids });
@@ -166,19 +174,21 @@ export async function runCreativeEndToEnd({
       return blocked(STAGE.INTEGRATION, E2E_BLOCK.LAYERED_STOP, layeredResult.reason, layeredResult.replan, { detail: layeredResult.detail ?? null });
     }
 
+    save(STAGE.INTEGRATION, { production: production.production.production_id, scene: sceneId, asset: assetPrep.asset.sha256 }, { layered_status: layeredResult.status, png_sha256: layeredResult.png_bytes ? sha(layeredResult.png_bytes) : null, artifact_render_sha256: layeredResult.artifact?.nodes?.render?.png_sha256 ?? null, provider_calls: layeredResult.provider_calls ?? 0 });
+
     // ---- REFINE: only for a NAMED defect that a layer repair can fix, within policy, budget and capability
     const repairable = new Set(['PREFLIGHT_FAIL', 'FIDELITY_FAIL', 'GUARDIAN_FAIL']);
     const extraDefects = options.refine?.defects ?? [];
     let attempts = 0;
     while ((repairable.has(layeredResult.status) || extraDefects.length) && attempts < (options.refine?.max_attempts ?? 1)) {
-      if (!options.refine?.enabled) { refineSummary = { decision: 'DISABLED', named_defects: defectsFromCandidate(layeredResult).length }; break; }
+      if (!options.refine?.enabled) { refineSummary = { decision: 'DISABLED', named_defects: defectsFromCandidate(layeredResult).length + extraDefects.length }; warnings.push('REFINE_DISABLED_WITH_NAMED_DEFECTS'); break; }
       const defects = [...defectsFromCandidate(layeredResult), ...extraDefects];
       if (!defects.length) { refineSummary = { decision: 'NO_NAMED_DEFECT' }; break; }
       attempts += 1;
       const maskedNeeded = options.refine.scopes ? null : null; void maskedNeeded;
       const r = await refineCreative({ candidate: layeredResult, defects, run, store: layerStore, budget: layerBudget, memory: refineMemory, allowedScopes: options.refine.scopes ?? null });
       refineSummary = { decision: 'ATTEMPTED', status: r.status, scope: r.plan?.scope ?? null, block: r.block ?? null, provider_calls: r.cost?.provider_calls ?? 0, layer_diff: r.layer_diff ?? null, product_identical: r.product_identical ?? null, locked_copy_identical: r.locked_copy_identical ?? null };
-      if (r.status === 'REPAIRED') { layeredResult = r.candidate; layerStore = r.store; stages[STAGE.REFINE] = { status: 'REPAIRED' }; continue; }
+      if (r.status === 'REPAIRED') { layeredResult = r.candidate; layerStore = r.store; stages[STAGE.REFINE] = { status: 'REPAIRED' }; save(STAGE.REFINE, { before: layeredResult.png_sha256, defects: defects.map((d) => d.defect_id) }, { status: r.status, scope: r.plan?.scope ?? null, changed: r.layer_diff?.changed ?? [], png_sha256: layeredResult.png_sha256 }); continue; }
       stages[STAGE.REFINE] = { status: r.status };
       if (r.block?.code === 'NEEDS_A_MASKED_EDIT_PROVIDER') { ctx.setFailure({ stage: STAGE.REFINE, code: E2E_BLOCK.MASKED_EDIT_NOT_CONNECTED }); return finish(E2E_STATE.PROVIDER_NOT_CONNECTED, { block: { stage: STAGE.REFINE, code: E2E_BLOCK.MASKED_EDIT_NOT_CONNECTED, reason: 'THE_DEFECT_NEEDS_A_MASKED_EDIT_PROVIDER', replan: 'CONNECT_A_MASKED_EDIT_PROVIDER' }, final: layeredResult }); }
       return blocked(STAGE.REFINE, E2E_BLOCK.REFINE_REJECTED, r.block?.code ?? r.status, r.replan ?? r.block?.replan ?? 'REPLAN_THE_SCENE', { refine: refineSummary });

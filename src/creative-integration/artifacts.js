@@ -57,8 +57,10 @@ export function detectArtifacts({
       // FLOATING: the contact is darkened under the product
       let covered = 0; let cols = 0;
       for (let x = c.x0; x <= c.x1; x += 1) {
-        if (alphaScene[(c.contact_y - 1) * W + x] < 128) continue; cols += 1;
-        let m = 0; for (let t = 0; t < 3; t += 1) { const yy = c.contact_y + t; if (yy < Hh) m = Math.max(m, shadowScene[yy * W + x]); }
+        // the lowest product row of this column within 3 px of the declared contact line (the renderer draws at a fractional position: a sub-pixel gap is not a floating product)
+        let yb = -1; for (let yy = Math.min(Hh - 1, c.contact_y); yy >= c.contact_y - 3; yy -= 1) if (alphaScene[yy * W + x] >= 128) { yb = yy; break; }
+        if (yb < 0) continue; cols += 1;
+        let m = 0; for (let t = 1; t < 4; t += 1) { const yy = yb + t; if (yy < Hh) m = Math.max(m, shadowScene[yy * W + x]); }
         if (m >= 0.15 * 255) covered += 1;
       }
       const coverage = cols ? covered / cols : 0;

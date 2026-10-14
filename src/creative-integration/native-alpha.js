@@ -84,6 +84,15 @@ export function segmentNativeAlpha(rgba, selection = { mode: 'AUTO' }) {
   // 8. the alpha ramp is not noisy
   const noise = alphaExtremaShare(alpha, width, height);
   findings.push(check('ALPHA_NOISE', noise, N.max_noise, noise <= N.max_noise));
+  // 9. a soft edge is MONOTONIC: among three consecutive partially transparent pixels on a row or a column the middle one lies between its neighbours (a random ramp zigzags)
+  let runs = 0; let zig = 0; const slack = N.zigzag_slack;
+  const partial = (v) => v > 8 && v < 247;
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    const b0 = alpha[y * width + x]; if (!partial(b0)) continue;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) { const p0 = alpha[(y - dy) * width + x - dx]; const p1 = alpha[(y + dy) * width + x + dx]; if (!partial(p0) || !partial(p1)) continue; runs += 1; if (b0 < Math.min(p0, p1) - slack || b0 > Math.max(p0, p1) + slack) zig += 1; }
+  }
+  const zigzag = runs >= N.min_runs ? zig / runs : 0;
+  findings.push(check('ALPHA_EDGE_ZIGZAG', zigzag, N.max_zigzag, zigzag <= N.max_zigzag));
 
   if (!findings.every((f) => f.ok)) return fail(SEG_REASON.ALPHA_INVALID, findings, { holes: holes.filter((h) => h.area > N.pinhole_px) });
   const bounds = boundsOfPlane(alpha, width, height, 1);
