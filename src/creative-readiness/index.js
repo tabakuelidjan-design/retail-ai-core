@@ -9,6 +9,7 @@ import { auditLayeredRuntimeParity, auditProductionParity } from '../creative-pr
 import { productionReadinessLevel } from '../creative-production/gate.js';
 import { auditRefineParity } from '../creative-refine/parity.js';
 import { auditIntegrationParity } from '../creative-integration/parity.js';
+import { auditEndToEndParity } from '../creative-e2e/parity.js';
 
 // THE CREATIVE READINESS GATE. A live Creative run is refused unless ONE explicit, offline verdict says CREATIVE_PIPELINE_READY. The pipeline is not the Creative Brain alone: it is the content planning in front of
 // it, the Brain, the campaign planning on top of it, the layered production that specifies what would be sent to a provider, and the layered RUNTIME that executes a scene through the gates. The layered
@@ -22,11 +23,32 @@ import { auditIntegrationParity } from '../creative-integration/parity.js';
 export const CREATIVE_READY = 'CREATIVE_PIPELINE_READY';
 export const NOT_READY = 'NOT_READY';
 export const COMPONENT = Object.freeze({
-  PLANNING: 'PLANNING', BRAIN: 'BRAIN', CAMPAIGN: 'CAMPAIGN', PRODUCTION: 'PRODUCTION', LAYERED_RUNTIME: 'LAYERED_RUNTIME', REFINE: 'REFINE', INTEGRATION: 'INTEGRATION',
+  PLANNING: 'PLANNING', BRAIN: 'BRAIN', CAMPAIGN: 'CAMPAIGN', PRODUCTION: 'PRODUCTION', LAYERED_RUNTIME: 'LAYERED_RUNTIME', REFINE: 'REFINE', INTEGRATION: 'INTEGRATION', END_TO_END: 'END_TO_END',
 });
-export const ACTIVE_COMPONENTS = Object.freeze([COMPONENT.PLANNING, COMPONENT.BRAIN, COMPONENT.CAMPAIGN, COMPONENT.PRODUCTION, COMPONENT.LAYERED_RUNTIME, COMPONENT.REFINE, COMPONENT.INTEGRATION]);
+export const ACTIVE_COMPONENTS = Object.freeze([COMPONENT.PLANNING, COMPONENT.BRAIN, COMPONENT.CAMPAIGN, COMPONENT.PRODUCTION, COMPONENT.LAYERED_RUNTIME, COMPONENT.REFINE, COMPONENT.INTEGRATION, COMPONENT.END_TO_END]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const CREATIVE_ATTESTATION_PATH = path.join(ROOT, 'docs', 'architecture', 'creative-readiness.json');
+
+/** The providers an end-to-end run needs before it can produce a real asset: a layer generator (plates and props) and the Brain's language model. */
+export const REQUIRED_PROVIDERS = Object.freeze(['LAYER_GENERATOR', 'BRAIN_MODEL']);
+export const HIGH_LEVEL = Object.freeze({ MODULES: 'CREATIVE_MODULES_READY', END_TO_END: 'CREATIVE_END_TO_END_READY', PROVIDER: 'CREATIVE_PROVIDER_READY', LIVE: 'CREATIVE_LIVE_VALIDATED', NONE: 'CREATIVE_NOT_READY' });
+
+/**
+ * The four LEVELS, each supported by its own evidence and none implied by another: the modules (each component proven), the end-to-end wiring (the entry point is wired and a provider-free fixture ran end to end),
+ * the real providers (a connection RECORDED in the attestation for each required provider), the live validation (a recorded successful live run). `CREATIVE_PIPELINE_READY` means the first two; it never implies the last two.
+ */
+export function readinessLevels({ modulesReady, fullReady, endToEndParity, attestation }) {
+  const e2e = fullReady && endToEndParity === true && attestation?.end_to_end?.provider_free_fixture === 'PASS';
+  const providers = Array.isArray(attestation?.providers_connected) && REQUIRED_PROVIDERS.every((p) => attestation.providers_connected.includes(p));
+  const live = providers && attestation?.live_validation?.status === 'success';
+  const levels = { MODULES_READY: Boolean(modulesReady), END_TO_END_WIRED: Boolean(e2e), REAL_PROVIDER_CONNECTED: Boolean(providers), LIVE_VALIDATED: Boolean(live) };
+  let top = HIGH_LEVEL.NONE;
+  if (levels.MODULES_READY) top = HIGH_LEVEL.MODULES;
+  if (levels.MODULES_READY && levels.END_TO_END_WIRED) top = HIGH_LEVEL.END_TO_END;
+  if (levels.MODULES_READY && levels.END_TO_END_WIRED && levels.REAL_PROVIDER_CONNECTED) top = HIGH_LEVEL.PROVIDER;
+  if (levels.MODULES_READY && levels.END_TO_END_WIRED && levels.REAL_PROVIDER_CONNECTED && levels.LIVE_VALIDATED) top = HIGH_LEVEL.LIVE;
+  return { levels, high_level_status: top };
+}
 
 const green = (r) => r && Number.isInteger(r.tests) && r.tests > 0 && r.fail === 0 && r.pass > 0;
 const completeSweep = (m) => Boolean(m) && m.total > 0 && m.killed + (m.survivors_documented ?? 0) === m.total;
@@ -66,17 +88,20 @@ export function evaluateCreativeReadiness({
 
 /** The live gate, with the three real parity audits, the Brain's own gate, the real code hash and the recorded attestation. */
 export function checkCreativeReadiness({ attestationFile = CREATIVE_ATTESTATION_PATH, root = ROOT, brainAttestationFile } = {}) {
-  const brain = auditContractParity(); const planning = auditPlanningParity(); const campaign = auditCampaignParity(); const production = auditProductionParity(); const layered = auditLayeredRuntimeParity(); const refine = auditRefineParity(); const integration = auditIntegrationParity();
+  const brain = auditContractParity(); const planning = auditPlanningParity(); const campaign = auditCampaignParity(); const production = auditProductionParity(); const layered = auditLayeredRuntimeParity(); const refine = auditRefineParity(); const integration = auditIntegrationParity(); const endToEnd = auditEndToEndParity();
   const brainGate = checkBrainReadiness({ root, ...(brainAttestationFile ? { attestationFile: brainAttestationFile } : {}) });
-  const verdict = evaluateCreativeReadiness({
-    parities: {
-      [COMPONENT.BRAIN]: brain, [COMPONENT.PLANNING]: planning, [COMPONENT.CAMPAIGN]: campaign, [COMPONENT.PRODUCTION]: production, [COMPONENT.LAYERED_RUNTIME]: layered, [COMPONENT.REFINE]: refine, [COMPONENT.INTEGRATION]: integration,
-    },
-    brainGate, attestation: readAttestation(attestationFile), hash: codeHash(root), levels: productionReadinessLevel({ parityOk: production.ready && layered.ready }),
-  });
+  const attestation = readAttestation(attestationFile);
+  const parities = {
+      [COMPONENT.BRAIN]: brain, [COMPONENT.PLANNING]: planning, [COMPONENT.CAMPAIGN]: campaign, [COMPONENT.PRODUCTION]: production, [COMPONENT.LAYERED_RUNTIME]: layered, [COMPONENT.REFINE]: refine, [COMPONENT.INTEGRATION]: integration, [COMPONENT.END_TO_END]: endToEnd,
+  };
+  const hash = codeHash(root); const levelsOfProduction = productionReadinessLevel({ parityOk: production.ready && layered.ready });
+  const verdict = evaluateCreativeReadiness({ parities, brainGate, attestation, hash, levels: levelsOfProduction });
+  const modules = evaluateCreativeReadiness({ parities, brainGate, attestation, hash, levels: levelsOfProduction, active: ACTIVE_COMPONENTS.filter((c) => c !== COMPONENT.END_TO_END) });
+  const tiers = readinessLevels({ modulesReady: modules.ready, fullReady: verdict.ready, endToEndParity: endToEnd.ready, attestation });
   return {
     ...verdict,
-    parity: Object.fromEntries([[COMPONENT.PLANNING, planning], [COMPONENT.BRAIN, brain], [COMPONENT.CAMPAIGN, campaign], [COMPONENT.PRODUCTION, production], [COMPONENT.LAYERED_RUNTIME, layered], [COMPONENT.REFINE, refine], [COMPONENT.INTEGRATION, integration]].map(([c, p]) => [c, { ready: p.ready, stages: p.stages.length, rows: p.rows.length, failures: p.failures.length }])),
+    ...tiers,
+    parity: Object.fromEntries([[COMPONENT.PLANNING, planning], [COMPONENT.BRAIN, brain], [COMPONENT.CAMPAIGN, campaign], [COMPONENT.PRODUCTION, production], [COMPONENT.LAYERED_RUNTIME, layered], [COMPONENT.REFINE, refine], [COMPONENT.INTEGRATION, integration], [COMPONENT.END_TO_END, endToEnd]].map(([c, p]) => [c, { ready: p.ready, stages: p.stages.length, rows: p.rows.length, failures: p.failures.length }])),
     brain_gate: { status: brainGate.status, ready: brainGate.ready },
   };
 }

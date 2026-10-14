@@ -11,6 +11,7 @@ import { auditCampaignParity } from '../src/creative-campaign/parity.js';
 import { auditLayeredRuntimeParity, auditProductionParity } from '../src/creative-production/parity.js';
 import { auditRefineParity } from '../src/creative-refine/parity.js';
 import { auditIntegrationParity } from '../src/creative-integration/parity.js';
+import { auditEndToEndParity } from '../src/creative-e2e/parity.js';
 import { productionReadinessLevel } from '../src/creative-production/index.js';
 import { describeLayeredRuntime } from '../src/creative-runtime/index.js';
 
@@ -26,7 +27,7 @@ const good = (hash) => ({
   ci: { status: 'success' },
 });
 const parities = {
-  PLANNING: auditPlanningParity(), BRAIN: auditContractParity(), CAMPAIGN: auditCampaignParity(), PRODUCTION: auditProductionParity(), LAYERED_RUNTIME: auditLayeredRuntimeParity(), REFINE: auditRefineParity(), INTEGRATION: auditIntegrationParity(),
+  PLANNING: auditPlanningParity(), BRAIN: auditContractParity(), CAMPAIGN: auditCampaignParity(), PRODUCTION: auditProductionParity(), LAYERED_RUNTIME: auditLayeredRuntimeParity(), REFINE: auditRefineParity(), INTEGRATION: auditIntegrationParity(), END_TO_END: auditEndToEndParity(),
 };
 const levels = productionReadinessLevel({ parityOk: true });
 const gate = { ready: true, status: 'CREATIVE_BRAIN_CONTRACT_PARITY_READY', reasons: [] };
@@ -38,8 +39,8 @@ test('CR-1 the pipeline is READY only when every component parity, the Brain gat
   assert.ok(Object.values(parities).every((p) => p.ready), 'the six real audits pass');
   const ok = verdict();
   assert.deepEqual({ status: ok.status, ready: ok.ready, reasons: ok.reasons }, { status: CREATIVE_READY, ready: true, reasons: [] });
-  assert.equal(CREATIVE_READY, 'CREATIVE_PIPELINE_READY'); assert.deepEqual(ACTIVE_COMPONENTS, ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION']);
-  assert.deepEqual(Object.keys(ok.components), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION']); assert.equal(ok.layered_production.level, 'RUNTIME_EXECUTABLE'); assert.ok(Object.values(ok.components).every((c) => c.parity_ready && c.attested && c.mutation_complete));
+  assert.equal(CREATIVE_READY, 'CREATIVE_PIPELINE_READY'); assert.deepEqual(ACTIVE_COMPONENTS, ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION', 'END_TO_END']);
+  assert.deepEqual(Object.keys(ok.components), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION', 'END_TO_END']); assert.equal(ok.layered_production.level, 'RUNTIME_EXECUTABLE'); assert.ok(Object.values(ok.components).every((c) => c.parity_ready && c.attested && c.mutation_complete));
 });
 
 test('CR-2 every missing or failing piece of evidence names itself, component by component, and refuses', () => {
@@ -54,6 +55,9 @@ test('CR-2 every missing or failing piece of evidence names itself, component by
     ['refine parity', { parities: { ...parities, REFINE: broken } }, /REFINE_PARITY_FAILS: STAGE/],
     ['refine audit missing', { parities: { PLANNING: parities.PLANNING, BRAIN: parities.BRAIN, CAMPAIGN: parities.CAMPAIGN, PRODUCTION: parities.PRODUCTION, LAYERED_RUNTIME: parities.LAYERED_RUNTIME } }, /REFINE_PARITY_FAILS: no audit/],
     ['integration parity', { parities: { ...parities, INTEGRATION: broken } }, /INTEGRATION_PARITY_FAILS: STAGE/],
+    ['end to end parity', { parities: { ...parities, END_TO_END: broken } }, /END_TO_END_PARITY_FAILS: STAGE/],
+    ['end to end not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION'] } }, /ATTESTATION_DOES_NOT_COVER:END_TO_END/],
+    ['end to end sweep absent', { attestation: { ...good('h'), mutation: mutation('END_TO_END', undefined) } }, /MUTATION_SWEEP_NOT_COMPLETE_OR_SURVIVORS_UNDOCUMENTED:END_TO_END/],
     ['integration not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE'] } }, /ATTESTATION_DOES_NOT_COVER:INTEGRATION/],
     ['integration sweep absent', { attestation: { ...good('h'), mutation: mutation('INTEGRATION', undefined) } }, /MUTATION_SWEEP_NOT_COMPLETE_OR_SURVIVORS_UNDOCUMENTED:INTEGRATION/],
     ['refine not covered', { attestation: { ...good('h'), components: ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME'] } }, /ATTESTATION_DOES_NOT_COVER:REFINE/],
@@ -110,11 +114,11 @@ test('CR-3 a component added to the pipeline cannot be a blind spot: the gate re
 
 test('CR-4 the real gate audits every component and keeps the Brain gate', () => {
   const real = checkCreativeReadiness({ attestationFile: new URL('./does-not-exist.json', import.meta.url).pathname });
-  assert.deepEqual(Object.keys(real.parity), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION']);
+  assert.deepEqual(Object.keys(real.parity), ['PLANNING', 'BRAIN', 'CAMPAIGN', 'PRODUCTION', 'LAYERED_RUNTIME', 'REFINE', 'INTEGRATION', 'END_TO_END']);
   assert.ok(Object.values(real.parity).every((p) => p.ready && p.failures === 0 && p.rows > 0));
   assert.equal(real.ready, false); assert.ok(real.reasons.some((r) => /NO_ATTESTATION/.test(r)));
   assert.ok('brain_gate' in real && typeof real.brain_gate.ready === 'boolean', 'the Brain gate is still evaluated');
-  assert.deepEqual(Object.keys(COMPONENT).sort(), ['BRAIN', 'CAMPAIGN', 'INTEGRATION', 'LAYERED_RUNTIME', 'PLANNING', 'PRODUCTION', 'REFINE']);
+  assert.deepEqual(Object.keys(COMPONENT).sort(), ['BRAIN', 'CAMPAIGN', 'END_TO_END', 'INTEGRATION', 'LAYERED_RUNTIME', 'PLANNING', 'PRODUCTION', 'REFINE']);
   assert.equal(real.layered_production.level, 'RUNTIME_EXECUTABLE'); assert.equal(real.layered_production.runtime_executable, true);
 });
 

@@ -71,6 +71,6 @@ export const E2E_BLOCK = Object.freeze({
   A_MANDATORY_GATE_FAILED: 'A_MANDATORY_GATE_FAILED',
 });
 
-export const ANALYSIS_MAX_PX = 1200; // the real product asset is analysed and composed at most at this longest edge (a provenance-recorded downscale of the owner's file)
+export const ANALYSIS_MAX_PX = 1000; // the real product asset is analysed and composed at most at this longest edge (a provenance-recorded downscale of the owner's file)
 export const DEFAULT_LIGHT = Object.freeze({ angle_deg: 120, elevation_deg: 40, softness: 0.5 });
 export const RUN_UNIT_COSTS = Object.freeze({ text_stage_eur: 0.03, vision_critic_eur: 0.01, segmentation_provider_eur: 0.02, masked_edit_eur: 0.05 });
