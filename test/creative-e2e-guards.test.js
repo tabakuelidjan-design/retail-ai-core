@@ -70,3 +70,22 @@ test('Budget boundaries: exactly the ceiling is allowed, one cent more is refuse
   for (const [n, ok] of [[2, false], [3, true], [64, true], [65, false]]) { const id = 'r'.repeat(n); if (ok) assert.doesNotThrow(() => createRunContext({ run_id: id, ceiling_eur: 1, ledger: null, at: 'x' })); else assert.throws(() => createRunContext({ run_id: id, ceiling_eur: 1, ledger: null, at: 'x' }), (e) => e.code === 'RUN_ID_INVALID'); }
   assert.throws(() => createRunContext({ run_id: undefined, ceiling_eur: 1, ledger: null, at: 'x' }), (e) => e.code === 'RUN_ID_INVALID');
 });
+
+test('The analysis size is a deterministic, recorded part of the contract, not a per-image adjustment', async () => {
+  const { createHash } = await import('node:crypto');
+  const { encodePng } = await import('../src/creative-intelligence/png-encode.js');
+  const { prepareAsset } = await import('../src/creative-e2e/asset.js');
+  const { ANALYSIS_MAX_PX } = await import('../src/creative-e2e/constants.js');
+  const png = (w, h) => { const pixels = new Uint8Array(w * h * 4); for (let i = 0; i < w * h; i += 1) { pixels[i * 4] = (i * 7) % 256; pixels[i * 4 + 1] = 90; pixels[i * 4 + 2] = 160; pixels[i * 4 + 3] = 255; } return encodePng({ width: w, height: h, pixels }); };
+  const sha = (b) => createHash('sha256').update(b).digest('hex');
+  // EG-11 the cap is the calibrated 1000 px and is not an option of the entry point
+  assert.equal(ANALYSIS_MAX_PX, 1000);
+  // EG-12 at or below the cap: the owner's bytes are untouched (no derivation); above it: ONE downscale, to exactly the cap, with the original hash and the scale recorded
+  const small = png(1000, 400); const keep = prepareAsset({ ref: 'a', bytes: small });
+  assert.equal(keep.provenance.derivation, 'NONE'); assert.equal(keep.provenance.scale, 1); assert.equal(keep.provenance.width_px, 1000);
+  const big = png(2000, 800); const down = prepareAsset({ ref: 'a', bytes: big });
+  assert.equal(down.provenance.width_px, 1000); assert.equal(down.provenance.height_px, 400); assert.equal(down.provenance.scale, 0.5); assert.notEqual(down.provenance.derivation, 'NONE'); assert.equal(down.provenance.original_sha256, sha(big));
+  const justOver = prepareAsset({ ref: 'a', bytes: png(1001, 400) }); assert.equal(justOver.provenance.width_px, 1000);
+  // EG-13 deterministic: the same file gives the same bytes and the same hash, twice
+  const again = prepareAsset({ ref: 'a', bytes: big }); assert.equal(sha(again.asset.bytes), sha(down.asset.bytes)); assert.deepEqual(again.provenance, down.provenance);
+});

@@ -90,3 +90,20 @@ Invalidation (`INVALIDATES`): ASSET → segmentation, production plan, integrati
 * The native-alpha validation cannot see a glow baked into opaque pixels (see the real-asset table).
 * The case-specific identity gate only exists for printed phone cases; other products are judged by the delivered-identity gate.
 * Real HABB assets, provider-free run (`scripts/creative-e2e-real-assets.mjs`): see the final report.
+
+## 11. Close-out proofs
+
+### 11.1 Resolution sensitivity: why 1000 px, and why it is a contract and not a workaround
+* The segmentation limits of Phase 5 (edge-reconstruction run length, halo width, hole size…) are measured **in pixels**, and were calibrated and attested on the matrix at the working size of that phase (a real 497×1000 photograph and drawn products of ≈ 300×440). They are therefore only meaningful at a stated analysis size: the same photograph analysed at 1.2× the size is a different measurement of the same edge, not a stricter or looser judge.
+* `ANALYSIS_MAX_PX = 1000` is a **constant of the module** (`src/creative-e2e/constants.js`), not an option of the entry point, not chosen per image and not adapted after a failure. `prepareAsset` is a pure function of the file's bytes: a file at or below 1000 px is untouched (derivation `NONE`); above it there is ONE downscale to exactly 1000 px on the longest edge, and the result records `original_sha256`, `scale`, `width_px`, `height_px`. The downscaled file is the product identity of the run; the owner's original stays named. Same bytes → same size → same hash (guard test EG-11…13).
+* How it was found, said plainly: the first real-asset run used 1200 px and MILA stopped at `EDGE_RECONSTRUCTION_RUN` by one 13-pixel run just over the limit; at 1000 px (the calibrated scale) it passes. No limit was edited, no limit differs between assets, and the remax photograph is `MATTE_INVALID` at both sizes. The sensitivity is itself a finding: the local photograph segmentation is **resolution-dependent**, which is recorded in §10 and is one reason the provider segmentation port exists. Making the limits scale-invariant would be a change to the Phase 5 calibration and needs its own approval.
+
+### 11.2 Native alpha is not assumed clean (`test/creative-e2e-native-defects.test.js`)
+| Defect | Where it is stopped | Test |
+|---|---|---|
+| a glow baked into the alpha as a semi-transparent ring | native-alpha validation (`ALPHA_BAKED_HALO` / `ALPHA_OPAQUE_CORE`): BLOCKED at SEGMENTATION, 0 Brain calls, 0 provider calls, 0 € | ND-1, NA-8 |
+| a pinhole (2×2) inside the product | native-alpha validation (`ALPHA_PINHOLE`); a larger enclosed opening is a legitimate product aperture | ND-3, NA-10 |
+| a ragged/zigzag edge, dust, a second object, a product cut by the border | native-alpha validation | NA-9…14 |
+| a halo that appears in the delivered composition of a clean native alpha | final gate INTEGRATION_ARTIFACTS: BLOCKED `INTEGRATION_ARTIFACT` even though the source is NATIVE_ALPHA | ND-2 |
+| product pixels altered in the compositor | PRODUCT_DELIVERED_IDENTITY / PRODUCT_PIXELS_IN_THE_COMPOSITOR | RT-8, RT-27 |
+| **a glow painted into OPAQUE pixels and marked opaque by the supplier** | **not detectable from the alpha**; no gate rejects it. The run can still not be READY by itself (owner approval is always PENDING and the warnings are named). Stated as a limit, not claimed as caught | ND-4 |
