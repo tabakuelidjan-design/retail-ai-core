@@ -16,7 +16,9 @@ const unmeasurable = (code, reason) => Object.freeze({ code, ok: false, value: n
 /**
  * @param {object} input { plate, composite, placed, shadow? (layer), geometry? (shadow geometry), light?, relight_measured?, placement, cutout_size: { width, height } }
  */
-export function detectArtifacts({ plate, composite, placed, shadow = null, geometry = null, relightMeasured = null, placement = {}, cutoutSize = null }) {
+export function detectArtifacts({
+  plate, composite, placed, shadow = null, geometry = null, relightMeasured = null, placement = {}, cutoutSize = null, ignoreDarkening = false,
+}) {
   const findings = []; const { width: W, height: Hh } = composite;
   const alphaScene = new Uint8Array(W * Hh); const shadowScene = new Uint8Array(W * Hh);
   const r = placed.rect;
@@ -29,7 +31,8 @@ export function detectArtifacts({ plate, composite, placed, shadow = null, geome
     const reach = dilate(hard, W, Hh, A.halo_ring_px); let tested = 0; let bad = 0;
     for (let i = 0; i < hard.length; i += 1) {
       if (hard[i] || !reach[i] || alphaScene[i] > 8 || shadowScene[i] > 5) continue; tested += 1;
-      if (Math.abs(lumaAt(composite.pixels, i * 4) - lumaAt(plate.pixels, i * 4)) > A.halo_luma_delta) bad += 1;
+      const delta = lumaAt(composite.pixels, i * 4) - lumaAt(plate.pixels, i * 4); // a renderer's own soft shadow (declared by the caller) darkens the ring: only a LIGHTER ring is a halo then
+      if ((ignoreDarkening ? delta : Math.abs(delta)) > A.halo_luma_delta) bad += 1;
     }
     const share = tested ? bad / tested : 0;
     findings.push(check('HALO', share, A.halo_max_share, share <= A.halo_max_share));

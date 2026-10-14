@@ -45,6 +45,7 @@ export const COMPONENT = Object.freeze({
   REFINE_PLANNER: 'nordla:refine-planner@1',
   REFINE_EXECUTOR: 'nordla:refine-executor@1',
   MASKED_EDIT_CAPABILITY: 'nordla:masked-edit-capability@1',
+  E2E_RUN_CONTEXT: 'nordla:creative-e2e-run-context@1',
 });
 
 export const DECISION = Object.freeze({
@@ -102,6 +103,7 @@ export const DECISION = Object.freeze({
   REFINE_EXECUTION: 'REFINE_EXECUTION', // the repair that was run, and what it was checked against
   REFINE_RESULT: 'REFINE_RESULT', // accepted, or rejected with the original kept
   MASKED_EDIT_REQUEST: 'MASKED_EDIT_REQUEST', // a request to the masked-edit capability, and whether a provider is connected
+  E2E_RUN_EVENT: 'E2E_RUN_EVENT', // an event of the end-to-end run context: an operation begun / settled / failed / reused, a budget refusal, a checkpoint, a failure
 });
 
 const KNOWN = new Set(Object.values(COMPONENT));

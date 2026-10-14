@@ -24,6 +24,8 @@ export const SEG_REASON = Object.freeze({
   SELECTION_TOUCHES_OTHER_OBJECT: 'SELECTION_TOUCHES_OTHER_OBJECT',
   PORT_CONTRACT_VIOLATION: 'PORT_CONTRACT_VIOLATION',
   PORT_FAILED: 'PORT_FAILED',
+  ALPHA_NOT_MEANINGFUL: 'ALPHA_NOT_MEANINGFUL',
+  ALPHA_INVALID: 'ALPHA_INVALID',
 });
 
 export const SEGMENTATION = Object.freeze({
@@ -50,6 +52,17 @@ export const SEGMENTATION = Object.freeze({
   bridge_px: 5, // gaps up to 2 x this between foreground on both sides are bridged
   min_confidence: 0.6,
   semi_transparent_floor: 0.08,
+});
+
+/** The native-alpha path: a pre-cut image whose alpha is already the matte. */
+export const NATIVE_ALPHA = Object.freeze({
+  transparent_max: 8, // alpha at or below this is transparent
+  opaque_floor: 245, // alpha at or above this is the product and is snapped to 255 (a supplier alpha of 253 is opaque)
+  min_transparent_share: 0.03, min_opaque_share: 0.03, // an alpha is "meaningful" when both exist
+  border_px: 2, border_clear_share: 0.98,
+  max_soft_share: 0.08, // partially transparent pixels, of all non-transparent ones
+  halo_px: 4, max_far_soft_share: 0.01, // soft pixels farther than this from the opaque core are a baked glow, not an edge
+  min_object_share: 0.0004, max_stray_pixels: 0, pinhole_px: 12, max_noise: 0.15,
 });
 
 export const MATTE = Object.freeze({

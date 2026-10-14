@@ -424,6 +424,16 @@ export async function runLayeredCreative({
       x: productRect.x + (art.x * asset.width_px - segmentation.crop.x0) * k, y: productRect.y + (art.y * asset.height_px - segmentation.crop.y0) * k, width: art.width * asset.width_px * k, height: art.height * asset.height_px * k,
     });
   }
+  // an OPT-IN contact shadow (the end-to-end entry point declares it): a SEPARATE layer in the midground band, under the product, derived from the real cut-out; absent by default (nothing changes for a direct call)
+  let integrationShadow = null;
+  if (typeof policy.contact_shadow === 'function') {
+    const shadow = await policy.contact_shadow({ productRect, cutout_png: segmentation.cutout_png, canvas });
+    if (shadow) {
+      rasterLayers.push({ layer_id: 'contact-shadow', kind: LAYER_KIND.PROP_MIDGROUND, z: LAYER_Z.PROP_MIDGROUND + 9, png: shadow.png, x: shadow.x, y: shadow.y, w: shadow.width, h: shadow.height });
+      integrationShadow = shadow.evidence ?? { x: shadow.x, y: shadow.y, width: shadow.width, height: shadow.height };
+      ledger.record({ decision: DECISION.LAYER_PLACEMENT, decided_by: component, rule: 'A_CONTACT_SHADOW_IS_A_SEPARATE_LAYER_UNDER_THE_PRODUCT', basis: ['contact-shadow'], outcome: { box: { x: shadow.x, y: shadow.y, width: shadow.width, height: shadow.height }, evidence: integrationShadow } });
+    }
+  }
   const productRaster = { layer_id: scene.layers.find((l) => l.kind === LAYER_KIND.PRODUCT).layer_id, kind: LAYER_KIND.PRODUCT, z: LAYER_Z.PRODUCT, png: placedProduct.png, x: productRect.x, y: productRect.y };
   // (1) the complete z-ordered stack, with its overlap and product-pixel measurements: refused as it is, never adjusted
   const stack = composeLayers({ canvas, layers: [...rasterLayers, productRaster], protectedRegions, ...rasterizerOption });
@@ -460,7 +470,9 @@ export async function runLayeredCreative({
   const foregroundLayers = foregroundDraws.map((f, i) => ({
     id: `foreground-${i}`, type: 'IMAGE', z_index: 15 + i, geometry: { x: f.x, y: f.y, width: f.width, height: f.height, rotation_deg: 0 }, visibility: 'VISIBLE', locked: false, source_ref: f.ref, constraints: [], effects: [], fit: 'CONTAIN', provenance: { origin: 'GENERATED', producer_ref: 'layered-production-runtime', evidence_refs: [] },
   }));
-  const finalLayers = [...colored.map(({ _choice, _noPair, ...layer }) => layer), ...plates, ...foregroundLayers];
+  // an OPT-IN: the default effect of the product layer (a soft offset shadow drawn by the renderer) is dropped when a separate contact-shadow layer replaces it (the end-to-end entry point declares it)
+  const productEffectDropped = policy.product_shadow_effect === false;
+  const finalLayers = [...colored.map(({ _choice, _noPair, ...layer }) => (productEffectDropped && layer.type === 'PRODUCT' ? { ...layer, effects: [] } : layer)), ...plates, ...foregroundLayers];
   const finalDocument = CI.reviseDesignDocument(solved.document, {
     layers: finalLayers, asset_refs: [...document.asset_refs, ...foregroundDraws.map((f) => f.ref)], created_at: at, derivation: 'REFINE', created_by: 'ENGINE', producer_refs: ['engine:creative-runtime.layered-production'],
   });
@@ -473,7 +485,7 @@ export async function runLayeredCreative({
   ledger.record({ decision: DECISION.PREFLIGHT, decided_by: COMPONENT.PREFLIGHT, rule: 'EXISTING_PREFLIGHT_CHECKS', basis: [], outcome: { status: preflight.status, checks: preflight.checks.map((c) => `${c.code}=${c.status}`) } });
   const makeArtifact = (pngSha) => {
     const plateReq = plateAccepted.request;
-    const propNodes = rasterLayers.filter((r) => r.kind !== LAYER_KIND.PLATE).map((r) => {
+    const propNodes = rasterLayers.filter((r) => r.kind !== LAYER_KIND.PLATE && r.layer_id !== 'contact-shadow').map((r) => {
       const g = generated.find((x) => x.layer.layer_id === r.layer_id); const key = g.request.request_key;
       return { node_id: `PROP:${r.layer_id}`, layer_id: r.layer_id, kind: r.kind, request_key: key, candidate_sha256: sha256(accepted.get(key).candidate.bytes), placed_sha256: sha256(r.png), box: { x: r.x, y: r.y, width: r.w, height: r.h }, z: r.z };
     });
@@ -552,6 +564,7 @@ export async function runLayeredCreative({
     text: exactness,
     segmentation: { quality: segmentation.quality, cutout_sha256: segmentation.cutout_sha256 },
     product_rect: productRect,
+    ...(integrationShadow ? { integration_shadow: integrationShadow } : {}),
     ledger: ledger.entries(),
     steering: manualSteeringReport(ledger),
     sha256_of: sha256(png.bytes),

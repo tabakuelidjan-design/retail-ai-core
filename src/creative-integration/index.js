@@ -14,3 +14,4 @@ export {
 } from './compose.js';
 export { integrateProduct, integrateScene } from './integrate.js';
 export { renderAcceptance } from './visual.js';
+export { hasMeaningfulAlpha, segmentNativeAlpha } from './native-alpha.js';
