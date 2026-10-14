@@ -69,7 +69,7 @@ test('6. outcomes are visible on the same screen with their own state word (Conf
 });
 test('7. a question card has Montrer / Noter la réponse / Passer: the old "Posée" and "Répondue" buttons no longer exist; the answer box opens inside the card', () => {
   const q = { id: 'price', title: 'Prix unitaire', tag: 'Bloquant pour calcul', tagKind: 'calc', en: 'What is your unit price?', zh: { text: '请问单价是多少?' }, state: 'OPEN' };
-  const closed = N.questionCard(q, { caseId: 'sonny' }); assert.match(closed, /Noter la réponse/); assert.match(closed, /Montrer/); assert.match(closed, /À poser/); assert.doesNotMatch(closed, />Posée<|>Répondue<|sl-ask-state/);
+  const closed = N.questionCard(q, { caseId: 'sonny' }); assert.match(closed, /Noter la réponse/); assert.match(closed, /Montrer/); assert.match(closed, /Copier/, 'the question can be copied (English + Chinese) to paste into a WeChat chat'); assert.match(closed, /À poser/); assert.doesNotMatch(closed, />Posée<|>Répondue<|sl-ask-state/);
   const open = N.questionCard(q, { caseId: 'sonny', answering: true, draft: 'brouillon' }); assert.match(open, /<textarea/); assert.match(open, /Enregistrer la réponse/); assert.match(open, /brouillon/); assert.match(open, /name="qid" value="price"/);
   assert.match(N.questionCard({ ...q, state: 'ASKED' }, { caseId: 'x' }), /Posée · en attente/); assert.match(N.questionCard({ ...q, state: 'ANSWERED' }, { caseId: 'x' }), /Réponse notée/);
 });

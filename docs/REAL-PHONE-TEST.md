@@ -1,5 +1,7 @@
 # REAL-PHONE-TEST - China Sourcing Field V1
 
+> The main screens were redesigned (Nordla Terrain, one bottom navigation). The current phone procedure is **docs/REAL-PHONE-TEST-TERRAIN-V2.md**; the steps below describe the previous Salon screens and menu names.
+
 Goal: one person, one phone, a real supplier text, the whole loop, no computer once it is running. Nothing is sent to any provider. Allow 20 minutes.
 
 ## Before you leave (on the computer, once)

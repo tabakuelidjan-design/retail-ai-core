@@ -156,7 +156,7 @@ try {
 
   await check('17. REOPEN: reloading keeps every case, note, correction and the screen the owner was on; the unsent draft survives', async () => {
     await click(t, '#tabs [data-key="note"]', 500); await setv(t, '#nx-text', 'brouillon pas envoyé'); await sleep(300); await t.goto(`${base}/`); await ready(t); await sleep(900); let txt = await text(t); ok(/Nouvelle note/.test(txt), 'reopens on the note screen: ' + txt.slice(0, 80)); ok((await t.eval("document.querySelector('#nx-text').value")) === 'brouillon pas envoyé', 'the draft is back');
-    const c = await sonny(t); ok(c.ledger.some((e) => e.key === 'spec.capacity' && e.status === 'USER_PROVIDED'), 'the correction survived'); await click(t, '#tabs [data-key="home"]', 500); ok(/Reprendre/.test(await text(t)) || /Dossiers récents/.test(await text(t)));
+    const c = await sonny(t); ok(c.ledger.some((e) => e.key === 'spec.capacity' && e.status === 'USER_PROVIDED'), 'the correction survived'); await click(t, '#tabs [data-key="home"]', 500); ok(/Reprendre/.test(await text(t)) || /Dossiers récents/.test(await text(t))); await shot(t, 'accueil-dossiers', 390);
   });
 
   await check('18. ADVANCED MODES stay reachable and operational, explicitly, from Plus; the way back is one tap', async () => {
@@ -164,10 +164,12 @@ try {
     await click(t, '#tabs [data-key="more"]', 500); await clickText(t, '.nx-menu button', 'Mode guidé', 800); ok(/Nordla écoute|Écouter|Écrire|batterie|Sonny/.test(await text(t)) || (await text(t, '#tabs')).length > 0, 'guided mode opens'); await click(t, '#btn-cases', 500); await clickText(t, '#overlay button', 'Nordla (écran principal)', 700);
   });
 
-  await check('19. WIDTHS: every main screen has no horizontal overflow and no control under 44 px at 375 px', async () => {
-    await t.resize(375, 812); await sleep(400); const sweep = [['home', '#tabs [data-key="home"]'], ['suppliers', '#tabs [data-key="suppliers"]'], ['visits', '#tabs [data-key="visits"]'], ['more', '#tabs [data-key="more"]'], ['note', '#tabs [data-key="note"]']];
-    for (const [name, sel] of sweep) { await click(t, sel, 600); await noOverflow(t, `${name}@375`); const sm = await small(t); ok(sm.length === 0, `${name}@375 small targets: ${sm.join(', ')}`); await shot(t, name, 375); }
-    await click(t, '#tabs [data-key="suppliers"]', 500); await clickText(t, '.nx-cardmain', 'Sonny', 700); for (const tab of ['Aperçu', 'Infos', 'Questions', 'Chiffres', 'Plus']) { await clickText(t, '.nx-tabs button', tab, 450); await noOverflow(t, `fiche/${tab}@375`); const sm = await small(t); ok(sm.length === 0, `fiche/${tab}@375 small targets: ${sm.join(', ')}`); }
+  await check('19. WIDTHS: every main screen has no horizontal overflow and no control under 44 px at 375 px and at 360 px (the narrow Android width)', async () => {
+    for (const W of [375, 360]) {
+    await t.resize(W, 812); await sleep(400); const sweep = [['home', '#tabs [data-key="home"]'], ['suppliers', '#tabs [data-key="suppliers"]'], ['visits', '#tabs [data-key="visits"]'], ['more', '#tabs [data-key="more"]'], ['note', '#tabs [data-key="note"]']];
+    for (const [name, sel] of sweep) { await click(t, sel, 600); await noOverflow(t, `${name}@${W}`); const sm = await small(t); ok(sm.length === 0, `${name}@${W} small targets: ${sm.join(', ')}`); if (W === 375) await shot(t, name, W); }
+    await click(t, '#tabs [data-key="suppliers"]', 500); await clickText(t, '.nx-cardmain', 'Sonny', 700); for (const tab of ['Aperçu', 'Infos', 'Questions', 'Chiffres', 'Plus']) { await clickText(t, '.nx-tabs button', tab, 450); await noOverflow(t, `fiche/${tab}@${W}`); const sm = await small(t); ok(sm.length === 0, `fiche/${tab}@${W} small targets: ${sm.join(', ')}`); }
+    }
     await t.resize(390, 844);
   });
 

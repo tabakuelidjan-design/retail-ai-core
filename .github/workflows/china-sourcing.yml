@@ -34,6 +34,19 @@ jobs:
       - run: npm run sourcing:e2e:fieldv1
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
 
+  e2e-terrain:
+    # BLOCKING: Nordla Terrain (mobile UI V2) at 390 and 375 px: the Sonny scenario, answers recorded on the question card, sync conflict, offline, reopen.
+    name: e2e terrain v2 (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm run sourcing:e2e:terrain
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
   e2e-pwa:
     # INFORMATIONAL (as before): written on Windows/Edge; passes 18/18 on Linux Chromium today.
     name: e2e pwa (informational)

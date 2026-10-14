@@ -109,7 +109,7 @@ try {
     await tab.run(`__t.fill('supplier', { name: 'Sonny depuis le téléphone' }); await __t.sleep(3500); return 1;`);
     ok(hash('sonny') === h, 'server file untouched by the stale save'); const s = (await api('/api/cases/sonny')).body; ok(s.notes.some((n) => n.text === 'autre appareil') && s.supplier.name === 'Sonny hors ligne', 'other device\'s data intact');
     ok((await phoneCases(tab)).find((c) => c.id === 'sonny').supplier.name === 'Sonny depuis le téléphone', 'my edit is still on the phone');
-    ok(/Conflict:/.test(await (async () => { await openMenu(tab); return tab.eval("document.querySelector('#overlay').innerText"); })()), 'the conflict is reported to the owner');
+    ok(/Conflit/.test(await (async () => { await openMenu(tab); return tab.eval("document.querySelector('#overlay').innerText"); })()), 'the conflict is reported to the owner');
   });
 } finally {
   await tab?.close(); await browser.close(); if (server) await stopServer(); rmSync(dir, { recursive: true, force: true });

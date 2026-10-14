@@ -8,9 +8,9 @@ import { offerDraft, attributeNameEvents } from '/core/field/offer-import.js';
 import { classifyCandidates } from '/core/understanding.js';
 import { describeConflict, validateCorrection } from '/core/candidate-view.js';
 import { planConversation } from '/core/conversation-engine.js';
-import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison, setAskState } from '/core/field/workspace.js';
+import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
-import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
+import { caseFacts, auditCase, observationsOf } from '/core/case-facts.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -265,8 +265,7 @@ export function createSalon(ctx) {
         case 'sl-answer-open': answering = key; return ctx.render();
         case 'sl-answer-close': answering = null; return ctx.render();
         case 'sl-q-skip': { const c = must(cid); if (/^uq-/.test(key)) commit(c.id, [{ type: 'QUESTION_STATE', id: key, state: 'ANSWERED' }]); else commit(c.id, [{ type: 'QUESTION_SKIP', questionId: key }]); return ctx.render(); }
-        case 'sl-ask-state': { const c = must(cid); ws = setAskState(ws, c.id, key, val, new Date()); if (val === 'ASKED') commit(c.id, [{ type: 'QUESTION_SHOWN', questionId: key, via: 'SHOWN_TO_SUPPLIER' }]); else if (val === 'SKIPPED') commit(c.id, [{ type: 'QUESTION_SKIP', questionId: key }]); saveWs(ws); return ctx.render(); }
-        case 'sl-copy': { const it = eng().caseView(must(cid), ws, ['askNow']).askNow.items.find((i) => i.id === key); if (!it) return undefined; let ok = false; try { await navigator.clipboard.writeText(V.askCopyText(it)); ok = true; } catch { /* clipboard refused or unavailable */ } flash = ok ? 'Copié : anglais et chinois.' : 'Copie impossible ici : utilisez « Montrer » pour faire lire le fournisseur.'; return ctx.render(); }
+        case 'sl-copy': { const q = questionOf(must(cid), key); if (!q) return undefined; let ok = false; try { await navigator.clipboard.writeText([q.en ?? q.fr, q.zh?.text].filter(Boolean).join('\n\n')); ok = true; } catch { /* clipboard refused or unavailable */ } flash = ok ? 'Copié : anglais et chinois, prêts à coller dans la conversation du fournisseur.' : 'Copie impossible ici : utilisez « Montrer » pour faire lire le fournisseur.'; return ctx.render(); }
         // NOTES
         case 'sl-note-open': { const id = key || lastCaseId(); if (!id) { flash = 'Créez d\'abord un fournisseur : un nom suffit.'; return go({ name: 'new' }); } noteMode = 'text'; lastNote = null; return go({ name: 'note', caseId: id }); }
         case 'sl-note-change': pickFor = 'note'; flash = 'Choisissez le fournisseur concerné par la note.'; return go({ name: 'suppliers' });
@@ -287,6 +286,7 @@ export function createSalon(ctx) {
         case 'sl-export': { flash = ctx.exportCase(key); return ctx.render(); }
         case 'sl-server': return ctx.openMenu();
         case 'sl-recover': return ctx.openMenu();
+        case 'sl-reanalyze': return ctx.openMenu();
         case 'sl-capabilities': return ctx.capabilities();
         default: return undefined;
       }

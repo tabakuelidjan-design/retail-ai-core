@@ -151,11 +151,11 @@ await check('14. CONFLICT: a case changed on another device is never overwritten
   const srv = (await api(`/api/cases/${caseId}`)).body; srv.notes.push({ at: new Date().toISOString(), text: 'edited on the other device' });
   const put = await api(`/api/cases/${caseId}`, { method: 'PUT', body: JSON.stringify(srv) }); ok(put.status === 200, 'other device saved');
   await openCase(tab, caseId); await tab.run(`__t.auto('quote', { unitPrice: '3.40' }); await __t.sleep(1800); 'ok'`);
-  const menu = await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(300); return document.querySelector('#overlay').innerText;`); ok(/Conflict:/.test(menu) && /Nothing was overwritten/.test(menu), 'conflict reported');
+  const menu = await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(300); return document.querySelector('#overlay').innerText;`); ok(/Conflit/.test(menu) && /Rien n'a été écrasé/.test(menu), 'conflict reported');
   const s2 = (await api(`/api/cases/${caseId}`)).body; ok(s2.notes.some((n) => n.text === 'edited on the other device') && s2.quotes.at(-1).unitPrice !== '3.40', 'the other device\'s evidence is intact on the server');
   await tab.run(`document.querySelector('[data-act="keep-both"]').click(); await __t.sleep(2500);`);
-  const l = await cases(); ok(l.length === 3 && l.some((c) => /\(my copy\)/.test(c.name)), `both copies on the server: ${l.map((c) => c.name).join(' | ')}`);
-  const mine = (await api(`/api/cases/${l.find((c) => /\(my copy\)/.test(c.name)).id}`)).body; ok(mine.quotes.at(-1).unitPrice === '3.40', 'my edit is preserved in my copy');
+  const l = await cases(); ok(l.length === 3 && l.some((c) => /\((my copy|ma copie)\)/.test(c.name)), `both copies on the server: ${l.map((c) => c.name).join(' | ')}`);
+  const mine = (await api(`/api/cases/${l.find((c) => /\((my copy|ma copie)\)/.test(c.name)).id}`)).body; ok(mine.quotes.at(-1).unitPrice === '3.40', 'my edit is preserved in my copy');
 });
 
 await check('15. nothing sensitive leaks: no server path or token in any API response; the phone stores only field data (no analytics keys)', async () => {

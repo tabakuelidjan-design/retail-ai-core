@@ -113,6 +113,7 @@ try {
     legacy.candidates = legacy.candidates.filter((c) => c.key === 'quote.moq');
     await importFile(tab, 'sonny-legacy.json', JSON.stringify(legacy));
     await click(tab, '[data-act="mode-salon"]');
+    await click(tab, '#tabs [data-key="suppliers"]');
     await click(tab, '[data-act="sl-open-case"][data-key="sonny-salon-legacy"]');
     ok((await tab.eval("JSON.parse(localStorage.getItem('nordla.sourcing.current'))")) === legacy.id, 'Salon selection aligns the global current case');
 

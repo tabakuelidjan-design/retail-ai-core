@@ -27,16 +27,16 @@ const ready = (t) => t.waitFor("document.readyState === 'complete' && document.q
 try {
   const t = await browser.tab(`${base}/#t=${TOKEN}`, { preload: seed(day.log.find((s) => s.label.startsWith('first')).cases) }); await ready(t); await sleep(700);
 
-  await check('1. the Salon opens with the five suppliers; no horizontal overflow at 390 px; every button is at least 40 px high', async () => {
-    const txt = await html(t); ok(/5 fournisseurs/.test(txt) && /Yiwu Brightcup/.test(txt), txt.slice(0, 200)); await noOverflow(t, 'home'); const sm = await small(t); ok(sm.length === 0, `small targets: ${sm.join(', ')}`);
+  await check('1. Fournisseurs lists the five suppliers; no horizontal overflow at 390 px; every button is at least 40 px high', async () => {
+    await click(t, '#tabs [data-key="suppliers"]', 600); const txt = await html(t); ok(/5 fournisseurs/.test(txt) && /Yiwu Brightcup/.test(txt), txt.slice(0, 200)); await noOverflow(t, 'home'); const sm = await small(t); ok(sm.length === 0, `small targets: ${sm.join(', ')}`);
   });
 
   await check('1b. the way in and out: the menu offers the Salon, the guided mode and the expert mode; the Salon is not on the guided first screen (it keeps its few controls)', async () => {
-    await click(t, '[data-act="sl-menu"]', 400); const o = await t.eval("document.querySelector('#overlay').innerText"); ok(/Mode terrain/.test(o) && /Salon \(comparer\)/.test(o), o.slice(0, 120)); await click(t, '[data-act="close-overlay"]', 300); ok(await t.eval("document.querySelector('#overlay').hidden === true"));
+    await click(t, '#tabs [data-key="more"]', 500); const o = await html(t); ok(/Mode guidé/.test(o) && /Mode expert/.test(o), o.slice(0, 200)); await click(t, '#tabs [data-key="suppliers"]', 400);
   });
 
   await check('2. CAPTURE: a new supplier from a pasted quote with nothing else filled in becomes a reviewable offer; the original text is kept', async () => {
-    await click(t, '[data-act="sl-nav"][data-key="capture"]'); await noOverflow(t, 'capture'); ok(/Capturer/.test(await html(t)));
+    await click(t, '.nx-fab', 500); await click(t, '[data-act="sl-nav"][data-key="capture"]', 500); await noOverflow(t, 'capture'); ok(/Capturer/.test(await html(t)));
     await setv(t, 'input[name="supplier"]', 'Ningbo Test Gifts'); await setv(t, 'textarea[name="text"]', 'Model TB-500. Material: stainless steel 304. USD3.30 for 1000 pcs. MOQ 500. FOB Ningbo. Lead time 25 days. CE available.');
     await click(t, 'form[data-form="sl-capture"] button[type="submit"]', 900); const txt = await html(t); ok(/Relire l'offre/.test(txt), txt.slice(0, 300)); ok(/dit par le fournisseur/i.test(txt) && /inconnu/i.test(txt)); await noOverflow(t, 'review');
     const c = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); const mine = Object.values(c).find((x) => x.supplier?.name === 'Ningbo Test Gifts'); ok(mine && mine.offers.length === 1 && mine.quotes.length === 0, 'the offer is recorded, no quote applied before review');
@@ -45,15 +45,15 @@ try {
   await check('3. REVIEW: confirm the clear facts in one tap, correct one, reject one; nothing becomes VERIFIED; the supplier\'s words stay visible', async () => {
     await click(t, '[data-act="sl-confirm-all"]', 700); let txt = await html(t); ok(/validés/.test(txt)); ok(!/vérifié\b/.test(txt.replace(/pas vérifié|rien ici n'est vérifié/g, '')), 'no "vérifié" claim');
     const c = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); const mine = Object.values(c).find((x) => x.supplier?.name === 'Ningbo Test Gifts'); ok(mine.quotes.at(-1).moq === 500, 'MOQ applied after confirmation'); ok(mine.ledger.every((e) => e.status !== 'VERIFIED'));
-    await click(t, '[data-act="sl-open-case"]', 700); txt = await html(t); ok(/Seule :/.test(txt) && /Demander/.test(txt)); await noOverflow(t, 'case');
+    await click(t, '[data-act="sl-open-case"]', 700); txt = await html(t); ok(/Seule :/.test(txt) && /Poser une question/.test(txt)); await noOverflow(t, 'case');
   });
 
   await check('4. COMPARE the five suppliers: summary first, five cards, decisive differences, ask next, recommendation pending; the cheapest is not called best', async () => {
-    await click(t, '[data-act="sl-nav"][data-key="home"]'); await t.eval("document.querySelectorAll('.sl-pick').forEach((b, i) => { if (i < 5) b.click(); })"); await sleep(300);
+    await click(t, '#tabs [data-key="suppliers"]', 500); await t.eval("document.querySelectorAll('.nx-pick').forEach((b, i) => { if (i < 5) b.click(); })"); await sleep(300);
     // select exactly the five China Day suppliers (the new one is first in the list: unselect it)
-    const sel = await t.eval("[...document.querySelectorAll('.sl-card')].map((c) => [c.dataset.case, c.classList.contains('sel')])"); const extra = sel.find(([id, s]) => s && !['A', 'B', 'C', 'D', 'E'].includes(id)); if (extra) await t.eval(`document.querySelector('.sl-pick[data-key="${extra[0]}"]').click()`); await sleep(200);
-    const need = ['A', 'B', 'C', 'D', 'E'].filter((id) => !sel.find(([x, s]) => x === id && s)); for (const id of need) await t.eval(`document.querySelector('.sl-pick[data-key="${id}"]')?.click()`); await sleep(200);
-    await click(t, '.sl-bar [data-act="sl-compare"]', 900); await t.eval("document.querySelectorAll('details.sl-sec').forEach((d) => d.open = true)"); await sleep(300); const txt = await html(t);
+    const sel = await t.eval("[...document.querySelectorAll('.nx-card')].map((c) => [c.dataset.case, c.classList.contains('sel')])"); const extra = sel.find(([id, s]) => s && !['A', 'B', 'C', 'D', 'E'].includes(id)); if (extra) await t.eval(`document.querySelector('.nx-pick[data-key="${extra[0]}"]').click()`); await sleep(200);
+    const need = ['A', 'B', 'C', 'D', 'E'].filter((id) => !sel.find(([x, s]) => x === id && s)); for (const id of need) await t.eval(`document.querySelector('.nx-pick[data-key="${id}"]')?.click()`); await sleep(200);
+    await click(t, '.nx-bar2 [data-act="sl-compare"]', 900); await t.eval("document.querySelectorAll('details.sl-sec').forEach((d) => d.open = true)"); await sleep(300); const txt = await html(t);
     ok(/Comparaison/.test(txt) && /Résumé/.test(txt) && /Aucun gagnant au seul prix/.test(txt), txt.slice(0, 200)); ok(/le plus bas prix annoncé, pas la meilleure offre/.test(txt)); ok(/EXW exclut les frais d'origine/.test(txt)); ok(/en attente de votre décision/.test(txt) && /aucun achat ni paiement/.test(txt));
     ok((await t.eval("document.querySelectorAll('.sl-ccard').length")) === 5, 'five cards'); ok((await t.eval("document.querySelectorAll('details.sl-sec').length")) === 8, 'eight sections'); await noOverflow(t, 'compare');
     const order = await t.eval("[...document.querySelectorAll('details.sl-sec')].map((d) => d.dataset.sec).join(',')"); ok(order === 'summary,cards,decisive,risks,economics,evidence,askNext,recommendation', order);
@@ -61,46 +61,45 @@ try {
 
   await check('5. SAVE the comparison, then ASK and NEGOTIATE on one supplier: two to five questions, Chinese marked not native-reviewed, a walk-away price, no autonomous action', async () => {
     await click(t, '[data-act="sl-save-cmp"]', 700); ok(/Comparaison enregistrée/.test(await html(t)));
-    await click(t, '[data-act="sl-open-case"][data-key="B"]', 700); await click(t, '[data-act="sl-ask"][data-key="B"]', 800); let txt = await html(t); const n = await t.eval("document.querySelectorAll('.sl-q').length"); ok(n >= 2 && n <= 5, `questions: ${n}`); ok(/pas relue? par un locuteur natif/i.test(txt)); ok(/Bloquant pour/.test(txt) && /Copier/.test(txt) && !/Écouter/.test(txt), 'compact ask cards'); await noOverflow(t, 'ask');
-    await click(t, '[data-act="sl-nav"][data-key="neg"]', 800); txt = await html(t); ok(/Limite \(prix d'achat max\)/i.test(txt) && /ne négocie pas à votre place/i.test(txt), txt.slice(0, 300)); await noOverflow(t, 'negotiate');
+    await click(t, '[data-act="sl-open-case"][data-key="B"]', 700); await click(t, '.nx-tabs [data-key="ask"]', 800); let txt = await html(t); const n = await t.eval("document.querySelectorAll('.nx-q').length"); ok(n >= 2 && n <= 5, `questions: ${n}`); ok(/pas relue? par un locuteur natif/i.test(txt)); ok(/Bloquant pour/.test(txt) && /Montrer/.test(txt) && /Noter la réponse/.test(txt) && !/Écouter/.test(txt), 'question cards'); await noOverflow(t, 'ask');
+    await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-more-open"][data-key="neg"]', 800); txt = await html(t); ok(/Limite \(prix d'achat max\)/i.test(txt) && /ne négocie pas à votre place/i.test(txt), txt.slice(0, 300)); await noOverflow(t, 'negotiate');
   });
 
   await check('6. UPDATE an offer: a new quote is added, the old one stays; WHAT CHANGED shows price, lead time and landed cost', async () => {
-    await click(t, '[data-act="sl-nav"][data-key="home"]'); await click(t, '.sl-cardmain[data-key="B"]', 700); await click(t, '[data-act="sl-update-offer"]', 600); ok(/Mise à jour de l'offre/.test(await html(t)));
+    await click(t, '#tabs [data-key="suppliers"]', 500); await click(t, '.nx-cardmain[data-key="B"]', 700); await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-update-offer"]', 600); ok(/Mise à jour de l'offre/.test(await html(t)));
     await setv(t, 'textarea[name="text"]', OFFERS.B2.text); await click(t, 'form[data-form="sl-capture"] button[type="submit"]', 900); ok(/mise à jour/.test(await html(t))); await click(t, '[data-act="sl-confirm-all"]', 700);
-    await click(t, '[data-act="sl-open-case"]', 700); await click(t, '[data-act="sl-case-tab"][data-key="changed"]', 600); const txt = await html(t); ok(/Prix unitaire/i.test(txt) && /3\.60 → 3\.45|3\.6 → 3\.45/.test(txt), txt.replace(/\n+/g, ' | ').slice(300, 900)); ok(/Coût rendu/i.test(txt) && /L'offre précédente est conservée/.test(txt)); await noOverflow(t, 'changed');
+    await click(t, '[data-act="sl-open-case"]', 700); await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-more-open"][data-key="changed"]', 600); const txt = await html(t); ok(/Prix unitaire/i.test(txt) && /3\.60 → 3\.45|3\.6 → 3\.45/.test(txt), txt.replace(/\n+/g, ' | ').slice(300, 900)); ok(/Coût rendu/i.test(txt) && /L'offre précédente est conservée/.test(txt)); await noOverflow(t, 'changed');
     const c = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c.B.offers.length >= 2, 'both offers of B are on record');
   });
 
   await check('6b. ONE state, THREE modes: correct the MOQ in the Salon (Faits tab); Expert (Quick) and Terrain show the same value; nothing is overwritten; it survives a reload', async () => {
-    await click(t, '[data-act="sl-case-tab"][data-key="facts"]', 600); // step 6 left the Salon on the fiche of supplier B
-    let txt = await html(t); ok(/Faits/.test(txt) && /Minimum de commande \(MOQ\)/.test(txt) && /dit par le fournisseur/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'facts');
+    await click(t, '.nx-tabs [data-key="facts"]', 600); // step 6 left the Salon on the fiche of supplier B
+    let txt = await html(t); ok(/Infos/.test(txt) && /Minimum de commande \(MOQ\)/.test(txt) && /dit par le fournisseur/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'facts');
     await click(t, '[data-act="sl-fact-edit"][data-key="MOQ"]', 500); await setv(t, 'form[data-form="sl-fact"] input[name="value"]', '777'); await click(t, 'form[data-form="sl-fact"] button[type="submit"]', 700); txt = await html(t); ok(/777 pièces/.test(txt) && /saisi ou corrigé par vous/.test(txt), txt.slice(0, 400)); ok(/Historique \(\d+\)/.test(txt), 'history');
     const c1 = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c1.B.quotes.at(-1).moq === 777 && c1.B.ledger.filter((e) => e.key === 'quote.moq').length >= 2, 'the case holds 777 and the earlier values are still in the ledger');
-    const openMenu = async () => { await t.eval(`(() => { const b = document.querySelector('[data-act=sl-menu], [data-act=menu]'); if (!b) throw new Error('no menu button'); b.click(); })()`); await sleep(400); };
-    await click(t, '[data-act="sl-nav"][data-key="home"]', 500); await openMenu(); await click(t, '[data-act="mode-expert"]', 700); await click(t, '[data-act="tab"][data-key="quick"]', 500); const quick = await t.eval("document.querySelector('input[name=\"moq\"]')?.value ?? null"); ok(quick === '777', `Expert shows ${quick}`);
-    await click(t, '[data-act="mode-field"]', 800); const ff = await t.eval("(() => { const b = document.querySelector('[data-act=\"fm-sheet\"][data-key=\"summary\"]'); if (b) b.click(); return !!b; })()"); await sleep(600); const sheet = await t.eval("document.querySelector('.fm-sheet')?.innerText ?? document.body.innerText"); ok(ff ? /777/.test(sheet) : true, `Terrain summary: ${sheet.slice(0, 300)}`);
+    await click(t, '#tabs [data-key="more"]', 500); await click(t, '[data-act="sl-mode"][data-key="expert"]', 700); await click(t, '[data-act="tab"][data-key="quick"]', 500); const quick = await t.eval("document.querySelector('input[name=\"moq\"]')?.value ?? null"); ok(quick === '777', `Expert shows ${quick}`);
+    await click(t, '#btn-cases', 400); await click(t, '[data-act="mode-field"]', 800); const ff = await t.eval("(() => { const b = document.querySelector('[data-act=\"fm-sheet\"][data-key=\"summary\"]'); if (b) b.click(); return !!b; })()"); await sleep(600); const sheet = await t.eval("document.querySelector('.fm-sheet')?.innerText ?? document.body.innerText"); ok(ff ? /777/.test(sheet) : true, `Terrain summary: ${sheet.slice(0, 300)}`);
     await t.eval("localStorage.setItem('nordla.sourcing.mode', '\"salon\"')"); // back to the Salon for the next checks (the mode is only a view)
-    await t.eval('location.reload()'); await ready(t); await sleep(900); const back = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(back.B.quotes.at(-1).moq === 777, 'after a reload the case still holds 777'); await noOverflow(t, 'after reload'); await click(t, '.sl-cardmain[data-key="B"]', 700); // back on the fiche of B, where the next check expects the owner to be
+    await t.eval('location.reload()'); await ready(t); await sleep(900); const back = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(back.B.quotes.at(-1).moq === 777, 'after a reload the case still holds 777'); await noOverflow(t, 'after reload'); await click(t, '#tabs [data-key="suppliers"]', 500); await click(t, '.nx-cardmain[data-key="B"]', 700); // back on the fiche of B, where the next check expects the owner to be
   });
 
   await check('7. CLOSE and RESUME: reload, the saved comparison and the last place are back; no network request leaves the phone except the app itself', async () => {
-    await sleep(1500); await t.goto(`${base}/`); await ready(t); await sleep(800); let txt = await html(t); ok(/Bloque|Seule|Offre|offre|Prix/.test(txt), 'the app reopens exactly where the owner was (a case view): ' + txt.slice(0, 120)); await click(t, '[data-act="sl-nav"][data-key="home"]'); txt = await html(t); ok(/Comparaisons enregistrées/.test(txt), txt.slice(0, 300));
+    await sleep(1500); await t.goto(`${base}/`); await ready(t); await sleep(800); let txt = await html(t); ok(/Bloque|Seule|Offre|offre|Prix/.test(txt), 'the app reopens exactly where the owner was (a case view): ' + txt.slice(0, 120)); await click(t, '#tabs [data-key="more"]', 500); txt = await html(t); ok(/Comparer/.test(txt) && /\d fournisseurs|Aucun gagnant|préféré|Personne/.test(txt), txt.slice(0, 300));
     await click(t, '[data-act="sl-compare"][data-key]', 900); txt = await html(t); ok(/Comparaison/.test(txt) && (await t.eval("document.querySelectorAll('.sl-ccard').length")) === 5); await noOverflow(t, 'compare-resumed');
     ok(net.every((u) => u.startsWith(base) || u.startsWith('data:') || u.startsWith('blob:') || u === 'about:blank'), `external requests: ${net.filter((u) => !u.startsWith(base) && !u.startsWith('data:')).join(', ')}`);
   });
 
   await check('8. OFFLINE: the browser is cut off; saved cases, comparison, evidence and ASK NEXT still open; a local note and a manual quote can be added', async () => {
-    await t.offline(true); await sleep(300); await click(t, '[data-act="sl-nav"][data-key="home"]'); ok(/fournisseurs/.test(await html(t))); await click(t, '.sl-cardmain[data-key="D"]', 700); await click(t, '[data-act="sl-case-tab"][data-key="truth"]', 500); ok(/contradiction/i.test(await html(t)));
-    await click(t, '[data-act="sl-ask"][data-key="D"]', 700); ok(/Chinois|locuteur natif/.test(await html(t)));
-    await click(t, '[data-act="sl-nav"][data-key="home"]'); await click(t, '.sl-cardmain[data-key="C"]', 600); await click(t, '[data-act="sl-update-offer"]', 500); await click(t, '[data-act="sl-cap-mode"][data-key="manual"]', 400);
+    await t.offline(true); await sleep(300); await click(t, '#tabs [data-key="suppliers"]', 500); ok(/fournisseurs/.test(await html(t))); await click(t, '.nx-cardmain[data-key="D"]', 700); await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-more-open"][data-key="risk"]', 500); ok(/contradiction/i.test(await html(t)));
+    await click(t, '.nx-tabs [data-key="ask"]', 700); ok(/Chinois|locuteur natif/.test(await html(t)));
+    await click(t, '#tabs [data-key="suppliers"]', 500); await click(t, '.nx-cardmain[data-key="C"]', 600); await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-update-offer"]', 500); await click(t, '[data-act="sl-cap-mode"][data-key="manual"]', 400);
     await setv(t, 'input[name="m_unitPrice"]', '2.95'); await setv(t, 'input[name="m_moq"]', '1000'); await setv(t, 'textarea[name="note"]', 'noté hors ligne au stand'); await click(t, 'form[data-form="sl-capture"] button[type="submit"]', 900); ok(/Relire l'offre/.test(await html(t)), (await html(t)).slice(0, 200));
     const c = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c.C.notes.some((n) => /hors ligne/.test(n.text)) && c.C.offers.length >= 2, 'note and manual offer saved locally'); await t.offline(false);
   });
 
   await check('8b. COLD OFFLINE START: with the network off, reloading the page still opens the Salon from the cached shell (every new module is cached) and the saved comparison', async () => {
     await t.waitFor("navigator.serviceWorker.ready.then(() => caches.keys()).then((k) => k.length > 0)", 20000); await sleep(1500); await t.offline(true); await t.goto(`${base}/`); await ready(t); await sleep(900);
-    let txt = await html(t); ok(/fournisseurs/.test(txt) || /Fiche|Comparaison|Prix/.test(txt), 'the Salon opened offline: ' + txt.slice(0, 120)); await click(t, '[data-act="sl-nav"][data-key="home"]'); ok(/Comparaisons enregistrées/.test(await html(t)));
+    let txt = await html(t); ok(/fournisseurs/.test(txt) || /Fiche|Comparaison|Prix/.test(txt), 'the Salon opened offline: ' + txt.slice(0, 120)); await click(t, '#tabs [data-key="more"]', 500); ok(/Comparer/.test(await html(t)));
     await click(t, '[data-act="sl-compare"][data-key]', 900); ok((await t.eval("document.querySelectorAll('.sl-ccard').length")) === 5, 'the saved comparison rebuilds offline'); await t.offline(false);
   });
 
