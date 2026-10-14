@@ -44,7 +44,9 @@ jobs:
           }
           export -f one
           : > /tmp/results.txt
-          ls test/*.test.js | grep -v -E "$EXCLUDE" | xargs -P 4 -I{} bash -c 'one {}'
+          # test/benchmark-*.test.js share benchmark/ask/results (benchmark-preflight counts its entries while the others write reports): they run ONE at a time, the rest 4 at a time
+          ls test/*.test.js | grep -v -E "$EXCLUDE" | grep -v '^test/benchmark-' | xargs -P 4 -I{} bash -c 'one {}'
+          ls test/benchmark-*.test.js | xargs -P 1 -I{} bash -c 'one {}'
           echo "files run: $(wc -l < /tmp/results.txt)"
           sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest::$f ${d}s (exit $rc)"; done
           ! grep -q -v '^0 ' /tmp/results.txt
