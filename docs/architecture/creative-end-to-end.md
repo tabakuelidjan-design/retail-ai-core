@@ -102,8 +102,8 @@ Invalidation (`INVALIDATES`): ASSET → segmentation, production plan, integrati
 | Defect | Where it is stopped | Test |
 |---|---|---|
 | a glow baked into the alpha as a semi-transparent ring | native-alpha validation (`ALPHA_BAKED_HALO` / `ALPHA_OPAQUE_CORE`): BLOCKED at SEGMENTATION, 0 Brain calls, 0 provider calls, 0 € | ND-1, NA-8 |
-| a pinhole (2×2) inside the product | native-alpha validation (`ALPHA_PINHOLE`); a larger enclosed opening is a legitimate product aperture | ND-3, NA-10 |
+| a pinhole (2×2) inside the product | native-alpha validation (`ALPHA_PINHOLES`); a larger enclosed opening is a legitimate product aperture | ND-3, NA-10 |
 | a ragged/zigzag edge, dust, a second object, a product cut by the border | native-alpha validation | NA-9…14 |
 | a halo that appears in the delivered composition of a clean native alpha | final gate INTEGRATION_ARTIFACTS: BLOCKED `INTEGRATION_ARTIFACT` even though the source is NATIVE_ALPHA | ND-2 |
 | product pixels altered in the compositor | PRODUCT_DELIVERED_IDENTITY / PRODUCT_PIXELS_IN_THE_COMPOSITOR | RT-8, RT-27 |
-| **a glow painted into OPAQUE pixels and marked opaque by the supplier** | **not detectable from the alpha**; no gate rejects it. The run can still not be READY by itself (owner approval is always PENDING and the warnings are named). Stated as a limit, not claimed as caught | ND-4 |
+| **a glow painted into OPAQUE pixels and marked opaque by the supplier** | **not detectable from the alpha**; no gate rejects it. The run is NOT stopped. It ends NEEDS_OWNER_REVIEW only because of the warnings every provider-free run carries (critic skipped, owner approval PENDING) — that is not a detection of the glow. Stated as a limit, not claimed as caught; the owner's visual review is the only control until a vision critic is connected | ND-4 |
