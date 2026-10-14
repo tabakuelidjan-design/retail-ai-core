@@ -6,11 +6,13 @@ import { loadDataset } from '../../metrics/load.js';
 import { mergeConfig } from '../../metrics/config.js';
 import { contentFacts, WEEKS } from '../content/facts.js';
 import { buildContent } from '../content/content.js';
+import { requireTimeZone } from '../../metrics/profile.js';
 
 const DAY = 86400000;
 
-export function createContentSource({ supabase, merchantId, timeZone = 'UTC', config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
+export function createContentSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createContentSource: merchantId is required (server context)');
+  requireTimeZone(timeZone, 'createContentSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function content() {
     const t = now();

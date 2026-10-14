@@ -178,8 +178,8 @@ async function seedTwo() {
 }
 test('audience tenant: each source reads only its merchant; merchant required and fixed at creation', async () => {
   const { supabase, A, B } = await seedTwo();
-  const pa = await createAudienceSource({ supabase, merchantId: A, now: () => NOW })();
-  const pb = await createAudienceSource({ supabase, merchantId: B, now: () => NOW })();
+  const pa = await createAudienceSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW })();
+  const pb = await createAudienceSource({ supabase, merchantId: B, timeZone: 'UTC', now: () => NOW })();
   assert.equal(pa.identifiedCustomers, 3);
   assert.equal(pb.identifiedCustomers, 75);
   assert.equal(seg(pa, 'reactivate').customers, 0, 'none of B\'s inactive buyers in A');
@@ -201,7 +201,7 @@ test('audience route: no tenant -> 503 TENANT_NOT_CONFIGURED; request parameters
   } finally { await none.close(); }
   const { supabase, A, B } = await seedTwo();
   const calls = [];
-  const source = createAudienceSource({ supabase, merchantId: A, now: () => NOW });
+  const source = createAudienceSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW });
   const app = await serve({ audience: (...args) => { calls.push(args); return source(); } });
   try {
     for (const q of ['', `?merchantId=${B}`, `?merchant_id=${B}&tenant=${B}`]) {

@@ -154,8 +154,8 @@ async function seedTwo() {
 }
 test('content case 7: two merchants -> no leak between A and B; merchant required and fixed at creation', async () => {
   const { supabase, A, B } = await seedTwo();
-  const pa = await createContentSource({ supabase, merchantId: A, now: () => NOW })();
-  const pb = await createContentSource({ supabase, merchantId: B, now: () => NOW })();
+  const pa = await createContentSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW })();
+  const pb = await createContentSource({ supabase, merchantId: B, timeZone: 'UTC', now: () => NOW })();
   assert.deepEqual(pa.rows.map((r) => r.title), ['Alpha produit']);
   assert.deepEqual(pb.rows.map((r) => r.title).sort(), ['Beta deux', 'Beta produit']);
   assert.equal(pa.capabilities.image, true);
@@ -207,7 +207,7 @@ test('content route: no tenant -> 503 TENANT_NOT_CONFIGURED; request parameters 
   } finally { await none.close(); }
   const { supabase, A, B } = await seedTwo();
   const calls = [];
-  const source = createContentSource({ supabase, merchantId: A, now: () => NOW });
+  const source = createContentSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW });
   const app = await serve({ content: (...args) => { calls.push(args); return source(); } });
   try {
     for (const q of ['', `?merchantId=${B}`, `?merchant_id=${B}&tenant=${B}`]) {

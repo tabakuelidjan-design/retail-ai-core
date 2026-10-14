@@ -15,6 +15,7 @@ import { createStoreSource } from './store.js';
 import { readMerchantIdFromEnv } from '../../tenant/index.js';
 import { resolveToolTenant } from '../../tenant/tool-context.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
+import { resolveBusinessProfile } from '../../metrics/profile.js';
 
 const port = Number(process.env.GROWTH_PORT || 4413);
 try {
@@ -22,16 +23,18 @@ try {
   if (readMerchantIdFromEnv(process.env)) {
     const supabase = createSupabaseClient(loadSupabaseConfigFromEnv());
     const tenant = await resolveToolTenant({ env: process.env, supabase, tool: 'growth', log: console.log });
-    productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone: process.env.MERCHANT_TIMEZONE || 'UTC' });
-    audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone: process.env.MERCHANT_TIMEZONE || 'UTC' });
-    content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone: process.env.MERCHANT_TIMEZONE || 'UTC' });
-    store = createStoreSource({ supabase, merchantId: tenant.merchantId, timeZone: process.env.MERCHANT_TIMEZONE || 'UTC' });
+    // The merchant's local zone (merchant_profile.timezone, else MERCHANT_TIMEZONE, reported): missing or invalid -> TIMEZONE_NOT_CONFIGURED / TIMEZONE_INVALID, nothing is served. UTC is never assumed.
+    const { timezone: timeZone } = await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env: process.env });
+    productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone });
+    audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone });
+    content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone });
+    store = createStoreSource({ supabase, merchantId: tenant.merchantId, timeZone });
   }
   const handler = createGrowthApp({ productPotential, audience, content, store });
   http.createServer(handler).listen(port, '127.0.0.1', () => {
     console.log(`Nordla Growth running at http://127.0.0.1:${port}${productPotential ? '' : ' (no NORDLA_MERCHANT_ID: Produits Potentiels, Audience, Contenu and Croissance magasin not configured)'}`);
   });
 } catch (e) {
-  console.error(`growth failed to start: ${e.message}`);
+  console.error(`growth failed to start${e.code ? ` (${e.code})` : ''}: ${e.message}`);
   process.exitCode = 1;
 }

@@ -306,8 +306,8 @@ async function seedTwoMerchants() {
 
 test('potential tenant: each source reads only its own merchant; the merchant is required and fixed at creation', async () => {
   const { supabase, A, B, now } = await seedTwoMerchants();
-  const pa = await createProductPotentialSource({ supabase, merchantId: A, now: () => now })();
-  const pb = await createProductPotentialSource({ supabase, merchantId: B, now: () => now })();
+  const pa = await createProductPotentialSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => now })();
+  const pb = await createProductPotentialSource({ supabase, merchantId: B, timeZone: 'UTC', now: () => now })();
   assert.deepEqual(pa.rows.map((r) => r.title), ['Alpha product']);
   assert.deepEqual(pb.rows.map((r) => r.title), ['Beta product']);
   assert.ok(!JSON.stringify(pa).includes('Beta'), 'no data of merchant B in merchant A\'s payload');
@@ -331,7 +331,7 @@ test('potential route: no tenant -> 503 TENANT_NOT_CONFIGURED; the request can n
   } finally { await none.close(); }
   const { supabase, A, B, now } = await seedTwoMerchants();
   const calls = [];
-  const source = createProductPotentialSource({ supabase, merchantId: A, now: () => now });
+  const source = createProductPotentialSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => now });
   const app = await serve({ productPotential: (...args) => { calls.push(args); return source(); } });
   try {
     for (const q of ['', `?merchantId=${B}`, `?merchant_id=${B}&tenant=${B}`]) {

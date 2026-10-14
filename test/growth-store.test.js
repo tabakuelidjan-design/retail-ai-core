@@ -99,8 +99,8 @@ async function seedTwo() {
 }
 test('store case 7: two merchants -> strict isolation; merchant required and fixed at creation', async () => {
   const { supabase, A, B } = await seedTwo();
-  const pa = await createStoreSource({ supabase, merchantId: A, now: () => NOW })();
-  const pb = await createStoreSource({ supabase, merchantId: B, now: () => NOW })();
+  const pa = await createStoreSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW })();
+  const pb = await createStoreSource({ supabase, merchantId: B, timeZone: 'UTC', now: () => NOW })();
   assert.equal(pa.kpis.storeOrders.value, 12);
   assert.equal(pa.kpis.storeNet.value, 360);
   assert.equal(pb.kpis.storeOrders.value, 50);
@@ -148,7 +148,7 @@ test('store route: no tenant -> 503 TENANT_NOT_CONFIGURED; request parameters ne
   } finally { await none.close(); }
   const { supabase, A, B } = await seedTwo();
   const calls = [];
-  const source = createStoreSource({ supabase, merchantId: A, now: () => NOW });
+  const source = createStoreSource({ supabase, merchantId: A, timeZone: 'UTC', now: () => NOW });
   const app = await serve({ store: (...args) => { calls.push(args); return source(); } });
   try {
     for (const q of ['', `?merchantId=${B}`, `?merchant_id=${B}&tenant=${B}`]) {

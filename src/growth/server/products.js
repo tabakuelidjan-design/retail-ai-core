@@ -6,12 +6,14 @@ import { loadDataset } from '../../metrics/load.js';
 import { mergeConfig } from '../../metrics/config.js';
 import { productPotentialFacts } from '../products/facts.js';
 import { buildProductPotential } from '../products/potential.js';
+import { requireTimeZone } from '../../metrics/profile.js';
 
 const DAY = 86400000;
 export const HISTORY_DAYS = 400; // same history depth as Finance's retail load: enough for the product's first-sale / age facts
 
-export function createProductPotentialSource({ supabase, merchantId, timeZone = 'UTC', config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
+export function createProductPotentialSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createProductPotentialSource: merchantId is required (server context)');
+  requireTimeZone(timeZone, 'createProductPotentialSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function productPotential() {
     const t = now();

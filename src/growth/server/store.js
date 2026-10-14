@@ -10,11 +10,13 @@ import { buildStore } from '../store/store.js';
 import { productPotentialFacts } from '../products/facts.js';
 import { buildProductPotential } from '../products/potential.js';
 import { HISTORY_DAYS } from './products.js';
+import { requireTimeZone } from '../../metrics/profile.js';
 
 const DAY = 86400000;
 
-export function createStoreSource({ supabase, merchantId, timeZone = 'UTC', config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
+export function createStoreSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createStoreSource: merchantId is required (server context)');
+  requireTimeZone(timeZone, 'createStoreSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function store() {
     const t = now();
