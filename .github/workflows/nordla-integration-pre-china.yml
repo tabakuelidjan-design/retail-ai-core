@@ -2,6 +2,8 @@ name: nordla-integration-pre-china
 # The cross-module integration branch. It merges lines that each have their own workflow, so this job runs the integration tests first (fast diagnosis) and then the suite.
 #  - Node 24: the WHOLE suite (China Sourcing requires Node 24, owner decision 2026-10-12: its runtime guard refuses Node 20 with a coded error).
 #  - Node 20 (the repository engine floor): the whole suite EXCEPT test/sourcing-*, which cannot run on Node 20 by that same decision. Nothing else is excluded.
+#    Each file runs in its own process with its own time cap, 4 at a time, and every failure or slow file is reported as an annotation naming the file, so a stuck
+#    file is named instead of the whole job being cancelled by the job limit.
 # No secret, no provider, no network: every module runs over fakes.
 on:
   push:
@@ -13,7 +15,7 @@ jobs:
   suite:
     name: full suite (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +30,20 @@ jobs:
       - name: Full suite (Node 24)
         if: matrix.node == 24
         run: node --test test/*.test.js
-      - name: Suite without the Node-24-only Sourcing tests (Node 20)
+      - name: Suite without the Node-24-only Sourcing tests (Node 20), one process and one cap per file
         if: matrix.node == 20
-        run: node --test $(ls test/*.test.js | grep -v '^test/sourcing-')
+        shell: bash
+        run: |
+          one() {
+            f="$1"; s=$(date +%s)
+            timeout 1500 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1; rc=$?
+            d=$(( $(date +%s) - s ))
+            echo "$rc $d $f" >> /tmp/results.txt
+            if [ "$rc" -ne 0 ]; then echo "::error title=node20 test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; fi
+          }
+          export -f one
+          : > /tmp/results.txt
+          ls test/*.test.js | grep -v '^test/sourcing-' | xargs -P 4 -I{} bash -c 'one {}'
+          echo "files run: $(wc -l < /tmp/results.txt)"
+          sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest on node 20::$f ${d}s (exit $rc)"; done
+          ! grep -q -v '^0 ' /tmp/results.txt
