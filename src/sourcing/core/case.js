@@ -143,7 +143,7 @@ function landedInputOf(s, quoteOverride) {
   const qty = Number(q.qty ?? q.moq ?? 1) || 1;
   const duty = s.customs?.duty; const costs = { ...(s.costs?.costs ?? {}) };
   if (duty && duty.ratePct !== undefined && duty.ratePct !== null) costs.customsDuty = { ratePct: duty.ratePct, status: duty.kind === 'TAXUD_LOOKUP' ? 'KNOWN' : 'ESTIMATED', source: duty.source ?? 'USER_ENTERED' };
-  return { supplier: { unitPrice: q.unitPrice, currency: q.currency ?? 'USD', qty, moq: q.moq ?? null, incoterm: q.incoterm ?? null }, fx: s.costs?.fx ?? null, costs, importVat: s.costs?.importVat ?? null };
+  return { supplier: { unitPrice: q.unitPrice, currency: q.currency ?? null, qty, moq: q.moq ?? null, incoterm: q.incoterm ?? null }, fx: s.costs?.fx ?? null, costs, importVat: s.costs?.importVat ?? null };
 }
 const saleOf = (sale) => (sale && sale.sellingPriceGross && sale.vatRatePct !== undefined && sale.vatRatePct !== null ? { sellingPriceGross: sale.sellingPriceGross, vatRatePct: sale.vatRatePct, lines: sale.lines ?? [] } : null);
 

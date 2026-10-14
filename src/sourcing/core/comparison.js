@@ -40,8 +40,8 @@ function priceCell(c) {
   if (!q) return cell(id, CELL.UNKNOWN, null, 'no quote', []);
   const qty = q.qty ?? q.moq ?? null; const r = resolveUnitPrice(q, qty); const tiers = normalizeTiers(q.tiers);
   if (r.unitPrice === null) return cell(id, CELL.UNKNOWN, null, tiers.length ? 'price tiers do not cover this quantity (or are ambiguous)' : 'no unit price', [ev('quote', 'quote.tiers', CELL.UNKNOWN, r.reason ?? null)]);
-  const cur = q.currency ?? 'USD';
-  return cell(id, CELL.SUPPLIER_CLAIM, { unitPrice: String(r.unitPrice), currency: cur, atQty: qty === null ? null : String(qty), tiers: tiers.map((t) => ({ minQty: t.minQty, unitPrice: t.unitPrice })) }, `${r.unitPrice} ${cur}${qty ? ` for ${qty} pcs` : ''}${tiers.length ? ` (${tiers.length} price tiers)` : ''}`,
+  const cur = q.currency ?? null; const priceText = `${r.unitPrice}${cur ? ` ${cur}` : ' — currency to confirm'}`;
+  return cell(id, CELL.SUPPLIER_CLAIM, { unitPrice: String(r.unitPrice), currency: cur, atQty: qty === null ? null : String(qty), tiers: tiers.map((t) => ({ minQty: t.minQty, unitPrice: t.unitPrice })) }, `${priceText}${qty ? ` for ${qty} pcs` : ''}${tiers.length ? ` (${tiers.length} price tiers)` : ''}`,
     [ev('quote', 'quote.unitPrice', CELL.SUPPLIER_CLAIM, latestLedger(state, 'quote.unitPrice') ? `ledger: ${latestLedger(state, 'quote.unitPrice').status}` : 'typed into the quote'), ...(r.flags ? [ev('quote', 'quote.tiers', CELL.SUPPLIER_CLAIM, r.flags.join(', '))] : [])]);
 }
 

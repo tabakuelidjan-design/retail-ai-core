@@ -86,7 +86,7 @@ function conversation({ withCosts }) {
   let s = newCase({ id: 'fs1', name: 'Power bank 20000', now: at(0) }); s = dispatch(s, { type: 'CATEGORY', category: 'power_bank' }, at(0)); s = dispatch(s, { type: 'SUPPLIER', supplier: { name: 'Shenzhen Brightway Electronics' } }, at(0));
   s = dispatch(s, { type: 'CONVERSATION_START', supplierRef: 'Hall 2 C-114', lang: 'auto' }, at(1)); const id = s.conversations.at(-1).id;
   s = dispatch(s, { type: 'CONVERSATION_ITEM', convId: id, speaker: 'supplier', lang: 'auto', text: 'Model PB-X200. MOQ 500 pieces, 4.20 USD FOB Shenzhen, lead time 20 days, 30% deposit.' }, at(2));
-  for (const c of s.candidates.filter((x) => x.state === 'PROPOSED' && ['quote.moq', 'quote.unitPrice', 'quote.incoterm', 'identifier.model'].includes(x.key))) s = dispatch(s, { type: 'CANDIDATE_CONFIRM', id: c.id }, at(3));
+  for (const c of s.candidates.filter((x) => x.state === 'PROPOSED' && ['quote.moq', 'quote.unitPrice', 'quote.currency', 'quote.incoterm', 'identifier.model'].includes(x.key))) s = dispatch(s, { type: 'CANDIDATE_CONFIRM', id: c.id }, at(3));
   s = dispatch(s, { type: 'CONVERSATION_ITEM', convId: id, speaker: 'supplier', lang: 'auto', text: 'We have CE and UN38.3 certificates.' }, at(4));
   if (withCosts) s = dispatch(s, { type: 'COSTS', costs: { fx: { rate: 0.92, date: '2026-10-02', source: 'USER_ENTERED' }, costs: { freight: { total: 600, status: 'ESTIMATED' } } } }, at(5)); if (withCosts) s = dispatch(s, { type: 'CUSTOMS', customs: { duty: { ratePct: 3.7, kind: 'USER_ENTERED', source: 'owner' } } }, at(5));
   return s;

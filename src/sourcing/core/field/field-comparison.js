@@ -27,7 +27,7 @@ export function fieldComparison(set, derived) {
   const contradicting = cands.filter((c) => cellOf(set, 'contradictions', c.caseId)?.status === CELL.CONFLICT).map((c) => ({ caseId: c.caseId, name: short(c), what: cellOf(set, 'contradictions', c.caseId).display }));
   const answers = {
     strongest: pref ? { caseId: pref.caseId, name: short(pref), basis: 'PREFERRED: at least as good as every other viable offer on every compared dimension and strictly better on one' } : { caseId: null, name: null, basis: set.summary.noWinnerReason ?? 'no offer is preferred', bestSupported: bestSupported.map((c) => ({ caseId: c.caseId, name: short(c), level: evOf(c.caseId) })), note: 'Best-supported is not a winner: it only says whose evidence is most complete.' },
-    cheapest: deals.cheapestQuote ? { ...deals.cheapestQuote, note: 'the lowest quoted unit price - not the best offer' } : { caseId: null, note: 'quotes cannot be compared (missing prices or different currencies)' },
+    cheapest: deals.cheapestQuote ? { ...deals.cheapestQuote, note: 'the lowest quoted unit price - not the best offer' } : { caseId: null, note: 'quotes cannot be compared (missing prices, different currencies or a currency not confirmed yet)' },
     bestLanded: deals.bestLanded ? { ...deals.bestLanded, provisional: deals.provisional } : { caseId: null, note: 'no landed cost can be compared yet' },
     blocked, weakEvidence: weak, contradictions: contradicting,
     askNext: cands.map((c) => ({ caseId: c.caseId, name: short(c), items: (D(c.caseId).askNow?.items ?? []).slice(0, 3).map((i) => ({ id: i.id, kind: i.kind, en: i.en, fr: i.fr, why: i.why, zh: i.zh, ...(i.verify ? { verify: i.verify } : {}) })) })),

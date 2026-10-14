@@ -5,6 +5,7 @@ import { createDerivedCache, refreshDerived, cachedAssessFn } from './derived.js
 import { fieldComparison } from './field-comparison.js';
 import { recordFromDerived, saveComparison, askStateOf, setView } from './workspace.js';
 import { supplierHistory } from './memory.js';
+import { priceOfQuote } from '../price-display.js';
 
 const NEED = ['deal', 'merchantFit', 'recommendation', 'evidenceStatus', 'askNow', 'truthCard', 'negotiation'];
 
@@ -18,7 +19,7 @@ export function createFieldEngine({ profile = null, externals = () => ({}), now 
   const overview = (cases, ws = null) => cases.map((s) => {
     const v = refresh(s, ws, { nodes: ['recommendation', 'evidenceStatus', 'deal'] }).results; const a = v.assessment;
     return { caseId: s.id, title: s.identity?.workingName || s.id, supplier: s.supplier?.name ?? null, updatedAt: s.updatedAt, offers: (s.offers ?? []).length, recommendation: v.recommendation.value, role: v.recommendation.role, evidence: v.evidenceStatus.evidenceCompleteness, verdict: a.decision.verdict,
-      price: v.deal.quoted.status === 'SUPPLIER_CLAIM' ? `${v.deal.quoted.unitPrice} ${v.deal.quoted.currency}` : null, landed: v.deal.landed.display, pending: s.candidates.filter((c) => c.state === 'PROPOSED').length, conflicts: s.conflicts.filter((c) => c.state === 'OPEN').length, blocked: v.recommendation.role === 'BLOCKED' };
+      price: v.deal.quoted.status === 'SUPPLIER_CLAIM' ? priceOfQuote(v.deal.quoted.unitPrice, v.deal.quoted.currency).text : null, landed: v.deal.landed.display, pending: s.candidates.filter((c) => c.state === 'PROPOSED').length, conflicts: s.conflicts.filter((c) => c.state === 'OPEN').length, blocked: v.recommendation.role === 'BLOCKED' };
   });
   /** the comparison of 2-5 cases, with the field view built over it. The saved definition is NOT needed to rebuild it: the cases are. */
   const compare = (cases, { id = null, ws = null, asOf = null } = {}) => {

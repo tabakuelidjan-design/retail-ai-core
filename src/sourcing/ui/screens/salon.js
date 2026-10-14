@@ -11,6 +11,7 @@ import { planConversation } from '/core/conversation-engine.js';
 import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
 import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
+import { priceOfCase, priceWording } from '/core/price-display.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -70,12 +71,13 @@ export function createSalon(ctx) {
   const remember = () => { ws = eng().setView(ws, { lastCaseId: view.caseId ?? null, lastComparisonId: view.cmpId ?? null, lastScreen: view.name }); saveWs(ws); };
 
   // ---- what a case says about its own follow-ups (cached by case + revision: cheap on every render) ------------------------------------------------------------------------------------------------
-  /** What is CONFIRMED (price, MOQ, model): the one line shown on the cards. Nothing proposed or guessed. */
-  const keyFacts = (c) => { try { const f = new Map(caseFacts(c).map((x) => [x.fact_type, x])); const price = f.get('PRICE'); const cur = f.get('CURRENCY'); return { price: price ? `${V.factValueText(price)}${cur ? ` ${V.factValueText(cur)}` : ''}` : null, moq: f.get('MOQ') ? String(f.get('MOQ').value) : null, model: f.get('MODEL') ? String(f.get('MODEL').value) : null }; } catch { return { price: null, moq: null, model: null }; } };
+  /** What is CONFIRMED (MOQ, model) and the PRICE worded with the state of its amount AND of its currency (core/price-display.js): the one line shown on the cards. Nothing proposed is shown as a fact. */
+  const keyFacts = (c) => { try { const b = Object.fromEntries(factStatusBoard(c, { locale: 'fr', types: ['MOQ', 'MODEL'] }).map((x) => [x.fact_type, x])); return { price: priceOfCase(c), moq: b.MOQ.state === 'CONFIRMED' ? String(b.MOQ.value) : null, model: b.MODEL.state === 'CONFIRMED' ? String(b.MODEL.value) : null }; } catch { return { price: priceWording({}), moq: null, model: null }; } };
   const lastTextOf = (c) => { const items = c.conversations.flatMap((x) => x.items).filter((i) => i.speaker !== 'unknown' || i.original); const it = items.sort((a, b) => String(b.at).localeCompare(String(a.at)))[0]; const t = it ? String(it.original ?? '').replace(/\s+/g, ' ').trim() : ''; return t.length > 110 ? `${t.slice(0, 107)}…` : t; };
-  /** The three essentials of the sheet (price, MOQ, model): confirmed, only proposed, or unknown - never a guess. */
+  /** The three essentials of the sheet (price, MOQ, model): confirmed, only proposed, or unknown - never a guess. A price says what is confirmed: "12 USD", "12 — devise à confirmer", "12 — prix à confirmer". */
   const stripOf = (c) => { const b = Object.fromEntries(factStatusBoard(c, { locale: 'fr' }).map((x) => [x.fact_type, x])); const one = (label, x, text) => (x.state === 'CONFIRMED' ? { label, value: text(x.valueText), state: 'confirmed' } : (x.state === 'PROPOSED' || x.state === 'AMBIGUOUS') && x.proposedValueText ? { label, value: x.state === 'AMBIGUOUS' ? 'à corriger' : text(x.proposedValueText), state: 'proposed' } : { label, value: '', state: 'unknown' });
-    const cur = b.CURRENCY?.state === 'CONFIRMED' ? b.CURRENCY.valueText : ''; return [one('Prix', b.PRICE, (t) => `${t}${cur ? ` ${cur}` : ''}`), one('MOQ', b.MOQ, (t) => String(t).replace(/ pièces?$/, '')), one('Modèle', b.MODEL, (t) => t)]; };
+    const p = priceOfCase(c); const price = p.status === 'CONFIRMED' ? { label: 'Prix', value: p.text, state: 'confirmed' } : p.status === 'UNKNOWN' ? { label: 'Prix', value: '', state: 'unknown' } : { label: 'Prix', value: p.currency ? `${p.amount} ${p.currency}` : p.amount, state: p.status === 'PRICE_TO_CONFIRM' ? 'proposed' : 'cur', note: p.note, sub: p.proposedCurrency ? `${p.proposedCurrency} proposée` : '' };
+    return [price, one('MOQ', b.MOQ, (t) => String(t).replace(/ pièces?$/, '')), one('Modèle', b.MODEL, (t) => t)]; };
   const meta = new Map();
   function metaOf(c) {
     const key = `${c.id}|${c.updatedAt}|${(c.questionLog ?? []).length}|${(c.candidates ?? []).length}`; const hit = meta.get(c.id); if (hit?.key === key) return hit.v;
@@ -222,6 +224,8 @@ export function createSalon(ctx) {
 
   // ---- actions --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   const reveal = (sel) => requestAnimationFrame(() => document.querySelector(sel)?.scrollIntoView({ block: 'start' }));
+  /** the row of tabs scrolls sideways when the five labels do not fit: keep the active one in view, without moving the page */
+  const centerTab = () => requestAnimationFrame(() => { const t = document.querySelector('.nx-tabs [aria-selected="true"]'); const r = t?.parentElement; if (r) r.scrollLeft = t.offsetLeft - (r.clientWidth - t.offsetWidth) / 2; });
   const must = (id) => { const c = caseOf(id); if (!c) throw new Error('unknown case'); return c; };
   const lastCaseId = () => view.caseId && caseOf(view.caseId) ? view.caseId : (ws.views.lastCaseId && caseOf(ws.views.lastCaseId) ? ws.views.lastCaseId : allCases()[0]?.id ?? null);
   async function click(ev, t) {
@@ -250,7 +254,7 @@ export function createSalon(ctx) {
         case 'sl-fact-edit': editingFact = editingFact === key ? null : key; return ctx.render();
         case 'sl-fact-revert': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_REVERT', ledgerId: key, mode: 'salon', reason: 'correction annulée par le propriétaire' }]); flash = 'Correction annulée : l\'historique est conservé.'; return ctx.render(); }
         case 'sl-obs-accept': { const c = must(view.caseId); commit(c.id, [{ type: 'FACT_ACCEPT', observationId: key, mode: 'salon' }]); return ctx.render(); }
-        case 'sl-case-tab': view = { ...view, name: view.name === 'review' ? 'case' : view.name === 'ask' || view.name === 'negotiate' || view.name === 'changed' ? 'case' : view.name, tab: key, sub: null }; save(); remember(); ctx.render(); return window.scrollTo(0, 0);
+        case 'sl-case-tab': view = { ...view, name: view.name === 'review' ? 'case' : view.name === 'ask' || view.name === 'negotiate' || view.name === 'changed' ? 'case' : view.name, tab: key, sub: null }; save(); remember(); ctx.render(); centerTab(); return window.scrollTo(0, 0);
         case 'sl-more-open': view = { ...view, name: 'case', tab: 'more', sub: key || null }; save(); ctx.render(); return window.scrollTo(0, 0);
         case 'sl-sel': { selected = selected.includes(key) ? selected.filter((x) => x !== key) : [...selected, key].slice(-MAX_CANDIDATES); save(); return ctx.render(); }
         case 'sl-compare': { const def = key ? ws.comparisons[key] : null; if (def) { selected = def.caseIds.slice(); return go({ name: 'compare', cmpId: key }); } return go({ name: 'compare', cmpId: null }); }

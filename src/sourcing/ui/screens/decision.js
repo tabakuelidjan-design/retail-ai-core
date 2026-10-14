@@ -5,7 +5,7 @@ import { numbersInner } from '../numbers.js';
 
 export function decisionScreen(A, c) {
   const d = A.decision; const [en, fr] = VERDICT_TEXT[d.verdict]; const dim = d.dimensions; const mp = A.maxPurchasePrice; const q = quoteOf(c);
-  const cur = q.currency ?? 'USD';
+  const cur = q.currency ?? 'currency to confirm'; // never a guessed currency
   const wi = S.whatIf;
   return `<section class="verdict v-${d.verdict}" aria-live="polite"><p class="q">SHOULD I CONTINUE WITH THIS PRODUCT?</p><div class="v">${esc(d.verdict.replace(/_/g, ' '))}</div><p class="a">${esc(en)} <span class="muted small">/ ${esc(fr)}</span></p><p style="margin:0">${esc(d.nextAction)}</p></section>
   ${coverageBanner(A)}<div class="chips">${chip('Identification', dim.identification, dim.identification === 'HIGH' ? 'GREEN' : dim.identification === 'MEDIUM' ? 'AMBER' : 'RED')}${chip('EU / BE', dim.marketability)}${chip('Amazon', dim.amazonReadiness)}${chip('Economics', dim.economics)}${chip('Supplier evidence', dim.supplierEvidence)}${chip('Safety risk', dim.safetyRisk)}</div>

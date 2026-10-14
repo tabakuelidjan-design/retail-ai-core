@@ -116,7 +116,7 @@ export function supplierSheet(questions, { lang = 'both', priorities = ['P1', 'P
  * Negotiation brief. The walk-away price is the MAXIMUM PURCHASE PRICE computed by the engine; the target price is the walk-away minus an EXPLICIT negotiation margin
  * (default 15%, an editable Nordla default - not a market fact). Nothing here predicts what the supplier will accept.
  */
-export function negotiationBrief({ maxPrice, quote, rules, role, targetDiscountPct = 15, currency = 'USD' }) {
+export function negotiationBrief({ maxPrice, quote, rules, role, targetDiscountPct = 15, currency = null }) {
   const walk = maxPrice?.maxUnitPriceMinor ?? null;
   const target = walk === null ? null : Math.round(walk * (1 - targetDiscountPct / 100));
   const docsBeforeDeposit = (rules.results ?? []).filter((r) => r.status !== 'NOT_APPLICABLE').flatMap((r) => (r.missingEvidence ?? []).filter((m) => m.requirement === 'REQUIRED' && m.docType && m.docType !== 'COMPANY_RECORD').map((m) => m.label));

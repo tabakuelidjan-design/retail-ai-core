@@ -49,10 +49,11 @@ export function landedCost(input) {
   if (!incoterm) warnings.push('INCOTERM_NOT_STATED');
 
   // ---- goods (supplier currency -> EUR with an explicit rate) ----
-  const cur = (input.supplier?.currency ?? 'EUR').toUpperCase();
+  const curRaw = input.supplier?.currency; const cur = curRaw ? String(curRaw).toUpperCase() : null; // a missing currency is UNKNOWN: it is never turned into EUR or USD
   const unitMinor = toMinor(input.supplier?.unitPrice);
   let goodsEur = null; let fx = null;
   if (unitMinor === null) { unknown.push('supplier.unitPrice'); criticalUnknown.push('supplier.unitPrice'); }
+  else if (cur === null) { unknown.push('supplier.currency'); criticalUnknown.push('supplier.currency'); }
   else if (cur === 'EUR') { goodsEur = unitMinor * qty; }
   else if (input.fx && Number(input.fx.rate) > 0) { fx = { rate: Number(input.fx.rate), date: input.fx.date ?? null, source: input.fx.source ?? 'USER_ENTERED', from: cur, to: 'EUR' }; goodsEur = roundHalfAway(unitMinor * qty * fx.rate); }
   else { unknown.push(`fx.${cur}EUR`); criticalUnknown.push(`fx.${cur}EUR`); }

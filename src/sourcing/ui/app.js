@@ -139,8 +139,8 @@ async function checkSafety({ quiet = false } = {}) {
   S.busy = ''; render();
 }
 async function fetchFx() {
-  const q = quoteOf(cur()); if (!S.token) { S.flash = 'Add the access token (menu) to fetch the ECB rate, or type the rate.'; return render(); }
-  try { const fx = await api(`/api/fx?currency=${encodeURIComponent(q.currency ?? 'USD')}`); commit({ type: 'COSTS', costs: { fx: { rate: String(fx.rate), date: fx.date, source: fx.source }, costs: cur().costs.costs, importVat: cur().costs.importVat } }); }
+  const q = quoteOf(cur()); if (!q.currency) { S.flash = 'Confirm the currency of the price first: the rate depends on it.'; return render(); } if (!S.token) { S.flash = 'Add the access token (menu) to fetch the ECB rate, or type the rate.'; return render(); }
+  try { const fx = await api(`/api/fx?currency=${encodeURIComponent(q.currency)}`); commit({ type: 'COSTS', costs: { fx: { rate: String(fx.rate), date: fx.date, source: fx.source }, costs: cur().costs.costs, importVat: cur().costs.importVat } }); }
   catch { S.flash = 'The rate could not be fetched: type it by hand.'; render(); }
 }
 
@@ -269,7 +269,7 @@ async function onSubmit(ev) {
   }
   if (name === 'customs') return commit({ type: 'CUSTOMS', customs: { chosenCode: d.code || null, duty: num(d.rate) ? { ratePct: num(d.rate), kind: 'USER_ENTERED', source: d.source || 'entered by the owner', origin: d.origin || 'CN', notes: d.notes || null } : cur().customs?.duty } });
   if (name === 'obs') return commit({ type: 'AMAZON_OBS', observation: { marketplace: d.marketplace, price: num(d.price), packQty: num(d.packQty), asin: d.asin, reviews: num(d.reviews), rating: num(d.rating), title: d.title, notes: d.notes, source: 'MANUAL' } });
-  if (name === 'whatif') { if (num(d.unitPrice) === null) return; try { S.whatIf = whatIf(cur(), { unitPrice: num(d.unitPrice), currency: quoteOf(cur()).currency ?? 'USD' }, { now: new Date(), externals: externals() }); } catch (e) { S.flash = `Could not compute: ${e.message}`; } return render(); }
+  if (name === 'whatif') { if (num(d.unitPrice) === null) return; try { S.whatIf = whatIf(cur(), { unitPrice: num(d.unitPrice), currency: quoteOf(cur()).currency ?? null }, { now: new Date(), externals: externals() }); } catch (e) { S.flash = `Could not compute: ${e.message}`; } return render(); }
   if (name === 'doc') return addDocument(f, d);
   if (name === 'doc-correct') return commit({ type: 'DOCUMENT_CORRECT', id: f.dataset.id, text: d.text ?? '' });
   if (name === 'doc-typed') {

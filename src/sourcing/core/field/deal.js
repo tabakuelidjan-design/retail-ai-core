@@ -21,7 +21,7 @@ export function incotermEffect(incoterm, unknownComponents = []) {
 function breakpoints(state, a, qty) {
   const q = state.quotes.at(-1) ?? null; if (!q) return [];
   const tiers = normalizeTiers(q.tiers); const points = tiers.length ? tiers.map((t) => ({ minQty: t.min, unitPrice: t.unitPrice, source: 'TIER' })) : (num(q.moq) !== null && q.unitPrice ? [{ minQty: num(q.moq), unitPrice: String(q.unitPrice), source: 'QUOTE_AT_MOQ' }] : []);
-  const maxMinor = a.maxPurchasePrice?.maxUnitPriceMinor ?? null; const cur = q.currency ?? 'USD';
+  const maxMinor = a.maxPurchasePrice?.maxUnitPriceMinor ?? null; const cur = q.currency ?? null; // no confirmed currency: the tiers are shown without one, never with a guessed one
   return points.map((p, i) => {
     const sc = economicsScenario(state, { tiers: null, unitPrice: p.unitPrice, qty: p.minQty }); const landed = sc.landed.status === 'INFORMATION_INSUFFICIENT' ? null : sc.landed;
     const per = landed?.totals?.landedPerUnitEurMinor ?? null; const total = landed?.totals?.landedTotalEurMinor ?? null;
@@ -65,13 +65,14 @@ export function dealIntelligence(state, a, { profile = null } = {}) {
  */
 export function compareDeals(entries) {
   const rows = entries.map(({ caseId, name, deal }) => ({ caseId, name, deal, unit: deal.quoted.status === 'SUPPLIER_CLAIM' ? Number(deal.quoted.unitPrice) : null, cur: deal.quoted.currency, landed: deal.landed.perUnitEurMinor, lb: deal.landed.isLowerBound }));
-  const priced = rows.filter((r) => r.unit !== null); const sameCur = priced.length > 0 && new Set(priced.map((r) => r.cur)).size === 1;
+  const priced = rows.filter((r) => r.unit !== null); const unknownCur = priced.filter((r) => !r.cur); const sameCur = priced.length > 0 && unknownCur.length === 0 && new Set(priced.map((r) => r.cur)).size === 1; // a quote with no confirmed currency is never compared on its unit price
   const cheapest = sameCur ? priced.slice().sort((x, y) => x.unit - y.unit || x.caseId.localeCompare(y.caseId))[0] : null;
   const withLanded = rows.filter((r) => r.landed !== null); const bestLanded = withLanded.length ? withLanded.slice().sort((x, y) => x.landed - y.landed || x.caseId.localeCompare(y.caseId))[0] : null;
   const provisional = withLanded.length !== rows.length || withLanded.some((r) => r.lb);
   const out = { cheapestQuote: cheapest ? { caseId: cheapest.caseId, name: cheapest.name, unitPrice: cheapest.unit, currency: cheapest.cur, incoterm: cheapest.deal.quoted.incoterm } : null, bestLanded: bestLanded ? { caseId: bestLanded.caseId, name: bestLanded.name, perUnitEurMinor: bestLanded.landed, display: fmt(bestLanded.landed, 'EUR'), incoterm: bestLanded.deal.quoted.incoterm } : null, provisional, reasons: [], inversion: false,
     notComparable: [...rows.filter((r) => r.unit === null).map((r) => ({ caseId: r.caseId, why: 'no usable unit price' })), ...rows.filter((r) => r.landed === null).map((r) => ({ caseId: r.caseId, why: 'landed cost unknown' }))] };
-  if (!sameCur && priced.length > 1) out.reasons.push('The quotes are in different currencies: unit prices are not compared with each other, only the landed cost in EUR.');
+  if (unknownCur.length && priced.length > 1) out.reasons.push('At least one quote has no confirmed currency: unit prices are not compared with each other until the currency is confirmed.');
+  else if (!sameCur && priced.length > 1) out.reasons.push('The quotes are in different currencies: unit prices are not compared with each other, only the landed cost in EUR.');
   if (provisional && withLanded.length) out.reasons.push(withLanded.length !== rows.length ? 'Some offers have no landed cost yet: the best landed cost among the others is PROVISIONAL.' : 'At least one landed cost is a lower bound: the ranking is PROVISIONAL.');
   if (cheapest && bestLanded && cheapest.caseId !== bestLanded.caseId) {
     out.inversion = true; const c = cheapest.deal; const b = bestLanded.deal; const ci = c.quoted.incoterm; const bi = b.quoted.incoterm;

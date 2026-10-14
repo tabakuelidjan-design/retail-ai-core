@@ -3,6 +3,8 @@
 // cards instead of tables, wrapping text, targets of at least 44 px, no horizontal scroll.
 import { esc } from '../dom.js';
 import { labelOf, describeFact } from '/core/candidate-view.js';
+import { priceOfQuote } from '/core/price-display.js';
+const moneyText = (amount, currency) => priceOfQuote(amount, currency).text; // "12 USD", or "12 — devise à confirmer": a missing currency is never replaced by a guess
 import { fr, frList, BLOCK_CODE_FR, DOC_NAME_FR, DOC_STATE_FR } from './salon-fr.js';
 
 export const REC_FR = { BUY_CANDIDATE: "Candidat à l'achat", INVESTIGATE: 'À creuser', PASS: 'Passer' };
@@ -97,7 +99,7 @@ export function factValueText(f) {
   const v = f.value; const u = f.unit; if (v === null || v === undefined) return 'inconnu';
   if (v === 'IN_STOCK') return 'en stock'; if (v === 'OUT_OF_STOCK') return 'pas en stock';
   if (Array.isArray(v)) return v.join(', '); if (typeof v === 'object') return v.amount !== undefined ? `${v.amount} ${v.unit ?? ''}`.trim() : v.max !== undefined ? `${v.max} jours` : JSON.stringify(v);
-  return `${v}${f.fact_type === 'MOQ' ? ' pièces' : f.fact_type === 'PRICE' && u ? ` ${u}` : f.fact_type === 'LEAD_TIME' ? ' jours' : f.fact_type === 'OUTPUT_COUNT' ? ' sorties' : ''}`;
+  return `${v}${f.fact_type === 'MOQ' ? ' pièces' : f.fact_type === 'PRICE' ? (u ? ` ${u}` : ' — devise à confirmer') : f.fact_type === 'LEAD_TIME' ? ' jours' : f.fact_type === 'OUTPUT_COUNT' ? ' sorties' : ''}`;
 }
 const ALWAYS = ['PRICE', 'CURRENCY', 'MOQ', 'MODEL', 'LEAD_TIME', 'INCOTERM', 'MATERIAL', 'PACKAGING'];
 const FACT_LABELS = { PRICE: 'Prix unitaire', CURRENCY: 'Devise', MOQ: 'Minimum de commande (MOQ)', MODEL: 'Modèle', LEAD_TIME: 'Délai de production', INCOTERM: 'Incoterm', MATERIAL: 'Matière', PACKAGING: 'Emballage', POWER: 'Puissance', CAPACITY: 'Capacité', OUTPUT_COUNT: 'Nombre de sorties', COLOURS: 'Couleurs', STOCK_STATUS: 'Stock', PORT: 'Port ou lieu' };
@@ -160,15 +162,15 @@ export function fitHtml(fit) {
 }
 export function dealHtml(d) {
   const q = d.quoted; const rows = [];
-  rows.push(kv('Prix proposé', q.status === 'SUPPLIER_CLAIM' ? `${esc(q.unitPrice)} ${esc(q.currency ?? '')} pour ${esc(q.atQty ?? '?')} pièces ${pill('dit par le fournisseur')}` : '<em>inconnu</em>'));
+  rows.push(kv('Prix proposé', q.status === 'SUPPLIER_CLAIM' ? `${esc(moneyText(q.unitPrice, q.currency))} pour ${esc(q.atQty ?? '?')} pièces ${pill('dit par le fournisseur')}` : '<em>inconnu</em>'));
   rows.push(kv('MOQ', q.moq !== null ? `${esc(q.moq)} pièces` : '<em>inconnu</em>'), kv('Incoterm', esc(q.incoterm ? `${q.incoterm}${q.port ? ` ${q.port}` : ''}` : 'inconnu')));
   rows.push(kv('Coût rendu / pièce', d.landed.display ? `${esc(d.landed.display)} ${pill(d.landed.isLowerBound ? 'minimum' : 'estimé')}` : `<em>inconnu</em><small>${esc(fr(d.landed.reason ?? ''))}</small>`));
   rows.push(kv('Prix d\'achat maximum', d.maxPurchasePrice.display ? `${esc(d.maxPurchasePrice.display)}${d.maxPurchasePrice.status === 'UPPER_BOUND' ? ' (plafond théorique)' : ''}` : `<em>inconnu</em><small>${esc(fr(d.maxPurchasePrice.reason ?? ''))}</small>`));
   rows.push(kv('Prix cible', d.targetPurchasePrice.display ? `${esc(d.targetPurchasePrice.display)}<small>${esc(fr(d.targetPurchasePrice.basis))}</small>` : `<em>aucune cible</em><small>${esc(fr(d.targetPurchasePrice.reason ?? ''))}</small>`));
   rows.push(kv('Marge', d.margin.pct !== null ? `${(d.margin.pct * 100).toFixed(1)} %${d.margin.status === 'UPPER_BOUND' ? ' (maximum)' : ''} · objectif ${esc(d.margin.targetPct ?? '?')} %` : `<em>inconnue</em><small>${esc(fr(d.margin.reason ?? ''))}</small>`));
   rows.push(kv('Cash à engager', d.cash.goodsEurMinor !== null ? `marchandise ${eur(d.cash.goodsEurMinor)}${d.cash.depositEurMinor !== null ? ` · acompte ${eur(d.cash.depositEurMinor)}` : ''}${d.cash.landedTotalEurMinor !== null ? ` · total rendu ${eur(d.cash.landedTotalEurMinor)}` : ''}` : '<em>inconnu</em>'));
-  rows.push(kv('Échantillon', d.cash.sample.status === 'SUPPLIER_CLAIM' ? `${esc(d.cash.sample.amount)} ${esc(d.cash.sample.currency ?? '')}${d.cash.sample.refundable === 'REFUNDABLE' ? ' · remboursable' : d.cash.sample.refundable === 'NOT_REFUNDABLE' ? ' · non remboursable' : ''}` : '<em>inconnu</em>'));
-  const bps = d.breakpoints.length ? `<h3 class="sl-h3">Paliers de prix</h3><ul class="sl-list">${d.breakpoints.map((b) => `<li><b>dès ${b.minQty} pcs</b> ${esc(b.unitPrice)} ${esc(b.currency)} → rendu ${b.landedPerUnitEurMinor !== null ? eur(b.landedPerUnitEurMinor) : '?'}/pce · cash ${b.cashTotalEurMinor !== null ? eur(b.cashTotalEurMinor) : '?'}${b.withinMaxPrice === false ? ' <span class="sl-pill bad">au-dessus du maximum</span>' : ''}</li>`).join('')}</ul>` : '';
+  rows.push(kv('Échantillon', d.cash.sample.status === 'SUPPLIER_CLAIM' ? `${esc(moneyText(d.cash.sample.amount, d.cash.sample.currency))}${d.cash.sample.refundable === 'REFUNDABLE' ? ' · remboursable' : d.cash.sample.refundable === 'NOT_REFUNDABLE' ? ' · non remboursable' : ''}` : '<em>inconnu</em>'));
+  const bps = d.breakpoints.length ? `<h3 class="sl-h3">Paliers de prix</h3><ul class="sl-list">${d.breakpoints.map((b) => `<li><b>dès ${b.minQty} pcs</b> ${esc(moneyText(b.unitPrice, b.currency))} → rendu ${b.landedPerUnitEurMinor !== null ? eur(b.landedPerUnitEurMinor) : '?'}/pce · cash ${b.cashTotalEurMinor !== null ? eur(b.cashTotalEurMinor) : '?'}${b.withinMaxPrice === false ? ' <span class="sl-pill bad">au-dessus du maximum</span>' : ''}</li>`).join('')}</ul>` : '';
   return `<dl class="sl-dl">${rows.join('')}</dl><p class="sl-hint">${esc(fr(d.incotermEffect.text))}</p>${bps}${d.insights.length ? `<ul class="sl-list">${d.insights.map((x) => `<li>${esc(fr(x))}</li>`).join('')}</ul>` : ''}${d.unknown.length ? `<p class="sl-hint">Inconnu : ${esc(d.unknown.map(UNKNOWN_FR).join(', '))}</p>` : ''}<p class="sl-hint">${esc(fr(d.note))}</p>`;
 }
 export function changedHtml(w) {
@@ -230,7 +232,7 @@ export function negotiateHtml({ info, plan, embedded = false }) {
   const cur = plan.currentOffer; const tg = plan.target; const wa = plan.walkAway;
   const lever = (l) => `<li class="sl-lv"><b>${esc(fr(l.ask))}</b><small>${esc(fr(l.why))}${l.basis ? ` · ${esc(fr(l.basis))}` : ''}</small>${l.zh ? `<p class="zh sl-qzh" lang="zh-Hans">${esc(l.zh)}</p>` : `<small class="sl-zhn">${esc(fr(l.zhNote))}</small>`}</li>`;
   return `<div class="sl">${embedded ? '' : `<header class="sl-hd"><div><h1>Négocier</h1><p class="sl-sub">${esc(info.supplier ?? info.title)}</p></div>${btn('Fiche', 'sl-open-case', info.caseId, '', 'ghost')}</header>`}
-    <dl class="sl-dl">${kv('Offre actuelle', cur.unitPrice ? `${esc(cur.unitPrice)} ${esc(cur.currency ?? '')} · MOQ ${esc(cur.moq ?? '?')} · ${esc(cur.incoterm ?? 'Incoterm ?')}` : '<em>pas de prix</em>')}${kv('Objectif', tg.status === 'CONFIGURED_STEP' ? `${esc(tg.display)}<small>${esc(fr(tg.basis))}</small>` : `<em>${plan.status === 'READY' ? 'aucune cible configurée' : 'données insuffisantes'}</em><small>${esc(fr(tg.reason ?? ''))}${tg.missing ? ` Manque : ${esc(tg.missing.map(fr).join(', '))}` : ''}</small>`)}${kv('Limite (prix d\'achat max)', wa.display ? esc(wa.display) : `<em>inconnue</em>${wa.missing ? `<small>Manque : ${esc(wa.missing.map(fr).join(', '))}</small>` : ''}`)}</dl>
+    <dl class="sl-dl">${kv('Offre actuelle', cur.unitPrice ? `${esc(moneyText(cur.unitPrice, cur.currency))} · MOQ ${esc(cur.moq ?? '?')} · ${esc(cur.incoterm ?? 'Incoterm ?')}` : '<em>pas de prix</em>')}${kv('Objectif', tg.status === 'CONFIGURED_STEP' ? `${esc(tg.display)}<small>${esc(fr(tg.basis))}</small>` : `<em>${plan.status === 'READY' ? 'aucune cible configurée' : 'données insuffisantes'}</em><small>${esc(fr(tg.reason ?? ''))}${tg.missing ? ` Manque : ${esc(tg.missing.map(fr).join(', '))}` : ''}</small>`)}${kv('Limite (prix d\'achat max)', wa.display ? esc(wa.display) : `<em>inconnue</em>${wa.missing ? `<small>Manque : ${esc(wa.missing.map(fr).join(', '))}</small>` : ''}`)}</dl>
     ${plan.status !== 'READY' ? '<p class="sl-flash">Pas assez d\'éléments pour fixer un objectif de prix. Posez d\'abord les questions ci-dessous.</p>' : ''}
     <h3 class="sl-h3">À demander maintenant</h3><ul class="sl-list">${plan.askNow.map(lever).join('') || '<li>Rien de plus à demander.</li>'}</ul>
     ${plan.ifPriceRefused.length ? `<h3 class="sl-h3">Si le prix est refusé, échangez</h3><ul class="sl-list">${plan.ifPriceRefused.map((x) => `<li><b>${esc(fr(x.ask))}</b><small>${esc(fr(x.why))}</small></li>`).join('')}</ul>` : ''}<p class="sl-hint">${esc(fr(plan.noForecast))} Nordla ne négocie pas à votre place.</p></div>`;
@@ -241,7 +243,7 @@ export function compareHtml({ view, saved, flash = '' }) {
   const a = view.summary.answers; const name = (id) => view.cards.find((c) => c.caseId === id)?.supplier ?? id;
   const qa = [
     ['Qui paraît le plus solide ?', a.strongest.caseId ? `${esc(name(a.strongest.caseId))} (préféré)` : `Personne n'est préféré. ${a.strongest.bestSupported?.length ? `Mieux documenté : ${esc(a.strongest.bestSupported.map((x) => name(x.caseId)).join(', '))}.` : ''}<small>${esc(fr(a.strongest.basis))}</small>`],
-    ['Qui est le moins cher ?', a.cheapest.caseId ? `${esc(name(a.cheapest.caseId))} : ${esc(a.cheapest.unitPrice)} ${esc(a.cheapest.currency)}${a.cheapest.incoterm ? ` ${esc(a.cheapest.incoterm)}` : ''}<small>le plus bas prix annoncé, pas la meilleure offre</small>` : `<em>non comparable</em><small>${esc(fr(a.cheapest.note))}</small>`],
+    ['Qui est le moins cher ?', a.cheapest.caseId ? `${esc(name(a.cheapest.caseId))} : ${esc(moneyText(a.cheapest.unitPrice, a.cheapest.currency))}${a.cheapest.incoterm ? ` ${esc(a.cheapest.incoterm)}` : ''}<small>le plus bas prix annoncé, pas la meilleure offre</small>` : `<em>non comparable</em><small>${esc(fr(a.cheapest.note))}</small>`],
     ['Meilleur coût rendu ?', a.bestLanded.caseId ? `${esc(name(a.bestLanded.caseId))} : ${esc(a.bestLanded.display)}${a.bestLanded.provisional ? ' <span class="sl-pill warn">provisoire</span>' : ''}` : `<em>inconnu</em><small>${esc(fr(a.bestLanded.note))}</small>`],
     ['Qui est bloqué ?', a.blocked.length ? a.blocked.map((x) => `${esc(name(x.caseId))} (${esc(fr(x.why))})`).join('<br>') : 'Personne'],
     ['Preuves faibles ?', a.weakEvidence.length ? a.weakEvidence.map((x) => `${esc(name(x.caseId))}`).join(', ') : 'Aucun'],

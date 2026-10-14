@@ -17,7 +17,7 @@ export function quickScreen(A, c) {
   <form data-form="quick">${field('name', '1. What is it? (name or what the label says)', id.workingName, 'autocomplete="off"')}
     ${selectOf('category', '2. Category (you confirm)', [['', cat.known ? `(keep: ${CATEGORIES[cat.value]?.label ?? cat.value})` : '- choose -'], ...Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])], '')}
     ${sugg.length ? `<p class="small muted">Probably: ${sugg.map((x) => esc(x.label)).join(' / ')}</p>` : ''}
-    <div class="row">${field('unitPrice', '3. Supplier price', q.unitPrice ?? '', 'inputmode="decimal"')}${selectOf('currency', 'Currency', [['USD', 'USD'], ['CNY', 'CNY'], ['EUR', 'EUR']], q.currency ?? 'USD')}</div>
+    <div class="row">${field('unitPrice', '3. Supplier price', q.unitPrice ?? '', 'inputmode="decimal"')}${selectOf('currency', 'Currency', [...(q.currency ? [] : [['', '? (to confirm)']]), ['USD', 'USD'], ['CNY', 'CNY'], ['EUR', 'EUR']], q.currency ?? '')}</div>
     <div class="row">${field('moq', '4. MOQ', q.moq ?? '', 'inputmode="numeric"')}${field('qty', 'I would buy', q.qty ?? '', 'inputmode="numeric"')}</div>
     <div class="row">${field('price', '5. Selling price I target (incl. VAT)', sl.sellingPriceGross ?? '', 'inputmode="decimal"')}${field('target', 'Margin I want %', sl.targetContributionPct ?? 30, 'inputmode="decimal"')}</div>
     ${selectOf('dest', '6. Where will it be sold?', [['own', 'My shop / Belgium'], ['amazon', 'Amazon'], ['both', 'Both']], dest)}
