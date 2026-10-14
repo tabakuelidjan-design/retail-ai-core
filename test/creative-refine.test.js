@@ -155,7 +155,7 @@ test('RF-8 an invalid repair scope fails closed: a scope that does not exist (a 
   assert.equal(planRepair({ artifact: art, defects: [defect], expectedArtifactDigest: 'stale' }).block.code, REPAIR_BLOCK.ARTIFACT_STALE);
   assert.equal((await doRefine(A, [defect], {})).status, 'REPAIRED');
   const blockedRun = await refineCreative({ candidate: { status: 'BLOCKED', reason: 'X' }, defects: [defect], run: A.run, store: A.store });
-  assert.equal(blockedRun.block.code, REPAIR_BLOCK.ARTIFACT_INVALID);
+  assert.equal(blockedRun.block.code, REPAIR_BLOCK.NO_ARTIFACT_TO_REPAIR); // a run that stopped before any image: said apart from an invalid artifact
   assert.equal((await refineCreative({ candidate: A.candidate, defects: [defect], run: { ...A.run, scene_id: 'other' }, store: A.store })).block.code, REPAIR_BLOCK.SCENE_DOES_NOT_MATCH_THE_ARTIFACT);
   assert.equal(createDefectRegion({ kind: DEFECT_KIND.PROP_UNUSABLE, layer_id: 'nope' }).kind, DEFECT_KIND.PROP_UNUSABLE);
   assert.equal(planRepair({ artifact: art, defects: [createDefectRegion({ kind: DEFECT_KIND.PROP_UNUSABLE, layer_id: 'nope' })] }).block.code, REPAIR_BLOCK.DEFECT_NOT_ATTRIBUTABLE);

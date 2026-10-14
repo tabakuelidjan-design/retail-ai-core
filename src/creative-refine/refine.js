@@ -18,6 +18,22 @@ import { planRepair } from './planner.js';
 
 const digestOf = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const DELIVERED = new Set(['READY_FOR_REVIEW', 'PREFLIGHT_FAIL', 'FIDELITY_FAIL', 'GUARDIAN_FAIL']);
+
+/**
+ * What a candidate is, said apart (a refusal must not conflate them):
+ *   DELIVERED               an image and an artifact, every gate of the run measured (a failed one included: that is what refine repairs)
+ *   UNMEASURABLE_DELIVERED  an image and a valid artifact whose hard fidelity gate could not be MEASURED (no case annotations for this product): nothing failed, nothing was verified
+ *   NO_ARTIFACT             the run stopped before any image
+ *   INVALID                 an artifact that is not a layered artifact, or a status that delivers nothing
+ */
+export function classifyCandidate(candidate) {
+  const artifact = candidate?.artifact;
+  if (!candidate || !artifact) return 'NO_ARTIFACT';
+  if (!buildLayerDependencyMap(artifact)) return 'INVALID';
+  if (DELIVERED.has(candidate.status)) return 'DELIVERED';
+  if (candidate.status === 'BLOCKED' && candidate.fidelity?.gate === 'NOT_MEASURABLE') return 'UNMEASURABLE_DELIVERED';
+  return 'INVALID';
+}
 const component = COMPONENT.REFINE_EXECUTOR;
 
 /** The digest of every node of an artifact (what a repair is checked against). */
@@ -55,11 +71,13 @@ export const mergePolicy = (base = {}, over = {}) => {
  *  budget     the layer budget of the production (optional: without it the repair has a budget of its own)
  *  memory     the refine memory (optional)
  *  runtime    the layered runtime to run (default: runLayeredCreative; a test may inject a fake to exercise the executor's decisions alone)
+ *  allowUnmeasurableIdentity  a candidate whose hard fidelity gate could not be MEASURED (no case annotations) may be repaired, and so may its repaired rerun be accepted on the same footing: the caller states that it judges the
+ *                 product's pixels itself (the end-to-end run does, on the delivered pixels). Default false: such a candidate is refused with its own code.
  *  allowedScopes  restricts the repair to these scopes (optional; a scope that does not exist, such as a full regeneration, is refused)
  * @returns RepairResult
  */
 export async function refineCreative({
-  candidate, defects = null, run, store = createLayerStore(), budget = null, memory = createRefineMemory(), allowedScopes = null, runtime = runLayeredCreative,
+  candidate, defects = null, run, store = createLayerStore(), budget = null, memory = createRefineMemory(), allowedScopes = null, runtime = runLayeredCreative, allowUnmeasurableIdentity = false,
 }) {
   const ledger = run.ledger;
   const sceneId = run.scene_id;
@@ -67,7 +85,10 @@ export async function refineCreative({
 
   // ---- the candidate and its artifact
   const artifact = candidate?.artifact;
-  if (!DELIVERED.has(candidate?.status) || !buildLayerDependencyMap(artifact)) return result('BLOCKED', { block: { code: REPAIR_BLOCK.ARTIFACT_INVALID, detail: `a ${candidate?.status ?? 'missing'} run has no artifact to repair`, replan: 'RUN_THE_SCENE_AGAIN' }, plan: null });
+  const kind = classifyCandidate(candidate);
+  if (kind === 'NO_ARTIFACT') return result('BLOCKED', { block: { code: REPAIR_BLOCK.NO_ARTIFACT_TO_REPAIR, detail: `a ${candidate?.status ?? 'missing'} run produced no image`, replan: 'RUN_THE_SCENE_AGAIN' }, plan: null });
+  if (kind === 'INVALID') return result('BLOCKED', { block: { code: REPAIR_BLOCK.ARTIFACT_INVALID, detail: `a ${candidate?.status ?? 'missing'} candidate is not a repairable layered artifact`, replan: 'RUN_THE_SCENE_AGAIN' }, plan: null });
+  if (kind === 'UNMEASURABLE_DELIVERED' && !allowUnmeasurableIdentity) return result('BLOCKED', { block: { code: REPAIR_BLOCK.FIDELITY_NOT_MEASURABLE, detail: 'the image exists but its hard fidelity gate could not be measured; the caller did not accept an unmeasured repair', replan: 'PROVIDE_THE_IDENTITY_ANNOTATIONS_OR_ACCEPT_AN_UNMEASURED_REPAIR' }, plan: null });
   if (artifact.scene_id !== sceneId) return result('BLOCKED', { block: { code: REPAIR_BLOCK.SCENE_DOES_NOT_MATCH_THE_ARTIFACT, detail: { artifact: artifact.scene_id, run: sceneId }, replan: 'REPAIR_THE_SCENE_OF_THE_ARTIFACT' }, plan: null });
   const found = defects ?? defectsFromCandidate(candidate);
 
@@ -102,7 +123,8 @@ export async function refineCreative({
   };
 
   // ---- the repaired candidate must pass every gate of the layered runtime (it is a full candidate, not a patch)
-  if (rerun.status !== 'READY_FOR_REVIEW' || !rerun.artifact) {
+  const rerunUnmeasurable = allowUnmeasurableIdentity && kind === 'UNMEASURABLE_DELIVERED' && classifyCandidate(rerun) === 'UNMEASURABLE_DELIVERED'; // the same footing as the candidate: nothing failed, the product node is proven unchanged below
+  if ((rerun.status !== 'READY_FOR_REVIEW' && !rerunUnmeasurable) || !rerun.artifact) {
     attempt('NOT_REPAIRED', REPAIR_BLOCK.REPAIRED_CANDIDATE_REFUSED, { run_status: rerun.status, run_reason: rerun.reason ?? null });
     return result('NOT_REPAIRED', { plan, block: { code: REPAIR_BLOCK.REPAIRED_CANDIDATE_REFUSED, detail: { status: rerun.status, reason: rerun.reason ?? null, blocks: rerun.detail ?? null }, replan: rerun.replan ?? 'REPLAN_THE_SCENE' }, cost, provider_calls: cost.provider_calls });
   }

@@ -33,7 +33,7 @@ export function createRunContext({
   const counters = {}; const settledKeys = new Map(); // key -> op id
   const results = new Map(); // key -> JSON result of a settled text operation (so a repeated request is not paid twice)
   const checkpoints = new Map(); // stage -> { stage, input_sha256, payload_sha256, payload, saved_at_op, valid }
-  let spent = 0; let seq = 0; let failure = null;
+  let spent = 0; let seq = 0; let failure = null; let budgetRefusal = null; // the first reservation the ceiling refused (a port that wraps errors must not hide it)
 
   if (resume) {
     if (resume.schema !== 'run-state@1' || resume.run_id !== runId) throw new RunInvariantError('RESUME_STATE_IS_NOT_THIS_RUN', { expected: runId, got: resume.run_id });
@@ -53,7 +53,7 @@ export function createRunContext({
     ceiling_eur: ceiling,
     reserve(label, eur) {
       if (!(Number.isFinite(eur) && eur >= 0)) throw new RunInvariantError('RESERVATION_AMOUNT_INVALID', { label, eur });
-      if (round(eur) > available() + 1e-12) { const d = { label, requested_eur: round(eur), available_eur: available(), ceiling_eur: ceiling, spent_eur: round(spent) }; note('RUN_BUDGET_REFUSED', d); throw new RunBudgetError(d); }
+      if (round(eur) > available() + 1e-12) { const d = { label, requested_eur: round(eur), available_eur: available(), ceiling_eur: ceiling, spent_eur: round(spent) }; note('RUN_BUDGET_REFUSED', d); budgetRefusal ??= d; throw new RunBudgetError(d); }
       const id = `res-${reservations.size + 1}`; reservations.set(id, { id, label, eur: round(eur), state: 'RESERVED', actual: null });
       return id;
     },
@@ -159,6 +159,10 @@ export function createRunContext({
     run_id: runId, at, ledger, budget, operations, checkpoints: cps, wrapComplete, wrapLayerPort,
     setFailure(f) { failure = f; note('RUN_FAILURE', f); },
     failure: () => failure,
+    /** The detail of the first reservation the ceiling refused, or null: a Brain or a layer port that swallows the refusal into its own error cannot turn it into a provider failure. */
+    budgetRefusal: () => budgetRefusal,
+    /** A named event of the run in the ledger of the run (the stages that decide something record it). */
+    event: note,
     results: results,
     /** Plain JSON: everything needed to resume this run in another process (settled keys, results, reservations, checkpoints with their payloads). */
     exportState: () => ({

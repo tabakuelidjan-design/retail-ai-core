@@ -70,9 +70,10 @@ test('EX-2 on a budget shared with the production the cost is the DIFFERENCE, an
 test('EX-3 only a delivered candidate with a layered artifact of the same scene is repaired; the runtime is not even asked otherwise', async () => {
   for (const status of ['READY_FOR_REVIEW', 'PREFLIGHT_FAIL', 'FIDELITY_FAIL', 'GUARDIAN_FAIL']) { const E = env({ status }); const r = await go(E, { runtime: fake(E) }); assert.equal(r.status, 'REPAIRED', status); }
   const E = env(); const rt = fake(E);
-  for (const candidate of [{ status: 'BLOCKED', artifact: E.candidate.artifact }, { status: 'READY_FOR_REVIEW' }, { status: 'READY_FOR_REVIEW', artifact: { schema: 'x' } }, null, undefined, { artifact: E.candidate.artifact }]) {
+  // no artifact (the run stopped before any image) and an invalid artifact are different refusals
+  for (const [candidate, code] of [[{ status: 'BLOCKED', artifact: E.candidate.artifact }, REPAIR_BLOCK.ARTIFACT_INVALID], [{ status: 'READY_FOR_REVIEW' }, REPAIR_BLOCK.NO_ARTIFACT_TO_REPAIR], [{ status: 'READY_FOR_REVIEW', artifact: { schema: 'x' } }, REPAIR_BLOCK.ARTIFACT_INVALID], [null, REPAIR_BLOCK.NO_ARTIFACT_TO_REPAIR], [undefined, REPAIR_BLOCK.NO_ARTIFACT_TO_REPAIR], [{ artifact: E.candidate.artifact }, REPAIR_BLOCK.ARTIFACT_INVALID]]) {
     const r = await refineCreative({ candidate, defects: [badMid()], run: E.run, store: E.store, runtime: rt });
-    assert.equal(r.status, 'BLOCKED'); assert.equal(r.block.code, REPAIR_BLOCK.ARTIFACT_INVALID); assert.equal(r.plan, null); assert.equal(r.original_kept, true); assert.equal(r.block.replan, 'RUN_THE_SCENE_AGAIN');
+    assert.equal(r.status, 'BLOCKED'); assert.equal(r.block.code, code); assert.equal(r.plan, null); assert.equal(r.original_kept, true); assert.equal(r.block.replan, 'RUN_THE_SCENE_AGAIN');
   }
   const wrong = await go(E, { runtime: rt, run: { ...E.run, scene_id: 'another' } });
   assert.deepEqual([wrong.status, wrong.block.code, wrong.block.detail, wrong.scene_id], ['BLOCKED', REPAIR_BLOCK.SCENE_DOES_NOT_MATCH_THE_ARTIFACT, { artifact: 'scn_probe', run: 'another' }, 'another']);

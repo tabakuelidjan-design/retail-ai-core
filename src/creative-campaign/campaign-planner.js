@@ -118,7 +118,9 @@ export function createCampaignPlanner({
     });
     for (const l of lanes) questions.push(...l.plan.questions.filter((q) => q.blocking));
     if (lanes.some((l) => l.plan.status === PLAN_STATUS.NEEDS_USER_DECISION)) return result(CAMPAIGN_STATUS.NEEDS_USER_DECISION);
-    if (!isCampaignRequest && !SEQUENCE_KINDS.has(lanes[0].plan.format.kind)) return result(CAMPAIGN_STATUS.NOT_A_MULTI_ASSET_PLAN);
+    // a single image is a campaign of ONE asset only when the caller says so (the end-to-end run does): the default contract (NOT_A_MULTI_ASSET_PLAN) is unchanged
+    const singleAsset = options.single_asset === true && lanes.length === 1 && lanes[0].plan.format.kind === FORMAT_KIND.SINGLE_IMAGE && lanes[0].plan.assets.length === 1;
+    if (!isCampaignRequest && !SEQUENCE_KINDS.has(lanes[0].plan.format.kind) && !singleAsset) return result(CAMPAIGN_STATUS.NOT_A_MULTI_ASSET_PLAN);
 
     // ---- the shared stages: ONE frame, ONE concept, ONE art direction
     const cb = campaignBriefOf({ brief, request, lanes });

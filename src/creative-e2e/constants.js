@@ -69,6 +69,10 @@ export const E2E_BLOCK = Object.freeze({
   REFINE_REJECTED: 'REFINE_REJECTED',
   A_MANDATORY_GATE_DID_NOT_RUN: 'A_MANDATORY_GATE_DID_NOT_RUN',
   A_MANDATORY_GATE_FAILED: 'A_MANDATORY_GATE_FAILED',
+  PRODUCT_COPY_CONFLICT: 'PRODUCT_COPY_CONFLICT',
+  CLAIM_NOT_PLACED: 'CLAIM_NOT_PLACED',
+  CLAIM_ALTERED: 'CLAIM_ALTERED',
+  CLAIM_POLICY_INVALID: 'CLAIM_POLICY_INVALID',
 });
 
 export const ANALYSIS_MAX_PX = 1000; // the real product asset is analysed and composed at most at this longest edge (a provenance-recorded downscale of the owner's file)

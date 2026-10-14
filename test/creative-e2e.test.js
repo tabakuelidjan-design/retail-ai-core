@@ -32,10 +32,10 @@ test('A full provider-free run produces one coherent result: one run id, one led
   const { w, r } = await getBaseline();
   // E2-1 the final state is explicit: a produced asset whose only open point is the provider-required critic (a warning), never an ambiguous success
   assert.equal(r.state, E2E_STATE.NEEDS_OWNER_REVIEW, JSON.stringify(r.block));
-  assert.deepEqual(r.warnings, ['VISION_CRITIC_SKIPPED_PROVIDER_NOT_CONNECTED']); assert.equal(r.owner_approval, 'PENDING'); assert.equal(r.fallback_to_generated_product, false);
+  assert.deepEqual(r.warnings.filter((x) => !x.startsWith('CLAIM_NOT_USED:')), ['VISION_CRITIC_SKIPPED_PROVIDER_NOT_CONNECTED']); assert.deepEqual(r.claims.map((c) => c.disposition), ['NOT_USED', 'NOT_USED', 'NOT_USED']); // the approved claims of the brief are in no text of the request: said, never silent assert.equal(r.owner_approval, 'PENDING'); assert.equal(r.fallback_to_generated_product, false);
   // E2-2 the contract is complete
   for (const k of ['schema', 'state', 'run_id', 'asset_id', 'campaign_id', 'format', 'final', 'source_provenance', 'product_identity', 'copy_integrity', 'integration', 'refine', 'gates', 'budget', 'provider_calls', 'operation_ids', 'ledger_reference', 'warnings', 'owner_approval', 'stages', 'checkpoints', 'resume_state', 'layers', 'selection']) assert.ok(k in r, k);
-  assert.equal(r.run_id, 'run-e2e-1'); assert.ok(r.campaign_id && r.asset_id); assert.equal(r.final.status_of_layered_run, 'READY_FOR_REVIEW'); assert.match(r.final.png_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(r.run_id, 'run-e2e-1'); assert.ok(r.campaign_id && r.asset_id); assert.equal(r.final.layered_run.raw_status, 'READY_FOR_REVIEW'); assert.equal(r.final.layered_run.delivery, 'COMPLETE'); assert.deepEqual([r.execution.produced, r.execution.deliverable], [true, true]); assert.match(r.final.png_sha256, /^[0-9a-f]{64}$/);
   assert.equal(r.product_identity.identity_status, 'VERIFIED'); assert.equal(r.product_identity.product_pixels_changed_by_compositor, 0); assert.equal(r.copy_integrity.exact, true);
   // E2-3 every stage ran, in the declared order, each with a checkpoint
   assert.deepEqual(r.checkpoints.map((c) => c.stage), STAGE_ORDER.filter((s) => s !== STAGE.REFINE)); // REFINE has a checkpoint only when a repair was accepted assert.ok(r.checkpoints.every((c) => c.valid));

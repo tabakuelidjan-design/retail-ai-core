@@ -39,6 +39,8 @@ export const REPAIR_BLOCK = Object.freeze({
   NO_DEFECT: 'NO_DEFECT',
   DEFECT_INVALID: 'DEFECT_INVALID',
   ARTIFACT_INVALID: 'ARTIFACT_INVALID',
+  NO_ARTIFACT_TO_REPAIR: 'NO_ARTIFACT_TO_REPAIR', // the run produced no image at all
+  FIDELITY_NOT_MEASURABLE: 'FIDELITY_NOT_MEASURABLE', // an image exists but the hard fidelity gate could not measure it, and the caller did not accept that
   ARTIFACT_STALE: 'ARTIFACT_STALE',
   DEFECT_NOT_ATTRIBUTABLE: 'DEFECT_NOT_ATTRIBUTABLE',
   REPAIR_SCOPE_INVALID: 'REPAIR_SCOPE_INVALID',
