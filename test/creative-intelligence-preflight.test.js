@@ -331,8 +331,9 @@ test('Boundaries: Creative Intelligence expresses an approved brief - it never p
   }
   // 248 no unaudited dependency: the manifest holds the pdf pair and ONLY the three audited production packages (docs: dependency / license audit)
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@resvg/resvg-js', 'bidi-js', 'harfbuzzjs', 'pdfjs-dist', 'pdfkit']);
-  assert.equal(pkg.devDependencies, undefined);
+  // integration (pre-China): the Finance e-invoicing validators (saxon-js, xmllint-wasm; dev: xslt3) are audited under vendor/MANIFEST.json, not by Creative; Creative itself adds none.
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@resvg/resvg-js', 'bidi-js', 'harfbuzzjs', 'pdfjs-dist', 'pdfkit', 'saxon-js', 'xmllint-wasm']);
+  assert.deepEqual(Object.keys(pkg.devDependencies ?? {}), ['xslt3']);
   // 249 error codes are stable, unique and namespaced
   const entries = Object.entries(CI.CI_ERROR);
   assert.equal(new Set(entries.map(([, v]) => v)).size, entries.length);
