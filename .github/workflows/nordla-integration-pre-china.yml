@@ -3,8 +3,8 @@ name: nordla-integration-pre-china
 #  - Node 24: the WHOLE suite (China Sourcing requires Node 24, owner decision 2026-10-12: its runtime guard refuses Node 20 with a coded error).
 #  - Node 20 (the repository engine floor): the whole suite EXCEPT test/sourcing-* (cannot run on Node 20 by that same decision) and test/growth-browser.test.js (uses the global
 #    WebSocket, absent on Node 20: it throws a ReferenceError and then hangs the job where Chrome exists; it runs on Node 24). Nothing else is excluded.
-#    Each file runs in its own process with its own time cap, 4 at a time, and every failure or slow file is reported as an annotation naming the file, so a stuck
-#    file is named instead of the whole job being cancelled by the job limit.
+#  - Both versions: each file runs in its own process with its own time cap, 4 at a time, and every failure, hang or slow file is reported as an annotation naming the file,
+#    so a stuck file is named (and capped) instead of the whole job being cancelled by the job limit.
 # No secret, no provider, no network: every module runs over fakes.
 on:
   push:
@@ -20,7 +20,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 24]
+        include:
+          - { node: 20, exclude: '^test/(sourcing-|growth-browser\.test\.js$)' }
+          - { node: 24, exclude: '^$' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,23 +30,21 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Integration contracts and the three cross-module workflows
         run: node --test test/integration-contracts.test.js test/integration-workflows.test.js
-      - name: Full suite (Node 24)
-        if: matrix.node == 24
-        run: node --test test/*.test.js
-      - name: Suite without the Node-24-only tests (Node 20), one process and one cap per file
-        if: matrix.node == 20
+      - name: Suite, one process and one cap per file
         shell: bash
+        env:
+          EXCLUDE: ${{ matrix.exclude }}
         run: |
           one() {
             f="$1"; s=$(date +%s)
             timeout 1500 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1; rc=$?
             d=$(( $(date +%s) - s ))
             echo "$rc $d $f" >> /tmp/results.txt
-            if [ "$rc" -ne 0 ]; then echo "::error title=node20 test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; fi
+            if [ "$rc" -ne 0 ]; then echo "::error title=test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; fi
           }
           export -f one
           : > /tmp/results.txt
-          ls test/*.test.js | grep -v -e '^test/sourcing-' -e '^test/growth-browser\.test\.js$' | xargs -P 4 -I{} bash -c 'one {}'
+          ls test/*.test.js | grep -v -E "$EXCLUDE" | xargs -P 4 -I{} bash -c 'one {}'
           echo "files run: $(wc -l < /tmp/results.txt)"
-          sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest on node 20::$f ${d}s (exit $rc)"; done
+          sort -k2 -n -r /tmp/results.txt | head -8 | while read rc d f; do echo "::notice title=slowest::$f ${d}s (exit $rc)"; done
           ! grep -q -v '^0 ' /tmp/results.txt
