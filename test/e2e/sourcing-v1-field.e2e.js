@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
 import { Browser, findBrowser, freePort } from './cdp.js';
 
-const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
+const EXPERT_FIRST = "try { localStorage.setItem('nordla.sourcing.uiGen', '\"terrain-v2\"'); localStorage.setItem('nordla.sourcing.modeDefault', '\"field-v1\"'); localStorage.setItem('nordla.sourcing.mode', '\"expert\"'); } catch (e) { /* no storage */ }"; // these suites drive the EXPERT shell; Field mode is the default entry since 2026-10-07 and has its own suite (sourcing:e2e:fieldmode)
 const exe = findBrowser(); if (!exe) { console.log('NO BROWSER FOUND (set SOURCING_E2E_BROWSER): nothing was run.'); process.exit(2); }
 const TOKEN = 'v1-field-token-0123456789-abcdef-xyz-1';
 const results = []; const check = async (name, fn) => { try { await fn(); results.push(true); console.log(`PASS  ${name}`); } catch (e) { results.push(false); console.log(`FAIL  ${name}\n      ${String(e.message).slice(0, 600)}`); } };

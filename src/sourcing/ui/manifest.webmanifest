@@ -1,9 +1,9 @@
 {
   "id": "/",
-  "name": "Nordla - Sourcing terrain",
-  "short_name": "Sourcing",
-  "description": "Decide on a product while standing in front of the supplier: works offline.",
-  "lang": "en",
+  "name": "Nordla - China Sourcing",
+  "short_name": "Nordla",
+  "description": "Notez, demandez et décidez devant le fournisseur : fonctionne hors ligne.",
+  "lang": "fr",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

@@ -40,7 +40,8 @@
     "asr:e2e": "node test/e2e/asr-canon.e2e.js",
     "sync:backfill": "node --env-file=.env src/sync/index.js orders --full-history",
     "analytics-premium": "node --env-file=.env src/analytics-premium/server/serve.js",
-    "benchmark:ask": "node benchmark/ask/run.js"
+    "benchmark:ask": "node benchmark/ask/run.js",
+    "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js"
   },
   "engines": {
     "node": ">=20"

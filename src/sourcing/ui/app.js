@@ -31,6 +31,7 @@ import { fieldSummaryText } from '/core/field-summary.js';
 import { createVoice } from './voice.js';
 import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
 import { recoverySection, recoveryError } from './recover.js';
+import { createSyncHelpers } from './sync-state.js';
 import { activeMenuCase, applyLegacyReanalysis } from './menu-case.js';
 import { buildSearchInput, outgoingFields, searchMarket } from '/core/market-search.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
@@ -106,7 +107,7 @@ const markDirty = (id) => { dirty.add(id); ls.set('nordla.sourcing.dirty', [...d
 let syncing = false;
 async function sync() {
   if (!S.token || syncing || !dirty.size) return; // ONLY cases the owner changed are sent: opening, recovering, importing, switching or restarting never marks a case
-  syncing = true;
+  syncing = true; let conflicted = false;
   try {
     for (const id of [...dirty]) {
       const c = S.cases[id]; if (!c) { dirty.delete(id); continue; }
@@ -118,12 +119,13 @@ async function sync() {
         else S.cases[id] = { ...saved };
         dirty.delete(id); if (S.cases[id].updatedAt !== sentAt) markDirty(id);
       } catch (e) {
-        if (e.status === 409) { (S.conflicts ??= {})[id] = e.body?.server ?? null; S.flash = 'A case was changed on another device. Nothing was overwritten: open the menu to choose.'; dirty.delete(id); }
+        if (e.status === 409) { (S.conflicts ??= {})[id] = e.body?.server ?? null; S.flash = 'Un dossier a été modifié sur un autre appareil. Rien n\'a été écrasé : ouvrez « Plus » pour voir les différences et choisir.'; dirty.delete(id); conflicted = true; }
         else { S.online = false; scheduleRetry(); break; }
       }
     }
   } finally { syncing = false; }
   ls.set('nordla.sourcing.dirty', [...dirty]); persist(); paintHeader();
+  if (conflicted) render(); // a conflict found in the background must be SEEN at once (banner), never discovered by chance on the next tap
   if (dirty.size && S.online) queueSync();
 }
 async function checkSafety({ quiet = false } = {}) {
@@ -190,7 +192,10 @@ function render() {
 
 // SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
 let salonInstance = null;
-const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu() }));
+const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
+
+const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport });
+
 const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
 const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 'ESTIMATED' });
@@ -198,7 +203,7 @@ const lineSpec = (v) => (num(v) === null ? undefined : { total: num(v), status: 
 // what was typed is submitted into the case: the next screen shows the case, not the old draft
 async function onSubmit(ev) {
   const f = ev.target.closest('form[data-form]'); if (!f) return; ev.preventDefault(); const d = readForm(f); if (!S.quiet) discardDrafts = true; const name = f.dataset.form; const c = cur();
-  if (name.startsWith('sl-')) { discardDrafts = false; return salon().submit(f, d); }
+  if (name.startsWith('sl-')) { discardDrafts = ['sl-note', 'sl-answer', 'sl-own-q'].includes(name); /* what was typed is kept in its own draft (storage) until it is saved: an error never loses it */ try { return salon().submit(f, d); } finally { discardDrafts = false; } }
   if (name === 'compose') { // FIELD MODE: one box; the conversation starts by itself
     const text = String(d.text ?? ''); if (!text.trim()) { S.flash = 'Écrivez ou collez ce que dit le fournisseur.'; discardDrafts = false; return render(); }
     const prev = S.captureDraft?.[c.id] ?? ''; (S.captureDraft ??= {})[c.id] = ''; ls.set('nordla.sourcing.capdraft', S.captureDraft);
@@ -315,7 +320,7 @@ const FRIENDLY = [[/needs a correction/i, 'This one needs a correction first: us
 S.voice = { state: 'idle', message: '' }; S.voicePartial = '';
 const openConversation = () => (cur()?.conversations ?? []).find((x) => x.status === 'OPEN') ?? null;
 const voice = createVoice({
-  onChange: ({ state, message }) => { S.voice = { state, message }; if ((state === 'paused' || state === 'idle') && openConversation()) { try { commit({ type: 'TURN_CLOSE', convId: openConversation().id, by: state === 'paused' ? 'PAUSE' : 'STOP' }); return; } catch (e) { console.error(e); } } if (S.mode === 'field') render(); },
+  onChange: ({ state, message }) => { S.voice = { state, message }; if ((state === 'paused' || state === 'idle') && openConversation()) { try { commit({ type: 'TURN_CLOSE', convId: openConversation().id, by: state === 'paused' ? 'PAUSE' : 'STOP' }); return; } catch (e) { console.error(e); } } if (S.mode === 'field' || S.mode === 'salon') render(); },
   onPartial: (t) => { S.voicePartial = t; const e = document.querySelector('.fm-partial'); if (e) { e.textContent = t; e.hidden = !t; } },
   onLevel: (v) => document.querySelector('.fm-mic')?.classList.toggle('on', v),
   onFinal: (x) => { const conv = openConversation(); if (!conv) return; try { commit({ type: 'SPEECH_SEGMENT', convId: conv.id, text: x.text, lang: x.lang, provider: x.provider, version: x.version, segment: x.segment, capture: { sessionId: x.capture.sessionId }, turnConfig: ls.get('nordla.sourcing.turns', null) }); } catch (e) { console.error(e); } },
@@ -395,8 +400,8 @@ async function onClick(ev) {
   if (act === 'close-overlay') { $('#overlay').hidden = true; $('#overlay').className = ''; return; }
   if (act === 'newcase') { discardDrafts = true; const c = newCase({}); S.cases[c.id] = c; S.currentId = c.id; S.tab = 'case'; persist(); closeOverlay(); return render(); }
   if (act === 'opencase') { if (!S.cases[key]) return; discardDrafts = true; S.currentId = key; S.tab = 'decision'; persist(); closeOverlay(); if (S.mode === 'salon') return salon().openCase(key); return render(); }
-  if (act === 'server-copy') { const sv = (S.conflicts ?? {})[key]; if (sv) { S.cases[sv.id] = sv; delete S.conflicts[key]; S.flash = ''; persist(); closeOverlay(); render(); } return; }
-  if (act === 'keep-both') { const sv = (S.conflicts ?? {})[key]; const mine = S.cases[key]; if (sv && mine) { const copyId = `${key}-mine-${Date.now().toString(36)}`; const copy = { ...JSON.parse(JSON.stringify(mine)), id: copyId, rev: 0, identity: { ...mine.identity, workingName: `${mine.identity.workingName || 'Case'} (my copy)` } }; S.cases[copyId] = copy; S.cases[sv.id] = sv; delete S.conflicts[key]; markDirty(copyId); S.flash = 'Both copies are kept: the server copy under the original name and yours as "(my copy)".'; persist(); closeOverlay(); render(); queueSync(); } return; }
+  if (act === 'server-copy') return takeServer(key, () => { S.flash = 'Version du serveur reprise. Votre version a été gardée dans « (ma version avant remplacement) ».'; closeOverlay(); render(); });
+  if (act === 'keep-both') return keepBoth(key, () => { S.flash = 'Les deux versions sont conservées : le dossier du serveur sous son nom, le vôtre sous « (ma copie) ».'; closeOverlay(); render(); });
   if (act === 'rec-list') return recList();
   if (act === 'rec-toggle') { const r = (S.rec ??= {}); (r.selected ??= {})[key] = t.checked; return openMenu(); }
   if (act === 'rec-go') return recGo();
@@ -475,7 +480,7 @@ async function recDecide(id, keep) {
 function openMenu() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
   const active = menuCase();
-  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button>${active ? `<p class="small"><b>Dossier actif : ${esc(active.identity.workingName || active.id)}</b> — ${esc(active.supplier?.name || 'Fournisseur non renseigné')}</p>` : ''}${S.reanalysisMessage ? `<p class="warn" role="status">${esc(S.reanalysisMessage)}</p>` : ''}<h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode terrain</button><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Salon (comparer)</button><button class="btn ${S.mode === 'field' ? 'sec' : ''}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Le mode terrain montre seulement la conversation. Le mode expert garde tous les écrans et toutes les fonctions.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
+  o.innerHTML = `<button class="btn sec" data-act="close-overlay">Close</button>${active ? `<p class="small"><b>Dossier actif : ${esc(active.identity.workingName || active.id)}</b> — ${esc(active.supplier?.name || 'Fournisseur non renseigné')}</p>` : ''}${S.reanalysisMessage ? `<p class="warn" role="status">${esc(S.reanalysisMessage)}</p>` : ''}<h2>Mode</h2><div class="row"><button class="btn ${S.mode === 'salon' ? '' : 'sec'}" data-act="mode-salon">Nordla (écran principal)</button><button class="btn ${S.mode === 'field' ? '' : 'sec'}" data-act="mode-field">Mode guidé</button><button class="btn ${S.mode === 'expert' ? '' : 'sec'}" data-act="mode-expert">Mode expert</button></div><p class="small muted">Nordla est l'écran principal. Le mode guidé montre seulement la conversation ; le mode expert garde tous les écrans du moteur.</p><h2>Cases</h2><button class="btn" data-act="newcase">New product case</button>${Object.values(S.cases).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => `<div class="card"><b>${esc(c.identity.workingName || 'Untitled')}</b> <span class="muted small">${esc(c.supplier.name ?? '')} - ${esc(c.updatedAt.slice(0, 16).replace('T', ' '))} - ${esc(c.decisions.at(-1)?.verdict?.replace(/_/g, ' ') ?? 'no decision yet')}</span><br><button class="btn sec" data-act="opencase" data-key="${esc(c.id)}" style="margin-top:6px">Open</button></div>`).join('')}
   <h2>Server (optional)</h2><p class="small muted">Without it everything works offline on this device. With it: cases are kept on your server, the Safety Gate cache and PDF reading are available.</p><label>Access token<input id="tok" type="password" autocomplete="off" value="${esc(S.token)}"></label><button class="btn" data-act="savetoken" style="margin-top:8px">Save token</button>${Object.keys(S.conflicts ?? {}).map((id) => `<div class="warn"><b>Conflict:</b> ${esc(S.cases[id]?.identity.workingName ?? id)} was changed on another device. Nothing was overwritten.<br><button class="btn" data-act="keep-both" data-key="${esc(id)}" style="margin-top:6px">Keep both copies</button> <button class="btn danger" data-act="server-copy" data-key="${esc(id)}" style="margin-top:6px">Take the server copy (replaces mine)</button></div>`).join('')}<h2>This phone</h2><button class="btn sec" data-act="what-works">What works right now (offline matrix)</button><h2>This case</h2><button class="btn sec" data-act="export">Export as JSON</button><p class="small muted">Pour retrouver les informations oubliées dans des notes créées avant la correction : exportez d'abord ce dossier. La réanalyse n'ajoute que des propositions à confirmer, sans modifier les faits déjà acceptés ou rejetés.</p>${S.reanalysisPrompt ? `<p class="warn">Relire les notes originales du fournisseur dans cette fiche ? Aucun fait ne sera confirmé automatiquement.</p><button class="btn" data-act="notes-reanalyze-apply">Oui, ajouter les propositions</button> <button class="btn sec" data-act="notes-reanalyze-cancel">Annuler</button>` : '<button class="btn sec" data-act="notes-reanalyze-preview">Réanalyser les anciennes notes</button>'}`;
   o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases }));
   if (S.reanalysisMessage) o.scrollTop = 0; // never hide the result below a long case list

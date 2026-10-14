@@ -18,11 +18,11 @@ export const REVIEW_FR = { PENDING: 'à relire', CONFIRMED: 'confirmé', CORRECT
 const SECTION_FR = { identity: 'Identité', price: 'Prix', logistics: 'Livraison', samples: 'Échantillon', specs: 'Produit', packaging: 'Emballage', claims: 'Documents annoncés', payment: 'Paiement', customization: 'Personnalisation', other: 'Autre' };
 const DIR_FR = { BETTER: 'mieux', WORSE: 'moins bien', NEUTRAL: '', UNKNOWN: '' };
 const cls = (x) => String(x ?? '').replace(/[^A-Za-z0-9_]/g, '');
-const pill = (text, kind = '') => `<span class="sl-pill ${cls(kind)}">${esc(text)}</span>`;
-const btn = (label, act, key = '', extra = '', kind = '') => `<button type="button" class="sl-btn ${kind}" data-act="${esc(act)}"${key !== '' ? ` data-key="${esc(key)}"` : ''}${extra}>${esc(label)}</button>`;
-const val = (v) => ` data-val='${esc(JSON.stringify(v))}'`;
+export const pill = (text, kind = '') => `<span class="sl-pill ${cls(kind)}">${esc(text)}</span>`;
+export const btn = (label, act, key = '', extra = '', kind = '') => `<button type="button" class="sl-btn ${kind}" data-act="${esc(act)}"${key !== '' ? ` data-key="${esc(key)}"` : ''}${extra}>${esc(label)}</button>`;
+export const val = (v) => ` data-val='${esc(JSON.stringify(v))}'`;
 const eur = (m) => (m === null || m === undefined ? '?' : `${(m / 100).toFixed(2)} €`);
-const section = (id, title, body, open = true, badge = '') => `<details class="sl-sec" data-sec="${esc(id)}"${open ? ' open' : ''}><summary><span>${esc(title)}</span>${badge}</summary><div class="sl-secbody">${body}</div></details>`;
+export const section = (id, title, body, open = true, badge = '') => `<details class="sl-sec" data-sec="${esc(id)}"${open ? ' open' : ''}><summary><span>${esc(title)}</span>${badge}</summary><div class="sl-secbody">${body}</div></details>`;
 
 // ---- home ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 export function homeHtml({ overview, comparisons, selected, resume, online, ws }) {
@@ -143,7 +143,7 @@ export function blockerHtml(ev, a) {
   return `<div class="sl-blk"><p class="sl-blkt"><b>${esc(b.title)}</b></p><ul class="sl-blkl">${b.labels.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
     <details class="sl-blkd"><summary>Voir les détails</summary>${b.details.length ? `<ul class="sl-list">${b.details.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}${b.docs.length ? `<h3 class="sl-h3">Documents à obtenir</h3><ul class="sl-list">${b.docs.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}</details></div>`;
 }
-const kv = (k, v, cls2 = '') => `<div class="sl-kv ${cls2}"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+export const kv = (k, v, cls2 = '') => `<div class="sl-kv ${cls2}"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 export function truthHtml(card) {
   const f = card.evidenceHealth.facts; const c = card.evidenceHealth.counts;
   const risks = Object.entries(card.risk).map(([k, v]) => `<li class="sl-risk lv-${cls(v.level)}"><b>${esc(RISK_FR[k] ?? k)}</b> ${pill(LEVEL_FR[v.level], `lv-${v.level}`)}<span>${esc(frList(v.why))}</span></li>`).join('');
@@ -226,10 +226,10 @@ export function askListHtml(ask, caseId, compact = false) {
 }
 export function askHtml({ info, ask, flash = '' }) { return `<div class="sl"><header class="sl-hd"><div><h1>Demander</h1><p class="sl-sub">${esc(info.supplier ?? info.title)}</p></div>${btn('Fiche', 'sl-open-case', info.caseId, '', 'ghost')}</header>${flash ? `<p class="sl-flash">${esc(flash)}</p>` : ''}${askListHtml(ask, info.caseId)}</div>`; }
 export function showHtml({ item }) { return `<div class="sl-showq"><button type="button" class="sl-btn ghost" data-act="sl-show-close">Fermer</button><p class="sl-qen big" lang="en">${esc(item.en ?? '')}</p>${item.zh ? `<p class="zh sl-qzh big" lang="zh-Hans">${esc(item.zh.text)}</p><small>Phrase fixe, pas relue par un locuteur natif.</small>` : '<small>Pas de phrase chinoise disponible pour cette question.</small>'}</div>`; }
-export function negotiateHtml({ info, plan }) {
+export function negotiateHtml({ info, plan, embedded = false }) {
   const cur = plan.currentOffer; const tg = plan.target; const wa = plan.walkAway;
   const lever = (l) => `<li class="sl-lv"><b>${esc(fr(l.ask))}</b><small>${esc(fr(l.why))}${l.basis ? ` · ${esc(fr(l.basis))}` : ''}</small>${l.zh ? `<p class="zh sl-qzh" lang="zh-Hans">${esc(l.zh)}</p>` : `<small class="sl-zhn">${esc(fr(l.zhNote))}</small>`}</li>`;
-  return `<div class="sl"><header class="sl-hd"><div><h1>Négocier</h1><p class="sl-sub">${esc(info.supplier ?? info.title)}</p></div>${btn('Fiche', 'sl-open-case', info.caseId, '', 'ghost')}</header>
+  return `<div class="sl">${embedded ? '' : `<header class="sl-hd"><div><h1>Négocier</h1><p class="sl-sub">${esc(info.supplier ?? info.title)}</p></div>${btn('Fiche', 'sl-open-case', info.caseId, '', 'ghost')}</header>`}
     <dl class="sl-dl">${kv('Offre actuelle', cur.unitPrice ? `${esc(cur.unitPrice)} ${esc(cur.currency ?? '')} · MOQ ${esc(cur.moq ?? '?')} · ${esc(cur.incoterm ?? 'Incoterm ?')}` : '<em>pas de prix</em>')}${kv('Objectif', tg.status === 'CONFIGURED_STEP' ? `${esc(tg.display)}<small>${esc(fr(tg.basis))}</small>` : `<em>${plan.status === 'READY' ? 'aucune cible configurée' : 'données insuffisantes'}</em><small>${esc(fr(tg.reason ?? ''))}${tg.missing ? ` Manque : ${esc(tg.missing.map(fr).join(', '))}` : ''}</small>`)}${kv('Limite (prix d\'achat max)', wa.display ? esc(wa.display) : `<em>inconnue</em>${wa.missing ? `<small>Manque : ${esc(wa.missing.map(fr).join(', '))}</small>` : ''}`)}</dl>
     ${plan.status !== 'READY' ? '<p class="sl-flash">Pas assez d\'éléments pour fixer un objectif de prix. Posez d\'abord les questions ci-dessous.</p>' : ''}
     <h3 class="sl-h3">À demander maintenant</h3><ul class="sl-list">${plan.askNow.map(lever).join('') || '<li>Rien de plus à demander.</li>'}</ul>
