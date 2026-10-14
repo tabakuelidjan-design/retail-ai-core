@@ -98,7 +98,7 @@ test('CL-6 a brief with no format is no longer a dead end on the planned path: t
 test('CL-7 the planner is additive: nothing in the existing source imports it except the campaign planner, the layered production, the layered runtime and the readiness gate built on it', () => {
   const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : [new URL(e.name, dir)]));
   const offenders = walk(new URL('../src/', import.meta.url)).filter((f) => f.pathname.endsWith('.js') && !f.pathname.includes('/creative-planning/') && readFileSync(f, 'utf8').includes('creative-planning/')).map((f) => f.pathname.split('/src/')[1]);
-  assert.deepEqual(offenders.filter((f) => !f.startsWith('creative-campaign/') && !f.startsWith('creative-readiness/') && !f.startsWith('creative-production/') && f !== 'creative-runtime/layered-runtime.js'), []);
+  assert.deepEqual(offenders.filter((f) => !f.startsWith('creative-campaign/') && !f.startsWith('creative-readiness/') && !f.startsWith('creative-production/') && !f.startsWith('creative-e2e/') && f !== 'creative-runtime/layered-runtime.js'), []);
 });
 
 test('CL-8 the slide capacities are measured with the real typography engine in the text-led spec, on every canvas and every density class', () => {

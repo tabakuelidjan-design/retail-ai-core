@@ -386,7 +386,7 @@ test('LG-2 the production is additive and offline: only the readiness gate and t
   const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : [new URL(e.name, dir)]));
   const files = walk(new URL('../src/', import.meta.url)).filter((f) => f.pathname.endsWith('.js'));
   const importers = files.filter((f) => !f.pathname.includes('/creative-production/') && readFileSync(f, 'utf8').includes('creative-production/')).map((f) => f.pathname.split('/src/')[1]);
-  assert.deepEqual(importers.filter((f) => !f.startsWith('creative-readiness/') && f !== 'creative-runtime/layered-runtime.js'), []);
+  assert.deepEqual(importers.filter((f) => !f.startsWith('creative-readiness/') && !f.startsWith('creative-e2e/') && f !== 'creative-runtime/layered-runtime.js'), []);
   for (const f of files.filter((x) => x.pathname.includes('/creative-production/'))) {
     const text = readFileSync(f, 'utf8');
     assert.ok(!/from '\.\.\/creative-runtime\/(runtime|index|agents|request-builder)\.js'/.test(text), `${f.pathname} imports no runtime`);

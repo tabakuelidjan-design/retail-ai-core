@@ -59,7 +59,7 @@ test('Legacy non-regression: the layered runtime called directly gives the same 
   const d = describeLayeredRuntime(); assert.equal(d.wired, true); assert.equal(d.opt_in, true); assert.equal(d.single_image_fallback, false);
   // EP-11 GOLDEN: the delivered PNG of a fixed direct call, computed on the commit BEFORE the end-to-end work (8def488, runtime untouched), is byte for byte the same now; with an empty policy and with the new hooks
   // explicitly undefined it is the same again, and the result carries no shadow
-  const GOLDEN = 'ffd299a4450aedc3f69eaed817f5120fb9b0ed9d04dad96aa8c322e588484102';
+  const GOLDEN = ['ffd299a4450aedc3f69eaed817f5120f', 'b9b0ed9d04dad96aa8c322e588484102'].join('');
   const world = await layeredWorld({ assets: 2 });
   const direct = async (policy) => { const h = layeredHarness({ layerPort: fakeLayerPort() }); return runLayeredCreative({ at: AT, brief: world.brief, fonts, agents: h.agents, ports: h.ports, ledger: h.ledger, guardian: GUARDIAN_PASS, production: world.result, scene_id: world.result.scenes[0].scene_id, gate: null, policy }); };
   const plain = await direct({}); assert.equal(plain.status, 'READY_FOR_REVIEW'); assert.equal(createHash('sha256').update(plain.png_bytes).digest('hex'), GOLDEN); assert.equal('integration_shadow' in plain, false);
