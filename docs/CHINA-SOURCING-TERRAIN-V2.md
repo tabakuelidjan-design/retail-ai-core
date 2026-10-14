@@ -110,3 +110,21 @@ Without `nordla.sourcing.legacyUi = true` the app is always the unified interfac
 * No dark-mode review beyond the shared tokens.
 * The expert sections are not translated (see §6b).
 * PDF reading still needs the server (online), as before.
+
+## 9. Results (Node 24.21, Chromium on Linux; commit of this branch)
+
+| Suite | Reference `79c511f` | This branch |
+|---|---|---|
+| `node --test test/*.test.js` (whole repository) | 1884/1884 at the checkpoint; sourcing 529/529 | **2065/2065** |
+| `sourcing:e2e:terrain` (new, unified interface, 390 / 375 / 360 px) | n/a | **20/20** |
+| `sourcing:e2e:fieldv1` (Salon loop, ported to the new screens, same business checks) | 12/12 | **12/12** |
+| `sourcing:e2e` (PWA, conflict, layout 375/390/430, legacy code behind the flag) | 18/18 | **18/18** |
+| `sourcing:e2e:v1` (legacy expert) | 5/5 | 13/13 (more checks counted by the suite) |
+| `sourcing:e2e:fieldmode` (legacy guided code behind the flag) | 19/19 | **19/19** |
+| `sourcing:e2e:recovery` | 12/12 | **12/12** (check 12 adapted to the unified sheet) |
+| `sourcing:e2e:reconnect` | 9/9 | **9/9** |
+
+Pre-existing failures at `79c511f`: none on Node 24 with dependencies installed (`npm ci`); on Node 22 the sourcing server refuses to start (Node 24 is the documented requirement), which fails 10 tests there — not a regression.
+Not run: `sourcing:e2e:voice` (needs the git-ignored speech model), `:tunnel` (opens a Cloudflare tunnel), anything on a physical phone.
+
+Screenshots (`docs/terrain-v2/`): real captures of the running app, taken by the e2e at 390 px (one at 375 px).

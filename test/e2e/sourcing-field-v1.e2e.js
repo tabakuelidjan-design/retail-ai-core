@@ -31,8 +31,8 @@ try {
     await click(t, '#tabs [data-key="suppliers"]', 600); const txt = await html(t); ok(/5 fournisseurs/.test(txt) && /Yiwu Brightcup/.test(txt), txt.slice(0, 200)); await noOverflow(t, 'home'); const sm = await small(t); ok(sm.length === 0, `small targets: ${sm.join(', ')}`);
   });
 
-  await check('1b. the way in and out: the menu offers the Salon, the guided mode and the expert mode; the Salon is not on the guided first screen (it keeps its few controls)', async () => {
-    await click(t, '#tabs [data-key="more"]', 500); const o = await html(t); ok(/Mode guidé/.test(o) && /Mode expert/.test(o), o.slice(0, 200)); await click(t, '#tabs [data-key="suppliers"]', 400);
+  await check('1b. ONE interface: Plus offers no mode switch (save state, backup, comparisons only)', async () => {
+    await click(t, '#tabs [data-key="more"]', 500); const o = await html(t); ok(!/Mode guidé|Mode expert/.test(o) && /Sauvegarde et synchronisation/.test(o), o.slice(0, 200)); await click(t, '#tabs [data-key="suppliers"]', 400);
   });
 
   await check('2. CAPTURE: a new supplier from a pasted quote with nothing else filled in becomes a reviewable offer; the original text is kept', async () => {
@@ -77,7 +77,7 @@ try {
     let txt = await html(t); ok(/Infos/.test(txt) && /Minimum de commande \(MOQ\)/.test(txt) && /dit par le fournisseur/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'facts');
     await click(t, '[data-act="sl-fact-edit"][data-key="MOQ"]', 500); await setv(t, 'form[data-form="sl-fact"] input[name="value"]', '777'); await click(t, 'form[data-form="sl-fact"] button[type="submit"]', 700); txt = await html(t); ok(/777 pièces/.test(txt) && /saisi ou corrigé par vous/.test(txt), txt.slice(0, 400)); ok(/Historique \(\d+\)/.test(txt), 'history');
     const c1 = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(c1.B.quotes.at(-1).moq === 777 && c1.B.ledger.filter((e) => e.key === 'quote.moq').length >= 2, 'the case holds 777 and the earlier values are still in the ledger');
-    await click(t, '.nx-iconbtn', 0).catch(() => {}); await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-embed"][data-key="quick"]', 800); const quick = await t.eval("document.querySelector('input[name=\"moq\"]')?.value ?? null"); ok(quick === '777', `the expert section (inside the one interface) shows ${quick}`);
+    await click(t, '.nx-tabs [data-key="more"]', 500); await click(t, '[data-act="sl-embed"][data-key="quick"]', 800); const quick = await t.eval("document.querySelector('input[name=\"moq\"]')?.value ?? null"); ok(quick === '777', `the expert section (inside the one interface) shows ${quick}`);
     await click(t, '.nx-chip[data-key="live"]', 800); const live = await html(t); ok(/Conversation/.test(live) && (await t.eval("document.querySelectorAll('#tabs button').length")) === 5, 'the live conversation opens inside the same navigation'); await click(t, '.nx-iconbtn', 500); await click(t, '.nx-tabs [data-key="facts"]', 500); ok(/777 pièces/.test(await html(t)), 'the same value in Infos');
     await t.eval("localStorage.setItem('nordla.sourcing.mode', '\"salon\"')"); // back to the Salon for the next checks (the mode is only a view)
     await t.eval('location.reload()'); await ready(t); await sleep(900); const back = JSON.parse(await t.eval("localStorage.getItem('nordla.sourcing.cases')")); ok(back.B.quotes.at(-1).moq === 777, 'after a reload the case still holds 777'); await noOverflow(t, 'after reload'); await click(t, '#tabs [data-key="suppliers"]', 500); await click(t, '.nx-cardmain[data-key="B"]', 700); // back on the fiche of B, where the next check expects the owner to be

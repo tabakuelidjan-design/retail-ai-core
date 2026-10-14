@@ -112,15 +112,14 @@ try {
     const legacy = sonny('sonny-salon-legacy');
     legacy.candidates = legacy.candidates.filter((c) => c.key === 'quote.moq');
     await importFile(tab, 'sonny-legacy.json', JSON.stringify(legacy));
-    await click(tab, '[data-act="mode-salon"]');
     await click(tab, '#tabs [data-key="suppliers"]');
     await click(tab, '[data-act="sl-open-case"][data-key="sonny-salon-legacy"]');
     ok((await tab.eval("JSON.parse(localStorage.getItem('nordla.sourcing.current'))")) === legacy.id, 'Salon selection aligns the global current case');
 
     // A global-menu NEW CASE action used to leave Salon visually on Sonny while
     // the global currentId pointed to a blank starter case.
-    await openMenu(tab);
-    await click(tab, '[data-act="newcase"]');
+    // (the unified settings sheet no longer lists cases, so the stale-blank situation is created the way the old button did)
+    await tab.eval("(() => { const b = document.createElement('button'); b.dataset.act = 'newcase'; document.body.appendChild(b); b.click(); b.remove(); })()");
     const blankId = await tab.eval("JSON.parse(localStorage.getItem('nordla.sourcing.current'))");
     ok(blankId !== legacy.id, 'stale blank global current-case situation recreated');
     ok(/Sonny/.test(await tab.eval("document.querySelector('#screen').innerText")), 'Salon still visibly displays Sonny');
