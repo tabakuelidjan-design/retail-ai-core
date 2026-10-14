@@ -1,12 +1,12 @@
 {
-  "verified_commit": "753cb420795e8ed887e7c9cbf66df4d9a5aae6d1",
-  "code_hash": "ee53466eb0e3c9009d41111dcd251e25c12f0c88",
+  "verified_commit": "086fae176659bf35a9089927d42b68b338b9e033",
+  "code_hash": "7033e1980aaf0ef767f2df3220c1a9cb98431769",
   "full_suite": {
-    "tests": 2424,
-    "pass": 2422,
+    "tests": 2444,
+    "pass": 2442,
     "fail": 0,
     "skipped": 2,
-    "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)",
+    "note": "docker node:24.21, clean clone of the code commit 086fae1, test concurrency 4: 2444 tests, 2442 passed, 2 skipped, 0 failed (no run alone was needed)",
     "node": "24 (clean clone, docker, test concurrency 4)"
   },
   "mutation": {
@@ -17,31 +17,22 @@
   },
   "clean_clones": {
     "node20": {
-      "tests": 2424,
-      "pass": 2422,
+      "tests": 2444,
+      "pass": 2442,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:20.20, clean clone of the code commit 753cb42, test concurrency 4: 2420 passed, two failures: CR-6 (expected until this attestation names END_TO_END) and finance-hosting \"missing Railway token fails startup safely\" (a 15 s child-process timeout under the 35-minute full-suite load, unrelated to Creative; it passes alone 10/10 on node:20). Both run again alone and pass: 2420 + 2 = 2422"
+      "note": "docker node:20.20, clean clone of the code commit 086fae1, test concurrency 4: 2444 tests, 2442 passed, 2 skipped, 0 failed (no run alone was needed)"
     },
     "node24": {
-      "tests": 2424,
-      "pass": 2422,
+      "tests": 2444,
+      "pass": 2442,
       "fail": 0,
       "skipped": 2,
-      "note": "docker node:24.21, clean clone of the code commit 753cb42, test concurrency 4: 2421 passed, the only failure CR-6 (expected until this attestation names END_TO_END; run again alone on the attestation and passes: 2421 + CR-6 = 2422)"
+      "note": "docker node:24.21, clean clone of the code commit 086fae1, test concurrency 4: 2444 tests, 2442 passed, 2 skipped, 0 failed (no run alone was needed)"
     }
   },
   "ci": {
-    "status": "success",
-    "run": 38521595004,
-    "workflow": "Creative Intelligence V1",
-    "commit": "3ff6d814dff4781b3ae1a779c2e5d9e6e50ae9e9",
-    "node20": "success (job 115712310638)",
-    "node24": "success (job 115712310216)",
-    "marketing_v1": {
-      "run": 38521594905,
-      "conclusion": "success"
-    },
-    "note": "Read from the public GitHub Actions API on 2026-10-14, attempt 1, no re-run needed. The code is the code verified at 753cb42 (code hash ee53466e...); the pushed commit differs only by the two attestation files, which are outside the code hash."
+    "status": "unknown",
+    "note": "Not read yet: recorded as success only after the Creative Intelligence V1 run on the pushed commit is read from the public GitHub Actions API."
   }
 }
