@@ -82,7 +82,7 @@ test('C7b. a dataset snapshot without a valid time zone is UNAVAILABLE (rebuild)
 
 test('C8. guard: no non-Finance source defaults a time zone to UTC (|| \'UTC\', ?? \'UTC\', timeZone = \'UTC\')', () => {
   const root = fileURLToPath(new URL('../src/', import.meta.url)); const hits = [];
-  /* KNOWN_DEBT (integration pre-China): 'growth' is skipped because the Growth servers still default to 'UTC'; a separate Growth task must require MERCHANT_TIMEZONE. */ const walk = (dir) => { for (const f of readdirSync(dir)) { const p = path.join(dir, f); if (statSync(p).isDirectory()) { if (!['finance', 'ui', 'growth'].includes(f)) walk(p); } else if (p.endsWith('.js')) { const t = readFileSync(p, 'utf8'); if (/(\|\||\?\?)\s*'UTC'|[tT]ime[zZ]one\s*=\s*'UTC'|\btz\s*=\s*'UTC'/.test(t)) hits.push(path.relative(root, p)); } } };
+  /* Growth is no longer exempted: it requires the merchant zone since the Core P0. */ const walk = (dir) => { for (const f of readdirSync(dir)) { const p = path.join(dir, f); if (statSync(p).isDirectory()) { if (!['finance', 'ui'].includes(f)) walk(p); } else if (p.endsWith('.js')) { const t = readFileSync(p, 'utf8'); if (/(\|\||\?\?)\s*'UTC'|[tT]ime[zZ]one\s*=\s*'UTC'|\btz\s*=\s*'UTC'/.test(t)) hits.push(path.relative(root, p)); } } };
   walk(root); assert.deepEqual(hits, [], 'silent UTC defaults remain in: ' + hits.join(', '));
   void mergeConfig;
 });
