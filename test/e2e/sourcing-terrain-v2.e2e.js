@@ -35,12 +35,12 @@ try {
 
   await check('1. HOME: one navigation of five entries (Accueil, Fournisseurs, Noter, Visites, Plus); the four quick actions; the save state is worded; no overflow; every control is at least 44 px', async () => {
     const nav = await text(t, '#tabs'); for (const w of ['Accueil', 'Fournisseurs', 'Noter', 'Visites', 'Plus']) ok(nav.includes(w), `nav lacks ${w}: ${nav}`); ok((await t.eval("document.querySelectorAll('#tabs button').length")) === 5);
-    const txt = await text(t); for (const w of ['Prendre une note', 'Nouveau fournisseur', 'Poser une question', 'Comparer']) ok(txt.includes(w), `home lacks ${w}`); ok(/Serveur à jour|Sur ce téléphone|Hors ligne/.test(txt), 'save state shown');
+    const txt = await text(t); for (const w of ['Commencez par un fournisseur', 'Nouveau fournisseur']) ok(txt.includes(w), `empty home lacks ${w}`); ok(!/Poser une question|Comparer/.test(txt), 'no empty actions before the first supplier exists'); ok(/Serveur à jour|Sur ce téléphone|Hors ligne/.test(txt), 'save state shown');
     ok(!/Guided|Quick|Verdict|Rules|Market|Money/.test(txt + nav), 'the old English tabs are not mixed in'); await noOverflow(t, 'home'); const sm = await small(t); ok(sm.length === 0, `small targets: ${sm.join(', ')}`); await shot(t, 'accueil', 390);
   });
 
   await check('2. NEW SUPPLIER in a few seconds: a name and a product are enough; the note screen opens for THAT supplier', async () => {
-    await clickText(t, '.nx-tile', 'Nouveau fournisseur'); await noOverflow(t, 'new'); await shot(t, 'nouveau-fournisseur', 390);
+    await click(t, '[data-act="sl-nav"][data-key="new"]', 500); await noOverflow(t, 'new'); await shot(t, 'nouveau-fournisseur', 390);
     await setv(t, 'input[name="supplier"]', 'Sonny'); await setv(t, 'input[name="product"]', 'batterie externe'); await click(t, 'form[data-form="sl-new"] button[type="submit"]', 700);
     const txt = await text(t); ok(/Nouvelle note/.test(txt) && /Sonny/.test(txt) && /batterie externe/.test(txt), txt.slice(0, 200)); await noOverflow(t, 'note'); await shot(t, 'prise-de-note', 390);
     const c = await sonny(t); ok(c && c.supplier.name === 'Sonny' && c.identity.workingName === 'batterie externe', 'the case exists with the right supplier and product');
@@ -74,7 +74,7 @@ try {
   });
 
   await check('6. SUPPLIER SHEET: Aperçu first (short), the five tabs, no horizontal scroll; the facts are findable in "Infos" with their sources; the Sonny numbers are the case\'s facts', async () => {
-    await click(t, '.nx-iconbtn', 700); let txt = await text(t); ok(/Fiche fournisseur/.test(txt) && /Sonny/.test(txt)); for (const w of ['Aperçu', 'Infos', 'Questions', 'Chiffres', 'Plus']) ok(txt.includes(w), `tab ${w}`); await noOverflow(t, 'fiche'); await shot(t, 'fiche-apercu', 390);
+    await click(t, '.nx-iconbtn', 700); let txt = await text(t); ok(/Sonny/.test(txt) && /batterie externe/.test(txt) && /Prendre une note/.test(txt) && /Poser une question/.test(txt) && /Prix/.test(txt) && /MOQ/.test(txt) && /Modèle/.test(txt), 'identity first, essentials strip, two actions: ' + txt.slice(0, 200)); for (const w of ['Aperçu', 'Infos', 'Questions', 'Chiffres', 'Plus']) ok(txt.includes(w), `tab ${w}`); await noOverflow(t, 'fiche'); await shot(t, 'fiche-apercu', 390);
     await clickText(t, '.nx-tabs button', 'Infos', 500); txt = await text(t); ok(/12/.test(txt) && /60 pièces/.test(txt) && /AB521/.test(txt) && /10000 mAh/.test(txt), txt.slice(0, 300)); ok(/dit par le fournisseur/.test(txt) && /corrigé par vous/i.test(txt), 'sources shown'); await noOverflow(t, 'infos'); await shot(t, 'fiche-infos', 390);
   });
 
@@ -82,10 +82,10 @@ try {
     await clickText(t, '.nx-tabs button', 'Questions', 500); await noOverflow(t, 'questions'); await shot(t, 'questions', 390); let txt = await text(t); ok(/à poser maintenant/i.test(txt) && /À poser/.test(txt) && /中文/.test(txt), 'questions with English and Chinese: ' + txt.slice(0, 400));
     ok((await t.eval("document.querySelectorAll('.nx-q [data-act=\"sl-answer-open\"]').length")) >= 2, 'every question has a "Noter la réponse" button');
     ok(!(await t.eval("[...document.querySelectorAll('.nx-q button')].some((b) => /^(Posée|Répondue)$/.test(b.innerText.trim()))")), 'the old Posée / Répondue buttons are gone');
-    const title = await t.eval("document.querySelector('.nx-q b').innerText"); await click(t, '.nx-q [data-act="sl-answer-open"]', 450); await shot(t, 'reponse-saisie', 390);
+    const title = await t.eval("document.querySelector('.nx-q b').innerText"); await click(t, '.nx-q [data-act="sl-answer-open"]', 600); await shot(t, 'reponse-saisie', 390);
     ok(await t.eval("!!document.querySelector('.nx-answer textarea')"), 'the answer box opens inside the question card');
     await setv(t, '.nx-answer textarea', 'Delai 25 jours, FOB Ningbo, acompte 30%'); await click(t, '.nx-answer button[type="submit"]', 900); txt = await text(t);
-    ok(/Réponse enregistrée/.test(txt) && /Réponse notée/.test(txt) && /« Delai 25 jours/.test(txt), txt.slice(0, 300)); ok(/Incoterm/.test(txt) && /FOB/.test(txt) && /Ningbo/.test(txt) && /Proposée · à confirmer/.test(txt), 'proposals read from the answer, with their state');
+    ok(/Réponse enregistrée/.test(txt) && /Delai 25 jours/.test(txt), txt.slice(0, 300)); ok(/Incoterm/.test(txt) && /FOB/.test(txt) && /Ningbo/.test(txt) && /Proposée · à confirmer/.test(txt), 'proposals read from the answer, with their state');
     const c = await sonny(t); const items = c.conversations.flatMap((x) => x.items); const it = items.find((i) => i.original.startsWith('Delai 25')); ok(it && it.speaker === 'supplier' && it.answersQuestion, 'the answer is an item of the conversation of this case, linked to the question');
     const ans = c.questionLog.find((e) => e.kind === 'ANSWERED'); ok(ans && ans.itemId === it.id && ans.questionText === title, `the question is logged ANSWERED -> ${ans?.itemId}`); ok(c.questionLog.some((e) => e.kind === 'SHOWN' && e.questionId === ans.questionId), 'the question is also logged as asked');
     const mine = c.candidates.filter((k) => k.itemId === it.id); ok(mine.length >= 2 && mine.every((k) => k.state === 'PROPOSED'), 'new proposals PROPOSED'); ok(!c.ledger.some((e) => /incoterm|port/.test(e.key)), 'no fact from the answer before the owner decides'); await shot(t, 'reponse-enregistree', 390);
@@ -103,7 +103,7 @@ try {
   });
 
   await check('10. A SECOND SUPPLIER and the comparison: Fournisseurs lists both with their follow-ups; "+" selects; Comparer opens the existing comparison; the search filters', async () => {
-    await click(t, '#tabs [data-key="home"]', 500); await clickText(t, '.nx-tile', 'Nouveau fournisseur', 500); await setv(t, 'input[name="supplier"]', 'Anna Lighting'); await setv(t, 'input[name="product"]', 'lampe de bureau'); await click(t, 'form[data-form="sl-new"] button[type="submit"]', 600);
+    await click(t, '#tabs [data-key="home"]', 500); await click(t, '[data-act="sl-nav"][data-key="new"]', 500); await setv(t, 'input[name="supplier"]', 'Anna Lighting'); await setv(t, 'input[name="product"]', 'lampe de bureau'); await click(t, 'form[data-form="sl-new"] button[type="submit"]', 600);
     await setv(t, '#nx-text', 'Model LD-300, USD 8.50 for 500 pcs, MOQ 300, FOB Ningbo, lead time 20 days'); await click(t, 'form#nx-note button.nx-btn', 800);
     await click(t, '#tabs [data-key="suppliers"]', 600); let txt = await text(t); ok(/Sonny/.test(txt) && /Anna Lighting/.test(txt) && /à confirmer/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'suppliers'); await shot(t, 'fournisseurs', 390);
     await setv(t, 'input[data-nx-search]', 'anna'); await sleep(300); txt = await text(t, '#nx-list'); ok(/Anna/.test(txt) && !/Sonny/.test(txt), 'the live search filters'); await setv(t, 'input[data-nx-search]', ''); await sleep(250);
@@ -112,7 +112,7 @@ try {
 
   await check('11. VISITS: the visited suppliers by day, what is left to do for each; "À poursuivre" / "Tous"', async () => {
     await click(t, '#tabs [data-key="visits"]', 600); let txt = await text(t); ok(/Mes visites/.test(txt) && /Aujourd'hui/.test(txt) && /À poursuivre/.test(txt) && /à confirmer/.test(txt), txt.slice(0, 300)); await noOverflow(t, 'visites'); await shot(t, 'visites', 390);
-    await clickText(t, '.nx-chip', 'Tous', 400); ok(/Anna Lighting/.test(await text(t)) && /Sonny/.test(await text(t)), 'both suppliers are listed under Tous'); await clickText(t, '.nx-visit', 'Sonny', 700); ok(/Fiche fournisseur/.test(await text(t)) && /Sonny/.test(await text(t)), 'a visit opens the supplier sheet');
+    await clickText(t, '.nx-seg button', 'Tous', 400); ok(/Anna Lighting/.test(await text(t)) && /Sonny/.test(await text(t)), 'both suppliers are listed under Tous'); await clickText(t, '.nx-visit', 'Sonny', 700); ok(/Prendre une note/.test(await text(t)) && /Sonny/.test(await text(t)), 'a visit opens the supplier sheet');
   });
 
   await check('12. PHOTO: a product photo is kept as the supplier\'s reference (name + position), on the phone, attached to the right case', async () => {
@@ -156,7 +156,7 @@ try {
 
   await check('17. REOPEN: reloading keeps every case, note, correction and the screen the owner was on; the unsent draft survives', async () => {
     await click(t, '#tabs [data-key="note"]', 500); await setv(t, '#nx-text', 'brouillon pas envoyé'); await sleep(300); await t.goto(`${base}/`); await ready(t); await sleep(900); let txt = await text(t); ok(/Nouvelle note/.test(txt), 'reopens on the note screen: ' + txt.slice(0, 80)); ok((await t.eval("document.querySelector('#nx-text').value")) === 'brouillon pas envoyé', 'the draft is back');
-    const c = await sonny(t); ok(c.ledger.some((e) => e.key === 'spec.capacity' && e.status === 'USER_PROVIDED'), 'the correction survived'); await click(t, '#tabs [data-key="home"]', 500); ok(/Reprendre/.test(await text(t)) || /Dossiers récents/.test(await text(t))); await shot(t, 'accueil-dossiers', 390);
+    const c = await sonny(t); ok(c.ledger.some((e) => e.key === 'spec.capacity' && e.status === 'USER_PROVIDED'), 'the correction survived'); await click(t, '#tabs [data-key="home"]', 500); { const h = await text(t); ok(/dernier fournisseur/i.test(h) && /Prendre une note/.test(h) && /Poser une question/.test(h) && /Comparer/.test(h) && /Nouveau fournisseur/.test(h), 'home with files: the last supplier is the one dominant block, three quiet actions: ' + h.slice(0, 300)); } await shot(t, 'accueil-dossiers', 390);
   });
 
   await check('18. ONE INTERFACE: no mode switch exists; every capability of the former Guided and Expert modes opens INSIDE the same navigation (the five-entry bar never changes), from the sheet and from where it is needed', async () => {
@@ -176,8 +176,8 @@ try {
     await shot(t, 'analyse-experte', 390);
   });
 
-  await check('19. WIDTHS: every main screen has no horizontal overflow and no control under 44 px at 375 px and at 360 px (the narrow Android width)', async () => {
-    for (const W of [375, 360]) {
+  await check('19. WIDTHS: every main screen has no horizontal overflow and no control under 44 px at 375, 360 and 430 px (the narrow Android width)', async () => {
+    for (const W of [375, 360, 430]) {
     await t.resize(W, 812); await sleep(400); const sweep = [['home', '#tabs [data-key="home"]'], ['suppliers', '#tabs [data-key="suppliers"]'], ['visits', '#tabs [data-key="visits"]'], ['more', '#tabs [data-key="more"]'], ['note', '#tabs [data-key="note"]']];
     for (const [name, sel] of sweep) { await click(t, sel, 600); await noOverflow(t, `${name}@${W}`); const sm = await small(t); ok(sm.length === 0, `${name}@${W} small targets: ${sm.join(', ')}`); if (W === 375) await shot(t, name, W); }
     await click(t, '#tabs [data-key="suppliers"]', 500); await clickText(t, '.nx-cardmain', 'Sonny', 700); for (const tab of ['Aperçu', 'Infos', 'Questions', 'Chiffres', 'Plus']) { await clickText(t, '.nx-tabs button', tab, 450); await noOverflow(t, `fiche/${tab}@${W}`); const sm = await small(t); ok(sm.length === 0, `fiche/${tab}@${W} small targets: ${sm.join(', ')}`); }

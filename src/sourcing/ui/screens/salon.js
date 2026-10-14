@@ -10,7 +10,7 @@ import { describeConflict, validateCorrection } from '/core/candidate-view.js';
 import { planConversation } from '/core/conversation-engine.js';
 import { newWorkspace, mergeWorkspaces, listComparisons, removeComparison } from '/core/field/workspace.js';
 import { sampleState } from '/core/field/external-evidence.js';
-import { caseFacts, auditCase, observationsOf } from '/core/case-facts.js';
+import { caseFacts, auditCase, observationsOf, factStatusBoard } from '/core/case-facts.js';
 import { MIN_CANDIDATES, MAX_CANDIDATES } from '/core/comparison.js';
 import { getBlob, putBlob } from '../storage.js';
 import * as V from './salon-views.js';
@@ -70,14 +70,20 @@ export function createSalon(ctx) {
   const remember = () => { ws = eng().setView(ws, { lastCaseId: view.caseId ?? null, lastComparisonId: view.cmpId ?? null, lastScreen: view.name }); saveWs(ws); };
 
   // ---- what a case says about its own follow-ups (cached by case + revision: cheap on every render) ------------------------------------------------------------------------------------------------
+  /** What is CONFIRMED (price, MOQ, model): the one line shown on the cards. Nothing proposed or guessed. */
+  const keyFacts = (c) => { try { const f = new Map(caseFacts(c).map((x) => [x.fact_type, x])); const price = f.get('PRICE'); const cur = f.get('CURRENCY'); return { price: price ? `${V.factValueText(price)}${cur ? ` ${V.factValueText(cur)}` : ''}` : null, moq: f.get('MOQ') ? String(f.get('MOQ').value) : null, model: f.get('MODEL') ? String(f.get('MODEL').value) : null }; } catch { return { price: null, moq: null, model: null }; } };
+  const lastTextOf = (c) => { const items = c.conversations.flatMap((x) => x.items).filter((i) => i.speaker !== 'unknown' || i.original); const it = items.sort((a, b) => String(b.at).localeCompare(String(a.at)))[0]; const t = it ? String(it.original ?? '').replace(/\s+/g, ' ').trim() : ''; return t.length > 110 ? `${t.slice(0, 107)}…` : t; };
+  /** The three essentials of the sheet (price, MOQ, model): confirmed, only proposed, or unknown - never a guess. */
+  const stripOf = (c) => { const b = Object.fromEntries(factStatusBoard(c, { locale: 'fr' }).map((x) => [x.fact_type, x])); const one = (label, x, text) => (x.state === 'CONFIRMED' ? { label, value: text(x.valueText), state: 'confirmed' } : (x.state === 'PROPOSED' || x.state === 'AMBIGUOUS') && x.proposedValueText ? { label, value: x.state === 'AMBIGUOUS' ? 'à corriger' : text(x.proposedValueText), state: 'proposed' } : { label, value: '', state: 'unknown' });
+    const cur = b.CURRENCY?.state === 'CONFIRMED' ? b.CURRENCY.valueText : ''; return [one('Prix', b.PRICE, (t) => `${t}${cur ? ` ${cur}` : ''}`), one('MOQ', b.MOQ, (t) => String(t).replace(/ pièces?$/, '')), one('Modèle', b.MODEL, (t) => t)]; };
   const meta = new Map();
   function metaOf(c) {
     const key = `${c.id}|${c.updatedAt}|${(c.questionLog ?? []).length}|${(c.candidates ?? []).length}`; const hit = meta.get(c.id); if (hit?.key === key) return hit.v;
     let waiting = 0; try { const v = eng().caseView(c, ws, ['askNow']); waiting = planConversation(c, v.assessment).questions.filter((q) => q.audience === 'SUPPLIER' && q.state === 'ASKED').length; } catch { waiting = 0; }
-    const v = { waiting, pending: (c.candidates ?? []).filter((x) => x.state === 'PROPOSED').length, conflicts: (c.conflicts ?? []).filter((x) => x.state === 'OPEN').length };
+    const v = { waiting, pending: (c.candidates ?? []).filter((x) => x.state === 'PROPOSED').length, conflicts: (c.conflicts ?? []).filter((x) => x.state === 'OPEN').length, facts: keyFacts(c), lastText: lastTextOf(c) };
     meta.set(c.id, { key, v }); return v;
   }
-  const overviewOf = (cases) => { const base = eng().overview(cases, ws); return base.map((o) => { const c = caseOf(o.caseId); const m = metaOf(c); return { ...o, pending: m.pending, conflicts: m.conflicts, waiting: m.waiting, photo: photosOf(c)[0] ?? null }; }); };
+  const overviewOf = (cases) => { const base = eng().overview(cases, ws); return base.map((o) => { const c = caseOf(o.caseId); const m = metaOf(c); return { ...o, pending: m.pending, conflicts: m.conflicts, waiting: m.waiting, facts: m.facts, lastText: m.lastText, photo: photosOf(c)[0] ?? null }; }); };
   const countsOf = (ov) => ({ toConfirm: ov.reduce((n, o) => n + o.pending, 0), waiting: ov.reduce((n, o) => n + o.waiting, 0), conflicts: ov.reduce((n, o) => n + o.conflicts, 0), cases: { confirm: ov.filter((o) => o.pending).length, waiting: ov.filter((o) => o.waiting).length, conflict: ov.filter((o) => o.conflicts).length } });
   const matches = (o, q) => { const t = q.trim().toLowerCase(); return !t || `${o.supplier ?? ''} ${o.title}`.toLowerCase().includes(t); };
   const filtered = (ov) => ov.filter((o) => matches(o, query) && (filter === 'all' || (filter === 'confirm' && o.pending) || (filter === 'waiting' && o.waiting) || (filter === 'conflict' && o.conflicts)));
@@ -92,7 +98,7 @@ export function createSalon(ctx) {
     const own = (c.userQuestions ?? []).filter((u) => u.state !== 'ANSWERED').map((u) => ({ id: u.id, title: 'Votre question', tag: null, en: u.lang === 'en' ? u.text : null, fr: u.text, zh: null, zhNote: 'Votre question est montrée telle que vous l\'avez écrite : aucune traduction n\'est inventée.', state: u.state === 'ASKED' ? 'ASKED' : 'OPEN' }));
     const last = new Map(); for (const e of c.questionLog ?? []) if (e.kind === 'ANSWERED') last.set(e.questionId, e);
     const items = c.conversations.flatMap((x) => x.items); const titleOf = (qid) => plan.questions.find((q) => q.id === qid)?.short?.fr;
-    const answered = [...last.values()].map((e) => { const it = items.find((x) => x.id === e.itemId); const pend = (c.candidates ?? []).filter((k) => k.itemId === e.itemId && k.state === 'PROPOSED').length; return { qid: e.questionId, title: e.questionText ?? (titleOf(e.questionId) ?? e.questionId), excerpt: String(it?.original ?? '').slice(0, 140), pending: pend, at: e.at }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const answered = [...last.values()].map((e) => { const it = items.find((x) => x.id === e.itemId); const pend = (c.candidates ?? []).filter((k) => k.itemId === e.itemId && k.state === 'PROPOSED').length; return { qid: e.questionId, title: e.questionText ?? (titleOf(e.questionId) ?? e.questionId), excerpt: String(it?.original ?? '').slice(0, 280), pending: pend, at: e.at, when: whenOf(e.at) }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
     return { toAsk: v.askNow.items.map(toQ), waiting, own, answered, message: v.askNow.message, chineseNote: v.askNow.chineseNote };
   }
   const questionOf = (c, qid) => { const v = eng().caseView(c, ws, ['askNow']); const g = questionGroups(c, v); return [...g.toAsk, ...g.waiting, ...g.own].find((q) => q.id === qid) ?? null; };
@@ -147,16 +153,13 @@ export function createSalon(ctx) {
     const cur = MAIN_NAV[view.name] ?? 'home';
     return NAV_ITEMS.map(([k, l, i]) => `<button type="button" data-act="sl-nav" data-key="${k}" aria-current="${cur === k}" class="${k === 'note' ? 'nx-navnote' : ''}">${N.ic(i)}<span>${l}</span></button>`).join('');
   }
-  function resumeInfo() {
-    const v = ws.views; if (!v?.lastScreen || ['home', 'more', 'sync', 'new'].includes(v.lastScreen) || view.name !== 'home') return null; const c = v.lastCaseId ? caseOf(v.lastCaseId) : null; const label = { compare: 'la comparaison', case: 'la fiche', ask: 'les questions', negotiate: 'la négociation', review: 'la relecture', capture: 'la capture', note: 'la note', suppliers: 'la liste', visits: 'les visites' }[v.lastScreen] ?? 'là où vous étiez';
-    return v.lastCaseId && !c && !v.lastComparisonId ? null : { label: `${label}${c?.supplier?.name ? ` de ${c.supplier.name}` : ''}`, view: v };
-  }
+  const ok = (text) => ({ text, kind: 'ok' }); // a confirmation (green); a plain string is a notice (amber)
   const takeFlash = () => { const f = flash || S.flash || ''; flash = ''; S.flash = ''; return f; }; // an error raised by the shell (a failed save, a refused file) must be SEEN here too, never swallowed
   function render() {
     const e = eng(); const cases = allCases();
     try {
       const name = view.name;
-      if (name === 'home') { const ov = overviewOf(cases); return N.homeHtml({ overview: ov, resume: resumeInfo(), sync: sync(), counts: countsOf(ov), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash() }); }
+      if (name === 'home') { const ov = overviewOf(cases); return N.homeHtml({ overview: ov, sync: sync(), counts: countsOf(ov), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash(), now: Date.now() }); }
       if (name === 'new') return N.newHtml({ flash: takeFlash() });
       if (name === 'suppliers') { const ov = overviewOf(cases); const list = filtered(ov); return N.suppliersHtml({ overview: list, total: ov.length, selected, filter, query, sync: sync(), conflicts: Object.keys(S.conflicts ?? {}).length, counts: countsOf(ov), flash: takeFlash() }); }
       if (name === 'visits') { const ov = overviewOf(cases); return N.visitsHtml({ items: ov, filter: visitFilter, now: Date.now(), sync: sync(), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash() }); }
@@ -190,7 +193,7 @@ export function createSalon(ctx) {
     const proposedAll = (c.candidates ?? []).filter((k) => k.state === 'PROPOSED'); const ids = new Set((c.candidates ?? []).map((k) => k.id));
     const factsView = { facts: { facts: caseFacts(c), audit: auditCase(c), observations: observationsOf(c), editing: editingFact, caseId: c.id, board: [], correcting }, cands: proposedAll, conflicts: conflictsOf(c, ids), correcting, history: eng().suppliers(allCases(), ws).find((h) => h.cases.some((x) => x.caseId === c.id)) ?? null };
     const sc = sync(c.id);
-    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, board: [], lastNotes: notesOf(c, 2), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
+    return N.ficheHtml({ info, v, tab, sub, flash: takeFlash(), sync: { ...sc, caseKind: sc.caseKind, caseLabel: sc.caseLabel }, conflicts: Object.keys(S.conflicts ?? {}).length, photos: photosOf(c), questionsHtml, factsView, board: [], lastNotes: notesOf(c, 2), strip: stripOf(c), now: Date.now(), counts: { toConfirm: m.pending, waiting: m.waiting, conflicts: m.conflicts }, negotiation: v.negotiation });
   }
 
   /** The detailed engine screens of the former Expert / Guided modes, inside the one navigation, for the supplier whose sheet the owner came from. */
@@ -270,10 +273,10 @@ export function createSalon(ctx) {
         case 'sl-show': showQ = { id: key, caseId: cid }; return ctx.render();
         case 'sl-show-close': showQ = null; return ctx.render();
         case 'sl-asked-answer': { const c = must(cid); const q = questionOf(c, key); if (q && q.state === 'OPEN') commit(c.id, [/^uq-/.test(key) ? { type: 'QUESTION_STATE', id: key, state: 'ASKED' } : { type: 'QUESTION_SHOWN', questionId: key, via: 'SHOWN_TO_SUPPLIER', texts: { en: q.en ?? null, fr: q.fr ?? null, zh: q.zh?.text ?? null } }]); showQ = null; answering = key; return go({ name: 'case', caseId: cid, tab: 'ask', sub: null }); }
-        case 'sl-answer-open': answering = key; return ctx.render();
+        case 'sl-answer-open': answering = key; ctx.render(); requestAnimationFrame(() => { const ta = document.querySelector('.nx-answer textarea'); if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus({ preventScroll: true }); } }); return;
         case 'sl-answer-close': answering = null; return ctx.render();
         case 'sl-q-skip': { const c = must(cid); if (/^uq-/.test(key)) commit(c.id, [{ type: 'QUESTION_STATE', id: key, state: 'ANSWERED' }]); else commit(c.id, [{ type: 'QUESTION_SKIP', questionId: key }]); return ctx.render(); }
-        case 'sl-copy': { const q = questionOf(must(cid), key); if (!q) return undefined; let ok = false; try { await navigator.clipboard.writeText([q.en ?? q.fr, q.zh?.text].filter(Boolean).join('\n\n')); ok = true; } catch { /* clipboard refused or unavailable */ } flash = ok ? 'Copié : anglais et chinois, prêts à coller dans la conversation du fournisseur.' : 'Copie impossible ici : utilisez « Montrer » pour faire lire le fournisseur.'; return ctx.render(); }
+        case 'sl-copy': { const q = questionOf(must(cid), key); if (!q) return undefined; let copied = false; try { await navigator.clipboard.writeText([q.en ?? q.fr, q.zh?.text].filter(Boolean).join('\n\n')); copied = true; } catch { /* clipboard refused or unavailable */ } flash = copied ? ok('Copié : anglais et chinois, prêts à coller dans la conversation du fournisseur.') : 'Copie impossible ici : utilisez « Montrer » pour faire lire le fournisseur.'; return ctx.render(); }
         // NOTES
         case 'sl-note-open': { const id = key || lastCaseId(); if (!id) { flash = 'Créez d\'abord un fournisseur : un nom suffit.'; return go({ name: 'new' }); } noteMode = 'text'; lastNote = null; return go({ name: 'note', caseId: id }); }
         case 'sl-note-change': pickFor = 'note'; flash = 'Choisissez le fournisseur concerné par la note.'; return go({ name: 'suppliers' });
@@ -290,8 +293,8 @@ export function createSalon(ctx) {
         case 'sl-conf-keep': return ctx.keepBoth(key, () => { flash = 'Les deux versions sont conservées : le dossier du serveur sous son nom, le vôtre sous « (ma copie) ».'; }).then(() => go({ name: Object.keys(S.conflicts ?? {}).length ? 'sync' : 'suppliers' }));
         case 'sl-conf-server': confirmingServer = key || null; return ctx.render();
         case 'sl-conf-server-go': return ctx.takeServer(key, () => { flash = 'Version du serveur reprise. Votre version a été gardée dans « (ma version avant remplacement) ».'; }).then(() => { confirmingServer = null; return go({ name: Object.keys(S.conflicts ?? {}).length ? 'sync' : 'suppliers' }); });
-        case 'sl-sync-now': { flash = await ctx.syncNow(); return ctx.render(); }
-        case 'sl-export': { flash = ctx.exportCase(key); return ctx.render(); }
+        case 'sl-sync-now': { const m = await ctx.syncNow(); flash = /^Tout est envoyé/.test(m) ? ok(m) : m; return ctx.render(); }
+        case 'sl-export': { const m = ctx.exportCase(key); flash = /^Export créé/.test(m) ? ok(m) : m; return ctx.render(); }
         case 'sl-server': return ctx.openMenu();
         case 'sl-recover': return ctx.openMenu();
         case 'sl-reanalyze': return ctx.openMenu();
@@ -312,17 +315,17 @@ export function createSalon(ctx) {
       }
       if (name === 'sl-note') {
         const id = d.caseId; const text = String(d.text ?? '').trim(); if (!text) { flash = 'Écrivez ou collez ce que dit le fournisseur.'; return ctx.render(); }
-        const item = recordNote(id, { text, who: d.speaker }); setDraft(`note:${id}`, ''); lastNote = { caseId: id, itemId: item.id }; const n = itemCands(S.cases[id], item.id).length; flash = n ? `Note enregistrée. ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : rien n'est encore confirmé.` : 'Note enregistrée. Aucune information chiffrée reconnue : le texte est gardé tel quel.'; ctx.render(); return reveal('.nx-props, .nx-flash');
+        const item = recordNote(id, { text, who: d.speaker }); setDraft(`note:${id}`, ''); lastNote = { caseId: id, itemId: item.id }; const n = itemCands(S.cases[id], item.id).length; flash = ok(n ? `Note enregistrée · ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''}. Rien n'est encore confirmé.` : 'Note enregistrée. Aucune information chiffrée reconnue : le texte est gardé tel quel.'); ctx.render(); return reveal('.nx-props, .nx-flash');
       }
       if (name === 'sl-answer') {
         const id = d.caseId; const text = String(d.text ?? '').trim(); if (!text) { flash = 'Notez la réponse du fournisseur.'; return ctx.render(); }
         const item = recordNote(id, { text, who: 'supplier', qid: d.qid, qtitle: d.qtitle }); setDraft(`ans:${d.qid}`, ''); panels = { ...panels, [d.qid]: { caseId: id, itemId: item.id } }; answering = null;
-        const n = itemCands(S.cases[id], item.id).length; flash = n ? `Réponse enregistrée. ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : confirmez, corrigez ou rejetez chacune.` : 'Réponse enregistrée. Aucune information chiffrée reconnue : le texte est gardé tel quel.'; ctx.render(); return reveal('.nx-lead');
+        const n = itemCands(S.cases[id], item.id).length; flash = ok(n ? `Réponse enregistrée · ${n} information${n > 1 ? 's' : ''} proposée${n > 1 ? 's' : ''} : confirmez, corrigez ou rejetez chacune.` : 'Réponse enregistrée. Aucune information chiffrée reconnue : le texte est gardé tel quel.'); ctx.render(); return reveal('.nx-lead');
       }
-      if (name === 'sl-own-q') { const text = String(d.text ?? '').trim(); if (!text) { flash = 'Écrivez votre question.'; return ctx.render(); } commit(d.caseId, [{ type: 'QUESTION_ADD', text, lang: 'auto' }]); setDraft('ownq', ''); flash = 'Question ajoutée.'; return ctx.render(); }
+      if (name === 'sl-own-q') { const text = String(d.text ?? '').trim(); if (!text) { flash = 'Écrivez votre question.'; return ctx.render(); } commit(d.caseId, [{ type: 'QUESTION_ADD', text, lang: 'auto' }]); setDraft('ownq', ''); flash = ok('Question ajoutée.'); return ctx.render(); }
       if (name === 'sl-capture') return capture(d);
       if (name === 'sl-correct') { const c = must(view.caseId); const cand = c.candidates.find((x) => x.id === d.id); const v = validateCorrection(cand.key, d.value, 'fr'); if (!v.ok) { flash = v.error; return ctx.render(); } correcting = null; commit(c.id, [{ type: 'CANDIDATE_CORRECT', id: d.id, value: v.value }]); return ctx.render(); }
-      if (name === 'sl-fact') { const c = must(d.caseId); commit(c.id, [{ type: 'FACT_CORRECT', factType: d.factType, value: d.value, mode: 'salon' }]); editingFact = null; flash = 'Valeur enregistrée : l\'ancienne reste dans l\'historique.'; return ctx.render(); }
+      if (name === 'sl-fact') { const c = must(d.caseId); commit(c.id, [{ type: 'FACT_CORRECT', factType: d.factType, value: d.value, mode: 'salon' }]); editingFact = null; flash = ok('Valeur enregistrée : l\'ancienne reste dans l\'historique.'); return ctx.render(); }
       if (name === 'sl-numbers') return numbers(d);
     } catch (e) { flash = friendly(e); ctx.render(); }
     return undefined;
@@ -349,7 +352,7 @@ export function createSalon(ctx) {
     if (freight !== null || fx !== null) ev.push({ type: 'COSTS', costs: { ...(c.costs ?? {}), ...(fx !== null ? { fx: { rate: fx, date: new Date().toISOString().slice(0, 10), source: 'USER_ENTERED' } } : {}), costs: { ...(c.costs?.costs ?? {}), ...(freight !== null ? { freight: { total: freight, status: 'ESTIMATED' } } : {}) } } });
     const duty = num(d.duty); if (duty !== null) ev.push({ type: 'CUSTOMS', customs: { duty: { ratePct: duty, kind: 'USER_ENTERED', source: 'owner' } } });
     const qty = num(d.qty); if (qty) ev.push({ type: 'PLAN_QTY', qty: Number(qty) });
-    if (ev.length) commit(c.id, ev); flash = ev.length ? 'Chiffres enregistrés.' : 'Rien à enregistrer.'; return ctx.render();
+    if (ev.length) commit(c.id, ev); flash = ev.length ? ok('Chiffres enregistrés.') : 'Rien à enregistrer.'; return ctx.render();
   }
 
   // ---- file inputs (photo reference, PDF text layer / text file) -------------------------------------------------------------------------------------------------------------
@@ -360,7 +363,7 @@ export function createSalon(ctx) {
       if (t.dataset.act === 'sl-note-photo') { // the photo is attached to THIS supplier's case at once: the reference is kept (original name + position), on the phone
         const id = view.caseId; const c = must(id); const n = (c.identity?.photos ?? []).length; const url = await downscale(file, 640, 0.7);
         if (!(await putBlob(`photo:${id}.${n}`, url))) { flash = 'La photo n\'a pas pu être gardée sur ce téléphone (stockage plein ?). Exportez le dossier, puis libérez de la place.'; return ctx.render(); }
-        commit(id, [{ type: 'PHOTO', ref: `photo-${n}`, note: file.name }]); t.value = ''; flash = `Photo ${n + 1} enregistrée dans le dossier de ${c.supplier?.name ?? c.identity?.workingName ?? 'ce fournisseur'}.`; return ctx.render();
+        commit(id, [{ type: 'PHOTO', ref: `photo-${n}`, note: file.name }]); t.value = ''; flash = ok(`Photo ${n + 1} enregistrée dans le dossier de ${c.supplier?.name ?? c.identity?.workingName ?? 'ce fournisseur'}.`); return ctx.render();
       }
       if (t.dataset.act === 'sl-photo') { pending.photo = { url: await downscale(file, 640, 0.7), name: file.name }; flash = 'Photo prête : elle sera gardée sur ce téléphone comme référence.'; return ctx.render(); }
       let text = ''; if (/\.txt$/i.test(file.name) || file.type.startsWith('text/')) text = await file.text();

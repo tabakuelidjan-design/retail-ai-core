@@ -60,7 +60,7 @@ test('4. a question answered can be asked again: a new SHOWN makes it ASKED agai
 const cand = (o) => ({ id: 'cand-1', key: 'quote.unitPrice', context: 'product', value: '12', rawText: 'prix 12$', state: 'PROPOSED', speaker: 'supplier', lang: 'fr', flags: [], ...o });
 test('5. proposals: a proposal says it is proposed, shows the supplier\'s own words, offers Confirmer / Corriger / Rejeter; an ambiguous one has NO Confirmer; nothing is called verified', () => {
   const html = N.proposalsHtml({ cands: [cand({}), cand({ id: 'cand-2', key: 'spec.capacity', value: null, rawText: '10000mAp', needsCorrection: true, flags: ['UNIT_UNRECOGNISED'] })], caseId: 'sonny' });
-  assert.match(html, /Proposée · à confirmer/); assert.match(html, /Ambiguë · à corriger/); assert.match(html, /« prix 12\$ »/); assert.match(html, /dit par le fournisseur · pas encore confirmé/); assert.doesNotMatch(html, /Vérifiée|vérifié/i);
+  assert.match(html, /Proposée · à confirmer/); assert.match(html, /Ambiguë · à corriger/); assert.match(html, /« prix 12\$ »/); assert.match(html, /dit par le fournisseur/); assert.doesNotMatch(html, /Vérifiée|vérifié/i);
   const rows = html.split('<li class="nx-prop').slice(1); assert.equal(rows.length, 2); assert.match(rows[0], /sl-confirm/); assert.doesNotMatch(rows[1], /data-act="sl-confirm"/, 'an ambiguous fact cannot be confirmed as it is'); assert.match(rows[1], /sl-correct-open/);
 });
 test('6. outcomes are visible on the same screen with their own state word (Confirmée, Corrigée par vous, Rejetée) and a corrected row keeps what the supplier said', () => {
@@ -83,7 +83,7 @@ test('8. everything a supplier, a product or a note can contain is escaped', () 
 test('9. the save state is worded for the owner; a conflict is never silent (banner on every main screen)', () => {
   assert.match(N.syncChip({ kind: 'synced', label: 'Serveur à jour' }), /Serveur à jour/); assert.match(N.syncChip({ kind: 'offline', label: 'Hors ligne · 2 à envoyer' }), /Hors ligne · 2 à envoyer/);
   const banner = N.conflictBanner(1); assert.match(banner, /Conflit de synchronisation/); assert.match(banner, /Rien n'a été écrasé/); assert.equal(N.conflictBanner(0), '');
-  const home = N.homeHtml({ overview: [], resume: null, sync: { kind: 'conflict', label: '1 conflit' }, counts: { toConfirm: 0, waiting: 0, conflicts: 0, cases: { confirm: 0, waiting: 0, conflict: 0 } }, conflicts: 1 }); assert.match(home, /Conflit de synchronisation/);
+  const home = N.homeHtml({ overview: [], sync: { kind: 'conflict', label: '1 conflit' }, counts: { toConfirm: 0, waiting: 0, conflicts: 0, cases: { confirm: 0, waiting: 0, conflict: 0 } }, conflicts: 1 }); assert.match(home, /Conflit de synchronisation/);
 });
 test('10. conflict screen: both versions, the differences, and "Garder les deux" is the recommended default; replacing needs a second explicit step that says nothing is lost', () => {
   const v = { id: 'a', title: 'Sonny · batterie', mine: { updatedText: '14 oct., 00:25', notes: 3, offers: 0, facts: 7 }, server: { updatedText: '14 oct., 00:26', notes: 3, offers: 0, facts: 7 }, diffs: [{ label: 'Prix unitaire', mine: '12', server: '11' }], onlyMine: [{ kind: 'Note (fournisseur)', text: 'accepte 55 pièces' }], onlyServer: [{ kind: 'Note libre', text: 'ajoutée ailleurs' }] };
@@ -112,5 +112,5 @@ test('14. no mode switch is offered anywhere in the screens; the legacy mode cod
   for (const f of ['screens/field.js', 'screens/fieldfirst.js', 'screens/fieldhome.js', 'screens/decision.js', 'screens/money.js', 'screens/quick.js']) assert.ok(ui(f).length > 500, `${f} is not removed`);
 });
 test('15. the sheet reaches the expert sections where they are needed (compliance and calculations from Aperçu / Chiffres, documents from the note, conversation from the notes)', () => {
-  const nx = ui('screens/nx.js'); for (const needle of ["'sl-embed', 'compliance'", "'sl-embed', 'money'", "'sl-embed', 'quick'", "'sl-embed', 'docs'", "'sl-embed', 'live'"]) assert.ok(nx.includes(needle), needle);
+  const nx = ui('screens/nx.js'); for (const needle of ["'sl-embed', 'compliance'", "'sl-embed', 'money'", "'sl-embed', 'quick'", "'sl-embed', 'docs'", 'data-key="live"']) assert.ok(nx.includes(needle), needle);
 });
