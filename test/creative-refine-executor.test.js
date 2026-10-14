@@ -186,3 +186,27 @@ test('EX-9 the digest of a node, and the difference between two artifacts, ignor
   assert.ok(diff.unchanged.includes('PRODUCT') && diff.unchanged.includes('PLATE:plk_probe')); assert.deepEqual(diffArtifacts(a, a), { changed: [], added: [], removed: [], unchanged: Object.keys(d).sort() });
   assert.equal(diffArtifacts(a, {}), null); assert.equal(diffArtifacts({}, a), null);
 });
+
+test('EX-9 a candidate whose hard fidelity gate could not be MEASURED is repaired only when the caller accepts it, and its rerun is judged on the same footing', async () => {
+  const unmeasured = (E, over = {}) => ({ ...E.candidate, status: 'BLOCKED', fidelity: { gate: 'NOT_MEASURABLE' }, png_bytes: bytesOf(7), ...over });
+  const rerunUnmeasured = { status: 'BLOCKED', extra: { fidelity: { gate: 'NOT_MEASURABLE' }, png_bytes: bytesOf(8) } };
+  // the strict default: its own refusal, the runtime is not even asked, nothing remembered
+  const E1 = env(); const rt1 = fake(E1, rerunUnmeasured); const memory1 = createRefineMemory();
+  const refused = await refineCreative({ candidate: unmeasured(E1), defects: [badMid()], run: E1.run, store: E1.store, runtime: rt1, memory: memory1 });
+  assert.deepEqual([refused.status, refused.block.code, refused.plan, refused.original_kept], ['BLOCKED', REPAIR_BLOCK.FIDELITY_NOT_MEASURABLE, null, true]); assert.equal(rt1.seen.length, 0); assert.equal(memory1.attempts('scn_probe').length, 0);
+  // accepted by the caller: repaired, the product and the locked copy proven unchanged by the diff
+  const E2 = env(); const ok = await refineCreative({ candidate: unmeasured(E2), defects: [badMid()], run: E2.run, store: E2.store, runtime: fake(E2, rerunUnmeasured), allowUnmeasurableIdentity: true });
+  assert.equal(ok.status, 'REPAIRED'); assert.equal(ok.product_identical, true); assert.equal(ok.locked_copy_identical, true); assert.equal(ok.candidate.status, 'BLOCKED');
+  // the rerun must be on the SAME footing: a rerun refused for another reason (guardian missing, fidelity measured and not passed) is not a repair
+  for (const [name, extra] of [['guardian missing', { fidelity: { gate: 'PASS' }, png_bytes: bytesOf(8), reason: 'BRAND_GUARDIAN_NOT_CONFIGURED' }], ['no image', { fidelity: { gate: 'NOT_MEASURABLE' } }]]) {
+    const E = env(); const r = await refineCreative({ candidate: unmeasured(E), defects: [badMid()], run: E.run, store: E.store, runtime: fake(E, { status: 'BLOCKED', extra }), allowUnmeasurableIdentity: true });
+    assert.equal(r.status, 'NOT_REPAIRED', name); assert.equal(r.block.code, REPAIR_BLOCK.REPAIRED_CANDIDATE_REFUSED);
+  }
+  // an unmeasured rerun is never accepted for a candidate that WAS measured, whatever the caller said, nor without the caller's acceptance
+  for (const allow of [true, false]) {
+    const E = env(); const r = await refineCreative({ candidate: E.candidate, defects: [badMid()], run: E.run, store: E.store, runtime: fake(E, rerunUnmeasured), allowUnmeasurableIdentity: allow });
+    assert.equal(r.status, 'NOT_REPAIRED', `allow=${allow}`); assert.equal(r.block.code, REPAIR_BLOCK.REPAIRED_CANDIDATE_REFUSED);
+  }
+  // a measured rerun (READY) of an unmeasured candidate is accepted as before
+  const E3 = env(); assert.equal((await refineCreative({ candidate: unmeasured(E3), defects: [badMid()], run: E3.run, store: E3.store, runtime: fake(E3), allowUnmeasurableIdentity: true })).status, 'REPAIRED');
+});

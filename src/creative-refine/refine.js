@@ -31,7 +31,7 @@ export function classifyCandidate(candidate) {
   if (!candidate || !artifact) return 'NO_ARTIFACT';
   if (!buildLayerDependencyMap(artifact)) return 'INVALID';
   if (DELIVERED.has(candidate.status)) return 'DELIVERED';
-  if (candidate.status === 'BLOCKED' && candidate.fidelity?.gate === 'NOT_MEASURABLE') return 'UNMEASURABLE_DELIVERED';
+  if (candidate.status === 'BLOCKED' && candidate.fidelity?.gate === 'NOT_MEASURABLE' && candidate.png_bytes) return 'UNMEASURABLE_DELIVERED'; // an unmeasured image: without the image nothing was delivered
   return 'INVALID';
 }
 const component = COMPONENT.REFINE_EXECUTOR;
