@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MODULE as M, ENTITY as E, ID_KIND as K, PROVENANCE as P, LEVEL as L, ERR, IntegrationError,
+  verifyEntries, handoffs, MODULE as M, ENTITY as E, ID_KIND as K, PROVENANCE as P, LEVEL as L, ERR, IntegrationError,
   createIdentityRegistry, ref, parseRef, createTraceLedger, createHub, routeUtterance, STATUS, authorize, ACTION_POLICY, validateApproval,
   OWNERSHIP, KNOWN_DUPLICATIONS, assertCanWrite, assertCanRead, MODULE_MAP, makeFact, promote, reconcile, toShared, MAPPINGS,
 } from '../src/integration/index.js';
@@ -58,6 +58,8 @@ test('provenance: no silent promotion - only a named human or an official source
   assert.equal(code(() => promote(claim, P.VERIFIED, undefined)), ERR.PROVENANCE_PROMOTION_REFUSED);
   assert.equal(code(() => promote(claim, P.VERIFIED, { verifier_kind: 'HUMAN', verifier: 'llm', evidence_ref: 'x' })), ERR.PROVENANCE_PROMOTION_REFUSED);
   assert.equal(code(() => promote(claim, P.VERIFIED, { verifier_kind: 'SYSTEM', verifier: 'engine', evidence_ref: 'x' })), ERR.PROVENANCE_PROMOTION_REFUSED);
+  assert.equal(code(() => promote(claim, P.VERIFIED, { verifier_kind: 'ROBOT', verifier: 'bob', evidence_ref: 'x' })), ERR.PROVENANCE_PROMOTION_REFUSED, 'only HUMAN or OFFICIAL_SOURCE are verifier kinds');
+  assert.equal(code(() => promote(claim, P.VERIFIED, { verifier_kind: 'OFFICIAL_SOURCE', verifier: 'ECB', evidence_ref: 'ecb:2026-10-02' })), null);
   assert.equal(code(() => promote(claim, P.DOCUMENT_OBSERVED, { verifier_kind: 'HUMAN', verifier: 'owner-1', evidence_ref: 'doc:1' })), ERR.PROVENANCE_PROMOTION_REFUSED, 'the only promotion is to VERIFIED');
   const ok = promote(claim, P.VERIFIED, { verifier_kind: 'HUMAN', verifier: 'owner-1', evidence_ref: 'proforma:PI-77' });
   assert.equal(ok.provenance, P.VERIFIED); assert.equal(ok.promoted_from, P.SUPPLIER_CLAIM); assert.equal(claim.provenance, P.SUPPLIER_CLAIM, 'the original fact is untouched');
@@ -84,6 +86,8 @@ test('approval: the policy is default-deny and every level behaves as documented
   assert.equal(authorize(`${M.FINANCE}.pay_supplier`).decision, 'APPROVAL_REQUIRED');
   assert.equal(authorize(`${M.CREATIVE}.call_live_provider`).code, ERR.ACTION_BLOCKED);
   assert.equal(authorize('NOPE.whatever').code, ERR.ACTION_UNKNOWN, 'an action outside the table is blocked');
+  assert.equal(authorize('NOPE.whatever').decision, 'BLOCK');
+  assert.equal(authorize('NOPE.whatever', { approvals: [human('NOPE.whatever', 'x')], subject_ref: 'x' }).decision, 'BLOCK', 'no approval can open an action the policy does not know');
   for (const [a, l] of Object.entries(ACTION_POLICY)) assert.ok(Object.values(L).includes(l), a);
 });
 
@@ -132,6 +136,11 @@ test('ledger: append-only, hash-chained, tenant-scoped; tampering is detected; f
   assert.equal(code(() => l.append({ tenant_id: 'other', workflow_id: 'w1', source_module: M.CORE, action: 'a', outcome: 'OK' })), ERR.TENANT_MISMATCH);
   assert.throws(() => { l.list()[0].facts.push(1); }, TypeError, 'entries are frozen');
   assert.equal(l.list({ module: M.FINANCE }).length, 1);
+  const forged = JSON.parse(JSON.stringify(l.list()));
+  assert.deepEqual(verifyEntries(forged), { ok: true, length: 2 });
+  forged[0].facts[0].value = 'cheaper'; // tamper with history
+  assert.deepEqual(verifyEntries(forged), { ok: false, broken_at: 1 });
+  assert.equal(verifyEntries(JSON.parse(JSON.stringify(l.list())).reverse()).ok, false);
 });
 
 test('hub: MODULE_NOT_AVAILABLE is explicit and traced (failure test F); blocked and approval-required calls never reach the module', async () => {
@@ -267,4 +276,33 @@ test('readiness: global flags are computed from evidence and never inferred from
   assert.equal(evaluateIntegrationReadiness({ contracts, workflows: wf, ledger_verified: false, full_suite: { ran: true, failed_unexplained: 0 }, ci: { green: true } }).NORDLA_MODULES_CONNECTED, 'NO');
   const all = evaluateIntegrationReadiness({ contracts, workflows: wf, ledger_verified: true, full_suite: { ran: true, failed_unexplained: 0 }, ci: { green: true } });
   assert.equal(all.NORDLA_PRE_CHINA_READY, 'YES'); assert.deepEqual(all.modules_not_implemented, [M.PARLE_A_NORDLA]); assert.match(all.voice, /no voice/);
+});
+
+// ------------------------------------------------------------------------------------------------ pure handoff guards (each also checked at the hub; these prove the function itself refuses)
+const OK_ASSESSMENT = { decision: { verdict: 'GO', hardBlockers: [], conditions: [] } };
+const CASE = { id: 'case-x', quotes: [{ unitPrice: 4.2, currency: 'EUR', qty: 1000, moq: 500, at: 't' }] };
+
+test('handoff guards: an approval for another case / another plan does not count, even when called directly', () => {
+  const act = `${M.CHINA_SOURCING}.mark_buy_candidate`;
+  assert.equal(code(() => handoffs.markBuyCandidate({ tenant_id: T, case_state: CASE, assessment: OK_ASSESSMENT, approval: human(act, 'nordla:sourcing_case:another'), supplier_ref: 'nordla:supplier:s' })), ERR.APPROVAL_REQUIRED);
+  assert.equal(code(() => handoffs.markBuyCandidate({ tenant_id: T, case_state: CASE, assessment: OK_ASSESSMENT, approval: human(`${M.BUYING}.place_order`, 'nordla:sourcing_case:case-x'), supplier_ref: 'nordla:supplier:s' })), ERR.APPROVAL_REQUIRED, 'another action');
+  assert.equal(handoffs.markBuyCandidate({ tenant_id: T, case_state: CASE, assessment: OK_ASSESSMENT, approval: human(act, 'nordla:sourcing_case:case-x'), supplier_ref: 'nordla:supplier:s' }).state, 'BUY_CANDIDATE');
+  const plan = { status: 'PLANNED', purchase_ref: 'nordla:purchase:pp1' };
+  assert.equal(code(() => handoffs.approvePurchasePlan(plan, human(`${M.BUYING}.approve_purchase_plan`, 'nordla:purchase:pp2'))), ERR.APPROVAL_REQUIRED);
+  assert.equal(handoffs.approvePurchasePlan(plan, human(`${M.BUYING}.approve_purchase_plan`, 'nordla:purchase:pp1')).status, 'APPROVED_TO_ORDER');
+  assert.equal(code(() => handoffs.approvePurchasePlan({ ...plan, status: 'APPROVED_TO_ORDER' }, human(`${M.BUYING}.approve_purchase_plan`, 'nordla:purchase:pp1'))), ERR.HANDOFF_INVALID, 'a plan is approved once');
+});
+
+test('handoff guards: unknown stock is UNVERIFIABLE, a "coming soon" claim needs an expectation with an ETA, a brand of another tenant is refused', () => {
+  const known = (n, inc = []) => handoffs.availabilityOf({ product_ref: 'nordla:product:p', on_hand: n, expectations: inc });
+  const inStock = { ref: 'c1', kind: 'AVAILABILITY', mode: 'IN_STOCK' }; const soon = { ref: 'c2', kind: 'AVAILABILITY', mode: 'COMING_SOON' };
+  assert.equal(handoffs.checkClaimsAgainstStock({ claims: [inStock], availability: known(undefined) }).verdicts[0].verdict, 'UNVERIFIABLE', 'stock not known => no availability claim');
+  assert.equal(handoffs.checkClaimsAgainstStock({ claims: [inStock], availability: known(3) }).verdicts[0].verdict, 'SUPPORTED');
+  assert.equal(handoffs.checkClaimsAgainstStock({ claims: [inStock], availability: known(0) }).verdicts[0].verdict, 'BLOCKED');
+  assert.equal(handoffs.checkClaimsAgainstStock({ claims: [soon], availability: known(0) }).verdicts[0].verdict, 'BLOCKED', 'nothing incoming => cannot say coming soon');
+  const inc = [{ product_ref: 'nordla:product:p', state: 'EXPECTED', expectation_id: 'e', qty: 10, eta: '2026-12-01' }];
+  assert.equal(handoffs.checkClaimsAgainstStock({ claims: [soon], availability: known(0, inc) }).verdicts[0].launch_date, '2026-12-01');
+  assert.equal(known(0, inc).on_hand_available, 0, 'incoming is never added to on-hand');
+  const brand = { tenant_id: 'other', brand_ref: 'b', approved_claims: [] };
+  assert.equal(code(() => handoffs.buildCampaignContract({ tenant_id: T, product_ref: 'nordla:product:p', brand, objective: 'o', audience: 'a', offer: 'f', channel: 'c', claims: [], availability: known(1) })), ERR.TENANT_MISMATCH);
 });

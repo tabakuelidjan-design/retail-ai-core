@@ -17,7 +17,7 @@ import { eurOfSupplier } from '../finance/currency.js';
 
 export * from './constants.js';
 export { createIdentityRegistry, ref, parseRef } from './ids.js';
-export { createTraceLedger } from './ledger.js';
+export { createTraceLedger, verifyEntries } from './ledger.js';
 export { createHub } from './hub.js';
 export { routeUtterance, INTENT, STATUS } from './router.js';
 export { authorize, ACTION_POLICY, validateApproval } from './approval.js';

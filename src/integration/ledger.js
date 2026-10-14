@@ -27,17 +27,20 @@ export function createTraceLedger({ tenant_id, now = () => new Date().toISOStrin
     return entry;
   }
   const list = (filter = {}) => entries.filter((x) => (!filter.workflow_id || x.workflow_id === filter.workflow_id) && (!filter.module || x.source_module === filter.module || x.destination_module === filter.module));
-  function verify() {
-    let prev = 'GENESIS';
-    for (const x of entries) {
-      const { hash, ...body } = x;
-      if (body.prev !== prev || sha(prev + canonical(body)) !== hash) return { ok: false, broken_at: x.seq };
-      prev = hash;
-    }
-    return { ok: true, length: entries.length };
-  }
+  const verify = () => verifyEntries(entries);
   return Object.freeze({ tenant_id, append, list, verify, size: () => entries.length });
 }
 
 /** A fact summary for the ledger: provenance and source stay, large payloads do not. */
 export const factSummary = (name, fact) => ({ name, value: fact.value, provenance: fact.provenance, source_module: fact.source_module, currency: fact.currency ?? null });
+
+/** Re-computes the chain. Pure so a forged copy can be checked: { ok, length } or { ok: false, broken_at }. */
+export function verifyEntries(entries) {
+  let prev = 'GENESIS';
+  for (const x of entries) {
+    const { hash, ...body } = x;
+    if (body.prev !== prev || sha(prev + canonical(body)) !== hash) return { ok: false, broken_at: x.seq };
+    prev = hash;
+  }
+  return { ok: true, length: entries.length };
+}

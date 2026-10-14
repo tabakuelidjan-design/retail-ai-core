@@ -239,6 +239,8 @@ test('W3 "everything financially relevant about this supplier": one supplier, in
   const i1 = await inv({ invoiceNumber: 'GL-001', issueDate: '2026-09-01', dueDate: '2026-10-01', netCents: 100000, vatCents: 0, grossCents: 100000 });
   const i2 = await inv({ invoiceNumber: 'GL-002', issueDate: '2026-09-20', dueDate: '2026-10-20', netCents: 50000, vatCents: 0, grossCents: 50000 });
   const i3 = await inv({ invoiceNumber: 'GL-USD-3', issueDate: '2026-09-25', dueDate: '2026-10-25', netCents: 20000, vatCents: 0, grossCents: 20000, currency: 'USD' });
+  const i4 = await inv({ invoiceNumber: 'GL-004', issueDate: '2026-08-01', dueDate: '2026-09-01', netCents: 40000, vatCents: 0, grossCents: 40000 });
+  await fin.svc.payments.pay({ amountCents: 40000, paidOn: '2026-09-02', method: 'bank_transfer', idempotencyKey: 'w3-pay-0', allocations: [{ supplierInvoiceId: i4.id, amountCents: 40000 }] }, MERCHANT_ACTOR);
   await fin.svc.payments.pay({ amountCents: 30000, paidOn: '2026-09-25', method: 'bank_transfer', idempotencyKey: 'w3-pay-1', allocations: [{ supplierInvoiceId: i1.id, amountCents: 30000 }] }, MERCHANT_ACTOR);
   const before = nx.registry.all(K.SUPPLIER).length;
 
@@ -250,8 +252,9 @@ test('W3 "everything financially relevant about this supplier": one supplier, in
   assert.equal(r.ok, true);
   const o = r.result;
   assert.equal(o.supplier_ref, supplier_ref); assert.equal(o.finance_company_ids.length, 1);
-  assert.equal(o.invoices.length, 3);
-  assert.equal(o.payments.allocated_cents, 30000);
+  assert.equal(o.invoices.length, 4);
+  assert.equal(o.invoices.find((x) => x.number === 'GL-004').payment_status, 'paid');
+  assert.equal(o.payments.allocated_cents, 70000);
   assert.equal(o.exposure.unpaid_eur_cents, 100000 - 30000 + 50000, 'unpaid EUR = open balance of GL-001 + GL-002');
   assert.equal(o.exposure.excluded_foreign_currency.length, 1); assert.equal(o.exposure.excluded_foreign_currency[0].currency, 'USD'); assert.match(o.exposure.note, /not converted/);
   assert.equal(o.outstanding_commitments.planned_and_approved.length, 1);
@@ -259,7 +262,7 @@ test('W3 "everything financially relevant about this supplier": one supplier, in
   assert.equal(o.sourcing_quotes.length, 1); assert.equal(o.sourcing_quotes[0].case_ref, 'nordla:sourcing_case:case-a');
   assert.equal(nx.registry.all(K.SUPPLIER).length, before, 'no duplicate supplier record');
   const search = await callA(M.FINANCE, 'search_invoices', { supplier_ref }, { workflow_id: wf });
-  assert.equal(search.result.length, 3);
+  assert.equal(search.result.length, 4);
 
   // G: two suppliers in focus => ASK, no Finance call is made
   const sizeBefore = nx.ledger.size();
