@@ -31,7 +31,8 @@ export async function runCreativeCampaign({
   if (!(Number.isFinite(ceiling) && ceiling >= 0)) return fail('CEILING_INVALID', { ceiling_eur: ceiling });
   if (resume && (resume.schema !== 'campaign-resume@1' || resume.campaign_run_id !== campaignRunId)) return fail('RESUME_STATE_IS_NOT_THIS_CAMPAIGN', { got: resume?.campaign_run_id ?? null });
 
-  const segmentation = deps.segment ?? computeProductSegmentation;
+  const { run: runAsset = runCreativeEndToEnd, ...assetDeps } = deps; // `deps.run` replaces the one-asset run (the tests of the campaign's own decisions inject a scripted one)
+  const segmentation = assetDeps.segment ?? computeProductSegmentation;
   const memo = new Map(); // the product is segmented once for the campaign; a paid segmentation provider is asked once
   const segment = async (args) => {
     const key = sha({ asset: args.rgba?.width, h: args.rgba?.height, px: createHash('sha256').update(args.rgba?.pixels ?? '').digest('hex'), mode: args.mode, selection: args.selection ?? null });
@@ -58,11 +59,11 @@ export async function runCreativeCampaign({
       continue;
     }
     const prior = priorAssets.get(i);
-    const result = await runCreativeEndToEnd({
+    const result = await runAsset({
       run_id: runId, at, ceiling_eur: assetCeiling === null ? remaining : Math.min(remaining, assetCeiling), request, brief, fonts, font, ports, guardian, ledger,
       options: { ...options, scene_index: i, planner_ceiling_eur: ceiling },
       resume: { run_state: prior?.run_state ?? null, campaign_store: campaignStore, layer_store: layerStore, refine_memory: prior?.refine_memory ?? null },
-      deps: { ...deps, segment },
+      deps: { ...assetDeps, segment },
     });
     assets.push({ asset_index: i, run_id: runId, asset_id: result.asset_id, state: result.state, result });
     campaignStore = result.resume_state?.campaign_store ?? campaignStore; layerStore = result.resume_state?.layer_store ?? layerStore;
