@@ -15,6 +15,7 @@ import { createSafetyGateAdapter } from '../adapters/safety-gate.js';
 import { fetchEcb } from '../adapters/fx.js';
 import { createDisabledProvider, createVisionProvider } from '../adapters/ai-provider.js';
 import { assertSourcingRuntime } from '../runtime.js';
+import { hostedConfig, isHosted } from './hosted.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -28,7 +29,9 @@ async function ensureToken(env, dir) {
 
 export async function startSourcingServer({ env = process.env, log = console.log, port = Number(env.SOURCING_PORT || 8787), dir = DATA_DIR, fetchImpl, ecb = () => fetchEcb(), allowedHosts = [] } = {}) {
   assertSourcingRuntime(); // China Sourcing requires Node 24
-  const host = env.SOURCING_HOST || '127.0.0.1';
+  const hosted = isHosted(env) ? hostedConfig(env) : null; // SOURCING_HOSTED=1: complete configuration or nothing starts (src/sourcing/server/hosted.js)
+  if (hosted) { dir = hosted.dataDir; for (const h of hosted.allowedHosts) if (!allowedHosts.includes(h)) allowedHosts.push(h); }
+  const host = hosted ? hosted.host : env.SOURCING_HOST || '127.0.0.1';
   await mkdir(dir, { recursive: true });
   const token = await ensureToken(env, dir);
   const safety = createSafetyGateAdapter({ cacheDir: join(dir, 'safety-gate'), ...(fetchImpl ? { fetchImpl } : {}) });
@@ -37,9 +40,9 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
-  log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
+  log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${hosted ? `HOSTED for ${hosted.allowedHosts.join(', ')}: behind the authenticating proxy, token required` : host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
   log(merchantProfile ? `Merchant profile: ${merchantProfile.merchantId} (${mp.source === 'FILE' ? 'file' : 'config/merchants'}), status ${merchantProfile.status ?? 'n/a'}` : `No merchant profile loaded${mp.error ? ` (${mp.error})` : ''}: the fit checklist will say so. Set SOURCING_MERCHANT_ID to choose one.`);
-  log(`Access token: ${join(dir, 'token.txt')} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
+  log(`Access token: ${hosted || (env.SOURCING_TOKEN && env.SOURCING_TOKEN.length >= 24) ? 'from SOURCING_TOKEN' : join(dir, 'token.txt')} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
   return { server, token, safety, port: addr.port };
 }
 

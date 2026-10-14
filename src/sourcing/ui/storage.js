@@ -28,7 +28,21 @@ export async function initStorage() {
     if (!m && !isSafety) continue; const key = isSafety ? 'safety' : `${m[1]}:${m[2]}`; const v = ls.get(k, null); if (v === null) continue;
     if (await putBlob(key, v)) ls.del(k);
   }
-  return { indexedDb: idbOk };
+  persistence = await requestPersistentStorage();
+  return { indexedDb: idbOk, persistence };
+}
+let persistence = 'UNKNOWN';
+/**
+ * Asks the browser to keep this site's data (Android may otherwise EVICT the storage of a site it judges little used, cases included). Granted
+ * silently for an installed app on Chrome/Android; a refusal is reported, never hidden: the server copy (sync) and the JSON export stay the protection.
+ * @returns {Promise<'PERSISTED'|'NOT_GRANTED'|'UNSUPPORTED'>}
+ */
+export async function requestPersistentStorage(nav = globalThis.navigator) {
+  try {
+    if (typeof nav?.storage?.persist !== 'function') return 'UNSUPPORTED';
+    if (typeof nav.storage.persisted === 'function' && await nav.storage.persisted()) return 'PERSISTED';
+    return (await nav.storage.persist()) ? 'PERSISTED' : 'NOT_GRANTED';
+  } catch { return 'UNSUPPORTED'; }
 }
 export const getBlob = (key) => mem.get(key) ?? null;
 export async function putBlob(key, value) {
@@ -37,6 +51,6 @@ export async function putBlob(key, value) {
   return ls.set(`nordla.sourcing.blob.${key}`, value); // fallback: may fail when the quota is full
 }
 export async function delBlob(key) { mem.delete(key); if (idbOk) { try { await tx('readwrite', (s) => s.delete(key)); } catch { /* ignore */ } } ls.del(`nordla.sourcing.blob.${key}`); }
-export const storageInfo = () => ({ indexedDb: idbOk, blobs: mem.size, localKeys: ls.keys().length });
+export const storageInfo = () => ({ indexedDb: idbOk, persistence, blobs: mem.size, localKeys: ls.keys().length });
 /** Estimated usage / quota when the browser can tell (navigator.storage.estimate). */
 export async function storageEstimate() { try { const e = await navigator.storage.estimate(); return { usageMB: Math.round((e.usage ?? 0) / 1e5) / 10, quotaMB: Math.round((e.quota ?? 0) / 1e5) / 10 }; } catch { return null; } }

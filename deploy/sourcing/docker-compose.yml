@@ -1,0 +1,59 @@
+# China Sourcing, permanent hosting WITHOUT the Windows PC (prepared, not deployed: no account, no server, no domain exists yet).
+#   Internet --HTTPS--> caddy (TLS for SOURCING_DOMAIN, owner password) --private network--> sourcing (Node 24, SOURCING_HOSTED=1, app token)
+# Only caddy publishes ports. The sourcing container is not reachable from the internet, runs read-only as a non-root user, and keeps its
+# data in the `sourcing-data` volume. Backups: `docker compose run --rm backup` (cron on the host, see README.md).
+name: nordla-sourcing
+services:
+  sourcing:
+    build: { context: ../.., dockerfile: Dockerfile }
+    command: ["node", "src/sourcing/server/index.js"]
+    env_file: .env                     # SOURCING_TOKEN, SOURCING_ALLOWED_HOSTS, SOURCING_MERCHANT_ID (see .env.example); never committed
+    environment:
+      SOURCING_HOSTED: "1"
+      SOURCING_HOST: "0.0.0.0"         # inside the private compose network only (no `ports:` here)
+      SOURCING_PORT: "8787"
+      SOURCING_DATA_DIR: /app/data/local/sourcing
+    volumes:
+      - sourcing-data:/app/data/local/sourcing
+    expose: ["8787"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2.8.4
+    depends_on: [sourcing]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SOURCING_DOMAIN: ${SOURCING_DOMAIN:?set SOURCING_DOMAIN in .env}
+      SOURCING_OWNER_USER: ${SOURCING_OWNER_USER:?set SOURCING_OWNER_USER in .env}
+      SOURCING_OWNER_PASSWORD_HASH: ${SOURCING_OWNER_PASSWORD_HASH:?set SOURCING_OWNER_PASSWORD_HASH in .env (caddy hash-password)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    restart: unless-stopped
+
+  backup:
+    profiles: [tools]                  # never started by `up`; run on demand / from cron
+    build: { context: ../.., dockerfile: Dockerfile }
+    command: ["node", "tools/sourcing-backup.mjs", "backup", "/data", "/backups", "--keep", "30"]
+    env_file: .env                     # SOURCING_BACKUP_PASSPHRASE
+    volumes:
+      - sourcing-data:/data:ro
+      - ./backups:/backups
+    network_mode: none
+
+volumes:
+  sourcing-data:
+  caddy-data:
+  caddy-config:

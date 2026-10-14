@@ -110,6 +110,7 @@ export function createSourcingApp({ token, store, workspace = null, merchantProf
     try {
       if (!hostOk(req)) return json(res, 421, { error: 'HOST_NOT_ALLOWED' });
       const url = new URL(req.url, 'http://local');
+      if (url.pathname === '/healthz' && req.method === 'GET') return json(res, 200, { ok: true }); // liveness for the container / monitor: no data, no token
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });

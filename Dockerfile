@@ -15,6 +15,7 @@ COPY config ./config
 COPY resources ./resources
 COPY vendor ./vendor
 COPY schemas ./schemas
+COPY tools/sourcing-backup.mjs ./tools/sourcing-backup.mjs
 
 RUN mkdir -p /app/data/local && chown -R node:node /app/data
 USER node

@@ -1,0 +1,28 @@
+# TLS (automatic certificate for the domain), security headers, and the FIRST authentication layer: the owner's password (bcrypt hash only,
+# from the environment). The app token remains the second, independent check on every /api call.
+# The install files of the PWA (manifest, icons) and the liveness probe are public: a browser fetches the manifest WITHOUT credentials, and
+# they hold no data. Everything else, the app shell included, needs the password.
+{$SOURCING_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	@public path /manifest.webmanifest /icon.svg /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /healthz
+	handle @public {
+		reverse_proxy sourcing:8787
+	}
+
+	handle {
+		basic_auth {
+			{$SOURCING_OWNER_USER} {$SOURCING_OWNER_PASSWORD_HASH}
+		}
+		reverse_proxy sourcing:8787
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

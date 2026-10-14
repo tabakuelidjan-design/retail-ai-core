@@ -25,3 +25,6 @@ config/marketing-creative.alibaba.env
 # benchmark run reports
 benchmark/ask/results/
 benchmark/ask/adapters/configs/*.local.json
+
+# Sourcing backups made on the hosted server (encrypted archives; never committed)
+deploy/sourcing/backups/
