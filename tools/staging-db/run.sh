@@ -36,6 +36,7 @@ q "select 1" >/dev/null 2>&1 || { echo "STOP: cannot connect to the database (de
 [[ ${#PASS} -ge 16 ]] || { echo "STOP: backup passphrase shorter than 16 characters"; exit 2; }
 [[ "$(q "select count(*) from public.merchants where id = '$MARKER'")" == 1 ]] || { echo "STOP: staging marker merchant absent: not the staging database"; exit 2; }
 log "guard OK: project $REF, staging marker present, server $(q 'show server_version')"
+if [[ "${CHECK_ONLY:-0}" == 1 ]]; then log "CHECK ONLY: address, connection, staging marker and passphrase verified; nothing else was done (no backup, no write)"; exit 0; fi
 
 FP_SQL="do \$\$ declare r record; n bigint; h text; o text := ''; begin for r in select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace where s.nspname = 'public' and c.relkind = 'r' order by 1 loop execute format('select count(*), coalesce(md5(string_agg(md5(t::text), '''' order by md5(t::text))), ''empty'') from public.%I t', r.relname) into n, h; o := o || r.relname || '=' || n || ':' || h || E'\n'; end loop; raise notice '%', o; end \$\$;"
 fingerprint() { psql "$1" -X -q -v ON_ERROR_STOP=1 -c "$FP_SQL" 2>&1 | sed -n 's/^NOTICE:  //p; /^[a-z_]*=[0-9]*:/p' | grep -E '^[a-z_0-9]+=' | sort; }

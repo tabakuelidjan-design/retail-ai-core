@@ -22,12 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.req.outputs.run }}
+      check_only: ${{ steps.req.outputs.check_only }}
     steps:
       - uses: actions/checkout@v4
       - name: Requested?
         id: req
         run: |
           run=$(jq -r '.run // false' ops/staging-db/request.json)
+          check=$(jq -r '.check_only // false' ops/staging-db/request.json)
+          # check_only: the protected job only verifies the address, the connection and the staging marker, then stops (nothing written)
+          if [ "$check" = "true" ]; then run=true; fi
+          echo "check_only=$check" >> "$GITHUB_OUTPUT"
           ref=$(jq -r '.project_ref // ""' ops/staging-db/request.json)
           if [ "$ref" != "fvhiammdskpcnfodsnrc" ]; then echo "::error::request.json does not name the staging project"; exit 1; fi
           if [ "$run" = "true" ] && [ "$GITHUB_REF" != "refs/heads/claude/nordla-core-p0" ]; then echo "::error::run=true only from claude/nordla-core-p0"; exit 1; fi
@@ -58,11 +63,12 @@ jobs:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           STAGING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_BACKUP_PASSPHRASE }}
           RESTORE_URL: postgresql://postgres:restore-only@127.0.0.1:5432/restore_check
+          CHECK_ONLY: ${{ needs.gate.outputs.check_only == 'true' && '1' || '0' }}
         run: bash tools/staging-db/run.sh ops/staging-db/request.json out
       - name: HABB test merchant, owner, module sourcing, private bucket (only if request.json says "bootstrap" true)
         # Runs only after the migrations above succeeded. The owner's e-mail is an environment secret (never in git); the account itself
         # is created by the owner in the Supabase dashboard. Proven on a real PostgreSQL: test/postgres/staging-bootstrap.pg-smoke.mjs.
-        if: success()
+        if: success() && needs.gate.outputs.check_only != 'true'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           STAGING_OWNER_EMAIL: ${{ secrets.STAGING_OWNER_EMAIL }}
