@@ -5,7 +5,7 @@
 name: nordla-sourcing
 services:
   sourcing:
-    build: { context: ../.., dockerfile: Dockerfile }
+    build: { context: ../.., dockerfile: deploy/sourcing/Dockerfile }
     command: ["node", "src/sourcing/server/index.js"]
     env_file: .env                     # SOURCING_TOKEN, SOURCING_ALLOWED_HOSTS, SOURCING_MERCHANT_ID (see .env.example); never committed
     environment:
@@ -45,7 +45,7 @@ services:
 
   backup:
     profiles: [tools]                  # never started by `up`; run on demand / from cron
-    build: { context: ../.., dockerfile: Dockerfile }
+    build: { context: ../.., dockerfile: deploy/sourcing/Dockerfile }
     command: ["node", "tools/sourcing-backup.mjs", "backup", "/data", "/backups", "--keep", "30"]
     env_file: .env                     # SOURCING_BACKUP_PASSPHRASE
     volumes:

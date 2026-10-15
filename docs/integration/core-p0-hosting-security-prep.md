@@ -1,4 +1,17 @@
-# Nordla Cloud — hébergement et sécurité (plan, Core P0)
+# Core P0 — préparation hébergement et sécurité de China Sourcing
+
+> **Lire d'abord.** Le plan d'hébergement de référence appartient à la session Infrastructure :
+> `docs/infrastructure/nordla-cloud-plan.md` sur `claude/blissful-babbage-z0nrt2` (`2b6b983`). Il enregistre les décisions du propriétaire :
+> **Railway en priorité** (Hetzner seulement avec justification écrite), cible `app.nordla.app`, **Supabase reste la seule base**.
+> Ce document-ci ne décide rien : il décrit ce que la branche `claude/nordla-core-p0` a préparé dans le code. Ce fichier s'appelait
+> `docs/infrastructure/nordla-cloud-plan.md` dans les commits `77e06b6`..`7681aa2` ; il a été déplacé pour ne pas entrer en conflit
+> avec le fichier réservé à Infrastructure. Là où le texte ci-dessous recommande Hetzner ou propose « Postgres sur le VPS », il est
+> **remplacé** par les décisions ci-dessus.
+>
+> Conséquence pour Railway : `deploy/sourcing/` (Compose + Caddy) reste une variante. Sur Railway il n'y a pas de Caddy devant le
+> service ; la première couche d'authentification doit alors être dans l'application (le modèle existe déjà : mode hébergé
+> d'Analytics, `src/analytics-premium/server/hosting.js` : hôtes autorisés, jeton, limitation de débit, HSTS) et `sourcing` doit
+> être ajouté à `src/service-start.js`. Ces deux points sont à faire par Core P0 / Infrastructure, après accord.
 
 Statut : **préparé, en attente des décisions du propriétaire**. Aucun compte, serveur, domaine, abonnement ou secret n'a été créé ;
 aucune migration n'a été appliquée. Reprend uniquement la partie hébergement / sécurité du plan du 2026-10-14
@@ -9,7 +22,7 @@ officielles avant toute souscription.
 
 | Élément | État |
 |---|---|
-| Runtime | Node 24 pour tout le dépôt (`engines >=24`, `.nvmrc`, `Dockerfile` `node:24-slim`). |
+| Runtime | Node 24 pour tout le dépôt (`engines >=24`, `.nvmrc`, `deploy/sourcing/Dockerfile` `node:24-slim`). |
 | China Sourcing | Dans ce dépôt (`src/sourcing/`) : serveur HTTP + PWA hors ligne. Aujourd'hui sur le PC Windows (`npm run sourcing:phone`, tunnel Cloudflare temporaire, jeton de jumelage, écoute en loopback). Données en fichiers JSON (`data/local/sourcing/`), mono-marchand. |
 | Mode hébergé | Prêt dans le code : `SOURCING_HOSTED=1` (configuration complète exigée, refus codés), `/healthz`, `deploy/sourcing/` (Compose + Caddy), testé localement. |
 | Sauvegarde | `tools/sourcing-backup.mjs` : archive chiffrée (AES-256-GCM), vérifiée à l'écriture, restauration testée, rétention. Copie hors serveur immuable : à décider. |

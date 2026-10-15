@@ -1,7 +1,7 @@
 # China Sourcing hébergé (sans PC Windows) — préparé, pas déployé
 
 Rien n'a été créé : ni compte, ni serveur, ni domaine, ni dépense. Ce dossier contient tout ce qu'il faut pour le faire **après** les
-décisions du propriétaire (hébergeur, budget, domaine). Plan complet : `docs/infrastructure/nordla-cloud-plan.md`.
+décisions du propriétaire (hébergeur, budget, domaine). Plan de référence : `docs/infrastructure/nordla-cloud-plan.md` (session Infrastructure, **Railway en priorité**) ; ce qui est préparé ici : `docs/integration/core-p0-hosting-security-prep.md`. Cette variante Compose + Caddy sert si l'hébergement Railway est écarté par écrit.
 
 ```
 Téléphone (PWA) ──HTTPS──> Caddy : certificat TLS du domaine + mot de passe du propriétaire
@@ -23,7 +23,7 @@ Sauvegarde : docker compose run --rm backup  ->  ./backups/sourcing-<date>.nsb (
 **Pas encore vérifié** (nécessite le vrai serveur et le Xiaomi) : certificat Let's Encrypt réel, installation de la PWA derrière le mot de
 passe sur Android, fonctionnement hors ligne après installation, accès depuis la Chine.
 
-## Mise en route (Hetzner, recommandé) — après accord
+## Mise en route (variante VPS, si Railway est écarté par écrit) — après accord
 
 1. Créer le VPS (UE), clé SSH uniquement, pare-feu : 22 (IP du propriétaire), 80, 443.
 2. Installer Docker ; cloner ce dépôt sur la branche validée.
@@ -37,8 +37,9 @@ passe sur Android, fonctionnement hors ligne après installation, accès depuis 
 8. **Test de restauration avant usage réel** :
    `docker compose run --rm --entrypoint node -v $PWD/restore-test:/restore backup tools/sourcing-backup.mjs restore /backups/<fichier>.nsb /restore/data`
 
-Railway reste possible (service Docker + volume), mais Railway ne place pas Caddy devant : il faudrait un autre premier niveau
-d'authentification (par exemple Cloudflare Access). C'est une raison de plus de préférer Hetzner pour ce module.
+Railway (décision par défaut du propriétaire) : service Docker + volume, mais sans Caddy devant. Il faut donc une première couche
+d'authentification dans l'application (modèle : mode hébergé d'Analytics) et une entrée `sourcing` dans `src/service-start.js` —
+travail Core P0 / Infrastructure, non fait ici.
 
 ## Migration des données du PC Windows
 
