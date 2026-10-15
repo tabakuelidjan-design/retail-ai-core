@@ -3,8 +3,11 @@
 # stopping everything on failure:
 #   1. guard     the connection is STAGING (project ref in the URL, never the production ref, staging's synthetic merchant present)
 #   2. backup    pg_dump -Fc of the whole database, encrypted (AES-256, passphrase secret), kept as a workflow artifact
-#   3. restore   the dump's public + supabase_migrations schemas restored into a throw-away PostgreSQL 17; every public table's row count
-#                and content hash must equal the live staging ones -> the backup is PROVEN restorable before anything changes
+#   3. restore   public + supabase_migrations restored from the ENCRYPTED dump into a throw-away PostgreSQL 17, in ONE transaction,
+#                stopping on the first error; data (row counts + content hashes) AND structure (constraints, indexes, functions, triggers,
+#                policies, RLS, grants: tools/staging-db/structure.sql) must equal the live staging ones -> proven before anything changes.
+#                Coverage is written out: auth + storage metadata are in the dump but their restore is not proven here; Storage FILES are
+#                not in it at all
 #   4. apply     each requested migration file, in order, skipped if its name is already in the migration history, otherwise in ONE
 #                transaction with its history row (psql --single-transaction): all or nothing per migration
 #   5. checks    identity tables + RLS, no privilege for anon / authenticated, no SECURITY DEFINER callable by them, functional run in a
@@ -22,6 +25,7 @@ q() { psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
 # ---- 1. guard
 [[ "$DB" == *"$REF"* ]] || { echo "STOP: the database URL does not name project $REF"; exit 2; }
 [[ "$DB" != *"$PROD_REF"* ]] || { echo "STOP: the database URL names the PRODUCTION project"; exit 2; }
+q "select 1" >/dev/null || { echo "STOP: cannot connect to the database"; exit 2; }
 [[ ${#PASS} -ge 16 ]] || { echo "STOP: backup passphrase shorter than 16 characters"; exit 2; }
 [[ "$(q "select count(*) from public.merchants where id = '$MARKER'")" == 1 ]] || { echo "STOP: staging marker merchant absent: not the staging database"; exit 2; }
 log "guard OK: project $REF, staging marker present, server $(q 'show server_version')"
@@ -29,32 +33,41 @@ log "guard OK: project $REF, staging marker present, server $(q 'show server_ver
 FP_SQL="do \$\$ declare r record; n bigint; h text; o text := ''; begin for r in select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace where s.nspname = 'public' and c.relkind = 'r' order by 1 loop execute format('select count(*), coalesce(md5(string_agg(md5(t::text), '''' order by md5(t::text))), ''empty'') from public.%I t', r.relname) into n, h; o := o || r.relname || '=' || n || ':' || h || E'\n'; end loop; raise notice '%', o; end \$\$;"
 fingerprint() { psql "$1" -X -q -v ON_ERROR_STOP=1 -c "$FP_SQL" 2>&1 | sed -n 's/^NOTICE:  //p; /^[a-z_]*=[0-9]*:/p' | grep -E '^[a-z_0-9]+=' | sort; }
 
-# ---- 2. backup
+# ---- 2. backup: public + supabase_migrations (restore PROVEN below) and auth + storage METADATA (kept, restore NOT proven here)
 fingerprint "$DB" > "$OUT/before.fingerprint"
-log "fingerprint: $(wc -l < "$OUT/before.fingerprint") public tables"
-pg_dump "$DB" -Fc --no-owner -f "$OUT/staging.dump"
+psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -f tools/staging-db/structure.sql > "$OUT/before.structure"
+log "fingerprint: $(wc -l < "$OUT/before.fingerprint") public tables, $(wc -l < "$OUT/before.structure") structural objects"
+pg_dump "$DB" -Fc --no-owner --schema=public --schema=supabase_migrations --schema=auth --schema=storage -f "$OUT/staging.dump"
 gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 -o "$OUT/staging.dump.gpg" "$OUT/staging.dump" 3<<<"$PASS"
 sha256sum "$OUT/staging.dump.gpg" > "$OUT/staging.dump.gpg.sha256"
 log "backup: $(du -h "$OUT/staging.dump.gpg" | cut -f1) encrypted, sha256 $(cut -c1-16 "$OUT/staging.dump.gpg.sha256")"
+# coverage, said explicitly: what this backup contains, what is proven restorable, what is NOT in it at all
+{
+  echo "RESTORE PROVEN (data + structure compared): public, supabase_migrations"
+  echo "IN THE DUMP, restore NOT proven by this job (Supabase-managed schemas): auth, storage (metadata rows only)"
+  echo "NOT IN THE DUMP: Storage FILES (object bytes live outside PostgreSQL), and every other schema:"
+  psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "select '  ' || nspname || ' (' || n || ' relations)' from (select n.nspname, count(c.oid) n from pg_namespace n left join pg_class c on c.relnamespace = n.oid where n.nspname not in ('public','supabase_migrations','auth','storage','pg_catalog','information_schema','pg_toast') and n.nspname not like 'pg_temp%' and n.nspname not like 'pg_toast_temp%' group by n.nspname) x order by 1"
+  echo "Storage objects per bucket (files NOT backed up by this job):"
+  psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "select '  ' || bucket_id || ': ' || n || ' object(s)' from (select bucket_id, count(*) n from storage.objects group by bucket_id) x order by 1"
+} > "$OUT/coverage.txt"
+cat "$OUT/coverage.txt"
 
-# ---- 3. restore proof (from the ENCRYPTED file, as a real restore would)
+# ---- 3. restore proof (from the ENCRYPTED file, as a real restore would): any error, any difference = STOP, nothing applied
 gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 -d -o "$OUT/check.dump" "$OUT/staging.dump.gpg" 3<<<"$PASS"
-psql "$RESTORE" -X -q -v ON_ERROR_STOP=1 <<'SQL'
-do $$ begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
-end $$;
-create schema if not exists extensions; create extension if not exists pgcrypto schema extensions; create extension if not exists "uuid-ossp" schema extensions;
-create schema if not exists auth; create table if not exists auth.users (id uuid primary key);
-create or replace function auth.uid() returns uuid language sql stable as $f$ select null::uuid $f$;
-create schema if not exists storage; create table if not exists storage.buckets (id text primary key);
-SQL
-pg_restore -d "$RESTORE" --no-owner --no-privileges --schema=public --schema=supabase_migrations "$OUT/check.dump" 2> "$OUT/restore.log" || true
+psql "$RESTORE" -X -q -v ON_ERROR_STOP=1 -f tools/staging-db/restore-prereqs.sql
+# every entry of the two schemas (TOC line: "<id>; <oid> <oid> <TYPE words> <schema> <name> <owner>"), the creation of the
+# supabase_migrations schema and the grants on schema public; never auth / storage (Supabase-managed: restore not proven here)
+pg_restore -l "$OUT/check.dump" | grep -E '^[0-9]+; [0-9]+ [0-9]+ [A-Z][A-Z ]* (public|supabase_migrations) |^[0-9]+; [0-9]+ [0-9]+ SCHEMA - supabase_migrations |^[0-9]+; [0-9]+ [0-9]+ ACL - SCHEMA public ' > "$OUT/restore.list"
+[[ -s "$OUT/restore.list" ]] || { echo "STOP: the dump lists no public / supabase_migrations object"; exit 3; }
+if ! pg_restore -d "$RESTORE" --no-owner --single-transaction --exit-on-error -L "$OUT/restore.list" "$OUT/check.dump" 2> "$OUT/restore.log"; then
+  echo "STOP: pg_restore failed (single transaction, nothing kept in the copy); nothing is applied:"; cat "$OUT/restore.log"; exit 3
+fi
 rm -f "$OUT/check.dump" "$OUT/staging.dump"   # only the encrypted copy is kept
 fingerprint "$RESTORE" > "$OUT/restored.fingerprint"
-if ! diff -u "$OUT/before.fingerprint" "$OUT/restored.fingerprint" > "$OUT/restore.diff"; then echo "STOP: the restored copy differs from staging (see restore.diff): nothing is applied"; cat "$OUT/restore.diff"; exit 3; fi
-log "restore proof OK: $(wc -l < "$OUT/restored.fingerprint") tables identical (row counts + content hashes)"
+psql "$RESTORE" -X -q -tA -v ON_ERROR_STOP=1 -f tools/staging-db/structure.sql > "$OUT/restored.structure"
+if ! diff -u "$OUT/before.fingerprint" "$OUT/restored.fingerprint" > "$OUT/restore.diff"; then echo "STOP: restored DATA differs from staging; nothing is applied:"; cat "$OUT/restore.diff"; exit 3; fi
+if ! diff -u "$OUT/before.structure" "$OUT/restored.structure" > "$OUT/structure.diff"; then echo "STOP: restored STRUCTURE (constraints, indexes, functions, triggers, policies, RLS, grants) differs; nothing is applied:"; head -40 "$OUT/structure.diff"; exit 3; fi
+log "restore proof OK: $(wc -l < "$OUT/restored.fingerprint") tables (rows + content hashes) and $(wc -l < "$OUT/restored.structure") structural objects identical"
 
 # ---- 4. apply, one transaction per migration (file + history row)
 n=$(jq '.migrations | length' "$REQ")
