@@ -19,8 +19,8 @@ test('every root deployment config starts the dispatcher - never a specific serv
 });
 
 test('each service maps to its own program (no inversion), and each program is really that service', () => {
-  assert.deepEqual(Object.keys(SERVICE_ENTRIES).sort(), ['analytics', 'core', 'core-once', 'finance']);
-  const signature = { core: /export async function schedule\(/, finance: /export async function startFinanceServer\(/, analytics: /export async function startAnalyticsServer\(/, 'core-once': /export async function runSync\(/ };
+  assert.deepEqual(Object.keys(SERVICE_ENTRIES).sort(), ['analytics', 'core', 'core-once', 'finance', 'sourcing']);
+  const signature = { core: /export async function schedule\(/, finance: /export async function startFinanceServer\(/, analytics: /export async function startAnalyticsServer\(/, 'core-once': /export async function runSync\(/, sourcing: /export async function startSourcingServer\(/ };
   for (const [name, entry] of Object.entries(SERVICE_ENTRIES)) {
     assert.ok(existsSync(new URL(entry, ROOT)), `${name}: ${entry} exists`);
     assert.match(read(entry), signature[name], `${name} starts ${entry}, which must be the ${name} program`);
