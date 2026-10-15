@@ -14,6 +14,9 @@
 #                transaction that is ROLLED BACK (owner bootstrap, module, session), and the pre-existing data unchanged
 # Usage: STAGING_DATABASE_URL=... STAGING_BACKUP_PASSPHRASE=... RESTORE_URL=... tools/staging-db/run.sh ops/staging-db/request.json OUT_DIR
 set -euo pipefail
+# Never print the database address: a client error can echo part of it (2026-10-15: a password holding an unencoded '@' was split
+# and a fragment reached the job log). Every line of this script's output goes through this mask.
+exec > >(sed -u -E 's#postgres(ql)?://[^[:space:]"]*#<adresse masquée>#g; s#"[^"]*@[^"]*"#"<masqué>"#g; s#[^[:space:]"]*@[^[:space:]"]*supabase\.(com|co)[^[:space:]"]*#<masqué>#g') 2>&1
 REQ="$1"; OUT="$2"; mkdir -p "$OUT"
 PROD_REF='xbtzjabbseclmqfozjeo'
 REF=$(jq -r .project_ref "$REQ"); MARKER=$(jq -r .staging_marker_merchant "$REQ")
@@ -23,9 +26,13 @@ log() { echo "[$(date -u +%H:%M:%S)] $*"; }
 q() { psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
 
 # ---- 1. guard
+# The address must parse unambiguously BEFORE any connection: exactly one '@', and no '/', '?' or '#' in the user / password part.
+rest="${DB#*://}"; userinfo="${rest%@*}"
+[[ "$DB" == postgres://* || "$DB" == postgresql://* ]] || { echo "STOP: the database URL must start with postgresql://"; exit 2; }
+[[ $(tr -cd '@' <<<"$DB" | wc -c) -eq 1 && "$userinfo" != *[/?#]* ]] || { echo "STOP: the database URL is ambiguous: the password contains '@', '/', '?' or '#'. Encode it (@ = %40) or generate a password with letters and digits only. Nothing was connected."; exit 2; }
 [[ "$DB" == *"$REF"* ]] || { echo "STOP: the database URL does not name project $REF"; exit 2; }
 [[ "$DB" != *"$PROD_REF"* ]] || { echo "STOP: the database URL names the PRODUCTION project"; exit 2; }
-q "select 1" >/dev/null || { echo "STOP: cannot connect to the database"; exit 2; }
+q "select 1" >/dev/null 2>&1 || { echo "STOP: cannot connect to the database (details withheld: they can contain the address)"; exit 2; }
 [[ ${#PASS} -ge 16 ]] || { echo "STOP: backup passphrase shorter than 16 characters"; exit 2; }
 [[ "$(q "select count(*) from public.merchants where id = '$MARKER'")" == 1 ]] || { echo "STOP: staging marker merchant absent: not the staging database"; exit 2; }
 log "guard OK: project $REF, staging marker present, server $(q 'show server_version')"
