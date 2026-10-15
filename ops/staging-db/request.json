@@ -1,5 +1,5 @@
 {
-  "_comment": "Supabase STAGING identity migrations 2-5 (migration 1 identity_sessions_events is already applied as version 20261015114757). Approved by the owner on 2026-10-15 for staging only. Changing this file re-runs the job; each file's SHA-256 (base64) must match.",
+  "_comment": "Supabase STAGING identity migrations 2-5 (applied by run 38813124178, skipped now: already in the history) + HABB test bootstrap (owner's go 2026-10-15, staging only). Changing this file re-runs the job; each file's SHA-256 (base64) must match.",
   "project_ref": "fvhiammdskpcnfodsnrc",
   "staging_marker_merchant": "4159734e-27be-4772-bb7c-6c5f24fbafcc",
   "migrations": [
@@ -24,6 +24,7 @@
       "sha256_b64": "ByfN0NtofcOk/fv0QWIlU/YdbUj1qGIz9DAh+sUD8fI="
     }
   ],
-  "run": false,
-  "check_only": false
+  "run": true,
+  "check_only": false,
+  "bootstrap": true
 }

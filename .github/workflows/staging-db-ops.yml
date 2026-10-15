@@ -74,12 +74,8 @@ jobs:
           STAGING_OWNER_EMAIL: ${{ secrets.STAGING_OWNER_EMAIL }}
         run: |
           if [ "$(jq -r '.bootstrap // false' ops/staging-db/request.json)" != "true" ]; then echo "::notice::bootstrap not requested"; exit 0; fi
-          case "$STAGING_DATABASE_URL" in *fvhiammdskpcnfodsnrc*) ;; *) echo "::error::not the staging project"; exit 1;; esac
-          case "$STAGING_DATABASE_URL" in *xbtzjabbseclmqfozjeo*) echo "::error::production refused"; exit 1;; esac
-          # STAGING_OWNER_EMAIL is optional: without it the owner is the ONLY confirmed account of staging Auth (else STOP)
-          set -o pipefail
-          if [ -n "$STAGING_OWNER_EMAIL" ]; then psql "$STAGING_DATABASE_URL" -X -v ON_ERROR_STOP=1 -v owner_email="$STAGING_OWNER_EMAIL" -f ops/staging-db/bootstrap-habb-test.sql | tee out/bootstrap.txt
-          else psql "$STAGING_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f ops/staging-db/bootstrap-habb-test.sql | tee out/bootstrap.txt; fi
+          # masked output, before/after proof that no pre-existing row changed, end state read back (tools/staging-db/bootstrap.sh)
+          bash tools/staging-db/bootstrap.sh out
       - name: Keep the encrypted backup and the evidence (never the clear dump)
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,5 +93,6 @@ jobs:
             out/restore.log
             out/history.txt
             out/bootstrap.txt
+            out/bootstrap-*.fingerprint
           retention-days: 30
           if-no-files-found: ignore
