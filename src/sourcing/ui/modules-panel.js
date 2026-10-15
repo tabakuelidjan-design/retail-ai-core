@@ -34,7 +34,7 @@ export function createModulesPanel({ S, api, refresh }) {
     ${c.decision ? `<p class="small"><b>Décision : ${esc(c.decision.decision)}</b> — « ${esc(c.decision.reason)} »</p>` : `<label class="small">Votre raison<input id="nx-reason-${i}"></label><div class="row">${[['APPROVED_FOR_CREATION', 'Valider pour création'], ['DEFERRED', 'Reporter'], ['REJECTED', 'Rejeter']].map(([d, l]) => `<button class="btn sec" data-act="nx-decide" data-i="${i}" data-id="${esc(c.id)}" data-decision="${d}">${l}</button>`).join('')}</div>`}</div>`;
 
   function section() {
-    const head = '<h2>Nordla</h2>';
+    const head = '<h2 id="nx-head">Nordla</h2>';
     if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les six autres modules demandent le serveur.</p>`;
     if (!st.modules) return `${head}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla (7 modules)</button>`;
     const by = Object.fromEntries(st.modules.map((m) => [m.key, m]));
