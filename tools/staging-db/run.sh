@@ -33,7 +33,18 @@ yn() { [[ "$userinfo" == *"$1"* ]] && echo yes || echo no; }
 [[ $(tr -cd '@' <<<"$DB" | wc -c) -eq 1 && "$userinfo" != *[/?#]* && "$userinfo" != *[\[\]]* && "$DB" != *[[:space:]]* ]] || { echo "STOP: the database URL is ambiguous. Structure only (no value): '@' in the whole address: $(tr -cd '@' <<<"$DB" | wc -c) (expected 1); in the user:password part: '/' $(yn /), '?' $(yn '?'), '#' $(yn '#'), '[' or ']' $( [[ "$userinfo" == *[\[\]]* ]] && echo yes || echo no) (placeholder [YOUR-PASSWORD] not replaced?), whitespace anywhere: $( [[ "$DB" == *[[:space:]]* ]] && echo yes || echo no). Use a password with letters and digits only (or encode: @ = %40). Nothing was connected."; exit 2; }
 [[ "$DB" == *"$REF"* ]] || { echo "STOP: the database URL does not name project $REF"; exit 2; }
 [[ "$DB" != *"$PROD_REF"* ]] || { echo "STOP: the database URL names the PRODUCTION project"; exit 2; }
-q "select 1" >/dev/null 2>&1 || { echo "STOP: cannot connect to the database (details withheld: they can contain the address)"; exit 2; }
+# Connection failure: the client's message can contain the address, so it is never printed; only its CATEGORY is.
+if ! cerr=$(psql "$DB" -X -q -tA -c "select 1" 2>&1 >/dev/null); then
+  case "$cerr" in
+    *"password authentication failed"*) why='authentication refused: the PASSWORD in the address is not the database password (reset it, letters and digits only, and update the secret)';;
+    *"could not translate host name"*|*"Name or service not known"*) why='host not found: the server part of the address is wrong';;
+    *"timeout"*|*"timed out"*|*"Connection refused"*) why='server unreachable (timeout or refused): check host and port (Session pooler, 5432)';;
+    *"Tenant or user not found"*|*"tenant"*) why='pooler does not know this user: the user must be postgres.<project ref>';;
+    *"SSL"*|*"ssl"*) why='TLS negotiation failed';;
+    *) why='other cause (details withheld)';;
+  esac
+  unset cerr; echo "STOP: cannot connect to the database - $why. Nothing was connected or changed."; exit 2
+fi
 [[ ${#PASS} -ge 16 ]] || { echo "STOP: backup passphrase shorter than 16 characters"; exit 2; }
 [[ "$(q "select count(*) from public.merchants where id = '$MARKER'")" == 1 ]] || { echo "STOP: staging marker merchant absent: not the staging database"; exit 2; }
 log "guard OK: project $REF, staging marker present, server $(q 'show server_version')"
