@@ -56,7 +56,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       - name: Provider provisioning tests (credential store, OAuth sessions, Instagram, TikTok, Google, Connection Center, Activation integration, security)
@@ -80,5 +80,5 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
       - run: node test/postgres/provider-connections.pg-smoke.mjs
