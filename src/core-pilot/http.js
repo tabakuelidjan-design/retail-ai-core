@@ -9,6 +9,7 @@
 //   POST /api/core/ask                          { text, caseId? }                         Parle à Nordla (text)
 import { CoreError } from './runtime.js';
 import { askNordla, NOT_CONNECTED } from './ask.js';
+import { creativeCapability } from './campaign.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
 const MAX = 64 * 1024;
@@ -32,7 +33,7 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, branding = null, campaigns = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req) {
     const chunks = []; let n = 0;
@@ -41,6 +42,22 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     try { return JSON.parse(raw); } catch { throw new CoreError('INVALID_JSON', 'JSON invalide'); }
   }
   const status = async () => (runtime ? { enabled: true, ...(({ decisions, ...o }) => o)(await runtime.overview()) } : { enabled: false, reason: configError ?? 'CORE_NOT_CONFIGURED' });
+
+  /** The seven modules as they REALLY are on this server (what answers, what is limited, what is missing and why). Offline: Sourcing only. */
+  async function modules() {
+    const b = branding ? await branding.status() : { status: 'NOT_CONNECTED' };
+    const c = creativeCapability(env);
+    const row = (key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
+    return { modules: [
+      row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
+      row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE),
+      row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS),
+      row('sourcing', 'China Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
+      row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles HABB en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
+      row('marketing', 'Marketing', campaigns ? 'LIMITÉ' : 'NON RACCORDÉ', 'Proposition de campagne (contrat, contrôles marque et stock) et décision humaine. Aucune diffusion possible.'),
+      row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
+    ] };
+  }
 
   /** @returns {Promise<boolean>} true when the request was a /api/core route (answered). `actor` = { userId?, role, label? } from the server's authorisation. */
   async function handle(req, res, url, actor) {
@@ -56,6 +73,14 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics }));
         return true;
       }
+      if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules()); return true; }
+      if (p === '/api/core/branding' && m === 'GET') { json(res, 200, branding ? await branding.status() : { status: 'NOT_CONNECTED' }); return true; }
+      if (p === '/api/core/branding/check' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await branding.checkText(String(b.text ?? '').slice(0, 4000))); return true; }
+      if (p === '/api/core/branding/approve' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } json(res, 200, await branding.approve(actor)); return true; }
+      if (p === '/api/core/campaigns' && m === 'GET') { json(res, 200, { campaigns: campaigns ? await campaigns.list() : [] }); return true; }
+      if (p === '/api/core/campaigns' && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
+      const cd = /^\/api\/core\/campaigns\/([^/]{1,200})\/decision$/.exec(p);
+      if (cd && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.decide(decodeURIComponent(cd[1]), b, actor)); return true; }
       if (!runtime) { json(res, 503, { error: 'CORE_NOT_CONFIGURED', reason: configError }); return true; }
       if (p === '/api/core/decisions' && m === 'GET') {
         const c = url.searchParams.get('case');
@@ -79,7 +104,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       }
       json(res, 404, { error: 'NOT_FOUND' }); return true;
     } catch (e) {
-      if (e instanceof CoreError) { json(res, e.status, { error: e.code, message: e.message }); return true; }
+      if (e instanceof CoreError || (e?.code && e?.status)) { json(res, e.status, { error: e.code, message: e.message }); return true; }
       throw e;
     }
   }

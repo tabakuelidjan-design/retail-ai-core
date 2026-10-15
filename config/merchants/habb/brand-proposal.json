@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "merchantId": "habb",
+  "status": "PROPOSED_NOT_APPROVED",
+  "note": "PROPOSAL for the owner's review. NOT official brand rules: Nordla never treats them as approved until the owner approves them in Nordla Core (OWNER role, recorded). Every line comes from config/merchants/habb/business-principles.md (the owner's stated direction) - nothing is invented about HABB's products, prices or claims. No product claim is proposed: approved claims must come from the real catalogue.",
+  "brandName": "HABB",
+  "locale": "fr-BE",
+  "supportedLocales": ["fr-BE", "nl-BE"],
+  "evidence": [
+    { "id": "habb-principles-1", "statement": "Owner direction: premium, sober, credible brand; no generic AI-looking or gimmicky promotion, no fake urgency, no decorative excess.", "source": "config/merchants/habb/business-principles.md#working-principles-1" },
+    { "id": "habb-principles-2", "statement": "Owner direction: never invent facts; prices, specs, compatibility and claims verified against the real catalogue before being stated.", "source": "config/merchants/habb/business-principles.md#working-principles-2" },
+    { "id": "habb-identity", "statement": "HABB: personalised gifts and UV printing, physical shop in Namur (Belgium) plus habb.be online.", "source": "config/merchants/habb/business-principles.md#who-habb-is" },
+    { "id": "habb-principles-4-5", "statement": "Owner direction: local acquisition in Namur and reaching real gift buyers directly are priorities.", "source": "config/merchants/habb/business-principles.md#working-principles-4-5" }
+  ],
+  "decisions": {
+    "category": "Cadeaux personnalisés et impression UV",
+    "buying_contexts": ["cadeau personnalisé", "achat en boutique à Namur", "commande en ligne sur habb.be"],
+    "value_proposition": "Un cadeau personnalisé, réalisé avec soin, en boutique à Namur ou en ligne.",
+    "positioning": "Premium, sobre et crédible.",
+    "core_promise": "Personnaliser avec soin, sans promettre plus que ce qui est vrai.",
+    "reasons_to_believe": ["Boutique physique à Namur", "Impression UV réalisée par HABB"],
+    "personality": ["sobre", "soigné", "crédible", "local"],
+    "voice": { "traits": ["sobre", "précis", "chaleureux sans excès"], "do": ["dire ce qui est vérifié", "parler du cadeau et de la personne qui le reçoit"], "dont": ["inventer un fait", "créer une urgence artificielle", "surcharger le message"] },
+    "exclusions": ["fausse urgence", "affirmation non vérifiée", "promotion tape-à-l'œil"],
+    "distinctive_assets": [],
+    "evidence_refs": ["habb-principles-1", "habb-principles-2", "habb-identity", "habb-principles-4-5"]
+  },
+  "hard_rules": [
+    { "id": "no-fake-urgency-1", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "dernière chance", "severity": "BLOCK", "scope": "GLOBAL", "why": "Pas de fausse urgence (principe 1)." },
+    { "id": "no-fake-urgency-2", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "dépêchez-vous", "severity": "BLOCK", "scope": "GLOBAL", "why": "Pas de fausse urgence (principe 1)." },
+    { "id": "no-fake-urgency-3", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "plus que quelques heures", "severity": "BLOCK", "scope": "GLOBAL", "why": "Pas de fausse urgence (principe 1)." },
+    { "id": "no-unverified-superlative-1", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "le meilleur", "severity": "REVIEW", "scope": "GLOBAL", "why": "Superlatif à prouver avant d'être dit (principe 2)." },
+    { "id": "no-unverified-superlative-2", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "n°1", "severity": "REVIEW", "scope": "GLOBAL", "why": "Classement à prouver avant d'être dit (principe 2)." },
+    { "id": "no-unverified-guarantee", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "garanti à vie", "severity": "REVIEW", "scope": "GLOBAL", "why": "Garantie à vérifier avant d'être promise (principe 2)." },
+    { "id": "no-gimmick-1", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "incroyable", "severity": "REVIEW", "scope": "GLOBAL", "why": "Ton sobre, pas tape-à-l'œil (principe 1)." },
+    { "id": "no-gimmick-2", "rule_type": "TEXT", "subject": "body", "operator": "NOT_CONTAINS", "value": "!!!", "severity": "REVIEW", "scope": "GLOBAL", "why": "Ton sobre, pas tape-à-l'œil (principe 1)." }
+  ],
+  "questions_for_owner": [
+    "Quelles affirmations produit (prix, délais, matériaux, durabilité) sont vérifiées et peuvent être enregistrées comme affirmations approuvées ?",
+    "Faut-il interdire d'autres expressions (ex. « promo », « soldes ») ou au contraire les autoriser dans certains cas ?",
+    "Couleurs, logo et typographie officiels de HABB (non connus de Nordla : aucune règle visuelle n'est proposée)."
+  ]
+}

@@ -45,14 +45,18 @@ export function buildHostedGate(env, hosted, services = null) {
 
 /** Nordla Core on this server: the merchant's core-decision.json + the decision journal in the data directory. Any problem (no config,
  *  a journal that does not verify) disables the Core with its reason and leaves China Sourcing working; the journal is never touched. */
-export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, root = join(HERE, '..', '..', '..') }) {
+export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, root = join(HERE, '..', '..', '..') }) {
   const { config, error } = await loadCoreConfig(env, root);
   if (!config) return { core: createCoreHttp({ runtime: null, configError: `CORE_NOT_CONFIGURED: ${error}`, store }), status: `Nordla Core OFF (${error})` };
   const runtime = createCoreRuntime({ merchantId, config, journal: createFileJournal({ merchantId, file: join(dir, 'core', 'decision-journal.jsonl') }) });
   try { await runtime.ready(); } catch (e) { return { core: createCoreHttp({ runtime: null, configError: e.code ? `${e.code}: ${e.message}` : 'JOURNAL_UNREADABLE', store }), status: `Nordla Core OFF: ${e.message}` }; }
   const externals = async () => { try { const g = await safety.get(); return g?.alerts ? { safety: g } : {}; } catch { return {}; } };
-  const readers = await buildReaders({ env, dir, merchantId, log });
-  return { core: createCoreHttp({ runtime, store, externals, ...readers }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  const readers = injected ?? await buildReaders({ env, dir, merchantId, log }); // injected: tests / the isolated demo (synthetic data) only
+  const { createBrandingService, loadBrandProposal } = await import('../../core-pilot/branding.js');
+  const { createCampaignService } = await import('../../core-pilot/campaign.js');
+  const branding = createBrandingService({ merchantId, proposal: await loadBrandProposal(env, root), file: join(dir, 'core', 'brand-approved.json') });
+  const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
@@ -89,7 +93,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const safety = createSafetyGateAdapter({ cacheDir: join(dir, 'safety-gate'), ...(fetchImpl ? { fetchImpl } : {}) });
   const mp = await loadMerchantProfile(env, join(HERE, '..', '..', '..')); const merchantProfile = mp.profile; // explicit choice (SOURCING_MERCHANT_ID / SOURCING_MERCHANT_PROFILE): no merchant is named in this code
   const store = createFileStore(join(dir, 'cases'));
-  const core = await buildCore({ env, dir, merchantId: hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local', store, safety, log });
+  const core = await buildCore({ env, dir, merchantId: hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local', store, safety, log, readers: services?.readers ?? null });
   const app = createSourcingApp({ gate, core: core.core, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });

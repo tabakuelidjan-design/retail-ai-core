@@ -53,6 +53,7 @@
     "sourcing:e2e:photos": "node test/e2e/sourcing-photo-backup.e2e.js",
     "sourcing:e2e:signin": "node test/e2e/sourcing-hosted-signin.e2e.js",
     "core:e2e": "node test/e2e/core-pilot.e2e.js",
+    "nordla:e2e": "node test/e2e/nordla-entry.e2e.js",
     "growth": "node src/growth/server/serve.js"
   },
   "engines": {

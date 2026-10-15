@@ -65,7 +65,7 @@ export function createCorePanel({ S, api, refresh }) {
     const a = st.ask;
     const askBlock = `<h3>Parle à Nordla (texte)</h3><label class="small">Votre question<input id="core-ask-text" placeholder="ex. résume ce dossier ; dois-je acheter ce produit ? ; décisions en attente"></label><button class="btn sec" data-act="core-ask" data-case="${esc(active?.id ?? '')}" ${st.busy ? 'disabled' : ''}>Demander</button>
       ${a ? `<div class="card" data-core-answer><p class="small muted">« ${esc(a.text)} »</p>${String(a.answer ?? '').split('\n').map((l) => `<p class="small">${esc(l)}</p>`).join('')}${a.sources?.length ? `<p class="small muted">Sources : ${esc(a.sources.map((s) => `${s.kind === 'sourcing_case' ? 'dossier' : 'journal'} ${s.ref}`).join(', '))}</p>` : ''}${a.limits?.length ? `<p class="small muted">Limites : ${esc(a.limits.join(' '))}</p>` : ''}</div>` : ''}`;
-    return `${head}${err}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}. Finance et Analyses : pas encore reliés.</p>${caseBlock}${askBlock}`;
+    return `${head}${err}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
   }
   return { section, load };
 }
