@@ -25,5 +25,5 @@
     }
   ],
   "run": false,
-  "check_only": true
+  "check_only": false
 }
