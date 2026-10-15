@@ -22,6 +22,7 @@ const MUTANTS = [
   ['durable/no-stale-lock-takeover', D, [['if (st && now() - st.mtimeMs > staleMs) {', 'if (false) {']]],
   ['durable/read-swallows-errors', D, [["if (e.code === 'ENOENT') return [];\n    throw new DurableFileError(`${label}_UNREADABLE`", 'return [];\n    throw new DurableFileError(`${label}_UNREADABLE`']]],
   ['durable/torn-tail-as-corrupt', D, [['if (last && !terminated) throw new DurableFileError(`${label}_TORN_TAIL`', 'if (false) throw new DurableFileError(`${label}_TORN_TAIL`']]],
+  ['durable/lock-busy-codes-not-retried', D, [["const LOCK_BUSY = new Set(['EEXIST', 'EPERM', 'EBUSY', 'EACCES']);", "const LOCK_BUSY = new Set(['EEXIST']);"]]],
   ['durable/short-write-ignored', D, [['if (!bytesWritten) throw new DurableFileError', 'if (false) throw new DurableFileError']]],
   // runtime: one logical writer
   ['runtime/decide-not-serialised', R, [['return serial(() => decideHumanSerial(entryId, body, actor));', 'return decideHumanSerial(entryId, body, actor);']]],

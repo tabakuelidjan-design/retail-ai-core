@@ -45,20 +45,25 @@ export async function fileSize(file) {
  * Runs `fn` while holding `<file>.lock`. The lock is released in `finally` only if it is still ours (a taken-over lock is never removed by its old owner).
  * Throws DurableFileError JOURNAL_LOCKED (503, transient: nothing was written) when the lock cannot be taken within `waitMs`.
  */
-export async function withWriteLock(file, fn, { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS, now = Date.now } = {}) {
+// On Windows a lock file that was just removed can stay "delete pending" for a moment: creating it then fails with EPERM (or EBUSY / EACCES), exactly like EEXIST.
+// Those codes mean "busy, try again"; if they never clear the outcome is the transient JOURNAL_LOCKED (nothing written), never a write failure that protects the journal.
+const LOCK_BUSY = new Set(['EEXIST', 'EPERM', 'EBUSY', 'EACCES']);
+
+export async function withWriteLock(file, fn, { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS, now = Date.now, openFile = open } = {}) {
   const lock = `${file}.lock`; const token = randomUUID();
   await mkdir(dirname(file), { recursive: true });
-  const deadline = now() + waitMs;
+  const deadline = now() + waitMs; let lastBusy = null;
   for (;;) {
     try {
-      const h = await open(lock, 'wx', 0o600);
+      const h = await openFile(lock, 'wx', 0o600);
       try { await h.writeFile(JSON.stringify({ token, pid: process.pid, at: new Date(now()).toISOString() })); } finally { await h.close(); }
       break;
     } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      let st = null; try { st = await stat(lock); } catch { /* released meanwhile */ }
+      if (!LOCK_BUSY.has(e.code)) throw e;
+      lastBusy = e.code;
+      let st = null; try { st = await stat(lock); } catch { /* released meanwhile, or delete pending */ }
       if (st && now() - st.mtimeMs > staleMs) { await unlink(lock).catch(() => {}); continue; } // a crashed writer's lock
-      if (now() > deadline) throw new DurableFileError('JOURNAL_LOCKED', 'another writer holds the journal; nothing was written, try again', { status: 503 });
+      if (now() > deadline) throw new DurableFileError('JOURNAL_LOCKED', 'another writer holds the journal; nothing was written, try again', { status: 503, details: { last_busy_code: lastBusy } });
       await sleep(15 + Math.floor(Math.random() * 20));
     }
   }

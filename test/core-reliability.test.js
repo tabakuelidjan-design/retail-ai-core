@@ -10,7 +10,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { newCase, dispatch } from '../src/sourcing/core/case.js';
 import { createCoreRuntime } from '../src/core-pilot/runtime.js';
 import { createFileJournal, createMemoryJournal, inspectJournalText, verifyChain } from '../src/core-pilot/journal.js';
-import { appendLineDurably, readJsonlStrict } from '../src/core-pilot/durable-file.js';
+import { appendLineDurably, readJsonlStrict, withWriteLock } from '../src/core-pilot/durable-file.js';
 import { applyRecovery, diagnoseJournal, prepareRecovery, verifyRecovery } from '../src/core-pilot/journal-recovery.js';
 import { validateCoreConfig } from '../src/core-pilot/config.js';
 import { createCampaignService } from '../src/core-pilot/campaign.js';
@@ -297,7 +297,7 @@ test('writers: many parallel appends through two journal objects on one file kee
     const raw = await readFile(file, 'utf8');
     const { events } = inspectJournalText(raw, MID); // throws if the chain forked
     assert.ok(events.length >= 11); assert.equal(events.length, 1 + results.filter((x) => x.status === 'fulfilled').length, 'every acknowledged append is in the file, nothing else');
-    assert.ok(results.filter((x) => x.status === 'rejected').every((x) => ['JOURNAL_STALE', 'JOURNAL_PROTECTED'].includes(x.reason.code)));
+    assert.ok(results.filter((x) => x.status === 'rejected').every((x) => ['JOURNAL_STALE', 'JOURNAL_PROTECTED', 'JOURNAL_LOCKED'].includes(x.reason.code)), 'a refusal is a stale head, a protected journal or a transient lock - never a silent write failure');
   });
 });
 
@@ -469,4 +469,38 @@ test('P3 a recovery is prepared in a NEW directory only: a directory that holds 
     await assert.rejects(prepareRecovery({ file, merchantId: MID, outDir: out }), { code: 'RECOVERY_DIR_NOT_EMPTY' });
     assert.deepEqual(await readdir(out), ['precious.txt']);
   });
+});
+
+test('writers: Windows-style lock contention (EPERM / EBUSY / EACCES on creating the lock) is "busy, retry", then the transient JOURNAL_LOCKED - never a write failure that protects the journal', async () => {
+  await withDir(async (dir) => {
+    const file = join(dir, 'j.jsonl');
+    const { open } = await import('node:fs/promises');
+    let calls = 0;
+    const flaky = async (...a) => { calls += 1; if (calls <= 3) throw Object.assign(new Error('EPERM: operation not permitted, open'), { code: ['EPERM', 'EBUSY', 'EACCES'][calls - 1] }); return open(...a); };
+    assert.equal(await withWriteLock(file, async () => 'ran', { openFile: flaky, waitMs: 2000 }), 'ran', 'three transient refusals, then the lock is taken');
+    const never = async () => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); };
+    const e = await withWriteLock(file, async () => 'ran', { openFile: never, waitMs: 120 }).catch((x) => x);
+    assert.equal(e.code, 'JOURNAL_LOCKED'); assert.equal(e.details.last_busy_code, 'EPERM');
+    // an error that is not contention is still an error
+    const broken = async () => { throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }); };
+    assert.equal(await code(withWriteLock(file, async () => 'ran', { openFile: broken, waitMs: 120 })), 'ENOSPC');
+    // and through the journal: a transient lock refusal does not protect it
+    const journal = createFileJournal({ merchantId: MID, file, lock: { openFile: never, waitMs: 80 } });
+    assert.equal(await code(journal.append({ kind: 'X', payload: {}, at: NOW.toISOString() })), 'JOURNAL_LOCKED'); assert.equal(journal.status().state, 'OK');
+  });
+});
+
+test('writers: 20 rounds of two journals appending in parallel on one file never fork and never fail for any reason other than a stale head, protection or a transient lock', async () => {
+  const seen = new Set();
+  for (let round = 0; round < 20; round += 1) {
+    await withDir(async (dir) => {
+      const file = join(dir, 'j.jsonl'); const a = createFileJournal({ merchantId: MID, file }); const b = createFileJournal({ merchantId: MID, file });
+      await a.append({ kind: 'X', payload: {}, at: NOW.toISOString() }); await b.all();
+      const rs = await Promise.allSettled([...Array(10)].flatMap((_, i) => [a.append({ kind: 'X', payload: { i }, at: NOW.toISOString() }), b.append({ kind: 'X', payload: { i }, at: NOW.toISOString() })]));
+      for (const r of rs) if (r.status === 'rejected') seen.add(r.reason.code);
+      const { events } = inspectJournalText(await readFile(file, 'utf8'), MID);
+      assert.equal(events.length, 1 + rs.filter((x) => x.status === 'fulfilled').length, 'every acknowledged append is in the file, nothing else');
+    });
+  }
+  for (const c of seen) assert.ok(['JOURNAL_STALE', 'JOURNAL_PROTECTED', 'JOURNAL_LOCKED'].includes(c), `unexpected refusal: ${c}`);
 });
