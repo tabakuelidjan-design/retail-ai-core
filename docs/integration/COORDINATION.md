@@ -98,3 +98,11 @@ Xiaomi, CI. Point de jonction : une fusion B → `claude/nordla-core-p0` prépar
   déclenchement sur `claude/nordla-core-p0`, tests Core en Node 24 seulement). Branche **remplacée**, à ne plus faire avancer.
 - `claude/blissful-babbage-z0nrt2` @ `2b6b983` : 1 document (`docs/infrastructure/nordla-cloud-plan.md`), **absent** de Core P0 mais
   cité par 4 fichiers (dont `tools/sourcing-backup.mjs`) ; fusion sans conflit vérifiée (`git merge-tree`). **Proposée, non exécutée.**
+
+## 2026-10-16 (nuit) — Chantier A : vérification de `claude/nordla-core-reliability` (rien fusionné)
+
+Fusion **simulée** localement (`claude/nordla-core-p0` @ `d9b630a` + `d85ec46`) : aucun conflit ; suite complète Node 24 : 362 fichiers,
+3 918 tests, 0 échec (3 ignorés, identiques sur la branche actuelle). Garde « journal sur le volume Railway » compatible avec la
+configuration `sourcing-staging` (`/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing`). Les 2 lignes dans `src/sourcing/server/index.js`
+et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés côté Chantier A. Fusion : décision du propriétaire
+(`docs/integration/bilan-2026-10-16.md`, D1).
