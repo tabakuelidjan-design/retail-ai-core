@@ -28,7 +28,8 @@ const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGr
 async function serve(opts) {
   const server = http.createServer(createGrowthApp(opts));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  return { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)) };
+  // closeAllConnections: a keep-alive connection of a browser that has not exited yet would otherwise keep server.close() (and the test file) waiting forever
+  return { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) };
 }
 
 /** One headless browser, one tab, driven over CDP. */
@@ -69,7 +70,14 @@ async function browser() {
       await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       await sleep(120);
     },
-    async close() { ws.close(); proc.kill(); await sleep(200); try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ } },
+    // Chrome does not always exit on SIGTERM (it was seen orphaned on CI, keeping the file's process alive until the job limit): wait for the exit, then SIGKILL.
+    async close() {
+      ws.close();
+      const exited = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise((r) => proc.once('exit', r));
+      proc.kill();
+      if (await Promise.race([exited.then(() => true), sleep(3000).then(() => false)]) === false) { proc.kill('SIGKILL'); await Promise.race([exited, sleep(3000)]); }
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ }
+    },
   };
   return b;
 }
