@@ -29,7 +29,8 @@ q() { psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
 # The address must parse unambiguously BEFORE any connection: exactly one '@', and no '/', '?' or '#' in the user / password part.
 rest="${DB#*://}"; userinfo="${rest%@*}"
 [[ "$DB" == postgres://* || "$DB" == postgresql://* ]] || { echo "STOP: the database URL must start with postgresql://"; exit 2; }
-[[ $(tr -cd '@' <<<"$DB" | wc -c) -eq 1 && "$userinfo" != *[/?#]* ]] || { echo "STOP: the database URL is ambiguous: the password contains '@', '/', '?' or '#'. Encode it (@ = %40) or generate a password with letters and digits only. Nothing was connected."; exit 2; }
+yn() { [[ "$userinfo" == *"$1"* ]] && echo yes || echo no; }
+[[ $(tr -cd '@' <<<"$DB" | wc -c) -eq 1 && "$userinfo" != *[/?#]* && "$userinfo" != *[\[\]]* && "$DB" != *[[:space:]]* ]] || { echo "STOP: the database URL is ambiguous. Structure only (no value): '@' in the whole address: $(tr -cd '@' <<<"$DB" | wc -c) (expected 1); in the user:password part: '/' $(yn /), '?' $(yn '?'), '#' $(yn '#'), '[' or ']' $( [[ "$userinfo" == *[\[\]]* ]] && echo yes || echo no) (placeholder [YOUR-PASSWORD] not replaced?), whitespace anywhere: $( [[ "$DB" == *[[:space:]]* ]] && echo yes || echo no). Use a password with letters and digits only (or encode: @ = %40). Nothing was connected."; exit 2; }
 [[ "$DB" == *"$REF"* ]] || { echo "STOP: the database URL does not name project $REF"; exit 2; }
 [[ "$DB" != *"$PROD_REF"* ]] || { echo "STOP: the database URL names the PRODUCTION project"; exit 2; }
 q "select 1" >/dev/null 2>&1 || { echo "STOP: cannot connect to the database (details withheld: they can contain the address)"; exit 2; }
