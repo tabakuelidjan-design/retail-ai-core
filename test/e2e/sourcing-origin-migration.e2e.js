@@ -69,6 +69,7 @@ try {
     const dl = await a.eval('window.__dl'); ok(dl && /nordla-case-xiaomi-case-1\.json$/.test(dl.name), `an export file was produced (${JSON.stringify(dl)})`);
     exported = await a.eval('window.__blob.text()');
     const doc = JSON.parse(exported); ok(doc.format === 'nordla-case-export' && doc.case.id === 'xiaomi-case-1', 'export format');
+    const said = await a.eval("document.querySelector('#overlay')?.innerText || ''"); ok(/3 photo\(s\) sur 3/.test(said) && !/ATTENTION/.test(said), `the screen states the photo count of the file: ${said.slice(0, 200)}`);
     ok(KEYS.every((k) => typeof doc.photos[k] === 'string'), `the three photos are in the file (${Object.keys(doc.photos).join(', ')})`);
     console.log(`      export size: ${Math.round(exported.length / 1024)} KB (import limit ${Math.round(MAX_IMPORT_BYTES / 1024)} KB)`);
   });

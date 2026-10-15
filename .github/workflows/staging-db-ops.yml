@@ -3,7 +3,8 @@
 # blocks any text containing several DELETE statements (an unanswerable confirmation -> 60 s timeout, diagnosed 2026-10-15).
 # Locks, all required:
 #   1. ops/staging-db/request.json must say "run": true (set only after the owner's go), with the sha256 of every approved file;
-#   2. the job runs in the GitHub environment `supabase-staging` (owner: add yourself as required reviewer there);
+#   2. the ops job runs in the GitHub environment `supabase-staging` (owner: add yourself as required reviewer there). A first job WITHOUT
+#      environment reads the request: when run=false (the default) the protected environment is never reached, never auto-created;
 #   3. secrets of that environment: STAGING_DATABASE_URL (staging only), STAGING_BACKUP_PASSPHRASE (>= 16 chars);
 #   4. the script refuses the production project ref and any database without the staging marker merchant.
 name: staging-db-ops
@@ -16,7 +17,25 @@ permissions:
   contents: read
 concurrency: { group: staging-db-ops, cancel-in-progress: false }
 jobs:
+  gate:
+    # No environment, no secret: only reads the request. The protected job below starts only for run=true on the approved branch.
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.req.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Requested?
+        id: req
+        run: |
+          run=$(jq -r '.run // false' ops/staging-db/request.json)
+          ref=$(jq -r '.project_ref // ""' ops/staging-db/request.json)
+          if [ "$ref" != "fvhiammdskpcnfodsnrc" ]; then echo "::error::request.json does not name the staging project"; exit 1; fi
+          if [ "$run" = "true" ] && [ "$GITHUB_REF" != "refs/heads/claude/nordla-core-p0" ]; then echo "::error::run=true only from claude/nordla-core-p0"; exit 1; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          [ "$run" = "true" ] || echo "::notice::request.json says run=false - nothing was done, the protected environment was not used."
   ops:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: supabase-staging
@@ -28,28 +47,33 @@ jobs:
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      - name: Requested?
-        id: req
-        run: echo "run=$(jq -r '.run // false' ops/staging-db/request.json)" >> "$GITHUB_OUTPUT"
-      - name: Not requested - nothing done
-        if: steps.req.outputs.run != 'true'
-        run: echo "::notice::request.json says run=false - nothing was done."
       - name: PostgreSQL 17 client
-        if: steps.req.outputs.run == 'true'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
       - name: Backup, proven restore, migrations, checks
-        if: steps.req.outputs.run == 'true'
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           STAGING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_BACKUP_PASSPHRASE }}
           RESTORE_URL: postgresql://postgres:restore-only@127.0.0.1:5432/restore_check
         run: bash tools/staging-db/run.sh ops/staging-db/request.json out
-      - name: Keep the encrypted backup and the evidence
-        if: always() && steps.req.outputs.run == 'true'
+      - name: HABB test merchant, owner, module sourcing, private bucket (only if request.json says "bootstrap" true)
+        # Runs only after the migrations above succeeded. The owner's e-mail is an environment secret (never in git); the account itself
+        # is created by the owner in the Supabase dashboard. Proven on a real PostgreSQL: test/postgres/staging-bootstrap.pg-smoke.mjs.
+        if: success()
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_OWNER_EMAIL: ${{ secrets.STAGING_OWNER_EMAIL }}
+        run: |
+          if [ "$(jq -r '.bootstrap // false' ops/staging-db/request.json)" != "true" ]; then echo "::notice::bootstrap not requested"; exit 0; fi
+          case "$STAGING_DATABASE_URL" in *fvhiammdskpcnfodsnrc*) ;; *) echo "::error::not the staging project"; exit 1;; esac
+          case "$STAGING_DATABASE_URL" in *xbtzjabbseclmqfozjeo*) echo "::error::production refused"; exit 1;; esac
+          [ -n "$STAGING_OWNER_EMAIL" ] || { echo "::error::secret STAGING_OWNER_EMAIL missing"; exit 1; }
+          psql "$STAGING_DATABASE_URL" -X -v ON_ERROR_STOP=1 -v owner_email="$STAGING_OWNER_EMAIL" -f ops/staging-db/bootstrap-habb-test.sql | tee out/bootstrap.txt
+      - name: Keep the encrypted backup and the evidence (never the clear dump)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: staging-db-ops-${{ github.run_id }}
@@ -57,8 +81,13 @@ jobs:
             out/staging.dump.gpg
             out/staging.dump.gpg.sha256
             out/*.fingerprint
+            out/*.structure
+            out/structure.diff
+            out/coverage.txt
+            out/restore.list
             out/restore.diff
             out/restore.log
             out/history.txt
+            out/bootstrap.txt
           retention-days: 30
           if-no-files-found: ignore

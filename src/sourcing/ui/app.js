@@ -29,7 +29,7 @@ import { validateCorrection } from '/core/candidate-view.js';
 import { fieldFirst, fmCompute, fmNav, fieldMissing } from './screens/fieldfirst.js';
 import { fieldSummaryText } from '/core/field-summary.js';
 import { createVoice } from './voice.js';
-import { validateCase, parseImportText, buildExport, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
+import { validateCase, parseImportText, buildExport, exportSummary, planRecovery, applyRecovery, photoKeysFor, MAX_IMPORT_BYTES } from '/core/recovery.js';
 import { recoverySection, recoveryError } from './recover.js';
 import { createSyncHelpers } from './sync-state.js';
 import { createEmbedded, settingsHtml } from './embedded.js';
@@ -193,7 +193,7 @@ const embeddedHtml = createEmbedded({ S, ls, cur, run, status, render: () => ren
 let salonInstance = null;
 const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), embedded: embeddedHtml, expertSections: () => TABS, syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
 
-const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => openMenu() }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport });
+const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => openMenu() }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary });
 
 const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
@@ -407,7 +407,7 @@ async function onClick(ev) {
   if (act === 'rec-toggle') { const r = (S.rec ??= {}); (r.selected ??= {})[key] = t.checked; return openMenu(); }
   if (act === 'rec-go') return recGo();
   if (act === 'rec-keep' || act === 'rec-skip') return recDecide(key, act === 'rec-keep');
-  if (act === 'export') { const c = menuCase(); if (!c) return; const blob = new Blob([buildExport(c, getBlob)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `nordla-case-${c.id}.json`; a.click(); return; }
+  if (act === 'export') { const c = menuCase(); if (!c) return; S.reanalysisMessage = exportCase(c.id); return openMenu(); } // same export as the Salon; its photo count is shown at the top of this screen
   if (act === 'gate-save') { S.token = $('#gate-tok').value.trim(); ls.set('nordla.sourcing.token', S.token); S.authFailed = false; await ping(); if (!S.authFailed) { await checkSafety(); queueSync(); } return render(); }
   if (act === 'gate-offline') { S.offlineChoice = true; ls.set('nordla.sourcing.offlineChoice', true); return render(); }
   if (act === 'fx') return fetchFx();

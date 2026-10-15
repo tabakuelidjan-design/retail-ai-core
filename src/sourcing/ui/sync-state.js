@@ -4,7 +4,7 @@
 import { caseFacts } from '/core/case-facts.js';
 import { factValueText } from './screens/salon-views.js';
 
-export function createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport }) {
+export function createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary }) {
 function syncInfo(caseId = null) {
   const conflicts = Object.keys(S.conflicts ?? {}).length; const waiting = dirty.size; const st = status().server.state; const verified = st === 'VERIFIED';
   let kind; let label; let detail;
@@ -50,7 +50,7 @@ async function syncNow() {
 }
 function exportCase(id) {
   const c = S.cases[id]; if (!c) return 'Aucun dossier à exporter.';
-  try { const json = buildExport(c, getBlob); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = `nordla-case-${c.id}.json`; a.click(); return `Export créé : ${a.download} (${Math.max(1, Math.round(json.length / 1024))} Ko). Il contient le dossier, ses notes et ses photos : gardez ce fichier.`; }
+  try { const json = buildExport(c, getBlob); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = `nordla-case-${c.id}.json`; a.click(); const n = exportSummary(c, getBlob); return `Export créé : ${a.download} (${Math.max(1, Math.round(json.length / 1024))} Ko). Il contient le dossier, ses notes et ${n.included} photo(s) sur ${n.expected}.${n.missing.length ? ` ATTENTION : ${n.missing.length} photo(s) absente(s) de ce téléphone ne sont PAS dans le fichier.` : ''} Gardez ce fichier.`; }
   catch (e) { return `L'export a échoué (${e?.message ?? e}). Rien n'a été modifié.`; }
 }
   return { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase };

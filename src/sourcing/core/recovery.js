@@ -65,6 +65,12 @@ export function buildExport(c, photoOf = () => null, now = new Date()) {
   return JSON.stringify({ format: EXPORT_FORMAT, version: 1, exportedAt: now.toISOString(), case: c, photos }, null, 1);
 }
 
+/** What an export really holds: the photos the case lists vs the photos found on this device (an absent one is never invented). */
+export function exportSummary(c, photoOf = () => null) {
+  const expected = photoKeysFor(c, c.id); const missing = expected.filter((k) => !photoOf(k));
+  return { expected: expected.length, included: expected.length - missing.length, missing };
+}
+
 const count = (a) => (Array.isArray(a) ? a.length : 0);
 /** What the owner is shown for one copy. Counts only, taken from the case itself. */
 export function describe(c) {

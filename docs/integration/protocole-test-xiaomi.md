@@ -13,14 +13,17 @@ Un navigateur range les données **par adresse (origine)**. Les dossiers et phot
 `http://<ip-du-pc>:8787`, ou autre) sont dans le `localStorage` et l'`IndexedDB` de **cette** ancienne origine. La nouvelle adresse
 part **vide** : aucune migration automatique, et rien ne doit être supposé synchronisé.
 
-1. PC allumé, Firefox du Xiaomi sur l'**ancienne** adresse : ouvrir chaque dossier → menu → **Exporter** : un fichier
-   `nordla-case-<id>.json` contenant le dossier, ses notes **et ses photos** est enregistré dans *Téléchargements*.
-   Noter pour chaque dossier : nombre de photos affiché.
+1. PC allumé, Firefox du Xiaomi sur l'**ancienne** adresse : ouvrir chaque dossier → réglages → **Exporter en JSON** : un fichier
+   `nordla-case-<id>.json` est enregistré dans *Téléchargements*. **L'écran affiche « … N photo(s) sur M »** (version `9e25f1d`+ du
+   serveur local) : N doit être égal à M. Sinon il affiche « ATTENTION : … photo(s) absente(s) de ce téléphone » : ces photos ne sont
+   pas dans le fichier — ne rien changer, me le signaler (elles peuvent être sur le serveur du PC).
+   L'ancien serveur du PC sert-il une version plus ancienne (sans ce compte) ? Alors : compter les vignettes du dossier et, après
+   récupération sur la nouvelle adresse (étape 0.R), recompter.
 2. Copier ces fichiers hors du téléphone (câble ou envoi à vous-même) : 2 copies.
 3. Côté PC : copier le répertoire de données du serveur local (`cases/`, `photos/`) sur une clé USB.
 4. **Ne pas** vider Firefox, ne pas désinstaller, ne pas « effacer les données du site » : l'ancienne origine reste la copie de secours.
 
-Récupération sur la nouvelle adresse : menu → **Récupérer** → choisir le fichier exporté. La récupération ne remplace jamais rien
+**0.R** Récupération sur la nouvelle adresse : menu → **Récupérer** → choisir le fichier exporté. La récupération ne remplace jamais rien
 (choix « garder les deux »). Point d'attention : un dossier récupéré n'est **pas** marqué « modifié », il n'est donc **pas** envoyé au
 serveur tant qu'on ne le modifie pas (une note suffit). Vérifier ensuite qu'il apparaît côté serveur (étape 7).
 
@@ -48,3 +51,27 @@ pendant le test sauf décision de votre part), Marketing (proposition + décisio
 - **Échec bloquant** : perte d'une photo ou d'une note, déconnexion non expliquée, donnée affichée sans source, toute erreur
   silencieuse. On note, on n'efface rien, on corrige, on refait le test.
 - Après le test : les données de test restent (ou sont archivées) ; aucune suppression sans votre décision.
+
+## Recommandation d'adresse
+
+Faire le test **directement sur `app.nordla.app`** (autorisation DNS avant le 18) avec des données de test : le téléphone ne change
+ainsi d'adresse qu'une fois (détails : `docs/infrastructure/domaine-app-nordla-app.md`).
+
+## Fiche téléphone (à garder ouverte pendant le test)
+
+```
+AVANT : PC allumé • exporter chaque ancien dossier • l'écran dit « N photo(s) sur N » • copier les fichiers hors du téléphone
+        NE PAS vider Firefox • NE PAS effacer les données du site
+1  Wi-Fi coupé, données mobiles, PC éteint
+2  Ouvrir l'adresse autorisée → se connecter (mon compte)
+3  Nouveau dossier fournisseur
+4  3 photos (appareil + galerie) → 3 vignettes
+5  Notes, prix, quantités
+6  Fermer le navigateur → rouvrir → tout est là ?
+7  Mode avion → modifier une note → données mobiles → « à jour » ?
+8  Autre navigateur : le dossier + 3 photos sont là ?
+9  Menu → Nordla → Finance / Analytics : source + période affichées ?
+10 Nordla Core : analyser le dossier → décision + raison → fermer/rouvrir → décision toujours là ?
+11 Création : photo + titre → visuel + « conforme »
+12 Noter l'heure et tout écart. Ne rien effacer.
+```

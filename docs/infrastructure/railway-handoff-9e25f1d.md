@@ -83,3 +83,20 @@ Mesure locale de l'image `9e25f1d` : **48 Mo de RAM au repos, CPU ≈ 0 %**. Pr�
 Migration d'identité 1 seule appliquée (`20261015114757 identity_sessions_events`, table `identity_events`) ; migrations 2–5 **non
 appliquées** ; 0 compte Auth ; 1 marchand (le marqueur staging) ; bucket `nordla-backups` **absent** (seul `finance-inbox`, privé).
 → Tant que ces points ne sont pas faits, le service démarrerait mais **personne ne pourrait se connecter**.
+
+## 8. Changement de variable nécessaire (identifié le 15/10)
+
+`NORDLA_MERCHANT_ID` vaut aujourd'hui sur `sourcing-staging` **l'identifiant du marchand HABB de production**
+(`36b1a1a7-…`). Sur Supabase **staging**, le marchand de test aura son propre identifiant :
+**`NORDLA_MERCHANT_ID=67646dbb-5e2e-4cd7-aad6-0ab289b068cb`** (créé par `ops/staging-db/bootstrap-habb-test.sql`). Sans ce changement,
+la connexion serait refusée (aucune adhésion sur l'identifiant de production en staging). Avantage : un serveur staging ne peut jamais
+correspondre à des lignes HABB réelles. `SOURCING_MERCHANT_ID=habb` (configuration : règles, polices) ne change pas.
+
+## 9. Ressources et coût : fixe / variable
+
+- **Fixe** : l'abonnement Railway du compte (plan Hobby : 5 $/mois, qui inclut 5 $ d'usage tous services confondus) — déjà payé pour
+  les services existants ; ce service n'ajoute aucun abonnement.
+- **Variable** : l'usage de ce service, estimé à 2–4 $/mois (section 6). Il ne coûte réellement que si l'usage total du compte
+  dépasse les 5 $ inclus.
+- Limite de ressources conseillée sur le service : 0,5 vCPU / 512 Mo (le service mesure 48 Mo au repos) — plafonne la dépense en cas
+  d'emballement.
