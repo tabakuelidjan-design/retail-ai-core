@@ -5,6 +5,11 @@ Service : `sourcing-staging` (`24cc9cd0-e868-4210-90ce-23487ff2e65c`), volume `s
 
 ## 1. Commit candidat
 
+**Mise à jour du 15/10 au soir : candidat = `62ec977b63e2733e217863c0c05d0e7c3609b9dc`** (= `9e25f1d` + l'export qui affiche « N photo(s)
+sur M », la sauvegarde testée des données Core, le canal staging durci). CI verte sur ce SHA : china-sourcing 38770848179,
+intégration Node 20/24 38770848181, Activation 38770848224, Provider Provisioning 38770848164. Le reste de ce document s'applique
+à l'identique (aucune variable nouvelle, aucun fichier Finance / Analytics / deploy modifié).
+
 `9e25f1d3eb2890c8dc5353170b96f37182250900` (branche `claude/nordla-core-p0`) — remplace l'épinglage actuel `c2c314d`
 **uniquement quand le propriétaire le décide et une fois sa CI confirmée verte** (voir le rapport du 15/10).
 
