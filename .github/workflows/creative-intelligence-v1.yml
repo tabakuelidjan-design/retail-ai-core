@@ -221,4 +221,7 @@ jobs:
       - name: Branding, Creative Fidelity, Marketing and Creative Intelligence together
         run: bash scripts/ci-annotated-tests.sh node --test test/branding*.test.js test/creative-fidelity*.test.js test/marketing*.test.js test/creative-intelligence*.test.js test/creative-brain*.test.js test/creative-planning*.test.js test/creative-campaign*.test.js test/creative-production*.test.js test/creative-layered-runtime*.test.js test/creative-readiness.test.js test/creative-critic.test.js test/creative-revision.test.js test/creative-stop-stage.test.js test/creative-layout-capability.test.js test/creative-environment-request.test.js test/creative-ambition.test.js test/creative-revision-director-call-mode.test.js test/creative-direction-text-contract.test.js test/marketing-creative-alibaba-director-timeout.test.js test/resources*.test.js
       - name: Full suite (cross-domain non-regression)
+        # Node 24 only: the repository requires Node >=24 and China Sourcing refuses Node 20 (owner decision 2026-10-12), so the whole suite cannot
+        # run on Node 20 (it hit the 30 min job limit there). Node 20 keeps the two focused Creative steps above (NDR-P22 clean-clone evidence).
+        if: matrix.node == '24'
         run: bash scripts/ci-annotated-tests.sh npm test

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/nordla-core-resilience-v1
+      - claude/nordla-core-p0
     paths:
       - 'src/core-resilience/**'
       - 'benchmarks/core-resilience/**'
@@ -42,4 +43,7 @@ jobs:
       - name: Chaos benchmark (fake providers only; no network, no credential)
         run: node scripts/run-core-chaos.mjs
       - name: Whole suite
+        # Node 24 only: the repository requires Node >=24 and China Sourcing refuses Node 20, so the whole suite cannot pass on Node 20.
+        # Node 20 keeps the core-resilience tests and the chaos benchmark above.
+        if: matrix.node == '24'
         run: npm test
