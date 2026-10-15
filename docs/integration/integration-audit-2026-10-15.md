@@ -11,7 +11,7 @@ Ce document constate ; il ne décide rien. Les preuves (commits, exécutions CI)
 | Reprise | Cherry-pick `-x` (pas de merge global, pas de réécriture) : `577ba8c`, `b18846a`, `83278fb`. Le workflow est désormais identique à la référence, sauf le déclencheur qui inclut `claude/nordla-core-p0`. |
 | `f7197d5` vs `5334e2d` | `f7197d5` n'était PAS ancêtre de `5334e2d` ; `5334e2d` contenait déjà 15 des 18 commits concernés. Après reprise, le contenu de `f7197d5` est entièrement présent (diff de fichiers vide hors déclencheur). |
 | `claude/blissful-babbage-z0nrt2` (Infrastructure) | HEAD `2b6b983`, non fusionné ici (coordination requise). Il **se fusionne sans conflit** dans la référence (`git merge-tree`), après le déplacement de mon document hors de `docs/infrastructure/`. |
-| `docs/integration/COORDINATION.md`, `docs/integration/recensement-nordla-core-2026-10-14.md` | **Absents de toutes les branches d'origin** vérifiées. Ils peuvent exister localement dans une autre session : non créés ici pour ne pas entrer en collision. |
+| `docs/integration/COORDINATION.md`, `docs/integration/recensement-nordla-core-2026-10-14.md` | Absents de toutes les branches d'origin au moment de la vérification ; **créés ensuite** sur demande explicite (routines du propriétaire du 14 octobre, 23:18 et 23:23 UTC). |
 
 ## 2. Intégration fonctionnelle par module (ce que le code prouve)
 
