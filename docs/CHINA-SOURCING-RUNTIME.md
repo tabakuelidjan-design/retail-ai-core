@@ -7,7 +7,7 @@ Why: the ASR benchmark helper (`tools/asr-bench/ws.mjs`) and the browser test he
 How it is enforced (China Sourcing only):
 - `src/sourcing/runtime.js` (`assertSourcingRuntime`) is called when the sourcing server starts and fails with a clear message on Node < 24.
 - `.github/workflows/china-sourcing.yml` runs on Node 24 only.
-- Since the Nordla Core P0 (branch `claude/nordla-core-p0`, owner's P0 list item 4) the WHOLE repository runs on Node 24: `engines` is `>=24`, `.nvmrc` says `24`, the Railway/Railpack build reads them and `deploy/sourcing/Dockerfile` uses `node:24` (not at the root: Railway would pick a root Dockerfile up instead of Railpack). The guard above stays (it names the requirement where it matters most).
+- The repository-wide `engines` field in `package.json` stays `>=20` (owner decision 2026-10-14: no global Node change before Finance, Analytics, Growth and the Railway deployments are checked; the deployment configuration belongs to the Infrastructure session). Core P0 checked the whole suite on Node 24 (0 failure) and PROPOSES `>=24`; see docs/integration/COORDINATION.md.
 - Node 20 compatibility is deliberately not pursued, and no Finance test was changed for it.
 
 ## Verified baseline (commit `ab38df0`, clean clone, Node 24.19)

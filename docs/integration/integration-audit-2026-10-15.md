@@ -85,12 +85,12 @@ d'identité produit sur un asset privé absent (normal) ; 1 garde de périmètre
 
 ## 5. Coordination
 
-Fichiers sensibles ou partagés : `.github/workflows/*`, `package.json` / `package-lock.json` (engines ≥ 24), `src/creative-brain/model-port.js`
+Fichiers sensibles ou partagés : `.github/workflows/*`, `package.json` / `package-lock.json` (`engines` remis à `>=20` : le passage à 24 est proposé, appliqué par Infrastructure), `src/creative-brain/model-port.js`
 (conflit résolu), `docs/architecture/creative-readiness*.json` (non modifiés), `docs/infrastructure/nordla-cloud-plan.md` (Infrastructure),
 `supabase/migrations*`, `railway.json` / `railpack.json` (non modifiés).
 
 | Pour | À faire |
 |---|---|
 | Core P0 | sync des photos ; import > 8 Mo ; première couche d'auth dans l'application pour Railway (modèle : `src/analytics-premium/server/hosting.js`) et entrée `sourcing` dans `service-start.js` ; brancher Identity sur les serveurs ; décider du branchement du Socle Decision |
-| Infrastructure | fusionner sa branche après relecture (sans conflit) ; caractériser Finance/Analytics sur Railway en Node 24 avant de déployer cette branche (`engines >=24`) ; adresse stable ; sauvegarde |
+| Infrastructure | fusionner sa branche après relecture (sans conflit) ; caractériser Finance/Analytics/Growth sur Railway en Node 24, puis appliquer (ou non) `engines >=24` et `.nvmrc`, proposés par Core P0 ; adresse stable ; sauvegarde |
 | Creative | non-déterminisme du masque (§4) ; ré-attestation (décision propriétaire) |

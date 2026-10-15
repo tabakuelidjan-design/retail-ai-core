@@ -22,7 +22,7 @@ officielles avant toute souscription.
 
 | Élément | État |
 |---|---|
-| Runtime | Node 24 pour tout le dépôt (`engines >=24`, `.nvmrc`, `deploy/sourcing/Dockerfile` `node:24-slim`). |
+| Runtime | China Sourcing exige Node 24 (garde `src/sourcing/runtime.js`, image `deploy/sourcing/Dockerfile` `node:24-slim`). `engines` du dépôt reste `>=20` (décision 2026-10-14 : changement global réservé à Infrastructure après vérification des déploiements). |
 | China Sourcing | Dans ce dépôt (`src/sourcing/`) : serveur HTTP + PWA hors ligne. Aujourd'hui sur le PC Windows (`npm run sourcing:phone`, tunnel Cloudflare temporaire, jeton de jumelage, écoute en loopback). Données en fichiers JSON (`data/local/sourcing/`), mono-marchand. |
 | Mode hébergé | Prêt dans le code : `SOURCING_HOSTED=1` (configuration complète exigée, refus codés), `/healthz`, `deploy/sourcing/` (Compose + Caddy), testé localement. |
 | Sauvegarde | `tools/sourcing-backup.mjs` : archive chiffrée (AES-256-GCM), vérifiée à l'écriture, restauration testée, rétention. Copie hors serveur immuable : à décider. |
