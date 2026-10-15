@@ -7,6 +7,24 @@ Préalables (chacun soumis à votre accord, voir le rapport) : Supabase staging 
 propriétaire, module `sourcing`, bucket) ; `sourcing-staging` actif sur le commit candidat ; adresse **autorisée** (d'abord l'adresse
 Railway `https://<service>.up.railway.app`, puis `app.nordla.app` après accord DNS). **Données de test uniquement** pendant la répétition.
 
+## État des prérequis (16/10 au matin)
+
+| Prérequis | État | Preuve |
+|---|---|---|
+| Supabase staging : migrations d'identité 1–5 | **fait** | run `staging-db-ops` 38813124178 |
+| Marchand de test `67646dbb-…`, votre adhésion OWNER, module `sourcing`, bucket privé `nordla-backups` | **fait** | run 38815730509, relu sur staging |
+| Votre compte de connexion | **fait** : le seul compte de l'Auth **staging** (créé par vous ; e-mail et mot de passe choisis par vous) | Auth staging : 1 compte confirmé |
+| Service `sourcing-staging` actif sur `62ec977` | **à autoriser** (Railway, coût 2–4 $/mois) | `docs/infrastructure/railway-handoff-9e25f1d.md` §0 |
+| Adresse | **à décider** : adresse Railway générée, ou `app.nordla.app` (DNS, autorisation séparée) | `docs/infrastructure/domaine-app-nordla-app.md` |
+
+Ce que vous verrez sur staging, et qui est **normal** : Finance / Analytics disent « données indisponibles » (le marchand de test n'a
+ni factures ni ventes) ; la Sécurité produits (Safety Gate) peut être marquée « en cache » ; Création, Branding, Marketing et
+China Sourcing fonctionnent avec vos photos de test. **Données de test uniquement** pendant la répétition.
+
+Contrôles techniques faits par Infrastructure **avant** de vous donner l'adresse (aucun n'utilise le téléphone) : `/healthz` 200 ;
+journal de démarrage « Nordla Core ON for merchant 67646dbb-… », uid 1000, aucun secret ; une requête `http://` est redirigée vers
+`https://` ; `/api/core/modules` sans session → 401 ; une sauvegarde forcée apparaît dans `nordla-backups`.
+
 ## 0. AVANT tout changement d'adresse : protéger les anciennes données du Xiaomi (ne rien effacer)
 
 Un navigateur range les données **par adresse (origine)**. Les dossiers et photos enregistrés auparavant (Firefox, serveur du PC
