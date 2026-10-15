@@ -72,16 +72,19 @@ chaque dossier (menu → Exporter) et copier les fichiers hors du téléphone ; 
 
 | Workflow | Avant | Cause observée | Correction |
 |---|---|---|---|
-| china-sourcing | `e2e terrain v2` rouge (run 38655597331) | Chrome n'a pas démarré sur le runner, avant tout test | Relance unique → 8/8 jobs verts. E2E terrain 20/20 en local. |
+| china-sourcing | `e2e terrain v2` rouge (run 38655597331), puis `e2e fieldv1` rouge (run 38666405936) | « browser did not start » exactement 15 s après le lancement, Chrome encore vivant : l'attente de `cdp.js` était un sondage fixe de 15 s | `cdp.js` attend le signal de Chrome (« DevTools listening »), échoue tout de suite avec la raison si Chrome s'arrête (`0599e0b`) → 8/8 jobs verts, E2E migration compris (run 38668580843) |
 | Marketing / Activation / Provider | annulés (limite 15/20 min), déjà sur la référence | `npm test` complet sous Node 20, impossible depuis Node ≥ 24 | Node 24 (`24cb0f6`) → verts (runs 38657902305, 38657902220, 38657902169) |
 | Creative Intelligence | Node 20 annulé à 30 min | même cause (`npm test` sous Node 20) | Suite complète Node 24 seulement ; Node 20 garde les étapes Creative (`7681aa2`) → Node 20 vert (run 38659540142) |
 | nordla-integration-pre-china | — | trois correctifs de la référence manquants | repris (§1) |
-| Nordla Core Resilience | Node 24 annulé à 30 min (run 38659540324) | `growth-browser` : tous les tests passent puis le processus ne se termine pas (Chrome orphelin) | Teardown corrigé (`d309790`) |
+| Nordla Core Resilience, Provider, Creative (Node 24, `npm test`) | annulés (runs 38659540324, puis 38666405895 et 38666405857) | `growth-browser` : tous les tests passent puis le processus ne se termine pas ; Chrome et deux `cat` orphelins (`/usr/bin/google-chrome` est un script) | `d309790` (attente + SIGKILL) a suffi une fois (Core Resilience vert, run 38666405707) mais pas toujours ; `00236d3` arrête tout le groupe de processus de Chrome. Vérification CI complète `npm test` à refaire au prochain déclenchement. |
 | Tests benchmark | conflit de dossier partagé | `benchmark-ask` écrivait dans `benchmark/ask/results/` que `benchmark-preflight` compte | rapport dans un dossier temporaire (`cf0509e`) |
 | **Creative Intelligence Node 24 / creative-refine** | rouge intermittent (run 38659540142 : PM-6) | **`buildProductMask` peut donner un masque différent pour une entrée identique**, sous charge CPU. Reproduit localement (2 à 4 sur 14 exécutions concurrentes) : mêmes empreintes que la CI (`96d2f81b…` attendu / `fe46f8d3…`). Le rendu (resvg) et la découpe sont stables ; c'est le calcul du masque. Isolé au moteur : 0/28 écart sans JIT optimisant (`--max-opt=0`), 0/28 avec Maglev au maximum (`--max-opt=2`), 2/28 avec TurboFan (défaut) ; remplacer `** 2` par des multiplications ne suffit pas (1/28). Reproduction : `tools/creative-mask-determinism-repro.mjs`. Diagnostic antérieur non intégré : `feature/creative-mask-determinism-diagnostic` `b817611`. | **Non corrigé** (code Creative, cause racine non isolée). Assertion non assouplie. À traiter par la session Creative. |
 
 Tests ignorés (14 dans la suite locale) : 11 `growth-browser` faute de Chrome dans le conteneur → **exécutés à part : 11/11** ; 2 tests
 d'identité produit sur un asset privé absent (normal) ; 1 garde de périmètre Growth volontairement suspendue à l'intégration.
+
+## 4 bis. Données Xiaomi : preuve de migration d'origine
+`test/e2e/sourcing-origin-migration.e2e.js` (`npm run sourcing:e2e:migration`) : 7/7 en local et vert en CI (run 38668580843). Ancienne origine → export réel → nouvelle origine : dossier et 3 photos identiques octet pour octet, ancienne installation intacte, pas de doublon ; la sync serveur ne porte pas les photos (écart affirmé par le test).
 
 ## 5. Coordination
 
