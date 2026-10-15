@@ -35,7 +35,8 @@ Ce que le workflow garantit (corrections `5dc4064` + `b0207c9`, essai local refa
      passe de la base staging). Vérifiez que l'URI contient `fvhiammdskpcnfodsnrc`.
    - `STAGING_BACKUP_PASSPHRASE` : une phrase de passe d'au moins 16 caractères. **Gardez-la** dans votre gestionnaire de mots de
      passe : sans elle, la sauvegarde chiffrée est illisible.
-   - `STAGING_OWNER_EMAIL` : l'adresse e-mail de **votre** compte (étape 3 bis). Elle n'est jamais écrite dans le dépôt.
+   - `STAGING_OWNER_EMAIL` : **facultatif**. Sans lui, le propriétaire est le **seul** compte confirmé de l'Auth staging (0 aujourd'hui) ;
+     s'il y en a plusieurs, arrêt sans rien créer (prouvé : smoke 16/16).
 3 bis. **Votre compte** (staging uniquement) : Supabase → projet **nordla-finance-staging** → *Authentication* → *Users* →
    *Add user* → *Create new user* : votre e-mail, un mot de passe choisi par vous, cochez *Auto Confirm User*. Personne d'autre ne
    crée ce compte ni ne connaît ce mot de passe.
@@ -50,7 +51,7 @@ Ensuite (2ᵉ exécution, après votre accord distinct) : `"bootstrap": true` da
 `67646dbb-5e2e-4cd7-aad6-0ab289b068cb` (jamais celui de la production), votre adhésion OWNER (par la fonction d'identité, qui
 journalise), module `sourcing` ACTIVE, bucket privé `nordla-backups` sans aucune politique d'accès. Refusé si votre compte n'existe pas
 ou n'est pas confirmé ; relançable sans effet. Prouvé sur un vrai PostgreSQL 17 (image Supabase) :
-`test/postgres/staging-bootstrap.pg-smoke.mjs`, 15/15 (refus sans compte, refus d'un compte non confirmé, idempotence, isolation).
+`test/postgres/staging-bootstrap.pg-smoke.mjs`, 16/16 (refus sans compte, refus d'un compte non confirmé, idempotence, isolation).
 
 ## Retour arrière
 

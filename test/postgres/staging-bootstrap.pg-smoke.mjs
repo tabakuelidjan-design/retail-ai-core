@@ -51,8 +51,9 @@ try {
   check('bucket nordla-backups private, no storage policy', one(`select public::text from storage.buckets where id='nordla-backups'`) === 'false' && one(`select count(*) from pg_policies where schemaname='storage' and (coalesce(qual,'')||coalesce(with_check,'')) like '%nordla-backups%'`) === '0');
   check('identity events recorded by the functions themselves', Number(one(`select count(*) from public.identity_events where merchant_id='${HABB_TEST}'`)) >= 2);
   const after1 = state();
-  const run2 = psql(BOOT, [`owner_email=${OWNER.email}`]);
-  check('re-run: accepted and changes nothing', run2.ok && state() === after1, `${run2.err} ${after1} -> ${state()}`);
+  const run2 = psql(BOOT, []); // without e-mail: the only confirmed account is the owner
+  check('two confirmed accounts and no e-mail: STOP, nothing guessed', (() => { psql(`insert into auth.users (id, email, email_confirmed_at, aud, role) values ('0d0d0d0d-1111-4222-8333-444444444444', 'other@nordla-test.example', now(), 'authenticated', 'authenticated');`); const r = psql(BOOT, []); psql(`delete from auth.users where id = '0d0d0d0d-1111-4222-8333-444444444444';`); return r.code === 3 && /exactly one confirmed account/.test(r.err); })());
+  check('re-run WITHOUT e-mail (single confirmed account): accepted and changes nothing', run2.ok && state() === after1, `${run2.err} ${after1} -> ${state()}`);
   check('isolation: the marker merchant has no member and no module', one(`select (select count(*) from public.merchant_members where merchant_id='${MARKER}') + (select count(*) from public.module_entitlements where merchant_id='${MARKER}')`) === '0');
   check('anon / authenticated cannot read the members table', one("select has_table_privilege('anon','public.merchant_members','SELECT') or has_table_privilege('authenticated','public.merchant_members','SELECT')") === 'f');
 } finally { if (!process.env.KEEP_PG_SMOKE) docker(['rm', '-f', NAME]); }
