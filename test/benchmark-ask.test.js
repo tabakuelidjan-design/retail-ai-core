@@ -127,7 +127,7 @@ test('SAFETY: the benchmark lives outside test/, npm test never reaches a provid
 });
 
 test('the runner works end to end with the oracle (no network) and writes a report with separate sub-scores', () => {
-  const out = path.join(ROOT, 'benchmark/ask/results/_test-run.json');
+  const out = path.join(mkdtempSync(path.join(tmpdir(), 'bench-run-')), '_test-run.json'); // own directory: benchmark-preflight counts benchmark/ask/results while the files run in parallel
   const r = spawnSync(process.execPath, [path.join(ROOT, 'benchmark/ask/run.js'), '--provider', 'oracle', '--only', 'S01,P01,C01', '--out', out], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /PASS {2}S01/); assert.match(r.stdout, /sub-scores \(separate, no composite\)/);
   const rep = JSON.parse(readFileSync(out, 'utf8')); assert.equal(rep.cases, 3); assert.equal(rep.provider, 'oracle'); assert.ok(rep.subScores.premiseRecall && rep.perCase.length === 3);
