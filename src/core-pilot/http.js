@@ -32,7 +32,7 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}) }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req) {
     const chunks = []; let n = 0;
@@ -48,12 +48,12 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     if (!p.startsWith('/api/core/')) return false;
     try {
       if (p === '/api/core/status' && m === 'GET') {
-        json(res, 200, { ...(await status()), connected: { china_sourcing: 'CONNECTED', socle_decision: runtime ? 'CONNECTED' : 'NOT_CONFIGURED' }, not_connected: NOT_CONNECTED, executes_actions: false, you: { role: actor.role, auth: actor.userId ? 'NORDLA_SESSION' : 'LOCAL_TOKEN' } });
+        json(res, 200, { ...(await status()), connected: { china_sourcing: 'CONNECTED', socle_decision: runtime ? 'CONNECTED' : 'NOT_CONFIGURED', finance: finance ? `READ_ONLY (${finance.source})` : 'NOT_CONNECTED', analytics: analytics ? `READ_ONLY (${analytics.source})` : 'NOT_CONNECTED' }, not_connected: Object.fromEntries(Object.entries(NOT_CONNECTED).filter(([k]) => !((k === 'FINANCE' && finance) || (k === 'ANALYTICS' && analytics)))), executes_actions: false, you: { role: actor.role, auth: actor.userId ? 'NORDLA_SESSION' : 'LOCAL_TOKEN' } });
         return true;
       }
       if (p === '/api/core/ask' && m === 'POST') {
         const b = await body(req);
-        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor }));
+        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics }));
         return true;
       }
       if (!runtime) { json(res, 503, { error: 'CORE_NOT_CONFIGURED', reason: configError }); return true; }

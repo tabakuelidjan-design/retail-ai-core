@@ -5,6 +5,7 @@
 import { routeUtterance, STATUS } from '../integration/router.js';
 import { MODULE as M } from '../integration/constants.js';
 import { sourcingPurchaseFacts } from './sourcing-facts.js';
+import { payablesAnswer, purchasesAnswer, salesAnswer, treasuryAnswer } from './answers.js';
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
@@ -17,7 +18,7 @@ export const NOT_CONNECTED = Object.freeze({
   [M.MARKETING]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
   [M.CREATIVE]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
 });
-export const CAN_DO = ['« résume ce dossier » (dossier ouvert)', '« dois-je acheter ce produit ? » (analyse Core du dossier ouvert)', '« décisions en attente »', '« suivi des décisions »'];
+export const CAN_DO = ['« quelles factures fournisseurs dois-je payer ? » (Finance)', '« ma trésorerie » (Finance)', '« mes achats du mois » (Finance)', '« comment évoluent mes ventes ? » (Analytics)', '« résume ce dossier » (dossier ouvert)', '« dois-je acheter ce produit ? » (analyse Core du dossier ouvert)', '« décisions en attente »', '« suivi des décisions »'];
 const AVAILABLE = new Set([M.CHINA_SOURCING]);
 
 const decisionLine = (v) => `• ${v.subject?.title ?? v.entry.subject.title} : ${v.entry.recommendation ? `recommandé « ${v.entry.recommendation.label} »` : 'à vérifier (données manquantes)'}${v.entry.human_decision ? ` — décidé : ${v.entry.human_decision.decision}` : ''}`;
@@ -27,7 +28,7 @@ const decisionSource = (v) => ({ kind: 'core_journal', ref: v.entry.id, case: v.
  * @param {{ text: string, caseId?: string|null }} q
  * @param {{ runtime: object|null, getCase: (id)=>Promise<object|null>, externals?: object, actor: object, now?: Date }} ctx
  */
-export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date() }) {
+export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null }) {
   const t = norm(text);
   if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
   const limits = [];
@@ -43,6 +44,16 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     const o = await runtime.overview(); const list = o.decisions.filter((v) => v.entry.human_decision);
     return { status: 'ANSWERED', answer: list.length ? `Décisions prises et leur suivi :\n${list.map((v) => `${decisionLine(v)}${v.entry.result ? ` — résultat : ${v.entry.result.result}` : ' — résultat pas encore enregistré'}`).join('\n')}` : 'Aucune décision n’a encore été prise.', sources: list.map(decisionSource), limits };
   }
+  // ---- Finance (read-only reader over Finance's own engines) and Analytics (its Tool Layer); without a reader: said NOT connected
+  const notConnected = (mod) => ({ status: 'MODULE_NOT_CONNECTED', module: mod, answer: NOT_CONNECTED[mod], sources: [], limits: [NOT_CONNECTED[mod]] });
+  if (/(factur|invoice)/.test(t) && /(fournisseur|supplier)/.test(t) && /(pay|regl|echean|due|doi|ouvert|reste)/.test(t) || /(echeanc|a payer|payables)/.test(t)) return finance ? payablesAnswer(await finance.payables()) : notConnected(M.FINANCE);
+  if (/(tresorerie|liquidit|solde bancaire|position de caisse|\bcash\b)/.test(t)) return finance ? treasuryAnswer(await finance.treasury()) : notConnected(M.FINANCE);
+  if (/(depense|achats? (du|de ce|ce) mois|combien.*(achete|depense))/.test(t)) {
+    if (!finance) return notConnected(M.FINANCE);
+    const today = finance.today(); return purchasesAnswer(await finance.purchases({ from: `${today.slice(0, 8)}01`, to: today }));
+  }
+  if (/(vente|ventes|chiffre d.affaires|\bca\b|sales|performance)/.test(t) && !/(prix de vente|selling price)/.test(t)) return analytics ? salesAnswer(await analytics.salesEvolution()) : notConnected(M.ANALYTICS);
+
   if (/(dois.?je|faut.?il|devrais.?je|peut.?on|should i).*(achet|command|buy|order)|(analys).*(dossier|produit|achat)/.test(t)) {
     if (!runtime) return notConfigured();
     const c = caseId ? await getCase(caseId) : null;
