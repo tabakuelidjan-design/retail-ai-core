@@ -1,0 +1,28 @@
+{
+  "_comment": "Supabase STAGING identity migrations 2-5 (migration 1 identity_sessions_events is already applied as version 20261015114757). Approved by the owner on 2026-10-15 for staging only. Changing this file re-runs the job; each file's sha256 must match.",
+  "project_ref": "fvhiammdskpcnfodsnrc",
+  "staging_marker_merchant": "4159734e-27be-4772-bb7c-6c5f24fbafcc",
+  "migrations": [
+    {
+      "name": "identity_rate_limits",
+      "file": "supabase/migrations/20260928130000_identity_rate_limits.sql",
+      "sha256": "ad29bbc4f6e4b5c084074c1810df3e6dd9d33bf3fead4b11ac599a93d170c23a"
+    },
+    {
+      "name": "identity_members",
+      "file": "supabase/migrations/20260928140000_identity_members.sql",
+      "sha256": "70efcb5a305b66c68da6edc3d5ed658c1ae3f0f353139bd3b22478784ce83eaf"
+    },
+    {
+      "name": "identity_modules_sessions",
+      "file": "supabase/migrations/20260928150000_identity_modules_sessions.sql",
+      "sha256": "c56836e6b715818f4953201cb9cf798776122e7ff4f1905d12fbd8e264b8e1fa"
+    },
+    {
+      "name": "identity_module_sourcing",
+      "file": "supabase/migrations-pending/20261015093000_identity_module_sourcing.sql",
+      "sha256": "0727cdd0db687dc3a4fdfbf441622553f61d6d48f5a86233f43021fac503f1f2"
+    }
+  ],
+  "run": false
+}

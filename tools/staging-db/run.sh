@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Supabase STAGING database operations through a direct PostgreSQL connection (GitHub Actions runner), in this order, each step
+# stopping everything on failure:
+#   1. guard     the connection is STAGING (project ref in the URL, never the production ref, staging's synthetic merchant present)
+#   2. backup    pg_dump -Fc of the whole database, encrypted (AES-256, passphrase secret), kept as a workflow artifact
+#   3. restore   the dump's public + supabase_migrations schemas restored into a throw-away PostgreSQL 17; every public table's row count
+#                and content hash must equal the live staging ones -> the backup is PROVEN restorable before anything changes
+#   4. apply     each requested migration file, in order, skipped if its name is already in the migration history, otherwise in ONE
+#                transaction with its history row (psql --single-transaction): all or nothing per migration
+#   5. checks    identity tables + RLS, no privilege for anon / authenticated, no SECURITY DEFINER callable by them, functional run in a
+#                transaction that is ROLLED BACK (owner bootstrap, module, session), and the pre-existing data unchanged
+# Usage: STAGING_DATABASE_URL=... STAGING_BACKUP_PASSPHRASE=... RESTORE_URL=... tools/staging-db/run.sh ops/staging-db/request.json OUT_DIR
+set -euo pipefail
+REQ="$1"; OUT="$2"; mkdir -p "$OUT"
+PROD_REF='xbtzjabbseclmqfozjeo'
+REF=$(jq -r .project_ref "$REQ"); MARKER=$(jq -r .staging_marker_merchant "$REQ")
+DB="${STAGING_DATABASE_URL:?STAGING_DATABASE_URL secret missing}"; PASS="${STAGING_BACKUP_PASSPHRASE:?STAGING_BACKUP_PASSPHRASE secret missing}"
+RESTORE="${RESTORE_URL:?RESTORE_URL (throw-away PostgreSQL) missing}"
+log() { echo "[$(date -u +%H:%M:%S)] $*"; }
+q() { psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 -c "$1"; }
+
+# ---- 1. guard
+[[ "$DB" == *"$REF"* ]] || { echo "STOP: the database URL does not name project $REF"; exit 2; }
+[[ "$DB" != *"$PROD_REF"* ]] || { echo "STOP: the database URL names the PRODUCTION project"; exit 2; }
+[[ ${#PASS} -ge 16 ]] || { echo "STOP: backup passphrase shorter than 16 characters"; exit 2; }
+[[ "$(q "select count(*) from public.merchants where id = '$MARKER'")" == 1 ]] || { echo "STOP: staging marker merchant absent: not the staging database"; exit 2; }
+log "guard OK: project $REF, staging marker present, server $(q 'show server_version')"
+
+FP_SQL="do \$\$ declare r record; n bigint; h text; o text := ''; begin for r in select c.relname from pg_class c join pg_namespace s on s.oid = c.relnamespace where s.nspname = 'public' and c.relkind = 'r' order by 1 loop execute format('select count(*), coalesce(md5(string_agg(md5(t::text), '''' order by md5(t::text))), ''empty'') from public.%I t', r.relname) into n, h; o := o || r.relname || '=' || n || ':' || h || E'\n'; end loop; raise notice '%', o; end \$\$;"
+fingerprint() { psql "$1" -X -q -v ON_ERROR_STOP=1 -c "$FP_SQL" 2>&1 | sed -n 's/^NOTICE:  //p; /^[a-z_]*=[0-9]*:/p' | grep -E '^[a-z_0-9]+=' | sort; }
+
+# ---- 2. backup
+fingerprint "$DB" > "$OUT/before.fingerprint"
+log "fingerprint: $(wc -l < "$OUT/before.fingerprint") public tables"
+pg_dump "$DB" -Fc --no-owner -f "$OUT/staging.dump"
+gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 -o "$OUT/staging.dump.gpg" "$OUT/staging.dump" 3<<<"$PASS"
+sha256sum "$OUT/staging.dump.gpg" > "$OUT/staging.dump.gpg.sha256"
+log "backup: $(du -h "$OUT/staging.dump.gpg" | cut -f1) encrypted, sha256 $(cut -c1-16 "$OUT/staging.dump.gpg.sha256")"
+
+# ---- 3. restore proof (from the ENCRYPTED file, as a real restore would)
+gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 -d -o "$OUT/check.dump" "$OUT/staging.dump.gpg" 3<<<"$PASS"
+psql "$RESTORE" -X -q -v ON_ERROR_STOP=1 <<'SQL'
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
+end $$;
+create schema if not exists extensions; create extension if not exists pgcrypto schema extensions; create extension if not exists "uuid-ossp" schema extensions;
+create schema if not exists auth; create table if not exists auth.users (id uuid primary key);
+create or replace function auth.uid() returns uuid language sql stable as $f$ select null::uuid $f$;
+create schema if not exists storage; create table if not exists storage.buckets (id text primary key);
+SQL
+pg_restore -d "$RESTORE" --no-owner --no-privileges --schema=public --schema=supabase_migrations "$OUT/check.dump" 2> "$OUT/restore.log" || true
+rm -f "$OUT/check.dump" "$OUT/staging.dump"   # only the encrypted copy is kept
+fingerprint "$RESTORE" > "$OUT/restored.fingerprint"
+if ! diff -u "$OUT/before.fingerprint" "$OUT/restored.fingerprint" > "$OUT/restore.diff"; then echo "STOP: the restored copy differs from staging (see restore.diff): nothing is applied"; cat "$OUT/restore.diff"; exit 3; fi
+log "restore proof OK: $(wc -l < "$OUT/restored.fingerprint") tables identical (row counts + content hashes)"
+
+# ---- 4. apply, one transaction per migration (file + history row)
+n=$(jq '.migrations | length' "$REQ")
+for i in $(seq 0 $((n - 1))); do
+  name=$(jq -r ".migrations[$i].name" "$REQ"); file=$(jq -r ".migrations[$i].file" "$REQ"); want=$(jq -r ".migrations[$i].sha256" "$REQ")
+  got=$(sha256sum "$file" | cut -d' ' -f1); [[ "$got" == "$want" ]] || { echo "STOP: $file sha256 $got differs from the approved $want"; exit 4; }
+  if [[ "$(q "select count(*) from supabase_migrations.schema_migrations where name = '$name'")" != 0 ]]; then log "skip $name: already in the history"; continue; fi
+  version=$(date -u +%Y%m%d%H%M%S); sleep 1
+  psql "$DB" -X -q -v ON_ERROR_STOP=1 --single-transaction -v body="$(cat "$file")" -v version="$version" -v name="$name" <<SQL
+set search_path = public, extensions;
+\i $file
+insert into supabase_migrations.schema_migrations (version, name, statements, created_by) values (:'version', :'name', array[:'body'], 'github-actions:staging-db-ops');
+SQL
+  log "applied $name as version $version (single transaction)"
+done
+
+# ---- 5. checks
+fail=0; chk() { if [[ "$2" == "$3" ]]; then log "PASS $1"; else log "FAIL $1 (got '$2', want '$3')"; fail=1; fi; }
+for t in app_sessions identity_events identity_rate_limits identity_auth_reservations merchant_members module_entitlements; do
+  chk "table $t with RLS" "$(q "select relrowsecurity from pg_class where oid = 'public.$t'::regclass")" t
+  for r in anon authenticated; do chk "$r has no privilege on $t" "$(q "select count(*) from information_schema.role_table_grants where table_schema = 'public' and table_name = '$t' and grantee = '$r'")" 0; done
+done
+for r in anon authenticated; do chk "$r executes no SECURITY DEFINER function" "$(q "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef and has_function_privilege('$r', p.oid, 'execute')")" 0; done
+fn=$(psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 <<SQL
+begin;
+set local search_path = public, extensions;
+insert into auth.users (id, aud, role, email) values ('00000000-0000-4000-8000-0000000000aa', 'authenticated', 'authenticated', 'staging-check@invalid.example');
+select (identity_member_bootstrap_owner('$MARKER', '00000000-0000-4000-8000-0000000000aa', now(), gen_random_uuid(), 'sourcing'))->>'code';
+select (identity_module_set('$MARKER', 'sourcing', 'ACTIVE', 'provisioning:check', now(), gen_random_uuid()))->>'code';
+select (identity_open_session('00000000-0000-4000-8000-0000000000aa', '$MARKER', 'sourcing', repeat('c', 64), now(), now() + interval '1 hour', gen_random_uuid()))->>'code';
+rollback;
+SQL
+)
+chk "functional run (rolled back)" "$(echo "$fn" | tr '\n' ' ' | xargs)" "BOOTSTRAPPED MODULE_ENABLED SESSION_OPENED"
+chk "nothing left by the functional run" "$(q "select (select count(*) from merchant_members) + (select count(*) from identity_events) + (select count(*) from module_entitlements)")" 0
+fingerprint "$DB" | grep -vE '^(app_sessions|identity_events|identity_rate_limits|identity_auth_reservations|merchant_members|module_entitlements)=' > "$OUT/after.fingerprint"
+grep -vE '^(app_sessions|identity_events|identity_rate_limits|identity_auth_reservations|merchant_members|module_entitlements)=' "$OUT/before.fingerprint" > "$OUT/before-existing.fingerprint"
+chk "pre-existing data unchanged" "$(diff -q "$OUT/before-existing.fingerprint" "$OUT/after.fingerprint" >/dev/null && echo same || echo different)" same
+q "select version || ' ' || name from supabase_migrations.schema_migrations order by version" > "$OUT/history.txt"
+exit $fail

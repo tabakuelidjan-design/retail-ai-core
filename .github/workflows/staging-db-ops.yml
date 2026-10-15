@@ -1,0 +1,64 @@
+# Supabase STAGING database operations (backup -> proven restore -> one transaction per migration -> checks). Never production.
+# Why a GitHub runner: the Claude session cannot open a PostgreSQL connection (its proxy has no raw TCP), and the Supabase connector
+# blocks any text containing several DELETE statements (an unanswerable confirmation -> 60 s timeout, diagnosed 2026-10-15).
+# Locks, all required:
+#   1. ops/staging-db/request.json must say "run": true (set only after the owner's go), with the sha256 of every approved file;
+#   2. the job runs in the GitHub environment `supabase-staging` (owner: add yourself as required reviewer there);
+#   3. secrets of that environment: STAGING_DATABASE_URL (staging only), STAGING_BACKUP_PASSPHRASE (>= 16 chars);
+#   4. the script refuses the production project ref and any database without the staging marker merchant.
+name: staging-db-ops
+on:
+  push:
+    branches: ['claude/nordla-core-p0']
+    paths: ['ops/staging-db/request.json']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: staging-db-ops, cancel-in-progress: false }
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: supabase-staging
+    services:
+      restore:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: restore-only, POSTGRES_DB: restore_check }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Requested?
+        id: req
+        run: echo "run=$(jq -r '.run // false' ops/staging-db/request.json)" >> "$GITHUB_OUTPUT"
+      - name: Not requested - nothing done
+        if: steps.req.outputs.run != 'true'
+        run: echo "::notice::request.json says run=false - nothing was done."
+      - name: PostgreSQL 17 client
+        if: steps.req.outputs.run == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Backup, proven restore, migrations, checks
+        if: steps.req.outputs.run == 'true'
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_BACKUP_PASSPHRASE }}
+          RESTORE_URL: postgresql://postgres:restore-only@127.0.0.1:5432/restore_check
+        run: bash tools/staging-db/run.sh ops/staging-db/request.json out
+      - name: Keep the encrypted backup and the evidence
+        if: always() && steps.req.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-db-ops-${{ github.run_id }}
+          path: |
+            out/staging.dump.gpg
+            out/staging.dump.gpg.sha256
+            out/*.fingerprint
+            out/restore.diff
+            out/restore.log
+            out/history.txt
+          retention-days: 30
+          if-no-files-found: ignore
