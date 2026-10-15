@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 env:
-  RELIABILITY_TESTS: test/core-reliability.test.js test/core-backup-integrity.test.js test/core-deployment-guard.test.js test/core-pilot.test.js test/core-backup-restore.test.js test/sourcing-backup-full-restore.test.js test/sourcing-hosted-backup.test.js
+  RELIABILITY_TESTS: test/core-reliability.test.js test/core-reliability-http.test.js test/core-backup-integrity.test.js test/core-deployment-guard.test.js test/core-pilot.test.js test/core-backup-restore.test.js test/sourcing-backup-full-restore.test.js test/sourcing-hosted-backup.test.js
 jobs:
   linux:
     name: reliability + full suite (linux, node 24)

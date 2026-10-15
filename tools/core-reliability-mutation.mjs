@@ -55,7 +55,7 @@ const MUTANTS = [
 // cannot find a difference that the byte comparison missed; the check is kept as defence in depth.
 const EQUIVALENT = new Set(['backup/restored-journal-not-rechecked']);
 const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
-const TESTS = ['test/core-reliability.test.js', 'test/core-backup-integrity.test.js'];
+const TESTS = ['test/core-reliability.test.js', 'test/core-backup-integrity.test.js', 'test/core-reliability-http.test.js'];
 const results = [];
 for (const [id, file, edits] of MUTANTS) {
   if (only && id !== only) continue;
