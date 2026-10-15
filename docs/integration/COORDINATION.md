@@ -56,3 +56,45 @@ qui, quoi, sur quel commit. Ajouter en bas, ne pas réécrire les lignes passée
   `renderProductionPng` (resvg), `measureProductFidelity`, `decodePng`, et le Gardien de marque via `src/core-pilot/branding.js`.
 - N'utilise PAS `buildProductMask` (défaut PM-6) : la photo est dessinée telle quelle (PIXEL_PRESERVE).
 - Configuration marchand : `config/merchants/habb/creation.json` (typographie = décision propriétaire existante du Benchmark 001).
+
+## 2026-10-15 — Chantier A (intégration, infrastructure, stabilité) / Chantier B (évolution fonctionnelle du Core)
+
+**Référence stable à transmettre au Chantier B** : branche `claude/nordla-core-p0`. Code : `9e25f1d` (CI : china-sourcing, intégration
+Node 20 + 24, Creative Intelligence = PASS ; suite complète locale 3875 tests, 0 échec). Le commit suivant du Chantier A n'ajoute que
+tests, CI et documentation (voir le journal git). Le Chantier B part de ce HEAD sur **sa propre branche** ; aucune intégration de ses
+commits dans `claude/nordla-core-p0` sans vérification CI et déclaration ici.
+
+### Propriété des fichiers
+| Chantier B (évolution Core) — A n'y touche pas sans déclaration | Chantier A (stabilité, déploiement) — B n'y touche pas sans déclaration |
+|---|---|
+| `src/socle-decision/**` | `deploy/**`, `railway.json`, `railpack.json`, `.github/workflows/**` |
+| `src/core-pilot/runtime.js`, `journal.js`, `ask.js`, `answers.js`, `config.js`, `sourcing-facts.js` | `tools/**`, `ops/**`, `supabase/migrations/**` (propriété Infrastructure) |
+| `config/merchants/*/core-decision.json` | `src/sourcing/server/**` (démarrage, sécurité, sauvegardes), `src/security/**`, `src/identity/**` |
+| tests `test/core-pilot*`, `test/socle-*` | `docs/infrastructure/**`, tests `test/core-modules*`, `test/core-backup-restore*`, `test/e2e/**` |
+
+**Partagés (déclarer ici avant modification, un seul chantier à la fois)** : `src/core-pilot/http.js` (routes `/api/core/*`),
+`src/core-pilot/{finance-reader,analytics-reader,branding,campaign,creation}.js`, `src/sourcing/ui/modules-panel.js`,
+`src/sourcing/ui/core-panel.js`, `package.json`, ce fichier.
+
+### Contrats existants (ne pas casser sans version)
+- Identité : `actor = { userId?, role }` vient **toujours** de la session (jamais du corps de requête) ; rôles `OWNER`, `ADMIN`,
+  `COLLABORATOR` ; décisions Branding / Marketing / Création = `OWNER` uniquement, raison obligatoire.
+- Routes `/api/core/*` (en-tête de `src/core-pilot/http.js`) : `status`, `modules`, `ask`, `decisions`, `cases/<id>/analyse`,
+  `decisions/<id>/{human,result}`, `branding{,/check,/approve}`, `campaigns{,/<id>/decision}`, `creation{,/<id>.png,/<id>/decision}`.
+- Runtime : `createCoreRuntime({ merchantId, config, journal })` → `ready, analyseCase, decideHuman, recordResult, overview, entry,
+  forCase` ; journal chaîné, en ajout seul, rejoué au démarrage (un journal qui ne se vérifie pas désactive le Core, sans le toucher).
+- Lecteurs (lecture seule) : Finance `payables() / treasury({horizonDays}) / purchases({from,to}) / today()` ; Analytics
+  `salesEvolution({periodKey})` — chaque réponse porte source, période, fraîcheur, données manquantes.
+- Données sur le volume : `core/decision-journal.jsonl`, `core/brand-approved.json`, `core/campaigns.jsonl`, `core/creations/` —
+  formats en ajout seul ; couverts par la sauvegarde (test `core-backup-restore`).
+- Modules (`GET /api/core/modules`) : états `DISPONIBLE, LECTURE SEULE, À APPROUVER, LIMITÉ, BLOQUÉ, NON RACCORDÉ, NON CONFIGURÉ`.
+
+### Peut avancer en parallèle
+B : capacités du Core (sujets, leviers, règles, Parle à Nordla) sur sa branche. A : Supabase staging, Railway, sauvegardes, protocole
+Xiaomi, CI. Point de jonction : une fusion B → `claude/nordla-core-p0` préparée par B, vérifiée (CI + e2e) par A, décidée par le propriétaire.
+
+### Branches (état vérifié le 15/10)
+- `integration/nordla-pre-china` @ `f7197d5` : ses 3 correctifs CI sont **déjà** dans `claude/nordla-core-p0` (seules différences :
+  déclenchement sur `claude/nordla-core-p0`, tests Core en Node 24 seulement). Branche **remplacée**, à ne plus faire avancer.
+- `claude/blissful-babbage-z0nrt2` @ `2b6b983` : 1 document (`docs/infrastructure/nordla-cloud-plan.md`), **absent** de Core P0 mais
+  cité par 4 fichiers (dont `tools/sourcing-backup.mjs`) ; fusion sans conflit vérifiée (`git merge-tree`). **Proposée, non exécutée.**

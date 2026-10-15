@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { node: 20, exclude: '^test/(sourcing-|core-pilot|core-readers|core-modules|growth-browser\.test\.js$)' } # Nordla Core runs inside the China Sourcing server: Node 24 only, like it
+          - { node: 20, exclude: '^test/(sourcing-|core-pilot|core-readers|core-modules|core-backup-restore|growth-browser\.test\.js$)' } # Nordla Core runs inside the China Sourcing server: Node 24 only, like it
           - { node: 24, exclude: '^$' }
     steps:
       - uses: actions/checkout@v4

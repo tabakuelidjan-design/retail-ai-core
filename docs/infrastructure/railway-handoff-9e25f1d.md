@@ -65,3 +65,21 @@ seule en préparation (`docs/infrastructure/prod-readonly-habb-procedure.md`).
 - Données : les fichiers ajoutés sur le volume (`core/brand-approved.json`, `core/campaigns.jsonl`, `core/creations/`) sont
   **additifs** ; `c2c314d` les ignore. Rien n'est supprimé ni réécrit au retour arrière.
 - Arrêt d'urgence : retirer le domaine public du service ou mettre le service à 0 instance ; le volume reste intact.
+
+## 6. Coût mensuel estimé de `sourcing-staging` (tarifs Railway officiels vérifiés le 15/10 : RAM 10 $/Go/mois, CPU 20 $/vCPU/mois, volume 0,15 $/Go/mois)
+
+Mesure locale de l'image `9e25f1d` : **48 Mo de RAM au repos, CPU ≈ 0 %**. Prévision avec rendus Création et rapports Analytics :
+100–200 Mo en moyenne.
+| Poste | Hypothèse | Coût / mois |
+|---|---|---|
+| RAM | 0,1–0,2 Go en continu | 1–2 $ |
+| CPU | < 0,02 vCPU en moyenne (usage ponctuel) | < 0,5 $ |
+| Volume | 1 Go | 0,15 $ |
+| Trafic sortant | quelques Go (photos) | < 0,5 $ |
+| **Total** | | **≈ 2–4 $ / mois**, en plus des services existants (le plan Hobby inclut 5 $ d'usage au total, tous services confondus) |
+À confirmer après une semaine réelle dans l'onglet *Usage* de Railway.
+
+## 7. État réel de Supabase staging (lecture des métadonnées, 15/10)
+Migration d'identité 1 seule appliquée (`20261015114757 identity_sessions_events`, table `identity_events`) ; migrations 2–5 **non
+appliquées** ; 0 compte Auth ; 1 marchand (le marqueur staging) ; bucket `nordla-backups` **absent** (seul `finance-inbox`, privé).
+→ Tant que ces points ne sont pas faits, le service démarrerait mais **personne ne pourrait se connecter**.
