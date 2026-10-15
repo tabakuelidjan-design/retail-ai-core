@@ -75,5 +75,5 @@ export function createIdentityService(config = {}) {
     newId,
   });
   const access = createAccessService({ supabase, merchantId: context.merchantId, moduleCode: context.module, verifier, config: sessions, now, newId, randomBytes });
-  return Object.freeze({ context, authenticateAndOpenSession: access.authenticateAndOpenSession, resolveAccessSession: access.resolveAccessSession });
+  return Object.freeze({ context, authenticateAndOpenSession: access.authenticateAndOpenSession, resolveAccessSession: access.resolveAccessSession, logoutSession: access.logoutSession });
 }

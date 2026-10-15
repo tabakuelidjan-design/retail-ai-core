@@ -125,5 +125,10 @@ export function createAccessService({ supabase, merchantId, moduleCode, verifier
     return Object.freeze({ ok: true, merchantId: s.merchantId, userId: s.userId, role: membership.role, module: s.module });
   }
 
-  return Object.freeze({ context: Object.freeze({ merchantId: merchant, module: moduleCode }), authenticateAndOpenSession, resolveAccessSession });
+  /** « Se déconnecter » : revokes THIS session (this merchant, this module) server-side. Never throws on an unknown token. */
+  async function logoutSession(rawToken) {
+    try { return await sessions.logoutCurrent(rawToken, { merchantId: merchant, module: moduleCode }); } catch { return { revoked: false, sessionId: null, userId: null, unavailable: true }; }
+  }
+
+  return Object.freeze({ context: Object.freeze({ merchantId: merchant, module: moduleCode }), authenticateAndOpenSession, resolveAccessSession, logoutSession });
 }

@@ -7,6 +7,8 @@ export const MODULES = Object.freeze([
   Object.freeze({ code: 'finance', name: 'Finances' }),
   Object.freeze({ code: 'analytics', name: 'Analyses' }),
   Object.freeze({ code: 'growth', name: 'Développement des ventes' }),
+  // China Sourcing (Buying & Suppliers): its hosted server opens Nordla sessions like the others. SQL: supabase/migrations-pending/20261015093000_identity_module_sourcing.sql
+  Object.freeze({ code: 'sourcing', name: 'Sourcing Chine' }),
 ]);
 export const MODULE_CODES = Object.freeze(MODULES.map((m) => m.code));
 

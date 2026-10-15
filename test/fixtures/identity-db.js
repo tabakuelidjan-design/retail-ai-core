@@ -83,7 +83,7 @@ export function createIdentityDb({ merchants = [], users = [], latencyMs = 0 } =
 
   // Mirror of the C3 SQL functions (migration 20260928150000; verified for real in PGlite): one uninterrupted body = one
   // transaction under the per-merchant lock; the change and its journal entry are committed together or not at all.
-  const MODULE_CODES = ['finance', 'analytics', 'growth'];
+  const MODULE_CODES = ['finance', 'analytics', 'growth', 'sourcing']; // the SQL check after 20261015093000_identity_module_sourcing (pending)
   function accessFn(fn, a) {
     const commitAll = (events, change) => {
       for (const ev of events) if (!/^[a-z][a-z0-9_-]{1,39}$/.test(ev.module)) throw dbError('check violation (identity_events.module)');

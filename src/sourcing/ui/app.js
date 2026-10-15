@@ -9,7 +9,7 @@ import { MARKETPLACES } from '/core/amazon.js';
 import { DOC_TYPES } from '/core/docinspect.js';
 import { capabilityMatrix } from '/core/capabilities.js';
 import { headerStatus } from '/core/status.js';
-import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js'; import { backupSection, createBackup, fetchCasePhotos } from './backup.js';
+import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js'; import { backupSection, createBackup, fetchCasePhotos } from './backup.js'; import { csrfToken, detectAuth, installSignIn, loginScreen } from './session.js';
 import { $, esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from './dom.js';
 import { S, cur, LEGACY_UI } from './state.js';
 import { formKey, captureDrafts, restoreDrafts } from './draft.js';
@@ -75,7 +75,7 @@ function paintLive() {
 }
 
 // ---- optional server -------------------------------------------------------------------------------------------------------------------------------------------------------
-const api = async (path, opts = {}) => { const r = await fetch(path, { ...opts, headers: { 'x-sourcing-token': S.token, 'content-type': 'application/json', ...(opts.headers ?? {}) } }); const body = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(body.error ?? r.status), { status: r.status, body }); return body; };
+const api = async (path, opts = {}) => { const r = await fetch(path, { ...opts, credentials: 'same-origin', headers: { ...(S.authMode === 'session' ? { 'x-nordla-csrf': csrfToken() } : { 'x-sourcing-token': S.token }), 'content-type': 'application/json', ...(opts.headers ?? {}) } }); /* hosted: session cookie + CSRF (session.js) */ const body = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(body.error ?? r.status), { status: r.status, body }); return body; };
 /** After a failed connection the sync is retried with a growing delay (1.5 s ... 30 s) while changes are waiting, so a reset connection right after the network returns does not leave them stuck. */
 let retryMs = 0; let retryTimer = null;
 function scheduleRetry() { clearTimeout(retryTimer); retryMs = Math.min(retryMs ? retryMs * 2 : 1500, 30000); retryTimer = setTimeout(() => ping(), retryMs); }
@@ -164,7 +164,7 @@ function gate() {
 let lastRenderKey = null; let discardDrafts = false;
 function render() {
   ensureCase(); const c = cur();
-  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
+  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? loginScreen(S) : gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
   const fm = S.mode === 'field'; const sl = S.mode === 'salon';
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
@@ -515,4 +515,4 @@ setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // 
 setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
 window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
-initStorage().then(() => { render(); ping(); });
+initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); });

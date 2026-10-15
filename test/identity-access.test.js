@@ -53,13 +53,17 @@ async function habbLike(opts) {
 }
 
 // ---------- registry ----------
-test('module registry: finance, analytics, growth - closed, exact, no core; the same list as the SQL check', () => {
-  assert.deepEqual(MODULES.map((m) => [m.code, m.name]), [['finance', 'Finances'], ['analytics', 'Analyses'], ['growth', 'Développement des ventes']]);
-  assert.deepEqual(MODULE_CODES, ['finance', 'analytics', 'growth']);
+test('module registry: finance, analytics, growth, sourcing - closed, exact, no core; the same list as the SQL check', () => {
+  assert.deepEqual(MODULES.map((m) => [m.code, m.name]), [['finance', 'Finances'], ['analytics', 'Analyses'], ['growth', 'Développement des ventes'], ['sourcing', 'Sourcing Chine']]);
+  assert.deepEqual(MODULE_CODES, ['finance', 'analytics', 'growth', 'sourcing']);
   for (const bad of ['core', 'Finance', ' finance', 'finance ', 'stock', '', null, undefined, 42]) assert.equal(isModuleCode(bad), false, String(bad));
   assert.equal(moduleOf('core'), null);
   const sql = readFileSync(new URL('../supabase/migrations/20260928150000_identity_modules_sessions.sql', import.meta.url), 'utf8');
   assert.equal((sql.match(/'finance', 'analytics', 'growth'/g) ?? []).length, 3, 'table check + both functions use exactly the registry');
+  // 'sourcing' (China Sourcing) is added by the pending migration: the check and both functions there use exactly the full registry
+  const next = readFileSync(new URL('../supabase/migrations-pending/20261015093000_identity_module_sourcing.sql', import.meta.url), 'utf8');
+  assert.equal((next.match(/\('finance', 'analytics', 'growth', 'sourcing'\)/g) ?? []).length, 3, 'pending migration: table check + both functions use exactly the registry');
+  assert.equal((next.match(/'finance', 'analytics', 'growth'\)/g) ?? []).length, 0, 'no three-value list left in the pending migration');
 });
 
 // ---------- provisioning ----------

@@ -35,8 +35,8 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
-  if (!token || String(token).length < 24) throw new Error('a token of at least 24 characters is required');
+export function createSourcingApp({ token, gate = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+  if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
   const hostOk = (req) => { const hosts = (allowedHosts ?? []).map((h) => String(h).toLowerCase()); const h = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, ''); return hosts.length ? hosts.includes(h) || LOOPBACK_HOSTS.includes(h) : true; };
@@ -58,7 +58,8 @@ export function createSourcingApp({ token, store, photos = null, workspace = nul
   async function api(req, res, url) {
     const ip = clientIp(req);
     if (blocked(ip)) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
-    if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
+    if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); } // hosted: a Nordla session (and CSRF for a change)
+    else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     const p = url.pathname; const m = req.method;
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });
@@ -130,6 +131,8 @@ export function createSourcingApp({ token, store, photos = null, workspace = nul
       const url = new URL(req.url, 'http://local');
       if (url.pathname === '/healthz' && req.method === 'GET') return json(res, 200, { ok: true }); // liveness for the container / monitor: no data, no token
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
+      if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
+      if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
       if (voice && await voice.handle(req, res, url.pathname)) return;
