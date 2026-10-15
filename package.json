@@ -49,6 +49,7 @@
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
     "sourcing:e2e:revision": "node test/e2e/sourcing-item-revision.e2e.js",
     "sourcing:e2e:identification": "node test/e2e/sourcing-identification.e2e.js",
+    "sourcing:e2e:migration": "node test/e2e/sourcing-origin-migration.e2e.js",
     "growth": "node src/growth/server/serve.js"
   },
   "engines": {
