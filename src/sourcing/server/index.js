@@ -23,6 +23,7 @@ import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { loadCoreConfig } from '../../core-pilot/config.js';
 import { createFileJournal } from '../../core-pilot/journal.js';
+import { checkJournalDeployment } from '../../core-pilot/deployment-guard.js';
 import { createCoreRuntime } from '../../core-pilot/runtime.js';
 import { createCoreHttp } from '../../core-pilot/http.js';
 
@@ -48,6 +49,9 @@ export function buildHostedGate(env, hosted, services = null) {
 export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, root = join(HERE, '..', '..', '..') }) {
   const { config, error } = await loadCoreConfig(env, root);
   if (!config) return { core: createCoreHttp({ runtime: null, configError: `CORE_NOT_CONFIGURED: ${error}`, store }), status: `Nordla Core OFF (${error})` };
+  // the journal's guarantees need a volume on Railway (durability) and one service (one writer): refuse to record decisions where they would be lost
+  const placement = checkJournalDeployment({ env, dir });
+  if (!placement.ok) return { core: createCoreHttp({ runtime: null, configError: `${placement.code}: ${placement.reason}`, store }), status: `Nordla Core OFF (${placement.code})` };
   const runtime = createCoreRuntime({ merchantId, config, journal: createFileJournal({ merchantId, file: join(dir, 'core', 'decision-journal.jsonl') }) });
   try { await runtime.ready(); } catch (e) { return { core: createCoreHttp({ runtime: null, configError: e.code ? `${e.code}: ${e.message}` : 'JOURNAL_UNREADABLE', store }), status: `Nordla Core OFF: ${e.message}` }; }
   const externals = async () => { try { const g = await safety.get(); return g?.alerts ? { safety: g } : {}; } catch { return {}; } };

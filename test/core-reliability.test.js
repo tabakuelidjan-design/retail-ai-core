@@ -412,3 +412,61 @@ test('readJsonlStrict: absent file is empty; a directory, a torn tail and a bad 
     await copyFile(join(dir, 'ok.jsonl'), join(dir, 'copy.jsonl'));
   });
 });
+
+// =============================================================================================== guards found by the mutation sweep
+test('P2 a write that is not the size it should be (someone else wrote between our write and our check) is not acknowledged: JOURNAL_DURABILITY_UNCERTAIN + protection', async () => {
+  await withDir(async (dir) => {
+    const file = join(dir, 'j.jsonl'); let arm = false;
+    const journal = createFileJournal({ merchantId: MID, file, hooks: { afterWrite: async () => { if (arm) await appendFile(file, 'intruder\n'); } } });
+    const rt = runtimeOn(journal); const r = await rt.analyseCase(goCase(), { externals, actor: OWNER });
+    arm = true;
+    assert.equal(await code(rt.decideHuman(r.entry.id, { decision: 'DEFERRED', reason: 'x' }, OWNER)), 'JOURNAL_DURABILITY_UNCERTAIN');
+    assert.equal(journal.status().state, 'PROTECTED'); assert.equal((await rt.entry(r.entry.id)).entry.human_decision, null);
+  });
+});
+
+test('journal: a journal that does not verify is refused at load, in memory too (no unverified history is ever served)', async () => {
+  const good = createMemoryJournal({ merchantId: MID }); await good.append({ kind: 'A', payload: {}, at: NOW.toISOString() }); await good.append({ kind: 'B', payload: {}, at: NOW.toISOString() });
+  const lines = good.lines().map((l) => JSON.parse(l));
+  assert.equal((await createMemoryJournal({ merchantId: MID, lines }).all()).length, 2);
+  const forged = [{ ...lines[0], payload: { forged: true } }, lines[1]];
+  assert.equal(await code(createMemoryJournal({ merchantId: MID, lines: forged }).all()), 'JOURNAL_CORRUPT');
+  assert.equal(await code(createMemoryJournal({ merchantId: 'other', lines }).all()), 'JOURNAL_CORRUPT');
+});
+
+test('durable append: a short write is completed, a write that makes no progress is an error (never an endless loop or a half line announced as written)', async () => {
+  await withDir(async (dir) => {
+    const written = [];
+    const handle = (step) => ({ write: async (buf, off, len) => { const n = Math.min(step, len); written.push(Buffer.from(buf.subarray(off, off + n))); return { bytesWritten: n }; }, datasync: async () => { written.push('SYNC'); }, close: async () => { written.push('CLOSE'); } });
+    const n = await appendLineDurably(join(dir, 'a.jsonl'), '{"a":12345}', { openFile: async () => handle(3) });
+    assert.equal(n, 12); assert.equal(Buffer.concat(written.filter((x) => Buffer.isBuffer(x))).toString(), '{"a":12345}\n', 'three bytes at a time, still one whole line');
+    assert.deepEqual(written.slice(-2), ['SYNC', 'CLOSE'], 'sync happens after the last byte, on the same handle, before the close');
+    const e = await appendLineDurably(join(dir, 'b.jsonl'), '{"a":1}', { openFile: async () => handle(0) }).catch((x) => x);
+    assert.equal(e.code, 'APPEND_SHORT_WRITE'); assert.equal(e.status, 503);
+    await assert.rejects(appendLineDurably(join(dir, 'c.jsonl'), 'two\nlines'), { code: 'APPEND_LINE_HAS_NEWLINE' });
+  });
+});
+
+test('runtime: an event that is durable but cannot be applied puts the Core in protection (CORE_PROTECTED) - the journal is the truth, a controlled restart will say', async () => {
+  const mem = createMemoryJournal({ merchantId: MID }); let corrupt = false;
+  const journal = { ...mem, append: (ev) => mem.append(corrupt ? { ...ev, payload: { ...ev.payload, entry_id: 'log_does_not_exist' } } : ev) };
+  const rt = runtimeOn(journal);
+  const r = await rt.analyseCase(goCase(), { externals, actor: OWNER });
+  corrupt = true;
+  assert.equal(await code(rt.decideHuman(r.entry.id, { decision: 'DEFERRED', reason: 'x' }, OWNER)), 'CORE_PROTECTED');
+  corrupt = false;
+  assert.equal(await code(rt.decideHuman(r.entry.id, { decision: 'DEFERRED', reason: 'again' }, OWNER)), 'CORE_PROTECTED', 'no further write while protected');
+  assert.equal(await code(rt.analyseCase(goCase('other'), { externals, actor: OWNER })), 'CORE_PROTECTED');
+  assert.equal((await rt.overview()).decisions.length, 1, 'consultation still works');
+});
+
+test('P3 a recovery is prepared in a NEW directory only: a directory that holds anything is refused and left alone', async () => {
+  await withDir(async (dir) => {
+    const { file, rt, r } = await seeded(dir);
+    await rt.decideHuman(r.entry.id, { decision: 'DEFERRED', reason: 'x' }, OWNER);
+    const raw = await readFile(file); await writeFile(file, raw.subarray(0, raw.length - 20));
+    const out = join(dir, 'taken'); await mkdir(out); await writeFile(join(out, 'precious.txt'), 'keep me');
+    await assert.rejects(prepareRecovery({ file, merchantId: MID, outDir: out }), { code: 'RECOVERY_DIR_NOT_EMPTY' });
+    assert.deepEqual(await readdir(out), ['precious.txt']);
+  });
+});

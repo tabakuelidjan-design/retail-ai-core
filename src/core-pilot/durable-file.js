@@ -20,11 +20,11 @@ export const LOCK_WAIT_MS = 4_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Appends `line` + "\n" and makes it durable. Returns the number of bytes written. Throws on ANY short or failed write: the caller must treat the file as uncertain. */
-export async function appendLineDurably(file, line, { mode = 0o600 } = {}) {
+export async function appendLineDurably(file, line, { mode = 0o600, openFile = open } = {}) {
   if (line.includes('\n')) throw new DurableFileError('APPEND_LINE_HAS_NEWLINE', 'a journal line is one line', { status: 500 });
   await mkdir(dirname(file), { recursive: true });
   const buf = Buffer.from(`${line}\n`, 'utf8');
-  const h = await open(file, 'a', mode);
+  const h = await openFile(file, 'a', mode); // `openFile` is injectable only so a test can simulate short and failed writes
   try {
     let off = 0;
     while (off < buf.length) {

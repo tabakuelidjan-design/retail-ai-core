@@ -1,0 +1,56 @@
+name: core-reliability
+# Nordla Core reliability (mandate 2026-10-15): the decision journal, the campaign and creation journals, the recovery tool and the backup integrity checks.
+#  - Linux, Node 24: the Core reliability tests, then the WHOLE suite (one process and one time cap per file, like nordla-integration-pre-china).
+#  - Windows, Node 24: the same reliability tests on the OS where datasync on a read-only handle used to fail with EPERM (the local PC server).
+# No secret, no provider, no network.
+on:
+  push:
+    branches: ['claude/nordla-core-reliability']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+env:
+  RELIABILITY_TESTS: test/core-reliability.test.js test/core-backup-integrity.test.js test/core-deployment-guard.test.js test/core-pilot.test.js test/core-backup-restore.test.js test/sourcing-backup-full-restore.test.js test/sourcing-hosted-backup.test.js
+jobs:
+  linux:
+    name: reliability + full suite (linux, node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - name: Core reliability tests
+        run: node --test $RELIABILITY_TESTS
+      - name: Whole suite, one process and one cap per file
+        shell: bash
+        run: |
+          one() {
+            f="$1"; s=$(date +%s)
+            timeout 1500 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1; rc=$?
+            d=$(( $(date +%s) - s ))
+            echo "$rc $d $f" >> /tmp/results.txt
+            if [ "$rc" -ne 0 ]; then echo "::error title=test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; fi
+          }
+          export -f one
+          : > /tmp/results.txt
+          # test/benchmark-*.test.js share benchmark/ask/results: they run ONE at a time, the rest 4 at a time
+          ls test/*.test.js | grep -v '^test/benchmark-' | xargs -P 4 -I{} bash -c 'one {}'
+          ls test/benchmark-*.test.js | xargs -P 1 -I{} bash -c 'one {}'
+          echo "files run: $(wc -l < /tmp/results.txt)"
+          sort -k2 -n -r /tmp/results.txt > /tmp/sorted.txt
+          head -8 /tmp/sorted.txt | while read rc d f; do echo "::notice title=slowest::$f ${d}s (exit $rc)"; done
+          ! grep -q -v '^0 ' /tmp/results.txt
+  windows:
+    name: reliability (windows, node 24)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - name: Core reliability tests on Windows
+        shell: bash
+        run: node --test $RELIABILITY_TESTS
