@@ -36,7 +36,8 @@ async function serve(opts) {
 async function browser() {
   const dir = mkdtempSync(path.join(tmpdir(), 'growth-cdp-'));
   const port = 9400 + Math.floor(Math.random() * 400);
-  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore' });
+  // own process group (detached): /usr/bin/google-chrome is a wrapper script with helper processes, so close() ends the WHOLE group, not one pid
+  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
   let targets = [];
   for (let i = 0; i < 100 && !targets.length; i += 1) { try { targets = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).filter((t) => t.type === 'page'); } catch { /* not up yet */ } if (!targets.length) await sleep(100); }
   const ws = new WebSocket(targets[0].webSocketDebuggerUrl);
@@ -74,8 +75,10 @@ async function browser() {
     async close() {
       ws.close();
       const exited = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise((r) => proc.once('exit', r));
-      proc.kill();
-      if (await Promise.race([exited.then(() => true), sleep(3000).then(() => false)]) === false) { proc.kill('SIGKILL'); await Promise.race([exited, sleep(3000)]); }
+      const killAll = (sig) => { try { if (process.platform !== 'win32') process.kill(-proc.pid, sig); else proc.kill(sig); } catch { /* already gone */ } };
+      killAll('SIGTERM');
+      if (await Promise.race([exited.then(() => true), sleep(3000).then(() => false)]) === false) { killAll('SIGKILL'); await Promise.race([exited, sleep(3000)]); }
+      proc.unref(); // nothing left of the browser may hold the test file open
       try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ }
     },
   };
