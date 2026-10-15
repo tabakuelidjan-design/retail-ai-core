@@ -5,6 +5,8 @@
 //   node tools/sourcing-backup.mjs backup  <dataDir> <outDir> [--keep N]     writes <outDir>/sourcing-<UTC time>.nsb (encrypted), keeps the N newest (default 30)
 //   node tools/sourcing-backup.mjs verify  <file.nsb>                         decrypts and checks every file's SHA-256; changes nothing
 //   node tools/sourcing-backup.mjs restore <file.nsb> <targetDir>             verifies first, then writes into an EMPTY or new directory, then checks what it wrote
+//   node tools/sourcing-backup.mjs offsite <dataDir> <outDir> [--keep N]     backup, then copy the archive to the private bucket SOURCING_BACKUP_BUCKET (no overwrite)
+//   node tools/sourcing-backup.mjs fetch   <archiveName> <outDir>            downloads one archive from that bucket and verifies it (then: restore)
 //
 // SOURCING_BACKUP_PASSPHRASE (>= 16 characters) is required: archives are encrypted (scrypt -> AES-256-GCM; a wrong passphrase or any changed
 // byte is refused, never half-restored). Keep the passphrase OFF the server too (password manager + paper): without it no archive can be read.
@@ -12,7 +14,7 @@
 // Off-site, immutable copies (object lock, write-only key) are the operator's next step and stay an owner decision (provider/account).
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'node:url';
 
@@ -98,6 +100,43 @@ export async function restore(file, targetDir, opts = {}) {
   return { ok: true, created_at: a.created_at, files: a.files.length, target };
 }
 
+// ---- off-server copy: a private Supabase Storage bucket (another provider than the Railway volume). Upload WITHOUT overwrite
+// (x-upsert: false): an archive name that already exists is refused, never replaced. The archive is encrypted before it leaves.
+// Not immutable against someone holding the service key (that needs object lock: an owner decision on provider / account).
+const storageOf = (env) => {
+  const url = String(env.SUPABASE_URL ?? '').replace(/\/+$/, ''); const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? ''); const bucket = String(env.SOURCING_BACKUP_BUCKET ?? '').trim();
+  if (!url || !key || !/^[a-z0-9][a-z0-9_-]{2,62}$/.test(bucket)) throw new BackupError('OFFSITE_NOT_CONFIGURED', 'off-server copy needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SOURCING_BACKUP_BUCKET');
+  return { base: `${url}/storage/v1/object/${bucket}`, headers: { authorization: `Bearer ${key}`, apikey: key } };
+};
+const ARCHIVE = /^sourcing-\d{8}T\d{6}Z\.nsb$/;
+
+export async function uploadOffsite(file, { env = process.env, fetchImpl = fetch } = {}) {
+  const name = basename(file); if (!ARCHIVE.test(name)) throw new BackupError('OFFSITE_NAME_INVALID', name);
+  await readArchive(file, { env }); // only a readable archive leaves the server
+  const { base, headers } = storageOf(env);
+  const r = await fetchImpl(`${base}/${name}`, { method: 'POST', headers: { ...headers, 'content-type': 'application/octet-stream', 'x-upsert': 'false' }, body: await readFile(file) });
+  if (!r.ok) throw new BackupError(r.status === 409 || r.status === 400 ? 'OFFSITE_EXISTS_OR_REFUSED' : 'OFFSITE_UPLOAD_FAILED', `upload of ${name} answered ${r.status}`);
+  return { ok: true, name };
+}
+
+export async function downloadOffsite(name, outDir, { env = process.env, fetchImpl = fetch } = {}) {
+  if (!ARCHIVE.test(name)) throw new BackupError('OFFSITE_NAME_INVALID', name);
+  const { base, headers } = storageOf(env);
+  const r = await fetchImpl(`${base}/${name}`, { headers });
+  if (!r.ok) throw new BackupError('OFFSITE_DOWNLOAD_FAILED', `download of ${name} answered ${r.status}`);
+  await mkdir(outDir, { recursive: true }); const file = join(outDir, name);
+  await writeFile(file, Buffer.from(await r.arrayBuffer()));
+  await readArchive(file, { env }); // a copy that does not decrypt / verify is reported at once
+  return { ok: true, file };
+}
+
+/** One scheduled run on the hosted server: local encrypted archive (kept `keep`), then the off-server copy. */
+export async function backupAndShip(dataDir, outDir, opts = {}) {
+  const b = await backup(dataDir, outDir, opts);
+  const u = await uploadOffsite(b.file, opts);
+  return { ...b, offsite: u.name };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [cmd, a, b] = process.argv.slice(2);
   const keepIx = process.argv.indexOf('--keep'); const keep = keepIx > 0 ? Number(process.argv[keepIx + 1]) : 30;
@@ -106,7 +145,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (cmd === 'backup' && a && b) r = await backup(a, b, { keep: Number.isInteger(keep) && keep > 0 ? keep : 30 });
     else if (cmd === 'verify' && a) r = await verify(a);
     else if (cmd === 'restore' && a && b) r = await restore(a, b);
-    else { console.error('usage: sourcing-backup.mjs backup <dataDir> <outDir> [--keep N] | verify <file.nsb> | restore <file.nsb> <emptyTargetDir>'); process.exit(2); }
+    else if (cmd === 'offsite' && a && b) r = await backupAndShip(a, b, { keep: Number.isInteger(keep) && keep > 0 ? keep : 30 });
+    else if (cmd === 'fetch' && a && b) r = await downloadOffsite(a, b);
+    else { console.error('usage: sourcing-backup.mjs backup <dataDir> <outDir> [--keep N] | offsite <dataDir> <outDir> [--keep N] | fetch <archiveName> <outDir> | verify <file.nsb> | restore <file.nsb> <emptyTargetDir>'); process.exit(2); }
     console.log(JSON.stringify(r));
   } catch (e) { console.error(`${e.code ?? 'ERROR'}: ${e.message}`); process.exit(1); }
 }

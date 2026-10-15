@@ -54,7 +54,7 @@ export async function buildCore({ env, dir, merchantId, store, safety, root = jo
   return { core: createCoreHttp({ runtime, store, externals }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'})` };
 }
 
-export async function startSourcingServer({ env = process.env, log = console.log, port = Number(env.SOURCING_PORT || 8787), dir = DATA_DIR, fetchImpl, ecb = () => fetchEcb(), allowedHosts = [], services = null } = {}) {
+export async function startSourcingServer({ env = process.env, log = console.log, port = Number(env.SOURCING_PORT || (isHosted(env) ? env.PORT : '') || 8787), dir = DATA_DIR, fetchImpl, ecb = () => fetchEcb(), allowedHosts = [], services = null } = {}) {
   assertSourcingRuntime(); // China Sourcing requires Node 24
   const hosted = isHosted(env) ? hostedConfig(env) : null; // SOURCING_HOSTED=1: complete configuration or nothing starts (src/sourcing/server/hosted.js)
   if (hosted) { dir = hosted.dataDir; for (const h of hosted.allowedHosts) if (!allowedHosts.includes(h)) allowedHosts.push(h); }
@@ -74,7 +74,23 @@ export async function startSourcingServer({ env = process.env, log = console.log
   log(merchantProfile ? `Merchant profile: ${merchantProfile.merchantId} (${mp.source === 'FILE' ? 'file' : 'config/merchants'}), status ${merchantProfile.status ?? 'n/a'}` : `No merchant profile loaded${mp.error ? ` (${mp.error})` : ''}: the fit checklist will say so. Set SOURCING_MERCHANT_ID to choose one.`);
   log(core.status);
   log(`Access: ${hosted ? 'Nordla session (sign-in)' : env.SOURCING_TOKEN && env.SOURCING_TOKEN.length >= 24 ? 'token from SOURCING_TOKEN' : `token in ${join(dir, 'token.txt')}`} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
-  return { server, token, safety, port: addr.port };
+  const backups = scheduleBackups({ env, dir, log });
+  server.on('close', () => backups.stop());
+  return { server, token, safety, port: addr.port, backups };
+}
+
+/** Daily encrypted backup of the whole data directory (cases, photos, Core journal) + its off-server copy, when configured
+ *  (SOURCING_BACKUP_PASSPHRASE + SOURCING_BACKUP_BUCKET + SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). Local archives go to
+ *  SOURCING_BACKUP_DIR (default: next to the data directory, never inside it). A failure is logged and retried next run: it never stops
+ *  the service and never touches the data. Without that configuration nothing runs and the log says so. */
+export function scheduleBackups({ env, dir, log, run = null, firstDelayMs = 10 * 60_000, everyMs = 24 * 3600_000 }) {
+  if (!String(env.SOURCING_BACKUP_PASSPHRASE ?? '').trim() || !String(env.SOURCING_BACKUP_BUCKET ?? '').trim()) { log('Backups: NOT scheduled (SOURCING_BACKUP_PASSPHRASE / SOURCING_BACKUP_BUCKET not set).'); return { stop: () => {}, runNow: async () => null }; }
+  const out = String(env.SOURCING_BACKUP_DIR ?? '').trim() || join(dir, '..', 'sourcing-backups');
+  const once = run ?? (async () => (await import('../../../tools/sourcing-backup.mjs')).backupAndShip(dir, out, { env, keep: 14 }));
+  const runNow = async () => { try { const r = await once(); log(`Backup OK: ${r.files} file(s), copied off-server as ${r.offsite}.`); return r; } catch (e) { log(`Backup FAILED (${e.code ?? 'ERROR'}): ${e.message} - retried at the next run; the data is untouched.`); return null; } };
+  const first = setTimeout(runNow, firstDelayMs); const every = setInterval(runNow, everyMs); first.unref?.(); every.unref?.();
+  log(`Backups: every ${Math.round(everyMs / 3600_000)} h, first in ${Math.round(firstDelayMs / 60_000)} min, local copies in ${out}, off-server bucket ${env.SOURCING_BACKUP_BUCKET}.`);
+  return { stop: () => { clearTimeout(first); clearInterval(every); }, runNow };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
