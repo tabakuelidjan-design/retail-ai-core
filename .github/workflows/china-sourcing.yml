@@ -4,9 +4,9 @@ name: china-sourcing
 on:
   push:
     branches: ['feature/china-sourcing-**', 'claude/nordla-core-p0']
-    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
+    paths: ['src/sourcing/**', 'src/core-pilot/**', 'src/buying/sourcing-purchase.js', 'src/socle-decision/**', 'src/integration/router.js', 'test/sourcing-*', 'test/core-pilot*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'config/merchants/habb/core-decision.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
   pull_request:
-    paths: ['src/sourcing/**', 'test/sourcing-*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']
+    paths: ['src/sourcing/**', 'src/core-pilot/**', 'test/sourcing-*', 'test/core-pilot*', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
-      - run: node --test test/sourcing-*.test.js
+      - run: node --test test/sourcing-*.test.js test/core-pilot.test.js
   # Real-browser suites that need no provider, one job each so that a failure names its suite and never skips another.
   e2e-fieldv1:
     # BLOCKING: the Field V1 / three-mode Salon suite at 390 px (cold offline start included).
@@ -57,6 +57,8 @@ jobs:
       - run: npm run sourcing:e2e:photos
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run sourcing:e2e:signin
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run core:e2e
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
 
   e2e-pwa:

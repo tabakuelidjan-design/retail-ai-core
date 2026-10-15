@@ -35,7 +35,7 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, gate = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ token, gate = null, core = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -58,9 +58,11 @@ export function createSourcingApp({ token, gate = null, store, photos = null, wo
   async function api(req, res, url) {
     const ip = clientIp(req);
     if (blocked(ip)) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
-    if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); } // hosted: a Nordla session (and CSRF for a change)
+    let actor = { role: 'OWNER', label: 'local-owner' }; // local PC server: the token holder is the owner of that PC (journaled as LOCAL_TOKEN)
+    if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); actor = { userId: a.access.userId, role: a.access.role }; } // hosted: a Nordla session (and CSRF for a change); who acts comes from the session only
     else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     const p = url.pathname; const m = req.method;
+    if (core && p.startsWith('/api/core/')) return core.handle(req, res, url, actor); // Nordla Core: Subject -> Levers -> Decision -> human -> follow-up, Parle à Nordla (src/core-pilot)
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });
     // ---- photos of a case (durable server copy; the phone keeps its own). No delete route: a photo is never removed through the API.

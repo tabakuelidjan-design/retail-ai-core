@@ -1,0 +1,90 @@
+// Parle à Nordla (TEXT) on the Core server. Deterministic: the integration router decides WHERE a sentence goes; the answer is built by
+// code from what this server really holds (the sourcing cases, the Core decision journal). No model, no invented figure: every number
+// quoted comes with its source (case + version, or journal entry), and what is not connected here is said so, with the reason.
+// Asking never executes anything; at most it runs the Core analysis of the open case (a recommendation, journaled, no action).
+import { routeUtterance, STATUS } from '../integration/router.js';
+import { MODULE as M } from '../integration/constants.js';
+import { sourcingPurchaseFacts } from './sourcing-facts.js';
+
+const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
+
+// What is NOT connected to this server, and why (said as is, never hidden behind a vague error).
+export const NOT_CONNECTED = Object.freeze({
+  [M.FINANCE]: 'Finance n’est pas encore relié au Core : ses données restent dans le service Finance (connexion propre). Aucun chiffre Finance n’est donné ici.',
+  [M.ANALYTICS]: 'Analyses n’est pas encore relié au Core : aucune vente ni tendance n’est lue ici. Aucun chiffre de ventes n’est donné.',
+  [M.STOCK_SALES]: 'Le stock n’est pas relié au Core : aucune quantité en stock n’est lue ici.',
+  [M.MARKETING]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
+  [M.CREATIVE]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
+});
+export const CAN_DO = ['« résume ce dossier » (dossier ouvert)', '« dois-je acheter ce produit ? » (analyse Core du dossier ouvert)', '« décisions en attente »', '« suivi des décisions »'];
+const AVAILABLE = new Set([M.CHINA_SOURCING]);
+
+const decisionLine = (v) => `• ${v.subject?.title ?? v.entry.subject.title} : ${v.entry.recommendation ? `recommandé « ${v.entry.recommendation.label} »` : 'à vérifier (données manquantes)'}${v.entry.human_decision ? ` — décidé : ${v.entry.human_decision.decision}` : ''}`;
+const decisionSource = (v) => ({ kind: 'core_journal', ref: v.entry.id, case: v.source?.case_id ?? null, at: v.entry.created_at });
+
+/**
+ * @param {{ text: string, caseId?: string|null }} q
+ * @param {{ runtime: object|null, getCase: (id)=>Promise<object|null>, externals?: object, actor: object, now?: Date }} ctx
+ */
+export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date() }) {
+  const t = norm(text);
+  if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
+  const limits = [];
+
+  // ---- Core questions (the decision journal)
+  if (/(decision|decide|valider|approuv).*(attente|en cours|a prendre|a valider)|(en attente|a valider).*(decision)/.test(t)) {
+    if (!runtime) return notConfigured();
+    const o = await runtime.overview(); const list = o.decisions.filter((v) => !v.entry.human_decision && v.entry.recommendation);
+    return { status: 'ANSWERED', answer: list.length ? `${list.length} décision(s) attendent votre validation :\n${list.map(decisionLine).join('\n')}` : 'Aucune décision n’attend votre validation.', sources: list.map(decisionSource), limits };
+  }
+  if (/\bsuivi\b|follow.?up|resultat.*(decision|achat)/.test(t)) {
+    if (!runtime) return notConfigured();
+    const o = await runtime.overview(); const list = o.decisions.filter((v) => v.entry.human_decision);
+    return { status: 'ANSWERED', answer: list.length ? `Décisions prises et leur suivi :\n${list.map((v) => `${decisionLine(v)}${v.entry.result ? ` — résultat : ${v.entry.result.result}` : ' — résultat pas encore enregistré'}`).join('\n')}` : 'Aucune décision n’a encore été prise.', sources: list.map(decisionSource), limits };
+  }
+  if (/(dois.?je|faut.?il|devrais.?je|peut.?on|should i).*(achet|command|buy|order)|(analys).*(dossier|produit|achat)/.test(t)) {
+    if (!runtime) return notConfigured();
+    const c = caseId ? await getCase(caseId) : null;
+    if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
+    const r = await runtime.analyseCase(c, { externals, actor });
+    if (r.status === 'SUPPRESSED') return { status: 'ANSWERED', answer: `Sujet mis de côté récemment (${r.reason}).`, sources: [], limits };
+    const e = r.entry; const facts = Object.fromEntries(r.subject.facts.map((f) => [f.key, f.value]));
+    const lines = [
+      e.recommendation ? `Recommandation Nordla Core : « ${e.recommendation.label} » (${e.recommendation.kind}).` : 'Nordla Core ne recommande rien : des données bloquantes manquent.',
+      ...(e.recommendation?.rationale ?? []).map((x) => `Pourquoi : ${x}`),
+      ...e.options.eliminated.filter((x) => x.stage !== 'RELEVANCE').map((x) => `Écarté : ${x.label} — ${x.reasons.join(' ; ')}`),
+      `Faits : verdict sourcing ${facts.verdict ?? 'inconnu'}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
+      ...r.subject.missing_data.map((m) => `Manque : ${m.field} — ${m.reason}`),
+      'Rien n’est commandé ni payé par Nordla : c’est à vous de décider (bouton Valider / Rejeter).',
+    ];
+    return { status: 'ANSWERED', answer: lines.join('\n'), sources: [{ kind: 'sourcing_case', ref: c.id, version: c.updatedAt ?? null }, decisionSource({ entry: e, source: r.source })], limits, decision: { entry_id: e.id } };
+  }
+
+  // ---- everything else: the integration router decides which module it belongs to
+  const routed = routeUtterance(text, { active: caseId ? { module: M.CHINA_SOURCING, entities: {} } : undefined, available: (m) => AVAILABLE.has(m) });
+  const off = (routed.route ?? []).find((s) => !AVAILABLE.has(s.module));
+  if (routed.status === STATUS.MODULE_NOT_AVAILABLE || off) {
+    const mod = routed.module ?? off.module;
+    return { status: 'MODULE_NOT_CONNECTED', module: mod, answer: NOT_CONNECTED[mod] ?? `${mod} n’est pas relié à ce serveur.`, sources: [], limits: [NOT_CONNECTED[mod] ?? mod] };
+  }
+  if (routed.status === STATUS.ROUTED && routed.route.some((s) => s.module === M.CHINA_SOURCING && s.command === 'summarize_case')) {
+    const c = caseId ? await getCase(caseId) : null;
+    if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
+    const { input, assessment } = sourcingPurchaseFacts(c, { merchantId: runtime?.merchantId ?? 'local', now, externals });
+    const lines = [
+      `${input.product_name || c.id} — verdict ${assessment.verdict ?? 'inconnu'}.`,
+      assessment.nextAction ? `Prochaine étape : ${assessment.nextAction}` : null,
+      `Coût rendu : ${eur(input.landed_per_unit)} / unité, ${eur(input.landed_total)} au total pour ${input.quote_qty ?? '?'} unités.`,
+      `Marge unitaire : ${eur(input.contribution_per_unit)} (prix de vente ${input.price_basis ?? 'inconnu'}).`,
+      ...assessment.hardBlockers.map((b) => `Blocage : ${b.detail}`),
+    ].filter(Boolean);
+    return { status: 'ANSWERED', answer: lines.join('\n'), sources: [{ kind: 'sourcing_case', ref: c.id, version: c.updatedAt ?? null }], limits };
+  }
+  if (routed.status === STATUS.ASK) return { status: 'ASK', answer: routed.question, sources: [], limits };
+  return { status: 'NOT_UNDERSTOOD', answer: `Je ne sais pas encore répondre à cela ici. Je sais : ${CAN_DO.join(', ')}.`, sources: [], limits: Object.values(NOT_CONNECTED).filter((v, i, a) => a.indexOf(v) === i) };
+}
+
+function notConfigured() {
+  return { status: 'CORE_NOT_CONFIGURED', answer: 'Nordla Core n’est pas configuré sur ce serveur (core-decision.json du marchand absent) : aucune décision n’est proposée.', sources: [], limits: ['CORE_NOT_CONFIGURED'] };
+}

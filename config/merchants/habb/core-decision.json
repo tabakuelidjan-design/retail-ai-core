@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "merchantId": "habb",
+  "status": "DRAFT_FOR_OWNER_REVIEW",
+  "note": "Pilot settings of the Core decision path. No owner constraint (budget, cash floor, margin) has been given by the owner yet: ownerRules is empty ON PURPOSE (none is invented) and every option still needs a human decision. materialityThreshold 0 = every sourcing purchase is shown. testSmall.budget null = the cost of a sample is not known.",
+  "currency": "EUR",
+  "gates": { "materialityThreshold": 0, "maxPrioritySubjects": 10, "cooldownDays": 14, "aggravationFactor": 1.5 },
+  "testSmall": { "budget": null, "time_to_effect_days": null },
+  "ownerRules": []
+}
