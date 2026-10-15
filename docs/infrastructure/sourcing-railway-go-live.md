@@ -1,24 +1,22 @@
 # Mise en ligne de Nordla (service `sourcing`) sur Railway — runbook
 
-> **Mise à jour 2026-10-15 (après vérification Railway par la session ChatGPT/Railway)** — le service existe déjà :
-> projet `app.nordla.app`, environnement `staging`, service `sourcing-staging` (`24cc9cd0-…`), volume `sourcing-staging-data` 1 Go
-> monté sur `/app/data`, Dockerfile `deploy/sourcing/Dockerfile`. **Ne pas créer de second service.** Les étapes H (création) et B (lecture)
-> ci-dessous sont donc remplacées par la section « Service existant » en fin de document. Identité de cette préproduction : projet
-> Supabase **staging**, jamais la production.
-
-État au 2026-10-15. Branche `claude/nordla-core-p0`. **Rien n'est encore créé, migré, déployé ni changé dans le DNS.**
+État au 2026-10-15 (fin de journée). Branche `claude/nordla-core-p0`, commit à déployer **`c2c314d`**.
 Chaque étape marquée **ACCORD** attend l'accord explicite du propriétaire pour *cette* action.
 
 ## 0. État réel vérifié
 
-| Élément | État | Comment c'est vérifié |
+| Élément | État | Source |
 |---|---|---|
-| Code `sourcing` (connexion Core, photos, Nordla Core, sauvegardes) | Prêt ; CI verte sur `a550cff` (6/7 workflows ; Activation : test d'isolation corrigé dans `8ca330c`, voir §6) | GitHub Actions |
-| Railway | **Inconnu depuis cette session** : aucun jeton, et l'API `backboard.railway.com` est bloquée par le réseau de la session | `curl` → 403 du proxy |
-| Supabase production `xbtzjabbseclmqfozjeo` | 23 migrations, dernière `merchant_connectors` ; marchand HABB `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5` | lecture seule (MCP) |
-| Supabase staging `fvhiammdskpcnfodsnrc` | mêmes 23 migrations ; marchand synthétique uniquement | lecture seule (MCP) |
-| RLS production | 0 table sans RLS ; 27 tables RLS sans policy = fermées au navigateur (seul le serveur lit) ; 0 vue ; 7 fonctions exécutables par `anon`, toutes `SECURITY INVOKER` (donc bloquées par RLS) ; 6 fonctions `fin_*` à `search_path` modifiable (WARN) | `get_advisors`, `pg_proc` |
-| Domaine `app.nordla.app` | Acheté chez Porkbun (déclaration du propriétaire) ; aucun enregistrement créé par nous | — |
+| Railway | Projet `app.nordla.app` (`261a1971-…`), environnement `staging` (`6b648e6b-…`), service **`sourcing-staging`** (`24cc9cd0-…`) et volume `sourcing-staging-data` (`d2c0c874-…`, 1 Go, Amsterdam, `/app/data`) **préparés dans un patch STAGED** (`7de09a12-…`, 28 changements) : **rien n'est réellement provisionné ni déployé**. Épinglé sur `c2c314d`, Dockerfile `deploy/sourcing/Dockerfile`, start command `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz`, 1 réplique, sommeil désactivé. Finance / Analytics / Core inchangés. **Ne pas créer de second service.** | transmission de la session Railway (ChatGPT), 2026-10-15 |
+| Code | Image validée avec Docker (volume root, uid 1000, sonde Railway, HSTS, refus d'origine / CSRF / hôte) ; CI de `c2c314d` : China Sourcing, intégration Node 20/24, Provider verts ; Activation en cours à la rédaction | Docker local, GitHub Actions |
+| Supabase production `xbtzjabbseclmqfozjeo` | 23 migrations, dernière `merchant_connectors` ; marchand HABB `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5` ; **non utilisé par la préproduction** | lecture seule (MCP) |
+| Supabase staging `fvhiammdskpcnfodsnrc` | 23 migrations ; marchand synthétique seulement ; **aucun conflit** pour l'UUID HABB ni pour `nordla-staging/habb-sourcing-staging` ; 0 table d'identité ; 0 compte Auth ; pas de bucket `nordla-backups` | lecture seule (MCP), 2026-10-15 |
+| RLS production | 0 table sans RLS ; 27 tables RLS sans policy = fermées au navigateur ; 0 vue ; 7 fonctions exécutables par `anon`, toutes `SECURITY INVOKER` ; 6 fonctions `fin_*` à `search_path` modifiable (WARN) | `get_advisors`, `pg_proc` |
+| Domaine `app.nordla.app` | Porkbun ; **aucun enregistrement créé** | — |
+
+Préproduction = service `sourcing-staging` + identité Supabase **staging** (section « Service existant » en fin de document).
+Les sections 1–3 ci-dessous décrivent la séquence générique (vérifiée pour la production) ; pour la préproduction, les mêmes
+fichiers s'appliquent au projet **staging**.
 
 ## 1. Migrations nécessaires à la mise en ligne — et seulement elles
 
@@ -46,14 +44,14 @@ Preuves (PostgreSQL 16 local isolé, état « production » reconstruit avec les
 
 | Étape | Action | Qui | Risque | Retour arrière |
 |---|---|---|---|---|
-| A | Donner l'accès Railway à la session : jeton **en lecture** dans les secrets de l'environnement (variable `RAILWAY_TOKEN`) + autoriser le domaine `backboard.railway.com` dans l'accès réseau de l'environnement | Propriétaire | nul | retirer le jeton |
-| B | Lire l'état réel Railway (projets, services Finance / Analytics, versions déployées, variables **noms seulement**) | Infra | nul (lecture) | — |
+| A | ~~Accès Railway pour cette session~~ — **sans objet** : la session Railway (ChatGPT) opère Railway | — | — | — |
+| B | ~~Lire l'état Railway~~ — **fait** par la session Railway (§0) | — | — | — |
 | C **ACCORD** | Supabase prod : vérifier qu'une sauvegarde quotidienne existe (Dashboard → Database → Backups) ; sinon sauvegarde manuelle avant D | Propriétaire + Infra | nul | — |
 | D **ACCORD** | Appliquer les migrations 1→5 une par une (§1), `get_advisors` après chacune | Infra | faible : objets nouveaux uniquement ; aucune table existante modifiée | fichier de retour arrière §1 (efface les données d'identité créées depuis) |
 | E | Supabase Auth : **désactiver les inscriptions publiques** (Authentication → Sign In / Providers → « Allow new users to sign up » off) | Propriétaire | nul pour Finance (connexion propre) | réactiver |
 | F | Le propriétaire crée **lui-même** son compte (Authentication → Users → Add user, mot de passe choisi par lui, jamais écrit dans un chat) | Propriétaire | nul | supprimer l'utilisateur |
 | G **ACCORD** | `supabase/provisioning/habb-owner-sourcing.sql` avec l'id du compte F : propriétaire OWNER de HABB + module `sourcing` actif | Infra | faible | suspendre le module (ligne dans le fichier) |
-| H **ACCORD — coût** | Railway : nouveau service `sourcing` dans le projet existant, depuis la branche validée ; **volume** monté sur `/data` ; variables §3 ; healthcheck `/healthz` (réglé dans le service, pas dans `railway.json` qui est partagé) | Infra | coût mensuel (service + volume) ; Finance / Analytics non touchés (service séparé, `railway.json` et `package.json` inchangés) | supprimer le service (le volume est conservé tant qu'on ne le supprime pas) |
+| H **ACCORD — coût** | Railway : **activer** le patch STAGED `7de09a12-…` (service `sourcing-staging` + volume 1 Go déjà préparés ; ne pas créer d'autre service) après saisie des valeurs (« Service existant ») et estimation du coût | Session Railway | coût mensuel (service + volume + stockage hors Railway) à chiffrer ; Finance / Analytics non touchés | désactiver / supprimer le service ; le volume est conservé tant qu'on ne le supprime pas |
 | I **ACCORD** | Supabase Storage : bucket **privé** `nordla-backups` (sauvegardes chiffrées hors Railway) | Infra | quota de stockage | supprimer le bucket |
 | J | Essai sur l'adresse Railway générée (`https://<service>.up.railway.app`) : `/healthz`, page de connexion, connexion, refus sans session, une sauvegarde forcée + restauration dans un dossier vide | Infra | nul | — |
 | K **ACCORD — DNS** | Porkbun : `CNAME app → <cible donnée par Railway>` + l'enregistrement `TXT` de vérification demandé par Railway ; puis `SOURCING_PUBLIC_ORIGIN=https://app.nordla.app` | Propriétaire (Porkbun) + Infra | aucun autre sous-domaine touché | supprimer le CNAME |
@@ -136,8 +134,9 @@ a. **ACCORD** — appliquer les 5 migrations (§1) sur staging, une par une ; sm
 b. **ACCORD** — `supabase/provisioning/staging-habb-merchant.sql` (marchand HABB avec **le même UUID** que la production) ;
 c. propriétaire : couper les inscriptions publiques de l'Auth staging, créer son compte (mot de passe choisi par lui) ;
 d. **ACCORD** — `supabase/provisioning/habb-owner-sourcing.sql` sur staging avec l'id de ce compte.
-Plus tard, passage à l'identité de production : mêmes étapes sur production (§2 C→G) puis changement des 3 variables Supabase du service ;
-dossiers, photos et journal du volume restent valides (même UUID marchand).
+Plus tard, passage à l'identité de production **sur le même service et le même volume** : mêmes étapes sur production (§2 C→G) puis
+changement des 3 variables Supabase du service ; le volume reste lisible parce que l'UUID marchand est le même. Changer de service ou
+de volume demande en plus la migration des données serveur (section suivante) : l'UUID seul ne transfère rien.
 
 Valeurs à régler dans `sourcing-staging` (en plus de celles déjà préparées) — secrets saisis directement dans Railway :
 
@@ -145,7 +144,7 @@ Valeurs à régler dans `sourcing-staging` (en plus de celles déjà préparées
 |---|---|---|
 | `NORDLA_MERCHANT_ID` | `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5` | non |
 | `SOURCING_MERCHANT_ID` | `habb` | non |
-| `SOURCING_PUBLIC_ORIGIN` | `https://app.nordla.app` (ou d'abord l'adresse `*.up.railway.app` du service pour l'essai sans téléphone) | non |
+| `SOURCING_PUBLIC_ORIGIN` | d'abord l'adresse `https://<service>.up.railway.app` générée par Railway, pour l'essai technique **sans données réelles** ; puis `https://app.nordla.app` (changement d'origine = reconnexion ; le téléphone n'utilise que la seconde) | non |
 | `SUPABASE_URL` | URL du projet **staging** | non |
 | `SUPABASE_ANON_KEY` | clé publique du projet staging | quasi (ne pas diffuser) |
 | `SUPABASE_SERVICE_ROLE_KEY` | clé service du projet staging | **oui** |
@@ -155,4 +154,19 @@ Valeurs à régler dans `sourcing-staging` (en plus de celles déjà préparées
 | `SOURCING_BACKUP_BUCKET` | `nordla-backups` (bucket privé à créer sur staging — **ACCORD**) | non |
 | `SOURCING_BACKUP_KEEP` | `3` (optionnel) | non |
 | Commande de démarrage | `/app/docker-entrypoint.sh node src/service-start.js` | — |
-| Commit | le commit de cette mise à jour (pas `e84918e` : il n'a ni l'entrypoint ni la correction du healthcheck) | — |
+| Commit | `c2c314d` (fait par la session Railway ; `e84918e` n'avait ni l'entrypoint ni la correction du healthcheck) | — |
+
+## Changer de service, de volume ou d'environnement : migration des données serveur (obligatoire, testée)
+
+Avoir le même UUID marchand **ne déplace aucun fichier** : dossiers, photos et journal Core sont sur le volume du service. Ils ne
+passent d'un volume à un autre que par cette procédure :
+1. ancien service : `node tools/sourcing-backup.mjs offsite /app/data/sourcing /app/data/sourcing-backups` (archive chiffrée + copie hors Railway) ;
+2. nouveau service, **avant** d'y ouvrir l'accès : `node tools/sourcing-backup.mjs fetch <archive> /app/data/restore-in` puis
+   `restore /app/data/restore-in/<archive> /app/data/sourcing` (le dossier cible doit être **vide** : jamais d'écrasement) ;
+3. démarrer : le journal Core est re-vérifié (chaîne SHA-256) ; une photo est re-vérifiée à chaque lecture ;
+4. l'ancien volume est conservé tant que le propriétaire n'a pas vérifié le nouveau (aucune suppression).
+Preuve automatisée : `test/sourcing-backup-full-restore.test.js` (serveur A → archive → restauration → serveur B : même dossier, même
+photo, même journal ; archive modifiée refusée). À rejouer **sur Railway réel** après activation (étape J).
+Identité : les comptes et sessions Supabase staging et production sont distincts. Passer à l'identité de production = recréer le
+compte propriétaire en production (§2 C→G) puis changer les 3 variables Supabase du service ; chacun se reconnecte. Si l'adresse
+reste `https://app.nordla.app`, le stockage du téléphone est conservé.
