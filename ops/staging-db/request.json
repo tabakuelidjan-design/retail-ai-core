@@ -24,5 +24,6 @@
       "sha256_b64": "ByfN0NtofcOk/fv0QWIlU/YdbUj1qGIz9DAh+sUD8fI="
     }
   ],
-  "run": false
+  "run": false,
+  "check_only": true
 }
