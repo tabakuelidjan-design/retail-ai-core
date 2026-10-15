@@ -504,3 +504,49 @@ test('writers: 20 rounds of two journals appending in parallel on one file never
   }
   for (const c of seen) assert.ok(['JOURNAL_STALE', 'JOURNAL_PROTECTED', 'JOURNAL_LOCKED'].includes(c), `unexpected refusal: ${c}`);
 });
+
+// =============================================================================================== lock: contention vs a real permission problem
+test('lock: EPERM / EBUSY / EACCES with a lock file present, or clearing within the window, is contention; persisting with NO lock file is a permission problem (JOURNAL_LOCK_PERMISSION), reported with the OS code', async () => {
+  await withDir(async (dir) => {
+    const file = join(dir, 'j.jsonl'); const refuse = (c) => async () => { throw Object.assign(new Error(`${c}: refused`), { code: c }); };
+    for (const c of ['EPERM', 'EBUSY', 'EACCES']) {
+      const e = await withWriteLock(file, async () => 'ran', { openFile: refuse(c), waitMs: 3000, ambiguousMs: 60 }).catch((x) => x);
+      assert.equal(e.code, 'JOURNAL_LOCK_PERMISSION', c); assert.equal(e.details.cause_code, c); assert.equal(e.status, 503); assert.match(e.message, /permission/);
+    }
+    // the same OS codes while a lock file is really there: contention, whatever the window - the deadline decides, and the outcome is the transient JOURNAL_LOCKED
+    await writeFile(`${file}.lock`, JSON.stringify({ token: 'other' }));
+    const held = await withWriteLock(file, async () => 'ran', { openFile: refuse('EPERM'), waitMs: 200, ambiguousMs: 30, staleMs: 60_000 }).catch((x) => x);
+    assert.equal(held.code, 'JOURNAL_LOCKED'); assert.equal(held.details.last_busy_code, 'EPERM');
+    await rm(`${file}.lock`);
+    // clearing inside the window (Windows delete-pending): the lock is taken, nothing is reported
+    let n = 0; const { open } = await import('node:fs/promises');
+    assert.equal(await withWriteLock(file, async () => 'ran', { openFile: async (...a) => { n += 1; if (n <= 4) throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); return open(...a); }, waitMs: 3000, ambiguousMs: 3000 }), 'ran');
+    // EEXIST is contention by definition
+    await writeFile(`${file}.lock`, JSON.stringify({ token: 'other' }));
+    const exist = await withWriteLock(file, async () => 'ran', { waitMs: 120, ambiguousMs: 10, staleMs: 60_000 }).catch((x) => x); assert.equal(exist.code, 'JOURNAL_LOCKED');
+  });
+});
+
+test('lock: a permission problem protects the journal under its own code (not "another writer"), a contention refusal does not', async () => {
+  await withDir(async (dir) => {
+    const file = join(dir, 'j.jsonl'); const deny = async () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); };
+    const journal = createFileJournal({ merchantId: MID, file, lock: { openFile: deny, ambiguousMs: 40, waitMs: 2000 } });
+    const e = await journal.append({ kind: 'X', payload: {}, at: NOW.toISOString() }).catch((x) => x);
+    assert.equal(e.code, 'JOURNAL_LOCK_PERMISSION'); assert.equal(journal.status().state, 'PROTECTED');
+    assert.equal(await code(journal.append({ kind: 'X', payload: {}, at: NOW.toISOString() })), 'JOURNAL_PROTECTED');
+    const fault = JSON.parse((await linesOf(`${file}.faults.jsonl`))[0]); assert.equal(fault.code, 'JOURNAL_LOCK_PERMISSION');
+    assert.ok(!(await stat(file).catch(() => null)), 'nothing was written');
+  });
+});
+
+test('lock: a REAL read-only data directory (POSIX, not root) is reported as a permission problem in well under the lock deadline', { skip: process.platform === 'win32' || process.getuid?.() === 0 ? 'needs POSIX permissions and a non-root user' : false }, async () => {
+  const { chmod } = await import('node:fs/promises');
+  await withDir(async (dir) => {
+    const sub = join(dir, 'ro'); await mkdir(sub); await chmod(sub, 0o500);
+    try {
+      const t0 = Date.now();
+      const e = await createFileJournal({ merchantId: MID, file: join(sub, 'j.jsonl'), lock: { ambiguousMs: 200, waitMs: 4000 } }).append({ kind: 'X', payload: {}, at: NOW.toISOString() }).catch((x) => x);
+      assert.equal(e.code, 'JOURNAL_LOCK_PERMISSION'); assert.ok(Date.now() - t0 < 2500, 'not the 4 s contention wait');
+    } finally { await chmod(sub, 0o700); }
+  });
+});

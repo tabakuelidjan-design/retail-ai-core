@@ -84,9 +84,9 @@ function createJournal({ merchantId, load, write, onFault = null }) {
       e.hash = eventHash(e);
       try { size = await write(e, { expectedSize: size }); } catch (err) {
         if (err?.code === 'JOURNAL_LOCKED') throw err; // transient: nothing was attempted
-        fault = { at: new Date().toISOString(), code: err instanceof JournalError ? err.code : 'JOURNAL_WRITE_FAILED', cause_code: err?.code ?? null, message: String(err?.message ?? err).slice(0, 300), seq: e.seq, expected_size: size, diagnostic: err?.diagnostic ?? null };
+        fault = { at: new Date().toISOString(), code: err instanceof JournalError || err?.code === 'JOURNAL_LOCK_PERMISSION' ? err.code : 'JOURNAL_WRITE_FAILED', cause_code: err?.details?.cause_code ?? err?.code ?? null, message: String(err?.message ?? err).slice(0, 300), seq: e.seq, expected_size: size, diagnostic: err?.diagnostic ?? null };
         try { await onFault?.(fault); } catch { /* the evidence is best effort; the protection is not */ }
-        throw err instanceof JournalError ? err : new JournalError('JOURNAL_WRITE_FAILED', `the event was NOT confirmed as recorded (${fault.message}); the journal is now protected`, { details: { cause: fault.message, seq: e.seq } });
+        throw err instanceof JournalError || err?.code === 'JOURNAL_LOCK_PERMISSION' ? err : new JournalError('JOURNAL_WRITE_FAILED', `the event was NOT confirmed as recorded (${fault.message}); the journal is now protected`, { details: { cause: fault.message, seq: e.seq } });
       }
       list.push(e); return e;
     });

@@ -5,7 +5,7 @@ name: core-reliability
 # No secret, no provider, no network.
 on:
   push:
-    branches: ['claude/nordla-core-reliability']
+    branches: ['claude/nordla-core-reliability', 'integration/core-p1p7']
   workflow_dispatch: {}
 permissions:
   contents: read

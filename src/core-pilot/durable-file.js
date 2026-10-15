@@ -45,23 +45,33 @@ export async function fileSize(file) {
  * Runs `fn` while holding `<file>.lock`. The lock is released in `finally` only if it is still ours (a taken-over lock is never removed by its old owner).
  * Throws DurableFileError JOURNAL_LOCKED (503, transient: nothing was written) when the lock cannot be taken within `waitMs`.
  */
-// On Windows a lock file that was just removed can stay "delete pending" for a moment: creating it then fails with EPERM (or EBUSY / EACCES), exactly like EEXIST.
-// Those codes mean "busy, try again"; if they never clear the outcome is the transient JOURNAL_LOCKED (nothing written), never a write failure that protects the journal.
-const LOCK_BUSY = new Set(['EEXIST', 'EPERM', 'EBUSY', 'EACCES']);
+// Creating the lock file can fail for two very different reasons that Windows reports with the same codes:
+//   contention  : EEXIST (a writer holds it), or - on Windows - EPERM / EBUSY / EACCES while a just-removed lock file is still "delete pending" for a few milliseconds;
+//   permission  : the data directory really refuses us (EACCES / EPERM on a read-only or foreign-owned directory, a volume mounted without write access).
+// EEXIST is always contention. EPERM / EBUSY / EACCES are contention when the lock file exists, or when they clear within AMBIGUOUS_LOCK_MS; if they persist that long
+// with NO lock file in sight they are a permission problem and are reported as JOURNAL_LOCK_PERMISSION (not transient: it protects the journal), with the OS code,
+// instead of being mistaken for "another writer holds the journal" until the deadline.
+const LOCK_AMBIGUOUS = new Set(['EPERM', 'EBUSY', 'EACCES']);
+export const AMBIGUOUS_LOCK_MS = 1_500;
 
-export async function withWriteLock(file, fn, { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS, now = Date.now, openFile = open } = {}) {
+export async function withWriteLock(file, fn, { waitMs = LOCK_WAIT_MS, staleMs = STALE_LOCK_MS, ambiguousMs = AMBIGUOUS_LOCK_MS, now = Date.now, openFile = open } = {}) {
   const lock = `${file}.lock`; const token = randomUUID();
   await mkdir(dirname(file), { recursive: true });
-  const deadline = now() + waitMs; let lastBusy = null;
+  const deadline = now() + waitMs; let lastBusy = null; let ambiguousSince = null;
   for (;;) {
     try {
       const h = await openFile(lock, 'wx', 0o600);
       try { await h.writeFile(JSON.stringify({ token, pid: process.pid, at: new Date(now()).toISOString() })); } finally { await h.close(); }
       break;
     } catch (e) {
-      if (!LOCK_BUSY.has(e.code)) throw e;
+      if (e.code !== 'EEXIST' && !LOCK_AMBIGUOUS.has(e.code)) throw e;
       lastBusy = e.code;
-      let st = null; try { st = await stat(lock); } catch { /* released meanwhile, or delete pending */ }
+      let st = null; try { st = await stat(lock); } catch { /* released meanwhile, or delete pending, or not readable */ }
+      if (e.code === 'EEXIST' || st) ambiguousSince = null; // a lock file is there: this is contention
+      else {
+        ambiguousSince ??= now();
+        if (now() - ambiguousSince > ambiguousMs) throw new DurableFileError('JOURNAL_LOCK_PERMISSION', `cannot create ${lock} (${e.code}) and no writer holds it: the data directory refuses writes (permission), this is not contention; nothing was written`, { status: 503, details: { cause_code: e.code, directory: dirname(file) } });
+      }
       if (st && now() - st.mtimeMs > staleMs) { await unlink(lock).catch(() => {}); continue; } // a crashed writer's lock
       if (now() > deadline) throw new DurableFileError('JOURNAL_LOCKED', 'another writer holds the journal; nothing was written, try again', { status: 503, details: { last_busy_code: lastBusy } });
       await sleep(15 + Math.floor(Math.random() * 20));
