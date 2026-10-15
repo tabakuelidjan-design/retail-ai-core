@@ -3,6 +3,37 @@
 **Ne rien déployer** : activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire. Pas de second service.
 Service : `sourcing-staging` (`24cc9cd0-e868-4210-90ce-23487ff2e65c`), volume `sourcing-staging-data` monté sur `/app/data`.
 
+## 0. Étape Railway prête à autoriser (état du 15/10, 22 h 25 UTC)
+
+**Rien n'est lancé.** Activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire.
+
+Prérequis Supabase **staging** `fvhiammdskpcnfodsnrc`, tous faits et vérifiés (runs `staging-db-ops` 38813124178 et 38815730509) :
+- migrations d'identité 1–5 appliquées (28 migrations au total) ;
+- marchand de test **HABB (test staging)** `67646dbb-5e2e-4cd7-aad6-0ab289b068cb`, une adhésion **OWNER ACTIVE** (le seul compte Auth
+  confirmé, celui du propriétaire), module `sourcing` **ACTIVE**, événements `MEMBER_BOOTSTRAPPED` et `MODULE_ENABLED` ;
+- bucket privé `nordla-backups` (0 objet, aucune politique Storage) ;
+- données préexistantes inchangées (empreinte avant / après) ; `finance-inbox` toujours 240 objets.
+
+Commit à déployer : **`62ec977b63e2733e217863c0c05d0e7c3609b9dc`** (inchangé : depuis, seuls `.github`, `docs`, `ops`, `test`, `tools`
+ont bougé, rien de ce que l'image exécute).
+
+À faire par la session Railway, **après autorisation**, sur le service existant `sourcing-staging` uniquement (pas de second service) :
+1. Variable non secrète à **changer** : `NORDLA_MERCHANT_ID=67646dbb-5e2e-4cd7-aad6-0ab289b068cb` (aujourd'hui : l'id de production).
+2. Variables non secrètes à poser : `NORDLA_SERVICE=sourcing`, `SOURCING_HOSTED=1`, `SOURCING_BACKUP_BUCKET=nordla-backups`,
+   `SOURCING_PUBLIC_ORIGIN=https://<adresse générée>.up.railway.app` (essai technique d'abord, voir §4), `SUPABASE_URL` = URL du
+   projet **staging**.
+3. Secrets, saisis **par le propriétaire** directement dans Railway (jamais dans un chat) : `SUPABASE_ANON_KEY` et
+   `SUPABASE_SERVICE_ROLE_KEY` du projet **staging**, `NORDLA_IDENTITY_RATE_LIMIT_KEY` et `NORDLA_CSRF_KEY` (deux valeurs différentes,
+   ≥ 32 octets), `SOURCING_BACKUP_PASSPHRASE` (≥ 16 caractères, aussi conservée hors ligne).
+4. Commande de démarrage `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz`, limite conseillée
+   0,5 vCPU / 512 Mo.
+5. Activer le patch STAGED, épinglé sur `62ec977`. Coût estimé : 2–4 $/mois (§6, §9).
+6. Contrôles §4 (1 à 8), sur l'adresse Railway générée, **données de test uniquement** ; le téléphone n'est pas utilisé à ce stade.
+
+Point à garder en tête : les fichiers créés sur le volume pendant la répétition portent l'id du marchand de test. Le passage ultérieur à
+l'identité de **production** (`36b1a1a7-…`) est une étape distincte (migrations production + changement de 3 variables) et ne doit pas
+supposer que ces fichiers de test deviennent des données HABB réelles.
+
 ## 1. Commit candidat
 
 **Mise à jour du 15/10 au soir : candidat = `62ec977b63e2733e217863c0c05d0e7c3609b9dc`** (= `9e25f1d` + l'export qui affiche « N photo(s)
@@ -84,7 +115,7 @@ Mesure locale de l'image `9e25f1d` : **48 Mo de RAM au repos, CPU ≈ 0 %**. Pr�
 | **Total** | | **≈ 2–4 $ / mois**, en plus des services existants (le plan Hobby inclut 5 $ d'usage au total, tous services confondus) |
 À confirmer après une semaine réelle dans l'onglet *Usage* de Railway.
 
-## 7. État réel de Supabase staging (lecture des métadonnées, 15/10)
+## 7. État réel de Supabase staging (lecture des métadonnées, 15/10 après-midi — **dépassé**, voir §0)
 Migration d'identité 1 seule appliquée (`20261015114757 identity_sessions_events`, table `identity_events`) ; migrations 2–5 **non
 appliquées** ; 0 compte Auth ; 1 marchand (le marqueur staging) ; bucket `nordla-backups` **absent** (seul `finance-inbox`, privé).
 → Tant que ces points ne sont pas faits, le service démarrerait mais **personne ne pourrait se connecter**.
