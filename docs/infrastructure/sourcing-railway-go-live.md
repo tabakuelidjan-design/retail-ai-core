@@ -1,5 +1,11 @@
 # Mise en ligne de Nordla (service `sourcing`) sur Railway — runbook
 
+> **Mise à jour 2026-10-15 (après vérification Railway par la session ChatGPT/Railway)** — le service existe déjà :
+> projet `app.nordla.app`, environnement `staging`, service `sourcing-staging` (`24cc9cd0-…`), volume `sourcing-staging-data` 1 Go
+> monté sur `/app/data`, Dockerfile `deploy/sourcing/Dockerfile`. **Ne pas créer de second service.** Les étapes H (création) et B (lecture)
+> ci-dessous sont donc remplacées par la section « Service existant » en fin de document. Identité de cette préproduction : projet
+> Supabase **staging**, jamais la production.
+
 État au 2026-10-15. Branche `claude/nordla-core-p0`. **Rien n'est encore créé, migré, déployé ni changé dans le DNS.**
 Chaque étape marquée **ACCORD** attend l'accord explicite du propriétaire pour *cette* action.
 
@@ -102,3 +108,51 @@ Le port : le service lit `PORT` fourni par Railway en mode hébergé. Le démarr
 - `growth-browser.test.js` : blocage intermittent de Chrome dans la suite d'un seul processus (workflow Activation coupé à 15 min sur
   `a550cff`) ; sans lien avec Sourcing ; à corriger par Core P0 sans désactiver le test.
 - Lecture Finance / Analyses depuis le Core : après le départ (connexion propre de Finance à remplacer d'abord).
+
+## Service existant `sourcing-staging` — ce qui a été vérifié et ce qu'il faut régler
+
+Vérifié ici avec Docker sur l'image construite depuis la branche (le seul écart local : le certificat du proxy de la session, passé
+en secret de build et absent de l'image) :
+
+1. **Volume** : avec `USER node`, un volume monté par root (cas Railway) faisait planter le démarrage (`EACCES`, reproduit). Corrigé :
+   `deploy/sourcing/docker-entrypoint.sh` donne `/app/data` (et les dossiers de données / sauvegardes) à `node`, puis lance le service
+   sous `node` (uid 1000, aucune capacité, `no_new_privs`) — vérifié dans `/proc/1/status`. Écriture, sauvegarde et redémarrage vérifiés.
+2. **Commande de démarrage** : la fixer à `/app/docker-entrypoint.sh node src/service-start.js` dans le service. Vérifié : correct que
+   Railway garde l'ENTRYPOINT de l'image ou non. Sans cela, si la commande `railway.json` (`node src/service-start.js`) remplace
+   l'ENTRYPOINT, le service tourne en root — il le signale au démarrage (`uid 0 (ROOT …)`).
+3. **Healthcheck** : la sonde Railway arrive avec l'hôte `healthcheck.railway.app` ; elle aurait reçu 421 (déploiement refusé). Corrigé :
+   `/healthz` répond quel que soit l'hôte (sans donnée) ; tout le reste garde la liste d'hôtes.
+4. **HTTPS / cookies / CSRF** : vérifié sur le conteneur avec `SOURCING_PUBLIC_ORIGIN=https://app.nordla.app` : origine étrangère → 403,
+   requête vue en HTTP → 400, modification sans session/CSRF → 401, autre hôte → 421 ; cookies `__Host-` (Secure, sans Domain, liés
+   à l'hôte exact) ; HSTS ajouté pour cet hôte seul. Un changement d'origine = nouvelle connexion (cookies) et stockage du téléphone vide :
+   le téléphone n'utilise que `https://app.nordla.app`.
+5. **Sauvegardes** : couvrent tout `/app/data/sourcing` (dossiers + espace de travail, photos, journal Core, cache Safety Gate).
+   Copies locales sur le même volume de 1 Go : **3** par défaut (`SOURCING_BACKUP_KEEP`), et aucune écriture si l'espace libre ne suffit
+   pas (`BACKUP_LOW_SPACE`, journalisé) ; l'historique est hors Railway (bucket privé). Attention : le quota de stockage Supabase (offre
+   gratuite 1 Go) se remplira aussi avec le temps : surveiller, ou décider d'une purge des archives anciennes (décision propriétaire).
+
+Identité de la préproduction (Supabase **staging** `fvhiammdskpcnfodsnrc`, aucune donnée de production touchée), ordre :
+a. **ACCORD** — appliquer les 5 migrations (§1) sur staging, une par une ; smoke `test/postgres/sourcing-identity-sequence.pg-smoke.mjs` 27/27 en local ;
+b. **ACCORD** — `supabase/provisioning/staging-habb-merchant.sql` (marchand HABB avec **le même UUID** que la production) ;
+c. propriétaire : couper les inscriptions publiques de l'Auth staging, créer son compte (mot de passe choisi par lui) ;
+d. **ACCORD** — `supabase/provisioning/habb-owner-sourcing.sql` sur staging avec l'id de ce compte.
+Plus tard, passage à l'identité de production : mêmes étapes sur production (§2 C→G) puis changement des 3 variables Supabase du service ;
+dossiers, photos et journal du volume restent valides (même UUID marchand).
+
+Valeurs à régler dans `sourcing-staging` (en plus de celles déjà préparées) — secrets saisis directement dans Railway :
+
+| Variable | Valeur | Secret |
+|---|---|---|
+| `NORDLA_MERCHANT_ID` | `36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5` | non |
+| `SOURCING_MERCHANT_ID` | `habb` | non |
+| `SOURCING_PUBLIC_ORIGIN` | `https://app.nordla.app` (ou d'abord l'adresse `*.up.railway.app` du service pour l'essai sans téléphone) | non |
+| `SUPABASE_URL` | URL du projet **staging** | non |
+| `SUPABASE_ANON_KEY` | clé publique du projet staging | quasi (ne pas diffuser) |
+| `SUPABASE_SERVICE_ROLE_KEY` | clé service du projet staging | **oui** |
+| `NORDLA_IDENTITY_RATE_LIMIT_KEY` | 32 octets aléatoires (`openssl rand -hex 32`) | **oui** |
+| `NORDLA_CSRF_KEY` | 32 octets aléatoires, **différents** du précédent | **oui** |
+| `SOURCING_BACKUP_PASSPHRASE` | ≥ 16 caractères, aussi dans le gestionnaire de mots de passe + papier | **oui** |
+| `SOURCING_BACKUP_BUCKET` | `nordla-backups` (bucket privé à créer sur staging — **ACCORD**) | non |
+| `SOURCING_BACKUP_KEEP` | `3` (optionnel) | non |
+| Commande de démarrage | `/app/docker-entrypoint.sh node src/service-start.js` | — |
+| Commit | le commit de cette mise à jour (pas `e84918e` : il n'a ni l'entrypoint ni la correction du healthcheck) | — |

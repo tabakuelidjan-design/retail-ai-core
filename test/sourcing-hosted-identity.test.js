@@ -122,3 +122,12 @@ test('a suspended member is out at the next request; a logged-out session is rev
     assert.ok(w.db.table('app_sessions').some((x) => x.user_id === P.owner.id && x.revoked_at), 'revoked in the session table');
   } finally { await w.close(); }
 });
+
+test('Railway health probe: /healthz answers for its own host name (healthcheck.railway.app) with no data; every other route keeps the Host allow-list', async () => {
+  const w = await world();
+  try {
+    const probe = (host, path) => new Promise((resolve, reject) => { const r = http.request({ host: '127.0.0.1', port: w.srv.port, path, method: 'GET', headers: { host } }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, body: t })); }); r.on('error', reject); r.end(); });
+    const h = await probe('healthcheck.railway.app', '/healthz'); assert.equal(h.status, 200); assert.deepEqual(JSON.parse(h.body), { ok: true });
+    for (const path of ['/', '/api/auth/session', '/api/cases', '/healthz/x']) assert.equal((await probe('healthcheck.railway.app', path)).status, 421, path);
+  } finally { await w.close(); }
+});

@@ -18,7 +18,8 @@ const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into sm
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
 const sameToken = (a, b) => { const x = Buffer.from(String(a ?? '')); const y = Buffer.from(String(b)); return x.length === y.length && timingSafeEqual(x, y); };
-const SEC = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin', 'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
+// HSTS for this host only (no includeSubDomains / preload: other nordla.app names are not committed); browsers ignore it over plain HTTP (local mode)
+const SEC = { 'strict-transport-security': 'max-age=31536000', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin', 'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
 // The Moonshine runtime (embind) builds its bindings with new Function() and compiles WebAssembly: that needs 'unsafe-eval' + 'wasm-unsafe-eval'. It is granted ONLY to the voice worker script and the /voice/ runtime files (a worker's policy comes
 // from its own response), never to the page: the page keeps script-src 'self'.
 const VOICE_SEC = { ...SEC, 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'" };
@@ -129,9 +130,11 @@ export function createSourcingApp({ token, gate = null, core = null, store, phot
   }
   const handler = async (req, res) => {
     try {
+      // liveness first, for ANY Host: the platform's health probe comes with its own host name (Railway: healthcheck.railway.app) and
+      // the answer carries no data. Every other route keeps the Host allow-list.
+      if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz') return json(res, 200, { ok: true });
       if (!hostOk(req)) return json(res, 421, { error: 'HOST_NOT_ALLOWED' });
       const url = new URL(req.url, 'http://local');
-      if (url.pathname === '/healthz' && req.method === 'GET') return json(res, 200, { ok: true }); // liveness for the container / monitor: no data, no token
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)

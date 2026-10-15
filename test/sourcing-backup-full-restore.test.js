@@ -101,3 +101,19 @@ test('off-server copy: uploaded encrypted, never overwritten; downloaded, verifi
     assert.equal(await s.runNow(), null); s.stop(); assert.match(logs.at(-1), /Backup FAILED \(OFFSITE_UPLOAD_FAILED\).*data is untouched/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('scheduled run on the server: few local copies by default (the volume is shared), a real run writes the local archive even when the off-server copy fails', async () => {
+  const { scheduleBackups } = await import('../src/sourcing/server/index.js');
+  const root = await mkdtemp(join(tmpdir(), 'nordla-sched-'));
+  try {
+    const { mkdir } = await import('node:fs/promises');
+    const data = join(root, 'sourcing'); await mkdir(join(data, 'cases'), { recursive: true }); await writeFile(join(data, 'cases', 'c1.json'), '{"id":"c1"}');
+    const logs = []; const env = { ...OFF, SUPABASE_URL: 'http://127.0.0.1:9', SOURCING_BACKUP_DIR: join(root, 'local') };
+    const s = scheduleBackups({ env, dir: data, log: (m) => logs.push(m) }); s.stop();
+    assert.match(logs[0], / 3 local copies /);
+    scheduleBackups({ env: { ...env, SOURCING_BACKUP_KEEP: '5' }, dir: data, log: (m) => logs.push(m) }).stop(); assert.match(logs[1], / 5 local copies /);
+    assert.equal(await s.runNow(), null, 'the off-server copy cannot be sent here: logged, not thrown');
+    assert.match(logs.at(-1), /Backup FAILED .*data is untouched/);
+    assert.equal((await readdir(join(root, 'local'))).filter((n) => n.endsWith('.nsb')).length, 1, 'the local encrypted archive exists');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

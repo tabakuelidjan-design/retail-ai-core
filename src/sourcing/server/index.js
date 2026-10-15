@@ -3,7 +3,7 @@
 // Binds 127.0.0.1 by default. To use it from a phone on your own network set SOURCING_HOST (e.g. 0.0.0.0): a token of 24+ characters is then mandatory.
 // Nothing is deployed, nothing is sent to Shopify/Supabase; cases are local files under data/local/sourcing.
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, statfs, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -73,11 +73,14 @@ export async function startSourcingServer({ env = process.env, log = console.log
   log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${hosted ? `HOSTED for ${hosted.origin}: Core identity sign-in (module sourcing, merchant ${hosted.merchantId}), no development token` : host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
   log(merchantProfile ? `Merchant profile: ${merchantProfile.merchantId} (${mp.source === 'FILE' ? 'file' : 'config/merchants'}), status ${merchantProfile.status ?? 'n/a'}` : `No merchant profile loaded${mp.error ? ` (${mp.error})` : ''}: the fit checklist will say so. Set SOURCING_MERCHANT_ID to choose one.`);
   log(core.status);
+  log(`Process: Node ${process.versions.node}, uid ${process.getuid?.() ?? 'n/a'}${process.getuid?.() === 0 ? ' (ROOT: the image entrypoint was bypassed - see deploy/sourcing/Dockerfile)' : ''}, data ${dir}.`);
   log(`Access: ${hosted ? 'Nordla session (sign-in)' : env.SOURCING_TOKEN && env.SOURCING_TOKEN.length >= 24 ? 'token from SOURCING_TOKEN' : `token in ${join(dir, 'token.txt')}`} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
   const backups = scheduleBackups({ env, dir, log });
   server.on('close', () => backups.stop());
   return { server, token, safety, port: addr.port, backups };
 }
+
+async function dirBytes(d) { let n = 0; for (const e of await readdir(d, { withFileTypes: true }).catch(() => [])) { const p = join(d, e.name); n += e.isDirectory() ? await dirBytes(p) : (await stat(p).catch(() => ({ size: 0 }))).size; } return n; }
 
 /** Daily encrypted backup of the whole data directory (cases, photos, Core journal) + its off-server copy, when configured
  *  (SOURCING_BACKUP_PASSPHRASE + SOURCING_BACKUP_BUCKET + SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). Local archives go to
@@ -86,10 +89,17 @@ export async function startSourcingServer({ env = process.env, log = console.log
 export function scheduleBackups({ env, dir, log, run = null, firstDelayMs = 10 * 60_000, everyMs = 24 * 3600_000 }) {
   if (!String(env.SOURCING_BACKUP_PASSPHRASE ?? '').trim() || !String(env.SOURCING_BACKUP_BUCKET ?? '').trim()) { log('Backups: NOT scheduled (SOURCING_BACKUP_PASSPHRASE / SOURCING_BACKUP_BUCKET not set).'); return { stop: () => {}, runNow: async () => null }; }
   const out = String(env.SOURCING_BACKUP_DIR ?? '').trim() || join(dir, '..', 'sourcing-backups');
-  const once = run ?? (async () => (await import('../../../tools/sourcing-backup.mjs')).backupAndShip(dir, out, { env, keep: 14 }));
+  // the local copies share the data volume (1 GB on the pilot): few of them (history lives off-server), and never when they could fill it
+  const keep = Math.min(30, Math.max(1, Number.parseInt(env.SOURCING_BACKUP_KEEP ?? '3', 10) || 3));
+  const once = run ?? (async () => {
+    const size = await dirBytes(dir); const fs = await statfs(dir);
+    const free = fs.bavail * fs.bsize; const need = 2 * size + 64 * 1024 * 1024; // the new archive (compressed, <= size) + head room
+    if (free < need) throw Object.assign(new Error(`not enough free space on the volume (${Math.round(free / 1e6)} MB free, ${Math.round(need / 1e6)} MB needed): nothing written; enlarge the volume or lower SOURCING_BACKUP_KEEP`), { code: 'BACKUP_LOW_SPACE' });
+    return (await import('../../../tools/sourcing-backup.mjs')).backupAndShip(dir, out, { env, keep });
+  });
   const runNow = async () => { try { const r = await once(); log(`Backup OK: ${r.files} file(s), copied off-server as ${r.offsite}.`); return r; } catch (e) { log(`Backup FAILED (${e.code ?? 'ERROR'}): ${e.message} - retried at the next run; the data is untouched.`); return null; } };
   const first = setTimeout(runNow, firstDelayMs); const every = setInterval(runNow, everyMs); first.unref?.(); every.unref?.();
-  log(`Backups: every ${Math.round(everyMs / 3600_000)} h, first in ${Math.round(firstDelayMs / 60_000)} min, local copies in ${out}, off-server bucket ${env.SOURCING_BACKUP_BUCKET}.`);
+  log(`Backups: every ${Math.round(everyMs / 3600_000)} h, first in ${Math.round(firstDelayMs / 60_000)} min, ${keep} local copies in ${out}, off-server bucket ${env.SOURCING_BACKUP_BUCKET}.`);
   return { stop: () => { clearTimeout(first); clearInterval(every); }, runNow };
 }
 
