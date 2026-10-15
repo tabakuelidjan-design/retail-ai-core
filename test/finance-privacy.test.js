@@ -14,6 +14,8 @@ const files = git('ls-files --cached --others --exclude-standard').split('\n').f
 const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf)$/i.test(f) && !f.endsWith('package-lock.json') && !f.startsWith('vendor/')
   // published sha-256 checksums of the committed test-fixture fonts (provenance inventory, not secrets)
   && f !== 'test/fixtures/fonts/FONTS.json'
+  // the golden Core decision journal (written by the original code, replayed by test/core-reliability.test.js): SHA-256 chain hashes of synthetic events, content-addressed, not secrets
+  && !f.startsWith('test/fixtures/core-journal-v1/')
   // sha-256 checksums of the supplied merchant source documents (evidence provenance, not secrets)
   && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-brand-canonical-v\d+\.json$/.test(f)
   // pinned sha-256 checksums of open font files and their licence texts (provenance, not secrets)

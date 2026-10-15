@@ -11,6 +11,7 @@ import { buildSourcingPurchaseSubject, sourcingPurchaseLevers, SOURCING_PURCHASE
 import { SocleError } from '../socle-decision/util.js';
 import { applyHumanDecision, applyResult } from '../socle-decision/ledger.js';
 import { sourcingPurchaseFacts } from './sourcing-facts.js';
+import { createSerial } from './durable-file.js';
 
 export class CoreError extends Error { constructor(code, message, status = 400) { super(message); this.name = 'CoreError'; this.code = code; this.status = status; } }
 
@@ -29,6 +30,10 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
   const decisions = new Map(); // decision id -> decision (needed to check a human decision)
   const meta = new Map(); // log entry id -> { case_id, case_version, assessment, analysed_by, analysed_at }
   let readyP = null;
+  // ONE logical writer: validation -> durable append -> application of the event run as a single unit, so a second request sees the state the first one produced.
+  // (Two taps on the same button, a retry on a flaky link, two analyses of the same case version.) The journal never receives an event the state would refuse.
+  const serial = createSerial();
+  let protectedBy = null; // set when an event was made durable but could not be applied: the in-memory state may lag the journal until a controlled restart
 
   function applyAnalysed(p) {
     store.setRuleSet(merchantId, p.rule_set);
@@ -50,6 +55,12 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
     else throw new CoreError('JOURNAL_UNKNOWN_EVENT', `line ${e.seq}: unknown event ${e.kind}`, 500);
   }
   const ready = () => (readyP ??= journal.all().then((evs) => { for (const e of evs) applyEvent(e); return true; }));
+  /** Append, then apply. If applying fails AFTER the event is durable, the Core stops accepting writes until restarted: the journal is the truth and replay will say. */
+  async function commit(event) {
+    if (protectedBy) throw new CoreError('CORE_PROTECTED', `le Core est en protection (${protectedBy}) : redémarrage contrôlé nécessaire, rien n’est enregistré d’ici là`, 503);
+    const e = await journal.append(event); // rejects unless the line is on disk: nothing below runs for an unconfirmed event
+    try { return applyEvent(e); } catch (err) { protectedBy = err?.code ?? 'APPLY_FAILED'; throw new CoreError('CORE_PROTECTED', `l’événement est enregistré mais son application a échoué (${protectedBy}) : redémarrage contrôlé nécessaire`, 503); }
+  }
 
   const ruleSet = () => createRuleSet(merchantId, config.ownerRules ?? []);
   const entries = () => store.getLog(merchantId);
@@ -63,6 +74,9 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
   async function analyseCase(state, { externals = {}, actor }) {
     await ready();
     if (!CAN_ANALYSE.includes(actor?.role)) throw new CoreError('ROLE_NOT_ALLOWED', 'votre rôle ne permet pas de lancer une analyse', 403);
+    return serial(() => analyseCaseSerial(state, { externals, actor }));
+  }
+  async function analyseCaseSerial(state, { externals, actor }) {
     const at = now().toISOString();
     const { input, scenarios, assessment } = sourcingPurchaseFacts(state, { merchantId, now: new Date(at), externals });
     const subject = buildSourcingPurchaseSubject(input);
@@ -74,8 +88,7 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
     const probe = new SocleStore(gate); probe.setRuleSet(merchantId, rs); const ing = probe.ingestSubject(merchantId, subject, at);
     if (ing.outcome !== 'ACCEPTED') return { status: 'SUPPRESSED', reason: ing.reason };
     let decision; try { ({ decision } = probe.decide(merchantId, ing.subject.id, levers, at)); } catch (err) { throw socle(err); }
-    const e = await journal.append({ kind: 'ANALYSED', at, actor: actorRef(actor), payload: { case_id: state.id, subject, levers, rule_set: rs, assessment, decision_id: decision.decision_id } });
-    applyEvent(e);
+    await commit({ kind: 'ANALYSED', at, actor: actorRef(actor), payload: { case_id: state.id, subject, levers, rule_set: rs, assessment, decision_id: decision.decision_id } });
     return { status: 'ANALYSED', decision, ...view(entries().find((x) => x.decision_ref === decision.decision_id)) };
   }
 
@@ -89,6 +102,9 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
   /** The human decision. Approver = the signed-in person; the role must be allowed for the chosen option's required approval. */
   async function decideHuman(entryId, body, actor) {
     await ready();
+    return serial(() => decideHumanSerial(entryId, body, actor));
+  }
+  async function decideHumanSerial(entryId, body, actor) {
     const entry = store.getLogEntry(merchantId, entryId); if (!entry) throw new CoreError('NOT_FOUND', 'décision introuvable', 404);
     const kind = body?.decision;
     if (!Object.values(HUMAN_DECISION).includes(kind)) throw new CoreError('INVALID_DECISION', 'décision : APPROVED, APPROVED_ALTERNATIVE, REJECTED ou DEFERRED');
@@ -102,13 +118,16 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
     const at = now().toISOString();
     const input = { decision: kind, reason: String(body.reason ?? '').trim(), approver: actorRef(actor).label, decided_at: at, chosen_lever_ids: chosen, planned_actions: [], next_review_at: body.next_review_at || null };
     try { applyHumanDecision(entry, decisions.get(entry.decision_ref), input); } catch (e) { throw socle(e); } // pure check first: a refused input never reaches the journal
-    applyEvent(await journal.append({ kind: 'HUMAN_DECISION', at, actor: actorRef(actor), payload: { entry_id: entryId, input } }));
+    await commit({ kind: 'HUMAN_DECISION', at, actor: actorRef(actor), payload: { entry_id: entryId, input } });
     return view(store.getLogEntry(merchantId, entryId));
   }
 
   /** Follow-up: the measured result of an approved decision. NOT_MEASURABLE / UNKNOWN are legitimate. A result never becomes a rule. */
   async function recordResult(entryId, body, actor) {
     await ready();
+    return serial(() => recordResultSerial(entryId, body, actor));
+  }
+  async function recordResultSerial(entryId, body, actor) {
     if (!CAN_ANALYSE.includes(actor?.role)) throw new CoreError('ROLE_NOT_ALLOWED', 'votre rôle ne permet pas d’enregistrer un suivi', 403);
     const entry = store.getLogEntry(merchantId, entryId); if (!entry) throw new CoreError('NOT_FOUND', 'décision introuvable', 404);
     if (entry.result) throw new CoreError('ALREADY_MEASURED', 'un résultat est déjà enregistré pour cette décision', 409);
@@ -117,7 +136,7 @@ export function createCoreRuntime({ merchantId, config, journal, now = () => new
     const unmeasured = [OUTCOME_RESULT.NOT_MEASURABLE, OUTCOME_RESULT.UNKNOWN].includes(body.result);
     const input = { result: body.result, evidence_level: unmeasured ? EVIDENCE_LEVEL.NONE : body.evidence_level, measured_at: at, notes: String(body.notes ?? '').slice(0, 2000) };
     try { applyResult(entry, input); } catch (e) { throw socle(e); }
-    applyEvent(await journal.append({ kind: 'RESULT', at, actor: actorRef(actor), payload: { entry_id: entryId, input } }));
+    await commit({ kind: 'RESULT', at, actor: actorRef(actor), payload: { entry_id: entryId, input } });
     return view(store.getLogEntry(merchantId, entryId));
   }
   const socle = (e) => (e instanceof SocleError ? new CoreError(e.code, e.message.replace(/^[A-Z_]+: /, ''), 409) : e);

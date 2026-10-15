@@ -5,8 +5,9 @@
 // No AI, no network, no paid call. The product mask (known non-determinism PM-6) is NOT used on this path: the photo is drawn as supplied.
 // The merchant's choices (font family, colours) are configuration: config/merchants/<id>/creation.json.
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { createSerial, readJsonlStrict, withWriteLock, appendLineDurably, writeFileDurably } from './durable-file.js';
 import * as CI from '../creative-intelligence/index.js';
 import * as P from '../creative-intelligence/production.js';
 import { dimensionsOf } from '../creative-e2e/asset.js';
@@ -53,8 +54,18 @@ export function createCreationService({ merchantId, config, branding = null, dir
     })();
     try { return await fontsP; } catch (e) { fontsP = null; throw e; }
   }
-  async function entries() { try { return (await readFile(journal, 'utf8')).trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } }
-  async function append(e) { await mkdir(dir, { recursive: true }); await appendFile(journal, `${JSON.stringify(e)}\n`, { mode: 0o600 }); return e; }
+  // Only a file that does not exist is an empty history. Damage, a cut-short last line or an unreadable file is an explicit error (CREATION_JOURNAL_*), never "no creations".
+  const entries = () => readJsonlStrict(journal, 'CREATION_JOURNAL');
+  const serial = createSerial();
+  /** One logical writer: strict read of the history, the caller's checks on it, ONE durable append - under the in-process queue and the file lock.
+   *  fn(all) -> { entry?, result? } : `entry` is appended (if any), `result` is returned (default: the entry). */
+  const mutate = (fn) => serial(() => withWriteLock(journal, async () => {
+    const all = await entries(); // also refuses to append after a damaged or cut-short line
+    const { entry = null, result = entry } = await fn(all);
+    if (entry) await appendLineDurably(journal, JSON.stringify(entry));
+    return result;
+  }));
+  const append = (entry) => mutate(async () => ({ entry }));
 
   function status() {
     return config
@@ -110,14 +121,17 @@ export function createCreationService({ merchantId, config, branding = null, dir
     const fidelity = observations.map((o) => ({ check: o.code, outcome: o.outcome, reason: o.evidence?.reason ?? null }));
     const fidelityOk = REQUIRED_PASS.every((c) => fidelity.find((f) => f.check === c)?.outcome === 'PASS');
     const id = `cr-${png.sha256.slice(0, 16)}`;
-    const same = (await entries()).find((e) => e.kind === 'CREATION' && e.id === id); if (same) return same; // same photo + headline = same bytes: kept once
-    if (fidelityOk) { const f = join(dir, `${id}.png`); await mkdir(dir, { recursive: true }); await writeFile(`${f}.tmp`, png.bytes, { mode: 0o600 }); await rename(`${f}.tmp`, f); }
-    return append({
+    // the "kept once" check, the PNG and the journal line are ONE unit: two identical requests together produce one visual
+    return mutate(async (all) => {
+    const same = all.find((e) => e.kind === 'CREATION' && e.id === id); if (same) return { result: same }; // same photo + headline = same bytes: kept once
+    if (fidelityOk) await writeFileDurably(join(dir, `${id}.png`), png.bytes);
+    return { entry: {
       kind: 'CREATION', id, at: now(), by, status: fidelityOk ? 'TO_OWNER_REVIEW' : 'FIDELITY_FAILED', headline: text, layout: CREATION_LAYOUT,
       typography: { family: font.family, license: font.license, evidence: config.typography_evidence ?? null },
       photo_sha256: photoSha, photo_px: { width: dims.width, height: dims.height }, png: fidelityOk ? { sha256: png.sha256, width: png.width, height: png.height, engine: png.engine } : null,
       fidelity, brand, limits: ['Aucune génération IA : la photo est utilisée telle quelle.', 'Texte imprimé sur la photo : non mesuré (aucune zone protégée annotée).', 'Couleurs de marque non approuvées : fond et texte neutres.'],
       owner_approval: 'PENDING', published: false,
+    } };
     });
   }
 
@@ -125,10 +139,12 @@ export function createCreationService({ merchantId, config, branding = null, dir
     if (actor?.role !== 'OWNER') throw err('APPROVAL_ROLE_REQUIRED', 'Seul le propriétaire valide un visuel.', 403);
     if (!DECISIONS.includes(decision)) throw err('INVALID_DECISION', `décision : ${DECISIONS.join(', ')}`);
     if (!String(reason ?? '').trim()) throw err('REASON_REQUIRED', 'raison obligatoire');
-    const all = await entries();
-    if (!all.some((e) => e.kind === 'CREATION' && e.id === id && e.status === 'TO_OWNER_REVIEW')) throw err('NOT_FOUND', 'visuel introuvable', 404);
-    if (all.some((e) => e.kind === 'DECISION' && e.id === id)) throw err('ALREADY_DECIDED', 'décision déjà enregistrée', 409);
-    return append({ kind: 'DECISION', id, at: now(), by: actor.userId ? `user:${actor.userId}` : 'local-owner', decision, reason: String(reason).trim(), published: false });
+    // the state check and the append are ONE unit: an approval and a rejection arriving together cannot both be recorded
+    return mutate(async (all) => {
+      if (!all.some((e) => e.kind === 'CREATION' && e.id === id && e.status === 'TO_OWNER_REVIEW')) throw err('NOT_FOUND', 'visuel introuvable', 404);
+      if (all.some((e) => e.kind === 'DECISION' && e.id === id)) throw err('ALREADY_DECIDED', 'décision déjà enregistrée', 409);
+      return { entry: { kind: 'DECISION', id, at: now(), by: actor.userId ? `user:${actor.userId}` : 'local-owner', decision, reason: String(reason).trim(), published: false } };
+    });
   }
 
   async function list() {

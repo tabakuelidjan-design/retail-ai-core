@@ -2,3 +2,5 @@
 resources/fonts/** -text
 # Official validation artifacts are third-party, verbatim, hash-pinned (vendor/MANIFEST.json): Git must never convert their line endings or diff them as text.
 vendor/** -text -diff
+# Golden Core journal produced by the ORIGINAL code (f721e49): replayed by test/core-reliability.test.js; hashes cover content, never convert line endings.
+test/fixtures/core-journal-v1/** -text
