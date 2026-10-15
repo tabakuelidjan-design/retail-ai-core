@@ -73,7 +73,7 @@ export function createBrandingService({ merchantId, proposal, file, now = () => 
     if (!a) {
       const t = normalizeMatchText(fragments.join(' '));
       const findings = proposal.hard_rules.filter((r) => t.includes(normalizeMatchText(r.value))).map((r) => ({ rule: r.id, forbidden: r.value, severity: r.severity, why: r.why }));
-      return { status: 'RULES_NOT_APPROVED', official: false, preview: findings.length ? 'WOULD_FLAG' : 'NOTHING_FLAGGED', findings, note: 'Aperçu indicatif : les règles de marque HABB ne sont pas encore approuvées par le propriétaire.' };
+      return { status: 'RULES_NOT_APPROVED', official: false, preview: findings.length ? 'WOULD_FLAG' : 'NOTHING_FLAGGED', findings, note: 'Aperçu indicatif : les règles de marque ne sont pas encore approuvées par le propriétaire.' };
     }
     const context = buildBrandContext({ tenant, brand, core: a.core, memory: a.memory, snapshot });
     const report = evaluateBrandGuardian({ tenant, brandContext: context, candidateManifest: { content_kind: 'TEXT', text: [{ subject: 'body', coverage: 'COMPLETE', values: fragments, evidence_refs: [] }] }, targetRef: `text://${createHash('sha256').update(fragments.join('\n')).digest('hex').slice(0, 16)}`, evaluatedAt: now() });

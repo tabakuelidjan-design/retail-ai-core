@@ -22,7 +22,7 @@ export function createModulesPanel({ S, api, refresh }) {
     if (a === 'nx-load') return load();
     if (a === 'nx-ask') return post('/api/core/ask', { text: t.dataset.q }, (r) => { st.answer = { q: t.dataset.label, ...r }; });
     if (a === 'nx-check') return post('/api/core/branding/check', { text: val('nx-copy') }, (r) => { st.check = r; });
-    if (a === 'nx-approve-brand') { if (!window.confirm('Approuver ces règles de marque comme règles OFFICIELLES de HABB ?')) return; return post('/api/core/branding/approve', {}); }
+    if (a === 'nx-approve-brand') { if (!window.confirm('Approuver ces règles de marque comme règles OFFICIELLES de votre marque ?')) return; return post('/api/core/branding/approve', {}); }
     if (a === 'nx-campaign') return post('/api/core/campaigns', { product: val('nx-product'), objective: val('nx-objective'), audience: val('nx-audience'), channel: val('nx-channel'), copy: val('nx-copy') });
     if (a === 'nx-decide') { const reason = val(`nx-reason-${t.dataset.i}`); if (!reason) { st.error = 'Écrivez la raison de votre décision.'; return refresh(); } return post(`/api/core/campaigns/${encodeURIComponent(t.dataset.id)}/decision`, { decision: t.dataset.decision, reason }); }
   });

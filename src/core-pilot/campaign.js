@@ -28,7 +28,7 @@ export function creativeCapability(env = process.env) {
 const DECISIONS = ['APPROVED_FOR_CREATION', 'REJECTED', 'DEFERRED'];
 
 export function createCampaignService({ merchantId, branding, analytics = null, file, env = process.env, now = () => new Date().toISOString() }) {
-  const brandProfile = () => ({ tenant_id: merchantId, brand_ref: `nordla:brand:${merchantId}`, approved_claims: branding.approvedClaims() });
+  const brandProfile = () => ({ tenant_id: merchantId, brand_ref: `nordla:brand:${merchantId}`, approved_claims: branding?.approvedClaims() ?? [] });
   async function entries() { try { return (await readFile(file, 'utf8')).trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } }
   async function append(e) { await mkdir(dirname(file), { recursive: true }); await appendFile(file, `${JSON.stringify(e)}\n`, { mode: 0o600 }); return e; }
 
@@ -44,7 +44,7 @@ export function createCampaignService({ merchantId, branding, analytics = null, 
         opportunity = { source: e.source, period: { from: e.period.from, to: e.period.to }, freshness: e.freshness, product_fact: hit ? { label: hit.label, values: hit.values, direction: e.movers.growth.includes(hit) ? 'HAUSSE' : 'BAISSE' } : null, note: hit ? 'Fait Analytics (pas une cause).' : 'Ce produit ne figure pas parmi les plus fortes variations : aucune donnée de tendance spécifique.' };
       } else opportunity = { source: e.source, unavailable: e.error };
     }
-    const brand = await branding.checkText(copy);
+    const brand = branding ? await branding.checkText(copy) : { status: 'NOT_CONNECTED', official: false, findings: [] };
     const contract = buildCampaignContract({
       tenant_id: merchantId, product_ref: ref(K.PRODUCT, String(product).trim()), brand: brandProfile(), objective, audience, offer: null, channel,
       claims: [{ ref: `claim://copy/${createHash('sha256').update(copy).digest('hex').slice(0, 12)}`, kind: 'DESCRIPTIVE', role: 'BODY', wording: copy }],
@@ -52,7 +52,7 @@ export function createCampaignService({ merchantId, branding, analytics = null, 
     });
     const creative = creativeCapability(env);
     const blockers = [
-      ...(brand.status === 'RULES_NOT_APPROVED' ? ['Règles de marque non approuvées : vérification indicative seulement.'] : []),
+      ...(brand.status === 'RULES_NOT_APPROVED' ? ['Règles de marque non approuvées : vérification indicative seulement.'] : brand.status === 'NOT_CONNECTED' ? ['Branding non raccordé : aucune vérification de marque.'] : []),
       ...(brand.official && brand.outcome !== 'PASS' ? [`Marque : ${brand.outcome}`] : []),
       ...(!contract.checks.brand.ok ? ['Le texte n’est pas une affirmation approuvée par la marque (registre d’affirmations vide).'] : []),
       ...(creative.status === 'PROVIDER_NOT_CONNECTED' ? ['Création : aucun fournisseur de génération connecté.'] : []),

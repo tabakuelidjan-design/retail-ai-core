@@ -72,8 +72,8 @@ log "restore proof OK: $(wc -l < "$OUT/restored.fingerprint") tables (rows + con
 # ---- 4. apply, one transaction per migration (file + history row)
 n=$(jq '.migrations | length' "$REQ")
 for i in $(seq 0 $((n - 1))); do
-  name=$(jq -r ".migrations[$i].name" "$REQ"); file=$(jq -r ".migrations[$i].file" "$REQ"); want=$(jq -r ".migrations[$i].sha256" "$REQ")
-  got=$(sha256sum "$file" | cut -d' ' -f1); [[ "$got" == "$want" ]] || { echo "STOP: $file sha256 $got differs from the approved $want"; exit 4; }
+  name=$(jq -r ".migrations[$i].name" "$REQ"); file=$(jq -r ".migrations[$i].file" "$REQ"); want=$(jq -r ".migrations[$i].sha256_b64" "$REQ")
+  got=$(openssl dgst -sha256 -binary "$file" | base64); [[ "$got" == "$want" ]] || { echo "STOP: $file SHA-256 $got differs from the approved $want"; exit 4; }
   if [[ "$(q "select count(*) from supabase_migrations.schema_migrations where name = '$name'")" != 0 ]]; then log "skip $name: already in the history"; continue; fi
   version=$(date -u +%Y%m%d%H%M%S); sleep 1
   psql "$DB" -X -q -v ON_ERROR_STOP=1 --single-transaction -v body="$(cat "$file")" -v version="$version" -v name="$name" <<SQL

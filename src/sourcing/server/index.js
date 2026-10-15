@@ -54,7 +54,8 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const readers = injected ?? await buildReaders({ env, dir, merchantId, log }); // injected: tests / the isolated demo (synthetic data) only
   const { createBrandingService, loadBrandProposal } = await import('../../core-pilot/branding.js');
   const { createCampaignService } = await import('../../core-pilot/campaign.js');
-  const branding = createBrandingService({ merchantId, proposal: await loadBrandProposal(env, root), file: join(dir, 'core', 'brand-approved.json') });
+  let branding = null; // Branding needs the merchant's Nordla UUID (hosted mode); a local PC server has none: Branding is then "not connected", never a crash
+  try { branding = createBrandingService({ merchantId, proposal: await loadBrandProposal(env, root), file: join(dir, 'core', 'brand-approved.json') }); } catch (e) { log(`Branding for the Core: NOT connected (${e.message}).`); }
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
