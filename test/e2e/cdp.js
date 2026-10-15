@@ -15,9 +15,21 @@ export class Browser {
   constructor(exe, profile = null, extraArgs = []) { this.extraArgs = extraArgs; this.exe = exe; this.profile = profile ?? mkdtempSync(join(tmpdir(), 'nordla-e2e-')); this.id = 0; this.pending = new Map(); this.listeners = []; }
   async launch() {
     this.port = await freePort();
-    this.proc = spawn(this.exe, ['--headless=new', `--remote-debugging-port=${this.port}`, `--user-data-dir=${this.profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--disable-extensions', '--disable-background-networking', '--window-size=390,844', ...this.extraArgs, 'about:blank'], { stdio: 'ignore' });
-    let ver = null; for (let i = 0; i < 60 && !ver; i++) { try { ver = await (await fetch(`http://127.0.0.1:${this.port}/json/version`)).json(); } catch { await sleep(250); } }
-    if (!ver) throw new Error('browser did not start');
+    this.proc = spawn(this.exe, ['--headless=new', `--remote-debugging-port=${this.port}`, `--user-data-dir=${this.profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--disable-extensions', '--disable-background-networking', '--window-size=390,844', ...this.extraArgs, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Ready = Chrome's own "DevTools listening on ws://..." line (a cold first start on a CI runner took longer than the old fixed 15 s poll while
+    // Chrome was alive). An exit before that line fails at once WITH Chrome's code and last stderr lines; 60 s is only a safety bound.
+    let stderr = '';
+    const listening = await new Promise((resolve) => {
+      const done = (v) => { clearTimeout(timer); resolve(v); };
+      const timer = setTimeout(() => done({ error: 'no DevTools endpoint within 60 s' }), 60000);
+      this.proc.stderr.on('data', (d) => { stderr = (stderr + d).slice(-4000); const m = /DevTools listening on (ws:\/\/\S+)/.exec(stderr); if (m) done({ ws: m[1] }); });
+      this.proc.once('exit', (code, signal) => done({ error: `browser exited before DevTools was up (code ${code}, signal ${signal})` }));
+      this.proc.once('error', (e) => done({ error: `browser could not be spawned (${e.code ?? e.message})` }));
+    });
+    if (listening.error) throw new Error(`browser did not start: ${listening.error}\n${stderr.split('\n').slice(-8).join('\n')}`);
+    this.proc.stderr.resume(); // keep draining: a full pipe would block Chrome
+    let ver = null; for (let i = 0; i < 40 && !ver; i++) { try { ver = await (await fetch(`http://127.0.0.1:${this.port}/json/version`)).json(); } catch { await sleep(250); } }
+    if (!ver) throw new Error(`browser did not start: DevTools announced ${listening.ws} but /json/version did not answer`);
     this.version = ver.Browser; this.ws = new WebSocket(ver.webSocketDebuggerUrl);
     await new Promise((res, rej) => { this.ws.onopen = res; this.ws.onerror = rej; });
     this.ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && this.pending.has(d.id)) { const { res, rej } = this.pending.get(d.id); this.pending.delete(d.id); d.error ? rej(new Error(`${d.error.message}`)) : res(d.result); } else if (d.method) this.listeners.forEach((l) => l(d)); };
