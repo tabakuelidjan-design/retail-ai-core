@@ -86,13 +86,22 @@ seule en préparation (`docs/infrastructure/prod-readonly-habb-procedure.md`).
 | # | Contrôle | Attendu |
 |---|---|---|
 | 1 | `GET /healthz` | `200 {"ok":true}` (répond avant le contrôle d'hôte : sonde Railway) |
-| 2 | Journaux au démarrage | `Process: Node 24…, uid 1000`, `Nordla Core ON for merchant 36b1a1a7-…`, `Backups: every 24 h` ; **aucun secret imprimé** |
+| 2 | Journaux au démarrage | `Process: Node 24…, uid 1000`, `Nordla Core ON for merchant 67646dbb-…` (staging), `Backups: every 24 h` ; **aucun secret imprimé** |
 | 3 | `GET /api/core/modules` sans session | `401` |
 | 4 | Connexion propriétaire (téléphone) → menu → « Nordla » | 7 modules ; China Sourcing seul marqué « hors ligne » |
 | 5 | Création : photo + titre | PNG affiché, 4 contrôles « conforme », `TEXT : non mesuré`, « Rien n'est publié » |
 | 6 | Redémarrage du service | décisions, approbations et visuels toujours présents (volume) |
 | 7 | Sauvegarde | archive chiffrée dans `/app/data/sourcing-backups`, copie dans `nordla-backups` ; restauration réelle à vérifier |
 | 8 | Finance / Analytics hébergés existants | inchangés (aucun fichier de ces services modifié) |
+| 9 | `curl -sI http://<adresse>/` | redirection 301/308 vers `https://` (faite par Railway ; sinon : arrêt, le service ne doit pas servir la page de connexion en clair) |
+| 10 | En-têtes du proxy | le service exige `X-Real-IP`, `X-Forwarded-Proto: https`, `X-Forwarded-Host` (posés par Railway) ; s'ils manquent, toute API répond 400 « Requête invalide » : c'est le premier diagnostic à faire |
+
+Audit local du 15/10 au soir (image construite depuis `26cc9a1`, code exécuté identique à `62ec977`, configuration staging prévue,
+secrets factices, Supabase volontairement injoignable) : démarrage en ≈ 10 s, uid 1000, aucune capacité, `no_new_privs` ; journal :
+« Nordla Core ON for merchant 67646dbb-… », sauvegardes « every 24 h, first in 10 min, bucket nordla-backups » ; **aucun secret** dans
+le journal ; `/healthz` 200 quel que soit l'hôte ; avec les en-têtes Railway : `/api/core/modules` et `/api/cases` sans session 401,
+origine étrangère 403, POST sans session 401, connexion avec Supabase injoignable 503 « momentanément indisponible » (aucun e-mail ni
+mot de passe journalisé) ; hôte non autorisé 421 ; en-têtes HSTS, CSP stricte, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`.
 
 ## 5. Retour arrière
 

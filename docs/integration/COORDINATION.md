@@ -119,3 +119,11 @@ Fichiers touchés (déclarés avant fusion, un seul chantier à la fois) :
 | `docs/integration/core-journal-reliability.md` | **nouveau** | Core P0 | garanties, limites, reprise, sauvegardes, reporté |
 
 À savoir pour Infrastructure : la documentation Railway rattache un volume à un seul service et ne documente aucun montage partagé ; la sauvegarde doit rester dans le service du Core. Le journal exige que `SOURCING_DATA_DIR` soit **dans** `RAILWAY_VOLUME_MOUNT_PATH`.
+
+## 2026-10-16 (nuit) — Chantier A : vérification de `claude/nordla-core-reliability` (rien fusionné)
+
+Fusion **simulée** localement (`claude/nordla-core-p0` @ `d9b630a` + `d85ec46`) : aucun conflit ; suite complète Node 24 : 362 fichiers,
+3 918 tests, 0 échec (3 ignorés, identiques sur la branche actuelle). Garde « journal sur le volume Railway » compatible avec la
+configuration `sourcing-staging` (`/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing`). Les 2 lignes dans `src/sourcing/server/index.js`
+et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés côté Chantier A. Fusion : décision du propriétaire
+(`docs/integration/bilan-2026-10-16.md`, D1).
