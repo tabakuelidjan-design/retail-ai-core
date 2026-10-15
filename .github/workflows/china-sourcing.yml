@@ -54,6 +54,8 @@ jobs:
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run sourcing:e2e:migration
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:photos
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
 
   e2e-pwa:
     # INFORMATIONAL (as before): written on Windows/Edge; passes 18/18 on Linux Chromium today.

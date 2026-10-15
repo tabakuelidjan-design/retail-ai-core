@@ -50,6 +50,7 @@
     "sourcing:e2e:revision": "node test/e2e/sourcing-item-revision.e2e.js",
     "sourcing:e2e:identification": "node test/e2e/sourcing-identification.e2e.js",
     "sourcing:e2e:migration": "node test/e2e/sourcing-origin-migration.e2e.js",
+    "sourcing:e2e:photos": "node test/e2e/sourcing-photo-backup.e2e.js",
     "growth": "node src/growth/server/serve.js"
   },
   "engines": {

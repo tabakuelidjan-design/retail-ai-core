@@ -3,7 +3,7 @@
 import { esc } from './dom.js';
 
 const REL = { INCOMING_AHEAD: 'la copie à récupérer contient tout ce que vous avez ici, et plus', LOCAL_AHEAD: 'votre copie sur ce téléphone contient tout ce que contient celle-ci, et plus', DIVERGED: 'les deux copies ont chacune des changements que l’autre n’a pas' };
-const ERR = { EMPTY: 'Le fichier est vide.', TOO_BIG: 'Le fichier est trop gros (8 Mo maximum).', NOT_JSON: 'Ce fichier n’est pas un export Nordla (JSON illisible).', NOT_A_CASE: 'Ce fichier ne contient pas un dossier Nordla complet.', BAD_ID: 'Le dossier a un identifiant invalide.', FORBIDDEN_KEY: 'Le fichier contient des champs interdits : refusé.', NEWER_SCHEMA: 'Ce dossier vient d’une version plus récente de Nordla : refusé pour ne rien abîmer.', NEWER_FORMAT: 'Ce format d’export est plus récent que cette application.' };
+const ERR = { EMPTY: 'Le fichier est vide.', TOO_BIG: 'Le fichier est trop gros (64 Mo maximum). Les photos sauvegardées sur le serveur se récupèrent aussi avec « Voir les dossiers du serveur ».', NOT_JSON: 'Ce fichier n’est pas un export Nordla (JSON illisible).', NOT_A_CASE: 'Ce fichier ne contient pas un dossier Nordla complet.', BAD_ID: 'Le dossier a un identifiant invalide.', FORBIDDEN_KEY: 'Le fichier contient des champs interdits : refusé.', NEWER_SCHEMA: 'Ce dossier vient d’une version plus récente de Nordla : refusé pour ne rien abîmer.', NEWER_FORMAT: 'Ce format d’export est plus récent que cette application.' };
 export const recoveryError = (code) => ERR[code] ?? 'Ce fichier n’a pas pu être lu.';
 
 const when = (iso) => esc(String(iso ?? '').slice(0, 16).replace('T', ' '));
@@ -28,5 +28,5 @@ export function recoverySection(rec, { online, hasToken, local }) {
   ${r.error ? `<p class="warn">${esc(r.error)}</p>` : ''}
   ${r.list ? (r.list.length ? `${list}<button class="btn" data-act="rec-go" ${nSel ? '' : 'disabled'}>Récupérer ${nSel ? `(${nSel})` : ''}</button>` : '<p>Le serveur ne contient aucun dossier.</p>') : ''}
   ${pending}${done ? `<ul class="small">${done}</ul>` : ''}
-  <p class="small muted">Les photos ne sont pas stockées sur le serveur : elles ne reviennent que via un export fait avec cette version (« Export » du menu les inclut).</p>`;
+  <p class="small muted">Les photos sauvegardées sur le serveur reviennent avec le dossier ; un export (« Export » du menu) les contient aussi.</p>`;
 }

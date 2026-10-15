@@ -154,7 +154,8 @@ test('10. a file that is not a safe, complete case is refused and nothing is sto
     newer: JSON.stringify({ ...c, schema: 99 }), noEvents: JSON.stringify({ ...c, events: undefined }), badCollection: JSON.stringify({ ...c, ledger: 'x' }),
     proto: JSON.stringify(c).replace('{', '{"__proto__":{"admin":true},'), nested: JSON.stringify({ ...c, notes: [{ constructor: { prototype: 1 } }] }), bundleNewer: JSON.stringify({ format: EXPORT_FORMAT, version: 2, case: c }) };
   for (const [name, text] of Object.entries(bad)) assert.equal(parseImportText(text).ok, false, name);
-  assert.equal(parseImportText('x'.repeat(9 * 1024 * 1024)).error, 'TOO_BIG');
+  assert.equal(parseImportText('x'.repeat(65 * 1024 * 1024)).error, 'TOO_BIG');
+  assert.equal(parseImportText('x'.repeat(9 * 1024 * 1024)).error, 'NOT_JSON', 'a 9 MB file is no longer refused for its size (the old 8 MB limit lost large cases)');
   assert.equal(({}).admin, undefined, 'no prototype pollution');
   // a photo that belongs to another case, or is not an image, is dropped, not stored under this case
   const p = parseImportText(JSON.stringify({ format: EXPORT_FORMAT, version: 1, case: c, photos: { 'photo:other.0': 'data:image/jpeg;base64,AA', 'photo:sonny.0': 'javascript:alert(1)', 'x': 'data:image/png;base64,AA' } })); assert.ok(p.ok); assert.deepEqual(p.photos, {});
@@ -182,7 +183,7 @@ test('13. the menu section: nothing is ticked by default, the button stays disab
   const pend = recoverySection({ list: [], pending: [{ id: 'sonny', relation: plan.relation, incoming: plan.incoming, local: plan.local }] }, { online: false, hasToken: false, local: {} });
   assert.match(pend, /Garder les deux/); assert.match(pend, /Ignorer/); assert.match(pend, /Rien n’a été remplacé/); assert.match(pend, /Sur ce téléphone/); assert.match(pend, /Importer un fichier exporté/);
   assert.match(pend, /data-act="rec-list" disabled/, 'the server list needs a reachable server');
-  assert.match(html, /photos ne sont pas stockées sur le serveur/);
+  assert.match(html, /Les photos sauvegardées sur le serveur reviennent avec le dossier/, 'the honest statement, now that the server keeps the photos');
 });
 
 test('14. the sync sends only cases the owner changed: sync() never marks the open case, commit() always marks the edited one', async () => {

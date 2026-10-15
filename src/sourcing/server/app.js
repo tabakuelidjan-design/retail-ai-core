@@ -35,7 +35,7 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, store, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ token, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!token || String(token).length < 24) throw new Error('a token of at least 24 characters is required');
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -62,6 +62,24 @@ export function createSourcingApp({ token, store, workspace = null, merchantProf
     const p = url.pathname; const m = req.method;
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });
+    // ---- photos of a case (durable server copy; the phone keeps its own). No delete route: a photo is never removed through the API.
+    const ph = /^\/api\/cases\/([A-Za-z0-9_-]{1,80})\/photos(?:\/([^/]{1,200}))?$/.exec(p);
+    if (ph) {
+      if (!photos) return json(res, 503, { error: 'NO_PHOTO_STORE' });
+      const caseId = ph[1]; let key = null; if (ph[2]) { try { key = decodeURIComponent(ph[2]); } catch { return json(res, 400, { error: 'PHOTO_KEY_INVALID' }); } }
+      try {
+        if (!key && m === 'GET') return json(res, 200, { caseId, photos: await photos.list(caseId) });
+        if (key && m === 'GET') { const got = await photos.get(caseId, key); return got ? json(res, 200, got) : json(res, 404, { error: 'NOT_FOUND' }); }
+        if (key && m === 'PUT') {
+          if (!(await store.get(caseId))) return json(res, 409, { error: 'CASE_NOT_ON_SERVER', note: 'send the case first: a photo is stored only under a case the server holds' });
+          const body = await readBody(req); return json(res, 200, await photos.put(caseId, key, body.dataUrl));
+        }
+      } catch (e) {
+        if (e instanceof StoreError) return json(res, e.code === 'PHOTO_CONFLICT' ? 409 : e.code === 'PHOTO_TOO_BIG' ? 413 : e.code === 'PHOTO_CORRUPT' ? 500 : 400, { error: e.code, ...(e.server ? { server: e.server, sent: e.sent } : {}) });
+        throw e;
+      }
+      return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+    }
     const c = /^\/api\/cases\/([A-Za-z0-9_-]{1,80})$/.exec(p);
     if (c && m === 'GET') { const s = await store.get(c[1]); return s ? json(res, 200, s) : json(res, 404, { error: 'NOT_FOUND' }); }
     if (c && m === 'PUT') { const body = await readBody(req); if (body.id !== c[1]) return json(res, 400, { error: 'ID_MISMATCH' }); try { return json(res, 200, await store.save(body)); } catch (e) { if (e instanceof StoreError && e.code === 'CONFLICT') return json(res, 409, { error: 'CONFLICT', server: e.server }); throw e; } }

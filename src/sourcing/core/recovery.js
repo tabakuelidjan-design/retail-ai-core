@@ -4,7 +4,8 @@
 import { upgradeCase, CASE_SCHEMA } from './upgrade.js';
 
 export const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
-export const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
+// 64 MB: a case with many document photos must stay importable (it was 8 MB). Photos are also recoverable one by one from the server since the photo store.
+export const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
 export const EXPORT_FORMAT = 'nordla-case-export';
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 

@@ -94,11 +94,14 @@ try {
     ok((await phoneCases(b)).filter((c) => c.id.startsWith('xiaomi-case-1')).length === 1, 'still one copy');
   });
 
-  await check('7. KNOWN GAP, stated not hidden: the server sync carries the case but NOT its photos (recovering from the server alone loses them)', async () => {
-    const put = await fetch(`${A}/api/cases/xiaomi-case-1`, { method: 'PUT', headers: { 'x-sourcing-token': TOKEN, 'content-type': 'application/json' }, body: JSON.stringify(kase) });
-    ok(put.status === 200, `server accepted the case (${put.status})`);
+  await check('7. the owner\'s "Sauvegarder sur le serveur" (origin A): the case JSON carries no image; its photos are stored separately, byte for byte', async () => {
+    await a.goto(`${A}/`); await ready(a); await a.waitFor('window.nordlaSourcing?.state().online === true', 15000);
+    await openMenu(a); await a.run(`document.querySelector('[data-act="backup-all"]').click(); await __t.sleep(1500); return 1;`);
+    let photos = []; for (let k = 0; k < 60 && photos.length < 3; k += 1) { photos = (await (await fetch(`${A}/api/cases/xiaomi-case-1/photos`, { headers: { 'x-sourcing-token': TOKEN } })).json()).photos ?? []; if (photos.length < 3) await new Promise((r) => setTimeout(r, 250)); }
     const back = await (await fetch(`${A}/api/cases/xiaomi-case-1`, { headers: { 'x-sourcing-token': TOKEN } })).json();
-    const text = JSON.stringify(back); ok(!/data:image\//.test(text), 'no image data travels with the case: photos must be carried by the export file (or a future photo sync)');
+    ok(back.id === 'xiaomi-case-1' && !/data:image\//.test(JSON.stringify(back)), 'the case is on the server, without image data inside');
+    ok(photos.length === 3, `the three photos are on the server (${photos.length})`);
+    for (const k of KEYS) { const g = await (await fetch(`${A}/api/cases/xiaomi-case-1/photos/${encodeURIComponent(k)}`, { headers: { 'x-sourcing-token': TOKEN } })).json(); ok(g.dataUrl === await blob(a, k), `${k}: the server copy equals the phone copy`); }
   });
 } finally {
   await browser.close(); await new Promise((r) => server.server.close(r)); server.server.closeAllConnections?.(); try { rmSync(dir, { recursive: true, force: true }); } catch { /* temp */ }
