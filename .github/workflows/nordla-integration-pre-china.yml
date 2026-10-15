@@ -40,7 +40,7 @@ jobs:
             timeout 1500 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1; rc=$?
             d=$(( $(date +%s) - s ))
             echo "$rc $d $f" >> /tmp/results.txt
-            if [ "$rc" -ne 0 ]; then echo "::error title=test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; fi
+            if [ "$rc" -ne 0 ]; then echo "::error title=test file failed (exit $rc, ${d}s)::$f :: $(grep -m1 -E '^✖|Error' "/tmp/$(basename "$f").log" | cut -c1-160)"; { echo "::group::$f (failure detail)"; grep -n -E -A25 '^not ok|^✖|AssertionError|ERR_TEST_FAILURE' "/tmp/$(basename "$f").log" | head -80; echo "::endgroup::"; }; fi
           }
           export -f one
           : > /tmp/results.txt

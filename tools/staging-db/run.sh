@@ -111,6 +111,8 @@ for t in app_sessions identity_events identity_rate_limits identity_auth_reserva
   for r in anon authenticated; do chk "$r has no privilege on $t" "$(q "select count(*) from information_schema.role_table_grants where table_schema = 'public' and table_name = '$t' and grantee = '$r'")" 0; done
 done
 for r in anon authenticated; do chk "$r executes no SECURITY DEFINER function" "$(q "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef and has_function_privilege('$r', p.oid, 'execute')")" 0; done
+left_q="select (select count(*) from merchant_members) + (select count(*) from identity_events) + (select count(*) from module_entitlements)"
+left_before=$(q "$left_q")  # after the HABB test bootstrap these tables are not empty: compare, do not expect 0
 fn=$(psql "$DB" -X -q -tA -v ON_ERROR_STOP=1 <<SQL
 begin;
 set local search_path = public, extensions;
@@ -122,7 +124,7 @@ rollback;
 SQL
 )
 chk "functional run (rolled back)" "$(echo "$fn" | tr '\n' ' ' | xargs)" "BOOTSTRAPPED MODULE_ENABLED SESSION_OPENED"
-chk "nothing left by the functional run" "$(q "select (select count(*) from merchant_members) + (select count(*) from identity_events) + (select count(*) from module_entitlements)")" 0
+chk "nothing left by the functional run" "$(q "$left_q")" "$left_before"
 fingerprint "$DB" | grep -vE '^(app_sessions|identity_events|identity_rate_limits|identity_auth_reservations|merchant_members|module_entitlements)=' > "$OUT/after.fingerprint"
 grep -vE '^(app_sessions|identity_events|identity_rate_limits|identity_auth_reservations|merchant_members|module_entitlements)=' "$OUT/before.fingerprint" > "$OUT/before-existing.fingerprint"
 chk "pre-existing data unchanged" "$(diff -q "$OUT/before-existing.fingerprint" "$OUT/after.fingerprint" >/dev/null && echo same || echo different)" same
