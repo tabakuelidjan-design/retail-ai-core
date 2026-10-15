@@ -64,8 +64,9 @@ async function noNetwork(fn) {
   globalThis.fetch = async (u) => { hits.push(String(u)); throw new TypeError('network forbidden in this test'); };
   try { return await fn(hits); } finally { globalThis.fetch = real; }
 }
-// 990 (B's price) only as a standalone number: never as a fragment of a random UUID (hex), which made this check flaky (~0.6% per id)
-const leaks = (value, other) => new RegExp(other === 'Beta' ? 'Beta|(?<![0-9a-f-])990(?![0-9a-f-])' : 'Alpha').test(JSON.stringify(value));
+// 990 (B's price) only as a standalone number: never as a fragment of a random UUID (hex), which made this check flaky (~0.6% per id),
+// nor as the milliseconds of an ISO timestamp ("...:42.990Z", ~0.1% per timestamp: failed CI on 6d721c4). B's price itself stays caught.
+const leaks = (value, other) => new RegExp(other === 'Beta' ? 'Beta|(?<![0-9a-f.-])990(?![0-9a-f-])' : 'Alpha').test(JSON.stringify(value));
 
 // The three tools, behind one shape: run(tool, supabase, env, { argv, createClient }) -> { merchantId, output }
 const TOOLS = {
