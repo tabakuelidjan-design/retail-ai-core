@@ -1,0 +1,11 @@
+{
+  "kind": "NORDLA_CREATION_LOCAL_CONFIG",
+  "status": "CONFIGURATION_FROM_EXISTING_OWNER_DECISION",
+  "note": "Local visual (no generation provider): the owner's photo kept pixel-exact + one headline in the typography the owner already chose for HABB Creative Benchmark 001. No brand colour is approved yet: neutral background and text colour.",
+  "fonts_manifest": "resources/fonts/habb-benchmark/manifest.json",
+  "headline_family": "Playfair Display",
+  "typography_evidence": "owner-decision://habb-creative-benchmark-001/typography-v1",
+  "background": "#FFFFFF",
+  "text_color": "#1E1E1E",
+  "locale": "fr-BE"
+}

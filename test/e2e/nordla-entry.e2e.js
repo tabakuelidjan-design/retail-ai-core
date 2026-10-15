@@ -1,6 +1,7 @@
 // REAL-BROWSER proof of the single NORDLA entry (Chromium, 390 px; engine-level, NOT the physical Xiaomi, NOT Railway itself), on ISOLATED
 // SYNTHETIC Finance and Analytics data: sign-in -> menu "Nordla" -> 7 modules with their real state -> Finance and Analytics answers with
-// sources -> brand check (indicative, rules not approved) -> campaign proposal with its blockers -> owner decision. Same set-up as the sign-in proof:
+// sources -> brand check (indicative, rules not approved) -> campaign proposal with its blockers -> owner decision -> local visual (Création
+// without provider: photo chosen on the phone -> PNG + measured fidelity -> owner decision) -> visible errors -> reload keeps it all. Same set-up as the sign-in proof:
 //   browser --HTTPS--> local TLS proxy that behaves like Railway (X-Real-IP, X-Forwarded-Proto/Host) --> hosted sourcing server (Core identity)
 // The public name sourcing.nordla-test.example is resolved to 127.0.0.1 by Chromium itself (--host-resolver-rules); the proxy's certificate
 // is a throw-away self-signed one (--ignore-certificate-errors). The identity tables and Supabase Auth are the in-memory test doubles of the
@@ -81,7 +82,7 @@ try {
     await click(tab, '[data-act="nx-load"]'); await tab.waitFor("document.querySelectorAll('[data-nx-module]').length === 7", 10000);
     const states = await tab.eval("[...document.querySelectorAll('[data-nx-module] summary')].map((s) => s.innerText.replace(/\\s+/g, ' ').trim()).join(' | ')");
     await shot(tab, '1-modules', '#nx-head');
-    for (const s of ['Nordla Core DISPONIBLE', 'Finance LECTURE SEULE', 'Analytics LECTURE SEULE', 'China Sourcing DISPONIBLE', 'Branding À APPROUVER', 'Marketing LIMITÉ', 'Création BLOQUÉ']) ok(states.includes(s), `missing "${s}" in ${states}`);
+    for (const s of ['Nordla Core DISPONIBLE', 'Finance LECTURE SEULE', 'Analytics LECTURE SEULE', 'China Sourcing DISPONIBLE', 'Branding À APPROUVER', 'Marketing LIMITÉ', 'Création LIMITÉ']) ok(states.includes(s), `missing "${s}" in ${states}`);
   });
   await check('2. Finance: "invoices to pay" answers with Finance\'s figures, due dates and its source', async () => {
     await tab.run(`document.querySelector('[data-nx-module="finance"]').open = true; document.querySelector('[data-nx-module="finance"] [data-act="nx-ask"]').click(); await __t.sleep(800); return 1;`);
@@ -112,6 +113,33 @@ try {
     await tab.waitFor("(document.querySelector('[data-nx-campaign]')?.innerText || '').includes('Décision : DEFERRED')", 10000);
     const lines = readFileSync(join(tmp, 'data', 'core', 'campaigns.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     ok(lines.some((l) => l.kind === 'DECISION' && l.decision === 'DEFERRED' && l.by === `user:${OWNER.id}`), 'decision journaled with the signed-in owner');
+  });
+  await check('6. Création: a visible error without a photo; then a photo chosen on the phone -> PNG shown, fidelity measured, owner decision journaled', async () => {
+    await tab.run(`document.querySelector('[data-nx-module="creative"]').open = true; document.getElementById('nx-headline').value = 'Un cadeau imprimé avec soin'; document.querySelector('[data-act="nx-render"]').click(); await __t.sleep(300); return 1;`);
+    ok(/Choisissez d’abord une photo/.test(await text(tab)), 'the missing photo is said on screen');
+    // a synthetic photo made in the page, handed to the real file input: the UI reduces it to JPEG like a phone photo and sends it
+    await tab.run(`const cv = document.createElement('canvas'); cv.width = 900; cv.height = 1200; const g = cv.getContext('2d'); g.fillStyle = '#202020'; g.fillRect(0, 0, 900, 1200); g.fillStyle = 'rgb(191,170,150)'; g.fillRect(30, 30, 840, 1140); g.fillStyle = '#34495e'; g.beginPath(); g.arc(450, 600, 220, 0, 7); g.fill();
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png')); const dt = new DataTransfer(); dt.items.add(new File([blob], 'produit.png', { type: 'image/png' }));
+      const input = document.getElementById('nx-photo'); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); await __t.sleep(800); return 1;`);
+    await tab.waitFor("(document.querySelector('[data-nx-module=\"creative\"]')?.innerText || '').includes('Photo prête : produit.png')", 10000);
+    await tab.run(`document.getElementById('nx-headline').value = 'Un cadeau imprimé avec soin'; document.querySelector('[data-act="nx-render"]').click(); await __t.sleep(1500); return 1;`);
+    await tab.waitFor("!!document.querySelector('[data-nx-creation] img') && document.querySelector('[data-nx-creation] img').complete && document.querySelector('[data-nx-creation] img').naturalWidth === 1080", 20000);
+    await shot(tab, '5-creation', '[data-nx-creation]');
+    const c = await tab.eval("document.querySelector('[data-nx-creation]').innerText");
+    ok(/PRODUCT_IDENTITY : conforme/.test(c) && /PRODUCT_GEOMETRY : conforme/.test(c) && /PRODUCT_COLOR : conforme/.test(c) && /TEXT : non mesuré/.test(c) && /Rien n’est publié/.test(c), c);
+    await tab.run(`document.querySelector('[data-nx-module="creative"]').open = true; document.getElementById('nx-cr-reason-0').value = 'photo fidèle, titre sobre'; document.querySelector('[data-act="nx-cr-decide"][data-decision="APPROVED"]').click(); await __t.sleep(1000); return 1;`);
+    await tab.waitFor("(document.querySelector('[data-nx-creation]')?.innerText || '').includes('Décision : APPROVED')", 10000);
+    const lines = readFileSync(join(tmp, 'data', 'core', 'creations', 'creations.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    const made = lines.find((l) => l.kind === 'CREATION'); ok(made.photo_px.width === 900 && made.photo_px.height === 1200, `the photo arrives at its size (under 1600 px): ${JSON.stringify(made.photo_px)}`);
+    ok(lines.some((l) => l.kind === 'DECISION' && l.decision === 'APPROVED' && l.by === `user:${OWNER.id}` && l.published === false), 'decision journaled with the signed-in owner, nothing published');
+    ok(readFileSync(join(tmp, 'data', 'core', 'creations', `${made.id}.png`)).length > 1000, 'PNG kept on the server volume');
+  });
+  await check('7. reload (as after a reconnection): still signed in, Nordla reopens with the campaign decision and the approved visual', async () => {
+    await tab.goto(`${ORIGIN}/`); await ready(tab); await tab.waitFor('window.nordlaSourcing?.state().online === true', 15000);
+    await click(tab, '#btn-cases'); await click(tab, '[data-act="nx-load"]'); await tab.waitFor("document.querySelectorAll('[data-nx-module]').length === 7", 10000);
+    const all = await tab.eval("document.getElementById('nx-head').parentElement.textContent");
+    ok(/Décision : DEFERRED/.test(all) && /Décision : APPROVED/.test(all), 'decisions visible again after reload');
+    ok(!/(eyJ|sb_secret|service_role)/.test(await tab.eval('document.documentElement.outerHTML + JSON.stringify(localStorage)')), 'no token of another service in the page or local storage');
   });
 } finally {
   await browser.close(); await new Promise((r) => proxy.close(r)); proxy.closeAllConnections?.(); await new Promise((r) => srv.server.close(r)); srv.server.closeAllConnections?.(); try { rmSync(tmp, { recursive: true, force: true }); } catch { /* temp */ }

@@ -11,7 +11,7 @@ const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 const mediaOf = (bytes) => { if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg'; if (bytes[0] === 0x89 && bytes[1] === 0x50) return 'image/png'; return null; };
 
-function dimensionsOf(bytes) {
+export function dimensionsOf(bytes) {
   const media = mediaOf(bytes);
   if (media === 'image/png') { const d = pngDimensions(bytes); return { width: d.width, height: d.height, media }; }
   if (media === 'image/jpeg') {

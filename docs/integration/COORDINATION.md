@@ -48,3 +48,11 @@ qui, quoi, sur quel commit. Ajouter en bas, ne pas réécrire les lignes passée
   c. créer le compte Supabase Auth du propriétaire, son adhésion OWNER au marchand et activer le module `sourcing` ;
   d. sauvegarde isolée du volume (`cases/`, `photos/`, `core/`) et restauration vérifiée.
 - Point 4 : non fait (DNS / domaine = propriétaire + Infrastructure).
+
+### 2026-10-15 — Core P0 : Création locale (sans fournisseur)
+- `src/creative-e2e/asset.js` : **seul changement dans le code Création** = `dimensionsOf` est désormais exporté (mot-clé `export`, aucun
+  changement de comportement). Réutilisé par `src/core-pilot/creation.js` pour lire les dimensions JPEG/PNG.
+- `src/core-pilot/creation.js` réutilise sans les modifier : `buildDesignDocument` / `renderDesignDocument` (creative-intelligence),
+  `renderProductionPng` (resvg), `measureProductFidelity`, `decodePng`, et le Gardien de marque via `src/core-pilot/branding.js`.
+- N'utilise PAS `buildProductMask` (défaut PM-6) : la photo est dessinée telle quelle (PIXEL_PRESERVE).
+- Configuration marchand : `config/merchants/habb/creation.json` (typographie = décision propriétaire existante du Benchmark 001).

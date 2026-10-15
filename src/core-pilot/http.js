@@ -7,12 +7,14 @@
 //   POST /api/core/decisions/<entry>/human      { decision, reason, chosen_lever_ids? }   the human decision
 //   POST /api/core/decisions/<entry>/result     { result, evidence_level?, notes? }       the follow-up
 //   POST /api/core/ask                          { text, caseId? }                         Parle à Nordla (text)
+//   GET/POST /api/core/creation, GET /api/core/creation/<id>.png, POST /api/core/creation/<id>/decision   local visual (no provider)
 import { CoreError } from './runtime.js';
 import { askNordla, NOT_CONNECTED } from './ask.js';
 import { creativeCapability } from './campaign.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
 const MAX = 64 * 1024;
+const MAX_PHOTO_BODY = 9 * 1024 * 1024; // a 6 MB photo, base64 in JSON
 
 export function presentDecision(v) {
   if (!v) return null;
@@ -33,11 +35,11 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, branding = null, campaigns = null, env = process.env }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, branding = null, campaigns = null, creation = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
-  async function body(req) {
+  async function body(req, max = MAX) {
     const chunks = []; let n = 0;
-    for await (const c of req) { n += c.length; if (n > MAX) throw new CoreError('BODY_TOO_LARGE', 'requête trop grande', 413); chunks.push(c); }
+    for await (const c of req) { n += c.length; if (n > max) throw new CoreError('BODY_TOO_LARGE', 'requête trop grande', 413); chunks.push(c); }
     const raw = Buffer.concat(chunks).toString('utf8'); if (!raw) return {};
     try { return JSON.parse(raw); } catch { throw new CoreError('INVALID_JSON', 'JSON invalide'); }
   }
@@ -55,7 +57,9 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       row('sourcing', 'China Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
       row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles de marque en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
       row('marketing', 'Marketing', campaigns ? 'LIMITÉ' : 'NON RACCORDÉ', 'Proposition de campagne (contrat, contrôles marque et stock) et décision humaine. Aucune diffusion possible.'),
-      row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
+      creation && creation.status().status === 'LOCAL_AVAILABLE'
+        ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
+        : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
     ] };
   }
 
@@ -81,6 +85,22 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/campaigns' && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
       const cd = /^\/api\/core\/campaigns\/([^/]{1,200})\/decision$/.exec(p);
       if (cd && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.decide(decodeURIComponent(cd[1]), b, actor)); return true; }
+      if (p === '/api/core/creation' && m === 'GET') { json(res, 200, creation ? { ...creation.status(), creations: await creation.list() } : { status: 'NOT_CONNECTED', creations: [] }); return true; }
+      if (p === '/api/core/creation' && m === 'POST') {
+        if (!creation) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
+        const b = await body(req, MAX_PHOTO_BODY);
+        const b64 = String(b.photo ?? '').replace(/^data:image\/(jpeg|png);base64,/, '');
+        if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) throw new CoreError('PHOTO_REQUIRED', 'Photo manquante ou illisible.');
+        json(res, 200, await creation.render({ photo: new Uint8Array(Buffer.from(b64, 'base64')), headline: b.headline }, actor)); return true;
+      }
+      const ci = /^\/api\/core\/creation\/(cr-[0-9a-f]{16})\.png$/.exec(p);
+      if (ci && m === 'GET') {
+        const png = creation ? await creation.image(ci[1]) : null;
+        if (!png) { json(res, 404, { error: 'NOT_FOUND' }); return true; }
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-disposition': `inline; filename="${ci[1]}.png"` }); res.end(png); return true;
+      }
+      const cr = /^\/api\/core\/creation\/(cr-[0-9a-f]{16})\/decision$/.exec(p);
+      if (cr && m === 'POST') { if (!creation) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await creation.decide(cr[1], b, actor)); return true; }
       if (!runtime) { json(res, 503, { error: 'CORE_NOT_CONFIGURED', reason: configError }); return true; }
       if (p === '/api/core/decisions' && m === 'GET') {
         const c = url.searchParams.get('case');

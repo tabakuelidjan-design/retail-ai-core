@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +22,7 @@ import { writeDataset, NOW as AN_NOW } from './fixtures/analytics-dataset.js';
 import { createFinanceReader } from '../src/core-pilot/finance-reader.js';
 import { createAnalyticsReader } from '../src/core-pilot/analytics-reader.js';
 import { creativeCapability } from '../src/core-pilot/campaign.js';
+import { Resvg } from '@resvg/resvg-js';
 
 const M = '36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5';
 const people = ['owner', 'buyer'].map((k, i) => ({ key: k, id: `${String(i + 1).padStart(8, '0')}-3333-4333-8333-${String(i + 1).padStart(12, '0')}`, email: `${k}@nordla-test.example`, password: `synthetic passphrase for ${k}` }));
@@ -47,6 +48,10 @@ async function world() {
     const r = http.request({ host: '127.0.0.1', port: w.srv.port, path, method, headers: { ...H, 'content-type': 'application/json', ...(who ? { cookie: who.cookie, 'x-nordla-csrf': who.csrf } : {}), ...(data ? { 'content-length': data.length } : {}) } }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, body: t ? JSON.parse(t) : null })); });
     r.on('error', reject); if (data) r.write(data); r.end();
   });
+  w.raw = (path, who) => new Promise((resolve, reject) => {
+    const r = http.request({ host: '127.0.0.1', port: w.srv.port, path, method: 'GET', headers: { ...H, ...(who ? { cookie: who.cookie } : {}) } }, (res) => { const c = []; res.on('data', (d) => c.push(d)); res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], bytes: Buffer.concat(c) })); });
+    r.on('error', reject); r.end();
+  });
   w.login = (p) => new Promise((resolve, reject) => {
     const data = Buffer.from(JSON.stringify({ email: p.email, password: p.password }));
     const r = http.request({ host: '127.0.0.1', port: w.srv.port, path: '/api/auth/login', method: 'POST', headers: { ...H, 'content-type': 'application/json', 'content-length': data.length } }, (res) => { res.resume(); res.on('end', () => { const set = res.headers['set-cookie'] ?? []; const pick = (n) => set.find((c) => c.startsWith(n))?.split(';')[0]; const sid = pick('__Host-nordla_sourcing_sid='); const cs = pick('__Host-nordla_sourcing_csrf='); resolve({ cookie: [sid, cs].join('; '), csrf: cs?.split('=')[1] }); }); });
@@ -61,7 +66,8 @@ test('Nordla single entry: 7 modules with their REAL state, Finance / Analytics 
     assert.equal((await w.call('GET', '/api/core/modules')).status, 401, 'no session, nothing');
     const owner = await w.login(PO); const buyer = await w.login(PB);
     const mods = (await w.call('GET', '/api/core/modules', { who: owner })).body.modules;
-    assert.deepEqual(mods.map((m) => [m.key, m.state]), [['core', 'DISPONIBLE'], ['finance', 'LECTURE SEULE'], ['analytics', 'LECTURE SEULE'], ['sourcing', 'DISPONIBLE'], ['branding', 'À APPROUVER'], ['marketing', 'LIMITÉ'], ['creative', 'BLOQUÉ']]);
+    assert.deepEqual(mods.map((m) => [m.key, m.state]), [['core', 'DISPONIBLE'], ['finance', 'LECTURE SEULE'], ['analytics', 'LECTURE SEULE'], ['sourcing', 'DISPONIBLE'], ['branding', 'À APPROUVER'], ['marketing', 'LIMITÉ'], ['creative', 'LIMITÉ']]);
+    assert.match(mods.find((m) => m.key === 'creative').detail, /Génération IA : aucun fournisseur connecté/, 'AI generation stays said as not connected');
     assert.deepEqual(mods.filter((m) => m.offline).map((m) => m.key), ['sourcing'], 'only Sourcing is said to work offline');
     // Finance and Analytics through Parle à Nordla, with sources
     const fin = (await w.call('POST', '/api/core/ask', { who: buyer, body: { text: 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?' } })).body;
@@ -100,4 +106,50 @@ test('Creative capability: without provider keys it is PROVIDER_NOT_CONNECTED wi
   assert.equal(c.status, 'PROVIDER_NOT_CONNECTED'); assert.deepEqual(c.missing, ['ALIBABA_MODEL_STUDIO_API_KEY', 'ALIBABA_MODEL_STUDIO_WORKSPACE_ID']); assert.match(c.note, /ni simulée/);
   const k = creativeCapability({ ALIBABA_MODEL_STUDIO_API_KEY: 'k', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-1234567890' });
   assert.notEqual(k.status, 'READY', 'keys alone never mean a verified provider');
+});
+
+// A synthetic "photo" (never a merchant asset): a dark frame, colour blocks and a disc.
+const photoPng = (seed = 1) => new Uint8Array(new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#202020"/><rect x="20" y="20" width="560" height="760" fill="rgb(${200 - seed * 9},170,150)"/><circle cx="300" cy="400" r="${150 + seed}" fill="#34495e"/></svg>`).render().asPng());
+const dataUrl = (b) => `data:image/png;base64,${Buffer.from(b).toString('base64')}`;
+
+test('Création without a provider: the owner\'s photo kept pixel-exact + a headline -> deterministic PNG with MEASURED fidelity, brand-checked, OWNER decision, restart-safe; nothing published', async () => {
+  const w = await world(); await w.start();
+  try {
+    assert.equal((await w.call('POST', '/api/core/creation', { body: { photo: dataUrl(photoPng()), headline: 'x' } })).status, 401, 'no session, nothing');
+    const owner = await w.login(PO); const buyer = await w.login(PB);
+    const st = (await w.call('GET', '/api/core/creation', { who: buyer })).body;
+    assert.equal(st.status, 'LOCAL_AVAILABLE'); assert.equal(st.typography, 'Playfair Display'); assert.equal(st.ai_generation, 'non connectée');
+    const c = (await w.call('POST', '/api/core/creation', { who: buyer, body: { photo: dataUrl(photoPng()), headline: 'Un cadeau imprimé avec soin à Namur' } })).body;
+    assert.equal(c.status, 'TO_OWNER_REVIEW'); assert.equal(c.published, false); assert.equal(c.owner_approval, 'PENDING'); assert.equal(c.by, `user:${PB.id}`);
+    assert.deepEqual(Object.fromEntries(c.fidelity.map((f) => [f.check, f.outcome])), { PRODUCT_IDENTITY: 'PASS', PRODUCT_GEOMETRY: 'PASS', PIECE_COUNT: 'PASS', PRODUCT_COLOR: 'PASS', TEXT: 'NOT_MEASURABLE' }, 'measured on the delivered PNG; printed text on the photo is said unmeasured');
+    assert.equal(c.brand.official, false, 'rules not approved: the brand check is a labelled preview');
+    assert.equal(c.png.width, 1080); assert.equal(c.png.height, 1350);
+    // the PNG is served only with a session, and its bytes are the recorded ones
+    assert.equal((await w.raw(`/api/core/creation/${c.id}.png`)).status, 401);
+    const img = await w.raw(`/api/core/creation/${c.id}.png`, buyer);
+    assert.equal(img.status, 200); assert.equal(img.type, 'image/png'); assert.equal(createHash('sha256').update(img.bytes).digest('hex'), c.png.sha256);
+    // same photo + same headline = the same bytes, kept once (deterministic; the product mask of PM-6 is not on this path)
+    const again = (await w.call('POST', '/api/core/creation', { who: owner, body: { photo: dataUrl(photoPng()), headline: 'Un cadeau imprimé avec soin à Namur' } })).body;
+    assert.equal(again.id, c.id); assert.equal(again.png.sha256, c.png.sha256);
+    // input errors are said, never guessed
+    assert.equal((await w.call('POST', '/api/core/creation', { who: buyer, body: { photo: dataUrl(photoPng()), headline: '' } })).body.error, 'FIELD_REQUIRED');
+    assert.equal((await w.call('POST', '/api/core/creation', { who: buyer, body: { photo: 'data:image/png;base64,AAAA', headline: 'Titre' } })).body.error, 'PHOTO_FORMAT');
+    const clear = new Uint8Array(new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="10" fill="#000"/></svg>').render().asPng());
+    assert.equal((await w.call('POST', '/api/core/creation', { who: buyer, body: { photo: dataUrl(clear), headline: 'Titre' } })).body.error, 'PHOTO_TRANSPARENT', 'transparency is refused, not measured as if opaque');
+    // OWNER decision only, with a reason
+    assert.equal((await w.call('POST', `/api/core/creation/${c.id}/decision`, { who: buyer, body: { decision: 'APPROVED', reason: 'ok' } })).status, 403);
+    assert.equal((await w.call('POST', `/api/core/creation/${c.id}/decision`, { who: owner, body: { decision: 'APPROVED', reason: '' } })).status, 400);
+    const d = (await w.call('POST', `/api/core/creation/${c.id}/decision`, { who: owner, body: { decision: 'APPROVED', reason: 'photo fidèle, titre sobre' } })).body;
+    assert.equal(d.by, `user:${PO.id}`); assert.equal(d.published, false);
+    // once the brand rules are approved, a forbidden headline is BLOCKED before any rendering
+    assert.equal((await w.call('POST', '/api/core/branding/approve', { who: owner })).body.status, 'APPROVED');
+    const blocked = (await w.call('POST', '/api/core/creation', { who: buyer, body: { photo: dataUrl(photoPng(2)), headline: 'Dernière chance !!!' } })).body;
+    assert.equal(blocked.status, 'BLOCKED_BY_BRAND'); assert.equal(blocked.png, null); assert.equal(blocked.brand.outcome, 'FAIL');
+    // restart: visuals, decisions and images are still there
+    await w.stop(); await w.start(); const o2 = await w.login(PO);
+    const list = (await w.call('GET', '/api/core/creation', { who: o2 })).body.creations;
+    assert.deepEqual(list.map((x) => x.status), ['BLOCKED_BY_BRAND', 'TO_OWNER_REVIEW']); assert.equal(list[1].decision.decision, 'APPROVED');
+    assert.equal((await w.raw(`/api/core/creation/${c.id}.png`, o2)).status, 200);
+    assert.doesNotMatch(await readFile(join(w.dir, 'core', 'creations', 'creations.jsonl'), 'utf8'), /@nordla-test\.example|base64/, 'no e-mail and no photo bytes in the journal');
+  } finally { await w.stop(); await rm(w.dir, { recursive: true, force: true }); }
 });
