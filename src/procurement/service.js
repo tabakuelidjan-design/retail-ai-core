@@ -10,12 +10,15 @@ import {
 import { LOCATION_TYPES, SELLABLE_TYPES, assertPostable } from './stock.js';
 import { authorize } from '../integration/approval.js';
 import { ref } from '../integration/ids.js';
+import { foldStockRequests } from './stock-requests.js';
 import { ID_KIND as K } from '../integration/constants.js';
 
 /**
  * Separation of duties. For these actions the human who APPROVES cannot be the person who PREPARED the thing (creator / submitter of an order, the actor who
  * posts an adjustment or a count). A single-person business can opt out explicitly with `soloOwner: { ownerIds, reason }`: the approval then goes through,
  * is flagged `separationWaived` in the journal, and nothing is waived silently.
+ * Or, per operation: `soloOwner: { perOperationConfirmation: true }` - the OWNER may approve what they prepared themselves ONLY when the approval carries an explicit
+ * `solo_owner_confirmed: true` (the server sets it from a confirmation the owner gave for THAT operation); the journal records it as `separationWaived` too.
  */
 export const DEFAULT_POLICY = Object.freeze({ separation: Object.freeze({ 'BUYING.approve_purchase_plan': true, 'STOCK_SALES.adjust_on_hand': true }), soloOwner: null });
 
@@ -44,7 +47,7 @@ const PERMISSION = {
   createItem: ['OWNER', 'BUYER'], updateItem: ['OWNER', 'BUYER'], createLocation: ['OWNER', 'WAREHOUSE'], createSupplier: ['OWNER', 'BUYER'], linkSupplierItem: ['OWNER', 'BUYER'],
   recordQuote: ['OWNER', 'BUYER'], selectQuote: ['OWNER', 'BUYER'], createPurchaseOrder: ['OWNER', 'BUYER'], submitPurchaseOrder: ['OWNER', 'BUYER'], rejectPurchaseOrder: ['OWNER'],
   approvePurchaseOrder: ['OWNER', 'BUYER'], placeOrder: ['OWNER', 'BUYER'], confirmOrder: ['OWNER', 'BUYER'], cancelPurchaseOrder: ['OWNER', 'BUYER'], linkPayment: ['OWNER', 'BUYER'],
-  closePurchaseOrder: ['OWNER', 'BUYER'], receiveGoods: ['OWNER', 'WAREHOUSE'], adjustStock: ['OWNER', 'WAREHOUSE'], transferStock: ['OWNER', 'WAREHOUSE'],
+  closePurchaseOrder: ['OWNER', 'BUYER'], requestStockChange: ['OWNER', 'WAREHOUSE'], decideStockChange: ['OWNER', 'WAREHOUSE'], receiveGoods: ['OWNER', 'WAREHOUSE'], adjustStock: ['OWNER', 'WAREHOUSE'], transferStock: ['OWNER', 'WAREHOUSE'],
   quarantineDefect: ['OWNER', 'WAREHOUSE'], recordCount: ['OWNER', 'WAREHOUSE'], reserveStock: ['OWNER', 'WAREHOUSE'], releaseStock: ['OWNER', 'WAREHOUSE'],
   recordIncident: ['OWNER', 'BUYER', 'WAREHOUSE'], addSupplierDocument: ['OWNER', 'BUYER'], startVisit: ['OWNER', 'BUYER'], captureProduct: ['OWNER', 'BUYER'], closeVisit: ['OWNER', 'BUYER'],
 };
@@ -106,19 +109,53 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     reqId(approval.id, 'approval.id');
     const d = authorize(action, { approvals: [approval], subject_ref: subjectRef });
     if (d.decision !== 'ALLOW') fail(d.code ?? 'APPROVAL_REQUIRED', d.reason, { action, subject_ref: subjectRef });
-    let separationWaived = false;
+    let separationWaived = false; let waiver = null;
     if (policy.separation?.[action] && makers.filter(Boolean).includes(approval.approver.id)) {
-      const solo = policy.soloOwner;
-      if (solo && solo.ownerIds.includes(approval.approver.id) && approval.approver.role === 'OWNER') separationWaived = true;
+      const solo = policy.soloOwner; const isOwner = approval.approver.role === 'OWNER';
+      const permanent = Boolean(solo?.ownerIds?.includes(approval.approver.id));
+      const confirmed = solo?.perOperationConfirmation === true && approval.solo_owner_confirmed === true;
+      if (solo && isOwner && (permanent || confirmed)) { separationWaived = true; waiver = permanent ? 'PERMANENT_SOLO_OWNER' : 'CONFIRMED_FOR_THIS_OPERATION'; }
       else fail('SEPARATION_OF_DUTIES', `${approval.approver.id} prepared this and cannot approve it: another authorized person must`, { action, subject_ref: subjectRef });
     }
     await ctx.tx.consumeApproval(merchantId, approval.id);
-    return { id: approval.id, approverId: approval.approver.id, action, subjectRef, separationWaived };
+    return { id: approval.id, approverId: approval.approver.id, action, subjectRef, separationWaived, ...(waiver ? { waiver } : {}) };
   }
 
   const LABEL = { items: 'item', stockLocations: 'location', suppliers: 'supplier', quotes: 'quote', purchaseOrders: 'purchase order', visits: 'visit' }; // never leak an internal collection name
   const must = async (ctx, coll, id, code) => (await ctx.tx.get(coll, merchantId, id)) ?? fail(code, `${LABEL[coll] ?? 'record'} ${id} not found`, { id });
   const poRefOf = (po) => ref(K.PURCHASE, po.id);
+
+  /** The adjustment itself, shared by the direct command and by the approval of a filed request. `makers` = who prepared it (separation of duties). */
+  async function adjustIn(ctx, p, makers) {
+    const itemId = reqId(p.itemId, 'itemId'); const locationId = reqId(p.locationId, 'locationId');
+    const delta = reqInt(p.delta, 'delta', { min: -1e6, max: 1e6 }); if (delta === 0) fail('INVALID_INPUT', 'delta cannot be zero');
+    const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
+    await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
+    const ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `${itemId}@${locationId}`), p.approval, makers);
+    const movement = await postMovement(ctx, { itemId, locationId, delta, kind: 'ADJUSTMENT', reason, approvalId: ap.id });
+    emit(ctx, 'STOCK_ADJUSTED', { kind: 'item', id: itemId }, { locationId, delta, reason }, ap);
+    return { movement, ap };
+  }
+  async function countIn(ctx, p, makers) {
+    const locationId = reqId(p.locationId, 'locationId'); const countId = reqId(p.countId, 'countId');
+    await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
+    if (!Array.isArray(p.counts) || !p.counts.length || p.counts.length > 500) fail('INVALID_INPUT', 'counts must hold 1-500 lines');
+    const seen = new Set(); const rows = [];
+    for (const [i, c] of p.counts.entries()) {
+      const itemId = reqId(c.itemId, `counts[${i}].itemId`); if (seen.has(itemId)) fail('DUPLICATE_LINE', `item ${itemId} counted twice`); seen.add(itemId);
+      const counted = reqInt(c.counted, `counts[${i}].counted`, { min: 0 });
+      const expected = (await ctx.tx.balanceOf(merchantId, itemId, locationId))?.onHand ?? 0;
+      const variance = counted - expected;
+      rows.push({ itemId, expected, counted, variance, reason: variance === 0 ? null : reqStr(c.reason, `counts[${i}].reason`, { min: 5, max: 300 }) });
+    }
+    const variances = rows.filter((r) => r.variance !== 0);
+    let ap = null;
+    if (variances.length) ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `count:${countId}`), p.approval, makers);
+    const groupId = store.newId();
+    for (const r of variances) await postMovement(ctx, { itemId: r.itemId, locationId, delta: r.variance, kind: 'COUNT_ADJUST', reason: r.reason, groupId, reference: { type: 'count', id: countId }, approvalId: ap.id });
+    emit(ctx, variances.length ? 'COUNT_ADJUSTED' : 'COUNT_CONFIRMED', { kind: 'location', id: locationId }, { countId, lines: rows.length, variances: variances.length }, ap);
+    return { countId, rows, adjusted: variances.length, ap };
+  }
 
   async function postMovement(ctx, movement) {
     const m = { ...movement, bucket: movement.bucket ?? 'ON_HAND' }; // the invariant check must see the bucket that will really be written
@@ -392,14 +429,8 @@ export function createProcurementService({ store, merchantId, now = () => new Da
 
     // ---------------------------------------------------------------- stock operations
     adjustStock: (actor, key, p) => command('adjustStock', actor, key, p, async (ctx) => {
-      const itemId = reqId(p.itemId, 'itemId'); const locationId = reqId(p.locationId, 'locationId');
-      const delta = reqInt(p.delta, 'delta', { min: -1e6, max: 1e6 }); if (delta === 0) fail('INVALID_INPUT', 'delta cannot be zero');
-      const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
-      await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
-      const ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `${itemId}@${locationId}`), p.approval, [ctx.actor.id]);
-      const mv = await postMovement(ctx, { itemId, locationId, delta, kind: 'ADJUSTMENT', reason, approvalId: ap.id });
-      emit(ctx, 'STOCK_ADJUSTED', { kind: 'item', id: itemId }, { locationId, delta, reason }, ap);
-      return { movement: mv };
+      const { movement } = await adjustIn(ctx, p, [ctx.actor.id]);
+      return { movement };
     }),
     transferStock: (actor, key, p) => command('transferStock', actor, key, p, async (ctx) => {
       const itemId = reqId(p.itemId, 'itemId'); const from = reqId(p.fromLocationId, 'fromLocationId'); const to = reqId(p.toLocationId, 'toLocationId'); const qty = reqInt(p.qty, 'qty');
@@ -424,24 +455,50 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     }),
     /** A physical count: variance = counted - ledger. Any variance needs a reason per line and ONE approval for the whole count. */
     recordCount: (actor, key, p) => command('recordCount', actor, key, p, async (ctx) => {
-      const locationId = reqId(p.locationId, 'locationId'); const countId = reqId(p.countId, 'countId');
-      await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
-      if (!Array.isArray(p.counts) || !p.counts.length || p.counts.length > 500) fail('INVALID_INPUT', 'counts must hold 1-500 lines');
-      const seen = new Set(); const rows = [];
-      for (const [i, c] of p.counts.entries()) {
-        const itemId = reqId(c.itemId, `counts[${i}].itemId`); if (seen.has(itemId)) fail('DUPLICATE_LINE', `item ${itemId} counted twice`); seen.add(itemId);
-        const counted = reqInt(c.counted, `counts[${i}].counted`, { min: 0 });
-        const expected = (await ctx.tx.balanceOf(merchantId, itemId, locationId))?.onHand ?? 0;
-        const variance = counted - expected;
-        rows.push({ itemId, expected, counted, variance, reason: variance === 0 ? null : reqStr(c.reason, `counts[${i}].reason`, { min: 5, max: 300 }) });
+      const { countId, rows, adjusted } = await countIn(ctx, p, [ctx.actor.id]);
+      return { countId, lines: rows, adjusted };
+    }),
+    /**
+     * A person who may not (or should not) approve their own work FILES the change; another authorized human decides. The request is a journal event, not a
+     * table: STOCK_CHANGE_REQUESTED -> STOCK_CHANGE_APPROVED | STOCK_CHANGE_REJECTED. type ADJUST { itemId, locationId, delta, reason } | COUNT { locationId, counts: [{ itemId, counted, reason? }] }.
+     */
+    requestStockChange: (actor, key, p) => command('requestStockChange', actor, key, p, async (ctx) => {
+      const type = reqEnum(p.type, 'type', ['ADJUST', 'COUNT']); let payload;
+      if (type === 'ADJUST') {
+        const itemId = reqId(p.itemId, 'itemId'); const locationId = reqId(p.locationId, 'locationId');
+        const delta = reqInt(p.delta, 'delta', { min: -1e6, max: 1e6 }); if (delta === 0) fail('INVALID_INPUT', 'delta cannot be zero');
+        const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
+        await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
+        payload = { itemId, locationId, delta, reason };
+      } else {
+        const locationId = reqId(p.locationId, 'locationId'); await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
+        if (!Array.isArray(p.counts) || !p.counts.length || p.counts.length > 500) fail('INVALID_INPUT', 'counts must hold 1-500 lines');
+        const seen = new Set();
+        const counts = p.counts.map((c, i) => { const itemId = reqId(c.itemId, `counts[${i}].itemId`); if (seen.has(itemId)) fail('DUPLICATE_LINE', `item ${itemId} counted twice`); seen.add(itemId); return { itemId, counted: reqInt(c.counted, `counts[${i}].counted`, { min: 0 }), reason: optStr(c.reason, `counts[${i}].reason`, { max: 300 }) ?? null }; });
+        for (const c of counts) await must(ctx, 'items', c.itemId, 'ITEM_NOT_FOUND');
+        payload = { locationId, countId: store.newId(), counts };
       }
-      const variances = rows.filter((r) => r.variance !== 0);
-      let ap = null;
-      if (variances.length) ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `count:${countId}`), p.approval, [ctx.actor.id]);
-      const groupId = store.newId();
-      for (const r of variances) await postMovement(ctx, { itemId: r.itemId, locationId, delta: r.variance, kind: 'COUNT_ADJUST', reason: r.reason, groupId, reference: { type: 'count', id: countId }, approvalId: ap.id });
-      emit(ctx, variances.length ? 'COUNT_ADJUSTED' : 'COUNT_CONFIRMED', { kind: 'location', id: locationId }, { countId, lines: rows.length, variances: variances.length }, ap);
-      return { countId, lines: rows, adjusted: variances.length };
+      const requestId = store.newId();
+      emit(ctx, 'STOCK_CHANGE_REQUESTED', { kind: 'stock_request', id: requestId }, { requestId, type, payload, requestedBy: ctx.actor.id });
+      return { request: { requestId, type, payload, status: 'PENDING', requestedBy: ctx.actor.id } };
+    }),
+    /** The decision on a filed request. APPROVE needs a named human approval (never the one who filed it, unless the OWNER confirms the exception for this operation). Decided once: a second decision is refused. */
+    decideStockChange: (actor, key, p) => command('decideStockChange', actor, key, p, async (ctx) => {
+      const requestId = reqId(p.requestId, 'requestId'); const decision = reqEnum(p.decision, 'decision', ['APPROVE', 'REJECT']);
+      const request = foldStockRequests(await ctx.tx.listEvents(merchantId)).find((r) => r.requestId === requestId);
+      if (!request) fail('REQUEST_NOT_FOUND', `stock request ${requestId} not found`);
+      if (request.status !== 'PENDING') fail('REQUEST_ALREADY_DECIDED', `this request was already ${request.status === 'APPROVED' ? 'approved' : 'rejected'}`);
+      // one decision per request, even under concurrency: the database refuses the second insert
+      try { await ctx.tx.consumeApproval(merchantId, `stockreq:${requestId}`); } catch (e) { if (e?.code === 'APPROVAL_ALREADY_USED') fail('REQUEST_ALREADY_DECIDED', 'this request was already decided'); throw e; }
+      if (decision === 'REJECT') {
+        const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
+        emit(ctx, 'STOCK_CHANGE_REJECTED', { kind: 'stock_request', id: requestId }, { requestId, type: request.type, decidedBy: ctx.actor.id, reason });
+        return { request: { ...request, status: 'REJECTED', reason } };
+      }
+      const makers = [request.requestedBy];
+      const out = request.type === 'ADJUST' ? await adjustIn(ctx, { ...request.payload, approval: p.approval }, makers) : await countIn(ctx, { ...request.payload, approval: p.approval }, makers);
+      emit(ctx, 'STOCK_CHANGE_APPROVED', { kind: 'stock_request', id: requestId }, { requestId, type: request.type, decidedBy: out.ap?.approverId ?? ctx.actor.id }, out.ap ?? null);
+      return { request: { ...request, status: 'APPROVED', decidedBy: out.ap?.approverId ?? ctx.actor.id, selfApproved: Boolean(out.ap?.separationWaived) }, ...(out.movement ? { movement: out.movement } : { countId: out.countId, adjusted: out.adjusted }) };
     }),
     reserveStock: (actor, key, p) => command('reserveStock', actor, key, p, async (ctx) => {
       const loc = await must(ctx, 'stockLocations', reqId(p.locationId, 'locationId'), 'LOCATION_NOT_FOUND');

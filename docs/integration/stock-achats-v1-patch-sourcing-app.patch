@@ -1,0 +1,10 @@
+--- a/src/sourcing/server/app.js
++++ b/src/sourcing/server/app.js
+@@ -156,6 +156,7 @@
+       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
+       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
+       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
++      if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
+       if (voice && await voice.handle(req, res, url.pathname)) return;
+       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
+       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
