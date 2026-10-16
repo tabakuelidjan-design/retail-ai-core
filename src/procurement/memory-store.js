@@ -121,6 +121,8 @@ export function createMemoryProcurementStore({ newId = randomUUID, state = null,
       if (data.approvals.has(k)) throw new StoreError('APPROVAL_ALREADY_USED', 'this approval was already consumed');
       data.approvals.add(k);
     },
+    /** Used by the file -> PostgreSQL import: continue a numbering exactly where it stopped (never lower than the current value). */
+    setSeq(merchantId, name, value) { const k = keyOf(merchantId, name); data.seq.set(k, Math.max(data.seq.get(k) ?? 0, value)); },
     nextSeq(merchantId, name) { const k = keyOf(merchantId, name); const n = (data.seq.get(k) ?? 0) + 1; data.seq.set(k, n); return n; },
     /** Test helper: a deep copy of everything, to prove that a read changes nothing. */
     snapshot() { return copy(data); },

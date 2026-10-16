@@ -1,35 +1,51 @@
-# Stock / Achats — préparation de la migration staging (NON EXÉCUTÉE)
+# Stock / Achats — PostgreSQL staging : préparation complète (NON EXÉCUTÉE)
 
-**Statut : préparée, jamais appliquée.** Rien ici ne doit être lancé sur un environnement partagé sans validation explicite du propriétaire. La migration n'a été exécutée que sur des bases PostgreSQL jetables locales.
+**Statut : préparé et répété sur des bases jetables ; jamais appliqué sur un environnement partagé ni en production.** Rien ci-dessous ne doit être lancé sans l'autorisation écrite du propriétaire.
 
-## Ce qui est prêt
-- `supabase/migrations-pending/20261016090000_procurement_stock.sql` : 17 tables `proc_*`, additive, ne touche aucune table existante. Dépend uniquement de `merchants` (schéma phase 1).
-- `supabase/rollback/20261016090000_procurement_stock.down.sql` : retire uniquement les objets `proc_*` (destructif pour les données du module).
-- `src/procurement/pg-store.js` : adaptateur ; reçoit un pool compatible `pg` **injecté** (le dépôt n'ajoute aucune dépendance de pilote).
-- Preuves : `node test/postgres/procurement.pg-smoke.mjs` (garanties du schéma, course à 2 sessions) et `node test/postgres/procurement-parity.mjs` (les mêmes suites que la mémoire, plus pannes réseau et concurrence).
+## 1. Ce qui est prêt
+| Élément | Fichier | Preuve |
+|---|---|---|
+| Schéma (17 tables `proc_*`, additif, ne touche aucune table existante ; dépend seulement de `merchants`) | `supabase/migrations-pending/20261016090000_procurement_stock.sql` | `procurement.pg-smoke.mjs` (50 contrôles), parité 12 suites |
+| Permissions explicites : droits retirés à PUBLIC/anon/authenticated, 1 politique RESTRICTIVE « deny » par table et par rôle, `search_path` fixe sur les fonctions, `UPDATE/DELETE/TRUNCATE` retirés au `service_role` sur le registre et le journal | `…/20261016091000_procurement_permissions.sql` | `procurement-staging-tool.pg-smoke.mjs` (voir §4) |
+| Retour arrière (permissions d'abord, puis schéma) | `supabase/rollback/*.down.sql` | rejoué sur base jetable, puis ré-application |
+| Runner à garde-fous (plan / verify / apply / rollback) | `tools/procurement-staging/run.mjs` | répété sur base jetable |
+| Import fichier → PostgreSQL (tout ou rien, refuse une cible non vide, vérifie l'équivalence) | `src/procurement/import-file-to-pg.js` | `test/procurement-import.test.js` sur PostgreSQL réel |
+| Adaptateur | `src/procurement/pg-store.js` | parité mémoire / fichier / PostgreSQL |
+Les migrations sont dans `supabase/migrations-pending/` (convention du chantier A) : `supabase db push` et le banc CI **ne les prennent pas**.
 
-## Décisions préalables (à valider)
-1. **Dépendance `pg`** : l'adaptateur s'utilise avec la chaîne de connexion directe Postgres de Supabase (pas l'API PostgREST, qui ne sait pas faire de transaction multi-lignes). Cela demande d'ajouter `pg` aux dépendances du dépôt.
-2. **Quel staging** : un projet Supabase **dédié et jetable** ou une branche Supabase, jamais la production ni un staging partagé avec d'autres chantiers.
-3. **Migration `20260926160000` (Finance, « NOT APPLIED »)** : son état réel n'a pas été vérifié ; ce module n'en dépend pas, mais le staging doit être dans un état connu.
+## 2. Décisions préalables (à valider)
+1. **Dépendance `pg`** : l'adaptateur s'utilise avec la chaîne de connexion directe Postgres de Supabase (l'API PostgREST ne sait pas faire de transaction multi-lignes). Cela demande d'ajouter `pg` aux dépendances du dépôt (non fait).
+2. **Quel staging** : un projet Supabase **dédié et jetable** (ou une branche Supabase), jamais la production ni un staging partagé avec un autre chantier. **Recouvrement avec le chantier A** (`integration_purchase_plans`, `integration_incoming_expectations`) : voir `stock-achats-v1-ac-arbitrage.md` — à arbitrer avant d'appliquer l'un ou l'autre.
+3. La migration Finance `20260926160000` (« NOT APPLIED ») : état réel non vérifié ; ce module n'en dépend pas.
 
-## Procédure proposée (à exécuter seulement après validation)
+## 3. Procédure (à exécuter seulement après autorisation)
 ```text
-1. Vérifier l'environnement cible (nom du projet, URL) : ce n'est PAS la production.
-2. Sauvegarde : export du schéma et des données existantes.
-3. Appliquer UNIQUEMENT 20261016090000_procurement_stock.sql dans une transaction.
-4. Vérifier : tables proc_* présentes, RLS activé partout, aucune politique créée.
-5. Lancer le test de parité contre une COPIE du schéma (jamais les données réelles).
-6. Brancher : PROCUREMENT_PG_URL=<chaîne directe> (secret hors Git) ; démarrer le serveur ; parcours de visite complet.
-7. Rollback si besoin : 20261016090000_procurement_stock.down.sql (après export).
-```
-Vérifications SQL après application :
-```sql
-select count(*) from information_schema.tables where table_name like 'proc\_%';              -- 17
-select count(*) from pg_tables where tablename like 'proc\_%' and not rowsecurity;            -- 0
-select count(*) from pg_policies where tablename like 'proc\_%';                              -- 0 (accès service uniquement)
+Variables (jamais committées) :
+  PROCUREMENT_STAGING_URL, PROCUREMENT_OWNER_AUTHORIZATION="<phrase du propriétaire>", PROCUREMENT_PRODUCTION_HOSTS="<hôtes de production>"
+1. node tools/procurement-staging/run.mjs plan                      # aucun contact base
+2. Sauvegarde du projet cible (dashboard Supabase ou pg_dump) ; noter la commande de restauration.
+3. node tools/procurement-staging/run.mjs apply --database <nom> --authorized-by "<nom>"
+      refuse si : pas d'autorisation, pas de nom, nom de base mal saisi, hôte déclaré production, nom ne ressemblant pas à staging,
+                  tables proc_ déjà présentes, table merchants absente. Chaque fichier = UNE transaction.
+4. node tools/procurement-staging/run.mjs verify                    # 17 tables, RLS partout, 34 politiques deny, 0 permissive,
+                                                                    # search_path fixe, 4 triggers append-only
+5. Parcours de visite complet contre ce staging (PROCUREMENT_PG_URL + paquet `pg`), PUIS import des données de terrain si nécessaire :
+      importFileState({ state, target, merchantId, dryRun: true })  -> relire les comptes -> dryRun: false -> compareStores() doit rendre []
 ```
 
-## Risques
-- Le serveur mobile utilise un fichier local tant que `PROCUREMENT_PG_URL` n'est pas défini : **aucune migration de données fichier → PostgreSQL n'est écrite**. Si des données de terrain existent dans le fichier avant la bascule, il faudra un export/import dédié (à construire et tester avant le voyage si la base doit être la source de vérité).
-- Le rôle de connexion directe contourne RLS : il ne doit jamais être exposé côté navigateur.
+## 4. Permissions : ce qui est prouvé (base jetable avec rôles Supabase simulés)
+`anon` et `authenticated` : lecture, écriture du registre et appel de `proc_next_number` **refusés** ; un `GRANT` fait par erreur à `anon` ne rend toujours **aucune ligne** (politique restrictive) ; `service_role` lit et écrit, le trigger de solde fonctionne, mais ne peut ni `UPDATE` le registre ni `DELETE` le journal (second verrou après les triggers). Non prouvé : le comportement avec le vrai Supabase (rôles, `auth.uid()`, extensions) — à constater sur le staging dédié.
+
+## 5. Plan de retour arrière
+| Situation | Action | Perte |
+|---|---|---|
+| `apply` échoue | rien à faire : chaque fichier est une transaction ; le runner l'indique | aucune |
+| Après `apply`, avant toute donnée | `run.mjs rollback … --data-exported` | aucune (tables vides) |
+| Données présentes | **exporter d'abord** (`pg_dump --data-only -t 'proc_*'` + copie du fichier `procurement.json`), puis `rollback … --data-exported --accept-data-loss` | les données du module (sauvegardées) |
+| Retour au fonctionnement fichier | retirer `PROCUREMENT_PG_URL` : le serveur repart sur `procurement.json` (inchangé par l'import) | aucune |
+Le fichier source n'est **jamais modifié** par l'import : il reste la copie de secours jusqu'à décision contraire.
+
+## 6. Risques résiduels
+- Un seul écrivain à la fois pendant la bascule : arrêter le serveur de terrain avant l'import, puis importer, vérifier, puis démarrer avec `PROCUREMENT_PG_URL`. Les compteurs de version de ligne repartent à 1 (sans effet hors édition concurrente).
+- Le rôle de connexion directe contourne RLS : ne jamais l'exposer côté navigateur.
+- Hors périmètre : sauvegardes automatiques et supervision du staging (à définir avec le propriétaire du projet Supabase).
