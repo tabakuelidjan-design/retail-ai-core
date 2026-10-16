@@ -32,6 +32,7 @@ Application téléphone (français) : onglets Visites · Produits · Comparer ·
 | Niveau | Exécuté | Résultat |
 |---|---|---|
 | Unitaire / API / permissions / UI-logique / persistance fichier — magasin **mémoire** | 23 suites (20 `procurement-*` + 2 `integration-procurement*` + `core-procurement-routing`) | **165 tests : 146 réussis, 0 échec, 19 ignorés** |
+| **Node 20** (conteneur `node:20`, sans dépendances installées) | les 20 suites `procurement-*` + `core-procurement-routing` | **tous réussis** (mêmes ignorés) ; `integration-procurement*` n'ont pas pu se charger faute de `@resvg/resvg-js` dans ce conteneur (limite du banc, pas du code) : elles tournent avec `npm ci` dans la CI |
 | Mêmes suites — magasin **fichier** (persistance locale) | idem | **165 : 146 réussis, 0 échec, 19 ignorés** |
 | **PostgreSQL réel** (PostgreSQL 17 jetable, rôles Supabase simulés) | parité des 20 suites `procurement-*` | **142 tests : 141 réussis, 0 échec, 1 ignoré** (mêmes suites, y compris concurrence, fautes réseau, hébergé sur PostgreSQL) |
 | PostgreSQL réel — coexistence avec les migrations d'A (4 variantes, dont la scission), redémarrage serveur, sauvegarde/restauration | `procurement-coexistence.pg-smoke.mjs` | **93/93** |
