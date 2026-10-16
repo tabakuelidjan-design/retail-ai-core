@@ -32,8 +32,8 @@ jobs:
         run: |
           test -f "$SOCIAL_E_DIR/src/social/service.js" || { echo "::error title=E checkout missing::the compatibility tests would be skipped"; exit 1; }
           node --test test/asset-library.test.js test/studio-compose.test.js test/social-compat.test.js test/habb-reserve-check.test.js test/studio-ai-layer.test.js | tee /tmp/d.log
-          echo "::notice title=D suites (node ${{ matrix.node }})::$(grep -E '^ℹ (tests|pass|fail|skipped)' /tmp/d.log | tr '\n' ' ')"
-          grep -q '^ℹ skipped 0' /tmp/d.log || { echo "::error title=skipped::a D test was skipped"; exit 1; }
+          echo "::notice title=D suites (node ${{ matrix.node }})::$(grep -E '^(ℹ|#) (tests|pass|fail|skipped)' /tmp/d.log | tr '\n' ' ')"
+          grep -qE '^(ℹ|#) skipped 0' /tmp/d.log || { echo "::error title=skipped::a D test was skipped"; exit 1; }
           if python3 -c "import PIL" 2>/dev/null; then echo "::notice title=jpeg decode check::Pillow present: SC-1 decoded the JPEG"; else echo "::notice title=jpeg decode check::Pillow ABSENT on this runner: SC-1 checked the headers and the size only"; fi
       - name: Branding, Marketing and Creative end-to-end suites (existing modules, unchanged) - counted per file
         shell: bash
@@ -42,7 +42,7 @@ jobs:
           for f in test/branding*.test.js test/marketing*.test.js test/creative-e2e*.test.js; do
             files=$((files+1))
             timeout 900 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1 || { echo "::error title=failed::$f"; tail -20 "/tmp/$(basename "$f").log"; fail=1; }
-            t=$(grep -E '^ℹ tests ' "/tmp/$(basename "$f").log" | awk '{print $3}'); p=$(grep -E '^ℹ pass ' "/tmp/$(basename "$f").log" | awk '{print $3}'); k=$(grep -E '^ℹ skipped ' "/tmp/$(basename "$f").log" | awk '{print $3}')
+            t=$(grep -E '^(ℹ|#) tests ' "/tmp/$(basename "$f").log" | awk '{print $3}'); p=$(grep -E '^(ℹ|#) pass ' "/tmp/$(basename "$f").log" | awk '{print $3}'); k=$(grep -E '^(ℹ|#) skipped ' "/tmp/$(basename "$f").log" | awk '{print $3}')
             tests=$((tests+${t:-0})); pass=$((pass+${p:-0})); skipped=$((skipped+${k:-0}))
           done
           echo "::notice title=Branding/Marketing/Creative e2e (node ${{ matrix.node }})::files=$files tests=$tests pass=$pass skipped=$skipped"
