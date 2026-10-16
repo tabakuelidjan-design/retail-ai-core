@@ -100,6 +100,7 @@ export function cropToInk(png) {
 }
 
 const overlap = (a, b, gap = 0) => a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap;
+const MIN_CLEARANCE = 40; // px between text and the edge of a surface it does not sit on
 const SLACK = 2; // ink may overhang its anchor by a pixel or two (serif T, stroke)
 const inside = (b, c, s) => b.x >= s.left - SLACK && b.y >= s.top - SLACK && b.x + b.width <= c.width - s.right + SLACK && b.y + b.height <= c.height - s.bottom + SLACK;
 
@@ -219,6 +220,15 @@ export function composeCreative({ spec, images, fonts, palette, options = {} }) 
     }
   }
   add('TEXT_NOT_STRADDLING_SURFACES', straddle.length === 0, straddle);
+  // text may not crowd the edge of a surface it does not sit on (a headline almost touching a panel reads as an accident)
+  const crowded = [];
+  for (const t of textBoxes.filter((x) => x.box)) {
+    for (const r of surfaces) {
+      const rb = { x: r.x, y: r.y, width: r.width, height: r.height };
+      if (r.id !== 'rule' && !overlap(t.box, rb, 0) && overlap(t.box, rb, MIN_CLEARANCE)) crowded.push({ text: t.id, surface: r.id });
+    }
+  }
+  add('TEXT_CLEARANCE_FROM_SURFACES', crowded.length === 0, { min_px: MIN_CLEARANCE, crowded });
   const tiny = layers.filter((l) => l.type === 'text' && l.size < (spec.min_text_px ?? 30)).map((l) => l.id);
   add('TEXT_LEGIBLE_SIZE', tiny.length === 0, { below_min: tiny, min_px: spec.min_text_px ?? 30 });
 

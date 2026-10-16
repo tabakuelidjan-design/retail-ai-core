@@ -26,7 +26,7 @@ export function productPost({ id, copy, productKey, wordmarkKey }) {
     { type: 'rect', id: 'panel', x: 590, y: 0, width: 490, height: 1350, fill: WHITE },
     { type: 'image', id: 'brand', key: wordmarkKey, crop: 'ink', box: { x: 90, y: 100, width: 220, height: 60 } },
     { type: 'image', id: 'product', key: productKey, box: { x: 630, y: 110, width: 410, height: 1080 } },
-    text('headline', copy.headline, 90, 450, 86, 100, { fill: CREAM }),
+    text('headline', copy.headline, 90, 450, 78, 94, { fill: CREAM }),
     text('price', copy.price, 90, 700, 104, 104, { family: 'Montserrat', weight: 600, fill: CREAM }),
     text('note', copy.note, 90, 790, MIN_TEXT, 50, { family: 'Montserrat', weight: 500, fill: CREAM }),
     text('example', copy.example, 630, 1232, MIN_TEXT, 44, { family: 'Montserrat', weight: 500, fill: NAVY2 }),

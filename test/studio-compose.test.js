@@ -138,3 +138,13 @@ test('SC-10 capability matrix: everything that needs a provider is named, none i
   assert.ok(!s.AVAILABLE_NOW.some((id) => /GENERATION|CRITIC|PUBLICATION|VIDEO/.test(id)));
   assert.equal(new Set(CAPABILITIES.map((c) => c.id)).size, CAPABILITIES.length);
 });
+
+test('SC-11 a text that crowds the edge of a surface it does not sit on is refused (the headline-almost-touching-the-panel defect found in the audit)', () => {
+  const spec = post();
+  spec.layers.find((l) => l.id === 'headline').size = 96;
+  spec.layers.find((l) => l.id === 'headline').lines = ['Votre photo,', 'votre coque.'];
+  spec.locked_copy = spec.layers.filter((l) => l.type === 'text').map((l) => l.lines.join(' '));
+  const r = compose(spec);
+  assert.ok(failed(r).includes('TEXT_CLEARANCE_FROM_SURFACES') || failed(r).includes('TEXT_NOT_STRADDLING_SURFACES'));
+  assert.equal(compose(post()).record.checks.find((c) => c.id === 'TEXT_CLEARANCE_FROM_SURFACES').outcome, 'PASS');
+});
