@@ -68,3 +68,16 @@ Les six cartes typographiques sont des **propositions rédigées et mises en pag
 - **RECOMMANDÉ** : classer les 71 images « non classées » avec le propriétaire (10 minutes).
 - **PLUS TARD** : critique visuelle branchée, fournisseur de segmentation, polices pour variantes.
 - Dette signalée, non corrigée : Windows `C:\C:\` dans 7 tests sourcing ; flake PM-6 / RF-2 connu.
+
+## 8. Mise à jour — moteur de production et chaîne D → E
+
+- **Moteur de composition** (`src/studio-compose/`) : gabarits HABB (publication produit, story promotionnelle, pièce savoir-faire), texte verrouillé, produit placé entier, mesures après dessin (copie exacte, ratio, pixels du produit ≤ 2 niveaux d'écart, non-recouvrement, zones de sécurité, contraste, palette, deux polices), export JPEG exigé par E. Un contrôle dur qui échoue = pas de livraison. Tests : `test/studio-compose.test.js` (10), `test/social-compat.test.js` (6, dont 2 contre le **vrai code de E**), `test/asset-library.test.js` (9).
+- **Calendrier corrigé** : « On rouvre la porte » retiré ; coque « prête en environ 5 minutes, selon le modèle et la disponibilité » ; gourdes personnalisables ; **plus aucun prix hors coque** (le filtre de E bloque tout prix non confirmé).
+- **Trois démonstrations réelles** (`data/private/habb-content/demo-d-to-e/`, fiche `FICHE-DE-VALIDATION.md`) : D1 publication produit, D2 story promotionnelle, D3 pièce savoir-faire (trois coques). Livrées à E au format `social-post-proposal.v1` : importées dans le vrai service de E = 5 posts, tous « à examiner », aucun approuvé ni publié.
+- **CI** : workflow `chantier-d-creative-pole` (Node 20 + 24, branche de E extraite à côté), run 38925612718 sur `7ad031e` : **succès sur les deux versions**. Périmètre : mes trois suites + Branding, Marketing et Creative bout en bout ; **pas** la suite complète du dépôt (celle-ci tourne sur `integration/**`). Je n'ai pas pu lire les journaux détaillés (API sans authentification) : je ne peux pas confirmer par la CI que les tests de compatibilité ont tourné plutôt qu'été ignorés ; ils ont été exécutés en local contre E (15/15 en local avec E présent).
+- **Capacités** (`src/studio-compose/capabilities.js`) : disponibles maintenant = composition typographique, placement fidèle du produit, JPEG, livraison à E, vérification des textes/prix, modification d'un élément sans reconstruire le reste (testé : région du produit identique à l'octet près) ; **fournisseur IA requis** = génération de scènes, Cerveau créatif, segmentation de photos, critique visuelle (rien de connecté ni choisi) ; **à fournir par vous** = photos HABB, vidéos ; **non implémenté** = retouche masquée, publication automatique.
+
+### Limites à lire
+- Les trois visuels s'appuient sur des **rendus de coques** (marqués « exemple de rendu » sur l'image). Leurs droits n'ont pas été enregistrés par vous : à confirmer avant toute publication.
+- Les visuels sont composés par des gabarits que j'ai dessinés : conformes aux règles de marque et mesurés, mais je ne garantis pas qu'ils soient « premium » ; ce sont des propositions à regarder.
+- Une seconde réserve (`reports/editorial-14j/`, autre session) existe en parallèle : une seule source de vérité à choisir.
