@@ -82,3 +82,13 @@ test('import is all-or-nothing: a failure in the middle leaves the target empty'
   for (const c of ['items', 'suppliers', 'purchaseOrders', 'stockLocations', 'visits']) assert.equal((await target.list(c, h.merchantId)).length, 0, `${c} rolled back`);
   assert.equal((await target.listMovements(h.merchantId)).length, 0);
 });
+
+test('the comparison is not complacent: a single unit of difference in the target is reported', { skip }, async () => {
+  const h = await fieldHistory(); await ensureMerchant(h.merchantId);
+  const target = createPgProcurementStore({ pool: pgPool() });
+  await importFileState({ state: h.store.exportState(), target, merchantId: h.merchantId, dryRun: false });
+  assert.deepEqual(await compareStores({ source: h.store, target, merchantId: h.merchantId }), []);
+  await createProcurement({ store: target, merchantId: h.merchantId, now: () => '2026-10-16T10:00:00.000Z' }).commands.adjustStock(wh, key(), { itemId: h.w.itemA.id, locationId: h.w.locs.warehouse.id, delta: 1, reason: 'one extra unit to prove the comparison sees it', approval: productApproval('STOCK_SALES.adjust_on_hand', `${h.w.itemA.id}@${h.w.locs.warehouse.id}`) });
+  const diffs = await compareStores({ source: h.store, target, merchantId: h.merchantId });
+  assert.ok(diffs.some((d) => d.name === 'stockPositions') && diffs.some((d) => d.name === 'events'), JSON.stringify(diffs.map((d) => d.name)));
+});

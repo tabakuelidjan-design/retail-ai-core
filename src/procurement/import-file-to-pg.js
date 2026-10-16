@@ -42,7 +42,15 @@ export async function importFileState({ state, target, merchantId, dryRun = true
   return { dryRun: false, counts, imported: true };
 }
 
-const strip = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'version' || k === 'ord' ? undefined : x)));
+// canonical form for comparing two stores: key order is irrelevant, `null` and an absent field mean the same ("no value"), and the row version counters are excluded
+const strip = (v) => {
+  const norm = (x) => {
+    if (Array.isArray(x)) return x.map(norm);
+    if (x && typeof x === 'object') return Object.fromEntries(Object.entries(x).filter(([k, y]) => k !== 'version' && k !== 'ord' && y !== null && y !== undefined).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, y]) => [k, norm(y)]));
+    return x;
+  };
+  return norm(JSON.parse(JSON.stringify(v)));
+};
 /** Do the two stores answer the same questions the same way? Returns the list of differences (empty = equivalent). */
 export async function compareStores({ source, target, merchantId }) {
   const a = createProcurement({ store: source, merchantId }).queries; const b = createProcurement({ store: target, merchantId }).queries;
