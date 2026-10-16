@@ -6,6 +6,10 @@ import { routeUtterance, STATUS } from '../integration/router.js';
 import { MODULE as M } from '../integration/constants.js';
 import { sourcingPurchaseFacts } from './sourcing-facts.js';
 import { payablesAnswer, purchasesAnswer, salesAnswer, treasuryAnswer } from './answers.js';
+import { recognizeFieldIntent, isActionRequest, INTENT_LABEL } from './field-intents.js';
+import { buildFieldSnapshot, displayVerdict } from './field-facts.js';
+import { buildFieldAnswer } from './field-answers.js';
+import { followUpIntent, stepConversation } from './field-context.js';
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
@@ -18,7 +22,7 @@ export const NOT_CONNECTED = Object.freeze({
   [M.MARKETING]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
   [M.CREATIVE]: 'Marketing et Création ne sont pas reliés au Core pour l’instant (prévu après la Chine).',
 });
-export const CAN_DO = ['« quelles factures fournisseurs dois-je payer ? » (Finance)', '« ma trésorerie » (Finance)', '« mes achats du mois » (Finance)', '« comment évoluent mes ventes ? » (Analytics)', '« résume ce dossier » (dossier ouvert)', '« dois-je acheter ce produit ? » (analyse Core du dossier ouvert)', '« décisions en attente »', '« suivi des décisions »'];
+export const CAN_DO = ['« qu’est-ce qui manque ? », « quels risques ? », « quelle est la marge ? », « quelle prochaine étape ? » (dossier ouvert)', '« quelles factures fournisseurs dois-je payer ? » (Finance)', '« ma trésorerie » (Finance)', '« mes achats du mois » (Finance)', '« comment évoluent mes ventes ? » (Analytics)', '« résume ce dossier » (dossier ouvert)', '« dois-je acheter ce produit ? » (analyse Core du dossier ouvert)', '« décisions en attente »', '« suivi des décisions »'];
 const AVAILABLE = new Set([M.CHINA_SOURCING]);
 
 const decisionLine = (v) => `• ${v.subject?.title ?? v.entry.subject.title} : ${v.entry.recommendation ? `recommandé « ${v.entry.recommendation.label} »` : 'à vérifier (données manquantes)'}${v.entry.human_decision ? ` — décidé : ${v.entry.human_decision.decision}` : ''}`;
@@ -28,21 +32,54 @@ const decisionSource = (v) => ({ kind: 'core_journal', ref: v.entry.id, case: v.
  * @param {{ text: string, caseId?: string|null }} q
  * @param {{ runtime: object|null, getCase: (id)=>Promise<object|null>, externals?: object, actor: object, now?: Date }} ctx
  */
-export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null }) {
+export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null, conversation }) {
   const t = norm(text);
   if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
   const limits = [];
 
+  // ---- an order to ACT is refused out loud: Nordla answers, it never orders, pays, sends, approves, records or erases anything
+  if (isActionRequest(text)) return { status: 'ACTION_REFUSED', answer: 'Je ne peux pas faire cela : Nordla répond aux questions mais ne commande, ne paie, n’envoie, n’approuve, n’enregistre ni n’efface rien (ni dossier, ni blocage, ni journal). Les décisions se valident par vous (Valider / Rejeter dans le Core) et les achats se font hors de Nordla. Je peux en revanche vous dire ce qui manque, les risques ou la prochaine vérification.', sources: [], limits };
+
   // ---- Core questions (the decision journal)
-  if (/(decision|decide|valider|approuv).*(attente|en cours|a prendre|a valider)|(en attente|a valider).*(decision)/.test(t)) {
+  if (/(decision|decide|valider|approuv).*(attente|attend|en cours|a prendre|dois prendre|a valider|approbation)|(en attente|a valider).*(decision)/.test(t)) {
     if (!runtime) return notConfigured();
     const o = await runtime.overview(); const list = o.decisions.filter((v) => !v.entry.human_decision && v.entry.recommendation);
     return { status: 'ANSWERED', answer: list.length ? `${list.length} décision(s) attendent votre validation :\n${list.map(decisionLine).join('\n')}` : 'Aucune décision n’attend votre validation.', sources: list.map(decisionSource), limits };
   }
-  if (/\bsuivi\b|follow.?up|resultat.*(decision|achat)/.test(t)) {
+  if (/\bsuivi(e|s|es)?\b|follow.?up|resultat.*(decision|achat)/.test(t)) {
     if (!runtime) return notConfigured();
     const o = await runtime.overview(); const list = o.decisions.filter((v) => v.entry.human_decision);
     return { status: 'ANSWERED', answer: list.length ? `Décisions prises et leur suivi :\n${list.map((v) => `${decisionLine(v)}${v.entry.result ? ` — résultat : ${v.entry.result.result}` : ' — résultat pas encore enregistré'}`).join('\n')}` : 'Aucune décision n’a encore été prise.', sources: list.map(decisionSource), limits };
+  }
+  // ---- which modules are connected here (said as is, from the same table the "not connected" answers use)
+  if (/\bmodules?\b|raccord|connect/.test(t) && /\bquel|liste|disponible|\bwhich\b|\bwhat\b|\betat\b|statut/.test(t) && !/(facture|vente|tresorerie|dossier|fournisseur)/.test(t)) {
+    const off = Object.values(NOT_CONNECTED).filter((v, i, a) => a.indexOf(v) === i);
+    return { status: 'ANSWERED', answer: ['Relié à ce serveur : China Sourcing (dossiers fournisseurs) et le journal de décisions du Core.', 'Pas encore relié :', ...off.map((o) => `• ${o}`)].join(String.fromCharCode(10)), sources: [], limits: off };
+  }
+  // ---- field questions on the open case (what is known / missing / risky, margin, next check, why this recommendation): read-only, no journal entry, no Finance / Analytics reading
+  const scope = { merchantId: runtime?.merchantId ?? 'local', caseId };
+  let fi = recognizeFieldIntent(text);
+  if (fi.status === 'UNKNOWN' && caseId) { const f = followUpIntent(text, conversation, scope); if (f) fi = { intent: f, status: 'RECOGNISED' }; } // elliptical follow-up, same merchant + same case only
+  if (fi.status === 'AMBIGUOUS') {
+    const opts = fi.reason === 'EQUAL_SCORE' ? fi.candidates.map((c) => INTENT_LABEL[c]).filter(Boolean) : null;
+    return { status: 'ASK', answer: opts ? `Je peux répondre sur : ${opts.join(' ; ')}. Laquelle voulez-vous ?` : 'Parlez-vous du dossier ouvert (fournisseur, produit, devis) ou de chiffres Finance / Analyses (factures, trésorerie, ventes) ? Précisez, je ne devine pas.', sources: [], limits };
+  }
+  if (fi.status === 'RECOGNISED') {
+    const c = caseId ? await getCase(caseId) : null;
+    if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
+    const snap = buildFieldSnapshot(c, { merchantId: runtime?.merchantId ?? 'local', now, externals });
+    const extra = {};
+    if (runtime) {
+      extra.ownerRules = (await runtime.overview()).owner_rules;
+      if (fi.intent === 'EXPLAIN_RECOMMENDATION') extra.entryView = (await runtime.forCase(c.id)).sort((a, b) => (a.entry.created_at < b.entry.created_at ? 1 : -1))[0] ?? null;
+    }
+    const out = buildFieldAnswer(fi.intent, snap, extra);
+    if (conversation !== undefined) { // opt-in: the caller owns the state (ids and intents only); nothing is stored here
+      const step = stepConversation(conversation, { merchantId: scope.merchantId, caseId: c.id, caseVersion: snap.source.version, intent: fi.intent, sources: out.sources, now });
+      out.conversation = step.conversation; if (step.notice) { out.notice = step.notice; out.answer = `${step.notice}
+${out.answer}`; }
+    }
+    return out;
   }
   // ---- Finance (read-only reader over Finance's own engines) and Analytics (its Tool Layer); without a reader: said NOT connected
   const notConnected = (mod) => ({ status: 'MODULE_NOT_CONNECTED', module: mod, answer: NOT_CONNECTED[mod], sources: [], limits: [NOT_CONNECTED[mod]] });
@@ -65,7 +102,7 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
       e.recommendation ? `Recommandation Nordla Core : « ${e.recommendation.label} » (${e.recommendation.kind}).` : 'Nordla Core ne recommande rien : des données bloquantes manquent.',
       ...(e.recommendation?.rationale ?? []).map((x) => `Pourquoi : ${x}`),
       ...e.options.eliminated.filter((x) => x.stage !== 'RELEVANCE').map((x) => `Écarté : ${x.label} — ${x.reasons.join(' ; ')}`),
-      `Faits : verdict sourcing ${facts.verdict ?? 'inconnu'}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
+      `Faits : verdict sourcing ${displayVerdict(facts.verdict, facts.hard_blockers)}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
       ...r.subject.missing_data.map((m) => `Manque : ${m.field} — ${m.reason}`),
       'Rien n’est commandé ni payé par Nordla : c’est à vous de décider (bouton Valider / Rejeter).',
     ];
@@ -84,7 +121,7 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
     const { input, assessment } = sourcingPurchaseFacts(c, { merchantId: runtime?.merchantId ?? 'local', now, externals });
     const lines = [
-      `${input.product_name || c.id} — verdict ${assessment.verdict ?? 'inconnu'}.`,
+      `${input.product_name || c.id} — verdict ${displayVerdict(assessment.verdict, assessment.hardBlockers.length)}.`,
       assessment.nextAction ? `Prochaine étape : ${assessment.nextAction}` : null,
       `Coût rendu : ${eur(input.landed_per_unit)} / unité, ${eur(input.landed_total)} au total pour ${input.quote_qty ?? '?'} unités.`,
       `Marge unitaire : ${eur(input.contribution_per_unit)} (prix de vente ${input.price_basis ?? 'inconnu'}).`,
