@@ -6,8 +6,8 @@ import { routeUtterance, STATUS } from '../integration/router.js';
 import { MODULE as M } from '../integration/constants.js';
 import { sourcingPurchaseFacts } from './sourcing-facts.js';
 import { payablesAnswer, purchasesAnswer, salesAnswer, treasuryAnswer } from './answers.js';
-import { recognizeFieldIntent, INTENT_LABEL } from './field-intents.js';
-import { buildFieldSnapshot } from './field-facts.js';
+import { recognizeFieldIntent, isActionRequest, INTENT_LABEL } from './field-intents.js';
+import { buildFieldSnapshot, displayVerdict } from './field-facts.js';
 import { buildFieldAnswer } from './field-answers.js';
 import { followUpIntent, stepConversation } from './field-context.js';
 
@@ -36,6 +36,9 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
   const t = norm(text);
   if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
   const limits = [];
+
+  // ---- an order to ACT is refused out loud: Nordla answers, it never orders, pays, sends, approves, records or erases anything
+  if (isActionRequest(text)) return { status: 'ACTION_REFUSED', answer: 'Je ne peux pas faire cela : Nordla répond aux questions mais ne commande, ne paie, n’envoie, n’approuve, n’enregistre ni n’efface rien (ni dossier, ni blocage, ni journal). Les décisions se valident par vous (Valider / Rejeter dans le Core) et les achats se font hors de Nordla. Je peux en revanche vous dire ce qui manque, les risques ou la prochaine vérification.', sources: [], limits };
 
   // ---- Core questions (the decision journal)
   if (/(decision|decide|valider|approuv).*(attente|attend|en cours|a prendre|dois prendre|a valider|approbation)|(en attente|a valider).*(decision)/.test(t)) {
@@ -99,7 +102,7 @@ ${out.answer}`; }
       e.recommendation ? `Recommandation Nordla Core : « ${e.recommendation.label} » (${e.recommendation.kind}).` : 'Nordla Core ne recommande rien : des données bloquantes manquent.',
       ...(e.recommendation?.rationale ?? []).map((x) => `Pourquoi : ${x}`),
       ...e.options.eliminated.filter((x) => x.stage !== 'RELEVANCE').map((x) => `Écarté : ${x.label} — ${x.reasons.join(' ; ')}`),
-      `Faits : verdict sourcing ${facts.verdict ?? 'inconnu'}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
+      `Faits : verdict sourcing ${displayVerdict(facts.verdict, facts.hard_blockers)}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
       ...r.subject.missing_data.map((m) => `Manque : ${m.field} — ${m.reason}`),
       'Rien n’est commandé ni payé par Nordla : c’est à vous de décider (bouton Valider / Rejeter).',
     ];
@@ -118,7 +121,7 @@ ${out.answer}`; }
     if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
     const { input, assessment } = sourcingPurchaseFacts(c, { merchantId: runtime?.merchantId ?? 'local', now, externals });
     const lines = [
-      `${input.product_name || c.id} — verdict ${assessment.verdict ?? 'inconnu'}.`,
+      `${input.product_name || c.id} — verdict ${displayVerdict(assessment.verdict, assessment.hardBlockers.length)}.`,
       assessment.nextAction ? `Prochaine étape : ${assessment.nextAction}` : null,
       `Coût rendu : ${eur(input.landed_per_unit)} / unité, ${eur(input.landed_total)} au total pour ${input.quote_qty ?? '?'} unités.`,
       `Marge unitaire : ${eur(input.contribution_per_unit)} (prix de vente ${input.price_basis ?? 'inconnu'}).`,

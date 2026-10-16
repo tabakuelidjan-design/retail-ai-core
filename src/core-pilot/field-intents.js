@@ -31,7 +31,7 @@ function stemHit(words, stem) {
 const has = (words, list) => list.some((s) => stemHit(words, s));
 
 // What makes a sentence "about a sourcing case" (vs. Finance's ledgers or Analytics' sales).
-const CASE_WORDS = ['dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
+const CASE_WORDS = ['lot', 'dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
 const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense'];
 const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu', 'client', 'clients', 'customer', 'customers', 'shopify', 'catalogue', 'par produit', 'tous les produits', 'mes produits', 'mes marges', 'boutique en ligne', 'par mois', 'ce mois', 'cette semaine'];
 
@@ -114,3 +114,12 @@ export const INTENT_LABEL = Object.freeze({
   MARGIN: 'la marge', LANDED_COST: 'le coût rendu', ORDER_TOTAL: 'le coût total de la commande', PRICE_GAP: 'le prix ou la donnée qui manque pour la rentabilité', PRICE_BASIS: 'l’origine du prix de vente',
   UNCOUNTED_COSTS: 'les coûts pas encore pris en compte', SUPPLIER_QUESTIONS: 'les questions à poser au fournisseur', PRICE_JUDGEMENT: 'le prix du devis comparé au prix maximum calculé', MOQ_SCENARIO: 'le scénario à la quantité minimale', CAN_ORDER: 'la possibilité de commander', NEXT_STEP: 'la prochaine vérification', EXPLAIN_RECOMMENDATION: 'l’explication de la recommandation',
 });
+
+// An IMPERATIVE asking Nordla to act (order, pay, send, approve, record, erase...). Nordla only answers: such a sentence is refused out loud, never "answered" with an unrelated explanation
+// that could be read as "done". Questions ("puis-je commander ?") are not imperatives and keep their own answers.
+const ACTION_VERBS = 'passe|passer|approuve|approuver|valide|valider|paie|paye|payer|envoie|envoyer|enregistre|enregistrer|efface|effacer|supprime|supprimer|annule|annuler|desactive|desactiver|modifie|modifier|commande|commander|achete|acheter|signe|signer|autorise|autoriser|ajoute|ajouter|cree|creer|lance|lancer|verse|verser|transfere|transferer|debloque|debloquer|ignore|ignorer';
+const ACTION_RE = new RegExp('^(nordla )?(tu peux |peux tu |s il te plait |stp |maintenant |alors |et )?(' + ACTION_VERBS + ')( |$)');
+export function isActionRequest(text) {
+  const segments = String(text ?? '').split(/[:;,.!?]/).flatMap((x) => normalize(x).split(/ puis | et puis /)).map((x) => x.trim()).filter(Boolean);
+  return segments.some((seg) => ACTION_RE.test(seg) && !/^(commande|achete|signe)\b.*\b(combien|quoi|quel|quelle)\b/.test(seg));
+}

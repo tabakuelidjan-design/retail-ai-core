@@ -52,3 +52,6 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
     moqScenario: scenarios.moq, brief, assessment: a,
   };
 }
+
+/** The verdict as shown to a person. The engine can say CONDITIONAL_GO while a HARD blocker is open (its tests pin that); shown bare it reads like a green light, so it never travels without the blocker. */
+export const displayVerdict = (verdict, hardBlockerCount = 0) => (verdict === 'CONDITIONAL_GO' && hardBlockerCount > 0 ? 'CONDITIONAL_GO, mais blocage dur ouvert : aucune commande possible' : (verdict ?? 'inconnu'));
