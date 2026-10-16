@@ -6,7 +6,8 @@ import { parseDecimal, parseInteger, parseWhole, CURRENCIES, errText, ERRORS_FR,
 const INCOTERMS = ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'];
 const LOC_FR = { WAREHOUSE: 'entrepôt', STORE: 'magasin', BACKROOM: 'réserve', TRANSIT: 'en transit', QUARANTINE: 'quarantaine' };
 const KIND_FR = { RECEIPT: 'Réception', ADJUSTMENT: 'Ajustement', TRANSFER_OUT: 'Transfert (sortie)', TRANSFER_IN: 'Transfert (entrée)', DEFECT_QUARANTINE_OUT: 'Défaut : sortie du stock', DEFECT_QUARANTINE_IN: 'Défaut : entrée en quarantaine', COUNT_ADJUST: 'Inventaire', RESERVE: 'Réservation', RELEASE: 'Libération' };
-const EVENT_FR = { STOCK_CHANGE_REQUESTED: 'Demande déposée', STOCK_CHANGE_APPROVED: 'Demande approuvée', STOCK_CHANGE_REJECTED: 'Demande refusée', STOCK_ADJUSTED: 'Ajustement appliqué', STOCK_TRANSFERRED: 'Transfert enregistré', COUNT_ADJUSTED: 'Inventaire : écarts corrigés', COUNT_CONFIRMED: 'Inventaire confirmé', GOODS_RECEIVED: 'Réception enregistrée' };
+const EVENT_FR = { STOCK_CHANGE_REQUESTED: 'Demande déposée', STOCK_CHANGE_APPROVED: 'Demande approuvée', STOCK_CHANGE_REJECTED: 'Demande refusée', STOCK_ADJUSTED: 'Ajustement appliqué', STOCK_TRANSFERRED: 'Transfert enregistré', COUNT_ADJUSTED: 'Inventaire : écarts corrigés', COUNT_CONFIRMED: 'Inventaire confirmé', GOODS_RECEIVED: 'Réception enregistrée', ITEM_CREATED: 'Produit créé', ITEM_UPDATED: 'Produit modifié', STOCK_RESERVED: 'Stock réservé', STOCK_RELEASED: 'Réservation levée', STOCK_QUARANTINED: 'Défaut mis en quarantaine' };
+const eventLabel = (type) => EVENT_FR[type] ?? 'Autre événement enregistré'; // never a raw internal code
 export const SOLO_TEXT = 'Vous avez vous-même préparé cette opération. En tant que propriétaire, vous pouvez l’approuver vous-même : c’est une EXCEPTION, elle sera inscrite au journal avec votre nom. Confirmer ?';
 
 export function createV1Screens(env) {
@@ -114,9 +115,9 @@ export function createV1Screens(env) {
   async function screenHistory({ item }) {
     setHead('Historique', item.name, true); const box = h('div', {}); swap(main, box);
     const res = await getJson(`/api/stock/${item.itemId}/history`); if (!res.data) return put(box, fail(res));
-    const m = [...res.data.movements].reverse(); const approvals = new Set(res.data.movements.map((x) => x.approvalId).filter(Boolean));
+    const m = [...res.data.movements].reverse();
     put(box, stale(res), h('div', { class: 'card' }, h('h2', {}, 'Mouvements (du plus récent au plus ancien)'), m.length ? h('table', {}, h('tbody', {}, m.map((x) => h('tr', {}, h('td', {}, h('div', {}, KIND_FR[x.kind] ?? x.kind), h('div', { class: 'small muted' }, `${new Date(x.at).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })} · ${x.location ?? ''} · ${x.actorId}${x.reason ? ` · ${x.reason}` : ''}`)), h('td', { class: 'n' }, `${x.bucket === 'RESERVED' ? '(réservé) ' : ''}${x.delta > 0 ? '+' : ''}${x.delta}`))))) : empty('Aucun mouvement.')),
-      h('div', { class: 'card' }, h('h2', {}, 'Journal'), res.data.events.length ? h('ul', { class: 'list' }, [...res.data.events].reverse().map((e) => h('li', {}, h('div', { class: 'grow' }, h('div', { class: 'nm' }, EVENT_FR[e.type] ?? e.type), h('div', { class: 'small muted' }, `${new Date(e.at).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })} · ${e.actor?.id ?? ''}${e.approval ? ` · approuvé par ${e.approval.approverId}${e.approval.separationWaived ? ' (exception propriétaire)' : ''}` : ''}`))))) : empty('Aucun événement.'), approvals.size ? h('p', { class: 'small muted' }, `${approvals.size} mouvement(s) approuvé(s) nominativement.`) : null));
+      h('div', { class: 'card' }, h('h2', {}, 'Journal'), res.data.events.length ? h('ul', { class: 'list' }, [...res.data.events].reverse().map((e) => h('li', {}, h('div', { class: 'grow' }, h('div', { class: 'nm' }, eventLabel(e.type)), h('div', { class: 'small muted' }, `${new Date(e.at).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })} · ${e.actor?.id ?? ''}${e.approval ? ` · approuvé par ${e.approval.approverId}${e.approval.separationWaived ? ' (exception propriétaire)' : ''}` : ''}`))))) : empty('Aucun événement.')));
   }
 
   // ------------------------------------------------------------------ inventory (count)
