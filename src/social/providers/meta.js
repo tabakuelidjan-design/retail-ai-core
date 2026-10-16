@@ -103,6 +103,9 @@ export function createInstagramPublisher({
         containerId = created.provider_submission_id;
         await onProgress({ submission_id: containerId }); // durable BEFORE the publish step: a failure there resumes this container
       }
+      // From here a PUBLISHING call may leave for the platform (the status step sends media_publish once the container is FINISHED): record that BEFORE it can happen. A process that dies
+      // after this point does not know whether the post exists: the outcome is UNKNOWN, never retried by a machine (publisher.recoverStale).
+      await onProgress({ publish_step: 'STARTED' });
       for (let i = 0; i < settleTries; i += 1) {
         const r = await adapter.fetchStatus({ connector, credential, providerSubmissionId: containerId });
         if (r.outcome === 'PUBLISHED') return { status: 'PUBLISHED', submission_id: containerId, post_id: r.provider_post_ids[0] ?? null, permalink: null };

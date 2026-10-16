@@ -1,0 +1,84 @@
+name: Social Publishing (E)
+
+# Safety suite of Social Publishing: cross-process locking (no duplicate publication), signed approvals, duplicate-content guard, launch paths, crash recovery.
+# Temp folders and a fake platform only: no real data, no network, no credential, no Meta call. Nothing is deployed or published.
+# Job 1: the social suite on Node 20 and 24 (the branch as it is).
+# Job 2: the same suite + the neighbouring suites (channel execution, providers) on a TRIAL merge with the convergence branch, compared with the convergence baseline.
+
+on:
+  push:
+    paths:
+      - 'src/social/**'
+      - 'test/social-*.test.js'
+      - 'test/social-*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/social-publishing.yml'
+  pull_request:
+    paths:
+      - 'src/social/**'
+      - 'test/social-*.test.js'
+      - 'test/social-*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/social-publishing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  social-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '24']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      - run: npm ci
+      - run: python3 -m pip install --quiet Pillow
+      - name: Social Publishing suite (concurrency, integrity, duplicates, launch paths, core)
+        run: node --test test/social-*.test.js
+
+  trial-merge-with-convergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: python3 -m pip install --quiet Pillow
+      - name: Trial merge with integration/nordla-convergence-v1 (never pushed)
+        run: |
+          git config user.email ci@example.invalid
+          git config user.name ci
+          git fetch origin integration/nordla-convergence-v1
+          git merge --no-edit origin/integration/nordla-convergence-v1
+      - run: npm ci
+      - name: Social + activation + provider suites on the merged tree
+        run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js
+      - name: Whole suite on the merged tree, failing test names recorded
+        run: |
+          npm test > merged.txt 2>&1 || true
+          grep -E '^(not ok|✖) ' merged.txt | sed -E 's/ \([0-9.]+ms\)//' | sort -u > merged-failures.txt || true
+          tail -n 12 merged.txt
+      - name: Baseline (convergence alone), failing test names recorded
+        run: |
+          git checkout --quiet --detach origin/integration/nordla-convergence-v1
+          npm ci
+          npm test > base.txt 2>&1 || true
+          grep -E '^(not ok|✖) ' base.txt | sed -E 's/ \([0-9.]+ms\)//' | sort -u > base-failures.txt || true
+      - name: No failure that the baseline does not already have
+        run: |
+          new=$(comm -13 base-failures.txt merged-failures.txt)
+          if [ -n "$new" ]; then echo "New failures caused by the merge:"; echo "$new"; exit 1; fi
+          echo "No new failure compared with the convergence baseline."

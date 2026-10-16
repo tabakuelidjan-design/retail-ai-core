@@ -7,11 +7,13 @@ import { ROLE, SOCIAL_ERROR as E, fail } from './constants.js';
 import { contentHashOf, newPost } from './post.js';
 import { editPost, transition } from './workflow.js';
 import { importProposals as importFromD } from './intake.js';
+import { acknowledgementFor, assertNoUnacknowledgedDuplicate } from './duplicates.js';
+import { defaultIntegrity } from './integrity.js';
 
 export const SYSTEM_ACTOR = Object.freeze({ id: 'nordla-publisher', role: ROLE.SYSTEM });
 
 export function createSocialService({
-  store, publishers = {}, clock = () => Date.now(), confirmedFacts = [],
+  store, publishers = {}, clock = () => Date.now(), confirmedFacts = [], integrity = defaultIntegrity(),
 }) {
   const nowIso = () => new Date(clock()).toISOString();
 
@@ -48,8 +50,13 @@ export function createSocialService({
   /** Any workflow action. Returns the new post; a copy held by the platform is removed when the decision requires it. */
   async function act(id, action, actor, params = {}) {
     let remote = false;
-    const saved = await store.update(id, (p) => {
-      const next = transition(p, action, actor, { ...params, confirmed: confirmedFacts, now: nowIso() });
+    const saved = await store.update(id, async (p, ctx) => {
+      // duplicate content (audit D4): decided INSIDE the same atomic step as the transition, over every post as it is at that instant
+      let duplicateAck = null;
+      if (action === 'approve') duplicateAck = acknowledgementFor(p, await ctx.list(), params);
+      else if (['schedule', 'retry', 'mark_manual_schedule'].includes(action)) assertNoUnacknowledgedDuplicate(p, await ctx.list());
+      // the client's params can never carry the key ring, the confirmed facts or the duplicate acknowledgement: they are set here, after the spread
+      const next = transition(p, action, actor, { ...params, confirmed: confirmedFacts, integrity, duplicate_ack: duplicateAck, now: nowIso() });
       remote = Boolean(next.history.at(-1)?.detail?.needs_remote_cancel);
       return next;
     });
@@ -59,6 +66,7 @@ export function createSocialService({
   return {
     store,
     confirmedFacts,
+    integrity,
     createPost,
     editPost: edit,
     act,
