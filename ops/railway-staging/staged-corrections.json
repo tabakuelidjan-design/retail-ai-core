@@ -1,15 +1,21 @@
 {
-  "_comment": "Corrections to STAGE (not deploy) on the existing staged-create service sourcing-staging, environment staging of project app.nordla.app. Non-secret values only. Applied by the Railway session after the owner's go; then the whole lot is re-audited (docs/infrastructure/railway-changeset-audit.md section 5).",
+  "_comment": "Corrections to STAGE (not deploy) on the existing staged-create service sourcing-staging, environment staging of project app.nordla.app. Non-secret values only. Applied by the Railway session after the owner's go; then the whole lot is re-audited (docs/infrastructure/railway-changeset-audit.md section 5). UPDATED 2026-10-17 for the merged candidate: pinned commit is the core-p0 merge commit; 'settings_to_verify_or_add' lists two Railway settings that were missing from the first list. Still NOT applied.",
   "project": "app.nordla.app",
   "environment": "staging",
   "service": "sourcing-staging",
   "source": {
     "repository": "tabakuelidjan-design/retail-ai-core",
     "branch": "claude/nordla-core-p0",
-    "commit": { "from": "c2c314db954fafad72fe0937e1da50d20b3bdf45", "to": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a" }
+    "commit": {
+      "from": "c2c314db954fafad72fe0937e1da50d20b3bdf45",
+      "to": "0f83fd2b28f7114ba2919557fc9d32d031104cc4",
+      "supersedes": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a"
+    }
   },
   "variables": {
-    "modify": { "NORDLA_MERCHANT_ID": "67646dbb-5e2e-4cd7-aad6-0ab289b068cb" },
+    "modify": {
+      "NORDLA_MERCHANT_ID": "67646dbb-5e2e-4cd7-aad6-0ab289b068cb"
+    },
     "set_if_absent_or_different": {
       "NORDLA_SUPABASE_PROJECT_REF": "fvhiammdskpcnfodsnrc",
       "SUPABASE_URL": "https://fvhiammdskpcnfodsnrc.supabase.co",
@@ -26,9 +32,35 @@
       "PORT": "8787",
       "SOURCING_PORT": "8787"
     },
-    "set_after_domain_generation": { "SOURCING_PUBLIC_ORIGIN": "https://<the service's generated *.up.railway.app domain>" },
-    "must_be_absent": ["ANTHROPIC_API_KEY", "SOURCING_VISION_PROVIDER", "SOURCING_TOKEN"],
-    "secrets_entered_by_owner_only": ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY", "NORDLA_IDENTITY_RATE_LIMIT_KEY", "NORDLA_CSRF_KEY", "SOURCING_BACKUP_PASSPHRASE"]
+    "set_after_domain_generation": {
+      "SOURCING_PUBLIC_ORIGIN": "https://<the service's generated *.up.railway.app domain>"
+    },
+    "must_be_absent": [
+      "ANTHROPIC_API_KEY",
+      "SOURCING_VISION_PROVIDER",
+      "SOURCING_TOKEN",
+      "PROCUREMENT_USERS",
+      "PROCUREMENT_PG_URL",
+      "SOURCING_CASES_DIR",
+      "PROCUREMENT_GRANTS (unless the owner names people)"
+    ],
+    "secrets_entered_by_owner_only": [
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_ANON_KEY",
+      "NORDLA_IDENTITY_RATE_LIMIT_KEY",
+      "NORDLA_CSRF_KEY",
+      "SOURCING_BACKUP_PASSPHRASE"
+    ]
   },
-  "unchanged": ["Dockerfile path deploy/sourcing/Dockerfile", "start command /app/docker-entrypoint.sh node src/service-start.js", "healthcheck /healthz", "1 replica", "volume sourcing-staging-data 1 GB at /app/data"]
+  "unchanged": [
+    "Dockerfile path deploy/sourcing/Dockerfile",
+    "start command /app/docker-entrypoint.sh node src/service-start.js",
+    "healthcheck /healthz",
+    "1 replica",
+    "volume sourcing-staging-data 1 GB at /app/data"
+  ],
+  "settings_to_verify_or_add": {
+    "config_as_code_path": "/deploy/sourcing/railway.json  (without it the repository-root railway.json wins: start command without the Docker entrypoint, no Dockerfile builder = root user, no prepared volume)",
+    "auto_deploy_on_push": "OFF or pinned to the commit above (the source branch claude/nordla-core-p0 receives pushes from several chantiers: each push would redeploy staging uncontrolled)"
+  }
 }
