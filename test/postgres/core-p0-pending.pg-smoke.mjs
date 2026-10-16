@@ -17,7 +17,13 @@ if (!/smoke|check/i.test(dbName)) { console.error(`STOP: refusing database "${db
 const results = [];
 /** Runs SQL in one transaction that is always rolled back. Returns { ok, out, err }. */
 function sql(text) {
-  const r = spawnSync('psql', [URL_, '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'], { input: `begin;\n${text}\n;\nrollback;\n`, encoding: 'utf8' });
+  // PG_SMOKE_DOCKER=<container>: no psql on this machine (Windows) -> psql runs INSIDE that throw-away PostgreSQL container, on the database named in PG_SMOKE_URL
+  const args = process.env.PG_SMOKE_DOCKER ? ['exec', '-i', process.env.PG_SMOKE_DOCKER, 'psql', '-U', 'postgres', '-d', dbName, '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'] : [URL_, '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'];
+  const r = spawnSync(process.env.PG_SMOKE_DOCKER ? 'docker' : 'psql', args, { input: `begin;
+${text}
+;
+rollback;
+`, encoding: 'utf8' });
   return { ok: r.status === 0, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
 }
 const check = (name, pass, detail = '') => { results.push({ name, pass }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${pass ? '' : `\n      ${detail}`}`); };
@@ -58,15 +64,12 @@ refused('ledger: update is refused', `${seed} ${l1} update integration_trace_led
 refused('ledger: delete is refused', `${seed} ${l1} delete from integration_trace_ledger;`, 'INTEGRATION_OBJECT_WRITE_ONCE');
 refused('ledger: truncate is refused', `${seed} ${l1} truncate integration_trace_ledger;`, 'INTEGRATION_OBJECT_WRITE_ONCE');
 
-// ---------------------------------------------------------------- purchase plan / incoming expectation: prepare, never buy
-const plan = `insert into integration_purchase_plans (merchant_id, purchase_ref, handoff_id, status, owner_review, qty, eta, body) values ('${A}', 'purchase:pp_1', 'bhf_1', 'PLANNED', 'PENDING', 100, '2026-12-01', '{}');`;
-accepted('plan: a PLANNED plan is stored', `${seed} ${plan} select status from integration_purchase_plans;`, 'PLANNED');
-refused('plan: order_placed = true is refused', `${seed} insert into integration_purchase_plans (merchant_id, purchase_ref, handoff_id, status, owner_review, qty, eta, order_placed, body) values ('${A}', 'purchase:pp_2', 'bhf_1', 'PLANNED', 'PENDING', 1, '2026-12-01', true, '{}');`, 'check constraint');
-refused('plan: APPROVED_TO_ORDER without an approval is refused', `${seed} ${plan} update integration_purchase_plans set status = 'APPROVED_TO_ORDER';`, 'integration_purchase_plans_approval_ck');
-accepted('plan: PLANNED -> APPROVED_TO_ORDER with an approval', `${seed} ${plan} update integration_purchase_plans set status = 'APPROVED_TO_ORDER', owner_review = 'APPROVED', approval = '{"approver":"owner"}'; select status from integration_purchase_plans;`, 'APPROVED_TO_ORDER');
-refused('plan: an approved plan is final', `${seed} ${plan} update integration_purchase_plans set status = 'APPROVED_TO_ORDER', owner_review = 'APPROVED', approval = '{"approver":"owner"}'; update integration_purchase_plans set qty = 5;`, 'PURCHASE_PLAN_APPROVED_IS_FINAL');
-refused('incoming: never counted as available', `${seed} ${plan} insert into integration_incoming_expectations (merchant_id, expectation_id, purchase_ref, qty, eta, state, counted_in_available, body) values ('${A}', 'inc_1', 'purchase:pp_1', 100, '2026-12-01', 'EXPECTED', true, '{}');`, 'check constraint');
-refused('incoming: must reference a plan of the SAME merchant', `${seed} ${plan} insert into integration_incoming_expectations (merchant_id, expectation_id, purchase_ref, qty, eta, state, body) values ('${B}', 'inc_1', 'purchase:pp_1', 100, '2026-12-01', 'EXPECTED', '{}');`, 'foreign key');
+// ---------------------------------------------------------------- purchase plan / incoming expectation: NOT persisted here
+// Decision of the convergence: the purchase order of Stock / Achats is the canonical object; a plan and an expectation are read-only views derived from it
+// (src/integration/procurement-compat.js). The migration therefore does not create integration_purchase_plans / integration_incoming_expectations
+// (split proposal of the Stock / Achats workstream, tools/procurement-staging/split-integration-migration.mjs). A second persistent copy would double-count.
+accepted('plan / incoming: the two tables are NOT created (the purchase order is canonical)', `select count(*) from pg_class where relname in ('integration_purchase_plans','integration_incoming_expectations');`, 0);
+accepted('plan / incoming: their guard function does not exist either', `select count(*) from pg_proc where proname = 'integration_purchase_plans_guard';`, 0);
 refused('campaign: published = true is refused', `${seed} insert into integration_campaign_contracts (merchant_id, campaign_ref, product_ref, ready_for_creative, owner_review, published, body) values ('${A}', 'campaign:c1', 'product:p1', true, 'PENDING', true, '{}');`, 'check constraint');
 
 // ---------------------------------------------------------------- sourcing cases: per merchant, optimistic revision

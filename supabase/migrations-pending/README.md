@@ -5,14 +5,14 @@ They wait for the owner's explicit authorization ("Autoriser l'application des m
 
 | File | What it does |
 |---|---|
-| `20261015090000_integration_objects_and_sourcing_cases.sql` | Tables for BUY_CANDIDATE, PurchasePlan, IncomingExpectation, CampaignContract, TrackingDefinition, the trace ledger (append-only, hash-chained per merchant) and the China Sourcing cases (`merchant_id`, optimistic revision). Service role only. |
+| `20261015090000_integration_objects_and_sourcing_cases.sql` | Tables for BUY_CANDIDATE, CampaignContract, TrackingDefinition, the trace ledger (append-only, hash-chained per merchant) and the China Sourcing cases (`merchant_id`, optimistic revision). Service role only. |
 | `20261015091000_rls_explicit_policies.sql` | Explicit RESTRICTIVE policies on every RLS table: anon denied, authenticated bounded to its ACTIVE merchants (`nordla_is_active_member`). Opens nothing: there is still no permissive policy. |
 | `20261015092000_fin_functions_fixed_search_path.sql` | Fixed `search_path = public, extensions, pg_temp` on every `fin_*` function that has none (33 in the repository's migrations, 6 seen on the live project). |
 
 ## Verified (throw-away PostgreSQL 16, Supabase roles stubbed)
 
 All `supabase/migrations/*.sql` then these three files apply in order, one transaction each; afterwards 0 public table without RLS, 0 RLS table
-without a policy, 0 `fin_*` function without a search_path. Behaviour: `node test/postgres/core-p0-pending.pg-smoke.mjs` (33 checks, see the file).
+without a policy, 0 `fin_*` function without a search_path. Behaviour: `node test/postgres/core-p0-pending.pg-smoke.mjs` (28 checks, see the file).
 Not yet run: the Finance PostgreSQL 17 bench (`test/pg`, needs Docker) with these files in place.
 
 ## How to apply, once authorized
@@ -24,3 +24,5 @@ Not yet run: the Finance PostgreSQL 17 bench (`test/pg`, needs Docker) with thes
 
 Rollback: the tables are new (drop them if empty); the policies are named `nordla_*` (drop them); the search_path is a function setting
 (`alter function ... reset search_path`).
+
+**Split (convergence decision, wave 2):** `integration_purchase_plans` and `integration_incoming_expectations` are NOT created by `20261015090000`: the purchase order of Stock / Achats (`proc_purchase_orders`, migrations `20261016090000` + `20261016091000`) is the canonical object, and a plan / an expectation are read-only views derived from it. Proof on a throw-away PostgreSQL in both orders: `node test/postgres/procurement-coexistence.pg-smoke.mjs`. Rollback: unchanged (the tables are new: drop them if empty; policies are named `nordla_*`).

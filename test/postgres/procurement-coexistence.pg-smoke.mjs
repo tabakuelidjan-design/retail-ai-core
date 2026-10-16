@@ -15,6 +15,7 @@ import { splitIntegrationMigration } from '../../tools/procurement-staging/split
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const NAME = 'nordla-pg-coexistence'; const IMAGE = process.env.PG_SMOKE_IMAGE ?? 'postgres:17';
+const MAIN_DB = 'coexist_split_a_then_c_check'; // the database used for the restart and backup / restore proofs
 const REF = process.env.CONVERGENCE_REF ?? 'origin/integration/nordla-convergence-v1';
 const results = [];
 const docker = (args, input) => spawnSync('docker', args, { input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -29,7 +30,8 @@ const BASE = sqlIn('supabase/migrations').map(([, s]) => s);
 const A_PENDING = sqlIn('supabase/migrations-pending').filter(([f]) => !/procurement/.test(f));
 const sqlOf = (dir, f) => readFileSync(join(dir, f), 'utf8');
 // the proposal that leaves out the two tables the convergence decided NOT to apply (tools/procurement-staging/split-integration-migration.mjs)
-const A_SPLIT = A_PENDING.map(([f, sql]) => (f.startsWith('20261015090000') ? [f, splitIntegrationMigration(sql)] : [f, sql]));
+const A_ALREADY_SPLIT = A_PENDING.some(([f, sql]) => f.startsWith('20261015090000') && !/create table integration_purchase_plans/.test(sql)); // true once the convergence applied the split to the file itself
+const A_SPLIT = A_PENDING.map(([f, sql]) => (f.startsWith('20261015090000') && !A_ALREADY_SPLIT ? [f, splitIntegrationMigration(sql)] : [f, sql]));
 const C_PENDING = ['20261016090000_procurement_stock.sql', '20261016091000_procurement_permissions.sql'].map((f) => [f, sqlOf(join(ROOT, 'supabase/migrations-pending'), f)]);
 
 const STUBS = `
@@ -71,7 +73,7 @@ try {
   const prepare = (db) => { check(`database ${db} created`, psql('postgres', `create database ${db};`).ok); psql(db, STUBS); return BASE.every((s, i) => { const r = psql(db, `begin;\n${s}\ncommit;`); if (!r.ok) check(`convergence migration #${i} applies on ${db}`, false, r.err); return r.ok; }); };
 
   // ---------------------------------------------------------------- 1. coexistence, both orders
-  for (const [db, order, split] of [['coexist_a_then_c', [A_PENDING, C_PENDING], false], ['coexist_c_then_a', [C_PENDING, A_PENDING], false], ['coexist_split_a_then_c', [A_SPLIT, C_PENDING], true], ['coexist_split_c_then_a', [C_PENDING, A_SPLIT], true]]) {
+  for (const [db, order, split] of [...(A_ALREADY_SPLIT ? [] : [['coexist_a_then_c', [A_PENDING, C_PENDING], false], ['coexist_c_then_a', [C_PENDING, A_PENDING], false]]), ['coexist_split_a_then_c_check', [A_SPLIT, C_PENDING], true], ['coexist_split_c_then_a_check', [C_PENDING, A_SPLIT], true]]) {
     check(`${db}: the convergence base migrations apply`, prepare(db));
     const ok = order.every((files) => applyAll(db, files));
     check(`${db}: A's pending (${A_PENDING.length} files) and C's pending (${C_PENDING.length} files) apply in this order, one transaction each`, ok);
@@ -102,24 +104,28 @@ try {
     check(`${db}: service_role reads but cannot UPDATE or DELETE the ledger`, psql(db, `set role service_role; select count(*) from proc_stock_movements;`).ok && !psql(db, `set role service_role; update proc_stock_movements set delta = 99;`).ok && !psql(db, `set role service_role; delete from proc_stock_movements;`).ok);
     check(`${db}: the owner role cannot rewrite the ledger either (append-only trigger)`, !psql(db, `update proc_stock_movements set delta = 99;`).ok && !psql(db, `truncate proc_stock_movements cascade;`).ok);
     check(`${db}: A's own objects still refuse the client roles`, !psql(db, `set role authenticated; select count(*) from ${split ? 'integration_trace_ledger' : 'integration_purchase_plans'};`).ok);
+    if (split) { // chantier A's own behaviour smoke on the SPLIT schema, with psql run inside the container
+      const a = spawnSync(process.execPath, [join(ROOT, 'test/postgres/core-p0-pending.pg-smoke.mjs')], { encoding: 'utf8', env: { ...process.env, PG_SMOKE_DOCKER: NAME, PG_SMOKE_URL: `postgres://postgres@127.0.0.1:5432/${db}` } });
+      check(`${db}: A's own pending-migration smoke passes on the split schema (${/\d+\/\d+ checks passed/.exec(a.stdout)?.[0] ?? 'no result'})`, a.status === 0, (a.stdout ?? '').split(String.fromCharCode(10)).filter((l) => /FAIL/.test(l)).join(' | ') + (a.stderr ?? ''));
+    }
   }
 
   // ---------------------------------------------------------------- 2. restart recovery (stop / start the whole database server)
-  const before = one('coexist_a_then_c', FINGERPRINT);
+  const before = one(MAIN_DB, FINGERPRINT);
   check('server stopped and started (data directory kept)', docker(['restart', NAME]).status === 0); waitReady();
-  check('restart: every row and every balance is back, balances equal the ledger', one('coexist_a_then_c', FINGERPRINT) === before && before === '2/2/3/18/0', `${before} -> ${one('coexist_a_then_c', FINGERPRINT)}`);
-  check('restart: the ledger is still append-only and the next movement still posts', !psql('coexist_a_then_c', `update proc_stock_movements set delta = 1;`).ok
-    && psql('coexist_a_then_c', `insert into proc_stock_movements (merchant_id, idempotency_key, item_id, location_id, bucket, delta, kind, actor_id) values ('${M1}', 'after-restart', '00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000c1', 'ON_HAND', 2, 'RECEIPT', 't')`).ok
-    && one('coexist_a_then_c', `select on_hand from proc_stock_balances where merchant_id='${M1}'`) === '17');
+  check('restart: every row and every balance is back, balances equal the ledger', one(MAIN_DB, FINGERPRINT) === before && before === '2/2/3/18/0', `${before} -> ${one(MAIN_DB, FINGERPRINT)}`);
+  check('restart: the ledger is still append-only and the next movement still posts', !psql(MAIN_DB, `update proc_stock_movements set delta = 1;`).ok
+    && psql(MAIN_DB, `insert into proc_stock_movements (merchant_id, idempotency_key, item_id, location_id, bucket, delta, kind, actor_id) values ('${M1}', 'after-restart', '00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000c1', 'ON_HAND', 2, 'RECEIPT', 't')`).ok
+    && one(MAIN_DB, `select on_hand from proc_stock_balances where merchant_id='${M1}'`) === '17');
 
   // ---------------------------------------------------------------- 3. backup / restore into a fresh database
-  const dump = docker(['exec', NAME, 'sh', '-c', `pg_dump -U postgres -d coexist_a_then_c -Fc -t 'proc_*' -f /tmp/proc.dump && ls -l /tmp/proc.dump`]);
+  const dump = docker(['exec', NAME, 'sh', '-c', `pg_dump -U postgres -d ${MAIN_DB} -Fc -t 'proc_*' -f /tmp/proc.dump && ls -l /tmp/proc.dump`]);
   check('pg_dump of the proc_* tables works', dump.status === 0, dump.stderr);
-  check('fresh database prepared the same way (schema only, no procurement data)', prepare('coexist_restored') && applyAll('coexist_restored', [...A_PENDING, ...C_PENDING]));
+  check('fresh database prepared the same way (schema only, no procurement data)', prepare('coexist_restored') && applyAll('coexist_restored', [...A_SPLIT, ...C_PENDING]));
   psql('coexist_restored', `insert into merchants (id, name) values ('${M1}', 'coexist A'), ('${M2}', 'coexist B') on conflict do nothing;`);
   const restore = docker(['exec', NAME, 'pg_restore', '-U', 'postgres', '-d', 'coexist_restored', '--data-only', '--disable-triggers', '/tmp/proc.dump']);
   check('pg_restore --data-only --disable-triggers (balances come from the dump, not recomputed twice)', restore.status === 0, restore.stderr);
-  const now = one('coexist_a_then_c', FINGERPRINT);
+  const now = one(MAIN_DB, FINGERPRINT);
   check('the restored database is identical: same counts, same balances, balances equal the ledger', one('coexist_restored', FINGERPRINT) === now && now.endsWith('/0'), `${now} vs ${one('coexist_restored', FINGERPRINT)}`);
   check('the restored database still refuses a ledger rewrite and still posts new movements', !psql('coexist_restored', `delete from proc_stock_movements;`).ok
     && psql('coexist_restored', `insert into proc_stock_movements (merchant_id, idempotency_key, item_id, location_id, bucket, delta, kind, actor_id) values ('${M1}', 'after-restore', '00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000c1', 'ON_HAND', 1, 'RECEIPT', 't')`).ok
