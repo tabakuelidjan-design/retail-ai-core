@@ -20,7 +20,7 @@ Lecture Shopify du 2026-10-17 (API en lecture seule) : **les 50 premières coque
 
 ## 2. Tests exécutés
 Locaux (Windows, Node 24) : D 41 tests : 40 réussis + 1 ignoré volontairement en local quand E n'est pas patché (AT-3) ; 9/9 contre le E patché (asset-library 9, studio-compose 11, social-compat 6 dont 2 contre E, habb-reserve-check 2, studio-ai-layer 10, social-alternative-to 3) · E patché sur copie de travail : 66/66 · mutations : gardes retirées → tests en échec.
-GitHub : voir `CI-COUVERTURE.md` (mise à jour avec le commit final).
+GitHub (commit final `463deb7`, Node 20 et 24, succès) : suites D 38/38 contre E tel qu'il est, 9/9 contre E patché, 507/507 modules existants, suite sociale de E avec le patch 65 réussis + 1 ignoré (test de E conditionnel), 0 échec, 0 test D ignoré. Détail et limites : `CI-COUVERTURE.md`.
 
 ## 3. Dépendances restantes avec E
 1. **Adopter `alternative_to`** (patch prêt, 66/66, s'applique sans conflit sur `879198d`). Tant que ce n'est pas fait, E laisse approuver deux variantes ; la seule protection active est la note « ne publier qu'une des deux » et la vigilance du propriétaire.
