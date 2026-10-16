@@ -4,9 +4,13 @@
 //   node src/social/cli.js seed-facts                       write the owner-confirmed facts registry (the coque price only)
 //   node src/social/cli.js import-editorial <dir> [--register A|B] [--ids P01,P02]
 //                                                           import chantier D's reserve (<dir>/posts.json + <dir>/visuels) as posts
+//   node src/social/cli.js jpeg-for-meta                   export JPEG copies of the PNG pictures of IMAGE posts (needs Python + Pillow); the
+//                                                           posts are switched to the JPEG (new asset => any approval is void); PNGs are kept
 //   node src/social/cli.js status                           every post, one line each
 //   node src/social/cli.js calendar [--from YYYY-MM-DD] [--out file.md]   the 14-day calendar as Markdown
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mapEditorialReserve } from './adapters/habb-editorial.js';
@@ -74,6 +78,35 @@ export async function main(argv = process.argv.slice(2), { dir = DATA_DIR, log =
     log(`importé : ${JSON.stringify(tally)} ; ignoré (hors périmètre E) : ${skipped.length}`);
     for (const s of skipped) log(`  ignoré ${s.id} / ${s.channel} : ${s.reason}`);
     for (const r of report.filter((x) => x.problems || x.error)) log(`  ${r.proposal_id.split(':').pop()} ${r.platform}/${r.format} : ${r.error ?? r.problems.join(', ')}`);
+    return 0;
+  }
+  if (cmd === 'jpeg-for-meta') {
+    const library = createAssetLibrary(join(dir, 'assets'));
+    const exec = promisify(execFile);
+    const agent = { id: 'chantier-e', role: 'agent' };
+    const tally = { exported: 0, switched: 0, skipped: 0 };
+    for (const post of await service.list()) {
+      const a = post.asset;
+      if (post.format !== 'IMAGE' || !a || a.content_type !== 'image/png' || ['PUBLISHED', 'VERIFIED', 'PUBLISHING', 'CANCELLED'].includes(post.state)) { tally.skipped += 1; continue; }
+      const png = await library.read(a);
+      const ref = `${a.ref}-jpeg`;
+      let jpeg = (await library.list()).find((x) => x.ref === ref && x.version === 1);
+      if (!jpeg) {
+        const tmp = join(dir, 'assets', `.export-${a.sha256.slice(0, 12)}`);
+        await mkdir(tmp, { recursive: true });
+        const src = join(tmp, 'in.png'); const out = join(tmp, 'out.jpg');
+        await writeFile(src, png.bytes);
+        await exec('python', ['scripts/social-export-jpeg.py', src, out, '92']);
+        jpeg = await library.register({ ref, version: 1, file: out, bytes: await readFile(out) });
+        tally.exported += 1;
+      }
+      const next = { ref: jpeg.ref, version: 1, sha256: jpeg.sha256, content_type: 'image/jpeg', width: a.width, height: a.height, ai_generated: a.ai_generated, ...(a.alt_text ? { alt_text: a.alt_text } : {}) };
+      await service.editPost(post.id, { asset: next }, agent);
+      const after = await service.get(post.id);
+      if (after.state === 'DRAFT') await service.act(post.id, 'submit', agent);
+      tally.switched += 1;
+    }
+    log(`jpeg-for-meta : ${JSON.stringify(tally)} - les PNG d'origine sont conservés ; toute approbation antérieure est annulée.`);
     return 0;
   }
   if (cmd === 'status') {
