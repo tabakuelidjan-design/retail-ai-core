@@ -45,12 +45,14 @@ export async function getJson(path) {
 const urls = new Map();
 /** Photos need the token, so they are fetched with it and shown from a local blob URL. */
 export async function photoUrl(ref) {
-  const name = /^upload:\/\/([0-9a-f]{64}\.(?:jpg|png|webp))$/.exec(String(ref))?.[1];
-  if (!name) return null;
-  if (urls.has(name)) return urls.get(name);
+  const up = /^upload:\/\/([0-9a-f]{64}\.(?:jpg|png|webp))$/.exec(String(ref))?.[1];
+  const sc = /^sourcing:\/\/([A-Za-z0-9_-]{1,80})\/((?:photo|docphoto)-[A-Za-z0-9_-]{1,80})$/.exec(String(ref));
+  const path = up ? `/api/uploads/${up}` : sc ? `/api/sourcing/photos/${sc[1]}/${sc[2]}` : null; // only these two shapes are ever fetched
+  if (!path) return null;
+  if (urls.has(path)) return urls.get(path);
   try {
-    const res = await fetch(`/api/uploads/${name}`, { headers: { 'x-nordla-token': getToken() ?? '' } });
-    if (!res.ok) return null;
-    const u = URL.createObjectURL(await res.blob()); urls.set(name, u); return u;
+    const res = await fetch(path, { headers: { 'x-nordla-token': getToken() ?? '' } });
+    if (!res.ok) return null; // not stored on the server (Sourcing photos can live only on the phone that took them): the screen says so
+    const u = URL.createObjectURL(await res.blob()); urls.set(path, u); return u;
   } catch { return null; }
 }

@@ -38,7 +38,7 @@ test('access: no token, a wrong token, lockout after 8 failures, host allow-list
   assert.equal((await s.call('GET', '/api/me', { user: null })).status, 401);
   assert.equal((await s.call('GET', '/api/me', { user: { token: 'x'.repeat(32) } })).status, 401);
   const me = await s.call('GET', '/api/me', { user: FIELD });
-  assert.deepEqual(me.json, { id: 'terrain', name: 'Field', role: 'BUYER', canApprove: false });
+  assert.deepEqual(me.json, { id: 'terrain', name: 'Field', role: 'BUYER', canApprove: false, canReceive: false });
   assert.match(me.headers.get('content-security-policy'), /default-src 'self'/); assert.equal(me.headers.get('cache-control'), 'no-store'); assert.equal(me.headers.get('x-frame-options'), 'DENY');
   const bad = await new Promise((resolve) => { const r = http.request({ host: '127.0.0.1', port: s.port, path: '/api/me', headers: { host: 'evil.example', 'x-nordla-token': OWNER.token } }, (res) => { res.resume(); resolve(res.statusCode); }); r.end(); });
   assert.equal(bad, 421, 'a foreign Host header is refused');

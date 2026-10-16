@@ -52,6 +52,30 @@ export const fmtDate = (iso, locale = 'fr-BE') => { try { return new Date(iso).t
 export const PO_STATUS_FR = { DRAFT: 'Brouillon', PENDING_APPROVAL: 'À approuver', APPROVED: 'Approuvé', ORDERED: 'Commandé', CONFIRMED: 'Confirmé', PARTIALLY_RECEIVED: 'Reçu en partie', RECEIVED: 'Reçu', CLOSED: 'Clos', CANCELLED: 'Annulé' };
 export const PO_GROUPS = [['DRAFT', 'Brouillons'], ['PENDING_APPROVAL', 'À approuver'], ['APPROVED', 'Approuvés, à commander'], ['ORDERED', 'Commandés'], ['CONFIRMED', 'Confirmés'], ['PARTIALLY_RECEIVED', 'Reçus en partie']];
 
+/** Plausible EUR value of 1 unit of a currency. A rate outside the range is not refused (rates move) but must be confirmed: a typed-in inverse (0,92 vs 1,09) is the classic mistake. */
+const FX_RANGES = { USD: [0.6, 1.3], CNY: [0.08, 0.2], GBP: [1.0, 1.5], HKD: [0.08, 0.15], JPY: [0.004, 0.009], CHF: [0.8, 1.3] };
+export function fxPlausibility(currency, rate) {
+  const range = FX_RANGES[currency]; const r = Number(rate);
+  if (!range || !Number.isFinite(r) || r <= 0) return { ok: true, known: Boolean(range) };
+  if (r >= range[0] && r <= range[1]) return { ok: true, known: true };
+  const inverted = 1 / r >= range[0] && 1 / r <= range[1];
+  return { ok: false, known: true, inverted, message: inverted ? `Ce taux ressemble à l’inverse : 1 ${currency} vaut environ ${range[0]} à ${range[1]} €, pas ${rate}. Vérifiez le sens.` : `Taux inhabituel : 1 ${currency} vaut en général entre ${range[0]} et ${range[1]} €.` };
+}
+
+/** Receipt form -> payload lines, or the errors to show. `po.lines[i]` has qty and qtyReceived; entries are what the person typed. Nothing above what is still outstanding. */
+export function receiptLinesFrom(po, entries) {
+  const errors = []; const lines = []; let total = 0;
+  for (const l of po.lines) {
+    const e = entries.find((x) => x.lineId === l.id) ?? { accepted: '', defective: '' };
+    const num = (v, what) => { const t = String(v ?? '').trim(); if (!t) return 0; if (!/^\d{1,7}$/.test(t)) { errors.push(`${l.name ?? l.sku} : ${what} illisible.`); return 0; } return Number(t); };
+    const accepted = num(e.accepted, 'quantité acceptée'); const defective = num(e.defective, 'quantité défectueuse'); const remaining = l.qty - l.qtyReceived;
+    if (accepted + defective > remaining) errors.push(`${l.name ?? l.sku} : ${accepted + defective} reçus alors qu’il n’en reste que ${remaining} à recevoir.`);
+    if (accepted + defective > 0) { lines.push({ poLineId: l.id, qtyAccepted: accepted, qtyDefective: defective }); total += accepted + defective; }
+  }
+  if (!errors.length && !total) errors.push('Saisissez au moins une quantité reçue.');
+  return { ok: !errors.length, errors, lines, total };
+}
+
 /** What a person may do with an order on the phone. Engaging steps are never queued: they need the server's answer. */
 export function poActions(po, me) {
   const acts = [];
@@ -61,6 +85,8 @@ export function poActions(po, me) {
     else if (me.canApprove) acts.push({ id: 'blocked', label: 'Vous avez préparé ce bon : une autre personne habilitée doit l’approuver.', info: true });
     if (me.canApprove) acts.push({ id: 'reject', label: 'Renvoyer en brouillon', needsReason: true });
   }
+  if (['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && me.canReceive) acts.push({ id: 'receive', label: 'Réceptionner la marchandise', primary: true });
+  if (['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && !me.canReceive) acts.push({ id: 'wait-receive', label: 'La réception est faite par une personne habilitée (entrepôt ou propriétaire).', info: true });
   if (po.status === 'APPROVED' && me.canApprove) acts.push({ id: 'order', label: 'Marquer comme commandé', primary: true, confirm: 'Confirmez : la commande a été passée auprès du fournisseur. Nordla n’envoie rien et ne paie rien.' });
   if (['APPROVED'].includes(po.status) && !me.canApprove) acts.push({ id: 'wait', label: 'En attente de la commande par une personne habilitée.', info: true });
   return acts;
@@ -73,12 +99,13 @@ const OFFER_FR = {
   PRICE_PRECISION_EXCEEDS_FINANCE_ENGINE: () => 'Prix trop précis pour le calcul du coût rendu (4 décimales max).',
 };
 /** French card text for one comparison offer. `money` formats EUR minor units. */
+const eur4 = (minor, qty) => (minor / 100 / qty).toLocaleString('fr-BE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 export function describeOffer(o, qty) {
   const chips = [];
   if (o.incoterm) chips.push({ t: o.incoterm, k: '' });
   if (o.leadTimeDays) chips.push({ t: `${o.leadTimeDays} j`, k: '' });
   if (o.estimated) chips.push({ t: 'ESTIMÉ (taux saisi)', k: 'a' });
-  if (o.status === 'LANDED') return { usable: true, headline: `Coût rendu : ${fmtMoney(Number(o.landedTotal ?? o.landedPerUnit * qty))} pour ${qty} pièces`, detail: `≈ ${fmtMoney(Number(o.landedPerUnit))} / pièce (arrondi au centime par le calcul Finance : fiez-vous au total). Prix fournisseur ${o.unitPrice} ${o.currency}. Estimation : transport, droits et taux saisis par vous ; ce n’est pas un montant fiscal définitif.`, chips: [...chips, { t: 'coût rendu', k: 'g' }] };
+  if (o.status === 'LANDED') return { usable: true, headline: `Coût rendu : ${fmtMoney(Number(o.landedTotal ?? o.landedPerUnit * qty))} pour ${qty} pièces`, detail: `≈ ${o.landedTotal !== undefined ? eur4(Number(o.landedTotal), qty) : fmtMoney(Number(o.landedPerUnit))} € / pièce (total ÷ quantité ; le calcul Finance arrondit au centime : seul le total est exact à 0,01 € près). Prix fournisseur ${o.unitPrice} ${o.currency}. Estimation : transport, droits et taux saisis par vous ; ce n’est pas un montant fiscal définitif.`, chips: [...chips, { t: 'coût rendu', k: 'g' }] };
   if (o.status === 'GOODS_ONLY') return { usable: true, headline: `${o.unitPrice} ${o.currency} / pièce ≈ ${o.goodsUnitEur} € (marchandises seules)`, detail: 'Transport et droits non saisis : le classement ne compare que le prix des marchandises.', chips: [...chips, { t: 'sans coût d’approche', k: 'a' }] };
   const why = (OFFER_FR[o.reason] ?? (() => `Non comparable (${o.reason}).`))(o);
   return { usable: false, headline: why, detail: o.status === 'NOT_ELIGIBLE' ? `Pour ${qty} pièces.` : 'Offre listée mais non classée.', chips };
@@ -103,3 +130,19 @@ export function classifyHttp(status) {
   return 'REJECT';
 }
 export const backoffMs = (attempts) => Math.min(60_000, 2000 * 2 ** Math.max(0, attempts - 1));
+
+/** A warning when the pieces are so cheap that rounding to the cent matters: below 0,10 EUR a piece, one cent is 10 % or more of the price. */
+export function precisionWarning(offers) {
+  const cheap = offers.some((o) => (o.status === 'LANDED' && Number(o.landedPerUnit) < 10) || (o.status === 'GOODS_ONLY' && o.goodsUnitEur < 0.1));
+  return cheap ? 'Pièces à quelques centimes : le calcul arrondit au centime, comparez les TOTAUX affichés plutôt que le prix par pièce.' : null;
+}
+/** Quotes of different currencies are compared only through the rates the person typed; list the currencies in play so none is overlooked. */
+export const currenciesOf = (offers) => [...new Set(offers.map((o) => o.currency))];
+/** What a person reads for a refused request: a French sentence per known code, else the server's message, else a neutral line. Never a code, a table or a stack. */
+export const ERRORS_FR = {
+  SEPARATION_OF_DUTIES: 'Vous avez préparé ou envoyé ce bon : une autre personne habilitée doit l’approuver.', FORBIDDEN: 'Votre accès ne permet pas cette action.', UNAUTHORIZED: 'Accès refusé : rouvrez le lien d’accès fourni par le propriétaire.',
+  TOO_MANY_ATTEMPTS: 'Trop d’essais : patientez une minute.', INVALID_TRANSITION: 'Le bon a changé entre-temps : actualisez la page.', BELOW_MOQ: 'Quantité sous le minimum du fournisseur (MOQ).', FX_REQUIRED: 'Un taux de change est nécessaire.',
+  QUOTE_EXPIRED: 'Ce devis a expiré.', VISIT_CLOSED: 'Cette visite est clôturée.', APPROVAL_ALREADY_USED: 'Cette approbation a déjà été utilisée.',
+  OVER_RECEIPT: 'Vous essayez de réceptionner plus que la quantité restant à recevoir.', NOT_FOUND: 'Introuvable : actualisez la page.',
+};
+export const errText = (r) => ERRORS_FR[r.json?.error] ?? (/_NOT_FOUND$/.test(r.json?.error ?? '') ? ERRORS_FR.NOT_FOUND : null) ?? r.json?.message ?? (r.status === 0 ? 'Connexion indisponible.' : `Erreur ${r.status}`);

@@ -174,6 +174,7 @@ export function createPgProcurementStore({ pool, newId = randomUUID } = {}) {
         const r = await run('insert into proc_approvals_used (merchant_id, approval_id) values ($1,$2) on conflict do nothing', [merchantId, approvalId]);
         if (r.rowCount === 0) throw new StoreError('APPROVAL_ALREADY_USED', 'this approval was already consumed');
       },
+      async setSeq(merchantId, name, value) { await run('insert into proc_sequences as s (merchant_id, name, value) values ($1::uuid, $2, $3) on conflict (merchant_id, name) do update set value = greatest(s.value, excluded.value)', [merchantId, name, value]); },
       async nextSeq(merchantId, name) { return (await run('select proc_next_number($1::uuid, $2) as n', [merchantId, name])).rows[0].n; },
       /** Test helper: every proc_ table as plain data, to prove that a read changed nothing. */
       async snapshot() {

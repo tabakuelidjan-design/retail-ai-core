@@ -14,6 +14,7 @@ import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProcurementError } from '../errors.js';
 import { importSourcingCase, draftOrderFromCase } from '../sourcing-bridge.js';
+import { createFileCaseSource, isCaseId } from './case-source.js';
 
 const UI_DIR = fileURLToPath(new URL('../ui/', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
@@ -37,7 +38,8 @@ const sameToken = (given, expected) => timingSafeEqual(hash(given), hash(expecte
  *  uploadsDir    where photos are stored (named by their SHA-256)
  *  allowedHosts  extra Host names (a live array: a tunnel adds its own)
  */
-export function createProcurementApp({ procurement, users, sourcingDir = null, uploadsDir, allowedHosts = [], now = () => new Date(), cacheAssets = true, maxJson = 262_144, maxUpload = 8_000_000 }) {
+export function createProcurementApp({ procurement, users, sourcingDir = null, sourcingPhotosDir = null, caseSource = null, uploadsDir, allowedHosts = [], now = () => new Date(), cacheAssets = true, maxJson = 262_144, maxUpload = 8_000_000 }) {
+  const cases = caseSource ?? createFileCaseSource({ casesDir: sourcingDir, photosDir: sourcingPhotosDir }); // read-only source of China Sourcing cases and photos
   for (const u of users) if (typeof u.token !== 'string' || u.token.length < 24) throw new Error('every access token needs at least 24 characters');
   const { commands: c, queries: q } = procurement;
   const fails = new Map();
@@ -80,7 +82,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
   async function poView(po, ctx = {}) {
     const items = ctx.items ?? new Map((await q.items()).map((i) => [i.id, i])); const suppliers = ctx.suppliers ?? new Map((await q.suppliers()).map((s) => [s.id, s]));
     return {
-      id: po.id, number: po.number, status: po.status, supplier: { id: po.supplierId, name: suppliers.get(po.supplierId)?.name ?? null }, currency: po.currency, totalMinor: po.totalMinor, expectedDate: po.expectedDate, depositBps: po.depositBps,
+      id: po.id, number: po.number, status: po.status, destinationLocationId: po.destinationLocationId, supplier: { id: po.supplierId, name: suppliers.get(po.supplierId)?.name ?? null }, currency: po.currency, totalMinor: po.totalMinor, expectedDate: po.expectedDate, depositBps: po.depositBps,
       createdBy: po.createdBy, submittedBy: po.submittedBy ?? null, fx: po.fx, version: po.version, schedule: po.schedule.map((s) => ({ kind: s.kind, amountMinor: s.amountMinor, status: s.status })),
       lines: po.lines.map((l) => ({ id: l.id, itemId: l.itemId, sku: items.get(l.itemId)?.sku ?? null, name: items.get(l.itemId)?.name ?? null, qty: l.qty, qtyReceived: l.qtyReceived, unitPriceMicro: l.unitPriceMicro, totalMinor: l.totalMinor, quoteId: l.quoteId })),
     };
@@ -101,18 +103,11 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
     };
   }
 
-  async function sourcingCases() {
-    if (!sourcingDir) return { available: false, reason: 'no Sourcing directory configured', cases: [] };
-    let names; try { names = await readdir(sourcingDir); } catch { return { available: false, reason: 'the Sourcing directory is not readable', cases: [] }; }
-    const cases = [];
-    for (const f of names.filter((n) => /^[A-Za-z0-9_-]+\.json$/.test(n))) {
-      try { const s = JSON.parse(await readFile(join(sourcingDir, f), 'utf8')); cases.push({ id: s.id, name: s.identity?.workingName ?? '', supplier: s.supplier?.name ?? null, quotes: (s.quotes ?? []).length, photos: (s.identity?.photos ?? []).length, updatedAt: s.updatedAt ?? null }); } catch { /* a corrupt case file is skipped, never fatal */ }
-    }
-    return { available: true, cases: cases.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) };
-  }
   async function readCase(id) {
-    if (!sourcingDir || !/^[A-Za-z0-9_-]{1,80}$/.test(String(id))) throw new ProcurementError('INVALID_INPUT', 'unknown Sourcing case');
-    try { return JSON.parse(await readFile(join(sourcingDir, `${id}.json`), 'utf8')); } catch { throw new ProcurementError('INVALID_INPUT', 'that Sourcing case could not be read'); }
+    if (!isCaseId(id)) throw new ProcurementError('INVALID_INPUT', 'unknown Sourcing case');
+    const c = await cases.get(id);
+    if (!c) throw new ProcurementError('INVALID_INPUT', 'that Sourcing case could not be read');
+    return c;
   }
 
   // `signedIn`: a user already authenticated by the hosting server (Nordla session, see handleApi); without it the personal access token is required
@@ -129,12 +124,12 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
     let r;
 
     if (p === '/api/health' && m === 'GET') return send(res, 200, { ok: true, time: now().toISOString() });
-    if (p === '/api/me' && m === 'GET') return send(res, 200, { id: user.id, name: user.name ?? user.id, role: user.role, canApprove: Boolean(user.canApprove) });
+    if (p === '/api/me' && m === 'GET') return send(res, 200, { id: user.id, name: user.name ?? user.id, role: user.role, canApprove: Boolean(user.canApprove), canReceive: Boolean(user.canApprove) && ['OWNER', 'WAREHOUSE'].includes(user.role) });
 
     if (p === '/api/overview' && m === 'GET') {
       const pos = await q.purchaseOrders(); const visits = await q.visits();
       const count = (st) => pos.filter((x) => x.status === st).length;
-      return send(res, 200, { openVisits: visits.filter((v) => v.status === 'OPEN').length, purchases: { DRAFT: count('DRAFT'), PENDING_APPROVAL: count('PENDING_APPROVAL'), APPROVED: count('APPROVED'), ORDERED: count('ORDERED') + count('CONFIRMED'), IN_RECEIPT: count('PARTIALLY_RECEIVED') }, items: (await q.items()).length, locations: (await q.locations()).map((l) => ({ id: l.id, name: l.name, type: l.type })) });
+      return send(res, 200, { openVisits: visits.filter((v) => v.status === 'OPEN').length, purchases: { DRAFT: count('DRAFT'), PENDING_APPROVAL: count('PENDING_APPROVAL'), APPROVED: count('APPROVED'), ORDERED: count('ORDERED') + count('CONFIRMED'), IN_RECEIPT: count('PARTIALLY_RECEIVED') }, toReceive: count('ORDERED') + count('CONFIRMED') + count('PARTIALLY_RECEIVED'), items: (await q.items()).length, locations: (await q.locations()).map((l) => ({ id: l.id, name: l.name, type: l.type })) });
     }
 
     // ---- visits
@@ -192,6 +187,31 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
       return send(res, 200, { purchaseOrder: await poView(await q.purchaseOrder(poId)), replayed: r.replayed });
     }
 
+    // ---- stock (read-only) and goods receipt
+    if (p === '/api/stock' && m === 'GET') {
+      const locs = new Map((await q.locations()).map((l) => [l.id, l])); const st = await q.stockPositions(); const items = new Map((await q.items()).map((i) => [i.id, i]));
+      return send(res, 200, {
+        locations: [...locs.values()].map((l) => ({ id: l.id, name: l.name, type: l.type })),
+        items: st.positions.map((x) => ({
+          itemId: x.itemId, sku: x.sku, name: items.get(x.itemId)?.name ?? x.sku, status: items.get(x.itemId)?.status ?? null, photo: (items.get(x.itemId)?.attachments ?? []).find((a) => a.kind === 'PHOTO')?.ref ?? null,
+          physical: x.physical, sellable: x.sellable, reserved: x.reserved, available: x.available, inTransit: x.inTransit, quarantine: x.quarantine,
+          incoming: { qty: x.incoming.qty, orders: x.incoming.orders.map((o) => ({ poId: o.poId, number: o.number, qty: o.qty, expectedDate: o.expectedDate, delayed: o.delayed })) },
+          perLocation: x.locations.filter((l) => l.onHand || l.reserved).map((l) => ({ locationId: l.locationId, name: locs.get(l.locationId)?.name ?? null, type: l.type, onHand: l.onHand, reserved: l.reserved })),
+          valuation: { status: x.valuation.status, valuedUnits: x.valuation.valuedUnits, unknownUnits: x.valuation.unknownUnits, unitCostEurMicro: x.valuation.unitCostEurMicro, valueEurMinor: x.valuation.valueEurMinor, goodsOnly: x.valuation.goodsOnly },
+        })),
+        valuation: st.valuation,
+      });
+    }
+    mm = /^\/api\/purchase-orders\/([\w-]+)\/receive$/.exec(p);
+    if (mm && m === 'POST') {
+      if (!(user.canApprove && ['OWNER', 'WAREHOUSE'].includes(user.role))) throw new ProcurementError('FORBIDDEN', 'your access cannot receive goods: it needs an authorized person with a warehouse or owner role');
+      const b = await readJson(req); const key = idemKey(req); const poId = mm[1];
+      const locs = await q.locations(); const quarantine = b.quarantineLocationId ?? locs.find((l) => l.type === 'QUARANTINE')?.id;
+      const lines = (Array.isArray(b.lines) ? b.lines : []).map((l) => ({ poLineId: l.poLineId, qtyAccepted: l.qtyAccepted ?? 0, qtyDefective: l.qtyDefective ?? 0 })).filter((l) => l.qtyAccepted + l.qtyDefective > 0);
+      r = await c.receiveGoods(actor, key, { poId, receivedAt: b.receivedAt ?? now().toISOString().slice(0, 10), lines, ...(b.locationId ? { locationId: b.locationId } : {}), ...(quarantine ? { quarantineLocationId: quarantine } : {}), approval: approvalFor(user, 'STOCK_SALES.receive_goods', poId, key) });
+      return send(res, 200, { purchaseOrder: await poView(await q.purchaseOrder(poId)), complete: r.complete, replayed: r.replayed });
+    }
+
     // ---- photos (stored by SHA-256; the module keeps only the reference)
     if (p === '/api/uploads' && m === 'POST') {
       const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
@@ -209,7 +229,14 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
     }
 
     // ---- China Sourcing
-    if (p === '/api/sourcing/cases' && m === 'GET') return send(res, 200, await sourcingCases());
+    if (p === '/api/sourcing/cases' && m === 'GET') return send(res, 200, await cases.list());
+    mm = /^\/api\/sourcing\/photos\/([A-Za-z0-9_-]{1,80})\/([A-Za-z0-9_-]{1,90})$/.exec(p);
+    if (mm && m === 'GET') {
+      const ph = await cases.photo(mm[1], mm[2]);
+      if (!ph) return send(res, 404, { error: 'PHOTO_NOT_AVAILABLE', message: 'this photo is not stored on the server (it may exist only on the phone that took it)' });
+      res.writeHead(200, { 'content-type': ph.mime, 'content-length': ph.bytes.length, 'x-content-type-options': 'nosniff', 'cross-origin-resource-policy': 'same-origin', 'content-security-policy': "default-src 'none'; sandbox", 'cache-control': 'private, max-age=3600', etag: `"${ph.sha256}"` });
+      return res.end(ph.bytes);
+    }
     if (p === '/api/sourcing/import' && m === 'POST') {
       const b = await readJson(req); const caseState = await readCase(b.caseId);
       if (b.qty !== undefined) {

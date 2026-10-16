@@ -6,21 +6,26 @@
 // Rollback: stop passing `procurement` to createIntegration / `extraRules` to routeUtterance (or revert the commit). The existing flows are untouched.
 import { MODULE as M, ERR, fail } from './constants.js';
 import { INTENT } from './router.js';
-import { PROCUREMENT_TOOLS, procCommand } from './procurement-policy.js';
+import { PROCUREMENT_TOOLS, PROCUREMENT_COMPAT, procCommand } from './procurement-policy.js';
 
 /** @param {{ call: (tool: string, args?: object) => Promise<object>, catalog: {name: string}[] }} assistant  from createProcurement().assistant */
-export function createProcurementCommands(assistant) {
+export function createProcurementCommands(assistant, planReader = null) {
   const known = new Set(assistant.catalog.map((t) => t.name));
   for (const tool of Object.keys(PROCUREMENT_TOOLS)) if (!known.has(tool)) fail(ERR.HANDOFF_INVALID, `the procurement assistant has no tool "${tool}": the integration contract is out of date`);
   for (const t of known) if (!(t in PROCUREMENT_TOOLS)) fail(ERR.HANDOFF_INVALID, `the procurement assistant exposes "${t}" but the integration policy does not list it: it would be unreachable (default deny) and must be reviewed first`);
   const byModule = { [M.STOCK_SALES]: {}, [M.BUYING]: {} };
   for (const [tool, t] of Object.entries(PROCUREMENT_TOOLS)) byModule[t.module][procCommand(tool)] = (args = {}) => assistant.call(tool, args ?? {});
+  if (planReader) {
+    byModule[PROCUREMENT_COMPAT.plans.module][PROCUREMENT_COMPAT.plans.command] = async () => ({ status: 'OK', plans: await planReader.listPlans() });
+    byModule[PROCUREMENT_COMPAT.incoming.module][PROCUREMENT_COMPAT.incoming.command] = async ({ product_ref = null } = {}) => ({ status: 'OK', incoming: await planReader.listIncoming(product_ref) });
+  }
   return byModule;
 }
 
 /** Merge into an adapters table; a command name that already exists is a conflict, never a silent override. */
-export function mergeProcurementAdapters(adapters, assistant) {
-  const add = createProcurementCommands(assistant);
+export function mergeProcurementAdapters(adapters, procurement) {
+  const assistant = procurement.assistant ?? procurement; // either the assistant itself, or { assistant, planReader }
+  const add = createProcurementCommands(assistant, procurement.planReader ?? null);
   for (const [module, commands] of Object.entries(add)) {
     const target = adapters[module] ?? fail(ERR.MODULE_NOT_AVAILABLE, `no ${module} adapter to extend`);
     for (const name of Object.keys(commands)) if (name in (target.commands ?? {})) fail(ERR.HANDOFF_INVALID, `${module}.${name} already exists`);
