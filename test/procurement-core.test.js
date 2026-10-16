@@ -265,3 +265,45 @@ test('concurrent receipts are serialised: the ordered quantity can never be exce
   assert.equal(w.q.stockPosition(w.itemA.id).physical, 9);
   assert.equal(w.q.purchaseOrder(po.id).lines[0].qtyReceived, 9);
 });
+
+test('illegal transitions are refused with INVALID_TRANSITION from every wrong state', async () => {
+  const w = await makeWorld();
+  const mkPo = async () => (await w.mk(w.c.createPurchaseOrder, buyer, { supplierId: w.supplier.id, currency: 'USD', expectedDate: '2026-11-20', destinationLocationId: w.locs.warehouse.id, lines: [{ itemId: w.itemA.id, qty: 100, quoteId: w.quote.id }] })).purchaseOrder;
+  const draft = await mkPo();
+  await rejects(w.mk(w.c.rejectPurchaseOrder, owner, { poId: draft.id, reason: 'not pending' }), 'INVALID_TRANSITION'); // DRAFT cannot be rejected
+  await rejects(w.mk(w.c.confirmOrder, buyer, { poId: draft.id }), 'INVALID_TRANSITION'); // DRAFT cannot be confirmed
+  await rejects(w.mk(w.c.closePurchaseOrder, buyer, { poId: draft.id, reason: 'nothing to close here' }), 'INVALID_TRANSITION');
+  await rejects(w.mk(w.c.linkPayment, buyer, { poId: draft.id, kind: 'BALANCE', paymentRef: 'p', amountMinor: 1, paidAt: '2026-10-17' }), 'INVALID_TRANSITION');
+  await w.mk(w.c.submitPurchaseOrder, buyer, { poId: draft.id });
+  await rejects(w.mk(w.c.submitPurchaseOrder, buyer, { poId: draft.id }), 'INVALID_TRANSITION'); // already pending
+  await w.mk(w.c.rejectPurchaseOrder, owner, { poId: draft.id, reason: 'prices look wrong' });
+  assert.equal(w.q.purchaseOrder(draft.id).status, 'DRAFT');
+  const ordered = await orderedPo(w, { qty: 100 });
+  await rejects(w.mk(w.c.submitPurchaseOrder, buyer, { poId: ordered.id }), 'INVALID_TRANSITION'); // ORDERED cannot be re-submitted
+  await w.mk(w.c.cancelPurchaseOrder, owner, { poId: ordered.id, reason: 'duplicate order' });
+  await rejects(w.mk(w.c.cancelPurchaseOrder, owner, { poId: ordered.id, reason: 'again' }), 'INVALID_TRANSITION'); // CANCELLED is final
+  await rejects(w.mk(w.c.confirmOrder, buyer, { poId: ordered.id }), 'INVALID_TRANSITION');
+  await rejects(receive(w, w.q.purchaseOrder(ordered.id), [{ poLineId: 'L1', qtyAccepted: 1 }]), 'INVALID_TRANSITION');
+});
+
+test('an expired quote cannot back a purchase order even when it is still RECEIVED', async () => {
+  let at = '2026-10-16T10:00:00.000Z';
+  const w = await makeWorld({ now: () => at });
+  at = '2027-01-15T10:00:00.000Z'; // the world quote (valid until 2026-12-31) is now expired but its status was never changed
+  await rejects(w.mk(w.c.createPurchaseOrder, buyer, { supplierId: w.supplier.id, currency: 'USD', expectedDate: '2027-02-20', destinationLocationId: w.locs.warehouse.id, lines: [{ itemId: w.itemA.id, qty: 100, quoteId: w.quote.id }] }), 'QUOTE_EXPIRED');
+});
+
+test('tenant isolation covers the ledger and the transit view', async () => {
+  const store = createMemoryProcurementStore();
+  const a = await makeWorld({ merchantId: 'm-A', store });
+  const b = await makeWorld({ merchantId: 'm-B', store });
+  const po = await orderedPo(a, { qty: 100 });
+  await receive(a, po, [{ poLineId: 'L1', qtyAccepted: 100 }]);
+  await a.c.transferStock(wh, key(), { itemId: a.itemA.id, fromLocationId: a.locs.warehouse.id, toLocationId: a.locs.transit.id, qty: 10 });
+  assert.equal(store.listMovements('m-B').length, 0);
+  assert.deepEqual(b.q.inTransit().inTransitLocationUnits, {});
+  assert.equal(b.q.inTransit().orderedNotReceived.units, 0);
+  assert.equal(b.q.stockPositions().positions.reduce((s, p) => s + p.physical, 0), 0);
+  assert.equal(b.q.events().length < a.q.events().length, true);
+  assert.ok(b.q.events().every((e) => e.merchantId === 'm-B'));
+});
