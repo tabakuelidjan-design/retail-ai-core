@@ -3,8 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { coreErrorMessage, coreDisabledReason } from '../src/sourcing/ui/core-journal-errors.js';
-import { createCorePanel } from '../src/sourcing/ui/core-panel.js';
-import { createModulesPanel } from '../src/sourcing/ui/modules-panel.js';
+import { loadUi } from './sourcing-ui-load.js';
+// the panels import browser-absolute paths ('/core/...'): they load through the shared resolve hook, like every other UI test
+const { createCorePanel } = await loadUi('core-panel.js');
+const { createModulesPanel } = await loadUi('modules-panel.js');
 
 test('journal errors are explicit, safe, and never assert that an uncertain write did not happen', () => {
   const protectedText = coreErrorMessage({ status: 503, body: { error: 'JOURNAL_PROTECTED', message: '/app/data/internal-path' } });
