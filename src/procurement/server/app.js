@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { ProcurementError } from '../errors.js';
 import { importSourcingCase, draftOrderFromCase } from '../sourcing-bridge.js';
 import { createFileCaseSource, isCaseId } from './case-source.js';
+import { capabilitiesOf, grantsOf, stockActor } from './permissions.js';
+import { createV1Routes } from './routes-v1.js';
 
 const UI_DIR = fileURLToPath(new URL('../ui/', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
@@ -25,7 +27,7 @@ const STATUS = {
   INVALID_INPUT: 400, TIER_ORDER: 400, FX_REQUIRED: 400, FX_MISMATCH: 400,
   ACTOR_REQUIRED: 401, FORBIDDEN: 403, APPROVAL_REQUIRED: 403, APPROVER_NOT_HUMAN: 403, SEPARATION_OF_DUTIES: 403,
   ITEM_NOT_FOUND: 404, SUPPLIER_NOT_FOUND: 404, QUOTE_NOT_FOUND: 404, PO_NOT_FOUND: 404, VISIT_NOT_FOUND: 404, LOCATION_NOT_FOUND: 404, PO_LINE_NOT_FOUND: 404,
-  STORE_UNAVAILABLE: 503, STORE_RETRYABLE: 503,
+  REQUEST_ALREADY_DECIDED: 409, STORE_UNAVAILABLE: 503, STORE_RETRYABLE: 503,
 };
 const hash = (v) => createHash('sha256').update(String(v ?? '')).digest();
 const sameToken = (given, expected) => timingSafeEqual(hash(given), hash(expected));
@@ -73,10 +75,13 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
     console.error('procurement server error:', e);
     return send(res, 500, { error: 'INTERNAL', message: 'unexpected error (see the server log)' });
   };
-  const approvalFor = (user, action, poId, key) => {
-    if (!user.canApprove) throw new ProcurementError('FORBIDDEN', 'your access cannot approve: ask the owner or an authorized reviewer');
-    return { id: `ap:${key}:${action}`, action, subject_ref: `nordla:purchase:${poId}`, approver: { kind: 'HUMAN', id: user.id, role: user.approverRole ?? 'AUTHORIZED_REVIEWER' }, approved_at: now().toISOString() };
+  const NEEDS = { 'BUYING.approve_purchase_plan': 'APPROVE_PO', 'BUYING.place_order': 'APPROVE_PO', 'STOCK_SALES.receive_goods': 'RECEIVE' };
+  /** The named-human approval, built HERE from the authenticated person (never from the request). `solo` = the owner's confirmation, for THIS operation only, that they approve what they prepared. */
+  const approvalFor = (user, action, poId, key, solo = false) => {
+    if (!grantsOf(user).has(NEEDS[action] ?? 'APPROVE_PO')) throw new ProcurementError('FORBIDDEN', 'your access cannot approve: ask the owner or an authorized reviewer');
+    return { id: `ap:${key}:${action}`, action, subject_ref: `nordla:purchase:${poId}`, approver: { kind: 'HUMAN', id: user.id, role: user.role === 'OWNER' ? 'OWNER' : (user.approverRole ?? 'AUTHORIZED_REVIEWER') }, approved_at: now().toISOString(), ...(solo === true && user.role === 'OWNER' ? { solo_owner_confirmed: true } : {}) };
   };
+  const v1 = createV1Routes({ c, q, send, readJson, idemKey, now });
 
   // ---- views: what the phone needs, in one request, with names instead of ids
   async function poView(po, ctx = {}) {
@@ -124,7 +129,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
     let r;
 
     if (p === '/api/health' && m === 'GET') return send(res, 200, { ok: true, time: now().toISOString() });
-    if (p === '/api/me' && m === 'GET') return send(res, 200, { id: user.id, name: user.name ?? user.id, role: user.role, canApprove: Boolean(user.canApprove), canReceive: Boolean(user.canApprove) && ['OWNER', 'WAREHOUSE'].includes(user.role) });
+    if (p === '/api/me' && m === 'GET') return send(res, 200, { id: user.id, name: user.name ?? user.id, role: user.role, ...capabilitiesOf(user) });
 
     if (p === '/api/overview' && m === 'GET') {
       const pos = await q.purchaseOrders(); const visits = await q.visits();
@@ -181,7 +186,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       const [, poId, act] = mm; const b = await readJson(req); const key = idemKey(req);
       if (act === 'submit') r = await c.submitPurchaseOrder(actor, key, { poId });
       else if (act === 'reject') r = await c.rejectPurchaseOrder(actor, key, { poId, reason: b.reason });
-      else if (act === 'approve') r = await c.approvePurchaseOrder(actor, key, { poId, approval: approvalFor(user, 'BUYING.approve_purchase_plan', poId, key) });
+      else if (act === 'approve') r = await c.approvePurchaseOrder(actor, key, { poId, approval: approvalFor(user, 'BUYING.approve_purchase_plan', poId, key, b.confirmSelfApproval === true) });
       else if (act === 'order') r = await c.placeOrder(actor, key, { poId, approval: approvalFor(user, 'BUYING.place_order', poId, key), supplierReference: b.supplierReference });
       else r = await c.cancelPurchaseOrder(actor, key, { poId, reason: b.reason });
       return send(res, 200, { purchaseOrder: await poView(await q.purchaseOrder(poId)), replayed: r.replayed });
@@ -204,11 +209,11 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
     }
     mm = /^\/api\/purchase-orders\/([\w-]+)\/receive$/.exec(p);
     if (mm && m === 'POST') {
-      if (!(user.canApprove && ['OWNER', 'WAREHOUSE'].includes(user.role))) throw new ProcurementError('FORBIDDEN', 'your access cannot receive goods: it needs an authorized person with a warehouse or owner role');
+      if (!capabilitiesOf(user).canReceive) throw new ProcurementError('FORBIDDEN', 'your access cannot receive goods: it needs the owner or a person explicitly authorized');
       const b = await readJson(req); const key = idemKey(req); const poId = mm[1];
       const locs = await q.locations(); const quarantine = b.quarantineLocationId ?? locs.find((l) => l.type === 'QUARANTINE')?.id;
       const lines = (Array.isArray(b.lines) ? b.lines : []).map((l) => ({ poLineId: l.poLineId, qtyAccepted: l.qtyAccepted ?? 0, qtyDefective: l.qtyDefective ?? 0 })).filter((l) => l.qtyAccepted + l.qtyDefective > 0);
-      r = await c.receiveGoods(actor, key, { poId, receivedAt: b.receivedAt ?? now().toISOString().slice(0, 10), lines, ...(b.locationId ? { locationId: b.locationId } : {}), ...(quarantine ? { quarantineLocationId: quarantine } : {}), approval: approvalFor(user, 'STOCK_SALES.receive_goods', poId, key) });
+      r = await c.receiveGoods(stockActor(user), key, { poId, receivedAt: b.receivedAt ?? now().toISOString().slice(0, 10), lines, ...(b.locationId ? { locationId: b.locationId } : {}), ...(quarantine ? { quarantineLocationId: quarantine } : {}), approval: approvalFor(user, 'STOCK_SALES.receive_goods', poId, key) });
       return send(res, 200, { purchaseOrder: await poView(await q.purchaseOrder(poId)), complete: r.complete, replayed: r.replayed });
     }
 
@@ -245,6 +250,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       }
       return send(res, 200, await importSourcingCase({ commands: c, queries: q, actor, caseState }));
     }
+    if (await v1(req, res, p, m, user, actor)) return;
     return send(res, 404, { error: 'NOT_FOUND' });
   }
 
