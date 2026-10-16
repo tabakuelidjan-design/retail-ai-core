@@ -42,8 +42,8 @@ export function procurementUserFor(actor, grants = configuredGrants) {
 }
 
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
-export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null }) {
-  let closeStore = async () => {};
+export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined }) {
+  let closeStore = async () => {}; let offSignals = () => {};
   try {
     const base = join(dir, 'procurement');
     await mkdir(base, { recursive: true });
@@ -56,7 +56,17 @@ export async function buildHostedProcurement({ dir, merchantId, env = process.en
         pool = new pg.Pool({ connectionString: env.PROCUREMENT_PG_URL, max: Number(env.PROCUREMENT_PG_POOL_MAX ?? 5) }); closeStore = () => pool.end();
       }
       store = createPgProcurementStore({ pool }); where = 'PostgreSQL';
-    } else { store = await openFileProcurementStore({ path: join(base, 'procurement.json') }); where = join(base, 'procurement.json'); }
+    } else {
+      // On a Railway volume (or PROCUREMENT_LOCK_LEASE=1) the file's write lock is a LEASE (heartbeat), not a process id: see src/procurement/file-store.js.
+      const useLease = lease !== undefined ? lease : (String(env.RAILWAY_VOLUME_MOUNT_PATH ?? '').trim() || env.PROCUREMENT_LOCK_LEASE === '1') ? true : null;
+      store = await openFileProcurementStore({ path: join(base, 'procurement.json'), lease: useLease }); where = join(base, 'procurement.json');
+      closeStore = async () => { offSignals(); await store.close(); };
+      if (useLease) { // a clean stop (SIGTERM from the host) releases the lease at once; a crash is covered by the staleness rule
+        const onSignal = (sig) => { closeStore().catch(() => {}).finally(() => process.kill(process.pid, sig)); };
+        const sigs = ['SIGTERM', 'SIGINT']; for (const sig of sigs) process.once(sig, onSignal);
+        offSignals = () => { for (const sig of sigs) process.removeListener(sig, onSignal); };
+      }
+    }
     const procurement = createProcurement({ store, merchantId, policy: SERVER_POLICY });
     const system = { id: 'system', role: 'OWNER' };
     const have = new Set((await procurement.queries.locations()).map((l) => l.type));
@@ -66,7 +76,7 @@ export async function buildHostedProcurement({ dir, merchantId, env = process.en
     return { handler, assistant: procurement.assistant, procurement, store, close: closeStore, status: `Stock / Achats ON (${where}; ${configuredGrants.size} authorization(s) granted)` };
   } catch (e) {
     try { await closeStore(); } catch { /* nothing to release */ }
-    log(`Stock / Achats: NOT mounted (${e.code ?? e.message}). The rest of Nordla is unaffected.`);
+    log(`Stock / Achats: NOT mounted (${e.code ?? 'ERROR'}: ${String(e.message ?? '').slice(0, 200)}). The rest of Nordla is unaffected.`);
     return { handler: null, assistant: null, procurement: null, store: null, close: async () => {}, status: `Stock / Achats OFF (${e.code ?? 'ERROR'})` };
   }
 }

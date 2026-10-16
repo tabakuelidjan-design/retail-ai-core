@@ -4,3 +4,6 @@ resources/fonts/** -text
 vendor/** -text -diff
 # Golden Core journal produced by the ORIGINAL code (f721e49): replayed by test/core-reliability.test.js; hashes cover content, never convert line endings.
 test/fixtures/core-journal-v1/** -text
+# Shell scripts run in Linux containers (deploy/sourcing/docker-entrypoint.sh): a CRLF shebang makes the container fail with "exec ... no such file or directory". Always LF, whatever core.autocrlf says.
+*.sh text eol=lf
+deploy/**/Dockerfile* text eol=lf
