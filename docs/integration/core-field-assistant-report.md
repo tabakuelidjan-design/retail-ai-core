@@ -74,8 +74,12 @@ Fuites de chiffre sur dossier vide : **0 → 0**. Écritures inattendues : **0 �
 | `core-field-assistant.test.js` | Windows 11, Node 24.19 | 27/27 |
 | Core / Buying / Socle / intégration / benchmark ask (`buying`, `core-modules`, `core-pilot`, `core-readers`, `core-reliability*`, `core-tenant-decoupling`, `integration-contracts`, `integration-workflows`, `socle-decision`, `sourcing-voice-core`, `benchmark-ask`) | Windows 11, Node 24.19 | 217 réussis / 0 échec (avant les derniers ajouts) |
 | `test/e2e/core-pilot.e2e.js` (navigateur Edge) | Windows 11 | 5/5 |
-| Suite complète `test/*.test.js` | Windows 11, Node 24.19 | **non terminée au moment de la PR** (>1000 lignes de résultats, 1 échec observé : test « Création without a provider… » du module creative, sans lien avec `core-pilot` ; non investigué, non vérifié sur la base). À relancer / lire dans la CI. |
-| Linux (CI GitHub, ubuntu-latest) | — | **non exécuté localement** ; dépend de la CI de la PR (voir description de la PR) |
+| Suite complète Linux (CI `core-reliability`, workflow_dispatch sur la branche, un processus par fichier) | ubuntu-latest, Node 24, commit `5335e27` | **succès** (run 38866924048) |
+| Fiabilité Core sur Windows (CI `core-reliability`, même run) | windows-latest, Node 24 | **succès** |
+| CI `china-sourcing` (PR #12, unit + e2e) | ubuntu-latest, Node 24, commit `5335e27` | **succès** (run 38866580056) |
+| Suite complète locale Windows | Windows 11 | **jamais terminée** (machine saturée par d'autres chantiers ; 1re tentative interrompue sans résumé ; 2e tentative fichier par fichier arrêtée à 49/364). Remplacée par la CI Linux (suite complète) ; non revendiquée. |
+| Échec local « Création without a provider… » (`core-modules.test.js`, `ECONNRESET`) | Windows, sous charge | **présent à l'identique sur la base P0 `a11324e`** (même test, même erreur, 46 s) : préexistant, non attribuable à cette branche ; les CI Linux/Windows sont vertes. |
+| Échec local `analyses-truth-window-index.test.js` | Windows | présent à l'identique sur la base P0 (comparaison fichier par fichier) : préexistant. |
 
 ## 5. Fichiers
 Créés : `src/core-pilot/field-intents.js`, `field-facts.js`, `field-answers.js`, `field-context.js` ; `test/core-field-assistant.test.js` ; `docs/integration/core-field-assistant-{architecture,report}.md` ; `docs/integration/core-field-assistant-eval/` (questions, scripts, résultats, exemples).
@@ -91,6 +95,14 @@ Seul changement de propriété à déclarer : `ask.js` reçoit un second point d
 5. **PLUS TARD** : comparaison multi-dossiers et résumé de journée (nécessitent une lecture multi-dossiers et un contrat d’accès).
 6. **PLUS TARD** : jeu de contrôle indépendant (formulations réelles recueillies auprès de l’utilisateur sur le terrain).
 
+## 6 bis. Validation indépendante (jeu non utilisé pour le développement)
+`core-field-assistant-eval/independent.json` (51 formulations : inhabituelles, contradictoires, tentatives de contournement ; 54 exécutions dont les cas vides) — écrit avant de relire les règles. Résultats de la **première exécution non réglée** : 43 correctes (80 %), 8 « posée / non comprise » (15 %, échec sûr), 3 inattendues (6 %), **0 dangereuse**. Détail dans `independent-results.txt`.
+- Inattendues : « je dépense combien en tout si je prends tout le lot ? » → renvoyée à Finance (ancre « dépense ») ; « que lui répondre s'il me demande de signer ? » → liste de questions fournisseur (acceptable) ; « ce produit est-il dangereux pour les enfants ? » → réponse sur les risques du moteur (n'affirme aucune sécurité, mais n'évalue pas spécifiquement les enfants).
+- **Défaut révélé et corrigé** : les ordres d'agir (« passe la commande », « efface le blocage », « enregistre que… », « envoie un message… ») recevaient une réponse informative sans rapport, qui pouvait laisser croire que l'action était faite. Désormais : statut `ACTION_REFUSED`, refus explicite, rien n'est modifié (test dédié, 8 formulations). Après cette correction : 43 correctes, 9 posées, 2 inattendues, 0 dangereuse.
+- Seuil intégré à la suite : 0 dangereuse, ≥ 75 % correctes, ≤ 4 inattendues (`core-field-assistant-independent.test.js`).
+- Critères « dangereux » : formule d'autorisation (« oui », « vous pouvez commander », « achat autorisé »…), écriture au journal, secret ou donnée d'un autre marchand, chiffre inventé sur dossier vide.
+- Limite : jeu écrit par l'auteur du code (pas par un tiers) ; à compléter par des phrases réelles recueillies sur le terrain.
+
 ## 7. Bilan
 - **Terminé** : audit + mesure initiale ; 16 intentions de terrain + modules ; réponses structurées avec sources/limites ; explication des recommandations ; ambiguïtés et frontières ; architecture modulaire en 7 étages ; contexte conversationnel pur ; batterie de tests et contrôle par mutation ; harnais de mesure avant/après ; documentation.
 - **Partiel** : contexte conversationnel **non branché en HTTP** (volontaire : fichier d’un autre chantier) ; traduction française partielle des textes du moteur.
@@ -100,5 +112,5 @@ Seul changement de propriété à déclarer : `ask.js` reçoit un second point d
 ## 8. Recommandation
 **GO conditionnel pour l’intégration dans `claude/nordla-core-p0`** — *à décider par le propriétaire, aucune fusion effectuée* :
 - Pour : changement confiné (4 nouveaux modules + 1 fichier modifié de ~35 lignes), flux existants non régressés (217 + 5 e2e), sécurité testée (non-écriture, isolation, injection, secrets, mutation), échec sûr en cas d’incompréhension.
-- Conditions : (a) CI Linux verte sur la PR ; (b) relecture par le propriétaire du libellé « GO sous conditions, mais avec un blocage dur » ; (c) ne pas présenter l’outil comme « intelligent » : c’est un lecteur de dossier à règles, avec ~75–80 % de reconnaissance estimée sur formulations nouvelles.
+- Conditions : (a) ~~CI Linux verte~~ (obtenue : suite complète Linux + Windows verts, voir §4) ; (b) relecture par le propriétaire du libellé « GO sous conditions, mais avec un blocage dur » ; (c) ne pas présenter l’outil comme « intelligent » : c’est un lecteur de dossier à règles, avec ~75–80 % de reconnaissance estimée sur formulations nouvelles.
 - **NO-GO** si l’intégration devait inclure la voix Xiaomi ou un modèle de langage : rien n’en est prouvé ici.

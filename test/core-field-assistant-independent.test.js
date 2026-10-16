@@ -40,3 +40,15 @@ test('a CONDITIONAL_GO with a hard blocker is never shown bare in any existing o
     assert.match(r.answer, /blocage dur/i, q); assert.doesNotMatch(r.answer, /CONDITIONAL_GO(?!, mais blocage dur)/, q);
   }
 });
+
+test('blocker priority: on a case with a hard blocker no intent ever produces authorisation wording, and every answer that touches the verdict carries the blocker', async () => {
+  const rt = createCoreRuntime({ merchantId: 'm', config: CONFIG, journal: createMemoryJournal({ merchantId: 'm' }), now: () => NOW });
+  const ctx = { runtime: rt, getCase: async () => blocked, externals: { safety: LIVE_CLEAN }, actor: { userId: 'u', role: 'OWNER' }, now: NOW };
+  const AUTH = /(^|[^a-z])oui([^a-z]|$)|vous pouvez (maintenant )?(commander|acheter|payer)|achat autorisé|commande (passée|validée|confirmée|envoyée)|c.est (bon|validé|autorisé)/i;
+  const qs = ['qu’est-ce qu’on sait sur ce fournisseur ?', 'qu’est-ce qui manque ?', 'quels documents faut-il vérifier ?', 'quels sont les risques ?', 'quelle est la marge ?', 'quel est le coût rendu ?', 'combien coûte la commande ?', 'quel prix manque pour la rentabilité ?', 'le prix de vente est-il observé ?', 'quels coûts ne sont pas pris en compte ?', 'et si je prends la quantité minimale ?', 'puis-je commander ?', 'quelle est la prochaine étape ?', 'quelles questions poser avant de signer ?', 'est-ce que ce prix est bon ?', 'pourquoi cette recommandation ?'];
+  for (const q of qs) { const r = await askNordla({ text: q, caseId: 'blocked' }, ctx); assert.equal(r.status, 'ANSWERED', q); assert.doesNotMatch(r.answer, AUTH, q); }
+  for (const q of ['puis-je commander ?', 'qu’est-ce qu’on sait sur ce fournisseur ?', 'quelle est la marge ?', 'est-ce que ce prix est bon ?']) {
+    const r = await askNordla({ text: q, caseId: 'blocked' }, ctx); assert.match(r.answer, /blocage/i, `${q}: the blocker travels with the answer`);
+  }
+  assert.equal((await rt.overview()).decisions.length, 0);
+});
