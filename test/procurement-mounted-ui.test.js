@@ -7,16 +7,6 @@ import { randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createIdentityDb } from './fixtures/identity-db.js';
-import { createFakeGoTrue } from './fixtures/fake-gotrue.js';
-import { createIdentityService } from '../src/identity/service.js';
-import { createMemberService } from '../src/identity/members.js';
-import { createModuleProvisioning } from '../src/identity/provisioning.js';
-import { loadIdentityConfig, loadRateLimitConfig } from '../src/identity/config.js';
-import { createHttpSecurity } from '../src/security/index.js';
-import { hostedConfig } from '../src/sourcing/server/hosted.js';
-import { startSourcingServer } from '../src/sourcing/server/index.js';
-import { newCase } from '../src/sourcing/core/case.js';
 
 const M = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'; const OTHER = '5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9';
 const people = ['owner', 'buyer', 'admin', 'stranger'].map((k, i) => ({ key: k, id: `${String(i + 1).padStart(8, '0')}-2222-4222-8222-${String(i + 1).padStart(12, '0')}`, email: `${k}@nordla-test.example`, password: `synthetic passphrase for ${k}` }));
@@ -26,6 +16,9 @@ const ENV = { SOURCING_HOSTED: '1', NORDLA_MERCHANT_ID: M, SOURCING_PUBLIC_ORIGI
   NORDLA_IDENTITY_RATE_LIMIT_KEY: randomBytes(32).toString('hex'), NORDLA_CSRF_KEY: randomBytes(32).toString('hex'), SOURCING_MERCHANT_ID: 'habb', SOURCING_HOST: '127.0.0.1' };
 
 async function world({ sourcingEnabled = true, dir: given = null, keep = false } = {}) {
+  const { createIdentityDb } = await import('./fixtures/identity-db.js'); const { createFakeGoTrue } = await import('./fixtures/fake-gotrue.js');
+  const { createIdentityService } = await import('../src/identity/service.js'); const { createMemberService } = await import('../src/identity/members.js'); const { createModuleProvisioning } = await import('../src/identity/provisioning.js');
+  const { loadIdentityConfig, loadRateLimitConfig } = await import('../src/identity/config.js'); const { createHttpSecurity } = await import('../src/security/index.js'); const { startSourcingServer } = await import('../src/sourcing/server/index.js');
   const db = createIdentityDb({ merchants: [M, OTHER], users: people.map((p) => p.id) });
   const auth = createFakeGoTrue({ users: people });
   const identity = createIdentityService({ merchantId: M, moduleCode: 'sourcing', supabase: db.supabase, auth: { baseUrl: ENV.SUPABASE_URL, anonKey: ENV.SUPABASE_ANON_KEY }, sessions: loadIdentityConfig({}), rateLimits: loadRateLimitConfig({}), rateLimitKey: ENV.NORDLA_IDENTITY_RATE_LIMIT_KEY, fetchImpl: auth.fetchImpl });
@@ -55,7 +48,8 @@ async function world({ sourcingEnabled = true, dir: given = null, keep = false }
 
 import { readFileSync } from 'node:fs';
 const MOUNTED = readFileSync(new URL('../src/sourcing/server/app.js', import.meta.url), 'utf8').includes('procurement.handleStatic');
-const skip = MOUNTED ? false : 'needs the one-line mount in src/sourcing/server/app.js (docs/integration/stock-achats-v1-patch-sourcing-app.patch, chantier 3)';
+const NODE24 = Number(process.versions.node.split('.')[0]) >= 24; // the Sourcing server code is Node 24 only (the module itself runs on 20 and 24)
+const skip = !NODE24 ? 'the hosted Sourcing server needs Node 24' : MOUNTED ? false : 'needs the one-line mount in src/sourcing/server/app.js (docs/integration/stock-achats-v1-patch-sourcing-app.patch, chantier 3)';
 /** a GET that keeps the raw text (the screens are HTML / JS, not JSON), with the headers Railway forwards */
 const raw = (w, path) => new Promise((resolve, reject) => { const r = http.request({ host: '127.0.0.1', port: w.srv.port, path, method: 'GET', headers: { host: HOST, 'x-forwarded-host': HOST, 'x-forwarded-proto': 'https', 'x-real-ip': '203.0.113.7' } }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: t })); }); r.on('error', reject); r.end(); });
 
