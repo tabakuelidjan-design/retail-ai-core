@@ -2,7 +2,7 @@
 // contains can run as code). French UI.
 import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener } from './api.js';
 import * as outbox from './outbox.js';
-import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES } from './logic.js';
+import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf } from './logic.js';
 
 const $ = (id) => document.getElementById(id);
 const main = $('main');
@@ -50,23 +50,30 @@ function netBadge() {
   if (r) { b.textContent = `${r} à corriger`; b.className = 'badge b-off'; } else if (n) { b.textContent = `${n} en attente d’envoi`; b.className = 'badge b-wait'; } else if (!S.online) { b.textContent = 'Hors connexion'; b.className = 'badge b-off'; } else { b.textContent = 'En ligne'; b.className = 'badge b-live'; }
   b.onclick = () => { S.tab = 'orders'; S.stack = [{ name: 'outbox', params: {} }]; render(); };
 }
-setStatusListener((status) => { const was = S.online; S.online = status !== 0 && status < 502; netBadge(); if (!was && S.online) outbox.flush({ force: true }).then(refreshAfterSend); });
+function offlineBanner() {
+  const el = $('offline'); const up = S.online;
+  el.hidden = up;
+  $('offline-text').textContent = 'Connexion au serveur indisponible. Les données affichées peuvent être anciennes ; vos saisies restent sur ce téléphone et partiront au retour de la connexion. Approuver, commander et réceptionner sont impossibles pour l’instant.';
+}
+$('offline-retry').addEventListener('click', async () => { const r = await request('GET', '/api/health'); if (r.status === 200) { await outbox.flush({ force: true }).then(refreshAfterSend); render(); } else banner('Toujours pas de connexion.', 'err'); });
+setStatusListener((status) => { const was = S.online; S.online = status !== 0 && status < 502; netBadge(); offlineBanner(); if (!was && S.online) outbox.flush({ force: true }).then(refreshAfterSend); });
 outbox.onOutboxChange(netBadge);
 window.addEventListener('online', () => outbox.flush({ force: true }).then(refreshAfterSend));
-window.addEventListener('offline', () => { S.online = false; netBadge(); });
+window.addEventListener('offline', () => { S.online = false; netBadge(); offlineBanner(); });
 setInterval(() => { if (outbox.pending().length) outbox.flush().then(refreshAfterSend); }, 15_000);
 function refreshAfterSend(sent) { if (sent) { banner(`${sent} saisie${sent > 1 ? 's' : ''} envoyée${sent > 1 ? 's' : ''} au serveur.`, 'ok'); render(); } }
 
 // ------------------------------------------------------------------ small widgets
 function thumb(ref, cls = 'thumb') {
   const img = h('img', { class: cls, alt: '', loading: 'lazy' });
-  photoUrl(ref).then((u) => { if (u) img.src = u; });
+  const box = h('div', { class: `${cls} missing`, title: 'Photo non disponible sur le serveur' }, 'photo sur le téléphone du terrain');
+  photoUrl(ref).then((u) => { if (u) img.src = u; else img.replaceWith(box); });
   return img;
 }
 const chip = (t, k = '') => h('span', { class: `chip ${k}` }, t);
 const empty = (t) => h('p', { class: 'empty' }, t);
 const stale = (res) => (res.stale ? h('div', { class: 'note' }, `Connexion indisponible : données du ${fmtDate(res.at)} à ${new Date(res.at).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}.`) : null);
-const fail = (res) => h('div', { class: 'warn' }, res.status === 401 ? ERRORS_FR.UNAUTHORIZED : `Impossible de charger : ${res.error ?? res.status}`);
+const fail = (res) => h('div', { class: 'warn' }, res.status === 401 ? ERRORS_FR.UNAUTHORIZED : res.status === 0 ? 'Impossible de joindre le serveur (connexion coupée ou lente) et aucune donnée précédente n’est gardée pour cet écran.' : `Impossible de charger : ${res.error ?? res.status}`, res.status === 401 ? null : h('div', {}, h('button', { class: 'btn sec', onclick: () => render() }, 'Réessayer')));
 function field(label, input, hint) { return h('div', {}, h('label', {}, label), input, hint ? h('div', { class: 'small muted' }, hint) : null); }
 function select(options, value) { return h('select', {}, options.map(([v, t]) => h('option', { value: v, selected: v === value }, t))); }
 
@@ -189,12 +196,21 @@ async function screenCompare() {
   const run = h('button', { class: 'btn', onclick: async () => {
     result.replaceChildren(); const q_ = parseInteger(qty.value);
     if (!sel.value || !q_) return put(result, h('div', { class: 'warn' }, 'Choisissez un produit et une quantité.'));
-    const fx = {}; for (const [c, input] of Object.entries(fxIn)) { const r = parseDecimal(input.value); if (r) { fx[c] = { rate: r, date: today(), source: 'saisie sur téléphone' }; storedFx[c] = fx[c]; } } save(FX_KEY, storedFx);
+    const fx = {};
+    for (const [c, input] of Object.entries(fxIn)) {
+      const r = parseDecimal(input.value); if (!input.value.trim()) continue;
+      if (!r) return put(result, h('div', { class: 'warn' }, `Taux ${c} illisible : écrivez un nombre exact (0,128).`));
+      const pl = fxPlausibility(c, r); if (!pl.ok && !confirm(`${pl.message}\n\nUtiliser quand même ${r} ?`)) return put(result, h('div', { class: 'warn' }, `Taux ${c} à vérifier : ${pl.message}`));
+      fx[c] = { rate: r, date: today(), source: 'saisie sur téléphone' }; storedFx[c] = fx[c];
+    }
+    save(FX_KEY, storedFx);
     const f = parseDecimal(freight.value);
     const qs = new URLSearchParams({ itemId: sel.value, qty: String(q_), fx: JSON.stringify(fx), ...(f ? { freight: f, dutyPct: parseDecimal(duty.value) ?? '0' } : {}), ...(parseDecimal(sell.value) ? { sellPrice: parseDecimal(sell.value) } : {}) });
     const r = await request('GET', `/api/compare?${qs}`); if (r.status !== 200) return put(result, h('div', { class: 'warn' }, errText(r)));
     const cmp = r.json; const byQuote = new Map(cmp.offers.map((o) => [o.quoteId, o])); const it = items.data.items.find((i) => i.id === sel.value);
     put(result, h('div', { class: 'note' }, cmp.basis === 'LANDED_COST' ? 'Classement au COÛT RENDU estimé (marchandises + transport + droits saisis).' : 'Classement sur le PRIX DES MARCHANDISES seul : saisissez transport et droits pour un coût rendu.'));
+    const pw = precisionWarning(cmp.offers); if (pw) put(result, h('div', { class: 'note' }, pw));
+    put(result, h('div', { class: 'small muted' }, `Devises en jeu : ${currenciesOf(cmp.offers).join(', ')}. Chaque prix est affiché dans la devise du fournisseur ; la comparaison n’utilise que les taux saisis ci-dessus.`));
     const ranked = cmp.ranking.map((r_) => byQuote.get(r_.quoteId)); const others = cmp.offers.filter((o) => !cmp.ranking.some((r_) => r_.quoteId === o.quoteId));
     for (const [i, o] of [...ranked, ...others].entries()) {
       const d = describeOffer(o, q_); const isRank = i < ranked.length;
@@ -241,6 +257,7 @@ async function screenPo({ id }) {
   const res = await getJson(`/api/purchase-orders/${id}`); if (!res.data) return put(box, fail(res));
   const po = res.data; setHead(po.number, po.supplier.name, true);
   const act = async (a) => {
+    if (a.id === 'receive') return go('receive', { id });
     if (a.confirm && !confirm(a.confirm)) return; let body = {};
     if (a.needsReason) { const reason = prompt('Motif (obligatoire) :'); if (!reason || reason.trim().length < 3) return; body = { reason: reason.trim() }; }
     if (a.id === 'order') { const ref = prompt('Référence donnée par le fournisseur (optionnel) :'); if (ref?.trim()) body = { supplierReference: ref.trim() }; }
@@ -271,13 +288,68 @@ async function screenImport() {
     h('button', { class: 'btn sec', onclick: async () => { const qty = parseInteger(prompt('Quantité du bon brouillon :')); if (!qty) return; const exp = prompt('Livraison souhaitée (AAAA-MM-JJ) :', new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10)); if (!exp) return; const fxr = prompt('Taux de change vers EUR si le prix n’est pas en euros (ex. 0,92), sinon laisser vide :'); const body = { caseId: c.id, qty, expectedDate: exp }; if (fxr && parseDecimal(fxr)) body.fxRate = parseDecimal(fxr); const r = await request('POST', '/api/sourcing/import', { key: uid('impo'), body }); if (r.status === 200) show(r.json); else banner(errText(r), 'err'); } }, 'Importer + brouillon de commande')))) : empty('Aucun dossier China Sourcing trouvé.'), out);
 }
 
+async function screenStock() {
+  setHead('Stock', 'Quantités, emplacements, entrant');
+  const box = h('div', {}); swap(main, box);
+  const res = await getJson('/api/stock'); if (!res.data) return put(box, fail(res));
+  const d = res.data; const v = d.valuation;
+  put(box, stale(res),
+    h('div', { class: 'card' }, h('h2', {}, 'Valeur du stock (moyenne pondérée mobile)'),
+      h('div', { class: 'big' }, fmtMoney(v.confirmedEurMinor + v.estimatedEurMinor, 'EUR')),
+      h('p', { class: 'small muted' }, `${fmtMoney(v.confirmedEurMinor, 'EUR')} confirmé · ${fmtMoney(v.estimatedEurMinor, 'EUR')} estimé (prix des marchandises seul, sans transport ni droits)${v.itemsWithUnknownCost ? ` · ${v.unknownUnits} unité(s) de ${v.itemsWithUnknownCost} produit(s) SANS coût connu, non valorisées` : ''}.`)),
+    d.items.length ? h('ul', { class: 'list' }, d.items.map((i) => h('li', {}, h('button', { class: 'tap', onclick: () => go('stockItem', { item: i, locations: d.locations }) }, i.photo ? thumb(i.photo) : h('div', { class: 'thumb' }), h('div', { class: 'grow' }, h('div', { class: 'nm' }, i.name), h('div', { class: 'sub' }, `${i.sku} · à vendre ${i.available}${i.incoming.qty ? ` · attendu ${i.incoming.qty}` : ''}${i.quarantine ? ` · quarantaine ${i.quarantine}` : ''}`)), valuationChip(i.valuation))))) : empty('Aucun produit en stock pour l’instant. Les marchandises apparaissent après leur réception.'),
+    h('p', { class: 'small muted' }, 'Le stock vient des réceptions et des mouvements enregistrés ici : ce n’est pas le stock Shopify, et rien n’est écrit dans Shopify.'));
+}
+const valuationChip = (v) => chip({ CONFIRMED: 'coût confirmé', ESTIMATED: 'coût estimé', PARTIAL: 'coût partiel', UNKNOWN: 'coût inconnu', EMPTY: 'vide' }[v.status] ?? v.status, { CONFIRMED: 'g', ESTIMATED: 'a', PARTIAL: 'a', UNKNOWN: 'r', EMPTY: '' }[v.status] ?? '');
+function screenStockItem({ item: i }) {
+  setHead(i.name, i.sku, true);
+  const loc = (l) => `${l.name ?? l.type}${l.type === 'QUARANTINE' ? ' (quarantaine)' : ''}`;
+  swap(main, h('div', {},
+    h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', {}, h('div', { class: 'small muted' }, 'À vendre'), h('div', { class: 'big' }, String(i.available))), h('div', {}, h('div', { class: 'small muted' }, 'Physique'), h('div', { class: 'big' }, String(i.physical))), h('div', {}, h('div', { class: 'small muted' }, 'Attendu'), h('div', { class: 'big' }, String(i.incoming.qty)))),
+      h('p', { class: 'small muted' }, `Réservé ${i.reserved} · en transit ${i.inTransit} · quarantaine ${i.quarantine}. L’attendu n’est jamais compté comme disponible.`)),
+    h('div', { class: 'card' }, h('h2', {}, 'Par emplacement'), i.perLocation.length ? h('table', {}, h('tbody', {}, i.perLocation.map((l) => h('tr', {}, h('td', {}, loc(l)), h('td', { class: 'n' }, `${l.onHand}${l.reserved ? ` (dont ${l.reserved} réservés)` : ''}`))))) : h('p', { class: 'muted' }, 'Aucune unité en stock.')),
+    i.incoming.orders.length ? h('div', { class: 'card' }, h('h2', {}, 'Commandes en attente de réception'), h('table', {}, h('tbody', {}, i.incoming.orders.map((o) => h('tr', {}, h('td', {}, o.number), h('td', { class: 'n' }, `${o.qty} · ${fmtDate(o.expectedDate)}`), h('td', {}, o.delayed ? chip('en retard', 'r') : null)))))) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Valorisation'), h('div', { class: 'row' }, valuationChip(i.valuation)), h('p', { class: 'small muted' }, i.valuation.status === 'UNKNOWN' ? 'Aucun coût connu pour ces unités : elles ne sont pas valorisées (jamais à zéro, jamais inventé).' : `${i.valuation.valuedUnits} unité(s) valorisée(s) à ${i.valuation.unitCostEurMicro / 1e6} € en moyenne = ${fmtMoney(i.valuation.valueEurMinor ?? 0, 'EUR')}${i.valuation.unknownUnits ? ` · ${i.valuation.unknownUnits} unité(s) sans coût connu` : ''}${i.valuation.goodsOnly ? ' · prix des marchandises seul (transport et droits non inclus)' : ''}.`))));
+}
+
+async function screenReceive({ id }) {
+  setHead('Réception', '', true); const box = h('div', {}); swap(main, box);
+  if (!S.me.canReceive) return put(box, h('div', { class: 'warn' }, ERRORS_FR.FORBIDDEN));
+  const res = await getJson(`/api/purchase-orders/${id}`); if (!res.data) return put(box, fail(res));
+  if (res.stale) return put(box, h('div', { class: 'warn' }, 'Connexion indisponible : une réception ne peut pas être enregistrée sur des données anciennes. Réessayez avec une connexion.'), h('button', { class: 'btn sec', onclick: () => render() }, 'Réessayer'));
+  const po = res.data; setHead(`Réception · ${po.number}`, po.supplier.name, true);
+  const ov = await getJson('/api/overview'); const sellable = (ov.data?.locations ?? []).filter((l) => ['WAREHOUSE', 'STORE', 'BACKROOM'].includes(l.type));
+  const dest = sellable.find((l) => l.id === po.destinationLocationId)?.id ?? sellable[0]?.id ?? '';
+  const where = select(sellable.map((l) => [l.id, `${l.name} (${{ WAREHOUSE: 'entrepôt', STORE: 'magasin', BACKROOM: 'réserve' }[l.type]})`]), dest);
+  const key = uid('recv'); const date = h('input', { type: 'date', value: today() }); const err = h('div', {}); const preview = h('div', { class: 'note' });
+  const rows = po.lines.map((l) => ({ l, ok: h('input', { inputmode: 'numeric', placeholder: '0' }), bad: h('input', { inputmode: 'numeric', placeholder: '0' }) }));
+  const entries = () => rows.map((r) => ({ lineId: r.l.id, accepted: r.ok.value, defective: r.bad.value }));
+  const refresh = () => { const v = receiptLinesFrom(po, entries()); preview.textContent = v.ok ? `${v.total} pièce(s) à enregistrer : ${v.lines.map((x) => `${x.qtyAccepted} acceptée(s)${x.qtyDefective ? ` + ${x.qtyDefective} défectueuse(s) en quarantaine` : ''}`).join(' ; ')}.` : v.errors[0]; };
+  for (const r of rows) { r.ok.addEventListener('input', refresh); r.bad.addEventListener('input', refresh); }
+  let busy = false;
+  const send = h('button', { class: 'btn', onclick: async () => {
+    if (busy) return; swap(err);
+    const v = receiptLinesFrom(po, entries()); if (!v.ok) return put(err, ...v.errors.map((e) => h('div', { class: 'warn' }, e)));
+    if (!confirm(`Enregistrer la réception de ${v.total} pièce(s) dans le stock ? Cette opération est tracée à votre nom.`)) return;
+    busy = true; send.disabled = true;
+    const r = await request('POST', `/api/purchase-orders/${id}/receive`, { key, body: { lines: v.lines, receivedAt: date.value, ...(where.value ? { locationId: where.value } : {}) } });
+    busy = false; send.disabled = false;
+    if (r.status === 200) { banner(r.json.complete ? 'Commande entièrement reçue.' : 'Réception partielle enregistrée.', 'ok'); S.stack.pop(); render(); }
+    else put(err, h('div', { class: 'warn' }, r.status === 0 ? 'Connexion perdue : la réception n’a peut-être PAS été enregistrée. Appuyez à nouveau sur « Enregistrer » : le même envoi ne sera jamais compté deux fois.' : errText(r)));
+  } }, 'Enregistrer la réception');
+  put(box, h('div', { class: 'card' }, h('p', { class: 'small muted' }, 'Saisissez ce qui est ARRIVÉ. Ce qui n’arrive pas reste attendu ; les pièces défectueuses vont en quarantaine, hors du stock à vendre.'),
+    rows.map(({ l, ok, bad }) => h('div', {}, h('label', {}, `${l.name ?? l.sku} — commandé ${l.qty}, déjà reçu ${l.qtyReceived}, reste ${l.qty - l.qtyReceived}`), h('div', { class: 'row' }, h('div', {}, h('div', { class: 'small muted' }, 'Acceptées'), ok), h('div', {}, h('div', { class: 'small muted' }, 'Défectueuses'), bad)))),
+    field('Date de réception', date), field('Reçu dans', where, 'Les pièces acceptées entrent dans cet emplacement ; les défectueuses vont en quarantaine.'), preview, err, send));
+  refresh();
+}
+
 // ------------------------------------------------------------------ router
-const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport };
+const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive };
 async function render() {
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === S.tab)));
   netBadge();
   const top = S.stack.at(-1);
-  try { await (top ? SCREENS[top.name](top.params) : ({ visits: screenVisits, items: screenItems, compare: screenCompare, orders: screenOrders })[S.tab]()); } catch (e) { swap(main, h('div', { class: 'warn' }, `Erreur d’affichage : ${e.message}`)); }
+  try { await (top ? SCREENS[top.name](top.params) : ({ visits: screenVisits, items: screenItems, compare: screenCompare, orders: screenOrders, stock: screenStock })[S.tab]()); } catch (e) { swap(main, h('div', { class: 'warn' }, `Erreur d’affichage : ${e.message}`)); }
   window.scrollTo(0, 0);
 }
 
