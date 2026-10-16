@@ -6,7 +6,7 @@ Branche d'intégration `integration/stock-achats-v1-wave2` (base convergence `2c
 | Sujet | Avant | Après cette branche |
 |---|---|---|
 | Écrans Stock / Achats | API montée seulement (`/api/procurement/*`) | + écrans servis à `/procurement/` (une ligne statique dans `src/sourcing/server/app.js`) ; **les données restent derrière la session, le CSRF et le rôle** |
-| Dépendances (`npm ci --omit=dev` dans `deploy/sourcing/Dockerfile`) | — | + `pg` 8.13.1 (JavaScript pur, 13 paquets) ; **chargé seulement si `PROCUREMENT_PG_URL` est défini** |
+| Dépendances (`npm ci --omit=dev` dans `deploy/sourcing/Dockerfile`) | — | **inchangées. `pg` n'est PAS ajouté** : le garde `test/creative-intelligence-preflight.test.js` fige la liste exacte des dépendances racine, et ajouter `pg` le fait échouer (constaté en CI sur la branche d'intégration : 4 workflows rouges). Le staging est en mode fichier, `pg` n'y sert à rien. Si PostgreSQL est décidé plus tard : ajouter `pg` 8.13.1 **et** mettre à jour la liste attendue de ce garde dans le même commit (décision explicite), patch prêt : `docs/integration/stock-achats-v1-patch-pg-dependency.patch` |
 | Dockerfile / `.dockerignore` | — | **inchangés** : `COPY src` embarque `src/procurement/**` (écrans compris) ; `docs`, `test`, `supabase` n'entrent pas dans l'image et ne sont pas nécessaires |
 | Stockage Stock / Achats | `<SOURCING_DATA_DIR>/procurement/procurement.json` (+ `uploads/`) | inchangé : **dans le volume**, donc dans la **sauvegarde chiffrée** (prouvé : `test/procurement-backup-restore.test.js`) |
 | Supabase | aucun appel de Stock / Achats | inchangé en mode fichier. PostgreSQL = option future (voir §3) |
@@ -16,7 +16,7 @@ Branche d'intégration `integration/stock-achats-v1-wave2` (base convergence `2c
 |---|---|---|---|
 | `PROCUREMENT_GRANTS` | autorisations explicites `{"<userId>":["RECEIVE","ADJUST","APPROVE_PO"]}` ; **absente = seul le propriétaire réceptionne, ajuste, approuve** ; une valeur invalide met le module **OFF** | **absente** (le compte de test est propriétaire) | propriétaire |
 | `PROCUREMENT_DISABLED` | `1` = module OFF au démarrage, rien d'ouvert, données intactes (**retour arrière sans redéploiement**) | absente (module actif) ; à poser à `1` pour un repli immédiat | propriétaire |
-| `PROCUREMENT_PG_URL` / `PROCUREMENT_PG_POOL_MAX` | magasin PostgreSQL (jamais de repli silencieux sur le fichier) | **absentes** : pas de PostgreSQL pour Stock / Achats au staging du 18/10 | — |
+| `PROCUREMENT_PG_URL` / `PROCUREMENT_PG_POOL_MAX` | magasin PostgreSQL (jamais de repli silencieux sur le fichier) ; **sans le paquet `pg` dans l'image, le module passe OFF (`PG_DRIVER_MISSING`)** | **absentes** : pas de PostgreSQL pour Stock / Achats au staging du 18/10 | — |
 | `PROCUREMENT_DEV` | ne pas mettre en cache les écrans (développement) | **jamais** en staging | — |
 Variables existantes (identité, Supabase, `NORDLA_MERCHANT_ID`, CSRF, sauvegarde) : **inchangées**. Le magasin de Stock / Achats utilise l'identifiant de commerçant hébergé déjà configuré.
 
