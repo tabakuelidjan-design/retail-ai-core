@@ -120,7 +120,7 @@ export async function draftOrderFromCase({ commands, queries, actor, caseState, 
   if (open) return { ...imp, purchaseOrder: { id: open.id, number: open.number, status: open.status, totalMinor: open.totalMinor, currency: open.currency, reused: true } };
   try {
     const r = await commands.createPurchaseOrder(actor, `src:${caseState.id}:po:${q.id}:${qty}`, {
-      supplierId: imp.supplier.id, currency: q.currency, expectedDate, destinationLocationId, lines: [{ itemId: imp.item.id, quoteId: q.id, qty }], ...(fx && q.currency !== 'EUR' ? { fx } : {}),
+      supplierId: imp.supplier.id, currency: q.currency, expectedDate, destinationLocationId, lines: [{ itemId: imp.item.id, quoteId: q.id, qty }], ...(fx && q.currency !== 'EUR' ? { fx: typeof fx === 'function' ? fx(q.currency) : fx } : {}),
     });
     const po = r.purchaseOrder;
     return { ...imp, purchaseOrder: { id: po.id, number: po.number, status: po.status, totalMinor: po.totalMinor, currency: po.currency, reused: false } };

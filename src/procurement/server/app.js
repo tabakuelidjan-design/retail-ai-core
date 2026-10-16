@@ -210,7 +210,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
       const b = await readJson(req); const caseState = await readCase(b.caseId);
       if (b.qty !== undefined) {
         const locs = await q.locations(); const dest = b.destinationLocationId ?? locs.find((l) => l.type === 'WAREHOUSE')?.id;
-        return send(res, 200, await draftOrderFromCase({ commands: c, queries: q, actor, caseState, qty: b.qty, destinationLocationId: dest, expectedDate: b.expectedDate, ...(b.fx ? { fx: b.fx } : {}) }));
+        return send(res, 200, await draftOrderFromCase({ commands: c, queries: q, actor, caseState, qty: b.qty, destinationLocationId: dest, expectedDate: b.expectedDate, ...(b.fxRate ? { fx: (cur) => ({ from: cur, to: 'EUR', rate: String(b.fxRate), date: now().toISOString().slice(0, 10), source: 'saisie sur téléphone' }) } : b.fx ? { fx: b.fx } : {}) }));
       }
       return send(res, 200, await importSourcingCase({ commands: c, queries: q, actor, caseState }));
     }

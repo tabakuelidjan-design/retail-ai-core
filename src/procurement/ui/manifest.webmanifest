@@ -1,0 +1,11 @@
+{
+  "name": "Nordla Achats",
+  "short_name": "Achats",
+  "description": "Visites fournisseurs, comparaison des offres et bons de commande brouillon",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#14263f",
+  "theme_color": "#14263f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
