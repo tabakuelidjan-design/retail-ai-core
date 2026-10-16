@@ -71,3 +71,35 @@ Chaque commit est indépendant et réversible. Intégration : retirer `procureme
 2. Sauvegarde quotidienne du dossier de données (procédure du guide terrain).
 3. Écran de réception des marchandises (le module est prêt).
 4. Branchement PostgreSQL staging si la décision 1 est prise.
+
+---
+
+# Clôture de la phase 2 (vérifications finales, code figé sur `e571b90`)
+
+## 1. Suite complète du dépôt (Node 24.19, Windows, un processus par fichier, `e571b90`)
+**354 fichiers : 346 passent, 8 échouent. 3 814 tests : 3 791 passent, 9 échouent, 14 ignorés.**
+Les 8 fichiers en échec : `sourcing-case-recovery`, `sourcing-field-v1-merchant-profile`, `sourcing-field-v1-phone-ui`, `sourcing-field-v1-server`, `sourcing-field-v1-three-modes`, `sourcing-price-currency`, `sourcing-terrain-v2`, `sourcing-xiaomi-sonny`.
+Ils échouent **à l'identique sur la base intacte** `integration/nordla-pre-china` (f7197d5), rejoués côté base : chemins Windows (`C:\C:\…` introuvable pour `src/sourcing/core/money.js`) et assertions sur des fichiers servis. Non causés par ce chantier ; je ne les ai pas modifiés (ils relèvent du chantier China Sourcing).
+La première exécution (avant corrections) avait en plus `core-product-images` (causé par moi, corrigé) et `remaining-tenant-decoupling` (intermittent connu : il passe cette fois). Aucun échec masqué.
+
+## 2. Persistance China Sourcing → Buying après redémarrage
+`test/procurement-sourcing-real.test.js` (Node 24) : des dossiers **construits par le vrai réducteur Sourcing** (`newCase`/`dispatch`) et enregistrés par le **vrai magasin fichier Sourcing**, lus sur disque par le serveur Stock/Achats, importés par HTTP (virgule décimale, deux devises, deux révisions de devis, photo) avec bon brouillon, **serveur arrêté puis relancé** : bon identique, 2 devis conservés, aucun fournisseur/produit/devis/bon/emplacement en double après réimport ; un devis ajouté ensuite dans Sourcing crée exactement une révision (aussi après redémarrage). 2/2.
+Limite constatée : la référence photo d'un dossier Sourcing est conservée comme **référence** (`photo://…`) ; l'écran mobile n'affiche pas de miniature pour elle (seules les photos envoyées depuis le téléphone, `upload://`, s'affichent).
+
+## 3. Interface mobile : fonctionnement et limites (navigateur réel, 375 px, code final)
+Les quatre onglets se chargent sans erreur et sans défilement horizontal ; emplacements par défaut recréés au démarrage ; parcours complet déjà joué (voir plus haut). Limites : service worker non enregistrable dans le navigateur intégré (non vérifié) ; pas d'essai sur un vrai téléphone, ni tunnel cloudflared, ni vraie caméra ; démarrer une visite et approuver/commander exigent le serveur ; pas d'écran de réception/ajustement ; miniatures Sourcing absentes (point 2).
+
+## 4. `assistant.js` et `queries.js` : différences et risque de conflit avec le chantier A
+Depuis la première version : les deux sont devenus **asynchrones** (le magasin peut être mémoire, fichier ou PostgreSQL) ; `queries.js` gagne `quote(s)`, `visit(s)`, `receiptLots`, `plannedMargin`, `targetUnitPrice`, `expiringDocuments`, `landedTotal`, `currentQuote`, la valorisation en moyenne mobile et la collection `stockLocations` ; `assistant.js` gagne `target_price` et `expiring_supplier_documents` (15 outils : 13 lectures, 2 propositions). Ils sont construits sur la lecture seule : aucun accès aux commandes.
+**Risque de conflit avec A : nul sur ces fichiers** : `src/procurement/` n'existe pas sur `origin/feature/core-field-assistant`. Sur les fichiers partagés que j'ai modifiés (`src/integration/{approval,router,index}.js`), A n'a rien changé depuis la base. Fusion à blanc (`git merge-tree`, rien fusionné) de ma branche avec la branche A : un seul conflit, `.github/workflows/nordla-integration-pre-china.yml`, qui **existe déjà entre la base et A** (je ne l'ai pas touché) ; `package.json` fusionne désormais sans conflit (mes 3 scripts sont placés loin des lignes éditées par A).
+Défaut corrigé : ma migration était dans `supabase/migrations/`, alors que la convention du chantier A place les migrations préparées et non appliquées dans `supabase/migrations-pending/` (sinon `supabase db push` ou le banc CI les prennent) → déplacée. À noter : A prépare des tables pour BUY_CANDIDATE/PurchasePlan/IncomingExpectation (`20261015090000_integration_objects_and_sourcing_cases.sql`) qui recoupent en partie ce module ; **recouvrement à arbitrer avant toute application de l'un ou l'autre**.
+
+## 5. Compatibilité avec les contrats d'intégration existants
+`integration-contracts` + `integration-workflows` : 38/38 inchangés, passent ; `integration-procurement` : 6/6 (13 lectures `READ_ONLY`, 2 propositions `OWNER_REVIEW`, rien d'engageant atteignable, dérive catalogue/politique détectée, 8 phrases existantes routées à l'identique avec et sans règles supplémentaires, plan d'achat en mémoire intact). Sans l'option `procurement`, le comportement est identique à la base.
+
+## 6. Défauts trouvés pendant la clôture et corrigés (ma branche uniquement)
+1. Migration dans le mauvais dossier (point 4).
+2. **Perte silencieuse de données lors d'un changement de format** : un fichier écrit avant le renommage de la collection `locations` perdait ses emplacements au chargement, puis le démarrage le réécrivait sans eux. Correctif : alias de la clé héritée ; toute clé inconnue est **refusée** au lieu d'être ignorée ; test dédié. (Dans le dossier de démonstration jetable, l'écrasement avait déjà eu lieu avant le correctif ; aucune donnée réelle n'était concernée.)
+3. Les emplacements par défaut ne se recréaient pas s'ils avaient disparu (le démarrage s'appuyait sur le rejeu d'une commande idempotente) → création conditionnelle.
+4. Tests qui ne libéraient pas le serveur en cas d'échec (blocage) → nettoyage garanti.
+Re-testés après correctifs : durabilité 7/7, serveur + Sourcing réel 9/9, suite complète relancée en entier.
