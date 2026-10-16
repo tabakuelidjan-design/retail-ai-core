@@ -48,4 +48,8 @@ export const PROCUREMENT_RULES = Object.freeze([
   rule('open_orders', /(commandes?|bons? de commande|purchase orders?).*(en cours|ouvert|en attente|pending|open|a approuver)|(en attente|pending).*(achat|commande|purchase)/, INTENT.SHOW, M.BUYING, 'open_purchase_orders'),
   rule('propose_po', /(prepar|propos|draft).*(bon de commande|commande fournisseur|purchase order)/, INTENT.CREATE, M.BUYING, 'propose_purchase_order'),
   rule('propose_adjust', /(ajust|corrig|adjust).*(stock|inventaire|inventory)/, INTENT.CREATE, M.STOCK_SALES, 'propose_stock_adjustment'),
+  // added by the Parle à Nordla workstream (appended: every sentence that routed before routes the same way). Three sentences the list above left UNROUTABLE:
+  rule('stock_overview', /(\bstock\b|inventaire)/, INTENT.SHOW, M.STOCK_SALES, 'stock_overview'),
+  rule('to_reorder', /(produits?|articles?)? ?a recommander|a recommander/, INTENT.SHOW, M.STOCK_SALES, 'reorder_alerts'),
+  rule('best_landed', /(meilleur|meilleure|moins cher|plus avantageux|compar).*(cout rendu|offre|devis)|cout rendu.*(meilleur|compar)/, INTENT.CALCULATE, M.BUYING, 'best_landed_cost_supplier'),
 ]);

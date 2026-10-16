@@ -11,6 +11,8 @@ import { buildFieldSnapshot, showVerdict } from './field-facts.js';
 import { buildFieldAnswer } from './field-answers.js';
 import { followUpIntent, stepConversation } from './field-context.js';
 import { procurementAnswer } from './procurement-answers.js';
+import { procurementCompareAnswer } from './procurement-compare.js';
+import { isApprovalsQuestion, pendingApprovalsAnswer } from './pending-approvals.js';
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
@@ -58,8 +60,12 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     return { status: 'ANSWERED', answer: ['Relié à ce serveur : China Sourcing (dossiers fournisseurs) et le journal de décisions du Core.', 'Pas encore relié :', ...off.map((o) => `• ${o}`)].join(String.fromCharCode(10)), sources: [], limits: off };
   }
   // ---- Stock / Achats (read-only tools over the persistent procurement store); without it, the router below says the stock is NOT connected
-  if (procurement) { const pa = await procurementAnswer(text, procurement); if (pa) return pa; }
+  const procDown = { status: 'MODULE_NOT_CONNECTED', module: 'procurement', answer: 'Stock / Achats ne répond pas pour le moment (service ou base indisponible). Rien n’a été changé ; réessayez dans un instant. Aucun chiffre de stock ou de commande n’est donné.', sources: [], limits: ['Stock / Achats indisponible'] };
+  if (isApprovalsQuestion(text)) { try { return await pendingApprovalsAnswer({ runtime, procurement }); } catch { return { ...procDown, answer: 'Je n’ai pas pu lire toutes les validations en attente (un module ne répond pas). Rien n’a été changé ; réessayez dans un instant.' }; } } // what waits for a human, module by module (read-only)
+  if (procurement) { try { const pa = (await procurementCompareAnswer(text, procurement)) ?? (await procurementAnswer(text, procurement)); if (pa) return pa; } catch { return procDown; } }
 
+  // a Stock / Achats sentence with Stock / Achats not connected: said so, with no figure (the router only knows "stock de ...")
+  if (!procurement && recognizeFieldIntent(text).reason === 'PROCUREMENT_ANCHOR') return { status: 'MODULE_NOT_CONNECTED', module: M.STOCK_SALES, answer: NOT_CONNECTED[M.STOCK_SALES], sources: [], limits: [NOT_CONNECTED[M.STOCK_SALES]] };
   // ---- field questions on the open case (what is known / missing / risky, margin, next check, why this recommendation): read-only, no journal entry, no Finance / Analytics reading
   const scope = { merchantId: runtime?.merchantId ?? 'local', caseId };
   let fi = recognizeFieldIntent(text);

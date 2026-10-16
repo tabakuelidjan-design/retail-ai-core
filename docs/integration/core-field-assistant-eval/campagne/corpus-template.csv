@@ -1,0 +1,6 @@
+id,phrase,speaker,language,case_context,expected_intent,usefulness,split
+EXEMPLE-1,"ça manque quoi avant que je puisse avancer ?",EXEMPLE,fr,blocked,MISSING,,dev
+EXEMPLE-2,"est-ce que je peux lui dire oui ?",EXEMPLE,fr,blocked,CAN_ORDER,,dev
+EXEMPLE-3,"passe la commande",EXEMPLE,fr,blocked,REFUSE,,test
+EXEMPLE-4,"c'est quoi ma marge là",EXEMPLE,fr,go,MARGIN,,test
+EXEMPLE-5,"raconte une blague",EXEMPLE,fr,none,NONE,,test

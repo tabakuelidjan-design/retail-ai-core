@@ -160,3 +160,13 @@ PR #12 fusionnée dans `claude/nordla-core-p0` sur autorisation du propriétaire
 | `src/core-pilot/sourcing-facts.js` (Core) | `assessment.verdictDisplay` | 1 champ ajouté ; `input` (sujet Core) inchangé |
 
 Contrats : `ask` renvoie `{status, answer, sources, limits}` + `intent, sections` pour les réponses de terrain (+ `conversation`, `notice` si l'appelant a envoyé `conversation`). L'assistant lit `decision.verdictDisplay` : la règle n'existe qu'à un endroit (le moteur). Tests de contrat : `test/core-field-assistant-contracts.test.js`.
+
+## 2026-10-16 — Core P0 : assistant de terrain, phase 3 (branche `feature/core-field-assistant-phase3`, rien de fusionné)
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/sourcing/ui/nordla-ask.js` (**nouveau**) | écran « Parle à Nordla » : réponses structurées, bandeau de blocage, conversation conservée sur le téléphone, bouton « Nouvelle conversation » | rendu pur (valeurs échappées) + contrôleur ; aucun appel réseau propre |
+| `src/sourcing/ui/core-panel.js` (**partagé ; fichier aussi modifié par la PR #11 ouverte**, `integration/core-postmerge-validation`) | 4 lignes : import, création du contrôleur, une ligne de dispatch `core-ask*`, remplacement du bloc de question | **dépendance à coordonner** : si #11 est fusionnée avant, le conflit est limité à ces 4 lignes (le reste de `core-panel.js` n'est pas touché) ; ne pas fusionner la phase 3 avant d'avoir vérifié l'ordre avec le propriétaire de #11 |
+| `src/core-pilot/field-answers.js` (Core) | champs additifs de la réponse : `case`, `verdict`, `orderBlocked`, `blockers`, `knownTitle` | forme documentée par le test de contrat ; aucun champ retiré |
+| `test/e2e/nordla-ask-ui.e2e.js`, `test/nordla-ask-ui.test.js`, `test/core-field-assistant-corpus.test.js` (**nouveaux**) | tests | `test/e2e/**` appartient au Chantier A : fichier **ajouté**, aucun test existant modifié |
+Non touchés : `src/sourcing/server/**`, `index.html`, `sw.js`, `app.css` (le CSS de l'écran est injecté par le module, namespace `.nxa-*`), workflows, `http.js`.
