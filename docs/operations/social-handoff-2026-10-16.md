@@ -7,8 +7,8 @@ Branche `feature/social-publishing-e`. Cible de la PR : `integration/nordla-conv
 | Vérification | Résultat |
 |---|---|
 | Périmètre | 30 fichiers ajoutés (`src/social/`, `test/social-*`, `docs/…`, `scripts/social-export-jpeg.py`) ; **un seul fichier existant modifié : `package.json` (+2 lignes `social`, `social:cli`, insérées au milieu de la liste pour éviter les conflits)** |
-| Tests dédiés Node 24.21.0 (Docker `node:24`) | 57 tests (54 + 3 voyage) — voir l'exécution finale ci-dessous |
-| Tests dédiés Node 20.20.2 (Docker `node:20`) | idem |
+| Tests dédiés Node 24.21.0 (Docker `node:24`) | 57 tests : **56 réussis, 0 échec, 1 ignoré** (le test d'export JPEG exige Python + Pillow, absents de l'image ; il passe sur l'hôte Windows : 57/57) |
+| Tests dédiés Node 20.20.2 (Docker `node:20`) | **56 réussis, 0 échec, 1 ignoré** (même raison) |
 | Suite générale, comparée **test par test** à la base `f7197d5` (même machine, deux exécutions complètes) | base : 3077 tests, 203 échecs · branche : 3129 tests, 204 échecs. **Les 204 noms d'échecs de la base sont tous présents sur la branche, identiques.** Seul écart : 1 test de performance Finance (« 3 000 factures… < 1 s ») échoué sous charge sur la branche ; rejoué isolément 3 fois sur chaque arbre : **réussi 3/3 des deux côtés** (fluctuation de charge). Aucun échec dans `social-*`. |
 | Cause des échecs préexistants (échantillon lu) | paquet absent de l'environnement local (`@resvg/resvg-js`) → certains fichiers plantent à l'import ; autres échecs Finance/PDF/Sourcing identiques à la base. Non analysés un par un : ils sont **identiques avec et sans ma branche**. |
 | Fusion dans Convergence (copie jetable, tip e08d98d) | **propre**, 0 conflit après déplacement des scripts npm. Sous-ensemble `social + channel + provider + integration` : mêmes 3 fichiers en échec (`integration-contracts`, `-procurement`, `-workflows`, paquet manquant) **avec et sans** ma branche. |
