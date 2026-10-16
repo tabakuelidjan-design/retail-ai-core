@@ -2,11 +2,11 @@
 
 Date : 2026-10-17. Source : API publique GitHub (étapes, annotations) du workflow `chantier-d-creative-pole`. Les journaux détaillés ne sont pas lisibles sans authentification : les nombres ci-dessous viennent d'annotations que le workflow écrit lui-même.
 
-## Ce que la CI a réellement exécuté (run 38935051685, commit `05f736d`, Node 20 et Node 24, succès sur les deux)
+## Ce que la CI a réellement exécuté (run 38936831458, commit `00a52ab`, Node 20 et Node 24, succès sur les deux)
 
 | Groupe | Fichiers | Tests | Réussis | Ignorés |
 |---|---|---|---|---|
-| Suites D : `asset-library`, `studio-compose`, `social-compat`, `habb-reserve-check`, `studio-ai-layer` | 5 | 36 | 36 | **0** |
+| Suites D : `asset-library`, `studio-compose`, `social-compat`, `habb-reserve-check`, `studio-ai-layer` | 5 | 37 | 37 | **0** |
 | Modules existants : `branding*`, `marketing*`, `creative-e2e*` | 28 | 507 | 507 | **0** |
 
 Le workflow **échoue** si un seul test des suites D est ignoré : les tests de compatibilité avec le vrai code de E (SE-1, SE-2) sont conditionnels (ils s'ignorent sans checkout de E). Ils ont donc bien tourné sur GitHub, avec la branche `feature/social-publishing-e` extraite à côté.
