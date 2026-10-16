@@ -62,7 +62,8 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     if (!actor || !isActor(actor)) fail('ACTOR_REQUIRED', 'a named actor { id, role } is required');
     if (!PERMISSION[name].includes(actor.role)) fail('FORBIDDEN', `role ${actor.role} cannot ${name}`, { command: name, role: actor.role });
     reqId(idempotencyKey, 'idempotencyKey');
-    const fp = fingerprint({ name, payload });
+    // the moment an approval was stamped is not part of the request: retrying the same approval later is the SAME request
+    const fp = fingerprint({ name, payload: payload?.approval ? { ...payload, approval: { ...payload.approval, approved_at: undefined } } : payload });
     let out;
     // A transient store failure (connection lost, deadlock, serialization failure) is retried with the SAME idempotency key: if the first attempt had in fact
     // committed (commit acknowledged lost), the retry finds the stored result and replays it; otherwise it runs once. Never a double effect.

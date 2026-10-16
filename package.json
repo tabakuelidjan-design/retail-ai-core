@@ -47,7 +47,10 @@
     "benchmark:ask": "node benchmark/ask/run.js",
     "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
-    "growth": "node src/growth/server/serve.js"
+    "growth": "node src/growth/server/serve.js",
+    "procurement": "node src/procurement/server/index.js",
+    "procurement:phone": "node src/procurement/server/phone.js",
+    "procurement:parity": "node test/postgres/procurement-parity.mjs"
   },
   "engines": {
     "node": ">=20"
