@@ -1,5 +1,22 @@
 // Shared fixtures for the Stock / Achats tests. In-memory store only: no database, no network, no production data.
-import { createProcurement, createMemoryProcurementStore } from '../src/procurement/index.js';
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { createProcurement, createMemoryProcurementStore, createPgProcurementStore } from '../src/procurement/index.js';
+
+// The SAME suites run on the memory store (default) and on a real PostgreSQL: PROCUREMENT_STORE=pg PROCUREMENT_PG_URL=postgres://... (a THROWAWAY database only;
+// test/postgres/procurement-parity.mjs starts one). Merchants are random UUIDs, so suites never collide in a shared database.
+export const STORE_KIND = process.env.PROCUREMENT_STORE === 'pg' ? 'pg' : 'memory';
+let pool = null;
+export function pgPool() {
+  if (!pool) {
+    const { Pool } = createRequire(import.meta.url)('./pg/node_modules/pg');
+    pool = new Pool({ connectionString: process.env.PROCUREMENT_PG_URL, max: 8, idleTimeoutMillis: 200, allowExitOnIdle: true });
+  }
+  return pool;
+}
+export async function newStore() { return STORE_KIND === 'pg' ? createPgProcurementStore({ pool: pgPool() }) : createMemoryProcurementStore(); }
+export async function ensureMerchant(id) { if (STORE_KIND === 'pg') await pgPool().query('insert into merchants (id, name) values ($1, $2) on conflict do nothing', [id, `test ${id}`]); return id; }
+export const newMerchant = () => randomUUID();
 
 export const NOW = '2026-10-16T10:00:00.000Z';
 export const owner = { id: 'u-owner', role: 'OWNER' };
@@ -15,9 +32,11 @@ export const approval = (action, subjectId, over = {}) => ({
 });
 export const productApproval = (action, subject, over = {}) => ({ id: key('ap'), action, subject_ref: `nordla:product:${subject}`, approver: { kind: 'HUMAN', id: 'elidjan', role: 'OWNER' }, approved_at: NOW, ...over });
 
-export async function makeWorld({ merchantId = 'm-test-1', store = createMemoryProcurementStore(), now = () => NOW, analyze } = {}) {
+export async function makeWorld({ merchantId = randomUUID(), store = null, now = () => NOW, analyze, retryDelayMs = 1, policy } = {}) {
+  store ??= await newStore();
+  await ensureMerchant(merchantId);
   const audited = [];
-  const proc = createProcurement({ store, merchantId, now, audit: async (e) => { audited.push(e); }, analyze });
+  const proc = createProcurement({ store, merchantId, now, audit: async (e) => { audited.push(e); }, analyze, retryDelayMs, policy });
   const c = proc.commands;
   const mk = async (fn, who, payload) => (await fn(who, key(), payload));
   const storeLoc = (await mk(c.createLocation, owner, { name: 'Boutique', type: 'STORE' })).location;

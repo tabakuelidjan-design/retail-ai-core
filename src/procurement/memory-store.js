@@ -70,6 +70,12 @@ export function createMemoryProcurementStore({ newId = randomUUID } = {}) {
     listMovements(merchantId, { itemId, locationId } = {}) {
       return data.movements.filter((m) => m.merchantId === merchantId && (!itemId || m.itemId === itemId) && (!locationId || m.locationId === locationId)).map(copy);
     },
+    /** Current balance of one (item, location). The SQL store reads the trigger-maintained table; here it is summed from the ledger. */
+    balanceOf(merchantId, itemId, locationId) {
+      let onHand = 0; let reserved = 0; let seen = false;
+      for (const m of data.movements) if (m.merchantId === merchantId && m.itemId === itemId && m.locationId === locationId) { seen = true; if (m.bucket === 'ON_HAND') onHand += m.delta; else reserved += m.delta; }
+      return seen ? { itemId, locationId, onHand, reserved } : undefined;
+    },
     appendEvent(row) { data.events.push(copy(row)); return copy(row); },
     listEvents(merchantId) { return data.events.filter((e) => e.merchantId === merchantId).map(copy); },
     appendIncident(row) { data.incidents.push(copy(row)); return copy(row); },

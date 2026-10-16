@@ -7,10 +7,17 @@ import { fail, ProcurementError, StoreError } from './errors.js';
 import {
   reqId, reqStr, optStr, reqInt, optInt, reqEnum, reqCurrency, reqDate, optDate, microOf, lineTotalMinor, pctToBps, shareMinor, reqFx, microToEurMicro, fingerprint, deepFreeze,
 } from './util.js';
-import { LOCATION_TYPES, SELLABLE_TYPES, balancesFrom, assertPostable } from './stock.js';
+import { LOCATION_TYPES, SELLABLE_TYPES, assertPostable } from './stock.js';
 import { authorize } from '../integration/approval.js';
 import { ref } from '../integration/ids.js';
 import { ID_KIND as K } from '../integration/constants.js';
+
+/**
+ * Separation of duties. For these actions the human who APPROVES cannot be the person who PREPARED the thing (creator / submitter of an order, the actor who
+ * posts an adjustment or a count). A single-person business can opt out explicitly with `soloOwner: { ownerIds, reason }`: the approval then goes through,
+ * is flagged `separationWaived` in the journal, and nothing is waived silently.
+ */
+export const DEFAULT_POLICY = Object.freeze({ separation: Object.freeze({ 'BUYING.approve_purchase_plan': true, 'STOCK_SALES.adjust_on_hand': true }), soloOwner: null });
 
 export const ROLES = ['OWNER', 'BUYER', 'WAREHOUSE', 'VIEWER'];
 export const INCOTERMS = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'];
@@ -28,7 +35,7 @@ function attachmentsOf(list, name = 'attachments') {
   if (!Array.isArray(list) || list.length > 20) fail('INVALID_INPUT', `${name} must hold at most 20 entries`);
   return list.map((a, i) => ({
     kind: reqEnum(a.kind, `${name}[${i}].kind`, ['PHOTO', 'DOCUMENT']), ref: reqStr(a.ref, `${name}[${i}].ref`, { max: 300 }),
-    sha256: a.sha256 === undefined ? null : (/^[0-9a-f]{64}$/.test(a.sha256) ? a.sha256 : fail('INVALID_INPUT', `${name}[${i}].sha256 must be 64 hex characters`)),
+    sha256: a.sha256 === undefined || a.sha256 === null ? null : (/^[0-9a-f]{64}$/.test(a.sha256) ? a.sha256 : fail('INVALID_INPUT', `${name}[${i}].sha256 must be 64 hex characters`)),
     note: optStr(a.note, `${name}[${i}].note`, { max: 300 }),
   }));
 }
@@ -45,7 +52,7 @@ const PERMISSION = {
 /**
  * @param {{ store: object, merchantId: string, now?: () => string, audit?: (event: object) => (void|Promise<void>) }} deps
  */
-export function createProcurementService({ store, merchantId, now = () => new Date().toISOString(), audit = async () => {} }) {
+export function createProcurementService({ store, merchantId, now = () => new Date().toISOString(), audit = async () => {}, retryDelayMs = 25, policy = DEFAULT_POLICY }) {
   reqId(merchantId, 'merchantId');
 
   // ------------------------------------------------------------------ plumbing
@@ -57,8 +64,23 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     reqId(idempotencyKey, 'idempotencyKey');
     const fp = fingerprint({ name, payload });
     let out;
-    try {
-      out = await store.transaction(async (tx) => {
+    // A transient store failure (connection lost, deadlock, serialization failure) is retried with the SAME idempotency key: if the first attempt had in fact
+    // committed (commit acknowledged lost), the retry finds the stored result and replays it; otherwise it runs once. Never a double effect.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        out = await runOnce();
+        break;
+      } catch (e) {
+        if (!(e instanceof StoreError && (e.code === 'STORE_UNAVAILABLE' || e.code === 'STORE_RETRYABLE')) || attempt >= 2) throw mapStoreError(e);
+        await new Promise((r) => setTimeout(r, retryDelayMs * (attempt + 1)));
+      }
+    }
+    const { _events: events = [], ...result } = out;
+    for (const e of events) { try { await audit(e); } catch { /* the journal in the store is the record; a failing mirror never undoes a committed command */ } }
+    return deepFreeze(result);
+
+    async function runOnce() {
+      return store.transaction(async (tx) => {
         const prior = await tx.getIdem(merchantId, idempotencyKey);
         if (prior) {
           if (prior.fingerprint !== fp) fail('IDEMPOTENCY_KEY_REUSED', 'this idempotency key was used for a different request', { idempotencyKey });
@@ -70,10 +92,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
         for (const e of ctx.events) await tx.appendEvent(e);
         return { ...result, replayed: false, _events: ctx.events };
       });
-    } catch (e) { throw mapStoreError(e); }
-    const { _events: events = [], ...result } = out;
-    for (const e of events) { try { await audit(e); } catch { /* the journal in the store is the record; a failing mirror never undoes a committed command */ } }
-    return deepFreeze(result);
+    }
   }
   const isActor = (a) => typeof a.id === 'string' && a.id.length > 0 && ROLES.includes(a.role);
 
@@ -81,13 +100,19 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     ctx.events.push({ id: store.newId(), merchantId, at: ctx.at, type, actor: { id: ctx.actor.id, role: ctx.actor.role }, object, approval, detail, idempotencyKey: ctx.key });
   }
 
-  async function requireApproval(ctx, action, subjectRef, approval) {
+  async function requireApproval(ctx, action, subjectRef, approval, makers = []) {
     if (!approval || typeof approval !== 'object') fail('APPROVAL_REQUIRED', `${action} needs a named human approval for ${subjectRef}`, { action, subject_ref: subjectRef });
     reqId(approval.id, 'approval.id');
     const d = authorize(action, { approvals: [approval], subject_ref: subjectRef });
     if (d.decision !== 'ALLOW') fail(d.code ?? 'APPROVAL_REQUIRED', d.reason, { action, subject_ref: subjectRef });
+    let separationWaived = false;
+    if (policy.separation?.[action] && makers.filter(Boolean).includes(approval.approver.id)) {
+      const solo = policy.soloOwner;
+      if (solo && solo.ownerIds.includes(approval.approver.id) && approval.approver.role === 'OWNER') separationWaived = true;
+      else fail('SEPARATION_OF_DUTIES', `${approval.approver.id} prepared this and cannot approve it: another authorized person must`, { action, subject_ref: subjectRef });
+    }
     await ctx.tx.consumeApproval(merchantId, approval.id);
-    return { id: approval.id, approverId: approval.approver.id, action, subjectRef };
+    return { id: approval.id, approverId: approval.approver.id, action, subjectRef, separationWaived };
   }
 
   const must = async (ctx, coll, id, code) => (await ctx.tx.get(coll, merchantId, id)) ?? fail(code, `${coll} ${id} not found`, { id });
@@ -98,7 +123,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     const item = await must(ctx, 'items', m.itemId, 'ITEM_NOT_FOUND');
     if (item.status === 'ARCHIVED') fail('ITEM_ARCHIVED', `item ${item.sku} is archived`);
     await must(ctx, 'locations', m.locationId, 'LOCATION_NOT_FOUND');
-    const current = balancesFrom(await ctx.tx.listMovements(merchantId, { itemId: m.itemId, locationId: m.locationId })).get(`${m.itemId}|${m.locationId}`);
+    const current = await ctx.tx.balanceOf(merchantId, m.itemId, m.locationId);
     assertPostable(current, m);
     return ctx.tx.appendMovement({
       id: store.newId(), merchantId, idempotencyKey: `${ctx.key}#${ctx.seq++}`, groupId: m.groupId ?? null, at: ctx.at, itemId: m.itemId, locationId: m.locationId,
@@ -238,14 +263,14 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const po = await ctx.tx.insert('purchaseOrders', {
         id: store.newId(), merchantId, number, supplierId: supplier.id, currency, incoterm: p.incoterm === undefined ? supplier.incotermDefault : reqEnum(p.incoterm, 'incoterm', INCOTERMS),
         expectedDate, originalExpectedDate: expectedDate, dateChanges: [], destinationLocationId: dest.id, depositBps, fx, lines, totalMinor, schedule, status: 'DRAFT',
-        supplierReference: null, orderedAt: null, closedShort: false, createdBy: ctx.actor.id, createdAt: ctx.at,
+        supplierReference: null, orderedAt: null, closedShort: false, createdBy: ctx.actor.id, submittedBy: null, createdAt: ctx.at,
       });
       emit(ctx, 'PO_CREATED', { kind: 'purchase_order', id: po.id }, { number, totalMinor, currency, lines: lines.length });
       return { purchaseOrder: po };
     }),
     submitPurchaseOrder: (actor, key, p) => command('submitPurchaseOrder', actor, key, p, async (ctx) => {
       const po = await must(ctx, 'purchaseOrders', reqId(p.poId, 'poId'), 'PO_NOT_FOUND');
-      const next = await transition(ctx, po, 'PENDING_APPROVAL');
+      const next = await transition(ctx, po, 'PENDING_APPROVAL', { submittedBy: ctx.actor.id });
       emit(ctx, 'PO_SUBMITTED', { kind: 'purchase_order', id: po.id }, {});
       return { purchaseOrder: poSummary(next) };
     }),
@@ -258,7 +283,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     approvePurchaseOrder: (actor, key, p) => command('approvePurchaseOrder', actor, key, p, async (ctx) => {
       const po = await must(ctx, 'purchaseOrders', reqId(p.poId, 'poId'), 'PO_NOT_FOUND');
       if (po.status !== 'PENDING_APPROVAL') fail('INVALID_TRANSITION', `a ${po.status} purchase order cannot be approved`, { from: po.status, to: 'APPROVED' });
-      const ap = await requireApproval(ctx, 'BUYING.approve_purchase_plan', poRefOf(po), p.approval);
+      const ap = await requireApproval(ctx, 'BUYING.approve_purchase_plan', poRefOf(po), p.approval, [po.createdBy, po.submittedBy]);
       const next = await transition(ctx, po, 'APPROVED');
       emit(ctx, 'PO_APPROVED', { kind: 'purchase_order', id: po.id }, { totalMinor: po.totalMinor }, ap);
       return { purchaseOrder: poSummary(next) };
@@ -363,7 +388,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const delta = reqInt(p.delta, 'delta', { min: -1e6, max: 1e6 }); if (delta === 0) fail('INVALID_INPUT', 'delta cannot be zero');
       const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
       await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'locations', locationId, 'LOCATION_NOT_FOUND');
-      const ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `${itemId}@${locationId}`), p.approval);
+      const ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `${itemId}@${locationId}`), p.approval, [ctx.actor.id]);
       const mv = await postMovement(ctx, { itemId, locationId, delta, kind: 'ADJUSTMENT', reason, approvalId: ap.id });
       emit(ctx, 'STOCK_ADJUSTED', { kind: 'item', id: itemId }, { locationId, delta, reason }, ap);
       return { movement: mv };
@@ -398,13 +423,13 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       for (const [i, c] of p.counts.entries()) {
         const itemId = reqId(c.itemId, `counts[${i}].itemId`); if (seen.has(itemId)) fail('DUPLICATE_LINE', `item ${itemId} counted twice`); seen.add(itemId);
         const counted = reqInt(c.counted, `counts[${i}].counted`, { min: 0 });
-        const expected = balancesFrom(await ctx.tx.listMovements(merchantId, { itemId, locationId })).get(`${itemId}|${locationId}`)?.onHand ?? 0;
+        const expected = (await ctx.tx.balanceOf(merchantId, itemId, locationId))?.onHand ?? 0;
         const variance = counted - expected;
         rows.push({ itemId, expected, counted, variance, reason: variance === 0 ? null : reqStr(c.reason, `counts[${i}].reason`, { min: 5, max: 300 }) });
       }
       const variances = rows.filter((r) => r.variance !== 0);
       let ap = null;
-      if (variances.length) ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `count:${countId}`), p.approval);
+      if (variances.length) ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `count:${countId}`), p.approval, [ctx.actor.id]);
       const groupId = store.newId();
       for (const r of variances) await postMovement(ctx, { itemId: r.itemId, locationId, delta: r.variance, kind: 'COUNT_ADJUST', reason: r.reason, groupId, reference: { type: 'count', id: countId }, approvalId: ap.id });
       emit(ctx, variances.length ? 'COUNT_ADJUSTED' : 'COUNT_CONFIRMED', { kind: 'location', id: locationId }, { countId, lines: rows.length, variances: variances.length }, ap);

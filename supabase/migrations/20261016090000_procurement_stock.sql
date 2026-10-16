@@ -127,6 +127,7 @@ create table proc_purchase_orders (
   close_reason text,
   cancel_reason text,
   created_by text not null,
+  submitted_by text, -- separation of duties: the approver of an order cannot be its creator or submitter (enforced by the service)
   version integer not null default 1,
   created_at timestamptz not null default now(),
   ord bigint generated always as identity,

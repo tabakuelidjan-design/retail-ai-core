@@ -76,8 +76,8 @@ test('random operations, valid and invalid, never break a ledger invariant', asy
 test('the ledger offers no way to change history', async () => {
   const w = await makeWorld();
   assert.equal(typeof w.store.updateMovement, 'undefined'); assert.equal(typeof w.store.deleteMovement, 'undefined');
-  assert.throws(() => w.store.update('movements', w.merchantId, 'x', {}, 1), /never updated/);
-  assert.throws(() => w.store.update('receipts', w.merchantId, 'x', {}, 1), /never updated/);
+  await assert.rejects(async () => w.store.update('movements', w.merchantId, 'x', {}, 1), /never updated/);
+  await assert.rejects(async () => w.store.update('receipts', w.merchantId, 'x', {}, 1), /never updated/);
   const po = (await import('./procurement-fixtures.js')).orderedPo;
   await po(w, { qty: 100 });
   const view = (await w.store.listMovements(w.merchantId)); view.push({ fake: true });

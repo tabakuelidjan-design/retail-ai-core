@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeWorld, orderedPo, receive, rejects, approval, productApproval, key, owner, buyer, wh, viewer, NOW } from './procurement-fixtures.js';
-import { createMemoryProcurementStore } from '../src/procurement/index.js';
+import { makeWorld, orderedPo, receive, rejects, approval, productApproval, key, owner, buyer, wh, viewer, NOW, newStore, newMerchant } from './procurement-fixtures.js';
 
 test('vertical slice: supplier -> item -> quote -> PO -> approval -> order -> partial receipt -> balance receipt -> stock', async () => {
   const w = await makeWorld();
@@ -239,9 +238,9 @@ test('catalogue and supplier uniqueness, input validation', async () => {
 });
 
 test('tenant isolation: another merchant sees and touches nothing', async () => {
-  const store = createMemoryProcurementStore();
-  const a = await makeWorld({ merchantId: 'm-A', store });
-  const b = await makeWorld({ merchantId: 'm-B', store });
+  const store = await newStore();
+  const a = await makeWorld({ merchantId: newMerchant(), store });
+  const b = await makeWorld({ merchantId: newMerchant(), store });
   assert.equal((await a.q.items()).length, 2); assert.equal((await b.q.items()).length, 2);
   assert.notEqual(a.itemA.id, b.itemA.id);
   assert.equal((await b.q.item(a.itemA.id)), null);
@@ -294,16 +293,44 @@ test('an expired quote cannot back a purchase order even when it is still RECEIV
 });
 
 test('tenant isolation covers the ledger and the transit view', async () => {
-  const store = createMemoryProcurementStore();
-  const a = await makeWorld({ merchantId: 'm-A', store });
-  const b = await makeWorld({ merchantId: 'm-B', store });
+  const store = await newStore();
+  const a = await makeWorld({ merchantId: newMerchant(), store });
+  const b = await makeWorld({ merchantId: newMerchant(), store });
   const po = await orderedPo(a, { qty: 100 });
   await receive(a, po, [{ poLineId: 'L1', qtyAccepted: 100 }]);
   await a.c.transferStock(wh, key(), { itemId: a.itemA.id, fromLocationId: a.locs.warehouse.id, toLocationId: a.locs.transit.id, qty: 10 });
-  assert.equal((await store.listMovements('m-B')).length, 0);
+  assert.equal((await store.listMovements(b.merchantId)).length, 0);
   assert.deepEqual((await b.q.inTransit()).inTransitLocationUnits, {});
   assert.equal((await b.q.inTransit()).orderedNotReceived.units, 0);
   assert.equal((await b.q.stockPositions()).positions.reduce((s, p) => s + p.physical, 0), 0);
   assert.equal((await b.q.events()).length < (await a.q.events()).length, true);
-  assert.ok((await b.q.events()).every((e) => e.merchantId === 'm-B'));
+  assert.ok((await b.q.events()).every((e) => e.merchantId === b.merchantId));
+});
+
+test('separation of duties: nobody approves what they prepared, unless the owner explicitly waived it (and the journal says so)', async () => {
+  const w = await makeWorld();
+  const draft = (await w.mk(w.c.createPurchaseOrder, buyer, { supplierId: w.supplier.id, currency: 'USD', expectedDate: '2026-11-20', destinationLocationId: w.locs.warehouse.id, lines: [{ itemId: w.itemA.id, qty: 100, quoteId: w.quote.id }] })).purchaseOrder;
+  await w.mk(w.c.submitPurchaseOrder, owner, { poId: draft.id });
+  // the creator (u-buyer) as approver: refused
+  await rejects(w.mk(w.c.approvePurchaseOrder, owner, { poId: draft.id, approval: approval('BUYING.approve_purchase_plan', draft.id, { approver: { kind: 'HUMAN', id: 'u-buyer', role: 'AUTHORIZED_REVIEWER' } }) }), 'SEPARATION_OF_DUTIES');
+  // the submitter (u-owner) as approver: refused too
+  await rejects(w.mk(w.c.approvePurchaseOrder, owner, { poId: draft.id, approval: approval('BUYING.approve_purchase_plan', draft.id, { approver: { kind: 'HUMAN', id: 'u-owner', role: 'OWNER' } }) }), 'SEPARATION_OF_DUTIES');
+  assert.equal((await w.q.purchaseOrder(draft.id)).status, 'PENDING_APPROVAL');
+  // someone else, authorized: accepted
+  await w.mk(w.c.approvePurchaseOrder, owner, { poId: draft.id, approval: approval('BUYING.approve_purchase_plan', draft.id, { approver: { kind: 'HUMAN', id: 'reviewer-1', role: 'AUTHORIZED_REVIEWER' } }) });
+  assert.equal((await w.q.purchaseOrder(draft.id)).status, 'APPROVED');
+  // stock adjustment: the person who posts it cannot be the one who approves it
+  const po = await orderedPo(w, { qty: 100 });
+  await receive(w, po, [{ poLineId: 'L1', qtyAccepted: 100 }]);
+  const adj = (approver) => w.c.adjustStock(wh, key(), { itemId: w.itemA.id, locationId: w.locs.warehouse.id, delta: -1, reason: 'one unit damaged on the shelf', approval: productApproval('STOCK_SALES.adjust_on_hand', `${w.itemA.id}@${w.locs.warehouse.id}`, { approver }) });
+  await rejects(adj({ kind: 'HUMAN', id: 'u-wh', role: 'AUTHORIZED_REVIEWER' }), 'SEPARATION_OF_DUTIES');
+  await adj({ kind: 'HUMAN', id: 'elidjan', role: 'OWNER' });
+  // opt-in waiver for a one-person business: only the named owner, recorded
+  const solo = await makeWorld({ policy: { separation: { 'BUYING.approve_purchase_plan': true, 'STOCK_SALES.adjust_on_hand': true }, soloOwner: { ownerIds: ['u-owner'], reason: 'single-owner shop' } } });
+  const d2 = (await solo.mk(solo.c.createPurchaseOrder, owner, { supplierId: solo.supplier.id, currency: 'USD', expectedDate: '2026-11-20', destinationLocationId: solo.locs.warehouse.id, lines: [{ itemId: solo.itemA.id, qty: 100, quoteId: solo.quote.id }] })).purchaseOrder;
+  await solo.mk(solo.c.submitPurchaseOrder, owner, { poId: d2.id });
+  await rejects(solo.mk(solo.c.approvePurchaseOrder, owner, { poId: d2.id, approval: approval('BUYING.approve_purchase_plan', d2.id, { approver: { kind: 'HUMAN', id: 'u-owner', role: 'AUTHORIZED_REVIEWER' } }) }), 'SEPARATION_OF_DUTIES'); // a reviewer is not the owner
+  await solo.mk(solo.c.approvePurchaseOrder, owner, { poId: d2.id, approval: approval('BUYING.approve_purchase_plan', d2.id, { approver: { kind: 'HUMAN', id: 'u-owner', role: 'OWNER' } }) });
+  const ev = (await solo.q.events({ objectId: d2.id })).find((e) => e.type === 'PO_APPROVED');
+  assert.equal(ev.approval.separationWaived, true);
 });

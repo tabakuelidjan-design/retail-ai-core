@@ -5,12 +5,13 @@ import { createProcurementQueries } from './queries.js';
 import { createProcurementAssistantTools } from './assistant.js';
 
 export { createMemoryProcurementStore } from './memory-store.js';
+export { createPgProcurementStore, mapPgError } from './pg-store.js';
 export { ProcurementError, StoreError } from './errors.js';
-export { PO_STATUSES, PO_TRANSITIONS, ROLES, INCOTERMS, resolveTierPrice } from './service.js';
+export { PO_STATUSES, PO_TRANSITIONS, ROLES, INCOTERMS, DEFAULT_POLICY, resolveTierPrice } from './service.js';
 export { LOCATION_TYPES, MOVEMENT_KINDS } from './stock.js';
 
-export function createProcurement({ store, merchantId, now, audit, analyze }) {
-  const commands = createProcurementService({ store, merchantId, now, audit });
+export function createProcurement({ store, merchantId, now, audit, analyze, retryDelayMs, policy }) {
+  const commands = createProcurementService({ store, merchantId, now, audit, ...(retryDelayMs !== undefined ? { retryDelayMs } : {}), ...(policy ? { policy } : {}) });
   const queries = createProcurementQueries({ store, merchantId, now, ...(analyze ? { analyze } : {}) });
   const assistant = createProcurementAssistantTools({ queries });
   return Object.freeze({ commands, queries, assistant });
