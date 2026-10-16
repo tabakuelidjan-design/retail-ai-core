@@ -19,6 +19,7 @@ import { createPublisher } from '../publisher.js';
 import { createFacebookPagePublisher, createInstagramPublisher } from '../providers/meta.js';
 import { createSimulatedPublisher } from '../providers/simulated.js';
 import { createSocialService } from '../service.js';
+import { createFileKeyring, defaultKeyDir } from '../integrity.js';
 import { createFileStore } from '../store.js';
 import { createFetchHttp } from '../../activation/providers/http.js';
 import { createSocialApp } from './app.js';
@@ -66,7 +67,9 @@ export async function startSocialServer({
   const credentialPort = createEnvCredentialPort(env);
   const { publishers, media } = buildPublishers({ env, credentialPort, fetchImpl });
   const confirmedFacts = await loadConfirmedFacts(dir);
-  const service = createSocialService({ store: createFileStore(dir), publishers, confirmedFacts });
+  // approvals are SIGNED with a key that lives OUTSIDE the data folder (integrity.js); the server refuses to start with a key folder inside the data folder
+  const integrity = createFileKeyring({ keyDir: defaultKeyDir(env), dataDir: dir });
+  const service = createSocialService({ store: createFileStore(dir), publishers, confirmedFacts, integrity });
   const publisher = createPublisher({ service, publishers, media, logger: (l) => log(JSON.stringify(l)) });
   const assets = createAssetLibrary(join(dir, 'assets'));
   const connections = async () => ['instagram', 'facebook'].map((platform) => ({
@@ -82,6 +85,7 @@ export async function startSocialServer({
   const addr = server.address();
   log(`HABB social publishing: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}  mode=${env.SOCIAL_MODE || 'none'}  (${host === '127.0.0.1' ? 'loopback only' : `listening on ${host}`}; token required)`);
   log(`Access token: ${join(dir, 'token.txt')} (never printed). Posts: ${join(dir, 'posts')}. Audit: ${join(dir, 'audit.jsonl')}.`);
+  log(`Approvals are signed (key id ${integrity.describe().key_id}); the key is kept outside the data folder and is never printed.`);
   if ((env.SOCIAL_MODE || 'none') === 'none') log('No platform is connected: nothing will be published automatically. Use the manual pack on each approved post.');
   return { server, token, port: addr.port, service, publisher, close: () => new Promise((r) => { clearInterval(timer); server.close(r); }) };
 }

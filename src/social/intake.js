@@ -9,6 +9,7 @@
 // A post that may already exist on a platform (publishing, published...) is never touched: a new proposal_id is required.
 
 import { createHash } from 'node:crypto';
+import { contentFingerprint } from './duplicates.js';
 import {
   FROZEN_STATES, PROPOSAL_SCHEMA, ROLE, SocialError,
 } from './constants.js';
@@ -66,6 +67,9 @@ export async function importProposals({
           line.result = 'UPDATED';
           line.approval_voided = Boolean(existing.approval);
         }
+        // an identical post under another proposal id (audit D4): reported at once, refused later at approval unless the owner accepts the republication
+        const twins = (await store.list()).filter((q) => q.id !== post.id && !['CANCELLED', 'REJECTED'].includes(q.state) && contentFingerprint(q) === contentFingerprint(post));
+        if (twins.length) line.duplicate_of = twins.map((q) => q.id);
         const problems = readinessProblems(post, { confirmed });
         if (problems.length) line.problems = problems;
         else if (post.state === 'DRAFT') await act(id, 'submit', actor);

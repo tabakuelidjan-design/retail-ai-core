@@ -18,6 +18,7 @@ import {
 } from './constants.js';
 import { isManualOnly } from './post.js';
 import { hasValidApproval, transition } from './workflow.js';
+import { OUT_THERE_STATES, unacknowledgedDuplicates } from './duplicates.js';
 import { SYSTEM_ACTOR } from './service.js';
 
 export const PUBLISHER_DEFAULTS = Object.freeze({
@@ -28,7 +29,7 @@ export function createPublisher({
   service, publishers = {}, media = null, clock = () => Date.now(), logger = () => {}, config = {},
 }) {
   const cfg = { ...PUBLISHER_DEFAULTS, nativeScheduling: true, ...config };
-  const { store } = service;
+  const { store, integrity } = service;
   const nowIso = () => new Date(clock()).toISOString();
   const log = (event, post, extra = {}) => logger(redact({ event, post_id: post.id, platform: post.platform, state: post.state, ...extra }));
   const sys = (id, action, params) => store.update(id, (p) => transition(p, action, SYSTEM_ACTOR, { now: nowIso(), ...params }));
@@ -40,15 +41,17 @@ export function createPublisher({
   async function claim(id, { native = false } = {}) {
     const claimId = randomUUID();
     let verdict = null;
-    const after = await store.update(id, (p) => {
+    const after = await store.update(id, async (p, ctx) => {
       if (p.state !== S.SCHEDULED || p.publication?.platform_schedule || p.publication?.remote_cancel_pending || p.publication?.manual_schedule || p.publication?.manual_cancel_required || isManualOnly(p)) { verdict = 'NOT_ELIGIBLE'; return p; }
-      if (!hasValidApproval(p)) { verdict = 'NO_VALID_APPROVAL'; return transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'NO_VALID_APPROVAL' }); }
+      if (!hasValidApproval(p, integrity)) { verdict = 'NO_VALID_APPROVAL'; return transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'NO_VALID_APPROVAL' }); }
       if (!native) {
         if (clock() < Date.parse(p.publish_at ?? 0) || clock() < notBefore(p)) { verdict = 'NOT_DUE'; return p; }
         if (lateness(p) > cfg.MAX_LATE_MS) { verdict = 'MISSED_WINDOW'; return transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'MISSED_WINDOW' }); }
       }
+      // an identical post already out there (or possibly out there) that the owner did not accept as a republication: never publish a second copy (audit D4); decided inside the claim itself
+      if (unacknowledgedDuplicates(p, await ctx.list(), OUT_THERE_STATES).length) { verdict = 'DUPLICATE_CONTENT_PUBLISHED'; return transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'DUPLICATE_CONTENT_PUBLISHED' }); }
       verdict = 'CLAIMED';
-      return transition(p, 'claim', SYSTEM_ACTOR, { now: nowIso(), claim_id: claimId });
+      return transition(p, 'claim', SYSTEM_ACTOR, { now: nowIso(), claim_id: claimId, integrity });
     });
     if (verdict !== 'CLAIMED' || after.publication?.claim_id !== claimId) { if (verdict && verdict !== 'NOT_ELIGIBLE' && verdict !== 'NOT_DUE') log('post.not_published', after, { code: verdict }); return null; }
     return after;
@@ -96,7 +99,9 @@ export function createPublisher({
           result = await publisher.publish(claimed, {
             media: mediaInfo,
             scheduleAt,
-            onProgress: (progress) => sys(id, 'annotate', { note: 'platform container created', publication: { submission_id: progress.submission_id }, detail: { progress: 'CONTAINER_CREATED' } }),
+            onProgress: (progress) => (progress.publish_step
+              ? sys(id, 'annotate', { note: 'the publishing step is about to leave for the platform', publication: { publish_step_started_at: nowIso() }, detail: { progress: 'PUBLISH_STEP_STARTED' } })
+              : sys(id, 'annotate', { note: 'platform container created', publication: { submission_id: progress.submission_id }, detail: { progress: 'CONTAINER_CREATED' } })),
           });
         }
       }
@@ -120,8 +125,10 @@ export function createPublisher({
     for (const p of await store.list()) {
       if (p.state !== S.PUBLISHING) continue;
       if (clock() - Date.parse(p.publication?.claimed_at ?? 0) < cfg.LEASE_MS) continue;
-      if (p.publication?.submission_id) await sys(p.id, 'retry_later', { code: 'WORKER_RESTARTED', next_attempt_at: nowIso() }); // a container exists: safe to resume
-      else await sys(p.id, 'mark_unknown', { code: 'WORKER_DIED_MID_CALL' }); // a creating call may have gone out: the owner reconciles
+      // The publishing step had started (or no container is known): the platform may hold the post, so the outcome is UNKNOWN and only the owner reconciles it. Only a container that was
+      // created and whose publishing step never started is safe to resume.
+      if (p.publication?.submission_id && !p.publication?.publish_step_started_at) await sys(p.id, 'retry_later', { code: 'WORKER_RESTARTED', next_attempt_at: nowIso() });
+      else await sys(p.id, 'mark_unknown', { code: p.publication?.publish_step_started_at ? 'WORKER_DIED_DURING_PUBLISH_STEP' : 'WORKER_DIED_MID_CALL' });
     }
   }
 

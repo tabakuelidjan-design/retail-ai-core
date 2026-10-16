@@ -47,7 +47,7 @@ async function readBody(req, limit = 256 * 1024) {
 }
 
 /** What the phone shows for one post: the post plus everything derived (hash to name in a decision, bucket, problems, labels). */
-export function describePost(post, { publishers = {}, nowMs = Date.now(), confirmed = [] } = {}) {
+export function describePost(post, { publishers = {}, nowMs = Date.now(), confirmed = [], integrity } = {}) {
   const problems = readinessProblems(post, { confirmed });
   const when = post.publish_at ? brusselsParts(post.publish_at) : null;
   const publisher = publishers[post.platform];
@@ -64,13 +64,13 @@ export function describePost(post, { publishers = {}, nowMs = Date.now(), confir
   return {
     ...post,
     current_hash: null, // filled by the caller (needs the service)
-    bucket: bucketOf(post, { confirmed }),
+    bucket: bucketOf(post, { confirmed, integrity }),
     state_label: STATE_LABEL_FR[post.state],
     mode_label: post.publication?.mode ? MODE_LABEL_FR[post.publication.mode] : null,
     when_brussels: when,
     problems,
     claim_findings: lintClaims(post, { confirmed }),
-    approval_valid: hasValidApproval(post),
+    approval_valid: hasValidApproval(post, integrity),
     alerts,
     auto_blockers: autoBlockers,
     full_caption: composeCaption(post),
@@ -87,24 +87,25 @@ export function createSocialApp({
   const tooMany = (ip) => { const f = (failures.get(ip) ?? []).filter((t) => Date.now() - t < 60_000); failures.set(ip, f); return f.length >= 10; };
   const noteFailure = (ip) => { failures.get(ip)?.push(Date.now()); };
 
-  const withHash = async (post) => ({ ...describePost(post, { publishers, nowMs: now().getTime(), confirmed: service.confirmedFacts }), current_hash: service.contentHashOf(post) });
+  const withHash = async (post) => ({ ...describePost(post, { publishers, nowMs: now().getTime(), confirmed: service.confirmedFacts, integrity: service.integrity }), current_hash: service.contentHashOf(post) });
 
   async function state() {
     const posts = await service.list();
     const described = await Promise.all(posts.map(withHash));
     const from = brusselsParts(now().toISOString()).date;
-    const calendar = buildCalendar({ posts, from, days: 14, confirmed: service.confirmedFacts });
+    const calendar = buildCalendar({ posts, from, days: 14, confirmed: service.confirmedFacts, integrity: service.integrity });
     const counts = Object.fromEntries(Object.values(BUCKET).map((b) => [b, calendar.buckets[b].length]));
     return {
       now: now().toISOString(), timezone: TIMEZONE, posts: described, calendar, counts,
       connections: connections ? await connections() : [],
+      integrity: service.integrity.describe(), // key id and whether the key is persistent: never the key
     };
   }
 
   function exportPack(post) {
     const when = post.publish_at ? brusselsParts(post.publish_at) : null;
     return {
-      post_id: post.id, platform: post.platform, format: post.format, state: post.state, approved: hasValidApproval(post),
+      post_id: post.id, platform: post.platform, format: post.format, state: post.state, approved: hasValidApproval(post, service.integrity),
       caption_full: composeCaption(post), when_brussels: when, assets: (post.assets ?? (post.asset ? [post.asset] : [])).map((a) => ({ ref: a.ref, version: a.version, sha256: a.sha256, content_type: a.content_type, alt_text: a.alt_text ?? null, download: `/api/asset?ref=${encodeURIComponent(a.ref)}&v=${a.version}&sha=${a.sha256}` })),
       steps_fr: post.platform === 'facebook'
         ? ['Ouvrez Meta Business Suite (ou l\'app Facebook Pages).', 'Créer une publication → ajoutez la photo téléchargée.', 'Collez le texte ci-dessus tel quel (ne le modifiez pas).', 'Choisissez « Programmer » avec la date et l\'heure indiquées (heure de Belgique), puis confirmez.', 'Revenez dans Nordla : « J\'ai publié à la main » et collez le lien.']

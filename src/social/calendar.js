@@ -53,12 +53,12 @@ export const BUCKET = Object.freeze({
 });
 
 /** Which of the owner's five questions does this post answer? */
-export function bucketOf(post, { confirmed = [] } = {}) {
+export function bucketOf(post, { confirmed = [], integrity } = {}) {
   const problems = readinessProblems(post, { confirmed });
   switch (post.state) {
     case S.PUBLISHED: case S.VERIFIED: case S.PUBLISHING: return BUCKET.PUBLISHED;
     case S.CANCELLED: return BUCKET.CANCELLED;
-    case S.APPROVED: case S.SCHEDULED: return hasValidApproval(post) && !problems.length ? BUCKET.PROGRAMMABLE : BUCKET.NEEDS_CORRECTION;
+    case S.APPROVED: case S.SCHEDULED: return hasValidApproval(post, integrity) && !problems.length ? BUCKET.PROGRAMMABLE : BUCKET.NEEDS_CORRECTION;
     case S.READY_FOR_REVIEW: return BUCKET.AWAITING_APPROVAL;
     case S.NEEDS_CHANGES: case S.REJECTED: case S.ERROR: case S.PUBLICATION_UNKNOWN: return BUCKET.NEEDS_CORRECTION;
     default: return problems.includes('ASSET_MISSING') ? BUCKET.MISSING_ASSET : BUCKET.NEEDS_CORRECTION; // DRAFT
@@ -66,14 +66,14 @@ export function bucketOf(post, { confirmed = [] } = {}) {
 }
 
 export function buildCalendar({
-  posts, from, days = 14, confirmed = [],
+  posts, from, days = 14, confirmed = [], integrity,
 }) {
   const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
   const grid = new Map(dates.map((d) => [d, []]));
   const buckets = Object.fromEntries(Object.values(BUCKET).map((b) => [b, []]));
   const unplaced = [];
   for (const post of posts) {
-    const bucket = bucketOf(post, { confirmed });
+    const bucket = bucketOf(post, { confirmed, integrity });
     buckets[bucket].push(post.id);
     if (!post.publish_at) { unplaced.push(post.id); continue; }
     const { date, time } = brusselsParts(post.publish_at);

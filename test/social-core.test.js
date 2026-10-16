@@ -38,8 +38,8 @@ test('happy path: draft -> review -> approved -> scheduled -> published -> verif
   cur = await rt.service.get(p.id);
   assert.equal(cur.state, 'VERIFIED');
   assert.equal(cur.verification.permalink, 'https://www.instagram.com/p/ABC123/');
-  assert.deepEqual(cur.history.map((h) => h.action), ['submit', 'approve', 'schedule', 'claim', 'annotate', 'mark_published', 'mark_verified']);
-  assert.deepEqual(cur.history.map((h) => h.actor.role), ['agent', 'owner', 'owner', 'system', 'system', 'system', 'system']);
+  assert.deepEqual(cur.history.map((h) => h.action), ['submit', 'approve', 'schedule', 'claim', 'annotate', 'annotate', 'mark_published', 'mark_verified']);
+  assert.deepEqual(cur.history.map((h) => h.actor.role), ['agent', 'owner', 'owner', 'system', 'system', 'system', 'system', 'system']);
 });
 
 test('only the owner decides: an agent or the publisher can never approve, schedule, reject or revoke', async () => {
@@ -210,7 +210,7 @@ test('"not published" reconciliation re-arms the post only on the owner\'s word'
 test('a worker that died mid-call: an existing container is resumed, no container means UNKNOWN (never a blind re-send)', async () => {
   const rt = runtime();
   const a = await scheduled(rt);
-  const b = await scheduled(rt, { subject: { kind: 'product', ref: 'other', label: 'o' } });
+  const b = await scheduled(rt, { subject: { kind: 'product', ref: 'other', label: 'o' }, caption: 'Un autre texte, pour une autre coque.' }); // not an identical post (identical content is refused: see social-duplicates.test.js)
   // simulate two dead claims
   await rt.store.update(a.id, (p) => transition(p, 'claim', { id: 'w', role: 'system' }, { now: new Date(T0).toISOString(), claim_id: 'dead-1' }));
   await rt.store.update(b.id, (p) => transition(p, 'claim', { id: 'w', role: 'system' }, { now: new Date(T0).toISOString(), claim_id: 'dead-2' }));
@@ -360,7 +360,7 @@ test('revoking or editing a post that was scheduled by hand at Meta warns that t
   const cleared = await rt.service.act(p.id, 'confirm_manual_cancel', OWNER, {});
   assert.equal(cleared.publication.manual_cancel_required, null);
   await rt.service.act(p.id, 'schedule', OWNER, { expected_hash: hash });
-  const q = await scheduled(rt, { subject: { kind: 'product', ref: 'q', label: 'q' } });
+  const q = await scheduled(rt, { subject: { kind: 'product', ref: 'q', label: 'q' }, caption: 'Le texte de la publication q.' });
   await rt.service.act(q.id, 'mark_manual_schedule', OWNER, {});
   const edited = await rt.service.editPost(q.id, { caption: 'Un autre texte pour la coque.' }, AGENT);
   assert.equal(edited.state, 'DRAFT');

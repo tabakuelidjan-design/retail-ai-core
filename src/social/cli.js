@@ -19,6 +19,7 @@ import { brusselsParts, buildCalendar } from './calendar.js';
 import { STATE_LABEL_FR } from './constants.js';
 import { readinessProblems } from './post.js';
 import { createSocialService } from './service.js';
+import { defaultKeyDir, openKeyringIfPresent } from './integrity.js';
 import { createFileStore } from './store.js';
 
 export const DATA_DIR = 'data/local/social';
@@ -56,7 +57,7 @@ export function renderCalendarMarkdown({ calendar, posts, confirmed = [] }) {
   return L.join('\n');
 }
 
-export async function main(argv = process.argv.slice(2), { dir = DATA_DIR, log = console.log } = {}) {
+export async function main(argv = process.argv.slice(2), { dir = DATA_DIR, log = console.log, keyDir = defaultKeyDir() } = {}) {
   const [cmd, ...args] = argv;
   await mkdir(dir, { recursive: true });
   if (cmd === 'seed-facts') {
@@ -65,7 +66,7 @@ export async function main(argv = process.argv.slice(2), { dir = DATA_DIR, log =
     return 0;
   }
   const confirmed = await loadFacts(dir);
-  const service = createSocialService({ store: createFileStore(dir), confirmedFacts: confirmed });
+  const service = createSocialService({ store: createFileStore(dir), confirmedFacts: confirmed, integrity: openKeyringIfPresent({ keyDir, dataDir: dir }) });
   if (cmd === 'import-editorial') {
     const from = resolve(args[0] ?? '');
     const posts = JSON.parse(await readFile(join(from, 'posts.json'), 'utf8'));
@@ -116,7 +117,7 @@ export async function main(argv = process.argv.slice(2), { dir = DATA_DIR, log =
   if (cmd === 'calendar') {
     const posts = await service.list();
     const from = flag(args, '--from') ?? brusselsParts(new Date().toISOString()).date;
-    const md = renderCalendarMarkdown({ calendar: buildCalendar({ posts, from, days: 14, confirmed }), posts, confirmed });
+    const md = renderCalendarMarkdown({ calendar: buildCalendar({ posts, from, days: 14, confirmed, integrity: service.integrity }), posts, confirmed });
     const out = flag(args, '--out');
     if (out) { await writeFile(out, md); log(`écrit ${out}`); } else log(md);
     return 0;

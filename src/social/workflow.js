@@ -11,10 +11,12 @@ import {
 import {
   contentHashOf, lintClaims, normalizeContent, readinessProblems,
 } from './post.js';
+import { defaultIntegrity } from './integrity.js';
 
 const clone = (v) => structuredClone(v);
 const MIN_SCHEDULE_LEAD_MS = 2 * 60 * 1000;
-export const hasValidApproval = (post) => Boolean(post.approval && post.approval.content_hash === contentHashOf(post));
+/** A SIGNED approval that covers this post as it is now (integrity.js). Without an explicit key ring the process-local key is used: an approval signed by another key is never valid (fail closed). */
+export const hasValidApproval = (post, integrity = defaultIntegrity()) => Boolean(post.approval && post.approval.content_hash === contentHashOf(post) && integrity.verifyApproval(post));
 
 function record(post, { action, actor, from, to, now, note = null, detail = null }) {
   post.history.push({
@@ -70,7 +72,11 @@ const HANDLERS = {
     allow(post, S.APPROVED);
     requireExactVersion(post, params);
     requireReady(post, params.confirmed);
-    post.approval = { approved_by: actor.id, approved_at: now, content_hash: contentHashOf(post) };
+    const integrity = params.integrity ?? defaultIntegrity();
+    const approval = {
+      approved_by: actor.id, approved_at: now, content_hash: contentHashOf(post), ...(params.duplicate_ack ? { duplicate_ack: params.duplicate_ack } : {}), key_id: integrity.keyId,
+    };
+    post.approval = { ...approval, sig: integrity.sign(post, approval) };
     return record(post, { action: 'approve', actor, from: post.state, to: S.APPROVED, now, note: params.note });
   },
   reject(post, { actor, now, params }) {
@@ -94,7 +100,7 @@ const HANDLERS = {
   schedule(post, { actor, now, params }) {
     allow(post, S.SCHEDULED);
     requireExactVersion(post, params);
-    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
+    if (!hasValidApproval(post, params.integrity)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
     requireReady(post, params.confirmed);
     if (post.publication?.manual_cancel_required) fail(E.CONFLICT, 'you scheduled this post by hand at Meta: confirm that you removed that copy first');
     if (post.publication?.remote_cancel_pending) fail(E.CONFLICT, 'a previous scheduled copy is still being removed at the platform: try again once it is confirmed gone');
@@ -114,9 +120,9 @@ const HANDLERS = {
     const remote = armRemoteCancel(post);
     return record(post, { action: 'cancel', actor, from: post.state, to: S.CANCELLED, now, note: params.note, detail: remote ? { needs_remote_cancel: true } : null });
   },
-  retry(post, { actor, now }) {
+  retry(post, { actor, now, params }) {
     if (post.state !== S.ERROR) fail(E.TRANSITION, 'only a post in ERROR can be retried');
-    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version: approve it again');
+    if (!hasValidApproval(post, params.integrity)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version: approve it again');
     allow(post, S.SCHEDULED);
     post.publication = { ...(post.publication ?? {}), retry_authorized_at: now, platform_schedule: null };
     return record(post, { action: 'retry', actor, from: post.state, to: S.SCHEDULED, now });
@@ -138,7 +144,7 @@ const HANDLERS = {
   },
   attest_manual(post, { actor, now, params }) {
     if (![S.APPROVED, S.SCHEDULED, S.ERROR].includes(post.state)) fail(E.TRANSITION, `cannot attest a manual publication from ${post.state}`);
-    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
+    if (!hasValidApproval(post, params.integrity)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
     if (!params.permalink || !/^https:\/\//.test(params.permalink)) fail(E.INVALID, 'give the link of the published post', { field: 'permalink' });
     allow(post, S.PUBLISHED);
     post.publication = { ...(post.publication ?? {}), mode: MODE.MANUAL, permalink: params.permalink, post_id: null, published_at: params.published_at ?? now, attempts: post.publication?.attempts ?? 0 };
@@ -146,7 +152,7 @@ const HANDLERS = {
   },
   mark_manual_schedule(post, { actor, now, params }) {
     if (![S.APPROVED, S.SCHEDULED].includes(post.state)) fail(E.TRANSITION, `cannot record a manual schedule from ${post.state}`);
-    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
+    if (!hasValidApproval(post, params.integrity)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
     if (post.publication?.platform_schedule) fail(E.CONFLICT, 'the platform already holds a scheduled copy made by Nordla: a second copy would publish twice');
     if (post.state === S.APPROVED) allow(post, S.SCHEDULED);
     const where = String(params.where ?? 'Meta Business Suite').slice(0, 80);
@@ -161,9 +167,9 @@ const HANDLERS = {
   // --- system-only ----------------------------------------------------------------------------------------------------------------
   claim(post, { actor, now, params }) {
     allow(post, S.PUBLISHING);
-    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
+    if (!hasValidApproval(post, params.integrity)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
     post.publication = {
-      ...(post.publication ?? {}), claim_id: params.claim_id, claimed_at: now, attempts: (post.publication?.attempts ?? 0) + 1,
+      ...(post.publication ?? {}), claim_id: params.claim_id, claimed_at: now, attempts: (post.publication?.attempts ?? 0) + 1, publish_step_started_at: null,
     };
     return record(post, { action: 'claim', actor, from: post.state, to: S.PUBLISHING, now });
   },
@@ -185,7 +191,7 @@ const HANDLERS = {
   },
   retry_later(post, { actor, now, params }) {
     allow(post, S.SCHEDULED);
-    post.publication = { ...(post.publication ?? {}), next_attempt_at: params.next_attempt_at, last_error: params.code, submission_id: params.submission_id ?? post.publication?.submission_id ?? null };
+    post.publication = { ...(post.publication ?? {}), next_attempt_at: params.next_attempt_at, last_error: params.code, submission_id: params.submission_id ?? post.publication?.submission_id ?? null, publish_step_started_at: null };
     return record(post, { action: 'retry_later', actor, from: post.state, to: S.SCHEDULED, now, detail: { code: params.code } });
   },
   mark_error(post, { actor, now, params }) {
