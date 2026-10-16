@@ -1,4 +1,4 @@
-# Procédure finale — lancer Nordla staging (`sourcing-staging`, commit `50c865c`)
+# Procédure finale — lancer Nordla staging (`sourcing-staging`, commit `ab02b77`)
 
 Qui : **P** = propriétaire (ou la session Railway, sous son contrôle) ; **I** = Infrastructure (cette session : vérifications
 sans secret). Chaque étape a sa condition d'arrêt : **une condition non remplie = on s'arrête, rien de plus n'est fait.**
@@ -67,7 +67,7 @@ Secrets — **P les saisit lui-même**, jamais dans un chat :
 
 ## 4. Activation (P — étape payante, sur confirmation explicite)
 
-Déployer le patch du service épinglé sur **`50c865cdf33184f873f6f905e4b4897753325c86`**.
+Déployer le patch du service épinglé sur **`ab02b7791b7dd91fbc7c10e7029bef5983a0c02a`** (`ab02b77` : `50c865c` + correction de la copie B2 ; CI verte : core-reliability 38864695248 Linux + vrai disque + Windows, intégration 38864695260 Node 20/24, china-sourcing 38864695251).
 
 ## 5. Contrôles de démarrage (P lit les journaux ; I interprète si besoin)
 

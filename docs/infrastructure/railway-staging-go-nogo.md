@@ -6,7 +6,7 @@ Décision du propriétaire (16/10) : déploiement de `sourcing-staging` validé 
 **activation, dépenses et changements d'infrastructure seulement après sa confirmation explicite**, sur présentation de cette grille.
 Adresse cible du test Xiaomi : `app.nordla.app` (aucun DNS modifié sans son accord). Staging reste séparé de la production.
 
-Commit à déployer : **`50c865cdf33184f873f6f905e4b4897753325c86`** (`50c865c`, remplace `a11324e` ; branche `claude/nordla-core-p0` ; contient la fusion du Chantier B #10 `9c78d44`). Les commits suivants ne touchent que la documentation : l'image serait identique.
+Commit à déployer : **`ab02b7791b7dd91fbc7c10e7029bef5983a0c02a`** (`ab02b77` = `50c865c` + correction de la copie B2 ; CI verte 38864695248 / 38864695260 / 38864695251 ; remplace `a11324e` ; branche `claude/nordla-core-p0` ; contient la fusion du Chantier B #10 `9c78d44`). Les commits suivants ne touchent que la documentation : l'image serait identique.
 
 ## A. Conditions vérifiables AVANT l'activation
 
