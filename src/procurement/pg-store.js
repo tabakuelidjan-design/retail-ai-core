@@ -18,7 +18,7 @@ const TS_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"';
 // column -> type. 'ord' (insertion order) is read-only and never returned.
 const SPEC = {
   items: { table: 'proc_items', cols: { id: 'uuid', merchant_id: 'uuid', sku: 'text', name: 'text', barcode: 'text', variant_ref: 'text', status: 'text', reorder_point: 'int', reorder_qty: 'int', attachments: 'json', version: 'int', created_at: 'ts' } },
-  locations: { table: 'proc_locations', cols: { id: 'uuid', merchant_id: 'uuid', name: 'text', type: 'text', created_at: 'ts' } },
+  stockLocations: { table: 'proc_locations', cols: { id: 'uuid', merchant_id: 'uuid', name: 'text', type: 'text', created_at: 'ts' } },
   suppliers: { table: 'proc_suppliers', cols: { id: 'uuid', merchant_id: 'uuid', name: 'text', country: 'text', currency: 'text', incoterm_default: 'text', deposit_bps: 'int', lead_time_days: 'int', finance_company_id: 'text', contacts: 'json', documents: 'json', status: 'text', version: 'int', created_at: 'ts' } },
   supplierItems: { table: 'proc_supplier_items', cols: { id: 'uuid', merchant_id: 'uuid', supplier_id: 'uuid', item_id: 'uuid', supplier_sku: 'text', moq: 'int', lead_time_days: 'int', created_at: 'ts' } },
   quotes: { table: 'proc_quotes', cols: { id: 'uuid', merchant_id: 'uuid', supplier_id: 'uuid', item_id: 'uuid', revision: 'int', currency: 'text', tiers: 'json', moq: 'int', incoterm: 'text', lead_time_days: 'int', valid_until: 'date', status: 'text', provenance: 'text', reason: 'text', evidence: 'json', recorded_by: 'text', version: 'int', created_at: 'ts' } },
@@ -31,7 +31,7 @@ const SPEC = {
 };
 const LINE_COLS = { line_id: 'text', position: 'int', item_id: 'uuid', qty: 'int', unit_price_micro: 'bigint', total_minor: 'bigint', quote_id: 'uuid', price_source: 'text', qty_received: 'int', qty_defective: 'int' };
 const SCHED_COLS = { kind: 'text', amount_minor: 'bigint', due_event: 'text', status: 'text', payment_ref: 'text', paid_amount_minor: 'bigint', paid_at: 'date' };
-const MUTABLE = new Set(['items', 'locations', 'suppliers', 'quotes', 'purchaseOrders', 'visits']);
+const MUTABLE = new Set(['items', 'stockLocations', 'suppliers', 'quotes', 'purchaseOrders', 'visits']);
 const VERSIONED = new Set(['items', 'suppliers', 'quotes', 'purchaseOrders', 'visits']);
 
 const sel = (cols, a = '') => Object.entries(cols).map(([c, t]) => (t === 'date' ? `to_char(${a}${c}, 'YYYY-MM-DD') as ${c}` : t === 'ts' ? `to_char(${a}${c} at time zone 'UTC', '${TS_FORMAT}') as ${c}` : `${a}${c}`)).join(', ');

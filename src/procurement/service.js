@@ -123,7 +123,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     const m = { ...movement, bucket: movement.bucket ?? 'ON_HAND' }; // the invariant check must see the bucket that will really be written
     const item = await must(ctx, 'items', m.itemId, 'ITEM_NOT_FOUND');
     if (item.status === 'ARCHIVED') fail('ITEM_ARCHIVED', `item ${item.sku} is archived`);
-    await must(ctx, 'locations', m.locationId, 'LOCATION_NOT_FOUND');
+    await must(ctx, 'stockLocations', m.locationId, 'LOCATION_NOT_FOUND');
     const current = await ctx.tx.balanceOf(merchantId, m.itemId, m.locationId);
     assertPostable(current, m);
     return ctx.tx.appendMovement({
@@ -206,7 +206,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       return { item: next };
     }),
     createLocation: (actor, key, p) => command('createLocation', actor, key, p, async (ctx) => {
-      const location = await ctx.tx.insert('locations', { id: store.newId(), merchantId, name: reqStr(p.name, 'name', { max: 100 }), type: reqEnum(p.type, 'type', LOCATION_TYPES), createdAt: ctx.at });
+      const location = await ctx.tx.insert('stockLocations', { id: store.newId(), merchantId, name: reqStr(p.name, 'name', { max: 100 }), type: reqEnum(p.type, 'type', LOCATION_TYPES), createdAt: ctx.at });
       emit(ctx, 'LOCATION_CREATED', { kind: 'location', id: location.id }, { type: location.type });
       return { location };
     }),
@@ -238,7 +238,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
       if (supplier.status !== 'ACTIVE') fail('SUPPLIER_INACTIVE', 'the supplier is not active');
       const currency = reqCurrency(p.currency);
-      const dest = await must(ctx, 'locations', reqId(p.destinationLocationId, 'destinationLocationId'), 'LOCATION_NOT_FOUND');
+      const dest = await must(ctx, 'stockLocations', reqId(p.destinationLocationId, 'destinationLocationId'), 'LOCATION_NOT_FOUND');
       if (!SELLABLE_TYPES.has(dest.type)) fail('INVALID_DESTINATION', 'goods are delivered to a store, back room or warehouse');
       const expectedDate = reqDate(p.expectedDate, 'expectedDate');
       if (!Array.isArray(p.lines) || !p.lines.length || p.lines.length > 200) fail('INVALID_INPUT', 'a purchase order holds 1-200 lines');
@@ -351,7 +351,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       if (!['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status)) fail('INVALID_TRANSITION', `goods cannot be received on a ${po.status} purchase order`, { from: po.status });
       const receivedAt = reqDate(p.receivedAt, 'receivedAt');
       if (!Array.isArray(p.lines) || !p.lines.length) fail('INVALID_INPUT', 'lines are required');
-      const loc = await must(ctx, 'locations', p.locationId === undefined ? po.destinationLocationId : reqId(p.locationId, 'locationId'), 'LOCATION_NOT_FOUND');
+      const loc = await must(ctx, 'stockLocations', p.locationId === undefined ? po.destinationLocationId : reqId(p.locationId, 'locationId'), 'LOCATION_NOT_FOUND');
       if (!SELLABLE_TYPES.has(loc.type)) fail('INVALID_DESTINATION', 'accepted goods go to a store, back room or warehouse');
       const dup = new Set(); const parsed = [];
       for (const [i, l] of p.lines.entries()) {
@@ -364,7 +364,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       }
       let quarantine = null;
       if (parsed.some((x) => x.defective > 0)) {
-        quarantine = await must(ctx, 'locations', reqId(p.quarantineLocationId, 'quarantineLocationId'), 'LOCATION_NOT_FOUND');
+        quarantine = await must(ctx, 'stockLocations', reqId(p.quarantineLocationId, 'quarantineLocationId'), 'LOCATION_NOT_FOUND');
         if (quarantine.type !== 'QUARANTINE') fail('INVALID_DESTINATION', 'defective goods go to a QUARANTINE location');
       }
       const ap = await requireApproval(ctx, 'STOCK_SALES.receive_goods', poRefOf(po), p.approval);
@@ -394,7 +394,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const itemId = reqId(p.itemId, 'itemId'); const locationId = reqId(p.locationId, 'locationId');
       const delta = reqInt(p.delta, 'delta', { min: -1e6, max: 1e6 }); if (delta === 0) fail('INVALID_INPUT', 'delta cannot be zero');
       const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
-      await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'locations', locationId, 'LOCATION_NOT_FOUND');
+      await must(ctx, 'items', itemId, 'ITEM_NOT_FOUND'); await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
       const ap = await requireApproval(ctx, 'STOCK_SALES.adjust_on_hand', ref(K.PRODUCT, `${itemId}@${locationId}`), p.approval, [ctx.actor.id]);
       const mv = await postMovement(ctx, { itemId, locationId, delta, kind: 'ADJUSTMENT', reason, approvalId: ap.id });
       emit(ctx, 'STOCK_ADJUSTED', { kind: 'item', id: itemId }, { locationId, delta, reason }, ap);
@@ -411,8 +411,8 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     }),
     quarantineDefect: (actor, key, p) => command('quarantineDefect', actor, key, p, async (ctx) => {
       const itemId = reqId(p.itemId, 'itemId'); const qty = reqInt(p.qty, 'qty'); const reason = reqStr(p.reason, 'reason', { min: 5, max: 300 });
-      const from = await must(ctx, 'locations', reqId(p.fromLocationId, 'fromLocationId'), 'LOCATION_NOT_FOUND');
-      const q = await must(ctx, 'locations', reqId(p.quarantineLocationId, 'quarantineLocationId'), 'LOCATION_NOT_FOUND');
+      const from = await must(ctx, 'stockLocations', reqId(p.fromLocationId, 'fromLocationId'), 'LOCATION_NOT_FOUND');
+      const q = await must(ctx, 'stockLocations', reqId(p.quarantineLocationId, 'quarantineLocationId'), 'LOCATION_NOT_FOUND');
       if (q.type !== 'QUARANTINE') fail('INVALID_DESTINATION', 'the target must be a QUARANTINE location');
       if (!SELLABLE_TYPES.has(from.type)) fail('INVALID_DESTINATION', 'only sellable stock can be quarantined');
       const groupId = store.newId();
@@ -424,7 +424,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     /** A physical count: variance = counted - ledger. Any variance needs a reason per line and ONE approval for the whole count. */
     recordCount: (actor, key, p) => command('recordCount', actor, key, p, async (ctx) => {
       const locationId = reqId(p.locationId, 'locationId'); const countId = reqId(p.countId, 'countId');
-      await must(ctx, 'locations', locationId, 'LOCATION_NOT_FOUND');
+      await must(ctx, 'stockLocations', locationId, 'LOCATION_NOT_FOUND');
       if (!Array.isArray(p.counts) || !p.counts.length || p.counts.length > 500) fail('INVALID_INPUT', 'counts must hold 1-500 lines');
       const seen = new Set(); const rows = [];
       for (const [i, c] of p.counts.entries()) {
@@ -443,7 +443,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       return { countId, lines: rows, adjusted: variances.length };
     }),
     reserveStock: (actor, key, p) => command('reserveStock', actor, key, p, async (ctx) => {
-      const loc = await must(ctx, 'locations', reqId(p.locationId, 'locationId'), 'LOCATION_NOT_FOUND');
+      const loc = await must(ctx, 'stockLocations', reqId(p.locationId, 'locationId'), 'LOCATION_NOT_FOUND');
       if (!SELLABLE_TYPES.has(loc.type)) fail('INVALID_DESTINATION', 'only sellable stock can be reserved');
       const mv = await postMovement(ctx, { itemId: reqId(p.itemId, 'itemId'), locationId: loc.id, bucket: 'RESERVED', delta: reqInt(p.qty, 'qty'), kind: 'RESERVE', reference: { type: reqStr(p.reference?.type, 'reference.type', { max: 40 }), id: reqStr(p.reference?.id, 'reference.id', { max: 80 }) } });
       emit(ctx, 'STOCK_RESERVED', { kind: 'item', id: mv.itemId }, { locationId: loc.id, qty: mv.delta });

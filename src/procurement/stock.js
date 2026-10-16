@@ -42,12 +42,47 @@ export function positionOf(itemId, movements, locations) {
   return { itemId, locations: per, physical, sellable, reserved, available: sellable - reserved, inTransit, quarantine };
 }
 
-/** Valuation = quantity x weighted-average unit cost of the receipts, by cost status. Never invents a cost: no receipt cost -> UNKNOWN (value null). */
-export function valuationOf(movements, physicalQty) {
-  const by = { CONFIRMED: { q: 0, c: 0 }, ESTIMATED: { q: 0, c: 0 } };
-  for (const m of movements) if (m.kind === 'RECEIPT' && m.bucket === 'ON_HAND' && m.delta > 0 && by[m.costStatus]) { by[m.costStatus].q += m.delta; by[m.costStatus].c += m.delta * m.unitCostEurMicro; }
-  const pick = by.CONFIRMED.q ? 'CONFIRMED' : by.ESTIMATED.q ? 'ESTIMATED' : null;
-  if (!pick) return { status: 'UNKNOWN', unitCostEurMicro: null, valueEurMinor: null, basis: 'WEIGHTED_AVERAGE_OF_ALL_RECEIPTS', goodsOnly: true };
-  const unit = Math.round(by[pick].c / by[pick].q);
-  return { status: pick, unitCostEurMicro: unit, valueEurMinor: Math.round((Math.max(physicalQty, 0) * unit) / 10000), basis: 'WEIGHTED_AVERAGE_OF_ALL_RECEIPTS', goodsOnly: pick === 'ESTIMATED' };
+/**
+ * Valuation by MOVING WEIGHTED AVERAGE (owner decision, V1). The ledger is replayed in order over the PHYSICAL units (store, back room, warehouse, quarantine):
+ *  - a receipt with a known cost adds units at that cost, so the average moves;
+ *  - anything that leaves (adjustment, transfer, quarantine move, count) leaves at the current average, which therefore does not move;
+ *  - a unit that enters without its own cost (a transfer in, a positive adjustment) enters at the current average;
+ *  - units whose cost is UNKNOWN stay unknown: they are counted (`unknownUnits`) and NEVER valued at an invented cost.
+ * Status: CONFIRMED (every valued unit has a confirmed landed cost), ESTIMATED (some valued units carry only the goods price), PARTIAL (some units have no cost: the
+ * value covers the others only), UNKNOWN (no unit has a cost), EMPTY (no unit on hand).
+ * FIFO stays possible later: `receiptLots` keeps every receipt (date, quantity, unit cost, cost status, order line) and the ledger keeps the order of everything else.
+ */
+export function valuationOf(movements, locations) {
+  let qty = 0n; let value = 0n; let est = 0n; let unknown = 0n;
+  for (const m of movements) {
+    if (m.bucket !== 'ON_HAND' || !PHYSICAL_TYPES.has(locations.get(m.locationId)?.type)) continue;
+    const d = BigInt(m.delta);
+    if (d > 0n) {
+      if (m.kind === 'RECEIPT') {
+        if (m.costStatus === 'UNKNOWN' || m.unitCostEurMicro === null || m.unitCostEurMicro === undefined) unknown += d;
+        else { qty += d; value += d * BigInt(m.unitCostEurMicro); if (m.costStatus === 'ESTIMATED') est += d; }
+      } else if (qty > 0n) { value += (d * value) / qty; est += (d * est) / qty; qty += d; } // enters at the current average
+      else unknown += d;
+    } else {
+      const out = -d; const total = qty + unknown;
+      const outCosted = total > 0n ? (out * qty) / total : 0n;
+      if (qty > 0n && outCosted > 0n) { value -= (value * outCosted) / qty; est -= (est * outCosted) / qty; qty -= outCosted; }
+      unknown -= out - outCosted;
+      if (unknown < 0n) unknown = 0n;
+    }
+  }
+  const valuedUnits = Number(qty); const unknownUnits = Number(unknown);
+  const base = { basis: 'MOVING_WEIGHTED_AVERAGE', valuedUnits, unknownUnits };
+  if (valuedUnits === 0 && unknownUnits === 0) return { ...base, status: 'EMPTY', unitCostEurMicro: null, valueEurMinor: 0, goodsOnly: false };
+  if (valuedUnits === 0) return { ...base, status: 'UNKNOWN', unitCostEurMicro: null, valueEurMinor: null, goodsOnly: true };
+  const unit = Number((value + qty / 2n) / qty);
+  const status = unknownUnits > 0 ? 'PARTIAL' : est > 0n ? 'ESTIMATED' : 'CONFIRMED';
+  return { ...base, status, unitCostEurMicro: unit, valueEurMinor: Number((value + 5000n) / 10000n), goodsOnly: status !== 'CONFIRMED' };
+}
+
+/** Every receipt of an item, oldest first: the raw material of a future FIFO / lot costing (nothing is consumed or allocated here). */
+export function receiptLots(movements, locations) {
+  return movements.filter((m) => m.kind === 'RECEIPT' && m.bucket === 'ON_HAND' && m.delta > 0).map((m) => ({
+    at: m.at, qty: m.delta, unitCostEurMicro: m.unitCostEurMicro ?? null, costStatus: m.costStatus, locationId: m.locationId, locationType: locations.get(m.locationId)?.type ?? null, reference: m.reference ?? null,
+  }));
 }

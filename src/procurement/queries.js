@@ -1,7 +1,7 @@
 // Stock / Achats read side. Pure derivations over the store: nothing here writes, nothing is cached, every figure is recomputed from the ledger and the orders.
 // Reliability and landed-cost answers carry their evidence (counts, ids, inputs) and say NOT_MEASURABLE / NOT_COMPUTED instead of guessing.
 // Every query is async: the store may be in memory, a file, or PostgreSQL.
-import { positionOf, valuationOf } from './stock.js';
+import { positionOf, valuationOf, receiptLots } from './stock.js';
 import { resolveTierPrice } from './service.js';
 import { analyzePurchase as financeAnalyze } from '../finance/purchase-analysis.js';
 import { microToString, reqId, reqInt, reqDate, reqCurrency, pctToBps, deepFreeze } from './util.js';
@@ -12,7 +12,7 @@ export const MIN_SAMPLE = 3; // receipts needed before a reliability ratio is sh
 
 export function createProcurementQueries({ store, merchantId, now = () => new Date().toISOString(), analyze = financeAnalyze }) {
   const today = () => now().slice(0, 10);
-  const locMap = async () => new Map((await store.list('locations', merchantId)).map((l) => [l.id, l]));
+  const locMap = async () => new Map((await store.list('stockLocations', merchantId)).map((l) => [l.id, l]));
   const orders = () => store.list('purchaseOrders', merchantId);
   const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
 
@@ -29,22 +29,22 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
   async function stockPosition(itemId) {
     const item = (await store.get('items', merchantId, reqId(itemId, 'itemId'))) ?? fail('ITEM_NOT_FOUND', `item ${itemId}`);
     const mvs = await store.listMovements(merchantId, { itemId });
-    const pos = positionOf(itemId, mvs, await locMap());
-    return deepFreeze({ ...pos, sku: item.sku, incoming: await incomingFor(itemId), valuation: valuationOf(mvs, pos.physical) });
+    const locs = await locMap(); const pos = positionOf(itemId, mvs, locs);
+    return deepFreeze({ ...pos, sku: item.sku, incoming: await incomingFor(itemId), valuation: valuationOf(mvs, locs) });
   }
 
   async function stockPositions() {
     const items = (await store.list('items', merchantId)).filter((i) => i.status !== 'ARCHIVED');
     const positions = [];
     for (const i of items) positions.push(await stockPosition(i.id));
-    const total = { confirmedEurMinor: 0, estimatedEurMinor: 0, itemsWithUnknownCost: 0 };
+    const total = { confirmedEurMinor: 0, estimatedEurMinor: 0, itemsWithUnknownCost: 0, unknownUnits: 0 };
     for (const p of positions) {
-      if (p.physical <= 0) continue;
-      if (p.valuation.status === 'CONFIRMED') total.confirmedEurMinor += p.valuation.valueEurMinor;
-      else if (p.valuation.status === 'ESTIMATED') total.estimatedEurMinor += p.valuation.valueEurMinor;
-      else total.itemsWithUnknownCost += 1;
+      const v = p.valuation;
+      if (v.status === 'CONFIRMED') total.confirmedEurMinor += v.valueEurMinor;
+      else if (v.status === 'ESTIMATED' || v.status === 'PARTIAL') total.estimatedEurMinor += v.valueEurMinor;
+      if (v.status === 'UNKNOWN' || v.status === 'PARTIAL') { total.itemsWithUnknownCost += 1; total.unknownUnits += v.unknownUnits; }
     }
-    return deepFreeze({ positions, valuation: { ...total, note: 'estimated = supplier goods price only (no freight, duty, fees); unknown-cost items are excluded, not valued at zero' } });
+    return deepFreeze({ positions, valuation: { ...total, basis: 'MOVING_WEIGHTED_AVERAGE', note: 'estimated = supplier goods price only (no freight, duty, fees); units with no known cost are counted, never valued at an invented cost' } });
   }
 
   async function reorderAlerts() {
@@ -197,9 +197,10 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
     quote: (id) => store.get('quotes', merchantId, id), quotes: () => store.list('quotes', merchantId),
     purchaseOrder: (id) => store.get('purchaseOrders', merchantId, id),
     purchaseOrders: async ({ status } = {}) => (await orders()).filter((po) => !status || po.status === status),
-    locations: () => store.list('locations', merchantId),
+    locations: () => store.list('stockLocations', merchantId),
     events: async ({ objectId } = {}) => (await store.listEvents(merchantId)).filter((e) => !objectId || e.object.id === objectId),
     currentQuote: async ({ supplierId, itemId }) => (await store.list('quotes', merchantId)).find((q) => q.supplierId === supplierId && q.itemId === itemId && ['RECEIVED', 'SELECTED'].includes(q.status) && (!q.validUntil || q.validUntil >= today())) ?? null,
+    receiptLots: async (itemId) => receiptLots(await store.listMovements(merchantId, { itemId: reqId(itemId, 'itemId') }), await locMap()),
     stockPosition, stockPositions, incomingFor, reorderAlerts, delayedOrders, inTransit, priceHistory, supplierMetrics, compareSuppliers, plannedMargin, expiringDocuments, targetUnitPrice,
   });
 }
