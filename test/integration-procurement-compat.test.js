@@ -101,3 +101,28 @@ test('through the hub: read-only commands, policy READ_ONLY, traced; they change
   assert.equal((await bare.call(M.BUYING, 'proc_purchase_plans', {}, { workflow_id: 'c3' })).status, 'COMMAND_NOT_AVAILABLE');
   assert.ok(INCOMING_STATUSES.includes('ORDERED') && key);
 });
+
+test('NO DOUBLE COUNTING: at every status an order is exactly one of {plan, incoming expectation, neither}; incoming views always sum to the stock position\'s incoming', async () => {
+  const w = await makeWorld(); const reader = createPlanReader({ queries: w.q });
+  const po = await draftPo(w);
+  const state = async (label) => {
+    const plans = await reader.listPlans(); const inc = await reader.listIncoming(w.itemA && productRefOf(w.itemA));
+    const asPlan = plans.filter((p) => p.purchase_ref === purchaseRefOf(po)).length; const asInc = inc.filter((e) => e.purchase_ref === purchaseRefOf(po)).length;
+    assert.ok(asPlan + asInc <= 1, `${label}: the same order is both a plan and an incoming expectation`);
+    const pos = await w.q.stockPosition(w.itemA.id);
+    assert.equal(inc.reduce((n, e) => n + e.qty, 0), pos.incoming.qty, `${label}: incoming views must equal the stock position's incoming`);
+    assert.ok(inc.every((e) => e.counted_in_available === false), `${label}: incoming is never available`);
+    return asPlan ? 'PLAN' : asInc ? 'INCOMING' : 'NEITHER';
+  };
+  const seen = [await state('DRAFT')];
+  await w.mk(w.c.submitPurchaseOrder, buyer, { poId: po.id }); seen.push(await state('PENDING'));
+  await w.mk(w.c.approvePurchaseOrder, buyer, { poId: po.id, approval: approval('BUYING.approve_purchase_plan', po.id) }); seen.push(await state('APPROVED'));
+  await w.mk(w.c.placeOrder, buyer, { poId: po.id, approval: approval('BUYING.place_order', po.id) }); seen.push(await state('ORDERED'));
+  await receive(w, await w.q.purchaseOrder(po.id), [{ poLineId: 'L1', qtyAccepted: 120 }]); seen.push(await state('PARTIAL'));
+  await receive(w, await w.q.purchaseOrder(po.id), [{ poLineId: 'L1', qtyAccepted: 80 }]); seen.push(await state('RECEIVED'));
+  assert.deepEqual(seen, ['PLAN', 'PLAN', 'PLAN', 'INCOMING', 'INCOMING', 'NEITHER']);
+  assert.equal((await w.q.stockPosition(w.itemA.id)).available, 200, 'the goods are counted once: on hand, not also expected');
+  // a cancelled order is neither
+  const c = await draftPo(w); await w.mk(w.c.cancelPurchaseOrder, buyer, { poId: c.id, reason: 'test' });
+  assert.equal((await reader.listPlans()).filter((p) => p.purchase_ref === purchaseRefOf(c)).length, 0); assert.equal((await reader.listIncoming()).filter((e) => e.purchase_ref === purchaseRefOf(c)).length, 0);
+});

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createProcurement, createMemoryProcurementStore } from '../src/procurement/index.js';
 import { createProcurementApp, listen } from '../src/procurement/server/app.js';
+import { errText } from '../src/procurement/ui/logic.js';
 import { createFileCaseSource, photoKeyOf, isCaseId } from '../src/procurement/server/case-source.js';
 
 const OWNER = { id: 'owner', role: 'OWNER', canApprove: true, approverRole: 'OWNER', token: 'o'.repeat(32) };
@@ -135,4 +136,29 @@ test('case-source patterns: strict ids and references', () => {
   assert.equal(photoKeyOf('case-a1', 'photo-3'), 'photo:case-a1.3'); assert.equal(photoKeyOf('case-a1', 'docphoto-d7'), 'docphoto:case-a1.d7');
   for (const bad of [['case-a1', 'photo-'], ['case-a1', 'photo-1/x'], ['case/a1', 'photo-1'], ['', 'photo-1'], ['case-a1', '../photo-1'], ['case-a1', 'photo:case-b.1'], ['case-a1', undefined]]) assert.equal(photoKeyOf(...bad), null, JSON.stringify(bad));
   assert.ok(isCaseId('case_A-1')); assert.ok(!isCaseId('../x')); assert.ok(!isCaseId('a'.repeat(81)));
+});
+
+test('understandable errors: no refusal ever shows an internal name (collections, tables, codes, stack traces)', async (t) => {
+  const s = await boot(); t.after(() => s.close()); const { po, itemId } = await orderedViaApi(s);
+  const ghost = '00000000-0000-4000-8000-000000000000';
+  const bad = [
+    ['POST', `/api/purchase-orders/${po.id}/receive`, FIELD, { lines: [{ poLineId: 'L1', qtyAccepted: 5 }] }],      // not allowed to receive
+    ['POST', `/api/purchase-orders/${po.id}/receive`, WAREHOUSE, { lines: [{ poLineId: 'L1', qtyAccepted: 100000 }] }], // over-receipt
+    ['POST', `/api/purchase-orders/${po.id}/receive`, WAREHOUSE, { lines: [{ poLineId: 'L9', qtyAccepted: 1 }] }],      // unknown line
+    ['POST', `/api/purchase-orders/${ghost}/receive`, WAREHOUSE, { lines: [{ poLineId: 'L1', qtyAccepted: 1 }] }],      // unknown order
+    ['POST', `/api/purchase-orders/${ghost}/submit`, FIELD, {}], ['POST', `/api/purchase-orders/${po.id}/submit`, FIELD, {}], // unknown / wrong state
+    ['POST', `/api/purchase-orders/${po.id}/approve`, FIELD, {}],                                                     // not an approver
+    ['POST', '/api/purchase-orders', FIELD, { lines: [{ quoteId: ghost, qty: 1 }], expectedDate: '2026-12-01' }],      // unknown offer
+    ['POST', `/api/visits/${ghost}/products`, FIELD, { product: { name: 'x' }, quote: { unitPrice: '1', moq: 1 } }], ['POST', `/api/visits/${ghost}/close`, FIELD, {}],
+    ['GET', `/api/stock/${ghost}`, OWNER, undefined], ['GET', `/api/items/${ghost}`, OWNER, undefined],
+  ];
+  const seen = [];
+  for (const [m, path, user, body] of bad) {
+    const r = await s.call(m, path, { user, body, key: idem() });
+    assert.ok(r.status >= 400 && r.status < 500, `${m} ${path} -> ${r.status}`);
+    const text = errText(r); seen.push(`${r.json?.error} -> ${text}`); // exactly what the phone shows
+    assert.doesNotMatch(text, /stockLocations|purchaseOrders|supplierItems|visits|quotes|proc_|[A-Z]{2,}_[A-Z_]{2,}|\b(DRAFT|ORDERED|PENDING_APPROVAL|APPROVED|CONFIRMED|CANCELLED)\b|at .*\.js:\d+|node_modules|Error:/, `internal detail leaked: ${text}`);
+  }
+  assert.ok(seen.every((t) => t.split(' -> ')[1].length > 5), 'every refusal carries a readable message');
+  assert.ok(itemId);
 });

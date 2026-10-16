@@ -2,7 +2,7 @@
 // contains can run as code). French UI.
 import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener } from './api.js';
 import * as outbox from './outbox.js';
-import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf } from './logic.js';
+import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf, errText, ERRORS_FR } from './logic.js';
 
 const $ = (id) => document.getElementById(id);
 const main = $('main');
@@ -30,12 +30,6 @@ const swap = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((
 
 // ------------------------------------------------------------------ state, navigation
 const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null };
-const ERRORS_FR = {
-  SEPARATION_OF_DUTIES: 'Vous avez préparé ou envoyé ce bon : une autre personne habilitée doit l’approuver.', FORBIDDEN: 'Votre accès ne permet pas cette action.', UNAUTHORIZED: 'Accès refusé : rouvrez le lien d’accès fourni par le propriétaire.',
-  TOO_MANY_ATTEMPTS: 'Trop d’essais : patientez une minute.', INVALID_TRANSITION: 'Le bon a changé entre-temps : actualisez la page.', BELOW_MOQ: 'Quantité sous le minimum du fournisseur (MOQ).', FX_REQUIRED: 'Un taux de change est nécessaire.',
-  QUOTE_EXPIRED: 'Ce devis a expiré.', VISIT_CLOSED: 'Cette visite est clôturée.', APPROVAL_ALREADY_USED: 'Cette approbation a déjà été utilisée.',
-};
-const errText = (r) => ERRORS_FR[r.json?.error] ?? r.json?.message ?? (r.status === 0 ? 'Connexion indisponible.' : `Erreur ${r.status}`);
 
 function banner(text, kind = '') { const b = $('banner'); b.textContent = text ?? ''; b.hidden = !text; b.className = `banner ${kind}`; if (text && kind !== 'err') setTimeout(() => { if (b.textContent === text) b.hidden = true; }, 6000); }
 function setHead(title, subtitle = '', back = false) { $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }

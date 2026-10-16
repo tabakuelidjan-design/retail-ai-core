@@ -138,3 +138,11 @@ export function precisionWarning(offers) {
 }
 /** Quotes of different currencies are compared only through the rates the person typed; list the currencies in play so none is overlooked. */
 export const currenciesOf = (offers) => [...new Set(offers.map((o) => o.currency))];
+/** What a person reads for a refused request: a French sentence per known code, else the server's message, else a neutral line. Never a code, a table or a stack. */
+export const ERRORS_FR = {
+  SEPARATION_OF_DUTIES: 'Vous avez préparé ou envoyé ce bon : une autre personne habilitée doit l’approuver.', FORBIDDEN: 'Votre accès ne permet pas cette action.', UNAUTHORIZED: 'Accès refusé : rouvrez le lien d’accès fourni par le propriétaire.',
+  TOO_MANY_ATTEMPTS: 'Trop d’essais : patientez une minute.', INVALID_TRANSITION: 'Le bon a changé entre-temps : actualisez la page.', BELOW_MOQ: 'Quantité sous le minimum du fournisseur (MOQ).', FX_REQUIRED: 'Un taux de change est nécessaire.',
+  QUOTE_EXPIRED: 'Ce devis a expiré.', VISIT_CLOSED: 'Cette visite est clôturée.', APPROVAL_ALREADY_USED: 'Cette approbation a déjà été utilisée.',
+  OVER_RECEIPT: 'Vous essayez de réceptionner plus que la quantité restant à recevoir.', NOT_FOUND: 'Introuvable : actualisez la page.',
+};
+export const errText = (r) => ERRORS_FR[r.json?.error] ?? (/_NOT_FOUND$/.test(r.json?.error ?? '') ? ERRORS_FR.NOT_FOUND : null) ?? r.json?.message ?? (r.status === 0 ? 'Connexion indisponible.' : `Erreur ${r.status}`);

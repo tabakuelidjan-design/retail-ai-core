@@ -6,8 +6,9 @@
 // Safety: all-or-nothing (one transaction); refuses a target that already holds anything for the merchant; refuses a file holding rows of another merchant;
 // `dryRun` (the default) reads and validates only; after an import, `compareStores` proves the two stores answer the same questions the same way.
 // Not preserved: the row `version` counters (they restart at 1: they only guard concurrent edits, and nothing is editing during the move).
-import { reviveState } from './memory-store.js';
+import { reviveState, createMemoryProcurementStore } from './memory-store.js';
 import { createProcurement } from './index.js';
+import { balancesFrom, assertPostable } from './stock.js';
 
 const ORDER = ['stockLocations', 'suppliers', 'items', 'supplierItems', 'quotes', 'purchaseOrders', 'visits', 'receipts']; // parents before children
 
@@ -62,4 +63,62 @@ export async function compareStores({ source, target, merchantId }) {
   await same('inTransit', () => a.inTransit(), () => b.inTransit());
   for (const item of await a.items()) await same(`receiptLots:${item.sku}`, () => a.receiptLots(item.id), () => b.receiptLots(item.id));
   return diffs;
+}
+
+/**
+ * Verifies the SOURCE before anything is written: every reference resolves, every PO line agrees with the ledger, the ledger replays without breaking an invariant,
+ * numbering is not behind the orders that exist. Returns { ok, problems: [{ code, message }] }. An import never starts on a source with problems.
+ */
+export function validateSourceState(state, merchantId) {
+  const problems = []; const add = (code, message) => problems.push({ code, message });
+  let d;
+  try { d = reviveState(state); } catch (e) { return { ok: false, problems: [{ code: 'SOURCE_UNREADABLE', message: e.message }] }; }
+  const ids = (c) => new Set([...d[c].keys()]);
+  const items = ids('items'); const locs = ids('stockLocations'); const sup = ids('suppliers'); const quotes = ids('quotes'); const pos = ids('purchaseOrders');
+  for (const c of ['items', 'stockLocations', 'suppliers', 'quotes', 'purchaseOrders', 'visits', 'receipts', 'supplierItems']) for (const r of d[c].values()) if (r.merchantId !== merchantId) add('FOREIGN_MERCHANT', `${c} ${r.id} belongs to another merchant`);
+  for (const c of ['movements', 'events', 'incidents']) for (const r of d[c]) if (r.merchantId !== merchantId) add('FOREIGN_MERCHANT', `a ${c} row belongs to another merchant`);
+  for (const q of d.quotes.values()) { if (!sup.has(q.supplierId)) add('DANGLING_REFERENCE', `quote ${q.id}: unknown supplier`); if (!items.has(q.itemId)) add('DANGLING_REFERENCE', `quote ${q.id}: unknown item`); }
+  const received = new Map();
+  for (const m of d.movements) {
+    if (m.kind === 'RECEIPT' && m.bucket === 'ON_HAND' && m.reference?.type === 'purchase_order') { const k = `${m.reference.id}|${m.reference.lineId}`; received.set(k, (received.get(k) ?? 0) + m.delta); }
+  }
+  for (const po of d.purchaseOrders.values()) {
+    if (!sup.has(po.supplierId)) add('DANGLING_REFERENCE', `order ${po.number}: unknown supplier`);
+    if (!locs.has(po.destinationLocationId)) add('DANGLING_REFERENCE', `order ${po.number}: unknown destination location`);
+    for (const l of po.lines) {
+      if (!items.has(l.itemId)) add('DANGLING_REFERENCE', `order ${po.number} line ${l.id}: unknown item`);
+      if (l.quoteId && !quotes.has(l.quoteId)) add('DANGLING_REFERENCE', `order ${po.number} line ${l.id}: unknown quote`);
+      if ((received.get(`${po.id}|${l.id}`) ?? 0) !== l.qtyReceived) add('LEDGER_MISMATCH', `order ${po.number} line ${l.id}: the order says ${l.qtyReceived} received, the ledger says ${received.get(`${po.id}|${l.id}`) ?? 0}`);
+      if (l.qtyReceived > l.qty) add('OVER_RECEIPT', `order ${po.number} line ${l.id}: more received than ordered`);
+    }
+  }
+  for (const r of d.receipts.values()) if (!pos.has(r.poId)) add('DANGLING_REFERENCE', `receipt ${r.id}: unknown order`);
+  for (const v of d.visits.values()) if (!sup.has(v.supplierId)) add('DANGLING_REFERENCE', `visit ${v.id}: unknown supplier`);
+  const bal = new Map(); const keys = new Set();
+  for (const m of d.movements) {
+    if (!items.has(m.itemId)) add('DANGLING_REFERENCE', `a movement names an unknown item`); if (!locs.has(m.locationId)) add('DANGLING_REFERENCE', `a movement names an unknown location`);
+    if (keys.has(m.idempotencyKey)) add('DUPLICATE_MOVEMENT_KEY', `movement key ${m.idempotencyKey} appears twice`); keys.add(m.idempotencyKey);
+    const k = `${m.itemId}|${m.locationId}`; try { assertPostable(bal.get(k), m); } catch (e) { add('LEDGER_INVARIANT', `replaying the ledger breaks "${e.code}" (item ${m.itemId})`); break; }
+    bal.set(k, balancesFrom([{ ...m }, ...(bal.has(k) ? [{ itemId: m.itemId, locationId: m.locationId, bucket: 'ON_HAND', delta: bal.get(k).onHand }, { itemId: m.itemId, locationId: m.locationId, bucket: 'RESERVED', delta: bal.get(k).reserved }] : [])]).get(k));
+  }
+  const maxNo = {}; for (const po of d.purchaseOrders.values()) { const m = /^PO-(\d{4})-(\d+)$/.exec(po.number); if (m) maxNo[m[1]] = Math.max(maxNo[m[1]] ?? 0, Number(m[2])); }
+  for (const [year, n] of Object.entries(maxNo)) { const seq = d.seq.get(`${merchantId}|po-${year}`) ?? 0; if (seq < n) add('NUMBERING_BEHIND', `the numbering for ${year} is at ${seq} but order ${n} exists: numbers would repeat`); }
+  return { ok: problems.length === 0, problems };
+}
+
+/**
+ * The whole procedure, with an honest status:
+ *   REFUSED_SOURCE_INVALID | REFUSED_TARGET_NOT_EMPTY | DRY_RUN_OK | IMPORTED_VERIFIED | IMPORTED_NOT_EQUIVALENT
+ * Only IMPORTED_VERIFIED is a success. IMPORTED_NOT_EQUIVALENT means the data went in but the two stores do not answer alike: do NOT use the target
+ * (drop the module with the rollback script and investigate); the source file is never modified by any of this.
+ */
+export async function runImport({ state, target, merchantId, apply = false }) {
+  const source = validateSourceState(state, merchantId);
+  if (!source.ok) return { status: 'REFUSED_SOURCE_INVALID', problems: source.problems };
+  let plan;
+  try { plan = await importFileState({ state, target, merchantId, dryRun: true }); } catch (e) { if (e instanceof ImportError) return { status: e.code === 'TARGET_NOT_EMPTY' ? 'REFUSED_TARGET_NOT_EMPTY' : `REFUSED_${e.code}`, message: e.message, detail: e.detail }; throw e; }
+  if (!apply) return { status: 'DRY_RUN_OK', counts: plan.counts };
+  await importFileState({ state, target, merchantId, dryRun: false });
+  const diffs = await compareStores({ source: createMemoryProcurementStore({ state }), target, merchantId });
+  return diffs.length ? { status: 'IMPORTED_NOT_EQUIVALENT', counts: plan.counts, diffs } : { status: 'IMPORTED_VERIFIED', counts: plan.counts };
 }

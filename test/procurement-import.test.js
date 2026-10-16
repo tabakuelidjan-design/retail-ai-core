@@ -92,3 +92,49 @@ test('the comparison is not complacent: a single unit of difference in the targe
   const diffs = await compareStores({ source: h.store, target, merchantId: h.merchantId });
   assert.ok(diffs.some((d) => d.name === 'stockPositions') && diffs.some((d) => d.name === 'events'), JSON.stringify(diffs.map((d) => d.name)));
 });
+
+// ---- source verification and the honest status of the whole procedure ----
+const { validateSourceState, runImport } = await import('../src/procurement/import-file-to-pg.js');
+const { createHash } = await import('node:crypto');
+const { readFileSync, writeFileSync } = await import('node:fs');
+const clone = (s) => JSON.parse(JSON.stringify(s));
+
+test('source verification (no database needed): a healthy history passes; each kind of damage is named and refused', async () => {
+  const h = await fieldHistory(); const good = h.store.exportState();
+  assert.deepEqual(validateSourceState(good, h.merchantId), { ok: true, problems: [] });
+  const codes = (s, m = h.merchantId) => validateSourceState(s, m).problems.map((p) => p.code);
+  assert.ok(codes(good, randomUUID()).includes('FOREIGN_MERCHANT'));
+  const orphan = clone(good); orphan.purchaseOrders[0][1].supplierId = 'ghost'; assert.ok(codes(orphan).includes('DANGLING_REFERENCE'));
+  const drift = clone(good); const l = drift.purchaseOrders.map((e) => e[1]).find((p) => p.lines.some((x) => x.qtyReceived > 0)).lines.find((x) => x.qtyReceived > 0); l.qtyReceived += 5; assert.ok(codes(drift).includes('LEDGER_MISMATCH'));
+  const dup = clone(good); dup.movements.push({ ...dup.movements[0] }); assert.ok(codes(dup).includes('DUPLICATE_MOVEMENT_KEY'));
+  const neg = clone(good); neg.movements.push({ ...neg.movements.at(-1), id: randomUUID(), idempotencyKey: 'x-neg', delta: -100000 }); assert.ok(codes(neg).includes('LEDGER_INVARIANT'));
+  const num = clone(good); num.seq = num.seq.map((e) => [e[0], 0]); assert.ok(codes(num).includes('NUMBERING_BEHIND'), JSON.stringify(codes(num)));
+  assert.deepEqual(codes({ format: 99 }), ['SOURCE_UNREADABLE']);
+});
+
+test('runImport: refuses an invalid source BEFORE any write, refuses a non-empty target, never modifies the source file, and only IMPORTED_VERIFIED means success', { skip }, async () => {
+  const h = await fieldHistory(); await ensureMerchant(h.merchantId);
+  const target = createPgProcurementStore({ pool: pgPool() });
+  const state = h.store.exportState();
+  const bad = clone(state); bad.purchaseOrders[0][1].supplierId = 'ghost';
+  const r1 = await runImport({ state: bad, target, merchantId: h.merchantId, apply: true });
+  assert.equal(r1.status, 'REFUSED_SOURCE_INVALID'); assert.equal((await target.list('items', h.merchantId)).length, 0, 'nothing written');
+  const r2 = await runImport({ state, target, merchantId: h.merchantId }); assert.equal(r2.status, 'DRY_RUN_OK'); assert.equal((await target.list('items', h.merchantId)).length, 0);
+  const file = join(mkdtempSync(join(tmpdir(), 'nordla-src-')), 'procurement.json'); writeFileSync(file, JSON.stringify(state));
+  const before = createHash('sha256').update(readFileSync(file)).digest('hex');
+  const r3 = await runImport({ state: JSON.parse(readFileSync(file, 'utf8')), target, merchantId: h.merchantId, apply: true });
+  assert.equal(r3.status, 'IMPORTED_VERIFIED', JSON.stringify(r3).slice(0, 500));
+  assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'), before, 'the source file is untouched');
+  const r4 = await runImport({ state, target, merchantId: h.merchantId, apply: true }); assert.equal(r4.status, 'REFUSED_TARGET_NOT_EMPTY');
+  assert.deepEqual(await compareStores({ source: h.store, target, merchantId: h.merchantId }), [], 'the refusals changed nothing');
+});
+
+test('runImport never reports success when the two stores do not answer alike', { skip }, async () => {
+  const h = await fieldHistory(); await ensureMerchant(h.merchantId);
+  const target = createPgProcurementStore({ pool: pgPool() });
+  const state = h.store.exportState();
+  // the target is altered right after the data went in (stand-in for any divergence): the verification step must say so
+  const tampered = { ...target, transaction: async (fn) => { const out = await target.transaction(fn); await createProcurement({ store: target, merchantId: h.merchantId, now: () => '2026-10-16T10:00:00.000Z' }).commands.adjustStock(wh, key(), { itemId: h.w.itemA.id, locationId: h.w.locs.warehouse.id, delta: 1, reason: 'divergence for the test', approval: productApproval('STOCK_SALES.adjust_on_hand', `${h.w.itemA.id}@${h.w.locs.warehouse.id}`) }); return out; } };
+  const r = await runImport({ state, target: tampered, merchantId: h.merchantId, apply: true });
+  assert.equal(r.status, 'IMPORTED_NOT_EQUIVALENT'); assert.ok(r.diffs.length > 0);
+});
