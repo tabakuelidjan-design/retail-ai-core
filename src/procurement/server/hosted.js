@@ -7,37 +7,63 @@
 // Failure isolation: if the store cannot open, `buildHostedProcurement` returns { handler: null, assistant: null, status } and the rest of Nordla keeps running.
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createProcurement, openFileProcurementStore } from '../../procurement/index.js';
+import { createProcurement, openFileProcurementStore, createPgProcurementStore } from '../../procurement/index.js';
 import { createProcurementApp } from '../../procurement/server/app.js';
+import { SERVER_POLICY, GRANTS, capabilitiesOf } from './permissions.js';
 
 /** Core identity roles -> procurement roles. Least privilege: only the owner approves or orders; an accountant or a viewer reads. */
 export const PROCUREMENT_ROLE = Object.freeze({ OWNER: 'OWNER', ADMIN: 'BUYER', COLLABORATOR: 'WAREHOUSE', VIEWER: 'VIEWER', ACCOUNTANT: 'VIEWER' });
 
+/**
+ * Explicit authorizations the OWNER gave to named people: PROCUREMENT_GRANTS='{"<userId>":["RECEIVE","ADJUST"]}' (RECEIVE = goods receipt, transfers, count entry, filing stock changes;
+ * ADJUST = deciding stock changes; APPROVE_PO = approving / placing orders). Anything else, an unknown grant or a malformed value is refused at start: nobody is granted by accident.
+ */
+export function parseGrants(raw) {
+  const out = new Map(); if (raw == null || String(raw).trim() === '') return out;
+  let obj; try { obj = JSON.parse(String(raw)); } catch { throw Object.assign(new Error('PROCUREMENT_GRANTS is not valid JSON'), { code: 'GRANTS_INVALID' }); }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw Object.assign(new Error('PROCUREMENT_GRANTS must be an object { userId: [grants] }'), { code: 'GRANTS_INVALID' });
+  for (const [id, list] of Object.entries(obj)) {
+    if (!Array.isArray(list) || list.some((g) => !GRANTS.includes(g))) throw Object.assign(new Error(`PROCUREMENT_GRANTS: unknown grant for ${id} (allowed: ${GRANTS.join(', ')})`), { code: 'GRANTS_INVALID' });
+    out.set(id, new Set(list));
+  }
+  return out;
+}
+let configuredGrants = new Map(); // set once by buildHostedProcurement; src/sourcing/server/app.js calls procurementUserFor(actor) with one argument
+
 /** The user the procurement API sees, built from the server's own authenticated actor (never from the request). null = no access. */
-export function procurementUserFor(actor) {
+export function procurementUserFor(actor, grants = configuredGrants) {
   const role = PROCUREMENT_ROLE[String(actor?.role ?? '')];
   if (!role) return null;
   const id = String(actor.userId ?? actor.label ?? '').trim();
   if (!id) return null;
-  const owner = role === 'OWNER';
-  return { id, role, name: owner ? 'Propriétaire' : id, canApprove: owner, ...(owner ? { approverRole: 'OWNER' } : {}) };
+  const owner = role === 'OWNER'; const given = [...(grants.get(id) ?? [])];
+  const user = { id, role, name: owner ? 'Propriétaire' : id, grants: given, ...(owner ? { approverRole: 'OWNER' } : {}) };
+  return { ...user, canApprove: capabilitiesOf(user).canApprove };
 }
 
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
 export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {} }) {
+  let closeStore = async () => {};
   try {
     const base = join(dir, 'procurement');
     await mkdir(base, { recursive: true });
-    const store = await openFileProcurementStore({ path: join(base, 'procurement.json') });
-    const procurement = createProcurement({ store, merchantId });
+    configuredGrants = parseGrants(env.PROCUREMENT_GRANTS);
+    let store; let where;
+    if (env.PROCUREMENT_PG_URL) { // PostgreSQL ONLY when the operator asks for it; a failure never falls back to the file (that would split the data in two)
+      let pg; try { pg = (await import('pg')).default; } catch { throw Object.assign(new Error('PROCUREMENT_PG_URL is set but the "pg" package is not installed'), { code: 'PG_DRIVER_MISSING' }); }
+      const pool = new pg.Pool({ connectionString: env.PROCUREMENT_PG_URL, max: Number(env.PROCUREMENT_PG_POOL_MAX ?? 5) }); closeStore = () => pool.end();
+      store = createPgProcurementStore({ pool }); where = 'PostgreSQL';
+    } else { store = await openFileProcurementStore({ path: join(base, 'procurement.json') }); where = join(base, 'procurement.json'); }
+    const procurement = createProcurement({ store, merchantId, policy: SERVER_POLICY });
     const system = { id: 'system', role: 'OWNER' };
     const have = new Set((await procurement.queries.locations()).map((l) => l.type));
     const boot = async (type, name) => { if (!have.has(type)) await procurement.commands.createLocation(system, `bootstrap:${type.toLowerCase()}:${merchantId}`, { name, type }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; }); };
     await boot('WAREHOUSE', 'Réception (par défaut)'); await boot('QUARANTINE', 'Quarantaine');
     const handler = createProcurementApp({ procurement, users: [], sourcingDir: join(dir, 'cases'), uploadsDir: join(base, 'uploads'), allowedHosts: [], cacheAssets: env.PROCUREMENT_DEV !== '1' });
-    return { handler, assistant: procurement.assistant, procurement, store, status: `Stock / Achats ON (${join(base, 'procurement.json')})` };
+    return { handler, assistant: procurement.assistant, procurement, store, close: closeStore, status: `Stock / Achats ON (${where}; ${configuredGrants.size} authorization(s) granted)` };
   } catch (e) {
+    try { await closeStore(); } catch { /* nothing to release */ }
     log(`Stock / Achats: NOT mounted (${e.code ?? e.message}). The rest of Nordla is unaffected.`);
-    return { handler: null, assistant: null, procurement: null, store: null, status: `Stock / Achats OFF (${e.code ?? 'ERROR'})` };
+    return { handler: null, assistant: null, procurement: null, store: null, close: async () => {}, status: `Stock / Achats OFF (${e.code ?? 'ERROR'})` };
   }
 }
