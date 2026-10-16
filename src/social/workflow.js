@@ -28,8 +28,11 @@ function record(post, { action, actor, from, to, now, note = null, detail = null
 
 /** The platform holds a scheduled copy: remember, durably and in the same write, that it must be removed. */
 function armRemoteCancel(post) {
+  if (post.publication?.manual_schedule) { // the owner scheduled it BY HAND in Meta Business Suite: only the owner can remove that copy
+    post.publication = { ...post.publication, manual_cancel_required: post.publication.manual_schedule, manual_schedule: null };
+  }
   const held = post.publication?.platform_schedule;
-  if (!held) return false;
+  if (!held) return Boolean(post.publication?.manual_cancel_required);
   post.publication = { ...post.publication, remote_cancel_pending: { post_id: held.post_id }, platform_schedule: null };
   return true;
 }
@@ -93,6 +96,7 @@ const HANDLERS = {
     requireExactVersion(post, params);
     if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
     requireReady(post, params.confirmed);
+    if (post.publication?.manual_cancel_required) fail(E.CONFLICT, 'you scheduled this post by hand at Meta: confirm that you removed that copy first');
     if (post.publication?.remote_cancel_pending) fail(E.CONFLICT, 'a previous scheduled copy is still being removed at the platform: try again once it is confirmed gone');
     if (!post.publish_at) fail(E.INVALID, 'choose a date and time before scheduling', { field: 'publish_at' });
     if (Date.parse(post.publish_at) < Date.parse(now) + MIN_SCHEDULE_LEAD_MS) fail(E.INVALID, 'publish_at must be at least 2 minutes in the future', { field: 'publish_at' });
@@ -139,6 +143,20 @@ const HANDLERS = {
     allow(post, S.PUBLISHED);
     post.publication = { ...(post.publication ?? {}), mode: MODE.MANUAL, permalink: params.permalink, post_id: null, published_at: params.published_at ?? now, attempts: post.publication?.attempts ?? 0 };
     return record(post, { action: 'attest_manual', actor, from: post.state, to: S.PUBLISHED, now, note: 'published by hand, attested by the owner' });
+  },
+  mark_manual_schedule(post, { actor, now, params }) {
+    if (![S.APPROVED, S.SCHEDULED].includes(post.state)) fail(E.TRANSITION, `cannot record a manual schedule from ${post.state}`);
+    if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
+    if (post.publication?.platform_schedule) fail(E.CONFLICT, 'the platform already holds a scheduled copy made by Nordla: a second copy would publish twice');
+    if (post.state === S.APPROVED) allow(post, S.SCHEDULED);
+    const where = String(params.where ?? 'Meta Business Suite').slice(0, 80);
+    post.publication = { ...(post.publication ?? {}), manual_schedule: { where, at: now, by: actor.id, for: post.publish_at ?? null } };
+    return record(post, { action: 'mark_manual_schedule', actor, from: post.state, to: S.SCHEDULED, now, note: `scheduled by hand in ${where}: Nordla will NOT publish it` });
+  },
+  confirm_manual_cancel(post, { actor, now }) {
+    if (!post.publication?.manual_cancel_required) fail(E.TRANSITION, 'no manual copy is waiting to be removed');
+    post.publication = { ...post.publication, manual_cancel_required: null };
+    return record(post, { action: 'confirm_manual_cancel', actor, from: post.state, to: post.state, now, note: 'the owner removed the hand-made schedule at Meta' });
   },
   // --- system-only ----------------------------------------------------------------------------------------------------------------
   claim(post, { actor, now, params }) {

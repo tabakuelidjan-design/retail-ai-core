@@ -327,6 +327,46 @@ test('manual fallback needs an approval of the exact version too', async () => {
   await rejects(rt.service.act(post.id, 'attest_manual', OWNER, { permalink: 'https://www.instagram.com/p/X/' }), 'SOCIAL_TRANSITION_REFUSED');
 });
 
+test('scheduled BY HAND at Meta before the trip: Nordla never publishes it too (no double post), and the owner attests afterwards', async () => {
+  const rt = runtime();
+  const post = await rt.service.createPost(postInput(), AGENT);
+  await rt.service.act(post.id, 'submit', AGENT);
+  const h = await hashOf(rt, post.id);
+  await rt.service.act(post.id, 'approve', OWNER, { expected_hash: h });
+  await rejects(rt.service.act(post.id, 'mark_manual_schedule', AGENT, {}), 'SOCIAL_FORBIDDEN');
+  const marked = await rt.service.act(post.id, 'mark_manual_schedule', OWNER, { where: 'Meta Business Suite' });
+  assert.equal(marked.state, 'SCHEDULED');
+  assert.equal(marked.publication.manual_schedule.by, 'owner:habb');
+  rt.clock.now = Date.parse('2026-10-17T17:30:00Z'); // the due time has passed
+  const pass = await rt.publisher.runDue();
+  assert.equal(pass.published, 0);
+  assert.equal(rt.igHttp.calls.length, 0, 'Nordla stays silent: Meta publishes its own copy');
+  const done = await rt.service.act(post.id, 'attest_manual', OWNER, { permalink: 'https://www.instagram.com/p/FROMMETA/' });
+  assert.deepEqual([done.state, done.publication.mode], ['PUBLISHED', 'MANUAL']);
+});
+
+test('revoking or editing a post that was scheduled by hand at Meta warns that the Meta copy still exists, and blocks re-scheduling until confirmed', async () => {
+  const rt = runtime();
+  const p = await scheduled(rt);
+  await rt.service.act(p.id, 'mark_manual_schedule', OWNER, {});
+  const revoked = await rt.service.act(p.id, 'revoke_approval', OWNER, { note: 'texte à changer' });
+  assert.equal(revoked.state, 'READY_FOR_REVIEW');
+  assert.ok(revoked.publication.manual_cancel_required, 'the Meta copy is still there: only the owner can remove it');
+  assert.equal(revoked.publication.manual_schedule, null);
+  const hash = await hashOf(rt, p.id);
+  await rt.service.act(p.id, 'approve', OWNER, { expected_hash: hash });
+  await rejects(rt.service.act(p.id, 'schedule', OWNER, { expected_hash: hash }), 'SOCIAL_CONFLICT');
+  await rejects(rt.service.act(p.id, 'confirm_manual_cancel', AGENT, {}), 'SOCIAL_FORBIDDEN');
+  const cleared = await rt.service.act(p.id, 'confirm_manual_cancel', OWNER, {});
+  assert.equal(cleared.publication.manual_cancel_required, null);
+  await rt.service.act(p.id, 'schedule', OWNER, { expected_hash: hash });
+  const q = await scheduled(rt, { subject: { kind: 'product', ref: 'q', label: 'q' } });
+  await rt.service.act(q.id, 'mark_manual_schedule', OWNER, {});
+  const edited = await rt.service.editPost(q.id, { caption: 'Un autre texte pour la coque.' }, AGENT);
+  assert.equal(edited.state, 'DRAFT');
+  assert.ok(edited.publication.manual_cancel_required, 'an edit also leaves a stale copy at Meta');
+});
+
 // ---------------------------------------------------------------------------------------------------------------- Facebook native scheduling
 test('Facebook: an approved post is handed to the platform scheduler (survives Nordla being offline); the plan is recorded', async () => {
   const rt = runtime({ withFacebook: true });

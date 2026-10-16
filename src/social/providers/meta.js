@@ -7,11 +7,16 @@
 //   cancelScheduled(post) -> void
 //   normalizeError(error) -> { code, retryable, unknown, retry_after_ms }
 //
-// Status of the facts below: Instagram follows the 2026-10-09 audit of the Activation layer, re-read on 2026-10-16 against the Meta
-// "Content Publishing" page (media must be on a public URL at the time of the attempt, JPEG images only, 100 API posts / 24 h).
-// Facebook Page facts (photos / feed / scheduled_publish_time / DELETE) come from the Pages API as I know it and are NOT yet
-// verified against the live platform: every Facebook capability is tested against a fake only (see docs).
-// NOTHING here has ever been called against a real account.
+// Status of the facts below (re-read on 2026-10-16 against the official Meta pages):
+//   VERIFIED  Instagram "Content Publishing" (updated 2026-06-30): media must be on a PUBLIC URL at the time of the attempt; JPEG is the only
+//             image format; 100 API-published posts / 24 h; container -> media_publish; is_ai_generated exists.
+//   VERIFIED  Facebook Pages API "Posts" (updated 2026-04-17): POST /{page-id}/feed {message, published=false, scheduled_publish_time} with the
+//             date "between 10 minutes and 30 days" from the request; POST /{page-id}/photos {url} -> {id, post_id}; DELETE /{post-id};
+//             permissions pages_manage_posts + pages_read_engagement (+ more) on a Page access token; permalink https://www.facebook.com/{post-id}.
+//   NOT VERIFIED  scheduling a PHOTO via /photos with published=false + scheduled_publish_time + unpublished_content_type=SCHEDULED (the page only
+//                 documents scheduling on /feed); the Instagram Standard / Advanced access question for the owner's OWN account; Page
+//                 Publishing Authorization for the target Page. The first sandbox run must settle these before any real post is planned.
+// NOTHING here has ever been called against a real account; every call is tested against a fake HTTP only.
 
 import { createInstagramAdapter } from '../../activation/providers/instagram.js';
 import { PROVIDER_ERROR as PE } from '../../activation/constants.js';

@@ -29,6 +29,9 @@ const ALERTS = {
   PLATFORM_SCHEDULE_MISSING: ['La plateforme ne montre plus cette publication programmée. Vérifiez dans Meta Business Suite.', 'bad'],
   OUTCOME_UNKNOWN: ["Résultat inconnu : la publication a peut-être eu lieu. Regardez la page, puis indiquez ce que vous voyez.", 'bad'],
   NO_CONNECTION_USE_MANUAL: ["Aucune connexion active : cette publication ne partira pas toute seule. Utilisez le pack de publication manuelle.", 'warn'],
+  MANUAL_CANCEL_REQUIRED: ["ATTENTION : vous aviez programmé ce post à la main chez Meta. Supprimez cette programmation dans Meta Business Suite, puis confirmez ici.", 'bad'],
+  MANUAL_SCHEDULED: ["Programmé à la main chez Meta : Nordla ne le publiera PAS lui-même (pas de doublon).", 'ok'],
+  MANUAL_SCHEDULE_CHECK: ["L'heure est passée : regardez la page, puis collez le lien du post (« J'ai publié à la main »).", 'warn'],
   OVERDUE: ["L'heure prévue est passée.", 'warn'],
   MANUAL_ONLY: ["Ce post sera publié À LA MAIN (carrousel, story, ou visuel PNG pour Instagram) : Nordla ne l'enverra pas. Utilisez le pack manuel, puis « J'ai publié à la main ».", 'warn'],
 };
@@ -113,6 +116,7 @@ function actionsFor(post) {
   const row = h('div', { class: 'actions' });
   const hash = post.current_hash;
   const blocked = post.problems.length > 0;
+  const manualSchedule = () => { if (!post.publication?.manual_schedule) row.append(h('button', { class: 'btn sec', onclick: () => { if (confirm("Confirmez-vous l'avoir programmé vous-même dans Meta Business Suite, à la date et l'heure indiquées ? Nordla ne le publiera alors pas.")) act(post, 'mark_manual_schedule', { where: 'Meta Business Suite' }); } }, "Je l'ai programmé dans Meta")); };
   const manual = () => row.append(h('button', { class: 'btn sec', onclick: () => manualPack(post) }, 'Pack de publication manuelle'));
   const attest = () => row.append(h('button', { class: 'btn sec', onclick: () => {
     const link = ask("Collez le lien du post publié à la main (https://…)");
@@ -132,7 +136,7 @@ function actionsFor(post) {
         h('button', { class: 'btn', disabled: !post.publish_at || null, onclick: () => act(post, 'schedule', { expected_hash: hash }) }, post.publish_at ? 'Programmer' : 'Choisissez une date'),
         h('button', { class: 'btn sec', onclick: () => act(post, 'revoke_approval', {}) }, "Retirer mon approbation"),
       );
-      box.append(dateEditor(post)); manual(); attest();
+      box.append(dateEditor(post)); manual(); manualSchedule(); attest();
       break;
     case 'SCHEDULED':
       row.append(
@@ -140,7 +144,8 @@ function actionsFor(post) {
         h('button', { class: 'btn sec', onclick: () => act(post, 'revoke_approval', {}) }, "Retirer mon approbation"),
         h('button', { class: 'btn bad', onclick: () => { if (confirm('Annuler définitivement cette publication ?')) act(post, 'cancel', {}); } }, 'Annuler'),
       );
-      manual(); attest();
+      manual(); manualSchedule(); attest();
+      if (post.publication?.manual_cancel_required) row.append(h('button', { class: 'btn', onclick: () => act(post, 'confirm_manual_cancel') }, "J'ai supprimé la copie chez Meta"));
       break;
     case 'ERROR':
       row.append(h('button', { class: 'btn', onclick: () => act(post, 'retry') }, 'Réessayer'));
@@ -185,7 +190,7 @@ async function manualPack(post) {
 }
 
 function historyOf(post) {
-  const ACTION = { submit: 'Proposé', approve: 'Approuvé', reject: 'Refusé', request_changes: 'Correction demandée', revoke_approval: 'Approbation retirée', schedule: 'Programmé', unschedule: 'Déprogrammé', cancel: 'Annulé', retry: 'Nouvel essai demandé', claim: 'Publication lancée', mark_published: 'Publié', platform_scheduled: 'Programmé chez la plateforme', retry_later: 'Nouvel essai plus tard', mark_error: 'Erreur', mark_unknown: 'Résultat inconnu', mark_verified: 'Vérifié', verify_manual: 'Vérifié par vous', attest_manual: 'Publié à la main', reconcile: 'Rapproché par vous', edit: 'Modifié', edit_notes: 'Note modifiée', annotate: 'Information', withdraw: 'Retiré' };
+  const ACTION = { submit: 'Proposé', approve: 'Approuvé', reject: 'Refusé', request_changes: 'Correction demandée', revoke_approval: 'Approbation retirée', schedule: 'Programmé', unschedule: 'Déprogrammé', cancel: 'Annulé', retry: 'Nouvel essai demandé', claim: 'Publication lancée', mark_published: 'Publié', platform_scheduled: 'Programmé chez la plateforme', retry_later: 'Nouvel essai plus tard', mark_error: 'Erreur', mark_unknown: 'Résultat inconnu', mark_verified: 'Vérifié', verify_manual: 'Vérifié par vous', attest_manual: 'Publié à la main', mark_manual_schedule: 'Programmé à la main chez Meta', confirm_manual_cancel: 'Copie Meta supprimée', reconcile: 'Rapproché par vous', edit: 'Modifié', edit_notes: 'Note modifiée', annotate: 'Information', withdraw: 'Retiré' };
   return h('details', {}, h('summary', {}, `Historique (${post.history.length})`),
     h('ul', { class: 'hist' }, post.history.slice().reverse().map((e) => h('li', {}, `${new Date(e.at).toLocaleString('fr-BE', { timeZone: 'Europe/Brussels', dateStyle: 'short', timeStyle: 'short' })} — ${ACTION[e.action] ?? e.action} (${e.actor.role === 'owner' ? 'vous' : e.actor.id})${e.note ? ` : ${e.note}` : ''}${e.detail?.approval_invalidated ? ' — approbation annulée' : ''}`))));
 }

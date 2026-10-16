@@ -55,9 +55,11 @@ export function describePost(post, { publishers = {}, nowMs = Date.now(), confir
   if (post.publication?.remote_cancel_pending) alerts.push('REMOTE_CANCEL_PENDING');
   if (post.history.some((h) => h.detail?.alert === 'PLATFORM_SCHEDULE_MISSING') && post.state === S.SCHEDULED) alerts.push('PLATFORM_SCHEDULE_MISSING');
   if (post.state === S.PUBLICATION_UNKNOWN) alerts.push('OUTCOME_UNKNOWN');
+  if (post.publication?.manual_cancel_required) alerts.push('MANUAL_CANCEL_REQUIRED');
+  if (post.publication?.manual_schedule) alerts.push(post.publish_at && Date.parse(post.publish_at) < nowMs ? 'MANUAL_SCHEDULE_CHECK' : 'MANUAL_SCHEDULED');
   if (isManualOnly(post) && [S.APPROVED, S.SCHEDULED].includes(post.state)) alerts.push('MANUAL_ONLY');
   const autoBlockers = autoPublishBlockers(post);
-  if (post.state === S.SCHEDULED && !publisher && !post.publication?.platform_schedule && !isManualOnly(post)) alerts.push('NO_CONNECTION_USE_MANUAL');
+  if (post.state === S.SCHEDULED && !publisher && !post.publication?.platform_schedule && !post.publication?.manual_schedule && !isManualOnly(post)) alerts.push('NO_CONNECTION_USE_MANUAL');
   if (post.state === S.SCHEDULED && post.publish_at && Date.parse(post.publish_at) < nowMs - 15 * 60_000) alerts.push('OVERDUE');
   return {
     ...post,

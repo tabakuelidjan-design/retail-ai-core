@@ -41,7 +41,7 @@ export function createPublisher({
     const claimId = randomUUID();
     let verdict = null;
     const after = await store.update(id, (p) => {
-      if (p.state !== S.SCHEDULED || p.publication?.platform_schedule || p.publication?.remote_cancel_pending || isManualOnly(p)) { verdict = 'NOT_ELIGIBLE'; return p; }
+      if (p.state !== S.SCHEDULED || p.publication?.platform_schedule || p.publication?.remote_cancel_pending || p.publication?.manual_schedule || p.publication?.manual_cancel_required || isManualOnly(p)) { verdict = 'NOT_ELIGIBLE'; return p; }
       if (!hasValidApproval(p)) { verdict = 'NO_VALID_APPROVAL'; return transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'NO_VALID_APPROVAL' }); }
       if (!native) {
         if (clock() < Date.parse(p.publish_at ?? 0) || clock() < notBefore(p)) { verdict = 'NOT_DUE'; return p; }
@@ -163,7 +163,7 @@ export function createPublisher({
         if (p.state === S.SCHEDULED) {
           const publisher = publishers[p.platform];
           if (p.publication?.platform_schedule) { await followPlatformSchedule(p); continue; }
-          if (p.publication?.remote_cancel_pending || !publisher || isManualOnly(p)) { done.skipped += 1; continue; } // carousels / stories: published by hand, never by a machine here
+          if (p.publication?.remote_cancel_pending || p.publication?.manual_schedule || p.publication?.manual_cancel_required || !publisher || isManualOnly(p)) { done.skipped += 1; continue; } // carousels / stories: published by hand, never by a machine here
           const lead = Date.parse(p.publish_at) - clock();
           const caps = publisher.capabilities;
           if (cfg.nativeScheduling && caps.native_scheduling && lead >= caps.schedule_min_lead_ms && lead <= caps.schedule_max_lead_ms) {

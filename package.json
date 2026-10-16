@@ -57,7 +57,9 @@
     "sourcing:e2e:signin": "node test/e2e/sourcing-hosted-signin.e2e.js",
     "core:e2e": "node test/e2e/core-pilot.e2e.js",
     "nordla:e2e": "node test/e2e/nordla-entry.e2e.js",
-    "growth": "node src/growth/server/serve.js"
+    "growth": "node src/growth/server/serve.js",
+    "social": "node src/social/server/index.js",
+    "social:cli": "node src/social/cli.js"
   },
   "engines": {
     "node": ">=20"
