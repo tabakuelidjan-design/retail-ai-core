@@ -2,18 +2,19 @@
 // here and what is missing. Nothing is shown as available that the server does not confirm. Offline, only China Sourcing works and the
 // screen says so. Actions are read-only questions, a brand check, a campaign PROPOSAL, a local visual and human decisions: nothing is published or paid.
 import { esc } from './dom.js';
+import { coreDisabledReason, coreErrorMessage } from './core-journal-errors.js';
 
 const BADGE = { DISPONIBLE: '#1b7f3b', 'LECTURE SEULE': '#1b5e7f', LIMITÉ: '#8a6d00', 'À APPROUVER': '#8a6d00', 'À VÉRIFIER': '#8a6d00', BLOQUÉ: '#a12', 'NON RACCORDÉ': '#666', 'NON CONFIGURÉ': '#666' };
 const QUICK = { finance: [['Factures fournisseurs à payer', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Trésorerie', 'ma trésorerie'], ['Achats du mois', 'mes achats du mois']], analytics: [['Évolution des ventes', 'comment évoluent mes ventes et pourquoi certaines performances changent-elles ?']] };
 
 export function createModulesPanel({ S, api, refresh }) {
   const st = (S.nx ??= { modules: null, branding: null, campaigns: null, creation: null, photo: null, answer: null, check: null, busy: false, error: '' });
-  const fail = (e) => { st.error = e?.body?.message ?? (e?.status === 401 ? 'Session expirée : reconnectez-vous.' : 'Le serveur n’a pas pu répondre. Rien n’a été changé.'); };
-  async function load() {
-    try { const [m, b, c, v] = await Promise.all([api('/api/core/modules'), api('/api/core/branding'), api('/api/core/campaigns'), api('/api/core/creation')]); st.modules = m.modules; st.branding = b; st.campaigns = c.campaigns; st.creation = v; st.error = ''; } catch (e) { fail(e); }
+  const fail = (e) => { st.error = coreErrorMessage(e); };
+  async function load({ preserveError = false } = {}) {
+    try { const [m, b, c, v] = await Promise.all([api('/api/core/modules'), api('/api/core/branding'), api('/api/core/campaigns'), api('/api/core/creation')]); st.modules = m.modules; st.branding = b; st.campaigns = c.campaigns; st.creation = v; if (!preserveError) st.error = ''; } catch (e) { if (!preserveError || !st.error) fail(e); }
     refresh();
   }
-  async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { fail(e); } st.busy = false; await load(); }
+  async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); let failed = false; try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { failed = true; fail(e); } st.busy = false; await load({ preserveError: failed }); }
   const val = (id) => document.getElementById(id)?.value.trim() ?? '';
   // The photo is reduced ON THE PHONE (longest edge 1600 px, orientation applied, JPEG), like a Sourcing photo; the server then uses it as received.
   const shrink = async (file) => { const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)); const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); return cv.toDataURL('image/jpeg', 0.9); };
@@ -56,7 +57,7 @@ export function createModulesPanel({ S, api, refresh }) {
     if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les six autres modules demandent le serveur.</p>`;
     if (!st.modules) return `${head}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla (7 modules)</button>`;
     const by = Object.fromEntries(st.modules.map((m) => [m.key, m]));
-    const mod = (m, body = '') => `<details class="card" data-nx-module="${esc(m.key)}" ${st.open === m.key ? 'open' : ''}><summary><b>${esc(m.label)}</b> <span class="small" style="color:#fff;background:${BADGE[m.state] ?? '#666'};border-radius:4px;padding:1px 6px">${esc(m.state)}</span>${m.offline ? ' <span class="small muted">hors ligne</span>' : ''}</summary><p class="small muted">${esc(m.detail)}</p>${body}</details>`;
+    const mod = (m, body = '') => `<details class="card" data-nx-module="${esc(m.key)}" ${st.open === m.key ? 'open' : ''}><summary><b>${esc(m.label)}</b> <span class="small" style="color:#fff;background:${BADGE[m.state] ?? '#666'};border-radius:4px;padding:1px 6px">${esc(m.state)}</span>${m.offline ? ' <span class="small muted">hors ligne</span>' : ''}</summary><p class="small muted">${esc(m.key === 'core' && m.state === 'NON CONFIGURÉ' ? coreDisabledReason(m.detail) : m.detail)}</p>${body}</details>`;
     const quick = (k) => (QUICK[k] ?? []).map(([l, q]) => `<button class="btn sec" data-act="nx-ask" data-label="${esc(l)}" data-q="${esc(q)}" ${['LECTURE SEULE'].includes(by[k]?.state) ? '' : 'disabled'}>${esc(l)}</button>`).join(' ');
     const b = st.branding;
     const brandBody = b?.status === 'PROPOSED_NOT_APPROVED' || b?.status === 'APPROVED' ? `<p class="small">Positionnement : ${esc(b.positioning)}</p><p class="small">Interdits proposés : ${esc(b.rules.map((r) => `« ${r.forbidden} » (${r.severity === 'BLOCK' ? 'bloquant' : 'à revoir'})`).join(', '))}</p>${b.status === 'APPROVED' ? `<p class="small">Approuvé le ${esc(String(b.approvedAt).slice(0, 16).replace('T', ' '))}.</p>` : `<p class="small muted">Questions ouvertes : ${esc(b.questions.join(' '))}</p><button class="btn sec" data-act="nx-approve-brand">Approuver ces règles (propriétaire)</button>`}` : '';
