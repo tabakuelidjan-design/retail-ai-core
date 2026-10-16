@@ -4,13 +4,13 @@ Décision du propriétaire (16/10) : déploiement de `sourcing-staging` validé 
 **activation, dépenses et changements d'infrastructure seulement après sa confirmation explicite**, sur présentation de cette grille.
 Adresse cible du test Xiaomi : `app.nordla.app` (aucun DNS modifié sans son accord). Staging reste séparé de la production.
 
-Commit à déployer : **COMMIT_CANDIDAT** (branche `claude/nordla-core-p0`).
+Commit à déployer : **`a11324eab6d246c23b5e5fe0dc3ba2e7f2ab6be4`** (`a11324e`, branche `claude/nordla-core-p0` ; contient la fusion du Chantier B #10 `9c78d44`). Les commits suivants ne touchent que la documentation : l'image serait identique.
 
 ## A. Conditions vérifiables AVANT l'activation
 
 | # | Condition du propriétaire | État | Preuve |
 |---|---|---|---|
-| A1 | CI finale verte sur le commit exact | ETAT_A1 | PREUVE_A1 |
+| A1 | CI finale verte sur le commit exact | **vert** | sur `a11324e` : `core-reliability` 38854414610 (Linux suite complète + **Windows**), `nordla-integration-pre-china` 38854414635 (Node 20 + Node 24, suite complète), `china-sourcing` 38854414576, `staging-backup-drill` 38854414639 (porte seule, `run: false`) ; local : 85 fichiers / 888 tests Sourcing-Core-sauvegardes, 0 échec |
 | A2 | Aucune connexion à la production | **vérifié dans le code et sur l'image** | le service ne joint Supabase que par `SUPABASE_URL` + 2 clés ; **nouvelle garde** : sur Railway, `NORDLA_SUPABASE_PROJECT_REF` est obligatoire, `SUPABASE_URL` doit être exactement `https://<ref>.supabase.co` et une clé JWT d'un autre projet est refusée (sans être affichée). Simulé dans l'image (variables `RAILWAY_*`) : variable absente → refus de démarrer ; URL de production → refus de démarrer ; configuration staging → démarrage, journal « Supabase project fvhiammdskpcnfodsnrc ». Tests : `test/sourcing-hosted-project-pin.test.js` |
 | A3 | Séparation des secrets et accès staging / production | **vérifié côté code ; à constater côté Railway** | les secrets sont saisis par le propriétaire ; le service staging ne reçoit **que** des valeurs du projet staging (garde A2) ; le canal GitHub `supabase-staging` refuse la référence de production ; aucune variable partagée avec Finance / Analytics de production ne doit être référencée par `sourcing-staging` (à constater dans l'onglet *Variables* : aucune « shared variable » de production) |
 | A4 | Volume persistant pour le journal Core | **vérifié dans l'image ; à constater côté Railway** | garde du Chantier B : sur Railway, journal hors volume → « Nordla Core OFF (JOURNAL_NOT_ON_A_VOLUME) » (simulé) ; configuration prévue : volume `sourcing-staging-data` monté sur `/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing` → « Nordla Core ON » (simulé). À constater : volume attaché, 1 réplique (Railway interdit les répliques avec volume) |

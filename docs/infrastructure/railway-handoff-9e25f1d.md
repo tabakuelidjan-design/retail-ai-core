@@ -3,6 +3,10 @@
 **Ne rien déployer** : activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire. Pas de second service.
 Service : `sourcing-staging` (`24cc9cd0-e868-4210-90ce-23487ff2e65c`), volume `sourcing-staging-data` monté sur `/app/data`.
 
+> **16/10 : remplacé par `docs/infrastructure/railway-staging-go-nogo.md`** — nouveau commit à déployer `a11324e` (fusion du Chantier B +
+> garde de projet Supabase) et nouvelle variable obligatoire `NORDLA_SUPABASE_PROJECT_REF=fvhiammdskpcnfodsnrc`. Le reste de ce document
+> (contrôles 1–10, retour arrière, coûts) s'applique.
+
 ## 0. Étape Railway prête à autoriser (état du 15/10, 22 h 25 UTC)
 
 **Rien n'est lancé.** Activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire.
