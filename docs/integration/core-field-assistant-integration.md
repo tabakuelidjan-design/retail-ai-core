@@ -1,4 +1,12 @@
-# Core Field Assistant — raccordements restants et dépendances (propositions, rien d'appliqué hors périmètre)
+# Core Field Assistant — raccordements restants et dépendances (préparés, rien d'appliqué hors périmètre)
+
+## 0. État de préparation (phase 2)
+| Dépendance | Livrable prêt | Où | Appliqué ? |
+|---|---|---|---|
+| `verdictDisplay` (sourcing) | branche isolée issue de P0, +1 champ additif dans `decide()`, 3 tests ; 693 tests sourcing/core relancés (2 échecs préexistants identiques sur P0 pur) | `origin/fix/sourcing-verdict-display` (commit `7a7ca2e`) — **sans PR**, au propriétaire de `decision.js` | non (rien fusionné) |
+| Multi-tours dans `http.js` | `validateConversation` (dans `field-context.js`, testé) + patch de 3 lignes + test HTTP | `core-field-assistant-http-conversation.patch` et `.test.js` (ce dossier) ; patch vérifié (`git apply --check`), test vert avec le patch, rouge sans | non (`http.js` non modifié) |
+
+Ordre d'adoption conseillé : (1) PR #12 ; (2) le patch `http.js` (il dépend de `validateConversation` livré par #12) ; (3) `verdictDisplay` côté sourcing, puis la couche d'affichage de `ask.js` pourra lire `decision.verdictDisplay` au lieu de le recalculer (`displayVerdict` reste valable tant que ce champ n'existe pas).
 
 ## 1. `CONDITIONAL_GO` avec un blocage dur
 
