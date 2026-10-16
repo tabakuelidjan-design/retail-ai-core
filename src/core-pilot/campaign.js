@@ -3,8 +3,7 @@
 //   -> Marketing (buildCampaignContract: stock + approved-claims checks, owner_review PENDING, published false)
 //   -> Creative (real provider configured? if not: PROVIDER_NOT_CONNECTED, nothing produced or simulated) -> HUMAN decision (journaled).
 // Nothing is published, sent or paid: there is no publish path here at all. Proposals and decisions are appended to a file journal.
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { appendLineDurably, createSerial, readJsonlStrict, withWriteLock } from './durable-file.js';
 import { createHash } from 'node:crypto';
 import { buildCampaignContract } from '../integration/handoffs.js';
 import { ref } from '../integration/ids.js';
@@ -29,8 +28,18 @@ const DECISIONS = ['APPROVED_FOR_CREATION', 'REJECTED', 'DEFERRED'];
 
 export function createCampaignService({ merchantId, branding, analytics = null, file, env = process.env, now = () => new Date().toISOString() }) {
   const brandProfile = () => ({ tenant_id: merchantId, brand_ref: `nordla:brand:${merchantId}`, approved_claims: branding?.approvedClaims() ?? [] });
-  async function entries() { try { return (await readFile(file, 'utf8')).trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } }
-  async function append(e) { await mkdir(dirname(file), { recursive: true }); await appendFile(file, `${JSON.stringify(e)}\n`, { mode: 0o600 }); return e; }
+  // Only a file that does not exist is an empty history. Damage, a cut-short last line or an unreadable file is an explicit error (CAMPAIGN_JOURNAL_*), never "no campaigns".
+  const entries = () => readJsonlStrict(file, 'CAMPAIGN_JOURNAL');
+  const serial = createSerial();
+  /** One logical writer: strict read of the history, the caller's checks on it, ONE durable append - under the in-process queue and the file lock.
+   *  fn(all) -> { entry?, result? } : `entry` is appended (if any), `result` is returned (default: the entry). */
+  const mutate = (fn) => serial(() => withWriteLock(file, async () => {
+    const all = await entries(); // also refuses to append after a damaged or cut-short line
+    const { entry = null, result = entry } = await fn(all);
+    if (entry) await appendLineDurably(file, JSON.stringify(entry));
+    return result;
+  }));
+  const append = (entry) => mutate(async () => ({ entry }));
 
   /** Prepare (never publish) a campaign proposal for a product, from identified data and constraints. */
   async function prepare({ product, objective, audience, channel, copy }, actor) {
@@ -65,10 +74,12 @@ export function createCampaignService({ merchantId, branding, analytics = null, 
     if (actor?.role !== 'OWNER') throw Object.assign(new Error('Seul le propriétaire décide d’une campagne.'), { code: 'APPROVAL_ROLE_REQUIRED', status: 403 });
     if (!DECISIONS.includes(decision)) throw Object.assign(new Error(`décision : ${DECISIONS.join(', ')}`), { code: 'INVALID_DECISION', status: 400 });
     if (!String(reason ?? '').trim()) throw Object.assign(new Error('raison obligatoire'), { code: 'REASON_REQUIRED', status: 400 });
-    const all = await entries();
-    if (!all.some((e) => e.kind === 'PROPOSAL' && e.id === id)) throw Object.assign(new Error('proposition introuvable'), { code: 'NOT_FOUND', status: 404 });
-    if (all.some((e) => e.kind === 'DECISION' && e.id === id)) throw Object.assign(new Error('décision déjà enregistrée'), { code: 'ALREADY_DECIDED', status: 409 });
-    return append({ kind: 'DECISION', id, at: now(), by: actor.userId ? `user:${actor.userId}` : 'local-owner', decision, reason: String(reason).trim(), published: false });
+    // the state check and the append are ONE unit: an approval and a rejection arriving together cannot both be recorded
+    return mutate(async (all) => {
+      if (!all.some((e) => e.kind === 'PROPOSAL' && e.id === id)) throw Object.assign(new Error('proposition introuvable'), { code: 'NOT_FOUND', status: 404 });
+      if (all.some((e) => e.kind === 'DECISION' && e.id === id)) throw Object.assign(new Error('décision déjà enregistrée'), { code: 'ALREADY_DECIDED', status: 409 });
+      return { entry: { kind: 'DECISION', id, at: now(), by: actor.userId ? `user:${actor.userId}` : 'local-owner', decision, reason: String(reason).trim(), published: false } };
+    });
   }
 
   async function list() {

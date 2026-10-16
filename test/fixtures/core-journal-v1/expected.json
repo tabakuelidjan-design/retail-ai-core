@@ -1,0 +1,25 @@
+{
+  "generated_with": "f721e49 (original journal.js and runtime.js)",
+  "lines": 6,
+  "journal_head": "6b0a1e752665908f4d1ce0d6f62368d93f4e5edbcde1c1091523834e61a84ea0",
+  "decisions": [
+    {
+      "entry": "log_2adf66f98223",
+      "human": null,
+      "result": null,
+      "case": "golden-c"
+    },
+    {
+      "entry": "log_5fe3bc399fbb",
+      "human": "APPROVED",
+      "result": "NOT_MEASURABLE",
+      "case": "golden-b"
+    },
+    {
+      "entry": "log_766a56450518",
+      "human": "DEFERRED",
+      "result": null,
+      "case": "golden-a"
+    }
+  ]
+}

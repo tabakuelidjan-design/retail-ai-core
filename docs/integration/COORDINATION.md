@@ -99,6 +99,27 @@ Xiaomi, CI. Point de jonction : une fusion B → `claude/nordla-core-p0` prépar
 - `claude/blissful-babbage-z0nrt2` @ `2b6b983` : 1 document (`docs/infrastructure/nordla-cloud-plan.md`), **absent** de Core P0 mais
   cité par 4 fichiers (dont `tools/sourcing-backup.mjs`) ; fusion sans conflit vérifiée (`git merge-tree`). **Proposée, non exécutée.**
 
+## 2026-10-15 — Core P0 : fiabilité du Core (mandat P1–P7), branche `claude/nordla-core-reliability`
+
+Branche créée depuis `claude/nordla-core-p0` @ `f721e49`. **Rien n'est fusionné dans `claude/nordla-core-p0` ni déployé** ; la fusion est préparée par Core P0, vérifiée par la CI, décidée par le propriétaire.
+Fichiers touchés (déclarés avant fusion, un seul chantier à la fois) :
+
+| Fichier | Nature | Propriété habituelle | Note |
+|---|---|---|---|
+| `src/core-pilot/journal.js`, `runtime.js` | modifiés | Chantier B | format des événements **inchangé** ; signatures publiques inchangées (ajouts : `status()`, `inspectJournalText`, option `hooks` / `lock` de `createFileJournal`) |
+| `src/core-pilot/campaign.js`, `creation.js` | modifiés | partagés | lectures strictes ; vérification d'état + ajout = une opération |
+| `src/core-pilot/{durable-file,journal-recovery,deployment-guard}.js` | **nouveaux** | Core P0 | primitives d'ajout durable ; reprise contrôlée ; garde « journal dans le volume Railway » |
+| `src/sourcing/server/index.js` | **2 lignes** (import + garde dans `buildCore`) | Chantier A | si Railway et dossier de données hors `RAILWAY_VOLUME_MOUNT_PATH` → Core OFF avec le motif ; rien ne change hors Railway |
+| `tools/sourcing-backup.mjs` | modifié | Infrastructure | vérifie la chaîne du journal dans l'archive, rogne la **copie** d'une ligne coupée, `restorable`, refus de restauration d'un journal incohérent, ignore `*.lock` ; format d'archive **inchangé** (champs ajoutés en lecture seule) |
+| `tools/core-journal-recover.mjs`, `tools/core-reliability-mutation.mjs` | **nouveaux** | Core P0 | reprise contrôlée (diagnose / prepare / verify / apply) ; balayage de mutations |
+| `test/finance-privacy.test.js` | **1 exemption** (2 lignes) | partagé | le dossier `test/fixtures/core-journal-v1/` (journal de référence : empreintes SHA-256 d'événements synthétiques) est exclu de la garde « aucune chaîne hexadécimale de 64 caractères » ; même précédent que `test/fixtures/fonts/FONTS.json` ; la garde reste entière partout ailleurs |
+| `.gitattributes` | 1 ligne | partagé | `test/fixtures/core-journal-v1/** -text` (journal de référence : aucune conversion de fin de ligne) |
+| `.github/workflows/core-reliability.yml` | **nouveau** | partagé | Linux Node 24 (fiabilité + suite complète) et Windows Node 24 (fiabilité) ; ne se déclenche que sur `claude/nordla-core-reliability` |
+| `test/core-reliability.test.js`, `core-backup-integrity.test.js`, `core-deployment-guard.test.js`, `test/fixtures/core-journal-v1/**` | **nouveaux** | Core P0 | aucun test existant modifié ni affaibli |
+| `docs/integration/core-journal-reliability.md` | **nouveau** | Core P0 | garanties, limites, reprise, sauvegardes, reporté |
+
+À savoir pour Infrastructure : la documentation Railway rattache un volume à un seul service et ne documente aucun montage partagé ; la sauvegarde doit rester dans le service du Core. Le journal exige que `SOURCING_DATA_DIR` soit **dans** `RAILWAY_VOLUME_MOUNT_PATH`.
+
 ## 2026-10-16 (nuit) — Chantier A : vérification de `claude/nordla-core-reliability` (rien fusionné)
 
 Fusion **simulée** localement (`claude/nordla-core-p0` @ `d9b630a` + `d85ec46`) : aucun conflit ; suite complète Node 24 : 362 fichiers,
