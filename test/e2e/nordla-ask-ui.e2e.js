@@ -147,6 +147,20 @@ try {
     await tab.offline(false);
     await tab.waitFor("window.nordlaSourcing.state().online === true", 20000);
   });
+  await check('11. loading state: while a question is in flight the buttons are disabled; afterwards they are back; the screen holds at 375, 390, 768 and 1280 px', async () => {
+    await openCore(tab); await tab.waitFor("!!document.querySelector('#core-ask-text')", 10000);
+    await tab.run(`window.__slow = true; window.__f1 = window.fetch; window.__n = 0; window.fetch = (u, o) => (String(u).includes('/api/core/ask') && (window.__n += 1, window.__slow) ? new Promise((r) => setTimeout(r, 1500)).then(() => window.__f1(u, o)) : window.__f1(u, o)); const i = document.querySelector('#core-ask-text'); i.value = 'Quelle est la marge estimée ?'; i.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('[data-act="core-ask"]').click(); document.querySelector('[data-act="core-ask"]')?.click(); document.querySelector('.nxa-chip')?.click(); await __t.sleep(400); return 1;`);
+    ok(await tab.eval("[...document.querySelectorAll('.nxa [data-act=\"core-ask\"], .nxa .nxa-chip')].every((b) => b.disabled)"), 'ask and chips are disabled while the request is in flight');
+    await tab.waitFor("[...document.querySelectorAll('.nxa [data-act=\"core-ask\"]')].every((b) => !b.disabled) && /marge/i.test(document.querySelector('[data-core-answer] .nxa-q')?.textContent || '')", 15000);
+    ok(await tab.eval('window.__n === 1'), 'three rapid clicks (a double-tap, a retry) sent ONE request: no duplicate question');
+    await tab.run('window.__slow = false; return 1;');
+    for (const w of [375, 390, 768, 1280]) {
+      await tab.resize(w, w >= 768 ? 900 : 844); await sleep(400);
+      ok(await tab.eval('document.documentElement.scrollWidth <= window.innerWidth + 1'), `no horizontal scroll at ${w} px`);
+      ok(await tab.eval("(() => { const r = document.querySelector('.nxa').getBoundingClientRect(); return r.width > 250 && r.right <= window.innerWidth + 1; })()"), `the ask block fits at ${w} px`);
+    }
+    await tab.resize(390, 844);
+  });
 } finally {
   await browser.close(); await new Promise((r) => proxy.close(r)); proxy.closeAllConnections?.(); await new Promise((r) => srv.server.close(r)); srv.server.closeAllConnections?.(); try { rmSync(tmp, { recursive: true, force: true }); } catch { /* temp */ }
 }
