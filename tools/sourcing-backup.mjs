@@ -7,6 +7,8 @@
 //   node tools/sourcing-backup.mjs restore <file.nsb> <targetDir>             verifies first, then writes into an EMPTY or new directory, then checks what it wrote
 //   node tools/sourcing-backup.mjs offsite <dataDir> <outDir> [--keep N]     backup, then copy the archive to the private bucket SOURCING_BACKUP_BUCKET (no overwrite)
 //   node tools/sourcing-backup.mjs fetch   <archiveName> <outDir>            downloads one archive from that bucket and verifies it (then: restore)
+//   node tools/sourcing-backup.mjs list                                       the archive names in that bucket, newest first
+//   node tools/sourcing-backup.mjs drill   <downloadDir> <emptyTargetDir>     independent restore drill: newest off-server archive -> verify -> restore
 //
 // SOURCING_BACKUP_PASSPHRASE (>= 16 characters) is required: archives are encrypted (scrypt -> AES-256-GCM; a wrong passphrase or any changed
 // byte is refused, never half-restored). Keep the passphrase OFF the server too (password manager + paper): without it no archive can be read.
@@ -140,7 +142,7 @@ export async function restore(file, targetDir, opts = {}) {
 const storageOf = (env) => {
   const url = String(env.SUPABASE_URL ?? '').replace(/\/+$/, ''); const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? ''); const bucket = String(env.SOURCING_BACKUP_BUCKET ?? '').trim();
   if (!url || !key || !/^[a-z0-9][a-z0-9_-]{2,62}$/.test(bucket)) throw new BackupError('OFFSITE_NOT_CONFIGURED', 'off-server copy needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SOURCING_BACKUP_BUCKET');
-  return { base: `${url}/storage/v1/object/${bucket}`, headers: { authorization: `Bearer ${key}`, apikey: key } };
+  return { base: `${url}/storage/v1/object/${bucket}`, list: `${url}/storage/v1/object/list/${bucket}`, headers: { authorization: `Bearer ${key}`, apikey: key } };
 };
 const ARCHIVE = /^sourcing-\d{8}T\d{6}Z\.nsb$/;
 
@@ -164,6 +166,24 @@ export async function downloadOffsite(name, outDir, { env = process.env, fetchIm
   return { ok: true, file };
 }
 
+/** The archive names in the bucket, newest first (names carry their UTC time). Only well-formed archive names are returned. */
+export async function listOffsite({ env = process.env, fetchImpl = fetch } = {}) {
+  const { list, headers } = storageOf(env);
+  const r = await fetchImpl(list, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ prefix: '', limit: 1000, offset: 0, sortBy: { column: 'name', order: 'desc' } }) });
+  if (!r.ok) throw new BackupError('OFFSITE_LIST_FAILED', `listing the bucket answered ${r.status}`);
+  const rows = await r.json();
+  return (Array.isArray(rows) ? rows : []).map((o) => String(o?.name ?? '')).filter((n) => ARCHIVE.test(n)).sort().reverse();
+}
+
+/** Independent restore drill (another machine than the server): the NEWEST off-server archive is downloaded, decrypted, verified and restored into an empty directory. */
+export async function drillLatest(outDir, targetDir, opts = {}) {
+  const names = await listOffsite(opts);
+  if (!names.length) throw new BackupError('OFFSITE_EMPTY', 'the bucket holds no archive: there is nothing off-server to restore');
+  const got = await downloadOffsite(names[0], outDir, opts);
+  const r = await restore(got.file, targetDir, opts);
+  return { ok: true, archive: names[0], archives_in_bucket: names.length, sha256: sha256(await readFile(got.file)), created_at: r.created_at, files: r.files, journals: r.journals.map((j) => ({ path: j.path, status: j.status, events: j.events ?? null })) };
+}
+
 /** One scheduled run on the hosted server: local encrypted archive (kept `keep`), then the off-server copy. */
 export async function backupAndShip(dataDir, outDir, opts = {}) {
   const b = await backup(dataDir, outDir, opts);
@@ -181,7 +201,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     else if (cmd === 'restore' && a && b) r = await restore(a, b);
     else if (cmd === 'offsite' && a && b) r = await backupAndShip(a, b, { keep: Number.isInteger(keep) && keep > 0 ? keep : 30 });
     else if (cmd === 'fetch' && a && b) r = await downloadOffsite(a, b);
-    else { console.error('usage: sourcing-backup.mjs backup <dataDir> <outDir> [--keep N] | offsite <dataDir> <outDir> [--keep N] | fetch <archiveName> <outDir> | verify <file.nsb> | restore <file.nsb> <emptyTargetDir>'); process.exit(2); }
+    else if (cmd === 'list') r = await listOffsite();
+    else if (cmd === 'drill' && a && b) r = await drillLatest(a, b);
+    else { console.error('usage: sourcing-backup.mjs backup <dataDir> <outDir> [--keep N] | offsite <dataDir> <outDir> [--keep N] | fetch <archiveName> <outDir> | list | drill <downloadDir> <emptyTargetDir> | verify <file.nsb> | restore <file.nsb> <emptyTargetDir>'); process.exit(2); }
     console.log(JSON.stringify(r));
   } catch (e) { console.error(`${e.code ?? 'ERROR'}: ${e.message}`); process.exit(1); }
 }

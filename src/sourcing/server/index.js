@@ -105,7 +105,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
-  log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${hosted ? `HOSTED for ${hosted.origin}: Core identity sign-in (module sourcing, merchant ${hosted.merchantId}), no development token` : host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
+  log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${hosted ? `HOSTED for ${hosted.origin}: Core identity sign-in (module sourcing, merchant ${hosted.merchantId}), Supabase project ${hosted.supabaseRef ?? 'not pinned'}, no development token` : host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
   log(merchantProfile ? `Merchant profile: ${merchantProfile.merchantId} (${mp.source === 'FILE' ? 'file' : 'config/merchants'}), status ${merchantProfile.status ?? 'n/a'}` : `No merchant profile loaded${mp.error ? ` (${mp.error})` : ''}: the fit checklist will say so. Set SOURCING_MERCHANT_ID to choose one.`);
   log(core.status);
   log(`Process: Node ${process.versions.node}, uid ${process.getuid?.() ?? 'n/a'}${process.getuid?.() === 0 ? ' (ROOT: the image entrypoint was bypassed - see deploy/sourcing/Dockerfile)' : ''}, data ${dir}.`);
@@ -121,7 +121,7 @@ async function dirBytes(d) { let n = 0; for (const e of await readdir(d, { withF
  *  (SOURCING_BACKUP_PASSPHRASE + SOURCING_BACKUP_BUCKET + SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). Local archives go to
  *  SOURCING_BACKUP_DIR (default: next to the data directory, never inside it). A failure is logged and retried next run: it never stops
  *  the service and never touches the data. Without that configuration nothing runs and the log says so. */
-export function scheduleBackups({ env, dir, log, run = null, firstDelayMs = 10 * 60_000, everyMs = 24 * 3600_000 }) {
+export function scheduleBackups({ env, dir, log, run = null, firstDelayMs = 10 * 60_000, everyMs = 24 * 3600_000, retryMs = 60 * 60_000 }) {
   if (!String(env.SOURCING_BACKUP_PASSPHRASE ?? '').trim() || !String(env.SOURCING_BACKUP_BUCKET ?? '').trim()) { log('Backups: NOT scheduled (SOURCING_BACKUP_PASSPHRASE / SOURCING_BACKUP_BUCKET not set).'); return { stop: () => {}, runNow: async () => null }; }
   const out = String(env.SOURCING_BACKUP_DIR ?? '').trim() || join(dir, '..', 'sourcing-backups');
   // the local copies share the data volume (1 GB on the pilot): few of them (history lives off-server), and never when they could fill it
@@ -132,10 +132,17 @@ export function scheduleBackups({ env, dir, log, run = null, firstDelayMs = 10 *
     if (free < need) throw Object.assign(new Error(`not enough free space on the volume (${Math.round(free / 1e6)} MB free, ${Math.round(need / 1e6)} MB needed): nothing written; enlarge the volume or lower SOURCING_BACKUP_KEEP`), { code: 'BACKUP_LOW_SPACE' });
     return (await import('../../../tools/sourcing-backup.mjs')).backupAndShip(dir, out, { env, keep });
   });
-  const runNow = async () => { try { const r = await once(); log(`Backup OK: ${r.files} file(s), copied off-server as ${r.offsite}.`); return r; } catch (e) { log(`Backup FAILED (${e.code ?? 'ERROR'}): ${e.message} - retried at the next run; the data is untouched.`); return null; } };
+  // a failed run (bucket unreachable, quota, low space) is retried after `retryMs` instead of waiting a whole day: one pending retry at a time
+  let retry = null;
+  const runNow = async () => {
+    try { const r = await once(); log(`Backup OK: ${r.files} file(s), copied off-server as ${r.offsite}.`); return r; } catch (e) {
+      if (!retry) { retry = setTimeout(() => { retry = null; runNow(); }, retryMs); retry.unref?.(); }
+      log(`Backup FAILED (${e.code ?? 'ERROR'}): ${e.message} - retried in ${Math.round(retryMs / 60_000)} min; the data is untouched.`); return null;
+    }
+  };
   const first = setTimeout(runNow, firstDelayMs); const every = setInterval(runNow, everyMs); first.unref?.(); every.unref?.();
   log(`Backups: every ${Math.round(everyMs / 3600_000)} h, first in ${Math.round(firstDelayMs / 60_000)} min, ${keep} local copies in ${out}, off-server bucket ${env.SOURCING_BACKUP_BUCKET}.`);
-  return { stop: () => { clearTimeout(first); clearInterval(every); }, runNow };
+  return { stop: () => { clearTimeout(first); clearInterval(every); clearTimeout(retry); retry = null; }, runNow };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

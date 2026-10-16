@@ -127,3 +127,13 @@ Fusion **simulée** localement (`claude/nordla-core-p0` @ `d9b630a` + `d85ec46`)
 configuration `sourcing-staging` (`/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing`). Les 2 lignes dans `src/sourcing/server/index.js`
 et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés côté Chantier A. Fusion : décision du propriétaire
 (`docs/integration/bilan-2026-10-16.md`, D1).
+
+## 2026-10-16 — Chantier A : préparation de l'activation staging (après la fusion #10)
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/sourcing/server/hosted.js`, `src/sourcing/server/index.js` | garde de projet Supabase ; nouvel essai de sauvegarde 1 h après un échec | sur Railway, `NORDLA_SUPABASE_PROJECT_REF` obligatoire ; `SUPABASE_URL` et clés JWT d'un autre projet refusées ; hors Railway, comportement inchangé si la variable n'est pas posée |
+| `tools/sourcing-backup.mjs` | `list`, `drill` (restauration indépendante de l'archive hors serveur la plus récente) | format d'archive inchangé ; vérification du journal du Chantier B réutilisée telle quelle |
+| `.github/workflows/staging-backup-drill.yml`, `ops/staging-backup/request.json` | **nouveaux** | restauration indépendante sur un runner GitHub, verrouillée comme `staging-db-ops` (`run: false`) |
+| `.github/workflows/core-reliability.yml` | déclencheur `claude/nordla-core-p0` ajouté | Linux + Windows sur chaque commit candidat |
+| `test/sourcing-hosted-project-pin.test.js` (nouveau), `test/sourcing-backup-full-restore.test.js`, `test/sourcing-hosted-identity.test.js` | tests | aucun test du Chantier B modifié |

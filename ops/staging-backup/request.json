@@ -1,0 +1,6 @@
+{
+  "_comment": "Independent restore drill of the hosted service's OFF-SERVER backups (bucket nordla-backups of Supabase STAGING), on a GitHub runner, never on the server that made them. Read-only on the bucket. Set run to true only after the owner's go; changing this file re-runs the gate.",
+  "project_ref": "fvhiammdskpcnfodsnrc",
+  "bucket": "nordla-backups",
+  "run": false
+}

@@ -28,7 +28,7 @@ const ENV = { SOURCING_HOSTED: '1', NORDLA_MERCHANT_ID: M, SOURCING_PUBLIC_ORIGI
   NORDLA_IDENTITY_RATE_LIMIT_KEY: randomBytes(32).toString('hex'), NORDLA_CSRF_KEY: randomBytes(32).toString('hex'), SOURCING_MERCHANT_ID: 'habb', SOURCING_HOST: '127.0.0.1' };
 
 test('hosted configuration: every missing piece is refused with its own code; no development token is ever enough', () => {
-  assert.deepEqual(hostedConfig(ENV), { host: '127.0.0.1', merchantId: M, origin: ORIGIN, allowedHosts: [HOST], dataDir: 'data/local/sourcing' });
+  assert.deepEqual(hostedConfig(ENV), { host: '127.0.0.1', merchantId: M, origin: ORIGIN, allowedHosts: [HOST], dataDir: 'data/local/sourcing', supabaseRef: null }); // not pinned off Railway (test/sourcing-hosted-project-pin.test.js)
   assert.throws(() => hostedConfig({ ...ENV, NORDLA_MERCHANT_ID: 'habb' }), { code: 'HOSTED_MERCHANT_REQUIRED' });
   for (const o of ['http://x.example.com', 'https://x.example.com/app', 'https://x.example.com:8443', 'https://*.example.com', '']) assert.throws(() => hostedConfig({ ...ENV, SOURCING_PUBLIC_ORIGIN: o }), { code: 'HOSTED_ORIGIN_REQUIRED' }, o);
   for (const k of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY', 'NORDLA_IDENTITY_RATE_LIMIT_KEY', 'NORDLA_CSRF_KEY']) assert.throws(() => hostedConfig({ ...ENV, [k]: '' }), { code: 'HOSTED_IDENTITY_REQUIRED' }, k);
