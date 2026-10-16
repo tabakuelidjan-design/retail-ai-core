@@ -59,10 +59,8 @@ jobs:
       - run: python3 -m pip install --quiet Pillow
       - name: Trial merge with integration/nordla-convergence-v1 (never pushed)
         run: |
-          git config user.email ci@example.invalid
-          git config user.name ci
           git fetch origin integration/nordla-convergence-v1
-          git merge --no-edit origin/integration/nordla-convergence-v1
+          git merge --no-commit --no-ff origin/integration/nordla-convergence-v1 # tree only: no commit, so no identity is needed
       - run: npm ci
       - name: Social + activation + provider suites on the merged tree
         run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js
