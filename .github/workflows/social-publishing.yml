@@ -71,6 +71,7 @@ jobs:
           tail -n 12 merged.txt
       - name: Baseline (convergence alone), failing test names recorded
         run: |
+          git reset --hard --quiet # drops the uncommitted trial merge; untracked result files stay
           git checkout --quiet --detach origin/integration/nordla-convergence-v1
           npm ci
           npm test > base.txt 2>&1 || true
