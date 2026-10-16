@@ -1,0 +1,673 @@
+{
+  "summary": {
+    "root": "retail-ai-core-field-assistant-base",
+    "total": 56,
+    "pass": 9,
+    "figureLeaks": 0,
+    "unexpectedWrites": 0,
+    "byCat": {
+      "B1 dossier": {
+        "total": 7,
+        "pass": 1
+      },
+      "B2 risques": {
+        "total": 7,
+        "pass": 0
+      },
+      "B3 rentabilité": {
+        "total": 9,
+        "pass": 0
+      },
+      "B4 décisions": {
+        "total": 10,
+        "pass": 1
+      },
+      "B5 transversal": {
+        "total": 4,
+        "pass": 3
+      },
+      "frontière": {
+        "total": 3,
+        "pass": 1
+      },
+      "fautes/accents": {
+        "total": 5,
+        "pass": 0
+      },
+      "FR/EN": {
+        "total": 3,
+        "pass": 0
+      },
+      "limites honnêtes": {
+        "total": 3,
+        "pass": 3
+      },
+      "pas de dossier": {
+        "total": 2,
+        "pass": 0
+      },
+      "dossier vide": {
+        "total": 3,
+        "pass": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "cat": "B1 dossier",
+      "q": "Résume ce dossier",
+      "expected": "ANSWERED",
+      "got": "ANSWERED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 1
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Qu'est-ce qu'on sait sur ce fournisseur ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Quelles données avons-nous ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Qu'est-ce qui manque ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Ce dossier est-il complet ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Qu'est-ce qui est confirmé ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B1 dossier",
+      "q": "Qu'est-ce que tu sais et qu'est-ce que tu ne sais pas ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Quels sont les risques ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Qu'est-ce qui peut bloquer l'achat ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Quels documents faut-il vérifier ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Quels points dois-je éclaircir ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Pourquoi Nordla hésite ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Quelles preuves manquent ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B2 risques",
+      "q": "Quels sont les risques avec ce fournisseur ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Quelle est la marge estimée ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Quel est le coût rendu ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Combien coûte l'ensemble de la commande ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Quel prix manque pour calculer la rentabilité ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Le prix de vente est-il observé ou simplement estimé ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Quels coûts ne sont pas encore pris en compte ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Combien je pourrais gagner sur ce produit ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Est-ce que ce prix est bon ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B3 rentabilité",
+      "q": "Et si j'achète seulement la quantité minimale ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Est-ce que je peux commander ce produit ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Est-ce que je peux acheter ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Dois-je acheter ce produit ?",
+      "expected": "ANSWERED",
+      "got": "ANSWERED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 2
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Quelles sont les options ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Pourquoi cette recommandation ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Qu'est-ce que tu me conseilles de vérifier ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Quelle est la prochaine étape ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Quelles questions dois-je poser avant de signer ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Quelles décisions attendent mon approbation ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B4 décisions",
+      "q": "Quelles décisions doivent encore être suivies ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B5 transversal",
+      "q": "Quelles factures fournisseurs dois-je payer ?",
+      "expected": "MODULE_NOT_CONNECTED",
+      "got": "MODULE_NOT_CONNECTED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B5 transversal",
+      "q": "Comment évoluent mes ventes ?",
+      "expected": "MODULE_NOT_CONNECTED",
+      "got": "MODULE_NOT_CONNECTED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B5 transversal",
+      "q": "Quelle est ma trésorerie ?",
+      "expected": "MODULE_NOT_CONNECTED",
+      "got": "MODULE_NOT_CONNECTED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "B5 transversal",
+      "q": "Quels modules sont connectés ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "frontière",
+      "q": "Quelle est la marge sur ce fournisseur ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "frontière",
+      "q": "Quelle marge sur mes ventes ?",
+      "expected": "MODULE_NOT_CONNECTED",
+      "got": "MODULE_NOT_CONNECTED",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "frontière",
+      "q": "Quelle est la marge de ce fournisseur sur mes ventes ?",
+      "expected": "ASK",
+      "got": "MODULE_NOT_CONNECTED",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "fautes/accents",
+      "q": "quest ce qui manque",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "fautes/accents",
+      "q": "quelle est la marje",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "fautes/accents",
+      "q": "quels docments manquent",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "fautes/accents",
+      "q": "quelle prochaine etape",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "fautes/accents",
+      "q": "quels sont les riques",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "FR/EN",
+      "q": "what are the risks on this supplier",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "FR/EN",
+      "q": "what is missing in this file",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "FR/EN",
+      "q": "can I order this product",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "limites honnêtes",
+      "q": "Compare les deux propositions que j'ai enregistrées",
+      "expected": "ASK|NOT_UNDERSTOOD",
+      "got": "NOT_UNDERSTOOD",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "limites honnêtes",
+      "q": "Résume ma journée de sourcing",
+      "expected": "ASK|NOT_UNDERSTOOD",
+      "got": "NOT_UNDERSTOOD",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "limites honnêtes",
+      "q": "raconte une blague",
+      "expected": "NOT_UNDERSTOOD",
+      "got": "NOT_UNDERSTOOD",
+      "pass": true,
+      "statusOk": true,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "pas de dossier",
+      "q": "Qu'est-ce qui manque ?",
+      "expected": "ASK",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "pas de dossier",
+      "q": "Quelle est la marge estimée ?",
+      "expected": "ASK",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "dossier vide",
+      "q": "Quelle est la marge estimée ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "dossier vide",
+      "q": "Quel est le coût rendu ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    },
+    {
+      "cat": "dossier vide",
+      "q": "Combien coûte l'ensemble de la commande ?",
+      "expected": "ANSWERED",
+      "got": "NOT_UNDERSTOOD",
+      "pass": false,
+      "statusOk": false,
+      "figureLeak": false,
+      "wrote": false,
+      "sources": 0
+    }
+  ]
+}
