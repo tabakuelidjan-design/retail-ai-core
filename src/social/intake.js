@@ -36,7 +36,7 @@ function validateProposal(p) {
  * result: CREATED | UNCHANGED | UPDATED | REFUSED_FROZEN | REJECTED. A created / updated post is offered for review when it is ready.
  */
 export async function importProposals({
-  proposals, actor = D_ACTOR, store, createPost, editPost, act,
+  proposals, actor = D_ACTOR, store, createPost, editPost, act, confirmed = [],
 }) {
   const report = [];
   for (const p of proposals) {
@@ -49,7 +49,7 @@ export async function importProposals({
       const line = { proposal_id: p.proposal_id, platform: target.platform, format: target.format, post_id: id };
       try {
         const content = {
-          platform: target.platform, format: target.format, account_ref: target.account_ref ?? null, subject: p.subject, asset: target.format === 'TEXT' ? null : p.asset,
+          platform: target.platform, format: target.format, account_ref: target.account_ref ?? null, subject: p.subject, asset: ['TEXT', 'CAROUSEL'].includes(target.format) ? null : p.asset ?? null, assets: target.format === 'CAROUSEL' ? p.assets ?? null : null,
           caption: p.caption, hashtags: p.hashtags ?? [], publish_at: p.suggested_date ?? null,
         };
         const existing = await store.get(id);
@@ -62,11 +62,11 @@ export async function importProposals({
           const incoming = normalizeContent({ ...content, publish_at: existing.publish_at });
           if (contentHashOf({ ...existing, ...incoming }) === contentHashOf(existing)) { report.push({ ...line, result: 'UNCHANGED' }); continue; }
           if (FROZEN_STATES.includes(existing.state)) { report.push({ ...line, result: 'REFUSED_FROZEN', error: `post is ${existing.state}: send a new proposal_id for a new version` }); continue; }
-          post = await editPost(id, { asset: incoming.asset, caption: incoming.caption, hashtags: incoming.hashtags, subject: incoming.subject, account_ref: incoming.account_ref }, actor);
+          post = await editPost(id, { asset: incoming.asset, assets: incoming.assets, caption: incoming.caption, hashtags: incoming.hashtags, subject: incoming.subject, account_ref: incoming.account_ref }, actor);
           line.result = 'UPDATED';
           line.approval_voided = Boolean(existing.approval);
         }
-        const problems = readinessProblems(post);
+        const problems = readinessProblems(post, { confirmed });
         if (problems.length) line.problems = problems;
         else if (post.state === 'DRAFT') await act(id, 'submit', actor);
         report.push(line);

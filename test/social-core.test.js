@@ -6,7 +6,9 @@ import { join } from 'node:path';
 
 import { createFileStore } from '../src/social/store.js';
 import { createSocialService } from '../src/social/service.js';
-import { lintClaims, newPost, contentHashOf } from '../src/social/post.js';
+import {
+  autoPublishBlockers, lintClaims, newPost, contentHashOf,
+} from '../src/social/post.js';
 import { transition } from '../src/social/workflow.js';
 import { createSimulatedPublisher } from '../src/social/providers/simulated.js';
 import {
@@ -115,12 +117,17 @@ test('unconfirmed commercial claims block review and approval: price, discount, 
   assert.deepEqual(lintClaims({ caption: 'Fabriquée à Namur, personnalisée avec votre photo.', hashtags: ['namur'] }), []);
 });
 
-test('Instagram needs a JPEG; an image post without a usable asset cannot be submitted', async () => {
+test('an image post without its picture cannot be submitted; a PNG for Instagram CAN be approved but is never sent by the machine', async () => {
   const rt = runtime();
-  const png = await rt.service.createPost(postInput({ asset: asset({ content_type: 'image/png' }) }), AGENT);
-  await rejects(rt.service.act(png.id, 'submit', AGENT), 'SOCIAL_UNCONFIRMED_CLAIM');
-  assert.throws(() => newPost(postInput({ asset: null }), { actor: AGENT, now: '2026-10-17T00:00:00Z' }), /asset is required/);
+  const bare = await rt.service.createPost(postInput({ asset: null }), AGENT); // brief delivered, picture missing: kept as a post
+  await rejects(rt.service.act(bare.id, 'submit', AGENT), 'SOCIAL_UNCONFIRMED_CLAIM');
   assert.throws(() => newPost(postInput({ format: 'TEXT' }), { actor: AGENT, now: '2026-10-17T00:00:00Z' }), /does not support format TEXT/); // Instagram has no text-only post
+  const png = await scheduled(rt, { asset: asset({ content_type: 'image/png' }), subject: { kind: 'product', ref: 'png', label: 'p' } });
+  assert.deepEqual(autoPublishBlockers(await rt.service.get(png.id)), ['INSTAGRAM_API_REQUIRES_JPEG']);
+  rt.clock.now = Date.parse('2026-10-17T17:30:00Z');
+  await rt.publisher.runDue();
+  assert.equal(rt.igHttp.calls.length, 0, 'the Instagram API takes JPEG only: nothing is attempted');
+  assert.equal((await rt.service.get(png.id)).state, 'SCHEDULED');
 });
 
 // ---------------------------------------------------------------------------------------------------------------- publishing exactly once
@@ -415,11 +422,48 @@ test('concurrent edits on the file store are serialized; no lost update', async 
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('Instagram carousels / stories and unknown platforms are refused by the contract (not implemented, not faked)', () => {
+test('the contract refuses what is not supported: TikTok, a Reel on Facebook, a text-only Instagram post, a one-image carousel, too many hashtags', () => {
   const now = '2026-10-17T00:00:00Z';
-  assert.throws(() => newPost(postInput({ format: 'CAROUSEL' }), { actor: AGENT, now }), /does not support format CAROUSEL/);
   assert.throws(() => newPost(postInput({ platform: 'tiktok' }), { actor: AGENT, now }), /platform must be/);
+  assert.throws(() => newPost(postInput({ platform: 'facebook', format: 'REEL' }), { actor: AGENT, now }), /does not support format REEL/);
+  assert.throws(() => newPost(postInput({ format: 'CAROUSEL', asset: null, assets: [asset()] }), { actor: AGENT, now }), /2 to 10 assets/);
   assert.throws(() => newPost(postInput({ hashtags: Array.from({ length: 31 }, (_, i) => `t${i}`) }), { actor: AGENT, now }), /at most 30 hashtags/);
+});
+
+test('carousels and stories are approved and tracked but NEVER sent by the machine: they are published by hand', async () => {
+  const rt = runtime();
+  const two = [asset(), asset({ ref: 'asset://habb/slide2', sha256: sha('slide2') })];
+  const carousel = await scheduled(rt, { format: 'CAROUSEL', asset: null, assets: two, subject: { kind: 'product', ref: 'car', label: 'c' } });
+  const story = await scheduled(rt, { format: 'STORY', asset: asset({ content_type: 'image/png' }), caption: '', subject: { kind: 'brand', ref: 'story', label: 's' } });
+  rt.clock.now = Date.parse('2026-10-17T17:30:00Z');
+  const pass = await rt.publisher.runDue();
+  assert.equal(pass.published, 0);
+  assert.equal(rt.igHttp.calls.length, 0, 'no platform call for a manual-only format');
+  assert.deepEqual([(await rt.service.get(carousel.id)).state, (await rt.service.get(story.id)).state], ['SCHEDULED', 'SCHEDULED']);
+  // the owner publishes by hand and attests
+  const done = await rt.service.act(carousel.id, 'attest_manual', OWNER, { permalink: 'https://www.instagram.com/p/CAROUSEL/' });
+  assert.deepEqual([done.state, done.publication.mode], ['PUBLISHED', 'MANUAL']);
+});
+
+test('confirmed facts: the owner-confirmed price is allowed in the right context, any other price or discount still blocks', () => {
+  const confirmed = [{ id: 'coque-25', excerpts: ['25 €', '25,00 €', '25 euros'], requires: 'coque', source: 'owner, 2026-08-05' }];
+  const ok = { caption: 'Coque personnalisée : 25 €. Prête en environ 5 minutes, Rue de Bruxelles 18, 10 h – 18 h.', hashtags: [] };
+  assert.deepEqual(lintClaims(ok, { confirmed }), []);
+  assert.ok(lintClaims(ok).some((f) => f.code === 'PRICE'), 'without the registry the price blocks');
+  assert.ok(lintClaims({ caption: 'Coque personnalisée : 25 €. Gourde : 19,90 €.', hashtags: [] }, { confirmed }).some((f) => f.excerpt.startsWith('19')), 'a second price is judged on its own');
+  assert.ok(lintClaims({ caption: 'Le cadeau parfait : 25 €.', hashtags: [] }, { confirmed }).length > 0, 'the confirmation only holds in its context (coque)');
+  assert.ok(lintClaims({ caption: 'Coque à 25 €, -20% ce week-end', hashtags: [] }, { confirmed }).some((f) => f.code === 'DISCOUNT'));
+});
+
+test('the service uses the confirmed-facts registry for submit / approve; a client cannot supply its own', async () => {
+  const confirmed = [{ id: 'coque-25', excerpts: ['25 €'], requires: 'coque' }];
+  const rt = runtime();
+  const svc = createSocialService({ store: rt.store, clock: () => rt.clock.now, confirmedFacts: confirmed });
+  const p = await svc.createPost(postInput({ caption: 'Coque personnalisée : 25 €.' }), AGENT);
+  assert.equal((await svc.act(p.id, 'submit', AGENT)).state, 'READY_FOR_REVIEW');
+  const noFacts = createSocialService({ store: rt.store, clock: () => rt.clock.now });
+  const q = await noFacts.createPost(postInput({ caption: 'Coque personnalisée : 25 €.', subject: { kind: 'product', ref: 'q', label: 'q' } }), AGENT);
+  await rejects(noFacts.act(q.id, 'submit', AGENT, { confirmed }), 'SOCIAL_UNCONFIRMED_CLAIM'); // params.confirmed from the caller is overridden
 });
 
 void createFakeHttp;
