@@ -30,7 +30,10 @@ Variables (jamais committées) :
 4. node tools/procurement-staging/run.mjs verify                    # 17 tables, RLS partout, 34 politiques deny, 0 permissive,
                                                                     # search_path fixe, 4 triggers append-only
 5. Parcours de visite complet contre ce staging (PROCUREMENT_PG_URL + paquet `pg`), PUIS import des données de terrain si nécessaire :
-      importFileState({ state, target, merchantId, dryRun: true })  -> relire les comptes -> dryRun: false -> compareStores() doit rendre []
+      runImport({ state, target, merchantId })               -> DRY_RUN_OK + comptes (relire)  [REFUSED_SOURCE_INVALID : la source est abîmée, rien n'est écrit]
+      runImport({ state, target, merchantId, apply: true })  -> seul IMPORTED_VERIFIED est un succès ;
+                                                                IMPORTED_NOT_EQUIVALENT = NE PAS utiliser la cible, rollback puis enquête ;
+                                                                REFUSED_TARGET_NOT_EMPTY = la cible contient déjà des données de ce commerçant (rien n'est touché)
 ```
 
 ## 4. Permissions : ce qui est prouvé (base jetable avec rôles Supabase simulés)
@@ -44,6 +47,9 @@ Variables (jamais committées) :
 | Données présentes | **exporter d'abord** (`pg_dump --data-only -t 'proc_*'` + copie du fichier `procurement.json`), puis `rollback … --data-exported --accept-data-loss` | les données du module (sauvegardées) |
 | Retour au fonctionnement fichier | retirer `PROCUREMENT_PG_URL` : le serveur repart sur `procurement.json` (inchangé par l'import) | aucune |
 Le fichier source n'est **jamais modifié** par l'import : il reste la copie de secours jusqu'à décision contraire.
+
+## 5 bis. Preuves supplémentaires (base jetable, `test/postgres/procurement-coexistence.pg-smoke.mjs`, 49 contrôles)
+Coexistence avec les 4 migrations préparées du chantier A (lues depuis `integration/nordla-convergence-v1`), **dans les deux ordres** ; 0 table sans RLS, 0 table RLS sans politique, 0 politique permissive sur `proc_*`, anon/authenticated refusés, `service_role` sans UPDATE/DELETE sur le registre, isolation entre commerçants (clés étrangères composites, clé d'idempotence par commerçant) ; **redémarrage du serveur PostgreSQL** (lignes et soldes intacts, registre toujours en ajout seul) ; **sauvegarde/restauration** (`pg_dump -Fc -t 'proc_*'` puis `pg_restore --data-only --disable-triggers` dans une base neuve : mêmes comptes, mêmes soldes, soldes = registre ; `--disable-triggers` est indispensable, sinon le trigger de solde recompterait les mouvements restaurés).
 
 ## 6. Risques résiduels
 - Un seul écrivain à la fois pendant la bascule : arrêter le serveur de terrain avant l'import, puis importer, vérifier, puis démarrer avec `PROCUREMENT_PG_URL`. Les compteurs de version de ligne repartent à 1 (sans effet hors édition concurrente).
