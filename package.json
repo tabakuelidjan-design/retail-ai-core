@@ -47,7 +47,9 @@
     "benchmark:ask": "node benchmark/ask/run.js",
     "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
-    "growth": "node src/growth/server/serve.js"
+    "growth": "node src/growth/server/serve.js",
+    "social": "node src/social/server/index.js",
+    "social:cli": "node src/social/cli.js"
   },
   "engines": {
     "node": ">=20"

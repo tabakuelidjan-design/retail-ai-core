@@ -61,7 +61,7 @@ export const MANUAL_ONLY_FORMATS = Object.freeze([FORMAT.CAROUSEL, FORMAT.STORY]
 
 export const ROLE = Object.freeze({ OWNER: 'owner', AGENT: 'agent', SYSTEM: 'system' });
 /** Actions only the owner may take: they carry the human authorization (Nordla never approves for them). */
-export const OWNER_ACTIONS = Object.freeze(['approve', 'reject', 'request_changes', 'revoke_approval', 'schedule', 'unschedule', 'cancel', 'retry', 'reconcile', 'attest_manual', 'verify_manual']);
+export const OWNER_ACTIONS = Object.freeze(['approve', 'reject', 'request_changes', 'revoke_approval', 'schedule', 'unschedule', 'cancel', 'retry', 'reconcile', 'attest_manual', 'verify_manual', 'mark_manual_schedule', 'confirm_manual_cancel']);
 
 export const MODE = Object.freeze({ LIVE: 'LIVE', SIMULATION: 'SIMULATION', MANUAL: 'MANUAL' });
 
