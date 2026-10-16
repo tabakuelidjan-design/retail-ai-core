@@ -21,6 +21,8 @@
     "buying:peer-sets": "node --env-file=.env src/buying/peer-sets.js",
     "buying:calibrate": "node --env-file=.env src/buying/calibrate.js",
     "marketing:report": "node --env-file=.env src/marketing/index.js",
+    "social": "node src/social/server/index.js",
+    "social:cli": "node src/social/cli.js",
     "customers:report": "node --env-file=.env src/customers/index.js",
     "finance": "node --env-file=.env src/finance/cli.js",
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
@@ -47,9 +49,7 @@
     "benchmark:ask": "node benchmark/ask/run.js",
     "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
-    "growth": "node src/growth/server/serve.js",
-    "social": "node src/social/server/index.js",
-    "social:cli": "node src/social/cli.js"
+    "growth": "node src/growth/server/serve.js"
   },
   "engines": {
     "node": ">=20"
