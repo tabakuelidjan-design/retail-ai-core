@@ -48,6 +48,11 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     const o = await runtime.overview(); const list = o.decisions.filter((v) => v.entry.human_decision);
     return { status: 'ANSWERED', answer: list.length ? `Décisions prises et leur suivi :\n${list.map((v) => `${decisionLine(v)}${v.entry.result ? ` — résultat : ${v.entry.result.result}` : ' — résultat pas encore enregistré'}`).join('\n')}` : 'Aucune décision n’a encore été prise.', sources: list.map(decisionSource), limits };
   }
+  // ---- which modules are connected here (said as is, from the same table the "not connected" answers use)
+  if (/\bmodules?\b|raccord|connect/.test(t) && /\bquel|liste|disponible|\bwhich\b|\bwhat\b|\betat\b|statut/.test(t) && !/(facture|vente|tresorerie|dossier|fournisseur)/.test(t)) {
+    const off = Object.values(NOT_CONNECTED).filter((v, i, a) => a.indexOf(v) === i);
+    return { status: 'ANSWERED', answer: ['Relié à ce serveur : China Sourcing (dossiers fournisseurs) et le journal de décisions du Core.', 'Pas encore relié :', ...off.map((o) => `• ${o}`)].join(String.fromCharCode(10)), sources: [], limits: off };
+  }
   // ---- field questions on the open case (what is known / missing / risky, margin, next check, why this recommendation): read-only, no journal entry, no Finance / Analytics reading
   const scope = { merchantId: runtime?.merchantId ?? 'local', caseId };
   let fi = recognizeFieldIntent(text);

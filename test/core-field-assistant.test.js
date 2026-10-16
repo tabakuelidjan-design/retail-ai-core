@@ -76,6 +76,12 @@ test('recognition: a supplier-margin question is not an Analytics question; a se
   assert.equal(both2.status, 'AMBIGUOUS');
 });
 
+test('recognition precision: portfolio, customer-order and other-module sentences are never taken for a sourcing-case question', () => {
+  for (const p of ['Quel est le total des commandes de mes clients ce mois ?', 'quelles sont mes marges par produit sur Shopify ?', 'quelles sont mes ventes par produit ?', 'quels sont les risques de trésorerie ?', 'mes factures sont-elles complètes ?', 'le fournisseur a-t-il envoyé sa facture ?', 'combien de stock il me reste ?', 'bonjour Nordla', 'merci', 'crée une campagne pour ce produit', 'ma commande client est partie ?']) {
+    assert.notEqual(recognizeFieldIntent(p).status, 'RECOGNISED', p);
+  }
+});
+
 // ===================================================================== 2. non-regression of the existing Core answers
 test('non-regression: existing Core / Finance / Analytics answers are unchanged', async () => {
   const w = world({ 'case-go': goCase() });

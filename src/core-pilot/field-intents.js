@@ -34,15 +34,18 @@ const has = (words, list) => list.some((s) => stemHit(words, s));
 // What makes a sentence "about a sourcing case" (vs. Finance's ledgers or Analytics' sales).
 const CASE_WORDS = ['dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
 const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense'];
-const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu'];
+const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu', 'client', 'clients', 'customer', 'customers', 'shopify', 'catalogue', 'par produit', 'tous les produits', 'mes produits', 'mes marges', 'boutique en ligne', 'par mois', 'ce mois', 'cette semaine'];
 
 const RULES = [
   // [intent, groups]: every group must be hit (any stem of the group). More groups = more specific. Order only breaks equal scores.
   [FIELD_INTENT.EXPLAIN_RECOMMENDATION, [['pourquoi', 'explique', 'expliqu', 'justifi', 'comment', 'why'], ['recommand', 'conseil', 'conclusion', 'decision', 'ecart', 'elimin', 'regle', 'recommend']]],
   [FIELD_INTENT.EXPLAIN_RECOMMENDATION, [['option', 'options', 'ecart', 'elimin', 'contrainte', 'regle', 'changer', 'changerait'], ['ecart', 'elimin', 'ecarte', 'recommand', 'propriet', 'budget', 'marge minimale', 'recommandation', 'changer', 'changerait', 'applique', 'appliquee', 'applique']]],
+  [FIELD_INTENT.EXPLAIN_RECOMMENDATION, [['quelles options', 'les options', 'options possibles', 'options disponibles', 'autres options', 'quelles sont les options', 'what options']]],
   [FIELD_INTENT.EXPLAIN_RECOMMENDATION, [['pourquoi'], ['hesit', 'refus', 'pas recommand', 'ne recommande']]],
   [FIELD_INTENT.MOQ_SCENARIO, [['quantite minimale', 'quantite mini', 'moq', 'minimum', 'minimale', 'seulement le minimum', 'minimum fournisseur', 'qte min'], ['acheter', 'achete', 'commander', 'prend', 'si', 'seulement', 'marge', 'cout', 'coute', 'prix']]],
-  [FIELD_INTENT.ORDER_TOTAL, [['combien'], ['coute', 'coût', 'cout', 'total', 'ensemble', 'coûte'], ['commande', 'lot', 'ensemble', 'total', 'devis']]],
+  [FIELD_INTENT.ORDER_TOTAL, [['combien'], ['coute', 'cout', 'total', 'ensemble'], ['commande', 'lot', 'ensemble', 'total', 'devis']]],
+  [FIELD_INTENT.ORDER_TOTAL, [['total', 'totale', 'ensemble', 'toute la', 'tout le'], ['commande', 'lot', 'devis']]],
+  [FIELD_INTENT.ORDER_TOTAL, [['combien'], ['sortir', 'debourser', 'depenser', 'investir', 'mettre', 'avancer'], ['commande', 'lot', 'devis', 'achat']]],
   [FIELD_INTENT.LANDED_COST, [['cout rendu', 'cout de revient', 'landed', 'prix de revient', 'revient', 'cout complet', 'cout total unitaire', 'cout par unite', 'cout unitaire']]],
   [FIELD_INTENT.LANDED_COST, [['quel', 'combien', 'quelle', 'what', 'how'], ['cout', 'coute', 'revient'], ['unite', 'piece', 'rendu', 'unitaire', 'chaque']]],
   [FIELD_INTENT.PRICE_GAP, [['quel', 'quels', 'quelle', 'what', 'quelles'], ['prix', 'cout', 'donnee', 'chiffre'], ['manque', 'manquent', 'absent', 'missing'], ['rentabilite', 'marge', 'calculer', 'profit', 'gagner']]],
@@ -50,16 +53,19 @@ const RULES = [
   [FIELD_INTENT.UNCOUNTED_COSTS, [['cout', 'couts', 'frais', 'cost', 'costs'], ['pas encore', 'non compt', 'pas pris', 'pris en compte', 'oubli', 'manqu', 'inclus', 'compris', 'inconnu', 'pas compt', 'not included', 'ignor']]],
   [FIELD_INTENT.MARGIN, [['marge', 'marje', 'rentab', 'benefice', 'gagner', 'gagne', 'profit', 'margin', 'contribution', 'rapporte', 'rapport']]],
   [FIELD_INTENT.SUPPLIER_QUESTIONS, [['question', 'questions', 'demander', 'poser', 'ask'], ['fournisseur', 'supplier', 'signer', 'commande', 'negocier', 'discuter', 'visite', 'usine', 'devis', 'salon'], ]],
-  [FIELD_INTENT.SUPPLIER_QUESTIONS, [['quelles questions', 'quelle question', 'questions a poser', 'questions poser', 'questions to ask', 'que demander', 'quoi demander', 'que dois je demander']]],
+  [FIELD_INTENT.SUPPLIER_QUESTIONS, [['quelles questions', 'quelle question', 'questions a poser', 'questions poser', 'questions to ask', 'que demander', 'quoi demander', 'que dois je demander', 'lui demander', 'leur demander', 'faut il demander', 'que demander']]],
   [FIELD_INTENT.PRICE_JUDGEMENT, [['prix'], ['bon', 'correct', 'interessant', 'raisonnable', 'eleve', 'cher', 'negocier', 'acceptable', 'good', 'fair', 'high']], ],
   [FIELD_INTENT.PRICE_JUDGEMENT, [['prix maximum', 'prix max', 'prix limite', 'jusqu a combien', 'maximum payer', 'prix d achat maximum', 'max purchase', 'combien au maximum', 'maximum a payer']], 2],
   [FIELD_INTENT.CAN_ORDER, [['puis je', 'je peux', 'puis-je', 'peut on commander', 'ai je le droit', 'autoris', 'feu vert', 'can i', 'je peut', 'est ce que je peux', 'on peut', 'peux je'], ['command', 'acheter', 'achat', 'signer', 'passer', 'order', 'buy', 'valider', 'lancer', 'verser', 'acompte', 'payer']]],
   [FIELD_INTENT.RISKS, [['preuve', 'preuves'], ['manque', 'manquent', 'manquant', 'manquantes', 'insuffisant', 'insuffisantes', 'faut', 'absente', 'absentes']]],
-  [FIELD_INTENT.RISKS, [['risque', 'risques', 'danger', 'bloquer', 'bloque', 'blocage', 'bloquant', 'bloquants', 'probleme', 'attention', 'alerte', 'risk', 'block', 'preuve', 'preuves', 'inquiet', 'hesit', 'point faible', 'piege']]],
-  [FIELD_INTENT.DOCUMENTS, [['document', 'documents', 'certificat', 'certificats', 'papier', 'papiers', 'declaration', 'rapport de test', 'conformite', 'marquage ce'], ['verifier', 'manque', 'manquent', 'manquant', 'faut', 'demander', 'exiger', 'reclamer', 'fournir', 'controler', 'check', 'missing', 'need', 'necessaire', 'requis']]],
+  [FIELD_INTENT.RISKS, [['risque', 'risques', 'danger', 'bloquer', 'bloque', 'blocage', 'bloquant', 'bloquants', 'probleme', 'attention', 'alerte', 'risk', 'block', 'preuve', 'preuves', 'inquiet', 'hesit', 'point faible', 'piege', 'mal tourner', 'tourner mal', 'pourrait mal', 'risque de', 'dangereux', 'risque']]],
+  [FIELD_INTENT.DOCUMENTS, [['document', 'documents', 'certificat', 'certificats', 'papier', 'papiers', 'declaration', 'rapport de test', 'conformite', 'marquage ce'], ['verifier', 'manque', 'manquent', 'manquant', 'faut', 'demander', 'exiger', 'reclamer', 'fournir', 'controler', 'check', 'missing', 'need', 'necessaire', 'requis', 'sont la', 'presents', 'recus', 'fournis', 'complets', 'complete']]],
   [FIELD_INTENT.NEXT_STEP, [['prochaine etape', 'etape suivante', 'next step', 'prochain pas', 'prochaine action', 'que faire', 'quoi faire', 'maintenant', 'conseille', 'recommandes tu', 'tu me conseilles', 'a verifier', 'verifier maintenant', 'dois je verifier', 'dois je faire', 'dois je demander', 'poser comme question', 'questions poser', 'quelles questions']]],
+  [FIELD_INTENT.MISSING, [['point', 'points', 'sujets', 'elements', 'choses'], ['eclaircir', 'clarifier', 'preciser', 'verifier', 'regler', 'trancher']]],
+  [FIELD_INTENT.MISSING, [['tout ce qu il faut', 'assez d infos', 'assez d informations', 'tout ce qu il me faut', 'suffisamment d informations']]],
   [FIELD_INTENT.MISSING, [['manque', 'manquent', 'manquant', 'manquants', 'incomplet', 'complet', 'absent', 'absents', 'lacune', 'missing', 'trou', 'reste a', 'il me faut', 'faut il encore', 'encore besoin']]],
   [FIELD_INTENT.KNOWLEDGE, [['sait', 'sais', 'savons', 'connais', 'connait', 'connaissons', 'confirme', 'confirmes', 'confirmee', 'confirmees', 'know', 'avons nous', 'donnees', 'infos', 'information', 'informations'], ['dossier', 'fournisseur', 'produit', 'supplier', 'product', 'case', 'file', 'tu', 'on', 'nous', 'avons', 'a ce', 'sur', 'disponible', 'disponibles', 'ne sais', 'savoir', 'sait pas']]],
+  [FIELD_INTENT.KNOWLEDGE, [['fais moi le point', 'le point sur', 'etat du dossier', 'ou en est', 'ou en sommes', 'bilan du dossier', 'etat des lieux']]],
   [FIELD_INTENT.KNOWLEDGE, [['est confirme', 'est confirmee', 'sont confirmes', 'sont confirmees', 'est verifie', 'est prouve', 'est etabli']]],
   [FIELD_INTENT.KNOWLEDGE, [['quest ce que tu sais', 'qu est ce que tu sais', 'ce que tu sais', 'ce que tu ne sais', 'sais tu', 'sais-tu']]],
 ];
@@ -96,6 +102,7 @@ export function recognizeFieldIntent(text) {
   if (top.length === 1) return { intent: top[0], status: 'RECOGNISED', caseWords };
   // Two intents equally specific: a few pairs are really one question, anything else is asked.
   const pair = (a, b) => top.length === 2 && top.includes(a) && top.includes(b);
+  if (pair(FIELD_INTENT.SUPPLIER_QUESTIONS, FIELD_INTENT.DOCUMENTS)) return { intent: FIELD_INTENT.DOCUMENTS, status: 'RECOGNISED', caseWords };
   if (pair(FIELD_INTENT.RISKS, FIELD_INTENT.DOCUMENTS)) return { intent: FIELD_INTENT.RISKS, status: 'RECOGNISED', caseWords };
   if (pair(FIELD_INTENT.MISSING, FIELD_INTENT.DOCUMENTS)) return { intent: FIELD_INTENT.DOCUMENTS, status: 'RECOGNISED', caseWords };
   if (pair(FIELD_INTENT.MISSING, FIELD_INTENT.KNOWLEDGE)) return { intent: FIELD_INTENT.MISSING, status: 'RECOGNISED', caseWords };
