@@ -37,9 +37,44 @@ depuis un navigateur d'ordinateur, sans y mettre de vraies données.
 Redirections : aucune nécessaire (pas d'ancien domaine public). Le passage `http://` → `https://` est fait par le réseau Railway :
 à contrôler au point 5 (`http://app.nordla.app/healthz` doit aboutir en https), non vérifiable d'ici.
 
+## Validation HTTPS, certificat, redirections — méthode exacte (préparée le 16/10, AUCUN DNS modifié)
+
+Adresse retenue par le propriétaire (16/10) : **`app.nordla.app`**. L'état DNS actuel n'est **pas lisible** depuis la session de travail
+(résolution DNS publique et `nordla.app` bloqués par la politique réseau) : les points « avant » ci-dessous se lisent chez Porkbun.
+
+Avant (lecture seule, Porkbun → `nordla.app` → DNS) :
+- aucun enregistrement `app` existant (sinon : le noter, ne pas l'écraser sans accord) ;
+- **CAA** : s'il existe des enregistrements CAA sur `nordla.app`, l'un doit autoriser `letsencrypt.org` (Railway émet ses certificats
+  avec Let's Encrypt) ; aucun CAA = tout est autorisé ;
+- **DNSSEC** : s'il est activé chez Porkbun, il doit être cohérent (un DNSSEC cassé bloque silencieusement la validation).
+
+Ajout (après accord DNS explicite) :
+1. Railway → `sourcing-staging` → *Settings* → *Networking* → *Custom Domain* → `app.nordla.app` : Railway donne **deux** valeurs : la
+   cible du CNAME (`<quelque chose>.up.railway.app`) et un jeton de vérification de propriété.
+2. Porkbun : `CNAME app → <cible Railway>` (TTL 600) **et** `TXT _railway-verify.app → <jeton Railway>`. Rien d'autre.
+3. Attendre dans Railway l'état « certificat émis » (minutes ; d'après la communauté Railway, le certificat reste bloqué tant que le TXT
+   manque). **Ne pas** supprimer / recréer le domaine plusieurs fois : Let's Encrypt limite les certificats répétés.
+4. `SOURCING_PUBLIC_ORIGIN=https://app.nordla.app` sur le service (redémarrage). Avant ce changement le service refuse l'hôte
+   `app.nordla.app` (421) : c'est attendu.
+
+Vérification (depuis un ordinateur, avant de donner l'adresse au téléphone) :
+| Contrôle | Commande | Attendu |
+|---|---|---|
+| Résolution | `nslookup app.nordla.app` | CNAME vers la cible Railway |
+| Certificat | `openssl s_client -connect app.nordla.app:443 -servername app.nordla.app </dev/null 2>/dev/null \| openssl x509 -noout -issuer -subject -dates` | émetteur Let's Encrypt, sujet `app.nordla.app`, dates valides |
+| Santé | `curl -sS https://app.nordla.app/healthz` | `{"ok":true}` |
+| Redirection | `curl -sI http://app.nordla.app/healthz` | 301/308 vers `https://` (fait par Railway) ; de toute façon **tout le domaine `.app` est en HSTS préchargé** : aucun navigateur n'y fait de requête `http://` |
+| En-têtes | `curl -sI https://app.nordla.app/` | `strict-transport-security`, `content-security-policy`, `x-frame-options: DENY` |
+| Hôte strict | `curl -sI https://<cible>.up.railway.app/` (après bascule) | 421 (seul `app.nordla.app` est servi) |
+| Sans session | `curl -s https://app.nordla.app/api/core/modules` | 401 |
+
+Délai conseillé : faire l'ajout DNS au plus tard le **17/10**, pour garder une journée si le certificat tarde. Plan B si le certificat
+n'est pas émis à temps : test sur l'adresse Railway générée (le téléphone changera alors d'adresse une fois de plus : export « N photo(s)
+sur N » obligatoire avant tout changement).
+
 ## Retour arrière
 
-Supprimer l'enregistrement CNAME `app` (et le TXT) chez Porkbun et remettre `SOURCING_PUBLIC_ORIGIN` sur l'adresse Railway : aucune
+Supprimer l'enregistrement CNAME `app` et le TXT `_railway-verify.app` chez Porkbun, retirer le domaine dans Railway, et remettre `SOURCING_PUBLIC_ORIGIN` sur l'adresse Railway : aucune
 donnée serveur touchée. Les données d'un téléphone restent sur l'origine où elles ont été saisies (elles ne sont pas effacées).
 
 ## Risques

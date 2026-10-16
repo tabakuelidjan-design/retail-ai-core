@@ -61,7 +61,9 @@ export async function withWriteLock(file, fn, { waitMs = LOCK_WAIT_MS, staleMs =
   for (;;) {
     try {
       const h = await openFile(lock, 'wx', 0o600);
-      try { await h.writeFile(JSON.stringify({ token, pid: process.pid, at: new Date(now()).toISOString() })); } finally { await h.close(); }
+      // the lock file is OURS from here: if its content cannot be written (disk full, read-only), remove it before failing, so a full disk does
+      // not leave an empty lock that blocks every writer until it turns stale (found on a real full tmpfs: test/core-storage-realfs.test.js)
+      try { try { await h.writeFile(JSON.stringify({ token, pid: process.pid, at: new Date(now()).toISOString() })); } finally { await h.close(); } } catch (e) { await unlink(lock).catch(() => {}); throw e; }
       break;
     } catch (e) {
       if (e.code !== 'EEXIST' && !LOCK_AMBIGUOUS.has(e.code)) throw e;

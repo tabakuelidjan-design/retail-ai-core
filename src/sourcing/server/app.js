@@ -36,7 +36,19 @@ const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
-export function createSourcingApp({ token, gate = null, core = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+/** OK: an off-server copy succeeded within `maxAgeH` and the latest attempt did not fail twice in a row; PENDING: first run not due yet. Anything else is an alert. */
+export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } = {}) {
+  if (!st) return { ok: false, status: 'UNKNOWN' };
+  if (!st.configured) return { ok: false, status: 'NOT_CONFIGURED' };
+  const ageH = (t) => (t == null ? null : Math.round(((nowMs - t) / 3_600_000) * 10) / 10);
+  const base = { last_success_age_h: ageH(st.last_success_at), last_failure_age_h: ageH(st.last_failure_at), consecutive_failures: st.consecutive_failures, error_code: st.last_error_code };
+  if (st.consecutive_failures >= 2) return { ok: false, status: 'FAILING', ...base };
+  if (st.last_success_at != null && nowMs - st.last_success_at <= maxAgeH * 3_600_000) return { ok: true, status: 'OK', ...base };
+  if (st.last_success_at == null && st.consecutive_failures === 0 && nowMs - st.started_at <= firstRunGraceMin * 60_000) return { ok: true, status: 'PENDING_FIRST_RUN', ...base };
+  return { ok: false, status: st.last_success_at == null ? 'NO_OFFSITE_COPY_YET' : 'STALE', ...base };
+}
+
+export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -134,6 +146,8 @@ export function createSourcingApp({ token, gate = null, core = null, store, phot
       // the answer carries no data. Every other route keeps the Host allow-list.
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz') return json(res, 200, { ok: true });
       if (!hostOk(req)) return json(res, 421, { error: 'HOST_NOT_ALLOWED' });
+      // backup health for an OUTSIDE monitor (no session: a monitor has none). Ages and counts only - no file name, path, key or data.
+      if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }
       const url = new URL(req.url, 'http://local');
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;

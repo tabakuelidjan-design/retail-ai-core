@@ -1,5 +1,45 @@
 # Protocole de test Xiaomi — Nordla hébergé, PC éteint, données mobiles (répétition du 18 octobre)
 
+## Fiche du 18 octobre (version courte — le détail suit plus bas)
+
+Conditions : `sourcing-staging` actif sur `ab02b77`, contrôles C1–C7 verts (`docs/infrastructure/controles-apres-activation.md`),
+**données de test uniquement**, aucune publication Shopify, aucune donnée de production.
+Adresse : **`https://app.nordla.app`** — le service est configuré pour elle ; le téléphone ne peut s'y connecter **qu'après le DNS**
+(accord séparé, au plus tard le 17). Sans DNS : bascule sur l'adresse Railway (un changement de variable + Deploy) avant le test.
+
+**Ce qui sera réellement disponible le 18 (commit `ab02b77`)** : China Sourcing (dossiers, photos, hors ligne, synchronisation,
+export / récupération), Nordla Core (analyse du dossier, décision avec raison, journal), menu Nordla et les 7 modules, Création (photo +
+titre → visuel), Branding / Marketing en lecture et décision, **Parle à Nordla – version texte de base** : questions Finance / Analytics
+(réponse avec source, période, fraîcheur — sur staging : « données indisponibles », c'est normal) et faits d'achat du dossier ouvert.
+**Pas disponible le 18** : l'**assistant de terrain** de Parle à Nordla (PR #12 : « que manque-t-il ? », risques, documents à vérifier,
+prochaine vérification, jugement de prix sur le dossier). Il n'est pas dans `ab02b77` et son branchement est encore à l'état de
+proposition : il demande un nouveau commit candidat, sa CI et un nouveau déploiement autorisé. Ne pas le tester le 18.
+
+**Avant (PC allumé, ancienne adresse dans Firefox)** — rien ne doit être perdu :
+1. Chaque ancien dossier → réglages → **Exporter en JSON** ; l'écran doit dire **« N photo(s) sur N »** (si « absentes » : arrêt, me le
+   signaler). 2. Copier les fichiers exportés hors du téléphone (2 copies) + le dossier de données du PC sur une clé USB.
+3. **Ne jamais** vider Firefox ni « effacer les données du site » : l'ancienne adresse reste la copie de secours.
+
+**Test (Wi-Fi coupé, données mobiles, PC éteint)** — noter l'heure et le résultat de chaque ligne :
+| # | Action | Réussi si |
+|---|---|---|
+| 1 | Ouvrir l'adresse, se connecter avec **votre** compte staging | connecté, aucun jeton demandé |
+| 2 | Nouveau dossier fournisseur (nom de test) | « enregistré sur ce téléphone » |
+| 3 | 3 photos (appareil photo + galerie) | 3 vignettes, envoi signalé, indicateur « à jour » |
+| 4 | Notes, prix, quantité | visibles immédiatement |
+| 5 | Fermer complètement le navigateur, rouvrir | toujours connecté ; dossier, notes, 3 photos présents |
+| 6 | Mode avion → modifier une note → rouvrir le dossier | « hors ligne », modification gardée |
+| 7 | Réactiver les données mobiles | synchronisation seule, « à jour » |
+| 8 | Ordinateur (ou 2ᵉ navigateur) : ouvrir le même dossier | dossier **et 3 photos** présents côté serveur |
+| 9 | Menu → Nordla → **Parle à Nordla** : « Quelles factures sont à payer ? » puis « Combien a-t-on vendu ce mois-ci ? » | chaque réponse dit **sa source, sa période, sa fraîcheur** ; « données indisponibles » est normal sur staging (version de base, pas l'assistant de terrain) |
+| 10 | Nordla Core : analyser le dossier → décider avec une raison → fermer / rouvrir ; puis (avec ChatGPT) redémarrage du service → rouvrir | la décision, votre nom et la raison sont toujours là, **même après redémarrage** (journal Core sur le volume) |
+| 11 | **Récupérer** un ancien export (menu → Récupérer) | dossier et photos restaurés, **rien remplacé** (« garder les deux ») |
+| 12 | Revenir sur l'ancienne adresse (PC rallumé, Firefox) | anciens dossiers et photos **toujours là** |
+
+**Échec bloquant** : une photo ou une note perdue, une déconnexion inexpliquée, une réponse sans source, une erreur silencieuse →
+on note, on n'efface rien, on me transmet l'heure ; correction puis nouveau test. Le 18 n'est validé que si 1–12 sont réussis.
+
+
 But : prouver sur le **vrai téléphone** ce que les tests navigateur (Chromium 390 px) ne prouvent pas : écran tactile, appareil photo,
 réseau mobile réel, fermeture du navigateur, coupure / reprise du réseau. Rien n'est déclaré « prêt pour la Chine » sans ce test.
 
@@ -14,8 +54,9 @@ Railway `https://<service>.up.railway.app`, puis `app.nordla.app` après accord 
 | Supabase staging : migrations d'identité 1–5 | **fait** | run `staging-db-ops` 38813124178 |
 | Marchand de test `67646dbb-…`, votre adhésion OWNER, module `sourcing`, bucket privé `nordla-backups` | **fait** | run 38815730509, relu sur staging |
 | Votre compte de connexion | **fait** : le seul compte de l'Auth **staging** (créé par vous ; e-mail et mot de passe choisis par vous) | Auth staging : 1 compte confirmé |
-| Service `sourcing-staging` actif sur `62ec977` | **à autoriser** (Railway, coût 2–4 $/mois) | `docs/infrastructure/railway-handoff-9e25f1d.md` §0 |
-| Adresse | **à décider** : adresse Railway générée, ou `app.nordla.app` (DNS, autorisation séparée) | `docs/infrastructure/domaine-app-nordla-app.md` |
+| Service `sourcing-staging` actif sur `ab02b77` | principe validé le 16/10 ; **activation à confirmer** (2–4 USD/mois) | `docs/infrastructure/procedure-activation-staging.md` |
+| Sauvegarde hors serveur + restauration indépendante | **après activation** (B2, B3 de la grille) ; staging non « opérationnel » avant | workflow `staging-backup-drill` |
+| Adresse | **`app.nordla.app`** retenue le 16/10 ; DNS **à autoriser** (au plus tard le 17/10) | `docs/infrastructure/domaine-app-nordla-app.md` |
 
 Ce que vous verrez sur staging, et qui est **normal** : Finance / Analytics disent « données indisponibles » (le marchand de test n'a
 ni factures ni ventes) ; la Sécurité produits (Safety Gate) peut être marquée « en cache » ; Création, Branding, Marketing et

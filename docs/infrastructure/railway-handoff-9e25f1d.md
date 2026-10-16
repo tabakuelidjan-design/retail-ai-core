@@ -3,6 +3,10 @@
 **Ne rien déployer** : activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire. Pas de second service.
 Service : `sourcing-staging` (`24cc9cd0-e868-4210-90ce-23487ff2e65c`), volume `sourcing-staging-data` monté sur `/app/data`.
 
+> **16/10 : remplacé par `docs/infrastructure/railway-staging-go-nogo.md`** — nouveau commit à déployer `a11324e` (fusion du Chantier B +
+> garde de projet Supabase) et nouvelle variable obligatoire `NORDLA_SUPABASE_PROJECT_REF=fvhiammdskpcnfodsnrc`. Le reste de ce document
+> (contrôles 1–10, retour arrière, coûts) s'applique.
+
 ## 0. Étape Railway prête à autoriser (état du 15/10, 22 h 25 UTC)
 
 **Rien n'est lancé.** Activation, coût et DNS restent soumis à l'autorisation distincte du propriétaire.
@@ -25,8 +29,8 @@ ont bougé, rien de ce que l'image exécute).
 3. Secrets, saisis **par le propriétaire** directement dans Railway (jamais dans un chat) : `SUPABASE_ANON_KEY` et
    `SUPABASE_SERVICE_ROLE_KEY` du projet **staging**, `NORDLA_IDENTITY_RATE_LIMIT_KEY` et `NORDLA_CSRF_KEY` (deux valeurs différentes,
    ≥ 32 octets), `SOURCING_BACKUP_PASSPHRASE` (≥ 16 caractères, aussi conservée hors ligne).
-4. Commande de démarrage `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz`, limite conseillée
-   0,5 vCPU / 512 Mo.
+4. Commande de démarrage `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz` (limites CPU / mémoire non
+   réglables avec un volume).
 5. Activer le patch STAGED, épinglé sur `62ec977`. Coût estimé : 2–4 $/mois (§6, §9).
 6. Contrôles §4 (1 à 8), sur l'adresse Railway générée, **données de test uniquement** ; le téléphone n'est pas utilisé à ce stade.
 
@@ -143,5 +147,5 @@ correspondre à des lignes HABB réelles. `SOURCING_MERCHANT_ID=habb` (configura
   les services existants ; ce service n'ajoute aucun abonnement.
 - **Variable** : l'usage de ce service, estimé à 2–4 $/mois (section 6). Il ne coûte réellement que si l'usage total du compte
   dépasse les 5 $ inclus.
-- Limite de ressources conseillée sur le service : 0,5 vCPU / 512 Mo (le service mesure 48 Mo au repos) — plafonne la dépense en cas
-  d'emballement.
+- Limites CPU / mémoire : **non réglables** sur un service avec volume (correction du 16/10, communauté Railway). La dépense est bornée par
+  la limite d'usage du compte (`procedure-activation-staging.md` §2) ; le service mesure 48 Mo au repos.

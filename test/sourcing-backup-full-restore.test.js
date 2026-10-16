@@ -70,6 +70,7 @@ function fakeStorage() {
     seen.push({ url, method, auth: headers.authorization, upsert: headers['x-upsert'] });
     const key = new URL(url).pathname.replace('/storage/v1/object/', '');
     if (headers.authorization !== 'Bearer service-key') return new Response('{}', { status: 403 });
+    if (method === 'POST' && key.startsWith('list/')) { const bucket = key.slice(5); return new Response(JSON.stringify([...objects.keys()].filter((k) => k.startsWith(`${bucket}/`)).map((k) => ({ name: k.slice(bucket.length + 1) })).concat([{ name: 'not-an-archive.txt' }])), { status: 200 }); }
     if (method === 'POST') { if (objects.has(key)) return new Response('{"error":"Duplicate"}', { status: 409 }); objects.set(key, Buffer.from(body)); return new Response('{}', { status: 200 }); }
     return objects.has(key) ? new Response(objects.get(key), { status: 200 }) : new Response('{}', { status: 404 });
   };
@@ -98,7 +99,14 @@ test('off-server copy: uploaded encrypted, never overwritten; downloaded, verifi
     const logs = [];
     assert.equal(await scheduleBackups({ env: ENV, dir: data, log: (m) => logs.push(m) }).runNow(), null); assert.match(logs[0], /NOT scheduled/);
     const s = scheduleBackups({ env: OFF, dir: data, log: (m) => logs.push(m), run: async () => { throw Object.assign(new Error('bucket unreachable'), { code: 'OFFSITE_UPLOAD_FAILED' }); } });
-    assert.equal(await s.runNow(), null); s.stop(); assert.match(logs.at(-1), /Backup FAILED \(OFFSITE_UPLOAD_FAILED\).*data is untouched/);
+    assert.equal(await s.runNow(), null); s.stop(); assert.match(logs.at(-1), /Backup FAILED \(OFFSITE_UPLOAD_FAILED\).*retried in 60 min.*data is untouched/);
+    // a failed run is retried soon (not a day later), once at a time, and succeeds when the bucket is back
+    let calls = 0; const retried = [];
+    const sched = scheduleBackups({ env: OFF, dir: data, log: (m) => retried.push(m), firstDelayMs: 3_600_000, retryMs: 30, run: async () => { calls += 1; if (calls < 3) throw Object.assign(new Error('bucket unreachable'), { code: 'OFFSITE_UPLOAD_FAILED' }); return { files: 1, offsite: 'sourcing-20261016T000000Z.nsb' }; } });
+    await sched.runNow(); await sched.runNow(); // two failures in a row: still ONE pending retry
+    for (let i = 0; i < 100 && !retried.some((m) => /Backup OK/.test(m)); i += 1) await new Promise((ok) => setTimeout(ok, 10));
+    sched.stop();
+    assert.equal(calls, 3, 'two failures, then exactly one retry (not one per failure)'); assert.match(retried.at(-1), /Backup OK: 1 file\(s\), copied off-server as sourcing-20261016T000000Z\.nsb/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -115,5 +123,26 @@ test('scheduled run on the server: few local copies by default (the volume is sh
     assert.equal(await s.runNow(), null, 'the off-server copy cannot be sent here: logged, not thrown');
     assert.match(logs.at(-1), /Backup FAILED .*data is untouched/);
     assert.equal((await readdir(join(root, 'local'))).filter((n) => n.endsWith('.nsb')).length, 1, 'the local encrypted archive exists');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('independent restore drill (another machine): the NEWEST off-server archive is listed, downloaded, decrypted, verified and restored; empty bucket and wrong passphrase are refused', async () => {
+  const { backupAndShip, drillLatest, listOffsite } = await import('../tools/sourcing-backup.mjs');
+  const { mkdir } = await import('node:fs/promises');
+  const root = await mkdtemp(join(tmpdir(), 'nordla-drill-'));
+  try {
+    const st = fakeStorage();
+    await assert.rejects(drillLatest(join(root, 'dl0'), join(root, 'r0'), { env: OFF, fetchImpl: st.fetchImpl }), { code: 'OFFSITE_EMPTY' });
+    const data = join(root, 'data'); await mkdir(join(data, 'cases'), { recursive: true });
+    await writeFile(join(data, 'cases', 'c1.json'), '{"v":1}');
+    await backupAndShip(data, join(root, 'local'), { env: OFF, fetchImpl: st.fetchImpl, now: () => new Date('2026-10-16T08:00:00Z') });
+    await writeFile(join(data, 'cases', 'c1.json'), '{"v":2}');
+    await backupAndShip(data, join(root, 'local'), { env: OFF, fetchImpl: st.fetchImpl, now: () => new Date('2026-10-16T09:00:00Z') });
+    assert.deepEqual(await listOffsite({ env: OFF, fetchImpl: st.fetchImpl }), ['sourcing-20261016T090000Z.nsb', 'sourcing-20261016T080000Z.nsb'], 'newest first, only archives');
+    const d = await drillLatest(join(root, 'dl'), join(root, 'restored'), { env: OFF, fetchImpl: st.fetchImpl });
+    assert.equal(d.archive, 'sourcing-20261016T090000Z.nsb'); assert.equal(d.archives_in_bucket, 2); assert.equal(d.files, 1); assert.match(d.sha256, /^[0-9a-f]{64}$/);
+    assert.equal(await readFile(join(root, 'restored', 'cases', 'c1.json'), 'utf8'), '{"v":2}', 'the restored copy is the newest data');
+    await assert.rejects(drillLatest(join(root, 'dl2'), join(root, 'r2'), { env: { ...OFF, SOURCING_BACKUP_PASSPHRASE: 'another passphrase, also long' }, fetchImpl: st.fetchImpl }), (e) => /BACKUP|DECRYPT|PASSPHRASE|CORRUPT/i.test(e.code ?? ''));
+    await assert.rejects(drillLatest(join(root, 'dl3'), join(root, 'r3'), { env: { ...OFF, SUPABASE_SERVICE_ROLE_KEY: 'wrong-key' }, fetchImpl: st.fetchImpl }), { code: 'OFFSITE_LIST_FAILED' });
   } finally { await rm(root, { recursive: true, force: true }); }
 });

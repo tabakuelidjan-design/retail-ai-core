@@ -127,3 +127,36 @@ Fusion **simulée** localement (`claude/nordla-core-p0` @ `d9b630a` + `d85ec46`)
 configuration `sourcing-staging` (`/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing`). Les 2 lignes dans `src/sourcing/server/index.js`
 et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés côté Chantier A. Fusion : décision du propriétaire
 (`docs/integration/bilan-2026-10-16.md`, D1).
+
+## 2026-10-16 — Chantier A : préparation de l'activation staging (après la fusion #10)
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/sourcing/server/hosted.js`, `src/sourcing/server/index.js` | garde de projet Supabase ; nouvel essai de sauvegarde 1 h après un échec | sur Railway, `NORDLA_SUPABASE_PROJECT_REF` obligatoire ; `SUPABASE_URL` et clés JWT d'un autre projet refusées ; hors Railway, comportement inchangé si la variable n'est pas posée |
+| `tools/sourcing-backup.mjs` | `list`, `drill` (restauration indépendante de l'archive hors serveur la plus récente) | format d'archive inchangé ; vérification du journal du Chantier B réutilisée telle quelle |
+| `.github/workflows/staging-backup-drill.yml`, `ops/staging-backup/request.json` | **nouveaux** | restauration indépendante sur un runner GitHub, verrouillée comme `staging-db-ops` (`run: false`) |
+| `.github/workflows/core-reliability.yml` | déclencheur `claude/nordla-core-p0` ajouté | Linux + Windows sur chaque commit candidat |
+| `test/sourcing-hosted-project-pin.test.js` (nouveau), `test/sourcing-backup-full-restore.test.js`, `test/sourcing-hosted-identity.test.js` | tests | aucun test du Chantier B modifié |
+
+## 2026-10-16 (suite) — Chantier A : vérifications avant l'autorisation finale
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/core-pilot/durable-file.js` (**Chantier B**, déclaré ici) | 3 lignes dans `withWriteLock` | si le contenu du verrou ne peut pas être écrit (disque plein / lecture seule), le verrou que l'on vient de créer est supprimé avant l'erreur. Trouvé sur un vrai tmpfs plein (`test/core-storage-realfs.test.js`) : un verrou vide bloquait toute écriture jusqu'à 15 s après redémarrage. Suites de fiabilité et `tools/core-reliability-mutation.mjs` inchangées et vertes. Le Chantier B peut reprendre la formulation |
+| `src/sourcing/server/{hosted,index,app}.js` | vérification en direct du projet Supabase au démarrage ; `GET /healthz/backup` ; état des sauvegardes | périmètre A |
+| `tools/sourcing-backup.mjs` | copie isolée B2 (ajout seul) + `drill-isolated` | optionnelle, inactive sans ses variables |
+| `.github/workflows/staging-backup-monitor.yml`, `ops/staging-monitor/target.json` | **nouveaux** | alerte externe (désactivée) |
+| tests `test/core-storage-realfs.test.js`, `test/sourcing-backup-health.test.js`, `test/sourcing-backup-isolated.test.js` | **nouveaux** | aucun test du Chantier B modifié |
+
+## 2026-10-16 — Core P0 : assistant de terrain (PR #12 fusionnée, `c2d01be`) et phase 2 (branche `feature/core-field-assistant-phase2`)
+
+PR #12 fusionnée dans `claude/nordla-core-p0` sur autorisation du propriétaire : code validé `fe0360b` (CI : nordla-integration-pre-china Node 24 + 20, core-reliability Linux + Windows, china-sourcing = succès) ; `1d89984` n'ajoute que de la documentation.
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/core-pilot/ask.js` (Core), `field-intents.js`, `field-facts.js`, `field-answers.js`, `field-context.js` (**nouveaux**) | assistant de terrain, lecture seule | paramètre opt-in `conversation` ; nouveau statut de réponse `ACTION_REFUSED` ; flux existants inchangés |
+| `src/core-pilot/http.js` (**partagé, déclaré ici avant modification ; aucun autre chantier ne le tient**) | route `POST /api/core/ask` | 3 lignes : lit `conversation` du corps **seulement si la clé est présente**, la reconstruit par `validateConversation` (jamais fait confiance au client), la passe à `askNordla`. Sans la clé : comportement identique. Test `test/core-http-conversation.test.js` (rouge sans le changement) |
+| `src/sourcing/core/decision.js` (périmètre China Sourcing, **ajout seul**) | champ `verdictDisplay` sur la carte de décision | `verdict` inchangé (tests figés) ; `CONDITIONAL_GO` avec blocage dur ouvert → `CONDITIONAL_GO_BLOCKED`. Aucune autre branche ne touchait ce fichier au 2026-10-16 (balayage de toutes les branches et worktrees). Test `test/sourcing-verdict-display.test.js` |
+| `src/core-pilot/sourcing-facts.js` (Core) | `assessment.verdictDisplay` | 1 champ ajouté ; `input` (sujet Core) inchangé |
+
+Contrats : `ask` renvoie `{status, answer, sources, limits}` + `intent, sections` pour les réponses de terrain (+ `conversation`, `notice` si l'appelant a envoyé `conversation`). L'assistant lit `decision.verdictDisplay` : la règle n'existe qu'à un endroit (le moteur). Tests de contrat : `test/core-field-assistant-contracts.test.js`.

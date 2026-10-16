@@ -1,0 +1,87 @@
+# Independent restore drill of the hosted China Sourcing / Nordla Core backups (Supabase STAGING bucket nordla-backups). Never production.
+# Proves what a local copy cannot: the newest OFF-SERVER archive, made by the Railway service, is downloaded on ANOTHER machine (this runner),
+# decrypted with the passphrase kept outside the server, verified file by file (SHA-256, decision-journal chain) and restored into an empty
+# directory. Read-only on the bucket: nothing is uploaded, deleted or overwritten. The restored data never leaves the runner.
+# Locks, all required:
+#   1. ops/staging-backup/request.json says "run": true (set only after the owner's go), project_ref = staging, branch claude/nordla-core-p0;
+#   2. the drill job runs in the protected GitHub environment `supabase-staging` (the owner approves each run);
+#   3. secrets of that environment (entered by the owner in GitHub, never in a chat): STAGING_SERVICE_ROLE_KEY (the STAGING service key) and
+#      STAGING_SOURCING_BACKUP_PASSPHRASE (the SAME value as SOURCING_BACKUP_PASSPHRASE on the Railway service);
+#   4. the key must belong to project fvhiammdskpcnfodsnrc (same check as the hosted server, src/sourcing/server/hosted.js): a production key is refused.
+name: staging-backup-drill
+on:
+  push:
+    branches: ['claude/nordla-core-p0']
+    paths: ['ops/staging-backup/request.json']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: staging-backup-drill, cancel-in-progress: false }
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.req.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Requested?
+        id: req
+        run: |
+          run=$(jq -r '.run // false' ops/staging-backup/request.json)
+          ref=$(jq -r '.project_ref // ""' ops/staging-backup/request.json)
+          if [ "$ref" != "fvhiammdskpcnfodsnrc" ]; then echo "::error::request.json does not name the staging project"; exit 1; fi
+          if [ "$run" = "true" ] && [ "$GITHUB_REF" != "refs/heads/claude/nordla-core-p0" ]; then echo "::error::run=true only from claude/nordla-core-p0"; exit 1; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          [ "$run" = "true" ] || echo "::notice::request.json says run=false - nothing was done, the protected environment was not used."
+  drill:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: supabase-staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Restore drill (newest off-server archive -> verify -> restore into an empty directory)
+        env:
+          NORDLA_SUPABASE_PROJECT_REF: fvhiammdskpcnfodsnrc
+          SUPABASE_URL: https://fvhiammdskpcnfodsnrc.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
+          SOURCING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_SOURCING_BACKUP_PASSPHRASE }}
+          SOURCING_BACKUP_BUCKET: nordla-backups
+        run: |
+          set -o pipefail
+          mask() { sed -u -E 's#eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+#<clé masquée>#g; s#sb_(secret|publishable)_[A-Za-z0-9_-]+#<clé masquée>#g'; }
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "STOP: secret STAGING_SERVICE_ROLE_KEY missing in environment supabase-staging"; exit 2; }
+          [ "${#SOURCING_BACKUP_PASSPHRASE}" -ge 16 ] || { echo "STOP: secret STAGING_SOURCING_BACKUP_PASSPHRASE missing or shorter than 16 characters"; exit 2; }
+          # the key must be the STAGING one (a JWT key naming another project, e.g. production, is refused; the key is never printed)
+          node --input-type=module -e "import { supabaseProjectPin } from './src/sourcing/server/hosted.js'; console.log('project pin OK: ' + supabaseProjectPin({ ...process.env, SUPABASE_ANON_KEY: '' }));" 2>&1 | mask
+          mkdir -p "$RUNNER_TEMP/drill"
+          node tools/sourcing-backup.mjs drill "$RUNNER_TEMP/drill/download" "$RUNNER_TEMP/drill/restored" 2>&1 | mask | tee drill-report.json
+          echo "restored on this runner (not on the server): $(find "$RUNNER_TEMP/drill/restored" -type f | wc -l) file(s), $(du -sh "$RUNNER_TEMP/drill/restored" | cut -f1)"
+          rm -rf "$RUNNER_TEMP/drill"
+      - name: Isolated immutable copy (Backblaze B2 Object Lock) - only when its READ key is configured
+        env:
+          SOURCING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_SOURCING_BACKUP_PASSPHRASE }}
+          SOURCING_BACKUP_B2_KEY_ID: ${{ secrets.STAGING_B2_READ_KEY_ID }}
+          SOURCING_BACKUP_B2_KEY: ${{ secrets.STAGING_B2_READ_KEY }}
+          SOURCING_BACKUP_B2_BUCKET_ID: ${{ vars.STAGING_B2_BUCKET_ID }}
+        run: |
+          set -o pipefail
+          if [ -z "$SOURCING_BACKUP_B2_KEY_ID" ]; then echo "::notice::isolated store not configured (secrets STAGING_B2_READ_KEY_ID / STAGING_B2_READ_KEY): skipped"; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/iso"
+          node tools/sourcing-backup.mjs drill-isolated "$RUNNER_TEMP/iso/download" "$RUNNER_TEMP/iso/restored" 2>&1 | tee isolated-report.json
+          rm -rf "$RUNNER_TEMP/iso"
+          [ "$(jq -r '.retention.locked_now' isolated-report.json)" = "true" ] || { echo "::error::the newest isolated archive is NOT under compliance retention: the copy is not immutable"; exit 1; }
+          [ "$(jq -r '.hidden_markers' isolated-report.json)" = "0" ] || { echo "::error::archives were HIDDEN in the isolated store (only the server's write key can do that): investigate a possible compromise; the locked versions are still there"; exit 1; }
+      - name: Keep the drill report (no data, no secret)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-backup-drill-${{ github.run_id }}
+          path: |
+            drill-report.json
+            isolated-report.json
+          retention-days: 30
+          if-no-files-found: ignore
