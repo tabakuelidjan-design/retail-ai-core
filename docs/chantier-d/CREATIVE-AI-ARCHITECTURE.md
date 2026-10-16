@@ -77,3 +77,24 @@ BRIEF (propriétaire / réserve éditoriale)
 ## 8. Ce qui est prouvé aujourd'hui (tests `test/studio-ai-layer.test.js`)
 AI-1 fournisseur par défaut non connecté, rien de réservé ou journalisé · AI-2 la plaque passe sous le produit, pixels du produit identiques à la composition sans plaque · AI-3 refus avant appel si plafond dépassé · AI-4 la requête ne contient ni copie ni pixel ni empreinte de produit · AI-5 référence image refusée par défaut · AI-6 plaque inutilisable refusée (taille, coût absent, non PNG) · AI-7 plaque chargée ou qui tue le contraste : version marquée non livrable · AI-8 journal en ajout seul, décision par référence humaine · AI-9 dépassement d'estimation enregistré.
 Ce sont des tests avec un **fournisseur factice local** : ils démontrent les règles d'intégration, pas la qualité de génération.
+
+## 9. Évolution : modes de création (décision du 2026-10-17 : « fond uniquement » reste le mode sécurisé initial)
+
+`AI_MODE` (dans `src/studio-compose/ai-layer.js`) nomme les modes et **n'en active qu'un : `PLATE_ONLY`**. Les trois autres sont refusés avant toute estimation, réservation ou appel (test AI-10). Chaque mode futur s'active **séparément**, par le propriétaire, avec ses propres portes ; aucun fournisseur payant n'est connecté et rien de ce qui suit n'est codé.
+
+| Mode | Ce que le modèle peut faire | Ce qu'il ne peut jamais faire | Portes à ajouter avant activation | Validation humaine |
+|---|---|---|---|---|
+| **1. `PLATE_ONLY`** (actif) | un fond plein cadre | produit, visage, texte, prix, logo | contraste mesuré, fond non chargé, taille exacte, produit inchangé (existants) | par version |
+| **2. `SCENE_AND_AMBIANCE`** | scène et ambiance : fond + accessoires sur fond uni composés *derrière* le produit, lumière cohérente | modifier le produit ; poser un objet qui ressemble à un produit HABB ; texte | critique visuelle branchée (avis) ; contrôle d'absence de texte (OCR) ; contrôle d'absence de personne ; segmentation des accessoires (`matteProp`) ; relight borné seulement | par version, avec l'image réelle et les mesures |
+| **3. `ORIGINAL_COMPOSITION`** | proposer des compositions originales : placement, échelle, hiérarchie, choix d'une scène, **exprimées comme un spec D** (calques, boîtes, textes verrouillés) que le compositeur dessine | dessiner lui-même des pixels du produit ou du texte ; dépasser le spec | le spec proposé passe les mêmes portes mesurées que n'importe quel spec ; plafond de variantes par brief ; comparaison par paires | choix d'une variante parmi N, jamais d'approbation automatique |
+| **4. `ART_DIRECTION_PROPOSALS`** | rédiger des pistes de direction artistique (concepts, palettes dans la charte, références de lumière, plans de prise de vue) | produire un visuel publiable | cohérence avec la charte (Gardien de marque) ; aucune affirmation produit | lecture par le propriétaire ; aucun effet sans décision |
+
+Invariants valables pour **tous** les modes (déjà testés pour le mode 1, à tester pour chaque nouveau mode avant activation) :
+1. **Produits, visages, textes et éléments verrouillés sont des couches du compositeur, jamais des entrées du modèle** : leurs pixels ne quittent pas la machine, et le résultat est mesuré (pixels du produit ≤ 2 niveaux d'écart, copie exacte, ratio).
+2. Tout résultat de modèle est une **version `PROPOSED`** dans le journal ; seule une référence humaine nommée la fait passer à `APPROVED`.
+3. Aucune publication sans l'approbation de **E** sur la version exacte (l'empreinte couvre l'asset, le texte, la date).
+4. Coût estimé avant, réservé sous plafond dur, enregistré après ; mode désactivé = aucun appel.
+5. `ai_generated: true` dès qu'une partie vient d'un modèle (transmis à Meta).
+6. Un mode ne s'active qu'avec un **banc d'essai sur de vrais produits HABB** (le `BENCHMARK_RUNBOOK` existant) et une décision du propriétaire sur le fournisseur, la clé, le budget et la localisation des données.
+
+Points d'intégration supplémentaires par mode : mode 2 → port `layers` du runtime Creative (existant, sans implémentation réelle) et critique visuelle ; mode 3 → le Cerveau créatif existant (`brainComplete`), dont la sortie est contrainte à un spec D ; mode 4 → même Cerveau, sortie texte seulement.

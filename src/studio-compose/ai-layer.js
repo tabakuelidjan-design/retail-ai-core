@@ -16,8 +16,19 @@ import { composeCreative } from './compose.js';
 
 export const AI_ERROR = Object.freeze({
   PROVIDER_NOT_CONNECTED: 'PROVIDER_NOT_CONNECTED', BUDGET_EXCEEDED: 'AI_BUDGET_EXCEEDED', REFERENCE_UPLOAD_NOT_ALLOWED: 'AI_REFERENCE_UPLOAD_NOT_ALLOWED', INVALID_PLATE: 'AI_INVALID_PLATE',
-  GATE_FAILED: 'AI_QUALITY_GATE_FAILED', INVALID_DECISION: 'AI_INVALID_DECISION', UNAUTHORISED: 'AI_NOT_AUTHORISED',
+  GATE_FAILED: 'AI_QUALITY_GATE_FAILED', MODE_NOT_ENABLED: 'AI_MODE_NOT_ENABLED', INVALID_DECISION: 'AI_INVALID_DECISION', UNAUTHORISED: 'AI_NOT_AUTHORISED',
 });
+/**
+ * Operating modes. PLATE_ONLY is the secure initial mode and the ONLY enabled one: the model produces a background plate, nothing else. The others are named here so that the
+ * architecture is explicit (docs/chantier-d/CREATIVE-AI-ARCHITECTURE.md section 9), and refused until the owner enables them mode by mode, with their own gates.
+ */
+export const AI_MODE = Object.freeze({
+  PLATE_ONLY: Object.freeze({ enabled: true }),
+  SCENE_AND_AMBIANCE: Object.freeze({ enabled: false }),
+  ORIGINAL_COMPOSITION: Object.freeze({ enabled: false }),
+  ART_DIRECTION_PROPOSALS: Object.freeze({ enabled: false }),
+});
+
 export class AiLayerError extends Error {
   constructor(code, message, detail = {}) { super(message); this.name = 'AiLayerError'; this.code = code; this.detail = detail; }
 }
@@ -75,7 +86,8 @@ export function createVersionLog() {
  * @param {object} p { spec (without plate), images, fonts, palette, provider, budget (createCampaignBudget), log (createVersionLog), intent, constraints?, parent? , allow_reference_upload? , critic? }
  * @returns {{ version, creative, request, cost_eur }} creative is the composer result with the plate as the bottom layer; deliverable only if every hard gate passed.
  */
-export async function generatePlateStep({ spec, images, fonts, palette, provider, budget, log, intent, constraints = [], parent = null, allow_reference_upload = false, critic = null }) {
+export async function generatePlateStep({ spec, images, fonts, palette, provider, budget, log, intent, constraints = [], parent = null, allow_reference_upload = false, critic = null, mode = 'PLATE_ONLY' }) {
+  if (!AI_MODE[mode]?.enabled) fail(AI_ERROR.MODE_NOT_ENABLED, `the mode ${mode} is not enabled: only PLATE_ONLY is (the secure initial mode)`, { mode });
   if (provider.capabilities.needs_reference_image && !allow_reference_upload) fail(AI_ERROR.REFERENCE_UPLOAD_NOT_ALLOWED, 'this provider needs a reference image; uploading locked pixels is not enabled', { provider: provider.id });
   const request = buildPlateRequest({ spec, intent, constraints, seedLabel: `v${log.list().length + 1}` });
   const estimate = provider.estimate(request); // throws PROVIDER_NOT_CONNECTED for the default provider: nothing reserved, nothing called

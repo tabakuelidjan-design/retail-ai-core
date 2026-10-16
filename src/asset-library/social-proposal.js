@@ -8,6 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sha256Hex } from './entry.js';
+import { lintPriceChannel, lintProcessClaims } from './claims.js';
 
 export const PROPOSAL_SCHEMA = 'social-post-proposal.v1';
 const PLATFORM_FORMATS = { instagram: ['IMAGE', 'REEL', 'CAROUSEL', 'STORY'], facebook: ['IMAGE', 'TEXT', 'CAROUSEL'] };
@@ -90,13 +91,21 @@ export function buildSocialProposal(p, { confirmed = [] } = {}) {
     if (!hashtags.some((t) => t.toLowerCase() === tag.toLowerCase())) hashtags.push(tag);
   }
   if (hashtags.length > LIMITS.HASHTAGS_MAX) fail('too many hashtags', { field: 'hashtags' });
-  const claims = lintClaimsLikeE(`${caption}\n${hashtags.map((h) => `#${h}`).join(' ')}`, { confirmed });
+  const body = `${caption}\n${hashtags.map((h) => `#${h}`).join(' ')}`;
+  const claims = lintClaimsLikeE(body, { confirmed });
   if (claims.length) fail('the text carries a claim nobody confirmed (E would block it)', { claims });
+  const processClaims = lintProcessClaims(body);
+  if (processClaims.length) fail('the text promises a checking process that is not confirmed', { claims: processClaims });
+  const channelClaims = lintPriceChannel(body, { confirmed });
+  if (channelClaims.length) fail('a price must say whether it is the shop price or the web price', { claims: channelClaims });
+  const alternatives = [...new Set(p.alternative_to ?? [])];
+  if (alternatives.length > 5 || alternatives.some((a) => typeof a !== 'string' || a.length < 4 || a.length > 200 || a === p.proposal_id)) fail('alternative_to must list at most 5 other proposal ids', { field: 'alternative_to' });
   const notes = (p.notes ?? '').slice(0, LIMITS.NOTE_MAX);
   const out = {
     schema: PROPOSAL_SCHEMA, proposal_id: p.proposal_id, producer: 'chantier-d', subject: { kind: p.subject.kind, ref: p.subject.ref, label: p.subject.label ?? '' },
     caption, hashtags, notes, targets: p.targets.map((t) => ({ platform: t.platform, format: t.format })),
   };
+  if (alternatives.length) out.alternative_to = alternatives.sort();
   if (p.asset) out.asset = p.asset;
   if (p.assets) out.assets = p.assets;
   if (p.suggested_date) { if (Number.isNaN(Date.parse(p.suggested_date)) || !/Z$|[+-]\d\d:?\d\d$/.test(p.suggested_date)) fail('suggested_date must be an ISO instant with a zone', { field: 'suggested_date' }); out.suggested_date = p.suggested_date; }

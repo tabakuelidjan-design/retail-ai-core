@@ -19,7 +19,7 @@ export const FORMAT_SAFE = Object.freeze({
 });
 const MIN_TEXT = 34;
 
-/** Feed post: dark page, product alone on a white panel on the right, left column of text. copy: { headline[], price[], note[], example[], cta[], address[] } */
+/** Feed post: dark page, product alone on a white panel on the right, left column of text. copy: { headline[], price[], price_channel[], note[], example[], cta[], address[] } */
 export function productPost({ id, copy, productKey, wordmarkKey }) {
   const f = FORMAT_SAFE.feed;
   const layers = [
@@ -28,7 +28,8 @@ export function productPost({ id, copy, productKey, wordmarkKey }) {
     { type: 'image', id: 'product', key: productKey, box: { x: 630, y: 110, width: 410, height: 1080 } },
     text('headline', copy.headline, 90, 450, 78, 94, { fill: CREAM }),
     text('price', copy.price, 90, 700, 104, 104, { family: 'Montserrat', weight: 600, fill: CREAM }),
-    text('note', copy.note, 90, 790, MIN_TEXT, 50, { family: 'Montserrat', weight: 500, fill: CREAM }),
+    text('price_channel', copy.price_channel, 90, 748, MIN_TEXT, 44, { family: 'Montserrat', weight: 500, fill: CREAM }),
+    text('note', copy.note, 90, 815, MIN_TEXT, 50, { family: 'Montserrat', weight: 500, fill: CREAM }),
     text('example', copy.example, 630, 1232, MIN_TEXT, 44, { family: 'Montserrat', weight: 500, fill: NAVY2 }),
     text('cta', copy.cta, 90, 1040, 42, 56, { family: 'Montserrat', weight: 600, fill: CREAM }),
     text('address', copy.address, 90, 1180, MIN_TEXT, 46, { family: 'Montserrat', weight: 500, fill: CREAM, spacing: 1.5 }),
@@ -42,15 +43,15 @@ export function storyPromo({ id, copy, productKey, wordmarkKey }) {
   const layers = [
     { type: 'image', id: 'brand', key: wordmarkKey, crop: 'ink', box: { x: 90, y: 260, width: 220, height: 60 } },
     text('headline', copy.headline, 90, 480, 100, 110),
-    { type: 'image', id: 'product', key: productKey, box: { x: 90, y: 630, width: 900, height: 760 } },
-    text('product_line', copy.product_line, 540, 1470, 48, 60, { family: 'Montserrat', weight: 600, anchor: 'middle' }),
-    text('caveat', copy.caveat, 540, 1530, MIN_TEXT, 46, { family: 'Montserrat', weight: 500, anchor: 'middle' }),
+    { type: 'image', id: 'product', key: productKey, box: { x: 90, y: 630, width: 900, height: 700 } },
+    text('product_line', copy.product_line, 540, 1402, 46, 58, { family: 'Montserrat', weight: 600, anchor: 'middle' }),
+    text('caveat', copy.caveat, 540, 1540, MIN_TEXT, 46, { family: 'Montserrat', weight: 500, anchor: 'middle' }),
     text('cta', copy.cta, 540, 1650, 44, 56, { fill: TERRA, family: 'Montserrat', weight: 600, anchor: 'middle' }),
   ];
   return { id, template_version: TEMPLATE_VERSION, canvas: { width: f.width, height: f.height, background: WHITE }, safe: f.safe, min_text_px: MIN_TEXT, locked_copy: joined(layers), layers };
 }
 
-/** Feed know-how piece: headline, three real products side by side each with its own label, one closing line. copy: { headline[], labels[3], closing[] } */
+/** Feed know-how piece: headline, three real products side by side each with its own label, one closing line. copy: { headline[], labels[3], closing[], example[] } */
 export function knowHowTriptych({ id, copy, productKeys, wordmarkKey }) {
   const f = FORMAT_SAFE.feed;
   const xs = [90, 410, 730];
@@ -58,9 +59,10 @@ export function knowHowTriptych({ id, copy, productKeys, wordmarkKey }) {
     { type: 'image', id: 'brand', key: wordmarkKey, crop: 'ink', box: { x: 90, y: 100, width: 220, height: 60 } },
     text('headline', copy.headline, 90, 290, 78, 92),
     ...productKeys.map((key, i) => ({ type: 'image', id: `product_${i + 1}`, key, box: { x: xs[i], y: 410, width: 260, height: 570 } })),
-    ...copy.labels.map((label, i) => text(`label_${i + 1}`, [label], xs[i] + 130, 1040, MIN_TEXT, 46, { family: 'Montserrat', weight: 600, anchor: 'middle' })),
-    { type: 'rect', id: 'rule', x: 90, y: 1085, width: 96, height: 4, fill: TERRA },
-    text('closing', copy.closing, 90, 1150, 40, 54, { family: 'Montserrat', weight: 600 }),
+    ...copy.labels.map((label, i) => text(`label_${i + 1}`, [label], xs[i] + 130, 1030, MIN_TEXT, 46, { family: 'Montserrat', weight: 600, anchor: 'middle' })),
+    { type: 'rect', id: 'rule', x: 90, y: 1062, width: 96, height: 4, fill: TERRA },
+    text('closing', copy.closing, 90, 1124, 40, 54, { family: 'Montserrat', weight: 600 }),
+    text('example', copy.example, 90, 1238, MIN_TEXT, 44, { family: 'Montserrat', weight: 500, fill: NAVY2 }),
   ];
   return { id, template_version: TEMPLATE_VERSION, canvas: { width: f.width, height: f.height, background: WHITE }, safe: f.safe, min_text_px: MIN_TEXT, locked_copy: joined(layers), layers };
 }

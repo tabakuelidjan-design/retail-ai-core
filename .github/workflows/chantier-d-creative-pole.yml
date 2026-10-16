@@ -35,6 +35,20 @@ jobs:
           echo "::notice title=D suites (node ${{ matrix.node }})::$(grep -E '^(ℹ|#) (tests|pass|fail|skipped)' /tmp/d.log | tr '\n' ' ')"
           grep -qE '^(ℹ|#) skipped 0' /tmp/d.log || { echo "::error title=skipped::a D test was skipped"; exit 1; }
           if python3 -c "import PIL" 2>/dev/null; then echo "::notice title=jpeg decode check::Pillow present: SC-1 decoded the JPEG"; else echo "::notice title=jpeg decode check::Pillow ABSENT on this runner: SC-1 checked the headers and the size only"; fi
+      - name: E with the PROPOSED alternative_to patch (applied to this throw-away checkout of E only) - D tests and E's own suite, counted, failing on any skip
+        shell: bash
+        env:
+          SOCIAL_E_DIR: ${{ github.workspace }}/social-e
+        run: |
+          git -C social-e rev-parse HEAD
+          git -C social-e apply --check --ignore-whitespace "$GITHUB_WORKSPACE/docs/chantier-d/e-proposals/alternative-to.patch" || { echo "::error title=patch no longer applies::chantier E moved: the alternative_to patch must be refreshed"; exit 1; }
+          git -C social-e apply --ignore-whitespace "$GITHUB_WORKSPACE/docs/chantier-d/e-proposals/alternative-to.patch"
+          node --test test/social-alternative-to.test.js test/social-compat.test.js | tee /tmp/alt.log
+          echo "::notice title=D tests against patched E (node ${{ matrix.node }})::$(grep -E '^(ℹ|#) (tests|pass|fail|skipped)' /tmp/alt.log | tr '\n' ' ')"
+          grep -qE '^(ℹ|#) skipped 0' /tmp/alt.log || { echo "::error title=skipped::a test was skipped against the patched E"; exit 1; }
+          (cd social-e && node --test test/social-*.test.js | tee /tmp/e.log)
+          echo "::notice title=E own suite with the patch (node ${{ matrix.node }})::$(grep -E '^(ℹ|#) (tests|pass|fail|skipped)' /tmp/e.log | tr '\n' ' ')"
+          grep -qE '^(ℹ|#) fail 0' /tmp/e.log || { echo "::error title=E suite::a test of E failed with the patch"; exit 1; }
       - name: Branding, Marketing and Creative end-to-end suites (existing modules, unchanged) - counted per file
         shell: bash
         run: |

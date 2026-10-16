@@ -19,7 +19,7 @@ Pourquoi la réserve plutôt que mon plan :
 |---|---|---|---|
 | Cadence | 8 posts : 19, 21, 23, 24, 27, 29, 31 oct., 1er nov. | 8 posts : 19, 21, 23, 25, 26, 28, 30 oct., 1er nov. | calendrier de la réserve retenu |
 | Piliers | coque, coque, gourdes, boîtes, plaques UV, boutique, idée cadeau, savoir-faire | coque, gourde, horloge ardoise, coffret, puzzle, cadre, savoir-faire | piliers de la réserve ; la réserve garde les plaques UV en brief, sans prix |
-| Registre | A (vouvoiement) par défaut, B en variante | tutoiement (B) | **choix du propriétaire en suspens** (réserve Q1) ; D livre ses visuels aux **deux** registres (paquet A par défaut, paquet B à côté) |
+| Registre | A (vouvoiement) par défaut, B en variante | tutoiement (B) | **décidé le 2026-10-17 : registre A** ; mon tutoiement est retiré |
 | Prix | seule la coque (25 €) | mes premiers textes citaient d'autres prix | alignés : un seul prix, celui de la coque ; le filtre de E bloque les autres |
 | Faits | horaires, « boutique fermée le dimanche », « cadrage vérifié avant impression » | « contrôle du fichier avant impression » | faits de la réserve conservés ; mon libellé abandonné |
 | Réouverture | aucun texte de réouverture | « On rouvre la porte » (retiré le 2026-10-16) | rien à retirer dans la réserve |
@@ -45,8 +45,8 @@ D **ne planifie plus**. D propose des **variantes visuelles** rattachées à des
 1. **Identifiants** : les variantes de D utilisent l'espace `habb-chantier-d-visuel:<clé>` : un identifiant distinct de ceux de la réserve, donc jamais de collision ni d'écrasement chez E.
 2. **Version d'asset** : chaque retouche est une nouvelle version du même `ref` (v2 pour la correction typographique de cette semaine). E annule alors toute approbation (règle de E) : D ne peut pas changer en silence ce que le propriétaire a approuvé.
 3. **Lien « variante de »** : E n'a pas de champ pour cela. D l'écrit dans `notes` (« VARIANTE VISUELLE du post P01… : ne publier qu'une des deux »). **Demande à E (non faite par D) : un champ `alternative_to` dans `social-post-proposal.v1`**, pour empêcher d'approuver les deux.
-4. **Registre** : D livre `demo-d-to-e/` (A, par défaut de E) et `demo-d-to-e-register-B/` ; seul un registre doit être importé.
+4. **Registre** : le propriétaire a décidé le **registre A (vouvoiement)** le 2026-10-17. D ne livre plus que ce registre ; la variante en tutoiement est retirée.
 5. **Outil** : `tools/habb-reserve-check.mjs` applique les contrôles de D au format de la réserve ; `tools/habb-editorial-check.mjs` (format interne de D) reste pour d'éventuels plans futurs mais n'est plus la référence.
 
 ## Restant à trancher par le propriétaire
-Registre A ou B ; autoriser ou non « créées en boutique » (D3) ; garder la réserve comme seule source (recommandé) ; confirmation écrite des affirmations restantes (cadrage/fichier vérifié avant impression).
+Garder la réserve comme seule source (recommandé). Le registre est décidé (A). La formulation « Personnalisées dans notre atelier à Namur » est autorisée pour les coques et employée dans D3. Le contrôle systématique des fichiers avant impression n'est **pas** affirmé tant que le processus n'est pas confirmé : le contrôleur de D signale les passages de la réserve qui l'affirment (voir `CLOTURE-PHASE-1.md`).

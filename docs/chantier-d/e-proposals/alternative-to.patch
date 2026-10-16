@@ -1,0 +1,358 @@
+diff --git a/src/social/post.js b/src/social/post.js
+index 3713ecd..56565c0 100644
+--- a/src/social/post.js
++++ b/src/social/post.js
+@@ -79,6 +79,19 @@ export function normalizeAssets(input, format) {
+   return { asset: normalizeOneAsset(input.asset, format === FORMAT.REEL ? true : format === FORMAT.STORY ? null : false), assets: null };
+ }
+ 
++/** `alternative_to`: proposal ids (other creations of the same publication) of which only one may be approved. Optional; at most 5; sorted; no duplicates. */
++export function normalizeAlternativeTo(list, selfProposalId = null) {
++  if (list == null) return [];
++  if (!Array.isArray(list) || list.length > 5) fail(E.INVALID, 'alternative_to is a list of at most 5 proposal ids', { field: 'alternative_to' });
++  const out = [];
++  for (const id of list) {
++    if (typeof id !== 'string' || id.length < 4 || id.length > 200) fail(E.INVALID, 'alternative_to holds proposal ids (4 to 200 characters)', { field: 'alternative_to' });
++    if (id === selfProposalId) fail(E.INVALID, 'a creation cannot be an alternative to itself', { field: 'alternative_to' });
++    if (!out.includes(id)) out.push(id);
++  }
++  return out.sort();
++}
++
+ export function normalizeSubject(subject) {
+   if (!isObj(subject)) fail(E.INVALID, 'subject ({kind, ref, label}) is required: which product or campaign is this about', { field: 'subject' });
+   if (!['product', 'campaign', 'brand', 'store'].includes(subject.kind)) fail(E.INVALID, 'subject.kind must be product | campaign | brand | store', { field: 'subject.kind' });
+@@ -90,6 +103,8 @@ export function contentOf(post) {
+   return {
+     platform: post.platform, format: post.format, account_ref: post.account_ref ?? null, subject: post.subject, asset: post.asset ?? null, assets: post.assets ?? null,
+     caption: post.caption, hashtags: post.hashtags, publish_at: post.publish_at ?? null,
++    // only when present: the fingerprint of every post without alternatives is unchanged, so no existing approval is invalidated by this field
++    ...(post.alternative_to?.length ? { alternative_to: post.alternative_to } : {}),
+   };
+ }
+ export const contentHashOf = (post) => sha256(canonical(contentOf(post)));
+@@ -111,7 +126,7 @@ export function normalizeContent(input) {
+   return {
+     platform, format, account_ref: input.account_ref == null ? null : text(input.account_ref, 'account_ref', { max: 200 }),
+     subject: normalizeSubject(input.subject), ...normalizeAssets(input, format), caption, hashtags: normalizeHashtags(input.hashtags),
+-    publish_at: normalizePublishAt(input.publish_at),
++    publish_at: normalizePublishAt(input.publish_at), alternative_to: normalizeAlternativeTo(input.alternative_to, input.origin?.proposal_id ?? null),
+   };
+ }
+ 
+diff --git a/src/social/workflow.js b/src/social/workflow.js
+index bda6dca..740574d 100644
+--- a/src/social/workflow.js
++++ b/src/social/workflow.js
+@@ -228,7 +228,7 @@ export function transition(post, action, actor, { now, ...params } = {}) {
+   return handler(clone(post), { actor, now, params });
+ }
+ 
+-const CONTENT_FIELDS = ['platform', 'format', 'account_ref', 'subject', 'asset', 'assets', 'caption', 'hashtags', 'publish_at'];
++const CONTENT_FIELDS = ['platform', 'format', 'account_ref', 'subject', 'asset', 'assets', 'caption', 'hashtags', 'publish_at', 'alternative_to'];
+ /**
+  * Edit content or notes. A change of what is published sends the post to DRAFT and wipes the approval (history says so).
+  * Returns { post, changed, approval_invalidated, needs_remote_cancel }.
+@@ -238,7 +238,7 @@ export function editPost(post, patch, actor, { now }) {
+   if (FROZEN_STATES.includes(post.state)) fail(E.TRANSITION, `a post in ${post.state} cannot be edited: the platform may already hold it`);
+   if (!EDITABLE_STATES.includes(post.state)) fail(E.TRANSITION, `a post in ${post.state} cannot be edited`);
+   const next = clone(post);
+-  const merged = { ...Object.fromEntries(CONTENT_FIELDS.map((f) => [f, post[f]])), ...Object.fromEntries(Object.entries(patch).filter(([k]) => CONTENT_FIELDS.includes(k))) };
++  const merged = { ...Object.fromEntries(CONTENT_FIELDS.map((f) => [f, post[f]])), ...Object.fromEntries(Object.entries(patch).filter(([k]) => CONTENT_FIELDS.includes(k))), origin: post.origin };
+   const content = normalizeContent(merged);
+   Object.assign(next, content);
+   if (patch.notes !== undefined) next.notes = String(patch.notes ?? '').slice(0, 1000);
+@@ -250,7 +250,8 @@ export function editPost(post, patch, actor, { now }) {
+   const invalidated = Boolean(post.approval);
+   next.approval = null;
+   const needsRemote = armRemoteCancel(next);
+-  const changedFields = CONTENT_FIELDS.filter((f) => JSON.stringify(post[f] ?? null) !== JSON.stringify(next[f] ?? null));
++  const emptyAsNull = (f, v) => (f === 'alternative_to' && !v?.length ? null : v ?? null);
++  const changedFields = CONTENT_FIELDS.filter((f) => JSON.stringify(emptyAsNull(f, post[f])) !== JSON.stringify(emptyAsNull(f, next[f])));
+   record(next, {
+     action: 'edit', actor, from: post.state, to: S.DRAFT, now, detail: { changed_fields: changedFields, approval_invalidated: invalidated, ...(needsRemote ? { needs_remote_cancel: true } : {}) },
+   });
+diff --git a/src/social/intake.js b/src/social/intake.js
+index a21fb88..d6bb84b 100644
+--- a/src/social/intake.js
++++ b/src/social/intake.js
+@@ -23,6 +23,7 @@ function validateProposal(p) {
+   if (p.schema !== PROPOSAL_SCHEMA) throw new SocialError('SOCIAL_INVALID', `schema must be ${PROPOSAL_SCHEMA}`, { field: 'schema' });
+   if (typeof p.proposal_id !== 'string' || p.proposal_id.length < 4 || p.proposal_id.length > 200) throw new SocialError('SOCIAL_INVALID', 'proposal_id is required (stable per creative decision)', { field: 'proposal_id' });
+   if (!Array.isArray(p.targets) || !p.targets.length) throw new SocialError('SOCIAL_INVALID', 'targets: at least one { platform, format }', { field: 'targets' });
++  if (p.alternative_to != null && (!Array.isArray(p.alternative_to) || p.alternative_to.some((x) => typeof x !== 'string'))) throw new SocialError('SOCIAL_INVALID', 'alternative_to is a list of proposal ids', { field: 'alternative_to' });
+   const seen = new Set();
+   for (const t of p.targets) {
+     const key = `${t.platform}|${t.format}`;
+@@ -50,7 +51,7 @@ export async function importProposals({
+       try {
+         const content = {
+           platform: target.platform, format: target.format, account_ref: target.account_ref ?? null, subject: p.subject, asset: ['TEXT', 'CAROUSEL'].includes(target.format) ? null : p.asset ?? null, assets: target.format === 'CAROUSEL' ? p.assets ?? null : null,
+-          caption: p.caption, hashtags: p.hashtags ?? [], publish_at: p.suggested_date ?? null,
++          caption: p.caption, hashtags: p.hashtags ?? [], publish_at: p.suggested_date ?? null, alternative_to: p.alternative_to ?? [],
+         };
+         const existing = await store.get(id);
+         let post;
+@@ -59,10 +60,10 @@ export async function importProposals({
+           line.result = 'CREATED';
+         } else {
+           // the owner's calendar choice (publish_at) is never overwritten by a creative delivery
+-          const incoming = normalizeContent({ ...content, publish_at: existing.publish_at });
++          const incoming = normalizeContent({ ...content, publish_at: existing.publish_at, origin: existing.origin });
+           if (contentHashOf({ ...existing, ...incoming }) === contentHashOf(existing)) { report.push({ ...line, result: 'UNCHANGED' }); continue; }
+           if (FROZEN_STATES.includes(existing.state)) { report.push({ ...line, result: 'REFUSED_FROZEN', error: `post is ${existing.state}: send a new proposal_id for a new version` }); continue; }
+-          post = await editPost(id, { asset: incoming.asset, assets: incoming.assets, caption: incoming.caption, hashtags: incoming.hashtags, subject: incoming.subject, account_ref: incoming.account_ref }, actor);
++          post = await editPost(id, { asset: incoming.asset, assets: incoming.assets, caption: incoming.caption, hashtags: incoming.hashtags, subject: incoming.subject, account_ref: incoming.account_ref, alternative_to: incoming.alternative_to }, actor);
+           line.result = 'UPDATED';
+           line.approval_voided = Boolean(existing.approval);
+         }
+diff --git a/src/social/service.js b/src/social/service.js
+index 9385b3d..e0b749f 100644
+--- a/src/social/service.js
++++ b/src/social/service.js
+@@ -7,6 +7,7 @@ import { ROLE, SOCIAL_ERROR as E, fail } from './constants.js';
+ import { contentHashOf, newPost } from './post.js';
+ import { editPost, transition } from './workflow.js';
+ import { importProposals as importFromD } from './intake.js';
++import { holdingRivals } from './exclusivity.js';
+ 
+ export const SYSTEM_ACTOR = Object.freeze({ id: 'nordla-publisher', role: ROLE.SYSTEM });
+ 
+@@ -46,7 +47,17 @@ export function createSocialService({
+   }
+ 
+   /** Any workflow action. Returns the new post; a copy held by the platform is removed when the decision requires it. */
++  /** Exclusive variants: while a rival holds the slot (approved, scheduled or published), no other variant may be approved, scheduled or retried. The owner revokes or cancels the rival first. */
++  async function assertSlotFree(id, action) {
++    if (!['approve', 'schedule', 'retry', 'mark_manual_schedule'].includes(action)) return;
++    const post = await store.get(id);
++    if (!post) return;
++    const rivals = holdingRivals(post, await store.list());
++    if (rivals.length) fail(E.CONFLICT, 'EXCLUSIVE_VARIANT_ALREADY_HOLDS_THE_SLOT: another variant of this publication is already approved, scheduled or published; revoke or cancel it first', { rivals: rivals.map((r) => ({ id: r.id, proposal_id: r.origin?.proposal_id ?? null, state: r.state })) });
++  }
++
+   async function act(id, action, actor, params = {}) {
++    await assertSlotFree(id, action);
+     let remote = false;
+     const saved = await store.update(id, (p) => {
+       const next = transition(p, action, actor, { ...params, confirmed: confirmedFacts, now: nowIso() });
+diff --git a/src/social/publisher.js b/src/social/publisher.js
+index c85b177..3e94a39 100644
+--- a/src/social/publisher.js
++++ b/src/social/publisher.js
+@@ -16,6 +16,7 @@ import { redact } from '../activation/validation.js';
+ import {
+   FORMAT, MODE, POST_STATE as S, SocialError,
+ } from './constants.js';
++import { holdingRivals, PUBLISHED_STATES } from './exclusivity.js';
+ import { isManualOnly } from './post.js';
+ import { hasValidApproval, transition } from './workflow.js';
+ import { SYSTEM_ACTOR } from './service.js';
+@@ -71,6 +72,13 @@ export function createPublisher({
+ 
+   /** Publish now, or hand the post to the platform's own scheduler (scheduleAt). One claimed attempt. */
+   async function publishOne(id, { scheduleAt = null } = {}) {
++    // defence in depth for exclusive variants: never publish while a rival is already out there (or may be)
++    const current = await store.get(id);
++    if (current && holdingRivals(current, await store.list(), PUBLISHED_STATES).length) {
++      await store.update(id, (p) => (p.state === S.SCHEDULED ? transition(p, 'mark_error', SYSTEM_ACTOR, { now: nowIso(), code: 'EXCLUSIVE_VARIANT_PUBLISHED' }) : p));
++      log('post.not_published', current, { code: 'EXCLUSIVE_VARIANT_PUBLISHED' });
++      return null;
++    }
+     const claimed = await claim(id, { native: Boolean(scheduleAt) });
+     if (!claimed) return null;
+     const publisher = publishers[claimed.platform];
+diff --git a/e-patched/src/social/exclusivity.js b/src/social/exclusivity.js
+new file mode 100644
+index 0000000..748aa9a
+--- /dev/null
++++ b/src/social/exclusivity.js
+@@ -0,0 +1,41 @@
++// Exclusive variants: two creations offered for the SAME publication slot (same platform, same format) of which only one may ever be approved, scheduled or published.
++//
++// A variant declares `alternative_to: [proposal_id, ...]` (chantier D, social-post-proposal.v1 optional field). The relation is stored ONLY on the variant, as proposal ids, and is
++// resolved against whatever posts exist at the time of the check, in EITHER direction: it does not matter which of the two was imported first, nor whether the original is
++// imported again later. Nothing is cached, so a re-import cannot "forget" it.
++
++import { POST_STATE as S } from './constants.js';
++
++/** States in which a post holds its slot: the owner decided for it, or the platform may already have it. */
++export const HOLDING_STATES = Object.freeze([S.APPROVED, S.SCHEDULED, S.PUBLISHING, S.PUBLISHED, S.VERIFIED, S.PUBLICATION_UNKNOWN]);
++/** States in which the platform may already hold the post: nothing can take it back. */
++export const PUBLISHED_STATES = Object.freeze([S.PUBLISHING, S.PUBLISHED, S.VERIFIED, S.PUBLICATION_UNKNOWN]);
++
++const proposalOf = (post) => post.origin?.proposal_id ?? null;
++
++/** Posts that are exclusive with `post` (same platform and format; the relation declared by either side). */
++export function rivalsOf(post, all) {
++  const mine = proposalOf(post);
++  return all.filter((q) => {
++    if (q.id === post.id || q.platform !== post.platform || q.format !== post.format) return false;
++    const theirs = proposalOf(q);
++    return (theirs && (post.alternative_to ?? []).includes(theirs)) || (mine && (q.alternative_to ?? []).includes(mine));
++  });
++}
++
++/** The rivals that currently hold the slot (approved, scheduled or published). */
++export const holdingRivals = (post, all, states = HOLDING_STATES) => rivalsOf(post, all).filter((q) => states.includes(q.state));
++
++/** Every pair of exclusive posts that BOTH hold their slot: should never exist; listed for audit (and by the status screen). */
++export function exclusivityConflicts(all) {
++  const out = [];
++  const seen = new Set();
++  for (const p of all) {
++    if (!HOLDING_STATES.includes(p.state)) continue;
++    for (const q of holdingRivals(p, all)) {
++      const key = [p.id, q.id].sort().join('|');
++      if (!seen.has(key)) { seen.add(key); out.push({ posts: [p.id, q.id], proposals: [proposalOf(p), proposalOf(q)], states: [p.state, q.state] }); }
++    }
++  }
++  return out;
++}
+diff --git a/e-patched/test/social-exclusive.test.js b/test/social-exclusive.test.js
+new file mode 100644
+index 0000000..16dcb34
+--- /dev/null
++++ b/test/social-exclusive.test.js
+@@ -0,0 +1,141 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++import { PROPOSAL_SCHEMA } from '../src/social/constants.js';
++import { contentHashOf, normalizeAlternativeTo } from '../src/social/post.js';
++import { exclusivityConflicts, rivalsOf } from '../src/social/exclusivity.js';
++import {
++  AGENT, OWNER, asset, postInput, runtime, sha,
++} from './social-fixtures.js';
++
++// Exclusive variants (`alternative_to`, social-post-proposal.v1 optional field): two creations of the SAME publication slot, only one may hold it.
++const D = { id: 'chantier-d', role: 'agent' };
++const prop = (proposal_id, over = {}) => ({
++  schema: PROPOSAL_SCHEMA, proposal_id, producer: 'chantier-d', subject: { kind: 'product', ref: 'shopify:coque', label: 'Coque' },
++  asset: asset({ ref: `asset://t/${proposal_id}`, sha256: sha(proposal_id) }), caption: 'Une coque qui voyage avec vous.', hashtags: ['namur'],
++  targets: [{ platform: 'instagram', format: 'IMAGE' }], suggested_date: '2026-10-21T17:00:00+02:00', ...over,
++});
++const ORIGINAL = 'reserve:P01';
++const VARIANT = 'd:D1';
++const postOf = async (rt, proposalId, platform = 'instagram') => (await rt.service.list()).find((p) => p.origin?.proposal_id === proposalId && p.platform === platform);
++const approve = async (rt, id) => rt.service.act(id, 'approve', OWNER, { expected_hash: rt.service.contentHashOf(await rt.service.get(id)) });
++const revoke = (rt, id) => rt.service.act(id, 'revoke_approval', OWNER, { note: 'x' });
++const conflict = (e) => e.code === 'SOCIAL_CONFLICT' && /EXCLUSIVE_VARIANT/.test(e.message) && e.detail.rivals.length >= 1;
++
++async function both(order = 'original-first', variantOver = {}) {
++  const rt = runtime();
++  const first = order === 'original-first' ? prop(ORIGINAL) : prop(VARIANT, { alternative_to: [ORIGINAL], ...variantOver });
++  const second = order === 'original-first' ? prop(VARIANT, { alternative_to: [ORIGINAL], ...variantOver }) : prop(ORIGINAL);
++  await rt.service.importProposals([first], D);
++  await rt.service.importProposals([second], D);
++  return rt;
++}
++
++test('EX-1 only one of two exclusive variants can be approved; revoking the first frees the slot (original imported first)', async () => {
++  const rt = await both('original-first');
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  assert.deepEqual(v.alternative_to, [ORIGINAL]);
++  await approve(rt, o.id);
++  await assert.rejects(() => approve(rt, v.id), conflict);
++  await revoke(rt, o.id);
++  await approve(rt, v.id);
++  await assert.rejects(() => approve(rt, o.id), conflict); // and the other way round
++  assert.deepEqual(exclusivityConflicts(await rt.service.list()), []);
++});
++
++test('EX-2 the order of import does not matter (variant imported before the original)', async () => {
++  const rt = await both('variant-first');
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  await approve(rt, v.id);
++  await assert.rejects(() => approve(rt, o.id), conflict);
++});
++
++test('EX-3 re-importing unchanged content keeps the exclusion; re-importing the original with changes does not release the variant', async () => {
++  const rt = await both('original-first');
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  await approve(rt, v.id);
++  const again = await rt.service.importProposals([prop(ORIGINAL), prop(VARIANT, { alternative_to: [ORIGINAL] })], D);
++  assert.deepEqual(again.map((r) => r.result), ['UNCHANGED', 'UNCHANGED']);
++  await assert.rejects(() => approve(rt, o.id), conflict);
++  const changed = await rt.service.importProposals([prop(ORIGINAL, { caption: 'Un autre texte pour la coque.' })], D);
++  assert.equal(changed[0].result, 'UPDATED');
++  assert.equal((await rt.service.get(v.id)).state, 'APPROVED'); // the owner's approved variant is untouched
++  await assert.rejects(async () => approve(rt, (await postOf(rt, ORIGINAL)).id), conflict);
++});
++
++test('EX-4 a link added AFTER both were approved voids the approval of the variant that carries it (D cannot silently change what was approved)', async () => {
++  const rt = runtime();
++  await rt.service.importProposals([prop(ORIGINAL), prop(VARIANT)], D); // no link yet
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  await approve(rt, o.id); await approve(rt, v.id); // legal today: nothing says they exclude each other
++  const r = await rt.service.importProposals([prop(VARIANT, { alternative_to: [ORIGINAL] })], D);
++  assert.equal(r[0].result, 'UPDATED');
++  assert.equal(r[0].approval_voided, true);
++  const v2 = await rt.service.get(v.id);
++  assert.equal(v2.approval, null);
++  assert.deepEqual(exclusivityConflicts(await rt.service.list()), []);
++  await assert.rejects(() => approve(rt, v.id), conflict);
++});
++
++test('EX-5 the slot is per platform and format: another platform is not a rival', async () => {
++  const rt = runtime();
++  await rt.service.importProposals([prop(ORIGINAL)], D);
++  await rt.service.importProposals([prop(VARIANT, { alternative_to: [ORIGINAL], targets: [{ platform: 'instagram', format: 'IMAGE' }, { platform: 'facebook', format: 'IMAGE' }] })], D);
++  const o = await postOf(rt, ORIGINAL);
++  await approve(rt, o.id);
++  await assert.rejects(async () => approve(rt, (await postOf(rt, VARIANT)).id), conflict);
++  await approve(rt, (await postOf(rt, VARIANT, 'facebook')).id); // no facebook original: free
++});
++
++test('EX-6 scheduling and retrying are guarded too, and a rejected/cancelled rival releases the slot', async () => {
++  const rt = await both('original-first');
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  await approve(rt, o.id);
++  await assert.rejects(() => rt.service.act(v.id, 'schedule', OWNER, { expected_hash: rt.service.contentHashOf(v) }), (e) => e.code === 'SOCIAL_CONFLICT');
++  await rt.service.act(o.id, 'cancel', OWNER, { note: 'abandon' });
++  await approve(rt, v.id);
++});
++
++test('EX-7 defence in depth: the publisher refuses to publish a variant when a rival is already published, and says why', async () => {
++  const rt = runtime();
++  await rt.service.importProposals([prop(ORIGINAL), prop(VARIANT, { alternative_to: [ORIGINAL] })], D);
++  const o = await postOf(rt, ORIGINAL); const v = await postOf(rt, VARIANT);
++  await approve(rt, v.id);
++  const hash = rt.service.contentHashOf(await rt.service.get(v.id));
++  await rt.service.act(v.id, 'schedule', OWNER, { expected_hash: hash });
++  await rt.store.update(o.id, (p) => ({ ...p, state: 'PUBLISHED', rev: p.rev + 1, publication: { mode: 'MANUAL' } })); // the rival is out there (race / manual publication)
++  rt.clock.now = Date.parse('2026-10-21T16:00:00Z');
++  const out = await rt.publisher.publishOne(v.id);
++  assert.equal(out, null);
++  const after = await rt.service.get(v.id);
++  assert.equal(after.state, 'ERROR');
++  assert.equal(after.publication.last_error, 'EXCLUSIVE_VARIANT_PUBLISHED');
++  assert.equal(rt.igHttp.calls.filter((c) => c.method === 'POST').length, 0);
++});
++
++test('EX-8 backward compatible: a post without alternatives keeps its exact fingerprint (no existing approval is invalidated)', () => {
++  const post = {
++    platform: 'instagram', format: 'IMAGE', account_ref: null, subject: { kind: 'product', ref: 'x', label: 'y' },
++    asset: { ref: 'asset://a/b', version: 1, sha256: 'a'.repeat(64), content_type: 'image/jpeg', width: 1080, height: 1350, ai_generated: false }, assets: null, caption: 'c', hashtags: ['h'], publish_at: '2026-10-21T15:00:00.000Z',
++  };
++  const golden = '5dcc7f94daa9a9193e8475639124a9b8058a561effaba6e200fcb57cda1706a5'; // computed by the code BEFORE this change
++  assert.equal(contentHashOf(post), golden);
++  assert.equal(contentHashOf({ ...post, alternative_to: [] }), golden);
++  assert.notEqual(contentHashOf({ ...post, alternative_to: ['reserve:P01'] }), golden);
++});
++
++test('EX-9 validation: a list of at most 5 other proposal ids; a creation is not its own alternative; rivalsOf is symmetric', async () => {
++  assert.deepEqual(normalizeAlternativeTo(['b:2', 'a:1', 'a:1'].map((x) => `${x}-xx`)), ['a:1-xx', 'b:2-xx']);
++  assert.throws(() => normalizeAlternativeTo('nope'), (e) => e.code === 'SOCIAL_INVALID');
++  assert.throws(() => normalizeAlternativeTo(['abcd1', 'abcd2', 'abcd3', 'abcd4', 'abcd5', 'abcd6']), (e) => e.code === 'SOCIAL_INVALID');
++  assert.throws(() => normalizeAlternativeTo(['me:1x'], 'me:1x'), (e) => e.code === 'SOCIAL_INVALID');
++  const rt = runtime();
++  const bad = await rt.service.importProposals([prop(VARIANT, { alternative_to: [VARIANT] }), prop('d:D9', { alternative_to: 'x' })], D);
++  assert.deepEqual(bad.map((r) => r.result), ['REJECTED', 'REJECTED']);
++  const rt2 = await both('original-first');
++  const all = await rt2.service.list();
++  const [o, v] = [all.find((p) => p.origin.proposal_id === ORIGINAL), all.find((p) => p.origin.proposal_id === VARIANT)];
++  assert.deepEqual(rivalsOf(o, all).map((p) => p.id), [v.id]);
++  assert.deepEqual(rivalsOf(v, all).map((p) => p.id), [o.id]);
++  assert.deepEqual(exclusivityConflicts([{ ...o, state: 'APPROVED' }, { ...v, state: 'SCHEDULED' }]).map((c) => c.states), [['APPROVED', 'SCHEDULED']]);
++});

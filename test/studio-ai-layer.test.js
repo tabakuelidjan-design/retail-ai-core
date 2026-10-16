@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  composeCreative, createCampaignBudget, createNotConnectedProvider, createVersionLog, generatePlateStep, buildPlateRequest, loadFonts, productPost, HABB_PALETTE, AI_ERROR,
+  AI_MODE, composeCreative, createCampaignBudget, createNotConnectedProvider, createVersionLog, generatePlateStep, buildPlateRequest, loadFonts, productPost, HABB_PALETTE, AI_ERROR,
 } from '../src/studio-compose/index.js';
 import { encodePng } from '../src/creative-intelligence/png-encode.js';
 import { decodePng } from '../src/creative-intelligence/png-pixels.js';
@@ -14,7 +14,7 @@ const noise = (w, h) => { const px = new Uint8Array(w * h * 4); for (let i = 0; 
 const tall = (w, h) => { const px = new Uint8Array(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px.set([(x * 3) & 255, (y * 2) & 255, (x + y) & 255, 255], (y * w + x) * 4); return encodePng({ width: w, height: h, pixels: px }); };
 const mark = () => { const w = 480; const h = 120; const px = new Uint8Array(w * h * 4); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) px.set(x > 150 && x < 300 && y > 40 && y < 80 ? [255, 255, 255, 255] : [24, 50, 71, 255], (y * w + x) * 4); return encodePng({ width: w, height: h, pixels: px }); };
 const images = () => new Map([['p', tall(200, 400)], ['wm', mark()]]);
-const spec = () => productPost({ id: 'AI1', productKey: 'p', wordmarkKey: 'wm', copy: { headline: ['Votre photo,', 'votre coque.'], price: ['25 €'], note: ['Prête en environ', '5 minutes, selon le', 'modèle et la', 'disponibilité.'], example: ['Exemple de rendu.'], cta: ['Venez en boutique', 'à Namur.'], address: ['RUE DE BRUXELLES 18', '5000 NAMUR'] } });
+const spec = () => productPost({ id: 'AI1', productKey: 'p', wordmarkKey: 'wm', copy: { headline: ['Votre photo,', 'votre coque.'], price: ['25 €'], price_channel: ['Prix en boutique'], note: ['Prête en environ', '5 minutes, selon le', 'modèle et la', 'disponibilité.'], example: ['Exemple de rendu.'], cta: ['Venez en boutique', 'à Namur.'], address: ['RUE DE BRUXELLES 18', '5000 NAMUR'] } });
 
 function double({ estimate = 0.04, cost = 0.04, plate = () => flat(1080, 1350, [24, 50, 71]), needsRef = false } = {}) {
   const calls = { estimate: 0, generate: 0, requests: [] };
@@ -116,4 +116,16 @@ test('AI-9 a cost above the estimate is recorded, never hidden; the spend stays 
   assert.equal(r.version.cost_eur, 0.09);
   assert.equal(buildPlateRequest({ spec: spec(), intent: 'a plain wall under soft light' }).operation, 'BACKGROUND_PLATE');
   assert.throws(() => buildPlateRequest({ spec: spec(), intent: 'x' }), (e) => e.code === AI_ERROR.INVALID_PLATE);
+});
+
+test('AI-10 PLATE_ONLY is the only enabled mode; any other mode is refused before anything is estimated, reserved or called', async () => {
+  assert.deepEqual(Object.entries(AI_MODE).filter(([, m]) => m.enabled).map(([k]) => k), ['PLATE_ONLY']);
+  for (const mode of ['SCENE_AND_AMBIANCE', 'ORIGINAL_COMPOSITION', 'ART_DIRECTION_PROPOSALS', 'NOPE']) {
+    const p = double();
+    const b = base({ provider: p });
+    await assert.rejects(() => generatePlateStep({ ...b, mode }), (e) => e.code === AI_ERROR.MODE_NOT_ENABLED);
+    assert.equal(p.calls.estimate + p.calls.generate, 0);
+    assert.equal(b.budget.reserved_eur(), 0);
+  }
+  assert.throws(() => { AI_MODE.PLATE_ONLY.enabled = false; }, TypeError);
 });

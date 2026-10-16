@@ -25,7 +25,7 @@ const images = () => new Map([
   ['p1', tall(200, 400, 1)], ['p2', tall(210, 420, 2)], ['p3', tall(190, 400, 3)],
   ['wm_d', plate(480, 120, [24, 50, 71, 255], [255, 255, 255, 255])], ['wm_a', plate(480, 120, [255, 255, 255, 255], [15, 42, 82, 255])],
 ]);
-const post = () => productPost({ id: 'T1', productKey: 'p1', wordmarkKey: 'wm_d', copy: { headline: ['Ta photo,', 'ta coque.'], price: ['25 €'], note: ['Prête en environ', '5 minutes, selon le', 'modèle et la', 'disponibilité.'], example: ['Exemple de rendu.'], cta: ['Viens en boutique', 'à Namur.'], address: ['RUE DE BRUXELLES 18', '5000 NAMUR'] } });
+const post = () => productPost({ id: 'T1', productKey: 'p1', wordmarkKey: 'wm_d', copy: { headline: ['Ta photo,', 'ta coque.'], price: ['25 €'], price_channel: ['Prix en boutique'], note: ['Prête en environ', '5 minutes, selon le', 'modèle et la', 'disponibilité.'], example: ['Exemple de rendu.'], cta: ['Viens en boutique', 'à Namur.'], address: ['RUE DE BRUXELLES 18', '5000 NAMUR'] } });
 const compose = (spec, imgs = images()) => composeCreative({ spec, images: imgs, fonts: FONTS, palette: HABB_PALETTE });
 const failed = (r) => r.record.checks.filter((c) => c.outcome === 'FAIL').map((c) => c.id);
 
@@ -64,8 +64,8 @@ test('SC-3 deterministic: same spec and images give the same bytes and hash', ()
 });
 
 test('SC-4 the three HABB templates compose at their formats with all checks passing', () => {
-  const s = storyPromo({ id: 'T2', productKey: 'p2', wordmarkKey: 'wm_a', copy: { headline: ['Prête en environ', '5 minutes.'], product_line: ['Coque personnalisée · 25 €'], caveat: ['Exemple de rendu. Selon le modèle', 'et la disponibilité.'], cta: ['Viens en boutique à Namur.'] } });
-  const t = knowHowTriptych({ id: 'T3', productKeys: ['p1', 'p2', 'p3'], wordmarkKey: 'wm_a', copy: { headline: ['Un prénom, un animal,', 'un paysage.'], labels: ['Un prénom', 'Un animal', 'Un paysage'], closing: ['Trois façons de faire sa coque,', 'créées en boutique à Namur.'] } });
+  const s = storyPromo({ id: 'T2', productKey: 'p2', wordmarkKey: 'wm_a', copy: { headline: ['Prête en environ', '5 minutes.'], product_line: ['Coque personnalisée', '25 € en boutique'], caveat: ['Exemple de rendu. Selon le modèle', 'et la disponibilité.'], cta: ['Viens en boutique à Namur.'] } });
+  const t = knowHowTriptych({ id: 'T3', productKeys: ['p1', 'p2', 'p3'], wordmarkKey: 'wm_a', copy: { headline: ['Un prénom, un animal,', 'un paysage.'], labels: ['Un prénom', 'Un animal', 'Un paysage'], closing: ['Des coques personnalisées', 'dans notre atelier à Namur.'], example: ['Exemple de personnalisation.'] } });
   for (const [spec, w, h] of [[s, 1080, 1920], [t, 1080, 1350]]) {
     const r = compose(spec);
     assert.equal(r.record.deliverable, true, JSON.stringify(failed(r)));
