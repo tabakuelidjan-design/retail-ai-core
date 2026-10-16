@@ -92,9 +92,9 @@ test('contract HTTP: the ask result is plain JSON, small, with the stable keys t
     const json = JSON.stringify(r); assert.equal(JSON.stringify(JSON.parse(json)), json, 'round-trips through JSON'); assert.ok(json.length < 16 * 1024, `${q}: ${json.length} bytes`);
   }
   const field = await askNordla({ text: 'quelle est la marge ?', caseId: 'blocked' }, ctx);
-  assert.deepEqual(Object.keys(field).sort(), ['answer', 'intent', 'limits', 'sections', 'sources', 'status']);
+  assert.deepEqual(Object.keys(field).sort(), ['answer', 'blockers', 'case', 'intent', 'knownTitle', 'limits', 'orderBlocked', 'sections', 'sources', 'status', 'verdict']);
   const withConv = await askNordla({ text: 'quelle est la marge ?', caseId: 'blocked' }, { ...ctx, conversation: null });
-  assert.deepEqual(Object.keys(withConv).sort(), ['answer', 'conversation', 'intent', 'limits', 'sections', 'sources', 'status'], 'opt-in only: no conversation key unless the caller asked');
+  assert.deepEqual(Object.keys(withConv).sort(), ['answer', 'blockers', 'case', 'conversation', 'intent', 'knownTitle', 'limits', 'orderBlocked', 'sections', 'sources', 'status', 'verdict'], 'opt-in only: no conversation key unless the caller asked');
 });
 
 test('contract isolation: the field modules import only pure sources - never the runtime, journal, HTTP layer, filesystem, network or process', () => {
@@ -115,4 +115,14 @@ test('contract HTTP -> conversation: validateConversation rebuilds a trusted cop
   const extra = { ...ok, injected: 'x', turns: [{ ...ok.turns[0], figure: 16.07, secret: 's' }] };
   assert.deepEqual(Object.keys(validateConversation(extra)), ['v', 'merchantId', 'caseId', 'caseVersion', 'turns']); assert.deepEqual(Object.keys(validateConversation(extra).turns[0]), ['intent', 'at', 'sources']);
   for (const bad of [null, undefined, 'x', 42, [], {}, { ...ok, v: 2 }, { ...ok, merchantId: '' }, { ...ok, turns: [] }, { ...ok, turns: Array(11).fill(ok.turns[0]) }, { ...ok, turns: [{ ...ok.turns[0], intent: 'DELETE_EVERYTHING' }] }, { ...ok, caseId: 'c'.repeat(81) }, { ...ok, turns: [{ ...ok.turns[0], sources: Array(11).fill({ kind: 'k', ref: 'r' }) }] }, { ...ok, pad: 'z'.repeat(5000) }]) assert.equal(validateConversation(bad), null, JSON.stringify(bad)?.slice(0, 60));
+});
+
+test('contract answers -> screens: the presentation fields tell the screen which case, which verdict, whether the order is closed and which blockers, by name', async () => {
+  const ctx = { runtime: null, getCase: async (id) => (id === 'blocked' ? blocked : bare), externals, actor: {}, now: NOW };
+  const b = await askNordla({ text: 'puis-je commander ?', caseId: 'blocked' }, ctx);
+  assert.equal(b.orderBlocked, true); assert.deepEqual(b.case, { ref: 'blocked', version: blocked.updatedAt, productName: 'USB charger' });
+  assert.equal(b.verdict, 'CONDITIONAL_GO_BLOCKED'); assert.ok(b.blockers.length > 0 && b.blockers.every((x) => x.code && x.label && x.label !== x.code && 'detail' in x));
+  assert.equal(b.knownTitle, 'Ce que nous savons');
+  const q = await askNordla({ text: 'quelles questions poser au fournisseur ?', caseId: 'blocked' }, ctx); assert.match(q.knownTitle, /À demander/);
+  const e = await askNordla({ text: 'quelle est la marge ?', caseId: 'bare' }, ctx); assert.equal(e.orderBlocked, true, 'a case that cannot commit money is blocked even without a named hard blocker');
 });
