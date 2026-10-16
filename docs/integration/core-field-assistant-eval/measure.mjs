@@ -3,7 +3,7 @@
 // Synthetic data only. "pass" = the status is one of the expected ones and, when the checkout reports an intent, it is the expected intent.
 // The old code reports no intent, so it is judged on status alone (generous to it). "figureLeak" = a monetary figure appears where the case has no data.
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, basename } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const root = resolve(process.argv[2] ?? '.');
@@ -36,7 +36,7 @@ for (const item of questions) {
 }
 const byCat = {};
 for (const r of rows) { const c = (byCat[r.cat] ??= { total: 0, pass: 0 }); c.total += 1; c.pass += r.pass ? 1 : 0; }
-const summary = { root, total: rows.length, pass: rows.filter((r) => r.pass).length, figureLeaks: rows.filter((r) => r.figureLeak).length, unexpectedWrites: rows.filter((r) => r.wrote).length, byCat };
+const summary = { root: basename(root), total: rows.length, pass: rows.filter((r) => r.pass).length, figureLeaks: rows.filter((r) => r.figureLeak).length, unexpectedWrites: rows.filter((r) => r.wrote).length, byCat };
 if (outFile) writeFileSync(outFile, JSON.stringify({ summary, rows }, null, 2));
 for (const r of rows) console.log(`${r.pass ? 'OK ' : 'KO '} [${r.cat}] ${r.q}  =>  ${r.got}  (attendu ${r.expected})${r.figureLeak ? '  CHIFFRE INVENTE' : ''}${r.wrote ? '  ECRITURE' : ''}`);
 console.log(JSON.stringify(summary, null, 1));

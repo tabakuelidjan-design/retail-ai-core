@@ -111,7 +111,7 @@ function knowledge(snap) {
   else if (e.landedLowerBoundFigure && isNum(e.landedLowerBoundFigure.total)) known.push(`coût rendu partiel : au moins ${eur(e.landedLowerBoundFigure.perUnit)} l’unité, ${eur(e.landedLowerBoundFigure.total)} au total (borne basse)`);
   if (isNum(e.contributionPerUnit)) known.push(`marge unitaire : ${eur(e.contributionPerUnit)}${e.contributionUpperBound ? ' (borne haute)' : ''}, prix de vente ${BASIS_FR[e.priceBasis] ?? 'inconnu'}`);
   const sg = snap.freshness.find((f) => f.name === 'EU Safety Gate'); if (sg) known.push(`Safety Gate : ${FRESH_FR[sg.status] ?? sg.status}${sg.mode ? ` (${sg.mode})` : ''}`);
-  const unknown = [...economicsUnknowns(snap).filter((x) => !x.startsWith('prix de vente') || true)];
+  const unknown = economicsUnknowns(snap);
   if (snap.missingDocs.length) unknown.push(`${snap.missingDocs.length} document(s) obligatoire(s) manquant(s) ou inexploitable(s)`);
   for (const u of snap.unknowns.slice(0, 5)) unknown.push(`${u.item} : ${u.note}`);
   return wrap(I.KNOWLEDGE, snap, { title: 'Voici l’état du dossier.', known, unknown, risks: blockerLines(snap), consequences: snap.hardBlockers.length ? ['tant qu’un blocage dur existe, aucune commande n’est recommandable'] : [], next: nextVerification(snap).slice(0, 2) });

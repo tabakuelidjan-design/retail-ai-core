@@ -13,7 +13,6 @@ export const FIELD_INTENT = Object.freeze({
   PRICE_JUDGEMENT: 'PRICE_JUDGEMENT', // "is this price good?": the quote against the engine's maximum purchase price - no market benchmark is invented
   EXPLAIN_RECOMMENDATION: 'EXPLAIN_RECOMMENDATION',
 });
-export const ECONOMICS_INTENTS = new Set([FIELD_INTENT.MARGIN, FIELD_INTENT.LANDED_COST, FIELD_INTENT.ORDER_TOTAL, FIELD_INTENT.PRICE_GAP, FIELD_INTENT.PRICE_BASIS, FIELD_INTENT.UNCOUNTED_COSTS, FIELD_INTENT.MOQ_SCENARIO]);
 
 export const normalize = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’'`´-]/g, ' ').replace(/[^a-z0-9 ,.%€$?]/g, ' ').replace(/\s+/g, ' ').trim();
 const tokens = (t) => t.split(/[^a-z0-9]+/).filter(Boolean);
