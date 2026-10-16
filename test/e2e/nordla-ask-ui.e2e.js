@@ -124,6 +124,29 @@ try {
     const dir = join(process.cwd(), 'docs', 'integration', 'core-field-assistant-eval', 'screens'); mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'parle-a-nordla-390px.png'), Buffer.from(shot.data, 'base64'));
   });
+  await check('8. very long text (no spaces) in a question and the case stays inside 390 px', async () => {
+    await tab.run(`const i = document.querySelector('#core-ask-text'); i.value = ${JSON.stringify('A'.repeat(900))}; i.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('[data-act="core-ask"]').click(); await __t.sleep(700); return 1;`);
+    await tab.waitFor("document.querySelectorAll('[data-core-answer]').length === 1", 10000);
+    ok(await tab.eval('document.documentElement.scrollWidth <= window.innerWidth + 1'), 'no horizontal scroll with a 900-character word');
+    ok(await tab.eval("[...document.querySelectorAll('.nxa-turn')].every((c) => c.getBoundingClientRect().right <= window.innerWidth + 1)"), 'every card stays inside the screen');
+  });
+  await check('9. a failing request: the error is shown in the ask block, the question stays in the box, and it works again afterwards', async () => {
+    await tab.run(`window.__f0 = window.fetch; window.fetch = (u, o) => (String(u).includes('/api/core/ask') && !window.__allowAsk ? Promise.reject(new TypeError('Failed to fetch')) : window.__f0(u, o)); const i = document.querySelector('#core-ask-text'); i.value = 'Quels sont les risques ?'; i.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('[data-act="core-ask"]').click(); await __t.sleep(900); return 1;`);
+    await tab.waitFor("!!document.querySelector('.nxa .nxa-block[role=alert]') && /n’a pas pu partir/.test(document.querySelector('.nxa').innerText)", 10000);
+    ok(await tab.eval("document.querySelector('#core-ask-text').value === 'Quels sont les risques ?'"), 'the question is still in the box');
+    await tab.run(`window.__allowAsk = true; document.querySelector('[data-act="core-ask"]').click(); await __t.sleep(900); return 1;`);
+    await tab.waitFor("/Quels sont les risques/.test(document.querySelector('[data-core-answer] .nxa-q')?.textContent || '') && !/n’a pas pu partir/.test(document.querySelector('.nxa').innerText)", 10000);
+  });
+  await check('10. offline: the answers already received stay readable (read-only) with the reason; back online the screen is complete again', async () => {
+    await tab.offline(true);
+    await tab.waitFor("window.nordlaSourcing.state().online === false", 15000);
+    await tab.run(`document.querySelector('#btn-cases').click(); await __t.sleep(400); return 1;`).catch(() => {});
+    const t = await tab.eval("(document.querySelector('#overlay') || document.body).innerText");
+    ok(/Hors ligne : vos réponses précédentes restent lisibles/.test(t) && /Quels sont les risques/.test(t), 'previous answers are still readable offline, with the reason');
+    ok(await tab.eval("!document.querySelector('#overlay [data-act=\"core-ask\"]')"), 'no ask button while offline');
+    await tab.offline(false);
+    await tab.waitFor("window.nordlaSourcing.state().online === true", 20000);
+  });
 } finally {
   await browser.close(); await new Promise((r) => proxy.close(r)); proxy.closeAllConnections?.(); await new Promise((r) => srv.server.close(r)); srv.server.closeAllConnections?.(); try { rmSync(tmp, { recursive: true, force: true }); } catch { /* temp */ }
 }

@@ -2,12 +2,12 @@
 // and Parle à Nordla in text. Everything here is computed and recorded by the SERVER (src/core-pilot): the phone only shows it and sends
 // the person's choice. Offline it says so and changes nothing local. Nordla never orders or pays: the screen says it.
 import { esc } from './dom.js';
-import { createAskUi } from './nordla-ask.js';
 
 const KIND = { ACTION: 'Action', COMBINED: 'Actions combinées', TEST_SMALL: 'Tester petit (échantillon, documents) avant d’engager de l’argent', DO_NOTHING: 'Ne rien faire' };
 const RESULTS = [['CONFIRMED', 'Confirmé'], ['SUGGESTIVE', 'Plutôt confirmé'], ['REFUTED', 'Démenti'], ['NOT_MEASURABLE', 'Pas mesurable'], ['UNKNOWN', 'Pas encore su']];
 const DECIDED = { APPROVED: 'Validé', APPROVED_ALTERNATIVE: 'Autre option choisie', REJECTED: 'Rejeté', DEFERRED: 'Reporté' };
 const val = (v) => (v === null || v === undefined ? 'inconnu' : typeof v === 'number' ? String(Math.round(v * 100) / 100).replace('.', ',') : String(v));
+import { createAskUi } from './nordla-ask.js'; // (ES imports hoist: kept here, away from the top import block that other changes also touch)
 
 export function createCorePanel({ S, api, refresh }) {
   const st = (S.core ??= { status: null, byCase: {}, ask: null, busy: false, error: '' });
@@ -56,7 +56,7 @@ export function createCorePanel({ S, api, refresh }) {
   /** The menu section. `active` = the open case (or null). */
   function section(active) {
     const head = '<h2>Nordla Core</h2>';
-    if (!S.online || !S.token) return `${head}<p class="small muted">Nordla Core et Parle à Nordla demandent le serveur${S.online ? ' (connectez-vous)' : ' : hors ligne maintenant'}. Rien n’est perdu : vos dossiers restent sur ce téléphone.</p>`;
+    if (!S.online || !S.token) return `${head}<p class="small muted">Nordla Core et Parle à Nordla demandent le serveur${S.online ? ' (connectez-vous)' : ' : hors ligne maintenant'}. Rien n’est perdu : vos dossiers restent sur ce téléphone.</p>${askUi.history(S.online)}`;
     if (!st.status) return `${head}<button class="btn sec" data-act="core-load" data-case="${esc(active?.id ?? '')}">Ouvrir Nordla Core</button>`;
     const err = st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : '';
     if (!st.status.enabled) return `${head}${err}<p class="warn">Nordla Core n’est pas actif sur ce serveur : ${esc(st.status.reason ?? '')}</p>`;
@@ -64,7 +64,7 @@ export function createCorePanel({ S, api, refresh }) {
     const caseBlock = !active ? '<p class="small muted">Ouvrez un dossier pour analyser son achat.</p>'
       : list === undefined ? `<button class="btn sec" data-act="core-load" data-case="${esc(active.id)}">Voir les décisions de ce dossier</button>`
         : `${list.length ? decisionCard(list[0]) : '<p class="small muted">Pas encore analysé par Nordla Core.</p>'}<button class="btn" data-act="core-analyse" data-case="${esc(active.id)}" ${st.busy ? 'disabled' : ''}>Analyser l’achat de ce dossier (version serveur)</button>`;
-    const askBlock = askUi.render(active, st.busy);
+    const askBlock = askUi.render(active, st.busy, st.error);
     return `${head}${err}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
   }
   return { section, load };

@@ -15,7 +15,7 @@ const STATUS_NOTE = { ASK: 'Précision demandée', NOT_UNDERSTOOD: 'Pas compris'
 
 const CSS = `.nxa{margin:0 0 12px}.nxa-chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.nxa-chip{font:inherit;font-size:14px;min-height:44px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
 .nxa-chip:focus-visible,.nxa button:focus-visible,.nxa input:focus-visible{outline:3px solid #4b8df0;outline-offset:2px}.nxa-form{display:flex;gap:8px;align-items:flex-end}.nxa-form label{flex:1;min-width:0}.nxa-form input{width:100%;box-sizing:border-box;min-height:44px;font:inherit}
-.nxa-case{font-size:13px;color:var(--muted);margin:2px 0 6px}.nxa-turn{border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;background:var(--card)}.nxa-q{font-size:13px;color:var(--muted);margin:0 0 6px}
+.nxa-case{font-size:13px;color:var(--muted);margin:2px 0 6px}.nxa-turn{overflow-wrap:anywhere;border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;background:var(--card)}.nxa-q{font-size:13px;color:var(--muted);margin:0 0 6px}
 .nxa-block{border-left:4px solid var(--red);background:var(--red-bg);padding:8px 10px;margin:0 0 8px;border-radius:0 8px 8px 0;font-size:14px}.nxa-block b{display:block}.nxa-head{font-weight:700;margin:0 0 6px}
 .nxa-sec h4{margin:10px 0 2px;font-size:13px;letter-spacing:.02em;color:var(--muted);text-transform:uppercase}.nxa-sec ul{margin:0;padding-left:18px}.nxa-sec li{font-size:14px;line-height:20px;margin:2px 0}
 .nxa-next{border-left:4px solid var(--accent);padding-left:10px;margin-top:10px}.nxa-src{font-size:13px;color:var(--muted);margin:8px 0 0}.nxa details{margin-top:6px;font-size:13px}.nxa-tools{display:flex;justify-content:space-between;align-items:center;margin:4px 0}`;
@@ -46,14 +46,21 @@ export function renderTurn(t, { newest = false } = {}) {
 }
 
 /** The whole block. `model` = { turns[newest first], notice, draft, busy, active:{id,name}|null }. */
-export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null } = {}) {
+export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null, error = '' } = {}) {
   const chips = (active ? CASE_CHIPS : NO_CASE_CHIPS).map(([text, label]) => `<button type="button" class="nxa-chip" data-act="core-ask-chip" data-text="${esc(text)}" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>${esc(label)}</button>`).join('');
   const where = active ? `Dossier ouvert : ${esc(active.name || active.id)}` : 'Aucun dossier ouvert : les questions sur un produit demandent d’en ouvrir un.';
   return `<div class="nxa"><h3>Parle à Nordla</h3><p class="nxa-case">${where}</p><div class="nxa-chips" role="group" aria-label="Questions fréquentes">${chips}</div>
-    <div class="nxa-form"><label class="small">Votre question<input id="core-ask-text" value="${esc(draft)}" autocomplete="off" placeholder="Posez votre question"></label><button type="button" class="btn" data-act="core-ask" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>Demander</button></div>
+    <div class="nxa-form"><label class="small">Votre question<input id="core-ask-text" value="${esc(draft)}" maxlength="1000" autocomplete="off" placeholder="Posez votre question"></label><button type="button" class="btn" data-act="core-ask" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>Demander</button></div>
+    ${error ? `<p class="nxa-block" role="alert"><b>La question n’a pas pu partir</b>${esc(error)} Votre question est conservée : réessayez.</p>` : ''}
     ${notice ? `<p class="small muted" role="status">${esc(notice)}</p>` : ''}
     ${turns.length ? `<div class="nxa-tools"><span class="small muted">${turns.length} question${turns.length > 1 ? 's' : ''} dans cette conversation</span><button type="button" class="btn sec" data-act="core-ask-reset">Nouvelle conversation</button></div>` : ''}
     <div aria-live="polite">${turns.map((t, i) => renderTurn(t, { newest: i === 0 })).join('')}</div></div>`;
+}
+
+/** Offline (or signed out): the server is unreachable, but the answers already on the screen are still worth reading chez le fournisseur. Read-only, with the reason. */
+export function renderHistory(turns = [], { online = false } = {}) {
+  if (!turns.length) return '';
+  return `<div class="nxa"><h3>Parle à Nordla</h3><p class="nxa-case">${online ? 'Reconnectez-vous pour poser une nouvelle question.' : 'Hors ligne : vos réponses précédentes restent lisibles ; une nouvelle question demande le serveur.'}</p>${turns.map((t, i) => renderTurn(t, { newest: i === 0 })).join('')}</div>`;
 }
 
 /** Controller: keeps the conversation on the phone (turns + the server's state) and asks through the panel's `post`. */
@@ -63,8 +70,9 @@ export function createAskUi({ st, post }) {
   function ask(text, caseId) {
     const q = String(text ?? '').trim(); if (!q) return true;
     const body = { text: q, caseId: caseId || null, conversation: nx.conversation }; // null = start; the server rebuilds whatever comes back, it never trusts it
-    nx.draft = '';
+    nx.pending = true; // set until an answer arrives: if the call fails, render() shows the error in THIS block
     post('/api/core/ask', body, (r) => {
+      nx.pending = false; nx.draft = ''; // cleared only once the answer is here: after a network error the person's question is still in the box
       nx.turns = [{ text: q, ...r }, ...nx.turns].slice(0, MAX_TURNS); nx.notice = r.notice ?? '';
       nx.conversation = r.conversation ?? null; // a server without conversation support simply returns none: every question then stands alone
     });
@@ -82,6 +90,7 @@ export function createAskUi({ st, post }) {
       if (act === 'core-ask-reset') { nx.turns = []; nx.conversation = null; nx.notice = ''; nx.draft = ''; return 'reset'; }
       return false;
     },
-    render(active, busy) { return renderAsk({ turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
+    history(online) { return renderHistory(nx.turns, { online }); },
+    render(active, busy, error) { return renderAsk({ turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, error: nx.pending && !busy ? error : '', active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
   };
 }

@@ -71,3 +71,32 @@ test('controller: the conversation state travels with every question, is replace
   for (let i = 0; i < MAX_TURNS + 5; i += 1) ui.handle('core-ask-chip', { dataset: { text: `q${i}` } }, 'c1'); assert.equal(st.nx.turns.length, MAX_TURNS);
   const before = sent.length; assert.equal(ui.handle('core-load', {}, 'c1'), false, 'other panel actions are not swallowed'); assert.equal(sent.length, before);
 });
+
+test('network failure: the question stays in the box, the error is shown inside the ask block (role=alert), and a later answer clears both', () => {
+  const st = { error: '' }; const sent = []; let fail = true;
+  const post = (path, body, after) => { sent.push(body.text); if (fail) { st.error = 'Le serveur n’a pas pu répondre. Rien n’a été changé.'; return; } st.error = ''; after({ status: 'ANSWERED', answer: 'ok', sources: [], limits: [] }); };
+  const ui = createAskUi({ st, post });
+  st.nx.draft = 'Qu’est-ce qui manque ?'; ui.handle('core-ask-chip', { dataset: { text: st.nx.draft } }, 'c1');
+  const html = ui.render({ id: 'c1' }, false, st.error);
+  assert.match(html, /role="alert"><b>La question n’a pas pu partir<\/b>Le serveur n’a pas pu répondre/); assert.ok(html.includes('value="Qu’est-ce qui manque ?"') || html.includes('value="Qu&#39;est-ce') || html.includes('Qu’est-ce qui manque ?'), 'the question is still in the input');
+  assert.equal(st.nx.turns.length, 0, 'a failed question is not recorded as asked');
+  fail = false; ui.handle('core-ask-chip', { dataset: { text: 'Qu’est-ce qui manque ?' } }, 'c1');
+  assert.doesNotMatch(ui.render({ id: 'c1' }, false, st.error), /n’a pas pu partir/); assert.equal(st.nx.draft, ''); assert.equal(st.nx.turns.length, 1);
+  assert.doesNotMatch(renderAsk({ active: { id: 'c1' }, error: 'x' }) && renderAsk({ active: { id: 'c1' }, error: '' }), /n’a pas pu partir/, 'no error block without an error');
+});
+
+test('a case not yet on the server and a very long text are shown safely; the input is capped at the server limit', async () => {
+  const gone = await askNordla({ text: 'quelle est la marge ?', caseId: 'case-unknown' }, { runtime: null, getCase: async () => null, externals: {}, actor: {}, now: NOW });
+  const h = renderTurn({ text: 'quelle est la marge ?', ...gone }); assert.match(visible(h), /Précision demandée/); assert.match(visible(h), /synchronisez-le d’abord/); assert.doesNotMatch(h, /nxa-block/);
+  const long = 'x'.repeat(5000); const big = renderTurn({ text: long, status: 'ANSWERED', answer: `${long}\nsuite`, sections: { known: [long], unknown: [], risks: [], consequences: [], next: [] }, case: { ref: long, version: long, productName: long } });
+  assert.ok(big.includes(long) && /overflow-wrap:anywhere/.test(renderAsk({})) === false, 'long text is kept whole (the CSS wraps it)');
+  assert.match(renderAsk({ active: { id: 'c1' } }), /maxlength="1000"/);
+});
+
+test('conversation storage: nothing is written to the browser (no localStorage, sessionStorage, IndexedDB, cookie); the state lives in memory for the life of the page only', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/sourcing/ui/nordla-ask.js', import.meta.url), 'utf8').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(src, /localStorage|sessionStorage|indexedDB|document\.cookie|caches\.|navigator\.storage|\bls\.set\b/);
+  const panel = readFileSync(new URL('../src/sourcing/ui/app.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(panel, /nordla\.sourcing\.[a-z]*(ask|nx|conversation)/i, 'no persisted key for the conversation');
+});
