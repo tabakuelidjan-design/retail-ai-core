@@ -257,6 +257,20 @@ function priceJudgement(snap) {
   return wrap(I.PRICE_JUDGEMENT, snap, { title, known, unknown, risks: snap.hardBlockers.length ? ['un blocage dur reste ouvert : un bon prix ne rend pas la commande possible'] : [], consequences: e.priceBasis !== 'OBSERVED' ? ['le prix maximum dépend du prix de vente supposé'] : [], next: nextVerification(snap).slice(0, 2) });
 }
 
+// ---- "best supplier / best landed cost / compare": a case holds ONE offer. Say what it holds; several offers are compared by Stock / Achats (never invented here).
+function compareOffers(snap) {
+  const e = snap.economics; const q = snap.quote; const known = []; const unknown = [];
+  const who = snap.supplierName ? `de « ${snap.supplierName} »` : 'du fournisseur de ce dossier (nom non renseigné)';
+  if (q) {
+    known.push(`offre ${who} : ${money(q.unitPrice, q.currency)} l’unité, ${q.qty ?? '?'} unités, minimum ${q.moq ?? 'inconnu'}${q.incoterm ? `, ${q.incoterm}` : ''}`);
+    if (isNum(e.landedPerUnit)) known.push(`coût rendu de cette offre : ${eur(e.landedPerUnit)} l’unité${e.landedLowerBound ? ' au moins' : ''}`);
+    else if (e.landedLowerBoundFigure && isNum(e.landedLowerBoundFigure.perUnit)) known.push(`coût rendu partiel de cette offre : au moins ${eur(e.landedLowerBoundFigure.perUnit)} l’unité (borne basse)`);
+    else unknown.push('coût rendu de cette offre non calculable (voir « quel est le coût rendu ? »)');
+  } else unknown.push('aucun devis fournisseur dans ce dossier');
+  unknown.push('autres offres ou autres fournisseurs : ce dossier n’en contient pas, donc aucun « meilleur » ne peut être désigné ici');
+  return wrap(I.COMPARE_OFFERS, snap, { title: q ? 'Ce dossier ne contient qu’une offre : il n’y a rien à comparer ici.' : 'Ce dossier ne contient aucune offre à comparer.', known, unknown, risks: [], consequences: ['comparer plusieurs fournisseurs sur le coût rendu se fait dans Stock / Achats, avec l’article exact et la quantité, et ne désigne ni ne commande personne'], next: ['Pour comparer : donnez la référence de l’article et la quantité à Stock / Achats ; pour ce dossier : enregistrez les autres devis reçus.'] });
+}
+
 // ---- Phase D: explain the Core recommendation already journaled for this case. Read-only: it never runs a new analysis.
 const REASON_FR = [
   [/can_commit_money eq true \(actual false\)/, 'le dossier n’autorise pas d’engager de l’argent (verdict sourcing)'],
@@ -309,6 +323,7 @@ export function buildFieldAnswer(intent, snap, { entryView = null, ownerRules = 
     case I.NEXT_STEP: return nextStep(snap);
     case I.SUPPLIER_QUESTIONS: return supplierQuestions(snap);
     case I.PRICE_JUDGEMENT: return priceJudgement(snap);
+    case I.COMPARE_OFFERS: return compareOffers(snap);
     case I.EXPLAIN_RECOMMENDATION: return explainRecommendation(snap, { entryView, ownerRules });
     default: return economics(snap, intent);
   }
