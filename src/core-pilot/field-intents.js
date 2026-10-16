@@ -13,7 +13,7 @@ export const FIELD_INTENT = Object.freeze({
 });
 export const ECONOMICS_INTENTS = new Set([FIELD_INTENT.MARGIN, FIELD_INTENT.LANDED_COST, FIELD_INTENT.ORDER_TOTAL, FIELD_INTENT.PRICE_GAP, FIELD_INTENT.PRICE_BASIS, FIELD_INTENT.UNCOUNTED_COSTS, FIELD_INTENT.MOQ_SCENARIO]);
 
-export const normalize = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’'`´]/g, ' ').replace(/[^a-z0-9 ,.%€$?-]/g, ' ').replace(/\s+/g, ' ').trim();
+export const normalize = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’'`´-]/g, ' ').replace(/[^a-z0-9 ,.%€$?]/g, ' ').replace(/\s+/g, ' ').trim();
 const tokens = (t) => t.split(/[^a-z0-9]+/).filter(Boolean);
 
 function distance(a, b) { // Levenshtein, bounded: only used on short words to forgive one typo
@@ -47,12 +47,14 @@ const RULES = [
   [FIELD_INTENT.PRICE_BASIS, [['prix de vente', 'prix vente', 'selling price', 'prix de revente', 'prix public'], ['observe', 'estime', 'hypothese', 'suppose', 'reel', 'verifie', 'confirm', 'vu', 'cible', 'observed', 'assum']]],
   [FIELD_INTENT.UNCOUNTED_COSTS, [['cout', 'couts', 'frais', 'cost', 'costs'], ['pas encore', 'non compt', 'pas pris', 'pris en compte', 'oubli', 'manqu', 'inclus', 'compris', 'inconnu', 'pas compt', 'not included', 'ignor']]],
   [FIELD_INTENT.MARGIN, [['marge', 'marje', 'rentab', 'benefice', 'gagner', 'gagne', 'profit', 'margin', 'contribution', 'rapporte', 'rapport']]],
-  [FIELD_INTENT.CAN_ORDER, [['puis je', 'je peux', 'puis-je', 'peut on commander', 'ai je le droit', 'autoris', 'feu vert', 'can i', 'je peut', 'est ce que je peux', 'on peut'], ['command', 'acheter', 'achat', 'signer', 'passer', 'order', 'buy', 'valider', 'lancer', 'verser', 'acompte', 'payer']]],
+  [FIELD_INTENT.CAN_ORDER, [['puis je', 'je peux', 'puis-je', 'peut on commander', 'ai je le droit', 'autoris', 'feu vert', 'can i', 'je peut', 'est ce que je peux', 'on peut', 'peux je'], ['command', 'acheter', 'achat', 'signer', 'passer', 'order', 'buy', 'valider', 'lancer', 'verser', 'acompte', 'payer']]],
+  [FIELD_INTENT.RISKS, [['preuve', 'preuves'], ['manque', 'manquent', 'manquant', 'manquantes', 'insuffisant', 'insuffisantes', 'faut', 'absente', 'absentes']]],
   [FIELD_INTENT.RISKS, [['risque', 'risques', 'danger', 'bloquer', 'bloque', 'blocage', 'bloquant', 'bloquants', 'probleme', 'attention', 'alerte', 'risk', 'block', 'preuve', 'preuves', 'inquiet', 'hesit', 'point faible', 'piege']]],
   [FIELD_INTENT.DOCUMENTS, [['document', 'documents', 'certificat', 'certificats', 'papier', 'papiers', 'declaration', 'rapport de test', 'conformite', 'marquage ce'], ['verifier', 'manque', 'manquent', 'manquant', 'faut', 'demander', 'exiger', 'reclamer', 'fournir', 'controler', 'check', 'missing', 'need', 'necessaire', 'requis']]],
-  [FIELD_INTENT.NEXT_STEP, [['prochaine etape', 'etape suivante', 'next step', 'ensuite', 'prochain pas', 'prochaine action', 'que faire', 'quoi faire', 'maintenant', 'conseille', 'recommandes tu', 'tu me conseilles', 'a verifier', 'verifier maintenant', 'dois je verifier', 'dois je faire', 'dois je demander', 'poser comme question', 'questions poser', 'quelles questions']]],
+  [FIELD_INTENT.NEXT_STEP, [['prochaine etape', 'etape suivante', 'next step', 'prochain pas', 'prochaine action', 'que faire', 'quoi faire', 'maintenant', 'conseille', 'recommandes tu', 'tu me conseilles', 'a verifier', 'verifier maintenant', 'dois je verifier', 'dois je faire', 'dois je demander', 'poser comme question', 'questions poser', 'quelles questions']]],
   [FIELD_INTENT.MISSING, [['manque', 'manquent', 'manquant', 'manquants', 'incomplet', 'complet', 'absent', 'absents', 'lacune', 'missing', 'trou', 'reste a', 'il me faut', 'faut il encore', 'encore besoin']]],
   [FIELD_INTENT.KNOWLEDGE, [['sait', 'sais', 'savons', 'connais', 'connait', 'connaissons', 'confirme', 'confirmes', 'confirmee', 'confirmees', 'know', 'avons nous', 'donnees', 'infos', 'information', 'informations'], ['dossier', 'fournisseur', 'produit', 'tu', 'on', 'nous', 'avons', 'a ce', 'sur', 'disponible', 'disponibles', 'ne sais', 'savoir', 'sait pas']]],
+  [FIELD_INTENT.KNOWLEDGE, [['est confirme', 'est confirmee', 'sont confirmes', 'sont confirmees', 'est verifie', 'est prouve', 'est etabli']]],
   [FIELD_INTENT.KNOWLEDGE, [['quest ce que tu sais', 'qu est ce que tu sais', 'ce que tu sais', 'ce que tu ne sais', 'sais tu', 'sais-tu']]],
 ];
 
@@ -79,7 +81,7 @@ export function recognizeFieldIntent(text) {
   const finance = phraseHit(FINANCE_WORDS); const analytics = phraseHit(ANALYTICS_WORDS) && !/prix de vente|selling price/.test(t);
 
   // Finance / Analytics boundary: their anchor words with no case anchor stay theirs; with both, the sentence is ambiguous - ask, never guess.
-  if ((finance || analytics) && !caseWords) return { intent: null, status: 'DEFERRED', reason: finance ? 'FINANCE_ANCHOR' : 'ANALYTICS_ANCHOR' };
+  if ((finance || analytics) && (!caseWords || !scored.length)) return { intent: null, status: 'DEFERRED', reason: finance ? 'FINANCE_ANCHOR' : 'ANALYTICS_ANCHOR' };
   if (!scored.length) return { intent: null, status: 'UNKNOWN', caseWords };
   if (finance || analytics) return { intent: null, status: 'AMBIGUOUS', candidates: [...new Set(scored.map((s) => s.intent))], reason: finance ? 'FINANCE_AND_CASE' : 'ANALYTICS_AND_CASE', caseWords };
 

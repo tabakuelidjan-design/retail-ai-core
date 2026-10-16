@@ -39,6 +39,8 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
     quote: quote ? { unitPrice: input.unit_price, currency: unitCurrency, qty: input.quote_qty, moq: input.moq, incoterm: safeText(quote.incoterm, 20) || null, leadTimeDays: input.lead_time_days } : null,
     economics: {
       landedStatus: landed.status ?? null, landedTotal: input.landed_total, landedPerUnit: input.landed_per_unit, landedLowerBound: input.landed_is_lower_bound,
+      // a LOWER_BOUND landed cost is not fed to the Core subject (landed_total stays null there); the engine's own partial figure is kept here, always labelled as a minimum
+      landedLowerBoundFigure: landed.status === 'LOWER_BOUND' ? { perUnit: minor(landed.totals?.landedPerUnitEurMinor), total: minor(landed.totals?.landedTotalEurMinor) } : null,
       landedCriticalUnknown: (landed.criticalUnknown ?? []).map((u) => safeText(u, 60)), landedUnknownComponents: (landed.unknownCostComponents ?? []).map((u) => safeText(String(u).replace(/^costs\./, ''), 60)),
       economicsStatus: econ.status ?? null, economicsReason: safeText(econ.reason, 160) || null,
       contributionPerUnit: input.contribution_per_unit, contributionUpperBound: input.contribution_is_upper_bound, contributionPct: isNum(econ.contributionPct) ? econ.contributionPct : null,

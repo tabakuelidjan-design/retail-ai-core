@@ -108,6 +108,7 @@ function knowledge(snap) {
   const e = snap.economics; const known = [`produit « ${snap.source.productName} », verdict du moteur : ${verdictLabel(snap)}${snap.canCommitMoney ? '' : ' ; le dossier n’autorise pas d’engager de l’argent'}`];
   if (quoteLine(snap)) known.push(quoteLine(snap));
   if (isNum(e.landedTotal)) known.push(`coût rendu : ${eur(e.landedPerUnit)} l’unité, ${eur(e.landedTotal)} au total${e.landedLowerBound ? ' (au moins)' : ''}`);
+  else if (e.landedLowerBoundFigure && isNum(e.landedLowerBoundFigure.total)) known.push(`coût rendu partiel : au moins ${eur(e.landedLowerBoundFigure.perUnit)} l’unité, ${eur(e.landedLowerBoundFigure.total)} au total (borne basse)`);
   if (isNum(e.contributionPerUnit)) known.push(`marge unitaire : ${eur(e.contributionPerUnit)}${e.contributionUpperBound ? ' (borne haute)' : ''}, prix de vente ${BASIS_FR[e.priceBasis] ?? 'inconnu'}`);
   const sg = snap.freshness.find((f) => f.name === 'EU Safety Gate'); if (sg) known.push(`Safety Gate : ${FRESH_FR[sg.status] ?? sg.status}${sg.mode ? ` (${sg.mode})` : ''}`);
   const unknown = [...economicsUnknowns(snap).filter((x) => !x.startsWith('prix de vente') || true)];
@@ -186,13 +187,15 @@ function economics(snap, intent) {
       unknown.push(...economicsUnknowns(snap)); break;
     case I.LANDED_COST:
       if (isNum(e.landedPerUnit)) { title = `Coût rendu : ${eur(e.landedPerUnit)} l’unité${e.landedLowerBound ? ' au moins' : ''}.`; known.push(`${eur(e.landedTotal)} au total pour ${snap.quote?.qty ?? '?'} unités`); if (e.landedLowerBound) consequences.push('coût incomplet : le coût réel est plus élevé'); }
+      else if (e.landedLowerBoundFigure && isNum(e.landedLowerBoundFigure.perUnit)) { title = `Coût rendu partiel : au moins ${eur(e.landedLowerBoundFigure.perUnit)} l’unité (borne basse).`; known.push(`au moins ${eur(e.landedLowerBoundFigure.total)} au total pour ${snap.quote?.qty ?? '?'} unités`); consequences.push('des coûts d’import ne sont pas saisis : le coût réel est plus élevé, la marge calculée est une borne haute'); }
       else { title = 'Le coût rendu ne peut pas être calculé.'; consequences.push('un coût indispensable manque : le moteur refuse de chiffrer'); }
       unknown.push(...economicsUnknowns(snap).filter((x) => x.startsWith('coût'))); break;
     case I.ORDER_TOTAL:
       if (isNum(e.landedTotal)) {
         title = `Coût rendu de la commande : ${eur(e.landedTotal)} pour ${snap.quote?.qty ?? '?'} unités${e.landedLowerBound ? ' (au moins)' : ''}.`;
         const t = snap.assessment.landed?.totals; if (t) known.push(`dont achat fournisseur ${eur((t.purchaseTotalEurMinor ?? NaN) / 100)} et import/frais ${eur((t.importCostEurMinor ?? NaN) / 100)}${isNum(t.estimatedMinor) && t.estimatedMinor > 0 ? ` (dont ${eur(t.estimatedMinor / 100)} estimés)` : ''}`);
-      } else title = 'Le coût de la commande ne peut pas être calculé.';
+      } else if (e.landedLowerBoundFigure && isNum(e.landedLowerBoundFigure.total)) { title = `Coût rendu de la commande : au moins ${eur(e.landedLowerBoundFigure.total)} pour ${snap.quote?.qty ?? '?'} unités (borne basse).`; consequences.push('des coûts d’import ne sont pas saisis : le total réel est plus élevé'); }
+      else title = 'Le coût de la commande ne peut pas être calculé.';
       if (snap.quote?.qty === null) unknown.push('quantité du devis inconnue');
       unknown.push(...economicsUnknowns(snap).filter((x) => x.startsWith('coût'))); break;
     case I.PRICE_GAP: {
