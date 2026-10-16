@@ -26,7 +26,8 @@ const bad = ui.filter((f) => existsSync(f) && run(process.execPath, ['--check', 
 // 3. contracts, security, routing, integration, procurement, conversation (one node --test invocation, no parallel suites)
 const tests = ['test/convergence-journey.test.js', 'test/core-procurement-routing.test.js', 'test/integration-router-precedence.test.js', 'test/integration-procurement.test.js', 'test/integration-contracts.test.js', 'test/integration-workflows.test.js', 'test/procurement-assistant.test.js', 'test/procurement-server.test.js', 'test/core-field-assistant.test.js', 'test/core-field-assistant-contracts.test.js', 'test/core-field-assistant-independent.test.js', 'test/core-http-conversation.test.js', 'test/nordla-ask-ui.test.js', 'test/core-journal-ui-errors.test.js', 'test/core-pilot.test.js', 'test/core-readers.test.js', 'test/core-modules.test.js', 'test/finance-privacy.test.js', 'test/sourcing-verdict-display.test.js'].filter(existsSync);
 const t = run(process.execPath, ['--test', ...tests]); const g = (k) => (t.stdout.match(new RegExp(`ℹ ${k} (\\d+)`)) ?? [])[1] ?? '?';
-rec(`unit / contract / security / routing (${tests.length} files)`, t.status === 0 ? 'PASS' : 'FAIL', `tests ${g('tests')}, pass ${g('pass')}, fail ${g('fail')}, skipped ${g('skipped')}`);
+const failedNames = (t.stdout.match(/^✖ .*$/gm) ?? []).filter((l, i, arr) => arr.indexOf(l) === i).map((l) => l.slice(0, 110));
+rec(`unit / contract / security / routing (${tests.length} files)`, t.status === 0 ? 'PASS' : 'FAIL', `tests ${g('tests')}, pass ${g('pass')}, fail ${g('fail')}, skipped ${g('skipped')}${failedNames.length ? ` — failing: ${failedNames.join(' | ')}` : ''}`);
 
 // 4. the TEST seed is idempotent and labelled (temp folder only)
 const dir = mkdtempSync(join(tmpdir(), 'nordla-verify-')); const M = '00000000-0000-4000-8000-0000000000aa';

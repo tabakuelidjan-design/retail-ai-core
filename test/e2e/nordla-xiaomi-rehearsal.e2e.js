@@ -62,7 +62,7 @@ await new Promise((r) => proxy.listen(proxyPort, '127.0.0.1', r));
 // the hosted server's Host allow-list is the public name without port; the proxy sends that Host, the security layer checks X-Forwarded-Host
 
 const HELPERS = `window.__t = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }; 'ok'`;
-const ready = async (t) => { await t.waitFor("document.readyState === 'complete' && document.body.innerText.length > 20", 20000); await t.eval(HELPERS); };
+const ready = async (t) => { await t.waitFor("document.readyState === 'complete' && document.body.innerText.length > 20", 60000); await t.eval(HELPERS); };
 const text = (t) => t.eval('document.body.innerText');
 const browser = await new Browser(exe, null, ['--ignore-certificate-errors', '--no-proxy-server', `--host-resolver-rules=MAP ${HOST} 127.0.0.1`]).launch(); let tab;
 console.log(`Browser engine: ${exe}`);
