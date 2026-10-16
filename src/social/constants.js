@@ -50,12 +50,14 @@ export const EDITABLE_STATES = Object.freeze([S.DRAFT, S.NEEDS_CHANGES, S.REJECT
 export const FROZEN_STATES = Object.freeze([S.PUBLISHING, S.PUBLISHED, S.VERIFIED, S.PUBLICATION_UNKNOWN, S.CANCELLED]);
 
 export const PLATFORM = Object.freeze({ INSTAGRAM: 'instagram', FACEBOOK: 'facebook' });
-export const FORMAT = Object.freeze({ IMAGE: 'IMAGE', REEL: 'REEL', TEXT: 'TEXT' });
-/** What each platform can carry in V1 (carousels and stories are NOT implemented: the contract refuses them). */
+export const FORMAT = Object.freeze({ IMAGE: 'IMAGE', REEL: 'REEL', TEXT: 'TEXT', CAROUSEL: 'CAROUSEL', STORY: 'STORY' });
+/** What each platform can carry in V1 (carousels and stories are approved and tracked here but published by hand). */
 export const PLATFORM_FORMATS = Object.freeze({
-  instagram: [FORMAT.IMAGE, FORMAT.REEL],
-  facebook: [FORMAT.IMAGE, FORMAT.TEXT],
+  instagram: [FORMAT.IMAGE, FORMAT.REEL, FORMAT.CAROUSEL, FORMAT.STORY],
+  facebook: [FORMAT.IMAGE, FORMAT.TEXT, FORMAT.CAROUSEL],
 });
+/** Formats Nordla can approve, schedule and track but that NO publisher sends automatically in V1 (carousels, stories): manual pack + attestation. */
+export const MANUAL_ONLY_FORMATS = Object.freeze([FORMAT.CAROUSEL, FORMAT.STORY]);
 
 export const ROLE = Object.freeze({ OWNER: 'owner', AGENT: 'agent', SYSTEM: 'system' });
 /** Actions only the owner may take: they carry the human authorization (Nordla never approves for them). */

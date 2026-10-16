@@ -47,16 +47,16 @@ function requireExactVersion(post, params) {
   if (!params.expected_hash) fail(E.STALE_VERSION, 'the decision must name the content_hash that was shown to the owner', { current: contentHashOf(post) });
   if (params.expected_hash !== contentHashOf(post)) fail(E.STALE_VERSION, 'the content changed since it was shown: look at the new version before deciding', { current: contentHashOf(post) });
 }
-function requireReady(post) {
-  const problems = readinessProblems(post);
+function requireReady(post, confirmed) {
+  const problems = readinessProblems(post, { confirmed });
   if (problems.length) fail(E.CLAIMS, `the post is not ready: ${problems.join(', ')}`, { problems });
 }
 
 const HANDLERS = {
-  submit(post, { actor, now }) {
+  submit(post, { actor, now, params }) {
     if (![S.DRAFT, S.NEEDS_CHANGES].includes(post.state)) fail(E.TRANSITION, `cannot submit from ${post.state}`);
     allow(post, S.READY_FOR_REVIEW);
-    requireReady(post);
+    requireReady(post, params.confirmed);
     return record(post, { action: 'submit', actor, from: post.state, to: S.READY_FOR_REVIEW, now });
   },
   withdraw(post, { actor, now }) {
@@ -66,7 +66,7 @@ const HANDLERS = {
   approve(post, { actor, now, params }) {
     allow(post, S.APPROVED);
     requireExactVersion(post, params);
-    requireReady(post);
+    requireReady(post, params.confirmed);
     post.approval = { approved_by: actor.id, approved_at: now, content_hash: contentHashOf(post) };
     return record(post, { action: 'approve', actor, from: post.state, to: S.APPROVED, now, note: params.note });
   },
@@ -92,7 +92,7 @@ const HANDLERS = {
     allow(post, S.SCHEDULED);
     requireExactVersion(post, params);
     if (!hasValidApproval(post)) fail(E.NO_VALID_APPROVAL, 'the approval does not cover this exact version');
-    requireReady(post);
+    requireReady(post, params.confirmed);
     if (post.publication?.remote_cancel_pending) fail(E.CONFLICT, 'a previous scheduled copy is still being removed at the platform: try again once it is confirmed gone');
     if (!post.publish_at) fail(E.INVALID, 'choose a date and time before scheduling', { field: 'publish_at' });
     if (Date.parse(post.publish_at) < Date.parse(now) + MIN_SCHEDULE_LEAD_MS) fail(E.INVALID, 'publish_at must be at least 2 minutes in the future', { field: 'publish_at' });
@@ -210,7 +210,7 @@ export function transition(post, action, actor, { now, ...params } = {}) {
   return handler(clone(post), { actor, now, params });
 }
 
-const CONTENT_FIELDS = ['platform', 'format', 'account_ref', 'subject', 'asset', 'caption', 'hashtags', 'publish_at'];
+const CONTENT_FIELDS = ['platform', 'format', 'account_ref', 'subject', 'asset', 'assets', 'caption', 'hashtags', 'publish_at'];
 /**
  * Edit content or notes. A change of what is published sends the post to DRAFT and wipes the approval (history says so).
  * Returns { post, changed, approval_invalidated, needs_remote_cancel }.

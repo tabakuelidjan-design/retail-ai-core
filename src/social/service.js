@@ -10,7 +10,9 @@ import { importProposals as importFromD } from './intake.js';
 
 export const SYSTEM_ACTOR = Object.freeze({ id: 'nordla-publisher', role: ROLE.SYSTEM });
 
-export function createSocialService({ store, publishers = {}, clock = () => Date.now() }) {
+export function createSocialService({
+  store, publishers = {}, clock = () => Date.now(), confirmedFacts = [],
+}) {
   const nowIso = () => new Date(clock()).toISOString();
 
   async function settleRemoteCancel(id) {
@@ -47,7 +49,7 @@ export function createSocialService({ store, publishers = {}, clock = () => Date
   async function act(id, action, actor, params = {}) {
     let remote = false;
     const saved = await store.update(id, (p) => {
-      const next = transition(p, action, actor, { ...params, now: nowIso() });
+      const next = transition(p, action, actor, { ...params, confirmed: confirmedFacts, now: nowIso() });
       remote = Boolean(next.history.at(-1)?.detail?.needs_remote_cancel);
       return next;
     });
@@ -56,6 +58,7 @@ export function createSocialService({ store, publishers = {}, clock = () => Date
 
   return {
     store,
+    confirmedFacts,
     createPost,
     editPost: edit,
     act,
@@ -65,6 +68,6 @@ export function createSocialService({ store, publishers = {}, clock = () => Date
     audit: () => store.audit(),
     contentHashOf,
     /** Posts proposed by chantier D (social-post-proposal.v1). Idempotent; a changed proposal edits the post and voids its approval. */
-    importProposals: (proposals, actor) => importFromD({ proposals, actor, store, createPost, editPost: edit, act }),
+    importProposals: (proposals, actor) => importFromD({ proposals, actor, store, createPost, editPost: edit, act, confirmed: confirmedFacts }),
   };
 }
