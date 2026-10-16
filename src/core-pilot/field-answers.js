@@ -86,6 +86,9 @@ function wrap(intent, snap, { title, knownTitle = 'Ce que nous savons', known = 
   const lines = [title, ...head(knownTitle, known), ...head('Ce que nous ne savons pas', unknown), ...head('Risques', risks), ...head('Pourquoi c’est important', consequences), ...head('Prochaine vérification', next), sourceLine(snap)];
   return {
     status: 'ANSWERED', intent, answer: lines.join('\n'),
+    // structured presentation fields for the screens (additive): which case, the displayed verdict, whether the order is closed, and the blockers by name
+    case: { ref: snap.source.ref, version: snap.source.version, productName: snap.source.productName }, verdict: snap.verdictDisplay ?? snap.verdict, orderBlocked: !snap.canCommitMoney,
+    blockers: snap.hardBlockers.map((x) => ({ code: x.code, label: BLOCKER_FR[x.code] ?? x.code, detail: x.detail })), knownTitle,
     sections: { known, unknown, risks, consequences, next }, sources: sourcesOf(snap, extraSources), limits: [...limitsOf(snap), ...extraLimits],
   };
 }

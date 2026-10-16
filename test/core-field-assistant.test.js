@@ -231,7 +231,7 @@ test('read-only: no field question writes to the journal, mutates the case, or t
 
 test('no commercial action: answers carry no action field and no ordering vocabulary in the result shape', async () => {
   const w = world({ go: goCase('go') }); const r = await w.ask('puis-je commander ?', 'go');
-  assert.deepEqual(Object.keys(r).sort(), ['answer', 'intent', 'limits', 'sections', 'sources', 'status']);
+  assert.deepEqual(Object.keys(r).sort(), ['answer', 'blockers', 'case', 'intent', 'knownTitle', 'limits', 'orderBlocked', 'sections', 'sources', 'status', 'verdict']);
   assert.deepEqual(Object.keys(r.sections).sort(), ['consequences', 'known', 'next', 'risks', 'unknown']);
   assert.ok(r.sources.every((s) => typeof s.kind === 'string' && typeof s.ref === 'string'));
 });
