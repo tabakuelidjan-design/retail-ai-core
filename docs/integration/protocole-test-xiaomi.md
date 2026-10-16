@@ -2,9 +2,18 @@
 
 ## Fiche du 18 octobre (version courte — le détail suit plus bas)
 
-Conditions : `sourcing-staging` actif et contrôlé (procédure §7–§10 vertes), **données de test uniquement**, aucune publication Shopify,
-aucune donnée de production. Adresse : `https://app.nordla.app` si le DNS est autorisé, sinon l'adresse Railway générée (elle ne
-change plus ensuite pour ce test).
+Conditions : `sourcing-staging` actif sur `ab02b77`, contrôles C1–C7 verts (`docs/infrastructure/controles-apres-activation.md`),
+**données de test uniquement**, aucune publication Shopify, aucune donnée de production.
+Adresse : **`https://app.nordla.app`** — le service est configuré pour elle ; le téléphone ne peut s'y connecter **qu'après le DNS**
+(accord séparé, au plus tard le 17). Sans DNS : bascule sur l'adresse Railway (un changement de variable + Deploy) avant le test.
+
+**Ce qui sera réellement disponible le 18 (commit `ab02b77`)** : China Sourcing (dossiers, photos, hors ligne, synchronisation,
+export / récupération), Nordla Core (analyse du dossier, décision avec raison, journal), menu Nordla et les 7 modules, Création (photo +
+titre → visuel), Branding / Marketing en lecture et décision, **Parle à Nordla – version texte de base** : questions Finance / Analytics
+(réponse avec source, période, fraîcheur — sur staging : « données indisponibles », c'est normal) et faits d'achat du dossier ouvert.
+**Pas disponible le 18** : l'**assistant de terrain** de Parle à Nordla (PR #12 : « que manque-t-il ? », risques, documents à vérifier,
+prochaine vérification, jugement de prix sur le dossier). Il n'est pas dans `ab02b77` et son branchement est encore à l'état de
+proposition : il demande un nouveau commit candidat, sa CI et un nouveau déploiement autorisé. Ne pas le tester le 18.
 
 **Avant (PC allumé, ancienne adresse dans Firefox)** — rien ne doit être perdu :
 1. Chaque ancien dossier → réglages → **Exporter en JSON** ; l'écran doit dire **« N photo(s) sur N »** (si « absentes » : arrêt, me le
@@ -22,8 +31,8 @@ change plus ensuite pour ce test).
 | 6 | Mode avion → modifier une note → rouvrir le dossier | « hors ligne », modification gardée |
 | 7 | Réactiver les données mobiles | synchronisation seule, « à jour » |
 | 8 | Ordinateur (ou 2ᵉ navigateur) : ouvrir le même dossier | dossier **et 3 photos** présents côté serveur |
-| 9 | Menu → Nordla → **Parle à Nordla** (Finance / Analytics) | réponse avec **source, période, fraîcheur** ; « données indisponibles » est normal sur staging |
-| 10 | Nordla Core : analyser le dossier → décider avec une raison → fermer / rouvrir | la décision, votre nom et la raison sont toujours là (journal Core) |
+| 9 | Menu → Nordla → **Parle à Nordla** : « Quelles factures sont à payer ? » puis « Combien a-t-on vendu ce mois-ci ? » | chaque réponse dit **sa source, sa période, sa fraîcheur** ; « données indisponibles » est normal sur staging (version de base, pas l'assistant de terrain) |
+| 10 | Nordla Core : analyser le dossier → décider avec une raison → fermer / rouvrir ; puis (avec ChatGPT) redémarrage du service → rouvrir | la décision, votre nom et la raison sont toujours là, **même après redémarrage** (journal Core sur le volume) |
 | 11 | **Récupérer** un ancien export (menu → Récupérer) | dossier et photos restaurés, **rien remplacé** (« garder les deux ») |
 | 12 | Revenir sur l'ancienne adresse (PC rallumé, Firefox) | anciens dossiers et photos **toujours là** |
 
