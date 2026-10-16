@@ -4,6 +4,11 @@ Qui : **P** = propriétaire (ou la session Railway, sous son contrôle) ; **I** 
 sans secret). Chaque étape a sa condition d'arrêt : **une condition non remplie = on s'arrête, rien de plus n'est fait.**
 Aucune étape ne touche la production, le DNS ou un secret en dehors de ce que P saisit lui-même.
 
+## 0. Lot de changements et commit (16/10, après l'audit Railway)
+
+Le service est épinglé sur `c2c314d` et l'environnement a **29 changements en attente** : avant toute activation, épingler `ab02b77`
+et trier le lot ligne par ligne selon `docs/infrastructure/railway-changeset-audit.md` (toute ligne hors du périmètre du service = arrêt).
+
 ## 1. Constats Railway (P, lecture seule, avant tout)
 
 Service `sourcing-staging`, environnement **staging** du projet `app.nordla.app` :
