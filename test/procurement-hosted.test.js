@@ -106,3 +106,33 @@ test('PostgreSQL is used only when asked; asking without the driver turns the mo
   assert.equal(off.handler, null); assert.match(off.status, /OFF \(PG_DRIVER_MISSING\)/); assert.ok(!existsSync(join(dir, 'procurement', 'procurement.json')), 'no file store was opened behind the operator\'s back'); assert.match(logs.join('\n'), /rest of Nordla is unaffected/);
   assert.ok(readFileSync(new URL('../src/procurement/server/hosted.js', import.meta.url), 'utf8').includes('never falls back'));
 });
+
+// ---------------------------------------------------------------- the same mount on a REAL PostgreSQL (PROCUREMENT_STORE=pg, test/postgres/procurement-parity.mjs)
+import { STORE_KIND, pgPool, ensureMerchant } from './procurement-fixtures.js';
+test('hosted on PostgreSQL: the mount, the grants, a receipt and a filed stock change survive a restart (a new store on the same database)', { skip: STORE_KIND !== 'pg' ? 'needs PROCUREMENT_STORE=pg (real PostgreSQL)' : false }, async (t) => {
+  const merchant = randomUUID(); await ensureMerchant(merchant); const dir = mkdtempSync(join(tmpdir(), 'nordla-hpg-'));
+  const boot = async () => {
+    const proc = await buildHostedProcurement({ dir, merchantId: merchant, env: { PROCUREMENT_GRANTS: GRANTS }, pgPool: pgPool() });
+    assert.match(proc.status, /ON \(PostgreSQL;/);
+    const server = http.createServer((req, res) => { const url = new URL(req.url, 'http://x'); const actor = actors[req.headers['x-test-actor']]; if (!actor) { res.writeHead(401); return res.end('{}'); } return proc.handler.handleApi(req, res, url, procurementUserFor(actor)); });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r)); const port = server.address().port;
+    const call = async (method, path, { as = 'owner', body } = {}) => { const r = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: { 'x-test-actor': as, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(method !== 'GET' ? { 'idempotency-key': idem() } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined }); let json = null; try { json = await r.json(); } catch { /* none */ } return { status: r.status, json }; };
+    return { call, close: () => new Promise((r) => server.close(r)) };
+  };
+  let m = await boot(); t.after(() => m.close());
+  assert.ok(!existsSync(join(dir, 'procurement', 'procurement.json')), 'nothing is written to the file store when PostgreSQL is the store');
+  const v = (await m.call('POST', '/api/procurement/visits', { as: 'admin', body: { supplierName: 'Yiwu Co', currency: 'USD', date: '2026-10-20' } })).json;
+  const c = (await m.call('POST', `/api/procurement/visits/${v.visit.id}/products`, { as: 'admin', body: { product: { name: 'Keychain' }, quote: { unitPrice: '0.5', moq: 10 } } })).json;
+  const po = (await m.call('POST', '/api/procurement/purchase-orders', { as: 'admin', body: { lines: [{ quoteId: c.quoteId, qty: 40 }], expectedDate: '2026-12-01', fx: { from: 'USD', to: 'EUR', rate: '0.9', date: '2026-10-20', source: 'test' } } })).json.purchaseOrder;
+  await m.call('POST', `/api/procurement/purchase-orders/${po.id}/submit`, { as: 'admin' }); await m.call('POST', `/api/procurement/purchase-orders/${po.id}/approve`, { as: 'owner' }); await m.call('POST', `/api/procurement/purchase-orders/${po.id}/order`, { as: 'owner', body: {} });
+  assert.equal((await m.call('POST', `/api/procurement/purchase-orders/${po.id}/receive`, { as: 'collab', body: { lines: [{ poLineId: po.lines[0].id, qtyAccepted: 40 }] } })).status, 200);
+  const stock = (await m.call('GET', '/api/procurement/stock')).json; const itemId = stock.items[0].itemId; const W = stock.locations.find((l) => l.type === 'WAREHOUSE').id;
+  const filed = await m.call('POST', '/api/procurement/stock/requests', { as: 'collab', body: { type: 'ADJUST', itemId, locationId: W, delta: -2, reason: 'two units crushed in the delivery' } }); assert.equal(filed.status, 200, JSON.stringify(filed.json));
+  await m.close(); m = await boot(); // restart: a fresh store over the same database
+  assert.equal((await m.call('GET', '/api/procurement/stock')).json.items[0].physical, 40);
+  const pending = (await m.call('GET', '/api/procurement/stock/requests?status=PENDING')).json.requests; assert.equal(pending.length, 1); assert.equal(pending[0].delta, -2);
+  assert.equal((await m.call('POST', `/api/procurement/stock/requests/${pending[0].requestId}/decision`, { as: 'collab', body: { decision: 'APPROVE' } })).status, 403, 'RECEIVE does not approve');
+  const rs = await Promise.all(['owner', 'admin', 'owner'].map((as) => m.call('POST', `/api/procurement/stock/requests/${pending[0].requestId}/decision`, { as, body: { decision: 'APPROVE' } })));
+  assert.equal(rs.filter((r) => r.status === 200).length, 1, JSON.stringify(rs.map((r) => r.status))); assert.equal((await m.call('GET', '/api/procurement/stock')).json.items[0].physical, 38);
+  assert.equal((await m.call('GET', `/api/procurement/stock/${itemId}/history`)).json.movements.map((x) => x.kind).join(), 'RECEIPT,ADJUSTMENT');
+});

@@ -42,16 +42,19 @@ export function procurementUserFor(actor, grants = configuredGrants) {
 }
 
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
-export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {} }) {
+export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null }) {
   let closeStore = async () => {};
   try {
     const base = join(dir, 'procurement');
     await mkdir(base, { recursive: true });
     configuredGrants = parseGrants(env.PROCUREMENT_GRANTS);
     let store; let where;
-    if (env.PROCUREMENT_PG_URL) { // PostgreSQL ONLY when the operator asks for it; a failure never falls back to the file (that would split the data in two)
-      let pg; try { pg = (await import('pg')).default; } catch { throw Object.assign(new Error('PROCUREMENT_PG_URL is set but the "pg" package is not installed'), { code: 'PG_DRIVER_MISSING' }); }
-      const pool = new pg.Pool({ connectionString: env.PROCUREMENT_PG_URL, max: Number(env.PROCUREMENT_PG_POOL_MAX ?? 5) }); closeStore = () => pool.end();
+    if (env.PROCUREMENT_PG_URL || pgPool) { // PostgreSQL ONLY when the operator asks for it; a failure never falls back to the file (that would split the data in two)
+      let pool = pgPool; // an injected pool (the PostgreSQL smoke tests) or the operator's connection string
+      if (!pool) {
+        let pg; try { pg = (await import('pg')).default; } catch { throw Object.assign(new Error('PROCUREMENT_PG_URL is set but the "pg" package is not installed'), { code: 'PG_DRIVER_MISSING' }); }
+        pool = new pg.Pool({ connectionString: env.PROCUREMENT_PG_URL, max: Number(env.PROCUREMENT_PG_POOL_MAX ?? 5) }); closeStore = () => pool.end();
+      }
       store = createPgProcurementStore({ pool }); where = 'PostgreSQL';
     } else { store = await openFileProcurementStore({ path: join(base, 'procurement.json') }); where = join(base, 'procurement.json'); }
     const procurement = createProcurement({ store, merchantId, policy: SERVER_POLICY });
