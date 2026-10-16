@@ -128,7 +128,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   log(`Process: Node ${process.versions.node}, uid ${process.getuid?.() ?? 'n/a'}${process.getuid?.() === 0 ? ' (ROOT: the image entrypoint was bypassed - see deploy/sourcing/Dockerfile)' : ''}, data ${dir}.`);
   log(`Access: ${hosted ? 'Nordla session (sign-in)' : env.SOURCING_TOKEN && env.SOURCING_TOKEN.length >= 24 ? 'token from SOURCING_TOKEN' : `token in ${join(dir, 'token.txt')}`} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
   backups = scheduleBackups({ env, dir, log });
-  server.on('close', () => backups.stop());
+  server.on('close', () => { backups.stop(); Promise.resolve(proc.close?.()).catch(() => { /* a pool that is already gone */ }); }); // release the Stock / Achats store (a PostgreSQL pool, if one was asked for)
   return { server, token, safety, port: addr.port, backups };
 }
 
