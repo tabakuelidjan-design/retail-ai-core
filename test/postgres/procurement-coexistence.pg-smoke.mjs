@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { splitIntegrationMigration } from '../../tools/procurement-staging/split-integration-migration.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const NAME = 'nordla-pg-coexistence'; const IMAGE = process.env.PG_SMOKE_IMAGE ?? 'postgres:17';
@@ -27,6 +28,8 @@ const sqlIn = (dir) => gitRead('ls-tree', '--name-only', REF, `${dir}/`).split(S
 const BASE = sqlIn('supabase/migrations').map(([, s]) => s);
 const A_PENDING = sqlIn('supabase/migrations-pending').filter(([f]) => !/procurement/.test(f));
 const sqlOf = (dir, f) => readFileSync(join(dir, f), 'utf8');
+// the proposal that leaves out the two tables the convergence decided NOT to apply (tools/procurement-staging/split-integration-migration.mjs)
+const A_SPLIT = A_PENDING.map(([f, sql]) => (f.startsWith('20261015090000') ? [f, splitIntegrationMigration(sql)] : [f, sql]));
 const C_PENDING = ['20261016090000_procurement_stock.sql', '20261016091000_procurement_permissions.sql'].map((f) => [f, sqlOf(join(ROOT, 'supabase/migrations-pending'), f)]);
 
 const STUBS = `
@@ -68,7 +71,7 @@ try {
   const prepare = (db) => { check(`database ${db} created`, psql('postgres', `create database ${db};`).ok); psql(db, STUBS); return BASE.every((s, i) => { const r = psql(db, `begin;\n${s}\ncommit;`); if (!r.ok) check(`convergence migration #${i} applies on ${db}`, false, r.err); return r.ok; }); };
 
   // ---------------------------------------------------------------- 1. coexistence, both orders
-  for (const [db, order] of [['coexist_a_then_c', [A_PENDING, C_PENDING]], ['coexist_c_then_a', [C_PENDING, A_PENDING]]]) {
+  for (const [db, order, split] of [['coexist_a_then_c', [A_PENDING, C_PENDING], false], ['coexist_c_then_a', [C_PENDING, A_PENDING], false], ['coexist_split_a_then_c', [A_SPLIT, C_PENDING], true], ['coexist_split_c_then_a', [C_PENDING, A_SPLIT], true]]) {
     check(`${db}: the convergence base migrations apply`, prepare(db));
     const ok = order.every((files) => applyAll(db, files));
     check(`${db}: A's pending (${A_PENDING.length} files) and C's pending (${C_PENDING.length} files) apply in this order, one transaction each`, ok);
@@ -76,7 +79,14 @@ try {
     check(`${db}: 0 public table without RLS`, one(db, `select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and not c.relrowsecurity`) === '0');
     check(`${db}: 0 RLS table without a policy`, one(db, `select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and c.relrowsecurity and not exists (select 1 from pg_policy p where p.polrelid=c.oid)`) === '0');
     check(`${db}: no permissive policy on any proc_ table`, one(db, `select count(*) from pg_policy p join pg_class c on c.oid=p.polrelid where c.relname like 'proc\\_%' and p.polpermissive`) === '0');
+    if (!split) {
     check(`${db}: 17 proc_ tables next to A's integration_ tables (no name collision)`, one(db, `select (select count(*) from pg_class where relname like 'proc\\_%' and relkind='r')||'/'||(select count(*) from pg_class where relname in ('integration_purchase_plans','integration_incoming_expectations','sourcing_cases') and relkind='r')`) === '17/3');
+    } else {
+      const T5 = "('integration_buy_candidates','integration_campaign_contracts','integration_tracking_definitions','integration_trace_ledger','sourcing_cases')";
+      check(`${db}: the split leaves out exactly the two excluded tables (no plans, no expectations), keeps the other five, and the 17 proc_ tables coexist`, one(db, `select (select count(*) from pg_class where relname like 'proc\_%' and relkind='r')||'/'||(select count(*) from pg_class where relname in ('integration_purchase_plans','integration_incoming_expectations') and relkind='r')||'/'||(select count(*) from pg_class where relname in ${T5} and relkind='r')`) === '17/0/5');
+      check(`${db}: A's remaining tables keep their protection (RLS on, anon and authenticated revoked)`, one(db, `select count(*) from pg_class c where c.relname in ${T5} and (not c.relrowsecurity or has_table_privilege('anon', c.oid, 'select') or has_table_privilege('authenticated', c.oid, 'select'))`) === '0');
+      check(`${db}: no leftover function of the removed tables`, one(db, `select count(*) from pg_proc where proname = 'integration_purchase_plans_guard'`) === '0');
+    }
     check(`${db}: no function without a fixed search_path was added by C`, one(db, `select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'proc\\_%' and not exists (select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')`) === '0');
     check(`${db}: data can be written by the owner role`, psql(db, SEED).ok);
     check(`${db}: the balance trigger kept the ledger sum (15 for merchant A, 3 for B) and no balance differs from its ledger`, one(db, FINGERPRINT) === '2/2/3/18/0', one(db, FINGERPRINT));
@@ -91,7 +101,7 @@ try {
     }
     check(`${db}: service_role reads but cannot UPDATE or DELETE the ledger`, psql(db, `set role service_role; select count(*) from proc_stock_movements;`).ok && !psql(db, `set role service_role; update proc_stock_movements set delta = 99;`).ok && !psql(db, `set role service_role; delete from proc_stock_movements;`).ok);
     check(`${db}: the owner role cannot rewrite the ledger either (append-only trigger)`, !psql(db, `update proc_stock_movements set delta = 99;`).ok && !psql(db, `truncate proc_stock_movements cascade;`).ok);
-    check(`${db}: A's own objects still refuse the client roles`, !psql(db, `set role authenticated; select count(*) from integration_purchase_plans;`).ok);
+    check(`${db}: A's own objects still refuse the client roles`, !psql(db, `set role authenticated; select count(*) from ${split ? 'integration_trace_ledger' : 'integration_purchase_plans'};`).ok);
   }
 
   // ---------------------------------------------------------------- 2. restart recovery (stop / start the whole database server)
