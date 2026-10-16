@@ -1,5 +1,8 @@
 # `sourcing-staging` — plan de PREMIER déploiement du candidat `2c8871d` (préparé, **rien n'est déclenché**)
 
+> **MISE À JOUR 2026-10-16 (A1 exécutée) :** le candidat à épingler et à déployer n'est plus `2c8871d` mais **`5a57d0b485b54161187004c52c5ee450302d7978`** (= `2c8871d` + `deploy/sourcing/railway.json`, PR #18 ; CI verte : core-reliability 38956577756, nordla-integration-pre-china 38956580627, china-sourcing 38956584961). P0 = `5a57d0b` (avance rapide, `main` intact). Lot Railway attendu : **32 lignes** = 31 + le chemin de configuration `/deploy/sourcing/railway.json` (réglage du seul service `sourcing-staging`). Contrôle V2 obligatoire : `uid 1000`. Toute mention de `2c8871d` ci-dessous comme cible de déploiement se lit `5a57d0b`. A2 et A3 : non autorisées.
+
+
 Constat Railway transmis par le propriétaire (16/10, contrôle direct, **non revérifié par cette session** : aucun outil Railway) : `sourcing-staging` n'existe que comme **création préparée** (`staged-create`) dans l'environnement staging ; **aucun déploiement actif, aucune adresse publique, aucun volume opérationnel** ; commit épinglé = `ab02b77`. Le service **n'a jamais été en ligne** : il n'y a donc pas de « version précédente » à restaurer (voir §6).
 
 ## 1. CI obligatoire du candidat — terminée
