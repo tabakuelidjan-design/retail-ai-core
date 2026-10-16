@@ -31,20 +31,20 @@ test('supplier documents carry expiry dates; only real expiries are reported', a
   await w.mk(w.c.addSupplierDocument, buyer, { supplierId: w.supplier.id, type: 'CERTIFICATE', name: 'Old audit', ref: 'docs://audit.pdf', expiresOn: '2026-09-01' });
   await w.mk(w.c.addSupplierDocument, buyer, { supplierId: w.supplier.id, type: 'CONTRACT', name: 'Framework', ref: 'docs://fw.pdf' }); // no expiry: never "expiring"
   await w.mk(w.c.addSupplierDocument, buyer, { supplierId: w.supplier.id, type: 'PRICE_LIST', name: 'Far away', ref: 'docs://pl.pdf', expiresOn: '2027-06-01' });
-  const soon = w.q.expiringDocuments({ asOf: '2026-10-16', withinDays: 30 });
+  const soon = (await w.q.expiringDocuments({ asOf: '2026-10-16', withinDays: 30 }));
   assert.deepEqual(soon.map((d) => [d.name, d.expired]), [['Old audit', true], ['CE declaration', false]]);
   assert.equal(soon[1].daysLeft, 16);
-  assert.equal(w.q.supplier(w.supplier.id).documents.length, 4);
+  assert.equal((await w.q.supplier(w.supplier.id)).documents.length, 4);
   await rejects(w.mk(w.c.addSupplierDocument, buyer, { supplierId: w.supplier.id, type: 'MEMO', name: 'x', ref: 'r' }), 'INVALID_INPUT');
   await rejects(w.mk(w.c.addSupplierDocument, wh, { supplierId: w.supplier.id, type: 'OTHER', name: 'x', ref: 'r' }), 'FORBIDDEN');
-  assert.equal(w.proc.assistant.call('expiring_supplier_documents', { asOf: '2026-10-16', withinDays: 30 }).documents.length, 2);
+  assert.equal((await w.proc.assistant.call('expiring_supplier_documents', { asOf: '2026-10-16', withinDays: 30 })).documents.length, 2);
 });
 
 test('target price: the highest supplier price that still reaches the margin, found on the Finance engine', async () => {
   const w = await makeWorld();
   const inputs = { freight_total: '60', duty_rate_pct: '4', import_vat_rate_pct: '21' };
   const fx = { rate: '0.90', date: '2026-10-15', source: 'ECB reference' };
-  const t = w.q.targetUnitPrice({ currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs, fx });
+  const t = (await w.q.targetUnitPrice({ currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs, fx }));
   assert.equal(t.status, 'ESTIMATED'); assert.ok(t.grossMarginBpAtMax >= 6000);
   // it IS the maximum: one more step of 0.0001 misses the target, the price itself reaches it
   const { analyzePurchase } = await import('../src/finance/purchase-analysis.js');
@@ -54,20 +54,20 @@ test('target price: the highest supplier price that still reaches the margin, fo
   assert.ok(at(next).margin.gross_margin_bp < 6000, `the next price step ${next} must miss the target`);
   assert.match(t.note, /not an offer/);
   // honest refusals
-  assert.equal(w.q.targetUnitPrice({ currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs }).reason, 'FX_REQUIRED');
-  assert.equal(w.q.targetUnitPrice({ currency: 'EUR', qty: 200, targetMarginPct: '60', costInputs: inputs }).reason, 'NO_SELLING_PRICE');
-  assert.equal(w.q.targetUnitPrice({ currency: 'EUR', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60' }).reason, 'NO_COST_INPUTS');
-  assert.equal(w.q.targetUnitPrice({ currency: 'EUR', qty: 1, sellingPriceGross: '0.50', targetMarginPct: '95', costInputs: { freight_total: '50', duty_rate_pct: '0', import_vat_rate_pct: '0' } }).status, 'NOT_ACHIEVABLE');
-  assert.equal(w.proc.assistant.call('target_price', { currency: 'USD' }).status, 'NEED_CLARIFICATION');
-  assert.equal(w.proc.assistant.call('target_price', { currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs, fx }).target.status, 'ESTIMATED');
+  assert.equal((await w.q.targetUnitPrice({ currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs })).reason, 'FX_REQUIRED');
+  assert.equal((await w.q.targetUnitPrice({ currency: 'EUR', qty: 200, targetMarginPct: '60', costInputs: inputs })).reason, 'NO_SELLING_PRICE');
+  assert.equal((await w.q.targetUnitPrice({ currency: 'EUR', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60' })).reason, 'NO_COST_INPUTS');
+  assert.equal((await w.q.targetUnitPrice({ currency: 'EUR', qty: 1, sellingPriceGross: '0.50', targetMarginPct: '95', costInputs: { freight_total: '50', duty_rate_pct: '0', import_vat_rate_pct: '0' } })).status, 'NOT_ACHIEVABLE');
+  assert.equal((await w.proc.assistant.call('target_price', { currency: 'USD' })).status, 'NEED_CLARIFICATION');
+  assert.equal((await w.proc.assistant.call('target_price', { currency: 'USD', qty: 200, sellingPriceGross: '3.00', targetMarginPct: '60', costInputs: inputs, fx })).target.status, 'ESTIMATED');
 });
 
 test('tracking from order to shelf: ordered, confirmed with a new date, delayed, partially received, closed', async () => {
   const w = await makeWorld();
   const po = await orderedPo(w, { qty: 200, expectedDate: '2026-10-20' });
-  assert.equal(w.q.inTransit().orderedNotReceived.lines[0].delayed, false);
+  assert.equal((await w.q.inTransit()).orderedNotReceived.lines[0].delayed, false);
   await w.mk(w.c.confirmOrder, buyer, { poId: po.id, confirmedDate: '2026-10-14' }); // supplier moved the date earlier than "today": already late
-  assert.equal(w.q.delayedOrders('2026-10-16')[0].daysLate, 2);
-  assert.equal(w.q.inTransit().orderedNotReceived.lines[0].delayed, true);
-  assert.equal(w.q.purchaseOrder(po.id).dateChanges[0].from, '2026-10-20');
+  assert.equal((await w.q.delayedOrders('2026-10-16'))[0].daysLate, 2);
+  assert.equal((await w.q.inTransit()).orderedNotReceived.lines[0].delayed, true);
+  assert.equal((await w.q.purchaseOrder(po.id)).dateChanges[0].from, '2026-10-20');
 });

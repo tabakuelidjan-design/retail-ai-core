@@ -23,7 +23,9 @@ create table proc_items (
   status text not null default 'ACTIVE' check (status in ('PROSPECT', 'ACTIVE', 'ARCHIVED')),
   reorder_point integer check (reorder_point is null or reorder_point >= 0),
   reorder_qty integer check (reorder_qty is null or reorder_qty > 0),
+  attachments jsonb not null default '[]'::jsonb check (jsonb_typeof(attachments) = 'array'), -- photo / document REFERENCES, never file content
   version integer not null default 1,
+  ord bigint generated always as identity,
   created_at timestamptz not null default now(),
   unique (id, merchant_id),
   unique (merchant_id, sku)
@@ -36,6 +38,7 @@ create table proc_locations (
   name text not null check (length(btrim(name)) between 1 and 100),
   type text not null check (type in ('STORE', 'BACKROOM', 'WAREHOUSE', 'TRANSIT', 'QUARANTINE')),
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   unique (id, merchant_id)
 );
 create unique index proc_locations_name_uq on proc_locations (merchant_id, lower(name));
@@ -50,11 +53,13 @@ create table proc_suppliers (
   deposit_bps integer check (deposit_bps is null or deposit_bps between 0 and 10000),
   lead_time_days integer check (lead_time_days is null or lead_time_days between 0 and 730),
   -- soft link to Finance's identity record (fin_companies); Finance owns supplier identity, this table owns the commercial profile
-  finance_company_id uuid,
+  finance_company_id text,
   contacts jsonb not null default '[]'::jsonb check (jsonb_typeof(contacts) = 'array'),
+  documents jsonb not null default '[]'::jsonb check (jsonb_typeof(documents) = 'array'), -- certificates, contracts, price lists (references + expiry)
   status text not null default 'ACTIVE' check (status in ('ACTIVE', 'INACTIVE')),
   version integer not null default 1,
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   unique (id, merchant_id)
 );
 create unique index proc_suppliers_name_uq on proc_suppliers (merchant_id, lower(name));
@@ -68,6 +73,7 @@ create table proc_supplier_items (
   moq integer check (moq is null or moq > 0),
   lead_time_days integer check (lead_time_days is null or lead_time_days between 0 and 730),
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   foreign key (supplier_id, merchant_id) references proc_suppliers (id, merchant_id),
   foreign key (item_id, merchant_id) references proc_items (id, merchant_id),
   unique (merchant_id, supplier_id, item_id)
@@ -89,9 +95,11 @@ create table proc_quotes (
   status text not null default 'RECEIVED' check (status in ('RECEIVED', 'SELECTED', 'SUPERSEDED')),
   provenance text not null check (provenance in ('SUPPLIER_CLAIM', 'USER_PROVIDED', 'DOCUMENT_OBSERVED')),
   reason text,
+  evidence jsonb not null default '[]'::jsonb check (jsonb_typeof(evidence) = 'array'),
   recorded_by text not null,
   version integer not null default 1,
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   foreign key (supplier_id, merchant_id) references proc_suppliers (id, merchant_id),
   foreign key (item_id, merchant_id) references proc_items (id, merchant_id),
   unique (id, merchant_id),
@@ -121,6 +129,7 @@ create table proc_purchase_orders (
   created_by text not null,
   version integer not null default 1,
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   foreign key (supplier_id, merchant_id) references proc_suppliers (id, merchant_id),
   foreign key (destination_location_id, merchant_id) references proc_locations (id, merchant_id),
   unique (id, merchant_id),
@@ -131,6 +140,7 @@ create table proc_po_lines (
   merchant_id uuid not null,
   po_id uuid not null,
   line_id text not null,
+  position integer not null check (position >= 1),
   item_id uuid not null,
   qty integer not null check (qty > 0),
   unit_price_micro bigint not null check (unit_price_micro > 0),
@@ -178,6 +188,7 @@ create table proc_receipts (
   approval_id text not null,
   recorded_by text not null,
   created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
   foreign key (po_id, merchant_id) references proc_purchase_orders (id, merchant_id),
   foreign key (location_id, merchant_id) references proc_locations (id, merchant_id),
   unique (merchant_id, idempotency_key)
@@ -201,6 +212,7 @@ create table proc_stock_movements (
   unit_cost_eur_micro bigint check (unit_cost_eur_micro is null or unit_cost_eur_micro >= 0),
   actor_id text not null,
   approval_id text,
+  ord bigint generated always as identity,
   foreign key (item_id, merchant_id) references proc_items (id, merchant_id),
   foreign key (location_id, merchant_id) references proc_locations (id, merchant_id),
   check ((kind in ('RESERVE', 'RELEASE')) = (bucket = 'RESERVED')),
@@ -254,7 +266,8 @@ create table proc_events (
   object jsonb not null,
   approval jsonb,
   detail jsonb not null default '{}'::jsonb,
-  idempotency_key text not null
+  idempotency_key text not null,
+  ord bigint generated always as identity
 );
 create index proc_events_object_idx on proc_events (merchant_id, ((object ->> 'id')));
 create trigger proc_events_immutable before update or delete on proc_events for each row execute function proc_forbid_change();
@@ -287,6 +300,7 @@ create table proc_incidents (
   description text not null check (length(btrim(description)) between 5 and 1000),
   at timestamptz not null default now(),
   recorded_by text not null,
+  ord bigint generated always as identity,
   foreign key (supplier_id, merchant_id) references proc_suppliers (id, merchant_id),
   foreign key (po_id, merchant_id) references proc_purchase_orders (id, merchant_id)
 );

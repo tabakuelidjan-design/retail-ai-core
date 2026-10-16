@@ -87,7 +87,7 @@ try {
   mustOk('a purchase order with a line is created', sql(`
     insert into proc_purchase_orders (id, merchant_id, number, supplier_id, currency, expected_date, original_expected_date, destination_location_id, total_minor, created_by)
       values ('00000000-0000-0000-0000-0000000d0001','${M1}','PO-2026-0001','${S1}','USD','2026-11-20','2026-11-20','${L1}',10000,'u');
-    insert into proc_po_lines (merchant_id, po_id, line_id, item_id, qty, unit_price_micro, total_minor, price_source) values ('${M1}','00000000-0000-0000-0000-0000000d0001','L1','${I1}',200,500000,10000,'MANUAL');`));
+    insert into proc_po_lines (merchant_id, po_id, line_id, position, item_id, qty, unit_price_micro, total_minor, price_source) values ('${M1}','00000000-0000-0000-0000-0000000d0001','L1',1,'${I1}',200,500000,10000,'MANUAL');`));
   const PO = `update proc_purchase_orders set status = `;
   const where = ` where id = '00000000-0000-0000-0000-0000000d0001';`;
   mustFail('DRAFT -> ORDERED is an illegal transition', sql(`${PO}'ORDERED'${where}`), /illegal purchase order transition/);
@@ -97,7 +97,7 @@ try {
   mustFail('received above ordered is refused', sql(`update proc_po_lines set qty_received = 201 where po_id = '00000000-0000-0000-0000-0000000d0001';`), /proc_po_line_received_le_ordered/);
   mustFail('defective above received is refused', sql(`update proc_po_lines set qty_received = 10, qty_defective = 11;`), /proc_po_line_defective_le_received/);
   mustOk('a partial receipt (120 of 200) is accepted', sql(`update proc_po_lines set qty_received = 120, qty_defective = 2;`));
-  mustFail('a PO line cannot point to another merchant\'s order (tenant FK)', sql(`insert into proc_po_lines (merchant_id, po_id, line_id, item_id, qty, unit_price_micro, total_minor, price_source) values ('${M2}','00000000-0000-0000-0000-0000000d0001','L9','${I2}',1,1,0,'MANUAL');`), /foreign key/);
+  mustFail('a PO line cannot point to another merchant\'s order (tenant FK)', sql(`insert into proc_po_lines (merchant_id, po_id, line_id, position, item_id, qty, unit_price_micro, total_minor, price_source) values ('${M2}','00000000-0000-0000-0000-0000000d0001','L9',2,'${I2}',1,1,0,'MANUAL');`), /foreign key/);
   mustFail('PO number is unique per merchant', sql(`insert into proc_purchase_orders (merchant_id, number, supplier_id, currency, expected_date, original_expected_date, destination_location_id, total_minor, created_by) values ('${M1}','PO-2026-0001','${S1}','USD','2026-11-20','2026-11-20','${L1}',1,'u');`), /duplicate key/);
   mustFail('a paid instalment must carry a payment reference', sql(`insert into proc_po_schedule (merchant_id, po_id, kind, amount_minor, due_event, status) values ('${M1}','00000000-0000-0000-0000-0000000d0001','DEPOSIT',3000,'ON_ORDER','PAID_LINKED');`), /violates check constraint/);
 

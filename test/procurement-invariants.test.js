@@ -7,8 +7,8 @@ import { lineTotalMinor, microOf, microToString, shareMinor, pctToBps } from '..
 // mulberry32: a fixed seed makes any failure reproducible
 const rng = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
-function checkLedger(w, label) {
-  const mvs = w.store.listMovements(w.merchantId);
+async function checkLedger(w, label) {
+  const mvs = (await w.store.listMovements(w.merchantId));
   for (const b of balancesFrom(mvs).values()) {
     assert.ok(b.onHand >= 0, `${label}: negative on-hand ${JSON.stringify(b)}`);
     assert.ok(b.reserved >= 0, `${label}: negative reserved ${JSON.stringify(b)}`);
@@ -22,7 +22,7 @@ function checkLedger(w, label) {
   for (const m of mvs) if (m.groupId && /^(TRANSFER|DEFECT_QUARANTINE)/.test(m.kind)) groups.set(m.groupId, (groups.get(m.groupId) ?? 0) + m.delta);
   for (const [g, sum] of groups) assert.equal(sum, 0, `${label}: group ${g} does not net to zero`);
   // order lines agree with the ledger: received = sum of RECEIPT movements for that line, and never above ordered
-  for (const po of w.q.purchaseOrders()) for (const l of po.lines) {
+  for (const po of (await w.q.purchaseOrders())) for (const l of po.lines) {
     const got = mvs.filter((m) => m.kind === 'RECEIPT' && m.reference?.id === po.id && m.reference.lineId === l.id).reduce((s, m) => s + m.delta, 0);
     assert.equal(l.qtyReceived, got, `${label}: ${po.number}/${l.id} received quantity disagrees with the ledger`);
     assert.ok(l.qtyReceived <= l.qty, `${label}: over-received`);
@@ -48,25 +48,26 @@ test('random operations, valid and invalid, never break a ledger invariant', asy
   for (let step = 0; step < 400; step++) {
     const item = pick([A, B]); const kind = Math.floor(r() * 7);
     const attempt = async () => {
-      if (kind === 0) { const po = pick(pos); const lineId = item === A ? 'L1' : 'L2'; const cur = w.q.purchaseOrder(po.id); await w.c.receiveGoods(wh, key(), { poId: po.id, receivedAt: '2026-11-20', lines: [{ poLineId: lineId, qtyAccepted: qty(80), qtyDefective: r() < 0.3 ? qty(3) : 0 }], quarantineLocationId: w.locs.quarantine.id, approval: approval('STOCK_SALES.receive_goods', cur.id) }); }
+      if (kind === 0) { const po = pick(pos); const lineId = item === A ? 'L1' : 'L2'; const cur = (await w.q.purchaseOrder(po.id)); await w.c.receiveGoods(wh, key(), { poId: po.id, receivedAt: '2026-11-20', lines: [{ poLineId: lineId, qtyAccepted: qty(80), qtyDefective: r() < 0.3 ? qty(3) : 0 }], quarantineLocationId: w.locs.quarantine.id, approval: approval('STOCK_SALES.receive_goods', cur.id) }); }
       else if (kind === 1) { const loc = pick(L); await w.c.adjustStock(wh, key(), { itemId: item, locationId: loc, delta: (r() < 0.5 ? -1 : 1) * qty(40), reason: 'random adjustment for the invariant test', approval: productApproval('STOCK_SALES.adjust_on_hand', `${item}@${loc}`) }); }
       else if (kind === 2) await w.c.transferStock(wh, key(), { itemId: item, fromLocationId: pick(L), toLocationId: pick(L), qty: qty(60) });
       else if (kind === 3) await w.c.reserveStock(wh, key(), { itemId: item, locationId: pick(sellable), qty: qty(30), reference: { type: 'order', id: `o-${step}` } });
       else if (kind === 4) await w.c.releaseStock(wh, key(), { itemId: item, locationId: pick(sellable), qty: qty(30), reference: { type: 'order', id: `o-${step}` } });
       else if (kind === 5) await w.c.quarantineDefect(wh, key(), { itemId: item, fromLocationId: pick(sellable), quarantineLocationId: w.locs.quarantine.id, qty: qty(10), reason: 'random defect found on shelf' });
-      else { const loc = pick(sellable); const cur = balancesFrom(w.store.listMovements(w.merchantId)).get(`${item}|${loc}`)?.onHand ?? 0; const countId = key('c'); await w.c.recordCount(wh, key(), { locationId: loc, countId, counts: [{ itemId: item, counted: Math.max(0, cur + Math.floor(r() * 7) - 3), reason: 'random count variance' }], approval: productApproval('STOCK_SALES.adjust_on_hand', `count:${countId}`) }); }
+      else { const loc = pick(sellable); const cur = balancesFrom((await w.store.listMovements(w.merchantId))).get(`${item}|${loc}`)?.onHand ?? 0; const countId = key('c'); await w.c.recordCount(wh, key(), { locationId: loc, countId, counts: [{ itemId: item, counted: Math.max(0, cur + Math.floor(r() * 7) - 3), reason: 'random count variance' }], approval: productApproval('STOCK_SALES.adjust_on_hand', `count:${countId}`) }); }
     };
     try { await attempt(); accepted++; } catch (e) {
       assert.ok(e.code && e.name === 'ProcurementError', `step ${step}: a refusal must be a coded ProcurementError, got ${e.stack}`);
       refused++;
     }
-    checkLedger(w, `step ${step}`);
+    await checkLedger(w, `step ${step}`);
   }
   assert.ok(accepted > 60 && refused > 40, `the run exercised both paths (accepted ${accepted}, refused ${refused})`);
   // read side agrees with the ledger
   for (const id of [A, B]) {
-    const p = w.q.stockPosition(id);
-    const sum = w.store.listMovements(w.merchantId, { itemId: id }).filter((m) => m.bucket === 'ON_HAND' && w.q.locations().find((l) => l.id === m.locationId).type !== 'TRANSIT').reduce((s, m) => s + m.delta, 0);
+    const p = (await w.q.stockPosition(id));
+    const locs = await w.q.locations();
+    const sum = (await w.store.listMovements(w.merchantId, { itemId: id })).filter((m) => m.bucket === 'ON_HAND' && locs.find((l) => l.id === m.locationId).type !== 'TRANSIT').reduce((s, m) => s + m.delta, 0);
     assert.equal(p.physical, sum);
     assert.equal(p.available, p.sellable - p.reserved);
   }
@@ -79,11 +80,11 @@ test('the ledger offers no way to change history', async () => {
   assert.throws(() => w.store.update('receipts', w.merchantId, 'x', {}, 1), /never updated/);
   const po = (await import('./procurement-fixtures.js')).orderedPo;
   await po(w, { qty: 100 });
-  const view = w.store.listMovements(w.merchantId); view.push({ fake: true });
-  assert.equal(w.store.listMovements(w.merchantId).length, 0, 'a caller cannot mutate the store through what it read');
-  const out = w.q.purchaseOrder(w.q.purchaseOrders()[0].id);
+  const view = (await w.store.listMovements(w.merchantId)); view.push({ fake: true });
+  assert.equal((await w.store.listMovements(w.merchantId)).length, 0, 'a caller cannot mutate the store through what it read');
+  const out = (await w.q.purchaseOrder((await w.q.purchaseOrders())[0].id));
   out.status = 'RECEIVED';
-  assert.equal(w.q.purchaseOrders()[0].status, 'ORDERED');
+  assert.equal((await w.q.purchaseOrders())[0].status, 'ORDERED');
 });
 
 test('money arithmetic is exact: micro prices, rounding half away from zero, shares that add up', () => {
