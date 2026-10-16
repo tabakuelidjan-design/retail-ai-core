@@ -36,7 +36,7 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, branding = null, campaigns = null, creation = null, env = process.env }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
@@ -55,6 +55,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
       row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE),
       row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS),
+      row('procurement', 'Stock / Achats', procurement ? 'DISPONIBLE' : 'NON RACCORDÉ', procurement ? 'Commandes d’achat, réceptions, stock : consultation par Parle à Nordla ; commander, approuver et réceptionner passent par l’écran Achats (approbation nommée).' : NOT_CONNECTED.STOCK_SALES),
       row('sourcing', 'China Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
       row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles de marque en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
       row('marketing', 'Marketing', campaigns ? 'LIMITÉ' : 'NON RACCORDÉ', 'Proposition de campagne (contrat, contrôles marque et stock) et décision humaine. Aucune diffusion possible.'),
@@ -70,13 +71,13 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     if (!p.startsWith('/api/core/')) return false;
     try {
       if (p === '/api/core/status' && m === 'GET') {
-        json(res, 200, { ...(await status()), connected: { china_sourcing: 'CONNECTED', socle_decision: runtime ? 'CONNECTED' : 'NOT_CONFIGURED', finance: finance ? `READ_ONLY (${finance.source})` : 'NOT_CONNECTED', analytics: analytics ? `READ_ONLY (${analytics.source})` : 'NOT_CONNECTED' }, not_connected: Object.fromEntries(Object.entries(NOT_CONNECTED).filter(([k]) => !((k === 'FINANCE' && finance) || (k === 'ANALYTICS' && analytics)))), executes_actions: false, you: { role: actor.role, auth: actor.userId ? 'NORDLA_SESSION' : 'LOCAL_TOKEN' } });
+        json(res, 200, { ...(await status()), connected: { china_sourcing: 'CONNECTED', socle_decision: runtime ? 'CONNECTED' : 'NOT_CONFIGURED', finance: finance ? `READ_ONLY (${finance.source})` : 'NOT_CONNECTED', stock_achats: procurement ? 'READ_ONLY' : 'NOT_CONNECTED', analytics: analytics ? `READ_ONLY (${analytics.source})` : 'NOT_CONNECTED' }, not_connected: Object.fromEntries(Object.entries(NOT_CONNECTED).filter(([k]) => !((k === 'FINANCE' && finance) || (k === 'ANALYTICS' && analytics) || (k === 'STOCK_SALES' && procurement)))), executes_actions: false, you: { role: actor.role, auth: actor.userId ? 'NORDLA_SESSION' : 'LOCAL_TOKEN' } });
         return true;
       }
       if (p === '/api/core/ask' && m === 'POST') {
         const b = await body(req);
         const conversation = 'conversation' in b ? validateConversation(b.conversation) : undefined; // opt-in; client state is rebuilt, never trusted
-        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, conversation }));
+        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, procurement, conversation }));
         return true;
       }
       if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules()); return true; }

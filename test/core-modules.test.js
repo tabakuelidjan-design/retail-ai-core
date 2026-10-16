@@ -66,7 +66,7 @@ test('Nordla single entry: 7 modules with their REAL state, Finance / Analytics 
     assert.equal((await w.call('GET', '/api/core/modules')).status, 401, 'no session, nothing');
     const owner = await w.login(PO); const buyer = await w.login(PB);
     const mods = (await w.call('GET', '/api/core/modules', { who: owner })).body.modules;
-    assert.deepEqual(mods.map((m) => [m.key, m.state]), [['core', 'DISPONIBLE'], ['finance', 'LECTURE SEULE'], ['analytics', 'LECTURE SEULE'], ['sourcing', 'DISPONIBLE'], ['branding', 'À APPROUVER'], ['marketing', 'LIMITÉ'], ['creative', 'LIMITÉ']]);
+    assert.deepEqual(mods.map((m) => [m.key, m.state]), [['core', 'DISPONIBLE'], ['finance', 'LECTURE SEULE'], ['analytics', 'LECTURE SEULE'], ['procurement', 'DISPONIBLE'], ['sourcing', 'DISPONIBLE'], ['branding', 'À APPROUVER'], ['marketing', 'LIMITÉ'], ['creative', 'LIMITÉ']]);
     assert.match(mods.find((m) => m.key === 'creative').detail, /Génération IA : aucun fournisseur connecté/, 'AI generation stays said as not connected');
     assert.deepEqual(mods.filter((m) => m.offline).map((m) => m.key), ['sourcing'], 'only Sourcing is said to work offline');
     // Finance and Analytics through Parle à Nordla, with sources
