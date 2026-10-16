@@ -32,8 +32,7 @@ jobs:
         run: |
           test -f "$SOCIAL_E_DIR/src/social/service.js" || { echo "::error title=E checkout missing::the compatibility tests would be skipped"; exit 1; }
           node --test test/asset-library.test.js test/studio-compose.test.js test/social-compat.test.js test/habb-reserve-check.test.js test/studio-ai-layer.test.js | tee /tmp/d.log
-          echo "::notice title=D suites (node ${{ matrix.node }})::$(grep -E '^ℹ (tests|pass|fail|skipped)' /tmp/d.log | tr '
-' ' ')"
+          echo "::notice title=D suites (node ${{ matrix.node }})::$(grep -E '^ℹ (tests|pass|fail|skipped)' /tmp/d.log | tr '\n' ' ')"
           grep -q '^ℹ skipped 0' /tmp/d.log || { echo "::error title=skipped::a D test was skipped"; exit 1; }
           if python3 -c "import PIL" 2>/dev/null; then echo "::notice title=jpeg decode check::Pillow present: SC-1 decoded the JPEG"; else echo "::notice title=jpeg decode check::Pillow ABSENT on this runner: SC-1 checked the headers and the size only"; fi
       - name: Branding, Marketing and Creative end-to-end suites (existing modules, unchanged) - counted per file
