@@ -27,7 +27,7 @@ const ACTIVE_MODULE_COMMAND = { [M.CHINA_SOURCING]: 'summarize_case', [M.FINANCE
  */
 export function routeUtterance(text, ctx = {}) {
   const t = norm(text);
-  const rule = RULES.find((r) => r.re.test(t));
+  const rule = [...RULES, ...(ctx.extraRules ?? [])].find((r) => r.re.test(t)); // extraRules (e.g. Stock / Achats) are tried only after every built-in rule
   if (!rule) return { status: STATUS.UNROUTABLE, text, reason: 'no module claims this sentence' };
 
   // "résume ce dossier": the active context decides the module (never a default)
