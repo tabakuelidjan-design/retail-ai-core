@@ -115,12 +115,16 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
     try { return JSON.parse(await readFile(join(sourcingDir, `${id}.json`), 'utf8')); } catch { throw new ProcurementError('INVALID_INPUT', 'that Sourcing case could not be read'); }
   }
 
-  async function api(req, res, url) {
+  // `signedIn`: a user already authenticated by the hosting server (Nordla session, see handleApi); without it the personal access token is required
+  async function api(req, res, url, signedIn = null) {
     const ip = clientIp(req);
-    if (blocked(ip)) return send(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
-    const given = req.headers['x-nordla-token'];
-    const user = given ? users.find((u) => sameToken(given, u.token)) : null;
-    if (!user) { failed(ip); return send(res, 401, { error: 'UNAUTHORIZED' }); }
+    let user = signedIn;
+    if (!user) {
+      if (blocked(ip)) return send(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
+      const given = req.headers['x-nordla-token'];
+      user = given ? users.find((u) => sameToken(given, u.token)) : null;
+      if (!user) { failed(ip); return send(res, 401, { error: 'UNAUTHORIZED' }); }
+    }
     const actor = { id: user.id, role: user.role }; const p = url.pathname; const m = req.method;
     let r;
 
@@ -217,7 +221,16 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
     return send(res, 404, { error: 'NOT_FOUND' });
   }
 
-  return async function handler(req, res) {
+  /** Hosted mode: the Nordla server has ALREADY authenticated the person (session + CSRF + module access) and mounts this API under /api/procurement/.
+   *  `user` = { id, role, name?, canApprove?, approverRole? } built by the host from that session; no token is read or accepted here. */
+  async function handleApi(req, res, url, user) {
+    try {
+      const u = new URL(url); u.pathname = u.pathname.replace(/^\/api\/procurement(?=\/)/, '/api');
+      return await api(req, res, u, user);
+    } catch (e) { return fail(res, e); }
+  }
+
+  const handler = async function handler(req, res) {
     try {
       if (!hostOk(req)) return send(res, 421, { error: 'HOST_NOT_ALLOWED' });
       const url = new URL(req.url, 'http://local');
@@ -229,6 +242,8 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
       try { const data = await asset(name); res.writeHead(200, { 'content-type': MIME[extname(name)], 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); return res.end(data); } catch { return send(res, 404, { error: 'NOT_FOUND' }); }
     } catch (e) { return fail(res, e); }
   };
+  handler.handleApi = handleApi;
+  return handler;
 }
 
 export function listen(handler, { host = '127.0.0.1', port = 0 } = {}) {

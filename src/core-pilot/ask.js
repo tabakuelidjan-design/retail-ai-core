@@ -10,6 +10,7 @@ import { recognizeFieldIntent, isActionRequest, INTENT_LABEL } from './field-int
 import { buildFieldSnapshot, showVerdict } from './field-facts.js';
 import { buildFieldAnswer } from './field-answers.js';
 import { followUpIntent, stepConversation } from './field-context.js';
+import { procurementAnswer } from './procurement-answers.js';
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
@@ -32,7 +33,7 @@ const decisionSource = (v) => ({ kind: 'core_journal', ref: v.entry.id, case: v.
  * @param {{ text: string, caseId?: string|null }} q
  * @param {{ runtime: object|null, getCase: (id)=>Promise<object|null>, externals?: object, actor: object, now?: Date }} ctx
  */
-export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null, conversation }) {
+export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null, procurement = null, conversation }) {
   const t = norm(text);
   if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
   const limits = [];
@@ -56,6 +57,9 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     const off = Object.values(NOT_CONNECTED).filter((v, i, a) => a.indexOf(v) === i);
     return { status: 'ANSWERED', answer: ['Relié à ce serveur : China Sourcing (dossiers fournisseurs) et le journal de décisions du Core.', 'Pas encore relié :', ...off.map((o) => `• ${o}`)].join(String.fromCharCode(10)), sources: [], limits: off };
   }
+  // ---- Stock / Achats (read-only tools over the persistent procurement store); without it, the router below says the stock is NOT connected
+  if (procurement) { const pa = await procurementAnswer(text, procurement); if (pa) return pa; }
+
   // ---- field questions on the open case (what is known / missing / risky, margin, next check, why this recommendation): read-only, no journal entry, no Finance / Analytics reading
   const scope = { merchantId: runtime?.merchantId ?? 'local', caseId };
   let fi = recognizeFieldIntent(text);

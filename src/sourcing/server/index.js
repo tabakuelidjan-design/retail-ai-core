@@ -2,6 +2,7 @@
 // Launch the China Sourcing field mode:  npm run sourcing
 // Binds 127.0.0.1 by default. To use it from a phone on your own network set SOURCING_HOST (e.g. 0.0.0.0): a token of 24+ characters is then mandatory.
 // Nothing is deployed, nothing is sent to Shopify/Supabase; cases are local files under data/local/sourcing.
+import { buildHostedProcurement } from '../../procurement/server/hosted.js';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, stat, statfs, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -46,7 +47,7 @@ export function buildHostedGate(env, hosted, services = null) {
 
 /** Nordla Core on this server: the merchant's core-decision.json + the decision journal in the data directory. Any problem (no config,
  *  a journal that does not verify) disables the Core with its reason and leaves China Sourcing working; the journal is never touched. */
-export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, root = join(HERE, '..', '..', '..') }) {
+export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, procurement = null, root = join(HERE, '..', '..', '..') }) {
   const { config, error } = await loadCoreConfig(env, root);
   if (!config) return { core: createCoreHttp({ runtime: null, configError: `CORE_NOT_CONFIGURED: ${error}`, store }), status: `Nordla Core OFF (${error})` };
   // the journal's guarantees need a volume on Railway (durability) and one service (one writer): refuse to record decisions where they would be lost
@@ -55,7 +56,7 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const runtime = createCoreRuntime({ merchantId, config, journal: createFileJournal({ merchantId, file: join(dir, 'core', 'decision-journal.jsonl') }) });
   try { await runtime.ready(); } catch (e) { return { core: createCoreHttp({ runtime: null, configError: e.code ? `${e.code}: ${e.message}` : 'JOURNAL_UNREADABLE', store }), status: `Nordla Core OFF: ${e.message}` }; }
   const externals = async () => { try { const g = await safety.get(); return g?.alerts ? { safety: g } : {}; } catch { return {}; } };
-  const readers = injected ?? await buildReaders({ env, dir, merchantId, log }); // injected: tests / the isolated demo (synthetic data) only
+  const readers = { ...(injected ?? await buildReaders({ env, dir, merchantId, log })), procurement }; // injected: tests / the isolated demo (synthetic data) only
   const { createBrandingService, loadBrandProposal } = await import('../../core-pilot/branding.js');
   const { createCampaignService } = await import('../../core-pilot/campaign.js');
   let branding = null; // Branding needs the merchant's Nordla UUID (hosted mode); a local PC server has none: Branding is then "not connected", never a crash
@@ -101,15 +102,18 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const safety = createSafetyGateAdapter({ cacheDir: join(dir, 'safety-gate'), ...(fetchImpl ? { fetchImpl } : {}) });
   const mp = await loadMerchantProfile(env, join(HERE, '..', '..', '..')); const merchantProfile = mp.profile; // explicit choice (SOURCING_MERCHANT_ID / SOURCING_MERCHANT_PROFILE): no merchant is named in this code
   const store = createFileStore(join(dir, 'cases'));
-  const core = await buildCore({ env, dir, merchantId: hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local', store, safety, log, readers: services?.readers ?? null });
+  const merchantKey = hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local';
+  const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
+  const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
   let backups = null;
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
   log(`China Sourcing field mode: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}   (${hosted ? `HOSTED for ${hosted.origin}: Core identity sign-in (module sourcing, merchant ${hosted.merchantId}), Supabase project ${hosted.supabaseRef ?? 'not pinned'}, no development token` : host === '127.0.0.1' ? 'loopback only' : `listening on ${host}: token required`})`);
   log(merchantProfile ? `Merchant profile: ${merchantProfile.merchantId} (${mp.source === 'FILE' ? 'file' : 'config/merchants'}), status ${merchantProfile.status ?? 'n/a'}` : `No merchant profile loaded${mp.error ? ` (${mp.error})` : ''}: the fit checklist will say so. Set SOURCING_MERCHANT_ID to choose one.`);
   log(core.status);
+  log(proc.status);
   log(`Process: Node ${process.versions.node}, uid ${process.getuid?.() ?? 'n/a'}${process.getuid?.() === 0 ? ' (ROOT: the image entrypoint was bypassed - see deploy/sourcing/Dockerfile)' : ''}, data ${dir}.`);
   log(`Access: ${hosted ? 'Nordla session (sign-in)' : env.SOURCING_TOKEN && env.SOURCING_TOKEN.length >= 24 ? 'token from SOURCING_TOKEN' : `token in ${join(dir, 'token.txt')}`} (never printed). Cases: ${join(dir, 'cases')}. Nothing is published or sent anywhere.`);
   backups = scheduleBackups({ env, dir, log });

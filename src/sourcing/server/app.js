@@ -1,5 +1,6 @@
 // HTTP app for China Sourcing field mode. The decision logic lives in src/sourcing/core and runs IN THE BROWSER too (offline): this server only adds what a phone cannot do
 // alone - cases kept on disk, the Safety Gate cache, PDF text, optional ECB rates and an optional AI provider. Every /api route needs the token.
+import { procurementUserFor } from '../../procurement/server/hosted.js';
 import { readFile, readdir } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { join, extname } from 'node:path';
@@ -48,7 +49,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
   return { ok: false, status: st.last_success_at == null ? 'NO_OFFSITE_COPY_YET' : 'STALE', ...base };
 }
 
-export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -76,6 +77,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     const p = url.pathname; const m = req.method;
     if (core && p.startsWith('/api/core/')) return core.handle(req, res, url, actor); // Nordla Core: Subject -> Levers -> Decision -> human -> follow-up, Parle à Nordla (src/core-pilot)
+    if (procurement && p.startsWith('/api/procurement/')) { const user = procurementUserFor(actor); return user ? procurement.handleApi(req, res, url, user) : json(res, 403, { error: 'FORBIDDEN', message: 'your role has no access to Stock / Achats' }); } // Stock / Achats: same sign-in, same volume (src/procurement/server/hosted.js)
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });
     // ---- photos of a case (durable server copy; the phone keeps its own). No delete route: a photo is never removed through the API.
