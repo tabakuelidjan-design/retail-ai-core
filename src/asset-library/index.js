@@ -7,3 +7,4 @@ export {
   ASSET_HANDOFF, CAMPAIGN_HANDOFF, CONTRACT_VERSION, PRODUCED_BY, VALIDATION_STATUS, ITEM_KIND, validateAssetHandoff, validateCampaignHandoff, assetHandoffFor,
 } from './contract.js';
 export { checkEditorialPlan, assertEditorialPlan, DEFAULT_COUNTS } from './editorial.js';
+export { buildSocialProposal, writeDeliveryPackage, lintClaimsLikeE, ProposalError, PROPOSAL_SCHEMA } from './social-proposal.js';

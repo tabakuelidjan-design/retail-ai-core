@@ -8,7 +8,8 @@ if (!planPath || !cataloguePath) { console.error('usage: node tools/habb-editori
 const plan = JSON.parse(readFileSync(planPath, 'utf8'));
 const snap = JSON.parse(readFileSync(cataloguePath, 'utf8'));
 const catalogue = new Map(Object.entries(snap.products));
-const result = checkEditorialPlan(plan, { catalogue });
+// chantier E blocks every price except the coque's (owner-confirmed 2026-08-05): same rule here
+const result = checkEditorialPlan(plan, { catalogue, priceConfirmedFor: new Set([...catalogue.keys()].filter((k) => /coque/.test(k))) });
 console.log(JSON.stringify({ ok: result.ok, counts: result.counts, problems: result.problems }, null, 1));
 
 if (outPath) {

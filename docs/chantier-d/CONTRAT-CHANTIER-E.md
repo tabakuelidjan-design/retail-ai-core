@@ -2,7 +2,7 @@
 
 Version 1 · 2026-10-16 · code : `src/asset-library/contract.js` (validateurs partagés), tests : `test/asset-library.test.js` (AL-6 à AL-9).
 
-**Le chantier « E » n'est défini dans aucun document du dépôt** (recherche dans `docs/`, `src/`, `*.md`, historique git). Ce contrat est donc écrit sur les points d'accès qui existent déjà : le Socle Resource Resolver (`src/resources`, nature ASSET et CLAIM), la propriété des entités (`src/integration/ownership.js`) et le contrat de campagne de l'intégration (`buildCampaignContract`). Si E attend autre chose, c'est une décision à prendre avant tout raccordement (voir « Questions »).
+**Chantier E = Social Publishing** (`feature/social-publishing-e`, `docs/architecture/social-publishing-e-v1.md` §3). Son contrat réel est **`social-post-proposal.v1`** : c'est lui que D livre (`src/asset-library/social-proposal.js`). Les enregistrements `nordla.chantier-d.*` ci-dessous restent le format **interne** de D (suivi, droits, statuts) ; ils ne remplacent pas le contrat de E. Voir `LIVRAISON-D-VERS-E.md`.
 
 ## Principes
 
@@ -42,7 +42,6 @@ Contrôles supplémentaires côté D (`checkEditorialPlan`) : prix cités = prix
 
 Créés par D : `src/asset-library/*`, `test/asset-library.test.js`, `tools/habb-asset-index.mjs`, `tools/habb-editorial-check.mjs`, `docs/chantier-d/*`. Aucun fichier de `src/integration`, `src/sourcing`, `src/core-pilot`, `src/procurement`, ni du workflow CI n'est modifié.
 
-## Questions pour le propriétaire / E
+## Question restante
 
-1. Qu'est-ce que le chantier E exactement, et quel format attend-il (fichiers, API, table) ?
-2. Le contrat de campagne de l'intégration (`CampaignContract`) doit-il absorber ce `campaign-handoff`, ou coexister ?
+Le contrat de campagne de l'intégration (`CampaignContract`) doit-il absorber ce `campaign-handoff`, ou coexister ? (non bloquant : E ne le lit pas.)

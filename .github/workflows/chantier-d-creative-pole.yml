@@ -1,0 +1,39 @@
+name: chantier-d-creative-pole
+# Chantier D (branding / marketing / creative pole). Targeted suites, each file in its own process, on Node 20 and 24. Not the whole repository suite: that one runs on integration/**.
+# test/social-compat.test.js runs E's REAL code against D's output: chantier E's branch is checked out beside this one (SOCIAL_E_DIR). No secret, no provider, no network.
+on:
+  push:
+    branches: ['feature/chantier-d-**']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  targeted:
+    name: targeted (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/social-publishing-e
+          path: social-e
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm ci --no-audit --no-fund
+      - name: D suites (asset library, composer, D -> E compatibility)
+        env:
+          SOCIAL_E_DIR: ${{ github.workspace }}/social-e
+        run: node --test test/asset-library.test.js test/studio-compose.test.js test/social-compat.test.js
+      - name: Branding, Marketing and Creative end-to-end suites (existing modules, unchanged)
+        shell: bash
+        run: |
+          fail=0
+          for f in test/branding*.test.js test/marketing*.test.js test/creative-e2e*.test.js; do
+            timeout 900 node --test "$f" > "/tmp/$(basename "$f").log" 2>&1 || { echo "::error title=failed::$f"; tail -20 "/tmp/$(basename "$f").log"; fail=1; }
+          done
+          exit $fail

@@ -14,10 +14,11 @@ export const DEFAULT_COUNTS = Object.freeze({ posts: 8, stories: 14, reels: 3 })
 
 /**
  * @param plan campaign handoff
+ * @param opts.priceConfirmedFor optional Set of product refs whose price the owner confirmed (chantier E blocks every other price)
  * @param opts.catalogue Map product_ref -> { title, price_eur } read from Shopify (never typed by hand)
  * @param opts.counts expected counts; reels may be fewer when footage is missing, if `reels_blocked_reason` is given
  */
-export function checkEditorialPlan(plan, { catalogue, counts = DEFAULT_COUNTS, reelsBlockedReason = null } = {}) {
+export function checkEditorialPlan(plan, { catalogue, counts = DEFAULT_COUNTS, reelsBlockedReason = null, priceConfirmedFor = null } = {}) {
   validateCampaignHandoff(plan);
   const problems = [];
   const n = { posts: 0, stories: 0, reels: 0 };
@@ -31,7 +32,8 @@ export function checkEditorialPlan(plan, { catalogue, counts = DEFAULT_COUNTS, r
     const prose = `${it.hook}\n${it.caption ?? ''}\n${it.claims.map((c) => c.text).join('\n')}`;
     for (const m of prose.matchAll(PRICE)) {
       const amount = Number(m[1].replace(',', '.'));
-      if (product && Math.abs(amount - product.price_eur) > 1e-9) problems.push({ item: where, code: 'PRICE_MISMATCH', detail: `${m[0].trim()} vs ${product.price_eur}` });
+      if (priceConfirmedFor && !priceConfirmedFor.has(it.product_ref)) problems.push({ item: where, code: 'PRICE_NOT_CONFIRMED', detail: m[0].trim() });
+      else if (product && Math.abs(amount - product.price_eur) > 1e-9) problems.push({ item: where, code: 'PRICE_MISMATCH', detail: `${m[0].trim()} vs ${product.price_eur}` });
     }
     const motif = it.concept.match(FORBIDDEN_MOTIF);
     if (motif && !(product && FORBIDDEN_MOTIF.test(product.title))) problems.push({ item: where, code: 'FORBIDDEN_DECORATIVE_MOTIF', detail: motif[0] });
