@@ -1,5 +1,36 @@
 # Protocole de test Xiaomi — Nordla hébergé, PC éteint, données mobiles (répétition du 18 octobre)
 
+## Fiche du 18 octobre (version courte — le détail suit plus bas)
+
+Conditions : `sourcing-staging` actif et contrôlé (procédure §7–§10 vertes), **données de test uniquement**, aucune publication Shopify,
+aucune donnée de production. Adresse : `https://app.nordla.app` si le DNS est autorisé, sinon l'adresse Railway générée (elle ne
+change plus ensuite pour ce test).
+
+**Avant (PC allumé, ancienne adresse dans Firefox)** — rien ne doit être perdu :
+1. Chaque ancien dossier → réglages → **Exporter en JSON** ; l'écran doit dire **« N photo(s) sur N »** (si « absentes » : arrêt, me le
+   signaler). 2. Copier les fichiers exportés hors du téléphone (2 copies) + le dossier de données du PC sur une clé USB.
+3. **Ne jamais** vider Firefox ni « effacer les données du site » : l'ancienne adresse reste la copie de secours.
+
+**Test (Wi-Fi coupé, données mobiles, PC éteint)** — noter l'heure et le résultat de chaque ligne :
+| # | Action | Réussi si |
+|---|---|---|
+| 1 | Ouvrir l'adresse, se connecter avec **votre** compte staging | connecté, aucun jeton demandé |
+| 2 | Nouveau dossier fournisseur (nom de test) | « enregistré sur ce téléphone » |
+| 3 | 3 photos (appareil photo + galerie) | 3 vignettes, envoi signalé, indicateur « à jour » |
+| 4 | Notes, prix, quantité | visibles immédiatement |
+| 5 | Fermer complètement le navigateur, rouvrir | toujours connecté ; dossier, notes, 3 photos présents |
+| 6 | Mode avion → modifier une note → rouvrir le dossier | « hors ligne », modification gardée |
+| 7 | Réactiver les données mobiles | synchronisation seule, « à jour » |
+| 8 | Ordinateur (ou 2ᵉ navigateur) : ouvrir le même dossier | dossier **et 3 photos** présents côté serveur |
+| 9 | Menu → Nordla → **Parle à Nordla** (Finance / Analytics) | réponse avec **source, période, fraîcheur** ; « données indisponibles » est normal sur staging |
+| 10 | Nordla Core : analyser le dossier → décider avec une raison → fermer / rouvrir | la décision, votre nom et la raison sont toujours là (journal Core) |
+| 11 | **Récupérer** un ancien export (menu → Récupérer) | dossier et photos restaurés, **rien remplacé** (« garder les deux ») |
+| 12 | Revenir sur l'ancienne adresse (PC rallumé, Firefox) | anciens dossiers et photos **toujours là** |
+
+**Échec bloquant** : une photo ou une note perdue, une déconnexion inexpliquée, une réponse sans source, une erreur silencieuse →
+on note, on n'efface rien, on me transmet l'heure ; correction puis nouveau test. Le 18 n'est validé que si 1–12 sont réussis.
+
+
 But : prouver sur le **vrai téléphone** ce que les tests navigateur (Chromium 390 px) ne prouvent pas : écran tactile, appareil photo,
 réseau mobile réel, fermeture du navigateur, coupure / reprise du réseau. Rien n'est déclaré « prêt pour la Chine » sans ce test.
 
