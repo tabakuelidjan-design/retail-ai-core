@@ -12,12 +12,19 @@ les changements **réseau** (adresse générée, domaine) ne sont **pas** mis en
 *Workspace → Usage* : noter l'usage du mois de tout l'espace. *Usage Limits* : **alerte e-mail 8 USD**. Limite stricte 10 USD seulement
 si l'usage actuel laisse de la marge (elle arrête **tous** les services de l'espace et n'est pas un plafond absolu).
 
-## 2. Adresse publique (R, gratuit, avant les secrets)
-`sourcing-staging` → *Settings* → *Networking* → *Generate Domain* (appliqué immédiatement) → mettre en attente
-`SOURCING_PUBLIC_ORIGIN=https://<adresse générée>` (sans `/` final). **C'est la seule variable encore manquante : sans elle le service
-refuse de démarrer** (`HOSTED_ORIGIN_REQUIRED`). Si Railway refuse de générer l'adresse avant le premier déploiement : mettre
-`SOURCING_PUBLIC_ORIGIN=https://app.nordla.app` (le service démarre ; seul `/healthz` répondra sur l'adresse Railway), puis corriger
-après le §6 (un second « Deploy » de ce seul changement).
+## 2. Adresse publique — démarrage sans domaine Railway (aucune modification du code)
+Constat (16/10) : *Generate Domain* échoue tant que le service est en `staged-create` (`ServiceInstance not found`).
+Solution : mettre en attente **`SOURCING_PUBLIC_ORIGIN=https://app.nordla.app`** — l'adresse finale déjà retenue par le propriétaire,
+pas une adresse inventée. Au premier démarrage (vérifié dans le code et en simulation Docker) :
+- `/healthz` répond **avant** le contrôle d'hôte → le healthcheck Railway passe, le déploiement réussit ;
+- vérification du projet Supabase, journal Core, sauvegardes : **actifs** (indépendants de l'adresse) → §7–§9 réalisables ;
+- toute autre requête sur l'adresse `*.up.railway.app` → **421** : personne ne peut se connecter tant que l'adresse n'est pas la bonne
+  (fermé par défaut ; aucune protection désactivée).
+Après le premier déploiement (le service existe) : R génère l'adresse Railway (**port cible 8787**), puis **une** des deux suites :
+- **DNS autorisé** : domaine personnalisé `app.nordla.app` + CNAME / TXT (`domaine-app-nordla-app.md`) → **aucune** variable à changer ;
+- **DNS pas encore autorisé** : mettre en attente `SOURCING_PUBLIC_ORIGIN=https://<adresse générée>` → Deploy (ce seul changement,
+  seul `sourcing-staging` redémarre) ; plus tard, retour à `app.nordla.app` au moment du DNS.
+Le téléphone n'utilise que l'adresse **finale** du test (son stockage dépend de l'adresse).
 
 ## 3. Secrets (P seul — jamais dans un chat, un document ou un journal)
 Dans Railway, `sourcing-staging` → *Variables* → *New Variable*, puis **⋮ → Seal** sur chacune (scellée = illisible dans l'interface et
@@ -35,7 +42,7 @@ Dans GitHub → *Settings* → *Environments* → `supabase-staging` → *Add en
 `STAGING_SERVICE_ROLE_KEY` (la même clé service **staging**) et `STAGING_SOURCING_BACKUP_PASSPHRASE` (**la même** phrase que ci-dessus).
 
 ## 4. Dernière vérification du lot (R, lecture)
-Le lot = les 32 lignes A déjà auditées **+** 5 secrets **+** `SOURCING_PUBLIC_ORIGIN`, rien d'autre ; aucune ligne hors `sourcing-staging`.
+Le lot = les 32 lignes A déjà auditées **+** 5 secrets **+** `SOURCING_PUBLIC_ORIGIN=https://app.nordla.app`, rien d'autre ; aucune ligne hors `sourcing-staging`.
 Réponse attendue : nombre de lignes et « 0 ligne hors service » (sans aucune valeur).
 
 ## 5. Autorisation (P)
@@ -65,7 +72,7 @@ P écrit « run: true restauration autorisé » → I pousse `ops/staging-backup
 (*Review deployments*) → I lit le rapport (archive restaurée sur un runner GitHub, fichiers et journal vérifiés) → I remet `"run": false`.
 Échec (clé, phrase de passe, archive illisible) : rien n'est modifié nulle part ; staging reste « non opérationnel » jusqu'à correction.
 
-## 10. Sécurité puis Xiaomi (I, depuis un ordinateur)
+## 10. Sécurité puis Xiaomi (I, depuis un ordinateur, sur l'adresse servie après le §2)
 `/healthz` 200 · `/api/core/modules` 401 · `http://` → `https://` · en-têtes HSTS / CSP / `X-Frame-Options: DENY` · origine étrangère 403.
 Puis `docs/integration/protocole-test-xiaomi.md` (fiche du 18/10). `app.nordla.app` : accord DNS séparé (`domaine-app-nordla-app.md`).
 
