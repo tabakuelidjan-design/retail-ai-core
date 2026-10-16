@@ -114,3 +114,30 @@ Seul changement de propriété à déclarer : `ask.js` reçoit un second point d
 - Pour : changement confiné (4 nouveaux modules + 1 fichier modifié de ~35 lignes), flux existants non régressés (217 + 5 e2e), sécurité testée (non-écriture, isolation, injection, secrets, mutation), échec sûr en cas d’incompréhension.
 - Conditions : (a) ~~CI Linux verte~~ (obtenue : suite complète Linux + Windows verts, voir §4) ; (b) relecture par le propriétaire du libellé « GO sous conditions, mais avec un blocage dur » ; (c) ne pas présenter l’outil comme « intelligent » : c’est un lecteur de dossier à règles, avec ~75–80 % de reconnaissance estimée sur formulations nouvelles.
 - **NO-GO** si l’intégration devait inclure la voix Xiaomi ou un modèle de langage : rien n’en est prouvé ici.
+
+## 9. Phase 2 — intégration (GO conditionnel accepté par le propriétaire ; PR #12 reste en brouillon)
+**Commit destiné à la fusion : `fe0360b`** (inclut la fusion de `claude/nordla-core-p0` `c3aca99`, sans conflit).
+
+| Contrôle | Résultat |
+|---|---|
+| Conflits avec P0 | aucun (`git merge-tree` propre, puis fusion de P0 dans la branche) |
+| Autres branches (distantes et locales) / 43 worktrees touchant `ask.js`, `http.js`, `answers.js`, `decision.js`, `sourcing-purchase.js`, `sourcing-facts.js`, `router.js` | **aucune** ; aucune modification non commitée sur ces fichiers |
+| CI `nordla-integration-pre-china` (suite complète Node 24 + Node 20) sur `fe0360b` | **succès** |
+| CI `core-reliability` (suite complète Linux Node 24 + fiabilité Windows Node 24) sur `fe0360b` | **succès** |
+| CI `china-sourcing` (PR #12) sur `fe0360b` | **succès** |
+| Tests d'interface ajoutés (`core-field-assistant-contracts.test.js`, 8 tests) | verts : codes de blocage/verdicts ↔ libellés français, champs lus dans `assess()`, ids et effets des leviers Buying/Core, vue du journal Core, routage « résume ce dossier », forme JSON de la réponse (clés stables, opt-in `conversation`), imports **purs** des modules field (jamais runtime/journal/http/fs/réseau), validateur d'état client |
+
+### Dépendances : résolues ou précisément documentées
+| Dépendance | Statut | Détail |
+|---|---|---|
+| `verdictDisplay` (sourcing, `decision.js`) | **préparée, non appliquée** | branche isolée `origin/fix/sourcing-verdict-display` (`7a7ca2e`, issue de P0) : +1 champ additif, `verdict` inchangé, 3 tests ; relance sourcing/core : 691/693, les 2 échecs (`sourcing-field-v1-merchant-profile`, `sourcing-ui-syntax`) échouent à l'identique sur P0 pur dans ce worktree (non causés par le patch). Pas de PR : à adopter par le propriétaire de `decision.js`. Entre-temps, `displayVerdict()` protège l'affichage. |
+| Multi-tours dans `http.js` | **préparée, non appliquée** | `validateConversation` livré dans la PR (testé) ; `core-field-assistant-http-conversation.patch` (3 lignes, `git apply --check` OK) + test HTTP de bout en bout (vert avec le patch, **rouge sans**) dans `docs/integration/`. À adopter par le propriétaire de `http.js`. |
+| PR #11, infra, Railway/Supabase | aucune | fichiers non touchés |
+| `COORDINATION.md` | à consolider à la fusion | `ask.js` : paramètre opt-in `conversation`, statut `ACTION_REFUSED` |
+
+### Recommandation finale d'intégration de la PR #12
+**GO pour fusion dans `claude/nordla-core-p0`, sur autorisation explicite du propriétaire** (aucune fusion faite).
+- Raisons : changement confiné et additif ; flux existants inchangés ; trois workflows obligatoires verts sur le commit exact ; zéro écriture/zéro autorisation d'achat démontrés (tests, mutations, jeu indépendant : 0 dangereux) ; les deux dépendances sont préparées, isolées et vérifiées.
+- Réserves à connaître (non bloquantes) : jeu indépendant écrit par l'auteur (≈80 % de reconnaissance, échec sûr sinon) ; multi-tours inactif tant que le patch `http.js` n'est pas adopté ; `CONDITIONAL_GO` brut reste dans le moteur jusqu'à `verdictDisplay`.
+- Après fusion : adopter le patch `http.js`, puis `verdictDisplay`, puis faire lire `decision.verdictDisplay` par `ask.js`.
+- Hors périmètre, non commencé : voix Xiaomi, modèle de langage, multi-dossiers.
