@@ -37,7 +37,7 @@ const sameToken = (given, expected) => timingSafeEqual(hash(given), hash(expecte
  *  uploadsDir    where photos are stored (named by their SHA-256)
  *  allowedHosts  extra Host names (a live array: a tunnel adds its own)
  */
-export function createProcurementApp({ procurement, users, sourcingDir = null, uploadsDir, allowedHosts = [], now = () => new Date(), maxJson = 262_144, maxUpload = 8_000_000 }) {
+export function createProcurementApp({ procurement, users, sourcingDir = null, uploadsDir, allowedHosts = [], now = () => new Date(), cacheAssets = true, maxJson = 262_144, maxUpload = 8_000_000 }) {
   for (const u of users) if (typeof u.token !== 'string' || u.token.length < 24) throw new Error('every access token needs at least 24 characters');
   const { commands: c, queries: q } = procurement;
   const fails = new Map();
@@ -46,7 +46,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, u
   const clientIp = (req) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
   const hostOk = (req) => { const h = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, ''); return ['localhost', '127.0.0.1', '[::1]', ...allowedHosts.map((x) => String(x).toLowerCase())].includes(h); };
   const files = new Map();
-  const asset = async (name) => { if (!files.has(name)) files.set(name, await readFile(join(UI_DIR, name))); return files.get(name); };
+  const asset = async (name) => { if (!cacheAssets || !files.has(name)) files.set(name, await readFile(join(UI_DIR, name))); return files.get(name); };
 
   const send = (res, code, body, headers = {}) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers }); res.end(JSON.stringify(body)); };
   async function readRaw(req, limit) {

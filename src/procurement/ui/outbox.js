@@ -10,6 +10,7 @@ import { classifyHttp, backoffMs } from './logic.js';
 const QKEY = 'nordla.proc.outbox';
 const DB = 'nordla-proc'; const STORE = 'photos';
 const safe = (fn, fallback = null) => { try { return fn(); } catch { return fallback; } };
+const safeAsync = async (fn, fallback = null) => { try { return await fn(); } catch { return fallback; } };
 
 let listeners = [];
 export const onOutboxChange = (fn) => { listeners.push(fn); };
@@ -38,7 +39,7 @@ export function enqueue({ label, method, path, body, photoIds = [], photosInto =
   write([...read(), { id, key: `${id}${Math.random().toString(36).slice(2, 8)}`.slice(0, 60), label, method, path, body, photoIds, photosInto, uploaded: [], state: 'PENDING', attempts: 0, error: null, createdAt: new Date().toISOString(), nextAt: 0, meta }]);
   return id;
 }
-export async function remove(id) { const q = read(); const it = q.find((x) => x.id === id); write(q.filter((x) => x.id !== id)); for (const p of it?.photoIds ?? []) await safe(() => delPhoto(p)); }
+export async function remove(id) { const q = read(); const it = q.find((x) => x.id === id); write(q.filter((x) => x.id !== id)); for (const p of it?.photoIds ?? []) await safeAsync(() => delPhoto(p)); }
 export function retryRejected(id) { write(read().map((x) => (x.id === id ? { ...x, state: 'PENDING', error: null, nextAt: 0 } : x))); }
 const patch = (id, p) => write(read().map((x) => (x.id === id ? { ...x, ...p } : x)));
 
@@ -53,7 +54,7 @@ export function flush({ force = false, onSent = () => {} } = {}) {
       // 1. photos: uploaded once each (the server stores them under their own hash, so a repeat is harmless)
       let uploaded = it.uploaded ?? [];
       for (const pid of it.photoIds.slice(uploaded.length)) {
-        const blob = await safe(() => getPhoto(pid));
+        const blob = await safeAsync(() => getPhoto(pid));
         if (!blob) { uploaded = [...uploaded, null]; continue; }
         const r = await request('POST', '/api/uploads', { raw: blob, contentType: blob.type || 'image/jpeg' });
         if (classifyHttp(r.status) !== 'DONE') {

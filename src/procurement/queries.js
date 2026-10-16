@@ -131,7 +131,7 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
         ...(rate ? { fx: { rate: rate.rate, provenance: 'USER_PROVIDED' } } : {}),
       });
       if (a.status !== 'ANALYZED') { rows.push({ ...base, status: 'NOT_COMPARABLE', reason: a.status, unitPrice: unit, errors: a.errors ?? null }); continue; }
-      rows.push({ ...base, status: 'LANDED', unitPrice: unit, landedPerUnit: a.landed_cost.per_unit, cashRequirement: a.cash_requirement?.total ?? null, margin: a.margin ?? null, estimated: Boolean(rate), analysisVersion: a.version, fx: rate ? { rate: rate.rate, date: rate.date, source: rate.source } : null });
+      rows.push({ ...base, status: 'LANDED', unitPrice: unit, landedPerUnit: a.landed_cost.per_unit, landedTotal: a.landed_cost.total, cashRequirement: a.cash_requirement?.total ?? null, margin: a.margin ?? null, estimated: Boolean(rate), analysisVersion: a.version, fx: rate ? { rate: rate.rate, date: rate.date, source: rate.source } : null });
     }
     const rankable = rows.filter((r) => r.status === 'LANDED' || r.status === 'GOODS_ONLY');
     const allLanded = rankable.length > 0 && rankable.every((r) => r.status === 'LANDED');

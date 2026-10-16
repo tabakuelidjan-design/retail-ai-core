@@ -78,7 +78,7 @@ export function describeOffer(o, qty) {
   if (o.incoterm) chips.push({ t: o.incoterm, k: '' });
   if (o.leadTimeDays) chips.push({ t: `${o.leadTimeDays} j`, k: '' });
   if (o.estimated) chips.push({ t: 'ESTIMÉ (taux saisi)', k: 'a' });
-  if (o.status === 'LANDED') return { usable: true, headline: `Coût rendu : ${fmtMoney(Number(o.landedPerUnit))} / pièce`, detail: `Prix fournisseur ${o.unitPrice} ${o.currency}. Estimation : transport, droits et taux saisis par vous ; ce n’est pas un montant fiscal définitif.`, chips: [...chips, { t: 'coût rendu', k: 'g' }] };
+  if (o.status === 'LANDED') return { usable: true, headline: `Coût rendu : ${fmtMoney(Number(o.landedTotal ?? o.landedPerUnit * qty))} pour ${qty} pièces`, detail: `≈ ${fmtMoney(Number(o.landedPerUnit))} / pièce (arrondi au centime par le calcul Finance : fiez-vous au total). Prix fournisseur ${o.unitPrice} ${o.currency}. Estimation : transport, droits et taux saisis par vous ; ce n’est pas un montant fiscal définitif.`, chips: [...chips, { t: 'coût rendu', k: 'g' }] };
   if (o.status === 'GOODS_ONLY') return { usable: true, headline: `${o.unitPrice} ${o.currency} / pièce ≈ ${o.goodsUnitEur} € (marchandises seules)`, detail: 'Transport et droits non saisis : le classement ne compare que le prix des marchandises.', chips: [...chips, { t: 'sans coût d’approche', k: 'a' }] };
   const why = (OFFER_FR[o.reason] ?? (() => `Non comparable (${o.reason}).`))(o);
   return { usable: false, headline: why, detail: o.status === 'NOT_ELIGIBLE' ? `Pour ${qty} pièces.` : 'Offre listée mais non classée.', chips };

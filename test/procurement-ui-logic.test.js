@@ -45,8 +45,8 @@ test('which buttons a person sees on an order: no self-approval, no ordering wit
 
 test('offer cards: landed, goods-only, and every reason an offer is not ranked, in plain French', () => {
   const base = { supplier: 'S', currency: 'USD', unitPrice: '0.085', incoterm: 'FOB', leadTimeDays: 25 };
-  const landed = describeOffer({ ...base, status: 'LANDED', landedPerUnit: 78, estimated: true }, 5000);
-  assert.equal(landed.usable, true); assert.match(landed.headline, /0[,.]78/); assert.ok(landed.chips.some((c) => /ESTIMÉ/.test(c.t))); assert.match(landed.detail, /pas un montant fiscal définitif/);
+  const landed = describeOffer({ ...base, status: 'LANDED', landedPerUnit: 78, landedTotal: 390000, estimated: true }, 5000);
+  assert.equal(landed.usable, true); assert.match(landed.headline, /3\D?900[,.]00/); assert.match(landed.detail, /0[,.]78\D+\/ pièce.*arrondi au centime/); assert.ok(landed.chips.some((c) => /ESTIMÉ/.test(c.t))); assert.match(landed.detail, /pas un montant fiscal définitif/);
   const goods = describeOffer({ ...base, status: 'GOODS_ONLY', goodsUnitEur: 0.078 }, 5000);
   assert.equal(goods.usable, true); assert.match(goods.headline, /marchandises seules/); assert.match(goods.detail, /Transport et droits non saisis/);
   assert.match(describeOffer({ ...base, status: 'NOT_COMPARABLE', reason: 'FX_REQUIRED' }, 5000).headline, /taux USD → EUR/);
