@@ -147,3 +147,16 @@ et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés
 | `tools/sourcing-backup.mjs` | copie isolée B2 (ajout seul) + `drill-isolated` | optionnelle, inactive sans ses variables |
 | `.github/workflows/staging-backup-monitor.yml`, `ops/staging-monitor/target.json` | **nouveaux** | alerte externe (désactivée) |
 | tests `test/core-storage-realfs.test.js`, `test/sourcing-backup-health.test.js`, `test/sourcing-backup-isolated.test.js` | **nouveaux** | aucun test du Chantier B modifié |
+
+## 2026-10-16 — Core P0 : assistant de terrain (PR #12 fusionnée, `c2d01be`) et phase 2 (branche `feature/core-field-assistant-phase2`)
+
+PR #12 fusionnée dans `claude/nordla-core-p0` sur autorisation du propriétaire : code validé `fe0360b` (CI : nordla-integration-pre-china Node 24 + 20, core-reliability Linux + Windows, china-sourcing = succès) ; `1d89984` n'ajoute que de la documentation.
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/core-pilot/ask.js` (Core), `field-intents.js`, `field-facts.js`, `field-answers.js`, `field-context.js` (**nouveaux**) | assistant de terrain, lecture seule | paramètre opt-in `conversation` ; nouveau statut de réponse `ACTION_REFUSED` ; flux existants inchangés |
+| `src/core-pilot/http.js` (**partagé, déclaré ici avant modification ; aucun autre chantier ne le tient**) | route `POST /api/core/ask` | 3 lignes : lit `conversation` du corps **seulement si la clé est présente**, la reconstruit par `validateConversation` (jamais fait confiance au client), la passe à `askNordla`. Sans la clé : comportement identique. Test `test/core-http-conversation.test.js` (rouge sans le changement) |
+| `src/sourcing/core/decision.js` (périmètre China Sourcing, **ajout seul**) | champ `verdictDisplay` sur la carte de décision | `verdict` inchangé (tests figés) ; `CONDITIONAL_GO` avec blocage dur ouvert → `CONDITIONAL_GO_BLOCKED`. Aucune autre branche ne touchait ce fichier au 2026-10-16 (balayage de toutes les branches et worktrees). Test `test/sourcing-verdict-display.test.js` |
+| `src/core-pilot/sourcing-facts.js` (Core) | `assessment.verdictDisplay` | 1 champ ajouté ; `input` (sujet Core) inchangé |
+
+Contrats : `ask` renvoie `{status, answer, sources, limits}` + `intent, sections` pour les réponses de terrain (+ `conversation`, `notice` si l'appelant a envoyé `conversation`). L'assistant lit `decision.verdictDisplay` : la règle n'existe qu'à un endroit (le moteur). Tests de contrat : `test/core-field-assistant-contracts.test.js`.

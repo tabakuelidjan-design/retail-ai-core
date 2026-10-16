@@ -30,5 +30,5 @@ export function sourcingPurchaseFacts(state, { merchantId, now, externals = {} }
     quote_qty: qty, moq, unit_price: num(quote?.unitPrice), quote_currency: quote?.currency ?? null, lead_time_days: num(quote?.leadTimeDays),
     max_unit_price: a.maxPurchasePrice?.status === 'COMPLETE' ? major(a.maxPurchasePrice.maxUnitPriceMinor) : null,
   };
-  return { input, scenarios: { moq: moqScenario }, assessment: { verdict: input.verdict, nextAction: a.decision?.nextAction ?? null, conditions: a.decision?.conditions ?? [], hardBlockers: a.decision?.hardBlockers ?? [], asOf: a.asOf } };
+  return { input, scenarios: { moq: moqScenario }, assessment: { verdict: input.verdict, verdictDisplay: a.decision?.verdictDisplay ?? null, nextAction: a.decision?.nextAction ?? null, conditions: a.decision?.conditions ?? [], hardBlockers: a.decision?.hardBlockers ?? [], asOf: a.asOf } };
 }

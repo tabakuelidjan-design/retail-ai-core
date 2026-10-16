@@ -41,7 +41,7 @@ const CONDITION_FR = [
   [/Amazon/i, 'condition liée à Amazon (voir le dossier)'],
 ];
 const conditionFr = (c) => { const hit = CONDITION_FR.find(([re]) => re.test(c)); return hit ? hit[1] : `(texte du moteur, en anglais) ${safeText(c, 200)}`; };
-const verdictLabel = (snap) => (snap.verdict === 'CONDITIONAL_GO' && snap.hardBlockers.length ? 'GO sous conditions, mais avec un blocage dur : aucune commande possible' : (VERDICT_FR[snap.verdict] ?? snap.verdict));
+const verdictLabel = (snap) => (snap.verdictDisplay === 'CONDITIONAL_GO_BLOCKED' ? 'GO sous conditions, mais avec un blocage dur : aucune commande possible' : (VERDICT_FR[snap.verdict] ?? snap.verdict)); // the rule is the engine's (verdictDisplay), not re-derived here
 const bullets = (arr) => arr.map((x) => `• ${x}`);
 const head = (title, arr) => (arr.length ? [`${title} :`, ...bullets(arr)] : []);
 

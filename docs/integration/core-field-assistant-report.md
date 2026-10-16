@@ -141,3 +141,16 @@ Seul changement de propriété à déclarer : `ask.js` reçoit un second point d
 - Réserves à connaître (non bloquantes) : jeu indépendant écrit par l'auteur (≈80 % de reconnaissance, échec sûr sinon) ; multi-tours inactif tant que le patch `http.js` n'est pas adopté ; `CONDITIONAL_GO` brut reste dans le moteur jusqu'à `verdictDisplay`.
 - Après fusion : adopter le patch `http.js`, puis `verdictDisplay`, puis faire lire `decision.verdictDisplay` par `ask.js`.
 - Hors périmètre, non commencé : voix Xiaomi, modèle de langage, multi-dossiers.
+
+## 10. Bilan de la phase 2 (branche `feature/core-field-assistant-phase2`, PR #13 en brouillon)
+**Fait** : PR #12 fusionnée dans `claude/nordla-core-p0` (`c2d01be`) sur autorisation du propriétaire (code `fe0360b`, `1d89984` = documentation seule). Phase 2 : `verdictDisplay` intégré au moteur (ajout seul, `verdict` inchangé) et **consommé** par l'assistant (règle unique, ancienne règle locale supprimée) ; multi-tours branché dans `http.js` (déclaré dans `COORDINATION.md`, `conversation` lu seulement si la clé est présente, reconstruit par `validateConversation`) ; tests de contrat, de sécurité et d'intégration.
+**CI sur `d2c96ed`** : `nordla-integration-pre-china` ✅ · `core-reliability` (Linux + Windows) ✅ · `china-sourcing` ✅. Local Windows : 189 tests ciblés ✅, e2e `core-pilot` 5/5, évaluation 56/56 (0 fuite de chiffre, 0 écriture), contrôle 37/37.
+**Restant** : fusion de la PR #13 (autorisation du propriétaire requise) ; relire `COORDINATION.md` à la fusion.
+
+### Prochaines étapes de « Parle à Nordla » (propositions, rien n'est lancé)
+1. **PWA** : afficher `sections` (savoir / ne pas savoir / risques / prochaine vérification) et conserver `conversation` côté client (le serveur est prêt).
+2. **Jeu de questions réel** : recueillir des phrases dites sur le terrain par le propriétaire pour remplacer le jeu écrit par l'auteur (le jeu indépendant actuel n'est pas écrit par un tiers).
+3. **Traduction des textes du moteur** (rulebook, questions fournisseur) côté moteur plutôt que par table.
+4. **Multi-dossiers** (comparer deux propositions, résumé de journée) : exige un contrat de lecture multi-dossiers et d'accès.
+5. **Voix Xiaomi** : transport seulement (ASR → `askNordla` → lecture de `answer`) ; à prouver par un test réel, pas avant décision du propriétaire.
+6. **Modèle de langage** : uniquement aux deux emplacements gardés (interpréter la phrase, reformuler avec garde « tout nombre doit figurer dans la réponse structurée ») ; jamais en écriture ni en calcul ; pas avant décision du propriétaire.
