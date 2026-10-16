@@ -1,0 +1,35 @@
+
+## S1  USD 4.20 x 1000, FX 0.92, freight 600 EUR, duty 2.7 %, other costs entered as 0
+  A Sourcing: COMPLETE per unit 4.5800 total 4584.5300
+  B Finance : ANALYZED per unit 458 total 458453 risks:FX_ESTIMATED
+  C Buying  : OK nominal per unit 4.584528
+
+## S2  same but price 4.3333 (rounding)
+  A Sourcing: COMPLETE per unit 4.5500 total 3533.4600
+  B Finance : ANALYZED per unit 455 total 353589 risks:FX_ESTIMATED
+  C Buying  : OK nominal per unit 4.550701
+
+## S3  same as S1 plus insurance 50 EUR (is duty charged on goods+freight or goods+freight+insurance?)
+  A Sourcing: COMPLETE per unit 4.6400 total 4635.8800
+  B Finance : ANALYZED per unit 458 total 458453 risks:FX_ESTIMATED
+  C Buying  : OK nominal per unit 4.584528
+
+## S4  freight not entered
+  A Sourcing: INFORMATION_INSUFFICIENT per unit 3.8600 total 3864.0000 critical:costs.freight
+  B Finance : ANALYZED per unit 397 total 396833 risks:FX_ESTIMATED+COST_UNKNOWN
+  C Buying  : OK nominal per unit 3.864000 missing:freight+duties
+
+## S5  USD price, NO exchange rate
+  A Sourcing: INFORMATION_INSUFFICIENT per unit null total null critical:fx.USDEUR
+  B Finance : CURRENCY_CONFLICT per unit - total - risks:CURRENCY_CONFLICT
+  C Buying  : FX_MISSING nominal per unit -
+
+## S6  EUR price (no FX needed), freight 600, duty 0 %
+  A Sourcing: COMPLETE per unit 4.8000 total 4800.0000
+  B Finance : ANALYZED per unit 480 total 480000 risks:-
+  C Buying  : OK nominal per unit 4.800000
+
+## S7  EXW (buyer pays everything) vs the same numbers: does the engine care about the Incoterm?
+  A Sourcing: COMPLETE per unit 4.8000 total 4800.0000
+  B Finance : ANALYZED per unit 480 total 480000 risks:-
+  C Buying  : OK nominal per unit 4.800000

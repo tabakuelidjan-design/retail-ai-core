@@ -18,7 +18,7 @@ export async function procurementCompareAnswer(text, assistant) {
     return { status: 'ANSWERED', answer: docs.length ? `${docs.length} document(s) fournisseur expiré(s) ou bientôt expirés :${NL}${docs.map((d) => `• ${d.title ?? d.type ?? d.id} — ${d.supplier ?? d.supplierName ?? 'fournisseur ?'}, échéance ${d.expiresOn ?? d.validUntil ?? 'inconnue'}`).join(NL)}` : 'Aucun document fournisseur n’est expiré ou proche de l’échéance dans Stock / Achats.', sources: [SRC('expiring_supplier_documents')], limits: ['Seuls les documents enregistrés dans Stock / Achats sont vus ; un document absent n’y apparaît pas.'] };
   }
   if (!COMPARE.test(t)) return null;
-  const sku = (/\b[A-Za-z]{2,}-\d{2,}\b/.exec(text) ?? [])[0];
+  const sku = (/\b[A-Za-z0-9]{2,}(?:-[A-Za-z0-9]+)*-\d{2,}\b/.exec(text) ?? [])[0];
   if (!sku) return null; // no item named: the case assistant (or the router) answers; it points to the exact next step
   const qtyMatch = /(\d{1,7})\s*(pieces?|pcs|unites?|exemplaires?)\b|\bpour\s+(\d{1,7})\b|\bx\s?(\d{1,7})\b/.exec(t);
   const qty = qtyMatch ? Number(qtyMatch[1] ?? qtyMatch[3] ?? qtyMatch[4]) : null;

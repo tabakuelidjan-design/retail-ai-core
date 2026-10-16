@@ -119,3 +119,12 @@ test('stock and orders: the refusal says PROPOSING describes and EXECUTING is a 
   const ord = await x.ask('passe la commande 500 pièces de MAG-001', 'blocked'); assert.match(ord.answer, /approbation nominative/); assert.doesNotMatch(ord.answer, /ajustement de stock/);
   assert.deepEqual(x.calls, []); assert.equal(JSON.stringify(await x.w.store.snapshot()), before);
 });
+
+test('SKUs with several hyphen segments (TEST-MAG-001) are read whole, and "mes commandes" / "les commandes" reach the open-orders answer', async () => {
+  const x = await world(); const w = x.w;
+  await w.mk(w.c.createItem, buyer, { sku: 'TEST-MAG-009', name: '[TEST] Aimant multi-segments' });
+  const st = await x.ask('stock de TEST-MAG-009', 'blocked'); assert.match(st.answer, /TEST-MAG-009/); assert.doesNotMatch(st.answer, /Quel article|Je ne trouve/);
+  assert.equal((await x.ask('mes commandes', 'blocked')).sources[0].ref, 'open_purchase_orders');
+  assert.equal((await x.ask('Les commandes', 'blocked')).sources[0].ref, 'open_purchase_orders');
+  const cmp = await x.ask('Meilleur fournisseur pour TEST-MAG-009 pour 100 pièces', 'blocked'); assert.doesNotMatch(cmp.answer, /Which exact SKU/); assert.ok(['ANSWERED', 'ASK'].includes(cmp.status));
+});

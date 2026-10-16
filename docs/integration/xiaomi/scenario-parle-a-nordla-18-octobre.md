@@ -8,6 +8,8 @@
 3. **Un dossier China Sourcing de test avec blocage** (par exemple le chargeur USB sans documents de conformité) ouvert sur le téléphone.
 4. **La voix n'est pas testée ni considérée opérationnelle** : ce scénario est **texte seulement**. Un essai vocal sur l'appareil est un scénario séparé, à décider.
 
+**Répétition automatisée (navigateur réel, 390 px, serveur hébergé avec Stock/Achats et données TEST)** : `node test/e2e/nordla-xiaomi-rehearsal.e2e.js` — **10/10** (P0, P2, P3-P4, P6, P7, P9, P10, P11, P12, P13-P15). C'est la même configuration que staging (comptes simulés, proxy TLS local), **pas staging et pas le téléphone physique**. Non automatisé : P1 tactile, **P8** (approbation réelle dans l'écran Achats), P14 (réseau mobile instable réel).
+
 ## 1. Déroulé (noter l'heure et le résultat de chaque ligne)
 | # | Action sur le téléphone | Réussi si |
 |---|---|---|
