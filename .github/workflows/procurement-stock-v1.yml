@@ -3,7 +3,7 @@ name: procurement-stock-v1
 # No secret, no provider, no network, no production data: the unit tests run over the in-memory and file stores, the SQL jobs over a throw-away PostgreSQL container.
 on:
   push:
-    branches: ['feature/stock-achat-**', 'feature/stock-achats-**']
+    branches: ['feature/stock-achat-**', 'feature/stock-achats-**', 'integration/stock-achats-**']
     paths:
       - 'src/procurement/**'
       - 'test/procurement-*'
