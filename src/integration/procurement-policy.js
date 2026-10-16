@@ -26,4 +26,9 @@ export const PROCUREMENT_TOOLS = Object.freeze({
 });
 
 export const procCommand = (tool) => `proc_${tool}`;
-export const PROCUREMENT_ACTIONS = Object.freeze(Object.fromEntries(Object.entries(PROCUREMENT_TOOLS).map(([tool, t]) => [`${t.module}.${procCommand(tool)}`, t.level])));
+/** Read-only compatibility views of the integration objects (see procurement-compat.js): purchase plans and incoming expectations built from purchase orders. */
+export const PROCUREMENT_COMPAT = Object.freeze({ plans: { module: M.BUYING, command: 'proc_purchase_plans', level: L.READ_ONLY }, incoming: { module: M.STOCK_SALES, command: 'proc_incoming_expectations', level: L.READ_ONLY } });
+export const PROCUREMENT_ACTIONS = Object.freeze({
+  ...Object.fromEntries(Object.entries(PROCUREMENT_TOOLS).map(([tool, t]) => [`${t.module}.${procCommand(tool)}`, t.level])),
+  ...Object.fromEntries(Object.values(PROCUREMENT_COMPAT).map((c) => [`${c.module}.${c.command}`, c.level])),
+});
