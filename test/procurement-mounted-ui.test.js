@@ -38,9 +38,9 @@ async function world({ sourcingEnabled = true, dir: given = null, keep = false }
   const dir = given ?? await mkdtemp(join(tmpdir(), 'src-hosted-'));
   const srv = await startSourcingServer({ env: { ...ENV, SOURCING_DATA_DIR: dir }, log: () => {}, port: 0, services: { identity, security }, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ({}) });
   // requests as Railway forwards them: TLS ended by the proxy, the real client in X-Real-IP
-  const call = (method, path, { body, cookie, csrf, origin = ORIGIN, token } = {}) => new Promise((resolve, reject) => {
+  const call = (method, path, { body, cookie, csrf, origin = ORIGIN, token, idem } = {}) => new Promise((resolve, reject) => {
     const data = body === undefined ? null : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
-    const headers = { host: HOST, 'x-forwarded-host': HOST, 'x-forwarded-proto': 'https', 'x-real-ip': '203.0.113.7', 'content-type': 'application/json', ...(origin ? { origin } : {}), ...(cookie ? { cookie } : {}), ...(csrf ? { 'x-nordla-csrf': csrf } : {}), ...(token ? { 'x-sourcing-token': token } : {}), ...(data ? { 'content-length': data.length } : {}) };
+    const headers = { host: HOST, 'x-forwarded-host': HOST, 'x-forwarded-proto': 'https', 'x-real-ip': '203.0.113.7', 'content-type': 'application/json', ...(origin ? { origin } : {}), ...(cookie ? { cookie } : {}), ...(csrf ? { 'x-nordla-csrf': csrf } : {}), ...(token ? { 'x-sourcing-token': token } : {}), ...(idem ? { 'idempotency-key': idem } : {}), ...(data ? { 'content-length': data.length } : {}) };
     const req = http.request({ host: '127.0.0.1', port: srv.port, path, method, headers }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: t ? JSON.parse(t) : null })); });
     req.on('error', reject); if (data) req.write(data); req.end();
   });
@@ -56,21 +56,24 @@ async function world({ sourcingEnabled = true, dir: given = null, keep = false }
 import { readFileSync } from 'node:fs';
 const MOUNTED = readFileSync(new URL('../src/sourcing/server/app.js', import.meta.url), 'utf8').includes('procurement.handleStatic');
 const skip = MOUNTED ? false : 'needs the one-line mount in src/sourcing/server/app.js (docs/integration/stock-achats-v1-patch-sourcing-app.patch, chantier 3)';
+/** a GET that keeps the raw text (the screens are HTML / JS, not JSON), with the headers Railway forwards */
+const raw = (w, path) => new Promise((resolve, reject) => { const r = http.request({ host: '127.0.0.1', port: w.srv.port, path, method: 'GET', headers: { host: HOST, 'x-forwarded-host': HOST, 'x-forwarded-proto': 'https', 'x-real-ip': '203.0.113.7' } }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: t })); }); r.on('error', reject); r.end(); });
 
 test('the phone screens are served at /procurement/ by the hosted server; the data stays behind the session, the CSRF check and the role', { skip }, async (t) => {
   const w = await world(); t.after(() => w.close());
-  const page = await w.call('GET', '/procurement/', { origin: null });
-  assert.equal(page.status, 200); assert.match(page.headers['content-type'], /text\/html/); assert.match(page.body, /src="app\.js"/);
-  assert.equal((await w.call('GET', '/procurement/app.js', { origin: null })).status, 200); assert.equal((await w.call('GET', '/procurement', { origin: null })).status, 301);
+  const page = await raw(w, '/procurement/');
+  assert.equal(page.status, 200); assert.match(page.headers['content-type'], /text\/html/); assert.match(page.text, /src="app\.js"/); assert.match(page.headers['content-security-policy'] ?? '', /script-src 'self'/);
+  assert.equal((await raw(w, '/procurement/app.js')).status, 200); assert.equal((await raw(w, '/procurement/screens-v1.js')).status, 200); assert.equal((await raw(w, '/procurement')).status, 301);
+  assert.equal((await raw(w, '/procurement/..%2fpackage.json')).status, 404);
   assert.equal((await w.call('GET', '/api/procurement/stock')).status, 401, 'no session, no data');
   const owner = await w.login(P.owner); assert.equal(owner.status, 200);
-  const me = await w.call('GET', '/api/procurement/me', { cookie: owner.cookie }); assert.equal(me.status, 200); const caps = JSON.parse(me.body); assert.equal(caps.role, 'OWNER'); assert.equal(caps.canAdjust, true);
+  const me = await w.call('GET', '/api/procurement/me', { cookie: owner.cookie }); assert.equal(me.status, 200); assert.equal(me.body.role, 'OWNER'); assert.equal(me.body.canAdjust, true); assert.equal(me.body.canSelfApprove, true);
   assert.equal((await w.call('GET', '/api/procurement/stock', { cookie: owner.cookie })).status, 200);
-  const key = () => `mount-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-  const post = (cookie, csrf, body, k = key()) => w.call('POST', '/api/procurement/suppliers', { cookie, csrf, body, ...{ } , token: undefined }).then((r) => r);
   const noCsrf = await w.call('POST', '/api/procurement/suppliers', { cookie: owner.cookie, body: { name: 'Yiwu Co', currency: 'USD' } }); assert.equal(noCsrf.status, 403, 'a change without the CSRF token is refused by the host');
-  assert.ok(post);
-  const buyer = await w.login(P.buyer); const bme = JSON.parse((await w.call('GET', '/api/procurement/me', { cookie: buyer.cookie })).body);
+  const mk = await w.call('POST', '/api/procurement/suppliers', { cookie: owner.cookie, csrf: owner.csrf, body: { name: 'Yiwu Co', country: 'CN', currency: 'USD' }, idem: 'mount-test-0001' });
+  assert.equal(mk.status, 200, JSON.stringify(mk.body)); assert.equal(mk.body.supplier.name, 'Yiwu Co');
+  const again = await w.call('POST', '/api/procurement/suppliers', { cookie: owner.cookie, csrf: owner.csrf, body: { name: 'Yiwu Co', country: 'CN', currency: 'USD' }, idem: 'mount-test-0001' }); assert.equal(again.body.replayed, true, 'a retried change through the host is harmless');
+  const buyer = await w.login(P.buyer); const bme = (await w.call('GET', '/api/procurement/me', { cookie: buyer.cookie })).body;
   assert.deepEqual([bme.role, bme.canReceive, bme.canAdjust, bme.canApprove], ['WAREHOUSE', false, false, false], 'a collaborator reads; without an explicit grant they cannot receive, adjust or approve');
   const stranger = await w.login(P.stranger); assert.ok([401, 403].includes((await w.call('GET', '/api/procurement/stock', { cookie: stranger.cookie })).status));
 });
