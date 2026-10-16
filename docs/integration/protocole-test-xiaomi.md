@@ -12,8 +12,9 @@ export / récupération), Nordla Core (analyse du dossier, décision avec raison
 titre → visuel), Branding / Marketing en lecture et décision, **Parle à Nordla – version texte de base** : questions Finance / Analytics
 (réponse avec source, période, fraîcheur — sur staging : « données indisponibles », c'est normal) et faits d'achat du dossier ouvert.
 **Pas disponible le 18** : l'**assistant de terrain** de Parle à Nordla (PR #12 : « que manque-t-il ? », risques, documents à vérifier,
-prochaine vérification, jugement de prix sur le dossier). Il n'est pas dans `ab02b77` et son branchement est encore à l'état de
-proposition : il demande un nouveau commit candidat, sa CI et un nouveau déploiement autorisé. Ne pas le tester le 18.
+prochaine vérification, jugement de prix sur le dossier). Il est fusionné sur la branche (PR #12 et #13, branchement HTTP compris)
+mais **absent de `ab02b77`** : l'avoir le 18 demanderait un nouveau commit candidat, sa CI complète et un nouveau déploiement autorisé.
+Ne pas le tester le 18 sur `ab02b77`.
 
 **Avant (PC allumé, ancienne adresse dans Firefox)** — rien ne doit être perdu :
 1. Chaque ancien dossier → réglages → **Exporter en JSON** ; l'écran doit dire **« N photo(s) sur N »** (si « absentes » : arrêt, me le
