@@ -9,6 +9,8 @@ export const FIELD_INTENT = Object.freeze({
   MARGIN: 'MARGIN', LANDED_COST: 'LANDED_COST', ORDER_TOTAL: 'ORDER_TOTAL', PRICE_GAP: 'PRICE_GAP', PRICE_BASIS: 'PRICE_BASIS', UNCOUNTED_COSTS: 'UNCOUNTED_COSTS', MOQ_SCENARIO: 'MOQ_SCENARIO',
   CAN_ORDER: 'CAN_ORDER', // "can I order": read-only explanation (the existing "dois-je acheter" runs the journaled Core analysis and is left alone)
   NEXT_STEP: 'NEXT_STEP',
+  SUPPLIER_QUESTIONS: 'SUPPLIER_QUESTIONS', // the questions to put to the supplier (engine's own P1 list, English + Chinese)
+  PRICE_JUDGEMENT: 'PRICE_JUDGEMENT', // "is this price good?": the quote against the engine's maximum purchase price - no market benchmark is invented
   EXPLAIN_RECOMMENDATION: 'EXPLAIN_RECOMMENDATION',
 });
 export const ECONOMICS_INTENTS = new Set([FIELD_INTENT.MARGIN, FIELD_INTENT.LANDED_COST, FIELD_INTENT.ORDER_TOTAL, FIELD_INTENT.PRICE_GAP, FIELD_INTENT.PRICE_BASIS, FIELD_INTENT.UNCOUNTED_COSTS, FIELD_INTENT.MOQ_SCENARIO]);
@@ -31,7 +33,7 @@ const has = (words, list) => list.some((s) => stemHit(words, s));
 
 // What makes a sentence "about a sourcing case" (vs. Finance's ledgers or Analytics' sales).
 const CASE_WORDS = ['dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
-const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense', 'payer', 'paiement'];
+const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense'];
 const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu'];
 
 const RULES = [
@@ -47,13 +49,17 @@ const RULES = [
   [FIELD_INTENT.PRICE_BASIS, [['prix de vente', 'prix vente', 'selling price', 'prix de revente', 'prix public'], ['observe', 'estime', 'hypothese', 'suppose', 'reel', 'verifie', 'confirm', 'vu', 'cible', 'observed', 'assum']]],
   [FIELD_INTENT.UNCOUNTED_COSTS, [['cout', 'couts', 'frais', 'cost', 'costs'], ['pas encore', 'non compt', 'pas pris', 'pris en compte', 'oubli', 'manqu', 'inclus', 'compris', 'inconnu', 'pas compt', 'not included', 'ignor']]],
   [FIELD_INTENT.MARGIN, [['marge', 'marje', 'rentab', 'benefice', 'gagner', 'gagne', 'profit', 'margin', 'contribution', 'rapporte', 'rapport']]],
+  [FIELD_INTENT.SUPPLIER_QUESTIONS, [['question', 'questions', 'demander', 'poser', 'ask'], ['fournisseur', 'supplier', 'signer', 'commande', 'negocier', 'discuter', 'visite', 'usine', 'devis', 'salon'], ]],
+  [FIELD_INTENT.SUPPLIER_QUESTIONS, [['quelles questions', 'quelle question', 'questions a poser', 'questions poser', 'questions to ask', 'que demander', 'quoi demander', 'que dois je demander']]],
+  [FIELD_INTENT.PRICE_JUDGEMENT, [['prix'], ['bon', 'correct', 'interessant', 'raisonnable', 'eleve', 'cher', 'negocier', 'acceptable', 'good', 'fair', 'high']], ],
+  [FIELD_INTENT.PRICE_JUDGEMENT, [['prix maximum', 'prix max', 'prix limite', 'jusqu a combien', 'maximum payer', 'prix d achat maximum', 'max purchase', 'combien au maximum', 'maximum a payer']], 2],
   [FIELD_INTENT.CAN_ORDER, [['puis je', 'je peux', 'puis-je', 'peut on commander', 'ai je le droit', 'autoris', 'feu vert', 'can i', 'je peut', 'est ce que je peux', 'on peut', 'peux je'], ['command', 'acheter', 'achat', 'signer', 'passer', 'order', 'buy', 'valider', 'lancer', 'verser', 'acompte', 'payer']]],
   [FIELD_INTENT.RISKS, [['preuve', 'preuves'], ['manque', 'manquent', 'manquant', 'manquantes', 'insuffisant', 'insuffisantes', 'faut', 'absente', 'absentes']]],
   [FIELD_INTENT.RISKS, [['risque', 'risques', 'danger', 'bloquer', 'bloque', 'blocage', 'bloquant', 'bloquants', 'probleme', 'attention', 'alerte', 'risk', 'block', 'preuve', 'preuves', 'inquiet', 'hesit', 'point faible', 'piege']]],
   [FIELD_INTENT.DOCUMENTS, [['document', 'documents', 'certificat', 'certificats', 'papier', 'papiers', 'declaration', 'rapport de test', 'conformite', 'marquage ce'], ['verifier', 'manque', 'manquent', 'manquant', 'faut', 'demander', 'exiger', 'reclamer', 'fournir', 'controler', 'check', 'missing', 'need', 'necessaire', 'requis']]],
   [FIELD_INTENT.NEXT_STEP, [['prochaine etape', 'etape suivante', 'next step', 'prochain pas', 'prochaine action', 'que faire', 'quoi faire', 'maintenant', 'conseille', 'recommandes tu', 'tu me conseilles', 'a verifier', 'verifier maintenant', 'dois je verifier', 'dois je faire', 'dois je demander', 'poser comme question', 'questions poser', 'quelles questions']]],
   [FIELD_INTENT.MISSING, [['manque', 'manquent', 'manquant', 'manquants', 'incomplet', 'complet', 'absent', 'absents', 'lacune', 'missing', 'trou', 'reste a', 'il me faut', 'faut il encore', 'encore besoin']]],
-  [FIELD_INTENT.KNOWLEDGE, [['sait', 'sais', 'savons', 'connais', 'connait', 'connaissons', 'confirme', 'confirmes', 'confirmee', 'confirmees', 'know', 'avons nous', 'donnees', 'infos', 'information', 'informations'], ['dossier', 'fournisseur', 'produit', 'tu', 'on', 'nous', 'avons', 'a ce', 'sur', 'disponible', 'disponibles', 'ne sais', 'savoir', 'sait pas']]],
+  [FIELD_INTENT.KNOWLEDGE, [['sait', 'sais', 'savons', 'connais', 'connait', 'connaissons', 'confirme', 'confirmes', 'confirmee', 'confirmees', 'know', 'avons nous', 'donnees', 'infos', 'information', 'informations'], ['dossier', 'fournisseur', 'produit', 'supplier', 'product', 'case', 'file', 'tu', 'on', 'nous', 'avons', 'a ce', 'sur', 'disponible', 'disponibles', 'ne sais', 'savoir', 'sait pas']]],
   [FIELD_INTENT.KNOWLEDGE, [['est confirme', 'est confirmee', 'sont confirmes', 'sont confirmees', 'est verifie', 'est prouve', 'est etabli']]],
   [FIELD_INTENT.KNOWLEDGE, [['quest ce que tu sais', 'qu est ce que tu sais', 'ce que tu sais', 'ce que tu ne sais', 'sais tu', 'sais-tu']]],
 ];
@@ -74,8 +80,8 @@ export function recognizeFieldIntent(text) {
   const words = tokens(t);
   const phraseHit = (list) => list.some((s) => (s.includes(' ') ? t.includes(s) : stemHit(words, s)));
   const scored = [];
-  for (const [intent, groups] of RULES) {
-    if (groups.every((g) => phraseHit(g))) scored.push({ intent, score: groups.length });
+  for (const [intent, groups, bonus = 0] of RULES) {
+    if (groups.every((g) => phraseHit(g))) scored.push({ intent, score: groups.length + bonus });
   }
   const caseWords = phraseHit(CASE_WORDS);
   const finance = phraseHit(FINANCE_WORDS); const analytics = phraseHit(ANALYTICS_WORDS) && !/prix de vente|selling price/.test(t);
@@ -100,5 +106,5 @@ export function recognizeFieldIntent(text) {
 export const INTENT_LABEL = Object.freeze({
   KNOWLEDGE: 'ce que nous savons et ne savons pas du dossier', MISSING: 'ce qui manque au dossier', DOCUMENTS: 'les documents à vérifier', RISKS: 'les risques et blocages',
   MARGIN: 'la marge', LANDED_COST: 'le coût rendu', ORDER_TOTAL: 'le coût total de la commande', PRICE_GAP: 'le prix ou la donnée qui manque pour la rentabilité', PRICE_BASIS: 'l’origine du prix de vente',
-  UNCOUNTED_COSTS: 'les coûts pas encore pris en compte', MOQ_SCENARIO: 'le scénario à la quantité minimale', CAN_ORDER: 'la possibilité de commander', NEXT_STEP: 'la prochaine vérification', EXPLAIN_RECOMMENDATION: 'l’explication de la recommandation',
+  UNCOUNTED_COSTS: 'les coûts pas encore pris en compte', SUPPLIER_QUESTIONS: 'les questions à poser au fournisseur', PRICE_JUDGEMENT: 'le prix du devis comparé au prix maximum calculé', MOQ_SCENARIO: 'le scénario à la quantité minimale', CAN_ORDER: 'la possibilité de commander', NEXT_STEP: 'la prochaine vérification', EXPLAIN_RECOMMENDATION: 'l’explication de la recommandation',
 });

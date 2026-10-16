@@ -32,7 +32,7 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
     conditions: d.conditions.map((c) => safeText(c, 400)),
     missingDocs: (d.gaps?.missingDocs ?? []).map((m) => ({ label: safeText(m.label, 160), docType: m.docType, ruleId: m.ruleId })),
     contradictions: (d.contradictions ?? []).map((c) => safeText(c.label ?? c, 200)),
-    supplierQuestions: (a.questions ?? []).filter((q) => q.priority === 'P1').map((q) => ({ id: q.id, topic: q.topic, why: safeText(q.why, 200), en: safeText(q.en, 200), blocks: q.blocks ?? [] })),
+    supplierQuestions: (a.questions ?? []).filter((q) => q.priority === 'P1').map((q) => ({ id: q.id, topic: q.topic, why: safeText(q.why, 200), en: safeText(q.en, 200), zh: safeText(q.zh, 120), blocks: q.blocks ?? [] })),
     dimensions: d.dimensions, engineNextAction: safeText(d.nextAction, 500), unknowns: (a.evidence?.unknown ?? []).map((u) => ({ item: safeText(u.item, 60), note: safeText(u.note, 160) })),
     freshness: (a.freshness ?? []).map((f) => ({ name: f.name, status: f.status, checkedAt: f.checkedAt ?? null, mode: f.mode ?? null, version: f.version ?? null })),
     dataMode: a.dataMode,

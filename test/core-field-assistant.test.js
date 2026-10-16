@@ -50,7 +50,9 @@ test('recognition: natural French questions map to the right field intent (accen
     [I.UNCOUNTED_COSTS, ["Quels coûts ne sont pas encore pris en compte ?", 'quels couts ne sont pas pris en compte']],
     [I.MOQ_SCENARIO, ["Et si j'achète seulement la quantité minimale ?", 'et si je prends le moq', 'et si je commande le minimum']],
     [I.CAN_ORDER, ['Est-ce que je peux commander ce produit ?', 'puis-je commander', 'est ce que je peux passer commande']],
-    [I.NEXT_STEP, ['Quelle est la prochaine étape ?', 'quelle prochaine etape', "Qu'est-ce que tu me conseilles de vérifier ?", 'quelles questions dois-je poser avant de signer', 'next step']],
+    [I.NEXT_STEP, ['Quelle est la prochaine étape ?', 'quelle prochaine etape', "Qu'est-ce que tu me conseilles de vérifier ?", 'next step']],
+    [I.SUPPLIER_QUESTIONS, ['quelles questions dois-je poser avant de signer', 'quelles questions poser au fournisseur', 'que dois-je demander au fournisseur', 'questions to ask the supplier']],
+    [I.PRICE_JUDGEMENT, ['Est-ce que ce prix est bon ?', 'le prix est-il correct', "jusqu'à combien puis-je payer", 'quel est le prix maximum']],
     [I.EXPLAIN_RECOMMENDATION, ['Pourquoi cette recommandation ?', 'pourquoi Nordla recommande ça', 'quelles options ont été écartées', 'pourquoi telle option est-elle écartée ?', 'Pourquoi Nordla hésite ?']],
   ];
   const wrong = [];
@@ -90,6 +92,13 @@ test('non-regression: existing Core / Finance / Analytics answers are unchanged'
   for (const q of ['quelle est la marge ?', 'quels sont les risques ?', 'combien coûte la commande', 'quelle marge pour ce fournisseur ?']) await w.ask(q, 'case-go', { finance, analytics });
   assert.deepEqual(called, [], 'field questions never read Finance or Analytics');
   await w.ask('quelles factures fournisseurs dois-je payer ?', null, { finance, analytics }).catch(() => {}); assert.deepEqual(called, ['payables'], 'a Finance question still reaches the Finance reader');
+});
+
+test('decisions wording: "attendent mon approbation", "que je dois prendre", "suivies" reach the existing journal answers (read-only)', async () => {
+  const w = world({ 'case-b': blockedCase('case-b') }); await w.ask('Dois-je acheter ce produit ?', 'case-b'); assert.equal(await journalSize(w.rt), 1);
+  for (const q of ['Quelles décisions attendent mon approbation ?', 'Montre-moi les décisions que je dois prendre.']) { const r = await w.ask(q); assert.match(r.answer, /1 décision\(s\) attendent votre validation/, q); }
+  assert.match((await w.ask('Quelles décisions doivent encore être suivies ?')).answer, /Aucune décision n’a encore été prise/);
+  assert.equal(await journalSize(w.rt), 1, 'asking about decisions never creates one');
 });
 
 // ===================================================================== 3. business results: the answer carries the engine's figures and no others
@@ -165,6 +174,17 @@ test('risks: proven blockers, alerts and "not assessed" are separate lines; a cl
   assert.ok(r.sections.risks.some((x) => x.startsWith('Pas évalué')), 'unassessed coverage is explicit');
   const g = await world({ g: goCase('g') }).ask('quels sont les risques ?', 'g');
   assert.doesNotMatch(g.answer, /aucun risque|sans risque|tout est bon/i);
+});
+
+test('supplier questions and price judgement: the engine own list and its own maximum, with no market benchmark invented', async () => {
+  const c = blockedCase(); const w = world({ [c.id]: c }); const a = assess(c, { now: NOW, externals });
+  const q = await w.ask('Quelles questions dois-je poser avant de signer ?', c.id);
+  const p1 = a.questions.filter((x) => x.priority === 'P1'); assert.equal(q.sections.known.length, Math.min(8, p1.length));
+  for (const x of p1.slice(0, 8)) assert.ok(q.sections.known.some((l) => l.includes(x.en) && l.includes(x.zh)), x.id);
+  const price = await w.ask('Est-ce que ce prix est bon ?', c.id); const { input } = sourcingPurchaseFacts(c, { merchantId: 'm-test', now: NOW, externals });
+  assert.ok(price.answer.includes(input.unit_price.toFixed(2).replace('.', ',')) && price.answer.includes(input.max_unit_price.toFixed(2).replace('.', ',')));
+  assert.match(price.answer, /sous le prix unitaire maximum/); assert.ok(price.sections.unknown.some((x) => /aucun prix de marché/.test(x)), 'no competitor price is invented'); assert.ok(price.sections.risks.some((x) => /un bon prix ne rend pas la commande possible/.test(x)));
+  const none = await world({ b: bareCase('b') }).ask('ce prix est-il bon ?', 'b'); assert.match(none.answer, /Je ne peux pas dire si ce prix est bon/); assert.doesNotMatch(none.answer, HAS_FIGURE);
 });
 
 test('missing / documents / next step: concrete, sourced, tied to the engine', async () => {

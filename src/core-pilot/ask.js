@@ -38,12 +38,12 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
   const limits = [];
 
   // ---- Core questions (the decision journal)
-  if (/(decision|decide|valider|approuv).*(attente|en cours|a prendre|a valider)|(en attente|a valider).*(decision)/.test(t)) {
+  if (/(decision|decide|valider|approuv).*(attente|attend|en cours|a prendre|dois prendre|a valider|approbation)|(en attente|a valider).*(decision)/.test(t)) {
     if (!runtime) return notConfigured();
     const o = await runtime.overview(); const list = o.decisions.filter((v) => !v.entry.human_decision && v.entry.recommendation);
     return { status: 'ANSWERED', answer: list.length ? `${list.length} décision(s) attendent votre validation :\n${list.map(decisionLine).join('\n')}` : 'Aucune décision n’attend votre validation.', sources: list.map(decisionSource), limits };
   }
-  if (/\bsuivi\b|follow.?up|resultat.*(decision|achat)/.test(t)) {
+  if (/\bsuivi(e|s|es)?\b|follow.?up|resultat.*(decision|achat)/.test(t)) {
     if (!runtime) return notConfigured();
     const o = await runtime.overview(); const list = o.decisions.filter((v) => v.entry.human_decision);
     return { status: 'ANSWERED', answer: list.length ? `Décisions prises et leur suivi :\n${list.map((v) => `${decisionLine(v)}${v.entry.result ? ` — résultat : ${v.entry.result.result}` : ' — résultat pas encore enregistré'}`).join('\n')}` : 'Aucune décision n’a encore été prise.', sources: list.map(decisionSource), limits };

@@ -82,8 +82,8 @@ function nextVerification(snap) {
 const ownerLine = (owner) => (owner === 'CONFIGURED' ? 'Des règles propriétaire existent dans la configuration ; cette réponse ne les évalue pas elle-même (c’est le rôle du Core : demandez « dois-je acheter ce produit ? »).'
   : owner === 'NOT_CONFIGURED' ? 'Aucune règle propriétaire (budget, marge minimale, trésorerie) n’est définie : aucune ne peut être appliquée ni supposée.' : 'Les règles propriétaire ne sont pas lisibles ici : aucune n’est supposée.');
 
-function wrap(intent, snap, { title, known = [], unknown = [], risks = [], consequences = [], next = [], extraSources = [], extraLimits = [] }) {
-  const lines = [title, ...head('Ce que nous savons', known), ...head('Ce que nous ne savons pas', unknown), ...head('Risques', risks), ...head('Pourquoi c’est important', consequences), ...head('Prochaine vérification', next), sourceLine(snap)];
+function wrap(intent, snap, { title, knownTitle = 'Ce que nous savons', known = [], unknown = [], risks = [], consequences = [], next = [], extraSources = [], extraLimits = [] }) {
+  const lines = [title, ...head(knownTitle, known), ...head('Ce que nous ne savons pas', unknown), ...head('Risques', risks), ...head('Pourquoi c’est important', consequences), ...head('Prochaine vérification', next), sourceLine(snap)];
   return {
     status: 'ANSWERED', intent, answer: lines.join('\n'),
     sections: { known, unknown, risks, consequences, next }, sources: sourcesOf(snap, extraSources), limits: [...limitsOf(snap), ...extraLimits],
@@ -228,6 +228,32 @@ function economics(snap, intent) {
   return wrap(intent, snap, { title, known, unknown, risks: snap.hardBlockers.length ? [`blocage(s) dur(s) : ${snap.hardBlockers.map((b) => BLOCKER_FR[b.code] ?? b.code).join(', ')} — les chiffres ci-dessus ne rendent pas la commande possible`] : [], consequences, next: nextVerification(snap).slice(0, 2), extraSources: extra });
 }
 
+// ---- on-site helpers: the questions to put to the supplier, and "is this price good?"
+function supplierQuestions(snap) {
+  const qs = snap.supplierQuestions; const lines = qs.slice(0, 8).map((q) => `${q.en}${q.zh ? ` / ${q.zh}` : ''}`);
+  const docs = snap.missingDocs.slice(0, 4).map((d) => `Please send: ${d.label}`);
+  return wrap(I.SUPPLIER_QUESTIONS, snap, {
+    title: qs.length || docs.length ? `Questions à poser au fournisseur (liste du moteur, ${qs.length} prioritaire(s)) :` : 'Le moteur n’a aucune question prioritaire à poser au fournisseur pour l’instant ; cela ne dispense pas de demander un échantillon et une facture proforma.',
+    knownTitle: 'À demander (anglais / chinois)', known: lines, unknown: [], risks: [], consequences: qs.length ? ['chaque question a été posée parce qu’une règle ou un coût ne peut pas être tranché sans la réponse'] : [], next: docs.length ? [`Demander aussi les documents manquants (en anglais) : ${docs.join(' ; ')}`] : [],
+  });
+}
+function priceJudgement(snap) {
+  const e = snap.economics; const q = snap.quote; const known = []; const unknown = [];
+  let title;
+  if (q && isNum(q.unitPrice) && isNum(e.maxUnitPrice)) {
+    const under = q.unitPrice <= e.maxUnitPrice;
+    title = `Le prix du devis (${money(q.unitPrice, q.currency)}) est ${under ? 'sous le' : 'AU-DESSUS du'} prix unitaire maximum calculé par le moteur (${money(e.maxUnitPrice, e.maxUnitPriceCurrency)})${e.maxUnitPriceUpperBound ? ' — borne haute, le vrai maximum est plus bas' : ''}.`;
+    known.push(`maximum calculé avec un prix de vente ${BASIS_FR[e.priceBasis] ?? 'd’origine inconnue'}`);
+    if (e.maxUnitPriceCurrency && q.currency && e.maxUnitPriceCurrency !== q.currency) unknown.push(`devis en ${q.currency}, maximum en ${e.maxUnitPriceCurrency} : comparer avec prudence`);
+  } else {
+    title = 'Je ne peux pas dire si ce prix est bon : il manque le prix du devis ou le prix maximum n’est pas calculable.';
+    if (!q || !isNum(q?.unitPrice)) unknown.push('prix unitaire du devis');
+    if (!isNum(e.maxUnitPrice)) unknown.push(e.maxUnitPriceReason ? `prix maximum incalculable (${e.maxUnitPriceReason})` : 'prix maximum incalculable');
+  }
+  unknown.push('aucun prix de marché ou de concurrent n’est lu ici : « bon » signifie seulement « sous le maximum de rentabilité du dossier »');
+  return wrap(I.PRICE_JUDGEMENT, snap, { title, known, unknown, risks: snap.hardBlockers.length ? ['un blocage dur reste ouvert : un bon prix ne rend pas la commande possible'] : [], consequences: e.priceBasis !== 'OBSERVED' ? ['le prix maximum dépend du prix de vente supposé'] : [], next: nextVerification(snap).slice(0, 2) });
+}
+
 // ---- Phase D: explain the Core recommendation already journaled for this case. Read-only: it never runs a new analysis.
 const REASON_FR = [
   [/can_commit_money eq true \(actual false\)/, 'le dossier n’autorise pas d’engager de l’argent (verdict sourcing)'],
@@ -278,6 +304,8 @@ export function buildFieldAnswer(intent, snap, { entryView = null, ownerRules = 
     case I.RISKS: return risks(snap);
     case I.CAN_ORDER: return canOrder(snap, ownerRules);
     case I.NEXT_STEP: return nextStep(snap);
+    case I.SUPPLIER_QUESTIONS: return supplierQuestions(snap);
+    case I.PRICE_JUDGEMENT: return priceJudgement(snap);
     case I.EXPLAIN_RECOMMENDATION: return explainRecommendation(snap, { entryView, ownerRules });
     default: return economics(snap, intent);
   }
