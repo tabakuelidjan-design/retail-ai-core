@@ -174,6 +174,24 @@ create table proc_po_schedule (
   check ((status = 'PAID_LINKED') = (payment_ref is not null))
 );
 
+-- A supplier visit (trade-fair stand, factory): supplier + date + place, and the products captured during it (entries: [{id, at, itemId, quoteId, itemCreated, note}]).
+create table proc_visits (
+  id uuid primary key default gen_random_uuid(),
+  merchant_id uuid not null,
+  supplier_id uuid not null,
+  visit_date date not null,
+  place text,
+  note text,
+  status text not null default 'OPEN' check (status in ('OPEN', 'CLOSED')),
+  entries jsonb not null default '[]'::jsonb check (jsonb_typeof(entries) = 'array'),
+  created_by text not null,
+  version integer not null default 1,
+  created_at timestamptz not null default now(),
+  ord bigint generated always as identity,
+  foreign key (supplier_id, merchant_id) references proc_suppliers (id, merchant_id),
+  unique (id, merchant_id)
+);
+
 create table proc_receipts (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null,
@@ -348,6 +366,7 @@ alter table proc_quotes enable row level security;
 alter table proc_purchase_orders enable row level security;
 alter table proc_po_lines enable row level security;
 alter table proc_po_schedule enable row level security;
+alter table proc_visits enable row level security;
 alter table proc_receipts enable row level security;
 alter table proc_stock_movements enable row level security;
 alter table proc_stock_balances enable row level security;

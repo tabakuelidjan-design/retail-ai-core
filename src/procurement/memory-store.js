@@ -13,14 +13,14 @@ const UNIQUE = {
   purchaseOrders: [(r) => ['number', r.number]],
   receipts: [(r) => ['po_idem', r.idempotencyKey]],
 };
-const MUTABLE = new Set(['items', 'locations', 'suppliers', 'supplierItems', 'quotes', 'purchaseOrders']);
+const MUTABLE = new Set(['items', 'locations', 'suppliers', 'supplierItems', 'quotes', 'purchaseOrders', 'visits']);
 
 const fresh = () => ({
-  items: new Map(), locations: new Map(), suppliers: new Map(), supplierItems: new Map(), quotes: new Map(), purchaseOrders: new Map(), receipts: new Map(),
+  items: new Map(), locations: new Map(), suppliers: new Map(), supplierItems: new Map(), quotes: new Map(), purchaseOrders: new Map(), receipts: new Map(), visits: new Map(),
   movements: [], events: [], incidents: [], idem: new Map(), approvals: new Set(), seq: new Map(), movementKeys: new Set(),
 });
 
-const MAPS = ['items', 'locations', 'suppliers', 'supplierItems', 'quotes', 'purchaseOrders', 'receipts', 'idem', 'seq'];
+const MAPS = ['items', 'locations', 'suppliers', 'supplierItems', 'quotes', 'purchaseOrders', 'receipts', 'visits', 'idem', 'seq'];
 const SETS = ['approvals', 'movementKeys'];
 const ARRAYS = ['movements', 'events', 'incidents'];
 /** Plain-JSON form of the whole state (for the file store). */

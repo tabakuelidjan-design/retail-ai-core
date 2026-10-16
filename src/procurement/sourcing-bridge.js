@@ -7,15 +7,14 @@
 //  - re-importing the same case never creates duplicates (deterministic idempotency keys + match on supplier name / SKU / barcode / unchanged terms);
 //  - an ambiguous supplier match is refused, never guessed;
 //  - a draft order is a DRAFT: no approval, no order, no payment happens here.
-import { fingerprint, microOf } from './util.js';
+import { fingerprint, microOf, supplierKeyOf } from './util.js';
+export { supplierKeyOf };
 import { INCOTERMS } from './service.js';
 
 const DEC = /^\d{1,9}(\.\d{1,6})?$/;
 const num = (v) => (v === undefined || v === null ? '' : String(v).trim().replace(',', '.'));
 const intOf = (v) => { const n = Number(String(v ?? '').trim()); return Number.isInteger(n) && n > 0 ? n : null; };
 
-/** Same normalisation as Sourcing's supplierKey, so the two modules agree on "the same supplier". */
-export const supplierKeyOf = (name) => String(name ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\b(co|ltd|limited|company|inc|corp|trading|factory|llc)\b\.?/g, ' ').replace(/[^a-z0-9一-鿿]+/g, ' ').trim();
 
 /** Pure: what a case says, in the module's vocabulary, plus everything that could not be read exactly. */
 export function caseToCapture(caseState) {

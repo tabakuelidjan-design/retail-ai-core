@@ -193,6 +193,7 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
   return deepFreeze({
     item: (id) => store.get('items', merchantId, id), items: () => store.list('items', merchantId),
     supplier: (id) => store.get('suppliers', merchantId, id), suppliers: () => store.list('suppliers', merchantId),
+    visit: (id) => store.get('visits', merchantId, id), visits: () => store.list('visits', merchantId),
     quote: (id) => store.get('quotes', merchantId, id), quotes: () => store.list('quotes', merchantId),
     purchaseOrder: (id) => store.get('purchaseOrders', merchantId, id),
     purchaseOrders: async ({ status } = {}) => (await orders()).filter((po) => !status || po.status === status),

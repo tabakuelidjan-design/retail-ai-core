@@ -70,4 +70,6 @@ export function canonical(v) {
   return `{${Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
 }
 export const fingerprint = (v) => createHash('sha256').update(canonical(v)).digest('hex');
+/** Same normalisation as Sourcing's supplierKey, so both modules agree on "the same supplier". */
+export const supplierKeyOf = (name) => String(name ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\b(co|ltd|limited|company|inc|corp|trading|factory|llc)\b\.?/g, ' ').replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ').trim();
 export const deepFreeze = (o) => { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o)) deepFreeze(v); } return o; };

@@ -5,7 +5,7 @@
 // placed the order elsewhere; deposits are a schedule linked to a Finance payment reference (paying stays in Finance, FINANCE.pay_supplier).
 import { fail, ProcurementError, StoreError } from './errors.js';
 import {
-  reqId, reqStr, optStr, reqInt, optInt, reqEnum, reqCurrency, reqDate, optDate, microOf, lineTotalMinor, pctToBps, shareMinor, reqFx, microToEurMicro, fingerprint, deepFreeze,
+  reqId, supplierKeyOf, reqStr, optStr, reqInt, optInt, reqEnum, reqCurrency, reqDate, optDate, microOf, lineTotalMinor, pctToBps, shareMinor, reqFx, microToEurMicro, fingerprint, deepFreeze,
 } from './util.js';
 import { LOCATION_TYPES, SELLABLE_TYPES, assertPostable } from './stock.js';
 import { authorize } from '../integration/approval.js';
@@ -46,7 +46,7 @@ const PERMISSION = {
   approvePurchaseOrder: ['OWNER', 'BUYER'], placeOrder: ['OWNER', 'BUYER'], confirmOrder: ['OWNER', 'BUYER'], cancelPurchaseOrder: ['OWNER', 'BUYER'], linkPayment: ['OWNER', 'BUYER'],
   closePurchaseOrder: ['OWNER', 'BUYER'], receiveGoods: ['OWNER', 'WAREHOUSE'], adjustStock: ['OWNER', 'WAREHOUSE'], transferStock: ['OWNER', 'WAREHOUSE'],
   quarantineDefect: ['OWNER', 'WAREHOUSE'], recordCount: ['OWNER', 'WAREHOUSE'], reserveStock: ['OWNER', 'WAREHOUSE'], releaseStock: ['OWNER', 'WAREHOUSE'],
-  recordIncident: ['OWNER', 'BUYER', 'WAREHOUSE'], addSupplierDocument: ['OWNER', 'BUYER'],
+  recordIncident: ['OWNER', 'BUYER', 'WAREHOUSE'], addSupplierDocument: ['OWNER', 'BUYER'], startVisit: ['OWNER', 'BUYER'], captureProduct: ['OWNER', 'BUYER'], closeVisit: ['OWNER', 'BUYER'],
 };
 
 /**
@@ -138,18 +138,58 @@ export function createProcurementService({ store, merchantId, now = () => new Da
   }
   const poSummary = (po) => ({ id: po.id, number: po.number, status: po.status, version: po.version, totalMinor: po.totalMinor, currency: po.currency });
 
+  async function createItemIn(ctx, p) {
+    const row = {
+      id: store.newId(), merchantId, sku: reqStr(p.sku, 'sku', { max: 64 }), name: reqStr(p.name, 'name', { max: 200 }), barcode: optStr(p.barcode, 'barcode', { max: 32 }),
+      variantRef: optStr(p.variantRef, 'variantRef', { max: 128 }), status: reqEnum(p.status ?? 'ACTIVE', 'status', ['PROSPECT', 'ACTIVE']),
+      reorderPoint: optInt(p.reorderPoint, 'reorderPoint', { min: 0 }), reorderQty: optInt(p.reorderQty, 'reorderQty'), attachments: attachmentsOf(p.attachments), createdAt: ctx.at,
+    };
+    const item = await ctx.tx.insert('items', row);
+    emit(ctx, 'ITEM_CREATED', { kind: 'item', id: item.id }, { sku: item.sku });
+    return { item };
+  }
+
+  async function createSupplierIn(ctx, p) {
+    const dep = p.payment?.depositPct !== undefined ? pctToBps(p.payment.depositPct, 'payment.depositPct') : null;
+    const bal = p.payment?.balancePct !== undefined ? pctToBps(p.payment.balancePct, 'payment.balancePct') : null;
+    if (dep !== null && bal !== null && dep + bal !== 10000) fail('INVALID_INPUT', 'deposit and balance must add up to 100%');
+    const row = {
+      id: store.newId(), merchantId, name: reqStr(p.name, 'name', { max: 200 }), country: p.country === undefined ? null : reqStr(p.country, 'country', { min: 2, max: 2 }).toUpperCase(),
+      currency: reqCurrency(p.currency), incotermDefault: p.incotermDefault === undefined ? null : reqEnum(p.incotermDefault, 'incotermDefault', INCOTERMS),
+      depositBps: dep ?? (bal !== null ? 10000 - bal : null), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
+      financeCompanyId: optStr(p.financeCompanyId, 'financeCompanyId', { max: 64 }), contacts: (p.contacts ?? []).slice(0, 20).map((c) => ({ name: reqStr(c.name, 'contact.name', { max: 120 }), email: optStr(c.email, 'contact.email', { max: 160 }), phone: optStr(c.phone, 'contact.phone', { max: 40 }) })),
+      documents: [], status: 'ACTIVE', createdAt: ctx.at,
+    };
+    const supplier = await ctx.tx.insert('suppliers', row);
+    emit(ctx, 'SUPPLIER_CREATED', { kind: 'supplier', id: supplier.id }, { name: supplier.name });
+    return { supplier };
+  }
+
+  async function recordQuoteIn(ctx, p) {
+    const supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
+    const item = await must(ctx, 'items', reqId(p.itemId, 'itemId'), 'ITEM_NOT_FOUND');
+    if (!Array.isArray(p.tiers) || !p.tiers.length || p.tiers.length > 20) fail('INVALID_INPUT', 'tiers must hold 1-20 entries');
+    const tiers = p.tiers.map((t, i) => ({ minQty: reqInt(t.minQty, `tiers[${i}].minQty`), unitPriceMicro: microOf(t.unitPrice, `tiers[${i}].unitPrice`) }));
+    tiers.forEach((t, i) => {
+      if (i && t.minQty <= tiers[i - 1].minQty) fail('TIER_ORDER', 'tier quantities must strictly increase');
+      if (i && t.unitPriceMicro > tiers[i - 1].unitPriceMicro) fail('TIER_PRICE_INCREASES', 'a higher tier cannot cost more per unit than a lower tier');
+    });
+    const all = (await ctx.tx.list('quotes', merchantId)).filter((q) => q.supplierId === supplier.id && q.itemId === item.id);
+    const revision = all.reduce((m, q) => Math.max(m, q.revision), 0) + 1;
+    for (const q of all) if (q.status === 'RECEIVED' || q.status === 'SELECTED') await ctx.tx.update('quotes', merchantId, q.id, { status: 'SUPERSEDED' });
+    const quote = await ctx.tx.insert('quotes', {
+      id: store.newId(), merchantId, supplierId: supplier.id, itemId: item.id, revision, currency: reqCurrency(p.currency), tiers, moq: optInt(p.moq, 'moq'),
+      incoterm: p.incoterm === undefined ? null : reqEnum(p.incoterm, 'incoterm', INCOTERMS), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
+      validUntil: optDate(p.validUntil, 'validUntil'), status: 'RECEIVED', provenance: reqEnum(p.provenance ?? 'SUPPLIER_CLAIM', 'provenance', QUOTE_ORIGINS),
+      reason: optStr(p.reason, 'reason', { max: 300 }), evidence: attachmentsOf(p.evidence, 'evidence'), recordedBy: ctx.actor.id, createdAt: ctx.at,
+    });
+    emit(ctx, 'QUOTE_RECORDED', { kind: 'quote', id: quote.id }, { supplierId: supplier.id, itemId: item.id, revision, supersededRevisions: all.length });
+    return { quote };
+  }
+
   const cmd = {
     // ---------------------------------------------------------------- catalogue
-    createItem: (actor, key, p) => command('createItem', actor, key, p, async (ctx) => {
-      const row = {
-        id: store.newId(), merchantId, sku: reqStr(p.sku, 'sku', { max: 64 }), name: reqStr(p.name, 'name', { max: 200 }), barcode: optStr(p.barcode, 'barcode', { max: 32 }),
-        variantRef: optStr(p.variantRef, 'variantRef', { max: 128 }), status: reqEnum(p.status ?? 'ACTIVE', 'status', ['PROSPECT', 'ACTIVE']),
-        reorderPoint: optInt(p.reorderPoint, 'reorderPoint', { min: 0 }), reorderQty: optInt(p.reorderQty, 'reorderQty'), attachments: attachmentsOf(p.attachments), createdAt: ctx.at,
-      };
-      const item = await ctx.tx.insert('items', row);
-      emit(ctx, 'ITEM_CREATED', { kind: 'item', id: item.id }, { sku: item.sku });
-      return { item };
-    }),
+    createItem: (actor, key, p) => command('createItem', actor, key, p, (ctx) => createItemIn(ctx, p)),
     updateItem: (actor, key, p) => command('updateItem', actor, key, p, async (ctx) => {
       const item = await must(ctx, 'items', reqId(p.itemId, 'itemId'), 'ITEM_NOT_FOUND');
       const q = p.patch ?? {}; const patch = {};
@@ -171,21 +211,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     }),
 
     // ---------------------------------------------------------------- suppliers
-    createSupplier: (actor, key, p) => command('createSupplier', actor, key, p, async (ctx) => {
-      const dep = p.payment?.depositPct !== undefined ? pctToBps(p.payment.depositPct, 'payment.depositPct') : null;
-      const bal = p.payment?.balancePct !== undefined ? pctToBps(p.payment.balancePct, 'payment.balancePct') : null;
-      if (dep !== null && bal !== null && dep + bal !== 10000) fail('INVALID_INPUT', 'deposit and balance must add up to 100%');
-      const row = {
-        id: store.newId(), merchantId, name: reqStr(p.name, 'name', { max: 200 }), country: p.country === undefined ? null : reqStr(p.country, 'country', { min: 2, max: 2 }).toUpperCase(),
-        currency: reqCurrency(p.currency), incotermDefault: p.incotermDefault === undefined ? null : reqEnum(p.incotermDefault, 'incotermDefault', INCOTERMS),
-        depositBps: dep ?? (bal !== null ? 10000 - bal : null), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
-        financeCompanyId: optStr(p.financeCompanyId, 'financeCompanyId', { max: 64 }), contacts: (p.contacts ?? []).slice(0, 20).map((c) => ({ name: reqStr(c.name, 'contact.name', { max: 120 }), email: optStr(c.email, 'contact.email', { max: 160 }), phone: optStr(c.phone, 'contact.phone', { max: 40 }) })),
-        documents: [], status: 'ACTIVE', createdAt: ctx.at,
-      };
-      const supplier = await ctx.tx.insert('suppliers', row);
-      emit(ctx, 'SUPPLIER_CREATED', { kind: 'supplier', id: supplier.id }, { name: supplier.name });
-      return { supplier };
-    }),
+    createSupplier: (actor, key, p) => command('createSupplier', actor, key, p, (ctx) => createSupplierIn(ctx, p)),
     linkSupplierItem: (actor, key, p) => command('linkSupplierItem', actor, key, p, async (ctx) => {
       const supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
       const item = await must(ctx, 'items', reqId(p.itemId, 'itemId'), 'ITEM_NOT_FOUND');
@@ -195,27 +221,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     }),
 
     // ---------------------------------------------------------------- quotes (every revision is kept = the negotiated-price history)
-    recordQuote: (actor, key, p) => command('recordQuote', actor, key, p, async (ctx) => {
-      const supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
-      const item = await must(ctx, 'items', reqId(p.itemId, 'itemId'), 'ITEM_NOT_FOUND');
-      if (!Array.isArray(p.tiers) || !p.tiers.length || p.tiers.length > 20) fail('INVALID_INPUT', 'tiers must hold 1-20 entries');
-      const tiers = p.tiers.map((t, i) => ({ minQty: reqInt(t.minQty, `tiers[${i}].minQty`), unitPriceMicro: microOf(t.unitPrice, `tiers[${i}].unitPrice`) }));
-      tiers.forEach((t, i) => {
-        if (i && t.minQty <= tiers[i - 1].minQty) fail('TIER_ORDER', 'tier quantities must strictly increase');
-        if (i && t.unitPriceMicro > tiers[i - 1].unitPriceMicro) fail('TIER_PRICE_INCREASES', 'a higher tier cannot cost more per unit than a lower tier');
-      });
-      const all = (await ctx.tx.list('quotes', merchantId)).filter((q) => q.supplierId === supplier.id && q.itemId === item.id);
-      const revision = all.reduce((m, q) => Math.max(m, q.revision), 0) + 1;
-      for (const q of all) if (q.status === 'RECEIVED' || q.status === 'SELECTED') await ctx.tx.update('quotes', merchantId, q.id, { status: 'SUPERSEDED' });
-      const quote = await ctx.tx.insert('quotes', {
-        id: store.newId(), merchantId, supplierId: supplier.id, itemId: item.id, revision, currency: reqCurrency(p.currency), tiers, moq: optInt(p.moq, 'moq'),
-        incoterm: p.incoterm === undefined ? null : reqEnum(p.incoterm, 'incoterm', INCOTERMS), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
-        validUntil: optDate(p.validUntil, 'validUntil'), status: 'RECEIVED', provenance: reqEnum(p.provenance ?? 'SUPPLIER_CLAIM', 'provenance', QUOTE_ORIGINS),
-        reason: optStr(p.reason, 'reason', { max: 300 }), evidence: attachmentsOf(p.evidence, 'evidence'), recordedBy: ctx.actor.id, createdAt: ctx.at,
-      });
-      emit(ctx, 'QUOTE_RECORDED', { kind: 'quote', id: quote.id }, { supplierId: supplier.id, itemId: item.id, revision, supersededRevisions: all.length });
-      return { quote };
-    }),
+    recordQuote: (actor, key, p) => command('recordQuote', actor, key, p, (ctx) => recordQuoteIn(ctx, p)),
     selectQuote: (actor, key, p) => command('selectQuote', actor, key, p, async (ctx) => {
       const quote = await must(ctx, 'quotes', reqId(p.quoteId, 'quoteId'), 'QUOTE_NOT_FOUND');
       if (quote.status !== 'RECEIVED') fail('QUOTE_NOT_SELECTABLE', `a ${quote.status} quote cannot be selected`);
@@ -458,6 +464,69 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const next = await ctx.tx.update('suppliers', merchantId, supplier.id, { documents: [...supplier.documents, doc] }, supplier.version);
       emit(ctx, 'SUPPLIER_DOCUMENT_ADDED', { kind: 'supplier', id: supplier.id }, { documentId: doc.id, type: doc.type, expiresOn: doc.expiresOn });
       return { document: doc, supplierVersion: next.version };
+    }),
+
+    // ---------------------------------------------------------------- supplier visits (the mobile flow): start, capture products one tap at a time, close
+    startVisit: (actor, key, p) => command('startVisit', actor, key, p, async (ctx) => {
+      let supplier; let supplierCreated = false;
+      if (p.supplierId !== undefined) supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
+      else {
+        const name = reqStr(p.supplierName, 'supplierName', { max: 200 });
+        const same = (await ctx.tx.list('suppliers', merchantId)).filter((x) => supplierKeyOf(x.name) === supplierKeyOf(name));
+        if (same.length > 1) fail('SUPPLIER_AMBIGUOUS', `${same.length} suppliers match "${name}": pick one`, { candidates: same.map((x) => ({ id: x.id, name: x.name })) });
+        if (same.length === 1) supplier = same[0];
+        else { supplier = (await createSupplierIn(ctx, { name, currency: p.currency, country: p.country })).supplier; supplierCreated = true; }
+      }
+      const visit = await ctx.tx.insert('visits', { id: store.newId(), merchantId, supplierId: supplier.id, visitDate: reqDate(p.date, 'date'), place: optStr(p.place, 'place', { max: 200 }), note: optStr(p.note, 'note', { max: 1000 }), status: 'OPEN', entries: [], createdBy: ctx.actor.id, createdAt: ctx.at });
+      emit(ctx, 'VISIT_STARTED', { kind: 'visit', id: visit.id }, { supplierId: supplier.id, supplierCreated, place: visit.place });
+      return { visit, supplier: { id: supplier.id, name: supplier.name, currency: supplier.currency, created: supplierCreated } };
+    }),
+    /**
+     * ONE tap, ONE transaction: the product (a prospect item, reused when its barcode or id is known), its photos and - when a price was given - a quote revision,
+     * all linked to the visit. The caller's idempotency key (a client-generated capture id) makes a retry after a lost connection harmless.
+     */
+    captureProduct: (actor, key, p) => command('captureProduct', actor, key, p, async (ctx) => {
+      const visit = await must(ctx, 'visits', reqId(p.visitId, 'visitId'), 'VISIT_NOT_FOUND');
+      if (visit.status !== 'OPEN') fail('VISIT_CLOSED', 'this visit is closed');
+      if (visit.entries.length >= 500) fail('LIMIT_REACHED', 'too many products in one visit');
+      const supplier = await must(ctx, 'suppliers', visit.supplierId, 'SUPPLIER_NOT_FOUND');
+      const prod = p.product ?? {};
+      let item; let itemCreated = false;
+      if (p.itemId !== undefined) item = await must(ctx, 'items', reqId(p.itemId, 'itemId'), 'ITEM_NOT_FOUND');
+      else {
+        const barcode = optStr(prod.barcode, 'product.barcode', { max: 32 });
+        const known = barcode ? (await ctx.tx.list('items', merchantId)).find((i) => i.barcode === barcode) : null;
+        if (known) item = known;
+        else {
+          const n = visit.entries.filter((e) => e.itemCreated).length + 1;
+          const sku = prod.sku !== undefined ? reqStr(prod.sku, 'product.sku', { max: 64 }) : `V${visit.visitDate.replace(/-/g, '')}-${visit.id.slice(0, 4)}-${n}`.toUpperCase();
+          item = (await createItemIn(ctx, { sku, name: prod.name, barcode, status: 'PROSPECT', attachments: prod.photos })).item; itemCreated = true;
+        }
+      }
+      const photos = attachmentsOf(prod.photos, 'product.photos');
+      if (!itemCreated && photos.length) {
+        const have = new Set((item.attachments ?? []).map((a) => a.ref)); const add = photos.filter((a) => !have.has(a.ref));
+        if (add.length) item = await ctx.tx.update('items', merchantId, item.id, { attachments: [...(item.attachments ?? []), ...add].slice(0, 20) }, item.version);
+      }
+      let quote = null;
+      if (p.quote !== undefined) {
+        const q = p.quote;
+        quote = (await recordQuoteIn(ctx, {
+          supplierId: supplier.id, itemId: item.id, currency: q.currency ?? supplier.currency, tiers: q.tiers ?? [{ minQty: q.moq ?? 1, unitPrice: q.unitPrice }], moq: q.moq, incoterm: q.incoterm, leadTimeDays: q.leadTimeDays,
+          validUntil: q.validUntil, provenance: 'SUPPLIER_CLAIM', reason: `visit ${visit.visitDate}${visit.place ? ` - ${visit.place}` : ''}${q.note ? ` - ${q.note}` : ''}`, evidence: q.photos,
+        })).quote;
+      }
+      const entry = { id: store.newId(), at: ctx.at, itemId: item.id, quoteId: quote?.id ?? null, itemCreated, note: optStr(p.note, 'note', { max: 500 }) };
+      const next = await ctx.tx.update('visits', merchantId, visit.id, { entries: [...visit.entries, entry] }, visit.version);
+      emit(ctx, 'VISIT_PRODUCT_CAPTURED', { kind: 'visit', id: visit.id }, { itemId: item.id, quoteId: entry.quoteId, itemCreated });
+      return { visit: next, item, quote, itemCreated, entry };
+    }),
+    closeVisit: (actor, key, p) => command('closeVisit', actor, key, p, async (ctx) => {
+      const visit = await must(ctx, 'visits', reqId(p.visitId, 'visitId'), 'VISIT_NOT_FOUND');
+      if (visit.status === 'CLOSED') fail('VISIT_CLOSED', 'this visit is already closed');
+      const next = await ctx.tx.update('visits', merchantId, visit.id, { status: 'CLOSED', note: p.note !== undefined ? optStr(p.note, 'note', { max: 1000 }) : visit.note }, visit.version);
+      emit(ctx, 'VISIT_CLOSED', { kind: 'visit', id: visit.id }, { products: visit.entries.length });
+      return { visit: next };
     }),
 
     // ---------------------------------------------------------------- supplier incidents (inputs of the traceable reliability metrics)

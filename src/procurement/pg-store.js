@@ -23,6 +23,7 @@ const SPEC = {
   supplierItems: { table: 'proc_supplier_items', cols: { id: 'uuid', merchant_id: 'uuid', supplier_id: 'uuid', item_id: 'uuid', supplier_sku: 'text', moq: 'int', lead_time_days: 'int', created_at: 'ts' } },
   quotes: { table: 'proc_quotes', cols: { id: 'uuid', merchant_id: 'uuid', supplier_id: 'uuid', item_id: 'uuid', revision: 'int', currency: 'text', tiers: 'json', moq: 'int', incoterm: 'text', lead_time_days: 'int', valid_until: 'date', status: 'text', provenance: 'text', reason: 'text', evidence: 'json', recorded_by: 'text', version: 'int', created_at: 'ts' } },
   purchaseOrders: { table: 'proc_purchase_orders', cols: { id: 'uuid', merchant_id: 'uuid', number: 'text', supplier_id: 'uuid', currency: 'text', incoterm: 'text', status: 'text', expected_date: 'date', original_expected_date: 'date', date_changes: 'json', destination_location_id: 'uuid', deposit_bps: 'int', fx: 'json', total_minor: 'bigint', supplier_reference: 'text', ordered_at: 'ts', closed_short: 'bool', close_reason: 'text', cancel_reason: 'text', created_by: 'text', submitted_by: 'text', version: 'int', created_at: 'ts' } },
+  visits: { table: 'proc_visits', cols: { id: 'uuid', merchant_id: 'uuid', supplier_id: 'uuid', visit_date: 'date', place: 'text', note: 'text', status: 'text', entries: 'json', created_by: 'text', version: 'int', created_at: 'ts' } },
   receipts: { table: 'proc_receipts', cols: { id: 'uuid', merchant_id: 'uuid', po_id: 'uuid', supplier_id: 'uuid', received_at: 'date', promised_date: 'date', on_time: 'bool', location_id: 'uuid', quarantine_location_id: 'uuid', lines: 'json', idempotency_key: 'text', approval_id: 'text', recorded_by: 'text', created_at: 'ts' } },
   movements: { table: 'proc_stock_movements', cols: { id: 'uuid', merchant_id: 'uuid', idempotency_key: 'text', group_id: 'uuid', at: 'ts', item_id: 'uuid', location_id: 'uuid', bucket: 'text', delta: 'int', kind: 'text', reason: 'text', reference: 'json', cost_status: 'text', unit_cost_eur_micro: 'bigint', actor_id: 'text', approval_id: 'text' } },
   events: { table: 'proc_events', cols: { id: 'uuid', merchant_id: 'uuid', at: 'ts', type: 'text', actor: 'json', object: 'json', approval: 'json', detail: 'json', idempotency_key: 'text' } },
@@ -30,8 +31,8 @@ const SPEC = {
 };
 const LINE_COLS = { line_id: 'text', position: 'int', item_id: 'uuid', qty: 'int', unit_price_micro: 'bigint', total_minor: 'bigint', quote_id: 'uuid', price_source: 'text', qty_received: 'int', qty_defective: 'int' };
 const SCHED_COLS = { kind: 'text', amount_minor: 'bigint', due_event: 'text', status: 'text', payment_ref: 'text', paid_amount_minor: 'bigint', paid_at: 'date' };
-const MUTABLE = new Set(['items', 'locations', 'suppliers', 'quotes', 'purchaseOrders']);
-const VERSIONED = new Set(['items', 'suppliers', 'quotes', 'purchaseOrders']);
+const MUTABLE = new Set(['items', 'locations', 'suppliers', 'quotes', 'purchaseOrders', 'visits']);
+const VERSIONED = new Set(['items', 'suppliers', 'quotes', 'purchaseOrders', 'visits']);
 
 const sel = (cols, a = '') => Object.entries(cols).map(([c, t]) => (t === 'date' ? `to_char(${a}${c}, 'YYYY-MM-DD') as ${c}` : t === 'ts' ? `to_char(${a}${c} at time zone 'UTC', '${TS_FORMAT}') as ${c}` : `${a}${c}`)).join(', ');
 function fromRow(cols, row) {
@@ -85,7 +86,7 @@ export function createPgProcurementStore({ pool, newId = randomUUID } = {}) {
       async get(coll, merchantId, id) {
         if (typeof id !== 'string' || !UUID.test(id)) return null;
         const spec = SPEC[coll];
-        const lock = inTx && coll === 'purchaseOrders' ? ' for update' : ''; // concurrent receipts / transitions on one order serialise here
+        const lock = inTx && (coll === 'purchaseOrders' || coll === 'visits') ? ' for update' : ''; // concurrent receipts / transitions on one order serialise here
         const r = await run(`select ${sel(spec.cols)} from ${spec.table} where id = $1 and merchant_id = $2${lock}`, [id, merchantId]);
         if (!r.rows[0]) return null;
         return coll === 'purchaseOrders' ? (await loadPo(r.rows))[0] : fromRow(spec.cols, r.rows[0]);
