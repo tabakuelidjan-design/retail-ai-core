@@ -14,6 +14,7 @@ import { assess as sourcingAssess } from '../sourcing/core/case.js';
 import { dealIntelligence, compareDeals } from '../sourcing/core/field/deal.js';
 import { runCreativeEndToEnd } from '../creative-e2e/index.js';
 import { eurOfSupplier } from '../finance/currency.js';
+import { mergeProcurementAdapters } from './procurement.js';
 
 export * from './constants.js';
 export { createIdentityRegistry, ref, parseRef } from './ids.js';
@@ -40,9 +41,10 @@ export function createIntegrationStore() {
  *  brand                { tenant_id, brand_ref, approved_claims:[{ref, wording}] }  -> Branding
  *  creativeWorld        ports + base brief/request for Creative, or a factory returning a fresh one per run (fakes in tests; no provider is ever created here)
  *  analytics            { explainChange(args) }               -> optional; absent => MODULE_NOT_AVAILABLE
+ *  procurement          the assistant of createProcurement()   -> optional; adds `proc_*` read/proposal commands to STOCK_SALES and BUYING (nothing existing is replaced)
  *  unavailable          modules to simulate as down
  */
-export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, unavailable = [], now = () => new Date().toISOString() }) {
+export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, procurement = null, unavailable = [], now = () => new Date().toISOString() }) {
   const registry = createIdentityRegistry({ tenant_id });
   const ledger = createTraceLedger({ tenant_id, now });
   const store = createIntegrationStore();
@@ -106,6 +108,8 @@ export function createIntegration({ tenant_id, finance = null, readOnHand = () =
     } },
     [M.PARLE_A_NORDLA]: { available: avail(M.PARLE_A_NORDLA), commands: {} },
   };
+
+  if (procurement) mergeProcurementAdapters(adapters, procurement);
 
   /** Everything financially relevant about ONE supplier (a canonical supplier ref). Exposure counts EUR only; foreign-currency documents are listed, never converted. */
   async function supplierOverview({ supplier_ref }) {

@@ -1,0 +1,57 @@
+name: procurement-stock-v1
+# Stock / Achats / Fournisseurs (Chantier C). Isolated: it runs only for this module's files and never touches another workflow.
+# No secret, no provider, no network, no production data: the unit tests run over the in-memory and file stores, the SQL jobs over a throw-away PostgreSQL container.
+on:
+  push:
+    branches: ['feature/stock-achat-**']
+    paths:
+      - 'src/procurement/**'
+      - 'test/procurement-*'
+      - 'test/integration-procurement.test.js'
+      - 'test/postgres/procurement*'
+      - 'supabase/migrations-pending/*procurement_stock*'
+      - 'supabase/rollback/*procurement_stock*'
+      - 'src/integration/**'
+      - 'src/finance/purchase-analysis.js'
+      - 'src/finance/money.js'
+      - 'package.json'
+      - '.github/workflows/procurement-stock-v1.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  unit:
+    name: unit + integration (node ${{ matrix.node }}, ${{ matrix.store }} store)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+        store: [memory, file]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm ci --no-audit --no-fund
+      - name: Procurement suites (each file in its own process)
+        env:
+          PROCUREMENT_STORE: ${{ matrix.store }}
+        run: |
+          for f in test/procurement-*.test.js; do echo "::group::$f"; node --test "$f" || exit 1; echo "::endgroup::"; done
+      - name: Integration wiring and the neighbours that share the approval policy and the Finance engine
+        run: node --test test/integration-procurement.test.js test/integration-contracts.test.js test/integration-workflows.test.js test/buying.test.js test/finance-stock.test.js
+  postgres:
+    name: real PostgreSQL 17 (throw-away container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix test/pg --no-audit --no-fund
+      - name: Schema guarantees (migration, rollback, ledger, races)
+        run: node test/postgres/procurement.pg-smoke.mjs
+      - name: Parity - the SAME procurement suites on PostgreSQL (incl. network faults and concurrency)
+        run: node test/postgres/procurement-parity.mjs
