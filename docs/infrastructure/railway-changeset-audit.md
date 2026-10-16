@@ -73,3 +73,19 @@ Activation **seulement** si toutes les lignes sont en A.
 3. `/healthz` 200 ; `/api/core/modules` 401 ; `/healthz/backup` `PENDING_FIRST_RUN`.
 4. +10 min : `Backup OK … copied off-server` ; puis restauration indépendante (`staging-backup-drill`, sur accord).
 Retour arrière : service à 0 instance ; aucune donnée ni autre service touché.
+
+## 5. Corrections à mettre en attente puis nouvel audit (16/10)
+
+Premier audit (session Railway, lecture seule) : **29 lignes, toutes A** (26 création du service, 3 volume) ; 0 B, 0 C. Lot conservé.
+
+Corrections exactes (valeurs non secrètes) : `ops/railway-staging/staged-corrections.json` — commit `c2c314d` → `ab02b77`,
+`NORDLA_MERCHANT_ID` → `67646dbb-…`, variables manquantes, variables qui doivent rester absentes. **Mises en attente, pas déployées.**
+
+Nouvel audit — chaque condition doit être vraie :
+1. Le lot ne contient toujours **que** des lignes du service `sourcing-staging` et de son volume (A) ; 0 B ; 0 C. Le nombre de lignes peut
+   augmenter (variables ajoutées) : chaque nouvelle ligne doit être une variable de ce service listée dans le fichier ci-dessus.
+2. Commit épinglé = `ab02b7791b7dd91fbc7c10e7029bef5983a0c02a` (le SHA complet, pas une branche « dernière version »).
+3. `NORDLA_MERCHANT_ID` = `67646dbb-5e2e-4cd7-aad6-0ab289b068cb` ; **aucune** valeur contenant `36b1a1a7` ni `xbtzjabbseclmqfozjeo`.
+4. Chaque variable de `set_if_absent_or_different` a exactement sa valeur ; `must_be_absent` absentes.
+5. Inchangés : Dockerfile, commande de démarrage, healthcheck, 1 réplique, volume 1 Go sur `/app/data`.
+Réponse attendue : le même tableau `n° | service | type | élément | A/B/C` + une ligne par condition 1–5 (vrai / faux), sans valeur secrète.
