@@ -298,6 +298,7 @@ async function screenStock() {
       h('div', { class: 'big' }, fmtMoney(v.confirmedEurMinor + v.estimatedEurMinor, 'EUR')),
       h('p', { class: 'small muted' }, `${fmtMoney(v.confirmedEurMinor, 'EUR')} confirmé · ${fmtMoney(v.estimatedEurMinor, 'EUR')} estimé (prix des marchandises seul, sans transport ni droits)${v.itemsWithUnknownCost ? ` · ${v.unknownUnits} unité(s) de ${v.itemsWithUnknownCost} produit(s) SANS coût connu, non valorisées` : ''}.`)),
     S.me.canReceive || S.me.canAdjust ? h('div', { class: 'row' }, h('button', { class: 'btn sec', onclick: () => go('count') }, 'Faire un inventaire'), h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente')) : h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente'),
+    S.me.canSelfApprove ? h('button', { class: 'btn sec', onclick: () => go('newLocation') }, 'Ajouter un emplacement') : null,
     d.items.length ? h('ul', { class: 'list' }, d.items.map((i) => h('li', {}, h('button', { class: 'tap', onclick: () => go('stockItem', { item: i, locations: d.locations }) }, i.photo ? thumb(i.photo) : h('div', { class: 'thumb' }), h('div', { class: 'grow' }, h('div', { class: 'nm' }, i.name), h('div', { class: 'sub' }, `${i.sku} · à vendre ${i.available}${i.incoming.qty ? ` · attendu ${i.incoming.qty}` : ''}${i.quarantine ? ` · quarantaine ${i.quarantine}` : ''}`)), valuationChip(i.valuation))))) : empty('Aucun produit en stock pour l’instant. Les marchandises apparaissent après leur réception.'),
     h('p', { class: 'small muted' }, 'Le stock vient des réceptions et des mouvements enregistrés ici : ce n’est pas le stock Shopify, et rien n’est écrit dans Shopify.'));
 }
@@ -346,7 +347,7 @@ async function screenReceive({ id }) {
 }
 
 // ------------------------------------------------------------------ router
-const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive, suppliers: V1.suppliers, newSupplier: V1.newSupplier, supplier: V1.supplier, newOffer: V1.newOffer, adjust: V1.adjust, transfer: V1.transfer, history: V1.history, count: V1.count, requests: V1.requests };
+const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive, newLocation: V1.newLocation, suppliers: V1.suppliers, newSupplier: V1.newSupplier, supplier: V1.supplier, newOffer: V1.newOffer, adjust: V1.adjust, transfer: V1.transfer, history: V1.history, count: V1.count, requests: V1.requests };
 async function render() {
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === S.tab)));
   netBadge();

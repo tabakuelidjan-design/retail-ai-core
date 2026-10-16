@@ -112,6 +112,14 @@ export function createV1Routes({ c, q, send, readJson, idemKey, now }) {
       return true;
     }
 
+    // ---------------------------------------------------------------- locations (structural: the owner only)
+    if (p === '/api/locations' && m === 'POST') {
+      if (!caps.canSelfApprove) forbid('only the owner creates stock locations');
+      const b = await readJson(req); const r = await c.createLocation({ id: user.id, role: 'OWNER' }, idemKey(req), { name: str(b.name, 100), type: b.type });
+      send(res, 200, { location: r.location, replayed: r.replayed });
+      return true;
+    }
+
     // ---------------------------------------------------------------- transfers, count preview, history
     if (p === '/api/stock/transfers' && m === 'POST') {
       if (!caps.canReceive) forbid('your access cannot move stock: it needs a person explicitly authorized by the owner');

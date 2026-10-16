@@ -96,12 +96,25 @@ export function createV1Screens(env) {
     } }, 'Déposer la demande d’ajustement');
     put(box, h('div', { class: 'card' }, h('p', { class: 'small muted' }, `Stock actuel : ${item.physical} (dont ${item.available} à vendre). Un ajustement corrige le stock sans réception : il est toujours tracé et validé par une personne habilitée.`), field('Emplacement', where), field('Variation', delta), field('Motif', why), out, send));
   }
+  function screenNewLocation() {
+    setHead('Nouvel emplacement', '', true);
+    if (!S.me.canSelfApprove) return swap(main, warn('Seul le propriétaire crée un emplacement de stock.'));
+    const key = uid('loc'); const name = h('input', { placeholder: 'ex. Magasin de Namur', autocomplete: 'off' }); const type = select(Object.entries(LOC_FR).map(([v, t]) => [v, t[0].toUpperCase() + t.slice(1)]), 'STORE'); const err = h('div', {}); let busy = false;
+    const btn = h('button', { class: 'btn', onclick: async () => {
+      if (busy) return; swap(err); if (!name.value.trim()) return put(err, warn('Le nom de l’emplacement est nécessaire.'));
+      busy = true; btn.disabled = true; const r = await request('POST', '/api/locations', { key, body: { name: name.value.trim(), type: type.value } }); busy = false; btn.disabled = false;
+      if (r.status === 200) { banner('Emplacement créé.', 'ok'); S.stack.pop(); render(); } else put(err, warn(r.status === 0 ? 'Connexion indisponible : rien n’a été créé.' : errText(r)));
+    } }, 'Créer l’emplacement');
+    swap(main, h('div', { class: 'card' }, h('p', { class: 'small muted' }, 'Un emplacement est un endroit où le stock se trouve (entrepôt, magasin, réserve). Les transferts et les inventaires se font entre emplacements.'), field('Nom', name), field('Type', type), err, btn));
+  }
   async function screenTransfer({ item, locations }) {
     setHead('Transférer', item.name, true); const box = h('div', {}); swap(main, box);
     if (needs(box, S.me.canReceive, 'Seules les personnes autorisées par le propriétaire peuvent déplacer du stock.')) return;
     const from = select(item.perLocation.filter((l) => l.onHand - l.reserved > 0).map((l) => [l.locationId, `${l.name} — ${l.onHand - l.reserved} disponibles`]), item.perLocation[0]?.locationId);
     const to = select(locations.filter((l) => ['WAREHOUSE', 'STORE', 'BACKROOM'].includes(l.type)).map((l) => [l.id, locLabel(l)]));
     const qty = h('input', { inputmode: 'numeric', placeholder: 'quantité' }); const why = h('input', { placeholder: 'motif (facultatif)' }); const out = h('div', {}); let busy = false; const key = uid('tr');
+    const sellable = locations.filter((l) => ['WAREHOUSE', 'STORE', 'BACKROOM'].includes(l.type));
+    if (sellable.length < 2) return put(box, empty('Un transfert demande au moins deux emplacements (par ex. entrepôt et magasin).'), S.me.canSelfApprove ? h('button', { class: 'btn', onclick: () => go('newLocation') }, 'Créer un emplacement') : h('div', { class: 'note' }, 'Demandez au propriétaire de créer l’emplacement.'));
     const send = h('button', { class: 'btn', onclick: async () => {
       if (busy) return; swap(out); const q = parseInteger(qty.value); if (!q) return put(out, warn('Indiquez une quantité d’au moins 1.')); if (from.value === to.value) return put(out, warn('Choisissez deux emplacements différents.'));
       busy = true; send.disabled = true;
@@ -171,5 +184,5 @@ export function createV1Screens(env) {
     put(box, stale(res), h('h2', {}, `À traiter (${pend.length})`), pend.length ? pend.map(card) : empty('Aucune demande en attente.'), done.length ? [h('h2', {}, 'Dernières décisions'), done.map(card)] : null);
   }
 
-  return { suppliers: screenSuppliers, newSupplier: screenNewSupplier, supplier: screenSupplier, newOffer: screenNewOffer, adjust: screenAdjust, transfer: screenTransfer, history: screenHistory, count: screenCount, requests: screenRequests, decide };
+  return { newLocation: screenNewLocation, suppliers: screenSuppliers, newSupplier: screenNewSupplier, supplier: screenSupplier, newOffer: screenNewOffer, adjust: screenAdjust, transfer: screenTransfer, history: screenHistory, count: screenCount, requests: screenRequests, decide };
 }

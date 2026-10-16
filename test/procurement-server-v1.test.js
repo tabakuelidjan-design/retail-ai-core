@@ -211,3 +211,13 @@ test('history: every movement with its actor, reason and approval, plus the jour
   const bad = await s.call('POST', '/api/stock/requests', { user: HANDLER, body: { type: 'ADJUST', itemId: randomUUID(), locationId: W, delta: 1, reason: 'unknown item on purpose' } });
   assert.equal(bad.status, 404); assert.doesNotMatch(String(bad.json.message), /stockLocations|purchaseOrders|supplierItems|proc_/);
 });
+
+test('locations: only the owner creates one; a type must be valid; a retry creates one; it appears in the stock answer and can receive a transfer', async (t) => {
+  const s = await boot(); t.after(() => s.close()); const { itemId, W } = await stocked(s);
+  for (const user of [RESP, HANDLER, EMPLOYEE, FIELD, VIEWER]) assert.equal((await s.call('POST', '/api/locations', { user, body: { name: 'Réserve', type: 'BACKROOM' } })).status, 403, user.id);
+  assert.equal((await s.call('POST', '/api/locations', { body: { name: 'Réserve', type: 'SECRET_ROOM' } })).status, 400); assert.equal((await s.call('POST', '/api/locations', { body: { name: '', type: 'BACKROOM' } })).status, 400);
+  const key = idem(); const mk = await s.call('POST', '/api/locations', { key, body: { name: 'Réserve arrière', type: 'BACKROOM' } }); assert.equal(mk.status, 200);
+  assert.equal((await s.call('POST', '/api/locations', { key, body: { name: 'Réserve arrière', type: 'BACKROOM' } })).json.replayed, true);
+  const locs = (await s.call('GET', '/api/stock')).json.locations; assert.equal(locs.filter((l) => l.name === 'Réserve arrière').length, 1);
+  assert.equal((await s.call('POST', '/api/stock/transfers', { user: HANDLER, body: { itemId, fromLocationId: W, toLocationId: mk.json.location.id, qty: 5 } })).status, 200);
+});
