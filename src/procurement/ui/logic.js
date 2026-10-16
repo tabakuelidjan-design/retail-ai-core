@@ -9,6 +9,8 @@ export function parseDecimal(text) {
   const s = String(text ?? '').trim().replace(',', '.');
   return /^\d{1,9}(\.\d{1,6})?$/.test(s) && Number(s) > 0 ? s : null;
 }
+/** A whole number, possibly negative: "-3" -> { ok: true, value: -3 }; "3.5", "abc", "" -> { ok: false }. */
+export function parseWhole(text, { min = -1e6 } = {}) { const s = String(text ?? '').trim(); if (!/^-?\d{1,9}$/.test(s)) return { ok: false }; const v = Number(s); return v >= min ? { ok: true, value: v } : { ok: false }; }
 export const parseInteger = (text) => { const s = String(text ?? '').trim(); return /^\d{1,9}$/.test(s) && Number(s) > 0 ? Number(s) : null; };
 
 /**
@@ -82,11 +84,14 @@ export function poActions(po, me) {
   if (po.status === 'DRAFT') acts.push({ id: 'submit', label: 'Envoyer pour approbation', primary: true }, { id: 'cancel', label: 'Supprimer ce brouillon', danger: true, needsReason: true });
   if (po.status === 'PENDING_APPROVAL') {
     if (me.canApprove && me.id !== po.createdBy && me.id !== po.submittedBy) acts.push({ id: 'approve', label: 'Approuver', primary: true });
+    else if (me.canApprove && me.canSelfApprove) acts.push({ id: 'approve', label: 'Approuver quand même (exception propriétaire)', selfApprove: true, confirm: 'Vous avez vous-même préparé ce bon. En tant que propriétaire, vous pouvez l’approuver vous-même : c’est une EXCEPTION, elle sera inscrite au journal avec votre nom. Confirmer ?' });
     else if (me.canApprove) acts.push({ id: 'blocked', label: 'Vous avez préparé ce bon : une autre personne habilitée doit l’approuver.', info: true });
     if (me.canApprove) acts.push({ id: 'reject', label: 'Renvoyer en brouillon', needsReason: true });
   }
   if (['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && me.canReceive) acts.push({ id: 'receive', label: 'Réceptionner la marchandise', primary: true });
   if (['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED'].includes(po.status) && !me.canReceive) acts.push({ id: 'wait-receive', label: 'La réception est faite par une personne habilitée (entrepôt ou propriétaire).', info: true });
+  if (po.status === 'ORDERED' && me.prepare) acts.push({ id: 'confirm', label: 'Noter la confirmation du fournisseur' });
+  if (['PARTIALLY_RECEIVED', 'RECEIVED'].includes(po.status) && me.prepare) acts.push({ id: 'close', label: po.status === 'RECEIVED' ? 'Clôturer la commande' : 'Clôturer (le reste n’arrivera pas)', needsReason: po.status === 'PARTIALLY_RECEIVED', confirm: po.status === 'PARTIALLY_RECEIVED' ? 'Clôturer maintenant : les quantités non arrivées sont abandonnées et le motif est conservé. Confirmer ?' : undefined });
   if (po.status === 'APPROVED' && me.canApprove) acts.push({ id: 'order', label: 'Marquer comme commandé', primary: true, confirm: 'Confirmez : la commande a été passée auprès du fournisseur. Nordla n’envoie rien et ne paie rien.' });
   if (['APPROVED'].includes(po.status) && !me.canApprove) acts.push({ id: 'wait', label: 'En attente de la commande par une personne habilitée.', info: true });
   return acts;
@@ -146,3 +151,35 @@ export const ERRORS_FR = {
   OVER_RECEIPT: 'Vous essayez de réceptionner plus que la quantité restant à recevoir.', NOT_FOUND: 'Introuvable : actualisez la page.',
 };
 export const errText = (r) => ERRORS_FR[r.json?.error] ?? (/_NOT_FOUND$/.test(r.json?.error ?? '') ? ERRORS_FR.NOT_FOUND : null) ?? r.json?.message ?? (r.status === 0 ? 'Connexion indisponible.' : `Erreur ${r.status}`);
+
+// ---------------------------------------------------------------- V1: stock changes, inventories, supplier reliability
+
+/** Lines of a physical count typed by hand: only the lines that were counted; a difference from what Nordla expects needs a reason. */
+export function countLinesFrom(rows) {
+  const errors = []; const lines = [];
+  for (const r of rows) {
+    const raw = String(r.counted ?? '').trim(); if (raw === '') continue;
+    const n = parseWhole(raw, { min: 0 });
+    if (!n.ok) { errors.push(`${r.name} : le comptage doit être un nombre entier, 0 ou plus.`); continue; }
+    const reason = String(r.reason ?? '').trim();
+    if (n.value !== r.expected && reason.length < 5) { errors.push(`${r.name} : écart de ${n.value - r.expected > 0 ? '+' : ''}${n.value - r.expected} : indiquez le motif (5 caractères minimum).`); continue; }
+    lines.push({ itemId: r.itemId, counted: n.value, reason: n.value === r.expected ? '' : reason });
+  }
+  if (!lines.length && !errors.length) errors.push('Comptez au moins un produit.');
+  return { ok: !errors.length, errors, lines };
+}
+
+/** One line for a filed stock change, in plain French. */
+export function requestSummary(r) {
+  if (r.type === 'ADJUST') return `Ajustement ${r.delta > 0 ? '+' : ''}${r.delta} × ${r.name ?? r.sku ?? 'produit'}`;
+  return `Inventaire : ${r.lines?.length ?? 0} produit(s)`;
+}
+
+/** What the supplier's measured reliability says - and nothing when there is not enough data to say anything. */
+export function supplierMetricsLine(m) {
+  if (!m) return 'Pas de mesure disponible.';
+  const pct = (x) => `${Math.round(x.ratio * 100)} %`; const inc = m.incidents?.total ? ` · ${m.incidents.total} incident(s) enregistré(s)` : '';
+  const a = m.onTimeReceipts; const d = m.defectRateUnits;
+  if (a?.status !== 'MEASURED' && d?.status !== 'MEASURED') return `Pas encore assez de livraisons pour mesurer la fiabilité (minimum ${a?.minSample ?? 3} réceptions).${inc}`;
+  return `${a.status === 'MEASURED' ? `${pct(a)} des réceptions à l’heure (${a.numerator}/${a.denominator})` : 'ponctualité : pas assez de réceptions'} · ${d.status === 'MEASURED' ? `${pct(d)} de pièces défectueuses (${d.numerator}/${d.denominator})` : 'défauts : pas assez de pièces'}${inc}`;
+}

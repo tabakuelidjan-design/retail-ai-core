@@ -263,6 +263,22 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
     } catch (e) { return fail(res, e); }
   }
 
+  async function serveAsset(res, name) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name) || !MIME[extname(name)]) return send(res, 404, { error: 'NOT_FOUND' });
+    try { const data = await asset(name); res.writeHead(200, { 'content-type': MIME[extname(name)], 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); return res.end(data); } catch { return send(res, 404, { error: 'NOT_FOUND' }); }
+  }
+
+  /** Hosted mode: the phone screens, served under /procurement/ by the Nordla server (static files only: no data, no secret; every /api/procurement call still needs the session). */
+  async function handleStatic(req, res, url) {
+    try {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+      const rel = url.pathname.replace(/^\/procurement/, '');
+      if (rel === '') { res.writeHead(301, { location: '/procurement/' }); return res.end(); }
+      res.setHeader('content-security-policy', CSP); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', 'DENY');
+      return await serveAsset(res, rel === '/' ? 'index.html' : rel.slice(1));
+    } catch (e) { return fail(res, e); }
+  }
+
   const handler = async function handler(req, res) {
     try {
       if (!hostOk(req)) return send(res, 421, { error: 'HOST_NOT_ALLOWED' });
@@ -270,12 +286,11 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       res.setHeader('content-security-policy', CSP); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', 'DENY');
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
-      const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-      if (!/^[A-Za-z0-9._-]+$/.test(name) || !MIME[extname(name)]) return send(res, 404, { error: 'NOT_FOUND' });
-      try { const data = await asset(name); res.writeHead(200, { 'content-type': MIME[extname(name)], 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); return res.end(data); } catch { return send(res, 404, { error: 'NOT_FOUND' }); }
+      return await serveAsset(res, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
     } catch (e) { return fail(res, e); }
   };
   handler.handleApi = handleApi;
+  handler.handleStatic = handleStatic;
   return handler;
 }
 
