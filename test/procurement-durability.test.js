@@ -106,3 +106,20 @@ test('when the write to disk fails the command fails and nothing is half-applied
   await c.createItem(buyer, key(), { sku: 'LOST-1', name: 'saved this time' });
   assert.equal((await q.items()).length, 2);
 });
+
+test('a data file written before a collection was renamed still loads completely; an unknown collection is refused, never dropped', async () => {
+  const { reviveState, serializeState } = await import('../src/procurement/memory-store.js');
+  const store = createMemoryProcurementStore();
+  const { commands: c, queries: q } = createProcurement({ store, merchantId: randomUUID(), now: () => NOW });
+  await c.createLocation(owner, key(), { name: 'Warehouse', type: 'WAREHOUSE' });
+  const modern = store.exportState();
+  const legacy = { ...modern, locations: modern.stockLocations }; delete legacy.stockLocations; // what an older version wrote
+  const path = join(dir(), 'old.json'); writeFileSync(path, JSON.stringify(legacy));
+  const reopened = await openFileProcurementStore({ path });
+  const again = createProcurement({ store: reopened, merchantId: [...JSON.parse(JSON.stringify(modern.stockLocations))][0][1].merchantId, now: () => NOW });
+  assert.equal((await again.queries.locations()).length, 1, 'the location written by the old version is still there');
+  await reopened.close();
+  assert.throws(() => reviveState({ ...modern, somethingNew: [] }), /unknown collection/);
+  assert.throws(() => reviveState({ ...modern, locations: [] }), /both locations and stockLocations/);
+  assert.ok(serializeState); assert.ok(q);
+});

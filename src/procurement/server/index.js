@@ -45,8 +45,10 @@ export async function startProcurementServer({ env = process.env, log = console.
   } else store = await openFileProcurementStore({ path: join(dataDir, 'procurement.json') });
   const procurement = createProcurement({ store, merchantId });
   const system = { id: 'system', role: 'OWNER' };
-  await procurement.commands.createLocation(system, 'bootstrap:loc-main', { name: 'Réception (par défaut)', type: 'WAREHOUSE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
-  await procurement.commands.createLocation(system, 'bootstrap:loc-quarantine', { name: 'Quarantaine', type: 'QUARANTINE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
+  // default locations: created only when none of that kind exists (never relying on a replayed idempotent command, which would not recreate a missing one)
+  const have = new Set((await procurement.queries.locations()).map((l) => l.type));
+  if (!have.has('WAREHOUSE')) await procurement.commands.createLocation(system, `bootstrap:main:${Date.now().toString(36)}`, { name: 'Réception (par défaut)', type: 'WAREHOUSE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
+  if (!have.has('QUARANTINE')) await procurement.commands.createLocation(system, `bootstrap:quarantine:${Date.now().toString(36)}`, { name: 'Quarantaine', type: 'QUARANTINE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
   const hosts = [...allowedHosts, ...(env.PROCUREMENT_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)];
   const handler = createProcurementApp({ procurement, users, sourcingDir: resolve(env.SOURCING_CASES_DIR ?? 'data/local/sourcing/cases'), uploadsDir: join(dataDir, 'uploads'), allowedHosts: hosts, cacheAssets: env.PROCUREMENT_DEV !== '1' });
   const listening = await listen(handler, { host: host ?? env.PROCUREMENT_HOST ?? '127.0.0.1', port: port ?? Number(env.PROCUREMENT_PORT ?? 8975) });

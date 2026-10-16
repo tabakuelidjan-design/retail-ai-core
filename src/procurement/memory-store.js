@@ -25,8 +25,15 @@ const SETS = ['approvals', 'movementKeys'];
 const ARRAYS = ['movements', 'events', 'incidents'];
 /** Plain-JSON form of the whole state (for the file store). */
 export const serializeState = (d) => ({ format: 1, ...Object.fromEntries(MAPS.map((k) => [k, [...d[k].entries()]])), ...Object.fromEntries(SETS.map((k) => [k, [...d[k]]])), ...Object.fromEntries(ARRAYS.map((k) => [k, d[k]])) });
+const LEGACY_KEYS = { locations: 'stockLocations' }; // renamed collections: a file written before the rename must still load, completely
 export function reviveState(j) {
   if (!j || j.format !== 1) throw new Error('procurement state: unknown format');
+  // never drop data silently: a key this version does not understand is a refusal to start, not a quiet loss
+  const known = new Set(['format', ...MAPS, ...SETS, ...ARRAYS, ...Object.keys(LEGACY_KEYS)]);
+  const stray = Object.keys(j).filter((k) => !known.has(k));
+  if (stray.length) throw new Error(`procurement state: unknown collection(s) ${stray.join(', ')} (written by a newer version?)`);
+  j = { ...j };
+  for (const [old, now] of Object.entries(LEGACY_KEYS)) if (old in j) { if (now in j) throw new Error(`procurement state: both ${old} and ${now} are present`); j[now] = j[old]; delete j[old]; }
   const d = fresh();
   for (const k of MAPS) d[k] = new Map(j[k] ?? []);
   for (const k of SETS) d[k] = new Set(j[k] ?? []);
