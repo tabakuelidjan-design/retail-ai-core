@@ -3,6 +3,12 @@
 const TOKEN_KEY = 'nordla.proc.token';
 const CACHE_PREFIX = 'nordla.proc.cache:';
 const safe = (fn, fallback = null) => { try { return fn(); } catch { return fallback; } };
+/** Mounted on the Nordla server (page at /procurement/): the browser carries the Core session cookie, every change carries the CSRF token (same cookie pair as the Sourcing app), and the API lives under /api/procurement/. */
+export const HOSTED = typeof location !== 'undefined' && location.pathname.startsWith('/procurement');
+const CSRF_COOKIE = '__Host-nordla_sourcing_csrf';
+const csrf = () => { for (const part of String(globalThis.document?.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === CSRF_COOKIE) return part.slice(i + 1).trim(); } return ''; };
+export const apiPath = (p) => (HOSTED ? p.replace(/^\/api\//, '/api/procurement/') : p);
+const authHeaders = () => (HOSTED ? { 'x-nordla-csrf': csrf() } : { 'x-nordla-token': getToken() ?? '' });
 
 export const getToken = () => safe(() => localStorage.getItem(TOKEN_KEY));
 /** The pairing link carries the token after "#t=". Keep it, then remove it from the address bar and the history entry. */
@@ -20,9 +26,9 @@ export const setStatusListener = (fn) => { onStatus = fn; };
 export async function request(method, path, { body, key, raw, contentType, timeoutMs = 20_000 } = {}) {
   const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(path, {
-      method, signal: ctrl.signal, cache: 'no-store',
-      headers: { 'x-nordla-token': getToken() ?? '', ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(contentType ? { 'content-type': contentType } : {}), ...(method !== 'GET' && key ? { 'idempotency-key': key } : {}) },
+    const res = await fetch(apiPath(path), {
+      method, signal: ctrl.signal, cache: 'no-store', credentials: 'same-origin',
+      headers: { ...authHeaders(), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(contentType ? { 'content-type': contentType } : {}), ...(method !== 'GET' && key ? { 'idempotency-key': key } : {}) },
       body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined),
     });
     let json = null; try { json = await res.json(); } catch { /* an empty or non-JSON body */ }
@@ -51,7 +57,7 @@ export async function photoUrl(ref) {
   if (!path) return null;
   if (urls.has(path)) return urls.get(path);
   try {
-    const res = await fetch(path, { headers: { 'x-nordla-token': getToken() ?? '' } });
+    const res = await fetch(apiPath(path), { credentials: 'same-origin', headers: authHeaders() });
     if (!res.ok) return null; // not stored on the server (Sourcing photos can live only on the phone that took them): the screen says so
     const u = URL.createObjectURL(await res.blob()); urls.set(path, u); return u;
   } catch { return null; }

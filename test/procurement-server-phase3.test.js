@@ -47,7 +47,7 @@ test('goods receipt over HTTP: only an authorized warehouse/owner access, partia
   const lines = (a, d = 0) => ({ lines: [{ poLineId: 'L1', qtyAccepted: a, qtyDefective: d }], receivedAt: '2026-11-25' });
   assert.equal((await s.call('POST', `/api/purchase-orders/${po.id}/receive`, { user: FIELD, body: lines(10) })).status, 403);
   const rev = await s.call('POST', `/api/purchase-orders/${po.id}/receive`, { user: REVIEWER, body: lines(10) });
-  assert.equal(rev.status, 403); assert.match(rev.json.message, /warehouse or owner role/, 'refused by the server rule itself, not only by a deeper layer');
+  assert.equal(rev.status, 403); assert.match(rev.json.message, /explicitly authorized/, 'refused by the server rule itself, not only by a deeper layer');
   const forged = await s.call('POST', `/api/purchase-orders/${po.id}/receive`, { user: WAREHOUSE, body: { ...lines(1), approval: { id: 'forged-1', action: 'STOCK_SALES.receive_goods', subject_ref: `nordla:purchase:${po.id}`, approver: { kind: 'HUMAN', id: 'the-ceo', role: 'OWNER' }, approved_at: '2026-10-20T00:00:00Z' } } });
   assert.equal(forged.status, 200);
   assert.equal((await s.procurement.queries.events({ objectId: po.id })).find((e) => e.type === 'GOODS_RECEIVED').approval.approverId, 'magasin', 'an approval sent by the phone is ignored: the server builds it from the authenticated user');

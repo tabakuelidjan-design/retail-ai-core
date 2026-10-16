@@ -3,7 +3,7 @@ name: procurement-stock-v1
 # No secret, no provider, no network, no production data: the unit tests run over the in-memory and file stores, the SQL jobs over a throw-away PostgreSQL container.
 on:
   push:
-    branches: ['feature/stock-achat-**']
+    branches: ['feature/stock-achat-**', 'feature/stock-achats-**']
     paths:
       - 'src/procurement/**'
       - 'test/procurement-*'
@@ -12,6 +12,9 @@ on:
       - 'supabase/migrations-pending/*procurement_stock*'
       - 'supabase/rollback/*procurement_stock*'
       - 'src/integration/**'
+      - 'tools/procurement-staging/**'
+      - 'supabase/migrations-pending/**'
+      - 'test/core-procurement-routing.test.js'
       - 'src/finance/purchase-analysis.js'
       - 'src/finance/money.js'
       - 'package.json'
@@ -40,13 +43,14 @@ jobs:
         run: |
           for f in test/procurement-*.test.js; do echo "::group::$f"; node --test "$f" || exit 1; echo "::endgroup::"; done
       - name: Integration wiring and the neighbours that share the approval policy and the Finance engine
-        run: node --test test/integration-procurement.test.js test/integration-contracts.test.js test/integration-workflows.test.js test/buying.test.js test/finance-stock.test.js
+        run: node --test test/integration-procurement.test.js test/integration-procurement-compat.test.js test/core-procurement-routing.test.js test/integration-contracts.test.js test/integration-workflows.test.js test/buying.test.js test/finance-stock.test.js
   postgres:
     name: real PostgreSQL 17 (throw-away container)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # the coexistence proof reads chantier A's migrations from the convergence branch
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
@@ -55,3 +59,5 @@ jobs:
         run: node test/postgres/procurement.pg-smoke.mjs
       - name: Parity - the SAME procurement suites on PostgreSQL (incl. network faults and concurrency)
         run: node test/postgres/procurement-parity.mjs
+      - name: Coexistence with chantier A's prepared migrations (both orders, and the split proposal), restart, backup / restore
+        run: node test/postgres/procurement-coexistence.pg-smoke.mjs

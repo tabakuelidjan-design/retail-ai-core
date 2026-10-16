@@ -101,3 +101,45 @@ test('precision: cheap pieces trigger the rounding warning; currencies in play a
   const d = describeOffer({ supplier: 'S', currency: 'USD', unitPrice: '0.072', status: 'LANDED', landedPerUnit: 9, landedTotal: 45000, estimated: true }, 5000);
   assert.match(d.headline, /450[,.]00/); assert.match(d.detail, /0[,.]0900/, 'per piece from the exact total (450 € / 5000), not from the rounded cents');
 });
+
+// ---------------------------------------------------------------- V1 logic: counts, requests, supplier reliability, new order actions
+import { parseWhole, countLinesFrom, requestSummary, supplierMetricsLine } from '../src/procurement/ui/logic.js';
+
+test('parseWhole: whole numbers only, negatives allowed, nothing guessed', () => {
+  assert.deepEqual(parseWhole('-3'), { ok: true, value: -3 }); assert.deepEqual(parseWhole(' 12 '), { ok: true, value: 12 }); assert.deepEqual(parseWhole('0'), { ok: true, value: 0 });
+  for (const bad of ['', '3.5', '3,5', 'abc', '1e3', '--2', '1234567890', null, undefined]) assert.equal(parseWhole(bad).ok, false, String(bad));
+  assert.equal(parseWhole('-1', { min: 0 }).ok, false);
+});
+
+test('count lines: only counted lines are sent; a difference needs a reason; nothing counted is an error, not an empty success', () => {
+  const rows = [{ itemId: 'a', name: 'Aimant', expected: 10, counted: '10', reason: '' }, { itemId: 'b', name: 'Mug', expected: 5, counted: '3', reason: 'deux cassés' }, { itemId: 'c', name: 'Pin', expected: 4, counted: '', reason: '' }];
+  const ok = countLinesFrom(rows); assert.equal(ok.ok, true); assert.deepEqual(ok.lines, [{ itemId: 'a', counted: 10, reason: '' }, { itemId: 'b', counted: 3, reason: 'deux cassés' }], 'the uncounted line is left out, a matching line carries no reason');
+  const noReason = countLinesFrom([{ itemId: 'b', name: 'Mug', expected: 5, counted: '3', reason: '' }]); assert.equal(noReason.ok, false); assert.match(noReason.errors[0], /motif/); assert.match(noReason.errors[0], /-2/);
+  assert.equal(countLinesFrom([{ itemId: 'b', name: 'Mug', expected: 5, counted: '3', reason: 'ok' }]).ok, false, 'a reason of 2 letters is not a reason');
+  assert.equal(countLinesFrom([{ itemId: 'b', name: 'Mug', expected: 5, counted: 'trois', reason: '' }]).ok, false);
+  assert.equal(countLinesFrom([{ itemId: 'b', name: 'Mug', expected: 5, counted: '-1', reason: 'x' }]).ok, false, 'a negative count is impossible');
+  const nothing = countLinesFrom([{ itemId: 'c', name: 'Pin', expected: 4, counted: '', reason: '' }]); assert.equal(nothing.ok, false); assert.match(nothing.errors[0], /au moins un/);
+  assert.deepEqual(countLinesFrom([{ itemId: 'z', name: 'Zéro', expected: 2, counted: '0', reason: 'plus rien en rayon' }]).lines, [{ itemId: 'z', counted: 0, reason: 'plus rien en rayon' }], 'counting zero is a count');
+});
+
+test('request summaries and supplier reliability are plain French and never invent a measure', () => {
+  assert.equal(requestSummary({ type: 'ADJUST', delta: -3, name: 'Aimant' }), 'Ajustement -3 × Aimant'); assert.equal(requestSummary({ type: 'ADJUST', delta: 5, sku: 'K-1' }), 'Ajustement +5 × K-1');
+  assert.equal(requestSummary({ type: 'COUNT', lines: [1, 2] }), 'Inventaire : 2 produit(s)');
+  assert.match(supplierMetricsLine({ onTimeReceipts: { status: 'NOT_MEASURABLE', minSample: 3 }, defectRateUnits: { status: 'NOT_MEASURABLE' }, incidents: { total: 0 } }), /Pas encore assez de livraisons/);
+  assert.match(supplierMetricsLine({ onTimeReceipts: { status: 'NOT_MEASURABLE', minSample: 3 }, defectRateUnits: { status: 'NOT_MEASURABLE' }, incidents: { total: 2 } }), /2 incident/);
+  const line = supplierMetricsLine({ onTimeReceipts: { status: 'MEASURED', ratio: 0.8, numerator: 4, denominator: 5 }, defectRateUnits: { status: 'MEASURED', ratio: 0.02, numerator: 2, denominator: 100 }, incidents: { total: 0 } });
+  assert.match(line, /80 %.*4\/5/); assert.match(line, /2 %.*2\/100/);
+  assert.match(supplierMetricsLine(null), /Pas de mesure/);
+});
+
+test('new order actions: confirm / close only for people who prepare orders; the owner who prepared an order gets the explicit exception, not a silent approve', () => {
+  const po = (status, over = {}) => ({ id: 'p', status, createdBy: 'owner', submittedBy: 'owner', ...over });
+  const ids = (p, me) => poActions(p, me).map((a) => a.id);
+  const buyer = { id: 'terrain', prepare: true, canApprove: false }; const ownerMe = { id: 'owner', prepare: true, canApprove: true, canSelfApprove: true, canReceive: true }; const viewer = { id: 'v', prepare: false };
+  assert.deepEqual(ids(po('ORDERED'), buyer).sort(), ['confirm', 'wait-receive']); assert.deepEqual(ids(po('ORDERED'), viewer), ['wait-receive']);
+  assert.deepEqual(ids(po('RECEIVED'), buyer), ['close']); assert.equal(poActions(po('RECEIVED'), buyer)[0].needsReason, false);
+  const part = poActions(po('PARTIALLY_RECEIVED'), buyer).find((a) => a.id === 'close'); assert.equal(part.needsReason, true); assert.match(part.confirm, /abandonnées/);
+  const own = poActions(po('PENDING_APPROVAL'), ownerMe); assert.deepEqual(own.map((a) => a.id), ['approve', 'reject']); assert.equal(own[0].selfApprove, true); assert.match(own[0].confirm, /EXCEPTION/);
+  const other = poActions(po('PENDING_APPROVAL', { createdBy: 'terrain', submittedBy: 'terrain' }), ownerMe); assert.equal(other[0].selfApprove, undefined, 'approving someone else\'s order is a normal approval');
+  const nonOwner = { id: 'owner', prepare: true, canApprove: true, canSelfApprove: false }; assert.deepEqual(ids(po('PENDING_APPROVAL'), nonOwner), ['blocked', 'reject'], 'only the owner is offered the exception');
+});

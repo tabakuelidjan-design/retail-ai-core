@@ -1,0 +1,89 @@
+--- a/supabase/migrations-pending/20261015090000_integration_objects_and_sourcing_cases.sql
++++ b/supabase/migrations-pending/20261015090000_integration_objects_and_sourcing_cases.sql
+@@ -1,4 +1,5 @@
+ -- NORDLA CORE P0 - PREPARED, NOT APPLIED (supabase/migrations-pending/). Owner authorization required before it is moved to supabase/migrations.
++-- SPLIT VARIANT (proposal, Stock / Achats): integration_purchase_plans and integration_incoming_expectations are NOT created: the purchase order of Stock / Achats is canonical (docs/architecture/stock-achats-v1-ac-arbitrage.md).
+ --
+ -- Persistence for the objects that only lived in memory (docs/architecture/nordla-integration-pre-china.md §6.2) and for the China Sourcing
+ -- cases (§6.5: single-tenant, file based). Every row belongs to ONE merchant (merchant_id, FK merchants, never null); nothing here is HABB
+@@ -23,43 +24,6 @@
+   primary key (merchant_id, case_ref)
+ );
+ 
+-create table integration_purchase_plans (
+-  merchant_id uuid not null references merchants(id) on delete restrict,
+-  purchase_ref text not null,
+-  handoff_id text not null,
+-  sourcing_case_ref text,
+-  product_ref text,
+-  supplier_ref text,
+-  status text not null check (status in ('PLANNED', 'APPROVED_TO_ORDER')),
+-  owner_review text not null check (owner_review in ('PENDING', 'APPROVED')),
+-  qty integer not null check (qty > 0),
+-  eta date not null,
+-  order_placed boolean not null default false check (order_placed = false),   -- a plan is a preparation: never an order
+-  approval jsonb,
+-  body jsonb not null,
+-  created_at timestamptz not null default now(),
+-  updated_at timestamptz not null default now(),
+-  primary key (merchant_id, purchase_ref),
+-  constraint integration_purchase_plans_approval_ck check ((status = 'APPROVED_TO_ORDER') = (approval is not null and owner_review = 'APPROVED'))
+-);
+-
+-create table integration_incoming_expectations (
+-  merchant_id uuid not null references merchants(id) on delete restrict,
+-  expectation_id text not null,
+-  purchase_ref text not null,
+-  product_ref text,
+-  supplier_ref text,
+-  qty integer not null check (qty > 0),
+-  eta date not null,
+-  state text not null check (state = 'EXPECTED'),
+-  counted_in_available boolean not null default false check (counted_in_available = false), -- incoming goods are not stock
+-  received_qty integer not null default 0 check (received_qty = 0),                     -- receipts are not part of this phase
+-  body jsonb not null,
+-  created_at timestamptz not null default now(),
+-  primary key (merchant_id, expectation_id),
+-  foreign key (merchant_id, purchase_ref) references integration_purchase_plans (merchant_id, purchase_ref) on delete restrict
+-);
+-
+ create table integration_campaign_contracts (
+   merchant_id uuid not null references merchants(id) on delete restrict,
+   campaign_ref text not null,
+@@ -117,27 +81,12 @@
+ create index sourcing_cases_recent_idx on sourcing_cases (merchant_id, updated_at desc);
+ 
+ -- ------------------------------------------------------------------ guards
+--- Keys never move to another merchant or another reference; a purchase plan only moves forward; an approval is never removed.
+-create function integration_purchase_plans_guard() returns trigger language plpgsql set search_path = '' as $$
+-begin
+-  if new.merchant_id is distinct from old.merchant_id or new.purchase_ref is distinct from old.purchase_ref or new.handoff_id is distinct from old.handoff_id then
+-    raise exception 'INTEGRATION_KEY_IMMUTABLE' using errcode = 'P0001';
+-  end if;
+-  if old.status = 'APPROVED_TO_ORDER' and new is distinct from old then
+-    raise exception 'PURCHASE_PLAN_APPROVED_IS_FINAL' using errcode = 'P0001';
+-  end if;
+-  new.updated_at := now();
+-  return new;
+-end $$;
+-create trigger integration_purchase_plans_guard before update on integration_purchase_plans for each row execute function integration_purchase_plans_guard();
+-
+ -- Objects that are written once (a new version is a new reference): no update, no delete.
+ create function integration_write_once() returns trigger language plpgsql set search_path = '' as $$
+ begin
+   raise exception 'INTEGRATION_OBJECT_WRITE_ONCE: % on %', tg_op, tg_table_name using errcode = 'P0001';
+ end $$;
+ create trigger integration_buy_candidates_write_once before update or delete on integration_buy_candidates for each row execute function integration_write_once();
+-create trigger integration_incoming_write_once before update or delete on integration_incoming_expectations for each row execute function integration_write_once();
+ create trigger integration_campaigns_write_once before update or delete on integration_campaign_contracts for each row execute function integration_write_once();
+ create trigger integration_tracking_write_once before update or delete on integration_tracking_definitions for each row execute function integration_write_once();
+ create trigger integration_ledger_append_only before update or delete on integration_trace_ledger for each row execute function integration_write_once();
+@@ -178,7 +127,7 @@
+ do $$
+ declare t text;
+ begin
+-  foreach t in array array['integration_buy_candidates', 'integration_purchase_plans', 'integration_incoming_expectations', 'integration_campaign_contracts',
++  foreach t in array array['integration_buy_candidates', 'integration_campaign_contracts',
+                            'integration_tracking_definitions', 'integration_trace_ledger', 'sourcing_cases'] loop
+     execute format('alter table public.%I enable row level security', t);
+     execute format('revoke all on table public.%I from anon, authenticated', t);
