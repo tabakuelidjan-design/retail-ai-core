@@ -6,6 +6,7 @@ import { resolveTierPrice } from './service.js';
 import { analyzePurchase as financeAnalyze } from '../finance/purchase-analysis.js';
 import { microToString, reqId, reqInt, reqDate, reqCurrency, pctToBps, deepFreeze } from './util.js';
 import { fail, ProcurementError } from './errors.js';
+import { foldStockRequests } from './stock-requests.js';
 
 const OPEN = new Set(['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED']);
 export const MIN_SAMPLE = 3; // receipts needed before a reliability ratio is shown as a measurement
@@ -200,6 +201,23 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
     locations: () => store.list('stockLocations', merchantId),
     events: async ({ objectId } = {}) => (await store.listEvents(merchantId)).filter((e) => !objectId || e.object.id === objectId),
     currentQuote: async ({ supplierId, itemId }) => (await store.list('quotes', merchantId)).find((q) => q.supplierId === supplierId && q.itemId === itemId && ['RECEIVED', 'SELECTED'].includes(q.status) && (!q.validUntil || q.validUntil >= today())) ?? null,
+    /** Filed stock changes (adjustments, counts) and their decision, newest first. status: PENDING | APPROVED | REJECTED (all when omitted). */
+    stockRequests: async ({ status = null } = {}) => foldStockRequests(await store.listEvents(merchantId)).filter((r) => !status || r.status === status),
+    stockRequest: async (requestId) => foldStockRequests(await store.listEvents(merchantId)).find((r) => r.requestId === reqId(requestId, 'requestId')) ?? null,
+    /** What a count WOULD change, without writing anything: expected (ledger) vs counted per line. */
+    countPreview: async ({ locationId, counts }) => {
+      reqId(locationId, 'locationId'); if (!Array.isArray(counts) || !counts.length || counts.length > 500) fail('INVALID_INPUT', 'counts must hold 1-500 lines');
+      const rows = [];
+      for (const [i, c] of counts.entries()) { const itemId = reqId(c.itemId, `counts[${i}].itemId`); const counted = reqInt(c.counted, `counts[${i}].counted`, { min: 0 }); const expected = (await store.balanceOf(merchantId, itemId, locationId))?.onHand ?? 0; rows.push({ itemId, expected, counted, variance: counted - expected }); }
+      return rows;
+    },
+    /** The full trail of one item: every ledger movement (who, when, why, which approval) and the journal events about it, oldest first. */
+    stockHistory: async (itemId) => {
+      reqId(itemId, 'itemId'); const locs = await locMap();
+      const movements = (await store.listMovements(merchantId, { itemId })).map((m) => ({ at: m.at, kind: m.kind, bucket: m.bucket, delta: m.delta, locationId: m.locationId, location: locs.get(m.locationId)?.name ?? null, reason: m.reason ?? null, reference: m.reference ?? null, actorId: m.actorId, approvalId: m.approvalId ?? null, unitCostEurMicro: m.unitCostEurMicro ?? null }));
+      const events = (await store.listEvents(merchantId)).filter((e) => e.object?.id === itemId).map((e) => ({ at: e.at, type: e.type, actor: e.actor, approval: e.approval ?? null, detail: e.detail }));
+      return { itemId, movements, events };
+    },
     receiptLots: async (itemId) => receiptLots(await store.listMovements(merchantId, { itemId: reqId(itemId, 'itemId') }), await locMap()),
     stockPosition, stockPositions, incomingFor, reorderAlerts, delayedOrders, inTransit, priceHistory, supplierMetrics, compareSuppliers, plannedMargin, expiringDocuments, targetUnitPrice,
   });

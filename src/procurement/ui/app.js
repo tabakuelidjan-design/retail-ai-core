@@ -1,7 +1,8 @@
 // Nordla Achats - phone app. Plain ES modules, no build step, no framework, no innerHTML with data (everything is built with textContent: nothing a supplier name
 // contains can run as code). French UI.
-import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener } from './api.js';
+import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener, HOSTED } from './api.js';
 import * as outbox from './outbox.js';
+import { createV1Screens } from './screens-v1.js';
 import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf, errText, ERRORS_FR } from './logic.js';
 
 const $ = (id) => document.getElementById(id);
@@ -70,6 +71,9 @@ const stale = (res) => (res.stale ? h('div', { class: 'note' }, `Connexion indis
 const fail = (res) => h('div', { class: 'warn' }, res.status === 401 ? ERRORS_FR.UNAUTHORIZED : res.status === 0 ? 'Impossible de joindre le serveur (connexion coupée ou lente) et aucune donnée précédente n’est gardée pour cet écran.' : `Impossible de charger : ${res.error ?? res.status}`, res.status === 401 ? null : h('div', {}, h('button', { class: 'btn sec', onclick: () => render() }, 'Réessayer')));
 function field(label, input, hint) { return h('div', {}, h('label', {}, label), input, hint ? h('div', { class: 'small muted' }, hint) : null); }
 function select(options, value) { return h('select', {}, options.map(([v, t]) => h('option', { value: v, selected: v === value }, t))); }
+
+// V1 screens (suppliers, adjustments, transfers, inventories, filed changes, history): same helpers, own file
+const V1 = createV1Screens({ h, put, swap, go, S, request, getJson, uid, banner, setHead, field, select, chip, empty, fail, stale, fmtMoney, render, main });
 
 // ------------------------------------------------------------------ screens
 async function screenVisits() {
@@ -223,7 +227,7 @@ async function screenOrders() {
   const cart = load(CART_KEY, []);
   if (cart.length) put(box, cartCard(cart));
   const res = await getJson('/api/purchase-orders'); if (!res.data) return put(box, fail(res));
-  put(box, stale(res), pendingNote());
+  put(box, stale(res), pendingNote(), h('button', { class: 'btn sec', onclick: () => go('suppliers') }, 'Fournisseurs et offres'));
   const all = res.data.purchaseOrders;
   if (!all.length) put(box, empty('Aucun bon de commande en cours. Comparez des offres, ajoutez-les à la sélection, puis créez un brouillon.'));
   for (const [st, title] of PO_GROUPS) { const rows = all.filter((p) => p.status === st); if (!rows.length) continue; put(box, h('h3', {}, `${title} (${rows.length})`), h('ul', { class: 'list' }, rows.map((p) => h('li', {}, h('button', { class: 'tap', onclick: () => go('po', { id: p.id }) }, h('div', { class: 'grow' }, h('div', { class: 'nm' }, `${p.number} · ${p.supplier.name}`), h('div', { class: 'sub' }, `${p.lines.length} produit(s) · livraison prévue ${fmtDate(p.expectedDate)}`)), h('div', { class: 'nm' }, fmtMoney(p.totalMinor, p.currency)))))));
@@ -254,6 +258,8 @@ async function screenPo({ id }) {
     if (a.id === 'receive') return go('receive', { id });
     if (a.confirm && !confirm(a.confirm)) return; let body = {};
     if (a.needsReason) { const reason = prompt('Motif (obligatoire) :'); if (!reason || reason.trim().length < 3) return; body = { reason: reason.trim() }; }
+    if (a.selfApprove) body = { ...body, confirmSelfApproval: true };
+    if (a.id === 'confirm') { const ref = prompt('Référence de confirmation du fournisseur (optionnel) :'); if (ref?.trim()) body = { supplierReference: ref.trim() }; }
     if (a.id === 'order') { const ref = prompt('Référence donnée par le fournisseur (optionnel) :'); if (ref?.trim()) body = { supplierReference: ref.trim() }; }
     const r = await request('POST', `/api/purchase-orders/${id}/${a.id}`, { key: uid(a.id), body });
     if (r.status === 200) { banner(`${a.label} : fait.`, 'ok'); render(); } else banner(errText(r), 'err');
@@ -291,11 +297,13 @@ async function screenStock() {
     h('div', { class: 'card' }, h('h2', {}, 'Valeur du stock (moyenne pondérée mobile)'),
       h('div', { class: 'big' }, fmtMoney(v.confirmedEurMinor + v.estimatedEurMinor, 'EUR')),
       h('p', { class: 'small muted' }, `${fmtMoney(v.confirmedEurMinor, 'EUR')} confirmé · ${fmtMoney(v.estimatedEurMinor, 'EUR')} estimé (prix des marchandises seul, sans transport ni droits)${v.itemsWithUnknownCost ? ` · ${v.unknownUnits} unité(s) de ${v.itemsWithUnknownCost} produit(s) SANS coût connu, non valorisées` : ''}.`)),
+    S.me.canReceive || S.me.canAdjust ? h('div', { class: 'row' }, h('button', { class: 'btn sec', onclick: () => go('count') }, 'Faire un inventaire'), h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente')) : h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente'),
+    S.me.canSelfApprove ? h('button', { class: 'btn sec', onclick: () => go('newLocation') }, 'Ajouter un emplacement') : null,
     d.items.length ? h('ul', { class: 'list' }, d.items.map((i) => h('li', {}, h('button', { class: 'tap', onclick: () => go('stockItem', { item: i, locations: d.locations }) }, i.photo ? thumb(i.photo) : h('div', { class: 'thumb' }), h('div', { class: 'grow' }, h('div', { class: 'nm' }, i.name), h('div', { class: 'sub' }, `${i.sku} · à vendre ${i.available}${i.incoming.qty ? ` · attendu ${i.incoming.qty}` : ''}${i.quarantine ? ` · quarantaine ${i.quarantine}` : ''}`)), valuationChip(i.valuation))))) : empty('Aucun produit en stock pour l’instant. Les marchandises apparaissent après leur réception.'),
     h('p', { class: 'small muted' }, 'Le stock vient des réceptions et des mouvements enregistrés ici : ce n’est pas le stock Shopify, et rien n’est écrit dans Shopify.'));
 }
 const valuationChip = (v) => chip({ CONFIRMED: 'coût confirmé', ESTIMATED: 'coût estimé', PARTIAL: 'coût partiel', UNKNOWN: 'coût inconnu', EMPTY: 'vide' }[v.status] ?? v.status, { CONFIRMED: 'g', ESTIMATED: 'a', PARTIAL: 'a', UNKNOWN: 'r', EMPTY: '' }[v.status] ?? '');
-function screenStockItem({ item: i }) {
+function screenStockItem({ item: i, locations = [] }) {
   setHead(i.name, i.sku, true);
   const loc = (l) => `${l.name ?? l.type}${l.type === 'QUARANTINE' ? ' (quarantaine)' : ''}`;
   swap(main, h('div', {},
@@ -303,6 +311,7 @@ function screenStockItem({ item: i }) {
       h('p', { class: 'small muted' }, `Réservé ${i.reserved} · en transit ${i.inTransit} · quarantaine ${i.quarantine}. L’attendu n’est jamais compté comme disponible.`)),
     h('div', { class: 'card' }, h('h2', {}, 'Par emplacement'), i.perLocation.length ? h('table', {}, h('tbody', {}, i.perLocation.map((l) => h('tr', {}, h('td', {}, loc(l)), h('td', { class: 'n' }, `${l.onHand}${l.reserved ? ` (dont ${l.reserved} réservés)` : ''}`))))) : h('p', { class: 'muted' }, 'Aucune unité en stock.')),
     i.incoming.orders.length ? h('div', { class: 'card' }, h('h2', {}, 'Commandes en attente de réception'), h('table', {}, h('tbody', {}, i.incoming.orders.map((o) => h('tr', {}, h('td', {}, o.number), h('td', { class: 'n' }, `${o.qty} · ${fmtDate(o.expectedDate)}`), h('td', {}, o.delayed ? chip('en retard', 'r') : null)))))) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Actions'), h('div', { class: 'row' }, S.me.canReceive || S.me.canAdjust ? h('button', { class: 'btn sec', onclick: () => go('adjust', { item: i, locations }) }, 'Ajuster') : null, S.me.canReceive ? h('button', { class: 'btn sec', onclick: () => go('transfer', { item: i, locations }) }, 'Transférer') : null, h('button', { class: 'btn sec', onclick: () => go('history', { item: i }) }, 'Historique'))),
     h('div', { class: 'card' }, h('h2', {}, 'Valorisation'), h('div', { class: 'row' }, valuationChip(i.valuation)), h('p', { class: 'small muted' }, i.valuation.status === 'UNKNOWN' ? 'Aucun coût connu pour ces unités : elles ne sont pas valorisées (jamais à zéro, jamais inventé).' : `${i.valuation.valuedUnits} unité(s) valorisée(s) à ${i.valuation.unitCostEurMicro / 1e6} € en moyenne = ${fmtMoney(i.valuation.valueEurMinor ?? 0, 'EUR')}${i.valuation.unknownUnits ? ` · ${i.valuation.unknownUnits} unité(s) sans coût connu` : ''}${i.valuation.goodsOnly ? ' · prix des marchandises seul (transport et droits non inclus)' : ''}.`))));
 }
 
@@ -338,7 +347,7 @@ async function screenReceive({ id }) {
 }
 
 // ------------------------------------------------------------------ router
-const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive };
+const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive, newLocation: V1.newLocation, suppliers: V1.suppliers, newSupplier: V1.newSupplier, supplier: V1.supplier, newOffer: V1.newOffer, adjust: V1.adjust, transfer: V1.transfer, history: V1.history, count: V1.count, requests: V1.requests };
 async function render() {
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === S.tab)));
   netBadge();
@@ -349,10 +358,10 @@ async function render() {
 
 (async function start() {
   initToken();
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  if (!getToken()) { setHead('Accès'); swap(main, h('div', { class: 'card' }, h('h2', {}, 'Lien d’accès nécessaire'), h('p', {}, 'Ouvrez le lien personnel fourni par le propriétaire (il contient votre jeton après le #).'))); return; }
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (!HOSTED && !getToken()) { setHead('Accès'); swap(main, h('div', { class: 'card' }, h('h2', {}, 'Lien d’accès nécessaire'), h('p', {}, 'Ouvrez le lien personnel fourni par le propriétaire (il contient votre jeton après le #).'))); return; }
   const me = await request('GET', '/api/me');
-  if (me.status === 401) { forgetToken(); setHead('Accès'); swap(main, h('div', { class: 'warn' }, ERRORS_FR.UNAUTHORIZED)); return; }
+  if (me.status === 401 || me.status === 403) { if (!HOSTED) forgetToken(); setHead('Accès'); swap(main, h('div', { class: 'warn' }, HOSTED ? (me.status === 403 ? 'Votre accès Nordla ne donne pas droit à Stock / Achats.' : 'Votre session Nordla a expiré : reconnectez-vous sur Nordla, puis rouvrez Stock / Achats.') : ERRORS_FR.UNAUTHORIZED), HOSTED ? h('a', { class: 'btn sec', href: '/' }, 'Retour à Nordla') : null); return; }
   S.me = me.json ?? safe(() => JSON.parse(localStorage.getItem('nordla.proc.me')), { id: '?', role: 'BUYER', canApprove: false });
   if (me.json) save('nordla.proc.me', me.json);
   S.online = me.status !== 0;
