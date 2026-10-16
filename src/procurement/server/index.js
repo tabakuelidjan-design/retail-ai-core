@@ -50,7 +50,7 @@ export async function startProcurementServer({ env = process.env, log = console.
   if (!have.has('WAREHOUSE')) await procurement.commands.createLocation(system, `bootstrap:main:${Date.now().toString(36)}`, { name: 'Réception (par défaut)', type: 'WAREHOUSE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
   if (!have.has('QUARANTINE')) await procurement.commands.createLocation(system, `bootstrap:quarantine:${Date.now().toString(36)}`, { name: 'Quarantaine', type: 'QUARANTINE' }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; });
   const hosts = [...allowedHosts, ...(env.PROCUREMENT_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)];
-  const handler = createProcurementApp({ procurement, users, sourcingDir: resolve(env.SOURCING_CASES_DIR ?? 'data/local/sourcing/cases'), uploadsDir: join(dataDir, 'uploads'), allowedHosts: hosts, cacheAssets: env.PROCUREMENT_DEV !== '1' });
+  const handler = createProcurementApp({ procurement, users, sourcingDir: resolve(env.SOURCING_CASES_DIR ?? 'data/local/sourcing/cases'), sourcingPhotosDir: resolve(env.SOURCING_PHOTOS_DIR ?? 'data/local/sourcing/photos'), uploadsDir: join(dataDir, 'uploads'), allowedHosts: hosts, cacheAssets: env.PROCUREMENT_DEV !== '1' });
   const listening = await listen(handler, { host: host ?? env.PROCUREMENT_HOST ?? '127.0.0.1', port: port ?? Number(env.PROCUREMENT_PORT ?? 8975) });
   const stop = async () => { await new Promise((r) => listening.server.close(r)); await store.close?.(); };
   if (created) log(`First start: access tokens were created in ${file} (keep that file private).`);

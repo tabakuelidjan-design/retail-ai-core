@@ -25,9 +25,12 @@ export function caseToCapture(caseState) {
   const name = String(caseState.identity?.workingName ?? caseState.name ?? '').trim();
   if (!name) issues.push({ code: 'NO_PRODUCT_NAME', message: 'the case has no product name' });
   const gtin = String(caseState.identity?.identifiers?.gtin ?? '').trim();
+  // the Sourcing PWA writes bare references (photo-0); the image itself lives on the phone / in Sourcing's photo store. A bare reference becomes sourcing://<case>/<ref>,
+  // which the server can resolve (read-only) when the photo is stored; a reference that is already a URI is kept as it is.
+  const refOf = (r) => (String(r).includes('://') ? String(r) : `sourcing://${caseState.id}/${r}`).slice(0, 300);
   const attachments = [
-    ...(caseState.identity?.photos ?? []).filter((p) => p?.ref).map((p) => ({ kind: 'PHOTO', ref: String(p.ref).slice(0, 300), note: p.note ? String(p.note).slice(0, 300) : null })),
-    ...(caseState.documents ?? []).filter((d) => d?.ref || d?.photoRef).map((d) => ({ kind: d.photoRef && !d.ref ? 'PHOTO' : 'DOCUMENT', ref: String(d.ref ?? d.photoRef).slice(0, 300), note: d.fileName ? String(d.fileName).slice(0, 300) : null })),
+    ...(caseState.identity?.photos ?? []).filter((p) => p?.ref).map((p) => ({ kind: 'PHOTO', ref: refOf(p.ref), note: p.note ? String(p.note).slice(0, 300) : null })),
+    ...(caseState.documents ?? []).filter((d) => d?.ref || d?.photoRef).map((d) => ({ kind: d.photoRef && !d.ref ? 'PHOTO' : 'DOCUMENT', ref: refOf(d.ref ?? d.photoRef), note: d.fileName ? String(d.fileName).slice(0, 300) : null })),
   ].filter((a, i, all) => all.findIndex((b) => b.ref === a.ref) === i).slice(0, 20);
   const quotes = [];
   for (const [i, q] of (caseState.quotes ?? []).entries()) {

@@ -116,7 +116,8 @@ export function createProcurementService({ store, merchantId, now = () => new Da
     return { id: approval.id, approverId: approval.approver.id, action, subjectRef, separationWaived };
   }
 
-  const must = async (ctx, coll, id, code) => (await ctx.tx.get(coll, merchantId, id)) ?? fail(code, `${coll} ${id} not found`, { id });
+  const LABEL = { items: 'item', stockLocations: 'location', suppliers: 'supplier', quotes: 'quote', purchaseOrders: 'purchase order', visits: 'visit' }; // never leak an internal collection name
+  const must = async (ctx, coll, id, code) => (await ctx.tx.get(coll, merchantId, id)) ?? fail(code, `${LABEL[coll] ?? 'record'} ${id} not found`, { id });
   const poRefOf = (po) => ref(K.PURCHASE, po.id);
 
   async function postMovement(ctx, movement) {

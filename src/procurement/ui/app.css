@@ -35,3 +35,8 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
 .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 12px}.step{padding:8px 2px;border:1px solid var(--line);border-radius:10px;background:var(--card);text-align:center;font-size:11px;color:var(--muted)}.step b{display:block;font-size:20px;color:var(--ink)}
 .hidden-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 td .chip{white-space:nowrap}
+
+.linkbtn{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;padding:4px 6px;min-height:36px}
+.thumb.missing{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;line-height:1.1;padding:2px}
+.tabs button{font-size:11px}
+.bar{height:8px;border-radius:4px;background:var(--grey-bg);overflow:hidden}.bar>i{display:block;height:100%;background:var(--green)}

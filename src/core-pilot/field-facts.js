@@ -25,6 +25,7 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
   const order = (id, qty) => { const l = levers.find((x) => x.id === id); return l ? { qty, landedTotal: l.estimated_cost?.amount ?? null, marginIfAllSold: l.estimated_effects?.margin_impact ?? null } : null; };
   const unitCurrency = quote?.currency ?? null;
   return {
+    supplierName: safeText(state.supplier?.name, 80) || null,
     source: { kind: 'sourcing_case', ref: state.id, version: state.updatedAt ?? null, asOf: a.asOf, productName: safeText(input.product_name || state.id, 80) },
     verdict: d.verdict, verdictDisplay: d.verdictDisplay ?? null, canCommitMoney: d.canCommitMoney === true,
     hardBlockers: d.hardBlockers.map((b) => ({ code: b.code, detail: safeText(b.detail, 300) })),

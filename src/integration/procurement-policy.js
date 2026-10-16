@@ -9,6 +9,7 @@ import { LEVEL as L, MODULE as M } from './constants.js';
 /** assistant tool name -> the hub module that owns the capability, the command name, the policy level. */
 export const PROCUREMENT_TOOLS = Object.freeze({
   find_item: { module: M.STOCK_SALES, level: L.READ_ONLY },
+  find_supplier: { module: M.BUYING, level: L.READ_ONLY },
   stock_position: { module: M.STOCK_SALES, level: L.READ_ONLY },
   stock_overview: { module: M.STOCK_SALES, level: L.READ_ONLY },
   goods_in_transit: { module: M.STOCK_SALES, level: L.READ_ONLY },
@@ -26,4 +27,9 @@ export const PROCUREMENT_TOOLS = Object.freeze({
 });
 
 export const procCommand = (tool) => `proc_${tool}`;
-export const PROCUREMENT_ACTIONS = Object.freeze(Object.fromEntries(Object.entries(PROCUREMENT_TOOLS).map(([tool, t]) => [`${t.module}.${procCommand(tool)}`, t.level])));
+/** Read-only compatibility views of the integration objects (see procurement-compat.js): purchase plans and incoming expectations built from purchase orders. */
+export const PROCUREMENT_COMPAT = Object.freeze({ plans: { module: M.BUYING, command: 'proc_purchase_plans', level: L.READ_ONLY }, incoming: { module: M.STOCK_SALES, command: 'proc_incoming_expectations', level: L.READ_ONLY } });
+export const PROCUREMENT_ACTIONS = Object.freeze({
+  ...Object.fromEntries(Object.entries(PROCUREMENT_TOOLS).map(([tool, t]) => [`${t.module}.${procCommand(tool)}`, t.level])),
+  ...Object.fromEntries(Object.values(PROCUREMENT_COMPAT).map((c) => [`${c.module}.${c.command}`, c.level])),
+});

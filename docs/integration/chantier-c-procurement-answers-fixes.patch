@@ -1,0 +1,22 @@
+diff --git a/src/core-pilot/procurement-answers.js b/src/core-pilot/procurement-answers.js
+index d605165..9b244cf 100644
+--- a/src/core-pilot/procurement-answers.js
++++ b/src/core-pilot/procurement-answers.js
+@@ -26,7 +26,7 @@ export async function procurementAnswer(text, assistant) {
+     const r = await call('reorder_alerts');
+     return reply(r.alerts.length ? `${r.alerts.length} article(s) à réapprovisionner :${NL}${r.alerts.map((a) => `• ${a.sku ?? a.itemId} — disponible ${a.available ?? '?'}, seuil ${a.reorderPoint ?? '?'} (le stock entrant n’est jamais compté comme disponible)`).join(NL)}` : 'Aucun article sous son seuil de réapprovisionnement (seuils configurés uniquement).', 'reorder_alerts');
+   }
+-  if (S.openOrders.test(text) || /(mes|les|toutes les) (commandes|bons de commande)/.test(t)) {
++  if (S.openOrders.test(text) || /\b(mes|les|toutes les) (commandes|bons de commande)\b/.test(t)) {
+     const r = await call('open_purchase_orders');
+     const po = (/PO-\d{4}-\d{3,}/i.exec(text) ?? [])[0]?.toUpperCase();
+     const list = po ? r.orders.filter((o) => o.number === po) : r.orders;
+@@ -39,7 +39,7 @@ export async function procurementAnswer(text, assistant) {
+     return reply(o.units ? `${o.units} unité(s) commandées et pas encore reçues (${o.lines.length} ligne(s))${vals ? `, valeur marchandises ${vals} (devises jamais additionnées)` : ''}. Elles ne sont pas dans le stock disponible.` : 'Rien n’est en commande en attente de réception.', 'goods_in_transit');
+   }
+   if (S.stock.test(t)) {
+-    const sku = (/\b[A-Za-z]{2,}-\d{2,}\b/.exec(text) ?? [])[0];
++    const sku = (/\b[A-Za-z0-9]{2,}(?:-[A-Za-z0-9]+)*-\d{2,}\b/.exec(text) ?? [])[0];
+     const name = t.replace(/.*\b(?:stock|inventaire)\b\s*(?:de|du|des|d'|pour|sur)?\s*/, '').replace(/[?!.]+$/, '').trim();
+     if (!sku && (!name || /^(total|general|actuel|disponible|global|ma boutique|tout)$/.test(name) || name.split(' ').length > 4)) {
+       const r = await call('stock_overview'); const ps = r.positions ?? [];

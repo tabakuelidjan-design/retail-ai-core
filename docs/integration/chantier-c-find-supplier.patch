@@ -1,0 +1,69 @@
+diff --git a/src/integration/procurement-policy.js b/src/integration/procurement-policy.js
+index 5f063b7..3b9d471 100644
+--- a/src/integration/procurement-policy.js
++++ b/src/integration/procurement-policy.js
+@@ -9,6 +9,7 @@ import { LEVEL as L, MODULE as M } from './constants.js';
+ /** assistant tool name -> the hub module that owns the capability, the command name, the policy level. */
+ export const PROCUREMENT_TOOLS = Object.freeze({
+   find_item: { module: M.STOCK_SALES, level: L.READ_ONLY },
++  find_supplier: { module: M.BUYING, level: L.READ_ONLY },
+   stock_position: { module: M.STOCK_SALES, level: L.READ_ONLY },
+   stock_overview: { module: M.STOCK_SALES, level: L.READ_ONLY },
+   goods_in_transit: { module: M.STOCK_SALES, level: L.READ_ONLY },
+diff --git a/src/procurement/assistant.js b/src/procurement/assistant.js
+index 707cc06..7ebb30e 100644
+--- a/src/procurement/assistant.js
++++ b/src/procurement/assistant.js
+@@ -20,6 +20,15 @@ export function createProcurementAssistantTools({ queries }) {
+   const tools = {
+     find_item: { authority: READ, description: 'Find catalogue items by SKU, barcode or name. Several matches are returned as candidates, never silently narrowed.',
+       run: async ({ text }) => { const m = await itemMatches(text); return { status: m.length === 1 ? 'OK' : m.length ? 'AMBIGUOUS' : 'NOT_FOUND', candidates: m }; } },
++    find_supplier: { authority: READ, description: 'Find suppliers of THIS company by name (accents and case ignored) or exact id. Several matches are returned as candidates, never silently narrowed. Returns identity and default commercial terms only: no contacts, no bank details, no documents.',
++      run: async ({ text }) => {
++        const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); const t = norm(text);
++        if (t.length < 2) return clarify('Which supplier (name)?');
++        const all = await queries.suppliers(); const exact = all.filter((s) => s.id === String(text).trim() || norm(s.name) === t);
++        const hits = (exact.length ? exact : all.filter((s) => norm(s.name).includes(t))).slice(0, 5);
++        const view = (s) => ({ supplierId: s.id, name: s.name, country: s.country ?? null, currency: s.currency ?? null, incotermDefault: s.incotermDefault ?? null, leadTimeDays: s.leadTimeDays ?? null });
++        return { status: hits.length === 1 ? 'OK' : hits.length ? 'AMBIGUOUS' : 'NOT_FOUND', candidates: hits.map(view) };
++      } },
+     stock_position: { authority: READ, description: 'On hand, reserved, available, incoming, in transit, quarantine and valuation of one item.',
+       run: async ({ sku }) => { const it = await bySku(sku); return it ? { status: 'OK', position: await queries.stockPosition(it.id) } : clarify('Which item (exact SKU)?', { candidates: await itemMatches(sku) }); } },
+     stock_overview: { authority: READ, description: 'Positions and valuation of every active item.', run: async () => ({ status: 'OK', ...(await queries.stockPositions()) }) },
+diff --git a/test/integration-procurement.test.js b/test/integration-procurement.test.js
+index 0b7c588..4467e3e 100644
+--- a/test/integration-procurement.test.js
++++ b/test/integration-procurement.test.js
+@@ -9,15 +9,15 @@ import { makeWorld, orderedPo, receive, buyer } from './procurement-fixtures.js'
+ const TENANT = '00000000-0000-0000-0000-0000000000f1';
+ const wf = (n = 'wf-1') => ({ workflow_id: n, initiated_by: 'tester' });
+ 
+-test('the policy lists exactly the assistant tools: 13 reads, 2 proposals, nothing that engages', async () => {
++test('the policy lists exactly the assistant tools: 14 reads (find_supplier added), 2 proposals, nothing that engages', async () => {
+   const w = await makeWorld();
+   const names = w.proc.assistant.catalog.map((t) => t.name).sort();
+   assert.deepEqual(names, Object.keys(PROCUREMENT_TOOLS).sort(), 'catalog and policy never drift apart');
+-  assert.equal(names.length, 15);
++  assert.equal(names.length, 16);
+   const levels = Object.values(PROCUREMENT_TOOLS).map((t) => t.level);
+-  assert.equal(levels.filter((l) => l === LEVEL.READ_ONLY).length, 13); assert.equal(levels.filter((l) => l === LEVEL.OWNER_REVIEW).length, 2);
++  assert.equal(levels.filter((l) => l === LEVEL.READ_ONLY).length, 14); assert.equal(levels.filter((l) => l === LEVEL.OWNER_REVIEW).length, 2);
+   // the two read-only compatibility views (purchase plans, incoming expectations) are the only other entries
+-  assert.equal(Object.keys(PROCUREMENT_ACTIONS).length, 17); assert.ok(Object.values(PROCUREMENT_ACTIONS).every((l) => l === LEVEL.READ_ONLY || l === LEVEL.OWNER_REVIEW));
++  assert.equal(Object.keys(PROCUREMENT_ACTIONS).length, 18); assert.ok(Object.values(PROCUREMENT_ACTIONS).every((l) => l === LEVEL.READ_ONLY || l === LEVEL.OWNER_REVIEW));
+   assert.ok(!levels.includes(LEVEL.AUTO_SAFE) && !levels.includes(LEVEL.OWNER_APPROVAL_REQUIRED));
+   for (const t of w.proc.assistant.catalog) assert.equal(t.authority === 'READ_ONLY', PROCUREMENT_TOOLS[t.name].level === LEVEL.READ_ONLY, `${t.name}: tool authority and policy level agree`);
+   // the engaging steps keep their own policy entries, untouched
+diff --git a/test/procurement-assistant.test.js b/test/procurement-assistant.test.js
+index 752c286..fe846c4 100644
+--- a/test/procurement-assistant.test.js
++++ b/test/procurement-assistant.test.js
+@@ -12,7 +12,7 @@ test('every assistant tool, called with any arguments, changes nothing', async (
+   const args = [{}, { sku: 'MAG-001' }, { sku: 'MAG-001', qty: 100 }, { supplierId: w.supplier.id, sku: 'MAG-001', lines: [{ sku: 'MAG-001', qty: 150 }] }, { poId: po.id }, { sku: 'MAG-001', locationId: w.locs.warehouse.id, delta: -5, reason: 'broken' }, { text: 'aimant' }, { status: 'ORDERED' }, null];
+   for (const t of a.catalog) for (const x of args) (await a.call(t.name, x ?? undefined));
+   assert.equal(JSON.stringify((await w.store.snapshot())), before, 'no tool wrote anything');
+-  assert.equal(a.catalog.length, 15);
++  assert.equal(a.catalog.length, 16);
+   assert.ok(a.catalog.every((t) => ['READ_ONLY', 'PROPOSE_ONLY'].includes(t.authority)), 'no tool has execute authority');
+ });
+ 

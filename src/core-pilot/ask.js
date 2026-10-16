@@ -11,6 +11,9 @@ import { buildFieldSnapshot, showVerdict } from './field-facts.js';
 import { buildFieldAnswer } from './field-answers.js';
 import { followUpIntent, stepConversation } from './field-context.js';
 import { procurementAnswer } from './procurement-answers.js';
+import { procurementCompareAnswer } from './procurement-compare.js';
+import { procurementSupplierAnswer } from './procurement-supplier.js';
+import { isApprovalsQuestion, pendingApprovalsAnswer } from './pending-approvals.js';
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const eur = (v) => (Number.isFinite(v) ? `${v.toFixed(2).replace('.', ',')} €` : 'inconnu');
@@ -39,7 +42,7 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
   const limits = [];
 
   // ---- an order to ACT is refused out loud: Nordla answers, it never orders, pays, sends, approves, records or erases anything
-  if (isActionRequest(text)) return { status: 'ACTION_REFUSED', answer: 'Je ne peux pas faire cela : Nordla répond aux questions mais ne commande, ne paie, n’envoie, n’approuve, n’enregistre ni n’efface rien (ni dossier, ni blocage, ni journal). Les décisions se valident par vous (Valider / Rejeter dans le Core) et les achats se font hors de Nordla. Je peux en revanche vous dire ce qui manque, les risques ou la prochaine vérification.', sources: [], limits };
+  if (isActionRequest(text)) return { status: 'ACTION_REFUSED', answer: refusalText(norm(text)), sources: [], limits };
 
   // ---- Core questions (the decision journal)
   if (/(decision|decide|valider|approuv).*(attente|attend|en cours|a prendre|dois prendre|a valider|approbation)|(en attente|a valider).*(decision)/.test(t)) {
@@ -58,8 +61,12 @@ export async function askNordla({ text, caseId = null }, { runtime, getCase, ext
     return { status: 'ANSWERED', answer: ['Relié à ce serveur : China Sourcing (dossiers fournisseurs) et le journal de décisions du Core.', 'Pas encore relié :', ...off.map((o) => `• ${o}`)].join(String.fromCharCode(10)), sources: [], limits: off };
   }
   // ---- Stock / Achats (read-only tools over the persistent procurement store); without it, the router below says the stock is NOT connected
-  if (procurement) { const pa = await procurementAnswer(text, procurement); if (pa) return pa; }
+  const procDown = { status: 'MODULE_NOT_CONNECTED', module: 'procurement', answer: 'Stock / Achats ne répond pas pour le moment (service ou base indisponible). Rien n’a été changé ; réessayez dans un instant. Aucun chiffre de stock ou de commande n’est donné.', sources: [], limits: ['Stock / Achats indisponible'] };
+  if (isApprovalsQuestion(text)) { try { return await pendingApprovalsAnswer({ runtime, procurement }); } catch { return { ...procDown, answer: 'Je n’ai pas pu lire toutes les validations en attente (un module ne répond pas). Rien n’a été changé ; réessayez dans un instant.' }; } } // what waits for a human, module by module (read-only)
+  if (procurement) { try { const pa = (await procurementSupplierAnswer(text, procurement, actor)) ?? (await procurementCompareAnswer(text, procurement)) ?? (await procurementAnswer(text, procurement)); if (pa) return pa; } catch { return procDown; } }
 
+  // a Stock / Achats sentence with Stock / Achats not connected: said so, with no figure (the router only knows "stock de ...")
+  if (!procurement && recognizeFieldIntent(text).reason === 'PROCUREMENT_ANCHOR') return { status: 'MODULE_NOT_CONNECTED', module: M.STOCK_SALES, answer: NOT_CONNECTED[M.STOCK_SALES], sources: [], limits: [NOT_CONNECTED[M.STOCK_SALES]] };
   // ---- field questions on the open case (what is known / missing / risky, margin, next check, why this recommendation): read-only, no journal entry, no Finance / Analytics reading
   const scope = { merchantId: runtime?.merchantId ?? 'local', caseId };
   let fi = recognizeFieldIntent(text);
@@ -135,6 +142,14 @@ ${out.answer}`; }
   }
   if (routed.status === STATUS.ASK) return { status: 'ASK', answer: routed.question, sources: [], limits };
   return { status: 'NOT_UNDERSTOOD', answer: `Je ne sais pas encore répondre à cela ici. Je sais : ${CAN_DO.join(', ')}.`, sources: [], limits: Object.values(NOT_CONNECTED).filter((v, i, a) => a.indexOf(v) === i) };
+}
+
+// Nordla answers; it never executes. The refusal says WHERE the step is done and, for stock and orders, the difference between PROPOSING (a description, nothing changes) and EXECUTING (a named person, in Achats).
+function refusalText(t) {
+  const base = 'Je ne peux pas faire cela : Nordla répond aux questions mais ne commande, ne paie, n’envoie, n’approuve, n’enregistre ni n’efface rien (ni dossier, ni blocage, ni journal, ni stock).';
+  if (/(stock|inventaire|ajust|corrig|receptionn|incremente|decremente)/.test(t)) return `${base} Un ajustement de stock s’exécute dans Achats, par une personne autorisée, avec son approbation nominative. Je peux seulement le décrire sans rien modifier (une proposition) ; je ne l’exécute jamais.`;
+  if (/(commande|achete|acompte|paie|paye|signe|approuv)/.test(t)) return `${base} Une commande, un acompte ou une approbation se font dans Achats / le Core par une personne autorisée (approbation nominative). Je peux vous dire ce qui manque, les risques ou la prochaine vérification.`;
+  return `${base} Les décisions se valident par vous (Valider / Rejeter dans le Core) et les achats se font hors de Nordla. Je peux en revanche vous dire ce qui manque, les risques ou la prochaine vérification.`;
 }
 
 function notConfigured() {

@@ -47,7 +47,7 @@
   { "cat": "FR/EN", "q": "what are the risks on this supplier", "expect": ["ANSWERED"], "intent": "RISKS" },
   { "cat": "FR/EN", "q": "what is missing in this file", "expect": ["ANSWERED"], "intent": "MISSING" },
   { "cat": "FR/EN", "q": "can I order this product", "expect": ["ANSWERED"], "intent": "CAN_ORDER" },
-  { "cat": "limites honnêtes", "q": "Compare les deux propositions que j'ai enregistrées", "expect": ["ASK", "NOT_UNDERSTOOD"], "note": "multi-dossiers : non supporté, jamais inventé" },
+  { "cat": "limites honnêtes", "q": "Compare les deux propositions que j'ai enregistrées", "expect": ["ANSWERED"], "intent": "COMPARE_OFFERS", "note": "un dossier = une offre : réponse honnête (rien à comparer ici), jamais de meilleur inventé" },
   { "cat": "limites honnêtes", "q": "Résume ma journée de sourcing", "expect": ["ASK", "NOT_UNDERSTOOD"], "note": "multi-dossiers : non supporté" },
   { "cat": "limites honnêtes", "q": "raconte une blague", "expect": ["NOT_UNDERSTOOD"] },
   { "cat": "pas de dossier", "q": "Qu'est-ce qui manque ?", "expect": ["ASK"], "noCase": true },

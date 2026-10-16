@@ -10,6 +10,7 @@ export const FIELD_INTENT = Object.freeze({
   CAN_ORDER: 'CAN_ORDER', // "can I order": read-only explanation (the existing "dois-je acheter" runs the journaled Core analysis and is left alone)
   NEXT_STEP: 'NEXT_STEP',
   SUPPLIER_QUESTIONS: 'SUPPLIER_QUESTIONS', // the questions to put to the supplier (engine's own P1 list, English + Chinese)
+  COMPARE_OFFERS: 'COMPARE_OFFERS', // "best supplier / best landed cost": what THIS case holds (one offer); several offers belong to Stock / Achats
   PRICE_JUDGEMENT: 'PRICE_JUDGEMENT', // "is this price good?": the quote against the engine's maximum purchase price - no market benchmark is invented
   EXPLAIN_RECOMMENDATION: 'EXPLAIN_RECOMMENDATION',
 });
@@ -33,6 +34,7 @@ const has = (words, list) => list.some((s) => stemHit(words, s));
 // What makes a sentence "about a sourcing case" (vs. Finance's ledgers or Analytics' sales).
 const CASE_WORDS = ['lot', 'dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
 const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense'];
+const PROCUREMENT_WORDS = ['stock', 'inventaire', 'transit', 'reapprovision', 'rupture', 'a recommander', 'bon de commande', 'bons de commande', 'commandes d achat', 'commandes en attente', 'commandes en cours', 'commandes ouvertes', 'purchase order', 'retard de livraison', 'commandes en retard', 'entrepot', 'marchandises en'];
 const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu', 'client', 'clients', 'customer', 'customers', 'shopify', 'catalogue', 'par produit', 'tous les produits', 'mes produits', 'mes marges', 'boutique en ligne', 'par mois', 'ce mois', 'cette semaine'];
 
 const RULES = [
@@ -55,6 +57,7 @@ const RULES = [
   [FIELD_INTENT.SUPPLIER_QUESTIONS, [['quelles questions', 'quelle question', 'questions a poser', 'questions poser', 'questions to ask', 'que demander', 'quoi demander', 'que dois je demander', 'lui demander', 'leur demander', 'faut il demander', 'que demander']]],
   [FIELD_INTENT.PRICE_JUDGEMENT, [['prix'], ['bon', 'correct', 'interessant', 'raisonnable', 'eleve', 'cher', 'negocier', 'acceptable', 'good', 'fair', 'high']], ],
   [FIELD_INTENT.PRICE_JUDGEMENT, [['prix maximum', 'prix max', 'prix limite', 'jusqu a combien', 'maximum payer', 'prix d achat maximum', 'max purchase', 'combien au maximum', 'maximum a payer']], 2],
+  [FIELD_INTENT.COMPARE_OFFERS, [['meilleur', 'meilleure', 'meilleurs', 'moins cher', 'comparer', 'compare', 'comparaison', 'classement', 'classer', 'plus avantageux'], ['fournisseur', 'fournisseurs', 'offre', 'offres', 'devis', 'proposition', 'propositions', 'cout rendu', 'prix']], 2],
   [FIELD_INTENT.CAN_ORDER, [['puis je', 'je peux', 'puis-je', 'peut on commander', 'ai je le droit', 'autoris', 'feu vert', 'can i', 'je peut', 'est ce que je peux', 'on peut', 'peux je'], ['command', 'acheter', 'achat', 'signer', 'passer', 'order', 'buy', 'valider', 'lancer', 'verser', 'acompte', 'payer']]],
   [FIELD_INTENT.RISKS, [['preuve', 'preuves'], ['manque', 'manquent', 'manquant', 'manquantes', 'insuffisant', 'insuffisantes', 'faut', 'absente', 'absentes']]],
   [FIELD_INTENT.RISKS, [['risque', 'risques', 'danger', 'bloquer', 'bloque', 'blocage', 'bloquant', 'bloquants', 'probleme', 'attention', 'alerte', 'risk', 'block', 'preuve', 'preuves', 'inquiet', 'hesit', 'point faible', 'piege', 'mal tourner', 'tourner mal', 'pourrait mal', 'risque de', 'dangereux', 'risque']]],
@@ -89,8 +92,10 @@ export function recognizeFieldIntent(text) {
     if (groups.every((g) => phraseHit(g))) scored.push({ intent, score: groups.length + bonus });
   }
   const caseWords = phraseHit(CASE_WORDS);
-  const finance = phraseHit(FINANCE_WORDS); const analytics = phraseHit(ANALYTICS_WORDS) && !/prix de vente|selling price/.test(t);
+  const proc = phraseHit(PROCUREMENT_WORDS) || /po [0-9]{4} [0-9]+/.test(t); const finance = phraseHit(FINANCE_WORDS); const analytics = phraseHit(ANALYTICS_WORDS) && !/prix de vente|selling price/.test(t); // Stock / Achats sentences are treated like Finance's: they belong to their module
 
+  // Stock / Achats (stock, transit, reorder, purchase orders, a PO number) always belongs to Stock / Achats, even beside a case word: its own answers come first, the router says "not connected" otherwise
+  if (proc) return { intent: null, status: 'DEFERRED', reason: 'PROCUREMENT_ANCHOR' };
   // Finance / Analytics boundary: their anchor words with no case anchor stay theirs; with both, the sentence is ambiguous - ask, never guess.
   if ((finance || analytics) && (!caseWords || !scored.length)) return { intent: null, status: 'DEFERRED', reason: finance ? 'FINANCE_ANCHOR' : 'ANALYTICS_ANCHOR' };
   if (!scored.length) return { intent: null, status: 'UNKNOWN', caseWords };
@@ -112,14 +117,18 @@ export function recognizeFieldIntent(text) {
 export const INTENT_LABEL = Object.freeze({
   KNOWLEDGE: 'ce que nous savons et ne savons pas du dossier', MISSING: 'ce qui manque au dossier', DOCUMENTS: 'les documents à vérifier', RISKS: 'les risques et blocages',
   MARGIN: 'la marge', LANDED_COST: 'le coût rendu', ORDER_TOTAL: 'le coût total de la commande', PRICE_GAP: 'le prix ou la donnée qui manque pour la rentabilité', PRICE_BASIS: 'l’origine du prix de vente',
-  UNCOUNTED_COSTS: 'les coûts pas encore pris en compte', SUPPLIER_QUESTIONS: 'les questions à poser au fournisseur', PRICE_JUDGEMENT: 'le prix du devis comparé au prix maximum calculé', MOQ_SCENARIO: 'le scénario à la quantité minimale', CAN_ORDER: 'la possibilité de commander', NEXT_STEP: 'la prochaine vérification', EXPLAIN_RECOMMENDATION: 'l’explication de la recommandation',
+  UNCOUNTED_COSTS: 'les coûts pas encore pris en compte', SUPPLIER_QUESTIONS: 'les questions à poser au fournisseur', PRICE_JUDGEMENT: 'le prix du devis comparé au prix maximum calculé', COMPARE_OFFERS: 'la comparaison des offres', MOQ_SCENARIO: 'le scénario à la quantité minimale', CAN_ORDER: 'la possibilité de commander', NEXT_STEP: 'la prochaine vérification', EXPLAIN_RECOMMENDATION: 'l’explication de la recommandation',
 });
 
-// An IMPERATIVE asking Nordla to act (order, pay, send, approve, record, erase...). Nordla only answers: such a sentence is refused out loud, never "answered" with an unrelated explanation
-// that could be read as "done". Questions ("puis-je commander ?") are not imperatives and keep their own answers.
-const ACTION_VERBS = 'passe|passer|approuve|approuver|valide|valider|paie|paye|payer|envoie|envoyer|enregistre|enregistrer|efface|effacer|supprime|supprimer|annule|annuler|desactive|desactiver|modifie|modifier|commande|commander|achete|acheter|signe|signer|autorise|autoriser|ajoute|ajouter|cree|creer|lance|lancer|verse|verser|transfere|transferer|debloque|debloquer|ignore|ignorer';
-const ACTION_RE = new RegExp('^(nordla )?(tu peux |peux tu |s il te plait |stp |maintenant |alors |et )?(' + ACTION_VERBS + ')( |$)');
+// An IMPERATIVE asking Nordla to act (order, pay, send, approve, record, erase, adjust stock...). Nordla only answers: such a sentence is refused out loud, never "answered" with an unrelated
+// explanation that could be read as "done". Questions ("puis-je commander ?") are not imperatives and keep their own answers. Verbs that are also NOUNS ("commande", "achete", "signe", "lance")
+// count only when an object follows (a determiner, a number, "maintenant"): "commande fournisseur en cours" is a noun phrase, "commande 500 pieces" is an order.
+const ACTION_VERBS = 'passe|passer|approuve|approuver|valide|valider|paie|paye|payer|envoie|envoyer|enregistre|enregistrer|efface|effacer|supprime|supprimer|annule|annuler|desactive|desactiver|modifie|modifier|autorise|autoriser|ajoute|ajouter|verse|verser|transfere|transferer|debloque|debloquer|ignore|ignorer|ajuste|ajuster|receptionne|receptionner|corrige|corriger|incremente|decremente';
+const NOUN_VERBS = 'commande|commander|achete|acheter|signe|signer|lance|lancer|cree|creer';
+const LEAD = '^(nordla )?(tu peux |peux tu |s il te plait |stp |maintenant |alors |et )?';
+const ACTION_RE = new RegExp(LEAD + '(' + ACTION_VERBS + ')( |$)');
+const NOUN_ACTION_RE = new RegExp(LEAD + '(' + NOUN_VERBS + ') (le |la |les |l |un |une |des |ce |cet |cette |mon |ma |mes |tout |toute |tous |ca |moi |maintenant|[0-9])');
 export function isActionRequest(text) {
   const segments = String(text ?? '').split(/[:;,.!?]/).flatMap((x) => normalize(x).split(/ puis | et puis /)).map((x) => x.trim()).filter(Boolean);
-  return segments.some((seg) => ACTION_RE.test(seg) && !/^(commande|achete|signe)\b.*\b(combien|quoi|quel|quelle)\b/.test(seg));
+  return segments.some((seg) => ACTION_RE.test(seg) || NOUN_ACTION_RE.test(seg));
 }

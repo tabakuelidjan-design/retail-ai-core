@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDecimal, parseInteger, buildQuotePayload, microToString, fmtMoney, poActions, describeOffer, addToCart, classifyHttp, backoffMs, PO_STATUS_FR } from '../src/procurement/ui/logic.js';
+import { parseDecimal, parseInteger, buildQuotePayload, microToString, fmtMoney, poActions, describeOffer, addToCart, classifyHttp, backoffMs, PO_STATUS_FR, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf } from '../src/procurement/ui/logic.js';
 
 test('what a person types is read exactly or refused, never guessed', () => {
   assert.equal(parseDecimal('0,52'), '0.52'); assert.equal(parseDecimal(' 3.5 '), '3.5'); assert.equal(parseDecimal('0.035'), '0.035');
@@ -40,13 +40,17 @@ test('which buttons a person sees on an order: no self-approval, no ordering wit
   assert.deepEqual(ids(po('PENDING_APPROVAL'), preparer), ['blocked', 'reject'], 'the preparer is told why, and has no Approve button');
   assert.deepEqual(ids(po('APPROVED'), owner), ['order']); assert.ok(poActions(po('APPROVED'), owner)[0].confirm.includes('n’envoie rien'));
   assert.deepEqual(ids(po('APPROVED'), field), ['wait']);
-  for (const st of ['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED']) assert.deepEqual(ids(po(st), owner), [], st);
+  for (const st of ['RECEIVED', 'CANCELLED', 'CLOSED']) assert.deepEqual(ids(po(st), owner), [], st);
+  // receiving is offered only to someone who may receive; everyone else is told who does
+  const warehouse = { id: 'magasin', canApprove: true, canReceive: true };
+  for (const st of ['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED']) { assert.deepEqual(ids(po(st), warehouse), ['receive'], st); assert.deepEqual(ids(po(st), owner), ['wait-receive'], st); assert.deepEqual(ids(po(st), field), ['wait-receive'], st); }
+  for (const st of ['DRAFT', 'PENDING_APPROVAL', 'APPROVED']) assert.ok(!ids(po(st), warehouse).includes('receive'), `no receipt on a ${st} order`);
 });
 
 test('offer cards: landed, goods-only, and every reason an offer is not ranked, in plain French', () => {
   const base = { supplier: 'S', currency: 'USD', unitPrice: '0.085', incoterm: 'FOB', leadTimeDays: 25 };
   const landed = describeOffer({ ...base, status: 'LANDED', landedPerUnit: 78, landedTotal: 390000, estimated: true }, 5000);
-  assert.equal(landed.usable, true); assert.match(landed.headline, /3\D?900[,.]00/); assert.match(landed.detail, /0[,.]78\D+\/ pièce.*arrondi au centime/); assert.ok(landed.chips.some((c) => /ESTIMÉ/.test(c.t))); assert.match(landed.detail, /pas un montant fiscal définitif/);
+  assert.equal(landed.usable, true); assert.match(landed.headline, /3\D?900[,.]00/); assert.match(landed.detail, /0[,.]7800\D+\/ pièce.*arrondit au centime/); assert.ok(landed.chips.some((c) => /ESTIMÉ/.test(c.t))); assert.match(landed.detail, /pas un montant fiscal définitif/);
   const goods = describeOffer({ ...base, status: 'GOODS_ONLY', goodsUnitEur: 0.078 }, 5000);
   assert.equal(goods.usable, true); assert.match(goods.headline, /marchandises seules/); assert.match(goods.detail, /Transport et droits non saisis/);
   assert.match(describeOffer({ ...base, status: 'NOT_COMPARABLE', reason: 'FX_REQUIRED' }, 5000).headline, /taux USD → EUR/);
@@ -68,4 +72,32 @@ test('the send queue: what to do with every answer from the server', () => {
   for (const s of [0, 408, 425, 429, 500, 502, 503, 504]) assert.equal(classifyHttp(s), 'RETRY', String(s));
   for (const s of [400, 401, 403, 404, 409, 415, 422]) assert.equal(classifyHttp(s), 'REJECT', `${s} must not loop forever`);
   assert.deepEqual([1, 2, 3, 4, 10].map(backoffMs), [2000, 4000, 8000, 16000, 60000]);
+});
+
+test('exchange rates: a plausible rate passes, an inverted or odd one needs confirmation, an unknown currency is not judged', () => {
+  assert.equal(fxPlausibility('USD', '0.92').ok, true); assert.equal(fxPlausibility('CNY', '0.128').ok, true); assert.equal(fxPlausibility('GBP', '1.17').ok, true);
+  const inv = fxPlausibility('USD', '1.09'); assert.equal(inv.ok, true, '1.09 is inside the plausible band for USD->EUR? it is not an inversion of 0.92 here');
+  const inverted = fxPlausibility('CNY', '7.8'); assert.equal(inverted.ok, false); assert.equal(inverted.inverted, true); assert.match(inverted.message, /inverse/);
+  const odd = fxPlausibility('USD', '12'); assert.equal(odd.ok, false); assert.equal(odd.inverted, false); assert.match(odd.message, /inhabituel/i);
+  assert.deepEqual(fxPlausibility('XYZ', '5'), { ok: true, known: false }); assert.equal(fxPlausibility('USD', 'abc').ok, true);
+});
+
+test('receipt form: exact numbers only, never above what is outstanding, at least one piece, defects counted too', () => {
+  const po = { lines: [{ id: 'L1', name: 'Keychain', qty: 100, qtyReceived: 40 }, { id: 'L2', name: 'Magnet', qty: 10, qtyReceived: 0 }] };
+  const ok = receiptLinesFrom(po, [{ lineId: 'L1', accepted: '55', defective: '5' }, { lineId: 'L2', accepted: '', defective: '' }]);
+  assert.equal(ok.ok, true); assert.deepEqual(ok.lines, [{ poLineId: 'L1', qtyAccepted: 55, qtyDefective: 5 }]); assert.equal(ok.total, 60);
+  assert.match(receiptLinesFrom(po, [{ lineId: 'L1', accepted: '61', defective: '0' }]).errors[0], /il n’en reste que 60/);
+  assert.match(receiptLinesFrom(po, [{ lineId: 'L1', accepted: '30', defective: '31' }]).errors[0], /reste que 60/, 'defective pieces count against the order too');
+  assert.match(receiptLinesFrom(po, [{ lineId: 'L1', accepted: '1,5', defective: '' }]).errors[0], /illisible/);
+  assert.match(receiptLinesFrom(po, [{ lineId: 'L1', accepted: 'beaucoup', defective: '' }]).errors[0], /illisible/);
+  assert.match(receiptLinesFrom(po, []).errors[0], /au moins une quantité/);
+  assert.equal(receiptLinesFrom(po, [{ lineId: 'L2', accepted: '10', defective: '0' }]).ok, true, 'the whole line can arrive');
+});
+
+test('precision: cheap pieces trigger the rounding warning; currencies in play are listed', () => {
+  assert.match(precisionWarning([{ status: 'LANDED', landedPerUnit: 9 }]), /centimes/); assert.match(precisionWarning([{ status: 'GOODS_ONLY', goodsUnitEur: 0.05 }]), /TOTAUX/);
+  assert.equal(precisionWarning([{ status: 'LANDED', landedPerUnit: 250 }]), null); assert.equal(precisionWarning([{ status: 'NOT_COMPARABLE' }]), null);
+  assert.deepEqual(currenciesOf([{ currency: 'USD' }, { currency: 'CNY' }, { currency: 'USD' }]), ['USD', 'CNY']);
+  const d = describeOffer({ supplier: 'S', currency: 'USD', unitPrice: '0.072', status: 'LANDED', landedPerUnit: 9, landedTotal: 45000, estimated: true }, 5000);
+  assert.match(d.headline, /450[,.]00/); assert.match(d.detail, /0[,.]0900/, 'per piece from the exact total (450 € / 5000), not from the rounded cents');
 });
