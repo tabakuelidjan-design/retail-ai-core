@@ -34,7 +34,14 @@ Vérification des modifications concurrentes du chantier A : sur `origin/feature
 | Node 20.20.2 (Docker) : 71/74 tests locaux ; les 3 fichiers `integration-*` échouent **localement uniquement** : binaire natif Windows `@resvg` introuvable sous Linux (artefact d'environnement) | ces fichiers passent en CI Linux Node 20 |
 | **CI GitHub, commit dae712c**, workflow `procurement-stock-v1` : Node 20 et 24 × mémoire et fichier + PostgreSQL 17 (schéma + parité) | **succès** (5 jobs) |
 | Parcours complet dans un navigateur réel (375 px), coupure réseau simulée, redémarrage brutal du serveur | réussi (voir plus haut) |
-| Suite complète du dépôt (une exécution par fichier, Node 24) | voir §Suite complète |
+| Suite complète du dépôt, Node 24, Windows, un processus par fichier (352 fichiers) | 341 passent, 11 échecs, **aucun causé par ce chantier** (voir ci-dessous) |
+
+### Suite complète : les 11 fichiers en échec
+- `core-product-images` : **causé par ce chantier** (garde « seul `src/sync` écrit les tables commerce » détectant la collection `locations`) ; corrigé (collection renommée), le fichier passe (10/10).
+- 8 fichiers `sourcing-*` : échouent **à l'identique sur la base intacte** `integration/nordla-pre-china` (chemins Windows `C:\C:\…` et assertions de fichiers) ; non liés.
+- `remaining-tenant-decoupling` : échec intermittent (« no B data », test de fuite sur UUID aléatoire, flake déjà connu) ; repasse 28/28 seul, et passe sur la base.
+- `test/benchmark-*` exécutés ; `procurement-pg-faults` exclu de cette exécution (nécessite PostgreSQL, couvert par la parité).
+- **CI GitHub, workflow « Creative Intelligence V1 » (Node 24) en échec** sur dae712c : déclenché par mon push (chemin `package.json`), étape « Focused Creative Intelligence tests ». Les journaux exigent une authentification que je n'ai pas : **cause non vérifiée**. Éléments : aucun de ces tests n'importe le module Stock/Achats ni les fichiers d'intégration modifiés ; tous ces fichiers passent en local ; la mémoire du projet note déjà un flake Node 24 non expliqué sur ce pipeline. À relancer pour confirmer. Les autres workflows déclenchés (Marketing, Activation, Provider) ont été annulés par le push suivant, pas échoués.
 
 Défauts réels trouvés et corrigés pendant la phase : un test de garde du dépôt (« seul `src/sync` écrit les tables commerce ») détectait la collection `locations` du module → renommée `stockLocations` ; photos : `append(null)` affichait « null » dans l'interface (trouvé dans le navigateur) ; un article relu en base ne pouvait pas être mis à jour avec ses propres pièces jointes (`sha256: null`) ; la valorisation ignorait les sorties (non conforme à la décision 3).
 **Correction d'une erreur de ma part** : le bilan de la phase 1 annonçait 16 outils assistant ; il y en a **15** (13 lectures, 2 propositions).
