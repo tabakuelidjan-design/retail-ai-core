@@ -9,15 +9,15 @@ import { makeWorld, orderedPo, receive, buyer } from './procurement-fixtures.js'
 const TENANT = '00000000-0000-0000-0000-0000000000f1';
 const wf = (n = 'wf-1') => ({ workflow_id: n, initiated_by: 'tester' });
 
-test('the policy lists exactly the assistant tools: 13 reads, 2 proposals, nothing that engages', async () => {
+test('the policy lists exactly the assistant tools: 14 reads (find_supplier added), 2 proposals, nothing that engages', async () => {
   const w = await makeWorld();
   const names = w.proc.assistant.catalog.map((t) => t.name).sort();
   assert.deepEqual(names, Object.keys(PROCUREMENT_TOOLS).sort(), 'catalog and policy never drift apart');
-  assert.equal(names.length, 15);
+  assert.equal(names.length, 16);
   const levels = Object.values(PROCUREMENT_TOOLS).map((t) => t.level);
-  assert.equal(levels.filter((l) => l === LEVEL.READ_ONLY).length, 13); assert.equal(levels.filter((l) => l === LEVEL.OWNER_REVIEW).length, 2);
+  assert.equal(levels.filter((l) => l === LEVEL.READ_ONLY).length, 14); assert.equal(levels.filter((l) => l === LEVEL.OWNER_REVIEW).length, 2);
   // the two read-only compatibility views (purchase plans, incoming expectations) are the only other entries
-  assert.equal(Object.keys(PROCUREMENT_ACTIONS).length, 17); assert.ok(Object.values(PROCUREMENT_ACTIONS).every((l) => l === LEVEL.READ_ONLY || l === LEVEL.OWNER_REVIEW));
+  assert.equal(Object.keys(PROCUREMENT_ACTIONS).length, 18); assert.ok(Object.values(PROCUREMENT_ACTIONS).every((l) => l === LEVEL.READ_ONLY || l === LEVEL.OWNER_REVIEW));
   assert.ok(!levels.includes(LEVEL.AUTO_SAFE) && !levels.includes(LEVEL.OWNER_APPROVAL_REQUIRED));
   for (const t of w.proc.assistant.catalog) assert.equal(t.authority === 'READ_ONLY', PROCUREMENT_TOOLS[t.name].level === LEVEL.READ_ONLY, `${t.name}: tool authority and policy level agree`);
   // the engaging steps keep their own policy entries, untouched

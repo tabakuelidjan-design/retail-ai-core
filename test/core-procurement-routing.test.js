@@ -95,3 +95,27 @@ test('expiring supplier documents are answered from Stock / Achats; supplier sea
   const x = await world(); const r = await x.ask('Quels certificats fournisseurs expirent bientôt ?', 'blocked');
   assert.equal(r.sources[0].ref, 'expiring_supplier_documents'); assert.match(r.answer, /Aucun document fournisseur|document\(s\) fournisseur/);
 });
+
+// ===================================================================== supplier search by name, role-gated; stock adjustment vs execution
+test('supplier search by name: found, ambiguous, not found; no contact or bank detail ever leaves the tool; terms only for OWNER / ADMIN; isolation between companies', async () => {
+  const x = await world(); const w = x.w;
+  await w.mk(w.c.createSupplier, buyer, { name: 'Shenzhen Gifts Trading', country: 'cn', currency: 'USD', incotermDefault: 'FOB', payment: { depositPct: '30', balancePct: '70' }, leadTimeDays: 40, contacts: [{ name: 'Secret Person', email: 'secret@example.test' }], bank: { iban: 'CN00SECRET' } });
+  const owner = await x.ask('Retrouve le fournisseur Shenzhen Gifts Co', 'blocked', { actor: { userId: 'u', role: 'OWNER' } });
+  assert.match(owner.answer, /Fournisseur : Shenzhen Gifts Co \(CN\)/); assert.match(owner.answer, /devise USD, Incoterm FOB, délai 35 j/); assert.match(owner.answer, /Fiabilité \(faits tracés, pas de note\)/); assert.equal(owner.sources[0].ref, 'find_supplier');
+  const viewer = await x.ask('Retrouve le fournisseur Shenzhen Gifts Co', 'blocked', { actor: { userId: 'v', role: 'COLLABORATOR' } });
+  assert.match(viewer.answer, /Fournisseur : Shenzhen Gifts Co/); assert.doesNotMatch(viewer.answer, /Incoterm|devise|Fiabilité/); assert.ok(viewer.limits.some((l) => /Propriétaire et Administrateur/.test(l)));
+  const amb = await x.ask('cherche le fournisseur shenzhen', 'blocked', { actor: { userId: 'u', role: 'OWNER' } }); assert.equal(amb.status, 'ASK'); assert.match(amb.answer, /Shenzhen Gifts Co.*Shenzhen Gifts Trading|Shenzhen Gifts Trading.*Shenzhen Gifts Co/);
+  const none = await x.ask('trouve le fournisseur Inconnu SARL', 'blocked'); assert.match(none.answer, /Je ne trouve aucun fournisseur/); assert.ok(none.limits.some((l) => /China Sourcing/.test(l)));
+  const raw = await w.proc.assistant.call('find_supplier', { text: 'shenzhen gifts trading' }); assert.deepEqual(Object.keys(raw.candidates[0]).sort(), ['country', 'currency', 'incotermDefault', 'leadTimeDays', 'name', 'supplierId']);
+  assert.doesNotMatch(JSON.stringify(raw) + owner.answer + viewer.answer + amb.answer, /Secret Person|secret@example|CN00SECRET/, 'contacts and bank details never leave');
+  const other = await makeWorld({ merchantId: randomUUID() }); await other.mk(other.c.createSupplier, buyer, { name: 'ZZ Foreign Supplier', country: 'de', currency: 'EUR' });
+  assert.match((await x.ask('retrouve le fournisseur ZZ Foreign Supplier', 'blocked')).answer, /Je ne trouve aucun fournisseur/, 'another company\'s supplier does not exist here');
+  for (const q of ['quels risques avec ce fournisseur ?', 'factures du fournisseur Shenzhen', 'le meilleur fournisseur']) assert.doesNotMatch(String((await x.ask(q, 'blocked')).sources?.[0]?.ref), /find_supplier/, `${q}: not a supplier lookup`);
+});
+
+test('stock and orders: the refusal says PROPOSING describes and EXECUTING is a named person in Achats; nothing is executed or called', async () => {
+  const x = await world(); const before = JSON.stringify(await x.w.store.snapshot());
+  const adj = await x.ask('ajuste le stock de MAG-001 de -50', 'blocked'); assert.equal(adj.status, 'ACTION_REFUSED'); assert.match(adj.answer, /s’exécute dans Achats, par une personne autorisée, avec son approbation nominative/); assert.match(adj.answer, /seulement le décrire sans rien modifier \(une proposition\)/);
+  const ord = await x.ask('passe la commande 500 pièces de MAG-001', 'blocked'); assert.match(ord.answer, /approbation nominative/); assert.doesNotMatch(ord.answer, /ajustement de stock/);
+  assert.deepEqual(x.calls, []); assert.equal(JSON.stringify(await x.w.store.snapshot()), before);
+});

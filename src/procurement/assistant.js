@@ -20,6 +20,15 @@ export function createProcurementAssistantTools({ queries }) {
   const tools = {
     find_item: { authority: READ, description: 'Find catalogue items by SKU, barcode or name. Several matches are returned as candidates, never silently narrowed.',
       run: async ({ text }) => { const m = await itemMatches(text); return { status: m.length === 1 ? 'OK' : m.length ? 'AMBIGUOUS' : 'NOT_FOUND', candidates: m }; } },
+    find_supplier: { authority: READ, description: 'Find suppliers of THIS company by name (accents and case ignored) or exact id. Several matches are returned as candidates, never silently narrowed. Returns identity and default commercial terms only: no contacts, no bank details, no documents.',
+      run: async ({ text }) => {
+        const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); const t = norm(text);
+        if (t.length < 2) return clarify('Which supplier (name)?');
+        const all = await queries.suppliers(); const exact = all.filter((s) => s.id === String(text).trim() || norm(s.name) === t);
+        const hits = (exact.length ? exact : all.filter((s) => norm(s.name).includes(t))).slice(0, 5);
+        const view = (s) => ({ supplierId: s.id, name: s.name, country: s.country ?? null, currency: s.currency ?? null, incotermDefault: s.incotermDefault ?? null, leadTimeDays: s.leadTimeDays ?? null });
+        return { status: hits.length === 1 ? 'OK' : hits.length ? 'AMBIGUOUS' : 'NOT_FOUND', candidates: hits.map(view) };
+      } },
     stock_position: { authority: READ, description: 'On hand, reserved, available, incoming, in transit, quarantine and valuation of one item.',
       run: async ({ sku }) => { const it = await bySku(sku); return it ? { status: 'OK', position: await queries.stockPosition(it.id) } : clarify('Which item (exact SKU)?', { candidates: await itemMatches(sku) }); } },
     stock_overview: { authority: READ, description: 'Positions and valuation of every active item.', run: async () => ({ status: 'OK', ...(await queries.stockPositions()) }) },

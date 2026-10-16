@@ -9,6 +9,7 @@ import { LEVEL as L, MODULE as M } from './constants.js';
 /** assistant tool name -> the hub module that owns the capability, the command name, the policy level. */
 export const PROCUREMENT_TOOLS = Object.freeze({
   find_item: { module: M.STOCK_SALES, level: L.READ_ONLY },
+  find_supplier: { module: M.BUYING, level: L.READ_ONLY },
   stock_position: { module: M.STOCK_SALES, level: L.READ_ONLY },
   stock_overview: { module: M.STOCK_SALES, level: L.READ_ONLY },
   goods_in_transit: { module: M.STOCK_SALES, level: L.READ_ONLY },
