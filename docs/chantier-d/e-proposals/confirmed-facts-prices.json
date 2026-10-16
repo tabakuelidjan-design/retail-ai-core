@@ -1,0 +1,28 @@
+{
+  "purpose": "Proposed entries for chantier E's confirmed-facts registry (data/local/social/confirmed-facts.json). PROPOSAL ONLY: E and the owner decide. An entry is dated and sourced; `channel` and `verified_value` are optional extra keys that E's current claim filter ignores (it reads only `excerpts` and `requires`).",
+  "facts": [
+    {
+      "id": "coque-25-boutique",
+      "channel": "IN_STORE",
+      "excerpts": ["25 €", "25,00 €"],
+      "requires": "coque",
+      "verified_value": "25.00 EUR",
+      "source": "Owner statement: shop price of the personalised case, 25,00 EUR (project CLAUDE.md, HABB_OS/PRICING.md); restated by the owner in chat on 2026-10-17.",
+      "confirmed_at": "2026-10-17"
+    },
+    {
+      "id": "coque-25-web",
+      "channel": "WEB",
+      "excerpts": ["25 €", "25,00 €"],
+      "requires": "coque",
+      "verified_value": "25.00 EUR",
+      "source": "Shopify Admin GraphQL, read-only, shop zmb5jr-wf (habb.be), collection 'Coques personnalisées': 83 products, 1 variant each, price 25.00 EUR, compareAtPrice null on all 83. Read 2026-10-17.",
+      "confirmed_at": "2026-10-17"
+    }
+  ],
+  "rules": [
+    "No text may state the web price until the coque-25-web entry exists in E's registry AND the entry is re-verified against Shopify the day the text is approved.",
+    "A text that states 25 € must say which channel it is (en boutique / en ligne): enforced on D's side by lintPriceChannel.",
+    "No other value for the online price of a coque is kept: the live value is the one read on Shopify."
+  ]
+}

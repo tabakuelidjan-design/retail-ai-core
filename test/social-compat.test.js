@@ -36,7 +36,7 @@ test('SP-1 proposal: schema, producer, ai flag, alt text, jpeg for Instagram ima
 test('SP-2 claims: only the owner-confirmed coque price passes; any other price, discount, delay or guarantee is refused', () => {
   const b = jpeg(4);
   assert.ok(buildSocialProposal(base(b), { confirmed: CONFIRMED }));
-  for (const bad of ['Gourde à 28,90 €.', 'Coque à 24,90 €.', '-20 % cette semaine', 'Livraison gratuite', 'Prête en 24 h', 'Le moins cher de Namur']) {
+  for (const bad of ['Gourde à 28,90 €.', 'Coque à 23,50 €.', '-20 % cette semaine', 'Livraison gratuite', 'Prête en 24 h', 'Le moins cher de Namur']) {
     assert.throws(() => buildSocialProposal(base(b, { caption: `Coque personnalisée. ${bad}` }), { confirmed: CONFIRMED }), (e) => e.detail.claims?.length > 0, bad);
   }
   assert.equal(lintClaimsLikeE('Prête en environ 5 minutes, selon le modèle.', { confirmed: CONFIRMED }).length, 0);

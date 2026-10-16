@@ -22,7 +22,7 @@ for (const it of doc.items) {
     const body = `${text}
 ${(it.hashtags ?? []).map((h) => `#${h}`).join(' ')}`;
     for (const f of lintProcessClaims(body)) problems.push({ item: ID(it), field, code: f.code, detail: f.excerpt });
-    for (const f of lintPriceChannel(body, { confirmed: CONFIRMED })) problems.push({ item: ID(it), field, code: f.code, detail: `${f.excerpt} (${f.channel})` });
+    for (const f of lintPriceChannel(body, { confirmed: CONFIRMED })) problems.push({ item: ID(it), field, code: f.code, detail: `${f.excerpt} (${f.channels.join("/")})` });
     const m = text.match(MOTIF); if (m) problems.push({ item: ID(it), field, code: 'FORBIDDEN_DECORATIVE_WORD', detail: m[0] });
   }
   if (kind(it) !== 'REEL' && !it.alt_text && /^\s*PR[ÊE]T/i.test(v)) problems.push({ item: ID(it), field: 'alt_text', code: 'ALT_TEXT_MISSING_ON_READY_VISUAL', detail: '' });

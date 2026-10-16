@@ -11,12 +11,12 @@ Branche `feature/chantier-d-branding-creative-pole`. Rien de fusionné, publié,
 | Rendus de coques : démonstration interne | chaque proposition de D commence par « DÉMONSTRATION INTERNE : droits non confirmés, ne pas publier » ; assets étiquetés `internal-demo`, droits `UNVERIFIED` |
 | « Personnalisées dans notre atelier à Namur » | employée dans D3 (« Des coques personnalisées dans notre atelier à Namur ») ; D1/D2 gardent « Venez en boutique à Namur » |
 | Pas de contrôle systématique des fichiers affirmé | nouvelle règle : `lintProcessClaims` refuse toute promesse de ce type (D le refuse dans ses propres propositions) ; le contrôleur de la réserve la signale |
-| Prix boutique 25 € / prix web 24,90 € | un prix confirmé porte maintenant son **canal** : D1, D2 et la légende disent « prix en boutique » / « 25 € en boutique » ; `lintPriceChannel` refuse un prix sans canal. **Le prix web 24,90 € n'est cité nulle part** (voir point ouvert) |
+| Prix boutique et prix web | un prix confirmé porte son **canal** : D1, D2 et la légende disent « prix en boutique » / « 25 € en boutique » ; `lintPriceChannel` refuse un prix sans canal et refuse tout texte « en ligne » tant que l'entrée `coque-25-web` n'existe pas dans le registre de E |
 | `alternative_to` | proposition + patch (`PROPOSITION-E-ALTERNATIVE-TO.md`) |
 | Mode IA « fond uniquement » | conservé, seul mode actif (`AI_MODE`) ; architecture des modes futurs documentée (§9 de `CREATIVE-AI-ARCHITECTURE.md`) |
 
-## Point ouvert : le prix web
-Lecture Shopify du 2026-10-17 (API en lecture seule) : **les 50 premières coques sont à 25,00 € en ligne**, sans prix barré. Or la demande distingue un prix web de 24,90 €. Je n'ai pas inventé : D ne cite aucun prix web. Deux possibilités : (a) le prix web doit passer à 24,90 € dans Shopify, ou (b) 24,90 € est l'ancien prix (remplacé par 25,00 € le 2026-08-05 d'après `CLAUDE.md`). Tant que ce n'est pas tranché, afficher 24,90 € créerait un écart avec ce que le client voit sur le site. Pour l'ajouter, il faudra un fait confirmé de canal `WEB` dans le registre de E **et** un prix Shopify cohérent.
+## Prix web : résolu par la valeur Shopify
+**Résolu, par la valeur vérifiée sur Shopify.** Lecture directe (Admin GraphQL, lecture seule, 2026-10-17) : les **83 coques** de la collection « Coques personnalisées », une variante chacune, sont à **25,00 € en ligne**, sans prix barré. Le prix web est donc 25,00 €, comme le prix boutique ; aucune autre valeur n'est conservée. Les deux sont deux faits distincts, datés et sourcés (`docs/chantier-d/e-proposals/confirmed-facts-prices.json`) : **E doit les enregistrer** ; tant que `coque-25-web` n'y est pas, aucun texte ne cite le prix en ligne.
 
 ## 2. Tests exécutés
 Locaux (Windows, Node 24) : D 41 tests : 40 réussis + 1 ignoré volontairement en local quand E n'est pas patché (AT-3) ; 9/9 contre le E patché (asset-library 9, studio-compose 11, social-compat 6 dont 2 contre E, habb-reserve-check 2, studio-ai-layer 10, social-alternative-to 3) · E patché sur copie de travail : 66/66 · mutations : gardes retirées → tests en échec.
@@ -24,7 +24,7 @@ GitHub (commit final `463deb7`, Node 20 et 24, succès) : suites D 38/38 contre 
 
 ## 3. Dépendances restantes avec E
 1. **Adopter `alternative_to`** (patch prêt, 66/66, s'applique sans conflit sur `879198d`). Tant que ce n'est pas fait, E laisse approuver deux variantes ; la seule protection active est la note « ne publier qu'une des deux » et la vigilance du propriétaire.
-2. Registre de faits confirmés de E : ne contient que « coque 25 € » ; un éventuel prix web exigera une entrée `WEB`.
+2. Registre de faits confirmés de E : y ajouter les deux entrées datées et sourcées proposées (`confirmed-facts-prices.json`), dont `coque-25-web` (relevé Shopify du 2026-10-17).
 3. Aucune publication réelle possible chez E (aucun compte connecté) : à régler par E / le propriétaire.
 
 ## 4. Limites

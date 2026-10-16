@@ -29,7 +29,7 @@ test('AT-2 D refuses a shop price that does not say it is the shop price, and a 
   assert.throws(() => buildSocialProposal(mk('d:D1', { caption: 'Votre coque personnalisée : 25 €.' }), { confirmed: CONFIRMED }), /shop price or the web price/);
   assert.ok(buildSocialProposal(mk('d:D1'), { confirmed: CONFIRMED }));
   assert.throws(() => buildSocialProposal(mk('d:D1', { caption: 'Votre coque. On vérifie votre fichier avant impression.' }), { confirmed: CONFIRMED }), /checking process/);
-  assert.throws(() => buildSocialProposal(mk('d:D1', { caption: 'Votre coque personnalisée : 24,90 € en ligne.' }), { confirmed: CONFIRMED }), /nobody confirmed/);
+  assert.throws(() => buildSocialProposal(mk('d:D1', { caption: 'Votre coque personnalisée : 23,50 € en ligne.' }), { confirmed: CONFIRMED }), /nobody confirmed/);
 });
 
 const E_DIR = process.env.SOCIAL_E_DIR ?? resolve(import.meta.dirname, '../../retail-ai-core-social-e-wt');

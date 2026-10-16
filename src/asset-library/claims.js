@@ -23,11 +23,16 @@ const CHANNEL_EVIDENCE = {
  */
 export function lintPriceChannel(text, { confirmed = [] } = {}) {
   const t = text.replace(/ /g, ' ').toLowerCase();
+  // facts that share the same excerpt (the same amount in two channels) form one price: the text is fine if it names a channel for which a fact exists
+  const groups = new Map();
+  for (const f of confirmed.filter((x) => x.channel)) {
+    const key = [...f.excerpts].sort().join('|');
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
   const out = [];
-  for (const f of confirmed) {
-    if (!f.channel) continue;
-    const present = f.excerpts.some((x) => t.includes(x.replace(/ /g, ' ').toLowerCase())) && (!f.requires || t.includes(f.requires.toLowerCase()));
-    if (present && !CHANNEL_EVIDENCE[f.channel].test(t)) out.push({ code: 'PRICE_CHANNEL_UNSTATED', channel: f.channel, excerpt: f.excerpts[0] });
+  for (const facts of groups.values()) {
+    const present = facts[0].excerpts.some((x) => t.includes(x.replace(/ /g, ' ').toLowerCase())) && facts.every((f) => !f.requires || t.includes(f.requires.toLowerCase()));
+    if (present && !facts.some((f) => CHANNEL_EVIDENCE[f.channel].test(t))) out.push({ code: 'PRICE_CHANNEL_UNSTATED', channels: facts.map((f) => f.channel), excerpt: facts[0].excerpts[0] });
   }
   return out;
 }

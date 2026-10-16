@@ -1,3 +1,5 @@
+> **Historique** : état au 2026-10-16/17. Les décisions du 2026-10-17 (registre A, prix par canal, aucune promesse de contrôle des fichiers) sont dans `CLOTURE-PHASE-1.md`.
+
 # Chantier D — Branding / Marketing / Creative : état réel (2026-10-16)
 
 Branche `feature/chantier-d-branding-creative-pole` (worktree `retail-ai-core-chantier-d-wt`), partie de `integration/nordla-pre-china` @ `f7197d5` (qui contient déjà Branding `e0b86c9`, Marketing M1-M4 `ceec15c`, Creative closure `7c76edb`, Activation, provider-connections). Rien n'est fusionné, rien n'est publié, aucune dépense, aucun secret touché.

@@ -139,7 +139,7 @@ const full = () => [...Array(8).keys()].map((i) => item(i, 'POST')).concat([...A
 test('AL-8 editorial plan: counts, catalogue price, forbidden motifs, unverified commercial claims', () => {
   assert.equal(L.checkEditorialPlan(plan(full()), { catalogue }).ok, true);
   const bad = full();
-  bad[0] = item(0, 'POST', { caption: 'Coque à 24,90 €' });
+  bad[0] = item(0, 'POST', { caption: 'Coque à 23,50 €' });
   bad[1] = item(1, 'POST', { concept: 'cœurs dorés en arrière-plan' });
   bad[2] = item(2, 'POST', { hook: 'Livraison gratuite' });
   bad[3] = item(3, 'POST', { product_ref: 'shopify:inconnu' });
