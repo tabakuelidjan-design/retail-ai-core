@@ -39,8 +39,17 @@ const runWorker = (f, opts) => new Promise((resolve) => {
 });
 const together = (f, n, opts = {}) => { const goAt = Date.now() + 1500; return Promise.all(Array.from({ length: n }, () => runWorker(f, { goAt, ...opts }))); };
 
+// 3 rounds by default (inside the whole-repository suite, which other workflows run under a time limit); the dedicated Social Publishing workflow sets SOCIAL_STRESS_ROUNDS=10
+export const stressRounds = (env) => Number(env.SOCIAL_STRESS_ROUNDS) || 3;
+
+test('CC-1a the number of racing rounds: 3 by default, 10 with SOCIAL_STRESS_ROUNDS=10 (what the Social Publishing workflow sets)', () => {
+  assert.equal(stressRounds({}), 3);
+  assert.equal(stressRounds({ SOCIAL_STRESS_ROUNDS: '10' }), 10);
+  assert.equal(stressRounds({ SOCIAL_STRESS_ROUNDS: 'abc' }), 3);
+});
+
 test('CC-1 (audit scenario D5) three processes racing on the same due post publish it ONCE, round after round', async () => {
-  const rounds = 10; const doubles = [];
+  const rounds = stressRounds(process.env); const doubles = []; let executed = 0;
   for (let i = 0; i < rounds; i += 1) {
     const f = folders(`cc1-${i}`);
     const post = await scheduledPost(serviceOf(f));
@@ -49,8 +58,10 @@ test('CC-1 (audit scenario D5) three processes racing on the same due post publi
     const n = lines(f.log, 'PUBLISH_CALL').length;
     const state = (await serviceOf(f).get(post.id)).state;
     // the invariant is "never more than one creating call, and the stored state tells the truth about it" (a machine so loaded that nobody gets to publish is slow, not wrong)
+    executed += 1;
     if (n > 1 || (n === 1) !== ['PUBLISHED', 'VERIFIED'].includes(state)) doubles.push({ round: i, calls: n, state });
   }
+  assert.equal(executed, rounds, `CC-1 ran ${executed} rounds, expected ${rounds}`);
   assert.deepEqual(doubles, [], `rounds with a number of platform creating calls or a state that disagrees with them: ${JSON.stringify(doubles)}`);
 });
 
