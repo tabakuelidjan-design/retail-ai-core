@@ -191,9 +191,11 @@ export async function drillLatest(outDir, targetDir, opts = {}) {
 // retention cannot be removed by anyone, the account owner included, before its date. The drill reads it with ANOTHER key (read-only,
 // kept outside the server) and checks the retention of what it restores.
 //   server : SOURCING_BACKUP_B2_KEY_ID, SOURCING_BACKUP_B2_KEY (writeFiles only), SOURCING_BACKUP_B2_BUCKET_ID
-//   drill  : the same variables with a read key (listFiles, readFiles, readFileRetentions) + SOURCING_BACKUP_B2_BUCKET_NAME
+//   drill  : the same variables with a CONTROL key (listFiles, readFiles, readFileRetentions), never given to the server
 const B2_API = 'https://api.backblazeb2.com';
-const WRITER_CAPABILITIES = new Set(['writeFiles']);
+// the console's "Write Only" key = writeFiles + listBuckets + listAllBucketNames (bucket metadata, never file contents). Anything else
+// (deleteFiles, readFiles, listFiles, *Retentions, bypassGovernance, ...) is refused.
+const WRITER_CAPABILITIES = new Set(['writeFiles', 'listBuckets', 'listAllBucketNames']);
 export const isolatedConfigured = (env) => Boolean(String(env.SOURCING_BACKUP_B2_KEY_ID ?? '').trim() && String(env.SOURCING_BACKUP_B2_KEY ?? '').trim() && String(env.SOURCING_BACKUP_B2_BUCKET_ID ?? '').trim());
 async function b2Authorize(env, fetchImpl) {
   const id = String(env.SOURCING_BACKUP_B2_KEY_ID ?? '').trim(); const key = String(env.SOURCING_BACKUP_B2_KEY ?? '').trim();
@@ -227,21 +229,25 @@ export async function uploadIsolated(file, { env = process.env, fetchImpl = fetc
 
 /** Drill on the isolated store: newest archive -> download -> verify -> restore; reports its retention (compliance, until when). */
 export async function drillIsolated(outDir, targetDir, { env = process.env, fetchImpl = fetch, now = () => Date.now() } = {}) {
-  const bucketId = String(env.SOURCING_BACKUP_B2_BUCKET_ID ?? '').trim(); const bucketName = String(env.SOURCING_BACKUP_B2_BUCKET_NAME ?? '').trim();
-  if (!bucketId || !/^[a-zA-Z0-9-]{6,63}$/.test(bucketName)) throw new BackupError('ISOLATED_NOT_CONFIGURED', 'the isolated drill needs SOURCING_BACKUP_B2_BUCKET_ID and SOURCING_BACKUP_B2_BUCKET_NAME');
+  const bucketId = String(env.SOURCING_BACKUP_B2_BUCKET_ID ?? '').trim();
+  if (!bucketId) throw new BackupError('ISOLATED_NOT_CONFIGURED', 'the isolated drill needs SOURCING_BACKUP_B2_BUCKET_ID');
   const auth = await b2Authorize(env, fetchImpl);
-  const listed = await b2Call(auth, fetchImpl, 'b2_list_file_names', { bucketId, prefix: 'sourcing-', maxFileCount: 1000 });
-  const files = (listed.files ?? []).filter((f) => ARCHIVE.test(f.fileName)).sort((a, b) => (a.fileName < b.fileName ? 1 : -1));
+  // ALL versions, hidden ones included: a writeFiles key can HIDE a file by name (never delete a locked version); a hide must not fool the drill
+  const listed = await b2Call(auth, fetchImpl, 'b2_list_file_versions', { bucketId, prefix: 'sourcing-', maxFileCount: 1000 });
+  const versions = (listed.files ?? []).filter((f) => ARCHIVE.test(f.fileName));
+  const hidden = versions.filter((f) => f.action === 'hide').length;
+  const files = versions.filter((f) => (f.action ?? 'upload') === 'upload').sort((a, b) => (a.fileName < b.fileName ? 1 : a.fileName > b.fileName ? -1 : 0));
   if (!files.length) throw new BackupError('ISOLATED_EMPTY', 'the isolated store holds no archive');
   const newest = files[0];
   const info = await b2Call(auth, fetchImpl, 'b2_get_file_info', { fileId: newest.fileId });
+  if (info.fileRetention?.isClientAuthorizedToRead === false) throw new BackupError('ISOLATED_RETENTION_UNREADABLE', 'the drill key cannot read file retentions: give the CONTROL key the readFileRetentions capability (the lock is then checked, not assumed)');
   const ret = info.fileRetention?.value ?? null;
-  const r = await fetchImpl(`${auth.downloadUrl}/file/${bucketName}/${encodeURIComponent(newest.fileName)}`, { headers: { authorization: auth.token } });
+  const r = await fetchImpl(`${auth.downloadUrl}/b2api/v2/b2_download_file_by_id?fileId=${encodeURIComponent(newest.fileId)}`, { headers: { authorization: auth.token } }); // by id: the exact locked version, even if a later upload or a hide shadows the name
   if (!r.ok) throw new BackupError('ISOLATED_DOWNLOAD_FAILED', `download answered ${r.status}`);
   await mkdir(outDir, { recursive: true }); const local = join(outDir, newest.fileName); await writeFile(local, Buffer.from(await r.arrayBuffer()));
   const restored = await restore(local, targetDir, { env });
   const until = Number(ret?.retainUntilTimestamp ?? 0);
-  return { ok: true, archive: newest.fileName, archives_in_store: files.length, sha256: sha256(await readFile(local)), files: restored.files, created_at: restored.created_at, retention: { mode: ret?.mode ?? null, retain_until: until ? new Date(until).toISOString() : null, locked_now: ret?.mode === 'compliance' && until > now() } };
+  return { ok: true, archive: newest.fileName, archives_in_store: files.length, hidden_markers: hidden, sha256: sha256(await readFile(local)), files: restored.files, created_at: restored.created_at, retention: { mode: ret?.mode ?? null, retain_until: until ? new Date(until).toISOString() : null, locked_now: ret?.mode === 'compliance' && until > now() } };
 }
 
 /** One scheduled run on the hosted server: local encrypted archive (kept `keep`), then the off-server copy. */

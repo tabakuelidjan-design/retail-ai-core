@@ -1,42 +1,52 @@
-# Sauvegarde isolée et immuable (Backblaze B2, Object Lock) — préparée, NON activée
+# Sauvegarde isolée et immuable (Backblaze B2, Object Lock) — préparée, NON créée
 
-But : une copie des sauvegardes que **ni le serveur, ni la clé de service Supabase, ni une personne ayant volé l'un ou l'autre** ne peut
-effacer ou modifier. Le bucket Supabase `nordla-backups` reste la copie hors serveur courante ; il n'est pas immuable (la clé de service
-peut y supprimer).
+But : une copie des sauvegardes que **ni le serveur, ni la clé de service Supabase, ni quelqu'un qui les aurait volés** ne peut effacer
+ou modifier. Le bucket Supabase `nordla-backups` reste la copie hors serveur courante ; il n'est pas immuable (la clé de service peut y
+supprimer). Code prêt et testé : `tools/sourcing-backup.mjs` (copie isolée + `drill-isolated`), `test/sourcing-backup-isolated.test.js`.
 
-## Principe (code prêt et testé : `tools/sourcing-backup.mjs`, `test/sourcing-backup-isolated.test.js`)
+## Principe
 
 | Élément | Réglage | Effet |
 |---|---|---|
-| Bucket B2 privé, **Object Lock activé à la création** | rétention **par défaut** en mode **compliance**, 30 jours | chaque archive déposée est verrouillée 30 jours ; en mode compliance **personne** (même le titulaire du compte) ne peut la supprimer ni raccourcir le verrou avant la date |
-| Clé du **serveur** (Railway) | **une seule** capacité : `writeFiles`, limitée à ce bucket | le serveur ajoute des archives ; il ne peut ni lister, ni lire, ni supprimer, ni toucher aux verrous. **Vérifié à chaque envoi** : une clé plus puissante est refusée (`ISOLATED_KEY_TOO_POWERFUL`) et rien n'est envoyé |
-| Clé de **contrôle** (GitHub uniquement) | `listFiles`, `readFiles`, `readFileRetentions`, limitée à ce bucket | la restauration indépendante (`staging-backup-drill`) télécharge la dernière archive, la restaure et **vérifie qu'elle est sous verrou compliance** ; sinon le contrôle échoue |
+| Bucket B2 **privé**, Object Lock **activé**, rétention **par défaut** en mode **Compliance**, **30 jours** | réglé par le propriétaire | chaque archive **déposée après** ce réglage est verrouillée 30 jours ; en mode Compliance personne (titulaire du compte compris) ne peut supprimer une version verrouillée ni raccourcir son verrou |
+| Clé du **serveur** (Railway) : type console **Write Only**, limitée à ce bucket | capacités `writeFiles` (+ `listBuckets`, `listAllBucketNames` que la console ajoute : métadonnées de bucket seulement) | le serveur **ajoute** des archives. **Vérifié à chaque envoi** : toute autre capacité (`deleteFiles`, `readFiles`, `listFiles`, `*Retentions`, `bypassGovernance`…) → envoi refusé (`ISOLATED_KEY_TOO_POWERFUL`) |
+| Clé de **contrôle** (GitHub uniquement, jamais sur le serveur) : limitée à ce bucket | `listFiles`, `readFiles`, **`readFileRetentions`** | la restauration indépendante lit **toutes les versions** (masquées comprises), télécharge la plus récente **par identifiant**, la restaure, **vérifie son verrou Compliance** et échoue si une archive a été masquée |
 | Archives | chiffrées (AES-256-GCM) **avant** de quitter le serveur | B2 ne voit jamais les données en clair |
 
-Un serveur compromis peut au pire **ajouter** des fichiers (coût de stockage) ; il ne peut pas détruire l'historique verrouillé.
+Ce qu'un serveur compromis peut encore faire avec `writeFiles` : **ajouter** des fichiers (coût) et **masquer** un nom de fichier (marqueur
+« hide ») — sans effacer la version verrouillée. Le contrôle lit les versions, retrouve l'archive et **signale** le masquage.
+
+## Corrections par rapport à la version précédente de cette fiche
+
+- Object Lock **peut** être activé sur un bucket **existant** (irréversible) ; il ne protège **pas** les fichiers déjà présents : l'activer
+  **avant** le premier envoi.
+- La clé « Write Only » de la console contient aussi `listBuckets` et `listAllBucketNames` ; le code les accepte désormais (il les refusait).
+- Le verrou se lit avec la capacité `readFileRetentions` : si la clé de contrôle ne l'a pas, le contrôle échoue avec
+  `ISOLATED_RETENTION_UNREADABLE` (le verrou n'est jamais supposé).
 
 ## Coût
 
-Stockage B2 : environ 6 USD par To et par mois ; les 10 premiers Go sont gratuits. Les archives staging pèsent quelques Mo : **0 USD
-attendu**. Création d'un compte Backblaze = **décision du propriétaire** (nouveau fournisseur).
+Stockage B2 : environ 6 USD par To et par mois, 10 premiers Go gratuits ; les archives staging pèsent quelques Mo : **0 USD attendu**.
+Les versions verrouillées ne peuvent pas être supprimées avant 30 jours (voulu).
 
-## Mise en place (propriétaire, rien dans un chat)
+## Mise en place (propriétaire ; rien dans un chat)
 
-1. Backblaze → créer le compte (ou utiliser l'existant).
-2. *Buckets* → *Create a Bucket* : nom par ex. `nordla-staging-backups-locked`, **Private**, **Object Lock : Enable** (impossible à ajouter
-   plus tard), puis *Object Lock* → *Default retention* : **Compliance**, **30 jours**.
-3. *Application Keys* → *Add a New Application Key* (clé du **serveur**) : accès **à ce seul bucket**, type **Write Only** (seule capacité
-   `writeFiles`) ; noter l'identifiant et la clé (affichée une seule fois).
-4. Deuxième clé (**contrôle**) : ce seul bucket, **Read Only** + capacité de lecture des rétentions si l'interface la propose.
-5. Railway, `sourcing-staging` : `SOURCING_BACKUP_B2_KEY_ID`, `SOURCING_BACKUP_B2_KEY` (clé serveur, secrète), `SOURCING_BACKUP_B2_BUCKET_ID`.
-6. GitHub, environnement `supabase-staging` : secrets `STAGING_B2_READ_KEY_ID`, `STAGING_B2_READ_KEY` ; variables `STAGING_B2_BUCKET_ID`,
-   `STAGING_B2_BUCKET_NAME`.
-7. Au démarrage, le journal du service indique « isolated immutable copy ON » ; après la première sauvegarde : « Backup OK … and to the
-   isolated immutable store ». Puis la restauration indépendante (`run: true`, approbation) prouve la restauration **et** le verrou.
+1. Créer le compte Backblaze (décision : nouveau fournisseur).
+2. *Buckets* → *Create a Bucket* : `nordla-staging-backups-locked` (ou autre nom), **Private**, **Object Lock : Enable** ; puis *Object Lock*
+   → *Default Retention Policy* : **Compliance**, **30 jours**. Noter l'**identifiant du bucket** (Bucket ID).
+3. *Application Keys* → *Add a New Application Key* — clé **serveur** : *Allow access to* = ce bucket, *Type of Access* = **Write Only**.
+4. Clé **contrôle** : ce bucket, **Read Only**. Si l'interface ne propose pas `readFileRetentions`, la créer avec l'outil en ligne de
+   commande B2 (`b2 key create --bucket <nom> <nom-de-clé> listFiles,readFiles,readFileRetentions`) ; sans elle le contrôle échoue (voulu).
+5. Railway (`sourcing-staging`) : `SOURCING_BACKUP_B2_KEY_ID`, `SOURCING_BACKUP_B2_KEY` (clé serveur), `SOURCING_BACKUP_B2_BUCKET_ID`.
+6. GitHub, environnement `supabase-staging` : secrets `STAGING_B2_READ_KEY_ID`, `STAGING_B2_READ_KEY` (clé contrôle) ; variable
+   `STAGING_B2_BUCKET_ID`.
+7. Contrôles : journal « isolated immutable copy ON » au démarrage ; « Backup OK … and to the isolated immutable store » après la
+   première sauvegarde ; puis la restauration indépendante (`staging-backup-drill`) : `retention.locked_now = true`, `hidden_markers = 0`.
 
 ## Limites honnêtes
 
-- Le format exact des en-têtes d'envoi B2 n'a pas pu être relu sur la documentation officielle depuis la session de travail (site
-  inaccessible) ; il est validé par le **premier envoi réel** et par le contrôle `drill-isolated` (qui échoue sinon).
-- 30 jours de verrou = une archive ne peut pas être supprimée avant 30 jours, même par erreur ou pour libérer de la place : c'est voulu.
-- Le premier envoi B2 qui échoue fait échouer l'exécution de sauvegarde : nouvel essai 1 h plus tard, alerte si l'échec persiste.
+- La documentation officielle B2 n'a pas pu être lue directement depuis la session (site inaccessible) ; les noms d'API viennent des pages
+  Backblaze vues par recherche. Le **premier envoi réel** et le contrôle `drill-isolated` les valident ; un écart fait échouer la
+  sauvegarde (alerte) ou le contrôle, jamais en silence.
+- Un premier envoi B2 en échec fait échouer l'exécution de sauvegarde (nouvel essai 1 h plus tard, alerte si l'échec persiste) : activer
+  B2 **après** que la sauvegarde Supabase a été vue réussie, pour isoler un éventuel problème.

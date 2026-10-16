@@ -14,7 +14,7 @@ Railway `https://<service>.up.railway.app`, puis `app.nordla.app` après accord 
 | Supabase staging : migrations d'identité 1–5 | **fait** | run `staging-db-ops` 38813124178 |
 | Marchand de test `67646dbb-…`, votre adhésion OWNER, module `sourcing`, bucket privé `nordla-backups` | **fait** | run 38815730509, relu sur staging |
 | Votre compte de connexion | **fait** : le seul compte de l'Auth **staging** (créé par vous ; e-mail et mot de passe choisis par vous) | Auth staging : 1 compte confirmé |
-| Service `sourcing-staging` actif sur `a11324e` | principe validé le 16/10 ; **activation à confirmer** (2–4 USD/mois) | `docs/infrastructure/railway-staging-go-nogo.md` |
+| Service `sourcing-staging` actif sur `50c865c` | principe validé le 16/10 ; **activation à confirmer** (2–4 USD/mois) | `docs/infrastructure/procedure-activation-staging.md` |
 | Sauvegarde hors serveur + restauration indépendante | **après activation** (B2, B3 de la grille) ; staging non « opérationnel » avant | workflow `staging-backup-drill` |
 | Adresse | **`app.nordla.app`** retenue le 16/10 ; DNS **à autoriser** (au plus tard le 17/10) | `docs/infrastructure/domaine-app-nordla-app.md` |
 

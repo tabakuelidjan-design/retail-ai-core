@@ -1,5 +1,7 @@
 # `sourcing-staging` sur Railway — grille GO / NO-GO (16/10)
 
+> Procédure courte à suivre : **`docs/infrastructure/procedure-activation-staging.md`**.
+
 Décision du propriétaire (16/10) : déploiement de `sourcing-staging` validé **dans son principe**, budget cible 2–4 USD/mois ;
 **activation, dépenses et changements d'infrastructure seulement après sa confirmation explicite**, sur présentation de cette grille.
 Adresse cible du test Xiaomi : `app.nordla.app` (aucun DNS modifié sans son accord). Staging reste séparé de la production.
@@ -15,7 +17,7 @@ Commit à déployer : **`50c865cdf33184f873f6f905e4b4897753325c86`** (`50c865c`,
 | A3 | Séparation des secrets et accès staging / production | **vérifié côté code ; à constater côté Railway** | les secrets sont saisis par le propriétaire ; le service staging ne reçoit **que** des valeurs du projet staging (garde A2) ; le canal GitHub `supabase-staging` refuse la référence de production ; aucune variable partagée avec Finance / Analytics de production ne doit être référencée par `sourcing-staging` (à constater dans l'onglet *Variables* : aucune « shared variable » de production) |
 | A4 | Volume persistant pour le journal Core | **vérifié dans l'image ; à constater côté Railway** | garde du Chantier B : sur Railway, journal hors volume → « Nordla Core OFF (JOURNAL_NOT_ON_A_VOLUME) » (simulé) ; configuration prévue : volume `sourcing-staging-data` monté sur `/app/data`, `SOURCING_DATA_DIR=/app/data/sourcing` → « Nordla Core ON » (simulé). À constater : volume attaché, 1 réplique (Railway interdit les répliques avec volume) |
 | A5 | Comportement en cas de panne du stockage ou des sauvegardes | **testé** | écriture du journal non durable → 503 et aucune décision « enregistrée » à tort (tests Chantier B `core-reliability*`) ; volume presque plein → aucune archive écrite, message `BACKUP_LOW_SPACE` ; copie hors serveur en échec → archive locale gardée, échec journalisé sans secret, **nouvel essai 1 h plus tard** (avant : 24 h ; corrigé et testé) ; archive modifiée ou mauvaise phrase de passe → refusée, jamais restaurée à moitié ; restauration jamais par écrasement |
-| A6 | Coûts et ressources réellement configurés | **à constater côté Railway** (non visible d'ici) | attendu : 1 service, 1 réplique, limite 0,5 vCPU / 512 Mo, volume 1 Go, pas de second service ; mesure locale 48 Mo au repos ; estimation 2–4 USD/mois. Recommandé : **limite d'usage** du compte Railway (*Usage* → *Usage limits*) à 10 USD pour borner toute dérive |
+| A6 | Coûts et ressources réellement configurés | **à constater côté Railway** (non visible d'ici) | attendu : 1 service, 1 réplique, volume 1 Go, pas de second service ; **correction 16/10 : les limites CPU / mémoire ne se règlent pas sur un service avec volume** (communauté Railway) — le coût est borné par la limite d'usage ; mesure locale 48 Mo au repos ; estimation 2–4 USD/mois. **limite d'usage** : alerte e-mail 8 USD ; limite stricte 10 USD seulement si l'usage actuel de l'espace laisse de la marge (elle met **tous** les services de l'espace hors ligne et n'est pas un plafond absolu) — voir `procedure-activation-staging.md` §2 |
 
 ## B. Conditions qui ne peuvent être prouvées qu'APRÈS l'activation (staging non « opérationnel » avant)
 

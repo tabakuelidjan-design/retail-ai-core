@@ -29,8 +29,8 @@ ont bougé, rien de ce que l'image exécute).
 3. Secrets, saisis **par le propriétaire** directement dans Railway (jamais dans un chat) : `SUPABASE_ANON_KEY` et
    `SUPABASE_SERVICE_ROLE_KEY` du projet **staging**, `NORDLA_IDENTITY_RATE_LIMIT_KEY` et `NORDLA_CSRF_KEY` (deux valeurs différentes,
    ≥ 32 octets), `SOURCING_BACKUP_PASSPHRASE` (≥ 16 caractères, aussi conservée hors ligne).
-4. Commande de démarrage `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz`, limite conseillée
-   0,5 vCPU / 512 Mo.
+4. Commande de démarrage `/app/docker-entrypoint.sh node src/service-start.js`, healthcheck `/healthz` (limites CPU / mémoire non
+   réglables avec un volume).
 5. Activer le patch STAGED, épinglé sur `62ec977`. Coût estimé : 2–4 $/mois (§6, §9).
 6. Contrôles §4 (1 à 8), sur l'adresse Railway générée, **données de test uniquement** ; le téléphone n'est pas utilisé à ce stade.
 
@@ -147,5 +147,5 @@ correspondre à des lignes HABB réelles. `SOURCING_MERCHANT_ID=habb` (configura
   les services existants ; ce service n'ajoute aucun abonnement.
 - **Variable** : l'usage de ce service, estimé à 2–4 $/mois (section 6). Il ne coûte réellement que si l'usage total du compte
   dépasse les 5 $ inclus.
-- Limite de ressources conseillée sur le service : 0,5 vCPU / 512 Mo (le service mesure 48 Mo au repos) — plafonne la dépense en cas
-  d'emballement.
+- Limites CPU / mémoire : **non réglables** sur un service avec volume (correction du 16/10, communauté Railway). La dépense est bornée par
+  la limite d'usage du compte (`procedure-activation-staging.md` §2) ; le service mesure 48 Mo au repos.
