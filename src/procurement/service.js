@@ -21,6 +21,17 @@ export const PO_TRANSITIONS = {
   ORDERED: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'], CONFIRMED: ['PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'],
   PARTIALLY_RECEIVED: ['PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED'], RECEIVED: ['CLOSED'], CLOSED: [], CANCELLED: [],
 };
+export const DOCUMENT_TYPES = ['CERTIFICATE', 'CONTRACT', 'PRICE_LIST', 'INSURANCE', 'OTHER'];
+/** Photos / documents are REFERENCES (a storage path or URL, optionally a hash): this module stores no file content. */
+function attachmentsOf(list, name = 'attachments') {
+  if (list === undefined || list === null) return [];
+  if (!Array.isArray(list) || list.length > 20) fail('INVALID_INPUT', `${name} must hold at most 20 entries`);
+  return list.map((a, i) => ({
+    kind: reqEnum(a.kind, `${name}[${i}].kind`, ['PHOTO', 'DOCUMENT']), ref: reqStr(a.ref, `${name}[${i}].ref`, { max: 300 }),
+    sha256: a.sha256 === undefined ? null : (/^[0-9a-f]{64}$/.test(a.sha256) ? a.sha256 : fail('INVALID_INPUT', `${name}[${i}].sha256 must be 64 hex characters`)),
+    note: optStr(a.note, `${name}[${i}].note`, { max: 300 }),
+  }));
+}
 export const QUOTE_ORIGINS = ['SUPPLIER_CLAIM', 'USER_PROVIDED', 'DOCUMENT_OBSERVED'];
 const PERMISSION = {
   createItem: ['OWNER', 'BUYER'], updateItem: ['OWNER', 'BUYER'], createLocation: ['OWNER', 'WAREHOUSE'], createSupplier: ['OWNER', 'BUYER'], linkSupplierItem: ['OWNER', 'BUYER'],
@@ -28,7 +39,7 @@ const PERMISSION = {
   approvePurchaseOrder: ['OWNER', 'BUYER'], placeOrder: ['OWNER', 'BUYER'], confirmOrder: ['OWNER', 'BUYER'], cancelPurchaseOrder: ['OWNER', 'BUYER'], linkPayment: ['OWNER', 'BUYER'],
   closePurchaseOrder: ['OWNER', 'BUYER'], receiveGoods: ['OWNER', 'WAREHOUSE'], adjustStock: ['OWNER', 'WAREHOUSE'], transferStock: ['OWNER', 'WAREHOUSE'],
   quarantineDefect: ['OWNER', 'WAREHOUSE'], recordCount: ['OWNER', 'WAREHOUSE'], reserveStock: ['OWNER', 'WAREHOUSE'], releaseStock: ['OWNER', 'WAREHOUSE'],
-  recordIncident: ['OWNER', 'BUYER', 'WAREHOUSE'],
+  recordIncident: ['OWNER', 'BUYER', 'WAREHOUSE'], addSupplierDocument: ['OWNER', 'BUYER'],
 };
 
 /**
@@ -108,7 +119,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const row = {
         id: store.newId(), merchantId, sku: reqStr(p.sku, 'sku', { max: 64 }), name: reqStr(p.name, 'name', { max: 200 }), barcode: optStr(p.barcode, 'barcode', { max: 32 }),
         variantRef: optStr(p.variantRef, 'variantRef', { max: 128 }), status: reqEnum(p.status ?? 'ACTIVE', 'status', ['PROSPECT', 'ACTIVE']),
-        reorderPoint: optInt(p.reorderPoint, 'reorderPoint', { min: 0 }), reorderQty: optInt(p.reorderQty, 'reorderQty'), createdAt: ctx.at,
+        reorderPoint: optInt(p.reorderPoint, 'reorderPoint', { min: 0 }), reorderQty: optInt(p.reorderQty, 'reorderQty'), attachments: attachmentsOf(p.attachments), createdAt: ctx.at,
       };
       const item = await ctx.tx.insert('items', row);
       emit(ctx, 'ITEM_CREATED', { kind: 'item', id: item.id }, { sku: item.sku });
@@ -121,6 +132,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       if (q.status !== undefined) patch.status = reqEnum(q.status, 'status', ['PROSPECT', 'ACTIVE', 'ARCHIVED']);
       if (q.reorderPoint !== undefined) patch.reorderPoint = optInt(q.reorderPoint, 'reorderPoint', { min: 0 });
       if (q.reorderQty !== undefined) patch.reorderQty = optInt(q.reorderQty, 'reorderQty');
+      if (q.attachments !== undefined) patch.attachments = attachmentsOf(q.attachments);
       if (q.barcode !== undefined) patch.barcode = optStr(q.barcode, 'barcode', { max: 32 });
       if (!Object.keys(patch).length) fail('INVALID_INPUT', 'nothing to update');
       const next = await ctx.tx.update('items', merchantId, item.id, patch, optInt(p.expectedVersion, 'expectedVersion') ?? item.version);
@@ -143,7 +155,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
         currency: reqCurrency(p.currency), incotermDefault: p.incotermDefault === undefined ? null : reqEnum(p.incotermDefault, 'incotermDefault', INCOTERMS),
         depositBps: dep ?? (bal !== null ? 10000 - bal : null), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
         financeCompanyId: optStr(p.financeCompanyId, 'financeCompanyId', { max: 64 }), contacts: (p.contacts ?? []).slice(0, 20).map((c) => ({ name: reqStr(c.name, 'contact.name', { max: 120 }), email: optStr(c.email, 'contact.email', { max: 160 }), phone: optStr(c.phone, 'contact.phone', { max: 40 }) })),
-        status: 'ACTIVE', createdAt: ctx.at,
+        documents: [], status: 'ACTIVE', createdAt: ctx.at,
       };
       const supplier = await ctx.tx.insert('suppliers', row);
       emit(ctx, 'SUPPLIER_CREATED', { kind: 'supplier', id: supplier.id }, { name: supplier.name });
@@ -174,7 +186,7 @@ export function createProcurementService({ store, merchantId, now = () => new Da
         id: store.newId(), merchantId, supplierId: supplier.id, itemId: item.id, revision, currency: reqCurrency(p.currency), tiers, moq: optInt(p.moq, 'moq'),
         incoterm: p.incoterm === undefined ? null : reqEnum(p.incoterm, 'incoterm', INCOTERMS), leadTimeDays: optInt(p.leadTimeDays, 'leadTimeDays', { max: 730 }),
         validUntil: optDate(p.validUntil, 'validUntil'), status: 'RECEIVED', provenance: reqEnum(p.provenance ?? 'SUPPLIER_CLAIM', 'provenance', QUOTE_ORIGINS),
-        reason: optStr(p.reason, 'reason', { max: 300 }), recordedBy: ctx.actor.id, createdAt: ctx.at,
+        reason: optStr(p.reason, 'reason', { max: 300 }), evidence: attachmentsOf(p.evidence, 'evidence'), recordedBy: ctx.actor.id, createdAt: ctx.at,
       });
       emit(ctx, 'QUOTE_RECORDED', { kind: 'quote', id: quote.id }, { supplierId: supplier.id, itemId: item.id, revision, supersededRevisions: all.length });
       return { quote };
@@ -409,6 +421,18 @@ export function createProcurementService({ store, merchantId, now = () => new Da
       const mv = await postMovement(ctx, { itemId: reqId(p.itemId, 'itemId'), locationId: reqId(p.locationId, 'locationId'), bucket: 'RESERVED', delta: -reqInt(p.qty, 'qty'), kind: 'RELEASE', reference: { type: reqStr(p.reference?.type, 'reference.type', { max: 40 }), id: reqStr(p.reference?.id, 'reference.id', { max: 80 }) } });
       emit(ctx, 'STOCK_RELEASED', { kind: 'item', id: mv.itemId }, { locationId: mv.locationId, qty: -mv.delta });
       return { movement: mv };
+    }),
+
+    addSupplierDocument: (actor, key, p) => command('addSupplierDocument', actor, key, p, async (ctx) => {
+      const supplier = await must(ctx, 'suppliers', reqId(p.supplierId, 'supplierId'), 'SUPPLIER_NOT_FOUND');
+      if (supplier.documents.length >= 100) fail('LIMIT_REACHED', 'too many documents on this supplier');
+      const doc = {
+        id: `D${supplier.documents.length + 1}`, type: reqEnum(p.type, 'type', DOCUMENT_TYPES), name: reqStr(p.name, 'name', { max: 200 }), ref: reqStr(p.ref, 'ref', { max: 300 }),
+        sha256: attachmentsOf([{ kind: 'DOCUMENT', ref: 'x', sha256: p.sha256 }])[0].sha256, expiresOn: optDate(p.expiresOn, 'expiresOn'), addedAt: ctx.at, addedBy: ctx.actor.id,
+      };
+      const next = await ctx.tx.update('suppliers', merchantId, supplier.id, { documents: [...supplier.documents, doc] }, supplier.version);
+      emit(ctx, 'SUPPLIER_DOCUMENT_ADDED', { kind: 'supplier', id: supplier.id }, { documentId: doc.id, type: doc.type, expiresOn: doc.expiresOn });
+      return { document: doc, supplierVersion: next.version };
     }),
 
     // ---------------------------------------------------------------- supplier incidents (inputs of the traceable reliability metrics)

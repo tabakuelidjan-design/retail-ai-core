@@ -39,6 +39,9 @@ export function createProcurementAssistantTools({ queries }) {
     planned_margin: { authority: READ, description: 'Estimated margin of a purchase order from stated selling prices and cost inputs.',
       run: (a) => (a?.poId ? { status: 'OK', margin: queries.plannedMargin(a) } : clarify('Which purchase order?')) },
 
+    target_price: { authority: READ, description: 'Highest supplier unit price that still reaches a target gross margin (negotiation ceiling from stated inputs; not an offer).',
+      run: (a) => (a?.currency && Number.isInteger(a.qty) && a.sellingPriceGross && a.targetMarginPct ? { status: 'OK', target: queries.targetUnitPrice(a) } : clarify('Which currency, quantity, selling price (gross) and target margin?')) },
+    expiring_supplier_documents: { authority: READ, description: 'Supplier certificates / contracts expired or expiring soon.', run: (a = {}) => ({ status: 'OK', documents: queries.expiringDocuments(a) }) },
     propose_purchase_order: { authority: PROPOSE, description: 'Check a purchase request against current quotes (MOQ, tiers, validity). Creates nothing.',
       run: ({ supplierId, lines = [] }) => {
         if (!supplierId || !lines.length) return clarify('Which supplier, and which items and quantities?');

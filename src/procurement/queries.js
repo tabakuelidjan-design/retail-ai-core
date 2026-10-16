@@ -3,7 +3,7 @@
 import { positionOf, valuationOf } from './stock.js';
 import { resolveTierPrice } from './service.js';
 import { analyzePurchase as financeAnalyze } from '../finance/purchase-analysis.js';
-import { microToString, reqId, reqInt, reqDate, deepFreeze } from './util.js';
+import { microToString, reqId, reqInt, reqDate, reqCurrency, pctToBps, deepFreeze } from './util.js';
 import { fail, ProcurementError } from './errors.js';
 
 const OPEN = new Set(['ORDERED', 'CONFIRMED', 'PARTIALLY_RECEIVED']);
@@ -157,6 +157,36 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
     return deepFreeze({ poId: po.id, number: po.number, lines, note: 'estimates from stated inputs; not a tax filing and not definitive' });
   }
 
+  /** Certificates / contracts that expired or expire within `withinDays`. A document without an expiry date is never reported as expiring. */
+  function expiringDocuments({ asOf = today(), withinDays = 60 } = {}) {
+    reqDate(asOf, 'asOf'); reqInt(withinDays, 'withinDays', { min: 0, max: 3650 });
+    const limit = new Date(Date.parse(`${asOf}T00:00:00Z`) + withinDays * 86400000).toISOString().slice(0, 10);
+    const out = [];
+    for (const s of store.list('suppliers', merchantId)) for (const d of s.documents) if (d.expiresOn && d.expiresOn <= limit) out.push({ supplierId: s.id, supplier: s.name, documentId: d.id, type: d.type, name: d.name, expiresOn: d.expiresOn, expired: d.expiresOn < asOf, daysLeft: daysBetween(asOf, d.expiresOn) });
+    return deepFreeze(out.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn)));
+  }
+
+  /**
+   * Highest supplier unit price (4 decimals, the Finance engine's precision) that still reaches a target gross margin, by bisection over analyzePurchase.
+   * It is a ceiling to negotiate against, not a quote: every input is stated by the caller and the result is ESTIMATED. NOT_COMPUTED / NOT_ACHIEVABLE otherwise.
+   */
+  function targetUnitPrice({ currency, qty, sellingPriceGross, targetMarginPct, costInputs, fx, sellingVatRatePct = '21' }) {
+    reqCurrency(currency); reqInt(qty, 'qty');
+    const bps = pctToBps(targetMarginPct, 'targetMarginPct');
+    if (!sellingPriceGross || !costInputs) return deepFreeze({ status: 'NOT_COMPUTED', reason: !sellingPriceGross ? 'NO_SELLING_PRICE' : 'NO_COST_INPUTS' });
+    if (currency !== 'EUR' && !fx) return deepFreeze({ status: 'NOT_COMPUTED', reason: 'FX_REQUIRED' });
+    const price = (units) => `${Math.floor(units / 1e4)}.${String(units % 1e4).padStart(4, '0')}`;
+    const at = (units) => analyze({ supplier_unit_price: price(units), currency, qty, ...costInputs, expected_selling_price_gross: sellingPriceGross, selling_vat_rate_pct: sellingVatRatePct, ...(fx ? { fx: { rate: fx.rate, provenance: 'USER_PROVIDED' } } : {}) });
+    const ok = (a) => a.status === 'ANALYZED' && a.margin && a.margin.gross_margin_bp >= bps;
+    const first = at(1);
+    if (first.status !== 'ANALYZED') return deepFreeze({ status: 'NOT_COMPUTED', reason: first.status, errors: first.errors ?? null });
+    if (!ok(first)) return deepFreeze({ status: 'NOT_ACHIEVABLE', reason: 'even a near-zero supplier price misses the target margin with these costs and this selling price' });
+    let lo = 1; let hi = 99999999; // 0.0001 .. 9999.9999
+    while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (ok(at(mid))) lo = mid; else hi = mid - 1; }
+    const best = at(lo);
+    return deepFreeze({ status: 'ESTIMATED', currency, maxUnitPrice: price(lo), grossMarginBpAtMax: best.margin.gross_margin_bp, targetMarginBp: bps, landedPerUnit: best.landed_cost.per_unit, fx: fx ?? null, analysisVersion: best.version, note: 'a negotiation ceiling from stated inputs, not an offer and not a tax figure' });
+  }
+
   return deepFreeze({
     item: (id) => store.get('items', merchantId, id), items: () => store.list('items', merchantId),
     supplier: (id) => store.get('suppliers', merchantId, id), suppliers: () => store.list('suppliers', merchantId),
@@ -165,6 +195,6 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
     locations: () => store.list('locations', merchantId),
     events: ({ objectId } = {}) => store.listEvents(merchantId).filter((e) => !objectId || e.object.id === objectId),
     currentQuote: ({ supplierId, itemId }) => store.list('quotes', merchantId).find((q) => q.supplierId === supplierId && q.itemId === itemId && ['RECEIVED', 'SELECTED'].includes(q.status) && (!q.validUntil || q.validUntil >= today())) ?? null,
-    stockPosition, stockPositions, incomingFor, reorderAlerts, delayedOrders, inTransit, priceHistory, supplierMetrics, compareSuppliers, plannedMargin,
+    stockPosition, stockPositions, incomingFor, reorderAlerts, delayedOrders, inTransit, priceHistory, supplierMetrics, compareSuppliers, plannedMargin, expiringDocuments, targetUnitPrice,
   });
 }
