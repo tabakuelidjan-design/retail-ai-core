@@ -136,3 +136,19 @@ test('hosted on PostgreSQL: the mount, the grants, a receipt and a filed stock c
   assert.equal(rs.filter((r) => r.status === 200).length, 1, JSON.stringify(rs.map((r) => r.status))); assert.equal((await m.call('GET', '/api/procurement/stock')).json.items[0].physical, 38);
   assert.equal((await m.call('GET', `/api/procurement/stock/${itemId}/history`)).json.movements.map((x) => x.kind).join(), 'RECEIPT,ADJUSTMENT');
 });
+
+test('an assistant never approves or writes: only READ / PROPOSE tools, no decision tool, proposals change nothing and name the human approval they need', async (t) => {
+  const m = await mount(mkdtempSync(join(tmpdir(), 'nordla-h-'))); t.after(() => m.close());
+  const a = m.proc.assistant; const q = m.proc.procurement.queries;
+  assert.ok(a.catalog.length >= 16 && a.catalog.every((x) => ['READ_ONLY', 'PROPOSE_ONLY'].includes(x.authority)), JSON.stringify(a.catalog.map((x) => x.authority)));
+  assert.deepEqual(a.catalog.filter((x) => x.authority === 'PROPOSE_ONLY').map((x) => x.name).sort(), ['propose_purchase_order', 'propose_stock_adjustment']);
+  for (const forbidden of ['decideStockChange', 'requestStockChange', 'approvePurchaseOrder', 'placeOrder', 'receiveGoods', 'adjustStock', 'transferStock', 'recordCount', 'approve', 'decide']) assert.equal((await a.call(forbidden, {})).status, 'UNKNOWN_TOOL', forbidden);
+  const v = (await m.call('POST', '/api/procurement/visits', { as: 'admin', body: { supplierName: 'Yiwu Co', currency: 'USD', date: '2026-10-20' } })).json;
+  await m.call('POST', `/api/procurement/visits/${v.visit.id}/products`, { as: 'admin', body: { product: { name: 'Keychain' }, quote: { unitPrice: '0.5', moq: 10 } } });
+  const sku = (await m.call('GET', '/api/procurement/items')).json.items[0].sku; const W = (await q.locations()).find((l) => l.type === 'WAREHOUSE').id;
+  const before = JSON.stringify([(await q.events()).length, (await q.stockRequests()).length, await q.purchaseOrders(), (await q.stockPositions()).positions]);
+  const p1 = await a.call('propose_stock_adjustment', { sku, locationId: W, delta: -1, reason: 'an assistant may only describe this' });
+  assert.equal(p1.executed, false); assert.deepEqual(p1.requires_approval, ['STOCK_SALES.adjust_on_hand']); assert.match(String(p1.next), /human|approv/i);
+  const p2 = await a.call('propose_purchase_order', { sku, qty: 10 }); assert.equal(p2.executed, false);
+  assert.equal(JSON.stringify([(await q.events()).length, (await q.stockRequests()).length, await q.purchaseOrders(), (await q.stockPositions()).positions]), before, 'proposals wrote nothing: no event, no request, no order, no movement');
+});
