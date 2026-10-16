@@ -20,8 +20,28 @@ const fresh = () => ({
   movements: [], events: [], incidents: [], idem: new Map(), approvals: new Set(), seq: new Map(), movementKeys: new Set(),
 });
 
-export function createMemoryProcurementStore({ newId = randomUUID } = {}) {
-  let data = fresh();
+const MAPS = ['items', 'locations', 'suppliers', 'supplierItems', 'quotes', 'purchaseOrders', 'receipts', 'idem', 'seq'];
+const SETS = ['approvals', 'movementKeys'];
+const ARRAYS = ['movements', 'events', 'incidents'];
+/** Plain-JSON form of the whole state (for the file store). */
+export const serializeState = (d) => ({ format: 1, ...Object.fromEntries(MAPS.map((k) => [k, [...d[k].entries()]])), ...Object.fromEntries(SETS.map((k) => [k, [...d[k]]])), ...Object.fromEntries(ARRAYS.map((k) => [k, d[k]])) });
+export function reviveState(j) {
+  if (!j || j.format !== 1) throw new Error('procurement state: unknown format');
+  const d = fresh();
+  for (const k of MAPS) d[k] = new Map(j[k] ?? []);
+  for (const k of SETS) d[k] = new Set(j[k] ?? []);
+  for (const k of ARRAYS) d[k] = j[k] ?? [];
+  return d;
+}
+
+/**
+ * @param {{ newId?: () => string, state?: object, onCommit?: (state: object) => Promise<void> }} opts
+ *   state    a serialized state to start from (see serializeState);
+ *   onCommit awaited after every successful transaction, BEFORE it resolves: if it throws, the transaction is rolled back and the error surfaces as
+ *            STORE_UNAVAILABLE (the file store persists here, so "committed" means "on disk").
+ */
+export function createMemoryProcurementStore({ newId = randomUUID, state = null, onCommit = null } = {}) {
+  let data = state ? reviveState(state) : fresh();
   let chain = Promise.resolve();
   const copy = (v) => structuredClone(v);
   const keyOf = (m, id) => `${m}|${id}`;
@@ -32,7 +52,13 @@ export function createMemoryProcurementStore({ newId = randomUUID } = {}) {
     transaction(fn) {
       const run = chain.then(async () => {
         const snapshot = copy(data);
-        try { return await fn(api); } catch (e) { data = snapshot; throw e; }
+        try {
+          const result = await fn(api);
+          if (onCommit) {
+            try { await onCommit(serializeState(data)); } catch (e) { throw new StoreError('STORE_UNAVAILABLE', `could not persist the transaction: ${e.message}`, { outcome: 'NOT_COMMITTED' }); }
+          }
+          return result;
+        } catch (e) { data = snapshot; throw e; }
       });
       chain = run.catch(() => {});
       return run;
@@ -91,6 +117,7 @@ export function createMemoryProcurementStore({ newId = randomUUID } = {}) {
     nextSeq(merchantId, name) { const k = keyOf(merchantId, name); const n = (data.seq.get(k) ?? 0) + 1; data.seq.set(k, n); return n; },
     /** Test helper: a deep copy of everything, to prove that a read changes nothing. */
     snapshot() { return copy(data); },
+    exportState() { return serializeState(data); },
   };
   return api;
 }

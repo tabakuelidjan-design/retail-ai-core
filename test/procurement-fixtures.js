@@ -1,11 +1,14 @@
 // Shared fixtures for the Stock / Achats tests. In-memory store only: no database, no network, no production data.
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { createProcurement, createMemoryProcurementStore, createPgProcurementStore } from '../src/procurement/index.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createProcurement, createMemoryProcurementStore, createPgProcurementStore, openFileProcurementStore } from '../src/procurement/index.js';
 
 // The SAME suites run on the memory store (default) and on a real PostgreSQL: PROCUREMENT_STORE=pg PROCUREMENT_PG_URL=postgres://... (a THROWAWAY database only;
 // test/postgres/procurement-parity.mjs starts one). Merchants are random UUIDs, so suites never collide in a shared database.
-export const STORE_KIND = process.env.PROCUREMENT_STORE === 'pg' ? 'pg' : 'memory';
+export const STORE_KIND = ['pg', 'file'].includes(process.env.PROCUREMENT_STORE) ? process.env.PROCUREMENT_STORE : 'memory';
 let pool = null;
 export function pgPool() {
   if (!pool) {
@@ -14,7 +17,11 @@ export function pgPool() {
   }
   return pool;
 }
-export async function newStore() { return STORE_KIND === 'pg' ? createPgProcurementStore({ pool: pgPool() }) : createMemoryProcurementStore(); }
+export async function newStore() {
+  if (STORE_KIND === 'pg') return createPgProcurementStore({ pool: pgPool() });
+  if (STORE_KIND === 'file') return openFileProcurementStore({ path: join(mkdtempSync(join(tmpdir(), 'nordla-proc-')), 'procurement.json') });
+  return createMemoryProcurementStore();
+}
 export async function ensureMerchant(id) { if (STORE_KIND === 'pg') await pgPool().query('insert into merchants (id, name) values ($1, $2) on conflict do nothing', [id, `test ${id}`]); return id; }
 export const newMerchant = () => randomUUID();
 

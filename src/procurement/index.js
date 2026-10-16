@@ -6,6 +6,8 @@ import { createProcurementAssistantTools } from './assistant.js';
 
 export { createMemoryProcurementStore } from './memory-store.js';
 export { createPgProcurementStore, mapPgError } from './pg-store.js';
+export { openFileProcurementStore } from './file-store.js';
+export { importSourcingCase, draftOrderFromCase, caseToCapture } from './sourcing-bridge.js';
 export { ProcurementError, StoreError } from './errors.js';
 export { PO_STATUSES, PO_TRANSITIONS, ROLES, INCOTERMS, DEFAULT_POLICY, resolveTierPrice } from './service.js';
 export { LOCATION_TYPES, MOVEMENT_KINDS } from './stock.js';
