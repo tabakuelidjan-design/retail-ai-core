@@ -34,7 +34,7 @@ const has = (words, list) => list.some((s) => stemHit(words, s));
 // What makes a sentence "about a sourcing case" (vs. Finance's ledgers or Analytics' sales).
 const CASE_WORDS = ['lot', 'dossier', 'fournisseur', 'produit', 'commande', 'devis', 'offre', 'proposition', 'quantite', 'moq', 'minimum', 'supplier', 'product', 'quote', 'order', 'fichier', 'cet article', 'article', 'sourcing', 'ce prix', 'deposit', 'acompte'];
 const FINANCE_WORDS = ['factur', 'invoice', 'tresorerie', 'liquidit', 'cash', 'echeanc', 'depense'];
-const PROCUREMENT_WORDS = ['stock', 'inventaire', 'transit', 'reapprovision', 'rupture', 'a recommander', 'bon de commande', 'bons de commande', 'commandes d achat', 'commandes en attente', 'commandes en cours', 'commandes ouvertes', 'purchase order', 'retard de livraison', 'commandes en retard', 'entrepot', 'marchandises en'];
+const PROCUREMENT_WORDS = ['stock', 'marchandises que j attend', 'marchandises attendues', 'marchandises en route', 'inventaire', 'transit', 'reapprovision', 'rupture', 'a recommander', 'bon de commande', 'bons de commande', 'commandes d achat', 'commandes en attente', 'commandes en cours', 'commandes ouvertes', 'purchase order', 'retard de livraison', 'commandes en retard', 'entrepot', 'marchandises en'];
 const ANALYTICS_WORDS = ['vente', 'ventes', 'chiffre d affaires', 'sales', 'revenue', 'tendance', 'evolu', 'client', 'clients', 'customer', 'customers', 'shopify', 'catalogue', 'par produit', 'tous les produits', 'mes produits', 'mes marges', 'boutique en ligne', 'par mois', 'ce mois', 'cette semaine'];
 
 const RULES = [
@@ -67,6 +67,8 @@ const RULES = [
   [FIELD_INTENT.MISSING, [['tout ce qu il faut', 'assez d infos', 'assez d informations', 'tout ce qu il me faut', 'suffisamment d informations']]],
   [FIELD_INTENT.MISSING, [['manque', 'manquent', 'manquant', 'manquants', 'incomplet', 'complet', 'absent', 'absents', 'lacune', 'missing', 'trou', 'reste a', 'il me faut', 'faut il encore', 'encore besoin']]],
   [FIELD_INTENT.KNOWLEDGE, [['sait', 'sais', 'savons', 'connais', 'connait', 'connaissons', 'confirme', 'confirmes', 'confirmee', 'confirmees', 'know', 'avons nous', 'donnees', 'infos', 'information', 'informations'], ['dossier', 'fournisseur', 'produit', 'supplier', 'product', 'case', 'file', 'tu', 'on', 'nous', 'avons', 'a ce', 'sur', 'disponible', 'disponibles', 'ne sais', 'savoir', 'sait pas']]],
+  [FIELD_INTENT.KNOWLEDGE, [['retrouve', 'retrouver', 'ouvre', 'montre', 'affiche', 'donne'], ['dossier'], ['fournisseur']]], // voice V2: "retrouve le dossier de ce fournisseur" (case open) - what we know of the case, supplier included
+  [FIELD_INTENT.CAN_ORDER, [['vaut la peine', 'vaut le coup', 'merite', 'rentable', 'interessant a acheter'], ['achet', 'command', 'produit', 'lot']]], // voice V2: "est-ce que ce produit vaut la peine d'etre achete ?" -> read-only explanation, never an order
   [FIELD_INTENT.KNOWLEDGE, [['fais moi le point', 'le point sur', 'etat du dossier', 'ou en est', 'ou en sommes', 'bilan du dossier', 'etat des lieux']]],
   [FIELD_INTENT.KNOWLEDGE, [['est confirme', 'est confirmee', 'sont confirmes', 'sont confirmees', 'est verifie', 'est prouve', 'est etabli']]],
   [FIELD_INTENT.KNOWLEDGE, [['quest ce que tu sais', 'qu est ce que tu sais', 'ce que tu sais', 'ce que tu ne sais', 'sais tu', 'sais-tu']]],
@@ -125,7 +127,7 @@ export const INTENT_LABEL = Object.freeze({
 // count only when an object follows (a determiner, a number, "maintenant"): "commande fournisseur en cours" is a noun phrase, "commande 500 pieces" is an order.
 const ACTION_VERBS = 'passe|passer|approuve|approuver|valide|valider|paie|paye|payer|envoie|envoyer|enregistre|enregistrer|efface|effacer|supprime|supprimer|annule|annuler|desactive|desactiver|modifie|modifier|autorise|autoriser|ajoute|ajouter|verse|verser|transfere|transferer|debloque|debloquer|ignore|ignorer|ajuste|ajuster|receptionne|receptionner|corrige|corriger|incremente|decremente';
 const NOUN_VERBS = 'commande|commander|achete|acheter|signe|signer|lance|lancer|cree|creer';
-const LEAD = '^(nordla )?(tu peux |peux tu |s il te plait |stp |maintenant |alors |et )?';
+const LEAD = '^((ok |okay |d accord |euh |bon |allez |hey |dis |salut |oui )*(nordla )?)(tu peux |peux tu |s il te plait |stp |maintenant |alors |et )?'; // spoken fillers ("ok Nordla, valide...") never hide an action
 const ACTION_RE = new RegExp(LEAD + '(' + ACTION_VERBS + ')( |$)');
 const NOUN_ACTION_RE = new RegExp(LEAD + '(' + NOUN_VERBS + ') (le |la |les |l |un |une |des |ce |cet |cette |mon |ma |mes |tout |toute |tous |ca |moi |maintenant|[0-9])');
 export function isActionRequest(text) {

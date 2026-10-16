@@ -8,7 +8,7 @@ const NL = String.fromCharCode(10);
 
 const S = Object.freeze({
   openOrders: /(commandes?|bons? de commande|purchase orders?)\b.*(en cours|ouvert|en attente|a approuver|ou en est|liste|statut|suivi)|\bPO-\d{4}-\d{3,}/i,
-  transit: /(en transit|en route|en cours de livraison|attendu|a recevoir|en commande)/,
+  transit: /(en transit|en route|en cours de livraison|attendu|attend|a recevoir|en commande)/,
   delayed: /retard/,
   reorder: /(reapprovision|rupture|a recommander|a commander|restock)/,
   stock: /(\bstock\b|en stock|inventaire)/,
