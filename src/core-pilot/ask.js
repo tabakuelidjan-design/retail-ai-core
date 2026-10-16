@@ -7,7 +7,7 @@ import { MODULE as M } from '../integration/constants.js';
 import { sourcingPurchaseFacts } from './sourcing-facts.js';
 import { payablesAnswer, purchasesAnswer, salesAnswer, treasuryAnswer } from './answers.js';
 import { recognizeFieldIntent, isActionRequest, INTENT_LABEL } from './field-intents.js';
-import { buildFieldSnapshot, displayVerdict } from './field-facts.js';
+import { buildFieldSnapshot, showVerdict } from './field-facts.js';
 import { buildFieldAnswer } from './field-answers.js';
 import { followUpIntent, stepConversation } from './field-context.js';
 
@@ -102,7 +102,7 @@ ${out.answer}`; }
       e.recommendation ? `Recommandation Nordla Core : « ${e.recommendation.label} » (${e.recommendation.kind}).` : 'Nordla Core ne recommande rien : des données bloquantes manquent.',
       ...(e.recommendation?.rationale ?? []).map((x) => `Pourquoi : ${x}`),
       ...e.options.eliminated.filter((x) => x.stage !== 'RELEVANCE').map((x) => `Écarté : ${x.label} — ${x.reasons.join(' ; ')}`),
-      `Faits : verdict sourcing ${displayVerdict(facts.verdict, facts.hard_blockers)}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
+      `Faits : verdict sourcing ${showVerdict(sourcingPurchaseFacts(c, { merchantId: runtime.merchantId, now, externals }).assessment.verdictDisplay)}, coût rendu total ${eur(facts.landed_total)}, marge unitaire ${eur(facts.contribution_per_unit)}, prix de vente ${facts.price_basis ?? 'inconnu'}.`,
       ...r.subject.missing_data.map((m) => `Manque : ${m.field} — ${m.reason}`),
       'Rien n’est commandé ni payé par Nordla : c’est à vous de décider (bouton Valider / Rejeter).',
     ];
@@ -121,7 +121,7 @@ ${out.answer}`; }
     if (!c) return { status: 'ASK', answer: caseId ? 'Ce dossier n’est pas encore sur le serveur : synchronisez-le d’abord.' : 'Quel dossier ? Ouvrez-le d’abord.', sources: [], limits };
     const { input, assessment } = sourcingPurchaseFacts(c, { merchantId: runtime?.merchantId ?? 'local', now, externals });
     const lines = [
-      `${input.product_name || c.id} — verdict ${displayVerdict(assessment.verdict, assessment.hardBlockers.length)}.`,
+      `${input.product_name || c.id} — verdict ${showVerdict(assessment.verdictDisplay)}.`,
       assessment.nextAction ? `Prochaine étape : ${assessment.nextAction}` : null,
       `Coût rendu : ${eur(input.landed_per_unit)} / unité, ${eur(input.landed_total)} au total pour ${input.quote_qty ?? '?'} unités.`,
       `Marge unitaire : ${eur(input.contribution_per_unit)} (prix de vente ${input.price_basis ?? 'inconnu'}).`,
