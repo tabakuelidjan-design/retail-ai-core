@@ -3,7 +3,10 @@
 // A failed hard check means the creative is not returned as deliverable (`deliverable: false`); nothing is "fixed" silently.
 
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
+import { createRealFont } from '../creative-intelligence/production-typography.js';
 import { encodePng } from '../creative-intelligence/png-encode.js';
 import { decodePng } from '../creative-intelligence/png-pixels.js';
 import { resizePng } from '../creative-production/raster-ops.js';
@@ -15,20 +18,56 @@ const hex = (c) => { const m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) throw new Ty
 const lin = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
 const luminance = (c) => { const [r, g, b] = hex(c).map(lin); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 export const contrastRatio = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const canonical = (v) => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v ?? null));
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
+/**
+ * The owner-approved fonts (resources/fonts/habb-benchmark, hash-pinned) as REAL fonts with exact shaping, at any weight of the variable axis.
+ * Text is drawn as glyph outlines from these fonts, so the weight asked for is the weight drawn (an SVG <text> would use the variable font's default instance: Montserrat Thin).
+ */
 export function loadFonts(dir) {
-  return ['PlayfairDisplay[wght].ttf', 'Montserrat[wght].ttf'].map((f) => `${dir.replace(/\\/g, '/').replace(/\/$/, '')}/${f}`);
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+  const cache = new Map();
+  return {
+    get(family, weight = 400) {
+      const entry = manifest.fonts.find((f) => f.family === family);
+      if (!entry) throw new Error(`font family ${family} is not an approved HABB font`);
+      const axis = entry.variable_axes?.wght ?? { min: weight, max: weight };
+      const w = Math.min(axis.max, Math.max(axis.min, weight));
+      const key = `${family}@${w}`;
+      if (!cache.has(key)) {
+        const bytes = new Uint8Array(readFileSync(join(dir, entry.file)));
+        cache.set(key, createRealFont({ font_ref: `font://habb/${family.toLowerCase().replace(/[^a-z]+/g, '-')}-${w}`, bytes, metadata: { family, style: 'normal', weight: w, content_hash: entry.font_sha256 }, variations: entry.variable_axes?.wght ? { wght: w } : null }));
+      }
+      return cache.get(key);
+    },
+  };
 }
 
-const textSvg = (l) => l.lines.map((t, i) => {
-  const mont = l.family === 'Montserrat';
-  return `<text x="${l.x}" y="${l.y + i * l.lineHeight}" font-family="${l.family}" font-weight="${l.weight ?? 400}" font-size="${l.size}" fill="${l.fill}" stroke="${l.fill}" stroke-width="${l.stroke ?? (mont ? ((l.weight ?? 400) >= 600 ? 1.8 : 0.9) : 0)}" text-anchor="${l.anchor ?? 'start'}" letter-spacing="${l.spacing ?? 0}">${esc(t)}</text>`;
-}).join('');
+const n3 = (v) => Math.round(v * 1000) / 1000;
+const textSvg = (l, fonts) => {
+  const font = fonts.get(l.family, l.weight ?? 400);
+  const scale = Math.round((l.size / font.units_per_em) * 1e6) / 1e6;
+  const tracking = (l.spacing ?? 0) / l.size;
+  const out = l.lines.map((t, i) => {
+    const laid = font.engine.layout(t, { fontSize: l.size, tracking, maxWidth: 1e9 });
+    if (laid.missing.length) throw new Error(`the font has no glyph for ${laid.missing.join('')}`);
+    const line = laid.lines[0];
+    const x0 = l.x - (l.anchor === 'middle' ? line.width / 2 : l.anchor === 'end' ? line.width : 0);
+    const y = l.y + i * l.lineHeight;
+    const parts = [];
+    for (const run of line.runs) {
+      for (const g of run.glyphs) {
+        const d = font.engine.glyphPath(g.gid);
+        if (d) parts.push(`<path transform="translate(${n3(x0 + run.x + g.x + g.ox)},${n3(y - g.y)}) scale(${scale},${-scale})" d="${d}"/>`);
+      }
+    }
+    return parts.join('');
+  });
+  return `<g fill="${l.fill}">${out.join('')}</g>`;
+};
 
-const render = (svg, fontFiles, width) => new Resvg(svg, { font: { fontFiles, loadSystemFonts: false, defaultFontFamily: 'Montserrat' }, fitTo: { mode: 'width', value: width } }).render();
+const render = (svg, width) => new Resvg(svg, { font: { loadSystemFonts: false }, fitTo: { mode: 'width', value: width } }).render();
 
 function inkBox(pixels, width, height, bg, tol = 24) {
   let x0 = width; let y0 = height; let x1 = -1; let y1 = -1;
@@ -68,11 +107,11 @@ const inside = (b, c, s) => b.x >= s.left - SLACK && b.y >= s.top - SLACK && b.x
  * @param {object} p
  * @param {object} p.spec { id, canvas:{width,height,background}, safe:{top,right,bottom,left}, locked_copy:[string], layers:[...] }
  * @param {Map<string, Uint8Array>} p.images PNG bytes by key
- * @param {string[]} p.fontFiles
+ * @param {{ get(family: string, weight?: number): object }} p.fonts from loadFonts()
  * @param {string[]} p.palette allowed #rrggbb colors
  * @param {{ jpegQuality?: number }} [p.options]
  */
-export function composeCreative({ spec, images, fontFiles, palette, options = {} }) {
+export function composeCreative({ spec, images, fonts, palette, options = {} }) {
   const { canvas, safe, layers } = spec;
   const checks = [];
   const add = (id, ok, detail, hard = true) => checks.push({ id, outcome: ok ? 'PASS' : (hard ? 'FAIL' : 'WARN'), detail });
@@ -80,15 +119,29 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
   const used = new Set([canvas.background.toLowerCase()]);
   const body = [`<rect width="${canvas.width}" height="${canvas.height}" fill="${canvas.background}"/>`];
   const placed = []; // product boxes with expected pixels
+  const backgrounds = []; // full-bleed plates (generated or photographed), exactly canvas-sized
+  const underlay = [body[0]]; // canvas colour, surfaces and plates only: what lies under the products
+  const noText = [body[0]]; // everything but the text: what the text will sit on
   const textBoxes = [];
   const surfaces = []; // rects, in drawing order
 
   for (const l of layers) {
     if (l.type === 'rect') {
-      body.push(`<rect x="${l.x}" y="${l.y}" width="${l.width}" height="${l.height}" fill="${l.fill}"/>`);
+      const rectSvg = `<rect x="${l.x}" y="${l.y}" width="${l.width}" height="${l.height}" fill="${l.fill}"/>`;
+      body.push(rectSvg); underlay.push(rectSvg); noText.push(rectSvg);
       used.add(l.fill.toLowerCase());
       surfaces.push(l);
     } else if (l.type === 'image') {
+      if (l.role === 'background') {
+        const plate = images.get(l.key);
+        if (!plate) throw new Error(`image ${l.key} is not supplied`);
+        const pd = decodePng(plate);
+        if (pd.width !== canvas.width || pd.height !== canvas.height) throw new Error('a background plate must be exactly the canvas size');
+        const plateSvg = `<image x="0" y="0" width="${canvas.width}" height="${canvas.height}" href="data:image/png;base64,${Buffer.from(plate).toString('base64')}"/>`;
+        body.push(plateSvg); underlay.push(plateSvg); noText.push(plateSvg);
+        backgrounds.push({ layer: l, sha256: sha(plate) });
+        continue;
+      }
       let src = images.get(l.key);
       if (!src) throw new Error(`image ${l.key} is not supplied`);
       if (l.crop === 'ink') src = cropToInk(src);
@@ -100,16 +153,20 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
       const x = Math.round(l.box.x + (l.box.width - w) / 2); const y = Math.round(l.box.y + (l.box.height - h) / 2);
       const resized = resizePng({ png: src, width: w, height: h });
       const uri = `data:image/png;base64,${Buffer.from(resized.png).toString('base64')}`;
-      body.push(`<image x="${x}" y="${y}" width="${w}" height="${h}" href="${uri}"/>`);
+      const imgSvg = `<image x="${x}" y="${y}" width="${w}" height="${h}" href="${uri}"/>`;
+      body.push(imgSvg); noText.push(imgSvg);
       const surface = [...surfaces].reverse().find((r) => x >= r.x && y >= r.y && x + w <= r.x + r.width && y + h <= r.y + r.height);
       placed.push({ layer: l, x, y, width: w, height: h, source: dims, resizedPixels: decodePng(resized.png).pixels, surface: surface?.fill ?? canvas.background, source_sha256: sha(src) });
     } else if (l.type === 'text') {
-      body.push(textSvg(l));
+      body.push(textSvg(l, fonts));
       used.add(l.fill.toLowerCase());
     } else throw new Error(`unknown layer type ${l.type}`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">${body.join('')}</svg>`;
-  const composite = render(svg, fontFiles, canvas.width);
+  const composite = render(svg, canvas.width);
+  const wrap = (parts) => `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}">${parts.join('')}</svg>`;
+  const under = backgrounds.length ? new Uint8Array(render(wrap(underlay), canvas.width).pixels) : null;
+  const bare = backgrounds.length ? new Uint8Array(render(wrap(noText), canvas.width).pixels) : null;
   const pixels = new Uint8Array(composite.pixels);
 
   // -- copy: every text layer is a locked string, every locked string is shown exactly once ---------------------------------------
@@ -127,7 +184,7 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
 
   // -- true ink boxes of each text layer (drawn alone on its own background) -----------------------------------------------------
   for (const l of layers.filter((x) => x.type === 'text')) {
-    const solo = render(`<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}"><rect width="${canvas.width}" height="${canvas.height}" fill="#ffffff"/>${textSvg({ ...l, fill: '#000000' })}</svg>`, fontFiles, canvas.width);
+    const solo = render(`<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}"><rect width="${canvas.width}" height="${canvas.height}" fill="#ffffff"/>${textSvg({ ...l, fill: '#000000' }, fonts)}</svg>`, canvas.width);
     const box = inkBox(new Uint8Array(solo.pixels), solo.width, solo.height, [255, 255, 255]);
     textBoxes.push({ id: l.id, box, layer: l });
   }
@@ -137,8 +194,17 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
   const weak = [];
   for (const t of textBoxes.filter((x) => x.box)) {
     const cx = t.box.x + t.box.width / 2; const cy = t.box.y + t.box.height / 2;
-    const surface = [...surfaces].reverse().find((r) => cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height)?.fill ?? canvas.background;
+    const rectSurface = [...surfaces].reverse().find((r) => cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height)?.fill;
     const need = t.layer.size >= 48 ? 3 : 4.5;
+    let surface = rectSurface ?? canvas.background;
+    if (!rectSurface && bare) {
+      // text over a plate: measure the pixels under the ink box (mean colour), and refuse a busy ground
+      let sum = [0, 0, 0]; let sq = [0, 0, 0]; let n = 0;
+      for (let y = t.box.y; y < t.box.y + t.box.height; y += 2) for (let x = t.box.x; x < t.box.x + t.box.width; x += 2) { const o = (y * canvas.width + x) * 4; for (let c = 0; c < 3; c += 1) { sum[c] += bare[o + c]; sq[c] += bare[o + c] ** 2; } n += 1; }
+      const mean = sum.map((v) => v / n); const sd = sq.map((v, c) => Math.sqrt(Math.max(0, v / n - mean[c] ** 2)));
+      surface = `#${mean.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+      if (Math.max(...sd) > 38) weak.push({ id: t.id, busy_background_std: Math.round(Math.max(...sd)) });
+    }
     const got = contrastRatio(t.layer.fill, surface);
     if (got < need) weak.push({ id: t.id, contrast: Math.round(got * 100) / 100, need });
   }
@@ -169,7 +235,7 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
     for (let y = 0; y < p.height; y += 1) {
       for (let x = 0; x < p.width; x += 1) {
         const o = ((p.y + y) * canvas.width + p.x + x) * 4; const r = (y * p.width + x) * 4; const a = p.resizedPixels[r + 3] / 255;
-        for (let c = 0; c < 3; c += 1) worst = Math.max(worst, Math.abs(pixels[o + c] - Math.round(p.resizedPixels[r + c] * a + s[c] * (1 - a))));
+        for (let c = 0; c < 3; c += 1) worst = Math.max(worst, Math.abs(pixels[o + c] - Math.round(p.resizedPixels[r + c] * a + (under ? under[o + c] : s[c]) * (1 - a))));
         counted += 1;
       }
     }
@@ -189,6 +255,7 @@ export function composeCreative({ spec, images, fontFiles, palette, options = {}
     width: composite.width,
     height: composite.height,
     spec_hash: sha(canonical({ spec, images: [...images.entries()].map(([k, v]) => [k, sha(v)]).sort() })),
+    backgrounds: backgrounds.map((b) => ({ layer: b.layer.id, sha256: b.sha256 })),
     products: placed.map((p) => ({ layer: p.layer.id, source_sha256: p.source_sha256, source_size: { width: p.source.width, height: p.source.height }, placed: { x: p.x, y: p.y, width: p.width, height: p.height } })),
     checks,
     deliverable: checks.every((c) => c.outcome !== 'FAIL'),

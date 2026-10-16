@@ -26,7 +26,7 @@ const images = () => new Map([
   ['wm_d', plate(480, 120, [24, 50, 71, 255], [255, 255, 255, 255])], ['wm_a', plate(480, 120, [255, 255, 255, 255], [15, 42, 82, 255])],
 ]);
 const post = () => productPost({ id: 'T1', productKey: 'p1', wordmarkKey: 'wm_d', copy: { headline: ['Ta photo,', 'ta coque.'], price: ['25 €'], note: ['Prête en environ', '5 minutes, selon le', 'modèle et la', 'disponibilité.'], example: ['Exemple de rendu.'], cta: ['Viens en boutique', 'à Namur.'], address: ['RUE DE BRUXELLES 18', '5000 NAMUR'] } });
-const compose = (spec, imgs = images()) => composeCreative({ spec, images: imgs, fontFiles: FONTS, palette: HABB_PALETTE });
+const compose = (spec, imgs = images()) => composeCreative({ spec, images: imgs, fonts: FONTS, palette: HABB_PALETTE });
 const failed = (r) => r.record.checks.filter((c) => c.outcome === 'FAIL').map((c) => c.id);
 
 test('SC-1 JPEG encoder: valid headers, deterministic, size read back, decodes close to the source when Pillow is available', () => {
@@ -85,7 +85,7 @@ test('SC-6 a text over the product, a distorted box, a third font, an off-palett
   const over = post(); over.layers.find((l) => l.id === 'headline').x = 640; over.layers.find((l) => l.id === 'headline').y = 600;
   assert.ok(failed(compose(over)).includes('PRODUCT_NOT_OVERLAPPED'));
   const font = post(); font.layers.find((l) => l.id === 'headline').family = 'Comic Sans';
-  assert.ok(failed(compose(font)).includes('FONTS_ALLOWED'));
+  assert.throws(() => compose(font), /not an approved HABB font/);
   const color = post(); color.layers.find((l) => l.id === 'panel').fill = '#d4af37';
   assert.ok(failed(compose(color)).includes('PALETTE_ONLY'));
   const zone = post(); zone.layers.find((l) => l.id === 'address').y = 1330;

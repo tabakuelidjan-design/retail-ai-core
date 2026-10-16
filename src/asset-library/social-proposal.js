@@ -45,7 +45,7 @@ function checkAsset(a, field, { wantsJpeg }) {
   if (!/^[a-f0-9]{64}$/.test(a.sha256 ?? '')) fail(`${field}.sha256 must be the 64-hex fingerprint of the exact file`, { field });
   if (!/^image\//.test(a.content_type ?? '')) fail(`${field}.content_type must be an image type`, { field });
   if (wantsJpeg && a.content_type !== 'image/jpeg') fail(`${field}: Instagram's publishing API takes JPEG only`, { field });
-  if (a.ai_generated !== false) fail(`${field}.ai_generated must be stated (false for a composed or photographed asset)`, { field });
+  if (typeof a.ai_generated !== 'boolean') fail(`${field}.ai_generated must be stated: false for a composed or photographed asset, true when any part (a plate) came from an image model`, { field });
   if (typeof a.alt_text !== 'string' || !a.alt_text.trim()) fail(`${field}.alt_text is required (accessibility)`, { field });
   for (const k of ['width', 'height']) if (!Number.isInteger(a[k]) || a[k] < 1) fail(`${field}.${k} must be a positive integer`, { field });
   return a;

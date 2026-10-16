@@ -26,6 +26,7 @@ test('SP-1 proposal: schema, producer, ai flag, alt text, jpeg for Instagram ima
   assert.throws(() => buildSocialProposal(base(b, { asset: asset(b, { content_type: 'image/png' }) }), { confirmed: CONFIRMED }), /JPEG only/);
   assert.throws(() => buildSocialProposal(base(b, { asset: asset(b, { ai_generated: undefined }) }), { confirmed: CONFIRMED }), /ai_generated/);
   assert.throws(() => buildSocialProposal(base(b, { asset: asset(b, { alt_text: '' }) }), { confirmed: CONFIRMED }), /alt_text/);
+  assert.equal(buildSocialProposal(base(b, { asset: asset(b, { ai_generated: true }) }), { confirmed: CONFIRMED }).asset.ai_generated, true);
   assert.throws(() => buildSocialProposal(base(b, { asset: asset(b, { sha256: 'abc' }) }), { confirmed: CONFIRMED }), /fingerprint/);
   assert.throws(() => buildSocialProposal(base(b, { targets: [{ platform: 'instagram', format: 'IMAGE' }, { platform: 'instagram', format: 'IMAGE' }] }), { confirmed: CONFIRMED }), /duplicate/);
   assert.throws(() => buildSocialProposal(base(b, { targets: [{ platform: 'facebook', format: 'REEL' }] }), { confirmed: CONFIRMED }), /does not support/);
