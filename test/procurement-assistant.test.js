@@ -12,7 +12,7 @@ test('every assistant tool, called with any arguments, changes nothing', async (
   const args = [{}, { sku: 'MAG-001' }, { sku: 'MAG-001', qty: 100 }, { supplierId: w.supplier.id, sku: 'MAG-001', lines: [{ sku: 'MAG-001', qty: 150 }] }, { poId: po.id }, { sku: 'MAG-001', locationId: w.locs.warehouse.id, delta: -5, reason: 'broken' }, { text: 'aimant' }, { status: 'ORDERED' }, null];
   for (const t of a.catalog) for (const x of args) (await a.call(t.name, x ?? undefined));
   assert.equal(JSON.stringify((await w.store.snapshot())), before, 'no tool wrote anything');
-  assert.ok(a.catalog.length >= 12);
+  assert.equal(a.catalog.length, 15);
   assert.ok(a.catalog.every((t) => ['READ_ONLY', 'PROPOSE_ONLY'].includes(t.authority)), 'no tool has execute authority');
 });
 

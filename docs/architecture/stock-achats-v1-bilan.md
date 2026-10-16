@@ -10,7 +10,7 @@ Audit + architecture : [stock-achats-v1.md](stock-achats-v1.md). Ce document ren
 | `queries.js` | Lectures dérivées : positions de stock, entrant, transit, retards, alertes de réapprovisionnement, historique de prix, fiabilité tracée, comparaison de fournisseurs (moteur Finance), marge prévue, prix cible, documents expirants |
 | `stock.js` | Règles pures du registre : soldes dérivés, invariants, valorisation |
 | `memory-store.js` | Magasin de référence (contraintes d'unicité, versions, registre append-only, approbations à usage unique, transaction avec retour arrière) |
-| `assistant.js` | Contrat d'outils pour « Parle à Nordla » : 14 lectures + 2 propositions, **aucun** outil d'exécution |
+| `assistant.js` | Contrat d'outils pour « Parle à Nordla » : 13 lectures + 2 propositions (15 outils; une première version de ce document disait 16 à tort), **aucun** outil d'exécution |
 | `supabase/migrations/20261016090000_procurement_stock.sql` + rollback | 16 tables `proc_*`, **non appliquée** à une base réelle |
 
 ## 2. Preuves (exécutées, pas supposées)
