@@ -18,8 +18,14 @@ Vérifiable : `git merge-base --is-ancestor origin/claude/nordla-core-p0 origin/
 - Zones modifiées par rapport à P0 : `src/procurement` (26 fichiers), `src/core-pilot`, `src/integration`, `src/sourcing` (2), docs, tests.
 - **Variables d'environnement** : aucune variable obligatoire nouvelle pour le chemin hébergé (liste complète des variables lues et de celles qui sont nouvelles : sortie de `verify-candidate.mjs`).
 
-## 3. CI du candidat exact `2c8871d`
-Résultats consignés dans le rapport de clôture (workflows obligatoires lancés sur ce commit : `china-sourcing`, `nordla-integration-pre-china`, `core-reliability`). Intermittences connues (`creative-refine` RF-2, `growth-browser`, `creative-e2e-parity`) : `ci-intermittences-report.md`. **P0 ne doit pas être mis à jour tant que ces trois résultats ne sont pas lus pour ce SHA.**
+## 3. CI du candidat exact `2c8871d` — VERTE (lue le 2026-10-16)
+| Workflow | Déclencheur | Résultat |
+|---|---|---|
+| china-sourcing | workflow_dispatch sur `candidate/p0-convergence` | success |
+| nordla-integration-pre-china | workflow_dispatch sur `candidate/p0-convergence` | success |
+| core-reliability (Linux + Windows) | workflow_dispatch sur `candidate/p0-convergence` | success |
+| nordla-integration-pre-china | push sur `integration/nordla-convergence-v1` | success |
+Aucune relance n'a été nécessaire. Intermittences connues : `ci-intermittences-report.md`. La condition « CI lue » de la fiche §8 est **cochée** ; A1 reste à donner par P.
 
 ## 4. Railway — lecture seule : vérifié / inaccessible
 Aucun outil Railway n'est disponible dans cette session, et mes sondes directes (adresse publique, lecture SQL staging) ont été **refusées** par le système : je ne les ai pas contournées.
@@ -59,7 +65,7 @@ Validation **réelle** à faire par P sur le téléphone (rien de tout cela n'es
 ## 8. Fiche GO / NO-GO avant toute opération
 | Condition | OK ? |
 |---|---|
-| CI des trois workflows obligatoires **lue** sur `2c8871d` (§3) | à cocher |
+| CI des trois workflows obligatoires **lue** sur `2c8871d` (§3) | **oui** (vert) |
 | A1 écrite par P | non |
 | `ab02b77` ou le service actuel identifié par **R** (branche, commit, existence : `staged-create` ou déployé) | non (inaccessible ici) |
 | Lot Railway relu par **R** : mêmes 32 lignes + secrets + origine, « 0 ligne hors service » | non |
