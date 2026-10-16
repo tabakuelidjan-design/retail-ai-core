@@ -13,7 +13,7 @@ import {
 import { join } from 'node:path';
 import { findSecretLeaks } from '../activation/validation.js';
 import { SOCIAL_ERROR as E, fail } from './constants.js';
-import { withDirLock } from './lock.js';
+import { retryTransient, withDirLock } from './lock.js';
 
 const TOKEN_IN_URL = /(access_token|token|secret|signature|sig)=/i;
 function assertPersistable(post) {
@@ -93,13 +93,13 @@ export function createFileStore(dir, { lock = {} } = {}) {
   const init = () => (ready ??= mkdir(postsDir, { recursive: true }));
   const fileOf = (id) => join(postsDir, `${safeId(id)}.json`);
   const read = async (id) => {
-    try { return JSON.parse(await readFile(fileOf(id), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
+    try { return JSON.parse(await retryTransient(() => readFile(fileOf(id), 'utf8'))); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
   };
   const write = async (post) => {
     const file = fileOf(post.id);
     const tmp = `${file}.${process.pid}.tmp`;
     await writeFile(tmp, `${JSON.stringify(post, null, 2)}\n`, 'utf8');
-    await rename(tmp, file); // atomic replace: a crash leaves the old or the new file, never half of one
+    await retryTransient(() => rename(tmp, file)); // atomic replace: a crash leaves the old or the new file, never half of one
   };
   const logEvents = async (events) => {
     if (events.length) await appendFile(auditFile, `${events.map((e) => JSON.stringify(e)).join('\n')}\n`, 'utf8');
@@ -107,7 +107,7 @@ export function createFileStore(dir, { lock = {} } = {}) {
   const listUnlocked = async () => {
     const names = (await readdir(postsDir)).filter((n) => n.endsWith('.json'));
     const posts = [];
-    for (const n of names) posts.push(JSON.parse(await readFile(join(postsDir, n), 'utf8')));
+    for (const n of names) posts.push(JSON.parse(await retryTransient(() => readFile(join(postsDir, n), 'utf8'))));
     return posts.sort((a, b) => a.created_at.localeCompare(b.created_at));
   };
   return {

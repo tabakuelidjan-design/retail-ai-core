@@ -18,6 +18,17 @@ import { SOCIAL_ERROR as E, fail } from './constants.js';
 
 export const LOCK_DEFAULTS = Object.freeze({ staleMs: 60_000, waitMs: 15_000, pollMs: 20, breakStaleMs: 10_000 });
 
+// Windows reports a file that another process is deleting (or has open) as EPERM / EACCES / EBUSY instead of EEXIST / ENOENT: for a lock or a read, that is contention, to be retried.
+export const TRANSIENT_FS = Object.freeze(['EPERM', 'EACCES', 'EBUSY']);
+export async function retryTransient(task, { tries = 50, delayMs = 10 } = {}) {
+  for (let i = 1; ; i += 1) {
+    try { return await task(); } catch (e) {
+      if (!TRANSIENT_FS.includes(e.code) || i >= tries) throw e;
+      await sleep(delayMs);
+    }
+  }
+}
+
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 export function processIsAlive(pid) {
@@ -48,7 +59,7 @@ async function breakIfStale(path, opts) {
   if (!(await isStale(path, opts))) return false;
   const decidedOn = (await readOwner(path))?.token ?? null;
   try { await createExclusive(breakPath, JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch (e) {
-    if (e.code !== 'EEXIST') throw e;
+    if (e.code !== 'EEXIST' && !TRANSIENT_FS.includes(e.code)) throw e;
     if (await isStale(breakPath, { staleMs: opts.breakStaleMs, host: opts.host })) { try { await unlink(breakPath); } catch { /* someone else did */ } }
     return false;
   }
@@ -70,7 +81,7 @@ export async function withDirLock(lockPath, fn, options = {}) {
       await createExclusive(lockPath, JSON.stringify({ pid: process.pid, host: opts.host, token, at: new Date().toISOString() }));
       break;
     } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
+      if (e.code !== 'EEXIST' && !TRANSIENT_FS.includes(e.code)) throw e;
       if (await breakIfStale(lockPath, opts)) continue;
       if (Date.now() >= deadline) fail(E.STORE_LOCKED, 'the data folder is locked by another Nordla process; try again in a moment', { lock: lockPath });
       await sleep(opts.pollMs);
