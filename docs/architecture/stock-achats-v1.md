@@ -79,10 +79,10 @@ Validation stricte des entrées (types, bornes, énumérations), `merchant_id` o
 Fournisseur → article → devis → bon de commande (approuvé puis commandé par des humains nommés) → réception partielle puis solde → mouvements de stock → soldes. Tests unitaires, intégration, invariants (propriétés aléatoires), idempotence, retour arrière, tenants.
 
 ## 4. Persistance
-`supabase/migrations/20261016090000_procurement_stock.sql` (**NON APPLIQUÉE** : jamais exécutée sur une base réelle). Vérifiée uniquement sur une base PostgreSQL **jetable** locale (voir rapport de tests). L'adaptateur `supabase-store` n'est pas écrit dans cette tranche.
+`supabase/migrations/20261016090000_procurement_stock.sql` (**NON APPLIQUÉE** : jamais exécutée sur une base réelle) + `supabase/rollback/…down.sql`. Prouvée sur une base PostgreSQL 17 **jetable** : `node test/postgres/procurement.pg-smoke.mjs` (50 vérifications). L'adaptateur `supabase-store` n'est pas écrit : voir le bilan.
 
 ## 5. Compatibilité Node
-Pas d'import de `src/sourcing` (exige Node 24). Code ESM sans dépendance, API standard uniquement. Exécuté localement sur **Node 24 uniquement** ; la compatibilité Node 20 est visée mais **non vérifiée localement** (la CI d'intégration la teste).
+Pas d'import de `src/sourcing` (exige Node 24). Code ESM sans dépendance, API standard uniquement. Exécuté sur **Node 24.19 et Node 20.20.2** (image Docker `node:20`) : 37/37 sur les deux.
 
 ## 6. Mobile / connexions instables
 Aucune promesse hors-ligne. Le module garantit seulement ce qui est testable côté serveur : toute commande est idempotente (rejouer après coupure est sans danger) et les conflits de version sont explicites. L'interface smartphone d'achat n'est pas construite ici ; la PWA Sourcing existante couvre la visite fournisseur.

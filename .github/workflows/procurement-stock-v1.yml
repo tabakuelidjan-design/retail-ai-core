@@ -1,0 +1,49 @@
+name: procurement-stock-v1
+# Stock / Achats / Fournisseurs (Chantier C). Isolated: it runs only for this module's files and never touches another workflow.
+# No secret, no provider, no network, no production data: the unit tests run over the in-memory store, the SQL job over a throw-away PostgreSQL container.
+on:
+  push:
+    branches: ['feature/stock-achat-**']
+    paths:
+      - 'src/procurement/**'
+      - 'test/procurement-*.js'
+      - 'test/postgres/procurement.pg-smoke.mjs'
+      - 'supabase/migrations/*procurement_stock*'
+      - 'supabase/rollback/*procurement_stock*'
+      - 'src/integration/approval.js'
+      - 'src/integration/ids.js'
+      - 'src/integration/constants.js'
+      - 'src/finance/purchase-analysis.js'
+      - 'src/finance/money.js'
+      - '.github/workflows/procurement-stock-v1.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  unit:
+    name: unit + integration (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm ci --no-audit --no-fund
+      - name: Procurement suites (each file in its own process)
+        run: |
+          for f in test/procurement-*.test.js; do echo "::group::$f"; node --test "$f" || exit 1; echo "::endgroup::"; done
+      - name: Neighbours that share the approval policy and the Finance engine
+        run: node --test test/integration-contracts.test.js test/buying.test.js test/finance-stock.test.js
+  postgres:
+    name: real PostgreSQL 17 (throw-away container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: node test/postgres/procurement.pg-smoke.mjs
