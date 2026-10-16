@@ -26,7 +26,7 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
   const unitCurrency = quote?.currency ?? null;
   return {
     source: { kind: 'sourcing_case', ref: state.id, version: state.updatedAt ?? null, asOf: a.asOf, productName: safeText(input.product_name || state.id, 80) },
-    verdict: d.verdict, canCommitMoney: d.canCommitMoney === true,
+    verdict: d.verdict, verdictDisplay: d.verdictDisplay ?? null, canCommitMoney: d.canCommitMoney === true,
     hardBlockers: d.hardBlockers.map((b) => ({ code: b.code, detail: safeText(b.detail, 300) })),
     conditionBlockers: d.conditionBlockers.map((b) => ({ code: b.code, detail: safeText(b.detail, 300) })),
     conditions: d.conditions.map((c) => safeText(c, 400)),
@@ -53,5 +53,5 @@ export function buildFieldSnapshot(state, { merchantId = 'local', now = new Date
   };
 }
 
-/** The verdict as shown to a person. The engine can say CONDITIONAL_GO while a HARD blocker is open (its tests pin that); shown bare it reads like a green light, so it never travels without the blocker. */
-export const displayVerdict = (verdict, hardBlockerCount = 0) => (verdict === 'CONDITIONAL_GO' && hardBlockerCount > 0 ? 'CONDITIONAL_GO, mais blocage dur ouvert : aucune commande possible' : (verdict ?? 'inconnu'));
+/** The verdict as shown to a person. The RULE lives in the engine (decision.verdictDisplay: CONDITIONAL_GO with an open hard blocker is CONDITIONAL_GO_BLOCKED); this only words it. */
+export const showVerdict = (display) => (display === 'CONDITIONAL_GO_BLOCKED' ? 'CONDITIONAL_GO, mais blocage dur ouvert : aucune commande possible' : (display ?? 'inconnu'));

@@ -13,7 +13,7 @@ import { validateCoreConfig } from '../src/core-pilot/config.js';
 import { routeUtterance, STATUS } from '../src/integration/router.js';
 import { MODULE as M } from '../src/integration/constants.js';
 import { askNordla } from '../src/core-pilot/ask.js';
-import { buildFieldSnapshot, displayVerdict } from '../src/core-pilot/field-facts.js';
+import { buildFieldSnapshot, showVerdict } from '../src/core-pilot/field-facts.js';
 import { BLOCKER_FR, buildFieldAnswer } from '../src/core-pilot/field-answers.js';
 import { FIELD_INTENT } from '../src/core-pilot/field-intents.js';
 import { NOW, LIVE_CLEAN, ident, traits, importer, commercial, extraTraits } from './sourcing-fixtures.js';
@@ -26,10 +26,11 @@ const bare = mk([...ident({ name: 'Mug', category: 'household_general' })], 'bar
 
 test('contract Sourcing engine -> field facts: every blocker code and verdict has a French wording; no code is shown raw', () => {
   for (const code of Object.values(BLOCKER)) assert.ok(BLOCKER_FR[code], `BLOCKER ${code} has no French label: add it to field-answers.js BLOCKER_FR`);
-  for (const v of Object.values(VERDICT)) { const label = displayVerdict(v, 0); assert.ok(label && label !== 'inconnu', v); }
-  assert.match(displayVerdict(VERDICT.CONDITIONAL_GO, 1), /blocage dur ouvert : aucune commande possible/);
-  assert.equal(displayVerdict(VERDICT.CONDITIONAL_GO, 0), 'CONDITIONAL_GO');
-  assert.equal(displayVerdict(VERDICT.GO, 3), 'GO', 'only CONDITIONAL_GO is rewritten; the engine never returns GO with a blocker');
+  // the rule is the engine's: every decision card carries verdictDisplay, and a CONDITIONAL_GO with a hard blocker is never displayed as a go
+  for (const c of [blocked, bare]) { const d = assess(c, { now: NOW, externals }).decision; assert.ok(typeof d.verdictDisplay === 'string', 'decision.verdictDisplay missing: the engine contract changed'); if (d.hardBlockers.length) assert.ok(!['GO', 'CONDITIONAL_GO'].includes(d.verdictDisplay)); }
+  for (const v of Object.values(VERDICT)) assert.ok(showVerdict(v) !== 'inconnu', v);
+  assert.match(showVerdict('CONDITIONAL_GO_BLOCKED'), /blocage dur ouvert : aucune commande possible/);
+  assert.equal(showVerdict('GO'), 'GO'); assert.equal(showVerdict(null), 'inconnu');
 });
 
 test('contract Sourcing engine -> field facts: assess() still exposes every field the snapshot reads', () => {
