@@ -79,7 +79,7 @@ Validation stricte des entrées (types, bornes, énumérations), `merchant_id` o
 Fournisseur → article → devis → bon de commande (approuvé puis commandé par des humains nommés) → réception partielle puis solde → mouvements de stock → soldes. Tests unitaires, intégration, invariants (propriétés aléatoires), idempotence, retour arrière, tenants.
 
 ## 4. Persistance
-`supabase/migrations/20261016090000_procurement_stock.sql` (**NON APPLIQUÉE** : jamais exécutée sur une base réelle) + `supabase/rollback/…down.sql`. Prouvée sur une base PostgreSQL 17 **jetable** : `node test/postgres/procurement.pg-smoke.mjs` (50 vérifications). L'adaptateur `supabase-store` n'est pas écrit : voir le bilan.
+`supabase/migrations-pending/20261016090000_procurement_stock.sql` (**NON APPLIQUÉE** : jamais exécutée sur une base réelle) + `supabase/rollback/…down.sql`. Prouvée sur une base PostgreSQL 17 **jetable** : `node test/postgres/procurement.pg-smoke.mjs` (50 vérifications). L'adaptateur `supabase-store` n'est pas écrit : voir le bilan.
 
 ## 5. Compatibilité Node
 Pas d'import de `src/sourcing` (exige Node 24). Code ESM sans dépendance, API standard uniquement. Exécuté sur **Node 24.19 et Node 20.20.2** (image Docker `node:20`) : 37/37 sur les deux.

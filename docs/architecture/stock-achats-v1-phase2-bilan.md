@@ -22,7 +22,7 @@ Branche `feature/stock-achat-v1`. Suite de [stock-achats-v1-bilan.md](stock-acha
 
 ## Fichiers (phase 2)
 Créés : `src/procurement/{pg-store,file-store,sourcing-bridge}.js`, `src/procurement/server/{app,index,phone}.js`, `src/procurement/ui/*` (9 fichiers), `src/integration/procurement{,-policy}.js`, `test/procurement-{pg-faults,durability,child-writer,server,ui-logic,visits,bridge,valuation}*`, `test/integration-procurement.test.js`, `test/postgres/procurement-parity.mjs`, `docs/operations/procurement-{field-guide,staging-migration}.md`, ce document.
-Modifiés : `src/procurement/{service,queries,assistant,memory-store,stock,util,index}.js`, `supabase/migrations/20261016090000_procurement_stock.sql` (jamais appliquée : +`proc_visits`, ordre d'insertion, pièces jointes, documents), son rollback, `package.json` (+3 scripts), `.github/workflows/procurement-stock-v1.yml`, `src/integration/{approval,router,index}.js` (**+8/−2 lignes, comportement par défaut inchangé**).
+Modifiés : `src/procurement/{service,queries,assistant,memory-store,stock,util,index}.js`, `supabase/migrations-pending/20261016090000_procurement_stock.sql` (jamais appliquée : +`proc_visits`, ordre d'insertion, pièces jointes, documents), son rollback, `package.json` (+3 scripts), `.github/workflows/procurement-stock-v1.yml`, `src/integration/{approval,router,index}.js` (**+8/−2 lignes, comportement par défaut inchangé**).
 Vérification des modifications concurrentes du chantier A : sur `origin/feature/core-field-assistant`, `src/integration` ne diffère de la base que par une ligne de `module-map.js` (note de dette Growth) ; je n'ai pas modifié `module-map.js`.
 
 ## Tests exécutés et résultats réels

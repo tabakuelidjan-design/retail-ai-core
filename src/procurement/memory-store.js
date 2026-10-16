@@ -1,4 +1,4 @@
-// In-memory reference store for Stock / Achats. It deliberately mirrors what the SQL schema enforces (supabase/migrations/20261016090000_procurement_stock.sql):
+// In-memory reference store for Stock / Achats. It deliberately mirrors what the SQL schema enforces (supabase/migrations-pending/20261016090000_procurement_stock.sql):
 // per-merchant unique keys, optimistic versions, an append-only ledger and journal (no update/delete method exists for them), single-use approvals,
 // and an all-or-nothing transaction. Tests run on this store only: no production data, no network.
 import { randomUUID } from 'node:crypto';

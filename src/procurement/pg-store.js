@@ -1,4 +1,4 @@
-// PostgreSQL store for Stock / Achats: same interface as memory-store.js, over the proc_* tables of supabase/migrations/20261016090000_procurement_stock.sql.
+// PostgreSQL store for Stock / Achats: same interface as memory-store.js, over the proc_* tables of supabase/migrations-pending/20261016090000_procurement_stock.sql.
 //
 // It takes an INJECTED node-postgres-compatible pool ({ connect(): Promise<client>, query(text, params) }; client.query / client.release). This module imports no
 // database driver: wiring a real Supabase connection (the `pg` package, a direct connection string) is a deployment step that needs the owner's approval.

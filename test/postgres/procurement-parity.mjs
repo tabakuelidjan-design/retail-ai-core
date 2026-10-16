@@ -24,8 +24,8 @@ try {
   const ready = () => ((docker(['logs', NAME]).stderr ?? '') + (docker(['logs', NAME]).stdout ?? '')).split('database system is ready to accept connections').length - 1;
   for (let i = 0; i < 90 && ready() < 2; i += 1) sleepMs(1000);
   for (let i = 0; i < 30 && psql('select 1').status !== 0; i += 1) sleepMs(1000);
-  const apply = (file) => { const r = psql(`begin;\n${readFileSync(`${ROOT}supabase/migrations/${file}`, 'utf8')}\ncommit;`); if (r.status !== 0) { console.error(r.stderr); process.exit(2); } };
-  apply('20260920132005_phase1_schema.sql'); apply('20261016090000_procurement_stock.sql');
+  const apply = (file, dir = 'migrations') => { const r = psql(`begin;\n${readFileSync(`${ROOT}supabase/${dir}/${file}`, 'utf8')}\ncommit;`); if (r.status !== 0) { console.error(r.stderr); process.exit(2); } };
+  apply('20260920132005_phase1_schema.sql'); apply('20261016090000_procurement_stock.sql', 'migrations-pending');
   const port = /:(\d+)\s*$/m.exec(docker(['port', NAME, '5432']).stdout)?.[1];
   const url = `postgres://postgres:parity@127.0.0.1:${port}/postgres`;
   const suites = process.argv.length > 2 ? process.argv.slice(2) : readdirSync(`${ROOT}test`).filter((f) => /^procurement-.*\.test\.js$/.test(f)).map((f) => `test/${f}`);

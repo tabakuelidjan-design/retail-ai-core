@@ -1,4 +1,4 @@
-// REAL PostgreSQL smoke test of supabase/migrations/20261016090000_procurement_stock.sql. No simulation, no production data:
+// REAL PostgreSQL smoke test of supabase/migrations-pending/20261016090000_procurement_stock.sql. No simulation, no production data:
 // it starts a THROWAWAY postgres container, applies the phase-1 schema (for `merchants`) and the procurement migration, then proves with real SQL
 // the guarantees the migration claims: append-only ledger, non-negative balances, reserved <= on-hand, tenant-composite keys, legal PO transitions,
 // single-use approvals, idempotency keys, a two-session race, and that the down script really reverses the migration.
@@ -37,7 +37,7 @@ try {
   for (let i = 0; i < 60 && readyCount() < 2; i += 1) sleepMs(1000); // init server, then the final server
   for (let i = 0; i < 30 && !sql('select 1').ok; i += 1) sleepMs(1000);
 
-  const up = readFileSync(`${ROOT}supabase/migrations/20261016090000_procurement_stock.sql`, 'utf8');
+  const up = readFileSync(`${ROOT}supabase/migrations-pending/20261016090000_procurement_stock.sql`, 'utf8');
   const down = readFileSync(`${ROOT}supabase/rollback/20261016090000_procurement_stock.down.sql`, 'utf8');
   const phase1 = readFileSync(`${ROOT}supabase/migrations/20260920132005_phase1_schema.sql`, 'utf8');
   mustOk('phase-1 schema (merchants) applies', sql(`begin;\n${phase1}\ncommit;`));

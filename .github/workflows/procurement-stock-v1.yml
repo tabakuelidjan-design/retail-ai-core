@@ -9,7 +9,7 @@ on:
       - 'test/procurement-*'
       - 'test/integration-procurement.test.js'
       - 'test/postgres/procurement*'
-      - 'supabase/migrations/*procurement_stock*'
+      - 'supabase/migrations-pending/*procurement_stock*'
       - 'supabase/rollback/*procurement_stock*'
       - 'src/integration/**'
       - 'src/finance/purchase-analysis.js'

@@ -3,7 +3,7 @@
 **Statut : préparée, jamais appliquée.** Rien ici ne doit être lancé sur un environnement partagé sans validation explicite du propriétaire. La migration n'a été exécutée que sur des bases PostgreSQL jetables locales.
 
 ## Ce qui est prêt
-- `supabase/migrations/20261016090000_procurement_stock.sql` : 17 tables `proc_*`, additive, ne touche aucune table existante. Dépend uniquement de `merchants` (schéma phase 1).
+- `supabase/migrations-pending/20261016090000_procurement_stock.sql` : 17 tables `proc_*`, additive, ne touche aucune table existante. Dépend uniquement de `merchants` (schéma phase 1).
 - `supabase/rollback/20261016090000_procurement_stock.down.sql` : retire uniquement les objets `proc_*` (destructif pour les données du module).
 - `src/procurement/pg-store.js` : adaptateur ; reçoit un pool compatible `pg` **injecté** (le dépôt n'ajoute aucune dépendance de pilote).
 - Preuves : `node test/postgres/procurement.pg-smoke.mjs` (garanties du schéma, course à 2 sessions) et `node test/postgres/procurement-parity.mjs` (les mêmes suites que la mémoire, plus pannes réseau et concurrence).
