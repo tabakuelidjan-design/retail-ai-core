@@ -170,3 +170,15 @@ Contrats : `ask` renvoie `{status, answer, sources, limits}` + `intent, sections
 | `src/core-pilot/field-answers.js` (Core) | champs additifs de la réponse : `case`, `verdict`, `orderBlocked`, `blockers`, `knownTitle` | forme documentée par le test de contrat ; aucun champ retiré |
 | `test/e2e/nordla-ask-ui.e2e.js`, `test/nordla-ask-ui.test.js`, `test/core-field-assistant-corpus.test.js` (**nouveaux**) | tests | `test/e2e/**` appartient au Chantier A : fichier **ajouté**, aucun test existant modifié |
 Non touchés : `src/sourcing/server/**`, `index.html`, `sw.js`, `app.css` (le CSS de l'écran est injecté par le module, namespace `.nxa-*`), workflows, `http.js`.
+
+## 2026-10-16 (soir) — Core P0 : fusions #11 et #14 ; branche d'intégration `integration/parle-a-nordla-convergence` (rien de fusionné dans la convergence)
+
+PR #11 (journal : messages d'erreur de l'UI) fusionnée dans `claude/nordla-core-p0` (`4d09629`) après correction de son test (chargement des panneaux par le chargeur d'UI commun : il échouait sur Linux) — ses trois workflows verts sur `e6c5102`. PR #14 (Parle à Nordla phase 3) fusionnée (`6b48b38`) : trois workflows verts sur `ab0ec10` (`creative-refine` RF-2, Node 24, a échoué une fois puis réussi à la relance du même commit ; voir le rapport §13).
+Branche d'intégration (PR brouillon vers la convergence) : convergence `e08d98d` + chantier C `b3d4161` + P0 `6b48b38` + le patch de compatibilité de Parle à Nordla + recherche de fournisseur par nom.
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/core-pilot/ask.js`, `procurement-compare.js`, `pending-approvals.js`, `procurement-supplier.js` (Core P0) | hooks Stock/Achats : comparaison, validations en attente, recherche de fournisseur par nom (affichage selon le rôle), panne ou absence du module | un ordre d'agir reste refusé ; texte distinct « proposer » / « exécuter » |
+| `src/procurement/assistant.js` (**chantier C, ajout seul**) | outil `find_supplier` (lecture seule ; ne renvoie que nom, pays, devise, Incoterm, délai : ni contacts ni banque) | patch pour C : `chantier-c-find-supplier.patch` ; 16 outils au lieu de 15 |
+| `src/integration/procurement-policy.js`, `procurement.js` (**convergence/C**) | `find_supplier` en lecture seule ; 3 règles de routage ajoutées en fin de liste | tests de comptage mis à jour (16 outils, 14 lectures, 18 actions) |
+| tests : `core-procurement-routing`, `integration-router-precedence` | nouveaux | — |
