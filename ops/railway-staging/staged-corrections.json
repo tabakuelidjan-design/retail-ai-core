@@ -1,0 +1,34 @@
+{
+  "_comment": "Corrections to STAGE (not deploy) on the existing staged-create service sourcing-staging, environment staging of project app.nordla.app. Non-secret values only. Applied by the Railway session after the owner's go; then the whole lot is re-audited (docs/infrastructure/railway-changeset-audit.md section 5).",
+  "project": "app.nordla.app",
+  "environment": "staging",
+  "service": "sourcing-staging",
+  "source": {
+    "repository": "tabakuelidjan-design/retail-ai-core",
+    "branch": "claude/nordla-core-p0",
+    "commit": { "from": "c2c314db954fafad72fe0937e1da50d20b3bdf45", "to": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a" }
+  },
+  "variables": {
+    "modify": { "NORDLA_MERCHANT_ID": "67646dbb-5e2e-4cd7-aad6-0ab289b068cb" },
+    "set_if_absent_or_different": {
+      "NORDLA_SUPABASE_PROJECT_REF": "fvhiammdskpcnfodsnrc",
+      "SUPABASE_URL": "https://fvhiammdskpcnfodsnrc.supabase.co",
+      "NORDLA_SERVICE": "sourcing",
+      "SOURCING_HOSTED": "1",
+      "SOURCING_BACKUP_BUCKET": "nordla-backups",
+      "MERCHANT_TIMEZONE": "Europe/Brussels",
+      "SOURCING_MERCHANT_ID": "habb",
+      "SOURCING_DATA_DIR": "/app/data/sourcing",
+      "SOURCING_BACKUP_DIR": "/app/data/sourcing-backups",
+      "SOURCING_BACKUP_KEEP": "3",
+      "NODE_ENV": "production",
+      "SOURCING_HOST": "0.0.0.0",
+      "PORT": "8787",
+      "SOURCING_PORT": "8787"
+    },
+    "set_after_domain_generation": { "SOURCING_PUBLIC_ORIGIN": "https://<the service's generated *.up.railway.app domain>" },
+    "must_be_absent": ["ANTHROPIC_API_KEY", "SOURCING_VISION_PROVIDER", "SOURCING_TOKEN"],
+    "secrets_entered_by_owner_only": ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY", "NORDLA_IDENTITY_RATE_LIMIT_KEY", "NORDLA_CSRF_KEY", "SOURCING_BACKUP_PASSPHRASE"]
+  },
+  "unchanged": ["Dockerfile path deploy/sourcing/Dockerfile", "start command /app/docker-entrypoint.sh node src/service-start.js", "healthcheck /healthz", "1 replica", "volume sourcing-staging-data 1 GB at /app/data"]
+}

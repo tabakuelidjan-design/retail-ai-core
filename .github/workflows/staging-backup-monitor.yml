@@ -1,0 +1,47 @@
+# OUTSIDE alert for the hosted staging service's backups: no need to read the Railway logs. Every 3 hours it asks the service
+# GET <origin>/healthz/backup (ages and counts only, no data, no secret) and GET <origin>/healthz. When the service is unreachable or the
+# backups are not OK (no off-server copy within 26 h, or a failed retry), it opens ONE GitHub issue "ALERTE sauvegarde staging" (or comments
+# on the open one): GitHub e-mails the repository owner. It never closes the issue itself: a person reads it.
+# - Scheduled runs only happen from the DEFAULT branch (GitHub rule): the schedule is live once this file is on `main` (owner decision).
+#   Until then it can be run by hand (workflow_dispatch) from claude/nordla-core-p0.
+# - Off by default: ops/staging-monitor/target.json "enabled": false (no request is made, no issue opened).
+# No secret is used or needed.
+name: staging-backup-monitor
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+concurrency: { group: staging-backup-monitor, cancel-in-progress: false }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: claude/nordla-core-p0 }
+      - name: Ask the service
+        id: ask
+        run: |
+          enabled=$(jq -r '.enabled // false' ops/staging-monitor/target.json); origin=$(jq -r '.origin // ""' ops/staging-monitor/target.json)
+          if [ "$enabled" != "true" ]; then echo "::notice::monitor disabled (ops/staging-monitor/target.json)"; echo "state=DISABLED" >> "$GITHUB_OUTPUT"; exit 0; fi
+          case "$origin" in https://*) ;; *) echo "::error::origin must be https"; exit 1;; esac
+          live=$(curl -s -m 20 -o /dev/null -w '%{http_code}' "$origin/healthz" || echo 000)
+          code=$(curl -s -m 20 -o backup.json -w '%{http_code}' "$origin/healthz/backup" || echo 000)
+          status=$(jq -r '.status // "UNREADABLE"' backup.json 2>/dev/null || echo UNREADABLE)
+          echo "healthz=$live backup=$code status=$status"; cat backup.json 2>/dev/null; echo
+          if [ "$live" = "200" ] && [ "$code" = "200" ]; then echo "state=OK" >> "$GITHUB_OUTPUT"; else
+            { echo "state=ALERT"; echo "summary=service /healthz $live, /healthz/backup $code ($status) at $(date -u +%FT%TZ)"; } >> "$GITHUB_OUTPUT"; fi
+      - name: Alert (one open issue, commented on repeat)
+        if: steps.ask.outputs.state == 'ALERT'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ steps.ask.outputs.summary }}
+        run: |
+          title='ALERTE sauvegarde staging (sourcing-staging)'
+          body=$(printf '%s\n\n%s\n\n%s' "$SUMMARY" "Détail : $(cat backup.json 2>/dev/null || echo 'aucune réponse')" "Que faire : journaux Railway du service (lignes « Backup FAILED »), état du bucket nordla-backups ; procédure : docs/infrastructure/railway-staging-go-nogo.md. Ce ticket ne se ferme pas tout seul.")
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$body"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
+          echo "::error::$SUMMARY"; exit 1

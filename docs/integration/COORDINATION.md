@@ -137,3 +137,13 @@ et les changements de `tools/sourcing-backup.mjs` (périmètre A) sont acceptés
 | `.github/workflows/staging-backup-drill.yml`, `ops/staging-backup/request.json` | **nouveaux** | restauration indépendante sur un runner GitHub, verrouillée comme `staging-db-ops` (`run: false`) |
 | `.github/workflows/core-reliability.yml` | déclencheur `claude/nordla-core-p0` ajouté | Linux + Windows sur chaque commit candidat |
 | `test/sourcing-hosted-project-pin.test.js` (nouveau), `test/sourcing-backup-full-restore.test.js`, `test/sourcing-hosted-identity.test.js` | tests | aucun test du Chantier B modifié |
+
+## 2026-10-16 (suite) — Chantier A : vérifications avant l'autorisation finale
+
+| Fichier | Nature | Note |
+|---|---|---|
+| `src/core-pilot/durable-file.js` (**Chantier B**, déclaré ici) | 3 lignes dans `withWriteLock` | si le contenu du verrou ne peut pas être écrit (disque plein / lecture seule), le verrou que l'on vient de créer est supprimé avant l'erreur. Trouvé sur un vrai tmpfs plein (`test/core-storage-realfs.test.js`) : un verrou vide bloquait toute écriture jusqu'à 15 s après redémarrage. Suites de fiabilité et `tools/core-reliability-mutation.mjs` inchangées et vertes. Le Chantier B peut reprendre la formulation |
+| `src/sourcing/server/{hosted,index,app}.js` | vérification en direct du projet Supabase au démarrage ; `GET /healthz/backup` ; état des sauvegardes | périmètre A |
+| `tools/sourcing-backup.mjs` | copie isolée B2 (ajout seul) + `drill-isolated` | optionnelle, inactive sans ses variables |
+| `.github/workflows/staging-backup-monitor.yml`, `ops/staging-monitor/target.json` | **nouveaux** | alerte externe (désactivée) |
+| tests `test/core-storage-realfs.test.js`, `test/sourcing-backup-health.test.js`, `test/sourcing-backup-isolated.test.js` | **nouveaux** | aucun test du Chantier B modifié |

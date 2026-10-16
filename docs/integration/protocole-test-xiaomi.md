@@ -14,8 +14,9 @@ Railway `https://<service>.up.railway.app`, puis `app.nordla.app` après accord 
 | Supabase staging : migrations d'identité 1–5 | **fait** | run `staging-db-ops` 38813124178 |
 | Marchand de test `67646dbb-…`, votre adhésion OWNER, module `sourcing`, bucket privé `nordla-backups` | **fait** | run 38815730509, relu sur staging |
 | Votre compte de connexion | **fait** : le seul compte de l'Auth **staging** (créé par vous ; e-mail et mot de passe choisis par vous) | Auth staging : 1 compte confirmé |
-| Service `sourcing-staging` actif sur `62ec977` | **à autoriser** (Railway, coût 2–4 $/mois) | `docs/infrastructure/railway-handoff-9e25f1d.md` §0 |
-| Adresse | **à décider** : adresse Railway générée, ou `app.nordla.app` (DNS, autorisation séparée) | `docs/infrastructure/domaine-app-nordla-app.md` |
+| Service `sourcing-staging` actif sur `ab02b77` | principe validé le 16/10 ; **activation à confirmer** (2–4 USD/mois) | `docs/infrastructure/procedure-activation-staging.md` |
+| Sauvegarde hors serveur + restauration indépendante | **après activation** (B2, B3 de la grille) ; staging non « opérationnel » avant | workflow `staging-backup-drill` |
+| Adresse | **`app.nordla.app`** retenue le 16/10 ; DNS **à autoriser** (au plus tard le 17/10) | `docs/infrastructure/domaine-app-nordla-app.md` |
 
 Ce que vous verrez sur staging, et qui est **normal** : Finance / Analytics disent « données indisponibles » (le marchand de test n'a
 ni factures ni ventes) ; la Sécurité produits (Safety Gate) peut être marquée « en cache » ; Création, Branding, Marketing et
