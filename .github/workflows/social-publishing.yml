@@ -60,7 +60,7 @@ jobs:
       - name: Trial merge with integration/nordla-convergence-v1 (never pushed)
         run: |
           git fetch origin integration/nordla-convergence-v1
-          git merge --no-commit --no-ff origin/integration/nordla-convergence-v1 # tree only: no commit, so no identity is needed
+          git -c user.name=ci -c user.email=ci-noreply merge --no-commit --no-ff origin/integration/nordla-convergence-v1 # tree only (nothing is committed); git still wants an identity, given without an email-like string
       - run: npm ci
       - name: Social + activation + provider suites on the merged tree
         run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js
