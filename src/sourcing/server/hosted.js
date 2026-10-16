@@ -64,3 +64,29 @@ export function hostedConfig(env = process.env) {
   const supabaseRef = supabaseProjectPin(env);
   return { host: String(env.SOURCING_HOST ?? '').trim() || '0.0.0.0', merchantId, origin: origin.origin, allowedHosts: [origin.hostname], dataDir: String(env.SOURCING_DATA_DIR ?? '').trim() || 'data/local/sourcing', supabaseRef };
 }
+
+/**
+ * Live check of a PINNED project at start (covers every key format: legacy JWT keys AND opaque sb_publishable_ / sb_secret_ keys, which do not
+ * name their project). Every request goes to the pinned https://<ref>.supabase.co only, so a key of another project (production) is REJECTED
+ * by that project's gateway: the service then refuses to start. The merchant must also exist in the pinned project (the production merchant
+ * id does not exist in staging). An unreachable project is not a proof either way: logged, and sign-in stays closed until it answers.
+ * @returns {Promise<'VERIFIED'|'UNVERIFIED_UNREACHABLE'>} or throws HostedConfigError. Never prints a key.
+ */
+export async function verifyPinnedProject(env, hosted, { fetchImpl = fetch, timeoutMs = 10_000 } = {}) {
+  if (!hosted?.supabaseRef) return 'NOT_PINNED';
+  const base = `https://${hosted.supabaseRef}.supabase.co`;
+  const ask = async (path, key) => {
+    try { return await fetchImpl(`${base}${path}`, { headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' }, signal: AbortSignal.timeout(timeoutMs) }); } catch { return null; }
+  };
+  const service = String(env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim(); const anon = String(env.SUPABASE_ANON_KEY ?? '').trim();
+  const row = await ask(`/rest/v1/merchants?select=id&id=eq.${encodeURIComponent(hosted.merchantId)}`, service);
+  const auth = await ask('/auth/v1/settings', anon);
+  for (const [r, k] of [[row, 'SUPABASE_SERVICE_ROLE_KEY'], [auth, 'SUPABASE_ANON_KEY']]) {
+    if (r && (r.status === 401 || r.status === 403)) throw new HostedConfigError('HOSTED_SUPABASE_KEY_REJECTED', `${k} is refused by project ${hosted.supabaseRef} (a key of another project, e.g. production, or a revoked key); the key is not printed`);
+  }
+  if (!row || !auth || row.status >= 500 || auth.status >= 500) return 'UNVERIFIED_UNREACHABLE';
+  if (!row.ok || !auth.ok) throw new HostedConfigError('HOSTED_SUPABASE_CHECK_FAILED', `project ${hosted.supabaseRef} answered ${row.status} / ${auth.status} to the start-up check`);
+  let rows; try { rows = await row.json(); } catch { rows = null; }
+  if (!Array.isArray(rows) || rows.length !== 1) throw new HostedConfigError('HOSTED_MERCHANT_NOT_IN_PROJECT', `merchant ${hosted.merchantId} does not exist in project ${hosted.supabaseRef}: wrong NORDLA_MERCHANT_ID for this project`);
+  return 'VERIFIED';
+}

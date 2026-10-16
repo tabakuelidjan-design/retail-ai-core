@@ -61,11 +61,27 @@ jobs:
           node tools/sourcing-backup.mjs drill "$RUNNER_TEMP/drill/download" "$RUNNER_TEMP/drill/restored" 2>&1 | mask | tee drill-report.json
           echo "restored on this runner (not on the server): $(find "$RUNNER_TEMP/drill/restored" -type f | wc -l) file(s), $(du -sh "$RUNNER_TEMP/drill/restored" | cut -f1)"
           rm -rf "$RUNNER_TEMP/drill"
+      - name: Isolated immutable copy (Backblaze B2 Object Lock) - only when its READ key is configured
+        env:
+          SOURCING_BACKUP_PASSPHRASE: ${{ secrets.STAGING_SOURCING_BACKUP_PASSPHRASE }}
+          SOURCING_BACKUP_B2_KEY_ID: ${{ secrets.STAGING_B2_READ_KEY_ID }}
+          SOURCING_BACKUP_B2_KEY: ${{ secrets.STAGING_B2_READ_KEY }}
+          SOURCING_BACKUP_B2_BUCKET_ID: ${{ vars.STAGING_B2_BUCKET_ID }}
+          SOURCING_BACKUP_B2_BUCKET_NAME: ${{ vars.STAGING_B2_BUCKET_NAME }}
+        run: |
+          set -o pipefail
+          if [ -z "$SOURCING_BACKUP_B2_KEY_ID" ]; then echo "::notice::isolated store not configured (secrets STAGING_B2_READ_KEY_ID / STAGING_B2_READ_KEY): skipped"; exit 0; fi
+          mkdir -p "$RUNNER_TEMP/iso"
+          node tools/sourcing-backup.mjs drill-isolated "$RUNNER_TEMP/iso/download" "$RUNNER_TEMP/iso/restored" 2>&1 | tee isolated-report.json
+          rm -rf "$RUNNER_TEMP/iso"
+          [ "$(jq -r '.retention.locked_now' isolated-report.json)" = "true" ] || { echo "::error::the newest isolated archive is NOT under compliance retention: the copy is not immutable"; exit 1; }
       - name: Keep the drill report (no data, no secret)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: staging-backup-drill-${{ github.run_id }}
-          path: drill-report.json
+          path: |
+            drill-report.json
+            isolated-report.json
           retention-days: 30
           if-no-files-found: ignore

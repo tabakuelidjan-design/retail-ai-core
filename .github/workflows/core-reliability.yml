@@ -23,6 +23,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Core reliability tests
         run: node --test $RELIABILITY_TESTS
+      - name: REAL full / read-only disk under the Core journal (needs root to mount a small tmpfs)
+        run: |
+          set -o pipefail
+          sudo env "PATH=$PATH" node --test test/core-storage-realfs.test.js | tee /tmp/realfs.log
+          grep -q '^ℹ skipped 0' /tmp/realfs.log || { echo "::error::the real-disk test was skipped: it must run here"; exit 1; }
       - name: Whole suite, one process and one cap per file
         shell: bash
         run: |

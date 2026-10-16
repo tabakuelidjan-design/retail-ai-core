@@ -1,0 +1,5 @@
+{
+  "_comment": "Outside monitor of the hosted staging service's backups (staging-backup-monitor workflow). enabled stays false until the service is active and the owner agrees; origin = the service's public https origin.",
+  "enabled": false,
+  "origin": "https://app.nordla.app"
+}
