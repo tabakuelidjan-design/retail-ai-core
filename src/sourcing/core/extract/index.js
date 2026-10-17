@@ -2,6 +2,7 @@
 // never calls the network. Input: original text (+ language hint). Output: candidates (each pointing at an exact span of the original) and the text left unparsed.
 import { extractEn } from './en.js';
 import { extractZh } from './zh.js';
+import { extractFr } from './fr.js';
 import { extractSpec } from './spec.js';
 import { extractDocClaims } from './claims.js';
 import { EXTRACTOR_NAME, EXTRACTOR_VERSION, unparsedOf } from './shared.js';
@@ -19,7 +20,10 @@ export function detectLang(text) {
 export function extractFacts({ text, lang = 'auto' } = {}) {
   const t = String(text ?? ''); const l = lang === 'auto' ? detectLang(t) : lang;
   const hasCjk = (t.match(CJK) ?? []).length > 0;
-  const raw = [...extractEn(t, l), ...(l === 'zh' ? [] : extractSpec(t, l)), ...(hasCjk ? extractZh(t, l) : []), ...extractDocClaims(t, l)];
+  const base = [...extractEn(t, l), ...(l === 'zh' ? [] : extractSpec(t, l)), ...(hasCjk ? extractZh(t, l) : []), ...extractDocClaims(t, l)];
+  // French terms (minimum order, lead time, offered quantity): added only where no other rule already read the same key at the same place, so existing readings are never altered or doubled
+  const fr = l === 'zh' ? [] : extractFr(t, l).filter((c) => !base.some((b) => b.key === c.key && b.span[0] < c.span[1] && c.span[0] < b.span[1]));
+  const raw = [...base, ...fr];
   const seen = new Set(); const candidates = [];
   for (const c of raw) { const k = `${c.key}|${c.context}|${JSON.stringify(c.value)}`; if (seen.has(k)) continue; seen.add(k); candidates.push(c); }
   candidates.sort((a, b) => a.span[0] - b.span[0] || a.key.localeCompare(b.key));
