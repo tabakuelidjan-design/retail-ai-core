@@ -16,6 +16,7 @@ export const OWNERSHIP = deepFreeze({
   [E.BRAND_PROFILE]: { owner: M.BRANDING, note: 'brand identity, constraints, approved claim registry' },
   [E.SOURCING_CASE]: { owner: M.CHINA_SOURCING, note: 'case, quotes, evidence, negotiation history, verdict' },
   [E.FINANCIAL_FACT]: { owner: M.FINANCE, note: 'every landed cost, margin, cash requirement and exposure figure shown to the owner' },
+  [E.SOCIAL_POST]: { owner: M.SOCIAL_PUBLISHING, note: 'calendar, owner approval (signed, bound to the exact content) and publication of a social post; Creative proposes (social-post-proposal.v1) and never approves, schedules or publishes' },
   [E.CLAIM_EVIDENCE]: { owner: M.BRANDING, note: 'Marketing proposes claims, Branding approves them, Creative only consumes approved ones; nobody but Finance/Stock creates the underlying commercial fact' },
 });
 
@@ -35,6 +36,7 @@ export const READS = deepFreeze({
   [E.PAYMENT]: [M.ANALYTICS, M.PARLE_A_NORDLA],
   [E.ORDER]: [M.ANALYTICS, M.MARKETING, M.GROWTH, M.FINANCE],
   [E.CUSTOMER]: [M.ANALYTICS, M.GROWTH],
+  [E.SOCIAL_POST]: [M.CREATIVE, M.MARKETING, M.ANALYTICS, M.PARLE_A_NORDLA],
 });
 
 export const ownerOf = (entity) => OWNERSHIP[entity]?.owner ?? null;
