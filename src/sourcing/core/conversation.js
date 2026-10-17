@@ -202,6 +202,7 @@ export function compile(s, c, value, level, source) {
     case 'payment.balancePct': return quote({ payment: { ...(base.payment ?? {}), balancePct: String(value) } });
     case 'payment.balanceDue': return quote({ payment: { ...(base.payment ?? {}), balanceDue: String(value) } });
     case 'carton.qty': case 'carton.dimensions': case 'carton.grossWeight': case 'carton.netWeight': return []; // kept in the ledger; the V0 carton text field is the owner's own
+    case 'quote.offeredQty': return []; // the quantity the supplier says it OFFERS: kept in the ledger only, never the MOQ and never the quantity ordered
     default:
       if (k.startsWith('docClaim.')) return [{ type: 'DOC_CLAIM', claim: k.slice('docClaim.'.length), status: String(value), source, summary: `supplier statement (${c.id}): ${k} = ${value}` }];
       return [];
@@ -220,7 +221,7 @@ function apply(s, c, value, { corrected, at, reduce, conflictId = null, ownerDec
   c.state = corrected ? CANDIDATE_STATE.CORRECTED : CANDIDATE_STATE.CONFIRMED; c.decidedAt = at; c.decidedBy = 'user'; if (corrected) { c.original = { value: c.value, rawText: c.rawText }; c.correctedValue = value; }
 }
 
-const label = (key, ctx) => (key.startsWith('docClaim.') ? `document statement (${key.slice(9) === 'UN383' ? 'UN 38.3' : key.slice(9)})` : null) ?? ({ 'quote.moq': `minimum order${ctx && ctx !== 'product' ? ` (${ctx.replace(/_/g, ' ')})` : ''}`, 'quote.unitPrice': 'unit price', 'quote.currency': 'currency', 'quote.incoterm': 'Incoterm', 'quote.port': 'port', 'quote.leadTime': 'lead time', 'quote.tiers': 'price tiers', 'identifier.model': 'model', 'identifier.brand': 'brand', 'identifier.manufacturer': 'manufacturer', 'payment.depositPct': 'deposit %', 'payment.balancePct': 'balance %' }[key] ?? key);
+const label = (key, ctx) => (key.startsWith('docClaim.') ? `document statement (${key.slice(9) === 'UN383' ? 'UN 38.3' : key.slice(9)})` : null) ?? ({ 'quote.offeredQty': 'quantity offered', 'quote.moq': `minimum order${ctx && ctx !== 'product' ? ` (${ctx.replace(/_/g, ' ')})` : ''}`, 'quote.unitPrice': 'unit price', 'quote.currency': 'currency', 'quote.incoterm': 'Incoterm', 'quote.port': 'port', 'quote.leadTime': 'lead time', 'quote.tiers': 'price tiers', 'identifier.model': 'model', 'identifier.brand': 'brand', 'identifier.manufacturer': 'manufacturer', 'payment.depositPct': 'deposit %', 'payment.balancePct': 'balance %' }[key] ?? key);
 const show = (v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v));
 
 function raiseConflict(s, c, value, found, at) {
