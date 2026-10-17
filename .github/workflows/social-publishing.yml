@@ -11,6 +11,8 @@ on:
       - 'src/social/**'
       - 'test/social-*.test.js'
       - 'test/social-*.js'
+      - 'test/integration-social.test.js'
+      - 'src/integration/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/social-publishing.yml'
@@ -19,6 +21,8 @@ on:
       - 'src/social/**'
       - 'test/social-*.test.js'
       - 'test/social-*.js'
+      - 'test/integration-social.test.js'
+      - 'src/integration/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/social-publishing.yml'
@@ -45,7 +49,7 @@ jobs:
       - name: Social Publishing suite (concurrency, integrity, duplicates, launch paths, core)
         env:
           SOCIAL_STRESS_ROUNDS: '10'
-        run: node --test test/social-*.test.js
+        run: node --test test/social-*.test.js test/integration-social.test.js
 
   trial-merge-with-core-p0:
     # The branch merged (tree only, never pushed) into claude/nordla-core-p0, the BASE of the Social Publishing integration PR, then the focused suites, including the procurement /
@@ -69,4 +73,4 @@ jobs:
       - run: npm ci
       # Focused suites only, once: the whole-repository suite already runs on the same merge in the other workflows. These must pass entirely.
       - name: Focused suites on the merged tree
-        run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js test/convergence-journey.test.js test/procurement-file-lease.test.js test/procurement-mounted-ui.test.js test/integration-procurement.test.js test/integration-procurement-compat.test.js test/core-procurement-routing.test.js
+        run: node --test test/social-*.test.js test/integration-social.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js test/convergence-journey.test.js test/procurement-file-lease.test.js test/procurement-mounted-ui.test.js test/integration-procurement.test.js test/integration-procurement-compat.test.js test/core-procurement-routing.test.js
