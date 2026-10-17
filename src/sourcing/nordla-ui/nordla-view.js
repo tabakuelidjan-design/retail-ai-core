@@ -27,6 +27,11 @@ export const MODULE_META = Object.freeze({
   branding: { icon: null, initial: 'B', short: 'Règles de marque' },
   marketing: { icon: 'growth', short: 'Propositions de campagne' },
   creative: { icon: null, initial: 'C', short: 'Visuels produit' },
+  parle: { icon: 'parleANordla', short: 'Questions en texte, réponses sourcées' },
+  validations: { icon: 'decisionLedger', short: 'Décisions et approbations' },
+  social: { icon: null, initial: 'S', short: 'Calendrier et état des publications' },
+  activation: { icon: 'synchronisation', short: 'Connexions aux réseaux' },
+  growth: { icon: 'growth', short: 'Priorités de vente' },
 });
 
 /** Server module state -> badge tone. Unknown states are neutral, never green. */

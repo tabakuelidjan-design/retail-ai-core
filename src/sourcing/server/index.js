@@ -64,7 +64,9 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  let social = null; // Social Publishing's own data directory, READ ONLY, only when the operator names it; never a way to approve or publish
+  if (String(env.SOCIAL_DATA_DIR ?? '').trim()) { const { createSocialReader } = await import('../../social/reader.js'); social = createSocialReader({ dir: String(env.SOCIAL_DATA_DIR).trim(), mode: env.SOCIAL_MODE || 'none' }); }
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, social, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
