@@ -1,11 +1,11 @@
-// Nordla Design System v1 (src/sourcing/ui/nordla-ds.*, nordla-view.js): the screen shows ONLY what the server answered, says
+// Nordla Design System v1 (src/sourcing/nordla-ui/nordla-ds.*, nordla-view.js): the screen shows ONLY what the server answered, says
 // "Non disponible" otherwise, never "Opérationnel" without the checks behind it, escapes every text, uses only official, non-defective
 // icons, and its colour tokens keep text contrast at WCAG AA. Pure Node, no browser (the browser proof is test/e2e/nordla-design.e2e.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { buildDashboard, systemStatus, metrics, activity, moduleCards, navItems, coreNodes, ICON_FILES, STATE_TONE } from '../src/sourcing/ui/nordla-view.js';
-import { esc, metricCard, moduleCard, activityFeed, sidebar, chartCard, mobileNav, coreDiagram } from '../src/sourcing/ui/nordla-ds.js';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { buildDashboard, systemStatus, metrics, activity, moduleCards, navItems, coreNodes, ICON_FILES, STATE_TONE } from '../src/sourcing/nordla-ui/nordla-view.js';
+import { esc, metricCard, moduleCard, activityFeed, sidebar, chartCard, mobileNav, coreDiagram } from '../src/sourcing/nordla-ui/nordla-ds.js';
 
 const STATUS = { enabled: true, owner_rules: 'NOT_CONFIGURED', awaiting_human: 2, in_follow_up: 1, journal_head: 'abc', connected: { china_sourcing: 'CONNECTED', socle_decision: 'CONNECTED', finance: 'READ_ONLY (Finance)', stock_achats: 'NOT_CONNECTED', analytics: 'NOT_CONNECTED' } };
 const MODULES = [
@@ -83,7 +83,7 @@ test('icons: only official files that exist, none of the pack\'s DEFECTIVE expor
 });
 
 test('tokens: validated palette, text contrast >= 4.5:1 on its backgrounds, no forbidden colours', () => {
-  const css = readFileSync(new URL('../src/sourcing/ui/nordla-ds.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.css', import.meta.url), 'utf8');
   const tok = (n) => new RegExp(`--nd-${n}:\\s*(#[0-9A-Fa-f]{6})`).exec(css)[1];
   assert.equal(tok('bg'), '#F5F6F8'); assert.equal(tok('card'), '#FFFFFF'); assert.equal(tok('nav'), '#FAFBFC'); assert.equal(tok('bronze'), '#95652F');
   const lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -93,4 +93,10 @@ test('tokens: validated palette, text contrast >= 4.5:1 on its backgrounds, no f
   assert.doesNotMatch(css, /gradient\(/i, 'no gradients');
   assert.doesNotMatch(css, /background:\s*#0{3,6}\b|background:\s*black/i, 'no black background');
   assert.doesNotMatch(css, /#(FFF8E7|FAF3E0|F5F0E6|FFFDD0|F5F5DC|1B4332|14532D)/i, 'no cream / dark-green');
+});
+
+test('the /nordla files stay OUT of the field app UI folder: the China Sourcing offline shell (built from src/sourcing/ui) is not changed', () => {
+  const walk = (u) => readdirSync(u, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, u)) : [e.name]));
+  const inUi = walk(new URL('../src/sourcing/ui/', import.meta.url)).filter((f) => /^nordla-(ds|view|home|mark)\.|^nordla\.html$/.test(f));
+  assert.deepEqual(inUi, []);
 });

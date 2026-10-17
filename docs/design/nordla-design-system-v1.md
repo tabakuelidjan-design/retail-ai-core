@@ -7,17 +7,16 @@ Branche `claude/nordla-design-system-v1` (depuis `claude/nordla-core-p0` @ `0f83
 
 | Élément | Fichier | Rôle |
 |---|---|---|
-| Jetons + composants CSS | `src/sourcing/ui/nordla-ds.css` | couleurs, typo Montserrat (fichiers officiels), espacements, rayons, bordures, ombres, focus, états |
-| Composants | `src/sourcing/ui/nordla-ds.js` | `sidebar` (NordlaSidebar), `topbar`, `mobileNav`, `moduleCard`, `metricCard`, `statusBadge`, `activityFeed`, `chartCard`, `coreDiagram` (AgentControl), `guardianIndicator` — HTML pur, tout texte échappé |
-| Modèle de vue | `src/sourcing/ui/nordla-view.js` | transforme les réponses serveur en ce qui s'affiche ; aucune E/S, aucun chiffre inventé |
-| Page | `src/sourcing/ui/nordla.html`, `nordla-home.js` | AppShell : tableau de bord desktop + écrans mobile `#accueil #modules #module/<clé> #parle #recherche #plus` |
-| Marque | `src/sourcing/ui/nordla-mark.svg` | le « N » existant, en bronze, sans fond |
+| Jetons + composants CSS | `src/sourcing/nordla-ui/nordla-ds.css` | couleurs, typo Montserrat (fichiers officiels), espacements, rayons, bordures, ombres, focus, états |
+| Composants | `src/sourcing/nordla-ui/nordla-ds.js` | `sidebar` (NordlaSidebar), `topbar`, `mobileNav`, `moduleCard`, `metricCard`, `statusBadge`, `activityFeed`, `chartCard`, `coreDiagram` (AgentControl), `guardianIndicator` — HTML pur, tout texte échappé |
+| Modèle de vue | `src/sourcing/nordla-ui/nordla-view.js` | transforme les réponses serveur en ce qui s'affiche ; aucune E/S, aucun chiffre inventé |
+| Page | `src/sourcing/nordla-ui/nordla.html`, `nordla-home.js` | AppShell : tableau de bord desktop + écrans mobile `#accueil #modules #module/<clé> #parle #recherche #plus` |
+| Marque | `src/sourcing/nordla-ui/nordla-mark.svg` | le « N » existant, en bronze, sans fond |
 | Routes | `src/sourcing/server/app.js` (bloc séparé, 2 lignes) | `/nordla`, `/nordla-ds.css`, `/nordla-mark.svg`, `/nordla-assets/*` (icônes et polices officielles déjà présentes dans `src/shared`) |
 
-L'application terrain China Sourcing (`/`), son service worker et son chemin Xiaomi ne sont **pas modifiés** : la nouvelle page est
-servie à côté. Le service worker n'est pas modifié ; sa liste de précache (`/shell-manifest.json`, calculée) inclut automatiquement les
-nouveaux modules `nordla-*.js` (fichiers présents, donc aucune erreur d'installation : `sourcing-pwa` 18/18) ; la page, le CSS et le SVG
-n'y sont pas.
+L'application terrain China Sourcing (`/`), son service worker et son chemin Xiaomi ne sont **pas modifiés**. Les fichiers de `/nordla`
+sont **hors** du dossier de l'application terrain (`src/sourcing/nordla-ui/`, servis par une table explicite) : la liste de précache du
+service worker (`/shell-manifest.json`, calculée depuis `src/sourcing/ui`) est identique à celle de la branche de base (vérifié par test).
 
 ## Palette (jetons `--nd-*`)
 
