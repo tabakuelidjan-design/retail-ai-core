@@ -20,7 +20,7 @@ const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app
 // Nordla Core screen (Design System v1, /nordla): its files live OUTSIDE the field app's UI folder (src/sourcing/nordla-ui), so the China
 // Sourcing offline shell (/shell-manifest.json, built from the UI folder) stays exactly what it was. Official icons and fonts: src/shared (/nordla-assets/).
 const NORDLA_UI_DIR = fileURLToPath(new URL('../nordla-ui/', import.meta.url));
-const NORDLA_PAGES = Object.fromEntries(['nordla-ds.css', 'nordla-ds.js', 'nordla-view.js', 'nordla-home.js', 'nordla-mark.svg'].map((f) => [`/${f}`, f]).concat([['/nordla', 'nordla.html']]));
+const NORDLA_PAGES = Object.fromEntries(['nordla-ds.css', 'nordla-ds.js', 'nordla-view.js', 'nordla-home.js'].map((f) => [`/${f}`, f]).concat([['/nordla', 'nordla.html']]));
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 

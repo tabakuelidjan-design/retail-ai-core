@@ -14,7 +14,11 @@ export const icon = (name, { cls = 'nd-nav-icon', initial = null, alt = '' } = {
 
 export const statusBadge = ({ tone, label }) => `<span class="nd-badge ${toneClass(tone)}">${esc(label)}</span>`;
 
-export const brand = () => '<a class="nd-brand" href="#accueil"><img class="nd-brand-mark" src="/nordla-mark.svg" alt="" width="28" height="28">Nordla</a>';
+/** Official brand files (pack NORDLA Brand Assets V1, unchanged), served by the shared reader at /nordla-assets/brand/. */
+export const BRAND = Object.freeze({ monogram: '/nordla-assets/brand/nordla-monogram.svg', monogramFlat: '/nordla-assets/brand/nordla-monogram-flat.svg', appNavy: '/nordla-assets/brand/nordla-app-navy.svg' });
+
+/** Logo: the official monogram (shaded; drawn at 36-40 px, where its light bronze tones keep their edge) + the wordmark in Montserrat. */
+export const brand = () => `<a class="nd-brand" href="#accueil"><img class="nd-brand-mark" src="${BRAND.monogram}" alt="" width="40" height="40">Nordla</a>`;
 
 /** NordlaSidebar: items with href=null are shown disabled with their note (never a dead link). */
 export const sidebar = (items, footer = '') => `<nav class="nd-sidebar" aria-label="Navigation Nordla">${brand()}
@@ -33,7 +37,7 @@ export const metricCard = ({ label, value, source }) => `<div class="nd-card nd-
   <span class="nd-metric-source">${esc(source)}</span></div>`;
 
 /** NordlaAgentControl: the Core diagram. A node is a link only when it has a real destination. */
-export const coreDiagram = (nodes) => `<div class="nd-core" data-nd-core><div class="nd-core-hub"><img src="/nordla-mark.svg" alt="Nordla Core" width="52" height="52"></div>
+export const coreDiagram = (nodes) => `<div class="nd-core" data-nd-core><div class="nd-core-hub"><img src="${BRAND.monogram}" alt="Nordla Core" width="64" height="64"></div>
   ${nodes.map((n) => { const inner = `${icon(n.icon, { cls: 'nd-nav-icon' })}<div><b>${esc(n.title)}</b><span>${esc(n.detail)}</span></div>`;
     return n.href ? `<a class="nd-core-node" data-pos="${esc(n.pos)}" data-node="${esc(n.key)}" href="${esc(n.href)}">${inner}</a>` : `<div class="nd-core-node" data-pos="${esc(n.pos)}" data-node="${esc(n.key)}">${inner}</div>`; }).join('')}</div>`;
 
