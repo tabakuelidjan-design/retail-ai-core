@@ -11,10 +11,14 @@ import { fxFor } from '../adapters/fx.js';
 import { callProvider, DATA_CLASS, ProviderPolicyError } from '../adapters/ai-provider.js';
 import { StoreError } from '../store/file-store.js';
 import { createVoiceAssets } from './voice-assets.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
 const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+// Nordla Core screen (Design System v1, /nordla): its page, stylesheet and mark are served like the field app's files, but kept OUT of the
+// offline shell (they need the server anyway); its .js modules are plain UI modules below. Official icons and fonts: src/shared (/nordla-assets/).
+const NORDLA_PAGES = { '/nordla': 'nordla.html', '/nordla-ds.css': 'nordla-ds.css', '/nordla-mark.svg': 'nordla-mark.svg' };
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
@@ -159,6 +163,8 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
+      if (NORDLA_PAGES[url.pathname]) return await serveStatic(res, NORDLA_PAGES[url.pathname], uiDir);
+      if (url.pathname.startsWith('/nordla-assets/')) { const a = await readNordlaShared(url.pathname); if (!a) return json(res, 404, { error: 'NOT_FOUND' }); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'public, max-age=86400', ...SEC }); return res.end(a.body); }
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);
       return json(res, 404, { error: 'NOT_FOUND' });
