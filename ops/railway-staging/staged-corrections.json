@@ -1,15 +1,15 @@
 {
-  "_comment": "Corrections to STAGE (not deploy) on the existing staged-create service sourcing-staging, environment staging of project app.nordla.app. Non-secret values only. Applied by the Railway session after the owner's go; then the whole lot is re-audited (docs/infrastructure/railway-changeset-audit.md section 5). UPDATED 2026-10-17 for the merged candidate: pinned commit is the core-p0 merge commit; 'settings_to_verify_or_add' lists two Railway settings that were missing from the first list. Still NOT applied.",
+  "_comment": "Corrections to STAGE (not deploy) on the staged-create service sourcing-staging, environment staging of project app.nordla.app. Non-secret values only. Inventory read by the owner 2026-10-17: 31 pending changes = 28 (create the service) + 3 (create its 1 GB volume), none destructive. The registered commit is ab02b77; it must become the merged candidate. Config-as-code path and the auto-deploy rule were NOT in the lot. NOT applied.",
   "project": "app.nordla.app",
   "environment": "staging",
   "service": "sourcing-staging",
   "source": {
     "repository": "tabakuelidjan-design/retail-ai-core",
-    "branch": "claude/nordla-core-p0",
+    "branch": "release/sourcing-staging",
+    "branch_note": "dedicated branch created at the pinned commit; nobody pushes to it, so a push by another chantier can never redeploy staging. It moves only by an explicit, authorised fast-forward. (claude/nordla-core-p0 receives pushes from several chantiers.)",
     "commit": {
-      "from": "c2c314db954fafad72fe0937e1da50d20b3bdf45",
-      "to": "0f83fd2b28f7114ba2919557fc9d32d031104cc4",
-      "supersedes": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a"
+      "registered_now": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a",
+      "to": "0f83fd2b28f7114ba2919557fc9d32d031104cc4"
     }
   },
   "variables": {
@@ -60,7 +60,21 @@
     "volume sourcing-staging-data 1 GB at /app/data"
   ],
   "settings_to_verify_or_add": {
-    "config_as_code_path": "/deploy/sourcing/railway.json  (without it the repository-root railway.json wins: start command without the Docker entrypoint, no Dockerfile builder = root user, no prepared volume)",
-    "auto_deploy_on_push": "OFF or pinned to the commit above (the source branch claude/nordla-core-p0 receives pushes from several chantiers: each push would redeploy staging uncontrolled)"
+    "config_as_code_path": "/deploy/sourcing/railway.json",
+    "config_as_code_why": "without it the repository-root railway.json wins (start command without the Docker entrypoint, no Dockerfile builder: root user, volume not prepared)",
+    "auto_deploy": "OFF if the Railway service offers the switch; otherwise rely on the dedicated branch release/sourcing-staging (no push = no redeploy). Either way: Deploy only on the owner's explicit go."
+  },
+  "identifiers_that_must_match": {
+    "railway_project_id": "261a1971-15da-432b-9bdd-0cde6a1e8815",
+    "railway_environment_staging_id": "6b648e6b-c685-45cb-abc8-db7dbe5357de",
+    "railway_environment_production_id_must_NOT_appear": "cb5eb0e7-b2ed-46ef-860a-26dd862ea5aa",
+    "supabase_staging_project_ref": "fvhiammdskpcnfodsnrc",
+    "supabase_production_ref_must_NOT_appear": "xbtzjabbseclmqfozjeo",
+    "merchant_staging_habb_test": "67646dbb-5e2e-4cd7-aad6-0ab289b068cb",
+    "merchant_production_prefix_must_NOT_appear": "36b1a1a7"
+  },
+  "expected_lot_after_corrections": {
+    "lines": "32 or 33",
+    "detail": "31 pending (28 service + 3 volume; the commit pin and the source branch are EDITS of existing lines) + 1 or 2 new settings (config-as-code path; auto-deploy switch if the UI has one). Any other new line must be a variable listed in this file."
   }
 }
