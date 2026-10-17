@@ -148,13 +148,25 @@ Sur la liste des 44 du 2026-10-17 : **couvertes par une V2 conforme (13)** : R1 
 
 Toutes catégories : **101 fonctions** n’ont aucune icône utilisable ; chacune a au moins un fichier reçu à corriger (rien n’est entièrement absent). Liste complète et défauts : galerie, filtre « Sans icône ».
 
-## 7. Décisions attendues
+### Priorités des 101 fonctions sans icône utilisable (champ `priority` du catalogue)
 
-1. **Validation graphique** des 34 V2 conformes (galerie, filtre « V2 conformes »).
-2. **15 fonctions avec V1 et V2** : garder la V1 en production ou adopter la V2.
-3. **Couleur d’accent** : cuivre `#C45828` (V1 et lot 1) ou bronze `#95652F` (palette V1) ; et l’accent brun des « manquantes ».
-4. **Réexports demandés à l’équipe créative** : 168 fichiers (raisons par fichier dans le catalogue) — en priorité les « manquantes » du lot 1 sans légende, et le lot 2 en 256 px transparent avec marges.
-5. **Noms à corriger** : Tableau de bord et China Sourcing (symboles d’autres fonctions), série 9 (texte seul), `10_import` et `12_recu` de la série 2.
+**P0 — bloquant pour les écrans actuels (3)** : Menu « Plus » (`menu-plus`), Photo (`photo`), Assistant IA (`assistant-ia`).
+
+**P1 — fonctions des modules déjà construits (37)** : Devis (`devis`), Avoir / note de crédit (`avoir`), TVA (`tva`), Justificatifs (`justificatifs`), Documents reçus (`documents-recus`), Reçu (`recu`), Ticket de caisse (`ticket`), Bon de commande (`bon-de-commande`), Échéance (`echeance`), Paiement reçu (`paiement-recu`), Retour (`retour`), Fermer (`fermer`), Modifier (`modifier`), Filtrer (`filtre`), Variation (`variation`), Déconnexion (`deconnexion`), Nouveau fournisseur (`nouveau-fournisseur`), Demande d'achat (`demande-achat`), Réception de marchandise (`reception-marchandise`), Comparer (`comparer`), Visite fournisseur (`visite-fournisseur`), Dossier fournisseur (`dossier-fournisseur`), Produit (`produit`), Inventaire (`inventaire`), Mouvement de stock (`mouvement-stock`), Emplacement (`emplacement`), Insight (`insight`), Recommandation (`recommandation`), Décision (`decision`), Opportunité (`opportunite`), Priorité (`priorite`), Explication (`explication`), Approbation du propriétaire (`approbation-proprietaire`), Micro / dictée (`micro-dictee`), Données à jour (`donnees-a-jour`), Données partielles (`donnees-partielles`), Noter (`noter`).
+
+**P2 — modules à venir / confort (61)** : Assistants et automatisations (`module-assistants-automatisations`), Centre des connexions (`module-centre-des-connexions`), Documents envoyés (`documents-envoyes`), Réception de document (`reception-document`), Remboursement (`remboursement`), Budget (`budget`), Rentabilité (`rentabilite`), Facturation (`facturation`), Dupliquer (`dupliquer`), Supprimer (`supprimer`), Trier (`tri`), Télécharger (`telecharger`), Partager (`partager`), Utilisateur (`utilisateur`), Session utilisateur (`session`), Équipe / groupe (`groupe-utilisateurs`), Profil (`profil`), Rôles et accès (`roles`), Accès (clé) (`acces`), Permission (`permission`), Confidentialité (`confidentialite`), Verrouiller (`verrouiller`), Historique (`historique`), CRM (`crm`), Prospect (`prospect`), Panier (`panier`), Suivi de commande (`suivi-commande`), Devis client (`devis-client`), Retour client (`retour-client`), Satisfaction (`satisfaction`), Pipeline commercial (`pipeline`), Livraison client (`livraison-client`), Livraison (`livraison`), Négociation (`negociation`), Catalogue (`catalogue`), Contrat (`contrat`), Catégories (`categories`), Variantes (`variantes`), Entrée de stock (`entree-stock`), Sortie de stock (`sortie-stock`), Stock faible (`stock-faible`), Code-barres (`code-barres`), Scanner (`scan`), Action recommandée (`action-recommandee`), Nous contacter (`nous-contacter`), Envoyé (`envoye`), E-mail (`email`), Message (`message`), Commentaire (`commentaire`), Pièce jointe (`piece-jointe`), Support (`support`), Aide (`aide`), Centre d'aide (`centre-aide`), Tutoriel (`tutoriel`), Avis / feedback (`feedback`), Signalement (`signalement`), Analyse (`analyse`), Liste de contrôle (`checklist`), Archiver (`archive`), Imprimer (`impression`), Aperçu (`apercu`).
+
+
+## 7. Décisions prises (2026-10-17) et suite
+
+1. La famille **Finance V1 officielle** reste la référence graphique.
+2. Les accents **cuivre** sont conservés : aucune recoloration automatique en bronze.
+3. Les **34 fichiers V2 conformes** sont des candidats techniques, **pas encore validés graphiquement** (`graphic_validation: en-attente`).
+4. Les fichiers défectueux restent des **références uniquement** (hors du dossier servi).
+5. Aucun PNG basse résolution n’est agrandi ni présenté comme SVG.
+6. Les icônes manquantes seront **créées en SVG par l’équipe créative**, dans une seule famille visuelle ; aucune création graphique ni modification d’écran côté code en attendant cette livraison.
+
+Restent ouverts : le choix V1 ou V2 pour les 15 fonctions qui ont les deux, et les noms à corriger (Tableau de bord, China Sourcing, série 9, `10_import` et `12_recu` de la série 2).
 
 ## 8. Fichiers ajoutés ou modifiés (217, tous des ajouts sauf 1)
 

@@ -632,7 +632,8 @@
      "sha256_16": "289e219e496d8365",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/03_modules_avances/png_256/03_assistants_et_automatisations.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "module-centre-des-connexions",
@@ -661,7 +662,8 @@
      "sha256_16": "194792150955a911",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/03_modules_avances/png_256/04_centre_des_connexions.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "module-centre-de-pilotage",
@@ -872,7 +874,8 @@
      "sha256_16": "c35c84ea72839dc8",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/02_devis.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "avoir",
@@ -925,7 +928,8 @@
      "sha256_16": "3039ac4c50046335",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/03_avoir.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "tva",
@@ -966,7 +970,8 @@
      "sha256_16": "1932f500bdcf90c0",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/06_tva.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "justificatifs",
@@ -1007,7 +1012,8 @@
      "sha256_16": "5119615f134f9964",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/07_justificatif.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "documents-recus",
@@ -1050,7 +1056,8 @@
      "sha256_16": "848bb6109e2a7607",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/08_documents_recus.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "documents-envoyes",
@@ -1080,7 +1087,8 @@
      "sha256_16": "7fdf52e011f782fe",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/09_documents_envoyes.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "import",
@@ -1204,7 +1212,8 @@
      "sha256_16": "12d5f74eedbc7bdb",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/12_recu.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "reception-document",
@@ -1233,7 +1242,8 @@
      "sha256_16": "fb6cf3d7c78cb4ee",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/13_reception.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "ticket",
@@ -1262,7 +1272,8 @@
      "sha256_16": "dbf4b007ef60d0e5",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/14_ticket.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "bon-de-commande",
@@ -1304,7 +1315,8 @@
      "sha256_16": "846eaeeb4ed71603",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/04_bon_de_commande.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "remboursement",
@@ -1334,7 +1346,8 @@
      "sha256_16": "a05a27356e3306d8",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/04_remboursement.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "echeance",
@@ -1363,7 +1376,8 @@
      "sha256_16": "e5c89cbd16df18a4",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/05_echeance.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "budget",
@@ -1392,7 +1406,8 @@
      "sha256_16": "e067b36bceff4a84",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/06_budget.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "rentabilite",
@@ -1422,7 +1437,8 @@
      "sha256_16": "45ac4042df9cd5ff",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/07_rentabilite.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "marge",
@@ -1488,7 +1504,8 @@
      "sha256_16": "53d6851981e94ddd",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/09_facturation.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "paiement-recu",
@@ -1518,7 +1535,8 @@
      "sha256_16": "5210aee8faeee49a",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/06_paiement_recu.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "ajouter",
@@ -1617,7 +1635,8 @@
      "sha256_16": "17e69b01440f80f2",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/02_menu_plus.png"
     }
-   ]
+   ],
+   "priority": "P0"
   },
   {
    "id": "retour",
@@ -1663,7 +1682,8 @@
      "sha256_16": "a98d40505df953f5",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/06_retour.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "fermer",
@@ -1709,7 +1729,8 @@
      "sha256_16": "69d001ec8c758c1d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/07_fermer.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "modifier",
@@ -1755,7 +1776,8 @@
      "sha256_16": "617006eb55ef6bae",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/03_modifier.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "dupliquer",
@@ -1785,7 +1807,8 @@
      "sha256_16": "31f2aa491960fde7",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/04_dupliquer.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "supprimer",
@@ -1819,7 +1842,8 @@
      "sha256_16": "ec8c95eeddc37867",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/05_supprimer.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "recherche",
@@ -1914,7 +1938,8 @@
      "sha256_16": "214ad3059efe7100",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/09_filtre.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "tri",
@@ -1959,7 +1984,8 @@
      "sha256_16": "1933b4901ed3692c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/10_tri.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "telecharger",
@@ -1993,7 +2019,8 @@
      "sha256_16": "2673a1b7dc808dd2",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/11_telecharger.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "partager",
@@ -2039,7 +2066,8 @@
      "sha256_16": "e85b748dd2d88ab5",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/12_partager.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "photo",
@@ -2069,7 +2097,8 @@
      "sha256_16": "70c7816a730641ad",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/04_actions_et_statuts/png_256/08_photo.png"
     }
-   ]
+   ],
+   "priority": "P0"
   },
   {
    "id": "variation",
@@ -2100,7 +2129,8 @@
      "sha256_16": "296fe05d17209b4e",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/06_variation.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "utilisateur",
@@ -2129,7 +2159,8 @@
      "sha256_16": "9416c542098b05b2",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/01_utilisateur.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "session",
@@ -2172,7 +2203,8 @@
      "sha256_16": "b933f24cdb40d0c3",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/04_session.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "deconnexion",
@@ -2216,7 +2248,8 @@
      "sha256_16": "ecaf65b5f6c7c121",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/05_deconnexion.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "groupe-utilisateurs",
@@ -2258,7 +2291,8 @@
      "sha256_16": "447630bc9362c0bd",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/02_groupe_utilisateurs.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "profil",
@@ -2288,7 +2322,8 @@
      "sha256_16": "ab49e621a7259ed8",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/03_profil.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "roles",
@@ -2330,7 +2365,8 @@
      "sha256_16": "1e3086753b82da8c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/09_roles.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "acces",
@@ -2360,7 +2396,8 @@
      "sha256_16": "118cf3bd951d67dd",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/08_acces.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "permission",
@@ -2390,7 +2427,8 @@
      "sha256_16": "7b69fe41a4b4e981",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/03_permission.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "securite",
@@ -2465,7 +2503,8 @@
      "sha256_16": "b5ce9824c5d86a12",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/11_confidentialite.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "verrouiller",
@@ -2495,7 +2534,8 @@
      "sha256_16": "0db3d8c694556edd",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/08_verrouiller.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "historique",
@@ -2538,7 +2578,8 @@
      "sha256_16": "dd75624efca4bd40",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/12_historique.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "ventes",
@@ -2604,7 +2645,8 @@
      "sha256_16": "e9d7b8cc793fbab4",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/02_crm.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "client",
@@ -2684,7 +2726,8 @@
      "sha256_16": "ef7856e07bebdbff",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/02_prospect.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "nouveau-client",
@@ -2798,7 +2841,8 @@
      "sha256_16": "0aff17b3f06c54c2",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/06_panier.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "suivi-commande",
@@ -2829,7 +2873,8 @@
      "sha256_16": "e7b30c0a0cb70296",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/07_suivi_commande.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "devis-client",
@@ -2860,7 +2905,8 @@
      "sha256_16": "d0e0b59e6c9bb852",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/08_devis_client.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "retour-client",
@@ -2890,7 +2936,8 @@
      "sha256_16": "fbd155070d892a4d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/10_retour_client.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "satisfaction",
@@ -2920,7 +2967,8 @@
      "sha256_16": "2f383c57a6e1c52d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/11_satisfaction.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "fidelite",
@@ -2998,7 +3046,8 @@
      "sha256_16": "401887e48933303e",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/04_pipeline.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "livraison-client",
@@ -3028,7 +3077,8 @@
      "sha256_16": "d7fb17122085f998",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/07_livraison_client.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "fournisseur",
@@ -3095,7 +3145,8 @@
      "sha256_16": "864fb40049510dfa",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/02_nouveau_fournisseur.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "achat",
@@ -3174,7 +3225,8 @@
      "sha256_16": "fd77e8fdbc586a65",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/04_demande_achat.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "reception-marchandise",
@@ -3205,7 +3257,8 @@
      "sha256_16": "f67bc2a19b5febb4",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/05_reception.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "livraison",
@@ -3247,7 +3300,8 @@
      "sha256_16": "65bfe6cf938b44f1",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/06_livraison.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "comparer",
@@ -3291,7 +3345,8 @@
      "sha256_16": "cc31f58c5c043cb7",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/07_comparer.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "visite-fournisseur",
@@ -3335,7 +3390,8 @@
      "sha256_16": "1bb77fef755109de",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/08_visite_fournisseur.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "negociation",
@@ -3366,7 +3422,8 @@
      "sha256_16": "2c4c43343ddc5c4d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/09_negociation.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "catalogue",
@@ -3398,7 +3455,8 @@
      "sha256_16": "d572ec4b2c59b0a3",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/10_catalogue.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "tarifs",
@@ -3467,7 +3525,8 @@
      "sha256_16": "5c0297cab3926cf5",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/12_contrat.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "dossier-fournisseur",
@@ -3498,7 +3557,8 @@
      "sha256_16": "38cbd2ad141dc612",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/08_dossier_fournisseur.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "stock",
@@ -3575,7 +3635,8 @@
      "sha256_16": "8973ae8db24812b6",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/02_produit.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "categories",
@@ -3605,7 +3666,8 @@
      "sha256_16": "18000c9c25411479",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/03_categories.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "variantes",
@@ -3636,7 +3698,8 @@
      "sha256_16": "3f213a6edb93d423",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/04_variantes.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "inventaire",
@@ -3666,7 +3729,8 @@
      "sha256_16": "c77246b3125a2b49",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/05_inventaire.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "mouvement-stock",
@@ -3697,7 +3761,8 @@
      "sha256_16": "9febf418c04ba204",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/06_mouvement_stock.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "entree-stock",
@@ -3727,7 +3792,8 @@
      "sha256_16": "22fdf9643ef8098a",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/07_entree_stock.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "sortie-stock",
@@ -3757,7 +3823,8 @@
      "sha256_16": "b03a19690a58b4c3",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/08_sortie_stock.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "stock-faible",
@@ -3788,7 +3855,8 @@
      "sha256_16": "0e598f0eb7a8b2dd",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/09_stock_faible.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "emplacement",
@@ -3818,7 +3886,8 @@
      "sha256_16": "3c38ce8935161895",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/10_emplacement.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "code-barres",
@@ -3848,7 +3917,8 @@
      "sha256_16": "82ffbc3ea49050d5",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/11_code_barres.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "scan",
@@ -3878,7 +3948,8 @@
      "sha256_16": "ceaa10c3567ad375",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/12_scan.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "assistant-ia",
@@ -3910,7 +3981,8 @@
      "sha256_16": "638a30aa579ba52d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/01_assistant_ia.png"
     }
-   ]
+   ],
+   "priority": "P0"
   },
   {
    "id": "insight",
@@ -3954,7 +4026,8 @@
      "sha256_16": "b5b50c5114cf5243",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/02_insight.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "recommandation",
@@ -3998,7 +4071,8 @@
      "sha256_16": "a9c05bf147afa6de",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/03_recommandation.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "decision",
@@ -4042,7 +4116,8 @@
      "sha256_16": "d0d6aaefa4988b36",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/04_decision.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "action-recommandee",
@@ -4087,7 +4162,8 @@
      "sha256_16": "69217841dcdcf00b",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/05_action_recommandee.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "opportunite",
@@ -4130,7 +4206,8 @@
      "sha256_16": "a2fbd9a76a0adb88",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/06_opportunite.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "priorite",
@@ -4175,7 +4252,8 @@
      "sha256_16": "a1de3f0e339f1d5a",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/07_priorite.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "explication",
@@ -4219,7 +4297,8 @@
      "sha256_16": "883b2fea4bacfebf",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/08_explication.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "validation",
@@ -4295,7 +4374,8 @@
      "sha256_16": "d6d8666eb2f0d75c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/06_approbation_proprietaire.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "detection-opportunites",
@@ -4458,7 +4538,8 @@
      "sha256_16": "3766eb6ee1db835b",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/01_micro_dictee.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "nous-contacter",
@@ -4500,7 +4581,8 @@
      "sha256_16": "7586e47bb18fbb3c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/02_nous_contacter.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "envoye",
@@ -4542,7 +4624,8 @@
      "sha256_16": "cc9b372036c5cd60",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/04_envoye.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "email",
@@ -4571,7 +4654,8 @@
      "sha256_16": "ff473f7716ca972a",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/03_email.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "message",
@@ -4600,7 +4684,8 @@
      "sha256_16": "8f0d2f0c9eb1f0dc",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/05_message.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "commentaire",
@@ -4629,7 +4714,8 @@
      "sha256_16": "d4a1f22e0e28a7b9",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/05_commentaire.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "piece-jointe",
@@ -4658,7 +4744,8 @@
      "sha256_16": "e9367e8e6b35614d",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/06_piece_jointe.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "support",
@@ -4686,7 +4773,8 @@
      "sha256_16": "ffd80dd850b76904",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/06_support.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "aide",
@@ -4731,7 +4819,8 @@
      "sha256_16": "fb650629c75c373b",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/08_aide.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "centre-aide",
@@ -4759,7 +4848,8 @@
      "sha256_16": "fe7869ff5a32a42c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/09_centre_aide.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "tutoriel",
@@ -4787,7 +4877,8 @@
      "sha256_16": "a493d12c42c30daa",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/10_tutoriel.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "feedback",
@@ -4816,7 +4907,8 @@
      "sha256_16": "363eca5257fd8904",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/11_feedback.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "signalement",
@@ -4845,7 +4937,8 @@
      "sha256_16": "08fd00e9e164de1c",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/12_signalement.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "synchronisation",
@@ -5007,7 +5100,8 @@
      "sha256_16": "6e95ffd67293e8b4",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/09_donnees_a_jour.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "donnees-partielles",
@@ -5050,7 +5144,8 @@
      "sha256_16": "e83629a0beaff2d8",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/10_donnees_partielles.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "fiabilite-donnees",
@@ -5127,7 +5222,8 @@
      "sha256_16": "3b0513647d5a7a1b",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/12_analyse.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "planning",
@@ -5255,7 +5351,8 @@
      "sha256_16": "138c36fc7da28907",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/07_checklist.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "noter",
@@ -5286,7 +5383,8 @@
      "sha256_16": "c5a4af460196f8bb",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/04_noter.png"
     }
-   ]
+   ],
+   "priority": "P1"
   },
   {
    "id": "archive",
@@ -5316,7 +5414,8 @@
      "sha256_16": "61171cbf69cb82a0",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/03_archive.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "impression",
@@ -5345,7 +5444,8 @@
      "sha256_16": "c145a4b56d17d637",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/04_impression.png"
     }
-   ]
+   ],
+   "priority": "P2"
   },
   {
    "id": "apercu",
@@ -5375,7 +5475,8 @@
      "sha256_16": "8e425bb51c405416",
      "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/05_apercu.png"
     }
-   ]
+   ],
+   "priority": "P2"
   }
  ],
  "v1_without_v2_equivalent": [

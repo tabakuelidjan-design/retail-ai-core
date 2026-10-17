@@ -23,7 +23,10 @@ test('catalogue: 11 categories, unique canonical ids, each function has a French
     assert.match(f.id, /^[a-z0-9-]+$/); assert.ok(f.label && cat.categories[String(f.category)], f.id); assert.ok(f.modules.length, `${f.id} has modules`);
     assert.ok(['conforme', 'a-corriger', 'absente'].includes(f.technical_quality), f.id); assert.ok(['en-attente', 'non-applicable'].includes(f.graphic_validation), f.id);
     if (f.file) { assert.equal(f.technical_quality, 'conforme'); assert.equal(f.graphic_validation, 'en-attente', 'a V2 icon is never declared graphically validated by the code'); }
+    assert.equal(Boolean(f.priority), !f.file && !f.v1_official.length, `${f.id}: a creation priority is set exactly when no usable icon exists`);
+    if (f.priority) assert.ok(['P0', 'P1', 'P2'].includes(f.priority), f.id);
   }
+  assert.equal(cat.functions.filter((f) => f.priority).length, 101, '101 functions still need an icon');
   for (const c of Object.keys(cat.categories)) assert.ok(cat.functions.some((f) => String(f.category) === c), `category ${c} used`);
 });
 
