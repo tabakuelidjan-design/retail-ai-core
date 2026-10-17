@@ -50,10 +50,34 @@ jobs:
       - run: node test/e2e/sourcing-french-note.e2e.js
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome, SOURCING_E2E_SHOTS: shots }
       - run: npm run sourcing:e2e:revision
+        if: ${{ !cancelled() }}
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run sourcing:e2e:terrain
+        if: ${{ !cancelled() }}
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - run: npm run sourcing:e2e:fieldv1
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:price
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:identification
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:migration
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:photos
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:signin
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run core:e2e
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run nordla:e2e
+        if: ${{ !cancelled() }}
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
       - uses: actions/upload-artifact@v4
         if: always()
