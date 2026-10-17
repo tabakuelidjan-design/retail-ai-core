@@ -14,6 +14,9 @@ import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
+// Who may CREATE records in the Core (a campaign proposal, a local visual). VIEWER and ACCOUNTANT read; they do not write. (Decisions and approvals have their own, stricter role tables.)
+const CAN_PROPOSE = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
+const mayPropose = (actor) => { if (!CAN_PROPOSE.has(actor?.role)) throw new CoreError('FORBIDDEN_ROLE', 'votre rôle peut consulter mais pas créer de proposition ni de visuel', 403); };
 const MAX = 64 * 1024;
 const MAX_PHOTO_BODY = 9 * 1024 * 1024; // a 6 MB photo, base64 in JSON
 
@@ -85,11 +88,12 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/branding/check' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await branding.checkText(String(b.text ?? '').slice(0, 4000))); return true; }
       if (p === '/api/core/branding/approve' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } json(res, 200, await branding.approve(actor)); return true; }
       if (p === '/api/core/campaigns' && m === 'GET') { json(res, 200, { campaigns: campaigns ? await campaigns.list() : [] }); return true; }
-      if (p === '/api/core/campaigns' && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
+      if (p === '/api/core/campaigns' && m === 'POST') { mayPropose(actor); if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
       const cd = /^\/api\/core\/campaigns\/([^/]{1,200})\/decision$/.exec(p);
       if (cd && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.decide(decodeURIComponent(cd[1]), b, actor)); return true; }
       if (p === '/api/core/creation' && m === 'GET') { json(res, 200, creation ? { ...creation.status(), creations: await creation.list() } : { status: 'NOT_CONNECTED', creations: [] }); return true; }
       if (p === '/api/core/creation' && m === 'POST') {
+        mayPropose(actor);
         if (!creation) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         const b = await body(req, MAX_PHOTO_BODY);
         const b64 = String(b.photo ?? '').replace(/^data:image\/(jpeg|png);base64,/, '');
