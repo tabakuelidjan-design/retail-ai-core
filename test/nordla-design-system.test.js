@@ -100,3 +100,25 @@ test('the /nordla files stay OUT of the field app UI folder: the China Sourcing 
   const inUi = walk(new URL('../src/sourcing/ui/', import.meta.url)).filter((f) => /^nordla-(ds|view|home|mark)\.|^nordla\.html$/.test(f));
   assert.deepEqual(inUi, []);
 });
+
+test('brand: the official pack files, unchanged (sha-256 prefix), no active content; the interface shows the official monogram, never the old provisional mark', async () => {
+  const { createHash } = await import('node:crypto');
+  const PINS = { 'nordla-monogram.svg': 'e6d6a56ae9a14f22', 'nordla-monogram-flat.svg': '40df16a995da6a1c', 'nordla-horizontal-light.svg': '0819326d02a730f1', 'nordla-horizontal-dark.svg': 'a498ff5c89e83fa8', 'nordla-app-navy.svg': '223e66d2054143f2', 'nordla-app-white.svg': '47ee9ab0e92a57d0', 'nordla-app-charcoal.svg': '51d5f13b4c25a627', 'nordla-app-32.png': 'e878a7311250bc50', 'nordla-app-256.png': 'bdad6f777c3c86e0' };
+  for (const [f, pin] of Object.entries(PINS)) {
+    const buf = readFileSync(new URL(`../src/shared/assets/nordla/brand/${f}`, import.meta.url));
+    assert.equal(createHash('sha256').update(buf).digest('hex').slice(0, 16), pin, `${f} is the pack file`);
+    if (f.endsWith('.svg')) assert.doesNotMatch(buf.toString('utf8'), /<script|foreignObject|href=|on[a-z]+=/i, `${f}: no active content`);
+  }
+  const { BRAND } = await import('../src/sourcing/nordla-ui/nordla-ds.js');
+  for (const u of Object.values(BRAND)) assert.ok(existsSync(new URL(`../src/shared/assets/nordla/brand/${u.split('/').pop()}`, import.meta.url)), u);
+  const ui = ['nordla-ds.js', 'nordla-home.js', 'nordla.html', 'nordla-ds.css'].map((f) => readFileSync(new URL(`../src/sourcing/nordla-ui/${f}`, import.meta.url), 'utf8')).join('\n');
+  assert.doesNotMatch(ui, /nordla-mark\.svg/); assert.ok(!existsSync(new URL('../src/sourcing/nordla-ui/nordla-mark.svg', import.meta.url)));
+  assert.match(brandHtml(), /src="\/nordla-assets\/brand\/nordla-monogram\.svg"[^>]*width="40"/);
+  const css = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.css', import.meta.url), 'utf8');
+  const tok = (n) => new RegExp(`--nd-${n}:\\s*(#[0-9A-Fa-f]{6})`).exec(css)[1];
+  assert.equal(tok('navy'), '#0F2A52'); assert.equal(tok('soft-white'), '#F8F5ED'); assert.equal(tok('ink'), '#111827');
+  assert.doesNotMatch(css, /background(-color)?:\s*var\(--nd-soft-white\)|background(-color)?:\s*#F8F5ED/i, 'soft white is never a page/card background (no cream)');
+  // the shaded monogram is never drawn under 32 px on a light background (its lightest bronze, #FFF0D0, is 1.13:1 on white)
+  for (const m of css.matchAll(/\.nd-(?:brand-mark|core-hub img)[^{]*\{[^}]*width:\s*(\d+)px/g)) assert.ok(Number(m[1]) >= 32, m[0]);
+});
+const brandHtml = () => { const s = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.js', import.meta.url), 'utf8'); return s.slice(s.indexOf('export const brand')).split('\n')[0].replace('${BRAND.monogram}', '/nordla-assets/brand/nordla-monogram.svg'); };

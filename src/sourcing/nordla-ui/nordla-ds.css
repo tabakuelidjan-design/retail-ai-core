@@ -1,7 +1,10 @@
 /* Nordla Design System v1 (validated 2026-10-17: "Nordla Core - Dashboard Desktop" + "Nordla Core Mobile / Module Finance").
    ONE source of tokens and shared components for every Nordla screen. Plain CSS, no framework, same-origin fonts (strict CSP).
-   Rules: light neutral backgrounds (no cream, no dark green menu, no black), bronze as the only accent, no gradients or glow,
-   official Nordla icons shown as they are (never recoloured). Contrast: every text token meets WCAG AA on its background. */
+   Rules: light neutral backgrounds (no cream, no dark green menu, no black), bronze as the only accent, no CSS gradients or glow,
+   official Nordla icons shown as they are (never recoloured). Contrast: every text token meets WCAG AA on its background.
+   Brand (2026-10-17, official pack NORDLA Brand Assets V1, src/shared/assets/nordla/brand, files unchanged): the bronze ribbon
+   monogram carries its own metallic shading INSIDE the SVG; the interface itself stays flat. Light backgrounds: the shaded
+   monogram from 32 px up, the flat one below (its lightest bronze tones vanish on white at 16-24 px). Dark backgrounds: shaded. */
 @font-face { font-family: 'Montserrat'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/nordla-assets/fonts/montserrat-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: 'Montserrat'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/nordla-assets/fonts/montserrat-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
@@ -24,6 +27,10 @@
   --nd-warning: #8A5A00;
   --nd-warning-tint: #FBF1DD;
   --nd-neutral-tint: #EEF0F3;
+  /* brand palette (official pack): navy for dark logo / app-icon grounds, soft white for text on navy - never a page background */
+  --nd-navy: #0F2A52;
+  --nd-soft-white: #F8F5ED;
+  --nd-ink: #111827;             /* the wordmark "Nordla" (= --nd-text) */
   /* typography: Montserrat self-hosted (UI), system fallback */
   --nd-font: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --nd-fs-xs: 12px; --nd-fs-sm: 13px; --nd-fs-md: 15px; --nd-fs-lg: 18px; --nd-fs-xl: 24px; --nd-fs-2xl: 30px;
@@ -62,8 +69,9 @@ body.nd-body { margin: 0; background: var(--nd-bg); color: var(--nd-text); font-
 @media (min-width: 1024px) {
   .nd-sidebar { display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; background: var(--nd-nav); border-right: var(--nd-line); padding: var(--nd-s5) var(--nd-s3); gap: var(--nd-s1); }
 }
-.nd-brand { display: flex; align-items: center; gap: 10px; padding: 0 var(--nd-s3) var(--nd-s5); font-weight: 700; font-size: 20px; color: var(--nd-text); text-decoration: none; }
-.nd-brand-mark { width: 28px; height: 28px; flex: none; }
+.nd-brand { display: flex; align-items: center; gap: 8px; padding: 0 var(--nd-s2) var(--nd-s5); font-weight: 700; font-size: 24px; line-height: 1; letter-spacing: -0.03em; color: var(--nd-ink); text-decoration: none; }
+.nd-body a.nd-brand { color: var(--nd-ink); }
+.nd-brand-mark { width: 40px; height: 40px; flex: none; } /* the monogram fills ~77 % of its square: a 40 px box draws a ~31 px N */
 .nd-nav-item { display: flex; align-items: center; gap: var(--nd-s3); padding: 9px var(--nd-s3); border-radius: var(--nd-r-sm); color: var(--nd-text); text-decoration: none; font-size: var(--nd-fs-sm); font-weight: 500; border: 0; background: none; width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
 .nd-nav-item:hover { background: var(--nd-neutral-tint); }
 .nd-nav-item[aria-current="page"] { background: var(--nd-bronze-tint); color: var(--nd-bronze-strong); font-weight: 650; }
@@ -78,6 +86,7 @@ body.nd-body { margin: 0; background: var(--nd-bg); color: var(--nd-text); font-
 .nd-topbar { display: flex; align-items: center; gap: var(--nd-s3); min-height: 56px; }
 @media (min-width: 1024px) { .nd-topbar { min-height: var(--nd-topbar-h); border-bottom: var(--nd-line); margin: 0 calc(-1 * var(--nd-s8)) var(--nd-s2); padding: 0 var(--nd-s8); background: var(--nd-card); position: sticky; top: 0; z-index: 5; } }
 .nd-topbar .nd-brand { padding: 0; font-size: 22px; }
+.nd-topbar .nd-brand-mark { width: 36px; height: 36px; }
 @media (min-width: 1024px) { .nd-topbar .nd-brand { display: none; } }
 .nd-search { flex: 1; max-width: 520px; display: none; }
 @media (min-width: 1024px) { .nd-search { display: block; } }
@@ -111,7 +120,7 @@ body.nd-body { margin: 0; background: var(--nd-bg); color: var(--nd-text); font-
 /* ---------- NordlaAgentControl (central Core diagram) ---------- */
 .nd-core { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: var(--nd-s3); }
 .nd-core-hub { grid-column: 1 / -1; justify-self: center; width: 96px; height: 96px; border-radius: 50%; background: var(--nd-card); border: 2px solid var(--nd-bronze-light); display: grid; place-items: center; box-shadow: var(--nd-shadow); }
-.nd-core-hub img { width: 52px; height: 52px; }
+.nd-core-hub img { width: 64px; height: 64px; }
 .nd-core-node { display: flex; align-items: center; gap: var(--nd-s3); padding: var(--nd-s3); border: var(--nd-line); border-radius: var(--nd-r-md); background: var(--nd-card); text-decoration: none; color: inherit; min-width: 0; }
 a.nd-core-node:hover { border-color: var(--nd-bronze-light); }
 .nd-core-node b { display: block; font-size: var(--nd-fs-sm); }
