@@ -211,3 +211,32 @@ test('NS-6 identity and role come from the SESSION only: a body, a header or a c
     assert.deepEqual(lines.filter((e) => e.kind === 'HUMAN_DECISION'), [], 'nobody approved anything');
   } finally { await w.stop(); }
 });
+
+test('NS-7 supplier notes and photos survive a server restart, stale saves are refused (409) and never overwrite, and a read-only role cannot alter them', async () => {
+  const w = await hostedWorld(); await w.start();
+  try {
+    let who = await w.loginAll();
+    let c = goCase('case-notes');
+    const NOTE_FR = 'Fournisseur Yiwu : MOQ 500 pièces, délai de production 25 jours, prix 4,20 USD départ usine, échantillon payant.';
+    c = dispatch(c, { type: 'NOTE', text: NOTE_FR }, NOW);
+    const put1 = await w.call('PUT', '/api/cases/case-notes', { who: who.owner, body: c }); assert.equal(put1.status, 200);
+    const photo = `data:image/jpeg;base64,${Buffer.from('photo-fournisseur-'.repeat(40)).toString('base64')}`;
+    assert.equal((await w.call('PUT', '/api/cases/case-notes/photos/photo:case-notes.1', { who: who.owner, body: { dataUrl: photo } })).status, 200);
+    // a second device saves from the SAME (now stale) revision: refused, with the server copy to merge on
+    const stale = await w.call('PUT', '/api/cases/case-notes', { who: who.buyer, body: dispatch(c, { type: 'NOTE', text: 'note du second téléphone' }, NOW) });
+    assert.equal(stale.status, 409, 'a stale save is a conflict, not an overwrite');
+    // a read-only role cannot alter the note, the case or the photo
+    for (const k of READ_ONLY_ROLES) {
+      assert.equal((await w.call('PUT', '/api/cases/case-notes', { who: who[k], body: dispatch(put1.body, { type: 'NOTE', text: 'altéré' }, NOW) })).status, 403, k);
+      assert.equal((await w.call('DELETE', '/api/cases/case-notes', { who: who[k] })).status, 403, k);
+      assert.equal((await w.call('PUT', '/api/cases/case-notes/photos/photo:case-notes.2', { who: who[k], body: { dataUrl: photo } })).status, 403, k);
+    }
+    // restart the server on the same volume
+    await w.stop(); await w.start(); who = await w.loginAll();
+    const back = await w.call('GET', '/api/cases/case-notes', { who: who.viewer });
+    assert.equal(back.status, 200); assert.equal(back.body.notes.at(-1).text, NOTE_FR, 'the supplier note is intact after the restart');
+    assert.equal(back.body.notes.length, 1);
+    const ph = await w.call('GET', '/api/cases/case-notes/photos/photo:case-notes.1', { who: who.viewer });
+    assert.equal(ph.status, 200); assert.equal(ph.body.dataUrl ?? ph.body.data ?? ph.body.photo, photo, 'the photo is intact after the restart');
+  } finally { await w.stop(); }
+});
