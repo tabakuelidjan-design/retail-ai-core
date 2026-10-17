@@ -36,9 +36,11 @@ export function speakable(turn, { max = SPOKEN_MAX } = {}) {
 /** Browser SpeechRecognition error code -> what the person sees. `fallback` is always the keyboard. */
 export function classifyError(code) {
   switch (code) {
-    case 'not-allowed': case 'service-not-allowed': return { state: 'denied', message: 'Le micro est refusé pour ce site. Autorisez-le dans les réglages du navigateur (icône à gauche de l’adresse), ou écrivez la question.' };
+    // Chrome without Google services (a phone sold in China, or Google blocked) answers 'service-not-allowed' although the microphone IS allowed: telling the person to change a setting would be wrong
+    case 'service-not-allowed': return { state: 'error', message: 'Le service de reconnaissance vocale du navigateur (Google sur Chrome) n’est pas disponible ici : il est souvent inaccessible en Chine. Écrivez la question, ou utilisez la touche micro du clavier du téléphone.' };
+    case 'not-allowed': return { state: 'denied', message: 'Le micro est refusé pour ce site. Autorisez-le dans les réglages du navigateur (icône à gauche de l’adresse), ou écrivez la question.' };
     case 'audio-capture': return { state: 'error', message: 'Aucun microphone n’a été trouvé. Écrivez la question au clavier.' };
-    case 'network': return { state: 'error', message: 'La reconnaissance vocale du navigateur a besoin d’internet et n’a pas répondu. Écrivez la question (la touche micro du clavier Android peut fonctionner).' };
+    case 'network': return { state: 'error', message: 'La reconnaissance vocale du navigateur a besoin d’internet et du service de Google (souvent inaccessible en Chine) : il n’a pas répondu. Écrivez la question (la touche micro du clavier du téléphone peut fonctionner).' };
     case 'language-not-supported': return { state: 'error', message: 'Le français n’est pas disponible pour la dictée sur ce navigateur. Écrivez la question.' };
     case 'no-speech': return { state: 'idle', message: 'Je n’ai rien entendu. Touchez le micro et parlez, ou écrivez la question.' };
     case 'aborted': return { state: 'idle', message: '' };

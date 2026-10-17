@@ -75,6 +75,9 @@ test('classifyError: refusal, no microphone, network, language, nothing heard - 
   assert.equal(classifyError('not-allowed').state, 'denied'); assert.match(classifyError('not-allowed').message, /refusé/i);
   assert.equal(classifyError('audio-capture').state, 'error'); assert.match(classifyError('network').message, /internet/); assert.equal(classifyError('no-speech').state, 'idle');
   assert.equal(classifyError('aborted').message, ''); assert.match(classifyError('whatever').message, /clavier/);
+  // a browser whose recognition service is unreachable (Google blocked, no Google services) is said so - it is NOT presented as a refused microphone
+  const svc = classifyError('service-not-allowed'); assert.equal(svc.state, 'error'); assert.match(svc.message, /Google/); assert.match(svc.message, /Chine/); assert.match(svc.message, /clavier/); assert.doesNotMatch(svc.message, /réglages|refusé/i);
+  assert.match(classifyError('network').message, /Google/); assert.match(classifyError('network').message, /clavier/);
 });
 
 test('no recognizer in the browser: no microphone button, a clear sentence, the keyboard box is unaffected; reading aloud unavailable is said too', () => {
