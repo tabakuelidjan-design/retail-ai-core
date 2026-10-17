@@ -1,0 +1,131 @@
+# Nordla Design System v1 — écran Core (`/nordla`)
+
+Branche `claude/nordla-design-system-v1` (depuis `claude/nordla-core-p0` @ `0f83fd2`). Les visuels de référence validés sont des
+**références de style** ; leurs chiffres sont illustratifs et ne sont codés nulle part. L'écran n'affiche que ce que le serveur répond.
+
+## Ce qui est livré
+
+| Élément | Fichier | Rôle |
+|---|---|---|
+| Jetons + composants CSS | `src/sourcing/nordla-ui/nordla-ds.css` | couleurs, typo Montserrat (fichiers officiels), espacements, rayons, bordures, ombres, focus, états |
+| Composants | `src/sourcing/nordla-ui/nordla-ds.js` | `sidebar` (NordlaSidebar), `topbar`, `mobileNav`, `moduleCard`, `metricCard`, `statusBadge`, `activityFeed`, `chartCard`, `coreDiagram` (AgentControl), `guardianIndicator` — HTML pur, tout texte échappé |
+| Modèle de vue | `src/sourcing/nordla-ui/nordla-view.js` | transforme les réponses serveur en ce qui s'affiche ; aucune E/S, aucun chiffre inventé |
+| Page | `src/sourcing/nordla-ui/nordla.html`, `nordla-home.js` | AppShell : tableau de bord desktop + écrans mobile `#accueil #modules #module/<clé> #parle #recherche #plus` |
+| Identité (logo, icônes) | `src/shared/assets/nordla/brand/` | pack officiel **NORDLA Brand Assets V1**, fichiers **inchangés** (empreintes vérifiées par test) : monogramme dégradé et plat, logos horizontaux clair/sombre, icônes d'application bleu nuit / blanche / charbon, PNG 32 et 256 ; servis à `/nordla-assets/brand/` par le lecteur partagé (Finance, Analytics, Growth peuvent les reprendre sans route nouvelle) |
+| Routes | `src/sourcing/server/app.js` (bloc séparé, 2 lignes) | `/nordla`, `/nordla-ds.css`, `/nordla-assets/*` (icônes et polices officielles déjà présentes dans `src/shared`) |
+
+L'application terrain China Sourcing (`/`), son service worker et son chemin Xiaomi ne sont **pas modifiés**. Les fichiers de `/nordla`
+sont **hors** du dossier de l'application terrain (`src/sourcing/nordla-ui/`, servis par une table explicite) : la liste de précache du
+service worker (`/shell-manifest.json`, calculée depuis `src/sourcing/ui`) est identique à celle de la branche de base (vérifié par test).
+
+## Palette (jetons `--nd-*`)
+
+Validée : fond `#F5F6F8`, cartes `#FFFFFF`, barre latérale `#FAFBFC`, bronze `#95652F`, bronze clair `#C49A60` (décor uniquement,
+jamais du texte), texte `#111827`, bordures `#E5E7EB`. Ajustements d'accessibilité (autorisés par la mission), mesurés par
+`test/nordla-design-system.test.js` (texte ≥ 4,5:1 sur fond, carte, barre latérale et teinte associée) :
+
+| Jeton | Validé | Utilisé | Raison |
+|---|---|---|---|
+| texte secondaire | `#64748B` | `#5B6678` | 4,40:1 sur le fond `#F5F6F8` (< AA) |
+| succès | `#16845B` | `#137A54` | 4,33:1 sur le fond (< AA) |
+| erreur | `#C24135` | `#B83A2F` | 4,46:1 sur sa teinte de badge (< AA) |
+
+Aucun dégradé, aucun fond noir, crème, ivoire ou beige, aucun vert foncé (vérifié par test).
+
+## Identité visuelle V1 (pack officiel, 2026-10-17)
+
+La marque bronze provisoire (`nordla-mark.svg`) est **supprimée**. L'identité vient du pack **NORDLA Brand Assets V1** remis par le
+propriétaire ; ses fichiers sont copiés **sans modification**. Le README du pack précise qu'il s'agit d'une « reconstruction vectorielle
+originale inspirée de la direction artistique validée », pas d'une vectorisation pixel à pixel.
+
+| Usage | Fichier | Taille |
+|---|---|---|
+| Barre latérale (desktop) | `nordla-monogram.svg` + « Nordla » Montserrat 700, `#111827`, interlettrage −0,03 em | 40 px (N ≈ 31 px), texte 24 px |
+| En-tête mobile | idem | 36 px, texte 22 px |
+| Centre du diagramme Core | `nordla-monogram.svg` | 64 px |
+| Icône d'onglet / écran d'accueil de `/nordla` | `nordla-app-navy.svg`, `nordla-app-32.png`, `nordla-app-256.png` (apple-touch-icon) | — |
+
+Règle mesurée dans Chromium (16 / 24 / 32 / 64 / 128 px) : sur fond clair, le monogramme dégradé n'est utilisé qu'à **32 px et plus**,
+car ses tons les plus clairs (`#FFF0D0`, 1,13:1 sur blanc) effacent le bord du ruban à 16 et 24 px ; en dessous, le **monogramme
+plat** est le bon fichier. Sur bleu nuit, le dégradé est net à toutes les tailles ; le plat y est trop sombre (bronze sur bleu nuit
+2,84:1). Aucun usage sous 32 px sur fond clair n'existe aujourd'hui dans l'interface (test).
+
+Palette de marque (jetons) : `--nd-navy #0F2A52` (fonds sombres du logo et des icônes), `--nd-soft-white #F8F5ED` (texte sur bleu nuit,
+13,1:1 ; **jamais** fond de page ou de carte, test), `--nd-ink #111827` (mot « Nordla », 17,1:1 sur la barre latérale), bronze `#95652F`.
+L'interface reste plate : les dégradés sont **dans** le fichier du logo, aucun dégradé CSS.
+
+**Décisions du propriétaire (2026-10-17, intégration technique approuvée, pas la mise en production)** : Montserrat 700 conservée
+pour le mot « Nordla » ; signature absente de la navigation et des petits en-têtes ; trois ajustements d'accessibilité de la palette
+conservés ; fichiers SVG du pack inchangés ; monochrome aux petites tailles quand le contraste l'exige, dégradé aux tailles adaptées ;
+composition du tableau de bord figée pour cette PR.
+
+**Non repris dans l'interface** (décision ci-dessus) : la signature « VOS DONNÉES EN ACTION » des logos horizontaux (`#BA824C` = 3,29:1 sur
+blanc, sous le seuil AA pour un texte de cette taille) ; la police des logos horizontaux du pack (DejaVu Sans / Arial, de
+substitution selon le README), l'interface utilisant Montserrat, police officielle déjà présente.
+
+**Inchangés** : l'icône PWA de China Sourcing (`src/sourcing/ui/icon*.png`, `icon.svg`, `apple-touch-icon.png`), `/favicon.ico`, le
+manifeste et le service worker de l'application terrain.
+
+## Disponible / non disponible (règle : source réelle ou « Non disponible »)
+
+| Zone | Source | Affichage sans source |
+|---|---|---|
+| État opérationnel | `GET /api/core/status` + `/healthz/backup` | « Opérationnel (vérifié à HH:MM UTC) » **seulement** si Core actif ET sauvegarde hors serveur `OK` ; sinon « Partiellement vérifié » avec le contrôle manquant, « Core inactif », « État non vérifié », « Hors ligne » |
+| Indicateurs | `awaiting_human`, `in_follow_up`, nombre d'analyses du journal, âge de la dernière sauvegarde | « Non disponible » + raison |
+| Dépenses IA et modèles | **aucun compteur côté serveur** | « Non disponible » (jamais estimé) |
+| Diagramme central | modules et connexions réels | Agents IA et Règles : pas de lien (aucune destination) ; Données et Outils → `#modules` |
+| Mes modules | `GET /api/core/modules` (état serveur tel quel) | état inconnu = badge neutre, jamais vert |
+| Activité | journal Core (`GET /api/core/decisions`) | « Activité non disponible » / « Aucune activité encore » |
+| Guardian / confidentialité | `GET /api/auth/session` | n'énonce que des contrôles appliqués par le serveur (session, origine, CSRF) |
+| Parle à Nordla | `POST /api/core/ask` (inchangé) | réponse, sources, limites ; refus d'action par le serveur |
+| Navigation : Ventes & CRM, Produits, Fournisseurs, Conformité | aucun module serveur | entrée désactivée « bientôt » (pas de lien mort) |
+| Voix | inchangée, dans l'application terrain | lien « Dictée vocale (application terrain) » ; aucun nouveau code micro |
+
+## Écarts assumés et points à décider
+
+- **Icônes officielles** (PNG marine + terracotta) affichées telles quelles sur tuile bronze clair : elles ne sont pas recolorées.
+  Les icônes listées `DEFECTIVE` dans `src/shared/nordla-icon.js` ne sont jamais utilisées (test).
+- **Branding et Création** n'ont pas d'icône officielle dans le pack d'icônes : une initiale est affichée.
+- **Module Finance desktop complet** (Vue d'ensemble / Transactions / Factures / Paiements / Analyses / Paramètres) : **non fait**.
+  Finance est un service séparé ; ses écrans existants ne sont pas modifiés (calculs, Peppol, rapprochement, export comptable
+  intacts). Dans `/nordla`, Finance montre son état réel et ses questions en lecture seule. Appliquer les jetons au service Finance
+  est une étape suivante, à faire module par module.
+- **Stock & Achats, China Sourcing** : état réel + lien vers l'application terrain ; persistance et parcours terrain inchangés.
+- **Aucun accès direct** depuis l'application terrain vers `/nordla` n'est ajouté (pour ne pas toucher au chemin Xiaomi du 18/10) :
+  l'adresse est `https://<origine>/nordla`.
+
+## Intégration : conflits et conditions (revue du 2026-10-17)
+
+Vérifié sur la tête `25cd201` (base `claude/nordla-core-p0` @ `ebff21e`, PR #23 incluse), sans modifier aucune autre branche.
+
+| Contre | Résultat | Responsable |
+|---|---|---|
+| `claude/nordla-core-p0` @ `ebff21e` | fusion propre (aucun fichier commun modifié des deux côtés) | — |
+| `integration/nordla-convergence-v1` = `integration/stock-achats-v1-wave2` @ `be43736` | `app.js` fusionné automatiquement ; **un conflit dans `src/procurement/server/hosted.js`**, fichier que la PR #22 ne touche pas | Stock & Achats / convergence |
+
+**Le conflit Stock & Achats existe sans la PR #22** : il se reproduit à l'identique en fusionnant la convergence dans
+`claude/nordla-core-p0` seul (déjà signalé par le chantier E, commit `7d9f0f2`). Nature : la base porte le verrou de bail du
+stockage (`lease`, `offSignals`, finalisation `8e46bfb`) ; la convergence ajoute l'interrupteur `PROCUREMENT_DISABLED=1`. Les deux
+sont compatibles : la résolution « signature et `offSignals` de la base, puis l'interrupteur de la convergence » a été essayée
+**localement uniquement** (copie jetable, rien de poussé) — suite complète et 9 e2e navigateur verts. Elle appartient au chantier
+Stock & Achats / convergence, par merge commit, pas à cette PR.
+
+**PR #24** (candidat staging Xiaomi) a pour tête `claude/nordla-core-p0` et exige « uniquement les dix fichiers attendus » :
+fusionner la PR #22 dans `claude/nordla-core-p0` tant que la PR #24 est ouverte ajouterait ~20 fichiers à ce candidat.
+**Condition : ne fusionner la PR #22 qu'après la clôture de la PR #24 (ou après le test Xiaomi), sur décision du propriétaire.**
+
+China Sourcing : `src/sourcing/ui` (dont `sw.js`, `manifest.webmanifest`, `icon.svg`), `src/sourcing/core`, `store`, `adapters`,
+`deploy/` et la configuration Railway sont identiques à la base et à la release `a7ecccd` ; `sw.js` est le même blob
+(`5957ce6`). `app.js` ne reçoit que des ajouts ; aucune route ajoutée ne recouvre un fichier de l'application terrain.
+
+## Tests
+
+- `test/nordla-design-system.test.js` (10) : honnêteté de l'état, indicateurs, modules, activité, navigation, échappement, icônes,
+  contrastes et couleurs interdites, fichiers `/nordla` hors du dossier de l'application terrain, fichiers de marque identiques au pack et sans contenu actif, jetons de marque, plus de marque provisoire.
+- `test/e2e/nordla-design.e2e.js` (`npm run nordla:design:e2e`, 7 contrôles, Chromium réel, serveur hébergé + proxy TLS type
+  Railway, données de test isolées) : état non « Opérationnel » sans sauvegarde vérifiée, indicateurs = champs serveur, modules =
+  `/api/core/modules`, Parle à Nordla avec source + refus d'action, 360/390/430 px sans débordement horizontal ni barre latérale avec
+  barre basse à 5 entrées (Parle au centre), 1440 px avec barre latérale, icônes chargées, noms accessibles et focus visible au
+  clavier, aucune clé dans la page, déconnexion → « Connexion requise ».
+- Captures (moteur Chromium, **pas** le Xiaomi physique) : `docs/design/nordla-design-system-v1/*.png`. Dans les captures pleine
+  page mobile, la barre basse apparaît au milieu : c'est un effet de capture d'un élément `position: fixed`, pas la mise en page.
