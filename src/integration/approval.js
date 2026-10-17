@@ -2,11 +2,13 @@
 // The policy lives outside any agent or model (NDR-009); an approval is a record by a HUMAN naming the action and the subject it covers.
 import { LEVEL, MODULE as M, ERR, fail, deepFreeze } from './constants.js';
 import { PROCUREMENT_ACTIONS } from './procurement-policy.js';
+import { SOCIAL_ACTIONS } from './social-policy.js';
 
 const L = LEVEL;
 /** `<MODULE>.<action>` -> level. Read the table as the whole list of what Nordla may do across modules before China. */
 export const ACTION_POLICY = deepFreeze({
   ...PROCUREMENT_ACTIONS, // Stock / Achats assistant tools (reads + proposals only), see procurement-policy.js
+  ...SOCIAL_ACTIONS, // Social Publishing: reads + one proposal; approve / schedule / publish BLOCKED here, see social-policy.js
   // reading and searching
   [`${M.FINANCE}.search_invoices`]: L.READ_ONLY, [`${M.FINANCE}.supplier_overview`]: L.READ_ONLY,
   [`${M.STOCK_SALES}.read_availability`]: L.READ_ONLY, [`${M.ANALYTICS}.read`]: L.READ_ONLY, [`${M.ANALYTICS}.explain_change`]: L.READ_ONLY,
