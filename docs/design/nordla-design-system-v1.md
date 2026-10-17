@@ -52,7 +52,8 @@ Aucun dégradé, aucun fond noir, crème, ivoire ou beige, aucun vert foncé (v�
 - **Icônes officielles** (PNG marine + terracotta) affichées telles quelles sur tuile bronze clair : elles ne sont pas recolorées.
   Les icônes listées `DEFECTIVE` dans `src/shared/nordla-icon.js` ne sont jamais utilisées (test).
 - **Branding et Création** n'ont pas d'icône officielle dans le pack : une initiale est affichée. **Logo officiel** absent du dépôt :
-  le « N » existant sert de marque. À fournir par le propriétaire si un fichier officiel existe.
+  le « N » existant, recoloré en bronze, sert de marque **provisoire, non validée** (aperçu remis au propriétaire ;
+  le glyphe n'occupe que le centre de son cadre et paraît petit à 28 px). À valider ou à remplacer par un fichier officiel.
 - **Module Finance desktop complet** (Vue d'ensemble / Transactions / Factures / Paiements / Analyses / Paramètres) : **non fait**.
   Finance est un service séparé ; ses écrans existants ne sont pas modifiés (calculs, Peppol, rapprochement, export comptable
   intacts). Dans `/nordla`, Finance montre son état réel et ses questions en lecture seule. Appliquer les jetons au service Finance
@@ -61,16 +62,34 @@ Aucun dégradé, aucun fond noir, crème, ivoire ou beige, aucun vert foncé (v�
 - **Aucun accès direct** depuis l'application terrain vers `/nordla` n'est ajouté (pour ne pas toucher au chemin Xiaomi du 18/10) :
   l'adresse est `https://<origine>/nordla`.
 
-## Risques / conflits
+## Intégration : conflits et conditions (revue du 2026-10-17)
 
-- `src/sourcing/server/app.js` est aussi modifié par les branches Stock & Achats (wave 2) et convergence : le changement ici est un
-  bloc isolé de quelques lignes (import + table `NORDLA_PAGES` + 2 lignes dans le routeur) pour limiter les conflits.
-- Rien n'est déployé : le candidat staging reste `ab02b77`.
+Vérifié sur la tête `25cd201` (base `claude/nordla-core-p0` @ `ebff21e`, PR #23 incluse), sans modifier aucune autre branche.
+
+| Contre | Résultat | Responsable |
+|---|---|---|
+| `claude/nordla-core-p0` @ `ebff21e` | fusion propre (aucun fichier commun modifié des deux côtés) | — |
+| `integration/nordla-convergence-v1` = `integration/stock-achats-v1-wave2` @ `be43736` | `app.js` fusionné automatiquement ; **un conflit dans `src/procurement/server/hosted.js`**, fichier que la PR #22 ne touche pas | Stock & Achats / convergence |
+
+**Le conflit Stock & Achats existe sans la PR #22** : il se reproduit à l'identique en fusionnant la convergence dans
+`claude/nordla-core-p0` seul (déjà signalé par le chantier E, commit `7d9f0f2`). Nature : la base porte le verrou de bail du
+stockage (`lease`, `offSignals`, finalisation `8e46bfb`) ; la convergence ajoute l'interrupteur `PROCUREMENT_DISABLED=1`. Les deux
+sont compatibles : la résolution « signature et `offSignals` de la base, puis l'interrupteur de la convergence » a été essayée
+**localement uniquement** (copie jetable, rien de poussé) — suite complète et 9 e2e navigateur verts. Elle appartient au chantier
+Stock & Achats / convergence, par merge commit, pas à cette PR.
+
+**PR #24** (candidat staging Xiaomi) a pour tête `claude/nordla-core-p0` et exige « uniquement les dix fichiers attendus » :
+fusionner la PR #22 dans `claude/nordla-core-p0` tant que la PR #24 est ouverte ajouterait ~20 fichiers à ce candidat.
+**Condition : ne fusionner la PR #22 qu'après la clôture de la PR #24 (ou après le test Xiaomi), sur décision du propriétaire.**
+
+China Sourcing : `src/sourcing/ui` (dont `sw.js`, `manifest.webmanifest`, `icon.svg`), `src/sourcing/core`, `store`, `adapters`,
+`deploy/` et la configuration Railway sont identiques à la base et à la release `a7ecccd` ; `sw.js` est le même blob
+(`5957ce6`). `app.js` ne reçoit que des ajouts ; aucune route ajoutée ne recouvre un fichier de l'application terrain.
 
 ## Tests
 
-- `test/nordla-design-system.test.js` (8) : honnêteté de l'état, indicateurs, modules, activité, navigation, échappement, icônes,
-  contrastes et couleurs interdites.
+- `test/nordla-design-system.test.js` (9) : honnêteté de l'état, indicateurs, modules, activité, navigation, échappement, icônes,
+  contrastes et couleurs interdites, fichiers `/nordla` hors du dossier de l'application terrain.
 - `test/e2e/nordla-design.e2e.js` (`npm run nordla:design:e2e`, 7 contrôles, Chromium réel, serveur hébergé + proxy TLS type
   Railway, données de test isolées) : état non « Opérationnel » sans sauvegarde vérifiée, indicateurs = champs serveur, modules =
   `/api/core/modules`, Parle à Nordla avec source + refus d'action, 360/390/430 px sans débordement horizontal ni barre latérale avec
