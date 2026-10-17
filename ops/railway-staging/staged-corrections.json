@@ -6,10 +6,12 @@
   "source": {
     "repository": "tabakuelidjan-design/retail-ai-core",
     "branch": "release/sourcing-staging",
-    "branch_note": "dedicated branch created at the pinned commit; nobody pushes to it, so a push by another chantier can never redeploy staging. It moves only by an explicit, authorised fast-forward. (claude/nordla-core-p0 receives pushes from several chantiers.)",
+    "branch_note": "dedicated branch created at the pinned commit; nobody pushes to it, so a push by another chantier can never redeploy staging. It moves only by an explicit, authorised fast-forward. (claude/nordla-core-p0 receives pushes from several chantiers.) UPDATE 2026-10-17 (owner GO): release/sourcing-staging was fast-forwarded 0f83fd2 -> a7ecccd (only railway.json differs; same Docker image layers).",
     "commit": {
-      "registered_now": "ab02b7791b7dd91fbc7c10e7029bef5983a0c02a",
-      "to": "0f83fd2b28f7114ba2919557fc9d32d031104cc4"
+      "registered_now_unknown_until_reread": "must be re-read in the lot",
+      "to": "a7ecccdc49d28def444bb6db0b68865372c55286",
+      "validated_code_commit": "0f83fd2b28f7114ba2919557fc9d32d031104cc4",
+      "relation": "a7ecccd is the direct child of 0f83fd2; only railway.json differs (root = sourcing-staging config, RELEASE BRANCH ONLY, never merged to core-p0 or main)"
     }
   },
   "variables": {
@@ -60,7 +62,7 @@
     "volume sourcing-staging-data 1 GB at /app/data"
   ],
   "settings_to_verify_or_add": {
-    "config_as_code_path": "/deploy/sourcing/railway.json",
+    "config_as_code_path": "after the FIRST deploy (the instance then exists): set /deploy/sourcing/railway.json so both sources agree; before it, the root railway.json of the pinned commit (a7ecccd) already carries the same content",
     "config_as_code_why": "without it the repository-root railway.json wins (start command without the Docker entrypoint, no Dockerfile builder: root user, volume not prepared)",
     "auto_deploy": "OFF if the Railway service offers the switch; otherwise rely on the dedicated branch release/sourcing-staging (no push = no redeploy). Either way: Deploy only on the owner's explicit go."
   },

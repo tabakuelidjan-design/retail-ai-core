@@ -1,5 +1,8 @@
 # `sourcing-staging` — dernière préparation avant activation (2026-10-17)
 
+> **MISE À JOUR (GO du propriétaire, 2026-10-17)** — `release/sourcing-staging` a été avancée par fast-forward de `0f83fd2` à **`a7ecccdc49d28def444bb6db0b68865372c55286`** (HEAD distant relevé juste avant : `0f83fd2` ; seul `railway.json` diffère ; pas de force-push ; `claude/nordla-core-p0` reste `0f83fd2`, `main` reste `a9d0e2f`). **Le commit à épingler dans Railway est désormais `a7ecccd…`** ; `0f83fd2` reste le code validé par la CI (même contenu d'image : 16 couches identiques). Voir `config-as-code-staged-create-2026-10-17.md`. Partout ci-dessous, « épingler `0f83fd2` » se lit « épingler `a7ecccd…` ».
+
+
 **Rien n'est déployé, rien n'est appliqué dans Railway, la production n'est pas touchée.** Ce document remplace les chiffres approximatifs (« 29 → ≈ 31 lignes ») de `activation-sourcing-staging-prete-2026-10-17.md` par l'inventaire réel relevé par le propriétaire.
 
 ## 1. Inventaire réel (relevé par le propriétaire)
