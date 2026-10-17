@@ -83,7 +83,7 @@ test('icons: only official files that exist, none of the pack\'s DEFECTIVE expor
 });
 
 test('tokens: validated palette, text contrast >= 4.5:1 on its backgrounds, no forbidden colours', () => {
-  const css = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/shared/nordla-ds.css', import.meta.url), 'utf8');
   const tok = (n) => new RegExp(`--nd-${n}:\\s*(#[0-9A-Fa-f]{6})`).exec(css)[1];
   assert.equal(tok('bg'), '#F5F6F8'); assert.equal(tok('card'), '#FFFFFF'); assert.equal(tok('nav'), '#FAFBFC'); assert.equal(tok('bronze'), '#95652F');
   const lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -111,10 +111,10 @@ test('brand: the official pack files, unchanged (sha-256 prefix), no active cont
   }
   const { BRAND } = await import('../src/sourcing/nordla-ui/nordla-ds.js');
   for (const u of Object.values(BRAND)) assert.ok(existsSync(new URL(`../src/shared/assets/nordla/brand/${u.split('/').pop()}`, import.meta.url)), u);
-  const ui = ['nordla-ds.js', 'nordla-home.js', 'nordla.html', 'nordla-ds.css'].map((f) => readFileSync(new URL(`../src/sourcing/nordla-ui/${f}`, import.meta.url), 'utf8')).join('\n');
+  const ui = ['nordla-ds.js', 'nordla-home.js', 'nordla.html'].map((f) => readFileSync(new URL(`../src/sourcing/nordla-ui/${f}`, import.meta.url), 'utf8')).concat(readFileSync(new URL('../src/shared/nordla-ds.css', import.meta.url), 'utf8')).join('\n');
   assert.doesNotMatch(ui, /nordla-mark\.svg/); assert.ok(!existsSync(new URL('../src/sourcing/nordla-ui/nordla-mark.svg', import.meta.url)));
   assert.match(brandHtml(), /src="\/nordla-assets\/brand\/nordla-monogram\.svg"[^>]*width="40"/);
-  const css = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/shared/nordla-ds.css', import.meta.url), 'utf8');
   const tok = (n) => new RegExp(`--nd-${n}:\\s*(#[0-9A-Fa-f]{6})`).exec(css)[1];
   assert.equal(tok('navy'), '#0F2A52'); assert.equal(tok('soft-white'), '#F8F5ED'); assert.equal(tok('ink'), '#111827');
   assert.doesNotMatch(css, /background(-color)?:\s*var\(--nd-soft-white\)|background(-color)?:\s*#F8F5ED/i, 'soft white is never a page/card background (no cream)');
