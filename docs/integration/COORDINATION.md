@@ -188,3 +188,9 @@ Branche d'intégration (PR brouillon vers la convergence) : convergence `e08d98d
 | Date | Session | Fichier(s) | Commit | Note |
 |---|---|---|---|---|
 | 2026-10-17 | Chantier A (Design System v1, branche `claude/nordla-design-system-v1`) | `src/sourcing/server/app.js` (bloc isolé : import `readNordlaShared`, table `NORDLA_PAGES`, 2 lignes de routage `/nordla*` et `/nordla-assets/*`), `package.json` (script `nordla:design:e2e`) ; nouveaux : `src/sourcing/nordla-ui/nordla-{ds.css,ds.js,view.js,home.js}`, `src/shared/assets/nordla/brand/` (pack officiel NORDLA Brand Assets V1, fichiers inchangés, ajout seul dans la zone partagée), `nordla.html`, tests `nordla-design-system`, `e2e/nordla-design` | voir journal git | Page `/nordla` en lecture des API Core existantes ; **service worker, application terrain, Finance, Stock & Achats non modifiés**. `app.js` fusionne sans conflit avec la convergence ; le seul conflit (`src/procurement/server/hosted.js`) existe déjà entre `claude/nordla-core-p0` et la convergence, sans lien avec cette PR. Ne pas fusionner tant que la PR #24 (tête `claude/nordla-core-p0`) est ouverte. Détail : `docs/design/nordla-design-system-v1.md`. |
+
+## Bibliothèque d'icônes Nordla V2 (Chantier A, 2026-10-17, branche `claude/nordla-icon-library-v2`, issue de `0b32cde`)
+
+| Date | Session | Fichier(s) | Commit | Note |
+|---|---|---|---|---|
+| 2026-10-17 | Chantier A (demande du propriétaire) | **ajouts seuls** : `src/shared/assets/nordla/library/` (catalogue `catalog.json` + 34 PNG conformes, copies octet pour octet des livraisons), `docs/design/nordla-icon-library-v2/` (références à corriger, galerie, captures), `docs/design/NORDLA-ICON-LIBRARY-V2-REPORT.md`, `test/nordla-icon-library-v2.test.js` | voir journal git | Registre de production `src/shared/nordla-icon.js` et pack V1 **inchangés** ; aucun écran n'utilise encore une icône V2 (test). Aucune modification de China Sourcing, Stock / Achats, serveurs, Railway. |
