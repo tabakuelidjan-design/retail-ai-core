@@ -182,3 +182,9 @@ Branche d'intégration (PR brouillon vers la convergence) : convergence `e08d98d
 | `src/procurement/assistant.js` (**chantier C, ajout seul**) | outil `find_supplier` (lecture seule ; ne renvoie que nom, pays, devise, Incoterm, délai : ni contacts ni banque) | patch pour C : `chantier-c-find-supplier.patch` ; 16 outils au lieu de 15 |
 | `src/integration/procurement-policy.js`, `procurement.js` (**convergence/C**) | `find_supplier` en lecture seule ; 3 règles de routage ajoutées en fin de liste | tests de comptage mis à jour (16 outils, 14 lectures, 18 actions) |
 | tests : `core-procurement-routing`, `integration-router-precedence` | nouveaux | — |
+
+## Design System v1 (Chantier A, 2026-10-17)
+
+| Date | Session | Fichier(s) | Commit | Note |
+|---|---|---|---|---|
+| 2026-10-17 | Chantier A (Design System v1, branche `claude/nordla-design-system-v1`) | `src/sourcing/server/app.js` (bloc isolé : import `readNordlaShared`, table `NORDLA_PAGES`, 2 lignes de routage `/nordla*` et `/nordla-assets/*`), `package.json` (script `nordla:design:e2e`) ; nouveaux : `src/sourcing/ui/nordla-{ds.css,ds.js,view.js,home.js,mark.svg}`, `nordla.html`, tests `nordla-design-system`, `e2e/nordla-design` | voir journal git | Page `/nordla` en lecture des API Core existantes ; **service worker, application terrain, Finance, Stock & Achats non modifiés**. Conflit possible sur `app.js` avec Stock & Achats wave 2 / convergence : à résoudre par merge commit. Détail : `docs/design/nordla-design-system-v1.md`. |
