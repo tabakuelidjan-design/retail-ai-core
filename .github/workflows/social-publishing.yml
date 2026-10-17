@@ -3,7 +3,7 @@ name: Social Publishing (E)
 # Safety suite of Social Publishing: cross-process locking (no duplicate publication), signed approvals, duplicate-content guard, launch paths, crash recovery.
 # Temp folders and a fake platform only: no real data, no network, no credential, no Meta call. Nothing is deployed or published.
 # Job 1: the social suite on Node 20 and 24 (the branch as it is).
-# Job 2: the same suite + the neighbouring suites (channel execution, providers) on a TRIAL merge with the convergence branch (focused suites, once; the whole-repository suite is run by the other workflows on the same merge).
+# Job 2: the same suite + the neighbouring suites (channel execution, providers, procurement, convergence journey) on a TRIAL merge with claude/nordla-core-p0 (focused suites, once; the whole-repository suite is run by the other workflows on the same merge).
 
 on:
   push:
@@ -47,7 +47,10 @@ jobs:
           SOCIAL_STRESS_ROUNDS: '10'
         run: node --test test/social-*.test.js
 
-  trial-merge-with-convergence:
+  trial-merge-with-core-p0:
+    # The branch merged (tree only, never pushed) into claude/nordla-core-p0, the BASE of the Social Publishing integration PR, then the focused suites, including the procurement /
+    # convergence-journey suites that live on that base. (The older protection - a trial merge with integration/nordla-convergence-v1 - stays in the workflow of
+    # feature/social-publishing-e; it cannot apply here: that line and claude/nordla-core-p0 conflict with EACH OTHER in src/procurement/server/hosted.js, a file this branch does not touch.)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -59,12 +62,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: python3 -m pip install --quiet Pillow
-      - name: Trial merge with integration/nordla-convergence-v1 (never pushed)
+      - name: Trial merge with claude/nordla-core-p0 (never pushed)
         run: |
-          git fetch origin integration/nordla-convergence-v1
-          git -c user.name=ci -c user.email=ci-noreply merge --no-commit --no-ff origin/integration/nordla-convergence-v1 # tree only (nothing is committed); git still wants an identity, given without an email-like string
+          git fetch origin claude/nordla-core-p0
+          git -c user.name=ci -c user.email=ci-noreply merge --no-commit --no-ff origin/claude/nordla-core-p0 # tree only (nothing is committed); git still wants an identity, given without an email-like string
       - run: npm ci
-      # Focused suites only, once: the whole-repository suite already runs on the same merge in the other workflows (Provider, Marketing, Activation...) - running it twice here exceeded the 30 minutes.
-      # On the merged tree these suites must pass entirely (stricter than a baseline comparison): Social Publishing, channel execution (Activation), connectors, providers.
-      - name: Social + activation + provider suites on the merged tree
-        run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js
+      # Focused suites only, once: the whole-repository suite already runs on the same merge in the other workflows. These must pass entirely.
+      - name: Focused suites on the merged tree
+        run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js test/convergence-journey.test.js test/procurement-file-lease.test.js test/procurement-mounted-ui.test.js test/integration-procurement.test.js test/integration-procurement-compat.test.js test/core-procurement-routing.test.js
