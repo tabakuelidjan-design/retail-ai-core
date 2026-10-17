@@ -181,3 +181,33 @@ test('NS-5 a read-only role cannot obtain a journaled analysis through Parle à 
     assert.deepEqual(lines.filter((e) => ['VIEWER', 'ACCOUNTANT'].includes(e.actor?.role)), [], 'no journal entry is attributed to a read-only role');
   } finally { await w.stop(); }
 });
+
+test('NS-6 identity and role come from the SESSION only: a body, a header or a cookie that claims to be the owner (or an agent) changes nothing', async () => {
+  const w = await hostedWorld(); await w.start();
+  try {
+    const who = await w.loginAll();
+    await w.call('PUT', '/api/cases/case-go', { who: who.owner, body: goCase() });
+    const a = await w.call('POST', '/api/core/cases/case-go/analyse', { who: who.buyer }); const id = a.body.decision.id;
+    const claims = { role: 'OWNER', userId: PEOPLE.owner.id, approver: 'owner', actor: { role: 'OWNER', userId: PEOPLE.owner.id }, grants: ['APPROVE_PO', 'RECEIVE', 'ADJUST'], confirmSelfApproval: true, as: 'owner' };
+    for (const k of ['buyer', 'viewer', 'accountant']) {
+      const r = await w.call('POST', `/api/core/decisions/${id}/human`, { who: who[k], body: { decision: 'APPROVED', reason: 'je suis le propriétaire', ...claims } });
+      assert.equal(r.status, 403, `${k}: a body claiming OWNER is ignored`);
+      const s = await w.call('POST', '/api/procurement/suppliers', { who: who[k], body: { name: 'Faux fournisseur', country: 'CN', currency: 'USD', ...claims } });
+      assert.equal(s.status, 403, `${k}: procurement ignores claimed grants/roles`);
+    }
+    // headers claiming another identity (including the ones used by this repository's own test harnesses) are not read
+    const raw = (headers) => new Promise((resolve, reject) => {
+      const data = Buffer.from(JSON.stringify({ decision: 'APPROVED', reason: 'en-tête usurpé' }));
+      const req = http.request({ host: '127.0.0.1', port: w.srv.port, path: `/api/core/decisions/${id}/human`, method: 'POST', headers: { host: 'app.nordla-test.example', 'x-forwarded-host': 'app.nordla-test.example', 'x-forwarded-proto': 'https', 'x-real-ip': '203.0.113.21', origin: 'https://app.nordla-test.example', 'content-type': 'application/json', 'content-length': data.length, cookie: who.buyer.cookie, 'x-nordla-csrf': who.buyer.csrf, ...headers } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', reject); req.write(data); req.end();
+    });
+    for (const h of [{ 'x-test-actor': 'owner' }, { 'x-nordla-role': 'OWNER' }, { 'x-forwarded-user': PEOPLE.owner.id }, { 'x-user-id': PEOPLE.owner.id, 'x-role': 'OWNER' }, { authorization: `Bearer ${PEOPLE.owner.id}` }]) {
+      assert.equal(await raw(h), 403, `header ${Object.keys(h)[0]} does not change who acts`);
+    }
+    // a forged cookie / a cookie of nobody
+    assert.equal((await w.call('GET', '/api/core/modules', { who: { cookie: '__Host-nordla_sourcing_sid=forged; __Host-nordla_sourcing_csrf=x', csrf: 'x' } })).status, 401);
+    // the journal attributes the decision to the real person only
+    const lines = (await readFile(join(w.dir, 'core', 'decision-journal.jsonl'), 'utf8')).trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.filter((e) => e.kind === 'HUMAN_DECISION'), [], 'nobody approved anything');
+  } finally { await w.stop(); }
+});
