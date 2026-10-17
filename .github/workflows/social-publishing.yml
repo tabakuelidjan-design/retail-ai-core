@@ -1,0 +1,70 @@
+name: Social Publishing (E)
+
+# Safety suite of Social Publishing: cross-process locking (no duplicate publication), signed approvals, duplicate-content guard, launch paths, crash recovery.
+# Temp folders and a fake platform only: no real data, no network, no credential, no Meta call. Nothing is deployed or published.
+# Job 1: the social suite on Node 20 and 24 (the branch as it is).
+# Job 2: the same suite + the neighbouring suites (channel execution, providers) on a TRIAL merge with the convergence branch (focused suites, once; the whole-repository suite is run by the other workflows on the same merge).
+
+on:
+  push:
+    paths:
+      - 'src/social/**'
+      - 'test/social-*.test.js'
+      - 'test/social-*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/social-publishing.yml'
+  pull_request:
+    paths:
+      - 'src/social/**'
+      - 'test/social-*.test.js'
+      - 'test/social-*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/social-publishing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  social-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '24']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      - run: npm ci
+      - run: python3 -m pip install --quiet Pillow
+      - name: Social Publishing suite (concurrency, integrity, duplicates, launch paths, core)
+        env:
+          SOCIAL_STRESS_ROUNDS: '10'
+        run: node --test test/social-*.test.js
+
+  trial-merge-with-convergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: python3 -m pip install --quiet Pillow
+      - name: Trial merge with integration/nordla-convergence-v1 (never pushed)
+        run: |
+          git fetch origin integration/nordla-convergence-v1
+          git -c user.name=ci -c user.email=ci-noreply merge --no-commit --no-ff origin/integration/nordla-convergence-v1 # tree only (nothing is committed); git still wants an identity, given without an email-like string
+      - run: npm ci
+      # Focused suites only, once: the whole-repository suite already runs on the same merge in the other workflows (Provider, Marketing, Activation...) - running it twice here exceeded the 30 minutes.
+      # On the merged tree these suites must pass entirely (stricter than a baseline comparison): Social Publishing, channel execution (Activation), connectors, providers.
+      - name: Social + activation + provider suites on the merged tree
+        run: node --test test/social-*.test.js test/channel-*.test.js test/merchant-connectors.test.js test/provider-*.test.js

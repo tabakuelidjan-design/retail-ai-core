@@ -24,6 +24,8 @@
     "procurement:phone": "node src/procurement/server/phone.js",
     "procurement:parity": "node test/postgres/procurement-parity.mjs",
     "marketing:report": "node --env-file=.env src/marketing/index.js",
+    "social": "node src/social/server/index.js",
+    "social:cli": "node src/social/cli.js",
     "customers:report": "node --env-file=.env src/customers/index.js",
     "finance": "node --env-file=.env src/finance/cli.js",
     "finance:dashboard": "node --env-file=.env src/finance/server/index.js",
