@@ -72,7 +72,7 @@ function inside(parent, child) {
 }
 
 /** Owner-only rights. POSIX: modes. Windows: remove inherited rights, grant the current user only. Returns whether the OS accepted it. */
-function harden(path, { directory }) {
+export function harden(path, { directory }) {
   if (process.platform !== 'win32') { try { chmodSync(path, directory ? 0o700 : 0o600); return true; } catch { return false; } }
   const user = process.env.USERDOMAIN && process.env.USERNAME ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME;
   if (!user) return false;

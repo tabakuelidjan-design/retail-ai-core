@@ -54,3 +54,7 @@ Options (à décider, avec leur coût éventuel) : un petit stockage objet publi
 ## 6. Retour arrière
 
 `SOCIAL_MODE=none` : plus aucun appel plateforme. Les posts déjà programmés **chez Facebook** restent programmés (supprimez-les dans Meta Business Suite ou retirez l'approbation dans Nordla, qui les supprime). Les données sont des fichiers dans `data/local/social/` (sauvegarde : copier ce dossier).
+
+## Jeton d'accès du propriétaire
+
+Le jeton n'est **plus** stocké en clair dans le dossier de données. Il est dans `owner.token` du dossier de clés (`SOCIAL_KEY_DIR`, hors du dossier de données, droits propriétaire seul), ou fourni par `SOCIAL_TOKEN` (24 caractères minimum) depuis le coffre de secrets de l'hébergeur ; dans ce cas rien n'est écrit. Un ancien `token.txt` est migré une fois (même valeur) puis retiré du dossier de données. Il n'est jamais affiché ni journalisé. Limite : un programme exécuté sous le même utilisateur système peut lire le dossier de clés.

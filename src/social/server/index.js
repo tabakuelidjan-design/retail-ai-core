@@ -8,8 +8,7 @@
 //
 // Binds 127.0.0.1 unless SOCIAL_HOST says otherwise (a token of 24+ characters is always required). Nothing is deployed, nothing is sent
 // anywhere by starting it. Posts live as local files under data/local/social.
-import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import http from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,21 +19,13 @@ import { createFacebookPagePublisher, createInstagramPublisher } from '../provid
 import { createSimulatedPublisher } from '../providers/simulated.js';
 import { createSocialService } from '../service.js';
 import { createFileKeyring, defaultKeyDir } from '../integrity.js';
+import { ensureOwnerToken } from '../token-store.js';
 import { createFileStore } from '../store.js';
 import { createFetchHttp } from '../../activation/providers/http.js';
 import { createSocialApp } from './app.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/social';
-
-async function ensureToken(env, dir) {
-  if (env.SOCIAL_TOKEN && env.SOCIAL_TOKEN.length >= 24) return env.SOCIAL_TOKEN;
-  const file = join(dir, 'token.txt');
-  try { const t = (await readFile(file, 'utf8')).trim(); if (t.length >= 24) return t; } catch { /* first run */ }
-  const t = randomBytes(24).toString('hex');
-  await writeFile(file, `${t}\n`);
-  return t;
-}
 
 export function buildPublishers({ env, credentialPort, fetchImpl = globalThis.fetch }) {
   const mode = env.SOCIAL_MODE || 'none';
@@ -63,12 +54,15 @@ export async function startSocialServer({
 } = {}) {
   const host = env.SOCIAL_HOST || '127.0.0.1';
   await mkdir(dir, { recursive: true });
-  const token = await ensureToken(env, dir);
   const credentialPort = createEnvCredentialPort(env);
   const { publishers, media } = buildPublishers({ env, credentialPort, fetchImpl });
   const confirmedFacts = await loadConfirmedFacts(dir);
   // approvals are SIGNED with a key that lives OUTSIDE the data folder (integrity.js); the server refuses to start with a key folder inside the data folder
-  const integrity = createFileKeyring({ keyDir: defaultKeyDir(env), dataDir: dir });
+  const keyDir = defaultKeyDir(env);
+  const integrity = createFileKeyring({ keyDir, dataDir: dir });
+  // the owner's access token lives next to the key (never in the data folder); a legacy data/token.txt is migrated once (token-store.js)
+  const owner = ensureOwnerToken({ env, keyDir, dataDir: dir });
+  const { token } = owner;
   const service = createSocialService({ store: createFileStore(dir), publishers, confirmedFacts, integrity });
   const publisher = createPublisher({ service, publishers, media, logger: (l) => log(JSON.stringify(l)) });
   const assets = createAssetLibrary(join(dir, 'assets'));
@@ -84,7 +78,7 @@ export async function startSocialServer({
   server.once('close', () => clearInterval(timer));
   const addr = server.address();
   log(`HABB social publishing: http://${host === '0.0.0.0' ? 'localhost' : host}:${addr.port}  mode=${env.SOCIAL_MODE || 'none'}  (${host === '127.0.0.1' ? 'loopback only' : `listening on ${host}`}; token required)`);
-  log(`Access token: ${join(dir, 'token.txt')} (never printed). Posts: ${join(dir, 'posts')}. Audit: ${join(dir, 'audit.jsonl')}.`);
+  log(`Access token: ${owner.source === 'env' ? 'from SOCIAL_TOKEN' : owner.file}${owner.migrated ? ' (moved out of the data folder)' : ''} (never printed). Posts: ${join(dir, 'posts')}. Audit: ${join(dir, 'audit.jsonl')}.`);
   log(`Approvals are signed (key id ${integrity.describe().key_id}); the key is kept outside the data folder and is never printed.`);
   if ((env.SOCIAL_MODE || 'none') === 'none') log('No platform is connected: nothing will be published automatically. Use the manual pack on each approved post.');
   return { server, token, port: addr.port, service, publisher, close: () => new Promise((r) => { clearInterval(timer); server.close(r); }) };
