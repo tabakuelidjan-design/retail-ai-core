@@ -1,0 +1,2444 @@
+{
+ "note": "Technical clean-ups only (background removal with edge rebuilt from the nearest solid colour; transparent margin added without resampling). Nothing is redrawn, recoloured or enlarged. NOT wired anywhere; each file needs a visual validation. Native resolution is kept: a candidate whose native size is below 256 px is only crisp up to safe_css_size_px.",
+ "margin_ratio_used": 0.1016,
+ "count": 75,
+ "by_class": {
+  "FIX_MARGIN": 7,
+  "FIX_BACKGROUND_LOWRES": 68
+ },
+ "files": [
+  {
+   "function_id": "recu",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/03_recu.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/recu__03_recu.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    153,
+    192
+   ],
+   "canvas_after": [
+    236,
+    236
+   ],
+   "margins_after_px": {
+    "top": 24,
+    "left": 45,
+    "bottom": 24,
+    "right": 46
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 118,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "groupe-utilisateurs",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/01_equipe.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/groupe-utilisateurs__01_equipe.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    237,
+    164
+   ],
+   "canvas_after": [
+    288,
+    288
+   ],
+   "margins_after_px": {
+    "top": 66,
+    "left": 29,
+    "bottom": 66,
+    "right": 30
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 256,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "commentaire",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/05_commentaire.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/commentaire__05_commentaire.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    192,
+    152
+   ],
+   "canvas_after": [
+    231,
+    231
+   ],
+   "margins_after_px": {
+    "top": 41,
+    "left": 23,
+    "bottom": 42,
+    "right": 24
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 115,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "piece-jointe",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/06_piece_jointe.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/piece-jointe__06_piece_jointe.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    159,
+    170
+   ],
+   "canvas_after": [
+    206,
+    206
+   ],
+   "margins_after_px": {
+    "top": 21,
+    "left": 27,
+    "bottom": 21,
+    "right": 28
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 103,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "historique",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/07_historique.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/historique__07_historique.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    169,
+    167
+   ],
+   "canvas_after": [
+    203,
+    203
+   ],
+   "margins_after_px": {
+    "top": 22,
+    "left": 21,
+    "bottom": 22,
+    "right": 21
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 101,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "tri",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/02_tri.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/tri__02_tri.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    176,
+    158
+   ],
+   "canvas_after": [
+    211,
+    211
+   ],
+   "margins_after_px": {
+    "top": 28,
+    "left": 21,
+    "bottom": 29,
+    "right": 22
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 105,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "opportunite",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/03_opportunite.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_margin/opportunite__03_opportunite.png",
+   "fix_class": "FIX_MARGIN",
+   "native_before": [
+    188,
+    170
+   ],
+   "canvas_after": [
+    226,
+    226
+   ],
+   "margins_after_px": {
+    "top": 30,
+    "left": 23,
+    "bottom": 30,
+    "right": 23
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {},
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 113,
+   "defects_not_fixable_here": [],
+   "style_warning": "lot 2 « D à G » : traits plus épais et cuivre granuleux (constat de l’audit) : cohérence avec la famille Finance V1 à arbitrer"
+  },
+  {
+   "function_id": "facture",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/01_facture.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/facture__01_facture.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    54,
+    62
+   ],
+   "canvas_after": [
+    73,
+    73
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 11,
+    "bottom": 8,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "devis",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/02_devis.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/devis__02_devis.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    92,
+    73
+   ],
+   "canvas_after": [
+    68,
+    68
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 9,
+    "bottom": 7,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.7,
+    "ring_pixels": 738,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 34,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "avoir",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/03_avoir.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/avoir__03_avoir.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    96,
+    73
+   ],
+   "canvas_after": [
+    116,
+    116
+   ],
+   "margins_after_px": {
+    "top": 27,
+    "left": 12,
+    "bottom": 27,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.3,
+    "ring_pixels": 743,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 58,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "bon-de-commande",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/04_bon_de_commande.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/bon-de-commande__04_bon_de_commande.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    92,
+    70
+   ],
+   "canvas_after": [
+    107,
+    107
+   ],
+   "margins_after_px": {
+    "top": 22,
+    "left": 11,
+    "bottom": 23,
+    "right": 11
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.2,
+    "ring_pixels": 564,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 53,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "tva",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/06_tva.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/tva__06_tva.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    89,
+    73
+   ],
+   "canvas_after": [
+    71,
+    71
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 12,
+    "bottom": 8,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.9,
+    "ring_pixels": 764,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "justificatifs",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/07_justificatif.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/justificatifs__07_justificatif.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    87,
+    72
+   ],
+   "canvas_after": [
+    70,
+    70
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 9,
+    "bottom": 8,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.2,
+    "ring_pixels": 704,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "recu",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/12_recu.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/recu__12_recu.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    99,
+    73
+   ],
+   "canvas_after": [
+    70,
+    70
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 7,
+    "bottom": 8,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.4,
+    "ring_pixels": 758,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "reception-document",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/13_reception.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/reception-document__13_reception.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    56,
+    60
+   ],
+   "canvas_after": [
+    71,
+    71
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 9,
+    "bottom": 8,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "ticket",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/14_ticket.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/ticket__14_ticket.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    52,
+    60
+   ],
+   "canvas_after": [
+    71,
+    71
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 11,
+    "bottom": 8,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "ajouter",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/01_ajouter.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/ajouter__01_ajouter.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    62,
+    60
+   ],
+   "canvas_after": [
+    73,
+    73
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "menu-plus",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/02_menu_plus.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/menu-plus__02_menu_plus.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    71,
+    48
+   ],
+   "canvas_after": [
+    85,
+    85
+   ],
+   "margins_after_px": {
+    "top": 20,
+    "left": 9,
+    "bottom": 21,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 42,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "modifier",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/03_modifier.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/modifier__03_modifier.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    64,
+    63
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "dupliquer",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/04_dupliquer.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/dupliquer__04_dupliquer.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    61,
+    59
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "supprimer",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/05_supprimer.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/supprimer__05_supprimer.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    50,
+    60
+   ],
+   "canvas_after": [
+    71,
+    71
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 12,
+    "bottom": 8,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "retour",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/06_retour.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/retour__06_retour.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    65,
+    45
+   ],
+   "canvas_after": [
+    77,
+    77
+   ],
+   "margins_after_px": {
+    "top": 18,
+    "left": 8,
+    "bottom": 18,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "fermer",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/07_fermer.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/fermer__07_fermer.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    106,
+    74
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 10,
+    "left": 8,
+    "bottom": 10,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.0,
+    "ring_pixels": 775,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "recherche",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/08_recherche.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/recherche__08_recherche.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    110,
+    74
+   ],
+   "canvas_after": [
+    73,
+    73
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 8,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.0,
+    "ring_pixels": 787,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "filtre",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/09_filtre.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/filtre__09_filtre.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    102,
+    74
+   ],
+   "canvas_after": [
+    67,
+    67
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 8,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.3,
+    "ring_pixels": 772,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 33,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "tri",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/10_tri.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/tri__10_tri.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    100,
+    74
+   ],
+   "canvas_after": [
+    52,
+    52
+   ],
+   "margins_after_px": {
+    "top": 5,
+    "left": 5,
+    "bottom": 6,
+    "right": 6
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.2,
+    "ring_pixels": 767,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 26,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "telecharger",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/11_telecharger.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/telecharger__11_telecharger.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    104,
+    74
+   ],
+   "canvas_after": [
+    68,
+    68
+   ],
+   "margins_after_px": {
+    "top": 9,
+    "left": 7,
+    "bottom": 9,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.1,
+    "ring_pixels": 777,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 34,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "partager",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/12_partager.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/partager__12_partager.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    101,
+    74
+   ],
+   "canvas_after": [
+    67,
+    67
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 7,
+    "bottom": 8,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.2,
+    "ring_pixels": 768,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 33,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "utilisateur",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/01_utilisateur.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/utilisateur__01_utilisateur.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    59,
+    64
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 10,
+    "bottom": 8,
+    "right": 11
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "profil",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/03_profil.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/profil__03_profil.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    70,
+    61
+   ],
+   "canvas_after": [
+    83,
+    83
+   ],
+   "margins_after_px": {
+    "top": 13,
+    "left": 8,
+    "bottom": 13,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "session",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/04_session.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/session__04_session.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    110,
+    76
+   ],
+   "canvas_after": [
+    82,
+    82
+   ],
+   "margins_after_px": {
+    "top": 11,
+    "left": 8,
+    "bottom": 12,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.9,
+    "ring_pixels": 803,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "parametres",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/06_parametres.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/parametres__06_parametres.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    102,
+    75
+   ],
+   "canvas_after": [
+    77,
+    77
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 8,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.1,
+    "ring_pixels": 593,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "securite",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/07_securite.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/securite__07_securite.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    99,
+    76
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 9,
+    "bottom": 8,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.1,
+    "ring_pixels": 777,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "acces",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/08_acces.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/acces__08_acces.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    103,
+    72
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 8,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 2.2,
+    "ring_pixels": 570,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "roles",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/09_roles.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/roles__09_roles.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    112,
+    76
+   ],
+   "canvas_after": [
+    80,
+    80
+   ],
+   "margins_after_px": {
+    "top": 12,
+    "left": 8,
+    "bottom": 12,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.7,
+    "ring_pixels": 808,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 40,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "notifications",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/10_notifications.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/notifications__10_notifications.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    112,
+    76
+   ],
+   "canvas_after": [
+    82,
+    82
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 9,
+    "bottom": 9,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.7,
+    "ring_pixels": 809,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "confidentialite",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/11_confidentialite.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/confidentialite__11_confidentialite.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    108,
+    67
+   ],
+   "canvas_after": [
+    82,
+    82
+   ],
+   "margins_after_px": {
+    "top": 15,
+    "left": 8,
+    "bottom": 15,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.7,
+    "ring_pixels": 469,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "crm",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/02_crm.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/crm__02_crm.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    103,
+    60
+   ],
+   "canvas_after": [
+    121,
+    121
+   ],
+   "margins_after_px": {
+    "top": 35,
+    "left": 12,
+    "bottom": 36,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.3,
+    "ring_pixels": 467,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 60,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "client",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/03_client.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/client__03_client.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    95,
+    60
+   ],
+   "canvas_after": [
+    111,
+    111
+   ],
+   "margins_after_px": {
+    "top": 28,
+    "left": 11,
+    "bottom": 28,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 4.2,
+    "ring_pixels": 480,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 55,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "nouveau-client",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/04_nouveau_client.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/nouveau-client__04_nouveau_client.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    98,
+    60
+   ],
+   "canvas_after": [
+    115,
+    115
+   ],
+   "margins_after_px": {
+    "top": 33,
+    "left": 12,
+    "bottom": 34,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.8,
+    "ring_pixels": 483,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 57,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "commande-client",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/05_commande.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/commande-client__05_commande.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    111,
+    60
+   ],
+   "canvas_after": [
+    86,
+    86
+   ],
+   "margins_after_px": {
+    "top": 16,
+    "left": 9,
+    "bottom": 17,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.1,
+    "ring_pixels": 486,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 43,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "panier",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/06_panier.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/panier__06_panier.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    109,
+    60
+   ],
+   "canvas_after": [
+    95,
+    95
+   ],
+   "margins_after_px": {
+    "top": 20,
+    "left": 10,
+    "bottom": 21,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.7,
+    "ring_pixels": 420,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 47,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "retour-client",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/10_retour_client.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/retour-client__10_retour_client.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    70,
+    55
+   ],
+   "canvas_after": [
+    83,
+    83
+   ],
+   "margins_after_px": {
+    "top": 15,
+    "left": 8,
+    "bottom": 16,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 0.2,
+    "ring_pixels": 22,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "satisfaction",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/11_satisfaction.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/satisfaction__11_satisfaction.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    63,
+    60
+   ],
+   "canvas_after": [
+    75,
+    75
+   ],
+   "margins_after_px": {
+    "top": 9,
+    "left": 8,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.015,
+   "background_stats": {
+    "background_pct": 0.1,
+    "ring_pixels": 16,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 37,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "fidelite",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/12_fidelite.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/fidelite__12_fidelite.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    55,
+    51
+   ],
+   "canvas_after": [
+    64,
+    64
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 6,
+    "bottom": 9,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 32,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "fournisseur",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/01_fournisseur.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/fournisseur__01_fournisseur.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    61,
+    51
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 12,
+    "left": 7,
+    "bottom": 13,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "nouveau-fournisseur",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/02_nouveau_fournisseur.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/nouveau-fournisseur__02_nouveau_fournisseur.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    59,
+    49
+   ],
+   "canvas_after": [
+    70,
+    70
+   ],
+   "margins_after_px": {
+    "top": 12,
+    "left": 7,
+    "bottom": 13,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "achat",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/03_achat.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/achat__03_achat.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    67,
+    53
+   ],
+   "canvas_after": [
+    80,
+    80
+   ],
+   "margins_after_px": {
+    "top": 15,
+    "left": 8,
+    "bottom": 16,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 40,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "demande-achat",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/04_demande_achat.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/demande-achat__04_demande_achat.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    66,
+    62
+   ],
+   "canvas_after": [
+    78,
+    78
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.137,
+   "background_stats": {
+    "background_pct": 0.3,
+    "ring_pixels": 63,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 39,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "reception-marchandise",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/05_reception.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/reception-marchandise__05_reception.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    64,
+    62
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 11,
+    "left": 8,
+    "bottom": 11,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.004,
+   "background_stats": {
+    "background_pct": 0.2,
+    "ring_pixels": 46,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "livraison",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/06_livraison.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/livraison__06_livraison.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    99,
+    52
+   ],
+   "canvas_after": [
+    120,
+    120
+   ],
+   "margins_after_px": {
+    "top": 36,
+    "left": 12,
+    "bottom": 36,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 60,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "comparer",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/07_comparer.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/comparer__07_comparer.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    93,
+    62
+   ],
+   "canvas_after": [
+    108,
+    108
+   ],
+   "margins_after_px": {
+    "top": 27,
+    "left": 11,
+    "bottom": 28,
+    "right": 11
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.4,
+    "ring_pixels": 499,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 54,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "visite-fournisseur",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/08_visite_fournisseur.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/visite-fournisseur__08_visite_fournisseur.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    73,
+    61
+   ],
+   "canvas_after": [
+    87,
+    87
+   ],
+   "margins_after_px": {
+    "top": 13,
+    "left": 9,
+    "bottom": 13,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.055,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 12,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 43,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "negociation",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/09_negociation.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/negociation__09_negociation.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    80,
+    59
+   ],
+   "canvas_after": [
+    96,
+    96
+   ],
+   "margins_after_px": {
+    "top": 20,
+    "left": 10,
+    "bottom": 20,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.1,
+    "ring_pixels": 16,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 48,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "catalogue",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/10_catalogue.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/catalogue__10_catalogue.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    68,
+    57
+   ],
+   "canvas_after": [
+    81,
+    81
+   ],
+   "margins_after_px": {
+    "top": 14,
+    "left": 8,
+    "bottom": 14,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 40,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "tarifs",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/11_tarifs.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/tarifs__11_tarifs.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    59,
+    56
+   ],
+   "canvas_after": [
+    70,
+    70
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 7,
+    "bottom": 8,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.078,
+   "background_stats": {
+    "background_pct": 0.1,
+    "ring_pixels": 24,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "contrat",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/12_contrat.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/contrat__12_contrat.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    65,
+    59
+   ],
+   "canvas_after": [
+    77,
+    77
+   ],
+   "margins_after_px": {
+    "top": 11,
+    "left": 8,
+    "bottom": 11,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.038,
+   "background_stats": {
+    "background_pct": 0.5,
+    "ring_pixels": 52,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "stock",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/01_stock.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/stock__01_stock.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    93,
+    62
+   ],
+   "canvas_after": [
+    83,
+    83
+   ],
+   "margins_after_px": {
+    "top": 13,
+    "left": 8,
+    "bottom": 13,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.5,
+    "ring_pixels": 365,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 41,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "produit",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/02_produit.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/produit__02_produit.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    92,
+    62
+   ],
+   "canvas_after": [
+    67,
+    67
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 7,
+    "bottom": 7,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.9,
+    "ring_pixels": 347,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 33,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "categories",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/03_categories.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/categories__03_categories.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    97,
+    62
+   ],
+   "canvas_after": [
+    113,
+    113
+   ],
+   "margins_after_px": {
+    "top": 29,
+    "left": 11,
+    "bottom": 30,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.1,
+    "ring_pixels": 494,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 56,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "inventaire",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/05_inventaire.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/inventaire__05_inventaire.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    94,
+    62
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 12,
+    "bottom": 8,
+    "right": 12
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.2,
+    "ring_pixels": 496,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "entree-stock",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/07_entree_stock.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/entree-stock__07_entree_stock.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    105,
+    62
+   ],
+   "canvas_after": [
+    78,
+    78
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.1,
+    "ring_pixels": 579,
+    "components_removed": 5
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 39,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "sortie-stock",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/08_sortie_stock.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/sortie-stock__08_sortie_stock.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    103,
+    62
+   ],
+   "canvas_after": [
+    121,
+    121
+   ],
+   "margins_after_px": {
+    "top": 30,
+    "left": 12,
+    "bottom": 31,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 3.6,
+    "ring_pixels": 487,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 60,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "emplacement",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/10_emplacement.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/emplacement__10_emplacement.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    48,
+    57
+   ],
+   "canvas_after": [
+    70,
+    70
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 13,
+    "bottom": 8,
+    "right": 13
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.136,
+   "background_stats": {
+    "background_pct": 0.2,
+    "ring_pixels": 38,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "code-barres",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/11_code_barres.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/code-barres__11_code_barres.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    76,
+    48
+   ],
+   "canvas_after": [
+    91,
+    91
+   ],
+   "margins_after_px": {
+    "top": 23,
+    "left": 9,
+    "bottom": 24,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 45,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "scan",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/12_scan.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/scan__12_scan.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    65,
+    55
+   ],
+   "canvas_after": [
+    77,
+    77
+   ],
+   "margins_after_px": {
+    "top": 13,
+    "left": 8,
+    "bottom": 13,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "insight",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/02_insight.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/insight__02_insight.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    95,
+    63
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 8,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 6.5,
+    "ring_pixels": 328,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "recommandation",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/03_recommandation.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/recommandation__03_recommandation.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    58,
+    59
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 9,
+    "bottom": 8,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "decision",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/04_decision.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/decision__04_decision.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    71,
+    60
+   ],
+   "canvas_after": [
+    85,
+    85
+   ],
+   "margins_after_px": {
+    "top": 13,
+    "left": 9,
+    "bottom": 14,
+    "right": 9
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 42,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "action-recommandee",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/05_action_recommandee.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/action-recommandee__05_action_recommandee.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    49,
+    60
+   ],
+   "canvas_after": [
+    72,
+    72
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 13,
+    "bottom": 8,
+    "right": 14
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 36,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "priorite",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/07_priorite.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/priorite__07_priorite.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    97,
+    63
+   ],
+   "canvas_after": [
+    75,
+    75
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 8,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 5.7,
+    "ring_pixels": 342,
+    "components_removed": 2
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 37,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "explication",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/08_explication.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/explication__08_explication.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    62,
+    63
+   ],
+   "canvas_after": [
+    78,
+    78
+   ],
+   "margins_after_px": {
+    "top": 8,
+    "left": 10,
+    "bottom": 8,
+    "right": 10
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 0.1,
+    "ring_pixels": 31,
+    "components_removed": 3
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 39,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "donnees-a-jour",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/09_donnees_a_jour.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/donnees-a-jour__09_donnees_a_jour.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    64,
+    57
+   ],
+   "canvas_after": [
+    76,
+    76
+   ],
+   "margins_after_px": {
+    "top": 11,
+    "left": 8,
+    "bottom": 11,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": 0.0,
+   "background_stats": {
+    "background_pct": 0.0,
+    "ring_pixels": 5,
+    "components_removed": 0
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 38,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "donnees-partielles",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/10_donnees_partielles.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/donnees-partielles__10_donnees_partielles.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    56,
+    55
+   ],
+   "canvas_after": [
+    66,
+    66
+   ],
+   "margins_after_px": {
+    "top": 7,
+    "left": 7,
+    "bottom": 7,
+    "right": 7
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 0.3,
+    "ring_pixels": 26,
+    "components_removed": 1
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 33,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  },
+  {
+   "function_id": "analyse",
+   "source": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/12_analyse.png",
+   "candidate": "docs/design/icons/candidates-technical/fix_background_lowres/analyse__12_analyse.png",
+   "fix_class": "FIX_BACKGROUND_LOWRES",
+   "native_before": [
+    90,
+    60
+   ],
+   "canvas_after": [
+    71,
+    71
+   ],
+   "margins_after_px": {
+    "top": 9,
+    "left": 7,
+    "bottom": 9,
+    "right": 8
+   },
+   "corners_transparent": true,
+   "drawing_mean_abs_diff_on_white": null,
+   "background_stats": {
+    "background_pct": 6.5,
+    "ring_pixels": 443,
+    "components_removed": 4
+   },
+   "status": "CANDIDATE_TECHNICAL_TO_VALIDATE",
+   "safe_css_size_px": 35,
+   "defects_not_fixable_here": [
+    "basse résolution (≤ 112 px, flou à 48–64 px)"
+   ],
+   "style_warning": null
+  }
+ ]
+}
