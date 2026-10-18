@@ -34,8 +34,11 @@ def registry():
 
 def image_facts(path):
     raw = Path(path).read_bytes()
-    f = {'bytes': len(raw), 'sha256_16': sha(raw)[:16]}
     ext = Path(path).suffix.lower()
+    # text assets (SVG) are fingerprinted with LF line endings: the same file must give the same fingerprint on Windows (CRLF checkout) and on Linux
+    f = {'bytes': len(raw), 'sha256_16': sha(raw.replace(b'
+', b'
+') if ext == '.svg' else raw)[:16]}
     if ext == '.svg':
         text = raw.decode('utf-8', 'replace'); m = re.search(r'viewBox="([^"]+)"', text)
         f.update(kind='svg', vector=True, viewBox=m.group(1) if m else None); return f
