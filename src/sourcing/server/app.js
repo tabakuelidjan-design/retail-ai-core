@@ -127,6 +127,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (mime.startsWith('text/') || /\.(txt|csv)$/i.test(name)) return json(res, 200, { text: buf.toString('utf8'), pages: null, pageCount: null, note: null });
       if (mime.startsWith('image/')) {
         if (!ai?.enabled) return json(res, 200, { text: null, textSource: null, note: 'image documents need an AI reader (none configured): the photo stays as evidence; type what the paper says (Docs > Type from the paper)' });
+        if (actor.role !== 'OWNER') return json(res, 403, { error: 'OWNER_ONLY', message: 'only the owner can send a document to an external AI' });
         // a supplier document is CONFIDENTIAL: it leaves this server only with the owner's explicit consent for THIS image
         if (b.consent !== true) return json(res, 428, { error: 'CONSENT_REQUIRED', provider: ai.name, region: ai.region, note: `this image would be sent to ${ai.name} (${ai.region}) to be read` });
         try {
@@ -138,6 +139,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     }
     if (p === '/api/ai/describe' && m === 'POST') {
       if (!ai?.enabled) return json(res, 200, { status: 'DISABLED', suggestions: [], note: 'No AI provider configured: type a description, or choose the category yourself.' });
+      if (actor.role !== 'OWNER') return json(res, 403, { error: 'OWNER_ONLY', message: 'only the owner can send a photo to an external AI' });
       const b = await readBody(req);
       if (b.consent !== true) return json(res, 428, { error: 'CONSENT_REQUIRED', provider: ai.name, region: ai.region, note: `this photo would be sent to ${ai.name} (${ai.region}) to be analysed` });
       try { return json(res, 200, await callProvider(ai, 'describe', { imageBase64: b.imageBase64, imageMime: b.imageMime, text: b.text, task: 'recognise product' }, { dataClass: DATA_CLASS.CONFIDENTIAL })); } catch (e) { if (e instanceof ProviderPolicyError) return json(res, 403, { error: e.code }); throw e; }
