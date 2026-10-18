@@ -219,6 +219,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
 
     // ---- photos (stored by SHA-256; the module keeps only the reference)
     if (p === '/api/uploads' && m === 'POST') {
+      const cap = capabilitiesOf(user); if (!cap.prepare && !cap.canReceive) throw new ProcurementError('FORBIDDEN', 'your access cannot store photos: it needs to prepare purchases or receive goods');
       const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
       if (!IMAGE_EXT[type]) return send(res, 415, { error: 'UNSUPPORTED_MEDIA', message: 'JPEG, PNG or WebP only' });
       const raw = await readRaw(req, maxUpload);
