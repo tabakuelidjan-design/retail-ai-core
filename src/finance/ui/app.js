@@ -1119,7 +1119,7 @@ async function viewDoc(id) {
     !isQ && d.settlementView ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Paid'), h('span', { class: 'fin-value' }, `${d.settlementView.paid} ${cur}`)) : null,
     !isQ && d.settlementView && d.settlement.creditedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Credited'), h('span', { class: 'fin-value' }, `${d.settlementView.credited} ${cur}`)) : null,
     !isQ && d.settlementView && d.settlement.refundedCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'Refunded'), h('span', { class: 'fin-value' }, `${d.settlementView.refunded} ${cur}`)) : null,
-    !isQ && d.settlementView && d.settlement.refundableCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'To refund'), h('span', { class: 'fin-value', style: 'color:var(--warn,#b45309)' }, `${d.settlementView.refundable} ${cur}`)) : null,
+    !isQ && d.settlementView && d.settlement.refundableCents ? h('div', { class: 'fin-row' }, h('span', { class: 'fin-label' }, 'To refund'), h('span', { class: 'fin-value', style: 'color:var(--nd-warning)' }, `${d.settlementView.refundable} ${cur}`)) : null,
     !isQ && d.settlementView ? h('div', { class: 'fin-row total' }, h('span', { class: 'fin-label' }, 'Amount due'), h('span', { class: `fin-primary ${d.settlement.remainingCents > 0 ? 'due' : 'settled'}`, style: 'font-size:20px' }, `${d.settlementView.remaining} ${cur}`)) : null,
   ].filter(Boolean);
   box.appendChild(h('div', { class: 'grid detailgrid', style: 'margin-top:16px' }, h('div', { class: 'card' }, h('h2', null, 'Lines'), linesTable(d)),

@@ -1,5 +1,8 @@
 /* Nordla Design System v1 (validated 2026-10-17: "Nordla Core - Dashboard Desktop" + "Nordla Core Mobile / Module Finance").
-   ONE source of tokens and shared components for every Nordla screen. Plain CSS, no framework, same-origin fonts (strict CSP).
+   ONE source of tokens and shared components for EVERY Nordla module (Core, Finance, Analytics, Growth, Stock & Achats, China
+   Sourcing...): this file lives in src/shared and every module server serves it at /nordla-ds.css through readNordlaShared().
+   Modules never define colours of their own: a module stylesheet only refers to --nd-* tokens (legacy variable names are mapped
+   onto them in src/shared/nordla-tokens.css). Changing a value here changes it in every module. Plain CSS, no framework, same-origin fonts (strict CSP).
    Rules: light neutral backgrounds (no cream, no dark green menu, no black), bronze as the only accent, no CSS gradients or glow,
    official Nordla icons shown as they are (never recoloured). Contrast: every text token meets WCAG AA on its background.
    Brand (2026-10-17, official pack NORDLA Brand Assets V1, src/shared/assets/nordla/brand, files unchanged): the bronze ribbon
@@ -31,6 +34,9 @@
   --nd-navy: #0F2A52;
   --nd-soft-white: #F8F5ED;
   --nd-ink: #111827;             /* the wordmark "Nordla" (= --nd-text) */
+  --nd-on-accent: #FFFFFF;       /* text / icons drawn ON the bronze accent, the navy or a filled status colour */
+  --nd-scrim: rgba(17, 24, 39, 0.45); /* behind dialogs and sheets */
+  --nd-shadow-lg: 0 8px 24px -8px rgba(17, 24, 39, 0.16), 0 2px 6px -2px rgba(17, 24, 39, 0.06); /* dialogs, menus, toasts */
   /* typography: Montserrat self-hosted (UI), system fallback */
   --nd-font: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --nd-fs-xs: 12px; --nd-fs-sm: 13px; --nd-fs-md: 15px; --nd-fs-lg: 18px; --nd-fs-xl: 24px; --nd-fs-2xl: 30px;
@@ -170,7 +176,7 @@ a.nd-module:hover { border-color: var(--nd-bronze-light); }
 .nd-guardian b { color: var(--nd-text); display: block; font-size: var(--nd-fs-sm); }
 
 /* ---------- buttons, answers ---------- */
-.nd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 var(--nd-s4); border-radius: var(--nd-r-sm); border: 0; background: var(--nd-bronze); color: #fff; font: inherit; font-weight: 650; font-size: var(--nd-fs-sm); cursor: pointer; text-decoration: none; }
+.nd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 var(--nd-s4); border-radius: var(--nd-r-sm); border: 0; background: var(--nd-bronze); color: var(--nd-on-accent); font: inherit; font-weight: 650; font-size: var(--nd-fs-sm); cursor: pointer; text-decoration: none; }
 .nd-btn:hover { background: var(--nd-bronze-strong); }
 .nd-btn[disabled] { opacity: 0.55; cursor: default; }
 .nd-btn.is-secondary { background: var(--nd-card); color: var(--nd-text); border: var(--nd-line); }
