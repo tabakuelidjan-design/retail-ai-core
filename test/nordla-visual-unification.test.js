@@ -24,6 +24,7 @@ const PAGES = {
   'src/analytics-premium/ui/index.html': ['/nordla-ds.css', '/nordla-tokens.css', '/style.css'],
   'src/growth/ui/index.html': ['/nordla-ds.css', '/nordla-tokens.css', '/style.css'],
   'src/procurement/ui/index.html': ['nordla-ds.css', 'nordla-tokens.css', 'app.css'],
+  'src/social/ui/index.html': ['/nordla-ds.css', '/nordla-tokens.css', '/app.css'],
   'src/sourcing/ui/index.html': ['/nordla-ds.css', '/nordla-tokens.css', '/app.css'],
   'src/sourcing/nordla-ui/nordla.html': ['/nordla-ds.css'],
 };
