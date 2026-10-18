@@ -20,9 +20,7 @@ const inv = JSON.parse(read('docs/design/icons/INVENTORY.json'));
 const cat = JSON.parse(read('src/shared/assets/nordla/library/catalog.json'));
 const registry = (name) => { const m = new RegExp(`const ${name} = \\{([\\s\\S]*?)\\n  \\};`).exec(read('src/shared/nordla-icon.js')); return Object.fromEntries([...m[1].matchAll(/(\w+):\s*'([^']+)'/g)].map((x) => [x[1], x[2]])); };
 const ICONS = registry('ICONS'); const DEFECTIVE = registry('DEFECTIVE');
-const sha16 = (f) => { let b = readFileSync(p(f)); if (f.endsWith('.svg')) b = Buffer.from(b.toString('latin1').replace(/
-/g, '
-'), 'latin1'); return createHash('sha256').update(b).digest('hex').slice(0, 16); }; // SVG: LF-normalised (Windows checkouts are CRLF)
+const sha16 = (f) => { let b = readFileSync(p(f)); if (f.endsWith('.svg')) b = Buffer.from(b.toString('latin1').split(String.fromCharCode(13, 10)).join(String.fromCharCode(10)), 'latin1'); return createHash('sha256').update(b).digest('hex').slice(0, 16); }; // SVG: LF-normalised (Windows checkouts are CRLF)
 const IMAGE = /\.(png|webp|svg|jpg|ico)$/i;
 
 test('GI-1 the inventory describes the REAL files: every listed file exists with its fingerprint, and no icon file of the known sets is missing from it', () => {

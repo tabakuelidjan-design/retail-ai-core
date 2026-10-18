@@ -27,7 +27,7 @@ Total : **317 fichiers** · **101 fonctions** du catalogue sans aucune icône ut
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_a_faire.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `aFaire` |
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_achats.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `achats` · utilisée par : finance |
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_after_sales.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `afterSales` |
-| `src/shared/assets/nordla/official-icons/01_navigation_modules_approval.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `approval` |
+| `src/shared/assets/nordla/official-icons/01_navigation_modules_approval.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `approval` · utilisée par : sourcing (app terrain + /nordla) |
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_banque_et_caisse.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `banqueEtCaisse` · utilisée par : finance |
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_buying_suppliers.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `buyingSuppliers` · utilisée par : sourcing (app terrain + /nordla) |
 | `src/shared/assets/nordla/official-icons/01_navigation_modules_ce_qui_a_change.png` | 256×256 | oui | validée (pack officiel V1, en production) | clé `ceQuiAChange` · utilisée par : analyses |

@@ -1636,7 +1636,9 @@
     "#d05030"
    ],
    "registry_key": "approval",
-   "used_by": []
+   "used_by": [
+    "sourcing (app terrain + /nordla)"
+   ]
   },
   {
    "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_banque_et_caisse.png",
@@ -11122,7 +11124,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2460,
-   "sha256_16": "9b96bd4cfd11063c",
+   "sha256_16": "51d5f13b4c25a627",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 1024 1024"
@@ -11132,7 +11134,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2460,
-   "sha256_16": "b4ea5ddb98bf356c",
+   "sha256_16": "223e66d2054143f2",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 1024 1024"
@@ -11142,7 +11144,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2460,
-   "sha256_16": "fb8b8c8b85c9a73c",
+   "sha256_16": "47ee9ab0e92a57d0",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 1024 1024"
@@ -11152,7 +11154,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2743,
-   "sha256_16": "cdceb2c4ebadd0b8",
+   "sha256_16": "a498ff5c89e83fa8",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 1080 300"
@@ -11162,7 +11164,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2695,
-   "sha256_16": "33a16d02a6ee24d4",
+   "sha256_16": "0819326d02a730f1",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 1080 300"
@@ -11172,7 +11174,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 1289,
-   "sha256_16": "d0ca8c29ae100c7c",
+   "sha256_16": "40df16a995da6a1c",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 464 464"
@@ -11182,7 +11184,7 @@
    "set": "brand",
    "status": "IDENTITY_ASSET",
    "bytes": 2338,
-   "sha256_16": "e2adefe0b818dabd",
+   "sha256_16": "e6d6a56ae9a14f22",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 464 464"
@@ -11350,7 +11352,7 @@
    "set": "module-assets",
    "status": "APP_ICON",
    "bytes": 183,
-   "sha256_16": "ec1df13c4ac63de4",
+   "sha256_16": "982d3d5e65197bd2",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 64 64"
@@ -11360,7 +11362,7 @@
    "set": "module-assets",
    "status": "APP_ICON",
    "bytes": 183,
-   "sha256_16": "af2870438ede9dd1",
+   "sha256_16": "1af751f9471b90c2",
    "kind": "svg",
    "vector": true,
    "viewBox": "0 0 96 96"

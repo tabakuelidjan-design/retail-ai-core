@@ -36,9 +36,7 @@ def image_facts(path):
     raw = Path(path).read_bytes()
     ext = Path(path).suffix.lower()
     # text assets (SVG) are fingerprinted with LF line endings: the same file must give the same fingerprint on Windows (CRLF checkout) and on Linux
-    f = {'bytes': len(raw), 'sha256_16': sha(raw.replace(b'
-', b'
-') if ext == '.svg' else raw)[:16]}
+    f = {'bytes': len(raw), 'sha256_16': sha(raw.replace(bytes([13, 10]), bytes([10])) if ext == '.svg' else raw)[:16]}
     if ext == '.svg':
         text = raw.decode('utf-8', 'replace'); m = re.search(r'viewBox="([^"]+)"', text)
         f.update(kind='svg', vector=True, viewBox=m.group(1) if m else None); return f
