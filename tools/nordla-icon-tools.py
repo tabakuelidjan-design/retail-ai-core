@@ -5,6 +5,7 @@
   python tools/nordla-icon-tools.py candidates    -> docs/design/icons/candidates-technical/  (TECHNICAL clean-ups of files the audit marked "to fix"; never wired anywhere)
   python tools/nordla-icon-tools.py sharpness     -> docs/design/icons/SHARPNESS.json + SHARPNESS.md + sheets
   python tools/nordla-icon-tools.py gallery       -> docs/design/icons/galerie-complete.html
+  python tools/nordla-icon-tools.py modulemap     -> docs/design/icons/MODULE-ICON-MAP.md
 
 Rules kept: validated files are never modified (candidates are written to their own folder); a bitmap is never presented as vector; no colour, proportion or stroke is changed.
 """
@@ -223,6 +224,9 @@ def write_classification_md(data):
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else ''
     if cmd == 'inventory': inventory()
+    elif cmd == 'modulemap':
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('nordla_icon_modulemap', ROOT / 'tools' / 'nordla-icon-tools-modulemap.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); m.modulemap(globals())
     elif cmd == 'gallery':
         import importlib.util
         spec = importlib.util.spec_from_file_location('nordla_icon_gallery', ROOT / 'tools' / 'nordla-icon-tools-gallery.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); m.gallery(globals())

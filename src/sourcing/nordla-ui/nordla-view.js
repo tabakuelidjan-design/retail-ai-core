@@ -28,7 +28,7 @@ export const MODULE_META = Object.freeze({
   marketing: { icon: 'growth', short: 'Propositions de campagne' },
   creative: { icon: null, initial: 'C', short: 'Visuels produit' },
   parle: { icon: 'parleANordla', short: 'Questions en texte, réponses sourcées' },
-  validations: { icon: 'decisionLedger', short: 'Décisions et approbations' },
+  validations: { icon: 'approval', short: 'Décisions et approbations' },
   social: { icon: null, initial: 'S', short: 'Calendrier et état des publications' },
   activation: { icon: 'synchronisation', short: 'Connexions aux réseaux' },
   growth: { icon: 'growth', short: 'Priorités de vente' },
