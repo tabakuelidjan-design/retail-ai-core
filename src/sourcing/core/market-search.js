@@ -53,7 +53,7 @@ const range = (xs) => { const by = new Map(); for (const p of xs) { const k = `$
  */
 export function summarizeMarketEvidence(searches, { landedPerUnitEurMinor = null } = {}) {
   const done = (searches ?? []).filter((s) => s.status === SEARCH_STATUS.DONE); const evidence = done.flatMap((s) => (s.evidence ?? []).map((e) => ({ ...e, searchId: s.id })));
-  const bucket = (regions) => { const es = evidence.filter((e) => regions.includes(regionOf(e.country))); const count = (t) => es.filter((e) => e.matchType === t).length; const sellers = [...new Map(es.map((e) => [`${e.seller ?? e.source}|${e.country}`, { seller: e.seller, source: e.source, country: e.country, type: e.sellerType }])).values()];
+  const bucket = (regions) => { const es = evidence.filter((e) => regions.includes(regionOf(e.country)) && !e.specs?.excluded); /* listings flagged as lots / accessories / aberrant prices stay in the evidence but never enter a count or a price range */ const count = (t) => es.filter((e) => e.matchType === t).length; const sellers = [...new Map(es.map((e) => [`${e.seller ?? e.source}|${e.country}`, { seller: e.seller, source: e.source, country: e.country, type: e.sellerType }])).values()];
     const countries = [...new Set(es.map((e) => e.country))].sort(); const best = es.reduce((a, e) => Math.max(a, RANK[e.matchType]), 0);
     return { exact: count(MATCH.EXACT_MATCH), probable: count(MATCH.PROBABLE_MATCH), similar: count(MATCH.SIMILAR_PRODUCT), total: es.length, countries, sellers, brands: [...new Set(es.map((e) => e.brand).filter(Boolean))], priceRanges: range(es.map((e) => e.price).filter(Boolean)), strongest: best === 3 ? MATCH.EXACT_MATCH : best === 2 ? MATCH.PROBABLE_MATCH : best === 1 ? MATCH.SIMILAR_PRODUCT : null,
       verifiedExact: es.some((e) => e.matchType === MATCH.EXACT_MATCH && e.confidence === 'HIGH') }; };
@@ -78,6 +78,6 @@ export function marketIdentityGap(state) {
 export function recordSearchRequest(s, ev, at) {
   const list = (s.marketSearches ??= []); const id = `ms-${1 + Math.max(0, ...list.map((x) => Number(String(x.id).slice(3)) || 0))}`;
   const rec = { id, requestedAt: at, completedAt: null, status: ev.status ?? SEARCH_STATUS.PROVIDER_NOT_CONFIGURED, provider: ev.provider ?? null, input: ev.input ?? null, outgoing: ev.outgoing ?? null, consent: ev.consent === true, evidence: [], note: ev.note ?? null };
-  if (ev.status === SEARCH_STATUS.DONE || ev.status === SEARCH_STATUS.ERROR) { rec.completedAt = at; rec.evidence = (ev.evidence ?? []).map((e) => sanitizeEvidence(e, { provider: ev.provider })).filter(Boolean); if (ev.error) rec.error = String(ev.error); }
+  if (ev.status === SEARCH_STATUS.DONE || ev.status === SEARCH_STATUS.ERROR) { rec.completedAt = at; rec.evidence = (ev.evidence ?? []).map((e) => sanitizeEvidence(e, { provider: ev.provider })).filter(Boolean); if (ev.error) rec.error = String(ev.error); if (ev.radar && typeof ev.radar === 'object') rec.radar = ev.radar; }
   list.push(rec); return rec;
 }

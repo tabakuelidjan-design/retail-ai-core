@@ -49,7 +49,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
   return { ok: false, status: st.last_success_at == null ? 'NO_OFFSITE_COPY_YET' : 'STALE', ...base };
 }
 
-export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ market = null, backupStatus = null, token, gate = null, core = null, procurement = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -114,6 +114,13 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     if (p === '/api/safety/alerts' && m === 'GET') { // the cache, compacted, so the phone can keep it and match offline (shown there as CACHED)
       const { alerts, source } = safety ? await safety.get() : { alerts: null, source: { mode: 'OFFLINE_VERIFICATION_REQUIRED', fetchedAt: null } };
       return json(res, 200, { source, alerts: alerts ? alerts.map(compactAlert) : null });
+    }
+    // ---- Market radar: prices of comparable products in Belgium / Europe (text query to a search service the SERVER holds credentials for; no photo, no credential ever in a response). A search is a paid call: in hosted mode the writer-role rule above applies to it.
+    if (p === '/api/market/status' && m === 'GET') return json(res, 200, market ? market.status() : { enabled: false, provider: null, note: 'market search not configured on this server' });
+    if (p === '/api/market/search' && m === 'POST') {
+      if (!market) return json(res, 503, { error: 'NOT_CONFIGURED', message: "La recherche de prix n'est pas configurée sur ce serveur : rien n'a été cherché ni envoyé." });
+      try { return json(res, 200, await market.search(await readBody(req))); }
+      catch (e) { if (e && e.code && e.status && e.name !== 'SyntaxError' && e.constructor?.name === 'RadarError') return json(res, e.status, { error: e.code, message: e.message, ...(e.retryAfterSec ? { retryAfterSec: e.retryAfterSec } : {}) }, e.retryAfterSec ? { 'retry-after': String(e.retryAfterSec) } : {}); throw e; }
     }
     if (p === '/api/ai/status' && m === 'GET') return json(res, 200, { enabled: ai?.enabled === true, provider: ai?.enabled ? ai.name : null, region: ai?.enabled ? ai.region : null });
     if (p === '/api/safety/refresh' && m === 'POST') return safety ? json(res, 200, await safety.refresh({ maxReports: 26 })) : json(res, 503, { error: 'NO_SAFETY_ADAPTER' });

@@ -340,7 +340,16 @@ async function onClick(ev) {
   if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
   if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
-  if (act === 'market-run') return void (async () => { const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const r = await searchMarket(input, null); commit({ type: 'MARKET_SEARCH', status: r.status, provider: r.provider ?? null, input, outgoing: outgoingFields(input), consent: true, evidence: r.evidence, note: r.note ?? null }); S.flash = r.status === 'PROVIDER_NOT_CONFIGURED' ? 'Aucun service de recherche n’est configuré : rien n’a été cherché ni envoyé. La demande est notée.' : ''; render(); })();
+  if (act === 'market-run') return void (async () => { // paid search through the server (credentials stay there); one at a time; a failure never touches the case
+    if (S.marketBusy) return; const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const q = c.quotes?.at(-1); const sp = q && q.unitPrice !== undefined && q.unitPrice !== '' ? Number(String(q.unitPrice).replace(',', '.')) : NaN;
+    S.marketBusy = true; S.flash = ''; render();
+    try {
+      const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
+      commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes } });
+      S.flash = r.cached ? 'Résultat déjà obtenu récemment : aucune nouvelle recherche n’a été payée.' : '';
+    } catch (e) { S.flash = e.body?.message ?? (e.status ? `La recherche a échoué (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la recherche n’a pas eu lieu et rien n’a été perdu. Réessayez avec du réseau.'); }
+    finally { S.marketBusy = false; render(); }
+  })();
   if (act === 'vc-start') return void voice.start();
   if (act === 'vc-pause') return void voice.pause();
   if (act === 'vc-resume') return void voice.resume();

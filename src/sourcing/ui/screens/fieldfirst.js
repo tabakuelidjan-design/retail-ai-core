@@ -16,6 +16,7 @@ import { CATEGORIES } from '/core/taxonomy.js';
 import { planContext } from '/core/context-engine.js';
 import { isTurnOpen, segmentsOf } from '/core/turns.js';
 import { buildSearchInput, outgoingFields } from '/core/market-search.js';
+import { radarResultBlock } from './market-radar-view.js';
 import { buildProductHypothesis } from '/core/product-hypothesis.js';
 import { presentSuggestion, normalizeTiming } from '/core/suggestion-presenter.js';
 import { groupUnderstanding } from '/core/understanding.js';
@@ -232,9 +233,9 @@ function sheet(kind, A, c, fm) {
     const used = [['Nom', inp.name], ['Marque', inp.brand], ['Modèle / référence', inp.model], ['Fabricant', inp.manufacturerRef], ['Code-barres (GTIN)', inp.gtin]].filter(([, v]) => v).map(([k, v]) => `<div class="fm-li"><i class="fm-dot ok"></i><span>${k} : <b>${esc(v)}</b></span></div>`).join('');
     body = `<p class="fm-note">Savoir si ce produit, ou un produit vraiment comparable, est déjà vendu en Europe, d’abord en Belgique. C’est une action facultative : elle ne s’exécute que si vous la lancez, et elle n’interrompt pas la conversation.</p>
       <div class="fm-k2">Ce qui serait utilisé</div>${used || '<p class="fm-empty">Rien encore : donnez au moins un nom.</p>'}<p class="fm-note">Identification : <b>${inp.strength === 'MODEL' || inp.strength === 'GTIN' ? 'référence connue' : inp.strength === 'BRAND_NAME' ? 'marque et nom' : 'nom seulement'}</b>${inp.strength === 'NAME_ONLY' || inp.strength === 'BRAND_NAME' ? ' : le numéro de modèle exact améliorerait beaucoup la recherche (et Nordla peut vous le faire demander).' : '.'}</p>
-      <div class="fm-k2">Ce qui serait envoyé</div><p class="fm-note">Texte seulement (${out.text.map((k) => ({ name: 'nom', brand: 'marque', model: 'modèle', manufacturerRef: 'fabricant', gtin: 'code-barres' }[k] ?? k)).join(', ') || 'rien'}). La photo n’est jamais envoyée sans votre accord explicite.</p>
-      <div class="fm-k2">Service de recherche</div><p class="fm-note">Aucun service de recherche (ni de recherche par image) n’est configuré dans cette version : <b>rien n’est cherché ni envoyé</b>. L’interface et le modèle de preuves sont prêts pour un service approuvé.</p>
-      <div class="fm-btns">${btn('Noter la demande de recherche', 'market-run', undefined, 'fm-btn fm-primary')}</div>${last ? `<p class="fm-note">Dernière demande : ${esc(last.status === 'PROVIDER_NOT_CONFIGURED' ? 'impossible, aucun service configuré' : last.status)}.</p>` : ''}
+      <div class="fm-k2">Ce qui serait envoyé</div><p class="fm-note">Texte seulement (${out.text.map((k) => ({ name: 'nom', brand: 'marque', model: 'modèle', manufacturerRef: 'fabricant', gtin: 'code-barres' }[k] ?? k)).join(', ') || 'rien'}), depuis le serveur Nordla vers le service de recherche de prix (Google Shopping via DataForSEO). <b>Aucune photo n’est envoyée</b> : cette version ne cherche pas encore à partir de la photo.</p>
+      <div class="fm-btns">${btn(S.marketBusy ? 'Recherche en cours…' : 'Rechercher les prix en Europe', 'market-run', undefined, 'fm-btn fm-primary', S.marketBusy ? 'disabled' : '')}</div>${S.flash ? `<p class="fm-note fm-warnline">${esc(S.flash)}</p>` : ''}${last && !last.radar ? `<p class="fm-note">Dernière demande : ${esc(last.status === 'PROVIDER_NOT_CONFIGURED' ? 'impossible, aucun service configuré' : last.status)}.</p>` : ''}
+      ${radarResultBlock((c.marketSearches ?? []).filter((x) => x.radar).at(-1))}
       ${marketBlock({ marketPresence: A.marketPresence }, false)}
       <p class="fm-note"><b>Aucune correspondance trouvée ≠ non vendu en Europe.</b> La présence sur le marché n’est pas la conformité UE, ni la préparation Amazon, ni l’identité du produit.</p>`; }
   else if (kind === 'speaker') { title = 'Qui parlait ?'; const it = (c.conversations ?? []).flatMap((v) => v.items).find((i) => i.id === S.attrItem);
