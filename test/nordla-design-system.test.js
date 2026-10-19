@@ -90,6 +90,8 @@ test('tokens: validated palette, text contrast >= 4.5:1 on its backgrounds, no f
   const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   for (const fg of ['text', 'text-2', 'bronze', 'success', 'error']) for (const bg of ['bg', 'card', 'nav']) assert.ok(ratio(tok(fg), tok(bg)) >= 4.5, `${fg} on ${bg}: ${ratio(tok(fg), tok(bg)).toFixed(2)}`);
   for (const [fg, bg] of [['success', 'success-tint'], ['error', 'error-tint'], ['warning', 'warning-tint'], ['bronze-strong', 'bronze-tint']]) assert.ok(ratio(tok(fg), tok(bg)) >= 4.5, `${fg} on ${bg}`);
+  // owner rule (2026-10-19): backgrounds are white or a very light neutral grey. No cream, ivory or beige: every surface / tint token must be neutral or cool (red never exceeds blue by more than 6)
+  for (const n of ['bg', 'card', 'nav', 'bronze-tint', 'warning-tint', 'neutral-tint']) { const h = tok(n); const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); assert.ok(r - b <= 6, `--nd-${n} ${h} is warm (cream / beige)`); }
   assert.doesNotMatch(css, /gradient\(/i, 'no gradients');
   assert.doesNotMatch(css, /background:\s*#0{3,6}\b|background:\s*black/i, 'no black background');
   assert.doesNotMatch(css, /#(FFF8E7|FAF3E0|F5F0E6|FFFDD0|F5F5DC|1B4332|14532D)/i, 'no cream / dark-green');
@@ -122,3 +124,14 @@ test('brand: the official pack files, unchanged (sha-256 prefix), no active cont
   for (const m of css.matchAll(/\.nd-(?:brand-mark|core-hub img)[^{]*\{[^}]*width:\s*(\d+)px/g)) assert.ok(Number(m[1]) >= 32, m[0]);
 });
 const brandHtml = () => { const s = readFileSync(new URL('../src/sourcing/nordla-ui/nordla-ds.js', import.meta.url), 'utf8'); return s.slice(s.indexOf('export const brand')).split('\n')[0].replace('${BRAND.monogram}', '/nordla-assets/brand/nordla-monogram.svg'); };
+
+test('every module icon the dashboard names resolves to an official file that exists (no broken image on any module card)', async () => {
+  const { MODULE_META, ICON_FILES, iconUrl } = await import('../src/sourcing/nordla-ui/nordla-view.js');
+  const { existsSync } = await import('node:fs');
+  for (const [key, m] of Object.entries(MODULE_META)) {
+    if (!m.icon) continue;
+    assert.ok(ICON_FILES[m.icon], `${key}: icon "${m.icon}" is not in ICON_FILES (the card would render <img src="">)`);
+    assert.ok(iconUrl(m.icon), `${key}: no URL`);
+    assert.ok(existsSync(new URL(`../src/shared/assets/nordla/official-icons/${ICON_FILES[m.icon]}`, import.meta.url)), `${key}: ${ICON_FILES[m.icon]} does not exist`);
+  }
+});

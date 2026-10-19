@@ -19,7 +19,7 @@
   --nd-bronze: #95652F;          /* accent: active nav, primary buttons, links, focus (5.0:1 on white) */
   --nd-bronze-strong: #7C5226;   /* hover / pressed */
   --nd-bronze-light: #C49A60;    /* decoration only (rings, chart accents), never text */
-  --nd-bronze-tint: #F4ECE2;     /* active nav background, icon tiles */
+  --nd-bronze-tint: #F1F3F6;     /* active nav background, icon tiles: a very light COOL grey (owner rule 2026-10-19: white and very light grey only, never cream / ivory / beige); the bronze is carried by the text, the icon and the indicator */
   --nd-text: #111827;
   --nd-text-2: #5B6678;
   --nd-border: #E5E7EB;
@@ -28,7 +28,7 @@
   --nd-error: #B83A2F;           /* validated #C24135 darkened slightly: 4.46:1 on its tint failed WCAG AA */
   --nd-error-tint: #FBECEA;
   --nd-warning: #8A5A00;
-  --nd-warning-tint: #FBF1DD;
+  --nd-warning-tint: #EEF0F3;    /* neutral grey ground (no cream); the warning colour is the text */
   --nd-neutral-tint: #EEF0F3;
   /* brand palette (official pack): navy for dark logo / app-icon grounds, soft white for text on navy - never a page background */
   --nd-navy: #0F2A52;
@@ -197,3 +197,20 @@ a.nd-module:hover { border-color: var(--nd-bronze-light); }
 .nd-mnav a.is-parle { position: relative; }
 .nd-mnav a.is-parle .nd-mnav-fab { width: 56px; height: 56px; margin-top: -26px; border-radius: 50%; background: var(--nd-bronze); display: grid; place-items: center; box-shadow: 0 4px 14px rgba(124, 82, 38, 0.35); border: 4px solid var(--nd-card); }
 .nd-mnav a.is-parle .nd-mnav-fab img { width: 26px; height: 26px; }
+
+/* ---------- small phones (360-479 px): the status badge goes UNDER the module text so the description keeps the full width ---------- */
+@media (max-width: 479px) {
+  .nd-module { display: grid; grid-template-columns: 44px minmax(0, 1fr) 16px; column-gap: var(--nd-s3); row-gap: 6px; align-items: start; }
+  .nd-module-tile { grid-row: 1 / span 2; }
+  .nd-module-body { grid-column: 2; }
+  .nd-module .nd-badge { grid-column: 2; justify-self: start; }
+  .nd-module .nd-chevron { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+  .nd-module-desc { -webkit-line-clamp: 3; }
+}
+
+/* ---------- loading skeleton (flat grey blocks, no animation, no gradient) and retry ---------- */
+.nd-skel { display: block; background: var(--nd-neutral-tint); border-radius: var(--nd-r-sm); height: 14px; }
+.nd-skel.is-title { height: 28px; width: 40%; } .nd-skel.is-line { width: 70%; } .nd-skel.is-block { height: 120px; border-radius: var(--nd-r-md); }
+.nd-skel-grid { display: grid; gap: var(--nd-s3); grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); margin-top: var(--nd-s4); }
+.nd-skel-card { background: var(--nd-card); border: var(--nd-line); border-radius: var(--nd-r-md); padding: var(--nd-s4); display: grid; gap: var(--nd-s2); }
+.nd-alert.has-action { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-s3); flex-wrap: wrap; }

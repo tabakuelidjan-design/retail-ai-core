@@ -12,7 +12,7 @@ export const ICON_FILES = Object.freeze({
   produits: '01_navigation_modules_produits.png', explorer: '01_navigation_modules_explorer.png', fournisseur: '04_produits_commerce_fournisseur.png',
   compliance: '01_navigation_modules_compliance.png', growth: '01_navigation_modules_growth.png', security: '01_navigation_modules_security.png',
   recherche: '08_ui_utilities_recherche.png', decisionLedger: '01_navigation_modules_decision_ledger.png', dataHealth: '08_ui_utilities_data_health.png',
-  synchronisation: '08_ui_utilities_synchronisation.png',
+  synchronisation: '08_ui_utilities_synchronisation.png', approval: '01_navigation_modules_approval.png',
 });
 export const iconUrl = (name) => (ICON_FILES[name] ? `/nordla-assets/official-icons/${ICON_FILES[name]}` : null);
 
@@ -89,12 +89,15 @@ export function coreNodes({ status, modules }) {
   ];
 }
 
+/** Display names where the validated navigation says it differently from the server label (label only: keys, states and API are untouched). */
+export const DISPLAY_NAME = Object.freeze({ analytics: 'Analyses' });
+
 /** The module list exactly as the server reports it; navigable only where a screen exists for it. */
 export function moduleCards({ modules }) {
   return (modules ?? []).map((m) => {
     const meta = MODULE_META[m.key] ?? { icon: null, initial: (m.label ?? '?').slice(0, 1), short: '' };
     const href = meta.href ?? `#module/${m.key}`; // every module has its detail screen (state, what it does here, what is missing)
-    return { key: m.key, name: m.label, state: m.state, tone: STATE_TONE[m.state] ?? 'neutral', short: meta.short, detail: m.detail, icon: meta.icon, initial: meta.initial ?? null, href, external: Boolean(meta.href) };
+    return { key: m.key, name: DISPLAY_NAME[m.key] ?? m.label, state: m.state, tone: STATE_TONE[m.state] ?? 'neutral', short: meta.short, detail: m.detail, icon: meta.icon, initial: meta.initial ?? null, href, external: Boolean(meta.href) };
   });
 }
 
