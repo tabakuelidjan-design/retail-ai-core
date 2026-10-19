@@ -152,3 +152,12 @@ test('an assistant never approves or writes: only READ / PROPOSE tools, no decis
   const p2 = await a.call('propose_purchase_order', { sku, qty: 10 }); assert.equal(p2.executed, false);
   assert.equal(JSON.stringify([(await q.events()).length, (await q.stockRequests()).length, await q.purchaseOrders(), (await q.stockPositions()).positions]), before, 'proposals wrote nothing: no event, no request, no order, no movement');
 });
+
+test('kill switch: PROCUREMENT_DISABLED=1 turns the module OFF with no file opened and no data touched; unset, it comes back with its data', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nordla-h-'));
+  const on = await buildHostedProcurement({ dir, merchantId: MERCHANT, env: {} }); assert.match(on.status, /ON \(/); const before = readFileSync(join(dir, 'procurement', 'procurement.json'), 'utf8'); await on.close();
+  const off = await buildHostedProcurement({ dir, merchantId: MERCHANT, env: { PROCUREMENT_DISABLED: '1' } });
+  assert.equal(off.handler, null); assert.equal(off.assistant, null); assert.match(off.status, /OFF \(DISABLED\)/); assert.equal(readFileSync(join(dir, 'procurement', 'procurement.json'), 'utf8'), before, 'the data file is byte-identical');
+  const fresh = mkdtempSync(join(tmpdir(), 'nordla-h-')); await buildHostedProcurement({ dir: fresh, merchantId: MERCHANT, env: { PROCUREMENT_DISABLED: '1' } }); assert.ok(!existsSync(join(fresh, 'procurement')), 'disabled from the start: nothing is even created');
+  const back = await buildHostedProcurement({ dir, merchantId: MERCHANT, env: {} }); assert.match(back.status, /ON \(/); assert.equal((await back.procurement.queries.locations()).length, 2);
+});

@@ -14,6 +14,9 @@ import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
+// Who may CREATE records in the Core (a campaign proposal, a local visual). VIEWER and ACCOUNTANT read; they do not write. (Decisions and approvals have their own, stricter role tables.)
+const CAN_PROPOSE = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
+const mayPropose = (actor) => { if (!CAN_PROPOSE.has(actor?.role)) throw new CoreError('FORBIDDEN_ROLE', 'votre rôle peut consulter mais pas créer de proposition ni de visuel', 403); };
 const MAX = 64 * 1024;
 const MAX_PHOTO_BODY = 9 * 1024 * 1024; // a 6 MB photo, base64 in JSON
 
@@ -36,7 +39,7 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, env = process.env }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, social = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
@@ -51,6 +54,16 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     const b = branding ? await branding.status() : { status: 'NOT_CONNECTED' };
     const c = creativeCapability(env);
     const row = (key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
+    // Social Publishing: read-only counts from its own app's data directory, only when the operator pointed this server at it (SOCIAL_DATA_DIR). Otherwise it is not connected - said so.
+    let socialRow;
+    if (!social) socialRow = row('social', 'Publication sociale', 'NON RACCORDÉ', 'Social Publishing est une application à part (npm run social, sur le poste, avec sa propre approbation signée). Elle n’est pas reliée à ce serveur : rien n’est publié d’ici.');
+    else {
+      try {
+        const s = await social.summary();
+        const sim = s.mode === 'live' ? 'mode réel' : s.mode === 'simulate' ? 'mode SIMULÉ (rien n’est publié)' : 'aucune plateforme connectée (publication à la main)';
+        socialRow = row('social', 'Publication sociale', s.error ? 'À VÉRIFIER' : 'LECTURE SEULE', `${s.total} publication(s) au calendrier, ${s.awaiting_owner} à valider par vous dans l’application Social ; prochaine : ${s.next_due ?? 'aucune planifiée'} ; ${sim}. Approuver, planifier et publier se font uniquement dans l’application Social, jamais depuis cet écran.${s.error ? ' Certaines publications n’ont pas pu être lues.' : ''}`);
+      } catch { socialRow = row('social', 'Publication sociale', 'À VÉRIFIER', 'Le dossier de Social Publishing n’a pas pu être lu.'); }
+    }
     return { modules: [
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
       row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE),
@@ -62,6 +75,11 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       creation && creation.status().status === 'LOCAL_AVAILABLE'
         ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
         : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
+      row('parle', 'Parle à Nordla', 'LIMITÉ', 'Questions en texte (dictée du navigateur si activée), réponses calculées avec leurs sources, sans modèle d’IA : dossiers d’achat, décisions, Stock / Achats, Finance et Analyses quand ils sont raccordés. Marketing et Création ne sont pas interrogeables ; il ne commande, ne paie ni n’approuve jamais.'),
+      row('validations', 'Règles et validations', runtime ? 'LIMITÉ' : 'NON CONFIGURÉ', runtime ? 'Décisions humaines du Core (journal), approbation nommée des commandes d’achat, règles de marque, décisions de campagne et de visuel : chacune a son propre contrôle ; il n’existe pas encore de file d’approbation unique. Finance n’a pas de double contrôle (la même personne peut créer, approuver et envoyer).' : String(configError ?? '')),
+      socialRow,
+      row('activation', 'Diffusion et connexions', 'NON RACCORDÉ', 'Adaptateurs Instagram, TikTok et Google testés avec des simulations ; aucun compte connecté, aucun écran de connexion (outil en ligne de commande seulement). Rien n’est diffusé.'),
+      row('growth', 'Développement des ventes', 'NON RACCORDÉ', 'Écran local séparé (npm run growth) sans authentification : volontairement non exposé sur ce serveur.'),
     ] };
   }
 
@@ -85,11 +103,12 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/branding/check' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await branding.checkText(String(b.text ?? '').slice(0, 4000))); return true; }
       if (p === '/api/core/branding/approve' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } json(res, 200, await branding.approve(actor)); return true; }
       if (p === '/api/core/campaigns' && m === 'GET') { json(res, 200, { campaigns: campaigns ? await campaigns.list() : [] }); return true; }
-      if (p === '/api/core/campaigns' && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
+      if (p === '/api/core/campaigns' && m === 'POST') { mayPropose(actor); if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.prepare({ product: b.product, objective: b.objective, audience: b.audience, channel: b.channel, copy: String(b.copy ?? '').slice(0, 2000) }, actor)); return true; }
       const cd = /^\/api\/core\/campaigns\/([^/]{1,200})\/decision$/.exec(p);
       if (cd && m === 'POST') { if (!campaigns) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await campaigns.decide(decodeURIComponent(cd[1]), b, actor)); return true; }
       if (p === '/api/core/creation' && m === 'GET') { json(res, 200, creation ? { ...creation.status(), creations: await creation.list() } : { status: 'NOT_CONNECTED', creations: [] }); return true; }
       if (p === '/api/core/creation' && m === 'POST') {
+        mayPropose(actor);
         if (!creation) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         const b = await body(req, MAX_PHOTO_BODY);
         const b64 = String(b.photo ?? '').replace(/^data:image\/(jpeg|png);base64,/, '');

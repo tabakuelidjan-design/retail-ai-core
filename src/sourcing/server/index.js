@@ -64,7 +64,9 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  let social = null; // Social Publishing's own data directory, READ ONLY, only when the operator names it; never a way to approve or publish
+  if (String(env.SOCIAL_DATA_DIR ?? '').trim()) { const { createSocialReader } = await import('../../social/reader.js'); social = createSocialReader({ dir: String(env.SOCIAL_DATA_DIR).trim(), mode: env.SOCIAL_MODE || 'none' }); }
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, social, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
@@ -90,10 +92,19 @@ export async function buildReaders({ env, dir, merchantId, log = () => {}, sched
   return { finance, analytics };
 }
 
+/** Hosted on Railway, the whole data directory (cases, photos, workspace, Core journal, backups) must sit inside the attached volume; otherwise refuse to start
+ *  (a loud failure at deploy beats supplier notes silently lost at the next one). Off Railway nothing is refused (checkJournalDeployment). */
+export function assertDataOnVolume({ env, dir }) {
+  const placement = checkJournalDeployment({ env, dir });
+  if (!placement.ok) throw Object.assign(new Error(`DATA_NOT_ON_A_VOLUME: ${placement.reason}`), { code: 'DATA_NOT_ON_A_VOLUME' });
+  return placement;
+}
+
 export async function startSourcingServer({ env = process.env, log = console.log, port = Number(env.SOURCING_PORT || (isHosted(env) ? env.PORT : '') || 8787), dir = DATA_DIR, fetchImpl, ecb = () => fetchEcb(), allowedHosts = [], services = null } = {}) {
   assertSourcingRuntime(); // China Sourcing requires Node 24
   const hosted = isHosted(env) ? hostedConfig(env) : null; // SOURCING_HOSTED=1: complete configuration or nothing starts (src/sourcing/server/hosted.js)
   if (hosted) { dir = hosted.dataDir; for (const h of hosted.allowedHosts) if (!allowedHosts.includes(h)) allowedHosts.push(h); }
+  if (hosted) assertDataOnVolume({ env, dir }); // cases, photos, workspace and Core all live under this directory: on Railway outside the attached volume they would vanish at the next deploy
   if (hosted?.supabaseRef) log(`Supabase project check (${hosted.supabaseRef}): ${await verifyPinnedProject(env, hosted, fetchImpl ? { fetchImpl } : {})}`); // a key of another project refuses the start
   const host = hosted ? hosted.host : env.SOURCING_HOST || '127.0.0.1';
   await mkdir(dir, { recursive: true });

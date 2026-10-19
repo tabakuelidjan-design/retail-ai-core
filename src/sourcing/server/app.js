@@ -4,6 +4,7 @@ import { procurementUserFor } from '../../procurement/server/hosted.js';
 import { readFile, readdir } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { matchSafetyGate } from '../core/safety.js';
 import { compactAlert } from '../adapters/safety-gate.js';
 import { pdfToText } from '../adapters/pdf.js';
@@ -11,10 +12,15 @@ import { fxFor } from '../adapters/fx.js';
 import { callProvider, DATA_CLASS, ProviderPolicyError } from '../adapters/ai-provider.js';
 import { StoreError } from '../store/file-store.js';
 import { createVoiceAssets } from './voice-assets.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
 const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+// Nordla Core screen (Design System v1, /nordla): its files live OUTSIDE the field app's UI folder (src/sourcing/nordla-ui), so the China
+// Sourcing offline shell (/shell-manifest.json, built from the UI folder) stays exactly what it was. Official icons and fonts: src/shared (/nordla-assets/).
+const NORDLA_UI_DIR = fileURLToPath(new URL('../nordla-ui/', import.meta.url));
+const NORDLA_PAGES = Object.fromEntries(['nordla-ds.css', 'nordla-ds.js', 'nordla-view.js', 'nordla-home.js'].map((f) => [`/${f}`, f]).concat([['/nordla', 'nordla.html']]));
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
@@ -34,6 +40,7 @@ async function readBody(req) {
 
 /** Behind the local tunnel every request comes from 127.0.0.1: the proxy's own header (trusted ONLY from a loopback peer) tells the real client apart, so one attacker cannot lock the owner out. */
 const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; const loop = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer); const fwd = loop ? String(req.headers['cf-connecting-ip'] ?? '').trim() : ''; return /^[0-9a-f.:]{3,45}$/i.test(fwd) ? fwd : peer; };
+const SOURCING_WRITERS = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
@@ -77,6 +84,8 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     const p = url.pathname; const m = req.method;
     if (core && p.startsWith('/api/core/')) return core.handle(req, res, url, actor); // Nordla Core: Subject -> Levers -> Decision -> human -> follow-up, Parle à Nordla (src/core-pilot)
+    // Hosted: sign-in proves membership and module access, NOT the right to change Sourcing data. VIEWER and ACCOUNTANT read; changing or deleting a case, storing a photo, the workspace, refreshing the Safety Gate cache or sending a document / photo to an AI reader needs OWNER, ADMIN or COLLABORATOR. (Core and Stock / Achats above and below enforce their own role tables.)
+    if (gate && !SOURCING_WRITERS.has(actor.role) && !['GET', 'HEAD'].includes(m) && !(m === 'POST' && p === '/api/safety/check') && !p.startsWith('/api/procurement/')) return json(res, 403, { error: 'FORBIDDEN_ROLE', message: 'your role can read China Sourcing but not change it' });
     if (procurement && p.startsWith('/api/procurement/')) { const user = procurementUserFor(actor); return user ? procurement.handleApi(req, res, url, user) : json(res, 403, { error: 'FORBIDDEN', message: 'your role has no access to Stock / Achats' }); } // Stock / Achats: same sign-in, same volume (src/procurement/server/hosted.js)
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });
@@ -124,6 +133,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (mime.startsWith('text/') || /\.(txt|csv)$/i.test(name)) return json(res, 200, { text: buf.toString('utf8'), pages: null, pageCount: null, note: null });
       if (mime.startsWith('image/')) {
         if (!ai?.enabled) return json(res, 200, { text: null, textSource: null, note: 'image documents need an AI reader (none configured): the photo stays as evidence; type what the paper says (Docs > Type from the paper)' });
+        if (actor.role !== 'OWNER') return json(res, 403, { error: 'OWNER_ONLY', message: 'only the owner can send a document to an external AI' });
         // a supplier document is CONFIDENTIAL: it leaves this server only with the owner's explicit consent for THIS image
         if (b.consent !== true) return json(res, 428, { error: 'CONSENT_REQUIRED', provider: ai.name, region: ai.region, note: `this image would be sent to ${ai.name} (${ai.region}) to be read` });
         try {
@@ -135,6 +145,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     }
     if (p === '/api/ai/describe' && m === 'POST') {
       if (!ai?.enabled) return json(res, 200, { status: 'DISABLED', suggestions: [], note: 'No AI provider configured: type a description, or choose the category yourself.' });
+      if (actor.role !== 'OWNER') return json(res, 403, { error: 'OWNER_ONLY', message: 'only the owner can send a photo to an external AI' });
       const b = await readBody(req);
       if (b.consent !== true) return json(res, 428, { error: 'CONSENT_REQUIRED', provider: ai.name, region: ai.region, note: `this photo would be sent to ${ai.name} (${ai.region}) to be analysed` });
       try { return json(res, 200, await callProvider(ai, 'describe', { imageBase64: b.imageBase64, imageMime: b.imageMime, text: b.text, task: 'recognise product' }, { dataClass: DATA_CLASS.CONFIDENTIAL })); } catch (e) { if (e instanceof ProviderPolicyError) return json(res, 403, { error: e.code }); throw e; }
@@ -159,6 +170,8 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
+      if (NORDLA_PAGES[url.pathname]) return await serveStatic(res, NORDLA_PAGES[url.pathname], NORDLA_UI_DIR);
+      if (url.pathname.startsWith('/nordla-assets/')) { const a = await readNordlaShared(url.pathname); if (!a) return json(res, 404, { error: 'NOT_FOUND' }); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'public, max-age=86400', ...SEC }); return res.end(a.body); }
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);
       return json(res, 404, { error: 'NOT_FOUND' });

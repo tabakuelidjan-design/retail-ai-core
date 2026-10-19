@@ -4,6 +4,8 @@
 // own escaper (the same five characters as dom.js): dom.js imports a browser-absolute path, so importing it would make this file untestable in Node
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+import { createVoiceController, renderVoice, VOICE_CSS } from './nordla-voice.js';
+
 export const MAX_TURNS = 10;
 const CASE_CHIPS = [['Qu’est-ce qui manque ?', 'Ce qui manque'], ['Quels sont les risques ?', 'Risques'], ['Quelle est la marge estimée ?', 'Marge'], ['Est-ce que je peux commander ce produit ?', 'Puis-je commander ?'], ['Quelle est la prochaine étape ?', 'Prochaine étape'], ['Quelles questions dois-je poser au fournisseur ?', 'Questions à poser'], ['Pourquoi cette recommandation ?', 'Pourquoi cette recommandation ?']];
 const NO_CASE_CHIPS = [['Quelles décisions attendent mon approbation ?', 'Décisions à valider'], ['Quels modules sont connectés ?', 'Modules connectés']];
@@ -18,7 +20,7 @@ const CSS = `.nxa{margin:0 0 12px}.nxa-chips{display:flex;flex-wrap:wrap;gap:8px
 .nxa-case{font-size:13px;color:var(--muted);margin:2px 0 6px}.nxa-turn{overflow-wrap:anywhere;border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;background:var(--card)}.nxa-q{font-size:13px;color:var(--muted);margin:0 0 6px}
 .nxa-block{border-left:4px solid var(--red);background:var(--red-bg);padding:8px 10px;margin:0 0 8px;border-radius:0 8px 8px 0;font-size:14px}.nxa-block b{display:block}.nxa-head{font-weight:700;margin:0 0 6px}
 .nxa-sec h4{margin:10px 0 2px;font-size:13px;letter-spacing:.02em;color:var(--muted);text-transform:uppercase}.nxa-sec ul{margin:0;padding-left:18px}.nxa-sec li{font-size:14px;line-height:20px;margin:2px 0}
-.nxa-next{border-left:4px solid var(--accent);padding-left:10px;margin-top:10px}.nxa-src{font-size:13px;color:var(--muted);margin:8px 0 0}.nxa details{margin-top:6px;font-size:13px}.nxa-tools{display:flex;justify-content:space-between;align-items:center;margin:4px 0}`;
+.nxa-next{border-left:4px solid var(--accent);padding-left:10px;margin-top:10px}.nxa-src{font-size:13px;color:var(--muted);margin:8px 0 0}.nxa details{margin-top:6px;font-size:13px}.nxa-tools{display:flex;justify-content:space-between;align-items:center;margin:4px 0}`+VOICE_CSS;
 function ensureStyle() { if (typeof document === 'undefined' || document.getElementById('nxa-style')) return; const el = document.createElement('style'); el.id = 'nxa-style'; el.textContent = CSS; document.head.appendChild(el); }
 
 const list = (arr) => (arr?.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
@@ -46,10 +48,10 @@ export function renderTurn(t, { newest = false } = {}) {
 }
 
 /** The whole block. `model` = { turns[newest first], notice, draft, busy, active:{id,name}|null }. */
-export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null, error = '' } = {}) {
+export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null, error = '', voiceHtml = '' } = {}) {
   const chips = (active ? CASE_CHIPS : NO_CASE_CHIPS).map(([text, label]) => `<button type="button" class="nxa-chip" data-act="core-ask-chip" data-text="${esc(text)}" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>${esc(label)}</button>`).join('');
   const where = active ? `Dossier ouvert : ${esc(active.name || active.id)}` : 'Aucun dossier ouvert : les questions sur un produit demandent d’en ouvrir un.';
-  return `<div class="nxa"><h3>Parle à Nordla</h3><p class="nxa-case">${where}</p><div class="nxa-chips" role="group" aria-label="Questions fréquentes">${chips}</div>
+  return `<div class="nxa"><h3>Parle à Nordla</h3><p class="nxa-case">${where}</p>${voiceHtml}<div class="nxa-chips" role="group" aria-label="Questions fréquentes">${chips}</div>
     <div class="nxa-form"><label class="small">Votre question<input id="core-ask-text" value="${esc(draft)}" maxlength="1000" autocomplete="off" placeholder="Posez votre question"></label><button type="button" class="btn" data-act="core-ask" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>Demander</button></div>
     ${error ? `<p class="nxa-block" role="alert"><b>La question n’a pas pu partir</b>${esc(error)} Votre question est conservée : réessayez.</p>` : ''}
     ${notice ? `<p class="small muted" role="status">${esc(notice)}</p>` : ''}
@@ -64,7 +66,7 @@ export function renderHistory(turns = [], { online = false } = {}) {
 }
 
 /** Controller: keeps the conversation on the phone (turns + the server's state) and asks through the panel's `post`. */
-export function createAskUi({ st, post }) {
+export function createAskUi({ st, post, refresh = () => {}, win = typeof window === 'undefined' ? null : window, recognizer = null, synth = null }) {
   ensureStyle();
   const nx = (st.nx ??= { turns: [], conversation: null, notice: '', draft: '' });
   function ask(text, caseId) {
@@ -75,9 +77,11 @@ export function createAskUi({ st, post }) {
       nx.pending = false; nx.draft = ''; // cleared only once the answer is here: after a network error the person's question is still in the box
       nx.turns = [{ text: q, ...r }, ...nx.turns].slice(0, MAX_TURNS); nx.notice = r.notice ?? '';
       nx.conversation = r.conversation ?? null; // a server without conversation support simply returns none: every question then stands alone
+      voice?.onAnswer(nx.turns[0]); // reads it aloud only if the person turned reading on
     });
     return true;
   }
+  const voice = win ? createVoiceController({ win, nx, refresh, ask, recognizer, synth }) : null; // no window (Node): text only
   if (typeof document !== 'undefined') {
     document.addEventListener('input', (ev) => { if (ev.target?.id === 'core-ask-text') nx.draft = ev.target.value; });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target?.id === 'core-ask-text') { ev.preventDefault(); document.querySelector('[data-act="core-ask"]')?.click(); } });
@@ -85,12 +89,13 @@ export function createAskUi({ st, post }) {
   return {
     /** @returns true when the click was an ask action (the panel stops there) */
     handle(act, t, caseId) {
+      if (voice?.handle(act, t, caseId)) return true; // microphone / reading aloud (nordla-voice.js)
       if (act === 'core-ask') return ask(document.getElementById('core-ask-text')?.value, caseId);
       if (act === 'core-ask-chip') return ask(t.dataset.text, caseId);
       if (act === 'core-ask-reset') { nx.turns = []; nx.conversation = null; nx.notice = ''; nx.draft = ''; return 'reset'; }
       return false;
     },
     history(online) { return renderHistory(nx.turns, { online }); },
-    render(active, busy, error) { return renderAsk({ turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, error: nx.pending && !busy ? error : '', active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
+    render(active, busy, error) { return renderAsk({ voiceHtml: voice ? renderVoice(voice.model(), { busy: busy || !!nx.pending, caseId: active?.id ?? '', hasAnswer: nx.turns.length > 0 }) : '', turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, error: nx.pending && !busy ? error : '', active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
   };
 }

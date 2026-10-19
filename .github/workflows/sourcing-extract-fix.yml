@@ -1,0 +1,84 @@
+name: sourcing-extract-fix
+# CI of the branch fix/sourcing-extract-moq-leadtime ONLY (French minimum order / lead time / offered quantity). It runs on pushes to that branch and by hand; it changes no other workflow and is not meant to be merged into a release line.
+#  - Node 24 (China Sourcing requires it, owner decision 2026-10-12): every sourcing test, Core pilot, integration / routing, procurement; plus the real-browser phone suites that show candidates.
+#  - Node 20 (the repository engine floor): the pure extraction / contract tests and the integration / routing tests, because the extractor is isomorphic and must not depend on a Node 24 feature.
+# No secret, no provider, no network, no deployment.
+on:
+  push:
+    branches: ['fix/sourcing-extract-moq-leadtime']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  node24-suite:
+    name: sourcing + routing + procurement (node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - name: Sourcing (extraction, contract, case flow, UI modules) and Core pilot
+        run: node --test test/sourcing-*.test.js test/core-pilot.test.js test/core-readers.test.js test/core-modules.test.js test/core-backup-restore.test.js
+      - name: Routing and procurement (integration router, procurement routing, procurement bridge)
+        run: node --test test/integration-*.test.js test/core-procurement-routing.test.js test/procurement-*.test.js test/core-field-assistant-contracts.test.js
+
+  node20-extraction:
+    name: extraction + routing (node 20)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci --no-audit --no-fund
+      - name: Extraction and fact contract (pure core, no China Sourcing runtime)
+        run: node --test test/sourcing-extract-fr-terms.test.js test/sourcing-offered-qty-contract.test.js test/sourcing-field-v1-extract-ranges.test.js test/sourcing-field-v1-phone-extract.test.js test/sourcing-engines.test.js test/sourcing-item-revision.test.js
+      - name: Routing and procurement
+        run: node --test test/integration-*.test.js test/core-procurement-routing.test.js test/procurement-*.test.js
+
+  e2e-phone:
+    name: phone UI at 360-430 px (node 24, real browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: node test/e2e/sourcing-french-note.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome, SOURCING_E2E_SHOTS: shots }
+      - run: npm run sourcing:e2e:revision
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:terrain
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:fieldv1
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:price
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:identification
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:migration
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:photos
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run sourcing:e2e:signin
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run core:e2e
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: npm run nordla:e2e
+        if: ${{ !cancelled() }}
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: phone-shots, path: shots, if-no-files-found: ignore }

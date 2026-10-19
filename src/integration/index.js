@@ -15,6 +15,7 @@ import { dealIntelligence, compareDeals } from '../sourcing/core/field/deal.js';
 import { runCreativeEndToEnd } from '../creative-e2e/index.js';
 import { eurOfSupplier } from '../finance/currency.js';
 import { mergeProcurementAdapters } from './procurement.js';
+import { createSocialAdapter } from './social.js';
 
 export * from './constants.js';
 export { createIdentityRegistry, ref, parseRef } from './ids.js';
@@ -41,10 +42,11 @@ export function createIntegrationStore() {
  *  brand                { tenant_id, brand_ref, approved_claims:[{ref, wording}] }  -> Branding
  *  creativeWorld        ports + base brief/request for Creative, or a factory returning a fresh one per run (fakes in tests; no provider is ever created here)
  *  analytics            { explainChange(args) }               -> optional; absent => MODULE_NOT_AVAILABLE
+ *  social               { service, credentialPort? } of Social Publishing (createSocialService): adds the SOCIAL_PUBLISHING reads and the proposal command; absent => MODULE_NOT_AVAILABLE
  *  procurement          the assistant of createProcurement()   -> optional; adds `proc_*` read/proposal commands to STOCK_SALES and BUYING (nothing existing is replaced)
  *  unavailable          modules to simulate as down
  */
-export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, procurement = null, unavailable = [], now = () => new Date().toISOString() }) {
+export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, procurement = null, social = null, unavailable = [], now = () => new Date().toISOString() }) {
   const registry = createIdentityRegistry({ tenant_id });
   const ledger = createTraceLedger({ tenant_id, now });
   const store = createIntegrationStore();
@@ -108,6 +110,8 @@ export function createIntegration({ tenant_id, finance = null, readOnHand = () =
     } },
     [M.PARLE_A_NORDLA]: { available: avail(M.PARLE_A_NORDLA), commands: {} },
   };
+
+  adapters[M.SOCIAL_PUBLISHING] = social ? { ...createSocialAdapter(social), available: avail(M.SOCIAL_PUBLISHING) } : { available: () => false, commands: {} }; // absent => MODULE_NOT_AVAILABLE, never a crash
 
   if (procurement) mergeProcurementAdapters(adapters, procurement);
 

@@ -17,7 +17,7 @@ export function createCorePanel({ S, api, refresh }) {
     try { st.status = await api('/api/core/status'); if (caseId && st.status.enabled) st.byCase[caseId] = (await api(`/api/core/decisions?case=${encodeURIComponent(caseId)}`)).decisions; st.error = ''; } catch (e) { fail(e); }
     refresh();
   }
-  const askUi = createAskUi({ st, post: (...a) => post(...a) });
+  const askUi = createAskUi({ st, post: (...a) => post(...a), refresh });
   async function post(path, body, after) {
     st.busy = true; st.error = ''; refresh();
     try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); } catch (e) { fail(e); }
