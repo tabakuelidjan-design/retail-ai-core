@@ -39,7 +39,7 @@ test('G2 real data — a "water bottle" case: every Travel Tumbler / beker of th
 test('G2 real data — the case does not say the KIND of product: ONE type question (bottle vs travel tumbler) from the titles actually observed, with evidence and price, nothing preselected, "Je ne sais pas" offered', () => {
   const input = { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }; const q = proposeQuestion({ input, listings: REAL });
   assert.equal(q.id, 'type'); assert.equal(q.unknownLabel, 'Je ne sais pas'); assert.equal(q.allowOther, false); assert.deepEqual(q.options.map((o) => o.label).sort(), ['gobelet de voyage', 'gourde / bouteille']);
-  assert.ok(q.options.every((o) => /vu dans \d+ annonce\(s\) · prix médian/.test(o.evidence) && o.selected === undefined && o.value.productType));
+  assert.ok(q.options.every((o) => /\d+ annonce\(s\) retenue\(s\) · prix médian indicatif/.test(o.evidence) && o.selected === undefined && o.value.productType));
   const ans = refine({ listings: REAL, input, confirmed: { productType: 'bottle' }, ecb: ECB }); assert.ok(ans.analysis.listings.filter((x) => typeOf(x.title, 'Hydro Flask') === 'tumbler').every((x) => x.excludedFromReference));
 });
 
@@ -172,6 +172,29 @@ test('"Autre" free text is cleaned: a typed size needs its unit and must be unam
 test('the threshold stays at 3 comparable listings per group: 2 are listed one by one, never averaged', () => {
   assert.equal(MIN_COMPARABLE, 3);
   const a = refine({ listings: [WIDE[0], STD[0]], input: ACME_IN, confirmed: { capacityMl: 710 }, ecb: ECB }).analysis; assert.equal(a.reference.reliable, false); assert.equal(a.reference.medianEur, null); assert.deepEqual(a.reference.pricesEur, [46, 62]); assert.ok(a.groups.every((g) => !g.reliable && g.medianEur === null)); assert.equal(a.listings.length, 2);
+});
+
+test('H3 real data — the type question promises exactly what the answer then shows: the same count and median as INDICATIVE prices, apart from the reference, never promoted to "probable"', () => {
+  const input = { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }; const { facet } = analyseWithFacets(REAL, input, { ecb: ECB }); const q = proposeQuestion({ input, listings: REAL, facet }); assert.equal(q.id, 'type');
+  for (const o of q.options) {
+    const [, n, med] = /^(\d+) annonce\(s\) retenue\(s\) · prix médian indicatif (\d+,\d+) €/.exec(o.evidence); const a = refine({ listings: REAL, input, confirmed: o.value, ecb: ECB, asked: 1 }).analysis; const ind = a.indicative.find((x) => x.type === o.value.productType);
+    assert.equal(ind.count, Number(n)); assert.equal(`${ind.medianEur.toFixed(2).replace('.', ',')}`, med); assert.equal(a.summary.probable, 0, 'brand + type alone never makes a listing "probable"'); assert.equal(a.reference.reliable, false); assert.equal(a.reference.medianEur, null);
+  }
+  const r = refine({ listings: REAL, input, confirmed: { productType: 'bottle' }, ecb: ECB, supplier: { price: 11, currency: 'USD' } }); assert.equal(r.comparison.ratio, null, 'an indicative price is never used for the supplier ratio');
+});
+
+test('H3 indicative prices: one family at a time, at least 3 similar listings per family, never pooled across families, never when the listings are comparable', () => {
+  const b = (p, i) => L(`ZORBA insulated bottle ${i}`, p); const t = (p, i) => L(`ZORBA travel tumbler ${i}`, p); const input = { name: 'ZORBA', brand: 'ZORBA', traits: {} };
+  const a = analyseListings([b(58, 1), b(59, 2), b(60, 3), t(30, 4), t(31, 5), t(32, 6)], input, { ecb: ECB }); assert.equal(a.indicative.length, 2); assert.deepEqual(a.indicative.map((x) => [x.type, x.count, x.medianEur]).sort(), [['bottle', 3, 59], ['tumbler', 3, 31]]);
+  const two = analyseListings([b(58, 1), b(59, 2), t(30, 3), t(31, 4)], input, { ecb: ECB }); assert.equal(two.indicative.length, 0, 'two per family is not enough');
+  const cmp = analyseListings([L('ZORBA insulated bottle 710 ml a', 50), L('ZORBA insulated bottle 710 ml b', 51), L('ZORBA insulated bottle 710 ml c', 52)], { name: 'insulated bottle', brand: 'ZORBA', traits: {} }, { ecb: ECB }); assert.equal(cmp.reference.reliable, true); assert.equal(cmp.indicative.length, 0, 'comparable listings are a reference, not an indication');
+});
+
+test('H2 "Préciser": typed size / model / variant go through the same cleaning as "Autre"; a value that is not understood is dropped (the screen says which one), a newly typed value replaces the earlier one, and it never needs a provider', async () => {
+  assert.deepEqual(sanitizeConfirmed({ capacityText: '64 oz', model: 'x', variantText: 'wide mouth' }), { capacityMl: 1893, variant: { key: 'wide mouth', label: 'wide mouth', tokens: ['wide', 'mouth'] } }, 'the invalid model is dropped, the others kept');
+  const radar = createMarketRadar({ env: {}, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ECB }); const ev = ACME().map((x, i) => ({ seller: 'S', url: `https://google.be/search?ibp=oshop&prds=${i}`, price: { amount: x.price, currency: 'EUR' }, observedAt: x.observedAt, specs: { title: x.title, query: 'q', queryVia: 'nom' } }));
+  const first = await radar.refine({ evidence: ev, input: ACME_IN, confirmed: { capacityText: '710 ml' }, asked: 0 }); assert.equal(first.input.confirmed.capacityMl, 710); assert.equal(first.question.id, 'variant', 'Préciser consumed no question: the variant is still asked');
+  const second = await radar.refine({ evidence: ev, input: ACME_IN, confirmed: { capacityText: '946 ml', variantText: 'wide mouth' }, asked: 0 }); assert.equal(second.input.confirmed.capacityMl, 946); assert.equal(second.reference.reliable, true); assert.equal(second.reference.count, 3);
 });
 
 // ---------- service level: 53 listings are all kept, answering costs nothing, an identical search is cached

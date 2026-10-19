@@ -80,10 +80,11 @@ export function proposeQuestion({ input, listings = [], facet = undefined, asked
   }
   const ptype = input?.productType ?? typeOf(input?.name, input?.brand); // the KIND of product: asked only when the case does not say it and the listings show two kinds that differ in price
   if (!ptype && !conf.productType && !no('type')) {
-    const byType = new Map(); for (const l of listings) { const t = typeOf(l.title, input?.brand); if (t && Number(l.price) > 0 && inScope(l, input)) (byType.get(t) ?? byType.set(t, []).get(t)).push(Number(l.price)); }
-    const kinds = [...byType.entries()].filter(([, ps]) => ps.length >= 2).sort((a, b) => b[1].length - a[1].length); const meds = kinds.map(([, ps]) => median(ps));
+    // what each answer would LEAVE once the usual exclusions are applied (lots, accessories, other kinds, aberrant prices): the evidence shown is exactly what the owner will see after answering, so the question never promises a number the result does not give
+    const seenKinds = new Set(); for (const l of listings) { const t = typeOf(l.title, input?.brand); if (t) seenKinds.add(t); }
+    const kinds = [...seenKinds].map((k) => { const a = analyseListings(listings, { ...input, productType: k }); return [k, a.listings.filter((r) => !r.excludedFromReference && r.type === k && r.price?.eur != null).map((r) => r.price.eur)]; }).filter(([, ps]) => ps.length >= 3).sort((x, y) => y[1].length - x[1].length); const meds = kinds.map(([, ps]) => median(ps));
     if (kinds.length >= 2 && Math.max(...meds) / Math.min(...meds) - 1 > PRICE_GAP) return { id: 'type', prompt: 'De quel type de produit s’agit-il ?', unknownLabel: 'Je ne sais pas', allowOther: false,
-      options: kinds.map(([k, ps]) => ({ value: { productType: k }, label: TYPE_LABELS[k], evidence: `vu dans ${ps.length} annonce(s) · prix médian ${eur(median(ps))}` })) };
+      options: kinds.map(([k, ps]) => ({ value: { productType: k }, label: TYPE_LABELS[k], evidence: `${ps.length} annonce(s) retenue(s) · prix médian indicatif ${eur(median(ps))}` })) };
   }
   const f = facet === undefined ? detectVariantFacet(listings, input) : facet;
   if (f && !conf.variant && !no('variant')) return { id: 'variant', prompt: 'Quelle variante est votre produit ?', unknownLabel: 'Je ne sais pas', allowOther: true, otherKind: 'variant', otherPlaceholder: 'ex. le mot qui la distingue',

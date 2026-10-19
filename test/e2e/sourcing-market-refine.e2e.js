@@ -103,7 +103,7 @@ try {
 
   await check('9. TWO questions at most, one at a time, each with "Autre" and "Je ne sais pas": size, then variant; each answer is free (no provider call); the final range is ONE homogeneous group; lots, accessories, other brands are listed apart', async () => {
     scenario = 'acme'; await t.eval(seed('r-acme', 'water bottle', 'ACME')); await sleep(300); await reload(t); await openMarket(t, 'r-acme'); await click(t, '[data-act="market-run"]', 1500); const paid = counts.post;
-    let s = await text(t); ok(/Quelle est la taille de votre produit/.test(s), s.slice(0, 600)); ok(await t.eval(`!!document.querySelector('[data-other-input]') && !!document.querySelector('[data-act="market-other"]')`), '"Autre" free text present'); ok(/Aucun produit exact trouvé/.test(s), 'explicit: no exact product'); ok(!/Prix constatés/.test(s), 'no price while pending');
+    let s = await text(t); ok(/Quelle est la taille de votre produit/.test(s), s.slice(0, 600)); ok(/Si la bonne n’y est pas, écrivez-la dans « Autre »/.test(s), 'H1: the sentence is shown when an Autre field exists'); ok(await t.eval(`!!document.querySelector('[data-other-input]') && !!document.querySelector('[data-act="market-other"]')`), '"Autre" free text present'); ok(/Aucun produit exact trouvé/.test(s), 'explicit: no exact product'); ok(!/Prix constatés/.test(s), 'no price while pending');
     const labels = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].map((b) => b.innerText)`); ok(JSON.stringify(labels) === JSON.stringify(['710 ml', '946 ml', 'Je ne sais pas']), JSON.stringify(labels));
     await click(t, '[data-act="market-answer"][data-key="0"]', 1200); s = await text(t); await shot(t, 'variant-question-390', '.fm-q');
     ok(counts.post === paid, 'the size answer is free'); ok(/Quelle variante est votre produit/.test(s), s.slice(0, 700)); ok(/taille 710 ml/.test(s), 'first answer recorded');
@@ -133,10 +133,12 @@ try {
 
   await check('12. G2 on 53 REAL listings: the case does not say the KIND of product -> ONE type question (bottle / travel tumbler); the answer is free; tumblers leave the bottle price and stay listed as "autre type de produit"', async () => {
     scenario = 'real'; await t.eval(seed('r-real', 'Hydro Flask', 'Hydro Flask')); await sleep(300); await reload(t); await openMarket(t, 'r-real'); await click(t, '[data-act="market-run"]', 1800); const paid = counts.post;
-    let s = await text(t); await shot(t, 'type-question-390', '.fm-q'); ok(/De quel type de produit/.test(s), s.slice(0, 600)); ok(!(await t.eval(`!!document.querySelector('[data-other-input]')`)), 'no free text for a closed list of kinds'); ok(/Aucun produit exact trouvé/.test(s), 'no exact product, said'); ok(!/Prix constatés/.test(s), 'no price while pending');
+    let s = await text(t); await shot(t, 'type-question-390', '.fm-q'); ok(/De quel type de produit/.test(s), s.slice(0, 600)); ok(!(await t.eval(`!!document.querySelector('[data-other-input]')`)), 'no free text for a closed list of kinds'); ok(!/écrivez-la dans « Autre »/.test(s), 'H1: the sentence about Autre is not shown when there is no Autre field');
+    const promised = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"]')].map((b) => b.innerText.replace(/\\s+/g, ' '))`); ok(promised.some((x) => /^gourde \/ bouteille 4 annonce\(s\) retenue\(s\) · prix médian indicatif 42,68 €/.test(x)), JSON.stringify(promised)); ok(/Aucun produit exact trouvé/.test(s), 'no exact product, said'); ok(!/Prix constatés/.test(s), 'no price while pending');
     const labels = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].map((b) => b.innerText)`); ok(JSON.stringify(labels) === JSON.stringify(['gobelet de voyage', 'gourde / bouteille', 'Je ne sais pas']), JSON.stringify(labels));
     const bottle = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].findIndex((b) => b.innerText === 'gourde / bouteille')`); await click(t, `[data-act="market-answer"][data-key="${bottle}"]`, 1300); s = await text(t);
-    ok(counts.post === paid, 'the type answer is free'); ok(/Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), 'a case named with the brand alone and no verified size: no price at all, said honestly'); ok(/type gourde \/ bouteille/.test(s), s.slice(0, 500));
+    ok(counts.post === paid, 'the type answer is free'); ok(/Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), 'a case named with the brand alone and no verified size: no price at all, said honestly');
+    ok(/Prix indicatifs par famille — pas un prix de référence/.test(s) && /gourde \/ bouteille : 31,10 € – 42,68 € – 44,95 € sur 4 annonce\(s\) similaires/.test(s), `H3: the indicative price equals what the question promised: ${s.slice(0, 900)}`); ok(/pas le même produit/.test(s) && /jamais comme un prix de référence/.test(s), 'H3: labelled as context only'); ok(/type gourde \/ bouteille/.test(s), s.slice(0, 500));
     await t.eval(`document.querySelectorAll('details.fm-rg').forEach((d) => { d.open = true; })`); await sleep(200); const all = await text(t); ok(/autre type de produit/.test(all), 'tumblers listed with their reason'); ok(/Travel Tumbler/i.test(all), 'the tumbler listings stay consultable'); await shot(t, 'type-answered-390', '.fm-k2'); await noOverflow(t, 'type answered');
   });
 
@@ -147,8 +149,21 @@ try {
     ok(titles.every((x) => !/^Prix constatés$/.test(x)) || typed.length === 0, `no mixed single box: ${JSON.stringify(titles)}`); ok(!/médiane observée/.test(s), 'no supplier ratio on mixed types'); await noOverflow(t, 'types grouped');
   });
 
+  await check('14. H2 "Préciser": with NO automatic question (a bottle case, nothing to choose), the owner can still type the size / variant; unreadable values are refused; it is free, replaces an earlier value, and survives', async () => {
+    await t.eval(seed('r-prec', 'water bottle', 'Hydro Flask')); await sleep(300); await reload(t); await openMarket(t, 'r-prec'); await click(t, '[data-act="market-run"]', 1800); const paid = counts.post; let s = await text(t);
+    ok(!/Une précision \(une touche\)/.test(s), 'no automatic question for a bottle case'); ok(await t.eval(`!!document.querySelector('details.fm-prec')`), 'the Préciser section is permanent'); await t.eval(`document.querySelector('details.fm-prec').open = true`); await sleep(200); await shot(t, 'preciser-390', 'details.fm-prec');
+    const h = await t.eval(`[...document.querySelectorAll('[data-prec], [data-act="market-precise"]')].map((e) => Math.round(e.getBoundingClientRect().height))`); ok(h.length === 4 && h.every((x) => x >= 44), `touch targets: ${JSON.stringify(h)}`);
+    const n0 = (await store(t))['r-prec'].marketSearches.length;
+    await click(t, '[data-act="market-precise"]', 600); s = await text(t); ok(/Écrivez au moins une valeur/.test(s), 'empty submit explained'); await t.eval(`document.querySelector('details.fm-prec').open = true; document.querySelector('[data-prec="capacity"]').value = 'beaucoup'`); await click(t, '[data-act="market-precise"]', 900); s = await text(t);
+    ok(/Non compris : taille/.test(s), s.slice(0, 500)); ok((await store(t))['r-prec'].marketSearches.length === n0, 'nothing stored for an unreadable size');
+    await t.eval(`document.querySelector('details.fm-prec').open = true; document.querySelector('[data-prec="capacity"]').value = '946 ml'; document.querySelector('[data-prec="variant"]').value = 'wide mouth'`); await click(t, '[data-act="market-precise"]', 1200); s = await text(t);
+    ok(counts.post === paid, 'Préciser is free: no provider call'); ok(/Précision confirmée par vous : taille 946 ml · variante wide mouth/.test(s), s.slice(0, 700)); let rec = (await store(t))['r-prec'].marketSearches.at(-1); ok(rec.radar.confirmation.answered === 'precise' && rec.radar.confirmation.accumulated.capacityMl === 946 && rec.radar.confirmation.asked === 0, 'recorded, no question consumed');
+    await t.eval(`document.querySelector('details.fm-prec').open = true; document.querySelector('[data-prec="capacity"]').value = '64 oz'`); await click(t, '[data-act="market-precise"]', 1200); s = await text(t); ok(/taille 1,89 L/.test(s) && !/taille 946 ml/.test(s), 'a newly typed size replaces the earlier one'); ok(counts.post === paid, 'still free');
+    await reload(t); await openMarket(t, 'r-prec'); s = await text(t); ok(/taille 1,89 L/.test(s), 'survives a reload'); await noOverflow(t, 'preciser');
+  });
+
   await check('7. the free step really is free: provider calls over the whole session = exactly the distinct searches that were pressed (answers and repeated searches add none)', async () => {
-    ok(counts.post === 5, `paid searches ${counts.post}`); // r-size, r-few, r-acme, r-unk2 and r-real are five DIFFERENT queries (r-real2 repeats r-real: cache); r-unk, r-free repeat an earlier one (cache) and every answer is free
+    ok(counts.post === 6, `paid searches ${counts.post}`); // r-size, r-few, r-acme, r-unk2 and r-real and r-prec are six DIFFERENT queries (r-real2 repeats r-real: cache); r-unk, r-free repeat an earlier one (cache) and every answer is free
   });
 
   await check('8. no uncaught error in the whole session', async () => { ok(errs.length === 0, errs.join(' | ').slice(0, 500)); });
