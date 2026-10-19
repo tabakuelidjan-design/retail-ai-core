@@ -71,7 +71,7 @@ const socialApp = createSocialApp({ token: SOCIAL_TOKEN, service: social, assets
 const socialSrv = await loop(socialApp.handler);
 
 const browser = await new Browser(exe, null, ['--ignore-certificate-errors', '--no-proxy-server', `--host-resolver-rules=MAP ${HOST} 127.0.0.1`]).launch();
-const VIEWS = { desktop: { width: 1440, height: 900, mobile: false }, mobile: { width: 390, height: 844, mobile: true } };
+const VIEWS = { desktop: { width: 1440, height: 900, mobile: false }, tablet: { width: 768, height: 1024, mobile: false }, mobile: { width: 390, height: 844, mobile: true }, small: { width: 360, height: 740, mobile: true } };
 const shot = async (t, name, view) => { const v = VIEWS[view]; await t.b.send('Emulation.setDeviceMetricsOverride', { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: v.mobile }, t.sessionId); await sleep(900); const r = await t.b.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, t.sessionId); writeFileSync(join(OUT, `${name}-${view}.png`), Buffer.from(r.data, 'base64')); console.log('saved', `${name}-${view}`); };
 const ready = async (t) => { await t.waitFor("document.readyState === 'complete' && document.body.innerText.length > 10", 20000); };
 try {
