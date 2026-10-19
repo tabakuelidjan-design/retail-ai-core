@@ -197,6 +197,22 @@ test('H2 "Préciser": typed size / model / variant go through the same cleaning 
   const second = await radar.refine({ evidence: ev, input: ACME_IN, confirmed: { capacityText: '946 ml', variantText: 'wide mouth' }, asked: 0 }); assert.equal(second.input.confirmed.capacityMl, 946); assert.equal(second.reference.reliable, true); assert.equal(second.reference.count, 3);
 });
 
+test('H4 real data — a KNOWN brand is respected: the indicative prices of the same brand and type are the same whatever the case name ("water bottle" or "Hydro Flask" + type answered), and another brand (Nalgene) is left out, counted and said', () => {
+  const named = analyseWithFacets(REAL, { name: 'water bottle', brand: 'Hydro Flask', traits: {} }, { ecb: ECB }).analysis; const typed = refine({ listings: REAL, input: { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }, confirmed: { productType: 'bottle' }, ecb: ECB, asked: 1 }).analysis;
+  const pick = (a) => a.indicative.find((x) => x.type === 'bottle'); assert.deepEqual(pick(named), pick(typed)); assert.deepEqual(pick(named), { type: 'bottle', count: 4, minEur: 31.1, medianEur: 42.68, maxEur: 44.95 });
+  assert.equal(named.indicativeBasis.brandKnown, true); assert.equal(named.indicativeBasis.brand, 'Hydro Flask'); assert.equal(named.indicativeBasis.otherBrandLeftOut, 2); assert.ok(named.listings.filter((x) => /Nalgene/i.test(x.title)).length >= 2, 'the other-brand listings stay listed');
+  const q = proposeQuestion({ input: { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }, listings: REAL }); const bottle = q.options.find((o) => o.value.productType === 'bottle'); assert.match(bottle.evidence, /^4 annonce\(s\) retenue\(s\) · prix médian indicatif 42,68 €/, 'the question promises the brand-respecting number');
+});
+
+test('H4 brand spelling variants never exclude a valid listing (case, accents, spaces, hyphens, symbols are ignored); a different brand is excluded; an unknown brand filters nothing and says so', () => {
+  const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {} };
+  const ls = [L('Hydroflask water fles A', 30), L('HYDRO-FLASK water fles B', 31), L('Hydro Flask® water fles C', 32), L('hydro  flask water fles D', 33), L('Nalgene water fles E', 20), L('Contigo water fles F', 22)]; // similar (half of the name's words), same kind of product
+  const a = analyseListings(ls, input, { ecb: ECB }); assert.ok(a.listings.every((x) => x.matchType === 'SIMILAR_PRODUCT' && !x.excludedFromReference && x.type === 'bottle'));
+  assert.deepEqual(a.indicative.map((x) => [x.type, x.count, x.medianEur]), [['bottle', 4, 31.5]], 'the four spellings of the brand are all kept'); assert.equal(a.indicativeBasis.otherBrandLeftOut, 2); assert.equal(a.indicativeBasis.brandKnown, true);
+  assert.equal(analyseListings(ls, { ...input, brand: 'Stanley' }, { ecb: ECB }).indicative.length, 0, 'with another brand known, none of these listings is that brand');
+  const unknown = analyseListings(ls, { name: 'water bottle', traits: {} }, { ecb: ECB }); assert.equal(unknown.indicativeBasis.brandKnown, false); assert.equal(unknown.indicativeBasis.otherBrandLeftOut, 0); assert.equal(unknown.indicative[0].count, 6, 'nothing is filtered when the brand is unknown');
+});
+
 // ---------- service level: 53 listings are all kept, answering costs nothing, an identical search is cached
 const items = (ls) => ls.map((l, i) => ({ type: 'google_shopping_serp', title: l.title, price: l.price, currency: 'EUR', seller: l.seller ?? 'Shop', url: `https://google.be/search?ibp=oshop&q=x&prds=${i + 1}` }));
 function provider(ls) {

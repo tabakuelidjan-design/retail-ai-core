@@ -164,7 +164,7 @@ export function analyseListings(listings, input, { ecb = null } = {}) {
     .sort((x, y) => CLASS_ORDER.indexOf(x.class) - CLASS_ORDER.indexOf(y.class) || y.count - x.count);
   const count = (t) => rows.filter((r) => r.matchType === t).length; const flagCount = {}; for (const r of rows) for (const f of r.flags) flagCount[f] = (flagCount[f] ?? 0) + 1;
   return { listings: rows, groups, summary: { total: rows.length, exact: count(MATCH.EXACT_MATCH), probable: count(MATCH.PROBABLE_MATCH), similar: count(MATCH.SIMILAR_PRODUCT), excluded: rows.filter((r) => r.excludedFromReference).length, exactNone: count(MATCH.EXACT_MATCH) === 0, flags: flagCount },
-    reference: referenceFrom(groups, comparable, incl), indicative: indicativeFrom(rows),
+    reference: referenceFrom(groups, comparable, incl), ...indicativeFrom(rows, input),
     marketplaces: { 'amazon.be': rows.filter((r) => r.marketplace === 'amazon.be').length, 'bol.com': rows.filter((r) => r.marketplace === 'bol.com').length } };
 }
 /** ONE reference price only when exactly one reliable homogeneous group exists in the best class; several groups = no single price; otherwise "non fiable". */
@@ -181,9 +181,18 @@ function referenceFrom(groups, comparable, incl) {
 
 /** INDICATIVE prices per product-type FAMILY: the SIMILAR (not comparable) listings still in scope, one family at a time, at least MIN_COMPARABLE per family. Context only: never a reference price, never promoted to "probable",
  *  never used for the supplier comparison. Different families are never averaged together. */
-function indicativeFrom(rows) {
-  const by = new Map(); for (const r of rows) { if (r.excludedFromReference || r.matchType !== MATCH.SIMILAR_PRODUCT || !r.type || r.price?.eur == null) continue; (by.get(r.type) ?? by.set(r.type, []).get(r.type)).push(r.price.eur); }
-  return [...by.entries()].filter(([, ps]) => ps.length >= MIN_COMPARABLE).map(([type, ps]) => { const s = [...ps].sort((x, y) => x - y); return { type, count: s.length, minEur: round2(s[0]), medianEur: round2(median(s)), maxEur: round2(s[s.length - 1]) }; });
+/** A brand that is KNOWN (the case, the barcode database, the label) is respected: a listing whose title does not name it is another brand and is left out of the indicative prices (counted, said). The test is on the letters and digits only
+ *  (case, accents, spaces, hyphens and symbols ignored: "Hydro Flask" = "HYDROFLASK" = "Hydro-Flask®"), so a spelling variant never excludes a valid listing. Brand unknown: nothing is filtered and the screen says the comparison mixes brands. */
+export const brandInTitle = (title, brand) => !String(brand ?? '').trim() || alnum(title).includes(alnum(brand));
+function indicativeFrom(rows, input) {
+  const brandKnown = !!String(input.brand ?? '').trim(); const by = new Map(); let otherBrand = 0;
+  for (const r of rows) {
+    if (r.excludedFromReference || r.matchType !== MATCH.SIMILAR_PRODUCT || !r.type || r.price?.eur == null) continue;
+    if (brandKnown && !brandInTitle(r.title, input.brand)) { otherBrand += 1; continue; }
+    (by.get(r.type) ?? by.set(r.type, []).get(r.type)).push(r.price.eur);
+  }
+  const indicative = [...by.entries()].filter(([, ps]) => ps.length >= MIN_COMPARABLE).map(([type, ps]) => { const s = [...ps].sort((x, y) => x - y); return { type, count: s.length, minEur: round2(s[0]), medianEur: round2(median(s)), maxEur: round2(s[s.length - 1]) }; });
+  return { indicative, indicativeBasis: { brandKnown, brand: brandKnown ? String(input.brand).trim() : null, brandSource: brandKnown ? (input.sources?.brand ?? null) : null, otherBrandLeftOut: otherBrand } };
 }
 
 /** Supplier price against the observed reference. Never a verdict. */

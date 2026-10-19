@@ -151,7 +151,8 @@ try {
 
   await check('14. H2 "Préciser": with NO automatic question (a bottle case, nothing to choose), the owner can still type the size / variant; unreadable values are refused; it is free, replaces an earlier value, and survives', async () => {
     await t.eval(seed('r-prec', 'water bottle', 'Hydro Flask')); await sleep(300); await reload(t); await openMarket(t, 'r-prec'); await click(t, '[data-act="market-run"]', 1800); const paid = counts.post; let s = await text(t);
-    ok(!/Une précision \(une touche\)/.test(s), 'no automatic question for a bottle case'); ok(await t.eval(`!!document.querySelector('details.fm-prec')`), 'the Préciser section is permanent'); await t.eval(`document.querySelector('details.fm-prec').open = true`); await sleep(200); await shot(t, 'preciser-390', 'details.fm-prec');
+    ok(!/Une précision \(une touche\)/.test(s), 'no automatic question for a bottle case'); ok(await t.eval(`!!document.querySelector('details.fm-prec')`), 'the Préciser section is permanent');
+    ok(/gourde \/ bouteille : 31,10 € – 42,68 € – 44,95 € sur 4 annonce\(s\) similaires/.test(s) && /Marque Hydro Flask : seules les annonces qui la nomment sont retenues ; 2 annonce\(s\) d’autres marques sont laissées de côté/.test(s), `H4: a known brand is respected and said: ${s.slice(0, 900)}`); await t.eval(`document.querySelector('details.fm-prec').open = true`); await sleep(200); await shot(t, 'preciser-390', 'details.fm-prec');
     const h = await t.eval(`[...document.querySelectorAll('[data-prec], [data-act="market-precise"]')].map((e) => Math.round(e.getBoundingClientRect().height))`); ok(h.length === 4 && h.every((x) => x >= 44), `touch targets: ${JSON.stringify(h)}`);
     const n0 = (await store(t))['r-prec'].marketSearches.length;
     await click(t, '[data-act="market-precise"]', 600); s = await text(t); ok(/Écrivez au moins une valeur/.test(s), 'empty submit explained'); await t.eval(`document.querySelector('details.fm-prec').open = true; document.querySelector('[data-prec="capacity"]').value = 'beaucoup'`); await click(t, '[data-act="market-precise"]', 900); s = await text(t);
@@ -162,8 +163,13 @@ try {
     await reload(t); await openMarket(t, 'r-prec'); s = await text(t); ok(/taille 1,89 L/.test(s), 'survives a reload'); await noOverflow(t, 'preciser');
   });
 
+  await check('15. H4 brand UNKNOWN: nothing is filtered by brand and the screen says the comparison mixes brands', async () => {
+    await t.eval(`(async () => { const c = JSON.parse(localStorage.getItem('nordla.sourcing.cases')); const k = 'r-nobrand'; const m = await import('/core/case.js'); let x = m.newCase({ id: k, name: 'water bottle', now: new Date('2026-10-20T08:00:00Z') }); c[k] = x; localStorage.setItem('nordla.sourcing.cases', JSON.stringify(c)); localStorage.setItem('nordla.sourcing.current', JSON.stringify(k)); })()`); await sleep(300); await reload(t); await openMarket(t, 'r-nobrand'); const before = counts.post; await click(t, '[data-act="market-run"]', 1800); const s = await text(t); await shot(t, 'brand-unknown-390', '.fm-ind');
+    ok(counts.post === before + 1, 'one paid search (a different query)'); ok(/Prix indicatifs par famille — pas un prix de référence/.test(s), s.slice(0, 600)); ok(/Marque inconnue : ces prix peuvent mélanger plusieurs marques/.test(s), 'the limit of the comparison is shown'); ok(!/laissées de côté/.test(s), 'nothing was left out by brand'); await noOverflow(t, 'brand unknown');
+  });
+
   await check('7. the free step really is free: provider calls over the whole session = exactly the distinct searches that were pressed (answers and repeated searches add none)', async () => {
-    ok(counts.post === 6, `paid searches ${counts.post}`); // r-size, r-few, r-acme, r-unk2 and r-real and r-prec are six DIFFERENT queries (r-real2 repeats r-real: cache); r-unk, r-free repeat an earlier one (cache) and every answer is free
+    ok(counts.post === 7, `paid searches ${counts.post}`); // r-size, r-few, r-acme, r-unk2 and r-real, r-prec and r-nobrand are seven DIFFERENT queries (r-real2 repeats r-real: cache); r-unk, r-free repeat an earlier one (cache) and every answer is free
   });
 
   await check('8. no uncaught error in the whole session', async () => { ok(errs.length === 0, errs.join(' | ').slice(0, 500)); });

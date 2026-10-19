@@ -2,7 +2,7 @@
 // and the local re-analysis of the listings already obtained once the owner answers. Generic by construction: nothing here knows a brand or a product line.
 // Rules: every option carries the evidence it comes from; nothing is preselected; "Je ne sais pas" and "Autre" (free text) are always possible; an unknown answer changes nothing and is never asked again; a facet is asked
 // only when listing-derived groups differ by more than 10 % in price; an answer never triggers a provider call by itself (a new search is a separate, explicit, capped action).
-import { ACCESSORY_WORDS, CATEGORY_WORDS, FLAG, TYPE_KEYS, TYPE_LABELS, analyseListings, capacityOf, classifyListing, clusterVolumes, compareWithSupplier, fmtMl, titleWords, typeOf, volumeMl, volumesIn } from './market-radar.js';
+import { ACCESSORY_WORDS, CATEGORY_WORDS, FLAG, TYPE_KEYS, brandInTitle, TYPE_LABELS, analyseListings, capacityOf, classifyListing, clusterVolumes, compareWithSupplier, fmtMl, titleWords, typeOf, volumeMl, volumesIn } from './market-radar.js';
 
 export const MAX_QUESTIONS = 2; const PRICE_GAP = 0.10;
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); const n = s.length; return n === 0 ? null : n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
@@ -82,7 +82,7 @@ export function proposeQuestion({ input, listings = [], facet = undefined, asked
   if (!ptype && !conf.productType && !no('type')) {
     // what each answer would LEAVE once the usual exclusions are applied (lots, accessories, other kinds, aberrant prices): the evidence shown is exactly what the owner will see after answering, so the question never promises a number the result does not give
     const seenKinds = new Set(); for (const l of listings) { const t = typeOf(l.title, input?.brand); if (t) seenKinds.add(t); }
-    const kinds = [...seenKinds].map((k) => { const a = analyseListings(listings, { ...input, productType: k }); return [k, a.listings.filter((r) => !r.excludedFromReference && r.type === k && r.price?.eur != null).map((r) => r.price.eur)]; }).filter(([, ps]) => ps.length >= 3).sort((x, y) => y[1].length - x[1].length); const meds = kinds.map(([, ps]) => median(ps));
+    const kinds = [...seenKinds].map((k) => { const a = analyseListings(listings, { ...input, productType: k }); return [k, a.listings.filter((r) => !r.excludedFromReference && r.type === k && r.price?.eur != null && brandInTitle(r.title, input?.brand)).map((r) => r.price.eur)]; }).filter(([, ps]) => ps.length >= 3).sort((x, y) => y[1].length - x[1].length); const meds = kinds.map(([, ps]) => median(ps));
     if (kinds.length >= 2 && Math.max(...meds) / Math.min(...meds) - 1 > PRICE_GAP) return { id: 'type', prompt: 'De quel type de produit s’agit-il ?', unknownLabel: 'Je ne sais pas', allowOther: false,
       options: kinds.map(([k, ps]) => ({ value: { productType: k }, label: TYPE_LABELS[k], evidence: `${ps.length} annonce(s) retenue(s) · prix médian indicatif ${eur(median(ps))}` })) };
   }

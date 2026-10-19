@@ -33,6 +33,11 @@ Une gourde avec étiquette lisible (idéalement une taille imprimée en oz et en
 | M18 | Une annonce sans le mot « bouteille » mais avec la marque et la taille (ex. « … Wide Mouth 710 ml ») | Classée « Correspondance probable », confiance faible, raison « type de produit non précisé dans le titre » ; jamais « exacte » |
 | M19 | « Préciser la taille, le modèle ou la variante » (section repliable sous la question) : taper « beaucoup » en taille, puis « 64 oz », puis un modèle | « beaucoup » → « Non compris : taille » et rien d'enregistré ; « 64 oz » → « taille 1,89 L », **0 $**, aucune question automatique consommée ; la nouvelle taille remplace l'ancienne ; le tout survit à la fermeture de l'application |
 | M20 | Question de type puis réponse | Le prix médian annoncé sur la carte est **le même** que celui des « Prix indicatifs par famille — pas un prix de référence » affichés après ; aucune annonce n'est « probable » sur la seule base de la marque et du type ; aucun rapport avec le prix fournisseur sur un prix indicatif |
+| M21 | Produit dont la marque est connue (ex. Hydro Flask) : regarder les prix indicatifs ; puis un produit **sans marque** | Marque connue : « seules les annonces qui la nomment sont retenues ; N annonce(s) d'autres marques sont laissées de côté », aucune autre marque dans l'indicatif, les écritures « Hydroflask / HYDRO-FLASK » comptent ; marque inconnue : « Marque inconnue : ces prix peuvent mélanger plusieurs marques » |
+
+## Limites connues (reportées, à ne pas confondre avec un échec)
+- Une annonce sans nom de contenant ni taille (ex. « Hydro Flask Wide Mouth ») reste « similaire » et hors prix indicatifs : seule une variante ou une taille confirmée la promeut, avec au moins 3 annonces homogènes (H5).
+- « Préciser » ne permet pas de saisir le type de produit ; la question de type est une liste fermée (H6).
 
 ## Critères d'arrêt
 Une photo envoyée sans carte d'accord ; une dépense à la réponse ; une valeur présélectionnée ; une médiane affichée avec < 3 annonces comparables ; une annonce d'une autre marque ou taille dans la médiane après confirmation.
