@@ -44,6 +44,8 @@ export function procurementUserFor(actor, grants = configuredGrants) {
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
 export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined }) {
   let closeStore = async () => {}; let offSignals = () => {};
+  // kill switch: PROCUREMENT_DISABLED=1 turns the module OFF at start (no file opened, no route, no screen) - a rollback that needs no redeploy and touches no data
+  if (String(env.PROCUREMENT_DISABLED ?? '') === '1') { log('Stock / Achats: DISABLED by PROCUREMENT_DISABLED=1 (data untouched).'); return { handler: null, assistant: null, procurement: null, store: null, close: async () => {}, status: 'Stock / Achats OFF (DISABLED)' }; }
   try {
     const base = join(dir, 'procurement');
     await mkdir(base, { recursive: true });
