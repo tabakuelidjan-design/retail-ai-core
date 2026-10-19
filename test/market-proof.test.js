@@ -112,3 +112,16 @@ test('marketplaces are split and reported separately: amazon.com.be and bol.com 
   const ev = [{ seller: 'bol.com', url: 'https://www.bol.com/p/1' }, { seller: 'Amazon.nl', url: 'https://www.amazon.nl/dp/1', specs: { domain: 'www.amazon.nl' } }, { seller: 'Shop', url: 'https://shop.example/x' }];
   const m = marketplaceSplit(ev); assert.equal(m['bol.com'].found, true); assert.equal(m['amazon.nl'].found, true); assert.equal(m['amazon.com.be'].found, false); assert.equal(m['amazon.fr'].count, 0);
 });
+
+test('a task still "In Queue" (40602) keeps being polled: it is not an error and nothing is lost', async () => {
+  let gets = 0;
+  const f = async (url, opt = {}) => url.endsWith('/locations') ? json({ tasks: [{ result: [{ location_code: 2056, country_iso_code: 'BE' }] }] })
+    : url.endsWith('/products/task_post') ? json({ tasks: [{ id: 't9', status_code: 20100 }] })
+    : (++gets < 3 ? json({ tasks: [{ status_code: 40602, status_message: 'Task In Queue.' }] }) : json({ tasks: [{ status_code: 20000, cost: 0.002, result: [{ items: [{ type: 'google_shopping_serp', title: 'X', price: 10, currency: 'EUR', seller: 'S', url: 'https://s.example/x' }] }] }] }));
+  const r = await searchShopping({ queries: [{ text: 'x', via: 't', strength: 'NAME_ONLY' }], country: 'BE', env: { DATAFORSEO_LOGIN: 'a', DATAFORSEO_PASSWORD: 'b' }, now: NOW, fetchImpl: f, pollMs: 1 });
+  assert.equal(r.status, 'DONE'); assert.equal(r.evidence.length, 1); assert.equal(r.costUsd, 0.002); assert.equal(gets, 3);
+});
+
+test('the credentials file may carry a hidden .txt extension (Windows): it is still found', () => {
+  assert.equal(typeof loadEnv('Z:/nope/market-proof.env', { A: '1' }), 'object');
+});

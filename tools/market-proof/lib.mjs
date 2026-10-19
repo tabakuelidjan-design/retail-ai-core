@@ -8,9 +8,10 @@ import { join } from 'node:path';
 import { MATCH, SEARCH_STATUS, sanitizeEvidence, summarizeMarketEvidence } from '../../src/sourcing/core/market-search.js';
 
 export const ENV_FILE = join(homedir(), '.nordla', 'market-proof.env');
+// Windows hides known extensions: a file saved as "market-proof.env" in Notepad often becomes "market-proof.env.txt". Both names are accepted (the plain one first).
 export function loadEnv(file = ENV_FILE, base = process.env) {
-  const out = { ...base };
-  if (existsSync(file)) for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) { const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line); if (m && !line.trim().startsWith('#')) out[m[1]] = m[2].replace(/^["']|["']$/g, ''); }
+  const out = { ...base }; const real = existsSync(file) ? file : existsSync(`${file}.txt`) ? `${file}.txt` : null;
+  if (real) for (const line of readFileSync(real, 'utf8').replace(/^﻿/, '').split(/\r?\n/)) { const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line); if (m && !line.trim().startsWith('#')) out[m[1]] = m[2].replace(/^["']|["']$/g, ''); }
   return out;
 }
 export const configured = (env) => ({ vision: !!env.GOOGLE_VISION_API_KEY, shopping: !!(env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD), bol: !!(env.BOL_CLIENT_ID && env.BOL_CLIENT_SECRET) });
@@ -84,7 +85,7 @@ export async function searchShopping({ queries, country = 'BE', env, now = () =>
       let items = null; const t0 = Date.now();
       while (Date.now() - t0 < maxWaitMs) {
         await sleep(pollMs); const gr = await fetchImpl(`${base}/products/task_get/advanced/${task.id}`, { headers: H }); if (!gr.ok) throw new Error(`task_get HTTP ${gr.status}`);
-        const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000) throw new Error(`task_get: ${t.status_message}`);
+        const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000 && ![40601, 40602].includes(t.status_code)) throw new Error(`task_get: ${t.status_message}`); // 40601 Task Handed / 40602 Task In Queue = still working: keep polling
       }
       if (items === null) { runs.push({ query: q.text, status: 'TIMEOUT' }); continue; }
       runs.push({ query: q.text, status: 'DONE', items: items.length });
@@ -122,7 +123,7 @@ export async function searchAmazon({ queries, country = 'BE', env, now = () => n
       const pr = await fetchImpl(`${base}/products/task_post`, { method: 'POST', headers: H, body: JSON.stringify([{ keyword: q.text, location_code: loc.location_code, ...(language_code ? { language_code } : {}), priority: 2, depth: 40 }]) }); if (!pr.ok) throw new Error(`amazon task_post HTTP ${pr.status}`);
       const task = (await pr.json()).tasks?.[0]; if (!task?.id || (task.status_code ?? 20100) >= 40000) throw new Error(`amazon task_post: ${task?.status_message ?? 'no task id'}`);
       let items = null; const t0 = Date.now();
-      while (Date.now() - t0 < maxWaitMs) { await sleep(pollMs); const gr = await fetchImpl(`${base}/products/task_get/advanced/${task.id}`, { headers: H }); if (!gr.ok) throw new Error(`amazon task_get HTTP ${gr.status}`); const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000) throw new Error(`amazon task_get: ${t.status_message}`); }
+      while (Date.now() - t0 < maxWaitMs) { await sleep(pollMs); const gr = await fetchImpl(`${base}/products/task_get/advanced/${task.id}`, { headers: H }); if (!gr.ok) throw new Error(`amazon task_get HTTP ${gr.status}`); const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000 && ![40601, 40602].includes(t.status_code)) throw new Error(`amazon task_get: ${t.status_message}`); }
       if (items === null) continue;
       for (const it of items.flatMap((x) => (x.type === 'amazon_serp' || x.type === 'amazon_paid' ? [x] : Array.isArray(x.items) ? x.items : []))) {
         if (!it.url) continue; const amount = Number(it.price_from); const price = Number.isFinite(amount) && amount > 0 && /^[A-Z]{3}$/.test(String(it.currency ?? '')) ? { amount, currency: it.currency, vatIncluded: null } : null; const m = classifyMatch(it.title, { model: ctx.model, brand: ctx.brand, queryText: q.text });

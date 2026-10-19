@@ -31,7 +31,7 @@ if (cfg.shopping && textQueries.length) {
   balanceBefore = await dfsBalance({ env }); const estimate = estimateCostUsd({ queries: textQueries, amazon: wantAmazon });
   const g = spendGuard({ go: args.go === true, balance: balanceBefore, estimate, allowFunded: args['allow-funded'] === true });
   out.guard = { ...out.guard, estimateUsd: estimate, balanceUsd: balanceBefore, ...g };
-  if (!g.ok) { console.log(`PAID CALLS NOT MADE: ${g.why}\nPlan: ${textQueries.length} query(ies) ${JSON.stringify(textQueries.map((q) => q.text))} on ${country}${wantAmazon ? ' + Amazon API' : ''}; worst-case cost ~${estimate} USD; balance ${balanceBefore ?? 'unreadable'} USD.`); process.exit(g.plan ? 0 : 2); }
+  if (!g.ok) { console.log(`PAID CALLS NOT MADE: ${g.why}\nPlan: ${textQueries.length} query(ies) ${JSON.stringify(textQueries.map((q) => q.text))} on ${country}${wantAmazon ? ' + Amazon API' : ''}; worst-case cost ~${estimate} USD; balance ${balanceBefore ?? 'unreadable'} USD.`); await new Promise((r) => setTimeout(r, 100)); process.exit(g.plan ? 0 : 2); }
 }
 
 // 2. Market search
