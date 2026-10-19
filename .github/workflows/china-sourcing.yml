@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
-      - run: node --test test/sourcing-*.test.js test/core-pilot.test.js test/core-readers.test.js test/core-modules.test.js test/core-backup-restore.test.js
+      - run: node --test test/sourcing-*.test.js test/core-pilot.test.js test/core-readers.test.js test/core-modules.test.js test/core-backup-restore.test.js test/night-security.test.js test/procurement-server.test.js
   # Real-browser suites that need no provider, one job each so that a failure names its suite and never skips another.
   e2e-fieldv1:
     # BLOCKING: the Field V1 / three-mode Salon suite at 390 px (cold offline start included).
