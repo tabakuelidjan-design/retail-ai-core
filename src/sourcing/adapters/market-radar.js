@@ -5,7 +5,7 @@ import { validGtin } from './market-vision.js';
 
 export const FLAG = Object.freeze({
   PACK_OR_LOT: 'PACK_OR_LOT', ACCESSORY_SUSPECTED: 'ACCESSORY_SUSPECTED', PRICE_OUTLIER_HIGH: 'PRICE_OUTLIER_HIGH', PRICE_OUTLIER_LOW: 'PRICE_OUTLIER_LOW',
-  CAPACITY_DIFFERS: 'CAPACITY_DIFFERS', PROMO_PRINTED: 'PROMO_PRINTED', NO_TEXT_OVERLAP: 'NO_TEXT_OVERLAP', CAPACITY_NOT_STATED: 'CAPACITY_NOT_STATED', MODEL_NOT_IN_TITLE: 'MODEL_NOT_IN_TITLE', BRAND_NOT_IN_TITLE: 'BRAND_NOT_IN_TITLE', VARIANT_DIFFERS: 'VARIANT_DIFFERS', VARIANT_NOT_STATED: 'VARIANT_NOT_STATED', NO_PRICE: 'NO_PRICE', FOREIGN_CURRENCY_NO_RATE: 'FOREIGN_CURRENCY_NO_RATE',
+  CAPACITY_DIFFERS: 'CAPACITY_DIFFERS', PROMO_PRINTED: 'PROMO_PRINTED', NO_TEXT_OVERLAP: 'NO_TEXT_OVERLAP', CAPACITY_NOT_STATED: 'CAPACITY_NOT_STATED', MODEL_NOT_IN_TITLE: 'MODEL_NOT_IN_TITLE', BRAND_NOT_IN_TITLE: 'BRAND_NOT_IN_TITLE', VARIANT_DIFFERS: 'VARIANT_DIFFERS', VARIANT_NOT_STATED: 'VARIANT_NOT_STATED', TYPE_DIFFERS: 'TYPE_DIFFERS', NO_PRICE: 'NO_PRICE', FOREIGN_CURRENCY_NO_RATE: 'FOREIGN_CURRENCY_NO_RATE',
 });
 const STOP = new Set(['the', 'and', 'for', 'with', 'pour', 'avec', 'voor', 'met', 'les', 'des', 'une', 'een', 'van', 'new', 'neuf', 'nieuw']);
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -19,6 +19,21 @@ export const CATEGORY_WORDS = new Set(['bottle', 'bottles', 'fles', 'flessen', '
 export const nameIsCategory = (input) => { const bt = new Set(nameTokens(input.brand)); const want = nameTokens(input.name).filter((w) => !bt.has(w)); return want.every((w) => CATEGORY_WORDS.has(w)); };
 export const titleWords = (title) => new Set(norm(title).split(/[^a-z0-9]+/).filter(Boolean));
 export const fmtMl = (ml) => (ml >= 1000 ? `${(ml / 1000).toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace('.', ',')} L` : `${Math.round(ml)} ml`);
+/** Product-type FAMILIES (generic synonyms in several languages): a bottle / gourde is not a travel tumbler / gobelet, and neither is a jug. The brand's own words are removed first ("Hydro Flask" is not a flask).
+ *  A title that names words of two families (or none) has NO determinable type: it is never excluded for its type, and never trusted to be the same type either. */
+export const TYPE_FAMILIES = Object.freeze({
+  bottle: ['bottle', 'bottles', 'fles', 'flessen', 'waterfles', 'drinkfles', 'thermosfles', 'thermosflessen', 'bidon', 'gourde', 'gourdes'],
+  tumbler: ['tumbler', 'tumblers', 'beker', 'bekers', 'drinkbeker', 'thermosbeker', 'gobelet', 'gobelets', 'mug', 'mugs', 'cup', 'cups'],
+  jug: ['jug', 'jugs', 'kan', 'kannen', 'cruche', 'pitcher', 'carafe'],
+});
+export const TYPE_KEYS = Object.keys(TYPE_FAMILIES);
+/** Nouns of ACCESSORY parts (generic): never a product variant. */
+export const ACCESSORY_WORDS = new Set(['cap', 'caps', 'lid', 'lids', 'straw', 'straws', 'dop', 'dopje', 'deksel', 'tote', 'sling', 'sleeve', 'strap', 'boot', 'handle', 'cover', 'spout', 'replacement', 'accessory']);
+export const TYPE_LABELS = Object.freeze({ bottle: 'gourde / bouteille', tumbler: 'gobelet de voyage', jug: 'cruche / carafe' });
+export function typeOf(text, brand = '') {
+  const bw = new Set(norm(brand).split(/[^a-z0-9]+/).filter(Boolean)); const words = [...titleWords(text)].filter((w) => !bw.has(w));
+  const hit = TYPE_KEYS.filter((k) => TYPE_FAMILIES[k].some((w) => words.includes(w))); return hit.length === 1 ? hit[0] : null;
+}
 /** Pack size read in a title ("5 st.", "50st.", "2 x", "2 Pack", "6-pack"); null when none. */
 export function packOf(title) { const t = norm(title); const m = /(?:^|\s)(\d{1,3})\s?(?:x|×)\s?(?=\d|[a-z]{3})/.exec(t) ?? /(?:^|\s)(\d{1,3})\s?(?:st\.?|stuks?|stk\.?|pcs|pieces|pc)(?=\s|$|\W)/.exec(t) ?? /(?:^|\s)(\d{1,3})[- ]?pack\b/.exec(t); const n = m ? Number(m[1]) : null; return n && n > 1 ? n : null; }
 /** The facet value a title states: exactly ONE value whose words are all in the title; otherwise null (unstated or ambiguous). */
@@ -99,12 +114,14 @@ export function classifyListing(l, input) {
   const noOverlap = brand ? (!brandHit && (!want.length || overlap === 0)) : (want.length ? overlap === 0 : true); /* true when there is nothing to compare (a bare barcode search): nothing ties the title to the search */ if (noOverlap && !modelHit) flags.push(FLAG.NO_TEXT_OVERLAP); // nothing in the title ties it to the search: kept visible, never in a price range
   if (PACK_RE.test(title)) flags.push(FLAG.PACK_OR_LOT); if ((ACCESSORY_RE.test(title) || STRAW_ONLY(title) || (accessoryByNoun(title, input.brand) && !ACC_NOUN.test(input.name ?? ''))) && !ACCESSORY_RE.test(input.name ?? '')) flags.push(FLAG.ACCESSORY_SUSPECTED); if (PROMO_RE.test(title) && !PROMO_RE.test(input.name ?? '')) flags.push(FLAG.PROMO_PRINTED);
   if (modelOk && !modelHit) flags.push(FLAG.MODEL_NOT_IN_TITLE);
+  const ptype = input.productType ?? typeOf(input.name, input.brand); const ltype = typeOf(title, input.brand); if (ptype && ltype && ptype !== ltype) flags.push(FLAG.TYPE_DIFFERS); // another KIND of product (tumbler vs bottle): never comparable, never in the same price
   let matchType; let confidence; let reason;
-  const downgraded = flags.includes(FLAG.CAPACITY_DIFFERS) || flags.includes(FLAG.ACCESSORY_SUSPECTED) || flags.includes(FLAG.PACK_OR_LOT) || flags.includes(FLAG.PROMO_PRINTED);
-  const categoryPromotion = !downgraded && brandHit && nameIsCategory(input) && !!wantMl && !!gotMl && CONTAINER_NOUN.test(title); // a known brand + a verified size + the same kind of product: enough for PROBABLE even when the case name is only a category
+  const downgraded = flags.includes(FLAG.CAPACITY_DIFFERS) || flags.includes(FLAG.ACCESSORY_SUSPECTED) || flags.includes(FLAG.PACK_OR_LOT) || flags.includes(FLAG.PROMO_PRINTED) || flags.includes(FLAG.TYPE_DIFFERS);
+  const variantOk = (input.confirmed?.variant?.tokens ?? []).length > 0 && input.confirmed.variant.tokens.every((tk) => titleWords(title).has(tk)); const sizeOk = ((!!wantMl && !!gotMl) || (!!wantG && !!gotG)) && !flags.includes(FLAG.CAPACITY_DIFFERS); // a volume OR a weight, written in the title and agreeing with the product's
+  const categoryPromotion = !downgraded && brandHit && nameIsCategory(input) && (sizeOk || variantOk); // brand + a VERIFIED size or variant, and no contradicting type: enough, the generic noun ("bottle") is not required // a known brand + a verified size + the same kind of product: enough for PROBABLE even when the case name is only a category
   if (!downgraded && modelHit && (brandHit || !brand)) { matchType = MATCH.EXACT_MATCH; confidence = 'MEDIUM'; reason = 'le modèle exact figure dans le titre'; }
-  else if (!downgraded && (categoryPromotion || (brandHit && (want.length === 0 ? nameTokens(input.name).length > 0 : want.length >= 2 && overlap >= 0.75)) || (modelHit && !!brand) || (!brand && want.length >= 3 && overlap >= 0.9) || (!!brand && !brandHit && want.length >= 3 && overlap >= 0.99) || (l.queryVia?.includes('GTIN') && (brandHit || overlap >= 0.5)))) { matchType = MATCH.PROBABLE_MATCH; confidence = 'MEDIUM'; reason = categoryPromotion && !modelHit ? 'marque et taille vérifiées, même type de produit (les mots de catégorie sont des synonymes)' : modelHit ? 'modèle trouvé mais marque absente du titre' : l.queryVia?.includes('GTIN') ? 'trouvé par code-barres, titre non confirmé' : brandHit ? `marque et ${Math.round(overlap * 100)} % des mots distinctifs du nom dans le titre` : `tous les mots distinctifs du nom dans le titre, mais marque absente`; }
-  else { matchType = MATCH.SIMILAR_PRODUCT; confidence = 'LOW'; reason = flags.includes(FLAG.NO_TEXT_OVERLAP) ? 'aucun mot du titre ne se rapporte à la recherche' : downgraded ? (flags.includes(FLAG.CAPACITY_DIFFERS) ? 'capacité différente' : flags.includes(FLAG.ACCESSORY_SUSPECTED) ? 'accessoire probable' : flags.includes(FLAG.PACK_OR_LOT) ? 'lot ou pack probable' : 'article promotionnel / personnalisé probable') : `ressemblance seulement (${Math.round(overlap * 100)} % des mots du nom)`; }
+  else if (!downgraded && (categoryPromotion || (brandHit && want.length >= 2 && overlap >= 0.75) /* a case named with the brand ALONE identifies nothing: every listing of that brand would be "probable" (only a verified size or variant promotes it, see categoryPromotion) */ || (modelHit && !!brand) || (!brand && want.length >= 3 && overlap >= 0.9) || (!!brand && !brandHit && want.length >= 3 && overlap >= 0.99) || (l.queryVia?.includes('GTIN') && (brandHit || overlap >= 0.5)))) { matchType = MATCH.PROBABLE_MATCH; confidence = categoryPromotion && !modelHit && !ltype ? 'LOW' : 'MEDIUM'; reason = categoryPromotion && !modelHit ? (ltype ? 'marque et taille ou variante vérifiées, même type de produit' : 'marque et taille ou variante vérifiées ; type de produit non précisé dans le titre (prudence)') : modelHit ? 'modèle trouvé mais marque absente du titre' : l.queryVia?.includes('GTIN') ? 'trouvé par code-barres, titre non confirmé' : brandHit ? `marque et ${Math.round(overlap * 100)} % des mots distinctifs du nom dans le titre` : `tous les mots distinctifs du nom dans le titre, mais marque absente`; }
+  else { matchType = MATCH.SIMILAR_PRODUCT; confidence = 'LOW'; reason = flags.includes(FLAG.NO_TEXT_OVERLAP) ? 'aucun mot du titre ne se rapporte à la recherche' : downgraded ? (flags.includes(FLAG.TYPE_DIFFERS) ? 'autre type de produit' : flags.includes(FLAG.CAPACITY_DIFFERS) ? 'capacité différente' : flags.includes(FLAG.ACCESSORY_SUSPECTED) ? 'accessoire probable' : flags.includes(FLAG.PACK_OR_LOT) ? 'lot ou pack probable' : 'article promotionnel / personnalisé probable') : `ressemblance seulement (${Math.round(overlap * 100)} % des mots du nom)`; }
   return { matchType, confidence, reason, flags };
 }
 
@@ -132,8 +149,8 @@ export function analyseListings(listings, input, { ecb = null } = {}) {
     const li = linkInfo(l.url); const n = f.includes(FLAG.PACK_OR_LOT) ? packOf(l.title) : null;
     return { id: `l${i + 1}`, title: l.title, seller: l.seller, marketplace: marketplaceOf(l.seller, l.url), price: l.price != null ? { amount: l.price, currency: l.currency, eur: eur != null ? round2(eur) : null } : null, url: l.url, linkKind: li.kind, linkHost: li.host,
       matchType, confidence, reason, flags: f, observedAt: l.observedAt, source: 'google-shopping via dataforseo', query: l.query, queryVia: l.queryVia, productId: l.productId,
-      variant: v ? { key: v.key, label: v.label } : null, sizeMl: volumeMl(l.title), pack: n && eur != null ? { n, unitEur: round2(eur / n), estimated: true } : null }; });
-  const OUT = [FLAG.PACK_OR_LOT, FLAG.ACCESSORY_SUSPECTED, FLAG.CAPACITY_DIFFERS, FLAG.PROMO_PRINTED, FLAG.NO_TEXT_OVERLAP]; if (strict) OUT.push(FLAG.CAPACITY_NOT_STATED, FLAG.MODEL_NOT_IN_TITLE, FLAG.BRAND_NOT_IN_TITLE, FLAG.VARIANT_DIFFERS, FLAG.VARIANT_NOT_STATED);
+      variant: v ? { key: v.key, label: v.label } : null, type: typeOf(l.title, input.brand), sizeMl: volumeMl(l.title), pack: n && eur != null ? { n, unitEur: round2(eur / n), estimated: true } : null }; });
+  const OUT = [FLAG.PACK_OR_LOT, FLAG.ACCESSORY_SUSPECTED, FLAG.CAPACITY_DIFFERS, FLAG.PROMO_PRINTED, FLAG.NO_TEXT_OVERLAP, FLAG.TYPE_DIFFERS]; if (strict) OUT.push(FLAG.CAPACITY_NOT_STATED, FLAG.MODEL_NOT_IN_TITLE, FLAG.BRAND_NOT_IN_TITLE, FLAG.VARIANT_DIFFERS, FLAG.VARIANT_NOT_STATED);
   // outliers: among listings that are not already out for another reason, against the median of those (needs 5 priced listings: otherwise no judgement)
   const base = rows.filter((r) => r.price?.eur != null && !r.flags.some((f) => OUT.includes(f)));
   if (base.length >= 5) { const m = median(base.map((r) => r.price.eur)); for (const r of base) { if (r.price.eur > m * 2.5) r.flags.push(FLAG.PRICE_OUTLIER_HIGH); else if (r.price.eur < m * 0.4) r.flags.push(FLAG.PRICE_OUTLIER_LOW); } }
@@ -141,9 +158,9 @@ export function analyseListings(listings, input, { ecb = null } = {}) {
   const incl = rows.filter((r) => !r.excludedFromReference); const comparable = incl.filter((r) => CLASS_ORDER.includes(r.matchType));
   // homogeneous groups: per class, per size (only while the size is unknown) and per variant (only while a variant facet exists and is not confirmed)
   const sizeKnown = !!capacityOf(input) || !!input.model; /* a model determines the size: no split by size */ const byVariant = !!facet && !conf.variant; const clusters = clusterVolumes(comparable.map((r) => r.sizeMl).filter(Boolean));
-  const gm = new Map(); for (const r of comparable) { const sz = sizeKnown ? '' : (r.sizeMl ? String(repOf(clusters, r.sizeMl)) : 'none'); const k = `${r.matchType}|${sz}|${byVariant ? (r.variant?.key ?? 'none') : ''}`; (gm.get(k) ?? gm.set(k, []).get(k)).push(r); }
+  const ptypeKnown = !!(input.productType ?? typeOf(input.name, input.brand)); /* while the product's own type is unknown, listings of different types are grouped apart */ const gm = new Map(); for (const r of comparable) { const tp = ptypeKnown ? '' : (r.type ?? 'none'); const sz = sizeKnown ? '' : (r.sizeMl ? String(repOf(clusters, r.sizeMl)) : 'none'); const k = `${r.matchType}|${tp}|${sz}|${byVariant ? (r.variant?.key ?? 'none') : ''}`; (gm.get(k) ?? gm.set(k, []).get(k)).push(r); }
   const groups = [...gm.values()].map((rs) => { const prices = rs.map((r) => r.price.eur).sort((x, y) => x - y); const reliable = prices.length >= MIN_COMPARABLE; const rep = !sizeKnown && rs[0].sizeMl ? repOf(clusters, rs[0].sizeMl) : null;
-    return { class: rs[0].matchType, size: rep ? { ml: Math.round(rep), label: fmtMl(rep) } : null, variant: byVariant ? (rs[0].variant ?? { key: 'none', label: 'variante non indiquée' }) : null, count: prices.length, reliable, minEur: round2(prices[0]), medianEur: reliable ? round2(median(prices)) : null, maxEur: round2(prices[prices.length - 1]), pricesEur: prices.map(round2), ids: rs.map((r) => r.id) }; })
+    return { class: rs[0].matchType, type: ptypeKnown ? null : (rs[0].type ?? 'none'), size: rep ? { ml: Math.round(rep), label: fmtMl(rep) } : null, variant: byVariant ? (rs[0].variant ?? { key: 'none', label: 'variante non indiquée' }) : null, count: prices.length, reliable, minEur: round2(prices[0]), medianEur: reliable ? round2(median(prices)) : null, maxEur: round2(prices[prices.length - 1]), pricesEur: prices.map(round2), ids: rs.map((r) => r.id) }; })
     .sort((x, y) => CLASS_ORDER.indexOf(x.class) - CLASS_ORDER.indexOf(y.class) || y.count - x.count);
   const count = (t) => rows.filter((r) => r.matchType === t).length; const flagCount = {}; for (const r of rows) for (const f of r.flags) flagCount[f] = (flagCount[f] ?? 0) + 1;
   return { listings: rows, groups, summary: { total: rows.length, exact: count(MATCH.EXACT_MATCH), probable: count(MATCH.PROBABLE_MATCH), similar: count(MATCH.SIMILAR_PRODUCT), excluded: rows.filter((r) => r.excludedFromReference).length, exactNone: count(MATCH.EXACT_MATCH) === 0, flags: flagCount },
@@ -176,7 +193,7 @@ export function compareWithSupplier({ reference, supplier, ecb }) {
 /** Listing -> the evidence record stored in the case (provenance and date kept; flags and link kind in `specs`). */
 export function toStoredEvidence(r, country) {
   return { seller: r.seller, sellerType: 'UNKNOWN', country, url: r.url, source: 'google-shopping', price: r.price ? { amount: r.price.amount, currency: r.price.currency, vatIncluded: null } : null, brand: null, model: null,
-    specs: { variant: r.variant ?? null, pack: r.pack ?? null, sizeMl: r.sizeMl ?? null, title: r.title, marketplace: r.marketplace, linkKind: r.linkKind, linkHost: r.linkHost, flags: r.flags, excluded: r.excludedFromReference, eur: r.price?.eur ?? null, query: r.query, queryVia: r.queryVia, productId: r.productId },
+    specs: { type: r.type ?? null, variant: r.variant ?? null, pack: r.pack ?? null, sizeMl: r.sizeMl ?? null, title: r.title, marketplace: r.marketplace, linkKind: r.linkKind, linkHost: r.linkHost, flags: r.flags, excluded: r.excludedFromReference, eur: r.price?.eur ?? null, query: r.query, queryVia: r.queryVia, productId: r.productId },
     availability: null, matchType: r.matchType, confidence: r.confidence, observedAt: r.observedAt, reason: r.reason };
 }
 

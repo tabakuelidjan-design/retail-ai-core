@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { FLAG, MIN_COMPARABLE, analyseListings, packOf } from '../src/sourcing/adapters/market-radar.js';
+import { FLAG, MIN_COMPARABLE, analyseListings, packOf, typeOf } from '../src/sourcing/adapters/market-radar.js';
 import { MAX_QUESTIONS, analyseWithFacets, detectVariantFacet, parseCapacityText, proposeQuestion, refine, sanitizeConfirmed } from '../src/sourcing/adapters/market-refine.js';
 import { createMarketRadar } from '../src/sourcing/server/market-radar-service.js';
 
@@ -25,23 +25,59 @@ test('F1 generic: a known brand + a CONFIRMED size + the same kind of product is
   const four = [L('ACME Wide Mouth 710 ml insulated bottle A', 55), L('ACME Wide Mouth 710 ml insulated bottle B', 56), L('ACME Wide Mouth 710 ml insulated bottle C', 57), L('ACME Wide Mouth 710 ml insulated bottle D', 58)];
   const r = refine({ listings: four, input: ACME_IN, confirmed: { capacityMl: 710 }, ecb: ECB });
   assert.equal(r.analysis.summary.probable, 4); assert.equal(r.analysis.reference.reliable, true); assert.equal(r.analysis.reference.count, 4); assert.equal(r.analysis.reference.matchClass, 'PROBABLE_MATCH');
-  assert.match(r.analysis.listings[0].reason, /marque et taille vérifiées/);
+  assert.match(r.analysis.listings[0].reason, /marque et taille ou variante vérifiées, même type de produit/);
 });
 
-test('S1 real data — brand + category name, size unknown: ONE size question from the titles actually observed, with evidence and price, nothing preselected, "Autre" and "Je ne sais pas" offered, and no price while it is pending', () => {
+test('G2 real data — a "water bottle" case: every Travel Tumbler / beker of the 53 real listings is ANOTHER KIND of product, flagged and out of every price; no choice is worth a question', () => {
   const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {} }; const { analysis, facet } = analyseWithFacets(REAL, input, { ecb: ECB });
   assert.equal(analysis.summary.exact, 0); assert.equal(analysis.summary.exactNone, true); assert.equal(analysis.reference.reliable, false);
-  const q = proposeQuestion({ input, listings: REAL, facet }); assert.equal(q.id, 'capacity'); assert.equal(q.allowOther, true); assert.equal(q.unknownLabel, 'Je ne sais pas');
-  assert.deepEqual(q.options.map((o) => o.value.capacityMl), [946, 1000]); assert.ok(q.options.every((o) => /vu dans \d+ annonce/.test(o.evidence) && /prix médian/.test(o.evidence) && o.selected === undefined));
+  const tumblers = analysis.listings.filter((x) => typeOf(x.title, 'Hydro Flask') === 'tumbler'); assert.ok(tumblers.length >= 10, `real tumblers found: ${tumblers.length}`);
+  assert.ok(tumblers.every((x) => x.flags.includes(FLAG.TYPE_DIFFERS) && x.excludedFromReference && x.reason === 'autre type de produit'));
+  assert.equal(proposeQuestion({ input, listings: REAL, facet }), null, 'in-scope bottles show no size or variant that moves the price: nothing to ask');
 });
 
-test('S1 real data — confirming 946 ml gives ONE reliable PROBABLE group made only of real comparable listings; accessories, lots, promos and other brands are out but still listed', () => {
+test('G2 real data — the case does not say the KIND of product: ONE type question (bottle vs travel tumbler) from the titles actually observed, with evidence and price, nothing preselected, "Je ne sais pas" offered', () => {
+  const input = { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }; const q = proposeQuestion({ input, listings: REAL });
+  assert.equal(q.id, 'type'); assert.equal(q.unknownLabel, 'Je ne sais pas'); assert.equal(q.allowOther, false); assert.deepEqual(q.options.map((o) => o.label).sort(), ['gobelet de voyage', 'gourde / bouteille']);
+  assert.ok(q.options.every((o) => /vu dans \d+ annonce\(s\) · prix médian/.test(o.evidence) && o.selected === undefined && o.value.productType));
+  const ans = refine({ listings: REAL, input, confirmed: { productType: 'bottle' }, ecb: ECB }); assert.ok(ans.analysis.listings.filter((x) => typeOf(x.title, 'Hydro Flask') === 'tumbler').every((x) => x.excludedFromReference));
+});
+
+test('G2 real data — "Je ne sais pas" on the type: prices are NEVER pooled across types (groups per type), and a median needs 3 homogeneous listings', () => {
+  const input = { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {} }; const a = refine({ listings: REAL, input, confirmed: { capacityMl: 946 }, ecb: ECB, asked: 1, declined: ['type'] }).analysis;
+  for (const g of a.groups) { const types = new Set(g.ids.map((id) => typeOf(a.listings.find((x) => x.id === id).title, 'Hydro Flask') ?? 'none')); assert.equal(types.size, 1, `group ${g.type} is of one type only`); }
+  assert.equal(a.reference.medianEur, null); assert.ok(a.groups.every((g) => g.count < 3 || g.reliable));
+});
+
+test('G1+G2 real data — confirming 946 ml for a bottle: the Travel Tumblers no longer make a "bottle" price; only an undetermined-type listing remains and it is alone: "Prix de référence non fiable"', () => {
   const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {} }; const r = refine({ listings: REAL, input, confirmed: { capacityMl: 946 }, ecb: ECB }); const a = r.analysis;
-  assert.equal(a.listings.length, 53, 'nothing is removed'); assert.equal(a.reference.reliable, true); assert.equal(a.reference.count, 3); assert.equal(a.reference.matchClass, 'PROBABLE_MATCH'); assert.equal(a.reference.minEur, 30.95); assert.equal(a.reference.maxEur, 32.9);
-  const inRef = a.listings.filter((x) => !x.excludedFromReference); assert.ok(inRef.every((x) => /hydro flask/i.test(x.title) && /946|32 ?oz/i.test(x.title)), inRef.map((x) => x.title).join(' | '));
-  assert.ok(a.listings.filter((x) => /Nalgene/i.test(x.title)).every((x) => x.excludedFromReference && x.flags.includes(FLAG.BRAND_NOT_IN_TITLE)));
-  assert.ok(a.listings.filter((x) => x.flags.includes(FLAG.PACK_OR_LOT)).every((x) => x.excludedFromReference)); assert.ok(a.listings.filter((x) => x.flags.includes(FLAG.ACCESSORY_SUSPECTED)).every((x) => x.excludedFromReference));
-  assert.equal(r.question, null, 'one answer was enough');
+  assert.equal(a.listings.length, 53, 'nothing is removed'); assert.equal(a.reference.reliable, false); assert.equal(a.reference.medianEur, null); assert.deepEqual(a.reference.pricesEur, [32.9]);
+  const inRef = a.listings.filter((x) => !x.excludedFromReference); assert.ok(inRef.every((x) => typeOf(x.title, 'Hydro Flask') !== 'tumbler')); assert.ok(a.listings.filter((x) => /Nalgene/i.test(x.title)).every((x) => x.excludedFromReference && x.flags.includes(FLAG.BRAND_NOT_IN_TITLE)));
+  assert.ok(a.listings.filter((x) => x.flags.includes(FLAG.PACK_OR_LOT) || x.flags.includes(FLAG.ACCESSORY_SUSPECTED)).every((x) => x.excludedFromReference)); assert.match(a.reference.note, /seulement 1 annonce/);
+});
+
+test('G1 real data — the two real "Hydro Flask Wide Mouth" listings (Amazon.be 38,99 €, Snowleader 44,90 €; no container noun, no size): never EXACT; with the variant "wide mouth" confirmed they become PROBABLE with LOW confidence and an honest reason, grouped apart from sized listings; 2 listings are not a reference', () => {
+  const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {} };
+  const before = analyseWithFacets(REAL, input, { ecb: ECB }).analysis; const wm = before.listings.filter((x) => /^Hydro Flask Wide Mouth$/.test(x.title)); assert.equal(wm.length, 2); assert.ok(wm.every((x) => x.matchType === 'SIMILAR_PRODUCT'), 'without any verified trait they stay SIMILAR');
+  const after = refine({ listings: REAL, input, confirmed: { variantText: 'wide mouth' }, ecb: ECB }).analysis; const wm2 = after.listings.filter((x) => /^Hydro Flask Wide Mouth$/.test(x.title));
+  assert.ok(wm2.every((x) => x.matchType === 'PROBABLE_MATCH' && x.confidence === 'LOW' && !x.excludedFromReference && /type de produit non précisé/.test(x.reason)), JSON.stringify(wm2.map((x) => [x.matchType, x.confidence, x.reason])));
+  assert.equal(after.summary.exact, 0); assert.equal(after.reference.reliable, false); assert.equal(after.reference.medianEur, null); assert.ok(after.reference.pricesEur.includes(38.99) && after.reference.pricesEur.includes(44.9));
+});
+
+test('G1 generic: "ACME Wide Mouth 710 ml" has no container noun: brand + verified size is enough for PROBABLE (LOW confidence, reason says the type is not stated), and it never becomes EXACT', () => {
+  const ls = [L('ACME Wide Mouth 710 ml Black', 55), L('ACME Wide Mouth 710 ml Blue', 56), L('ACME Wide Mouth 710 ml Green', 57), L('ACME Wide Mouth 710 ml White', 58)];
+  const a = refine({ listings: ls, input: ACME_IN, confirmed: { capacityMl: 710 }, ecb: ECB }).analysis; assert.equal(a.summary.probable, 4); assert.equal(a.summary.exact, 0); assert.equal(a.reference.reliable, true); assert.equal(a.reference.count, 4);
+  assert.ok(a.listings.every((x) => x.confidence === 'LOW' && /type de produit non précisé/.test(x.reason)));
+});
+
+test('G2 generic: a TUMBLER is never priced with a BOTTLE, whatever the brand; with the type unknown they are grouped apart; the type is a question only when the two kinds differ in price', () => {
+  const bottles = [58, 59, 60].map((p, i) => L(`ZORBA insulated bottle 710 ml b${i}`, p)); const tumblers = [30, 31, 32].map((p, i) => L(`ZORBA travel tumbler 710 ml t${i}`, p)); const input = { name: 'ZORBA', brand: 'ZORBA', traits: {} };
+  const known = refine({ listings: [...bottles, ...tumblers], input: { ...input, name: 'insulated bottle' }, confirmed: { capacityMl: 710 }, ecb: ECB }).analysis; assert.equal(known.reference.count, 3); assert.equal(known.reference.medianEur, 59); assert.ok(tumblers.every((t) => known.listings.find((x) => x.title === t.title).flags.includes(FLAG.TYPE_DIFFERS)));
+  const unknown = refine({ listings: [...bottles, ...tumblers], input, confirmed: { capacityMl: 710 }, ecb: ECB }); assert.equal(unknown.analysis.groups.length, 2); assert.equal(unknown.analysis.reference.multiple, true); assert.equal(unknown.analysis.reference.medianEur, null);
+  const q = proposeQuestion({ input, listings: [...bottles, ...tumblers] }); assert.equal(q.id, 'type', 'one size only in the titles: the kind of product is the question');
+  const typeQ = proposeQuestion({ input: { ...input, confirmed: { capacityMl: 710 } }, listings: [...bottles, ...tumblers] }); assert.equal(typeQ.id, 'type');
+  const cheap = [58, 59, 60, 57, 56, 55].map((p, i) => L(`ZORBA ${i % 2 ? 'insulated bottle' : 'travel tumbler'} 710 ml c${i}`, p)); assert.equal(proposeQuestion({ input: { ...input, confirmed: { capacityMl: 710 } }, listings: cheap }), null, 'same price range: the type does not move the price: not asked');
+  assert.equal(typeOf('Hydro Flask Wide Mouth', 'Hydro Flask'), null); assert.equal(typeOf('Thermosflessen 32 oz Travel Tumbler'), null, 'two families: undetermined'); assert.equal(typeOf('ACME gourde 1 L'), 'bottle'); assert.equal(typeOf('ACME gobelet 40 cl'), 'tumbler');
 });
 
 test('S1 real data — a size with no comparable listing (473 ml, or a typed 64 oz) is "Prix de référence non fiable": no median, no invented price', () => {
@@ -53,8 +89,8 @@ test('S1 real data — a size with no comparable listing (473 ml, or a typed 64 
 test('S2 confirmed — size then variant (two questions at most, price-moving facets only), then ONE homogeneous reference; variants, sizes, lots, accessories, other brands never enter it', () => {
   const ls = ACME();
   const first = refine({ listings: ls, input: ACME_IN, confirmed: null, ecb: ECB, asked: 0 }); assert.equal(first.question.id, 'capacity'); assert.deepEqual(first.question.options.map((o) => o.value.capacityMl), [710, 946]);
-  const second = refine({ listings: ls, input: ACME_IN, confirmed: { capacityMl: 710 }, ecb: ECB, asked: 1 }); assert.equal(second.question.id, 'variant'); assert.deepEqual(second.question.options.map((o) => o.label).sort(), ['Standard', 'Wide']); assert.ok(second.question.options.every((o) => /vu dans \d+ annonce.*prix médian/.test(o.evidence)));
-  const wide = second.question.options.find((o) => o.label === 'Wide').value;
+  const second = refine({ listings: ls, input: ACME_IN, confirmed: { capacityMl: 710 }, ecb: ECB, asked: 1 }); assert.equal(second.question.id, 'variant'); assert.deepEqual(second.question.options.map((o) => o.label).sort(), ['Standard mouth', 'Wide mouth']); assert.ok(second.question.options.every((o) => /vu dans \d+ annonce.*prix médian/.test(o.evidence)));
+  const wide = second.question.options.find((o) => /^Wide/.test(o.label)).value;
   const third = refine({ listings: ls, input: ACME_IN, confirmed: { capacityMl: 710, ...wide }, ecb: ECB, asked: 2 }); const a = third.analysis;
   assert.equal(third.question, null, `no third question (limit ${MAX_QUESTIONS})`); assert.equal(a.reference.reliable, true); assert.equal(a.reference.count, 4); assert.equal(a.reference.minEur, 60); assert.equal(a.reference.maxEur, 64); assert.equal(a.reference.medianEur, 62.5);
   const by = (t) => a.listings.find((x) => x.title === t); assert.ok(by('ACME Standard Mouth insulated bottle 710 ml Black').flags.includes(FLAG.VARIANT_DIFFERS)); assert.ok(by('ACME Wide Mouth insulated bottle 946 ml v0').flags.includes(FLAG.CAPACITY_DIFFERS));
@@ -87,7 +123,7 @@ test('EXACT needs every determining trait verified: a variant the title states a
   const input = { name: 'water bottle', brand: 'ACME', model: 'HF-710W', traits: {} };
   const before = analyseWithFacets(ls, input, { ecb: ECB }).analysis; assert.equal(before.summary.exact, 0); assert.ok(before.listings.every((x) => x.matchType === 'PROBABLE_MATCH' && /variante .* n’est pas confirmée/.test(x.reason)));
   const q = proposeQuestion({ input, listings: ls }); assert.equal(q.id, 'variant');
-  const after = refine({ listings: ls, input, confirmed: { variant: q.options.find((o) => o.label === 'Wide').value.variant }, ecb: ECB }).analysis; assert.equal(after.listings.filter((x) => !x.excludedFromReference && x.matchType === 'EXACT_MATCH').length, 3); assert.equal(after.reference.matchClass, 'EXACT_MATCH'); assert.equal(after.reference.count, 3); assert.equal(after.reference.medianEur, 63);
+  const after = refine({ listings: ls, input, confirmed: { variant: q.options.find((o) => /^Wide/.test(o.label)).value.variant }, ecb: ECB }).analysis; assert.equal(after.listings.filter((x) => !x.excludedFromReference && x.matchType === 'EXACT_MATCH').length, 3); assert.equal(after.reference.matchClass, 'EXACT_MATCH'); assert.equal(after.reference.count, 3); assert.equal(after.reference.medianEur, 63);
 });
 
 test('S4 product without a recognised brand: never EXACT without a model, even with a confirmed size', () => {
@@ -149,11 +185,11 @@ function provider(ls) {
 const svc = (p) => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a@b.test', DATAFORSEO_PASSWORD: 'pw-test-123', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: p.f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1 });
 
 test('service: all 53 real listings are kept in the case (not 40) and re-read by the refine step; the answer chain makes ZERO provider call; an identical search is served from the cache', async () => {
-  const p = provider(REAL.map((x) => ({ title: x.title, price: x.price, seller: x.seller }))); const radar = svc(p);
-  const first = await radar.search({ input: { name: 'water bottle', brand: 'Hydro Flask' } }); assert.equal(first.stored.length, 53); assert.equal(first.question.id, 'capacity'); assert.equal(p.calls.post, 1); const before = { ...p.calls };
-  const input = { name: 'water bottle', brand: 'Hydro Flask' };
-  const a1 = await radar.refine({ evidence: first.stored, input, confirmed: { capacityMl: 946 }, asked: 1 }); assert.equal(a1.stored.length, 53); assert.equal(a1.reference.reliable, true); assert.equal(a1.reference.count, 3); assert.deepEqual(a1.cost, { estimatedMaxUsd: 0, reportedUsd: 0, calls: 0 });
-  const a2 = await radar.refine({ evidence: first.stored, input, confirmed: null, asked: 1, declined: ['capacity'] }); assert.equal(a2.confirmation, 'UNKNOWN'); const a3 = await radar.refine({ evidence: first.stored, input, confirmed: { capacityText: '64 oz' }, asked: 1 }); assert.equal(a3.reference.reliable, false);
+  const p = provider(REAL.map((x) => ({ title: x.title, price: x.price, seller: x.seller }))); const radar = svc(p); const input = { name: 'Hydro Flask', brand: 'Hydro Flask' };
+  const first = await radar.search({ input }); assert.equal(first.stored.length, 53); assert.equal(first.question.id, 'type'); assert.equal(p.calls.post, 1); const before = { ...p.calls };
+  const a1 = await radar.refine({ evidence: first.stored, input, confirmed: { productType: 'bottle' }, asked: 1 }); assert.equal(a1.stored.length, 53); assert.deepEqual(a1.cost, { estimatedMaxUsd: 0, reportedUsd: 0, calls: 0 }); assert.ok(a1.stored.filter((e) => e.specs.type === 'tumbler').every((e) => e.specs.excluded));
+  const a2 = await radar.refine({ evidence: first.stored, input, confirmed: { productType: 'bottle', capacityMl: 946 }, asked: 2 }); assert.equal(a2.reference.reliable, false); assert.equal(a2.question, null);
+  const a3 = await radar.refine({ evidence: first.stored, input, confirmed: null, asked: 1, declined: ['type'] }); assert.equal(a3.confirmation, 'UNKNOWN'); const a4 = await radar.refine({ evidence: first.stored, input, confirmed: { capacityText: '64 oz' }, asked: 1 }); assert.equal(a4.reference.reliable, false);
   assert.deepEqual(p.calls, before, 'no provider call for any answer'); const again = await radar.search({ input }); assert.equal(again.cached, true); assert.equal(p.calls.post, 1, 'identical parameters: cached, not paid twice');
 });
 

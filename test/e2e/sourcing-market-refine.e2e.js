@@ -2,7 +2,7 @@
 // Proves: after the search, at most ONE one-tap question built from evidence (none preselected, "Je ne sais pas" always there); the answer re-reads the listings already obtained WITHOUT any provider call
 // (the simulated provider counts every call); non-comparable listings leave the median but stay listed with their reason; fewer than 3 comparable listings = "Prix de référence non fiable", no median.
 //   SOURCING_E2E_BROWSER="C:/Program Files/Google/Chrome/Application/chrome.exe" node test/e2e/sourcing-market-refine.e2e.js        (SOURCING_E2E_SHOTS=<dir> for screenshots)
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startSourcingServer } from '../../src/sourcing/server/index.js';
@@ -19,6 +19,7 @@ const it = (title, price, id) => ({ type: 'google_shopping_serp', title, price, 
 const SCENARIOS = {
   sizes: [it('Stanley Quencher H2.0 tumbler 1.18L Rose', 55, 1), it('Stanley Quencher H2.0 tumbler 1,18 L Blue', 54, 2), it('Stanley Quencher H2.0 tumbler 1.18L Cream', 56, 3), it('Stanley Quencher H2.0 tumbler 1.18L Black', 58, 4), it('Stanley Quencher H2.0 tumbler 1.18L Green', 57, 5),
     it('Stanley Quencher H2.0 tumbler 887ml Rose', 40, 6), it('Stanley Quencher H2.0 tumbler 0.887 L Blue', 41, 7), it('Stanley Quencher H2.0 tumbler', 52, 8), it('Yeti Rambler tumbler 1.18L', 70, 9), it('Stanley Quencher H2.0 tumbler 1.18L 2 pack', 110, 10)],
+  real: JSON.parse(readFileSync(new URL('../fixtures/market-hydroflask-53.json', import.meta.url), 'utf8')).map((x, i) => it(x.title, x.price, 300 + i)),
   acme: [['Wide Mouth', 'insulated bottle', '710 ml', ['Black', 'Blue', 'Green', 'White'], [62, 64, 60, 63]], ['Standard Mouth', 'insulated bottle', '710 ml', ['Black', 'Blue', 'Green', 'White'], [46, 48, 45, 47]], ['Wide Mouth', 'insulated bottle', '946 ml', ['v0', 'v1', 'v2'], [74, 75, 76]]]
     .flatMap(([v, k, size, cs, ps], g) => cs.map((c, i) => it(`ACME ${v} ${k} ${size} ${c}`, ps[i], 100 + g * 10 + i)))
     .concat([it('ACME Wide Mouth replacement cap lid', 14, 150), it('6 pcs ACME Wide Mouth insulated bottle 710 ml', 330, 151), it('ZETA Wide Mouth insulated bottle 710 ml', 40, 152)]),
@@ -130,8 +131,24 @@ try {
     ok(titles.filter((x) => /^Prix constatés/.test(x)).length >= 2, `one box per homogeneous group: ${JSON.stringify(titles)}`); ok(!/médiane observée/.test(s) || /non fiable|aucune comparaison/.test(s), 'no supplier ratio on a mixed set'); await noOverflow(t, 'groups');
   });
 
+  await check('12. G2 on 53 REAL listings: the case does not say the KIND of product -> ONE type question (bottle / travel tumbler); the answer is free; tumblers leave the bottle price and stay listed as "autre type de produit"', async () => {
+    scenario = 'real'; await t.eval(seed('r-real', 'Hydro Flask', 'Hydro Flask')); await sleep(300); await reload(t); await openMarket(t, 'r-real'); await click(t, '[data-act="market-run"]', 1800); const paid = counts.post;
+    let s = await text(t); await shot(t, 'type-question-390', '.fm-q'); ok(/De quel type de produit/.test(s), s.slice(0, 600)); ok(!(await t.eval(`!!document.querySelector('[data-other-input]')`)), 'no free text for a closed list of kinds'); ok(/Aucun produit exact trouvé/.test(s), 'no exact product, said'); ok(!/Prix constatés/.test(s), 'no price while pending');
+    const labels = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].map((b) => b.innerText)`); ok(JSON.stringify(labels) === JSON.stringify(['gobelet de voyage', 'gourde / bouteille', 'Je ne sais pas']), JSON.stringify(labels));
+    const bottle = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].findIndex((b) => b.innerText === 'gourde / bouteille')`); await click(t, `[data-act="market-answer"][data-key="${bottle}"]`, 1300); s = await text(t);
+    ok(counts.post === paid, 'the type answer is free'); ok(/Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), 'a case named with the brand alone and no verified size: no price at all, said honestly'); ok(/type gourde \/ bouteille/.test(s), s.slice(0, 500));
+    await t.eval(`document.querySelectorAll('details.fm-rg').forEach((d) => { d.open = true; })`); await sleep(200); const all = await text(t); ok(/autre type de produit/.test(all), 'tumblers listed with their reason'); ok(/Travel Tumbler/i.test(all), 'the tumbler listings stay consultable'); await shot(t, 'type-answered-390', '.fm-k2'); await noOverflow(t, 'type answered');
+  });
+
+  await check('13. "Je ne sais pas" on the kind of product: prices are given per TYPE group, a Travel Tumbler is never averaged with a bottle', async () => {
+    await t.eval(seed('r-real2', 'Hydro Flask', 'Hydro Flask')); await sleep(300); await reload(t); await openMarket(t, 'r-real2'); await click(t, '[data-act="market-run"]', 1500); let s = await text(t);
+    for (let i = 0; i < 2 && /Une précision \(une touche\)/.test(s); i += 1) { await click(t, '[data-act="market-answer"][data-key="unknown"]', 1100); s = await text(t); }
+    const titles = await t.eval(`[...document.querySelectorAll('.fm-rbox .fm-k2')].map((e) => e.innerText)`); const typed = titles.filter((x) => /gobelet de voyage|gourde \/ bouteille|type non précisé/.test(x));
+    ok(titles.every((x) => !/^Prix constatés$/.test(x)) || typed.length === 0, `no mixed single box: ${JSON.stringify(titles)}`); ok(!/médiane observée/.test(s), 'no supplier ratio on mixed types'); await noOverflow(t, 'types grouped');
+  });
+
   await check('7. the free step really is free: provider calls over the whole session = exactly the distinct searches that were pressed (answers and repeated searches add none)', async () => {
-    ok(counts.post === 4, `paid searches ${counts.post}`); // r-size, r-few, r-acme and r-unk2 are four DIFFERENT queries; r-unk, r-free repeat an earlier one (cache) and every answer is free
+    ok(counts.post === 5, `paid searches ${counts.post}`); // r-size, r-few, r-acme, r-unk2 and r-real are five DIFFERENT queries (r-real2 repeats r-real: cache); r-unk, r-free repeat an earlier one (cache) and every answer is free
   });
 
   await check('8. no uncaught error in the whole session', async () => { ok(errs.length === 0, errs.join(' | ').slice(0, 500)); });

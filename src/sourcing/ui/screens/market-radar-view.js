@@ -4,7 +4,7 @@ import { esc } from '../dom.js';
 import { getBlob } from '../storage.js';
 
 const CLASS = { EXACT_MATCH: 'Correspondance exacte', PROBABLE_MATCH: 'Correspondance probable', SIMILAR_PRODUCT: 'Produit similaire' };
-const FLAG = { PACK_OR_LOT: 'lot ou pack ?', PROMO_PRINTED: 'promotionnel / personnalisé ?', NO_TEXT_OVERLAP: 'sans rapport avec la recherche ?', ACCESSORY_SUSPECTED: 'accessoire ?', PRICE_OUTLIER_HIGH: 'prix très élevé (aberrant ?)', PRICE_OUTLIER_LOW: 'prix très bas (aberrant ?)', CAPACITY_DIFFERS: 'capacité différente', CAPACITY_NOT_STATED: 'capacité non indiquée', MODEL_NOT_IN_TITLE: 'modèle absent du titre', BRAND_NOT_IN_TITLE: 'autre marque (ou marque absente)', VARIANT_DIFFERS: 'autre variante', VARIANT_NOT_STATED: 'variante non indiquée', NO_PRICE: 'pas de prix', FOREIGN_CURRENCY_NO_RATE: 'devise sans taux' };
+const FLAG = { PACK_OR_LOT: 'lot ou pack ?', PROMO_PRINTED: 'promotionnel / personnalisé ?', NO_TEXT_OVERLAP: 'sans rapport avec la recherche ?', ACCESSORY_SUSPECTED: 'accessoire ?', PRICE_OUTLIER_HIGH: 'prix très élevé (aberrant ?)', PRICE_OUTLIER_LOW: 'prix très bas (aberrant ?)', CAPACITY_DIFFERS: 'capacité différente', CAPACITY_NOT_STATED: 'capacité non indiquée', MODEL_NOT_IN_TITLE: 'modèle absent du titre', BRAND_NOT_IN_TITLE: 'autre marque (ou marque absente)', VARIANT_DIFFERS: 'autre variante', TYPE_DIFFERS: 'autre type de produit', VARIANT_NOT_STATED: 'variante non indiquée', NO_PRICE: 'pas de prix', FOREIGN_CURRENCY_NO_RATE: 'devise sans taux' };
 const MP = { 'amazon.be': 'Amazon.be', 'bol.com': 'bol.com', amazon: 'Amazon' };
 const eur = (n) => `${Number(n).toFixed(2).replace('.', ',')} €`;
 const when = (iso) => { try { return new Intl.DateTimeFormat('fr-BE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Brussels' }).format(new Date(iso)); } catch { return String(iso ?? ''); } };
@@ -57,7 +57,7 @@ function questionCard(q) {
 const confirmLine = (c) => {
   if (!c) return '';
   const v = c.accumulated ?? (c.unknown ? {} : c.value) ?? {};
-  const what = [v.capacityMl ? `taille <b>${esc(fmtMlView(v.capacityMl))}</b>` : '', v.model ? `modèle <b>${esc(v.model)}</b>` : '', v.variant ? `variante <b>${esc(v.variant.label)}</b>` : ''].filter(Boolean).join(' · ');
+  const what = [v.capacityMl ? `taille <b>${esc(fmtMlView(v.capacityMl))}</b>` : '', v.model ? `modèle <b>${esc(v.model)}</b>` : '', v.variant ? `variante <b>${esc(v.variant.label)}</b>` : '', v.productType ? `type <b>${esc(TYPE_LABEL[v.productType] ?? v.productType)}</b>` : ''].filter(Boolean).join(' · ');
   const unk = c.unknown ? '<p class="fm-note">Précision : <b>vous ne savez pas</b> — pas de filtre ajouté sur ce point : les prix sont donnés <b>par groupe</b> (jamais mélangés) et restent non fiables s’il y a trop peu d’annonces comparables.</p>' : '';
   const rec = what ? `<p class="fm-note">Précision confirmée par vous : ${what}. Les annonces dont la taille, le modèle, la variante ou la marque ne correspondent pas (ou ne se vérifient pas) sont écartées du calcul mais restent consultables avec leur raison.</p>` : '';
   return unk + rec;
@@ -71,7 +71,8 @@ function unreliableBox(ref, c, queries) {
   return `<div class="fm-rbox fm-unrel" role="status"><div class="fm-k2 first">Prix de référence non fiable</div><p class="fm-note"><b>Nordla ne donne pas de médiane</b> : ${esc(ref?.note ?? 'aucune annonce vraiment comparable n’a été trouvée')}.${prices ? ` Prix des annonces comparables (à lire une par une) : ${prices}.` : ''} Les autres annonces restent listées plus bas, avec la raison de leur exclusion.</p>
     ${wants ? '<p class="fm-note">Une recherche plus précise avec votre réponse est possible : <b>c’est une nouvelle recherche payante</b> (quelques centimes, plafond appliqué par le serveur). Elle ne part que si vous appuyez.</p><button type="button" class="btn sec" data-act="market-rerun">Chercher avec cette précision (payant)</button>' : ''}</div>`;
 }
-const groupLabel = (g) => [CLASS[g.class], g.variant && g.variant.key !== 'none' ? g.variant.label : g.variant ? 'variante non indiquée' : '', g.size?.label].filter(Boolean).join(' · ');
+const TYPE_LABEL = { bottle: 'gourde / bouteille', tumbler: 'gobelet de voyage', jug: 'cruche / carafe', none: 'type non précisé' };
+const groupLabel = (g) => [CLASS[g.class], g.type ? TYPE_LABEL[g.type] ?? g.type : '', g.variant && g.variant.key !== 'none' ? g.variant.label : g.variant ? 'variante non indiquée' : '', g.size?.label].filter(Boolean).join(' · ');
 /** One homogeneous group (a class, a size, a variant): its own range, never averaged with another. */
 function groupBox(g, labelled, excCount, note) {
   return `<div class="fm-rbox"><div class="fm-k2 first">Prix constatés${labelled || g.variant || g.size ? ` — ${esc(groupLabel(g))}` : ''}</div><p class="fm-rbig">${esc(eur(g.minEur))} – <b>${esc(eur(g.medianEur))}</b> – ${esc(eur(g.maxEur))}</p><p class="fm-note">minimum · médiane · maximum, sur ${g.count} annonce(s) (${esc(CLASS[g.class]?.toLowerCase() ?? g.class)}). ${excCount ? `${excCount} annonce(s) écartée(s) du calcul (lots, accessoires, autres marques, tailles ou variantes différentes, prix aberrants) : elles restent listées plus bas.` : ''} ${note ? `<br><b>${esc(note)}</b>` : ''}</p></div>`;

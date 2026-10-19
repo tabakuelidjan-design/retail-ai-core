@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { lookupGtin } from '../adapters/gtin-lookup.js';
 import { analyseWithFacets, listingFromEvidence, proposeQuestion, refine as refineListings, sanitizeConfirmed } from '../adapters/market-refine.js';
 const STORED_MAX = 60; // listings kept in the case (and re-read by the refine step): above the ~53 a real search returns
-const FACETS = ['capacity', 'variant', 'model'];
+const FACETS = ['capacity', 'type', 'variant', 'model'];
 
 const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
 const FR = {

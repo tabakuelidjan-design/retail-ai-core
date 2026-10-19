@@ -29,6 +29,8 @@ Une gourde avec étiquette lisible (idéalement une taille imprimée en oz et en
 | M14 | Taper la vraie taille dans « Autre » (ex. « 64 oz ») ; puis « beaucoup » | « 64 oz » → « taille 1,89 L », 0 $ ; « beaucoup » → message « Taille non comprise », rien d'enregistré |
 | M15 | « Je ne sais pas » aux deux questions | Un prix **par groupe** (jamais une médiane mélangée) ; plus aucune question |
 | M16 | Résultat final | « Aucun produit exact trouvé » écrit s'il y en a aucun ; chaque annonce porte « disponibilité non vérifiée » ; accessoires et lots dans leurs groupes à part (lots : prix à la pièce marqué estimation) |
+| M17 | Un produit dont le nom est seulement la marque (ex. « Hydro Flask »), avec des gourdes **et** des gobelets de voyage dans les résultats | **Une** carte « De quel type de produit s'agit-il ? » (gobelet de voyage / gourde-bouteille) avec les prix médians observés ; aucune médiane tant qu'elle est là ; après la réponse, les annonces de l'autre type sont listées « autre type de produit » et hors du prix |
+| M18 | Une annonce sans le mot « bouteille » mais avec la marque et la taille (ex. « … Wide Mouth 710 ml ») | Classée « Correspondance probable », confiance faible, raison « type de produit non précisé dans le titre » ; jamais « exacte » |
 
 ## Critères d'arrêt
 Une photo envoyée sans carte d'accord ; une dépense à la réponse ; une valeur présélectionnée ; une médiane affichée avec < 3 annonces comparables ; une annonce d'une autre marque ou taille dans la médiane après confirmation.
