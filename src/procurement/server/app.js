@@ -17,8 +17,11 @@ import { importSourcingCase, draftOrderFromCase } from '../sourcing-bridge.js';
 import { createFileCaseSource, isCaseId } from './case-source.js';
 import { capabilitiesOf, grantsOf, stockActor } from './permissions.js';
 import { createV1Routes } from './routes-v1.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const UI_DIR = fileURLToPath(new URL('../ui/', import.meta.url));
+// The ONE Nordla Design System stylesheet and its module bridge (src/shared, never a copy in this folder); the fonts they name live under /nordla-assets/.
+const SHARED_CSS = new Set(['nordla-ds.css', 'nordla-tokens.css']);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 const IMAGE_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
 const CSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -265,6 +268,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
   }
 
   async function serveAsset(res, name) {
+    if (SHARED_CSS.has(name)) { const a = await readNordlaShared(`/${name}`); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); return res.end(a.body); }
     if (!/^[A-Za-z0-9._-]+$/.test(name) || !MIME[extname(name)]) return send(res, 404, { error: 'NOT_FOUND' });
     try { const data = await asset(name); res.writeHead(200, { 'content-type': MIME[extname(name)], 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); return res.end(data); } catch { return send(res, 404, { error: 'NOT_FOUND' }); }
   }
@@ -287,6 +291,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       res.setHeader('content-security-policy', CSP); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', 'DENY');
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+      if (url.pathname.startsWith('/nordla-assets/fonts/')) { const a = await readNordlaShared(url.pathname); if (!a) return send(res, 404, { error: 'NOT_FOUND' }); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'public, max-age=86400', 'x-content-type-options': 'nosniff' }); return res.end(a.body); } // standalone mode (the Nordla server serves them when mounted)
       return await serveAsset(res, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
     } catch (e) { return fail(res, e); }
   };

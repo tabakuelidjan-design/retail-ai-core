@@ -96,10 +96,11 @@ const plusScreen = () => `${head('Plus', '')}
   ${S.data ? guardianIndicator(S.data.guardian) : ''}`;
 
 function content() {
-  if (S.loading) return `${head('Nordla Core', 'Chargement de l’état réel du serveur…')}<div class="nd-empty" aria-busy="true">Chargement…</div>`;
+  if (S.loading) return `<div aria-busy="true" role="status"><span class="nd-sr">Chargement de l’état réel du serveur…</span><span class="nd-skel is-title"></span><span class="nd-skel is-line" style="margin-top:10px"></span>
+    <div class="nd-skel-grid">${[1, 2, 3, 4].map(() => '<div class="nd-skel-card"><span class="nd-skel is-line"></span><span class="nd-skel is-title"></span><span class="nd-skel"></span></div>').join('')}</div><div class="nd-skel-card" style="margin-top:12px"><span class="nd-skel is-block"></span></div></div>`;
   if (S.session?.mode === 'session' && !S.session.authenticated) return `${head('Nordla', 'Connexion requise')}<section class="nd-card"><p>Connectez-vous avec votre compte Nordla dans l’application, puis revenez ici.</p><a class="nd-btn" href="/">Se connecter</a></section>`;
   const r = route();
-  const err = S.error ? `<div class="nd-alert is-error" role="alert">${esc(S.error)}</div>` : '';
+  const err = S.error ? `<div class="nd-alert is-error has-action" role="alert"><span>${esc(S.error)}</span><button class="nd-btn is-secondary" type="button" data-nd-retry>Réessayer</button></div>` : '';
   if (r === 'modules') return `${err}${head('Modules', 'État réel de chaque module sur ce serveur')}<div class="nd-modules is-grid" data-nd-modules>${S.data.modules.map(moduleCard).join('') || '<div class="nd-empty">Modules non disponibles.</div>'}</div>`;
   if (r.startsWith('module/')) return err + moduleScreen(r.slice(7));
   if (r === 'parle') return err + parleScreen();
@@ -122,6 +123,7 @@ document.addEventListener('submit', (ev) => {
 });
 document.addEventListener('click', async (ev) => {
   const q = ev.target.closest('[data-ask]'); if (q && !q.disabled) return ask(q.dataset.ask);
+  if (ev.target.closest('[data-nd-retry]')) return load();
   if (ev.target.closest('[data-nd-logout]')) { try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch { /* the server decides */ } return load(); }
 });
 window.addEventListener('hashchange', () => { S.answer = null; paint(); document.getElementById('nd-main')?.focus({ preventScroll: true }); window.scrollTo(0, 0); });
