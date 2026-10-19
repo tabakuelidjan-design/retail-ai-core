@@ -135,3 +135,9 @@ test('every module icon the dashboard names resolves to an official file that ex
     assert.ok(existsSync(new URL(`../src/shared/assets/nordla/official-icons/${ICON_FILES[m.icon]}`, import.meta.url)), `${key}: ${ICON_FILES[m.icon]} does not exist`);
   }
 });
+
+test('module cards in the 4-column grid (1024 px and up) use the stacked layout, so the status badge never covers the module title', () => {
+  const css = readFileSync(new URL('../src/shared/nordla-ds.css', import.meta.url), 'utf8');
+  assert.match(css, /\.nd-modules\.is-grid \.nd-module \{ display: grid;/, 'grid cards are laid out as a grid');
+  assert.match(css, /\.nd-modules\.is-grid \.nd-module \.nd-badge \{ grid-column: 2;/, 'the badge sits under the text, not beside it');
+});

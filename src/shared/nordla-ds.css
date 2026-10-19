@@ -208,6 +208,14 @@ a.nd-module:hover { border-color: var(--nd-bronze-light); }
   .nd-module-desc { -webkit-line-clamp: 3; }
 }
 
+/* ---------- module grid (4 narrow columns from 1024 px): the same stacked card, otherwise the inline badge crushes the title (seen at 1440 px on 2026-10-19) ---------- */
+.nd-modules.is-grid .nd-module { display: grid; grid-template-columns: 44px minmax(0, 1fr) 16px; column-gap: var(--nd-s3); row-gap: 6px; align-items: start; }
+.nd-modules.is-grid .nd-module-tile { grid-row: 1 / span 2; }
+.nd-modules.is-grid .nd-module-body { grid-column: 2; }
+.nd-modules.is-grid .nd-module .nd-badge { grid-column: 2; justify-self: start; }
+.nd-modules.is-grid .nd-module .nd-chevron { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+.nd-modules.is-grid .nd-module-desc { -webkit-line-clamp: 3; }
+
 /* ---------- loading skeleton (flat grey blocks, no animation, no gradient) and retry ---------- */
 .nd-skel { display: block; background: var(--nd-neutral-tint); border-radius: var(--nd-r-sm); height: 14px; }
 .nd-skel.is-title { height: 28px; width: 40%; } .nd-skel.is-line { width: 70%; } .nd-skel.is-block { height: 120px; border-radius: var(--nd-r-md); }
