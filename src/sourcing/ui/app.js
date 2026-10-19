@@ -22,6 +22,7 @@ import { askScreen } from './screens/ask.js';
 import { docsScreen } from './screens/docs.js';
 import { rulesScreen } from './screens/rules.js';
 import { marketScreen } from './screens/market.js';
+import { detectBarcode, prepareForUpload } from './barcode-local.js';
 import { moneyScreen } from './screens/money.js';
 import { fieldScreen } from './screens/field.js';
 import { createSalon } from './screens/salon.js';
@@ -304,6 +305,43 @@ async function addDocument(form, d) {
 }
 
 function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.en}\n   ${i.zh}`).join('\n\n'); }
+// ---- market radar: search from the case, or from a PHOTO of the case. A local barcode read sends no photo; a photo goes to Google Cloud Vision ONLY after an explicit consent card for THAT photo (server checks the consent is bound to its sha-256).
+let marketPending = null; // { i, up }: the downscaled photo held in memory while the owner decides; never stored in the case
+const marketStatusOnce = async () => { if (S.marketStatus) return S.marketStatus; try { S.marketStatus = await api('/api/market/status'); } catch { S.marketStatus = { enabled: false, photoIdentification: { enabled: false } }; } return S.marketStatus; };
+async function marketSearch({ identification = null, photo = null }) { // paid search through the server (credentials stay there); one at a time; a failure never touches the case
+  if (S.marketBusy) return; const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const q = c.quotes?.at(-1); const sp = q && q.unitPrice !== undefined && q.unitPrice !== '' ? Number(String(q.unitPrice).replace(',', '.')) : NaN;
+  S.marketBusy = true; S.flash = ''; render();
+  try {
+    const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, identification, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
+    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes, identification: r.identification ? { ...r.identification, photo } : null } });
+    S.flash = r.cached ? 'Résultat déjà obtenu récemment : aucune nouvelle recherche n’a été payée.' : '';
+  } catch (e) { S.flash = e.body?.message ?? (e.status ? `La recherche a échoué (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la recherche n’a pas eu lieu et rien n’a été perdu. Réessayez avec du réseau.'); }
+  finally { S.marketBusy = false; render(); }
+}
+async function marketPhotoStart(i) {
+  const c = cur(); const url = getBlob(`photo:${c.id}.${i}`); if (!url) { S.flash = 'Cette photo est introuvable sur ce téléphone.'; return render(); }
+  S.flash = ''; marketPending = null; S.marketPhoto = { i, stage: 'scanning' }; render();
+  const bc = await detectBarcode(url); // on the phone: no network, no photo sent
+  if (bc) { const identification = { source: 'LOCAL_BARCODE', eans: [bc.gtin], engine: bc.engine, format: bc.format }; S.marketPhoto = { i, stage: 'searching', ident: identification }; render(); await marketSearch({ identification, photo: { index: i, sentToProvider: false } }); S.marketPhoto = { i, stage: 'done' }; return render(); }
+  const st = await marketStatusOnce();
+  if (!st.photoIdentification?.enabled) { S.marketPhoto = { i, stage: 'no-code', reason: st.photoIdentification?.reason ?? null }; return render(); }
+  try { const up = await prepareForUpload(url); marketPending = { i, up }; S.marketPhoto = { i, stage: 'consent', sha256: up.sha256, bytes: up.bytes, width: up.width, height: up.height, estimate: st.photoIdentification.estimatedCostPerPhotoUsd }; }
+  catch { S.marketPhoto = { i, stage: 'error', msg: 'Cette photo n’a pas pu être préparée. Rien n’a été envoyé.' }; }
+  render();
+}
+async function marketPhotoSend() {
+  const m = S.marketPhoto; if (!marketPending || m?.stage !== 'consent') return; const { i, up } = marketPending; S.marketPhoto = { ...m, stage: 'sending' }; render();
+  try {
+    const res = await api('/api/market/identify', { method: 'POST', body: JSON.stringify({ imageBase64: up.imageBase64, mime: up.mime, consent: { accepted: true, sha256: up.sha256 } }) }); marketPending = null; // the bytes are dropped as soon as the answer is in
+    const ident = res.identification; const photo = { index: i, sentToProvider: true, consentAt: res.consent?.at ?? null, sha256: res.consent?.sha256 ?? up.sha256, provider: res.consent?.provider ?? 'google-cloud-vision' };
+    if (ident.confidence === 'HIGH' || ident.confidence === 'MEDIUM') { S.marketPhoto = { i, stage: 'searching', ident, photo }; render(); await marketSearch({ identification: ident, photo }); S.marketPhoto = { i, stage: 'done' }; }
+    else if (ident.confidence === 'LOW') S.marketPhoto = { i, stage: 'confirm', ident, photo };
+    else S.marketPhoto = { i, stage: 'none' };
+  } catch (e) { marketPending = null; S.marketPhoto = { i, stage: 'error', msg: e.body?.message ?? (e.status ? `L’analyse a échoué (${e.status}).` : 'Pas de connexion au serveur : la photo n’a pas été envoyée.') }; }
+  render();
+}
+async function marketPhotoGo() { const m = S.marketPhoto; if (m?.stage !== 'confirm') return; S.marketPhoto = { i: m.i, stage: 'searching', ident: m.ident }; render(); await marketSearch({ identification: m.ident, photo: m.photo }); S.marketPhoto = { i: m.i, stage: 'done' }; render(); }
+
 function setMode(m) { if (!LEGACY_UI) { closeOverlay(); S.flash = ''; if (m === 'field') return salon().openEmbedded('live'); if (m === 'expert') return salon().openEmbedded('decision'); return salon().goHome(); } S.mode = m; S.returnMode = null; S.attach = false; S.sheet = null; ls.set('nordla.sourcing.mode', m); closeOverlay(); S.flash = ''; render(); window.scrollTo(0, 0); }
 /** The supplier-facing screen for a question: the supplier's language BIG (never invented: when there is none the owner is told), the owner's French small. What was shown is remembered. */
 function showQuestion(id, lang = 'en') {
@@ -340,16 +378,11 @@ async function onClick(ev) {
   if (act === 'fm-nav') { S.sheet = key === 'talk' ? null : (S.sheet === key ? null : key); S.flash = ''; render(); if (key === 'talk') window.scrollTo(0, document.body.scrollHeight); return; }
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
   if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
-  if (act === 'market-run') return void (async () => { // paid search through the server (credentials stay there); one at a time; a failure never touches the case
-    if (S.marketBusy) return; const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const q = c.quotes?.at(-1); const sp = q && q.unitPrice !== undefined && q.unitPrice !== '' ? Number(String(q.unitPrice).replace(',', '.')) : NaN;
-    S.marketBusy = true; S.flash = ''; render();
-    try {
-      const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
-      commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes } });
-      S.flash = r.cached ? 'Résultat déjà obtenu récemment : aucune nouvelle recherche n’a été payée.' : '';
-    } catch (e) { S.flash = e.body?.message ?? (e.status ? `La recherche a échoué (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la recherche n’a pas eu lieu et rien n’a été perdu. Réessayez avec du réseau.'); }
-    finally { S.marketBusy = false; render(); }
-  })();
+  if (act === 'market-run') return void marketSearch({});
+  if (act === 'market-photo') return void marketPhotoStart(Number(key));
+  if (act === 'market-photo-send') return void marketPhotoSend();
+  if (act === 'market-photo-go') return void marketPhotoGo();
+  if (act === 'market-photo-cancel') { marketPending = null; S.marketPhoto = null; S.flash = ''; return render(); }
   if (act === 'vc-start') return void voice.start();
   if (act === 'vc-pause') return void voice.pause();
   if (act === 'vc-resume') return void voice.resume();

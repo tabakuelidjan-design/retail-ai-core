@@ -49,7 +49,7 @@ test('outliers, packs and accessories are FLAGGED and kept out of the reference 
 });
 
 test('without exact or probable matches the range is labelled SIMILAR products only', () => {
-  const a = analyseListings([L('Random flask', 20), L('Other flask', 30)], { name: 'Acme thermos', brand: 'Acme', traits: {} }, { ecb: ECB });
+  const a = analyseListings([L('Acme steel flask bottle', 20), L('Acme flask bottle large', 30)], { name: 'Acme thermos bottle', brand: 'Acme', traits: {} }, { ecb: ECB });
   assert.equal(a.reference.matchClass, 'SIMILAR_PRODUCT'); assert.match(a.reference.note, /SIMILAIRES/);
 });
 
@@ -203,4 +203,17 @@ test('real titles: a different model of the same brand (ProTour) is SIMILAR, the
   assert.equal(c('Quencher H2.0 FlowState Tumbler Stanley'), 'PROBABLE_MATCH'); assert.equal(c('Stanley 1913 Quencher H2.0 FlowState Tumbler – koud voor 15 uur'), 'PROBABLE_MATCH');
   assert.equal(c('Gourde Quencher H2.0 FlowState Tumbler - Blue Sky'), 'PROBABLE_MATCH'); // brand absent from the retailer's title: all distinctive words present
   for (const title of ['Stanley Quencher H2.0 FlowState Tumbler', 'Quencher H2.0 FlowState Tumbler Stanley']) assert.notEqual(c(title), 'EXACT_MATCH');
+});
+
+test('a listing with NO word in common with the search is flagged NO_TEXT_OVERLAP and never enters a price range (real case: a bare barcode query returned unrelated groceries)', () => {
+  const input = { name: 'Nutella', brand: 'Nutella', quantity: '400 g', traits: {} };
+  const a = analyseListings([L('Unox Cup a Soep prei Crème 48g', 1.99), L('Chocomel vol 1 liter', 4.15), L('Nutella pâte à tartiner 400 g', 3.89), L('Ferrero Nutella 400g pot', 3.99)], input, { ecb: ECB });
+  const by = (t) => a.listings.find((r) => r.title.startsWith(t)); assert.ok(by('Unox').flags.includes(FLAG.NO_TEXT_OVERLAP)); assert.ok(by('Chocomel').excludedFromReference); assert.ok(!by('Nutella').flags.includes(FLAG.NO_TEXT_OVERLAP));
+  assert.equal(a.reference.count, 2); assert.ok(a.reference.maxEur < 4.1);
+  const gtinOnly = analyseListings([L('Anything at all', 5), L('Other thing', 6)], { gtin: '3017620422003', traits: {} }, { ecb: ECB }); assert.equal(gtinOnly.reference, null); assert.ok(gtinOnly.listings.every((r) => r.flags.includes(FLAG.NO_TEXT_OVERLAP) && r.excludedFromReference), 'a bare barcode search cannot be verified: nothing enters a range');
+});
+
+test('once the barcode is resolved to a name the bare number is not searched; the quantity joins the name query', () => {
+  const q = queriesFromInput({ name: 'Nutella', brand: 'Nutella', quantity: '400 g', gtin: '3017620422003', gtinResolved: true, traits: {} }, 2); assert.equal(q.length, 1); assert.equal(q[0].text, 'Nutella 400 g'); assert.match(q[0].via, /base ouverte/);
+  assert.equal(queriesFromInput({ gtin: '3017620422003', traits: {} }, 2)[0].strength, 'GTIN');
 });

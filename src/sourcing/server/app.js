@@ -122,6 +122,11 @@ export function createSourcingApp({ market = null, backupStatus = null, token, g
       try { return json(res, 200, await market.search(await readBody(req))); }
       catch (e) { if (e && e.code && e.status && e.name !== 'SyntaxError' && e.constructor?.name === 'RadarError') return json(res, e.status, { error: e.code, message: e.message, ...(e.retryAfterSec ? { retryAfterSec: e.retryAfterSec } : {}) }, e.retryAfterSec ? { 'retry-after': String(e.retryAfterSec) } : {}); throw e; }
     }
+    if (p === '/api/market/identify' && m === 'POST') { // a PHOTO leaves this server only here, only for the OWNER, only with a consent bound to this image (checked in the service); the image is never stored or logged
+      if (!market?.identify) return json(res, 503, { error: 'PHOTO_NOT_ENABLED', message: "La reconnaissance par photo n'est pas activée sur ce serveur : aucune photo n'a été envoyée." });
+      try { return json(res, 200, await market.identify(await readBody(req), actor)); }
+      catch (e) { if (e && e.code && e.status && e.constructor?.name === 'RadarError') return json(res, e.status, { error: e.code, message: e.message, ...(e.retryAfterSec ? { retryAfterSec: e.retryAfterSec } : {}), ...(e.code === 'CONSENT_REQUIRED' ? { provider: e.provider, region: e.region, sha256: e.sha256, bytes: e.bytes } : {}) }, e.retryAfterSec ? { 'retry-after': String(e.retryAfterSec) } : {}); throw e; }
+    }
     if (p === '/api/ai/status' && m === 'GET') return json(res, 200, { enabled: ai?.enabled === true, provider: ai?.enabled ? ai.name : null, region: ai?.enabled ? ai.region : null });
     if (p === '/api/safety/refresh' && m === 'POST') return safety ? json(res, 200, await safety.refresh({ maxReports: 26 })) : json(res, 503, { error: 'NO_SAFETY_ADAPTER' });
     if (p === '/api/documents/extract' && m === 'POST') {
