@@ -28,6 +28,11 @@ const PROMO_RE = /\b(bedrukken|bedrukt|bedrukking|met logo|met uw logo|relatiege
 const ACCESSORY_RE = /\b(replacement|vervangings\w*|vervang\w*|remplacement|rechange|accessoire|accessoires|accessory|accessories|sticker|stickers|autocollant|charm|sleeve|boot|hoes|housse|etui|étui|borstel|brosse|brush|lid only|deksel(?: alleen)?)\b/i;
 const STRAW_ONLY = (t) => { const end = /\b(straws?|rietjes?|pailles?)\W*$/i.test(t); return end && !/\b(met|avec|with|mit|incl\w*|et|and|\+)\s+(?:\d+\s*)?(?:\w+\s+){0,2}(?:straws?|rietjes?|pailles?)\W*$/i.test(t); };
 
+/** Accessory by NOUN (calibrated on real Hydro Flask listings: "Standard Flex Cap", "Wide Flex Straw", "Press-In Lid", "Insulated Tote" are not bottles). The brand is removed first ("Hydro FLASK" contains a container word); a title that ALSO names a container ("Wide Flex Cap Thermosfles") is a bottle with that cap. */
+const ACC_NOUN = /\b(caps?|lids?|straws?|dop|dopje|deksel|tote|sling|sleeve|strap|boot)\b/i;
+const CONTAINER_NOUN = /\b(bottles?|fles|flessen|thermosfles|drinkfles|bidon|beker|tumbler|gourde|gobelet|mug|cup|flask|thermos|kan)\b/i;
+const accessoryByNoun = (title, brand) => { let t = String(title ?? ''); if (brand) t = t.replace(new RegExp(String(brand).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), ' '); return ACC_NOUN.test(t) && !CONTAINER_NOUN.test(t); };
+
 export function linkInfo(url) {
   let u; try { u = new URL(url); } catch { return { kind: 'UNKNOWN', host: null }; }
   const google = /(^|\.)google\.[a-z.]+$/i.test(u.hostname) && (/oshop|shopping/.test(u.search) || /^\/(shopping|search)/.test(u.pathname));
@@ -69,7 +74,7 @@ export function classifyListing(l, input) {
   const wantMl = capacityOf(input); const gotMl = volumeMl(title); const wantG = massG(input.quantity) ?? massG(input.name); const gotG = massG(title);
   if ((wantMl && gotMl && Math.abs(gotMl - wantMl) / wantMl > 0.12) || (wantG && gotG && Math.abs(gotG - wantG) / wantG > 0.12)) flags.push(FLAG.CAPACITY_DIFFERS); else if ((wantMl && !gotMl) || (wantG && !gotG && !wantMl)) flags.push(FLAG.CAPACITY_NOT_STATED);
   const noOverlap = brand ? (!brandHit && (!want.length || overlap === 0)) : (want.length ? overlap === 0 : true); /* true when there is nothing to compare (a bare barcode search): nothing ties the title to the search */ if (noOverlap && !modelHit) flags.push(FLAG.NO_TEXT_OVERLAP); // nothing in the title ties it to the search: kept visible, never in a price range
-  if (PACK_RE.test(title)) flags.push(FLAG.PACK_OR_LOT); if ((ACCESSORY_RE.test(title) || STRAW_ONLY(title)) && !ACCESSORY_RE.test(input.name ?? '')) flags.push(FLAG.ACCESSORY_SUSPECTED); if (PROMO_RE.test(title) && !PROMO_RE.test(input.name ?? '')) flags.push(FLAG.PROMO_PRINTED);
+  if (PACK_RE.test(title)) flags.push(FLAG.PACK_OR_LOT); if ((ACCESSORY_RE.test(title) || STRAW_ONLY(title) || (accessoryByNoun(title, input.brand) && !ACC_NOUN.test(input.name ?? ''))) && !ACCESSORY_RE.test(input.name ?? '')) flags.push(FLAG.ACCESSORY_SUSPECTED); if (PROMO_RE.test(title) && !PROMO_RE.test(input.name ?? '')) flags.push(FLAG.PROMO_PRINTED);
   if (modelOk && !modelHit) flags.push(FLAG.MODEL_NOT_IN_TITLE);
   let matchType; let confidence; let reason;
   const downgraded = flags.includes(FLAG.CAPACITY_DIFFERS) || flags.includes(FLAG.ACCESSORY_SUSPECTED) || flags.includes(FLAG.PACK_OR_LOT) || flags.includes(FLAG.PROMO_PRINTED);

@@ -217,3 +217,10 @@ test('once the barcode is resolved to a name the bare number is not searched; th
   const q = queriesFromInput({ name: 'Nutella', brand: 'Nutella', quantity: '400 g', gtin: '3017620422003', gtinResolved: true, traits: {} }, 2); assert.equal(q.length, 1); assert.equal(q[0].text, 'Nutella 400 g'); assert.match(q[0].via, /base ouverte/);
   assert.equal(queriesFromInput({ gtin: '3017620422003', traits: {} }, 2)[0].strength, 'GTIN');
 });
+
+test('real Hydro Flask titles: caps, lids, straws and totes are accessories; a bottle sold WITH a cap, or a bare model name, is not', () => {
+  const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {} }; const f = (title) => classifyListing(L(title, 30), input).flags;
+  for (const title of ['Hydro Flask Standard Mouth Flex Cap', 'Hydro Flask Wide Flex Straw', 'Hydro Flask Closeable Press-In Lid', 'Hydro Flask Insulated Tote 20l', 'Hydro Flask Wide Flex Sip Lid', 'Hydro Flask 32oz / 946ml Flex Chug Cap']) assert.ok(f(title).includes(FLAG.ACCESSORY_SUSPECTED), title);
+  for (const title of ['Hydro Flask Wide Flex Cap Thermosfles', 'Hydro Flask Wide Mouth', 'Hydro Flask All Around Travel Tumbler', 'Hydro Flask 20oz Wide Flex Cap Bottle Black']) assert.ok(!f(title).includes(FLAG.ACCESSORY_SUSPECTED), title);
+  assert.ok(!classifyListing(L('Hydro Flask Standard Mouth Flex Cap', 30), { name: 'flex cap', brand: 'Hydro Flask', traits: {} }).flags.includes(FLAG.ACCESSORY_SUSPECTED), 'when the owner is looking for a cap, a cap is not an accessory');
+});
