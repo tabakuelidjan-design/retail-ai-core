@@ -134,7 +134,13 @@ test('NS-3 outbound audit: no Core / Parle / Branding / Marketing / Creation / d
     assert.equal(noConsent.status, 428, 'no consent, no sending'); assert.deepEqual(spy2.calls, []);
     const viewer = await w2.call('POST', '/api/documents/extract', { who: who.viewer, body: { dataBase64: img, fileName: 'devis.jpg', mime: 'image/jpeg', consent: true } });
     assert.equal(viewer.status, 403, 'a read-only role cannot send a document out even with the consent flag'); assert.deepEqual(spy2.calls, []);
-    const ok = await w2.call('POST', '/api/documents/extract', { who: who.buyer, body: { dataBase64: img, fileName: 'devis.jpg', mime: 'image/jpeg', consent: true, supplier: 'Yiwu Greenline', price: 4.2, iban: 'BE68539007547034', text: 'secret' } });
+    for (const k of ['admin', 'buyer', 'accountant']) {
+      for (const [path, body] of [['/api/documents/extract', { dataBase64: img, fileName: 'devis.jpg', mime: 'image/jpeg', consent: true }], ['/api/ai/describe', { imageBase64: img, imageMime: 'image/jpeg', consent: true }]]) {
+        const r = await w2.call('POST', path, { who: who[k], body }); assert.equal(r.status, 403, `${k} cannot send to an external AI (${path})`);
+      }
+    }
+    assert.deepEqual(spy2.calls, [], 'nothing left for a non-owner role');
+    const ok = await w2.call('POST', '/api/documents/extract', { who: who.owner, body: { dataBase64: img, fileName: 'devis.jpg', mime: 'image/jpeg', consent: true, supplier: 'Yiwu Greenline', price: 4.2, iban: 'BE68539007547034', text: 'secret' } });
     assert.equal(ok.status, 200);
     assert.equal(spy2.calls.length, 1); assert.equal(spy2.calls[0].url, 'https://api.anthropic.com/v1/messages');
     const sent = spy2.calls[0].body;
