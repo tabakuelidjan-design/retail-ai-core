@@ -11,6 +11,7 @@ import { analyseListings, compareWithSupplier, identificationConfidence, mergeId
 import { MAX_IMAGE_BYTES, VISION_COST_PER_PHOTO_USD, imageKind, visionIdentify } from '../adapters/market-vision.js';
 import { createHash } from 'node:crypto';
 import { lookupGtin } from '../adapters/gtin-lookup.js';
+import { listingFromEvidence, proposeQuestion, refine as refineListings, sanitizeConfirmed } from '../adapters/market-refine.js';
 
 const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; };
 const FR = {
@@ -60,6 +61,7 @@ export function createMarketRadar({ env = process.env, fetchImpl = fetch, now = 
     const country = String(body.country ?? 'BE').toUpperCase(); if (!COUNTRIES[country]) throw new RadarError('BAD_COUNTRY');
     const b = body.input && typeof body.input === 'object' ? body.input : {}; const identification = sanitizeIdentification(body.identification);
     const input = mergeIdentification({ name: str(b.name), brand: str(b.brand), model: str(b.model), manufacturerRef: str(b.manufacturerRef), gtin: digits(b.gtin), traits: b.traits && typeof b.traits === 'object' ? b.traits : {}, category: str(b.category) }, identification);
+    const confirmedIn = sanitizeConfirmed(body.confirmed); if (confirmedIn) { input.confirmed = confirmedIn; if (confirmedIn.model) { input.model = confirmedIn.model; input.sources.model = 'OWNER_CONFIRMED'; } }
     // a barcode alone cannot be searched reliably: resolve it to a NAME through the open Facts databases (only the number is sent; a hit is a proposal with its source and link; not found is normal for non-food goods)
     let gtinLookup = null; if (input.gtin && String(env.MARKET_GTIN_LOOKUP ?? '1') !== '0' && (!input.name || !input.brand)) { gtinLookup = await lookupGtin(input.gtin, { fetchImpl });
       if (gtinLookup.found) { if (!input.name) { input.name = gtinLookup.name; input.sources.name = 'GTIN_DB'; } if (!input.brand && gtinLookup.brand) { input.brand = gtinLookup.brand; input.sources.brand = 'GTIN_DB'; } if (gtinLookup.quantity) input.quantity = gtinLookup.quantity; input.gtinResolved = true; } }
@@ -68,7 +70,7 @@ export function createMarketRadar({ env = process.env, fetchImpl = fetch, now = 
     const supplier = body.supplier && Number.isFinite(Number(body.supplier.price)) ? { price: Number(body.supplier.price), currency: str(body.supplier.currency)?.toUpperCase() ?? null } : null;
     let rates = null; if (ecb) { try { rates = await ecb(); } catch { rates = null; } }
     const finish = (raw, cached) => { const a = analyseListings(raw.listings, input, { ecb: rates }); const comparison = compareWithSupplier({ reference: a.reference, supplier, ecb: rates });
-      return { status: 'DONE', provider: 'dataforseo-google-shopping', market: { country, searchDomain: COUNTRIES[country].domain }, queries, input: { name: input.name, brand: input.brand, model: input.model, gtin: input.gtin, sources: input.sources }, identification: identification ? { ...identification, confidence: identificationConfidence(identification), ...(gtinLookup ? { gtinLookup } : {}) } : null, ...a, comparison, observedAt: raw.datetime ?? raw.at, partial: raw.partial, runs: raw.runs, cost: { estimatedMaxUsd: estimateCostUsd(queries.length), reportedUsd: raw.costUsd, cached }, cached,
+      return { status: 'DONE', provider: 'dataforseo-google-shopping', market: { country, searchDomain: COUNTRIES[country].domain }, queries, input: { name: input.name, brand: input.brand, model: input.model, gtin: input.gtin, sources: input.sources, confirmed: input.confirmed ?? null }, question: proposeQuestion({ input, listings: raw.listings }), identification: identification ? { ...identification, confidence: identificationConfidence(identification), ...(gtinLookup ? { gtinLookup } : {}) } : null, ...a, comparison, observedAt: raw.datetime ?? raw.at, partial: raw.partial, runs: raw.runs, cost: { estimatedMaxUsd: estimateCostUsd(queries.length), reportedUsd: raw.costUsd, cached }, cached,
         stored: a.listings.slice(0, 40).map((r) => toStoredEvidence(r, country)), notes: ['Les liens « Google Shopping » ouvrent la page de Google Shopping du produit, pas la page directe du marchand ni d\'Amazon ou de bol.com', 'Aucun résultat ne prouve qu\'un produit n\'est pas vendu : « rien trouvé » signifie seulement que cette recherche n\'a rien de fiable', 'Observations de marché : ni marge, ni conformité UE, ni décision d\'achat'] }; };
     if (hit && now().getTime() - hit.at < lim.cacheMs) return finish(hit.raw, true);
     rollDay();
@@ -110,7 +112,19 @@ export function createMarketRadar({ env = process.env, fetchImpl = fetch, now = 
         notes: ['Valeurs proposées par une machine : à confirmer. Une lecture de texte peut se tromper et une « meilleure estimation » est un nom de catégorie, pas un produit exact.', "La photo n'est ni conservée ni journalisée par le serveur."] };
     } finally { photoBusy = false; }
   }
-  return { enabled, status, search, identify };
+  /** The owner's one-tap answer (or "I don't know" = no `confirmed`) applied to the listings ALREADY obtained: pure local re-analysis. It never calls the provider, never needs credentials and never costs anything
+   *  (no fetch is made here); a new, paid search is a separate explicit action with its own caps. */
+  async function refine(body = {}) {
+    const ev = Array.isArray(body.evidence) ? body.evidence.slice(0, 40) : []; if (!ev.length) throw new RadarError('INVALID_INPUT');
+    const b = body.input && typeof body.input === 'object' ? body.input : {};
+    const input = mergeIdentification({ name: str(b.name), brand: str(b.brand), model: str(b.model), gtin: digits(b.gtin), quantity: str(b.quantity), traits: b.traits && typeof b.traits === 'object' ? b.traits : {} }, sanitizeIdentification(body.identification)); // same hints as the search had (label size / models), same cleaning
+    const supplier = body.supplier && Number.isFinite(Number(body.supplier.price)) ? { price: Number(body.supplier.price), currency: str(body.supplier.currency)?.toUpperCase() ?? null } : null;
+    let rates = null; if (ecb) { try { rates = await ecb(); } catch { rates = null; } }
+    const listings = ev.map(listingFromEvidence); const r = refineListings({ listings, input, confirmed: body.confirmed, ecb: rates, supplier }); const country = String(body.country ?? 'BE').toUpperCase();
+    return { status: 'DONE', provider: 'local-refine', market: { country, searchDomain: COUNTRIES[country]?.domain ?? null }, input: { name: input.name, brand: input.brand, model: r.input.model ?? input.model, gtin: input.gtin, confirmed: r.confirmed }, confirmation: r.confirmed ? 'CONFIRMED' : 'UNKNOWN', question: null, ...r.analysis, comparison: r.comparison, cost: { estimatedMaxUsd: 0, reportedUsd: 0, calls: 0 }, cached: false,
+      stored: r.analysis.listings.slice(0, 40).map((x, i) => ({ ...toStoredEvidence(x, country), observedAt: ev[i]?.observedAt ?? x.observedAt })), notes: ['Nouvelle lecture locale des annonces déjà relevées : aucun appel au service de recherche, aucun coût, aucune photo envoyée.'] };
+  }
+  return { enabled, status, search, identify, refine };
 
 }
 const str = (v) => { const s = String(v ?? '').trim(); return s ? s.slice(0, 200) : null; };

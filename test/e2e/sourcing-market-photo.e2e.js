@@ -76,7 +76,7 @@ try {
 
   await check('A2. BARCODE not in the open databases: the number itself is searched, nothing can be tied to it, so NO price range is given and the owner is told', async () => {
     log.keywords.length = 0; await openMarket(t, 'ph-barcode2'); await clickSel(t, '.fm-thumb', 300); await waitText(t, 'Résultat de la recherche'); const s = await text(t); await shot(t, 'A2-unverifiable-390');
-    ok(log.vision === 0 && log.keywords[0] === GTIN2, `searched by the number: ${JSON.stringify(log.keywords)}`); ok(/n’est pas dans les bases ouvertes/.test(s) && /Aucune annonce n’a pu être rattachée/.test(s), s.slice(0, 900));
+    ok(log.vision === 0 && log.keywords[0] === GTIN2, `searched by the number: ${JSON.stringify(log.keywords)}`); ok(/n’est pas dans les bases ouvertes/.test(s) && /Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), s.slice(0, 900)); // wording changed deliberately: the old 'aucune annonce rattachée' notice became the explicit 'Prix de référence non fiable' (no range, no median)
     ok((await t.eval(`document.querySelectorAll('.fm-rbig').length`)) === 0, 'no price range'); const rec = (await store(t))['ph-barcode2'].marketSearches.at(-1); ok(rec.evidence.every((e) => e.specs.excluded), 'every listing kept but excluded');
   });
 

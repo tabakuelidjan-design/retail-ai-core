@@ -59,5 +59,30 @@ Parcours : fiche > « Prix en Europe » > vignette de la photo > Nordla identifi
 ### Ce qui reste pour une démonstration Vision réelle
 Une clé Google Cloud Vision (voir le rapport) et l'autorisation du propriétaire pour envoyer **une photo précise** ; un test avec de vraies photos de fournisseur sur le Xiaomi (le décodeur JS est testé sur des images nettes, pas sur des photos floues ou en perspective).
 
+## Confirmation du modèle ou de la taille (M1) — comparer ce qui est vraiment comparable
+
+Objectif : après la photo et **au plus une** confirmation, Nordla affiche des prix pour des produits réellement comparables, ou dit honnêtement qu'il n'en a pas trouvé. Aucune valeur n'est inventée ni présélectionnée.
+
+### Ce que Nordla utilise automatiquement (sans rien demander)
+Photo (code-barres lu sur le téléphone, étiquette, marque, modèle lus par Vision après accord), nom/marque/modèle/caractéristiques du dossier, fiche du code-barres (base ouverte), taille écrite sur l'étiquette **si toutes les tailles trouvées concordent** (40 oz = 1,18 L), et les annonces elles-mêmes. Un modèle lu sur l'étiquette n'est repris automatiquement que s'il n'y en a **qu'un** ; deux modèles différents deviennent une question, jamais « le premier ».
+
+### La question (une seule, `src/sourcing/adapters/market-refine.js`)
+- **Taille d'abord** (c'est elle qui déplace le plus le prix), sinon **modèle**. Jamais deux questions.
+- Posée seulement si les preuves montrent **au moins deux** tailles (étiquette, ou ≥ 2 annonces par taille) ou **au moins deux** modèles lus. Une taille vue une seule fois n'est pas une preuve suffisante.
+- Chaque choix indique sa preuve (« lu sur l'étiquette », « vu dans 7 annonce(s) »). Aucun choix n'est présélectionné. « Je ne sais pas » existe toujours et ne change rien.
+- Tant que la question est en attente, **aucune médiane** n'est affichée (les tailles sont mélangées) ; la comparaison avec le prix fournisseur est aussi masquée.
+
+### Après la réponse — comparabilité stricte
+Route `POST /api/market/refine` (même authentification, même CSRF ; en hébergé, rôle d'écriture requis) : relecture **locale** des annonces déjà relevées, **zéro appel au fournisseur, zéro coût, aucune photo, aucun identifiant nécessaire** (testé avec un espion réseau). Une annonce est **écartée de la médiane mais reste consultable avec sa raison** si : taille différente ou non indiquée, modèle absent du titre, autre marque ou marque absente, lot/pack, accessoire, promotionnel/personnalisé, prix aberrant. Le résultat est enregistré comme une nouvelle entrée du dossier qui **remplace** la précédente dans les totaux (jamais comptée deux fois) ; l'ancienne reste dans l'historique.
+
+### « Prix de référence non fiable »
+La médiane n'est calculée **qu'à partir d'au moins 3 annonces vraiment comparables** (exactes ou probables). En dessous : « Prix de référence non fiable », pas de médiane, les prix comparables listés un par un, et la comparaison avec le prix fournisseur indique qu'elle n'est pas faite. (Ce changement s'applique aussi aux recherches sans confirmation : avant, une seule annonce exacte pouvait fixer « la » médiane, et des produits seulement similaires donnaient une fourchette.)
+
+### Coût
+Répondre à la question : **0 $**. Une nouvelle recherche payante n'est proposée (bouton explicite « Chercher avec cette précision (payant) ») que si la réponse n'est pas déjà dans les requêtes et que les résultats restent non fiables ; elle suit les plafonds habituels (`MARKET_MAX_COST_USD`, plafond quotidien, intervalle, cache 24 h). Aucune photo n'est renvoyée.
+
+### Tests
+`test/market-refine.test.js` (15), `test/e2e/sourcing-market-refine.e2e.js` (8, navigateur 390 px, fournisseur simulé qui compte ses appels), non-régression `market-radar`, `market-photo`, `market-proof`, e2e `sourcing-market-radar` (11) et `sourcing-market-photo` (10). Limites : fournisseur simulé ; titres et tailles réels à valider sur le Xiaomi (voir `docs/MARKET-RADAR-M1-VALIDATION-XIAOMI.md`). Le modèle n'est pas déduit des annonces (seulement lu sur l'étiquette ou saisi).
+
 ## Pour déployer (décision séparée du propriétaire)
 Poser les deux variables sur Railway ; relever `CACHE` de `src/sourcing/ui/sw.js` (le shell hors ligne change) et revoir le test qui l'épingle ; recette sur le Xiaomi ; accès Railway depuis la Chine non vérifié ; **ne pas fusionner en bloc** vers la ligne release (piège `railway.json`, voir NORDLA-MASTER-STATUS.md).

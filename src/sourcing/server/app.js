@@ -122,6 +122,11 @@ export function createSourcingApp({ market = null, backupStatus = null, token, g
       try { return json(res, 200, await market.search(await readBody(req))); }
       catch (e) { if (e && e.code && e.status && e.name !== 'SyntaxError' && e.constructor?.name === 'RadarError') return json(res, e.status, { error: e.code, message: e.message, ...(e.retryAfterSec ? { retryAfterSec: e.retryAfterSec } : {}) }, e.retryAfterSec ? { 'retry-after': String(e.retryAfterSec) } : {}); throw e; }
     }
+    if (p === '/api/market/refine' && m === 'POST') { // the owner's one-tap answer applied to listings ALREADY obtained: a pure local re-analysis, no provider call, no credential, no cost
+      if (!market?.refine) return json(res, 503, { error: 'NOT_CONFIGURED', message: "L'affinage des résultats n'est pas disponible sur ce serveur." });
+      try { return json(res, 200, await market.refine(await readBody(req))); }
+      catch (e) { if (e && e.code && e.status && e.constructor?.name === 'RadarError') return json(res, e.status, { error: e.code, message: e.message }); throw e; }
+    }
     if (p === '/api/market/identify' && m === 'POST') { // a PHOTO leaves this server only here, only for the OWNER, only with a consent bound to this image (checked in the service); the image is never stored or logged
       if (!market?.identify) return json(res, 503, { error: 'PHOTO_NOT_ENABLED', message: "La reconnaissance par photo n'est pas activée sur ce serveur : aucune photo n'a été envoyée." });
       try { return json(res, 200, await market.identify(await readBody(req), actor)); }

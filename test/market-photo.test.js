@@ -160,7 +160,7 @@ test('search from a LOCAL barcode: the open database names it, the NAME is searc
 test('barcode NOT in the open databases: the number is searched, every result is unverifiable (excluded, no range), and the result says so', async () => {
   const kws = []; const f = async (u, o) => (u.includes('open') && u.includes('facts') ? { ok: true, status: 200, json: async () => ({ status: 0 }) } : dfsFake(() => ['Anything', 'Whatever'], kws)(u, o));
   const r = await createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a', DATAFORSEO_PASSWORD: 'b' }, fetchImpl: f, sleep: async () => {}, pollMs: 1 }).search({ input: {}, identification: { source: 'LOCAL_BARCODE', eans: ['4006381333931'] } });
-  assert.deepEqual(kws, ['4006381333931']); assert.equal(r.identification.gtinLookup.found, false); assert.equal(r.reference, null); assert.ok(r.listings.every((l) => l.excludedFromReference));
+  assert.deepEqual(kws, ['4006381333931']); assert.equal(r.identification.gtinLookup.found, false); assert.equal(r.reference.reliable, false); assert.equal(r.reference.count, 0); assert.equal(r.reference.medianEur, null); assert.ok(r.listings.every((l) => l.excludedFromReference));
 });
 test('the lookup can be switched off (MARKET_GTIN_LOOKUP=0): nothing is sent to the open databases', async () => {
   const kws = []; let open = 0; const base = dfsFake(() => ['X'], kws); const f = async (u, o) => { if (u.includes('facts')) open++; return base(u, o); };

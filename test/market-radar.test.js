@@ -48,9 +48,9 @@ test('outliers, packs and accessories are FLAGGED and kept out of the reference 
   assert.equal(a.reference.count, 5); assert.equal(a.reference.medianEur, 55); assert.equal(a.reference.maxEur, 60); // the 3810 € lot is not in the range
 });
 
-test('without exact or probable matches the range is labelled SIMILAR products only', () => {
+test('without exact or probable matches there is NO reference price: similar products only are reported as such, never as a median', () => {
   const a = analyseListings([L('Acme steel flask bottle', 20), L('Acme flask bottle large', 30)], { name: 'Acme thermos bottle', brand: 'Acme', traits: {} }, { ecb: ECB });
-  assert.equal(a.reference.matchClass, 'SIMILAR_PRODUCT'); assert.match(a.reference.note, /SIMILAIRES/);
+  assert.equal(a.reference.reliable, false); assert.equal(a.reference.medianEur, null); assert.match(a.reference.note, /similaire/i); assert.equal(a.reference.count, 0);
 });
 
 test('Google Shopping links are labelled as such; marketplaces come from the SELLER, never from the link', () => {
@@ -141,7 +141,7 @@ test('network error, provider refusal, timeout: explicit codes, nothing invented
 });
 
 test('no result: an honest DONE with zero listings, never a fabricated one; invalid input and missing configuration are explicit', async () => {
-  const r = await radar(fakeProvider({ listings: [] })).search(body()); assert.equal(r.status, 'DONE'); assert.equal(r.listings.length, 0); assert.equal(r.reference, null); assert.ok(r.notes.some((n) => /rien trouvé/.test(n)));
+  const r = await radar(fakeProvider({ listings: [] })).search(body()); assert.equal(r.status, 'DONE'); assert.equal(r.listings.length, 0); assert.equal(r.reference.reliable, false); assert.equal(r.reference.medianEur, null); assert.ok(r.notes.some((n) => /rien trouvé/.test(n)));
   assert.equal(await codeOf(() => radar(fakeProvider()).search({ input: {} })), 'INVALID_INPUT');
   assert.equal(await codeOf(() => createMarketRadar({ env: {} }).search(body())), 'NOT_CONFIGURED'); assert.equal(createMarketRadar({ env: {} }).status().enabled, false);
   assert.equal(await codeOf(() => radar(fakeProvider()).search(body({ country: 'US' }))), 'BAD_COUNTRY');
@@ -209,8 +209,8 @@ test('a listing with NO word in common with the search is flagged NO_TEXT_OVERLA
   const input = { name: 'Nutella', brand: 'Nutella', quantity: '400 g', traits: {} };
   const a = analyseListings([L('Unox Cup a Soep prei Crème 48g', 1.99), L('Chocomel vol 1 liter', 4.15), L('Nutella pâte à tartiner 400 g', 3.89), L('Ferrero Nutella 400g pot', 3.99)], input, { ecb: ECB });
   const by = (t) => a.listings.find((r) => r.title.startsWith(t)); assert.ok(by('Unox').flags.includes(FLAG.NO_TEXT_OVERLAP)); assert.ok(by('Chocomel').excludedFromReference); assert.ok(!by('Nutella').flags.includes(FLAG.NO_TEXT_OVERLAP));
-  assert.equal(a.reference.count, 2); assert.ok(a.reference.maxEur < 4.1);
-  const gtinOnly = analyseListings([L('Anything at all', 5), L('Other thing', 6)], { gtin: '3017620422003', traits: {} }, { ecb: ECB }); assert.equal(gtinOnly.reference, null); assert.ok(gtinOnly.listings.every((r) => r.flags.includes(FLAG.NO_TEXT_OVERLAP) && r.excludedFromReference), 'a bare barcode search cannot be verified: nothing enters a range');
+  assert.equal(a.reference.count, 2); assert.ok(a.reference.maxEur < 4.1); assert.equal(a.reference.reliable, false, 'two comparable listings are not enough for a median'); assert.equal(a.reference.medianEur, null); assert.deepEqual(a.reference.pricesEur, [3.89, 3.99]);
+  const gtinOnly = analyseListings([L('Anything at all', 5), L('Other thing', 6)], { gtin: '3017620422003', traits: {} }, { ecb: ECB }); assert.equal(gtinOnly.reference.reliable, false); assert.equal(gtinOnly.reference.count, 0); assert.ok(gtinOnly.listings.every((r) => r.flags.includes(FLAG.NO_TEXT_OVERLAP) && r.excludedFromReference), 'a bare barcode search cannot be verified: nothing enters a range');
 });
 
 test('once the barcode is resolved to a name the bare number is not searched; the quantity joins the name query', () => {

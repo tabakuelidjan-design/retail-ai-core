@@ -138,3 +138,9 @@ body.fm-mode:has(.fm.started){padding-bottom:calc(104px + env(safe-area-inset-bo
 .fm-chip{display:inline-block;padding:1px 8px;border-radius:999px;border:1px solid var(--fm-line);font-size:12px}.fm-chip.warn{border-color:#c0392b;color:#7a2418}.fm-lim{margin:6px 0 0 18px;padding:0;font-size:13px;color:var(--fm-muted)}.fm-warnline{color:#7a2418;font-weight:600}
 
 .fm-thumbs{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.fm-thumb{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:84px;min-height:44px;padding:6px;border:1px solid var(--fm-line);border-radius:14px;background:var(--fm-card);font:inherit;font-size:12.5px;cursor:pointer}.fm-thumb img{width:76px;height:76px;object-fit:cover;border-radius:10px}.fm-radar h3{margin:14px 0 4px;font-size:15px}
+/* market radar: one-tap clarification (size / model) and the "reference price not reliable" notice */
+.fm-opts { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 }
+.fm-opt { min-height: 48px; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; overflow-wrap: anywhere }
+.fm-opt small { font-weight: 400; opacity: .8; font-size: 12px }
+.fm-unk { font-weight: 600 }
+.fm-unrel { background: var(--fm-amber-bg) }

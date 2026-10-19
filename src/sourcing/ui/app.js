@@ -308,16 +308,30 @@ function supplierText(A) { return A.supplierSheet.items.map((i) => `${i.n}. ${i.
 // ---- market radar: search from the case, or from a PHOTO of the case. A local barcode read sends no photo; a photo goes to Google Cloud Vision ONLY after an explicit consent card for THAT photo (server checks the consent is bound to its sha-256).
 let marketPending = null; // { i, up }: the downscaled photo held in memory while the owner decides; never stored in the case
 const marketStatusOnce = async () => { if (S.marketStatus) return S.marketStatus; try { S.marketStatus = await api('/api/market/status'); } catch { S.marketStatus = { enabled: false, photoIdentification: { enabled: false } }; } return S.marketStatus; };
-async function marketSearch({ identification = null, photo = null }) { // paid search through the server (credentials stay there); one at a time; a failure never touches the case
+async function marketSearch({ identification = null, photo = null, confirmed = null }) { // paid search through the server (credentials stay there); one at a time; a failure never touches the case
   if (S.marketBusy) return; const c = cur(); const input = buildSearchInput(c, buildProductHypothesis(c)); const q = c.quotes?.at(-1); const sp = q && q.unitPrice !== undefined && q.unitPrice !== '' ? Number(String(q.unitPrice).replace(',', '.')) : NaN;
   S.marketBusy = true; S.flash = ''; render();
   try {
-    const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, identification, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
-    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes, identification: r.identification ? { ...r.identification, photo } : null } });
+    const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, identification, confirmed, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
+    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes, question: r.question ?? null, confirmation: confirmed ? { at: new Date().toISOString(), answered: 'owner-confirmed-new-search', value: confirmed, unknown: false } : null, identification: r.identification ? { ...r.identification, photo } : null } });
     S.flash = r.cached ? 'Résultat déjà obtenu récemment : aucune nouvelle recherche n’a été payée.' : '';
   } catch (e) { S.flash = e.body?.message ?? (e.status ? `La recherche a échoué (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la recherche n’a pas eu lieu et rien n’a été perdu. Réessayez avec du réseau.'); }
   finally { S.marketBusy = false; render(); }
 }
+// the owner's one-tap answer (size or model) or "Je ne sais pas": the listings ALREADY obtained are re-read on the server (pure computation: no provider call, no cost, no photo)
+async function marketAnswer(key) {
+  if (S.marketBusy) return; const c = cur(); const last = (c.marketSearches ?? []).filter((x) => x.radar).at(-1); const q = last?.radar?.question; if (!last || !q) return;
+  const value = key === 'unknown' ? null : q.options?.[Number(key)]?.value; if (value === undefined) return;
+  const input = last.input ?? {}; const qt = c.quotes?.at(-1); const sp = qt && qt.unitPrice !== undefined && qt.unitPrice !== '' ? Number(String(qt.unitPrice).replace(',', '.')) : NaN;
+  S.marketBusy = true; S.flash = ''; render();
+  try {
+    const r = await api('/api/market/refine', { method: 'POST', body: JSON.stringify({ evidence: last.evidence, input: { name: input.name, brand: input.brand, model: input.model, gtin: input.gtin, traits: input.traits }, identification: last.radar.identification ?? null, confirmed: value, supplier: Number.isFinite(sp) ? { price: sp, currency: qt.currency ?? null } : null, country: 'BE' }) });
+    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input: last.input, outgoing: [], consent: true, evidence: r.stored, note: null, radar: { ...last.radar, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, cost: r.cost, notes: r.notes, question: null, cached: false, refinedFromId: last.id, confirmation: { at: new Date().toISOString(), answered: q.id, value, unknown: value === null } } });
+  } catch (e) { S.flash = e.body?.message ?? (e.status ? `La précision n’a pas pu être appliquée (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la précision n’a pas été appliquée et rien n’a été perdu.'); }
+  finally { S.marketBusy = false; render(); }
+}
+// an explicit, capped, PAID new search that carries the owner's answer (the button says so; the server applies its cost cap, daily cap and cache)
+function marketRerun() { const c = cur(); const last = (c.marketSearches ?? []).filter((x) => x.radar).at(-1); const cf = last?.radar?.confirmation; if (!cf || cf.unknown || !cf.value) return; return marketSearch({ identification: last.radar.identification ? { ...last.radar.identification, photo: undefined } : null, confirmed: cf.value }); }
 async function marketPhotoStart(i) {
   const c = cur(); const url = getBlob(`photo:${c.id}.${i}`); if (!url) { S.flash = 'Cette photo est introuvable sur ce téléphone.'; return render(); }
   S.flash = ''; marketPending = null; S.marketPhoto = { i, stage: 'scanning' }; render();
@@ -379,6 +393,8 @@ async function onClick(ev) {
   if (act === 'fm-sheet') { S.sheet = key; S.flash = ''; render(); return; }
   if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
   if (act === 'market-run') return void marketSearch({});
+  if (act === 'market-answer') return void marketAnswer(key);
+  if (act === 'market-rerun') return void marketRerun();
   if (act === 'market-photo') return void marketPhotoStart(Number(key));
   if (act === 'market-photo-send') return void marketPhotoSend();
   if (act === 'market-photo-go') return void marketPhotoGo();
