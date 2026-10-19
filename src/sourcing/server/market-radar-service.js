@@ -4,7 +4,7 @@
 //    (MARKET_DAILY_MAX, default 20), one search at a time, a minimum interval between searches, and a cache so the same search is never paid twice within MARKET_CACHE_HOURS (default 24);
 //  - nothing is retried automatically (a retry is a second paid call); every failure becomes a named code with a plain message;
 //  - PHOTOS: the search itself is text only. Photo recognition (`identify`, Google Cloud Vision) is OFF unless the operator sets MARKET_PHOTO_ENABLED=1 AND GOOGLE_VISION_API_KEY; it is OWNER-only; each photo needs the owner's explicit
-//    consent bound to THIS image (its sha-256, checked here); the photo is never stored or logged; at most MARKET_PHOTO_DAILY_MAX per day (10). A local barcode read on the phone sends no photo at all (only the number).
+//    consent bound to THIS image (its sha-256, checked here); the photo is never stored or logged; at most MARKET_PHOTO_DAILY_MAX per day (5). A local barcode read on the phone sends no photo at all (only the number).
 //  - `identification` (from a barcode read, a photo, or the owner) only fills what the case lacks, is cleaned here (a GTIN needs a valid check digit) and keeps its source.
 import { COUNTRIES, ProviderError, dfsBalance, estimateCostUsd, fetchShoppingListings } from '../adapters/market-dataforseo.js';
 import { analyseListings, compareWithSupplier, identificationConfidence, mergeIdentification, queriesFromInput, sanitizeIdentification, toStoredEvidence } from '../adapters/market-radar.js';
@@ -48,7 +48,7 @@ export function createMarketRadar({ env = process.env, fetchImpl = fetch, now = 
   const login = String(env.DATAFORSEO_LOGIN ?? '').trim(); const password = String(env.DATAFORSEO_PASSWORD ?? '').trim(); const enabled = !!(login && password);
   const lim = { maxQueries: Math.min(3, Math.floor(num(env.MARKET_MAX_QUERIES, 2))), maxCostUsd: num(env.MARKET_MAX_COST_USD, 0.05), dailyMax: Math.floor(num(env.MARKET_DAILY_MAX, 20)), minIntervalMs: num(env.MARKET_MIN_INTERVAL_SEC, 10) * 1000, cacheMs: num(env.MARKET_CACHE_HOURS, 24) * 3_600_000 };
   const visionKey = String(env.GOOGLE_VISION_API_KEY ?? '').trim(); const photoEnabled = !!visionKey && String(env.MARKET_PHOTO_ENABLED ?? '') === '1';
-  const plim = { dailyMax: Math.floor(num(env.MARKET_PHOTO_DAILY_MAX, 10)), minIntervalMs: num(env.MARKET_PHOTO_MIN_INTERVAL_SEC, 5) * 1000, maxCostUsd: num(env.MARKET_PHOTO_MAX_COST_USD, 0.02) };
+  const plim = { dailyMax: Math.floor(num(env.MARKET_PHOTO_DAILY_MAX, 5)), minIntervalMs: num(env.MARKET_PHOTO_MIN_INTERVAL_SEC, 5) * 1000, maxCostUsd: num(env.MARKET_PHOTO_MAX_COST_USD, 0.02) };
   let photoBusy = false; let photoLastAt = 0; let todayPhotos = 0;
   const cache = new Map(); let inflight = false; let lastAt = 0; let day = ''; let todayCount = 0; let todaySpentUsd = 0;
   const today = () => now().toISOString().slice(0, 10); const rollDay = () => { if (day !== today()) { day = today(); todayCount = 0; todaySpentUsd = 0; todayPhotos = 0; } };

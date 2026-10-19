@@ -50,7 +50,7 @@ Parcours : fiche > « Prix en Europe » > vignette de la photo > Nordla identifi
 - **Propriétaire seulement** (rôle OWNER, vérifié par le serveur).
 - Une carte d'accord s'affiche **avant tout envoi**, pour **cette** photo : destination (Google Cloud Vision, États-Unis), taille, coût maximal, empreinte SHA-256. Le serveur recalcule l'empreinte de l'image reçue et **refuse** si elle diffère de l'accord (« CONSENT_MISMATCH »). « Non » n'envoie rien.
 - La photo est réduite à 1024 px côté téléphone, jamais conservée ni journalisée par le serveur ; le dossier ne garde que la provenance (source, date de l'accord, empreinte, moteur), jamais les pixels.
-- Plafonds : `MARKET_PHOTO_DAILY_MAX` (10), `MARKET_PHOTO_MIN_INTERVAL_SEC` (5), `MARKET_PHOTO_MAX_COST_USD` (0,02 ; estimation 0,0065 $ par photo), une photo à la fois, aucune nouvelle tentative automatique.
+- Plafonds : `MARKET_PHOTO_DAILY_MAX` (5), `MARKET_PHOTO_MIN_INTERVAL_SEC` (5), `MARKET_PHOTO_MAX_COST_USD` (0,02 ; estimation 0,0065 $ par photo), une photo à la fois, aucune nouvelle tentative automatique.
 - Le serveur nettoie toute identification reçue d'un téléphone : source en liste blanche, numéro de code-barres à clé valide, textes bornés.
 
 ### Tests
