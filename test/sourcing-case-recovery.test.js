@@ -135,7 +135,7 @@ test('8. recovering marks nothing as changed: the app code for recovery has no s
   const block = src.slice(a, b);
   assert.doesNotMatch(block, /markDirty|queueSync|sync\(\)|method:\s*'(PUT|POST|DELETE)'/, 'recovery only reads (GET) and stores locally');
   assert.match(block, /api\('\/api\/cases'\)/); assert.match(block, /api\(`\/api\/cases\/\$\{encodeURIComponent\(id\)\}`\)/);
-  const sw = await readFile(new URL('../src/sourcing/ui/sw.js', import.meta.url), 'utf8'); assert.match(sw, /nordla-sourcing-terrain-v2-1/, 'the installed phone app refreshes (the shell cache name changes with the UI generation)');
+  const sw = await readFile(new URL('../src/sourcing/ui/sw.js', import.meta.url), 'utf8'); assert.match(sw, /nordla-sourcing-terrain-v2-2/, 'the installed phone app refreshes (the shell cache name changes with the UI generation)');
 });
 
 test('9. EXPORT / IMPORT of a JSON: a case that never reached the server round-trips whole, with the photos the phone holds', () => {

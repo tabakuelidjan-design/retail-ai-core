@@ -18,9 +18,13 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 const MAX_BODY = 16 * 1024 * 1024;
 const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
 // Nordla Core screen (Design System v1, /nordla): its files live OUTSIDE the field app's UI folder (src/sourcing/nordla-ui), so the China
-// Sourcing offline shell (/shell-manifest.json, built from the UI folder) stays exactly what it was. Official icons and fonts: src/shared (/nordla-assets/).
+// Sourcing offline shell (/shell-manifest.json, built from the UI folder). Official icons and fonts: src/shared (/nordla-assets/).
+// The ONE Design System stylesheet (/nordla-ds.css) and its module bridge (/nordla-tokens.css) come from src/shared for every page, the field app
+// included: they are listed in the offline shell with the two Montserrat files, so the field app keeps its look with no connection.
+const SHARED_CSS = ['/nordla-ds.css', '/nordla-tokens.css'];
+const SHELL_SHARED = [...SHARED_CSS, '/nordla-assets/fonts/montserrat-latin.woff2', '/nordla-assets/fonts/montserrat-latin-ext.woff2'];
 const NORDLA_UI_DIR = fileURLToPath(new URL('../nordla-ui/', import.meta.url));
-const NORDLA_PAGES = Object.fromEntries(['nordla-ds.css', 'nordla-ds.js', 'nordla-view.js', 'nordla-home.js'].map((f) => [`/${f}`, f]).concat([['/nordla', 'nordla.html']]));
+const NORDLA_PAGES = Object.fromEntries(['nordla-ds.js', 'nordla-view.js', 'nordla-home.js'].map((f) => [`/${f}`, f]).concat([['/nordla', 'nordla.html']]));
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
@@ -70,7 +74,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
   async function shellManifest() {
     if (shellCache) return shellCache;
     const walk = async (dir, prefix) => { const out = []; for (const e of await readdir(dir, { withFileTypes: true })) { if (e.isDirectory()) out.push(...await walk(join(dir, e.name), `${prefix}${e.name}/`)); else if (/\.js$/.test(e.name)) out.push(`${prefix}${e.name}`); } return out; };
-    return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(uiDir, '/')), ...(await walk(coreDir, '/core/'))])].sort() });
+    return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(uiDir, '/')), ...(await walk(coreDir, '/core/')), ...SHELL_SHARED])].sort() });
   }
   async function serveStatic(res, file, dir) {
     try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...(file === 'voice-engine-worker.js' ? VOICE_SEC : SEC) }); res.end(data); }
@@ -171,6 +175,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
       if (NORDLA_PAGES[url.pathname]) return await serveStatic(res, NORDLA_PAGES[url.pathname], NORDLA_UI_DIR);
+      if (SHARED_CSS.includes(url.pathname)) { const a = await readNordlaShared(url.pathname); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'no-cache', ...SEC }); return res.end(a.body); }
       if (url.pathname.startsWith('/nordla-assets/')) { const a = await readNordlaShared(url.pathname); if (!a) return json(res, 404, { error: 'NOT_FOUND' }); res.writeHead(200, { 'content-type': a.type, 'cache-control': 'public, max-age=86400', ...SEC }); return res.end(a.body); }
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);

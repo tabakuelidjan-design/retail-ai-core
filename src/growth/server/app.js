@@ -35,7 +35,6 @@ const STATIC = {
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
   '/lang-en.js': [UI, 'lang-en.js', JS],
   '/style.css': [ANALYTICS_UI, 'style.css', CSS],
-  '/nordla-tokens.css': [ANALYTICS_UI, 'nordla-tokens.css', CSS],
   '/i18n.js': [ANALYTICS_UI, 'i18n.js', JS],
 };
 
