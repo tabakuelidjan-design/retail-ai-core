@@ -3,6 +3,7 @@
 // (sourcing_cases / sourcing_evidence / sourcing_documents / sourcing_decisions) without conversion. `supplier` and `quotes` are shaped to link to "Achats & Fournisseurs".
 import { mkdir, readFile, readdir, rename, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 export class StoreError extends Error { constructor(code, msg, extra = {}) { super(msg ?? code); this.code = code; Object.assign(this, extra); } }
 const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
@@ -25,6 +26,10 @@ export function createMemoryStore() {
 
 export function createFileStore(dir) {
   const fileOf = (id) => join(dir, `${assertId(id)}.json`);
+  // One save at a time PER CASE: "read the stored revision, compare, write" must not interleave, or two devices saving from the same revision would both pass the check (a note lost
+  // without a word) and share one temporary file (ENOENT). Different cases never wait for each other. (A single server process owns the folder: the volume lease guarantees it.)
+  const chains = new Map();
+  const serial = (id, task) => { const run = (chains.get(id) ?? Promise.resolve()).catch(() => {}).then(task); const tail = run.catch(() => {}); chains.set(id, tail); tail.then(() => { if (chains.get(id) === tail) chains.delete(id); }); return run; };
   const read = async (id) => { try { return JSON.parse(await readFile(fileOf(id), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
   return {
     async list() {
@@ -34,10 +39,14 @@ export function createFileStore(dir) {
     },
     get: read,
     async save(state) {
-      await mkdir(dir, { recursive: true }); assertId(state.id); const prev = await read(state.id); check(prev, state);
-      const next = { ...state, rev: (prev?.rev ?? 0) + 1 }; const tmp = `${fileOf(state.id)}.${process.pid}.tmp`;
-      await writeFile(tmp, JSON.stringify(next, null, 1)); await rename(tmp, fileOf(state.id)); return next;
+      assertId(state.id);
+      return serial(state.id, async () => {
+        await mkdir(dir, { recursive: true }); const prev = await read(state.id); check(prev, state);
+        const next = { ...state, rev: (prev?.rev ?? 0) + 1 }; const tmp = `${fileOf(state.id)}.${process.pid}.${randomUUID()}.tmp`;
+        try { await writeFile(tmp, JSON.stringify(next, null, 1)); await rename(tmp, fileOf(state.id)); } catch (e) { await unlink(tmp).catch(() => {}); throw e; }
+        return next;
+      });
     },
-    async remove(id) { try { await unlink(fileOf(id)); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } },
+    async remove(id) { assertId(id); return serial(id, async () => { try { await unlink(fileOf(id)); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; } }); },
   };
 }
