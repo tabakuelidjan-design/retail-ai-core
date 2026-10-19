@@ -82,7 +82,7 @@ try {
     ok(backup.body?.status !== 'OK', `test set-up: the backup is not configured here (${JSON.stringify(backup.body)})`);
     const badge = await tab.eval("document.querySelector('.nd-card-head .nd-badge').innerText");
     ok(!/Opérationnel/.test(badge) && /Partiellement vérifié|Core inactif|État non vérifié/.test(badge), `status badge: ${badge}`);
-    const shell = (await api(tab, '/shell-manifest.json')).body.files; ok(!shell.some((f) => /nordla-(ds|view|home|mark)|^\/nordla(\.html)?$/.test(f)), `field app offline shell unchanged: ${shell.filter((f) => /nordla/.test(f))}`);
+    const shell = (await api(tab, '/shell-manifest.json')).body.files; ok(!shell.some((f) => /nordla-(view|home|mark)|^\/nordla(\.html)?$/.test(f)), `the /nordla screen files stay out of the field app offline shell (only the shared Design System assets belong there since the 2026-10-17 unification): ${shell.filter((f) => /nordla/.test(f))}`);
     ok(/Sauvegarde hors serveur/.test(await tab.eval("document.querySelector('[data-nd-system]')?.innerText ?? ''")), 'the missing check is named');
   });
   await check('2. indicators = the server fields; spend IA "Non disponible"; modules = /api/core/modules with their state', async () => {
