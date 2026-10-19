@@ -5,7 +5,7 @@ import { validGtin } from './market-vision.js';
 
 export const FLAG = Object.freeze({
   PACK_OR_LOT: 'PACK_OR_LOT', ACCESSORY_SUSPECTED: 'ACCESSORY_SUSPECTED', PRICE_OUTLIER_HIGH: 'PRICE_OUTLIER_HIGH', PRICE_OUTLIER_LOW: 'PRICE_OUTLIER_LOW',
-  CAPACITY_DIFFERS: 'CAPACITY_DIFFERS', PROMO_PRINTED: 'PROMO_PRINTED', NO_TEXT_OVERLAP: 'NO_TEXT_OVERLAP', CAPACITY_NOT_STATED: 'CAPACITY_NOT_STATED', MODEL_NOT_IN_TITLE: 'MODEL_NOT_IN_TITLE', BRAND_NOT_IN_TITLE: 'BRAND_NOT_IN_TITLE', NO_PRICE: 'NO_PRICE', FOREIGN_CURRENCY_NO_RATE: 'FOREIGN_CURRENCY_NO_RATE',
+  CAPACITY_DIFFERS: 'CAPACITY_DIFFERS', PROMO_PRINTED: 'PROMO_PRINTED', NO_TEXT_OVERLAP: 'NO_TEXT_OVERLAP', CAPACITY_NOT_STATED: 'CAPACITY_NOT_STATED', MODEL_NOT_IN_TITLE: 'MODEL_NOT_IN_TITLE', BRAND_NOT_IN_TITLE: 'BRAND_NOT_IN_TITLE', VARIANT_DIFFERS: 'VARIANT_DIFFERS', VARIANT_NOT_STATED: 'VARIANT_NOT_STATED', NO_PRICE: 'NO_PRICE', FOREIGN_CURRENCY_NO_RATE: 'FOREIGN_CURRENCY_NO_RATE',
 });
 const STOP = new Set(['the', 'and', 'for', 'with', 'pour', 'avec', 'voor', 'met', 'les', 'des', 'une', 'een', 'van', 'new', 'neuf', 'nieuw']);
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -13,6 +13,16 @@ const alnum = (s) => norm(s).replace(/[^a-z0-9]/g, '');
 const tokens = (s) => norm(s).split(/[^a-z0-9]+/).filter((t) => t.length > 2 && !STOP.has(t));
 /** Distinctive words of a product name: keeps model-like tokens ("h2.0"), drops capacities and bare numbers (a volume is checked separately). */
 const nameTokens = (s) => norm(s).split(/[\s,;:()/–—-]+/).map((t) => t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')).filter((t) => t.length >= 3 && !STOP.has(t) && !/^[\d.,]+$/.test(t) && !volumeMl(t));
+
+/** Words that name a KIND of product (a bottle, a tumbler, a flask...) in several languages: synonyms, not identifiers. A case named only with such words ("water bottle") is identified by its brand and its verified traits, not by these words. */
+export const CATEGORY_WORDS = new Set(['bottle', 'bottles', 'fles', 'flessen', 'thermosfles', 'drinkfles', 'waterfles', 'bidon', 'gourde', 'flask', 'thermos', 'tumbler', 'beker', 'thermosbeker', 'drinkbeker', 'mug', 'cup', 'gobelet', 'kan', 'water', 'eau', 'insulated', 'isotherme', 'steel', 'stainless', 'vacuum', 'sport', 'drink', 'travel']);
+export const nameIsCategory = (input) => { const bt = new Set(nameTokens(input.brand)); const want = nameTokens(input.name).filter((w) => !bt.has(w)); return want.every((w) => CATEGORY_WORDS.has(w)); };
+export const titleWords = (title) => new Set(norm(title).split(/[^a-z0-9]+/).filter(Boolean));
+export const fmtMl = (ml) => (ml >= 1000 ? `${(ml / 1000).toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace('.', ',')} L` : `${Math.round(ml)} ml`);
+/** Pack size read in a title ("5 st.", "50st.", "2 x", "2 Pack", "6-pack"); null when none. */
+export function packOf(title) { const t = norm(title); const m = /(?:^|\s)(\d{1,3})\s?(?:x|×)\s?(?=\d|[a-z]{3})/.exec(t) ?? /(?:^|\s)(\d{1,3})\s?(?:st\.?|stuks?|stk\.?|pcs|pieces|pc)(?=\s|$|\W)/.exec(t) ?? /(?:^|\s)(\d{1,3})[- ]?pack\b/.exec(t); const n = m ? Number(m[1]) : null; return n && n > 1 ? n : null; }
+/** The facet value a title states: exactly ONE value whose words are all in the title; otherwise null (unstated or ambiguous). */
+export function variantOf(title, facet) { if (!facet?.values?.length) return null; const w = titleWords(title); const hit = facet.values.filter((v) => v.tokens.every((tk) => w.has(tk))); return hit.length === 1 ? hit[0] : null; }
 
 /** Volume in millilitres from a text ("1.18L", "1,18 l", "500ml", "50cl", "40oz"); null when none. */
 export function volumeMl(text) {
@@ -65,7 +75,7 @@ export function volumesIn(text) { const t = norm(text).replace(/(\d),(\d)/g, '$1
 export function clusterVolumes(vols) { const cs = []; for (const v of [...vols].sort((a, b) => a - b)) { const last = cs[cs.length - 1]; if (last && Math.abs(v - last) / last <= 0.03) continue; cs.push(v); } return cs; }
 export const capacityOf = (input) => { if (input.confirmed?.capacityMl) return Number(input.confirmed.capacityMl); const t = input.traits ?? {}; for (const k of ['capacity', 'volume', 'capacite', 'contenance']) { const v = t[k]?.value ?? t[k]; if (v) { const ml = volumeMl(String(v)); if (ml) return ml; } } return volumeMl(input.name) ?? volumeMl(input.quantity) ?? input.capacityHint?.ml ?? null; };
 /** Strict comparability applies once the owner has CONFIRMED a model or a size: what cannot be verified against it (size or model not written in the title, another brand) leaves the median, but stays visible with its reason. */
-export const isStrict = (input) => !!(input.confirmed && (input.confirmed.capacityMl || input.confirmed.model));
+export const isStrict = (input) => !!(input.confirmed && (input.confirmed.capacityMl || input.confirmed.model || input.confirmed.variant));
 
 /** At most `max` queries (each is a paid call): GTIN, then brand+model, then brand+name+capacity. */
 export function queriesFromInput(input, max = 2) {
@@ -84,14 +94,16 @@ export function classifyListing(l, input) {
   const brandTok = new Set(nameTokens(input.brand)); const want = nameTokens(input.name).filter((w) => !brandTok.has(w)); const have = new Set(nameTokens(title));
   const overlap = want.length ? want.filter((w) => have.has(w) || t.includes(alnum(w))).length / want.length : 0; // share of the product's distinctive words found in the title (brand excluded)
   const wantMl = capacityOf(input); const gotMl = volumeMl(title); const wantG = massG(input.quantity) ?? massG(input.name); const gotG = massG(title);
-  if ((wantMl && gotMl && Math.abs(gotMl - wantMl) / wantMl > 0.12) || (wantG && gotG && Math.abs(gotG - wantG) / wantG > 0.12)) flags.push(FLAG.CAPACITY_DIFFERS); else if ((wantMl && !gotMl) || (wantG && !gotG && !wantMl)) flags.push(FLAG.CAPACITY_NOT_STATED);
+  const volTol = input.confirmed?.capacityMl ? 0.04 : 0.12; /* a size the owner CONFIRMED is matched tightly (946 ml is not 1 L); a size inferred from the case keeps the looser 12 % */
+  if ((wantMl && gotMl && Math.abs(gotMl - wantMl) / wantMl > volTol) || (wantG && gotG && Math.abs(gotG - wantG) / wantG > 0.12)) flags.push(FLAG.CAPACITY_DIFFERS); else if ((wantMl && !gotMl) || (wantG && !gotG && !wantMl)) flags.push(FLAG.CAPACITY_NOT_STATED);
   const noOverlap = brand ? (!brandHit && (!want.length || overlap === 0)) : (want.length ? overlap === 0 : true); /* true when there is nothing to compare (a bare barcode search): nothing ties the title to the search */ if (noOverlap && !modelHit) flags.push(FLAG.NO_TEXT_OVERLAP); // nothing in the title ties it to the search: kept visible, never in a price range
   if (PACK_RE.test(title)) flags.push(FLAG.PACK_OR_LOT); if ((ACCESSORY_RE.test(title) || STRAW_ONLY(title) || (accessoryByNoun(title, input.brand) && !ACC_NOUN.test(input.name ?? ''))) && !ACCESSORY_RE.test(input.name ?? '')) flags.push(FLAG.ACCESSORY_SUSPECTED); if (PROMO_RE.test(title) && !PROMO_RE.test(input.name ?? '')) flags.push(FLAG.PROMO_PRINTED);
   if (modelOk && !modelHit) flags.push(FLAG.MODEL_NOT_IN_TITLE);
   let matchType; let confidence; let reason;
   const downgraded = flags.includes(FLAG.CAPACITY_DIFFERS) || flags.includes(FLAG.ACCESSORY_SUSPECTED) || flags.includes(FLAG.PACK_OR_LOT) || flags.includes(FLAG.PROMO_PRINTED);
+  const categoryPromotion = !downgraded && brandHit && nameIsCategory(input) && !!wantMl && !!gotMl && CONTAINER_NOUN.test(title); // a known brand + a verified size + the same kind of product: enough for PROBABLE even when the case name is only a category
   if (!downgraded && modelHit && (brandHit || !brand)) { matchType = MATCH.EXACT_MATCH; confidence = 'MEDIUM'; reason = 'le modèle exact figure dans le titre'; }
-  else if (!downgraded && ((brandHit && (want.length === 0 ? nameTokens(input.name).length > 0 : want.length >= 2 && overlap >= 0.75)) || (modelHit && !!brand) || (!brand && want.length >= 3 && overlap >= 0.9) || (!!brand && !brandHit && want.length >= 3 && overlap >= 0.99) || (l.queryVia?.includes('GTIN') && (brandHit || overlap >= 0.5)))) { matchType = MATCH.PROBABLE_MATCH; confidence = 'MEDIUM'; reason = modelHit ? 'modèle trouvé mais marque absente du titre' : l.queryVia?.includes('GTIN') ? 'trouvé par code-barres, titre non confirmé' : brandHit ? `marque et ${Math.round(overlap * 100)} % des mots distinctifs du nom dans le titre` : `tous les mots distinctifs du nom dans le titre, mais marque absente`; }
+  else if (!downgraded && (categoryPromotion || (brandHit && (want.length === 0 ? nameTokens(input.name).length > 0 : want.length >= 2 && overlap >= 0.75)) || (modelHit && !!brand) || (!brand && want.length >= 3 && overlap >= 0.9) || (!!brand && !brandHit && want.length >= 3 && overlap >= 0.99) || (l.queryVia?.includes('GTIN') && (brandHit || overlap >= 0.5)))) { matchType = MATCH.PROBABLE_MATCH; confidence = 'MEDIUM'; reason = categoryPromotion && !modelHit ? 'marque et taille vérifiées, même type de produit (les mots de catégorie sont des synonymes)' : modelHit ? 'modèle trouvé mais marque absente du titre' : l.queryVia?.includes('GTIN') ? 'trouvé par code-barres, titre non confirmé' : brandHit ? `marque et ${Math.round(overlap * 100)} % des mots distinctifs du nom dans le titre` : `tous les mots distinctifs du nom dans le titre, mais marque absente`; }
   else { matchType = MATCH.SIMILAR_PRODUCT; confidence = 'LOW'; reason = flags.includes(FLAG.NO_TEXT_OVERLAP) ? 'aucun mot du titre ne se rapporte à la recherche' : downgraded ? (flags.includes(FLAG.CAPACITY_DIFFERS) ? 'capacité différente' : flags.includes(FLAG.ACCESSORY_SUSPECTED) ? 'accessoire probable' : flags.includes(FLAG.PACK_OR_LOT) ? 'lot ou pack probable' : 'article promotionnel / personnalisé probable') : `ressemblance seulement (${Math.round(overlap * 100)} % des mots du nom)`; }
   return { matchType, confidence, reason, flags };
 }
@@ -102,29 +114,52 @@ export const toEur = (amount, currency, ecb) => (currency === 'EUR' ? amount : e
 
 /** Annotates every listing and computes the reference range from the INCLUDED ones only (nothing is deleted: excluded listings stay visible with their reasons). */
 export const MIN_COMPARABLE = 3;
-function referenceOf(comparable, incl) {
-  const prices = comparable.map((r) => r.price.eur).sort((x, y) => x - y);
-  if (comparable.length >= MIN_COMPARABLE) return { reliable: true, matchClass: comparable.every((r) => r.matchType === MATCH.EXACT_MATCH) ? MATCH.EXACT_MATCH : MATCH.PROBABLE_MATCH, count: prices.length, minEur: round2(prices[0]), medianEur: round2(median(prices)), maxEur: round2(prices[prices.length - 1]), note: null };
-  const similar = incl.length - comparable.length;
-  return { reliable: false, matchClass: comparable.length ? comparable[0].matchType : null, count: comparable.length, minEur: prices.length ? round2(prices[0]) : null, medianEur: null, maxEur: prices.length ? round2(prices[prices.length - 1]) : null, pricesEur: prices.map(round2),
-    note: comparable.length ? `seulement ${comparable.length} annonce(s) comparable(s) (minimum ${MIN_COMPARABLE}) : pas de médiane` : similar ? `aucune annonce comparable : ${similar} produit(s) seulement similaire(s), pas de médiane` : 'aucune annonce comparable retenue' };
-}
+const CLASS_ORDER = [MATCH.EXACT_MATCH, MATCH.PROBABLE_MATCH];
+const repOf = (clusters, ml) => clusters.reduce((best, c) => (best == null || Math.abs(c - ml) < Math.abs(best - ml) ? c : best), null);
+
+/** Annotates every listing and builds the reference prices from the INCLUDED, COMPARABLE ones only (nothing is deleted: excluded listings stay visible with their reasons).
+ *  Statistics are made per CLASS (exact / probable) and per HOMOGENEOUS group (one size, one variant): different things are never averaged together. Below MIN_COMPARABLE in a group there is no median. */
 export function analyseListings(listings, input, { ecb = null } = {}) {
-  const rows = listings.map((l, i) => { const c = classifyListing(l, input); const eur = l.price != null ? toEur(l.price, l.currency, ecb) : null; const f = [...c.flags]; if (isStrict(input) && input.brand && !alnum(l.title).includes(alnum(input.brand))) f.push(FLAG.BRAND_NOT_IN_TITLE); if (l.price == null) f.push(FLAG.NO_PRICE); else if (eur == null) f.push(FLAG.FOREIGN_CURRENCY_NO_RATE);
-    const li = linkInfo(l.url); return { id: `l${i + 1}`, title: l.title, seller: l.seller, marketplace: marketplaceOf(l.seller, l.url), price: l.price != null ? { amount: l.price, currency: l.currency, eur: eur != null ? round2(eur) : null } : null, url: l.url, linkKind: li.kind, linkHost: li.host,
-      matchType: c.matchType, confidence: c.confidence, reason: c.reason, flags: f, observedAt: l.observedAt, source: 'google-shopping via dataforseo', query: l.query, queryVia: l.queryVia, productId: l.productId }; });
-  // outliers: among listings that are not already packs / accessories / different capacity, against the median of those (needs 5 priced listings: otherwise no judgement)
-  const base = rows.filter((r) => r.price?.eur != null && !r.flags.some((f) => [FLAG.PACK_OR_LOT, FLAG.ACCESSORY_SUSPECTED, FLAG.CAPACITY_DIFFERS, FLAG.PROMO_PRINTED, FLAG.NO_TEXT_OVERLAP].includes(f)));
+  const strict = isStrict(input); const conf = input.confirmed ?? {}; const facet = input.variantFacet ?? null;
+  const rows = listings.map((l, i) => { const c = classifyListing(l, input); const eur = l.price != null ? toEur(l.price, l.currency, ecb) : null; const f = [...c.flags];
+    if (strict && input.brand && !alnum(l.title).includes(alnum(input.brand))) f.push(FLAG.BRAND_NOT_IN_TITLE);
+    const v = variantOf(l.title, facet);
+    if (conf.variant?.tokens?.length) { const w = titleWords(l.title); if (!conf.variant.tokens.every((tk) => w.has(tk))) f.push(v && v.key !== conf.variant.key ? FLAG.VARIANT_DIFFERS : FLAG.VARIANT_NOT_STATED); }
+    if (l.price == null) f.push(FLAG.NO_PRICE); else if (eur == null) f.push(FLAG.FOREIGN_CURRENCY_NO_RATE);
+    let { matchType, confidence, reason } = c;
+    // EXACT needs every determining trait verified: a variant the title states and the owner has not confirmed keeps the listing at PROBABLE
+    if (matchType === MATCH.EXACT_MATCH && facet && v && !conf.variant) { matchType = MATCH.PROBABLE_MATCH; reason = `modèle trouvé, mais la variante (${v.label}) n’est pas confirmée`; }
+    const li = linkInfo(l.url); const n = f.includes(FLAG.PACK_OR_LOT) ? packOf(l.title) : null;
+    return { id: `l${i + 1}`, title: l.title, seller: l.seller, marketplace: marketplaceOf(l.seller, l.url), price: l.price != null ? { amount: l.price, currency: l.currency, eur: eur != null ? round2(eur) : null } : null, url: l.url, linkKind: li.kind, linkHost: li.host,
+      matchType, confidence, reason, flags: f, observedAt: l.observedAt, source: 'google-shopping via dataforseo', query: l.query, queryVia: l.queryVia, productId: l.productId,
+      variant: v ? { key: v.key, label: v.label } : null, sizeMl: volumeMl(l.title), pack: n && eur != null ? { n, unitEur: round2(eur / n), estimated: true } : null }; });
+  const OUT = [FLAG.PACK_OR_LOT, FLAG.ACCESSORY_SUSPECTED, FLAG.CAPACITY_DIFFERS, FLAG.PROMO_PRINTED, FLAG.NO_TEXT_OVERLAP]; if (strict) OUT.push(FLAG.CAPACITY_NOT_STATED, FLAG.MODEL_NOT_IN_TITLE, FLAG.BRAND_NOT_IN_TITLE, FLAG.VARIANT_DIFFERS, FLAG.VARIANT_NOT_STATED);
+  // outliers: among listings that are not already out for another reason, against the median of those (needs 5 priced listings: otherwise no judgement)
+  const base = rows.filter((r) => r.price?.eur != null && !r.flags.some((f) => OUT.includes(f)));
   if (base.length >= 5) { const m = median(base.map((r) => r.price.eur)); for (const r of base) { if (r.price.eur > m * 2.5) r.flags.push(FLAG.PRICE_OUTLIER_HIGH); else if (r.price.eur < m * 0.4) r.flags.push(FLAG.PRICE_OUTLIER_LOW); } }
-  const OUT = [FLAG.PACK_OR_LOT, FLAG.ACCESSORY_SUSPECTED, FLAG.CAPACITY_DIFFERS, FLAG.PROMO_PRINTED, FLAG.NO_TEXT_OVERLAP, FLAG.PRICE_OUTLIER_HIGH, FLAG.PRICE_OUTLIER_LOW]; if (isStrict(input)) OUT.push(FLAG.CAPACITY_NOT_STATED, FLAG.MODEL_NOT_IN_TITLE, FLAG.BRAND_NOT_IN_TITLE);
-  for (const r of rows) r.excludedFromReference = r.price?.eur == null || r.flags.some((f) => OUT.includes(f));
-  const incl = rows.filter((r) => !r.excludedFromReference);
-  // the reference price is built ONLY from comparable listings (exact or probable); below MIN_COMPARABLE of them there is no median, whatever the other listings say
-  const comparable = incl.filter((r) => r.matchType === MATCH.EXACT_MATCH || r.matchType === MATCH.PROBABLE_MATCH); const ref = comparable.map((r) => r.price.eur);
+  const EXCL = [...OUT, FLAG.PRICE_OUTLIER_HIGH, FLAG.PRICE_OUTLIER_LOW]; for (const r of rows) r.excludedFromReference = r.price?.eur == null || r.flags.some((f) => EXCL.includes(f));
+  const incl = rows.filter((r) => !r.excludedFromReference); const comparable = incl.filter((r) => CLASS_ORDER.includes(r.matchType));
+  // homogeneous groups: per class, per size (only while the size is unknown) and per variant (only while a variant facet exists and is not confirmed)
+  const sizeKnown = !!capacityOf(input) || !!input.model; /* a model determines the size: no split by size */ const byVariant = !!facet && !conf.variant; const clusters = clusterVolumes(comparable.map((r) => r.sizeMl).filter(Boolean));
+  const gm = new Map(); for (const r of comparable) { const sz = sizeKnown ? '' : (r.sizeMl ? String(repOf(clusters, r.sizeMl)) : 'none'); const k = `${r.matchType}|${sz}|${byVariant ? (r.variant?.key ?? 'none') : ''}`; (gm.get(k) ?? gm.set(k, []).get(k)).push(r); }
+  const groups = [...gm.values()].map((rs) => { const prices = rs.map((r) => r.price.eur).sort((x, y) => x - y); const reliable = prices.length >= MIN_COMPARABLE; const rep = !sizeKnown && rs[0].sizeMl ? repOf(clusters, rs[0].sizeMl) : null;
+    return { class: rs[0].matchType, size: rep ? { ml: Math.round(rep), label: fmtMl(rep) } : null, variant: byVariant ? (rs[0].variant ?? { key: 'none', label: 'variante non indiquée' }) : null, count: prices.length, reliable, minEur: round2(prices[0]), medianEur: reliable ? round2(median(prices)) : null, maxEur: round2(prices[prices.length - 1]), pricesEur: prices.map(round2), ids: rs.map((r) => r.id) }; })
+    .sort((x, y) => CLASS_ORDER.indexOf(x.class) - CLASS_ORDER.indexOf(y.class) || y.count - x.count);
   const count = (t) => rows.filter((r) => r.matchType === t).length; const flagCount = {}; for (const r of rows) for (const f of r.flags) flagCount[f] = (flagCount[f] ?? 0) + 1;
-  return { listings: rows, summary: { total: rows.length, exact: count(MATCH.EXACT_MATCH), probable: count(MATCH.PROBABLE_MATCH), similar: count(MATCH.SIMILAR_PRODUCT), excluded: rows.filter((r) => r.excludedFromReference).length, flags: flagCount },
-    reference: referenceOf(comparable, incl),
+  return { listings: rows, groups, summary: { total: rows.length, exact: count(MATCH.EXACT_MATCH), probable: count(MATCH.PROBABLE_MATCH), similar: count(MATCH.SIMILAR_PRODUCT), excluded: rows.filter((r) => r.excludedFromReference).length, exactNone: count(MATCH.EXACT_MATCH) === 0, flags: flagCount },
+    reference: referenceFrom(groups, comparable, incl),
     marketplaces: { 'amazon.be': rows.filter((r) => r.marketplace === 'amazon.be').length, 'bol.com': rows.filter((r) => r.marketplace === 'bol.com').length } };
+}
+/** ONE reference price only when exactly one reliable homogeneous group exists in the best class; several groups = no single price; otherwise "non fiable". */
+function referenceFrom(groups, comparable, incl) {
+  for (const cls of CLASS_ORDER) {
+    const gs = groups.filter((g) => g.class === cls && g.reliable);
+    if (gs.length === 1) { const g = gs[0]; return { reliable: true, matchClass: cls, count: g.count, minEur: g.minEur, medianEur: g.medianEur, maxEur: g.maxEur, variant: g.variant, size: g.size, note: null }; }
+    if (gs.length > 1) return { reliable: false, multiple: true, matchClass: cls, count: gs.reduce((n, g) => n + g.count, 0), minEur: null, medianEur: null, maxEur: null, pricesEur: [], note: `${gs.length} groupes distincts (tailles ou variantes différentes) : pas de prix unique, un prix par groupe` };
+  }
+  const prices = comparable.map((r) => r.price.eur).sort((x, y) => x - y); const similar = incl.length - comparable.length;
+  return { reliable: false, matchClass: comparable[0]?.matchType ?? null, count: comparable.length, minEur: prices.length ? round2(prices[0]) : null, medianEur: null, maxEur: prices.length ? round2(prices[prices.length - 1]) : null, pricesEur: prices.map(round2),
+    note: comparable.length ? (groups.length > 1 ? `${comparable.length} annonce(s) comparable(s) réparties en ${groups.length} groupes de moins de ${MIN_COMPARABLE} : pas de médiane` : `seulement ${comparable.length} annonce(s) comparable(s) (minimum ${MIN_COMPARABLE}) : pas de médiane`) : similar ? `aucune annonce comparable : ${similar} produit(s) seulement similaire(s), pas de médiane` : 'aucune annonce comparable retenue' };
 }
 
 /** Supplier price against the observed reference. Never a verdict. */
@@ -141,7 +176,7 @@ export function compareWithSupplier({ reference, supplier, ecb }) {
 /** Listing -> the evidence record stored in the case (provenance and date kept; flags and link kind in `specs`). */
 export function toStoredEvidence(r, country) {
   return { seller: r.seller, sellerType: 'UNKNOWN', country, url: r.url, source: 'google-shopping', price: r.price ? { amount: r.price.amount, currency: r.price.currency, vatIncluded: null } : null, brand: null, model: null,
-    specs: { title: r.title, marketplace: r.marketplace, linkKind: r.linkKind, linkHost: r.linkHost, flags: r.flags, excluded: r.excludedFromReference, eur: r.price?.eur ?? null, query: r.query, queryVia: r.queryVia, productId: r.productId },
+    specs: { variant: r.variant ?? null, pack: r.pack ?? null, sizeMl: r.sizeMl ?? null, title: r.title, marketplace: r.marketplace, linkKind: r.linkKind, linkHost: r.linkHost, flags: r.flags, excluded: r.excludedFromReference, eur: r.price?.eur ?? null, query: r.query, queryVia: r.queryVia, productId: r.productId },
     availability: null, matchType: r.matchType, confidence: r.confidence, observedAt: r.observedAt, reason: r.reason };
 }
 

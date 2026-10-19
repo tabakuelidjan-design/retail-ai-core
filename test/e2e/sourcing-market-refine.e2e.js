@@ -19,6 +19,9 @@ const it = (title, price, id) => ({ type: 'google_shopping_serp', title, price, 
 const SCENARIOS = {
   sizes: [it('Stanley Quencher H2.0 tumbler 1.18L Rose', 55, 1), it('Stanley Quencher H2.0 tumbler 1,18 L Blue', 54, 2), it('Stanley Quencher H2.0 tumbler 1.18L Cream', 56, 3), it('Stanley Quencher H2.0 tumbler 1.18L Black', 58, 4), it('Stanley Quencher H2.0 tumbler 1.18L Green', 57, 5),
     it('Stanley Quencher H2.0 tumbler 887ml Rose', 40, 6), it('Stanley Quencher H2.0 tumbler 0.887 L Blue', 41, 7), it('Stanley Quencher H2.0 tumbler', 52, 8), it('Yeti Rambler tumbler 1.18L', 70, 9), it('Stanley Quencher H2.0 tumbler 1.18L 2 pack', 110, 10)],
+  acme: [['Wide Mouth', 'insulated bottle', '710 ml', ['Black', 'Blue', 'Green', 'White'], [62, 64, 60, 63]], ['Standard Mouth', 'insulated bottle', '710 ml', ['Black', 'Blue', 'Green', 'White'], [46, 48, 45, 47]], ['Wide Mouth', 'insulated bottle', '946 ml', ['v0', 'v1', 'v2'], [74, 75, 76]]]
+    .flatMap(([v, k, size, cs, ps], g) => cs.map((c, i) => it(`ACME ${v} ${k} ${size} ${c}`, ps[i], 100 + g * 10 + i)))
+    .concat([it('ACME Wide Mouth replacement cap lid', 14, 150), it('6 pcs ACME Wide Mouth insulated bottle 710 ml', 330, 151), it('ZETA Wide Mouth insulated bottle 710 ml', 40, 152)]),
   few: [it('Acme steel bottle 500ml Blue', 20, 21), it('Acme steel bottle 500ml Red', 22, 22), it('Acme steel bottle replacement cap', 5, 23), it('Generic bottle 750ml', 9, 24)],
 };
 let scenario = 'sizes'; const counts = { post: 0, balance: 0 };
@@ -55,7 +58,7 @@ try {
     await openMarket(t, 'r-size'); await click(t, '[data-act="market-run"]', 1500); const s = await text(t); await shot(t, 'question-390', '.fm-q');
     ok(/Une précision \(une touche\)/.test(s) && /Quelle est la taille de votre produit/.test(s), `question missing: ${s.slice(0, 700)}`);
     const opts = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"]')].map((b) => ({ k: b.getAttribute('data-key'), t: b.innerText.replace(/\\s+/g, ' '), sel: b.classList.contains('active') || b.getAttribute('aria-pressed') === 'true' || b.hasAttribute('data-selected') }))`);
-    ok(opts.length === 3, JSON.stringify(opts)); ok(opts.every((o) => !o.sel), 'an option is preselected'); ok(/1,18 L/.test(opts[0].t) && /vu dans 7 annonce/.test(opts[0].t), opts[0].t); ok(/887 ml/.test(opts[1].t) && /vu dans 2 annonce/.test(opts[1].t), opts[1].t); ok(/Je ne sais pas/.test(opts[2].t) && opts[2].k === 'unknown', opts[2].t);
+    ok(opts.length === 3, JSON.stringify(opts)); ok(opts.every((o) => !o.sel), 'an option is preselected'); ok(/1,18 L/.test(opts[0].t) && /vu dans 6 annonce/.test(opts[0].t) && /prix médian/.test(opts[0].t), opts[0].t); ok(/887 ml/.test(opts[1].t) && /vu dans 2 annonce/.test(opts[1].t), opts[1].t); ok(/Je ne sais pas/.test(opts[2].t) && opts[2].k === 'unknown', opts[2].t);
     ok(counts.post === 1, `paid searches: ${counts.post}`); ok(/aucune recherche payante/.test(s), 'the free-answer statement');
     ok(/Prix de référence en attente de votre précision/.test(s) && !/Prix constatés/.test(s) && !/médiane observée/.test(s), 'no median (and no supplier ratio) while the question is pending: the sizes are mixed'); await noOverflow(t, 'question');
   });
@@ -87,7 +90,7 @@ try {
     await click(t, '[data-act="market-run"]', 1500); ok(/Une précision \(une touche\)/.test(await text(t)), 'question expected again'); const afterSearch = { ...counts };
     await click(t, '[data-act="market-answer"][data-key="unknown"]', 1200); const s = await text(t); await shot(t, 'unknown-390', '.fm-note.fm-warnline, .fm-rbox');
     ok(counts.post === afterSearch.post && counts.balance === afterSearch.balance, 'no provider call for the answer'); ok(afterSearch.post === before.post, 'the repeated search came from the cache (not paid twice)');
-    ok(/vous ne savez pas/.test(s) && /mélanger plusieurs tailles/.test(s) && !/Une précision \(une touche\)/.test(s), s.slice(0, 500)); const rec = (await store(t))['r-unk'].marketSearches.at(-1); ok(rec.radar.confirmation.unknown === true, 'unknown recorded');
+    ok(/vous ne savez pas/.test(s) && /par groupe/.test(s) && /jamais mélangés/.test(s) && !/Une précision \(une touche\)/.test(s), s.slice(0, 500)); const rec = (await store(t))['r-unk'].marketSearches.at(-1); ok(rec.radar.confirmation.unknown === true, 'unknown recorded');
   });
 
   await check('6. fewer than 3 really comparable listings: "Prix de référence non fiable", no median, prices readable one by one, no supplier ratio; excluded ones stay listed', async () => {
@@ -97,8 +100,38 @@ try {
     await t.eval(`document.querySelectorAll('details.fm-rg').forEach((d) => { d.open = true; })`); await sleep(200); ok(/accessoire/.test(await text(t)), 'excluded listings keep their reason');
   });
 
-  await check('7. the free step really is free: provider calls over the whole session = exactly the searches that were pressed (3 searches, 1 cached)', async () => {
-    ok(counts.post === 2, `paid searches ${counts.post}`);
+  await check('9. TWO questions at most, one at a time, each with "Autre" and "Je ne sais pas": size, then variant; each answer is free (no provider call); the final range is ONE homogeneous group; lots, accessories, other brands are listed apart', async () => {
+    scenario = 'acme'; await t.eval(seed('r-acme', 'water bottle', 'ACME')); await sleep(300); await reload(t); await openMarket(t, 'r-acme'); await click(t, '[data-act="market-run"]', 1500); const paid = counts.post;
+    let s = await text(t); ok(/Quelle est la taille de votre produit/.test(s), s.slice(0, 600)); ok(await t.eval(`!!document.querySelector('[data-other-input]') && !!document.querySelector('[data-act="market-other"]')`), '"Autre" free text present'); ok(/Aucun produit exact trouvé/.test(s), 'explicit: no exact product'); ok(!/Prix constatés/.test(s), 'no price while pending');
+    const labels = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"] b')].map((b) => b.innerText)`); ok(JSON.stringify(labels) === JSON.stringify(['710 ml', '946 ml', 'Je ne sais pas']), JSON.stringify(labels));
+    await click(t, '[data-act="market-answer"][data-key="0"]', 1200); s = await text(t); await shot(t, 'variant-question-390', '.fm-q');
+    ok(counts.post === paid, 'the size answer is free'); ok(/Quelle variante est votre produit/.test(s), s.slice(0, 700)); ok(/taille 710 ml/.test(s), 'first answer recorded');
+    const vl = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"]')].map((b) => b.innerText.replace(/\\s+/g, ' '))`); ok(vl.length === 3 && vl.some((x) => /^Wide .*prix médian/.test(x)) && vl.some((x) => /^Standard .*prix médian/.test(x)), JSON.stringify(vl));
+    const wide = await t.eval(`[...document.querySelectorAll('[data-act="market-answer"]')].findIndex((b) => /^Wide/.test(b.innerText))`); await click(t, `[data-act="market-answer"][data-key="${wide}"]`, 1200); s = await text(t); await shot(t, 'variant-final-390', '.fm-rbig');
+    ok(counts.post === paid, 'the variant answer is free'); ok(!/Une précision \(une touche\)/.test(s), 'no third question'); ok(/taille 710 ml/.test(s) && /variante Wide/.test(s), 'both answers recorded');
+    const big = await text(t, '.fm-rbig'); ok(/60,00 € – 62,50 € – 64,00 €/.test(big), big); ok(/sur 4 annonce/.test(s), 'four comparable listings');
+    await t.eval(`document.querySelectorAll('details.fm-rg').forEach((d) => { d.open = true; })`); await sleep(200); const all = await text(t);
+    ok(/Lots et packs — hors prix de référence/.test(all) && /55,00 € la pièce/.test(all) && /estimation/.test(all), 'lot apart with a per-piece ESTIMATE'); ok(/Accessoires — exclus des prix/.test(all), 'accessories apart'); ok(/autre variante/.test(all) && /capacité différente/.test(all) && /autre marque/.test(all), 'reasons for the excluded');
+    ok((all.match(/disponibilité non vérifiée/g) ?? []).length >= 5, 'availability is never claimed on any listing'); await noOverflow(t, 'final variant screen');
+  });
+
+  await check('10. "Autre": a typed size (64 oz) is understood (1,89 L), costs nothing, and with no comparable listing gives "Prix de référence non fiable"; an unreadable size is refused with a message and changes nothing', async () => {
+    await t.eval(seed('r-free', 'water bottle', 'ACME')); await sleep(300); await reload(t); await openMarket(t, 'r-free'); const before = counts.post; await click(t, '[data-act="market-run"]', 1500); ok(counts.post === before, 'the search itself came from the cache');
+    const n0 = (await store(t))['r-free'].marketSearches.length;
+    await t.eval(`(() => { const i = document.querySelector('[data-other-input]'); i.value = 'beaucoup'; })()`); await click(t, '[data-act="market-other"]', 900); let s = await text(t); ok(/Taille non comprise/.test(s), s.slice(0, 500)); ok((await store(t))['r-free'].marketSearches.length === n0, 'nothing stored for an unreadable size');
+    await t.eval(`(() => { const i = document.querySelector('[data-other-input]'); i.value = '64 oz'; })()`); await click(t, '[data-act="market-other"]', 1200); s = await text(t); await shot(t, 'autre-64oz-390', '.fm-unrel');
+    ok(counts.post === before, 'a typed size costs nothing'); ok(/taille 1,89 L/.test(s), s.slice(0, 600)); ok(/Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), 'no comparable listing at 1,89 L: honest'); await noOverflow(t, 'autre');
+  });
+
+  await check('11. "Je ne sais pas" on size AND variant: prices are given PER GROUP (never one mixed median); the questions are not asked again', async () => {
+    await t.eval(seed('r-unk2', 'insulated bottle', 'ACME')); await sleep(300); await reload(t); await openMarket(t, 'r-unk2'); await click(t, '[data-act="market-run"]', 1500); let s = await text(t);
+    for (let i = 0; i < 2 && /Une précision \(une touche\)/.test(s); i += 1) { await click(t, '[data-act="market-answer"][data-key="unknown"]', 1100); s = await text(t); }
+    await shot(t, 'groups-390', '.fm-rbox'); ok(!/Une précision \(une touche\)/.test(s), 'no more question after two "Je ne sais pas"'); const titles = await t.eval(`[...document.querySelectorAll('.fm-rbox .fm-k2')].map((e) => e.innerText)`);
+    ok(titles.filter((x) => /^Prix constatés/.test(x)).length >= 2, `one box per homogeneous group: ${JSON.stringify(titles)}`); ok(!/médiane observée/.test(s) || /non fiable|aucune comparaison/.test(s), 'no supplier ratio on a mixed set'); await noOverflow(t, 'groups');
+  });
+
+  await check('7. the free step really is free: provider calls over the whole session = exactly the distinct searches that were pressed (answers and repeated searches add none)', async () => {
+    ok(counts.post === 4, `paid searches ${counts.post}`); // r-size, r-few, r-acme and r-unk2 are four DIFFERENT queries; r-unk, r-free repeat an earlier one (cache) and every answer is free
   });
 
   await check('8. no uncaught error in the whole session', async () => { ok(errs.length === 0, errs.join(' | ').slice(0, 500)); });

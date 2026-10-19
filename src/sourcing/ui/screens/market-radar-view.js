@@ -4,7 +4,7 @@ import { esc } from '../dom.js';
 import { getBlob } from '../storage.js';
 
 const CLASS = { EXACT_MATCH: 'Correspondance exacte', PROBABLE_MATCH: 'Correspondance probable', SIMILAR_PRODUCT: 'Produit similaire' };
-const FLAG = { PACK_OR_LOT: 'lot ou pack ?', PROMO_PRINTED: 'promotionnel / personnalisé ?', NO_TEXT_OVERLAP: 'sans rapport avec la recherche ?', ACCESSORY_SUSPECTED: 'accessoire ?', PRICE_OUTLIER_HIGH: 'prix très élevé (aberrant ?)', PRICE_OUTLIER_LOW: 'prix très bas (aberrant ?)', CAPACITY_DIFFERS: 'capacité différente', CAPACITY_NOT_STATED: 'capacité non indiquée', MODEL_NOT_IN_TITLE: 'modèle absent du titre', BRAND_NOT_IN_TITLE: 'autre marque (ou marque absente)', NO_PRICE: 'pas de prix', FOREIGN_CURRENCY_NO_RATE: 'devise sans taux' };
+const FLAG = { PACK_OR_LOT: 'lot ou pack ?', PROMO_PRINTED: 'promotionnel / personnalisé ?', NO_TEXT_OVERLAP: 'sans rapport avec la recherche ?', ACCESSORY_SUSPECTED: 'accessoire ?', PRICE_OUTLIER_HIGH: 'prix très élevé (aberrant ?)', PRICE_OUTLIER_LOW: 'prix très bas (aberrant ?)', CAPACITY_DIFFERS: 'capacité différente', CAPACITY_NOT_STATED: 'capacité non indiquée', MODEL_NOT_IN_TITLE: 'modèle absent du titre', BRAND_NOT_IN_TITLE: 'autre marque (ou marque absente)', VARIANT_DIFFERS: 'autre variante', VARIANT_NOT_STATED: 'variante non indiquée', NO_PRICE: 'pas de prix', FOREIGN_CURRENCY_NO_RATE: 'devise sans taux' };
 const MP = { 'amazon.be': 'Amazon.be', 'bol.com': 'bol.com', amazon: 'Amazon' };
 const eur = (n) => `${Number(n).toFixed(2).replace('.', ',')} €`;
 const when = (iso) => { try { return new Intl.DateTimeFormat('fr-BE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Brussels' }).format(new Date(iso)); } catch { return String(iso ?? ''); } };
@@ -17,7 +17,7 @@ function card(e) {
   return `<div class="fm-rl"><div class="fm-rl-t">${esc(s.title ?? '(sans titre)')}</div>
     <div class="fm-rl-m"><span>${esc(e.seller ?? 'vendeur inconnu')}${s.marketplace ? ` <span class="fm-chip">${esc(MP[s.marketplace] ?? s.marketplace)}</span>` : ''}</span><span>${price}</span></div>
     ${flags ? `<div class="fm-rl-f">${flags}</div>` : ''}<div class="fm-rl-s">${esc(CLASS[e.matchType] ?? e.matchType)} · ${esc(e.reason ?? '')}</div>
-    <div class="fm-rl-s">Source : Google Shopping (via DataForSEO) · relevé le ${esc(when(e.observedAt))}</div><div class="fm-rl-l">${link}</div></div>`;
+    ${s.pack ? `<div class="fm-rl-s">≈ <b>${esc(eur(s.pack.unitEur))}</b> la pièce (estimation : prix ÷ ${esc(s.pack.n)} lu dans le titre, non vérifiée ; hors prix de référence)</div>` : ''}<div class="fm-rl-s">Source : Google Shopping (via DataForSEO) · relevé le ${esc(when(e.observedAt))} · <b>disponibilité non vérifiée</b></div><div class="fm-rl-l">${link}</div></div>`;
 }
 const group = (title, rows, open = false) => (rows.length ? `<details class="fm-rg" ${open ? 'open' : ''}><summary>${esc(title)} (${rows.length})</summary>${rows.map(card).join('')}</details>` : '');
 
@@ -25,18 +25,23 @@ const group = (title, rows, open = false) => (rows.length ? `<details class="fm-
 export function radarResultBlock(rec) {
   const r = rec?.radar; if (!rec || !r) return '';
   const pending = !!(r.question && (r.question.options ?? []).length); const ev = rec.evidence ?? []; const inc = ev.filter((e) => !e.specs?.excluded); const exc = ev.filter((e) => e.specs?.excluded);
+  const legacy = !Array.isArray(r.groups); const relGroups = (r.groups ?? []).filter((g) => g.reliable); const smallGroups = (r.groups ?? []).filter((g) => !g.reliable);
+  const hasFlag = (e, f) => (e.specs?.flags ?? []).includes(f); const lots = exc.filter((e) => hasFlag(e, 'PACK_OR_LOT')); const accs = exc.filter((e) => !hasFlag(e, 'PACK_OR_LOT') && hasFlag(e, 'ACCESSORY_SUSPECTED')); const others = exc.filter((e) => !lots.includes(e) && !accs.includes(e));
   const by = (t) => inc.filter((e) => e.matchType === t); const mk = r.marketplaces ?? {}; const cmp = r.comparison; const ref = r.reference;
   const found = (k, label) => `<div class="fm-li"><i class="fm-dot ${mk[k] ? 'ok' : ''}"></i><span>${label} : <b>${mk[k] ? `trouvé dans cette recherche (${mk[k]})` : 'absent de ces résultats'}</b></span></div>`;
   return `${identBlock(r.identification)}${confirmLine(r.confirmation)}${questionCard(r.question)}<div class="fm-k2">Résultat de la recherche</div>
     <p class="fm-note">Relevé le <b>${esc(when(r.observedAt ?? rec.completedAt))}</b> · marché <b>Belgique</b> (${esc(r.market?.searchDomain ?? 'google.be')}) · ${ev.length} annonce(s) · exactes ${r.summary?.exact ?? 0}, probables ${r.summary?.probable ?? 0}, similaires ${r.summary?.similar ?? 0}${r.cached ? ' · <b>résultat déjà obtenu (aucune nouvelle recherche payée)</b>' : ''}${r.partial ? ' · <b>résultat partiel (délai dépassé)</b>' : ''}.<br>Requêtes : ${(r.queries ?? []).map((q) => `« ${esc(q.text)} » <small>(${esc(q.via)})</small>`).join(' ; ') || '—'}</p>
     ${ev.length === 0 ? '<p class="fm-note"><b>Aucune annonce fiable trouvée par cette recherche.</b> Cela ne veut pas dire que le produit n’est pas vendu en Europe.</p>' : ''}
     ${pending && ev.length ? '<p class="fm-note fm-warnline" role="status"><b>Prix de référence en attente de votre précision :</b> les annonces mélangent plusieurs tailles, Nordla ne calcule pas de médiane tant que vous n’avez pas répondu (ou dit « Je ne sais pas »).</p>' : ''}
-    ${!pending && ev.length && (!ref || ref.reliable === false) ? unreliableBox(ref, r.confirmation, r.queries) : ''}
-    ${!pending && ref && ref.reliable !== false ? `<div class="fm-rbox"><div class="fm-k2 first">Prix constatés</div><p class="fm-rbig">${esc(eur(ref.minEur))} – <b>${esc(eur(ref.medianEur))}</b> – ${esc(eur(ref.maxEur))}</p><p class="fm-note">minimum · médiane · maximum, sur ${ref.count} annonce(s) (${esc(CLASS[ref.matchClass]?.toLowerCase() ?? ref.matchClass)}). ${exc.length ? `${exc.length} annonce(s) écartée(s) du calcul (lots, accessoires, capacités différentes, prix aberrants) : elles restent listées plus bas.` : ''} ${ref.note ? `<br><b>${esc(ref.note)}</b>` : ''}</p></div>` : ''}
+    ${ev.length && (r.summary?.exact ?? 0) === 0 ? '<p class="fm-note"><b>Aucun produit exact trouvé.</b> Les annonces ci-dessous sont, au mieux, des correspondances probables : elles ne sont jamais présentées comme le même produit.</p>' : ''}
+    ${!pending && ev.length && (legacy ? (!ref || ref.reliable === false) : !relGroups.length) ? unreliableBox(ref, r.confirmation, r.queries) : ''}
+    ${!pending && legacy && ref && ref.reliable !== false ? groupBox({ class: ref.matchClass, count: ref.count, minEur: ref.minEur, medianEur: ref.medianEur, maxEur: ref.maxEur }, false, exc.length, ref.note) : ''}
+    ${!pending && !legacy ? relGroups.map((g, i) => groupBox(g, (r.groups ?? []).length > 1, i === 0 ? exc.length : 0, null)).join('') : ''}
+    ${!pending && !legacy && relGroups.length && smallGroups.length ? `<p class="fm-note">Groupes trop petits pour un prix (minimum 3 annonces comparables, pas de médiane) : ${smallGroups.map((g) => `${esc(groupLabel(g))} — ${g.count} annonce(s) : ${(g.pricesEur ?? []).map((x) => esc(eur(x))).join(' · ')}`).join(' ; ')}.</p>` : ''}
     <div class="fm-k2">Amazon.be et bol.com (vérifiés séparément)</div>${found('amazon.be', 'Amazon.be')}${found('bol.com', 'bol.com')}
     <p class="fm-note">« Trouvé » = une annonce nommant ce vendeur est revenue dans <b>cette</b> recherche. « Absent » ne veut pas dire « non vendu ». Les liens ouvrent <b>la page Google Shopping</b> du produit, pas une page directe d’Amazon ou de bol.com.</p>
     ${cmp && !pending ? `<div class="fm-k2">Comparaison avec le prix fournisseur</div><p class="fm-note">${esc(cmp.note ?? '')}${cmp.supplierEur != null ? ` (prix fournisseur converti : ${esc(eur(cmp.supplierEur))}, taux BCE du ${esc(cmp.ecbDate ?? '?')})` : ''}</p><ul class="fm-lim">${(cmp.caveats ?? []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    <div class="fm-k2">Annonces</div>${group('Correspondances exactes', by('EXACT_MATCH'), true)}${group('Correspondances probables', by('PROBABLE_MATCH'), true)}${group('Produits similaires', by('SIMILAR_PRODUCT'))}${group('Écartées du calcul (avec la raison)', exc)}
+    <div class="fm-k2">Annonces</div>${group('Correspondances exactes', by('EXACT_MATCH'), true)}${group('Correspondances probables', by('PROBABLE_MATCH'), true)}${group('Produits similaires', by('SIMILAR_PRODUCT'))}${group('Lots et packs — hors prix de référence (prix à la pièce estimé)', lots)}${group('Accessoires — exclus des prix', accs)}${group('Écartées du calcul (avec la raison)', others)}
     <p class="fm-note">Ces preuves sont conservées dans le dossier avec leur source et leur date. Une annonce prouve que quelqu’un vend quelque chose de comparable à ce prix, pas que vous pouvez vendre ce produit.</p>`;
 }
 
@@ -45,22 +50,31 @@ export function radarResultBlock(rec) {
 function questionCard(q) {
   if (!q || !(q.options ?? []).length) return '';
   const opts = q.options.map((o, i) => `<button type="button" class="btn sec fm-opt" data-act="market-answer" data-key="${i}"><b>${esc(o.label)}</b>${o.evidence ? `<small>${esc(o.evidence)}</small>` : ''}</button>`).join('');
-  return `<div class="fm-rbox fm-q" role="group" aria-label="Une précision"><div class="fm-k2 first">Une précision (une touche)</div><p class="fm-note"><b>${esc(q.prompt)}</b> Nordla ne choisit pas à votre place : ces valeurs viennent de l’étiquette ou des annonces relevées.</p>
-    <div class="fm-opts">${opts}<button type="button" class="btn sec fm-opt fm-unk" data-act="market-answer" data-key="unknown"><b>${esc(q.unknownLabel ?? 'Je ne sais pas')}</b></button></div>
+  return `<div class="fm-rbox fm-q" role="group" aria-label="Une précision"><div class="fm-k2 first">Une précision (une touche)</div><p class="fm-note"><b>${esc(q.prompt)}</b> Nordla ne choisit pas à votre place : ces valeurs viennent de l’étiquette ou des annonces relevées. Aucune n’est cochée d’avance ; si la bonne n’y est pas, écrivez-la dans « Autre ».</p>
+    <div class="fm-opts">${opts}${q.allowOther ? `<label class="fm-other"><span><b>Autre</b> — ${esc(q.otherPlaceholder ?? 'à saisir')}</span><span class="fm-other-row"><input type="text" data-other-input maxlength="40" autocomplete="off" aria-label="Autre : saisie libre"><button type="button" class="btn sec" data-act="market-other">Valider</button></span></label>` : ''}<button type="button" class="btn sec fm-opt fm-unk" data-act="market-answer" data-key="unknown"><b>${esc(q.unknownLabel ?? 'Je ne sais pas')}</b></button></div>
     <p class="fm-note">Répondre ne lance <b>aucune recherche payante</b> : les annonces déjà relevées sont relues, gratuitement.</p></div>`;
 }
 const confirmLine = (c) => {
-  if (!c) return ''; if (c.unknown) return '<p class="fm-note">Précision : <b>vous ne savez pas</b> — les résultats restent ceux de la recherche, sans filtre supplémentaire : la fourchette peut mélanger plusieurs tailles ou modèles.</p>';
-  const v = c.value ?? {}; const what = [v.capacityMl ? `taille <b>${esc(v.capacityMl >= 1000 ? `${(v.capacityMl / 1000).toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace('.', ',')} L` : `${v.capacityMl} ml`)}</b>` : '', v.model ? `modèle <b>${esc(v.model)}</b>` : ''].filter(Boolean).join(' · ');
-  return `<p class="fm-note">Précision confirmée par vous : ${what}. Les annonces dont la taille, le modèle ou la marque ne correspondent pas (ou ne se vérifient pas) sont écartées du calcul mais restent consultables avec leur raison.</p>`;
+  if (!c) return '';
+  const v = c.accumulated ?? (c.unknown ? {} : c.value) ?? {};
+  const what = [v.capacityMl ? `taille <b>${esc(fmtMlView(v.capacityMl))}</b>` : '', v.model ? `modèle <b>${esc(v.model)}</b>` : '', v.variant ? `variante <b>${esc(v.variant.label)}</b>` : ''].filter(Boolean).join(' · ');
+  const unk = c.unknown ? '<p class="fm-note">Précision : <b>vous ne savez pas</b> — pas de filtre ajouté sur ce point : les prix sont donnés <b>par groupe</b> (jamais mélangés) et restent non fiables s’il y a trop peu d’annonces comparables.</p>' : '';
+  const rec = what ? `<p class="fm-note">Précision confirmée par vous : ${what}. Les annonces dont la taille, le modèle, la variante ou la marque ne correspondent pas (ou ne se vérifient pas) sont écartées du calcul mais restent consultables avec leur raison.</p>` : '';
+  return unk + rec;
 };
+const fmtMlView = (ml) => (ml >= 1000 ? `${(ml / 1000).toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace('.', ',')} L` : `${ml} ml`);
 /** No median unless at least 3 really comparable listings: otherwise Nordla says so instead of showing a misleading number. A confirmed answer that the listings could not match offers an explicit, capped, PAID new search. */
 function unreliableBox(ref, c, queries) {
   const prices = (ref?.pricesEur ?? []).map((x) => esc(eur(x))).join(' · ');
   const known = (queries ?? []).map((q) => String(q.text).toLowerCase()).join(' ');
-  const wants = c && !c.unknown && c.value && ((c.value.model && !known.includes(String(c.value.model).toLowerCase())) || (c.value.capacityMl && !/\d\s?(l|ml|cl|oz)\b/.test(known)));
+  const cv = c?.accumulated ?? (c && !c.unknown ? c.value : null); const wants = cv && ((cv.model && !known.includes(String(cv.model).toLowerCase())) || (cv.capacityMl && !/\d\s?(l|ml|cl|oz)\b/.test(known)));
   return `<div class="fm-rbox fm-unrel" role="status"><div class="fm-k2 first">Prix de référence non fiable</div><p class="fm-note"><b>Nordla ne donne pas de médiane</b> : ${esc(ref?.note ?? 'aucune annonce vraiment comparable n’a été trouvée')}.${prices ? ` Prix des annonces comparables (à lire une par une) : ${prices}.` : ''} Les autres annonces restent listées plus bas, avec la raison de leur exclusion.</p>
     ${wants ? '<p class="fm-note">Une recherche plus précise avec votre réponse est possible : <b>c’est une nouvelle recherche payante</b> (quelques centimes, plafond appliqué par le serveur). Elle ne part que si vous appuyez.</p><button type="button" class="btn sec" data-act="market-rerun">Chercher avec cette précision (payant)</button>' : ''}</div>`;
+}
+const groupLabel = (g) => [CLASS[g.class], g.variant && g.variant.key !== 'none' ? g.variant.label : g.variant ? 'variante non indiquée' : '', g.size?.label].filter(Boolean).join(' · ');
+/** One homogeneous group (a class, a size, a variant): its own range, never averaged with another. */
+function groupBox(g, labelled, excCount, note) {
+  return `<div class="fm-rbox"><div class="fm-k2 first">Prix constatés${labelled || g.variant || g.size ? ` — ${esc(groupLabel(g))}` : ''}</div><p class="fm-rbig">${esc(eur(g.minEur))} – <b>${esc(eur(g.medianEur))}</b> – ${esc(eur(g.maxEur))}</p><p class="fm-note">minimum · médiane · maximum, sur ${g.count} annonce(s) (${esc(CLASS[g.class]?.toLowerCase() ?? g.class)}). ${excCount ? `${excCount} annonce(s) écartée(s) du calcul (lots, accessoires, autres marques, tailles ou variantes différentes, prix aberrants) : elles restent listées plus bas.` : ''} ${note ? `<br><b>${esc(note)}</b>` : ''}</p></div>`;
 }
 const CONF = { HIGH: 'élevée (code-barres valide)', MEDIUM: 'moyenne (marque et modèle lus)', LOW: 'faible (un nom de catégorie seulement)', NONE: 'aucune' };
 /** What Nordla recognised, where it comes from, and what is only a machine proposal. */

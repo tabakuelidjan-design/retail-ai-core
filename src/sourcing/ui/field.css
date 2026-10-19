@@ -144,3 +144,6 @@ body.fm-mode:has(.fm.started){padding-bottom:calc(104px + env(safe-area-inset-bo
 .fm-opt small { font-weight: 400; opacity: .8; font-size: 12px }
 .fm-unk { font-weight: 600 }
 .fm-unrel { background: var(--fm-amber-bg) }
+.fm-other { display: block; margin: 4px 0 8px } .fm-other > span:first-child { display: block; margin-bottom: 4px; font-size: 14px }
+.fm-other-row { display: flex; gap: 8px } .fm-other-row input { flex: 1; min-width: 0; min-height: 48px; padding: 0 12px; border: 1px solid var(--fm-line); border-radius: 12px; font-size: 16px; background: #fff }
+.fm-other-row .btn { min-height: 48px; flex: none }

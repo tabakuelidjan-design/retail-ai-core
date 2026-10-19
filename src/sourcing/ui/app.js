@@ -313,25 +313,32 @@ async function marketSearch({ identification = null, photo = null, confirmed = n
   S.marketBusy = true; S.flash = ''; render();
   try {
     const r = await api('/api/market/search', { method: 'POST', body: JSON.stringify({ input: { name: input.name, brand: input.brand, model: input.model, manufacturerRef: input.manufacturerRef, gtin: input.gtin, traits: input.traits, category: input.category }, identification, confirmed, supplier: Number.isFinite(sp) ? { price: sp, currency: q.currency ?? null } : null, country: 'BE' }) });
-    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes, question: r.question ?? null, confirmation: confirmed ? { at: new Date().toISOString(), answered: 'owner-confirmed-new-search', value: confirmed, unknown: false } : null, identification: r.identification ? { ...r.identification, photo } : null } });
+    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input, outgoing: outgoingFields(input), consent: true, evidence: r.stored, note: null, radar: { market: r.market, queries: r.queries, summary: r.summary, groups: r.groups, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, observedAt: r.observedAt, cached: r.cached, partial: r.partial, cost: r.cost, notes: r.notes, question: r.question ?? null, confirmation: confirmed ? { at: new Date().toISOString(), answered: 'owner-confirmed-new-search', value: confirmed, unknown: false, accumulated: confirmed, asked: 0, declined: [] } : null, identification: r.identification ? { ...r.identification, photo } : null } });
     S.flash = r.cached ? 'Résultat déjà obtenu récemment : aucune nouvelle recherche n’a été payée.' : '';
   } catch (e) { S.flash = e.body?.message ?? (e.status ? `La recherche a échoué (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la recherche n’a pas eu lieu et rien n’a été perdu. Réessayez avec du réseau.'); }
   finally { S.marketBusy = false; render(); }
 }
-// the owner's one-tap answer (size or model) or "Je ne sais pas": the listings ALREADY obtained are re-read on the server (pure computation: no provider call, no cost, no photo)
-async function marketAnswer(key) {
+// the owner's one-tap answer (size, variant or model), a free-text "Autre", or "Je ne sais pas": the listings ALREADY obtained are re-read on the server (pure computation: no provider call, no cost, no photo).
+// At most 2 questions in all; answers accumulate; a "Je ne sais pas" is remembered so the same facet is never asked again.
+async function marketAnswer(key, otherText = null) {
   if (S.marketBusy) return; const c = cur(); const last = (c.marketSearches ?? []).filter((x) => x.radar).at(-1); const q = last?.radar?.question; if (!last || !q) return;
-  const value = key === 'unknown' ? null : q.options?.[Number(key)]?.value; if (value === undefined) return;
+  const prev = last.radar.confirmation ?? {}; const acc0 = prev.accumulated ?? {}; const declined0 = prev.declined ?? []; const asked0 = prev.asked ?? 0; let value;
+  if (otherText !== null) { const t = String(otherText).trim(); if (!t) { S.flash = 'Écrivez la valeur dans « Autre », ou choisissez une option.'; return render(); } value = q.otherKind === 'capacity' ? { capacityText: t } : q.otherKind === 'model' ? { model: t } : { variantText: t }; }
+  else value = key === 'unknown' ? null : q.options?.[Number(key)]?.value;
+  if (value === undefined) return;
   const input = last.input ?? {}; const qt = c.quotes?.at(-1); const sp = qt && qt.unitPrice !== undefined && qt.unitPrice !== '' ? Number(String(qt.unitPrice).replace(',', '.')) : NaN;
+  const acc = value ? { ...acc0, ...value } : acc0; const declined = value ? declined0 : [...declined0, q.id]; const asked = asked0 + 1;
   S.marketBusy = true; S.flash = ''; render();
   try {
-    const r = await api('/api/market/refine', { method: 'POST', body: JSON.stringify({ evidence: last.evidence, input: { name: input.name, brand: input.brand, model: input.model, gtin: input.gtin, traits: input.traits }, identification: last.radar.identification ?? null, confirmed: value, supplier: Number.isFinite(sp) ? { price: sp, currency: qt.currency ?? null } : null, country: 'BE' }) });
-    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input: last.input, outgoing: [], consent: true, evidence: r.stored, note: null, radar: { ...last.radar, summary: r.summary, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, cost: r.cost, notes: r.notes, question: null, cached: false, refinedFromId: last.id, confirmation: { at: new Date().toISOString(), answered: q.id, value, unknown: value === null } } });
+    const r = await api('/api/market/refine', { method: 'POST', body: JSON.stringify({ evidence: last.evidence, input: { name: input.name, brand: input.brand, model: input.model, gtin: input.gtin, traits: input.traits }, identification: last.radar.identification ?? null, confirmed: Object.keys(acc).length ? acc : null, asked, declined, supplier: Number.isFinite(sp) ? { price: sp, currency: qt.currency ?? null } : null, country: 'BE' }) });
+    const cf = r.input?.confirmed ?? null; const kept = q.otherKind === 'capacity' ? cf?.capacityMl : q.otherKind === 'model' ? cf?.model : cf?.variant;
+    if (otherText !== null && !kept) { S.flash = q.otherKind === 'capacity' ? 'Taille non comprise : écrivez-la avec son unité (ex. 64 oz, 1,89 L, 710 ml).' : 'Valeur non comprise : réessayez avec quelques lettres ou chiffres.'; return; }
+    commit({ type: 'MARKET_SEARCH', status: 'DONE', provider: r.provider, input: last.input, outgoing: [], consent: true, evidence: r.stored, note: null, radar: { ...last.radar, summary: r.summary, groups: r.groups, reference: r.reference, comparison: r.comparison, marketplaces: r.marketplaces, cost: r.cost, notes: r.notes, question: r.question ?? null, cached: false, refinedFromId: last.id, confirmation: { at: new Date().toISOString(), answered: q.id, value, unknown: value === null, accumulated: cf ?? {}, asked, declined } } });
   } catch (e) { S.flash = e.body?.message ?? (e.status ? `La précision n’a pas pu être appliquée (${e.status}). Rien n’a été modifié.` : 'Pas de connexion au serveur : la précision n’a pas été appliquée et rien n’a été perdu.'); }
   finally { S.marketBusy = false; render(); }
 }
 // an explicit, capped, PAID new search that carries the owner's answer (the button says so; the server applies its cost cap, daily cap and cache)
-function marketRerun() { const c = cur(); const last = (c.marketSearches ?? []).filter((x) => x.radar).at(-1); const cf = last?.radar?.confirmation; if (!cf || cf.unknown || !cf.value) return; return marketSearch({ identification: last.radar.identification ? { ...last.radar.identification, photo: undefined } : null, confirmed: cf.value }); }
+function marketRerun() { const c = cur(); const last = (c.marketSearches ?? []).filter((x) => x.radar).at(-1); const cf = last?.radar?.confirmation; const conf = cf?.accumulated ?? (cf && !cf.unknown ? cf.value : null); if (!conf || !Object.keys(conf).length) return; return marketSearch({ identification: last.radar.identification ? { ...last.radar.identification, photo: undefined } : null, confirmed: conf }); }
 async function marketPhotoStart(i) {
   const c = cur(); const url = getBlob(`photo:${c.id}.${i}`); if (!url) { S.flash = 'Cette photo est introuvable sur ce téléphone.'; return render(); }
   S.flash = ''; marketPending = null; S.marketPhoto = { i, stage: 'scanning' }; render();
@@ -394,6 +401,7 @@ async function onClick(ev) {
   if (act === 'fm-sheet-close') { S.sheet = null; render(); return; }
   if (act === 'market-run') return void marketSearch({});
   if (act === 'market-answer') return void marketAnswer(key);
+  if (act === 'market-other') return void marketAnswer(null, document.querySelector('[data-other-input]')?.value ?? '');
   if (act === 'market-rerun') return void marketRerun();
   if (act === 'market-photo') return void marketPhotoStart(Number(key));
   if (act === 'market-photo-send') return void marketPhotoSend();

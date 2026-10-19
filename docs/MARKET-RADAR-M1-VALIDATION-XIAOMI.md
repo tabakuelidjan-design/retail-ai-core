@@ -25,6 +25,10 @@ Une gourde avec étiquette lisible (idéalement une taille imprimée en oz et en
 | M10 | Tuer l'application puis rouvrir | Résultat, précision et annonces écartées toujours là |
 | M11 | Rôle non propriétaire (VIEWER/ACCOUNTANT) | Ne peut ni lancer une recherche ni répondre (403) ; aucune photo n'est envoyée sauf par le propriétaire |
 | M12 | 390 px réel | Aucun débordement horizontal, boutons ≥ 44 px, texte lisible en plein soleil |
+| M13 | Cas avec deux variantes de prix différents (ex. goulot large / standard) | Après la taille, **une** carte « Quelle variante ? » avec les variantes réellement vues et leur prix médian ; jamais plus de 2 questions en tout |
+| M14 | Taper la vraie taille dans « Autre » (ex. « 64 oz ») ; puis « beaucoup » | « 64 oz » → « taille 1,89 L », 0 $ ; « beaucoup » → message « Taille non comprise », rien d'enregistré |
+| M15 | « Je ne sais pas » aux deux questions | Un prix **par groupe** (jamais une médiane mélangée) ; plus aucune question |
+| M16 | Résultat final | « Aucun produit exact trouvé » écrit s'il y en a aucun ; chaque annonce porte « disponibilité non vérifiée » ; accessoires et lots dans leurs groupes à part (lots : prix à la pièce marqué estimation) |
 
 ## Critères d'arrêt
 Une photo envoyée sans carte d'accord ; une dépense à la réponse ; une valeur présélectionnée ; une médiane affichée avec < 3 annonces comparables ; une annonce d'une autre marque ou taille dans la médiane après confirmation.

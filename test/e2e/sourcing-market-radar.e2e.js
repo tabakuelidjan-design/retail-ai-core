@@ -71,7 +71,7 @@ try {
 
   await check('4. the lot (3 810 €), the accessory and any aberrant price are FLAGGED and kept out of the range, still listed with their reason; classes are never EXACT without the model', async () => {
     const s = await t.eval(`(() => { document.querySelectorAll('.fm-rg').forEach((d) => d.open = true); return document.querySelector('#screen').innerText; })()`);
-    ok(/Écartées du calcul/.test(s) && /3810,29 €/.test(s) && /lot ou pack/.test(s), 'lot listed + flagged'); ok(/accessoire/.test(s), 'accessory flagged');
+    ok(/Lots et packs/.test(s) && /3810,29/.test(s) && /lot ou pack/.test(s), 'lot listed + flagged, in its own group'); ok(/76,21/.test(s) && /la pièce/.test(s) && /estimation/.test(s), 'per-piece price is an ESTIMATE, outside the range'); ok(/Accessoires — exclus des prix/.test(s) && /accessoire/.test(s), 'accessory flagged, in its own group'); ok(/disponibilité non vérifiée/.test(s), 'availability is never claimed');
     const range = await t.eval(`document.querySelector('.fm-rbig')?.innerText ?? ''`); ok(!/3810/.test(range), `the lot must not be in the range: ${range}`); ok(!/Correspondances exactes/.test(s), 'no EXACT section: the case has no model');
     await shot(t, 'flags-390');
   });
