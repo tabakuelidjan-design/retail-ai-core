@@ -21,6 +21,7 @@ import {
 } from '../post.js';
 import { brusselsToUtc } from '../calendar.js';
 import { hasValidApproval } from '../workflow.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png',
@@ -161,6 +162,9 @@ export function createSocialApp({
   async function serveStatic(res, pathname) {
     const rel = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^([/\\])+/, '');
     if (rel.includes('..')) return json(res, 400, { error: 'BAD_PATH' });
+    // the shared Nordla Design System (stylesheets, fonts, official icons): static files, no data, no secret
+    const shared = await readNordlaShared(pathname);
+    if (shared) { res.writeHead(200, { 'Content-Type': shared.type, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' }); return res.end(shared.body); }
     try {
       const body = await readFile(join(uiDir, rel));
       res.writeHead(200, { 'Content-Type': MIME[extname(rel)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' });

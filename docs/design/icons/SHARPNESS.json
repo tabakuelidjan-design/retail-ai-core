@@ -1,0 +1,2982 @@
+{
+ "sizes_px": [
+  16,
+  24,
+  32,
+  48,
+  64,
+  128,
+  256
+ ],
+ "note": "No file is vector. A bitmap is never presented as vector: above its native size an icon is soft.",
+ "summary": {
+  "VALIDATED_V1": {
+   "files": 46,
+   "crisp_up_to": {
+    "256": 46
+   }
+  },
+  "V2_CONFORME_PENDING_VALIDATION": {
+   "files": 34,
+   "crisp_up_to": {
+    "256": 34
+   }
+  },
+  "CANDIDATE": {
+   "files": 75,
+   "crisp_up_to": {
+    "128": 6,
+    "256": 1,
+    "64": 67,
+    "48": 1
+   }
+  }
+ },
+ "files": [
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_a_faire.png",
+   "status": "VALIDATED_V1",
+   "label": "aFaire",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_achats.png",
+   "status": "VALIDATED_V1",
+   "label": "achats",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_after_sales.png",
+   "status": "VALIDATED_V1",
+   "label": "afterSales",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_approval.png",
+   "status": "VALIDATED_V1",
+   "label": "approval",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_banque_et_caisse.png",
+   "status": "VALIDATED_V1",
+   "label": "banqueEtCaisse",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_buying_suppliers.png",
+   "status": "VALIDATED_V1",
+   "label": "buyingSuppliers",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_ce_qui_a_change.png",
+   "status": "VALIDATED_V1",
+   "label": "ceQuiAChange",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_clients.png",
+   "status": "VALIDATED_V1",
+   "label": "clients",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_command_center.png",
+   "status": "VALIDATED_V1",
+   "label": "commandCenter",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_compliance.png",
+   "status": "VALIDATED_V1",
+   "label": "compliance",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_contacts.png",
+   "status": "VALIDATED_V1",
+   "label": "contacts",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_decision_ledger.png",
+   "status": "VALIDATED_V1",
+   "label": "decisionLedger",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_explorer.png",
+   "status": "VALIDATED_V1",
+   "label": "explorer",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_governance.png",
+   "status": "VALIDATED_V1",
+   "label": "governance",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_growth.png",
+   "status": "VALIDATED_V1",
+   "label": "growth",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_parle_a_nordla.png",
+   "status": "VALIDATED_V1",
+   "label": "parleANordla",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_produits.png",
+   "status": "VALIDATED_V1",
+   "label": "produits",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_resume.png",
+   "status": "VALIDATED_V1",
+   "label": "resume",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_security.png",
+   "status": "VALIDATED_V1",
+   "label": "security",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_tresorerie.png",
+   "status": "VALIDATED_V1",
+   "label": "tresorerie",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/01_navigation_modules_ventes.png",
+   "status": "VALIDATED_V1",
+   "label": "ventes",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_baisse.png",
+   "status": "VALIDATED_V1",
+   "label": "baisse",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_chiffre_affaires.png",
+   "status": "VALIDATED_V1",
+   "label": "chiffreAffaires",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_commandes.png",
+   "status": "VALIDATED_V1",
+   "label": "commandes",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_croissance.png",
+   "status": "VALIDATED_V1",
+   "label": "croissance",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_marge_brute.png",
+   "status": "VALIDATED_V1",
+   "label": "margeBrute",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/02_performance_business_panier_moyen.png",
+   "status": "VALIDATED_V1",
+   "label": "panierMoyen",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_client_a_risque.png",
+   "status": "VALIDATED_V1",
+   "label": "clientARisque",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_client_dormant.png",
+   "status": "VALIDATED_V1",
+   "label": "clientDormant",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_client_fidele.png",
+   "status": "VALIDATED_V1",
+   "label": "clientFidele",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_cohorte.png",
+   "status": "VALIDATED_V1",
+   "label": "cohorte",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_nouveau_client.png",
+   "status": "VALIDATED_V1",
+   "label": "nouveauClient",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/03_clients_segment_client.png",
+   "status": "VALIDATED_V1",
+   "label": "segmentClient",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_fournisseur.png",
+   "status": "VALIDATED_V1",
+   "label": "fournisseur",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_meilleur_produit.png",
+   "status": "VALIDATED_V1",
+   "label": "meilleurProduit",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_prix.png",
+   "status": "VALIDATED_V1",
+   "label": "prix",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_baisse.png",
+   "status": "VALIDATED_V1",
+   "label": "produitEnBaisse",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_hausse.png",
+   "status": "VALIDATED_V1",
+   "label": "produitEnHausse",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_produits_commerce_stock.png",
+   "status": "VALIDATED_V1",
+   "label": "stock",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_ui_core_accueil.png",
+   "status": "VALIDATED_V1",
+   "label": "accueil",
+   "width": 512,
+   "height": 512,
+   "native_px": 512,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_ui_core_pack_comptable.png",
+   "status": "VALIDATED_V1",
+   "label": "packComptable",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/04_ui_core_parametres.png",
+   "status": "VALIDATED_V1",
+   "label": "parametres",
+   "width": 512,
+   "height": 512,
+   "native_px": 512,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/08_ui_utilities_calendrier.png",
+   "status": "VALIDATED_V1",
+   "label": "calendrier",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/08_ui_utilities_data_health.png",
+   "status": "VALIDATED_V1",
+   "label": "dataHealth",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/08_ui_utilities_recherche.png",
+   "status": "VALIDATED_V1",
+   "label": "recherche",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/official-icons/08_ui_utilities_synchronisation.png",
+   "status": "VALIDATED_V1",
+   "label": "synchronisation",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-branding.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-branding",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-centre-de-pilotage.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-centre-de-pilotage",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-conformite.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-conformite",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-creation.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-creation",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-fournisseurs.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-fournisseurs",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-journal-des-decisions.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-journal-des-decisions",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-marketing.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-marketing",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-parle-a-nordla.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-parle-a-nordla",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-produits.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-produits",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-service-apres-vente.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-service-apres-vente",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-stock-achats.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-stock-achats",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/module-ventes-crm.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "module-developpement-des-ventes",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/parametres.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "parametres",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/01-modules/tous-les-modules.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "tous-les-modules",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/02-finance-documents/export.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "export",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/02-finance-documents/facture.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "facture",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/02-finance-documents/import.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "import",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/02-finance-documents/paiement.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "paiement",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/02-finance-documents/retard.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "retard",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/03-navigation-actions/ajouter.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "ajouter",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/03-navigation-actions/recherche.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "recherche",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/04-utilisateurs-securite/securite.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "securite",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/07-stock-produits/stock.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "stock",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/08-intelligence-decisions/detection-opportunites.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "detection-opportunites",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/08-intelligence-decisions/information.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "information",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/08-intelligence-decisions/risque-alerte.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "risque-alerte",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/08-intelligence-decisions/validation.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "validation",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/09-communication-support/notifications.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "notifications",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/10-donnees-systeme/donnees.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "donnees",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/10-donnees-systeme/rapport.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "rapport",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/10-donnees-systeme/sauvegarde.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "sauvegarde",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/10-donnees-systeme/synchronisation.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "synchronisation",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/11-organisation-automatisations/automatisation.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "automatisation",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "src/shared/assets/nordla/library/11-organisation-automatisations/planning.png",
+   "status": "V2_CONFORME_PENDING_VALIDATION",
+   "label": "planning",
+   "width": 256,
+   "height": 256,
+   "native_px": 256,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/recu__03_recu.png",
+   "status": "CANDIDATE",
+   "label": "recu",
+   "width": 236,
+   "height": 236,
+   "native_px": 236,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/groupe-utilisateurs__01_equipe.png",
+   "status": "CANDIDATE",
+   "label": "groupe-utilisateurs",
+   "width": 288,
+   "height": 288,
+   "native_px": 288,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "NET (réduction du fichier source)"
+   },
+   "crisp_up_to_px": 256,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/commentaire__05_commentaire.png",
+   "status": "CANDIDATE",
+   "label": "commentaire",
+   "width": 231,
+   "height": 231,
+   "native_px": 231,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/piece-jointe__06_piece_jointe.png",
+   "status": "CANDIDATE",
+   "label": "piece-jointe",
+   "width": 206,
+   "height": 206,
+   "native_px": 206,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/historique__07_historique.png",
+   "status": "CANDIDATE",
+   "label": "historique",
+   "width": 203,
+   "height": 203,
+   "native_px": 203,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/tri__02_tri.png",
+   "status": "CANDIDATE",
+   "label": "tri",
+   "width": 211,
+   "height": 211,
+   "native_px": 211,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_margin/opportunite__03_opportunite.png",
+   "status": "CANDIDATE",
+   "label": "opportunite",
+   "width": 226,
+   "height": 226,
+   "native_px": 226,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "NET (réduction du fichier source)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 128,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/facture__01_facture.png",
+   "status": "CANDIDATE",
+   "label": "facture",
+   "width": 73,
+   "height": 73,
+   "native_px": 73,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/devis__02_devis.png",
+   "status": "CANDIDATE",
+   "label": "devis",
+   "width": 68,
+   "height": 68,
+   "native_px": 68,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/avoir__03_avoir.png",
+   "status": "CANDIDATE",
+   "label": "avoir",
+   "width": 116,
+   "height": 116,
+   "native_px": 116,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/bon-de-commande__04_bon_de_commande.png",
+   "status": "CANDIDATE",
+   "label": "bon-de-commande",
+   "width": 107,
+   "height": 107,
+   "native_px": 107,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/tva__06_tva.png",
+   "status": "CANDIDATE",
+   "label": "tva",
+   "width": 71,
+   "height": 71,
+   "native_px": 71,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/justificatifs__07_justificatif.png",
+   "status": "CANDIDATE",
+   "label": "justificatifs",
+   "width": 70,
+   "height": 70,
+   "native_px": 70,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/recu__12_recu.png",
+   "status": "CANDIDATE",
+   "label": "recu",
+   "width": 70,
+   "height": 70,
+   "native_px": 70,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/reception-document__13_reception.png",
+   "status": "CANDIDATE",
+   "label": "reception-document",
+   "width": 71,
+   "height": 71,
+   "native_px": 71,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/ticket__14_ticket.png",
+   "status": "CANDIDATE",
+   "label": "ticket",
+   "width": 71,
+   "height": 71,
+   "native_px": 71,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/ajouter__01_ajouter.png",
+   "status": "CANDIDATE",
+   "label": "ajouter",
+   "width": 73,
+   "height": 73,
+   "native_px": 73,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/menu-plus__02_menu_plus.png",
+   "status": "CANDIDATE",
+   "label": "menu-plus",
+   "width": 85,
+   "height": 85,
+   "native_px": 85,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/modifier__03_modifier.png",
+   "status": "CANDIDATE",
+   "label": "modifier",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/dupliquer__04_dupliquer.png",
+   "status": "CANDIDATE",
+   "label": "dupliquer",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/supprimer__05_supprimer.png",
+   "status": "CANDIDATE",
+   "label": "supprimer",
+   "width": 71,
+   "height": 71,
+   "native_px": 71,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/retour__06_retour.png",
+   "status": "CANDIDATE",
+   "label": "retour",
+   "width": 77,
+   "height": 77,
+   "native_px": 77,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/fermer__07_fermer.png",
+   "status": "CANDIDATE",
+   "label": "fermer",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/recherche__08_recherche.png",
+   "status": "CANDIDATE",
+   "label": "recherche",
+   "width": 73,
+   "height": 73,
+   "native_px": 73,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/filtre__09_filtre.png",
+   "status": "CANDIDATE",
+   "label": "filtre",
+   "width": 67,
+   "height": 67,
+   "native_px": 67,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/tri__10_tri.png",
+   "status": "CANDIDATE",
+   "label": "tri",
+   "width": 52,
+   "height": 52,
+   "native_px": 52,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 48,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/telecharger__11_telecharger.png",
+   "status": "CANDIDATE",
+   "label": "telecharger",
+   "width": 68,
+   "height": 68,
+   "native_px": 68,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/partager__12_partager.png",
+   "status": "CANDIDATE",
+   "label": "partager",
+   "width": 67,
+   "height": 67,
+   "native_px": 67,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/utilisateur__01_utilisateur.png",
+   "status": "CANDIDATE",
+   "label": "utilisateur",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/profil__03_profil.png",
+   "status": "CANDIDATE",
+   "label": "profil",
+   "width": 83,
+   "height": 83,
+   "native_px": 83,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/session__04_session.png",
+   "status": "CANDIDATE",
+   "label": "session",
+   "width": 82,
+   "height": 82,
+   "native_px": 82,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/parametres__06_parametres.png",
+   "status": "CANDIDATE",
+   "label": "parametres",
+   "width": 77,
+   "height": 77,
+   "native_px": 77,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/securite__07_securite.png",
+   "status": "CANDIDATE",
+   "label": "securite",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/acces__08_acces.png",
+   "status": "CANDIDATE",
+   "label": "acces",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/roles__09_roles.png",
+   "status": "CANDIDATE",
+   "label": "roles",
+   "width": 80,
+   "height": 80,
+   "native_px": 80,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/notifications__10_notifications.png",
+   "status": "CANDIDATE",
+   "label": "notifications",
+   "width": 82,
+   "height": 82,
+   "native_px": 82,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/confidentialite__11_confidentialite.png",
+   "status": "CANDIDATE",
+   "label": "confidentialite",
+   "width": 82,
+   "height": 82,
+   "native_px": 82,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/crm__02_crm.png",
+   "status": "CANDIDATE",
+   "label": "crm",
+   "width": 121,
+   "height": 121,
+   "native_px": 121,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/client__03_client.png",
+   "status": "CANDIDATE",
+   "label": "client",
+   "width": 111,
+   "height": 111,
+   "native_px": 111,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/nouveau-client__04_nouveau_client.png",
+   "status": "CANDIDATE",
+   "label": "nouveau-client",
+   "width": 115,
+   "height": 115,
+   "native_px": 115,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/commande-client__05_commande.png",
+   "status": "CANDIDATE",
+   "label": "commande-client",
+   "width": 86,
+   "height": 86,
+   "native_px": 86,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/panier__06_panier.png",
+   "status": "CANDIDATE",
+   "label": "panier",
+   "width": 95,
+   "height": 95,
+   "native_px": 95,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/retour-client__10_retour_client.png",
+   "status": "CANDIDATE",
+   "label": "retour-client",
+   "width": 83,
+   "height": 83,
+   "native_px": 83,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/satisfaction__11_satisfaction.png",
+   "status": "CANDIDATE",
+   "label": "satisfaction",
+   "width": 75,
+   "height": 75,
+   "native_px": 75,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/fidelite__12_fidelite.png",
+   "status": "CANDIDATE",
+   "label": "fidelite",
+   "width": 64,
+   "height": 64,
+   "native_px": 64,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/fournisseur__01_fournisseur.png",
+   "status": "CANDIDATE",
+   "label": "fournisseur",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/nouveau-fournisseur__02_nouveau_fournisseur.png",
+   "status": "CANDIDATE",
+   "label": "nouveau-fournisseur",
+   "width": 70,
+   "height": 70,
+   "native_px": 70,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/achat__03_achat.png",
+   "status": "CANDIDATE",
+   "label": "achat",
+   "width": 80,
+   "height": 80,
+   "native_px": 80,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/demande-achat__04_demande_achat.png",
+   "status": "CANDIDATE",
+   "label": "demande-achat",
+   "width": 78,
+   "height": 78,
+   "native_px": 78,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/reception-marchandise__05_reception.png",
+   "status": "CANDIDATE",
+   "label": "reception-marchandise",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/livraison__06_livraison.png",
+   "status": "CANDIDATE",
+   "label": "livraison",
+   "width": 120,
+   "height": 120,
+   "native_px": 120,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/comparer__07_comparer.png",
+   "status": "CANDIDATE",
+   "label": "comparer",
+   "width": 108,
+   "height": 108,
+   "native_px": 108,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/visite-fournisseur__08_visite_fournisseur.png",
+   "status": "CANDIDATE",
+   "label": "visite-fournisseur",
+   "width": 87,
+   "height": 87,
+   "native_px": 87,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/negociation__09_negociation.png",
+   "status": "CANDIDATE",
+   "label": "negociation",
+   "width": 96,
+   "height": 96,
+   "native_px": 96,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/catalogue__10_catalogue.png",
+   "status": "CANDIDATE",
+   "label": "catalogue",
+   "width": 81,
+   "height": 81,
+   "native_px": 81,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/tarifs__11_tarifs.png",
+   "status": "CANDIDATE",
+   "label": "tarifs",
+   "width": 70,
+   "height": 70,
+   "native_px": 70,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/contrat__12_contrat.png",
+   "status": "CANDIDATE",
+   "label": "contrat",
+   "width": 77,
+   "height": 77,
+   "native_px": 77,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/stock__01_stock.png",
+   "status": "CANDIDATE",
+   "label": "stock",
+   "width": 83,
+   "height": 83,
+   "native_px": 83,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/produit__02_produit.png",
+   "status": "CANDIDATE",
+   "label": "produit",
+   "width": 67,
+   "height": 67,
+   "native_px": 67,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/categories__03_categories.png",
+   "status": "CANDIDATE",
+   "label": "categories",
+   "width": 113,
+   "height": 113,
+   "native_px": 113,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/inventaire__05_inventaire.png",
+   "status": "CANDIDATE",
+   "label": "inventaire",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/entree-stock__07_entree_stock.png",
+   "status": "CANDIDATE",
+   "label": "entree-stock",
+   "width": 78,
+   "height": 78,
+   "native_px": 78,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/sortie-stock__08_sortie_stock.png",
+   "status": "CANDIDATE",
+   "label": "sortie-stock",
+   "width": 121,
+   "height": 121,
+   "native_px": 121,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/emplacement__10_emplacement.png",
+   "status": "CANDIDATE",
+   "label": "emplacement",
+   "width": 70,
+   "height": 70,
+   "native_px": 70,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/code-barres__11_code_barres.png",
+   "status": "CANDIDATE",
+   "label": "code-barres",
+   "width": 91,
+   "height": 91,
+   "native_px": 91,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/scan__12_scan.png",
+   "status": "CANDIDATE",
+   "label": "scan",
+   "width": 77,
+   "height": 77,
+   "native_px": 77,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/insight__02_insight.png",
+   "status": "CANDIDATE",
+   "label": "insight",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/recommandation__03_recommandation.png",
+   "status": "CANDIDATE",
+   "label": "recommandation",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/decision__04_decision.png",
+   "status": "CANDIDATE",
+   "label": "decision",
+   "width": 85,
+   "height": 85,
+   "native_px": 85,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/action-recommandee__05_action_recommandee.png",
+   "status": "CANDIDATE",
+   "label": "action-recommandee",
+   "width": 72,
+   "height": 72,
+   "native_px": 72,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/priorite__07_priorite.png",
+   "status": "CANDIDATE",
+   "label": "priorite",
+   "width": 75,
+   "height": 75,
+   "native_px": 75,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/explication__08_explication.png",
+   "status": "CANDIDATE",
+   "label": "explication",
+   "width": 78,
+   "height": 78,
+   "native_px": 78,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/donnees-a-jour__09_donnees_a_jour.png",
+   "status": "CANDIDATE",
+   "label": "donnees-a-jour",
+   "width": 76,
+   "height": 76,
+   "native_px": 76,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/donnees-partielles__10_donnees_partielles.png",
+   "status": "CANDIDATE",
+   "label": "donnees-partielles",
+   "width": 66,
+   "height": 66,
+   "native_px": 66,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  },
+  {
+   "path": "docs/design/icons/candidates-technical/fix_background_lowres/analyse__12_analyse.png",
+   "status": "CANDIDATE",
+   "label": "analyse",
+   "width": 71,
+   "height": 71,
+   "native_px": 71,
+   "sizes": {
+    "16": "NET (réduction du fichier source)",
+    "24": "NET (réduction du fichier source)",
+    "32": "NET (réduction du fichier source)",
+    "48": "NET (réduction du fichier source)",
+    "64": "NET (réduction du fichier source)",
+    "128": "AGRANDI : flou (fichier plus petit que la taille demandée)",
+    "256": "AGRANDI : flou (fichier plus petit que la taille demandée)"
+   },
+   "crisp_up_to_px": 64,
+   "vector": false
+  }
+ ]
+}
