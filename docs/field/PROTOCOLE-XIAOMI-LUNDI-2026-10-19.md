@@ -3,6 +3,9 @@
 **Objectif unique : ne perdre aucune donnée avant le départ en Chine (mardi matin).** Aucun autre test fonctionnel ou visuel.
 **Document seul** : rien n'est déployé ni modifié par ce protocole. Il complète `02_RECETTE_XIAOMI.md` (X01–X15) de ChatGPT, dont il reprend l'URL staging et les critères d'arrêt.
 
+## Critère de réussite (seule preuve valable)
+**« Serveur à jour » n'est PAS une preuve.** C'est un indicateur de l'application, pas une vérification indépendante. La sauvegarde n'est réussie que lorsque **tous les dossiers, toutes les notes (dernière version) et toutes les photos sont retrouvés, identiques, dans un navigateur indépendant** (étape 2, R1–R3), comparés aux compteurs de l'étape 0. Sans cela, considérer que rien n'est sauvegardé et s'appuyer sur les exports JSON.
+
 ## Règles
 - Un seul navigateur sur le Xiaomi (Chrome, application installée si elle l'est déjà). Ne **pas** vider les données du navigateur, ne **pas** désinstaller l'application, ne **pas** supprimer ni modifier les dossiers existants (`TEST XIAOMI – GOURDE 18-10`, `test Jeremy`).
 - URL à utiliser : celle confirmée par le propriétaire pour le staging (déclarée par Railway : `https://sourcing-staging-staging.up.railway.app`). Ne saisir aucun mot de passe sur une adresse non confirmée.
@@ -19,7 +22,7 @@
 | ID | Action | Réussi uniquement si |
 |---|---|---|
 | S1 | Connecté en OWNER, en 4G/5G (Wi-Fi coupé), appuyer sur « Sauvegarder sur le serveur » | Le bouton rapporte un envoi terminé ; **aucune erreur** ; le même nombre de dossiers et de photos qu'à l'étape 0 |
-| S2 | Lire l'indicateur de synchronisation | Il affiche « Serveur à jour » (serveur vérifié ET file d'attente vide). Tout autre état = **stop**, ne pas considérer la sauvegarde comme faite |
+| S2 | Lire l'indicateur de synchronisation | Il affiche « Serveur à jour ». C'est une **condition nécessaire, non suffisante** : tout autre état = **stop** ; même « à jour », la sauvegarde n'est validée que par l'étape 2 |
 | S3 | Rouvrir la liste des dossiers | Aucun dossier ne manque, aucune photo ne manque |
 
 Rappel : un dossier ou une photo jamais envoyé ne part **que** par ce bouton (réservé au propriétaire).
@@ -38,7 +41,7 @@ But : prouver que le serveur seul suffit à tout retrouver.
 | H1 | Avec réseau : ouvrir l'application et chaque dossier utile (préchargement) | Les écrans s'affichent sans erreur |
 | H2 | Mode avion. Fermer complètement le navigateur, le rouvrir sur l'application | L'application s'ouvre ; dossiers et photos visibles |
 | H3 | Toujours hors ligne : modifier la note du dossier de test (ex. `TEST_NOTE_B`) | Modification acceptée et conservée |
-| H4 | Réactiver le réseau. Appuyer sur « Sauvegarder sur le serveur », attendre « Serveur à jour » | La note B est sur le serveur : la retrouver depuis le navigateur indépendant (R1) |
+| H4 | Réactiver le réseau. Appuyer sur « Sauvegarder sur le serveur », attendre « Serveur à jour » (nécessaire, non suffisant) | La note B est sur le serveur : la retrouver depuis le navigateur indépendant (R1) |
 | H5 | En cas de conflit annoncé | Les **deux versions** sont conservées ; ne rien écraser, noter l'écart |
 
 ## Étape 4 — Photos (5 min)
