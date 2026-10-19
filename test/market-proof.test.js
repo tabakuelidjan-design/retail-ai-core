@@ -1,7 +1,7 @@
 // Contract tests of the isolated market proof: providers are SIMULATED here (fake fetch). They prove the rules, not the real providers.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validGtin, identifyPhoto, buildQueries, classifyMatch, flattenItems, toEvidence, searchShopping, bolByEan, ecbRates, compareToSupplier, configured, loadEnv } from '../tools/market-proof/lib.mjs';
+import { spendGuard, estimateCostUsd, dfsBalance, searchAmazon, marketplaceSplit, validGtin, identifyPhoto, buildQueries, classifyMatch, flattenItems, toEvidence, searchShopping, bolByEan, ecbRates, compareToSupplier, configured, loadEnv } from '../tools/market-proof/lib.mjs';
 
 const json = (o, status = 200) => ({ ok: status < 400, status, json: async () => o, text: async () => (typeof o === 'string' ? o : JSON.stringify(o)) });
 const NOW = () => new Date('2026-10-19T12:00:00Z');
@@ -79,3 +79,36 @@ test('ECB parsing and comparison arithmetic', async () => {
 });
 
 test('env file values never leak through configured()', () => { const c = configured({ GOOGLE_VISION_API_KEY: 'secret', DATAFORSEO_LOGIN: 'l' }); assert.deepEqual(c, { vision: true, shopping: false, bol: false }); assert.ok(typeof loadEnv('Z:/missing.env', {}) === 'object'); });
+
+test('spend guard: no paid call without --go, a readable trial-sized balance, and an estimate that fits (no top-up path)', () => {
+  assert.equal(spendGuard({ go: true, balance: null, estimate: 0.02 }).ok, false);
+  assert.equal(spendGuard({ go: true, balance: 50, estimate: 0.02 }).ok, false); // funded account: refused unless --allow-funded
+  assert.equal(spendGuard({ go: true, balance: 50, estimate: 0.02, allowFunded: true }).ok, true);
+  assert.equal(spendGuard({ go: true, balance: 0.01, estimate: 0.02 }).ok, false);
+  const dry = spendGuard({ go: false, balance: 1, estimate: 0.02 }); assert.equal(dry.ok, false); assert.equal(dry.plan, true);
+  assert.equal(spendGuard({ go: true, balance: 1, estimate: 0.02 }).ok, true);
+  assert.equal(estimateCostUsd({ queries: [1, 2], amazon: true }), 0.04);
+});
+
+test('balance read: unreadable answer -> null (the caller then refuses to spend)', async () => {
+  const env = { DATAFORSEO_LOGIN: 'a', DATAFORSEO_PASSWORD: 'b' };
+  assert.equal(await dfsBalance({ env, fetchImpl: async () => json({}, 401) }), null);
+  assert.equal(await dfsBalance({ env, fetchImpl: async () => json({ tasks: [{ result: [{ money: { balance: 0.97 } }] }] }) }), 0.97);
+  assert.equal(await dfsBalance({ env: {}, fetchImpl: async () => { throw new Error('must not be called'); } }), null);
+});
+
+test('Amazon through the provider: an unsupported marketplace is reported, never faked; a supported one returns listings with links', async () => {
+  const env = { DATAFORSEO_LOGIN: 'a', DATAFORSEO_PASSWORD: 'b' };
+  const none = await searchAmazon({ queries: [{ text: 'x', via: 't' }], country: 'BE', env, fetchImpl: async () => json({ tasks: [{ result: [] }] }) });
+  assert.equal(none.status, 'UNSUPPORTED'); assert.deepEqual(none.evidence, []);
+  const f = async (url) => url.includes('/locations/') ? json({ tasks: [{ result: [{ location_code: 2528, country_iso_code: 'NL', available_languages: [{ language_code: 'nl_NL' }] }] }] })
+    : url.endsWith('/task_post') ? json({ tasks: [{ id: 'a1', status_code: 20100 }] })
+    : json({ tasks: [{ status_code: 20000, cost: 0.0015, result: [{ items: [{ type: 'amazon_serp', title: 'ACME RB-980HB', url: 'https://www.amazon.nl/dp/B0X', domain: 'www.amazon.nl', price_from: 21.5, currency: 'EUR', data_asin: 'B0X' }, { type: 'amazon_serp', title: 'no link', price_from: 1, currency: 'EUR' }] }] }] });
+  const r = await searchAmazon({ queries: [{ text: 'ACME RB-980HB', via: 't' }], country: 'NL', env, now: NOW, fetchImpl: f, pollMs: 1, ctx: { model: 'RB-980HB' } });
+  assert.equal(r.status, 'DONE'); assert.equal(r.evidence.length, 1); assert.equal(r.evidence[0].price.amount, 21.5); assert.equal(r.costUsd, 0.0015);
+});
+
+test('marketplaces are split and reported separately: amazon.com.be and bol.com are found or not found, never assumed', () => {
+  const ev = [{ seller: 'bol.com', url: 'https://www.bol.com/p/1' }, { seller: 'Amazon.nl', url: 'https://www.amazon.nl/dp/1', specs: { domain: 'www.amazon.nl' } }, { seller: 'Shop', url: 'https://shop.example/x' }];
+  const m = marketplaceSplit(ev); assert.equal(m['bol.com'].found, true); assert.equal(m['amazon.nl'].found, true); assert.equal(m['amazon.com.be'].found, false); assert.equal(m['amazon.fr'].count, 0);
+});

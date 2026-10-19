@@ -74,7 +74,7 @@ const MARKET = { BE: { name: 'Belgium', lang: 'nl' }, FR: { name: 'France', lang
 export async function searchShopping({ queries, country = 'BE', env, now = () => new Date(), fetchImpl = fetch, pollMs = 4000, maxWaitMs = 120000, ctx = {} }) {
   if (!(env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD)) return { status: SEARCH_STATUS.PROVIDER_NOT_CONFIGURED, provider: 'dataforseo-google-shopping', evidence: [], note: 'DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD missing: nothing was searched.' };
   const auth = basic(env.DATAFORSEO_LOGIN, env.DATAFORSEO_PASSWORD); const H = { authorization: auth, 'content-type': 'application/json' }; const base = 'https://api.dataforseo.com/v3/merchant/google';
-  const mk = MARKET[country] ?? MARKET.BE; const evidence = []; const runs = [];
+  const mk = MARKET[country] ?? MARKET.BE; const evidence = []; const runs = []; let costUsd = 0;
   try {
     const lr = await fetchImpl(`${base}/locations`, { headers: H }); if (!lr.ok) throw new Error(`locations HTTP ${lr.status}`);
     const loc = ((await lr.json()).tasks?.[0]?.result ?? []).find((l) => l.country_iso_code === country || l.location_name === mk.name); if (!loc) throw new Error(`no location code for ${mk.name}`);
@@ -84,14 +84,61 @@ export async function searchShopping({ queries, country = 'BE', env, now = () =>
       let items = null; const t0 = Date.now();
       while (Date.now() - t0 < maxWaitMs) {
         await sleep(pollMs); const gr = await fetchImpl(`${base}/products/task_get/advanced/${task.id}`, { headers: H }); if (!gr.ok) throw new Error(`task_get HTTP ${gr.status}`);
-        const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; break; } if (t && t.status_code >= 40000) throw new Error(`task_get: ${t.status_message}`);
+        const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000) throw new Error(`task_get: ${t.status_message}`);
       }
       if (items === null) { runs.push({ query: q.text, status: 'TIMEOUT' }); continue; }
       runs.push({ query: q.text, status: 'DONE', items: items.length });
       for (const raw of flattenItems(items)) { const ev = toEvidence(raw, { q, country, observedAt: now().toISOString(), ctx }); if (ev) evidence.push(ev); }
     }
-  } catch (e) { return { status: SEARCH_STATUS.ERROR, provider: 'dataforseo-google-shopping', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-google-shopping' })).filter(Boolean), error: String(e.message ?? e), runs }; }
-  return { status: SEARCH_STATUS.DONE, provider: 'dataforseo-google-shopping', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-google-shopping' })).filter(Boolean), runs };
+  } catch (e) { return { status: SEARCH_STATUS.ERROR, provider: 'dataforseo-google-shopping', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-google-shopping' })).filter(Boolean), error: String(e.message ?? e), runs, costUsd }; }
+  return { status: SEARCH_STATUS.DONE, provider: 'dataforseo-google-shopping', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-google-shopping' })).filter(Boolean), runs, costUsd };
+}
+
+/** DataForSEO account balance (free call). null when it cannot be read: the caller then refuses to spend. Shape of the answer is UNVERIFIED until a live run. */
+export async function dfsBalance({ env, fetchImpl = fetch }) {
+  if (!(env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD)) return null;
+  try { const r = await fetchImpl('https://api.dataforseo.com/v3/appendix/user_data', { headers: { authorization: basic(env.DATAFORSEO_LOGIN, env.DATAFORSEO_PASSWORD) } }); if (!r.ok) return null; const b = (await r.json()).tasks?.[0]?.result?.[0]?.money?.balance; return Number.isFinite(Number(b)) ? Number(b) : null; } catch { return null; }
+}
+/** Upper bound of what a run can cost (deliberately pessimistic). Google Shopping lists from $0.001-0.002 per SERP of 40; the Amazon price per task was not readable: 0.01 is assumed. */
+export const estimateCostUsd = ({ queries, amazon = false }) => +(queries.length * (0.01 + (amazon ? 0.01 : 0))).toFixed(4);
+/** Spend guard: a paid call happens only with an explicit go, a readable balance, a trial-sized balance (no top-up) and an estimate that fits in it. */
+export function spendGuard({ go, balance, estimate, allowFunded = false, trialCeiling = 2 }) {
+  if (balance === null) return { ok: false, why: 'balance unreadable: refusing to spend (nothing sent)' };
+  if (balance > trialCeiling && !allowFunded) return { ok: false, why: `balance ${balance} USD is above the trial ceiling (${trialCeiling}): the account looks funded; add --allow-funded only if you really want to spend real money` };
+  if (estimate > balance) return { ok: false, why: `worst-case estimate ${estimate} USD exceeds the balance ${balance} USD` };
+  if (!go) return { ok: false, why: 'dry plan only: add --go to run the paid calls', plan: true };
+  return { ok: true };
+}
+
+/** Amazon results through DataForSEO's Amazon Merchant API (the provider collects Amazon; owner decision about Amazon's terms is pending: OFF unless --amazon). Locations are listed first (free): an unsupported marketplace is reported, never faked. */
+export async function searchAmazon({ queries, country = 'BE', env, now = () => new Date(), fetchImpl = fetch, pollMs = 4000, maxWaitMs = 120000, ctx = {} }) {
+  if (!(env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD)) return { status: SEARCH_STATUS.PROVIDER_NOT_CONFIGURED, provider: 'dataforseo-amazon', evidence: [], note: 'DATAFORSEO credentials missing.' };
+  const H = { authorization: basic(env.DATAFORSEO_LOGIN, env.DATAFORSEO_PASSWORD), 'content-type': 'application/json' }; const base = 'https://api.dataforseo.com/v3/merchant/amazon'; const evidence = []; let costUsd = 0;
+  try {
+    const lr = await fetchImpl(`${base}/locations/${country}`, { headers: H }); if (!lr.ok) throw new Error(`amazon locations HTTP ${lr.status}`);
+    const loc = ((await lr.json()).tasks?.[0]?.result ?? []).find((l) => l.country_iso_code === country); if (!loc) return { status: 'UNSUPPORTED', provider: 'dataforseo-amazon', evidence: [], note: `the provider lists no Amazon location for ${country}` };
+    const lang = (loc.available_languages ?? loc.language_codes ?? [])[0]; const language_code = typeof lang === 'string' ? lang : lang?.language_code;
+    for (const q of queries) {
+      const pr = await fetchImpl(`${base}/products/task_post`, { method: 'POST', headers: H, body: JSON.stringify([{ keyword: q.text, location_code: loc.location_code, ...(language_code ? { language_code } : {}), priority: 2, depth: 40 }]) }); if (!pr.ok) throw new Error(`amazon task_post HTTP ${pr.status}`);
+      const task = (await pr.json()).tasks?.[0]; if (!task?.id || (task.status_code ?? 20100) >= 40000) throw new Error(`amazon task_post: ${task?.status_message ?? 'no task id'}`);
+      let items = null; const t0 = Date.now();
+      while (Date.now() - t0 < maxWaitMs) { await sleep(pollMs); const gr = await fetchImpl(`${base}/products/task_get/advanced/${task.id}`, { headers: H }); if (!gr.ok) throw new Error(`amazon task_get HTTP ${gr.status}`); const t = (await gr.json()).tasks?.[0]; if (t?.status_code === 20000) { items = t.result?.[0]?.items ?? []; costUsd += Number(t.cost) || 0; break; } if (t && t.status_code >= 40000) throw new Error(`amazon task_get: ${t.status_message}`); }
+      if (items === null) continue;
+      for (const it of items.flatMap((x) => (x.type === 'amazon_serp' || x.type === 'amazon_paid' ? [x] : Array.isArray(x.items) ? x.items : []))) {
+        if (!it.url) continue; const amount = Number(it.price_from); const price = Number.isFinite(amount) && amount > 0 && /^[A-Z]{3}$/.test(String(it.currency ?? '')) ? { amount, currency: it.currency, vatIncluded: null } : null; const m = classifyMatch(it.title, { model: ctx.model, brand: ctx.brand, queryText: q.text });
+        evidence.push({ seller: it.domain ?? hostOf(it.url), sellerType: 'MARKETPLACE', country, url: it.url, source: 'amazon-via-dataforseo', price, specs: { title: it.title ?? null, asin: it.data_asin ?? null, domain: it.domain ?? null, priceTo: it.price_to ?? null, query: q.text, queryVia: q.via, matchReason: m.reason }, matchType: m.matchType, confidence: m.confidence, observedAt: now().toISOString() });
+      }
+    }
+  } catch (e) { return { status: SEARCH_STATUS.ERROR, provider: 'dataforseo-amazon', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-amazon' })).filter(Boolean), error: String(e.message ?? e), costUsd }; }
+  return { status: SEARCH_STATUS.DONE, provider: 'dataforseo-amazon', evidence: evidence.map((e) => sanitizeEvidence(e, { provider: 'dataforseo-amazon' })).filter(Boolean), costUsd };
+}
+
+/** Marketplace split of what was found, so Amazon.be and bol.com are verified SEPARATELY and never assumed. */
+export function marketplaceSplit(evidence) {
+  const of = (e) => { const h = `${e.seller ?? ''} ${e.url ?? ''} ${e.specs?.domain ?? ''}`.toLowerCase(); const a = /amazon\.(com\.be|nl|fr|de|co\.uk|es|it)/.exec(h); if (a) return `amazon.${a[1]}`; if (/amazon/.test(h)) return 'amazon.(unknown domain)'; if (/bol\.com|\bbol\b/.test(h)) return 'bol.com'; return null; };
+  const by = {}; for (const e of evidence) { const k = of(e); if (k) (by[k] ??= []).push(e); }
+  const row = (k) => ({ found: (by[k] ?? []).length > 0, count: (by[k] ?? []).length, links: (by[k] ?? []).slice(0, 3).map((e) => e.url) });
+  return { 'amazon.com.be': row('amazon.com.be'), 'bol.com': row('bol.com'), 'amazon.nl': row('amazon.nl'), 'amazon.fr': row('amazon.fr'), 'amazon.de': row('amazon.de'), other: Object.keys(by).filter((k) => !['amazon.com.be', 'bol.com', 'amazon.nl', 'amazon.fr', 'amazon.de'].includes(k)), note: 'found = a listing with a link was returned for that marketplace in THIS search; absence means "not in these results", never "not sold there"' };
 }
 export function flattenItems(items) { const out = []; for (const it of items ?? []) { if (it.type === 'google_shopping_serp') out.push(it); else if (Array.isArray(it.items)) for (const el of it.items) if (el && /product|carousel_element|serp/.test(String(el.type ?? ''))) out.push(el); } return out; }
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return null; } };
