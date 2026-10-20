@@ -184,15 +184,18 @@ function referenceFrom(groups, comparable, incl) {
 /** A brand that is KNOWN (the case, the barcode database, the label) is respected: a listing whose title does not name it is another brand and is left out of the indicative prices (counted, said). The test is on the letters and digits only
  *  (case, accents, spaces, hyphens and symbols ignored: "Hydro Flask" = "HYDROFLASK" = "Hydro-Flask®"), so a spelling variant never excludes a valid listing. Brand unknown: nothing is filtered and the screen says the comparison mixes brands. */
 export const brandInTitle = (title, brand) => !String(brand ?? '').trim() || alnum(title).includes(alnum(brand));
+/** A brand read BY A MACHINE (Google Vision on a label, a barcode read, the barcode database) is only PROVISIONAL until the owner confirms it explicitly: it filters nothing, because a brand read wrongly would throw valid listings away. */
+export const MACHINE_BRAND_SOURCES = new Set(['PHOTO_VISION', 'LOCAL_BARCODE', 'GTIN_DB']);
+export const brandFilterOn = (input) => !!String(input?.brand ?? '').trim() && !MACHINE_BRAND_SOURCES.has(input?.sources?.brand);
 function indicativeFrom(rows, input) {
-  const brandKnown = !!String(input.brand ?? '').trim(); const by = new Map(); let otherBrand = 0;
+  const brandKnown = !!String(input.brand ?? '').trim(); const provisional = brandKnown && MACHINE_BRAND_SOURCES.has(input.sources?.brand); const by = new Map(); let otherBrand = 0; let notNamedKept = 0;
   for (const r of rows) {
     if (r.excludedFromReference || r.matchType !== MATCH.SIMILAR_PRODUCT || !r.type || r.price?.eur == null) continue;
-    if (brandKnown && !brandInTitle(r.title, input.brand)) { otherBrand += 1; continue; }
+    if (brandKnown && !brandInTitle(r.title, input.brand)) { if (!provisional) { otherBrand += 1; continue; } notNamedKept += 1; }
     (by.get(r.type) ?? by.set(r.type, []).get(r.type)).push(r.price.eur);
   }
   const indicative = [...by.entries()].filter(([, ps]) => ps.length >= MIN_COMPARABLE).map(([type, ps]) => { const s = [...ps].sort((x, y) => x - y); return { type, count: s.length, minEur: round2(s[0]), medianEur: round2(median(s)), maxEur: round2(s[s.length - 1]) }; });
-  return { indicative, indicativeBasis: { brandKnown, brand: brandKnown ? String(input.brand).trim() : null, brandSource: brandKnown ? (input.sources?.brand ?? null) : null, otherBrandLeftOut: otherBrand } };
+  return { indicative, indicativeBasis: { brandKnown, brand: brandKnown ? String(input.brand).trim() : null, brandSource: brandKnown ? (input.sources?.brand ?? null) : null, provisional, otherBrandLeftOut: otherBrand, notNamedKept } };
 }
 
 /** Supplier price against the observed reference. Never a verdict. */

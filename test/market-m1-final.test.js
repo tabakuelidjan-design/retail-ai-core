@@ -213,6 +213,33 @@ test('H4 brand spelling variants never exclude a valid listing (case, accents, s
   const unknown = analyseListings(ls, { name: 'water bottle', traits: {} }, { ecb: ECB }); assert.equal(unknown.indicativeBasis.brandKnown, false); assert.equal(unknown.indicativeBasis.otherBrandLeftOut, 0); assert.equal(unknown.indicative[0].count, 6, 'nothing is filtered when the brand is unknown');
 });
 
+test('PROVISIONAL brand — a brand read by a machine (Vision, barcode, barcode database) filters NOTHING until the owner confirms it; the screen data says so', () => {
+  for (const source of ['PHOTO_VISION', 'LOCAL_BARCODE', 'GTIN_DB']) {
+    const input = { name: 'water bottle', brand: 'Hydro Flask', traits: {}, sources: { brand: source } }; const a = analyseWithFacets(REAL, input, { ecb: ECB }).analysis; const bottle = a.indicative.find((x) => x.type === 'bottle');
+    assert.deepEqual(bottle, { type: 'bottle', count: 6, minEur: 15.95, medianEur: 35.75, maxEur: 44.95 }, `${source}: the other-brand listings (Nalgene) are NOT thrown out while the brand is provisional`);
+    assert.equal(a.indicativeBasis.provisional, true); assert.equal(a.indicativeBasis.brandKnown, true); assert.equal(a.indicativeBasis.brandSource, source); assert.equal(a.indicativeBasis.otherBrandLeftOut, 0); assert.equal(a.indicativeBasis.notNamedKept, 2);
+  }
+});
+
+test('CONFIRMED brand — after the owner confirms it explicitly, the H4 filter applies (same numbers as a brand typed in the case); unknown brand and case brand are unchanged', () => {
+  const prov = { name: 'water bottle', brand: 'Hydro Flask', traits: {}, sources: { brand: 'PHOTO_VISION' } };
+  const r = refine({ listings: REAL, input: prov, confirmed: { brand: 'Hydro Flask' }, ecb: ECB }); const a = r.analysis;
+  assert.deepEqual(a.indicative.find((x) => x.type === 'bottle'), { type: 'bottle', count: 4, minEur: 31.1, medianEur: 42.68, maxEur: 44.95 }); assert.equal(a.indicativeBasis.provisional, false); assert.equal(a.indicativeBasis.brandSource, 'OWNER_CONFIRMED'); assert.equal(a.indicativeBasis.otherBrandLeftOut, 2); assert.equal(r.confirmed.brand, 'Hydro Flask');
+  const fromCase = analyseWithFacets(REAL, { name: 'water bottle', brand: 'Hydro Flask', traits: {} }, { ecb: ECB }).analysis; assert.deepEqual(fromCase.indicative, a.indicative, 'a brand typed in the case behaves like a confirmed brand');
+  assert.equal(analyseWithFacets(REAL, { name: 'water bottle', traits: {} }, { ecb: ECB }).analysis.indicativeBasis.brandKnown, false);
+  assert.equal(sanitizeConfirmed({ brand: '®®' }), null); assert.equal(sanitizeConfirmed({ brand: ' Hydro Flask ' }).brand, 'Hydro Flask'); assert.equal(refine({ listings: REAL, input: prov, confirmed: { brand: '®®' }, ecb: ECB }).analysis.indicativeBasis.provisional, true, 'an unusable brand confirms nothing');
+  assert.equal(refine({ listings: REAL, input: prov, confirmed: { brand: 'Hydro Flask' }, ecb: ECB }).analysis.summary.exact, 0); assert.equal(refine({ listings: REAL, input: prov, confirmed: { brand: 'Hydro Flask' }, ecb: ECB }).analysis.reference.reliable, false, 'confirming a brand never creates a reference price');
+});
+
+test('PROVISIONAL / CONFIRMED brand — the type question promises exactly what the answer shows, in both states', () => {
+  const evidenceOf = (input, kind) => { const q = proposeQuestion({ input, listings: REAL, facet: analyseWithFacets(REAL, input, { ecb: ECB }).facet }); return q.options.find((o) => o.value.productType === kind); };
+  for (const sources of [{ brand: 'LOCAL_BARCODE' }, { brand: 'OWNER_CONFIRMED' }]) {
+    const input = { name: 'Hydro Flask', brand: 'Hydro Flask', traits: {}, sources }; const o = evidenceOf(input, 'bottle'); const [, n, med] = /^(\d+) annonce\(s\) retenue\(s\) · prix médian indicatif (\d+,\d+) €/.exec(o.evidence);
+    const ind = refine({ listings: REAL, input, confirmed: o.value, ecb: ECB, asked: 1 }).analysis.indicative.find((x) => x.type === 'bottle'); assert.equal(ind.count, Number(n)); assert.equal(ind.medianEur.toFixed(2).replace('.', ','), med);
+  }
+  // (with a brand-only case name the other brands already have no word in common with the search and are out of scope in both states: the promise is the same, and it always equals the answer)
+});
+
 // ---------- service level: 53 listings are all kept, answering costs nothing, an identical search is cached
 const items = (ls) => ls.map((l, i) => ({ type: 'google_shopping_serp', title: l.title, price: l.price, currency: 'EUR', seller: l.seller ?? 'Shop', url: `https://google.be/search?ibp=oshop&q=x&prds=${i + 1}` }));
 function provider(ls) {
@@ -230,6 +257,15 @@ test('service: all 53 real listings are kept in the case (not 40) and re-read by
   const a2 = await radar.refine({ evidence: first.stored, input, confirmed: { productType: 'bottle', capacityMl: 946 }, asked: 2 }); assert.equal(a2.reference.reliable, false); assert.equal(a2.question, null);
   const a3 = await radar.refine({ evidence: first.stored, input, confirmed: null, asked: 1, declined: ['type'] }); assert.equal(a3.confirmation, 'UNKNOWN'); const a4 = await radar.refine({ evidence: first.stored, input, confirmed: { capacityText: '64 oz' }, asked: 1 }); assert.equal(a4.reference.reliable, false);
   assert.deepEqual(p.calls, before, 'no provider call for any answer'); const again = await radar.search({ input }); assert.equal(again.cached, true); assert.equal(p.calls.post, 1, 'identical parameters: cached, not paid twice');
+});
+
+test('service: a brand that only a Vision read provided is PROVISIONAL (no brand filter); the owner\'s confirmation re-reads the listings for free and only then filters', async () => {
+  const p = provider(REAL.map((x) => ({ title: x.title, price: x.price, seller: x.seller }))); const radar = svc(p); const ident = { source: 'PHOTO_VISION', logos: ['Hydro Flask'], eans: [], models: [], bestGuess: [] };
+  const first = await radar.search({ input: { name: 'water bottle' }, identification: ident }); assert.equal(first.input.sources.brand, 'PHOTO_VISION'); assert.equal(first.indicativeBasis.provisional, true); assert.equal(first.indicativeBasis.brand, 'Hydro Flask'); assert.equal(first.indicative.find((x) => x.type === 'bottle').count, 6); const before = { ...p.calls };
+  const kept = await radar.refine({ evidence: first.stored, input: { name: 'water bottle', brand: first.input.brand }, inputSources: first.input.sources, identification: ident, confirmed: null, asked: 0 }); assert.equal(kept.indicativeBasis.provisional, true, 'still provisional until the owner confirms');
+  const confirmed = await radar.refine({ evidence: first.stored, input: { name: 'water bottle', brand: first.input.brand }, inputSources: first.input.sources, identification: ident, confirmed: { brand: 'Hydro Flask' }, asked: 0 }); assert.equal(confirmed.indicativeBasis.provisional, false); assert.equal(confirmed.indicativeBasis.brandSource, 'OWNER_CONFIRMED'); assert.equal(confirmed.indicative.find((x) => x.type === 'bottle').count, 4); assert.equal(confirmed.input.confirmed.brand, 'Hydro Flask');
+  assert.deepEqual(p.calls, before, 'confirming a brand costs nothing: no provider call');
+  const typed = await svc(provider(REAL.map((x) => ({ title: x.title, price: x.price })))).search({ input: { name: 'water bottle', brand: 'Hydro Flask' } }); assert.equal(typed.indicativeBasis.provisional, false, 'a brand typed in the case is the owner\'s own: filtering from the start'); assert.equal(typed.indicative.find((x) => x.type === 'bottle').count, 4);
 });
 
 test('service: an explicit new search carrying the owner\'s confirmed size and variant uses them (query and strict filter) and asks nothing more', async () => {

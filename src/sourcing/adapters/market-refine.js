@@ -2,7 +2,7 @@
 // and the local re-analysis of the listings already obtained once the owner answers. Generic by construction: nothing here knows a brand or a product line.
 // Rules: every option carries the evidence it comes from; nothing is preselected; "Je ne sais pas" and "Autre" (free text) are always possible; an unknown answer changes nothing and is never asked again; a facet is asked
 // only when listing-derived groups differ by more than 10 % in price; an answer never triggers a provider call by itself (a new search is a separate, explicit, capped action).
-import { ACCESSORY_WORDS, CATEGORY_WORDS, FLAG, TYPE_KEYS, brandInTitle, TYPE_LABELS, analyseListings, capacityOf, classifyListing, clusterVolumes, compareWithSupplier, fmtMl, titleWords, typeOf, volumeMl, volumesIn } from './market-radar.js';
+import { ACCESSORY_WORDS, CATEGORY_WORDS, FLAG, TYPE_KEYS, brandFilterOn, brandInTitle, TYPE_LABELS, analyseListings, capacityOf, classifyListing, clusterVolumes, compareWithSupplier, fmtMl, titleWords, typeOf, volumeMl, volumesIn } from './market-radar.js';
 
 export const MAX_QUESTIONS = 2; const PRICE_GAP = 0.10;
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); const n = s.length; return n === 0 ? null : n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
@@ -26,6 +26,7 @@ export function sanitizeConfirmed(raw) {
   if (!raw || typeof raw !== 'object') return null; const out = {};
   const ml = Number(raw.capacityMl); if (Number.isFinite(ml) && ml >= 50 && ml <= 5000) out.capacityMl = Math.round(ml); else if (typeof raw.capacityText === 'string') { const t = parseCapacityText(raw.capacityText); if (t) out.capacityMl = t; }
   if (TYPE_KEYS.includes(raw.productType)) out.productType = raw.productType;
+  const br = String(raw.brand ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 60); if (/[\p{L}\p{N}]/u.test(br)) out.brand = br; // the brand the owner explicitly CONFIRMS
   const m = String(raw.model ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().toUpperCase(); if (/^[A-Z0-9][A-Z0-9 ._-]{2,39}$/.test(m)) out.model = m;
   const v = raw.variant && typeof raw.variant === 'object' ? raw.variant : null;
   const tokens = v && Array.isArray(v.tokens) ? v.tokens.map((t) => String(t).toLowerCase()).filter((t) => /^[a-z0-9]{2,20}$/.test(t)).slice(0, 3) : typeof raw.variantText === 'string' && !/[<>{}\\\u0000-\u001f]/.test(raw.variantText) ? wordsOf(raw.variantText) : [];
@@ -82,7 +83,7 @@ export function proposeQuestion({ input, listings = [], facet = undefined, asked
   if (!ptype && !conf.productType && !no('type')) {
     // what each answer would LEAVE once the usual exclusions are applied (lots, accessories, other kinds, aberrant prices): the evidence shown is exactly what the owner will see after answering, so the question never promises a number the result does not give
     const seenKinds = new Set(); for (const l of listings) { const t = typeOf(l.title, input?.brand); if (t) seenKinds.add(t); }
-    const kinds = [...seenKinds].map((k) => { const a = analyseListings(listings, { ...input, productType: k }); return [k, a.listings.filter((r) => !r.excludedFromReference && r.type === k && r.price?.eur != null && brandInTitle(r.title, input?.brand)).map((r) => r.price.eur)]; }).filter(([, ps]) => ps.length >= 3).sort((x, y) => y[1].length - x[1].length); const meds = kinds.map(([, ps]) => median(ps));
+    const kinds = [...seenKinds].map((k) => { const a = analyseListings(listings, { ...input, productType: k }); return [k, a.listings.filter((r) => !r.excludedFromReference && r.type === k && r.price?.eur != null && (!brandFilterOn(input) || brandInTitle(r.title, input?.brand))).map((r) => r.price.eur)]; }).filter(([, ps]) => ps.length >= 3).sort((x, y) => y[1].length - x[1].length); const meds = kinds.map(([, ps]) => median(ps));
     if (kinds.length >= 2 && Math.max(...meds) / Math.min(...meds) - 1 > PRICE_GAP) return { id: 'type', prompt: 'De quel type de produit s’agit-il ?', unknownLabel: 'Je ne sais pas', allowOther: false,
       options: kinds.map(([k, ps]) => ({ value: { productType: k }, label: TYPE_LABELS[k], evidence: `${ps.length} annonce(s) retenue(s) · prix médian indicatif ${eur(median(ps))}` })) };
   }
@@ -96,7 +97,7 @@ export function proposeQuestion({ input, listings = [], facet = undefined, asked
 
 /** Re-analyses the listings already obtained with the owner's answers (accumulated). Pure: no network, no cost. "Unknown" (null) keeps the ordinary, non-strict classification. */
 export function refine({ listings, input, confirmed, ecb = null, supplier = null, asked = 0, declined = [] }) {
-  const c = sanitizeConfirmed(confirmed); const inp = { ...input, ...(c ? { confirmed: c, ...(c.model ? { model: c.model } : {}), ...(c.productType ? { productType: c.productType } : {}) } : {}) };
+  const c = sanitizeConfirmed(confirmed); const inp = { ...input, ...(c ? { confirmed: c, ...(c.model ? { model: c.model } : {}), ...(c.productType ? { productType: c.productType } : {}), ...(c.brand ? { brand: c.brand, sources: { ...(input.sources ?? {}), brand: 'OWNER_CONFIRMED' } } : {}) } : {}) };
   const { analysis, facet } = analyseWithFacets(listings, inp, { ecb }); const comparison = compareWithSupplier({ reference: analysis.reference, supplier, ecb });
   return { analysis, comparison, confirmed: c, input: inp, facet, question: proposeQuestion({ input: inp, listings, facet, asked, declined }) };
 }

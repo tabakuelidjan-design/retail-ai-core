@@ -74,6 +74,14 @@ try {
     ok(rec.evidence.length === 3 && rec.evidence.every((e) => e.url && e.observedAt), 'evidence kept with provenance'); console.log(`      engine used for the barcode: ${rec.radar.identification.engine}`);
   });
 
+  await check('A3. the brand given by the barcode database is PROVISIONAL: "Marque à confirmer" with the risk of mixed brands; the owner confirms it explicitly (free: no provider call) and only then does it count as confirmed', async () => {
+    const s0 = await text(t); ok(/Marque à confirmer/.test(s0) && /peuvent mélanger plusieurs marques/.test(s0), s0.slice(0, 500)); ok(await t.eval(`!!document.querySelector('[data-act="market-brand-confirm"]')`), 'a confirm button'); await t.eval(`(() => { const e = document.querySelector('.fm-brandbox'); if (e) { e.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); } })()`); await sleep(300); await shot(t, 'A3-brand-provisional-390');
+    const calls0 = log.keywords.length; const rec0 = (await store(t))['ph-barcode'].marketSearches.at(-1); ok(rec0.radar.indicativeBasis.provisional === true && rec0.radar.indicativeBasis.brandSource === 'GTIN_DB', JSON.stringify(rec0.radar.indicativeBasis));
+    await clickSel(t, '[data-act="market-brand-confirm"]', 1100); const s1 = await text(t); await t.eval(`(() => { const e = [...document.querySelectorAll('p.fm-note')].find((x) => /confirmée par vous/.test(x.innerText)); if (e) { e.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); } })()`); await sleep(300); await shot(t, 'A3-brand-confirmed-390');
+    ok(log.keywords.length === calls0 && log.vision === 0, 'confirming a brand makes NO provider call'); ok(!/Marque à confirmer/.test(s1) && /Précision confirmée par vous : marque Acme Foods/.test(s1), s1.slice(0, 600));
+    const rec1 = (await store(t))['ph-barcode'].marketSearches.at(-1); ok(rec1.radar.confirmation.answered === 'brand' && rec1.radar.confirmation.accumulated.brand === rec0.radar.indicativeBasis.brand && rec1.radar.indicativeBasis.provisional === false && rec1.radar.indicativeBasis.brandSource === 'OWNER_CONFIRMED', JSON.stringify(rec1.radar.confirmation));
+  });
+
   await check('A2. BARCODE not in the open databases: the number itself is searched, nothing can be tied to it, so NO price range is given and the owner is told', async () => {
     log.keywords.length = 0; await openMarket(t, 'ph-barcode2'); await clickSel(t, '.fm-thumb', 300); await waitText(t, 'Résultat de la recherche'); const s = await text(t); await shot(t, 'A2-unverifiable-390');
     ok(log.vision === 0 && log.keywords[0] === GTIN2, `searched by the number: ${JSON.stringify(log.keywords)}`); ok(/n’est pas dans les bases ouvertes/.test(s) && /Prix de référence non fiable/.test(s) && !/Prix constatés/.test(s), s.slice(0, 900)); // wording changed deliberately: the old 'aucune annonce rattachée' notice became the explicit 'Prix de référence non fiable' (no range, no median)
