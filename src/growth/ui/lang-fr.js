@@ -2,7 +2,7 @@
 // Français - langue par défaut de Nordla Growth (même runtime NORDLA_I18N qu'Analytics Premium).
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
-  'gr.brand': 'Nordla AI',
+  'gr.brand': 'Nordla',
   'gr.dash': '—',
   'gr.src.unavailable': 'Donnée non disponible',
   'gr.vsPrevious': 'vs période précédente',

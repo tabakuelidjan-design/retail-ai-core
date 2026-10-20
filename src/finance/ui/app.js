@@ -277,9 +277,8 @@ async function refreshSyncPill() {
 
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
-  const initial = seller.trim().charAt(0).toUpperCase() || 'F';
   const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
-    h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
+    h('a', { class: 'rail-mark', href: '#/', title: seller, 'aria-label': seller }),
     h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, h('span', { class: n.nordla ? 'rail-ico official' : 'rail-ico' }, navIcon(n, 'md')), h('span', { class: 'rlabel' }, tr(n.label))))),
     h('button', { class: 'railitem rail-more', type: 'button', title: tt('More'), 'aria-label': tt('More'), on: { click: openMoreSheet } }, svgIcon('chevron', 18), h('span', { class: 'rlabel' }, tt('More'))),
     h('div', { class: 'rail-foot' },

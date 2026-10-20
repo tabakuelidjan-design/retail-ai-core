@@ -2,7 +2,7 @@
 // English - Nordla Growth.
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
-  'gr.brand': 'Nordla AI',
+  'gr.brand': 'Nordla',
   'gr.dash': '—',
   'gr.src.unavailable': 'Data not available',
   'gr.vsPrevious': 'vs previous period',

@@ -135,3 +135,13 @@ test('every module icon the dashboard names resolves to an official file that ex
     assert.ok(existsSync(new URL(`../src/shared/assets/nordla/official-icons/${ICON_FILES[m.icon]}`, import.meta.url)), `${key}: ${ICON_FILES[m.icon]} does not exist`);
   }
 });
+
+test('no provisional brand marks (owner rule 2026-10-19): Finance rail shows the official monogram, not a merchant initial; Growth brand is "Nordla", not "Nordla AI"; the module grid keeps the badge under the text', () => {
+  const rd = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  const fin = rd('../src/finance/ui/app.js'); assert.match(fin, /class: 'rail-mark'[^)]*aria-label': seller \}\)/, 'Finance rail-mark carries no letter');
+  assert.doesNotMatch(fin, /rail-mark.*initial/, 'no initial in the rail mark');
+  assert.match(rd('../src/finance/ui/style.css'), /\.rail-mark \{ background: url\('\/nordla-assets\/brand\/nordla-monogram\.svg'\)/, 'Finance rail uses the official monogram');
+  for (const l of ['fr', 'en', 'nl']) assert.match(rd(`../src/growth/ui/lang-${l}.js`), /'gr\.brand': 'Nordla',/, `Growth brand (${l})`);
+  assert.doesNotMatch(rd('../src/growth/ui/index.html'), /<title>Nordla AI/, 'Growth page title');
+  assert.match(rd('../src/shared/nordla-ds.css'), /\.nd-modules\.is-grid \.nd-module \.nd-badge \{ grid-column: 2;/, 'desktop module cards stack the badge under the text');
+});

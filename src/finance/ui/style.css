@@ -1529,3 +1529,6 @@ body:has(.modal-back) .contact-support { display: none; }
 
 /* Treasury V1: basis chips stay inline inside a metric (observed / calculated / forecast / scenario) */
 .tmetric .chip { display: inline-block; width: auto; margin-left: 6px; }
+
+/* Official Nordla monogram in the rail's brand slot (owner rule 2026-10-19: no provisional merchant-initial mark). Same declaration as .nordla-brand-monogram; >= 32 px on a light ground. */
+.rail-mark { background: url('/nordla-assets/brand/nordla-monogram.svg') center / contain no-repeat; }

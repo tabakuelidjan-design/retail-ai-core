@@ -214,3 +214,11 @@ a.nd-module:hover { border-color: var(--nd-bronze-light); }
 .nd-skel-grid { display: grid; gap: var(--nd-s3); grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); margin-top: var(--nd-s4); }
 .nd-skel-card { background: var(--nd-card); border: var(--nd-line); border-radius: var(--nd-r-md); padding: var(--nd-s4); display: grid; gap: var(--nd-s2); }
 .nd-alert.has-action { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-s3); flex-wrap: wrap; }
+
+/* Desktop / tablet module grid (cards ~220-270 px wide): same stacked layout as on small phones, so the badge never covers the text. */
+.nd-modules.is-grid .nd-module { display: grid; grid-template-columns: 44px minmax(0, 1fr) 16px; column-gap: var(--nd-s3); row-gap: 6px; align-items: start; }
+.nd-modules.is-grid .nd-module-tile { grid-row: 1 / span 2; }
+.nd-modules.is-grid .nd-module-body { grid-column: 2; }
+.nd-modules.is-grid .nd-module .nd-badge { grid-column: 2; justify-self: start; }
+.nd-modules.is-grid .nd-module .nd-chevron { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+.nd-modules.is-grid .nd-module-desc { -webkit-line-clamp: 3; }

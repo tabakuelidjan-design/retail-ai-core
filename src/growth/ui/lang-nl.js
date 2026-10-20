@@ -2,7 +2,7 @@
 // Nederlands - Nordla Growth.
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
-  'gr.brand': 'Nordla AI',
+  'gr.brand': 'Nordla',
   'gr.dash': '—',
   'gr.src.unavailable': 'Gegevens niet beschikbaar',
   'gr.vsPrevious': 'vs vorige periode',
