@@ -30,7 +30,7 @@ const fakeFetch = async (url, opt = {}) => {
     { type: 'google_shopping_serp', title: `${kw} Edition C`, price: 27.5, currency: 'EUR', seller: 'Shop', url: 'https://google.be/search?ibp=oshop&q=a&prds=3' }] }] }] }); }
   throw new Error(`unexpected ${url}`);
 };
-const mkRadar = (env = {}) => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.test', DATAFORSEO_PASSWORD: 'pw-e2e', GOOGLE_VISION_API_KEY: KEY, MARKET_PHOTO_ENABLED: '1', MARKET_MIN_INTERVAL_SEC: '0.001', MARKET_PHOTO_MIN_INTERVAL_SEC: '0.001', MARKET_CACHE_HOURS: '0.0001', ...env }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
+const mkRadar = (env = {}) => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.com', DATAFORSEO_PASSWORD: 'pw-e2e', GOOGLE_VISION_API_KEY: KEY, MARKET_PHOTO_ENABLED: '1', MARKET_MIN_INTERVAL_SEC: '0.001', MARKET_PHOTO_MIN_INTERVAL_SEC: '0.001', MARKET_CACHE_HOURS: '0.0001', ...env }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
 const dirA = mkdtempSync(join(tmpdir(), 'nordla-photo-e2e-')); const dirB = mkdtempSync(join(tmpdir(), 'nordla-photo-e2e-b-'));
 const port = await freePort(); const base = `http://127.0.0.1:${port}`;
 let server = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, port, dir: dirA, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), services: { market: mkRadar() } });

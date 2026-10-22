@@ -2,15 +2,11 @@
 // (the real provider was exercised separately: see docs/MARKET-RADAR.md).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { analyseListings, classifyListing, compareWithSupplier, linkInfo, marketplaceOf, mergeIdentification, queriesFromInput, volumeMl, FLAG } from '../src/sourcing/adapters/market-radar.js';
 import { ProviderError, fetchShoppingListings } from '../src/sourcing/adapters/market-dataforseo.js';
 import { createMarketRadar, RadarError } from '../src/sourcing/server/market-radar-service.js';
-import { startSourcingServer } from '../src/sourcing/server/index.js';
 
-const SECRET = 'S3cr3t-Pa55word-XYZ'; const LOGIN = 'owner@example.test';
+const SECRET = 'S3cr3t-Pa55word-XYZ'; const LOGIN = 'owner@example.com';
 const ENV = { DATAFORSEO_LOGIN: LOGIN, DATAFORSEO_PASSWORD: SECRET };
 const ECB = { date: '2026-10-19', perEur: { USD: 1.1, CNY: 7.8 } };
 const json = (o, status = 200) => ({ ok: status < 400, status, json: async () => o });
@@ -162,21 +158,6 @@ test('adapter: a task still in queue is polled, a refused task is an error', asy
   let g = 0; const f = async (u) => u.endsWith('/locations') ? json({ tasks: [{ result: [{ location_code: 2056, country_iso_code: 'BE' }] }] }) : u.endsWith('/task_post') ? json({ tasks: [{ id: 'z', status_code: 20100, cost: 0.002 }] }) : (++g < 3 ? json({ tasks: [{ status_code: 40602 }] }) : json({ tasks: [{ status_code: 20000, result: [{ items: items({ title: 'X', price: 1, currency: 'EUR', url: 'https://u.example/x' }) }] }] }));
   const r = await fetchShoppingListings({ queries: [{ text: 'x', via: 't' }], login: 'a', password: 'b', fetchImpl: f, pollMs: 1, sleep: async () => {} }); assert.equal(r.listings.length, 1); assert.equal(g, 3);
   await assert.rejects(() => fetchShoppingListings({ queries: [{ text: 'x', via: 't' }], login: 'a', password: 'b', fetchImpl: async (u) => (u.endsWith('/locations') ? json({ tasks: [{ result: [{ location_code: 2056, country_iso_code: 'BE' }] }] }) : json({ tasks: [{ status_code: 40501 }] })), pollMs: 1, sleep: async () => {} }), (e) => e instanceof ProviderError);
-});
-
-// ---------- the HTTP route (real server, fake radar)
-test('HTTP: token required, status and search answer, error codes reach the client, no credential in the body', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nordla-radar-')); const TOKEN = 'radar-token-0123456789-abcdef'; const p = fakeProvider();
-  const market = createMarketRadar({ env: ENV, fetchImpl: p.f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1, now: () => new Date('2026-10-19T12:00:00Z') });
-  const server = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, port: 0, dir, fetchImpl: async () => { throw new Error('no network'); }, services: { market } });
-  const base = `http://127.0.0.1:${server.port}`; const H = { 'x-sourcing-token': TOKEN, 'content-type': 'application/json' };
-  try {
-    assert.equal((await fetch(`${base}/api/market/status`)).status, 401);
-    const st = await (await fetch(`${base}/api/market/status`, { headers: H })).json(); assert.equal(st.enabled, true); assert.equal(st.photoIdentification.enabled, false);
-    const ok = await fetch(`${base}/api/market/search`, { method: 'POST', headers: H, body: JSON.stringify(body()) }); const txt = await ok.text(); assert.equal(ok.status, 200); assert.ok(!txt.includes(SECRET) && !txt.includes(LOGIN)); assert.equal(JSON.parse(txt).listings.length, 3);
-    const bad = await fetch(`${base}/api/market/search`, { method: 'POST', headers: H, body: JSON.stringify({ input: {} }) }); assert.equal(bad.status, 400); assert.equal((await bad.json()).error, 'INVALID_INPUT');
-    const soon = await fetch(`${base}/api/market/search`, { method: 'POST', headers: H, body: JSON.stringify(body({ input: { name: 'Different thing', brand: 'Acme' } })) }); assert.equal(soon.status, 429); assert.ok(soon.headers.get('retry-after'));
-  } finally { await new Promise((r) => server.server.close(r)); rmSync(dir, { recursive: true, force: true }); }
 });
 
 // ---------- calibration on REAL titles (Belgian Google Shopping, 19/10/2026)

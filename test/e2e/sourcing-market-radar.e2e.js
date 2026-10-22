@@ -30,7 +30,7 @@ const fakeFetch = async (url) => {
   throw new Error(`unexpected ${url}`);
 };
 const dirA = mkdtempSync(join(tmpdir(), 'nordla-radar-e2e-')); const dirB = mkdtempSync(join(tmpdir(), 'nordla-radar-e2e-b-'));
-const mkRadar = () => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.test', DATAFORSEO_PASSWORD: SECRET, MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
+const mkRadar = () => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.com', DATAFORSEO_PASSWORD: SECRET, MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
 const port = await freePort(); const base = `http://127.0.0.1:${port}`;
 let server = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, port, dir: dirA, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), services: { market: mkRadar() } });
 const browser = await new Browser(exe, null, process.getuid?.() === 0 ? ['--no-sandbox'] : []).launch();

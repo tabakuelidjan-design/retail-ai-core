@@ -34,7 +34,7 @@ const fakeFetch = async (url) => {
   throw new Error(`unexpected ${url}`);
 };
 const dirA = mkdtempSync(join(tmpdir(), 'nordla-refine-e2e-'));
-const radar = createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.test', DATAFORSEO_PASSWORD: 'e2e-Secret-Pa55', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
+const radar = createMarketRadar({ env: { DATAFORSEO_LOGIN: 'owner@example.com', DATAFORSEO_PASSWORD: 'e2e-Secret-Pa55', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: fakeFetch, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), sleep: async () => {}, pollMs: 1 });
 const port = await freePort(); const base = `http://127.0.0.1:${port}`;
 const server = await startSourcingServer({ env: { SOURCING_TOKEN: TOKEN }, log: () => {}, port, dir: dirA, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ({ date: '2026-10-19', perEur: { USD: 1.1 } }), services: { market: radar } });
 const browser = await new Browser(exe, null, process.getuid?.() === 0 ? ['--no-sandbox'] : []).launch();

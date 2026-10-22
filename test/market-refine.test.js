@@ -124,7 +124,7 @@ test('a search that carries the owner\'s answer (explicit paid action) uses it i
     if (url.endsWith('/appendix/user_data')) return j({ tasks: [{ result: [{ money: { balance: 1 } }] }] }); if (url.endsWith('/locations')) return j({ tasks: [{ result: [{ location_code: 2056, country_iso_code: 'BE' }] }] });
     if (url.endsWith('/products/task_post')) { posted.push(opt.body); return j({ tasks: [{ id: 't1', status_code: 20100, cost: 0.002 }] }); }
     if (url.includes('/task_get/advanced/')) return j({ tasks: [{ status_code: 20000, result: [{ datetime: '2026-10-19 15:02:34 +00:00', items: listings }] }] }); throw new Error(`unexpected ${url}`); };
-  const mkSvc = () => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a@b.test', DATAFORSEO_PASSWORD: 'pw-test-123', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1 });
+  const mkSvc = () => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a@example.com', DATAFORSEO_PASSWORD: 'pw-test-123', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1 });
   const first = await mkSvc().search({ input: { name: BASE.name, brand: 'Stanley' } }); assert.equal(first.question.id, 'capacity'); assert.equal(first.question.options.length, 2);
   const second = await mkSvc().search({ input: { name: BASE.name, brand: 'Stanley' }, confirmed: { capacityMl: 1180 } }); assert.equal(second.question, null);
   assert.match(String(posted.at(-1)), /1\.18L|1,18L|1\.18 ?L/i, 'the confirmed size is part of the new query'); assert.equal(second.listings.filter((x) => x.excludedFromReference).length, 2); assert.equal(second.input.confirmed.capacityMl, 1180);

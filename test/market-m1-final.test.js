@@ -248,7 +248,7 @@ function provider(ls) {
     if (url.endsWith('/products/task_post')) { calls.post += 1; return j({ tasks: [{ id: `t${calls.post}`, status_code: 20100, cost: 0.002 }] }); } if (url.includes('/task_get/advanced/')) return j({ tasks: [{ status_code: 20000, result: [{ datetime: '2026-10-19 15:02:34 +00:00', items: items(ls) }] }] }); throw new Error(`unexpected ${url}`); };
   return { f, calls };
 }
-const svc = (p) => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a@b.test', DATAFORSEO_PASSWORD: 'pw-test-123', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: p.f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1 });
+const svc = (p) => createMarketRadar({ env: { DATAFORSEO_LOGIN: 'a@example.com', DATAFORSEO_PASSWORD: 'pw-test-123', MARKET_MIN_INTERVAL_SEC: '0.001' }, fetchImpl: p.f, ecb: async () => ECB, sleep: async () => {}, pollMs: 1 });
 
 test('service: all 53 real listings are kept in the case (not 40) and re-read by the refine step; the answer chain makes ZERO provider call; an identical search is served from the cache', async () => {
   const p = provider(REAL.map((x) => ({ title: x.title, price: x.price, seller: x.seller }))); const radar = svc(p); const input = { name: 'Hydro Flask', brand: 'Hydro Flask' };
