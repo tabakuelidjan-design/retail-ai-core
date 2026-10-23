@@ -129,3 +129,20 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run sourcing:e2e:reconnect
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-market:
+    # BLOCKING: Market Radar M1 at 390 px (price search, one-tap precision, barcode / photo flow, provisional brand). SIMULATED providers only (fake fetch): no DataForSEO, Vision or other network call, no secret, no credential variable. The *-live suites are never run in CI.
+    name: e2e market radar (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: node test/e2e/sourcing-market-refine.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: node test/e2e/sourcing-market-radar.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: node test/e2e/sourcing-market-photo.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
