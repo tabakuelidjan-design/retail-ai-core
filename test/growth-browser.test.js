@@ -28,6 +28,8 @@ const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGr
 async function serve(opts) {
   const server = http.createServer(createGrowthApp(opts));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  // If browser setup fails before the test enters its try/finally, this server must not keep the whole test file alive.
+  server.unref();
   // closeAllConnections: a keep-alive connection of a browser that has not exited yet would otherwise keep server.close() (and the test file) waiting forever
   return { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) };
 }
@@ -62,7 +64,7 @@ async function browser() {
   try {
     let targets = [];
     let port = null;
-    for (let i = 0; i < 200 && !targets[0]; i += 1) {
+    for (let i = 0; i < 600 && !targets[0]; i += 1) {
       if (proc.exitCode !== null || proc.signalCode !== null) break;
       if (port === null) {
         try {
@@ -80,7 +82,7 @@ async function browser() {
       if (!targets[0]) await sleep(100);
     }
     if (!targets[0]?.webSocketDebuggerUrl) {
-      throw new Error(`Chrome did not expose a page target within 20s (exitCode=${proc.exitCode}, signal=${proc.signalCode}, devtoolsPort=${port ?? 'unavailable'})`);
+      throw new Error(`Chrome did not expose a page target within 60s (exitCode=${proc.exitCode}, signal=${proc.signalCode}, devtoolsPort=${port ?? 'unavailable'})`);
     }
     ws = new WebSocket(targets[0].webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
