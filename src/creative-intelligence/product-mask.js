@@ -250,16 +250,12 @@ export function buildProductMask({ rgba, inner_outline: outline, options = {} } 
   // the model outline, pulled `bias_px` toward the inside (a negative bias): no surrounding pixel leaks into the product
   const model = fitted ? insetPolygon(fitted.polygon, -o.bias_px) : null;
   const boundary = model ?? measured.map((m) => [m.x + m.nx * o.bias_px, m.y + m.ny * o.bias_px]);
-  // Quantize sub-pixel coordinates before coverage rasterization. It is visually negligible (1/256 px)
-  // and prevents floating-point/JIT noise from flipping alpha values at exact coverage thresholds.
-  const grid = 256;
-  const stableBoundary = boundary.map(([x, y]) => [Math.round(x * grid) / grid, Math.round(y * grid) / grid]);
-  const alpha = rasterize(stableBoundary, rgba.width, rgba.height);
-  const xs = stableBoundary.map((p) => p[0]); const ys = stableBoundary.map((p) => p[1]);
+  const alpha = rasterize(boundary, rgba.width, rgba.height);
+  const xs = boundary.map((p) => p[0]); const ys = boundary.map((p) => p[1]);
   const bounds = { x0: Math.max(0, Math.floor(Math.min(...xs))), y0: Math.max(0, Math.floor(Math.min(...ys))), x1: Math.min(rgba.width, Math.ceil(Math.max(...xs))), y1: Math.min(rgba.height, Math.ceil(Math.max(...ys))) };
   const positive = tight.scores.filter((s) => s > 0).length / n;
   return {
-    alpha, width: rgba.width, height: rgba.height, bounds, boundary: stableBoundary,
+    alpha, width: rgba.width, height: rgba.height, bounds, boundary,
     quality: {
       samples: n, median_rim_px: median, rim_px_range: [Math.min(...tight.offsets), Math.max(...tight.offsets)], edge_step_positive_share: positive,
       mean_edge_step: tight.scores.reduce((s, v) => s + v, 0) / n, confident: positive >= o.min_confident_share, min_confident_share: o.min_confident_share,
