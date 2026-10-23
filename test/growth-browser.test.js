@@ -57,7 +57,7 @@ async function browser() {
   const dir = mkdtempSync(path.join(tmpdir(), 'growth-cdp-'));
   // Chrome chooses an unused port and publishes it in this profile's DevToolsActivePort file.
   // This avoids collisions between parallel CI jobs using a guessed port range.
-  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=0', \`--user-data-dir=\${dir}\`, 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
+  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
   let ws = null;
   try {
     let targets = [];
@@ -73,14 +73,14 @@ async function browser() {
       }
       if (port !== null) {
         try {
-          const response = await fetch(\`http://127.0.0.1:\${port}/json\`);
+          const response = await fetch(`http://127.0.0.1:${port}/json`);
           if (response.ok) targets = (await response.json()).filter((t) => t.type === 'page');
         } catch { /* DevTools is not accepting connections yet */ }
       }
       if (!targets[0]) await sleep(100);
     }
     if (!targets[0]?.webSocketDebuggerUrl) {
-      throw new Error(\`Chrome did not expose a page target within 20s (exitCode=\${proc.exitCode}, signal=\${proc.signalCode}, devtoolsPort=\${port ?? 'unavailable'})\`);
+      throw new Error(`Chrome did not expose a page target within 20s (exitCode=${proc.exitCode}, signal=${proc.signalCode}, devtoolsPort=${port ?? 'unavailable'})`);
     }
     ws = new WebSocket(targets[0].webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
@@ -99,12 +99,12 @@ async function browser() {
       errors,
       send,
       // Waits until the page left its loading state (polling, not a fixed delay: the suite runs files in parallel and a busy
-      // machine must not make a test flaky). \`ready: false\` returns as soon as the shell is on screen (to observe loading).
+      // machine must not make a test flaky). `ready: false` returns as soon as the shell is on screen (to observe loading).
       async open(url, width = 1440, height = 900, { ready = true } = {}) {
         await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768 });
         await send('Page.navigate', { url: 'about:blank' });
         await send('Page.navigate', { url });
-        const cond = ready ? \`!!document.querySelector('.ex-title') && !document.querySelector('.gr-state-loading')\` : \`!!document.querySelector('.ex-title')\`;
+        const cond = ready ? `!!document.querySelector('.ex-title') && !document.querySelector('.gr-state-loading')` : `!!document.querySelector('.ex-title')`;
         for (let i = 0; i < 100; i += 1) { if (await b.eval(cond)) break; await sleep(100); }
         await sleep(150);
       },
