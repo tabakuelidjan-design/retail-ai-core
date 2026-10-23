@@ -13,7 +13,10 @@ const DISPATCHER = 'node src/service-start.js';
 
 test('every root deployment config starts the dispatcher - never a specific service program', () => {
   const railway = JSON.parse(read('railway.json')); const railpack = JSON.parse(read('railpack.json'));
-  assert.equal(railway.deploy.startCommand, DISPATCHER); assert.equal(railpack.deploy.startCommand, DISPATCHER);
+  // release/sourcing-staging only: railway.json wraps the dispatcher in the image entrypoint (it hands the root-owned volume to `node`, then execs the dispatcher as `node`).
+  const ENTRYPOINT = '/app/docker-entrypoint.sh';
+  assert.ok([DISPATCHER, `${ENTRYPOINT} ${DISPATCHER}`].includes(railway.deploy.startCommand), railway.deploy.startCommand); assert.equal(railpack.deploy.startCommand, DISPATCHER);
+  if (railway.deploy.startCommand !== DISPATCHER) assert.match(read('deploy/sourcing/Dockerfile'), /COPY deploy\/sourcing\/docker-entrypoint\.sh \/app\/docker-entrypoint\.sh/, 'the entrypoint named by railway.json must be shipped in the image');
   for (const f of ['railway.toml', 'nixpacks.toml', 'Procfile']) assert.equal(existsSync(new URL(f, ROOT)), false, `${f} would be a second, competing start command`);
   for (const cfg of [read('railway.json'), read('railpack.json')]) for (const entry of Object.values(SERVICE_ENTRIES)) assert.ok(!cfg.includes(entry), `a root config names ${entry} directly`);
 });
