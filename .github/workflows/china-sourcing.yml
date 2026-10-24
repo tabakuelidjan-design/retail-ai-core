@@ -3,7 +3,7 @@ name: china-sourcing
 # the ASR bench uses its fake provider and the tunnel e2e is never run.
 on:
   push:
-    branches: ['feature/china-sourcing-**', 'claude/nordla-core-p0']
+    branches: ['feature/china-sourcing-**', 'claude/nordla-core-p0', 'integration/market-radar-m1-on-a0']
     paths: ['src/sourcing/**', 'src/core-pilot/**', 'src/branding/**', 'src/integration/**', 'config/merchants/habb/brand-proposal.json', 'config/merchants/habb/creation.json', 'resources/fonts/**', 'src/creative-intelligence/**', 'src/creative-e2e/asset.js', 'src/buying/sourcing-purchase.js', 'src/socle-decision/**', 'src/integration/router.js', 'test/sourcing-*', 'test/core-pilot*', 'test/core-readers*', 'test/core-modules*', 'test/core-backup-restore*', 'src/finance/**', 'src/analytics-premium/**', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', 'tools/field-v1-mutation.mjs', 'config/merchants/habb/sourcing-fit.json', 'config/merchants/habb/core-decision.json', 'package.json', 'package-lock.json', '.github/workflows/china-sourcing.yml']
   pull_request:
     paths: ['src/sourcing/**', 'src/core-pilot/**', 'test/sourcing-*', 'test/core-pilot*', 'test/core-readers*', 'test/core-modules*', 'test/core-backup-restore*', 'src/finance/**', 'src/analytics-premium/**', 'test/e2e/**', 'tools/voice-bench/**', 'tools/asr-bench/**', '.github/workflows/china-sourcing.yml']
@@ -128,4 +128,21 @@ jobs:
         with: { node-version: 24 }
       - run: npm ci --no-audit --no-fund
       - run: npm run sourcing:e2e:reconnect
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+
+  e2e-market:
+    # BLOCKING: Market Radar M1 at 390 px (price search, one-tap precision, barcode / photo flow, provisional brand). SIMULATED providers only (fake fetch): no DataForSEO, Vision or other network call, no secret, no credential variable. The *-live suites are never run in CI.
+    name: e2e market radar (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --no-audit --no-fund
+      - run: node test/e2e/sourcing-market-refine.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: node test/e2e/sourcing-market-radar.e2e.js
+        env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
+      - run: node test/e2e/sourcing-market-photo.e2e.js
         env: { SOURCING_E2E_BROWSER: /usr/bin/google-chrome }
