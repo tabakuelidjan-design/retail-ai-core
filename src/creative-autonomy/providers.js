@@ -1,60 +1,77 @@
-// WHICH ENGINES ARE REALLY CONNECTED. Nordla never pretends: a port exists only if its provider is configured in the environment. When it is not, the port is
-// null and the run stops honestly at the first stage that needs it (PROVIDER_NOT_CONNECTED). There is no silent fallback to a fake, a template or a human.
+// WHICH ENGINES ARE REALLY CONNECTED. Nordla never pretends: a port exists only if its provider is configured in the environment AND the owner's trial
+// authorisation is present. When it is not, the port is null and the run stops honestly at the first stage that needs it (PROVIDER_NOT_CONNECTED).
+// There is no silent fallback to a fake, a template or a human.
 //
-// Text (FRAME, IDEATE, ART_DIRECT, STAGE): Alibaba Model Studio, Frankfurt lane, qwen3.8-max, through the existing createQwenBrainPort (bounded calls, bounded cost).
-// Vision (concept critic): the same provider's vision lane, through createQwenVisionPort; it ALSO needs the owner's scoped authorization to send the rendered images
-// (NORDLA_MEDIA_AUTHORIZATION_FILE): without it the critic is NOT_CONNECTED even when the key exists.
-// Local engines (examination, Blender scene, compositor) cost nothing and are always real.
+// Everything below REUSES the Alibaba lane as it is: createQwenBrainPort (bounded calls), createQwenVisionPort (scoped media clearance per image),
+// SpendGuard (worst-case reservation BEFORE every call, BUDGET_EXCEEDED refusal), JsonlCallJournal (every call recorded, no secret).
+// Vision clearance: ONE owner record for the product photo (transmissible: the source AND images derived from it, for this purpose only); each render then
+// gets its own clearance bound to its exact bytes through deriveCandidateAuthorization. Without that record the critic stays NOT_CONNECTED.
 import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { loadAlibabaCreativeConfig } from '../marketing-creative/alibaba/config.js';
 import { createQwenBrainPort } from '../marketing-creative/alibaba/qwen-brain-port.js';
-import { createQwenVisionPort } from '../marketing-creative/alibaba/qwen-vision.js';
+import { createQwenVisionPort, deriveCandidateAuthorization } from '../marketing-creative/alibaba/qwen-vision.js';
 import { SpendGuard } from '../marketing-creative/alibaba/budget.js';
+import { modelAllowedInScope, SCOPE } from './trial.js';
 
 export const PROVIDER_STATE = Object.freeze({ REAL: 'REAL', TEST_DOUBLE: 'TEST_DOUBLE', NOT_CONNECTED: 'NOT_CONNECTED', NONE: 'NONE' });
+export const VISION_PURPOSE = 'NORDLA_CREATIVE_CRITIQUE';
 
 /** What the owner must authorise before Nordla can think on its own. Shown verbatim in every trace that stops for lack of a provider. */
 export const WHAT_IS_NEEDED = Object.freeze({
   text: {
-    provider: 'Alibaba Cloud Model Studio (région eu-central-1, Francfort)',
-    model: 'qwen3.8-max',
-    env: ['ALIBABA_MODEL_STUDIO_API_KEY', 'ALIBABA_MODEL_STUDIO_WORKSPACE_ID'],
+    provider: 'Alibaba Cloud Model Studio, région Allemagne (Francfort), espace de travail en périmètre EU',
+    model: 'qwen3-vl-plus (texte + image, périmètre EU) ; qwen3.8-max n\'existe à Francfort qu\'en périmètre Global',
+    env: ['ALIBABA_MODEL_STUDIO_API_KEY', 'ALIBABA_MODEL_STUDIO_WORKSPACE_ID', 'ALIBABA_QWEN_TEXT_MODEL', 'NORDLA_ALIBABA_SCOPE', 'NORDLA_TRIAL_AUTHORIZATION'],
     why: 'FRAME, IDEATE, ART_DIRECT et STAGE sont des décisions de langage : sans modèle, aucune idée ne peut naître de Nordla.',
-    cost: 'environ 2 $ / M jetons en entrée, 6 $ / M en sortie ; un passage complet (3 concepts, 1 révision chacun) ≈ 12 appels ≈ 0,15 € à 0,30 € ; quota gratuit de 1 M jetons pendant 90 jours sur un compte neuf',
-    authorisation: 'clé API déposée dans le coffre des connexions fournisseur + plafond de dépense par passage (proposé : 1,50 €)',
+    cost: 'voir le plan d\'essai (scripts/creative-autonomy-trial.mjs --plan) ; plafond dur 1,50 € par essai ; aucun quota gratuit à Francfort',
+    authorisation: 'clé API d\'un espace EU + autorisation d\'essai liée au plan + plafond',
   },
   vision: {
-    provider: 'même fournisseur, voie vision',
-    env: ['ALIBABA_MODEL_STUDIO_API_KEY', 'NORDLA_MEDIA_AUTHORIZATION_FILE'],
+    provider: 'même fournisseur, même modèle multimodal',
+    env: ['NORDLA_MEDIA_AUTHORIZATION_FILE'],
     why: 'juger la force du concept sur l\'image rendue (6 dimensions) et donner des indices de révision ; les contrôles techniques restent locaux',
-    cost: '≈ 3 000 jetons par image ; 3 à 6 images par passage ≈ 0,05 € à 0,15 €',
-    authorisation: 'consentement écrit du propriétaire pour envoyer les rendus (qui contiennent la photo produit) au fournisseur, limité à cet usage',
+    authorisation: 'consentement du propriétaire pour envoyer la photo produit ET les rendus qui en dérivent, pour cette seule critique (rétention standard ≤ 30 jours, pas de ZDR)',
   },
 });
 
+const sha = (b) => createHash('sha256').update(b).digest('hex');
+
 /**
- * @param {object} o { env, maxSpendEur, maxTextCalls, maxVisionCalls }
- * @returns {{ text: Function|null, vision: object|null, state: { text, vision }, budget: SpendGuard|null, missing: string[] }}
+ * @param {object} o { env, maxSpendEur, maxTextCalls, maxVisionCalls, journal, sourcePhotoBytes, fetchImpl, trialAuthorized }
+ *   trialAuthorized: the caller has verified the owner's authorisation for THIS plan; without it nothing is connected, even with a key.
  */
-export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxTextCalls = 16, maxVisionCalls = 6, fetchImpl = globalThis.fetch } = {}) {
+export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxTextCalls = 20, maxVisionCalls = 6, journal = null, sourcePhotoBytes = null, fetchImpl = globalThis.fetch, trialAuthorized = false, budget: sharedBudget = null } = {}) {
   const missing = [];
   let config = null;
-  try { config = loadAlibabaCreativeConfig(env); } catch (error) { missing.push(`configuration Alibaba invalide : ${error.message}`); }
-  const hasKey = Boolean(config?.apiKey && config?.workspaceId);
-  if (!hasKey) missing.push('ALIBABA_MODEL_STUDIO_API_KEY / ALIBABA_MODEL_STUDIO_WORKSPACE_ID absents');
-  const budget = hasKey ? new SpendGuard({ maxSpendEur, maxImages: 0, maxVideoSeconds: 0 }) : null;
-  const text = hasKey ? createQwenBrainPort({ config, budget, maxCalls: maxTextCalls, fetchImpl }) : null;
+  try { config = loadAlibabaCreativeConfig(env); } catch (error) { missing.push(`configuration Alibaba refusée : ${error.message}`); }
+  const scope = env.NORDLA_ALIBABA_SCOPE ?? null;
+  if (!(config?.apiKey && config?.workspaceId)) missing.push('ALIBABA_MODEL_STUDIO_API_KEY / ALIBABA_MODEL_STUDIO_WORKSPACE_ID absents');
+  if (!Object.values(SCOPE).includes(scope)) missing.push('NORDLA_ALIBABA_SCOPE (EU ou GLOBAL : le périmètre de l\'espace de travail) non déclaré');
+  else if (config && !modelAllowedInScope(config.textModel, scope)) missing.push(`le modèle ${config.textModel} n'est pas disponible en périmètre ${scope} à Francfort`);
+  if (!trialAuthorized) missing.push('autorisation d\'essai du propriétaire absente : aucun appel payant');
+  const ready = missing.length === 0;
 
-  let vision = null;
+  const budget = ready ? (sharedBudget ?? new SpendGuard({ maxSpendEur, maxImages: 0, maxVideoSeconds: 0 })) : null;
+  const text = ready ? createQwenBrainPort({ config, budget, journal, maxCalls: maxTextCalls, fetchImpl }) : null;
+
+  let visionFor = null;
   const authFile = env.NORDLA_MEDIA_AUTHORIZATION_FILE;
-  if (hasKey && authFile && existsSync(authFile)) {
-    const authorization = JSON.parse(readFileSync(authFile, 'utf8'));
-    vision = createQwenVisionPort({ config, budget, authorization, purpose: 'CREATIVE_CRITIQUE', assetRefFor: (sha) => `asset://nordla/render/${sha.slice(0, 16)}`, maxCalls: maxVisionCalls, fetchImpl });
-  } else if (hasKey) missing.push('NORDLA_MEDIA_AUTHORIZATION_FILE absent : le critique visuel ne peut pas envoyer les rendus');
+  if (ready && authFile && existsSync(authFile) && sourcePhotoBytes) {
+    const source = JSON.parse(readFileSync(authFile, 'utf8'));
+    const sourceSha = sha(sourcePhotoBytes);
+    let visionCalls = 0;
+    visionFor = ({ ref, bytes }) => {
+      if (visionCalls >= maxVisionCalls) return null;
+      visionCalls += 1;
+      const authorization = deriveCandidateAuthorization({ authorization: source, source_asset_sha256: sourceSha, candidate_ref: ref, candidate_sha256: sha(bytes) });
+      return createQwenVisionPort({ config, budget, journal, authorization, purpose: VISION_PURPOSE, assetRefFor: () => ref, maxCalls: 1, fetchImpl });
+    };
+  } else if (ready) missing.push('NORDLA_MEDIA_AUTHORIZATION_FILE absent : le critique visuel ne peut rien envoyer');
 
   return {
-    text, vision, budget, missing,
-    state: { text: text ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED, vision: vision ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED },
+    text, visionFor, vision: null, budget, missing, scope,
+    state: { text: text ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED, vision: visionFor ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED },
     model: { text: config?.textModel ?? null, vision: config?.textModel ?? null },
   };
 }

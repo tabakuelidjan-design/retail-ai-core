@@ -223,10 +223,15 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
           return { outcome: r.technical.defects.length ? 'DEFECTS' : 'CLEAN', detail: { defects: r.technical.defects, fidelity_max_levels: r.fidelity.max_level_difference_after_removing_layers }, value: r };
         });
         const criticRec = { step: 'CRITIC', concept_id: cid, round, component: 'createConceptCritic', module: 'src/creative-brain/concept-critic.js', kind: KIND.VISION };
-        if (critic) {
+        // a static critic (tests) or one built per image from the owner's clearance of the source photo (real lane)
+        const candidateRef = `render://${cid}/${tag}`;
+        const png = (critic || ports.visionFor) ? readFileSync(imagePath) : null;
+        const perImage = !critic && ports.visionFor ? ports.visionFor({ ref: candidateRef, bytes: png }) : null;
+        const activeCritic = critic ?? (perImage ? createConceptCritic({ vlm: perImage }) : null);
+        if (activeCritic) {
           critique = await step({ ...criticRec, provider: visionProvider }, async () => {
-            const png = readFileSync(imagePath);
-            const { critique: c, provenance } = await critic.critique({ candidate: { ref: `render://${cid}/${tag}`, png_bytes: png }, brief: { public_facts: brief.public_facts } });
+            const { critique: c, provenance } = await activeCritic.critique({ candidate: { ref: candidateRef, png_bytes: png }, brief: { public_facts: brief.public_facts } });
+            if (provenance.failure || provenance.rejected) return { outcome: 'NOT_MEASURABLE', detail: provenance, value: c };
             lastCost = provenance.cost_eur ?? 0; lastModel = provenance.model ?? null; textCost += lastCost;
             return { outcome: c.dimensions.some(flagged) ? 'REVISION_ASKED' : 'NO_REVISION_ASKED', detail: c.dimensions, value: c };
           });

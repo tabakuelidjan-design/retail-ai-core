@@ -172,3 +172,48 @@ test('local engines really run on a real photo (examination, Blender scene, comp
     assert.ok(p.technical_quality.product_fidelity.max_level_difference_after_removing_layers <= 2, 'the product pixels come back intact once the light layers are removed');
   }
 });
+
+// ---- the first real trial: prepared, gated, never run by the tests
+import { trialPlanId, forecastCost, modelAllowedInScope, TRIAL_LIMITS, RECOMMENDED } from '../src/creative-autonomy/trial.js';
+
+const KEYED = { ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-0000000000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-0001' };
+
+test('trial gate: a key alone connects nothing; the owner\'s trial authorisation is required', () => {
+  const p = connectProviders({ env: { ...KEYED, NORDLA_ALIBABA_SCOPE: 'GLOBAL' } });
+  assert.equal(p.text, null);
+  assert.match(p.missing.join(' '), /autorisation d'essai/);
+});
+
+test('trial gate: qwen3.8-max is refused in an EU workspace (Frankfurt serves it in GLOBAL scope only)', () => {
+  assert.equal(modelAllowedInScope('qwen3.8-max', 'EU'), false);
+  assert.equal(modelAllowedInScope('qwen3-vl-plus', 'EU'), true);
+  const p = connectProviders({ env: { ...KEYED, NORDLA_ALIBABA_SCOPE: 'EU' }, trialAuthorized: true });
+  assert.equal(p.text, null);
+  assert.match(p.missing.join(' '), /qwen3\.8-max n'est pas disponible en périmètre EU/);
+});
+
+test('trial gate: the recommended model is still refused until the Alibaba lane allow-list accepts it (no silent widening)', () => {
+  const p = connectProviders({ env: { ...KEYED, ALIBABA_QWEN_TEXT_MODEL: RECOMMENDED.model, NORDLA_ALIBABA_SCOPE: 'EU' }, trialAuthorized: true });
+  assert.equal(p.text, null);
+  assert.match(p.missing.join(' '), /configuration Alibaba refusée/);
+});
+
+test('trial plan: the authorisation is bound to model, scope and limits; the forecast stays under the hard ceiling', () => {
+  const a = trialPlanId({ model: 'qwen3-vl-plus', scope: 'EU' });
+  assert.notEqual(a, trialPlanId({ model: 'qwen3-vl-plus', scope: 'GLOBAL' }));
+  assert.notEqual(a, trialPlanId({ model: 'qwen3-vl-plus', scope: 'EU', limits: { ...TRIAL_LIMITS, max_spend_eur: 3 } }));
+  const f = forecastCost({ model: 'qwen3-vl-plus', calls: [{ kind: 'TEXT', input_chars: 20000, expected_output_chars: 3000 }, { kind: 'VISION', input_chars: 4000, expected_output_chars: 2400, images: 1 }] });
+  assert.ok(f.expected_eur > 0 && f.worst_case_eur >= f.expected_eur && f.spendguard_reserved_eur >= f.worst_case_eur);
+  assert.ok(f.spendguard_reserved_eur * 20 < TRIAL_LIMITS.max_spend_eur * 20);
+});
+
+test('per-image critic: a render is critiqued only through a clearance built for its own bytes', async () => {
+  const DIMS = ['CONCEPT_STRENGTH', 'NARRATIVE_COHESION', 'EMOTIONAL_RESONANCE', 'EDITORIAL_SOPHISTICATION', 'DISTINCTIVENESS', 'WOW_FACTOR'];
+  const asked = [];
+  const visionFor = ({ ref, bytes }) => { asked.push({ ref, n: bytes.length }); return { invoke: async () => ({ model: 'TEST_DOUBLE', cost_eur: 0, text: JSON.stringify({ dimensions: DIMS.map((dimension) => ({ dimension, outcome: 'PASS', evidence: 'The image carries this dimension clearly enough for a first look.' })) }) }) }; };
+  const r = await runAutonomous({ input: input(GOURDE, { variantTitle: 'Noir' }), ports: { text: doublePort().complete, visionFor, state: { text: 'TEST_DOUBLE', vision: 'TEST_DOUBLE' } }, engines: fakeEngines(), workdir: mkdtempSync(join(tmpdir(), 'na-')) });
+  assert.equal(r.status, RUN_STATUS.PROPOSALS_READY_FOR_OWNER);
+  assert.equal(asked.length, 3);
+  assert.ok(asked.every((a) => a.ref.startsWith('render://') && a.n > 0));
+  assert.ok(r.proposals.every((p) => p.creative_quality.state === 'CREATIVELY_SUFFICIENT_AWAITING_OWNER' && p.status === 'PROPOSED_FOR_OWNER_VALIDATION'));
+});
