@@ -192,10 +192,13 @@ test('trial gate: qwen3.8-max is refused in an EU workspace (Frankfurt serves it
   assert.match(p.missing.join(' '), /qwen3\.8-max n'est pas disponible en périmètre EU/);
 });
 
-test('trial gate: the recommended model is still refused until the Alibaba lane allow-list accepts it (no silent widening)', () => {
-  const p = connectProviders({ env: { ...KEYED, ALIBABA_QWEN_TEXT_MODEL: RECOMMENDED.model, NORDLA_ALIBABA_SCOPE: 'EU' }, trialAuthorized: true });
-  assert.equal(p.text, null);
-  assert.match(p.missing.join(' '), /configuration Alibaba refusée/);
+test('trial gate: the recommended model connects only with an EU scope declared AND the trial authorisation', () => {
+  const env = { ...KEYED, ALIBABA_QWEN_TEXT_MODEL: RECOMMENDED.model, NORDLA_ALIBABA_SCOPE: 'EU' };
+  assert.equal(connectProviders({ env }).text, null);
+  assert.equal(connectProviders({ env: { ...env, NORDLA_ALIBABA_SCOPE: undefined } , trialAuthorized: true }).text, null);
+  const p = connectProviders({ env, trialAuthorized: true });
+  assert.equal(typeof p.text, 'function');
+  assert.equal(p.model.text, 'qwen3-vl-plus');
 });
 
 test('trial plan: the authorisation is bound to model, scope and limits; the forecast stays under the hard ceiling', () => {

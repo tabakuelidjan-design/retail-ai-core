@@ -1,15 +1,22 @@
-// THE FIRST REAL TRIAL OF NORDLA'S CREATIVE AUTONOMY. Two products, one model, one hard ceiling, one attempt.
+// THE FIRST REAL TRIAL OF NORDLA'S CREATIVE AUTONOMY: one product, one model, one hard ceiling, one attempt.
 //
-//   node scripts/creative-autonomy-trial.mjs --plan    <outDir> <bottlePhoto> <casePhoto>   (default: no network, no cost)
-//   node scripts/creative-autonomy-trial.mjs --execute <outDir> <bottlePhoto> <casePhoto>   (refused unless NORDLA_TRIAL_AUTHORIZATION equals the plan id)
+//   node scripts/creative-autonomy-trial.mjs --plan    --out <dir> --product gourde-noire --photo <file>     (no network, no cost)
+//   node scripts/creative-autonomy-trial.mjs --execute --out <dir> --product gourde-noire --photo <file>     (refused unless every gate below passes)
 //
-// --plan    checks the environment WITHOUT printing any secret, measures the real size of every Brain call with a SIZING double (generic test content, never shown
-//           as a proposal), prices them for the chosen model and prints the plan id the owner must authorise.
-// --execute takes the one-attempt lock, asks the provider's FREE model list whether the model is served to this workspace, then runs both products under ONE
-//           SpendGuard of 1.50 EUR shared by every call (worst case reserved before each call; BUDGET_EXCEEDED stops the run), with every call journalled.
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
-import { join } from 'node:path';
+// Gates for --execute: the key from the environment or from a secrets file OUTSIDE any git work tree with mode 600 (never printed, never written);
+// NORDLA_TRIAL_AUTHORIZATION equal to the plan id (bound to model, scope, region, limits, product and the photo's SHA-256); NORDLA_PHOTO_RIGHTS=OWNER_CONFIRMED;
+// output folder outside any git work tree; the one-attempt lock; the provider's free model list showing the model. Then ONE SpendGuard of 1.50 EUR for every call.
+//
+// Three money figures are kept apart:
+//   ESTIMATE   the forecast below, at the model's list price, from measured prompt sizes
+//   CEILING    the application cap: the SpendGuard reserves each call's worst case BEFORE sending it and refuses past 1.50 EUR. It prices every call at the
+//              qwen3.8-max rate with USD = EUR, so its ledger runs HIGHER than the real cost: it is a safety ledger, not a bill
+//   USAGE      after the run: the tokens Alibaba reports in each response, priced at the qwen3-vl-plus list price. The INVOICE itself is only in the Alibaba
+//              console (Billing), which this script cannot read: it is the one figure to check by hand
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, statSync, existsSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders } from '../src/creative-autonomy/providers.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
@@ -23,40 +30,74 @@ import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 // SIZING ONLY: generic invented answers of the test world, used to measure prompt sizes. They never reach the owner.
 import { frameAnswer, CONCEPTS, artDirectionAnswer } from '../test/creative-brain-world.js';
 
-const [mode = '--plan', outDir = mkdtempSync(join(tmpdir(), 'nordla-trial-')), bottlePhoto, casePhoto] = process.argv.slice(2);
-mkdirSync(outDir, { recursive: true });
+const argv = process.argv.slice(2);
+const mode = argv.includes('--execute') ? 'execute' : 'plan';
+const arg = (k, d = null) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
+const outDir = resolve(arg('out', mkdtempSync(join(tmpdir(), 'nordla-trial-'))));
+const productKey = arg('product', 'gourde-noire');
+const photoPath = arg('photo');
 const snap = (f) => JSON.parse(readFileSync(new URL(`../test/fixtures/creative-autonomy/${f}`, import.meta.url), 'utf8'));
-const PRODUCTS = [
-  { key: 'gourde-noire', snap: snap('shopify-gourde-tyeso.json'), variant: 'Noir', photo: bottlePhoto, objective: 'Écouler les 7 gourdes noires en stock avant fin novembre, en boutique et en ligne' },
-  { key: 'coque-iphone12', snap: snap('shopify-coque-iphone12.json'), variant: null, photo: casePhoto, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
-];
-const inputFor = (p) => ({ product: p.snap.product, variantTitle: p.variant, readAt: p.snap.read_at, objective: p.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: p.photo,
-  photoMeta: { media_type: p.photo?.endsWith('.png') ? 'image/png' : 'image/jpeg', width_px: null, height_px: null, origin: 'MERCHANT_UPLOAD', rights_class: 'MERCHANT_OWNED' } });
+const CATALOG = {
+  'gourde-noire': { snap: 'shopify-gourde-tyeso.json', variant: 'Noir', objective: 'Écouler les 7 gourdes noires en stock avant fin novembre, en boutique et en ligne' },
+  'coque-iphone12': { snap: 'shopify-coque-iphone12.json', variant: null, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
+};
+if (!CATALOG[productKey]) throw new Error(`unknown product ${productKey}`);
+if (!photoPath || !existsSync(photoPath)) throw new Error('--photo <file> is required');
+const P = { key: productKey, ...CATALOG[productKey], snap: snap(CATALOG[productKey].snap) };
+const photoBytes = readFileSync(photoPath);
+const photoSha = createHash('sha256').update(photoBytes).digest('hex');
 
-const env = process.env;
-const model = env.ALIBABA_QWEN_TEXT_MODEL || RECOMMENDED.model;
-const scope = env.NORDLA_ALIBABA_SCOPE || RECOMMENDED.scope;
-const planId = trialPlanId({ model, scope });
+// ---- secrets: from the environment, or from a file outside any git work tree with mode 600. Values are never printed or written.
+function insideGitWorkTree(p) { let d = resolve(p); for (;;) { if (existsSync(join(d, '.git'))) return d; const up = dirname(d); if (up === d) return null; d = up; } }
+function loadSecrets() {
+  const file = process.env.NORDLA_ALIBABA_SECRETS_FILE;
+  if (!file) return { source: process.env.ALIBABA_MODEL_STUDIO_API_KEY ? 'environment' : 'none', values: {} };
+  const problems = [];
+  if (!existsSync(file)) problems.push('fichier de secrets introuvable');
+  else {
+    if (insideGitWorkTree(file)) problems.push('le fichier de secrets est dans un dépôt git : refusé');
+    if ((statSync(file).mode & 0o077) !== 0) problems.push('le fichier de secrets est lisible par d\'autres que toi (chmod 600 requis)');
+  }
+  if (problems.length) return { source: 'file', values: {}, problems };
+  const values = {};
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const m = /^\s*(ALIBABA_MODEL_STUDIO_API_KEY|ALIBABA_MODEL_STUDIO_WORKSPACE_ID)\s*=\s*(\S+)\s*$/.exec(line);
+    if (m) values[m[1]] = m[2];
+  }
+  return { source: 'file', values };
+}
+const secrets = loadSecrets();
+const env = { ...process.env, ...secrets.values, ALIBABA_QWEN_TEXT_MODEL: process.env.ALIBABA_QWEN_TEXT_MODEL || RECOMMENDED.model, NORDLA_ALIBABA_SCOPE: process.env.NORDLA_ALIBABA_SCOPE || RECOMMENDED.scope };
+const model = env.ALIBABA_QWEN_TEXT_MODEL;
+const scope = env.NORDLA_ALIBABA_SCOPE;
+const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
+const limits = { ...TRIAL_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha };
+const planId = trialPlanId({ model, scope, limits });
 
-// ---- preflight: no secret is ever printed, only presence
+const inputFor = () => ({ product: P.snap.product, variantTitle: P.variant, readAt: P.snap.read_at, objective: P.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath,
+  photoMeta: { media_type: photoPath.endsWith('.png') ? 'image/png' : 'image/jpeg', width_px: null, height_px: null, origin: 'SUPPLIER_IMAGE_OR_UNKNOWN', rights_class: rights === 'OWNER_CONFIRMED' ? 'LICENSED' : 'UNKNOWN' } });
+
+// ---- preflight: presence only, never values
 function preflight() {
   const checks = [];
   const ok = (name, pass, detail) => checks.push({ name, pass, detail });
-  ok('clé API présente', Boolean(env.ALIBABA_MODEL_STUDIO_API_KEY), env.ALIBABA_MODEL_STUDIO_API_KEY ? 'présente (non affichée)' : 'absente');
-  ok('workspace présent', Boolean(env.ALIBABA_MODEL_STUDIO_WORKSPACE_ID), env.ALIBABA_MODEL_STUDIO_WORKSPACE_ID ? 'présent' : 'absent');
-  ok('région Francfort', (env.ALIBABA_MODEL_STUDIO_REGION || 'eu-central-1') === 'eu-central-1', env.ALIBABA_MODEL_STUDIO_REGION || 'eu-central-1');
-  ok(`modèle ${model} servi en périmètre ${scope}`, modelAllowedInScope(model, scope), FRANKFURT_CATALOGUE.models[model]?.note ?? 'modèle inconnu du catalogue');
-  let cfgError = null; try { loadAlibabaCreativeConfig({ ...env, ALIBABA_QWEN_TEXT_MODEL: model }); } catch (e) { cfgError = e.message; }
-  ok('modèle accepté par la configuration du lane Alibaba', !cfgError, cfgError ?? 'accepté');
+  ok('clé API', Boolean(env.ALIBABA_MODEL_STUDIO_API_KEY), env.ALIBABA_MODEL_STUDIO_API_KEY ? `présente (${secrets.source}, non affichée)` : 'absente');
+  ok('workspace Francfort', Boolean(env.ALIBABA_MODEL_STUDIO_WORKSPACE_ID), env.ALIBABA_MODEL_STUDIO_WORKSPACE_ID ? 'présent' : 'absent');
+  for (const p of secrets.problems ?? []) ok('fichier de secrets', false, p);
+  ok('région', (env.ALIBABA_MODEL_STUDIO_REGION || 'eu-central-1') === 'eu-central-1', env.ALIBABA_MODEL_STUDIO_REGION || 'eu-central-1');
+  ok(`${model} servi en périmètre ${scope} à Francfort`, modelAllowedInScope(model, scope), FRANKFURT_CATALOGUE.models[model]?.note ?? 'modèle inconnu du catalogue');
+  let cfgError = null; try { loadAlibabaCreativeConfig(env); } catch (e) { cfgError = e.message; }
+  ok('modèle accepté par le lane Alibaba', !cfgError, cfgError ?? 'accepté');
+  ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
   ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
+  ok('dossier de sortie hors dépôt git', !insideGitWorkTree(outDir), insideGitWorkTree(outDir) ? 'refusé : les traces ne doivent pas finir dans GitHub' : 'ok');
   ok('autorisation d\'essai pour CE plan', env.NORDLA_TRIAL_AUTHORIZATION === planId, env.NORDLA_TRIAL_AUTHORIZATION ? (env.NORDLA_TRIAL_AUTHORIZATION === planId ? 'conforme' : 'ne correspond pas au plan') : 'absente');
   return checks;
 }
 
 // ---- sizing: the real instructions of a full run, measured (no network)
-async function sizing(p) {
+async function sizing() {
   const calls = [];
-  const concepts = normalizeConceptSet(CONCEPTS);
   const complete = async ({ system, user }) => {
     const stage = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('art director') ? 'ART_DIRECT' : 'STAGE';
     const c = stage === 'ART_DIRECT' || stage === 'STAGE' ? JSON.parse(user).concept : null;
@@ -71,45 +112,65 @@ async function sizing(p) {
     examine: async () => ({ status: 'CUT_OUT' }), render: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { resolution: [1, 1], foreground_props: 0 }; },
     compose: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { fidelity: { max_level_difference_after_removing_layers: 0 }, technical: { defects: [], text_contrast_ratio: 21, product_height_share: 0.5 }, text_used: { facts_lines: [] } }; } };
   const tmpPhoto = join(mkdtempSync(join(tmpdir(), 'sz-')), 'p.jpg'); writeFileSync(tmpPhoto, 'sizing');
-  await runAutonomous({ input: { ...inputFor(p), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
-  // the run itself does one STAGE per concept; a real run may add up to 2 refinements per concept: priced as STAGE re-asks
+  await runAutonomous({ input: { ...inputFor(), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
   const stageCall = calls.find((c) => c.stage === 'STAGE');
-  for (let i = 0; i < concepts.length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
+  for (let i = 0; i < normalizeConceptSet(CONCEPTS).length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
   const critic = buildConceptCriticInstruction({ brief: {} });
+  // a 540 x 675 render is about 360 image tokens (1 per 32 x 32 px); 1 000 are counted
   for (let i = 0; i < TRIAL_LIMITS.max_vision_calls_per_product; i += 1) calls.push({ kind: 'VISION', stage: 'CRITIC', input_chars: critic.system.length + critic.user.length + 400, expected_output_chars: 2400, images: 1 });
   return calls;
 }
 
 const checks = preflight();
-const perProduct = [];
-for (const p of PRODUCTS) { const calls = await sizing(p); perProduct.push({ product: p.key, calls: calls.length, by_stage: calls.reduce((a, c) => ({ ...a, [c.stage]: (a[c.stage] ?? 0) + 1 }), {}), forecast: forecastCost({ calls, model }) }); }
-const total = perProduct.reduce((a, p) => ({ expected_eur: a.expected_eur + p.forecast.expected_eur, worst_case_eur: a.worst_case_eur + p.forecast.worst_case_eur, spendguard_reserved_eur: a.spendguard_reserved_eur + p.forecast.spendguard_reserved_eur }), { expected_eur: 0, worst_case_eur: 0, spendguard_reserved_eur: 0 });
-const plan = { plan_id: planId, model, scope, region: 'eu-central-1', limits: TRIAL_LIMITS, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks, per_product: perProduct, total: Object.fromEntries(Object.entries(total).map(([k, v]) => [k, Math.round(v * 10000) / 10000])), hard_ceiling_eur: TRIAL_LIMITS.max_spend_eur };
-writeFileSync(join(outDir, `${planId}.plan.json`), JSON.stringify(plan, null, 1));
+const calls = await sizing();
+const forecast = forecastCost({ calls, model, imageTokens: 1000 });
+// the vision port books 3 000 image tokens per image: the ledger figure uses the same rule
+const ledger = forecastCost({ calls, model, imageTokens: 3000 });
+const plan = {
+  plan_id: planId, product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
+  limits, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks,
+  calls_by_stage: calls.reduce((a, c) => ({ ...a, [c.stage]: (a[c.stage] ?? 0) + 1 }), {}),
+  money: {
+    ESTIMATE_expected_eur: forecast.expected_eur,
+    ESTIMATE_worst_case_eur: forecast.worst_case_eur,
+    CEILING_application_eur: TRIAL_LIMITS.max_spend_eur,
+    CEILING_ledger_max_reserved_eur: ledger.spendguard_reserved_eur,
+    USAGE_and_INVOICE: 'après l\'essai seulement : usage déclaré par Alibaba dans chaque réponse (calculé par ce script) ; facture réelle dans la console Alibaba, à vérifier à la main',
+  },
+};
+if (mode === 'plan') { mkdirSync(outDir, { recursive: true }); writeFileSync(join(outDir, `${planId}.plan.json`), JSON.stringify(plan, null, 1)); console.log(JSON.stringify(plan, null, 1)); process.exit(0); }
 
-if (mode !== '--execute') { console.log(JSON.stringify(plan, null, 1)); process.exit(0); }
-
-// ================= EXECUTE: only with the owner's authorisation of THIS plan =================
-const failed = checks.filter((c) => !c.pass && !/autorisation média/.test(c.name));
+// ================= EXECUTE =================
+const failed = checks.filter((c) => !c.pass && c.name !== 'autorisation média (photo + rendus dérivés)');
 if (failed.length) { console.error(JSON.stringify({ refused: 'PREFLIGHT_FAILED', failed }, null, 1)); process.exit(2); }
-await takeLiveCallLock(join(outDir, `${planId}.lock`)); // one attempt; never released by code
-const journal = new JsonlCallJournal(join(outDir, `${planId}.calls.jsonl`));
+mkdirSync(outDir, { recursive: true });
+writeFileSync(join(outDir, `${planId}.plan.json`), JSON.stringify(plan, null, 1));
+await takeLiveCallLock(join(outDir, `${planId}.lock`));
+const journalPath = join(outDir, `${planId}.calls.jsonl`);
+const journal = new JsonlCallJournal(journalPath);
 const budget = new SpendGuard({ maxSpendEur: TRIAL_LIMITS.max_spend_eur, maxImages: 0, maxVideoSeconds: 0 });
 
-// free check: is the model served to this workspace? (model list endpoint, no tokens billed)
-const cfg = loadAlibabaCreativeConfig({ ...env, ALIBABA_QWEN_TEXT_MODEL: model });
-const listUrl = `https://${cfg.workspaceId}.eu-central-1.maas.aliyuncs.com/api/v1/models`;
-const listed = await fetch(listUrl, { headers: { Authorization: `Bearer ${cfg.apiKey}` } }).then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : null })).catch((e) => ({ status: 0, error: e.code ?? 'NETWORK' }));
+const cfg = loadAlibabaCreativeConfig(env);
+const listed = await fetch(`https://${cfg.workspaceId}.eu-central-1.maas.aliyuncs.com/api/v1/models`, { headers: { Authorization: `Bearer ${cfg.apiKey}` } })
+  .then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : null })).catch((e) => ({ status: 0, error: e.code ?? 'NETWORK' }));
 const served = JSON.stringify(listed.body ?? {}).includes(`"${model}"`);
 await journal.append({ event: 'MODEL_LIST_CHECK', provider: 'alibaba-cloud-model-studio', model, region: 'eu-central-1', status: served ? 'SERVED' : `NOT_CONFIRMED_${listed.status}` });
 if (!served) { console.error(JSON.stringify({ refused: 'MODEL_NOT_CONFIRMED_BY_PROVIDER', status: listed.status }, null, 1)); process.exit(3); }
 
-const results = [];
-for (const p of PRODUCTS) {
-  const ports = connectProviders({ env: { ...env, ALIBABA_QWEN_TEXT_MODEL: model }, journal, budget, sourcePhotoBytes: readFileSync(p.photo), trialAuthorized: true, maxTextCalls: TRIAL_LIMITS.max_text_calls_per_product, maxVisionCalls: TRIAL_LIMITS.max_vision_calls_per_product });
-  const r = await runAutonomous({ input: inputFor(p), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, p.key) });
-  results.push({ product: p.key, status: r.status, budget: budget.snapshot() });
-  if (/BUDGET_EXCEEDED|BRAIN_CALL_LIMIT_REACHED/.test(JSON.stringify(r.error ?? ''))) break; // the ceiling stops everything, not just one product
-}
-writeFileSync(join(outDir, `${planId}.result.json`), JSON.stringify({ plan_id: planId, results, budget: budget.snapshot() }, null, 1));
-console.log(JSON.stringify({ plan_id: planId, results, budget: budget.snapshot() }, null, 1));
+const ports = connectProviders({ env, journal, budget, sourcePhotoBytes: photoBytes, trialAuthorized: true, maxTextCalls: TRIAL_LIMITS.max_text_calls_per_product, maxVisionCalls: TRIAL_LIMITS.max_vision_calls_per_product });
+const r = await runAutonomous({ input: inputFor(), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, productKey) });
+
+// USAGE: what Alibaba itself reported, priced at the model's list price
+const rows = readFileSync(journalPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+const price = FRANKFURT_CATALOGUE.models[model];
+const used = rows.filter((e) => e.event === 'SUCCEEDED' && e.usage).reduce((a, e) => ({ in: a.in + (e.usage.prompt_tokens ?? 0), out: a.out + (e.usage.completion_tokens ?? 0), n: a.n + 1 }), { in: 0, out: 0, n: 0 });
+const failedCalls = rows.filter((e) => e.event === 'FAILED').length;
+const money = {
+  ESTIMATE_expected_eur: forecast.expected_eur,
+  CEILING_application_eur: TRIAL_LIMITS.max_spend_eur,
+  CEILING_ledger: budget.snapshot(),
+  USAGE_reported_by_alibaba: { calls: used.n, prompt_tokens: used.in, completion_tokens: used.out, eur_at_list_price: Math.round(((used.in * price.usd_in + used.out * price.usd_out) / 1e6) * 0.92 * 10000) / 10000, failed_calls_without_usage: failedCalls },
+  INVOICE: 'console Alibaba > Billing : seule source de la facturation réelle',
+};
+writeFileSync(join(outDir, `${planId}.result.json`), JSON.stringify({ plan_id: planId, status: r.status, money }, null, 1));
+console.log(JSON.stringify({ plan_id: planId, status: r.status, money }, null, 1));

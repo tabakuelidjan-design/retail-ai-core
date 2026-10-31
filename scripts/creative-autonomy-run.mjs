@@ -13,7 +13,7 @@ const media = photoPath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 const result = await runAutonomous({
   input: {
     product: snap.product, variantTitle: opt('variant'), readAt: snap.read_at, objective: opt('objective'), audience: opt('audience'), occasion: opt('occasion'),
-    brand: HABB_BRAND, format: opt('format', 'INSTAGRAM_FEED_4_5'), photoPath, photoMeta: { media_type: media, width_px: null, height_px: null, origin: 'MERCHANT_UPLOAD', rights_class: 'MERCHANT_OWNED' },
+    brand: HABB_BRAND, format: opt('format', 'INSTAGRAM_FEED_4_5'), photoPath, photoMeta: { media_type: media, width_px: null, height_px: null, origin: 'MERCHANT_UPLOAD', rights_class: 'UNKNOWN' },
   },
   ports, engines: localEngines(), workdir,
 });

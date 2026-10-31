@@ -3,7 +3,7 @@ const REGION_HOSTS = Object.freeze({
 });
 
 const ALLOWED_MODELS = Object.freeze({
-  text: new Set(['qwen3.8-max']),
+  text: new Set(['qwen3.8-max', 'qwen3-vl-plus']), // qwen3-vl-plus: the multimodal model served with EU-only inference in Frankfurt (owner decision 2026-11-01)
   image: new Set(['qwen-image-3.0-pro']),
   video: new Set(['wan3.0-video']),
 });
