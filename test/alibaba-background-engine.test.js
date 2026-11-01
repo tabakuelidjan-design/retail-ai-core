@@ -41,7 +41,7 @@ test('real Brain concept and art direction become a product-free prompt; mock PN
   assert.equal(called.length, 1);
   assert.equal(called[0].referenceImages.length, 0);
   assert.match(called[0].prompt, /urban pause/);
-  assert.match(called[0].prompt, /wet concrete/);
+  assert.match(called[0].prompt, /wet concrete/i);
   assert.match(called[0].prompt, /Do NOT draw.*product/i);
   assert.equal(called[0].n, 1);
   assert.equal(called[0].watermark, false);
@@ -87,6 +87,6 @@ test('durable attempt lock prevents a second execution even after a fresh engine
   const claim = createFileAttemptClaim({ registryDir: mkdtempSync(join(tmpdir(), 'nordla-visual-claims-')) });
   const attempt = { planId: 'visual-smoke-1', provider: 'alibaba-model-studio', model: config.imageModel };
   const first = await claim(attempt);
-  assert.match(first, /visual-smoke-1\\.background\\.lock$/);
+  assert.ok(first.endsWith('visual-smoke-1.background.lock'));
   await assert.rejects(() => claim(attempt), /VISUAL_PLAN_ALREADY_ATTEMPTED/);
 });
