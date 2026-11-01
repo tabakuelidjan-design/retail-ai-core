@@ -23,6 +23,7 @@ import { observeBrief, createProblemFramer } from '../creative-brain/problem-fra
 import { createConceptDirector } from '../creative-brain/concept.js';
 import { createArtDirector } from '../creative-brain/art-direction.js';
 import { createConceptCritic } from '../creative-brain/concept-critic.js';
+import { createConceptSelector } from '../creative-brain/concept-selection.js';
 import { buildAutonomousBrief } from './brief.js';
 import { createStageDirector, normalizeStage } from './stage-contract.js';
 import { PROVIDER_STATE, WHAT_IS_NEEDED } from './providers.js';
@@ -201,6 +202,12 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       return { outcome: 'THREE_DISTINCT_CONCEPTS', detail: c.map((x) => ({ concept_id: x.concept_id, central_idea: x.central_idea, visual_metaphor: x.visual_metaphor })), value: c };
     });
 
+    // 5b SELECT: Nordla's own judgment of its concepts, criterion by criterion, in words (existing Brain stage). Recorded for the owner; it does not filter the concepts here.
+    const selection = await step({ step: 'SELECT', component: 'createConceptSelector (10 criteria, words only)', module: 'src/creative-brain/concept-selection.js', kind: KIND.LLM, provider: textProvider }, async () => {
+      const { selection: sel, evaluations } = await createConceptSelector({ complete: metered }).select({ frame, concepts });
+      return { outcome: sel.outcome ?? 'EVALUATED', detail: { selection: sel, evaluations }, value: { selection: sel, evaluations } };
+    });
+
     const artDirector = createArtDirector({ complete: metered });
     const stageDirector = createStageDirector({ complete: metered });
     const critic = ports.vision ? createConceptCritic({ vlm: ports.vision }) : null;
@@ -282,7 +289,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     humanInterventions.push({ when: 'après le passage', who: 'propriétaire', what: 'valide, refuse ou demande une révision de chaque proposition (titre compris)', creative: true });
     writeFileSync(join(workdir, 'propositions.json'), JSON.stringify(proposals, null, 1));
     const status = ideationOnly ? RUN_STATUS.IDEATION_ONLY_NOT_A_VISUAL : assetUsable ? RUN_STATUS.PROPOSALS_READY_FOR_OWNER : RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE;
-    return finish(status, { mode, frame, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
+    return finish(status, { mode, frame, concepts, selection, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
   } catch (error) {
     return finish(RUN_STATUS.STOPPED_ERROR, { error: { code: error.code ?? null, message: String(error.message).slice(0, 300) }, asset_usable: assetUsable });
   }

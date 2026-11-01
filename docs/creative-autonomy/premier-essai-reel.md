@@ -32,10 +32,12 @@ Facts read on 2026-11-01 in the Alibaba Cloud Model Studio documentation. Re-ver
 - The key appears only in the Authorization header, never in the journal.
 
 ## Plans (updated 2026-11-01, 08:34 decision)
-- **Ideation trial, text only**: plan `trial-2d159b21c7ca20db`.
-  - Bound to the model, the EU scope, eu-central-1, the limits and the product. There is no photo, so it is not bound to one.
-  - 8 text calls: FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE. No image is read or sent; nothing is rendered.
-  - Expected ≈ 0.01 €; worst case ≈ 0.05 €; ledger ≤ 0.21 €; ceiling 1.50 €.
+- **Ideation trial, text only**: plan **`trial-b7c58aac7b7a59f3`** (supersedes `trial-2d159b21c7ca20db`).
+  - Objective given to Nordla: « Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB ».
+  - The objective, the Shopify snapshot, the variant, the format and the HABB brand rules are now bound to the plan id. Before this fix, the objective was not.
+  - 9 text calls: FRAME, IDEATE, SELECT (Nordla's own judgment of its concepts, existing Brain stage), 3 ART_DIRECT, 3 STAGE. No image is read or sent; nothing is rendered.
+  - Expected ≈ 0.013 €; worst case ≈ 0.06 €; ledger ≤ 0.23 €; ceiling 1.50 €.
+  - The report (`RAPPORT.md`) is built from the trace only and quotes the model's words as they came.
   - Status at the end: IDEATION_ONLY_NOT_A_VISUAL. It is not a visual production.
 - **Full trial**: its plan id is computed from the HABB photo once it is chosen (the supplier photo is excluded: its rights are not established).
 - The earlier id `trial-295639a1d700269b` is superseded: the limits now include the mode.

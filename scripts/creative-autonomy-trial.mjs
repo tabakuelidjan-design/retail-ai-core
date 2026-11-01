@@ -28,7 +28,7 @@ import { takeLiveCallLock } from '../src/marketing-creative/alibaba/live-call-lo
 import { buildConceptCriticInstruction } from '../src/creative-brain/concept-critic.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 // SIZING ONLY: generic invented answers of the test world, used to measure prompt sizes. They never reach the owner.
-import { frameAnswer, CONCEPTS, artDirectionAnswer } from '../test/creative-brain-world.js';
+import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from '../test/creative-brain-world.js';
 
 const argv = process.argv.slice(2);
 const mode = argv.includes('--execute') ? 'execute' : 'plan';
@@ -40,7 +40,7 @@ const productKey = arg('product', 'gourde-noire');
 const photoPath = arg('photo');
 const snap = (f) => JSON.parse(readFileSync(new URL(`../test/fixtures/creative-autonomy/${f}`, import.meta.url), 'utf8'));
 const CATALOG = {
-  'gourde-noire': { snap: 'shopify-gourde-tyeso.json', variant: 'Noir', objective: 'Écouler les 7 gourdes noires en stock avant fin novembre, en boutique et en ligne' },
+  'gourde-noire': { snap: 'shopify-gourde-tyeso.json', variant: 'Noir', objective: 'Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB' },
   'coque-iphone12': { snap: 'shopify-coque-iphone12.json', variant: null, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
 };
 if (!CATALOG[productKey]) throw new Error(`unknown product ${productKey}`);
@@ -73,10 +73,13 @@ const env = { ...process.env, ...secrets.values, ALIBABA_QWEN_TEXT_MODEL: proces
 const model = env.ALIBABA_QWEN_TEXT_MODEL;
 const scope = env.NORDLA_ALIBABA_SCOPE;
 const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
-const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 12, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
+// what Nordla is ASKED is part of what the owner authorises: objective, product snapshot, variant, format and brand rules are bound to the plan id
+const BRIEF_BINDING = { objective: P.objective, product_id: P.snap.product.id, variant: P.variant, snapshot_read_at: P.snap.read_at, format: 'INSTAGRAM_FEED_4_5',
+  brand_sha256: createHash('sha256').update(JSON.stringify(HABB_BRAND)).digest('hex') };
+const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 14, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
 const limits = ideation
-  ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`] }
-  : { ...TRIAL_LIMITS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha };
+  ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], brief: BRIEF_BINDING }
+  : { ...TRIAL_LIMITS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha, brief: BRIEF_BINDING };
 const planId = trialPlanId({ model, scope, limits });
 
 const inputFor = () => ({ product: P.snap.product, variantTitle: P.variant, readAt: P.snap.read_at, objective: P.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath,
@@ -104,9 +107,9 @@ function preflight() {
 async function sizing() {
   const calls = [];
   const complete = async ({ system, user }) => {
-    const stage = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('art director') ? 'ART_DIRECT' : 'STAGE';
+    const stage = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('concept selector') ? 'SELECT' : system.includes('art director') ? 'ART_DIRECT' : 'STAGE';
     const c = stage === 'ART_DIRECT' || stage === 'STAGE' ? JSON.parse(user).concept : null;
-    const body = stage === 'FRAME' ? frameAnswer() : stage === 'IDEATE' ? { concepts: CONCEPTS }
+    const body = stage === 'FRAME' ? frameAnswer() : stage === 'IDEATE' ? { concepts: CONCEPTS } : stage === 'SELECT' ? evaluationsAnswer(normalizeConceptSet(CONCEPTS), [])
       : stage === 'ART_DIRECT' ? artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] })
         : { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'sizing' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Sizing', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'sizing' };
     const text = JSON.stringify(body);
@@ -118,7 +121,7 @@ async function sizing() {
     compose: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { fidelity: { max_level_difference_after_removing_layers: 0 }, technical: { defects: [], text_contrast_ratio: 21, product_height_share: 0.5 }, text_used: { facts_lines: [] } }; } };
   const tmpPhoto = join(mkdtempSync(join(tmpdir(), 'sz-')), 'p.jpg'); writeFileSync(tmpPhoto, 'sizing');
   await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', input: { ...inputFor(), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
-  if (ideation) return calls; // FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE: no refinement (nothing is rendered), no critique (no image)
+  if (ideation) return calls; // FRAME, IDEATE, SELECT, 3 ART_DIRECT, 3 STAGE: no refinement (nothing is rendered), no critique (no image)
   const stageCall = calls.find((c) => c.stage === 'STAGE');
   for (let i = 0; i < normalizeConceptSet(CONCEPTS).length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
   const critic = buildConceptCriticInstruction({ brief: {} });
@@ -133,7 +136,7 @@ const forecast = forecastCost({ calls, model, imageTokens: 1000 });
 // the vision port books 3 000 image tokens per image: the ledger figure uses the same rule
 const ledger = forecastCost({ calls, model, imageTokens: 3000 });
 const plan = {
-  plan_id: planId, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
+  plan_id: planId, objective: P.objective, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
   limits, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks,
   calls_by_stage: calls.reduce((a, c) => ({ ...a, [c.stage]: (a[c.stage] ?? 0) + 1 }), {}),
   money: {
@@ -182,3 +185,6 @@ const money = {
 };
 writeFileSync(join(outDir, `${planId}.result.json`), JSON.stringify({ plan_id: planId, status: r.status, money }, null, 1));
 console.log(JSON.stringify({ plan_id: planId, status: r.status, money }, null, 1));
+// the owner's report, from the recorded trace only
+const { execFileSync } = await import('node:child_process');
+console.log(execFileSync(process.execPath, [new URL('./creative-autonomy-report.mjs', import.meta.url).pathname, outDir, productKey, planId]).toString().trim());

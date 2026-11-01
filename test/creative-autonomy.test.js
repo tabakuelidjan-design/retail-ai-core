@@ -10,7 +10,7 @@ import { normalizeStage } from '../src/creative-autonomy/stage-contract.js';
 import { verifiedFacts, HABB_BRAND } from '../src/creative-autonomy/brief.js';
 import { connectProviders, PROVIDER_STATE } from '../src/creative-autonomy/providers.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
-import { frameAnswer, CONCEPTS, artDirectionAnswer } from './creative-brain-world.js';
+import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
 
 const snap = (name) => JSON.parse(readFileSync(new URL(`./fixtures/creative-autonomy/${name}`, import.meta.url), 'utf8'));
 const GOURDE = snap('shopify-gourde-tyeso.json');
@@ -32,11 +32,12 @@ function doublePort({ stageOver = () => ({}) } = {}) {
   const calls = [];
   const concepts = normalizeConceptSet(CONCEPTS);
   const complete = async ({ system, user }) => {
-    const stage = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('art director') ? 'ART_DIRECT' : system.includes('set designer') ? 'STAGE' : '?';
+    const stage = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('concept selector') ? 'SELECT' : system.includes('art director') ? 'ART_DIRECT' : system.includes('set designer') ? 'STAGE' : '?';
     calls.push({ stage, revision: system.includes('REVISION') });
     let body;
     if (stage === 'FRAME') body = frameAnswer();
     else if (stage === 'IDEATE') body = { concepts: CONCEPTS };
+    else if (stage === 'SELECT') body = evaluationsAnswer(concepts, []);
     else if (stage === 'ART_DIRECT') { const c = JSON.parse(user).concept; body = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element of the set', reason: c.story, zone: 'FOREGROUND' }] }); }
     else if (stage === 'STAGE') { const c = JSON.parse(user).concept; body = stageAnswer(c, stageOver(c, calls)); } else throw new Error('unknown stage');
     return { text: JSON.stringify(body), model: 'TEST_DOUBLE', request_id: `td-${calls.length}`, cost_eur: 0 };

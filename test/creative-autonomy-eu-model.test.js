@@ -12,7 +12,8 @@ import { ALIBABA_PRICE_USD } from '../src/marketing-creative/alibaba/budget.js';
 import { runAutonomous, RUN_STATUS } from '../src/creative-autonomy/run.js';
 import { connectProviders, VISION_PURPOSE } from '../src/creative-autonomy/providers.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
-import { frameAnswer, CONCEPTS, artDirectionAnswer } from './creative-brain-world.js';
+import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
+import { normalizeConceptSet as ncs } from '../src/creative-brain/concept.js';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
@@ -45,11 +46,12 @@ function recordingFetch() {
     const system = body.messages[0].content;
     const userContent = body.messages[1].content;
     const isVision = Array.isArray(userContent);
-    const stage = isVision ? 'CRITIC' : system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('art director') ? 'ART_DIRECT' : system.includes('set designer') ? 'STAGE' : '?';
+    const stage = isVision ? 'CRITIC' : system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('concept selector') ? 'SELECT' : system.includes('art director') ? 'ART_DIRECT' : system.includes('set designer') ? 'STAGE' : '?';
     requests.push({ url, stage, body, auth: init.headers.Authorization });
     let answer;
     if (stage === 'FRAME') answer = frameAnswer();
     else if (stage === 'IDEATE') answer = { concepts: CONCEPTS };
+    else if (stage === 'SELECT') answer = evaluationsAnswer(ncs(CONCEPTS), []);
     else if (stage === 'ART_DIRECT') { const c = JSON.parse(userContent).concept; answer = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }
     else if (stage === 'STAGE') { const c = JSON.parse(userContent).concept; answer = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'wire test' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Titre de test', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'wire test' }; }
     else answer = { dimensions: DIMS.map((dimension) => ({ dimension, outcome: 'PASS', evidence: 'The image carries this dimension clearly enough for a first look.' })) };
@@ -95,7 +97,7 @@ test('on the wire: Brain, STAGE and critic all call qwen3-vl-plus on the Frankfu
   const expectedUrl = alibabaCreativeEndpoints(loadAlibabaCreativeConfig(ENV)).chatCompletions;
   assert.equal(expectedUrl, 'https://ws-test-eu-0001.eu-central-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions');
   const stages = requests.map((q) => q.stage);
-  assert.deepEqual([...new Set(stages)].sort(), ['ART_DIRECT', 'CRITIC', 'FRAME', 'IDEATE', 'STAGE']);
+  assert.deepEqual([...new Set(stages)].sort(), ['ART_DIRECT', 'CRITIC', 'FRAME', 'IDEATE', 'SELECT', 'STAGE']);
   for (const q of requests) {
     assert.equal(q.url, expectedUrl, 'only the Frankfurt workspace host');
     assert.equal(q.body.model, 'qwen3-vl-plus', `${q.stage} uses the chosen model`);
@@ -135,7 +137,7 @@ test('on the wire: without the media record the critic sends nothing (no image l
   assert.ok(r.proposals.every((p) => p.creative_quality.state === 'NOT_MEASURED'));
 });
 
-test('ideation only, on the wire: 8 text calls (FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE), no image anywhere, no engine, every Brain request and raw answer kept', async () => {
+test('ideation only, on the wire: 9 text calls (FRAME, IDEATE, SELECT, 3 ART_DIRECT, 3 STAGE), no image anywhere, no engine, every Brain request and raw answer kept', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'eu-id-'));
   const { fetchImpl, requests } = recordingFetch();
   const ports = { ...connectProviders({ env: ENV, trialAuthorized: true, fetchImpl }), visionFor: null };
@@ -143,14 +145,15 @@ test('ideation only, on the wire: 8 text calls (FRAME, IDEATE, 3 ART_DIRECT, 3 S
   const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
   const r = await runAutonomous({ mode: 'IDEATION_ONLY', input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'x', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports, engines, workdir: join(dir, 'run') });
   assert.equal(r.status, RUN_STATUS.IDEATION_ONLY_NOT_A_VISUAL, JSON.stringify(r.error ?? null));
-  assert.deepEqual(requests.map((q) => q.stage), ['FRAME', 'IDEATE', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE']);
+  assert.deepEqual(requests.map((q) => q.stage), ['FRAME', 'IDEATE', 'SELECT', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE']);
   assert.ok(requests.every((q) => q.body.model === 'qwen3-vl-plus' && !JSON.stringify(q.body).includes('image_url')));
   assert.ok(r.proposals.every((p) => p.status === 'IDEATION_ONLY_NOT_A_VISUAL' && p.image === null && Array.isArray(p.grammar_gap.wanted_but_not_available)));
   assert.ok(!r.trace.some((t) => ['EXAMINE', 'RENDER', 'COMPOSE+CHECK', 'CRITIC'].includes(t.step)));
   const files = (await import('node:fs')).readdirSync(r.brain_calls_dir);
-  assert.equal(files.filter((f) => f.endsWith('.request.json')).length, 8);
-  assert.equal(files.filter((f) => f.endsWith('.response.txt')).length, 8);
-  assert.ok(files.some((f) => f.startsWith('01-FRAME')) && files.some((f) => /^0[3-8]-STAGE-cnc_/.test(f)));
+  assert.equal(files.filter((f) => f.endsWith('.request.json')).length, 9);
+  assert.equal(files.filter((f) => f.endsWith('.response.txt')).length, 9);
+  assert.ok(r.selection.evaluations.length === 3, 'Nordla judged its own three concepts');
+  assert.ok(files.some((f) => f.startsWith('01-FRAME')) && files.some((f) => /^0[4-9]-STAGE-cnc_/.test(f)));
 });
 
 test('stage contract: the model may report what the vocabulary could not express (optional, bounded, not rendered)', async () => {
@@ -162,4 +165,25 @@ test('stage contract: the model may report what the vocabulary could not express
   const s = normalizeStage({ ...base, wanted_but_not_available: ['wet stone surface with water droplets', 'morning fog'] }, { concept, personalisation_offered: false });
   assert.equal(s.wanted_but_not_available.length, 2);
   assert.throws(() => normalizeStage({ ...base, wanted_but_not_available: ['a', 'b', 'c', 'd', 'e', 'f'] }, { concept, personalisation_offered: false }));
+});
+
+test('plan id: changing only the objective changes the plan id (what Nordla is asked is authorised too)', async () => {
+  const { trialPlanId, TRIAL_LIMITS } = await import('../src/creative-autonomy/trial.js');
+  const base = { ...TRIAL_LIMITS, brief: { objective: 'A' } };
+  assert.notEqual(trialPlanId({ model: 'qwen3-vl-plus', scope: 'EU', limits: base }), trialPlanId({ model: 'qwen3-vl-plus', scope: 'EU', limits: { ...base, brief: { objective: 'B' } } }));
+});
+
+test('report: built from the trace only, five sections, no visual claim for an ideation run', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const dir = mkdtempSync(join(tmpdir(), 'eu-rep-'));
+  const { fetchImpl } = recordingFetch();
+  const ports = { ...connectProviders({ env: ENV, trialAuthorized: true, fetchImpl }), visionFor: null };
+  const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
+  await runAutonomous({ mode: 'IDEATION_ONLY', input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'x', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports, engines: {}, workdir: join(dir, 'gourde-noire') });
+  const out = execFileSync('node', [new URL('../scripts/creative-autonomy-report.mjs', import.meta.url).pathname, dir, 'gourde-noire', 'none']).toString().trim();
+  const md = readFileSync(out, 'utf8');
+  for (const h of ['## 1.', '## 2.', '## 3.', '## 4.', '## 5.']) assert.ok(md.includes(h), h);
+  assert.match(md, /IDÉATION SEULE/);
+  assert.match(md, /images envoyées : 0/);
+  assert.ok(md.includes(CONCEPTS[0].central_idea), 'the concept is quoted as the model wrote it');
 });
