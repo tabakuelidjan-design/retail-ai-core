@@ -1,5 +1,6 @@
 export const ALIBABA_PRICE_USD = Object.freeze({
-  verified_at: '2026-11-01',
+  verified_at: '2026-10-07', // legacy text/video values were last checked on this date
+  image_verified_at: '2026-11-01', // Qwen Image 3.0 pro output pricing and area tiers
   text_input_per_million: 1.65,
   text_output_per_million: 4.951,
   image_1k: 0.03438,
