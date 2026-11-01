@@ -30,9 +30,12 @@ a = np.clip(pr[..., 3:4], 0, 1); src_c = pr[..., :3]
 # couches de lumière (séparées, bornées)
 dark = stage['backdrop_tone'] in ('DEEP_BLACK', 'CHARCOAL', 'BRAND_NAVY')
 key = stage['key_light']['intensity']
-scene_factor = ({'LOW': 0.5, 'MEDIUM': 0.65, 'HIGH': 0.8}[key] if dark else 1.0)
+# scène générée autour du produit : le niveau est MESURÉ sur le produit redessiné par le modèle (scene_check.py), pas déduit du STAGE ;
+# pas de liseré ajouté, la lumière de la scène est celle du modèle
+scene_mode = info.get('render_backend') == 'SCENE_AROUND_PRODUCT'
+scene_factor = float(info['product_level']) if info.get('product_level') is not None else ({'LOW': 0.5, 'MEDIUM': 0.65, 'HIGH': 0.8}[key] if dark else 1.0)
 L = (scene_factor - 1.0) * src_c
-kinds = [l['kind'] for l in [stage['key_light'], *stage['accent_lights']]]
+kinds = [] if scene_mode else [l['kind'] for l in [stage['key_light'], *stage['accent_lights']]]
 xn = np.linspace(-1, 1, tw)[None, :]
 if 'RIM' in kinds:
     edge = np.clip(1 - (1 - np.abs(xn)) / 0.14, 0, 1) ** 1.5
@@ -45,7 +48,8 @@ if info.get('slit_y') is not None:
 base = beauty.copy()
 yy_, xx_ = np.mgrid[0:H, 0:W].astype(np.float32)
 ell = ((xx_ - bx) / (tw * 0.62)) ** 2 + ((yy_ - by) / (th * 0.018)) ** 2
-base *= (1 - np.exp(-ell * 2.2) * 0.8)[..., None]
+if info.get('contact_shadow', True):  # l'ombre synthétique n'est posée que si la scène n'a pas la sienne
+    base *= (1 - np.exp(-ell * 2.2) * 0.8)[..., None]
 cx0, cy0 = max(x0, 0), max(y0, 0); cx1, cy1 = min(x0 + tw, W), min(y0 + th, H)
 sl = (slice(cy0 - y0, cy1 - y0), slice(cx0 - x0, cx1 - x0))
 region = base[cy0:cy1, cx0:cx1]

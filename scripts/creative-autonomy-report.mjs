@@ -18,8 +18,10 @@ const journal = journalPath && existsSync(journalPath) ? readFileSync(journalPat
 
 const L = [];
 const q = (t) => String(t ?? '').replace(/\n/g, ' ');
-L.push(`# Rapport d'essai Nordla : ${trace.mode === 'IDEATION_ONLY' ? 'IDÉATION SEULE (texte, aucune image, pas une production visuelle)' : trace.mode}`);
-L.push('', `- Plan : \`${planId ?? 'inconnu'}\` · statut : **${trace.status}** · moteur texte : ${trace.engines.text} · images envoyées : 0`);
+const sceneRun = plan?.limits?.mode === 'SCENE_AROUND_PRODUCT';
+const imageEdits = journal.filter((e) => e.operation === 'IMAGE_EDIT');
+L.push(`# Rapport d'essai Nordla : ${trace.mode === 'IDEATION_ONLY' ? 'IDÉATION SEULE (texte, aucune image, pas une production visuelle)' : sceneRun ? 'SCÈNE AUTOUR DU VRAI PRODUIT (concept sélectionné par Nordla)' : trace.mode}`);
+L.push('', `- Plan : \`${planId ?? 'inconnu'}\` · statut : **${trace.status}** · moteur texte : ${trace.engines.text} · images envoyées : ${sceneRun ? `${imageEdits.filter((e) => e.event === 'RESERVED').length} plaque (le produit détouré de la photo, sur fond gris), à ${plan.limits.image.model}, périmètre ${plan.limits.image.scope}` : 0}`);
 if (plan) L.push(`- Objectif donné à Nordla : « ${plan.objective} »`, `- Modèle : ${plan.model}, périmètre ${plan.scope}, ${plan.region}`);
 L.push('- Tout le texte entre guillemets ou en citation vient du modèle, tel quel. Rien n\'a été réécrit.');
 if (trace.error) L.push('', `> Arrêt : **${trace.status}** à l'étape ${trace.stopped_at?.step ?? '?'}${trace.stopped_at?.concept_id ? ` (\`${trace.stopped_at.concept_id}\`)` : ''} : ${trace.error.code ?? ''}${trace.error.field ? ` sur \`${trace.error.field}\`` : ''}. ${q(trace.error.message)}`, '> Les sections ci-dessous présentent ce qui a réellement été obtenu avant l\'arrêt, rien d\'autre.');
@@ -91,6 +93,29 @@ for (const cid of conceptIds) {
 }
 L.push('', gaps ? `Total : ${gaps} manque(s) déclaré(s) par le modèle lui-même. C'est la preuve à utiliser pour décider du prochain développement.` : 'Le modèle n\'a déclaré aucun manque. Ce constat est enregistré tel quel, il ne prouve pas que la grammaire suffit.');
 
+if (sceneRun) {
+  L.push('', '## 4 bis. La scène générée autour du vrai produit');
+  const produced = trace.trace.find((t) => t.step === 'PRODUCE');
+  if (produced) L.push(`- Concept produit : \`${produced.detail.concept_id ?? 'aucun'}\` (choix de Nordla à l'étape SELECT : ${produced.detail.selection_outcome}). Concepts non produits : ${produced.detail.not_produced.map((c) => `\`${c}\``).join(', ') || 'aucun'}.`);
+  for (const r of trace.trace.filter((t) => t.step === 'RENDER')) {
+    const d = r.detail ?? {};
+    if (r.outcome === 'ERROR') {
+      L.push(`- Rendu **refusé** : ${d.code} · ${q(d.message)}`);
+      for (const v of d.evidence?.variants ?? []) L.push(`  - variante ${v.variant} : ${v.pass ? 'acceptée' : `refusée (${v.rejections.join(', ')})`}${v.warnings?.length ? ` · avertissements : ${v.warnings.join(', ')}` : ''}`);
+      continue;
+    }
+    L.push(`- Rendu ${d.reused_scene ? '(scène réutilisée, aucun nouvel appel)' : `${d.model} · requête ${d.request_id ?? '?'} · variante choisie : ${d.chosen_variant}`}`);
+    if (!d.reused_scene) for (const v of d.variants ?? []) L.push(`  - variante ${v.variant} : ${v.pass ? 'acceptée' : `refusée (${v.rejections.join(', ')})`}${v.warnings?.length ? ` · avertissements : ${v.warnings.join(', ')}` : ''}`);
+  }
+  const prop = (() => { try { return JSON.parse(readFileSync(join(work, 'propositions.json'), 'utf8'))[0]; } catch { return null; } })();
+  const chosen = prop?.scene?.variants?.find((v) => v.variant === prop.scene.chosen_variant);
+  if (chosen) {
+    L.push(`- Mesures de la variante retenue : produit retrouvé à (${chosen.alignment.dx}, ${chosen.alignment.dy}) px, échelle ${chosen.alignment.scale}, corrélation des contours ${chosen.alignment.edge_ncc} · bordure fantôme ${chosen.ghost?.share ?? '?'} · ombre de contact ${chosen.contact_shadow?.present ? 'mesurée' : 'NON mesurée'} · reflet ${chosen.reflection?.present ? 'mesuré' : 'non mesuré'}${chosen.reflection?.expected ? ' (attendu : sol miroir)' : ''} · côté de la lumière ${chosen.light?.consistent === false ? 'DIFFÉRENT de la photo' : 'cohérent'}`);
+    L.push(`- Image finale : \`${prop.image}\` · fidélité du produit : ${prop.technical_quality.product_fidelity.pass ? 'pixels de la photo restaurés (preuve)' : 'ÉCHEC'} · défauts techniques : ${prop.technical_quality.defects.join(', ') || 'aucun'}`);
+  }
+  L.push('> Restaurer les pixels authentiques ne prouve pas que l\'image est réaliste : ombre, reflet et lumière sont des mesures indicatives. Le jugement final est celui du propriétaire, à l\'œil, en taille réelle.');
+}
+
 L.push('', '## 5. Appels réels et coût');
 L.push('| # | Étape | Type | Fournisseur | Modèle | Issue | Durée |', '|---|---|---|---|---|---|---|');
 for (const t of trace.trace) L.push(`| ${t.n} | ${t.step}${t.concept_id ? ` ${t.concept_id}` : ''} | ${t.kind} | ${t.provider} | ${t.model ?? '-'} | ${t.outcome} | ${t.ms} ms |`);
@@ -99,7 +124,7 @@ L.push('', `- Réparations : ${trace.repairs?.used ?? 0} utilisée(s) sur ${trac
 L.push(`- Appels réussis d'après le journal : ${ok.length} · échecs : ${journal.filter((e) => e.event === 'FAILED').length} · request ids : ${ok.map((e) => e.request_id).filter(Boolean).join(', ') || 'aucun'}`);
 if (result?.money) {
   const m = result.money;
-  L.push(`- Coût **estimé** avant l'essai : ${m.ESTIMATE_expected_eur} €`,
+  L.push(`- Coût **estimé** avant l'essai : ${plan?.money?.ESTIMATE_expected_eur ?? m.ESTIMATE_expected_eur} €${sceneRun ? ` (dont l'appel d'image : ${plan.money.ESTIMATE_parts?.image_call_usd} USD au prix catalogue de Francfort)` : ''}`,
     `- **Plafond** de l'application : ${m.CEILING_application_eur} €. Montant comptabilisé dans le registre de sécurité, volontairement surestimé : ${m.CEILING_ledger?.settled_eur ?? '?'} €, plus ${m.CEILING_ledger?.reserved_eur ?? 0} € réservés`,
     `- **Usage déclaré par Alibaba** : ${m.USAGE_reported_by_alibaba?.prompt_tokens} jetons en entrée et ${m.USAGE_reported_by_alibaba?.completion_tokens} en sortie, soit ≈ ${m.USAGE_reported_by_alibaba?.eur_at_list_price} € au prix catalogue`,
     `- **Facturation réelle** : uniquement dans la console Alibaba (Facturation), à relever à la main.`);

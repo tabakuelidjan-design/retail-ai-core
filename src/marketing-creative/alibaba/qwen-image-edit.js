@@ -81,17 +81,20 @@ export function imageInfoOf(bytes) {
 
 const invalid = (message, extra = {}) => new AlibabaProviderError(message, { code: 'INVALID_PROVIDER_RESPONSE', ...extra });
 
-function parseEditResponse(payload) {
+function parseEditResponse(payload, expected = 1) {
   const choice = payload?.output?.choices?.[0];
   if (!choice || typeof choice !== 'object') throw invalid('Alibaba image-edit response has no choice', { requestId: payload?.request_id ?? null });
   if (choice.finish_reason !== 'stop') throw invalid('Alibaba image-edit response did not finish normally', { requestId: payload?.request_id ?? null });
   const parts = Array.isArray(choice.message?.content) ? choice.message.content : [];
   const images = parts.map((p) => p?.image).filter((v) => typeof v === 'string' && v);
-  if (images.length !== 1) throw invalid('Alibaba image-edit response must hold exactly one image', { requestId: payload?.request_id ?? null });
-  let url;
-  try { url = new URL(images[0]); } catch { throw invalid('Alibaba image-edit output is not a URL', { requestId: payload?.request_id ?? null }); }
-  if (url.protocol !== 'https:' || url.username || url.password) throw invalid('Alibaba image-edit output URL is not a credential-free HTTPS URL', { requestId: payload?.request_id ?? null });
-  return { url: url.toString(), requestId: typeof payload.request_id === 'string' ? payload.request_id : null, usage: payload.usage && typeof payload.usage === 'object' ? payload.usage : null };
+  if (images.length !== expected) throw invalid(expected === 1 ? 'Alibaba image-edit response must hold exactly one image' : `Alibaba image-edit response must hold exactly ${expected} images`, { requestId: payload?.request_id ?? null });
+  const urls = images.map((image) => {
+    let url;
+    try { url = new URL(image); } catch { throw invalid('Alibaba image-edit output is not a URL', { requestId: payload?.request_id ?? null }); }
+    if (url.protocol !== 'https:' || url.username || url.password) throw invalid('Alibaba image-edit output URL is not a credential-free HTTPS URL', { requestId: payload?.request_id ?? null });
+    return url.toString();
+  });
+  return { url: urls[0], urls, requestId: typeof payload.request_id === 'string' ? payload.request_id : null, usage: payload.usage && typeof payload.usage === 'object' ? payload.usage : null };
 }
 
 /**
@@ -100,7 +103,8 @@ function parseEditResponse(payload) {
  *  config        loadAlibabaCreativeConfig(...) of the Frankfurt lane (credentials from the environment, never from Git)
  *  authorization the scoped external-media authorization record
  *  asset         { ref, bytes, media_type }  the private source photograph
- *  request       { request_id, capability: 'IMAGE_EDIT', text_policy: 'NO_CRITICAL_TEXT', purpose, scene, product_role, preserve, forbid, size }
+ *  request       { request_id, capability: 'IMAGE_EDIT', text_policy: 'NO_CRITICAL_TEXT', purpose, scene, product_role, preserve, forbid, size, n? }
+ *                n = variants of the SAME edit in ONE call (1 to 6, default 1): one request, one clearance, n output images billed, all reserved before sending
  *  budget        a SpendGuard      journal  a call journal      outputStore  a private output store
  */
 export async function editProductImage({
@@ -129,9 +133,12 @@ export async function editProductImage({
   const size = String(request.size ?? '').replace('x', '*');
   const [w, h] = size.split('*').map(Number);
   if (!Number.isInteger(w) || !Number.isInteger(h) || w * h < MIN_PIXELS || w * h > MAX_PIXELS) throw new RangeError('request.size must be W*H between 512*512 and 2048*2048 pixels');
+  const n = request.n ?? 1;
+  if (!Number.isInteger(n) || n < 1 || n > 6) throw new RangeError('request.n must be an integer from 1 to 6');
   const { prompt, negative_prompt: negativePrompt } = buildProductEditPrompt(request);
   const promptSha = sha256(prompt);
-  const reservation = budget.reserveImages({ id: operationId, n: 1, size: `${w}x${h}` });
+  // the reference image is billed too (one input image), so the reservation covers it
+  const reservation = budget.reserveImages({ id: operationId, n, size: `${w}x${h}`, inputImages: 1 });
   const base = {
     operation_id: operationId, provider: IMAGE_EDIT_PROVIDER_ID, model: config.imageModel, region: config.region, data_class: 'SCOPED_PRIVATE_MEDIA', operation: 'IMAGE_EDIT',
     clearance_id: clearance.authorization_id, input_sha256: inputSha, prompt_sha256: promptSha,
@@ -148,20 +155,25 @@ export async function editProductImage({
       body: {
         model: config.imageModel,
         input: { messages: [{ role: 'user', content: [{ image: `data:${asset.media_type};base64,${Buffer.from(asset.bytes).toString('base64')}` }, { text: prompt }] }] },
-        // prompt_extend off: the provider must not rewrite or embellish the instruction; one output image only
-        parameters: { n: 1, size, negative_prompt: negativePrompt, watermark: false, prompt_extend: false, ...(request.seed == null ? {} : { seed: request.seed }) },
+        // prompt_extend off: the provider must not rewrite or embellish the instruction; exactly n output images
+        parameters: { n, size, negative_prompt: negativePrompt, watermark: false, prompt_extend: false, ...(request.seed == null ? {} : { seed: request.seed }) },
       },
     });
     const latencyMs = Math.round(now() - started);
-    const parsed = parseEditResponse(payload);
-    const stored = await outputStore.storeUrl({ url: parsed.url, kind: 'image', operationId, fetchImpl });
-    const info = imageInfoOf(await outputStore.readBytes(stored));
-    if (!info) throw invalid('Alibaba image-edit output is not a PNG or JPEG image', { requestId: parsed.requestId });
-    const actualEur = priceImagesEur({ n: 1, size: `${w}x${h}`, usdToEur: budget.usdToEur });
+    const parsed = parseEditResponse(payload, n);
+    const outputs = []; const infos = [];
+    for (const url of parsed.urls) {
+      const one = await outputStore.storeUrl({ url, kind: 'image', operationId, fetchImpl });
+      const oneInfo = imageInfoOf(await outputStore.readBytes(one));
+      if (!oneInfo) throw invalid('Alibaba image-edit output is not a PNG or JPEG image', { requestId: parsed.requestId });
+      outputs.push(one); infos.push(oneInfo);
+    }
+    const [stored] = outputs; const [info] = infos;
+    const actualEur = priceImagesEur({ n, size: `${w}x${h}`, usdToEur: budget.usdToEur, inputImages: 1 });
     budget.settle(reservation, actualEur);
     const usage = parsed.usage ? Object.freeze({ ...parsed.usage }) : null;
     await journal?.append({
-      ...base, event: 'SUCCEEDED', status: 'SUCCEEDED', request_id: parsed.requestId, latency_ms: latencyMs, usage, actual_cost_eur: actualEur, output_sha256: stored.sha256,
+      ...base, event: 'SUCCEEDED', status: 'SUCCEEDED', request_id: parsed.requestId, latency_ms: latencyMs, usage, actual_cost_eur: actualEur, output_sha256: outputs.map((o) => o.sha256).join(','), images: n,
     });
     return Object.freeze({
       provider_id: IMAGE_EDIT_PROVIDER_ID,
@@ -181,6 +193,8 @@ export async function editProductImage({
       clearance_id: clearance.authorization_id,
       output: stored,
       output_info: info,
+      outputs: Object.freeze(outputs),
+      output_infos: Object.freeze(infos),
     });
   } catch (caught) {
     // a provider error already carries no credential; any other error (a fetch implementation may quote a header) is redacted before it leaves
