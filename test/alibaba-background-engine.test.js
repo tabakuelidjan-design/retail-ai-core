@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createAlibabaBackgroundEngine } from '../src/creative-autonomy/alibaba-background-engine.js';
+import { createAlibabaBackgroundEngine, createFileAttemptClaim } from '../src/creative-autonomy/alibaba-background-engine.js';
 import { MemoryOutputStore } from '../src/marketing-creative/alibaba/output-store.js';
 
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
@@ -29,7 +29,7 @@ function harness(overrides = {}) {
   const engine = createAlibabaBackgroundEngine({
     baseEngines, config, planId: 'visual-smoke-1', authorization, sourcePhotoRights: 'OWNER_CONFIRMED',
     budget: { reserveImages() {} }, journal: null, outputStore: store,
-    generate, prepare: async () => ({ resolution: [1080, 1350] }), ...overrides,
+    generate, prepare: async () => ({ resolution: [1080, 1350] }), claimAttempt: async () => {}, ...overrides,
   });
   const arg = { stage, concept, artDirection, canvas, stagePath: 'unused', examPath: 'unused', outPath: join(root, 'out.png') };
   return { engine, called, arg };
@@ -81,4 +81,12 @@ test('rejects provider-controlled URLs outside official Alibaba storage domains'
   const { engine, arg } = harness({ outputStore: store, generate });
   await assert.rejects(() => engine.render(arg), /UNTRUSTED_GENERATED_IMAGE_URL/);
   assert.equal(intercepted, true);
+});
+
+test('durable attempt lock prevents a second execution even after a fresh engine instance', async () => {
+  const claim = createFileAttemptClaim({ registryDir: mkdtempSync(join(tmpdir(), 'nordla-visual-claims-')) });
+  const attempt = { planId: 'visual-smoke-1', provider: 'alibaba-model-studio', model: config.imageModel };
+  const first = await claim(attempt);
+  assert.match(first, /visual-smoke-1\\.background\\.lock$/);
+  await assert.rejects(() => claim(attempt), /VISUAL_PLAN_ALREADY_ATTEMPTED/);
 });
