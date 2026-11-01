@@ -136,8 +136,18 @@ Plan `trial-dd94896e8b89e81e` is superseded and was never authorised. The plan i
   - the attempt registry uses the account's home from the OS.
 
 ### Residual risks (accepted, documented)
-- **Final settle** (LOW): reservations estimate tokens as characters/4, while the settle uses the tokens Alibaba reports. The last call can therefore bring the safety ledger slightly above 1.50 €. For qwen3-vl-plus the ledger prices at the qwen3.8-max rate, so the real spend stays several times lower. The fix belongs to the Alibaba lane's budget module (shared; not changed without decision).
+- ~~**Final settle (F9)**~~ **FIXED**, without touching the shared budget module.
+  - Before each text or vision call, `providers.js` (`guardSettlement`) prices the call's provable maximum:
+    - input: UTF-8 bytes of every text + 512 tokens of template overhead (Qwen's tokenizer is byte-level BPE, so a token covers at least one byte);
+    - images: priced from the PNG's IHDR header, at least 3 000 tokens each; an unrecognised image counts as 16 384;
+    - output: always counted at its max_tokens cap.
+  - The call is refused before being sent if the ceiling cannot absorb that maximum. Once the ledger has gone above the ceiling, every further call is refused.
+  - `test/creative-autonomy-settlement.test.js` reproduces the overshoot without the guard (0.1189 € for a 0.11 € ceiling). It then shows that, through the guard, the ledger never goes above the ceiling. That check runs on 4 ceilings and on 40 random rounds mixing ASCII, accents, emoji and CJK, under the densest tokenisation the guard allows.
+  - The trial plan now shows `CEILING_provable_max_ledger_eur`: ideation about 0.51 €, full mode about 1.13 €, both under 1.50 €.
 - **node_modules** (LOW): installed dependency code is covered only through `package-lock.json`, not hashed file by file.
 - **Windows attempt registry**: `os.userInfo().homedir` is used instead of `%USERPROFILE%`. Its independence from the environment variable on Windows has not been verified on Windows.
 - **HABB guard**: patterns, not understanding. They reduce the risk and do not prove it absent. The owner's review of every proposal remains the last control.
 - **Creative quality**: never measured with a real model on a complete run. The tests prove the mechanics only.
+
+### Known test failures
+See `echecs-de-tests-connus.md`. These are the secrets scan (two of the files are the frozen plan record and the superseded proposal), LG-2 (Chantier D) and Node 24 (China Sourcing). None is hidden by weakening a test.

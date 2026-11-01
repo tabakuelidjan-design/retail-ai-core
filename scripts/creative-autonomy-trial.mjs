@@ -18,7 +18,8 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
-import { connectProviders } from '../src/creative-autonomy/providers.js';
+import { connectProviders, worstCaseCallEur, VISION_MAX_TOKENS } from '../src/creative-autonomy/providers.js';
+import { BRAIN_PORT_LIMITS } from '../src/marketing-creative/alibaba/qwen-brain-port.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
 import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel, codeFingerprint, secretsFileProblems, runtimeInjections } from '../src/creative-autonomy/trial.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
@@ -126,7 +127,7 @@ async function sizing() {
       : stage === 'ART_DIRECT' ? artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] })
         : { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'sizing' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Sizing', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'sizing' };
     const text = JSON.stringify(body);
-    calls.push({ kind: 'TEXT', stage, input_chars: system.length + user.length, expected_output_chars: Math.ceil(text.length * 1.5) });
+    calls.push({ kind: 'TEXT', stage, input_chars: system.length + user.length, input_bytes: Buffer.byteLength(system + user, 'utf8'), expected_output_chars: Math.ceil(text.length * 1.5) });
     return { text, model: 'SIZING_DOUBLE', request_id: null, cost_eur: 0 };
   };
   const fake = { name: { render: 'sizing', compose: 'sizing' },
@@ -142,7 +143,7 @@ async function sizing() {
   for (let i = 0; i < normalizeConceptSet(CONCEPTS).length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
   const critic = buildConceptCriticInstruction({ brief: {} });
   // a 540 x 675 render is about 360 image tokens (1 per 32 x 32 px); 1 000 are counted
-  for (let i = 0; i < TRIAL_LIMITS.max_vision_calls_per_product; i += 1) calls.push({ kind: 'VISION', stage: 'CRITIC', input_chars: critic.system.length + critic.user.length + 400, expected_output_chars: 2400, images: 1 });
+  for (let i = 0; i < TRIAL_LIMITS.max_vision_calls_per_product; i += 1) calls.push({ kind: 'VISION', stage: 'CRITIC', input_chars: critic.system.length + critic.user.length + 400, input_bytes: Buffer.byteLength(critic.system + critic.user, 'utf8') + 400, expected_output_chars: 2400, images: 1 });
   return calls;
 }
 
@@ -151,6 +152,9 @@ const calls = await sizing();
 const forecast = forecastCost({ calls, model, imageTokens: 1000 });
 // the vision port books 3 000 image tokens per image: the ledger figure uses the same rule
 const ledger = forecastCost({ calls, model, imageTokens: 3000 });
+// the settlement guard's provable maximum for the whole plan (bytes as tokens + template overhead, every output at its cap, images at >= 3 000 tokens), ledger prices
+const PNG_1080x1350 = Buffer.alloc(24); PNG_1080x1350.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13], 0); PNG_1080x1350.write('IHDR', 12, 'latin1'); PNG_1080x1350.writeUInt32BE(1080, 16); PNG_1080x1350.writeUInt32BE(1350, 20);
+const provableMax = Math.round(calls.reduce((n, c) => n + worstCaseCallEur({ texts: ['x'.repeat(c.input_bytes ?? c.input_chars * 2)], images: c.images ? [PNG_1080x1350] : [], maxOutputTokens: c.kind === 'VISION' ? VISION_MAX_TOKENS : BRAIN_PORT_LIMITS.max_output_tokens, usdToEur: 1 }).eur, 0) * 10000) / 10000;
 const plan = {
   plan_id: planId, code_sha256: CODE.code_sha256, code_files: CODE.files, attempt_registry: registryDir, runtime_injections: limits.runtime_injections.length, objective: P.objective, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
   limits, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks,
@@ -160,6 +164,8 @@ const plan = {
     ESTIMATE_worst_case_eur: forecast.worst_case_eur,
     CEILING_application_eur: TRIAL_LIMITS.max_spend_eur,
     CEILING_ledger_max_reserved_eur: ledger.spendguard_reserved_eur,
+    CEILING_provable_max_ledger_eur: provableMax, // what the ledger could reach at most if every call happened; the settlement guard refuses any call past the ceiling
+    CEILING_provable_max_fits: provableMax <= TRIAL_LIMITS.max_spend_eur,
     USAGE_and_INVOICE: 'après l\'essai seulement : usage déclaré par Alibaba dans chaque réponse (calculé par ce script) ; facture réelle dans la console Alibaba, à vérifier à la main',
   },
 };
