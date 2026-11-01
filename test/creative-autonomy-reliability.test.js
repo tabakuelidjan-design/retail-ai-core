@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAutonomous, RUN_STATUS, REPAIRABLE } from '../src/creative-autonomy/run.js';
-import { normalizeStage, buildStageInstruction, STAGE_SPEC, assertArtDirectionHabbRules, hasForbidden, HABB_ART_DIRECTION_HINT } from '../src/creative-autonomy/stage-contract.js';
+import { normalizeStage, buildStageInstruction, STAGE_SPEC, assertArtDirectionHabbRules, hasForbidden, HABB_ART_DIRECTION_HINT, createStageDirector } from '../src/creative-autonomy/stage-contract.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { BRAIN_ERROR } from '../src/creative-brain/validation.js';
@@ -62,17 +62,53 @@ test('a 361-character rationale is refused with BRAIN_TEXT_INVALID on stage.rati
 const REAL = process.env.NORDLA_REAL_TRIAL_CALLS || '';
 const realFile = (re) => (REAL && existsSync(REAL) ? readdirSync(REAL).find((f) => re.test(f)) : null);
 const SKIP_REAL = 'set NORDLA_REAL_TRIAL_CALLS to a COPY of the real brain-calls folder (outside the repository)';
-test('REAL trial answer: the recorded STAGE response is refused as in the trial (stage.rationale over the contract limit)', { skip: !realFile(/^\d+-STAGE-.*\.response\.txt$/) && SKIP_REAL }, () => {
-  const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.response\.txt$/)), 'utf8'));
+/**
+ * The PRODUCTION path of a STAGE answer: createStageDirector -> askAndNormalize (near-miss normalisation of the closed contract, e.g. an empty optional
+ * field removed) -> normalizeStage. The port is a replay that returns the recorded text unchanged: no network, one call, nothing rewritten.
+ */
+async function stageThroughTheBrain(recordedText, { concept, artDirection = {}, frame = {}, facts = {} }) {
+  const calls = [];
+  const complete = async (instruction) => { calls.push(instruction); return { text: recordedText, model: 'REPLAY_OF_RECORDED_ANSWER', request_id: null }; };
+  try { const { stage } = await createStageDirector({ complete }).stage({ frame, concept, artDirection, facts }); return { stage, error: null, calls }; } catch (error) { return { stage: null, error, calls }; }
+}
+const validatorLength = (t) => t.normalize('NFC').trim().replace(/ {2,}/g, ' ').length; // exactly how oneLine() measures
+
+test('REAL trial answer: the recorded STAGE response, through the Brain\'s own path, is refused on stage.rationale (over the contract limit)', { skip: !realFile(/^\d+-STAGE-.*\.response\.txt$/) && SKIP_REAL }, async () => {
+  const recordedText = readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.response\.txt$/)), 'utf8'); // read-only, passed on byte for byte
   const req = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.request\.json$/)), 'utf8'));
-  const { concept, verified_facts: facts } = JSON.parse(req.user);
+  const user = JSON.parse(req.user);
   const max = STAGE_SPEC.fields.rationale.max;
-  // the length exactly as the validator measures it (NFC, trimmed, repeated spaces collapsed): no historical figure is imposed
-  const measured = raw.rationale.normalize('NFC').trim().replace(/ {2,}/g, ' ').length;
+  const measured = validatorLength(JSON.parse(recordedText).rationale);
   assert.ok(measured > max, `the real rationale (${measured} characters) is over the ${max}-character limit`);
-  assert.throws(() => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts?.personalisation_offered) }),
-    (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.rationale' && e.detail?.limit === max && e.detail?.length === measured);
+  const { error, calls } = await stageThroughTheBrain(recordedText, { concept: user.concept, artDirection: user.art_direction, frame: user.problem_frame, facts: user.verified_facts ?? {} });
+  assert.equal(calls.length, 1, 'one replayed answer, no protocol re-ask');
+  assert.ok(error, 'the recorded answer is refused');
+  assert.equal(error.code, BRAIN_ERROR.TEXT_INVALID);
+  assert.equal(error.field, 'stage.rationale');
+  assert.deepEqual({ length: error.detail?.length, limit: error.detail?.limit }, { length: measured, limit: max });
 });
+
+test('local fixture (synthetic): an EMPTY optional props[].word is removed by the Brain\'s path, as in production; normalizeStage alone would refuse it', async () => {
+  const [concept] = normalizeConceptSet(CONCEPTS);
+  const withEmptyWord = (rationale) => JSON.stringify(baseStage(concept, { rationale, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: concept.visual_metaphor, word: '' }] }));
+  const long = `${'é'.repeat(10)}${'x'.repeat(341)}`; // 351 characters, like the recorded one; not its text
+  // the shortcut the earlier test took: the empty optional field fails first
+  assert.throws(() => normalizeStage(JSON.parse(withEmptyWord(long)), { concept, personalisation_offered: false }), (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.props[0].word');
+  // the production path: the empty optional field is normalised away, the real violation is reported
+  const refused = await stageThroughTheBrain(withEmptyWord(long), { concept });
+  assert.equal(refused.error?.code, BRAIN_ERROR.TEXT_INVALID);
+  assert.equal(refused.error?.field, 'stage.rationale');
+  assert.deepEqual({ length: refused.error.detail.length, limit: refused.error.detail.limit }, { length: 351, limit: STAGE_SPEC.fields.rationale.max });
+  // and with a rationale within the limit the same answer is ACCEPTED, the empty optional word removed (not invented, not kept empty)
+  const accepted = await stageThroughTheBrain(withEmptyWord('Un socle mat pour poser la gourde au niveau du regard.'), { concept });
+  assert.equal(accepted.error, null, String(accepted.error));
+  assert.equal('word' in accepted.stage.props[0], false);
+  // a NON-empty word that breaks the contract is still refused (normalisation removes only EMPTY optional fields)
+  const badWord = await stageThroughTheBrain(JSON.stringify(baseStage(concept, { props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: concept.visual_metaphor, word: 'MOTBEAUCOUPTROPLONG' }] })), { concept });
+  assert.equal(badWord.error?.code, BRAIN_ERROR.TEXT_INVALID);
+  assert.equal(badWord.error?.field, 'stage.props[0].word');
+});
+
 test('REAL trial answer: the recorded ART_DIRECT response is refused by HABB\'s rules (leaves / foliage)', { skip: !realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/) && SKIP_REAL }, () => {
   const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/)), 'utf8'));
   assert.throws(() => assertArtDirectionHabbRules(raw), (e) => e.code === BRAIN_ERROR.FORBIDDEN_CONTENT && /leaves|leaf|foliage|feuill/.test(e.message));
