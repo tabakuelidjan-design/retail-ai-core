@@ -2,8 +2,9 @@
 // Background-only: the real product photo stays on the owner's machine and is composed locally.
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { writeFileSync, mkdirSync, openSync, closeSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { generateMarketingImage } from '../marketing-creative/alibaba/qwen-image.js';
@@ -35,6 +36,34 @@ function safeProviderOutputStore(store) {
     },
   };
 }
+
+/** Durable one-attempt gate. Locks survive restarts and must live outside the repo.
+ * A new model call requires a new explicitly authorized planId; no silent retry.
+ */
+export function createFileAttemptClaim({ registryDir = join(homedir(), '.nordla', 'visual-attempt-locks') } = {}) {
+  const location = resolve(registryDir);
+  const cwd = resolve(process.cwd());
+  if (location === cwd || location.startsWith(cwd + sep)) throw new Error('LOCK_DIRECTORY_INSIDE_REPOSITORY');
+  return async ({ planId }) => {
+    if (!/^[a-zA-Z0-9_-]{4,160}$/.test(planId)) throw new Error('INVALID_VISUAL_PLAN_ID');
+    mkdirSync(location, { recursive: true, mode: 0o700 });
+    const lockFile = join(location, planId + '.background.lock');
+    let fd;
+    try {
+      fd = openSync(lockFile, 'wx', 0o600);
+    } catch (error) {
+      if (error?.code === 'EEXIST') throw new Error('VISUAL_PLAN_ALREADY_ATTEMPTED');
+      throw error;
+    }
+    try {
+      writeFileSync(fd, JSON.stringify({ planId, created_at: new Date().toISOString() }) + '\\n');
+    } finally {
+      closeSync(fd);
+    }
+    return lockFile;
+  };
+}
+
 export async function prepareImageForComposer({ imagePath, examPath, stagePath, python = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3') }) {
   const output = await runFile(python, [PREPARE, imagePath, examPath, stagePath], { timeout: 90_000, maxBuffer: 1 << 20 });
   return JSON.parse(output.stdout.trim().split('\n').at(-1));
@@ -51,7 +80,7 @@ export function createAlibabaBackgroundEngine({
   baseEngines, config, planId, authorization, sourcePhotoRights,
   budget, journal, outputStore = new MemoryOutputStore(),
   generate = generateMarketingImage, prepare = prepareImageForComposer,
-  fetchImpl,
+  fetchImpl, claimAttempt = createFileAttemptClaim(),
 }) {
   if (typeof baseEngines?.examine !== 'function' || typeof baseEngines?.compose !== 'function') {
     throw new TypeError('Real examination and local compositor required');
@@ -61,6 +90,7 @@ export function createAlibabaBackgroundEngine({
     throw new TypeError('Image provider, prepare function and readable output store required');
   }
   if (!budget?.reserveImages) throw new TypeError('SpendGuard is required');
+  if (typeof claimAttempt !== 'function') throw new Error('PERSISTENT_ATTEMPT_LOCK_REQUIRED');
   let attempted = 0;
 
   return Object.freeze({
@@ -77,6 +107,9 @@ export function createAlibabaBackgroundEngine({
         productPosition: stage.camera.product_position,
       });
       if (attempted >= authorization.maxCalls) throw new Error('IMAGE_CALL_LIMIT_EXCEEDED');
+      // The persistent lock is claimed before the first billable request.
+      // All retries, even after a failed attempt or a process restart, require owner review.
+      await claimAttempt({ planId, provider: PROVIDER, model: config.imageModel });
       attempted += 1; // a failed call still consumes the slot; never retry silently.
       const result = await generate({
         config, prompt: visualBrief.prompt, referenceImages: [],
