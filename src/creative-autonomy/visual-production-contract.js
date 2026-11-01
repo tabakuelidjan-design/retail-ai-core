@@ -66,6 +66,11 @@ export function assertVisualProductionApproval({ planId, provider, model, author
   if (!Number.isInteger(authorization.maxCalls) || authorization.maxCalls !== 1) {
     throw new Error('VISUAL_PRODUCTION_NOT_AUTHORIZED: one model call per approved test');
   }
+  // This Alibaba image model uses GLOBAL deployment scope even with the Frankfurt endpoint.
+  // The user's past approval of EU-only text inference does NOT authorize global image processing.
+  if (authorization.dataScope !== 'GLOBAL' || authorization.crossBorderApproved !== true) {
+    throw new Error('GLOBAL_SCOPE_NOT_APPROVED: obtain explicit approval of Alibaba image processing scope');
+  }
   if (sourcePhotoRights !== 'OWNER_CONFIRMED') {
     throw new Error('PHOTO_RIGHTS_UNVERIFIED: verified advertising rights required');
   }
