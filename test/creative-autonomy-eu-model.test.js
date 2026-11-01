@@ -3,7 +3,7 @@
 // nothing leaves this machine, nothing is billed. The answers are generic test content (the creative-brain test world), never proposals.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -205,4 +205,51 @@ test('plan id: the SHA-256 of the full Shopify snapshot is bound; a change of pr
   assert.notEqual(idFor(reworded), original, 'a description change, even one space, invalidates the plan');
   const restocked = structuredClone(snap); restocked.product.variants.nodes[0].inventoryQuantity += 1;
   assert.notEqual(idFor(restocked), original);
+});
+
+// ---- the provider's model-list confirmation (false negative of 2026-11-01: the list is paginated, the model was not on page 1)
+test('model list: the owner\'s real Alibaba answer is accepted; other answers are not', async () => {
+  const { providerConfirmsModel, modelListUrl } = await import('../src/creative-autonomy/trial.js');
+  const owner = { success: true, output: { total: 1, models: [{ model: 'qwen3-vl-plus' }] }, request_id: '6864af00-406c-95e9-997e-79cf755985ac' };
+  assert.deepEqual(providerConfirmsModel(owner, 'qwen3-vl-plus'), { confirmed: true, request_id: '6864af00-406c-95e9-997e-79cf755985ac', total: 1, success: true });
+  assert.equal(providerConfirmsModel({ ...owner, success: false }, 'qwen3-vl-plus').confirmed, false);
+  assert.equal(providerConfirmsModel({ ...owner, success: 'true' }, 'qwen3-vl-plus').confirmed, false);
+  assert.equal(providerConfirmsModel({ success: true, output: { total: 168, models: [{ model: 'qwen3.8-max' }] } }, 'qwen3-vl-plus').confirmed, false, 'a page without the model');
+  assert.equal(providerConfirmsModel({ success: true, output: { total: 1, models: [{ model: 'QWEN3-VL-PLUS' }] } }, 'qwen3-vl-plus').confirmed, false, 'exact id only');
+  assert.equal(providerConfirmsModel({ success: true, output: { models: [{ name: 'qwen3-vl-plus' }] } }, 'qwen3-vl-plus').confirmed, false, 'the display name is not the id');
+  assert.equal(providerConfirmsModel(null, 'qwen3-vl-plus').confirmed, false);
+  assert.equal(modelListUrl('ws-1', 'qwen3-vl-plus'), 'https://ws-1.eu-central-1.maas.aliyuncs.com/api/v1/models?model=qwen3-vl-plus');
+});
+
+test('trial --execute end to end against a fetch double: the owner\'s answer passes, 9 calls, report written; a refusal does not consume the attempt', { timeout: 120_000 }, async () => {
+  const { execFileSync, spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../scripts/creative-autonomy-trial.mjs', import.meta.url));
+  const preload = fileURLToPath(new URL('./fixtures/creative-autonomy/fetch-double-preload.mjs', import.meta.url));
+  const out = mkdtempSync(join(tmpdir(), 'trial-e2e-'));
+  const log = join(out, 'fetch.log');
+  const base = { ...process.env, ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-double-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-double', NORDLA_FETCH_DOUBLE_LOG: log };
+  const planId = JSON.parse(execFileSync(process.execPath, [script, '--plan', '--ideation', '--out', join(out, 'p'), '--product', 'gourde-noire'], { env: base }).toString()).plan_id;
+  assert.equal(planId, 'trial-61e7eeb84a2de902', 'the fix does not change the frozen plan');
+  const run = (dir, mode) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--ideation', '--out', dir, '--product', 'gourde-noire'], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: planId, NORDLA_FETCH_DOUBLE_MODEL_LIST: mode } });
+  // a paginated list without the model: refused, and NO lock taken
+  const refused = run(join(out, 'r'), 'PAGE_WITHOUT_MODEL');
+  assert.equal(refused.status, 3); assert.match(refused.stderr.toString(), /MODEL_NOT_CONFIRMED_BY_PROVIDER/);
+  assert.equal(readdirSync(join(out, 'r')).some((f) => f.endsWith('.lock')), false);
+  const refusedFalse = run(join(out, 'f'), 'SUCCESS_FALSE');
+  assert.equal(refusedFalse.status, 3);
+  // the owner's real answer: accepted, then the 9 planned calls, the report
+  const ok = run(join(out, 'ok'), 'OWNER_PROOF');
+  assert.equal(ok.status, 0, ok.stderr.toString());
+  assert.match(ok.stdout.toString(), /"confirmed":true/);
+  assert.match(ok.stdout.toString(), /6864af00-406c-95e9-997e-79cf755985ac/);
+  const calls = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const okCalls = calls.slice(-10);
+  assert.equal(okCalls[0].path, '/api/v1/models'); assert.equal(okCalls[0].query, '?model=qwen3-vl-plus');
+  assert.equal(okCalls.slice(1).length, 9);
+  assert.ok(okCalls.slice(1).every((c) => c.host === 'ws-test-double.eu-central-1.maas.aliyuncs.com' && c.path === '/compatible-mode/v1/chat/completions' && c.model === 'qwen3-vl-plus'));
+  assert.ok(readdirSync(join(out, 'ok')).some((f) => f.endsWith('.lock')));
+  const report = readFileSync(join(out, 'ok', 'gourde-noire', 'RAPPORT.md'), 'utf8');
+  assert.match(report, /IDÉATION SEULE/); assert.match(report, /test double gap/);
+  assert.ok(!report.includes('sk-test-double') && !readFileSync(join(out, 'ok', `${planId}.calls.jsonl`), 'utf8').includes('sk-test-double'));
 });

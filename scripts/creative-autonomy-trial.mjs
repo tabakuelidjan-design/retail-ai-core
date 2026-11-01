@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders } from '../src/creative-autonomy/providers.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
-import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding } from '../src/creative-autonomy/trial.js';
+import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel } from '../src/creative-autonomy/trial.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
 import { SpendGuard } from '../src/marketing-creative/alibaba/budget.js';
 import { JsonlCallJournal } from '../src/marketing-creative/alibaba/journal.js';
@@ -153,17 +153,21 @@ const failed = checks.filter((c) => !c.pass && c.name !== 'autorisation média (
 if (failed.length) { console.error(JSON.stringify({ refused: 'PREFLIGHT_FAILED', failed }, null, 1)); process.exit(2); }
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, `${planId}.plan.json`), JSON.stringify(plan, null, 1));
-await takeLiveCallLock(join(outDir, `${planId}.lock`));
 const journalPath = join(outDir, `${planId}.calls.jsonl`);
 const journal = new JsonlCallJournal(journalPath);
-const budget = new SpendGuard({ maxSpendEur: TRIAL_LIMITS.max_spend_eur, maxImages: 0, maxVideoSeconds: 0 });
 
+// FREE check first (no token billed), BEFORE the one-attempt lock: a refusal here must not consume the single attempt
 const cfg = loadAlibabaCreativeConfig(env);
-const listed = await fetch(`https://${cfg.workspaceId}.eu-central-1.maas.aliyuncs.com/api/v1/models`, { headers: { Authorization: `Bearer ${cfg.apiKey}` } })
-  .then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : null })).catch((e) => ({ status: 0, error: e.code ?? 'NETWORK' }));
-const served = JSON.stringify(listed.body ?? {}).includes(`"${model}"`);
-await journal.append({ event: 'MODEL_LIST_CHECK', provider: 'alibaba-cloud-model-studio', model, region: 'eu-central-1', status: served ? 'SERVED' : `NOT_CONFIRMED_${listed.status}` });
-if (!served) { console.error(JSON.stringify({ refused: 'MODEL_NOT_CONFIRMED_BY_PROVIDER', status: listed.status }, null, 1)); process.exit(3); }
+const listed = await fetch(modelListUrl(cfg.workspaceId, model), { headers: { Authorization: `Bearer ${cfg.apiKey}` } })
+  .then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) })).catch((e) => ({ status: 0, body: null, error: e.code ?? 'NETWORK' }));
+const confirmation = providerConfirmsModel(listed.body, model);
+const served = listed.status === 200 && confirmation.confirmed;
+await journal.append({ event: 'MODEL_LIST_CHECK', provider: 'alibaba-cloud-model-studio', model, region: 'eu-central-1', request_id: confirmation.request_id, status: served ? 'SERVED' : `NOT_CONFIRMED_HTTP_${listed.status}_SUCCESS_${confirmation.success}_TOTAL_${confirmation.total}` });
+console.log(JSON.stringify({ model_list_check: { http: listed.status, success: confirmation.success, total: confirmation.total, confirmed: served, request_id: confirmation.request_id } }));
+if (!served) { console.error(JSON.stringify({ refused: 'MODEL_NOT_CONFIRMED_BY_PROVIDER', http: listed.status, success: confirmation.success, total: confirmation.total, request_id: confirmation.request_id }, null, 1)); process.exit(3); }
+
+await takeLiveCallLock(join(outDir, `${planId}.lock`)); // from here on, paid calls may happen: one attempt, never released by code
+const budget = new SpendGuard({ maxSpendEur: TRIAL_LIMITS.max_spend_eur, maxImages: 0, maxVideoSeconds: 0 });
 
 const ports = ideation
   ? { ...connectProviders({ env: { ...env, NORDLA_MEDIA_AUTHORIZATION_FILE: '' }, journal, budget, trialAuthorized: true, maxTextCalls: limits.max_text_calls_per_product, maxVisionCalls: 0 }), visionFor: null }
@@ -186,4 +190,5 @@ writeFileSync(join(outDir, `${planId}.result.json`), JSON.stringify({ plan_id: p
 console.log(JSON.stringify({ plan_id: planId, status: r.status, money }, null, 1));
 // the owner's report, from the recorded trace only
 const { execFileSync } = await import('node:child_process');
-console.log(execFileSync(process.execPath, [new URL('./creative-autonomy-report.mjs', import.meta.url).pathname, outDir, productKey, planId]).toString().trim());
+const { fileURLToPath } = await import('node:url'); // a URL pathname is not a Windows path ("/C:/..."): convert it
+console.log(execFileSync(process.execPath, [fileURLToPath(new URL('./creative-autonomy-report.mjs', import.meta.url)), outDir, productKey, planId]).toString().trim());

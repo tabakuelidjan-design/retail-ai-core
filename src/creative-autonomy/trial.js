@@ -92,3 +92,15 @@ export function briefBinding({ snapshot, variant, objective, format, brand }) {
     brand_sha256: sha(brand),
   };
 }
+
+/**
+ * The provider's own confirmation that a model is served to this workspace (GET /api/v1/models, free). The list is PAGINATED (20 per page, 160+ models), so
+ * the request asks for the exact model (`model=` exact-match filter) and the answer is accepted only when success === true AND output.models contains an
+ * entry whose model is exactly the one requested. Anything else (other page, other model, case variant, error envelope) is NOT a confirmation.
+ */
+export const modelListUrl = (workspaceId, model) => `https://${workspaceId}.eu-central-1.maas.aliyuncs.com/api/v1/models?model=${encodeURIComponent(model)}`;
+export function providerConfirmsModel(body, model) {
+  const models = body?.output?.models;
+  const confirmed = body?.success === true && Array.isArray(models) && models.some((m) => m?.model === model);
+  return { confirmed, request_id: body?.request_id ?? null, total: body?.output?.total ?? null, success: body?.success ?? null };
+}
