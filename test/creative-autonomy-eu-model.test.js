@@ -180,7 +180,8 @@ test('report: built from the trace only, five sections, no visual claim for an i
   const ports = { ...connectProviders({ env: ENV, trialAuthorized: true, fetchImpl }), visionFor: null };
   const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
   await runAutonomous({ mode: 'IDEATION_ONLY', input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'x', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports, engines: {}, workdir: join(dir, 'gourde-noire') });
-  const out = execFileSync('node', [new URL('../scripts/creative-autonomy-report.mjs', import.meta.url).pathname, dir, 'gourde-noire', 'none']).toString().trim();
+  const { fileURLToPath } = await import('node:url');
+  const out = execFileSync(process.execPath, [fileURLToPath(new URL('../scripts/creative-autonomy-report.mjs', import.meta.url)), dir, 'gourde-noire', 'none']).toString().trim();
   const md = readFileSync(out, 'utf8');
   for (const h of ['## 1.', '## 2.', '## 3.', '## 4.', '## 5.']) assert.ok(md.includes(h), h);
   assert.match(md, /IDÉATION SEULE/);
@@ -225,7 +226,9 @@ test('trial --execute end to end against a fetch double: the owner\'s answer pas
   const { execFileSync, spawnSync } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');
   const script = fileURLToPath(new URL('../scripts/creative-autonomy-trial.mjs', import.meta.url));
-  const preload = fileURLToPath(new URL('./fixtures/creative-autonomy/fetch-double-preload.mjs', import.meta.url));
+  // --import takes a module SPECIFIER, not a path: a bare Windows path "C:\\..." is read as a URL of scheme "c:" (ERR_UNSUPPORTED_ESM_URL_SCHEME, exit 1,
+  // before the script even starts). A file: URL is valid on every platform.
+  const preload = new URL('./fixtures/creative-autonomy/fetch-double-preload.mjs', import.meta.url).href;
   const out = mkdtempSync(join(tmpdir(), 'trial-e2e-'));
   const log = join(out, 'fetch.log');
   const base = { ...process.env, ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-double-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-double', NORDLA_FETCH_DOUBLE_LOG: log };
@@ -234,10 +237,13 @@ test('trial --execute end to end against a fetch double: the owner\'s answer pas
   const run = (dir, mode) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--ideation', '--out', dir, '--product', 'gourde-noire'], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: planId, NORDLA_FETCH_DOUBLE_MODEL_LIST: mode } });
   // a paginated list without the model: refused, and NO lock taken
   const refused = run(join(out, 'r'), 'PAGE_WITHOUT_MODEL');
-  assert.equal(refused.status, 3); assert.match(refused.stderr.toString(), /MODEL_NOT_CONFIRMED_BY_PROVIDER/);
+  assert.equal(refused.status, 3, refused.stderr.toString());
+  assert.match(refused.stderr.toString(), /MODEL_NOT_CONFIRMED_BY_PROVIDER/);
+  // the fetch double really was in place: the refused check went to it, never to the network
+  assert.match(readFileSync(log, 'utf8'), /"path":"\/api\/v1\/models"/);
   assert.equal(readdirSync(join(out, 'r')).some((f) => f.endsWith('.lock')), false);
   const refusedFalse = run(join(out, 'f'), 'SUCCESS_FALSE');
-  assert.equal(refusedFalse.status, 3);
+  assert.equal(refusedFalse.status, 3, refusedFalse.stderr.toString());
   // the owner's real answer: accepted, then the 9 planned calls, the report
   const ok = run(join(out, 'ok'), 'OWNER_PROOF');
   assert.equal(ok.status, 0, ok.stderr.toString());

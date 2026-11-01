@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { runAutonomous, RUN_STATUS, deterministicFix, localEngines } from '../src/creative-autonomy/run.js';
 import { normalizeStage } from '../src/creative-autonomy/stage-contract.js';
 import { verifiedFacts, HABB_BRAND } from '../src/creative-autonomy/brief.js';
@@ -53,7 +53,7 @@ function fakeEngines({ examStatus = 'CUT_OUT', defectsByRound = [[]] } = {}) {
     async examine() { calls.examine += 1; return { status: examStatus, ...(examStatus !== 'CUT_OUT' ? { reasons: ['BACKGROUND_NOT_PLAIN_OR_GRADIENT'] } : {}) }; },
     async render({ outPath }) { calls.render += 1; writeFileSync(outPath, 'x'); return { resolution: [10, 10], foreground_props: 0 }; },
     async compose({ stagePath, outPath }) {
-      calls.compose += 1; const key = stagePath.split('/').slice(-2, -1)[0]; const r = rounds.get(key) ?? 0; rounds.set(key, r + 1);
+      calls.compose += 1; const key = basename(dirname(stagePath)); /* the concept's own folder, on every platform */ calls.composedFor = [...(calls.composedFor ?? []), key]; const r = rounds.get(key) ?? 0; rounds.set(key, r + 1);
       writeFileSync(outPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]));
       return { fidelity: { max_level_difference_after_removing_layers: 1 }, technical: { defects: defectsByRound[r] ?? [], text_contrast_ratio: 12, product_height_share: 0.5 }, text_used: { facts_lines: ['x'] } };
     },
@@ -103,6 +103,10 @@ test('with a TEST_DOUBLE brain: 3 concepts, each art-directed, staged, rendered,
   // the deterministic refine only moved what it is allowed to move
   const fixes = r.trace.filter((t) => t.step === 'REFINE');
   assert.equal(fixes.length, 3);
+  // concept isolation: each concept had its own two compose rounds (defect, then clean) and its own refinement
+  const ids = r.proposals.map((p) => p.concept.concept_id);
+  assert.deepEqual([...new Set(fixes.map((f) => f.concept_id))].sort(), [...ids].sort());
+  for (const id of ids) assert.equal(engines.calls.composedFor.filter((k) => k === id).length, 2, `${id}: two compose rounds`);
   for (const f of fixes) { assert.equal(f.kind, 'DETERMINISTIC'); assert.deepEqual(Object.keys(f.detail.change), ['text_placement']); }
   // every brain step is labelled TEST_DOUBLE, never REAL
   assert.ok(r.trace.filter((t) => t.kind === 'LLM').every((t) => t.provider === 'TEST_DOUBLE'));
