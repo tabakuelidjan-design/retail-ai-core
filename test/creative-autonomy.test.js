@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { runAutonomous, RUN_STATUS, deterministicFix, localEngines } from '../src/creative-autonomy/run.js';
 import { normalizeStage } from '../src/creative-autonomy/stage-contract.js';
+import { createAlibabaBackgroundEngine } from '../src/creative-autonomy/alibaba-background-engine.js';
+import { MemoryOutputStore } from '../src/marketing-creative/alibaba/output-store.js';
 import { verifiedFacts, HABB_BRAND } from '../src/creative-autonomy/brief.js';
 import { connectProviders, PROVIDER_STATE } from '../src/creative-autonomy/providers.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
@@ -224,4 +226,39 @@ test('per-image critic: a render is critiqued only through a clearance built for
   assert.equal(asked.length, 3);
   assert.ok(asked.every((a) => a.ref.startsWith('render://') && a.n > 0));
   assert.ok(r.proposals.every((p) => p.creative_quality.state === 'CREATIVELY_SUFFICIENT_AWAITING_OWNER' && p.status === 'PROPOSED_FOR_OWNER_VALIDATION'));
+});
+
+
+test('Nordla FULL route passes its actual Brain concepts to Alibaba background adapter; one-call gate stops without inventing a second image', async () => {
+  const store = new MemoryOutputStore();
+  const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  const generated = [];
+  const base = fakeEngines({ defectsByRound: [[]] });
+  const engine = createAlibabaBackgroundEngine({
+    baseEngines: base, config: { region: 'eu-central-1', imageModel: 'qwen-image-3.0-pro' },
+    planId: 'mock-full-autonomy', sourcePhotoRights: 'OWNER_CONFIRMED',
+    authorization: { approved: true, planId: 'mock-full-autonomy', provider: 'alibaba-model-studio',
+      model: 'qwen-image-3.0-pro', maxCalls: 1, photoTransmission: 'NONE', dataScope: 'GLOBAL', crossBorderApproved: true },
+    budget: { reserveImages() {} }, outputStore: store,
+    claimAttempt: async () => {},
+    generate: async ({ prompt, referenceImages }) => {
+      generated.push({ prompt, referenceImages });
+      const output = await store.storeBytes({ bytes: image, contentType: 'image/png', operationId: 'mock-full-route' });
+      return { outputs: [output], model: 'qwen-image-3.0-pro', requestId: 'FAKE_OFFLINE', costEur: 0 };
+    },
+    prepare: async () => ({ resolution: [1080, 1350] }),
+  });
+  const r = await runAutonomous({ input: input(GOURDE, { variantTitle: 'Noir' }), ports: tdPorts(doublePort()),
+    engines: engine, workdir: mkdtempSync(join(tmpdir(), 'na-gen-')) });
+  assert.equal(r.status, RUN_STATUS.STOPPED_ERROR);
+  assert.equal(r.error.message, 'IMAGE_CALL_LIMIT_EXCEEDED');
+  assert.equal(generated.length, 1, 'one simulated provider call only');
+  assert.deepEqual(generated[0].referenceImages, [], 'no photo transmitted');
+  assert.equal(r.proposals.length, 1, 'one real mock background was composed');
+  assert.equal(r.proposals[0].status, 'PROPOSED_FOR_OWNER_VALIDATION');
+  const rendered = r.trace.filter(x => x.step === 'RENDER');
+  assert.equal(rendered[0].provider, 'alibaba-model-studio');
+  assert.equal(rendered[0].detail.render_backend, 'GENERATIVE_BACKGROUND');
+  assert.equal(rendered[0].detail.source_photo_transmitted, false);
+  assert.equal(r.published, false);
 });

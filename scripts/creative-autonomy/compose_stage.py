@@ -5,7 +5,9 @@ produit, place le texte selon le STAGE, puis MESURE :
   - qualité technique : texte sur le produit, contraste du texte, marges, part du produit dans l'image.
 Usage : python compose_stage.py <stage.json> <rendu.png> <produit_rgba.png> <examen.json> <faits.json> <sortie.jpg>
 """
-import glob, json, sys
+import glob, json, os, sys
+from functools import lru_cache
+from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -65,7 +67,29 @@ ok = opaque[sl] & ~clip & ~occluded
 diff = np.abs(back - ref)[ok] if ok.any() else np.array([0])
 
 # texte : position décidée par le STAGE, taille ajustée à la colonne, couleur choisie par contraste mesuré
-def font(name, size): return ImageFont.truetype(glob.glob(f'/usr/share/fonts/**/{name}', recursive=True)[0], size)
+@lru_cache(maxsize=64)
+def font(name, size):
+    # Inter is preferred. On Windows, Linux and macOS fall back to a real
+    # system sans font instead of failing on a hard-coded Linux path.
+    bold = 'SemiBold' in name
+    candidates = [name, 'Inter-SemiBold.ttf' if bold else 'Inter-Regular.ttf',
+                  'arialbd.ttf' if bold else 'arial.ttf',
+                  'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf']
+    for candidate in candidates:
+        try:
+            return ImageFont.truetype(candidate, max(1, size))
+        except OSError:
+            pass
+    roots = [os.environ.get('NORDLA_FONT_DIR'), str(Path.home() / 'AppData/Local/Microsoft/Windows/Fonts'),
+             'C:/Windows/Fonts', '/usr/share/fonts', '/usr/local/share/fonts', '/Library/Fonts']
+    for root in filter(None, roots):
+        for candidate in candidates:
+            for found in glob.glob(str(Path(root) / '**' / candidate), recursive=True):
+                try:
+                    return ImageFont.truetype(found, max(1, size))
+                except OSError:
+                    continue
+    raise RuntimeError('NORDLA_FONT_NOT_AVAILABLE: install Inter or Arial, or set NORDLA_FONT_DIR')
 d = ImageDraw.Draw(out); k = min(W, H) / 1080; m = round(88 * k)
 place = stage['text_placement']; prod_box = (x0, y0, x0 + tw, y0 + th)
 col_w = {'LEFT_COLUMN': prod_box[0] - 2 * m, 'RIGHT_COLUMN': W - prod_box[2] - 2 * m}.get(place, W * 0.42)
