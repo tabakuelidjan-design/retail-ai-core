@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAlibabaBackgroundEngine, createFileAttemptClaim } from '../src/creative-autonomy/alibaba-background-engine.js';
 import { MemoryOutputStore } from '../src/marketing-creative/alibaba/output-store.js';
+import { priceImagesEur } from '../src/marketing-creative/alibaba/budget.js';
 
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 const config = { imageModel: 'qwen-image-3.0-pro', region: 'eu-central-1' };
@@ -45,6 +46,7 @@ test('real Brain concept and art direction become a product-free prompt; mock PN
   assert.match(called[0].prompt, /Do NOT draw.*product/i);
   assert.equal(called[0].n, 1);
   assert.equal(called[0].watermark, false);
+  assert.match(called[0].negativePrompt, /bottles.*logos/);
   assert.equal(called[0].size, '1080x1350');
   assert.equal(called[0].dataPolicy.classification, 'PUBLIC');
   assert.equal(info.render_backend, 'GENERATIVE_BACKGROUND');
@@ -89,4 +91,12 @@ test('durable attempt lock prevents a second execution even after a fresh engine
   const first = await claim(attempt);
   assert.ok(first.endsWith('visual-smoke-1.background.lock'));
   await assert.rejects(() => claim(attempt), /VISUAL_PLAN_ALREADY_ATTEMPTED/);
+});
+
+
+test('Qwen Image 3.0 prices 4:5 and 9:16 below the 2,250,000-pixel threshold', () => {
+  assert.equal(priceImagesEur({ n: 1, size: '1080x1350' }), 0.03438);
+  assert.equal(priceImagesEur({ n: 1, size: '1080x1920' }), 0.03438);
+  assert.equal(priceImagesEur({ n: 1, size: '1536x1536' }), 0.068761);
+  assert.throws(() => priceImagesEur({ size: '0x0' }), /UNPRICED_IMAGE_SIZE/);
 });
