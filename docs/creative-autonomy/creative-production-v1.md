@@ -28,13 +28,13 @@ Known evidence: three real concepts from Alibaba; first run stopped on an overlo
 
 ## Fixed delivery gates
 
-**A — Completed here:** vendor-neutral background contract, fail-closed one-shot approval and six local unit tests. No API call or change to the existing full path.
+**A — Implemented in this draft PR:** vendor-neutral background brief; opt-in Alibaba adapter using the pre-existing generateMarketingImage client and MemoryOutputStore; existing FULL route forwards actual concepts and art directions to the adapter; Python-generated image-to-compositor geometry bridge; portable compositor fonts; one-shot durable plan locks; HABB restrictions; global image-scope opt-in; secret-free CI and mocked unit/integration tests. No paid API call. The Blender default path remains intact.
 
-**B — Next:** image-provider interface and mocked image response, safe output storage and ledger; Windows font portability, real-photo local composition and independent fidelity/typography checks.
+**B — Next:** wire a separate CLI with auditable plan fingerprint, source-photo SHA, approved spending ceiling and provider-account eligibility check; inspect an offline real-photo composition on Windows and review realistic product grounding, fidelity/typography at 100% scale. The current renderer remains OPT-IN by code and is NOT a production CLI.
 
-**C — After explicit consent:** ONE true Nordla-directed paid visual proof with TYESO, real-image output, QA, billing reconciliation. Do not claim success before viewing the artifact.
+**C — After explicit consent:** ONE true Nordla-directed paid visual proof with TYESO, real-image output, QA, billing reconciliation. Authorisation must separately cover supplier-photo advertising rights, image model GLOBAL deployment scope, approved billing ceiling and a fresh source-image/code-bound one-use trial. Do not claim success before viewing the artifact.
 
-**D — Final:** THREE distinct finished premium images, each independently staged, verified and presented for owner approval. Benchmark visually against the HABB TYESO reference; one bounded improvement only when a demonstrated defect requires it.
+**D — Final:** THREE distinct finished premium images, each independently staged, verified and presented for owner approval. The first one-call trial must NOT be silently reused to create all three; a separately approved three-image plan is required. Benchmark visually against the HABB TYESO reference; one bounded improvement only when a demonstrated defect requires it.
 
 ## Retail urgency
 
@@ -46,3 +46,11 @@ HABB marketing must continue today using clearly labeled, approved existing crea
 - https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
 - https://developers.openai.com/api/reference/resources/images/methods/generate
 - https://developers.openai.com/api/docs/guides/your-data
+
+### Verification limitations
+
+- The current Alibaba adapter is opt-in for `runAutonomous({ engines: createAlibabaBackgroundEngine(...) })`; the existing `scripts/creative-autonomy-trial.mjs` is unchanged and still uses Blender. Never imply a real production image was made by this branch.
+- CI only verifies unit contracts, mocked provider responses, and the FULL route with fake Brain / photo engines, plus Python source syntax. A mock-generated first background followed by a deliberate second-call refusal yields `STOPPED_ERROR`; this is expected for the one-call permission, NOT a three-image production success.
+- The background prompt is product-free, but text-only generation cannot technically guarantee the remote model won't hallucinate a product or text. Owner visual review and dedicated QA are required before use.
+- The background geometry bridge positions the product deterministically; realistic contact lighting and reflections must be validated with a real photo at full resolution.
+- Pricing: provider Frankfurt Global 2K output list $0.068761 per image as of 2026-11-01; the existing image SpendGuard conservatively books $0.069 at >1024px but does not estimate the Brain text/vision portion here. Verify actual invoice after any explicitly authorized experiment.
