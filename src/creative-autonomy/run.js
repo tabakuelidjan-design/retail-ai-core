@@ -25,7 +25,8 @@ import { createArtDirector } from '../creative-brain/art-direction.js';
 import { createConceptCritic } from '../creative-brain/concept-critic.js';
 import { createConceptSelector } from '../creative-brain/concept-selection.js';
 import { buildAutonomousBrief } from './brief.js';
-import { createStageDirector, normalizeStage } from './stage-contract.js';
+import { createStageDirector, normalizeStage, assertArtDirectionHabbRules, HABB_ART_DIRECTION_HINT } from './stage-contract.js';
+import { BRAIN_ERROR } from '../creative-brain/validation.js';
 import { PROVIDER_STATE, WHAT_IS_NEEDED } from './providers.js';
 
 const run$ = promisify(execFile);
@@ -42,6 +43,15 @@ export const RUN_STATUS = Object.freeze({
 });
 export const KIND = Object.freeze({ DETERMINISTIC: 'DETERMINISTIC', LLM: 'LLM', VISION: 'VISION', LOCAL_ENGINE: 'LOCAL_ENGINE' });
 export const MAX_REFINE_ROUNDS = 2;
+
+/**
+ * BOUNDED CONTRACT REPAIR. When a model answer is well-formed JSON but refused by a contract rule (a text too long, a forbidden word, a missing key...), Nordla
+ * may ask the SAME stage ONCE more, telling the model exactly which field broke which rule. The repair is a paid call, so it exists only when the owner's
+ * authorised plan says so: maxRepairCalls (default 0 = no repair, the run stops as before). Never on a provider failure (no retry policy), never twice for
+ * the same stage call, and every repair goes through the same port, SpendGuard, call cap and journal as any other call. The refused answer stays in the trace.
+ */
+export const REPAIRABLE = Object.freeze(new Set([BRAIN_ERROR.TEXT_INVALID, BRAIN_ERROR.MISSING_KEY, BRAIN_ERROR.UNKNOWN_KEY, BRAIN_ERROR.ENUM_INVALID, BRAIN_ERROR.LIST_INVALID, BRAIN_ERROR.NUMERIC_VALUE, BRAIN_ERROR.FORBIDDEN_CONTENT, BRAIN_ERROR.RULE_VIOLATION]));
+export const repairHint = (error) => `Your previous answer was REFUSED by Nordla's contract: ${error.code} at ${error.field ?? 'unknown field'}: ${String(error.message).slice(0, 240)}. Return the whole answer again with this field corrected; keep everything else that was valid.`;
 
 /** Default local engines: real processes, zero cost. Tests may replace them. */
 export function localEngines({ python = 'python3', blenderPython = process.env.NORDLA_BLENDER_PYTHON || 'python3', renderScale = 0.5, samples = 32 } = {}) {
@@ -108,7 +118,9 @@ function technicalQuality(report) {
  *   engines: localEngines()
  *   workdir: where every intermediate file is kept (the run is fully inspectable)
  */
-export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL' }) {
+export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL', maxRepairCalls = 0 }) {
+  if (!Number.isInteger(maxRepairCalls) || maxRepairCalls < 0) throw new TypeError('maxRepairCalls must be a non-negative integer');
+  let repairsUsed = 0;
   const ideationOnly = mode === 'IDEATION_ONLY';
   mkdirSync(workdir, { recursive: true });
   const trace = [];
@@ -141,6 +153,14 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       throw error;
     }
   }
+  /** One stage call; if its answer breaks a contract rule and the plan allows a repair, ONE more call of the same stage with the exact violation. */
+  async function repairable(rec, call) {
+    try { return await step(rec, () => call([])); } catch (error) {
+      if (!REPAIRABLE.has(error?.code) || repairsUsed >= maxRepairCalls) throw error;
+      repairsUsed += 1;
+      return step({ ...rec, step: `${rec.step}_REPAIR`, repair_of: { code: error.code, field: error.field ?? null }, repairs_used: repairsUsed, repairs_allowed: maxRepairCalls }, () => call([repairHint(error)]));
+    }
+  }
   const notConnected = (rec, port) => {
     trace.push({ n: trace.length + 1, ...rec, provider: PROVIDER_STATE.NOT_CONNECTED, model: null, cost_eur: 0, ms: 0, outcome: 'PROVIDER_NOT_CONNECTED', detail: { needed: WHAT_IS_NEEDED[port] } });
   };
@@ -149,7 +169,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       status, trace, human_interventions: humanInterventions,
       engines: { text: ports.state?.text ?? PROVIDER_STATE.NOT_CONNECTED, vision: ports.state?.vision ?? PROVIDER_STATE.NOT_CONNECTED, local: PROVIDER_STATE.REAL },
       cost_eur: { text_and_vision: Math.round(textCost * 10000) / 10000, local: 0, budget: ports.budget?.snapshot?.() ?? null },
-      published: false, spent_without_authorisation: false, ...extra,
+      published: false, spent_without_authorisation: false, repairs: { used: repairsUsed, allowed: maxRepairCalls }, ...extra,
     };
     writeFileSync(join(workdir, 'trace.json'), JSON.stringify(result, null, 1));
     return result;
@@ -216,12 +236,14 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     for (const concept of concepts) {
       const cid = concept.concept_id;
       const dir = join(workdir, cid); mkdirSync(dir, { recursive: true });
-      const art = await step({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector', module: 'src/creative-brain/art-direction.js', kind: KIND.LLM, provider: textProvider }, async () => {
-        const { art_direction: a } = await artDirector.direct({ frame, concept });
+      // ART_DIRECT gets HABB's hard rules from its first call, and its answer is checked against them (the Brain's contract does not know HABB)
+      const art = await repairable({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector + HABB rules', module: 'src/creative-brain/art-direction.js, src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async (extra) => {
+        const { art_direction: a } = await artDirector.direct({ frame, concept, hints: [HABB_ART_DIRECTION_HINT, ...extra] });
+        assertArtDirectionHabbRules(a);
         return { outcome: 'DIRECTED', detail: a, value: a };
       });
-      let stage = await step({ step: 'STAGE', concept_id: cid, component: 'createStageDirector', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async () => {
-        const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts });
+      let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async (extra) => {
+        const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts, hints: extra });
         return { outcome: 'STAGED', detail: s, value: s };
       });
 

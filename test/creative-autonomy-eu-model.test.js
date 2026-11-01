@@ -233,7 +233,8 @@ test('trial --execute end to end against a fetch double: the owner\'s answer pas
   const log = join(out, 'fetch.log');
   const base = { ...process.env, ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-double-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-double', NORDLA_FETCH_DOUBLE_LOG: log };
   const planId = JSON.parse(execFileSync(process.execPath, [script, '--plan', '--ideation', '--out', join(out, 'p'), '--product', 'gourde-noire'], { env: base }).toString()).plan_id;
-  assert.equal(planId, 'trial-61e7eeb84a2de902', 'the fix does not change the frozen plan');
+  // the plan in force: trial-61e7eeb84a2de902 + max_repair_calls 2 (owner-authorised repairs are part of the plan); any accidental change of plan inputs fails here
+  assert.equal(planId, 'trial-dd94896e8b89e81e');
   const run = (dir, mode) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--ideation', '--out', dir, '--product', 'gourde-noire'], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: planId, NORDLA_FETCH_DOUBLE_MODEL_LIST: mode } });
   // a paginated list without the model: refused, and NO lock taken
   const refused = run(join(out, 'r'), 'PAGE_WITHOUT_MODEL');

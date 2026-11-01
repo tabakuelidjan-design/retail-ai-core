@@ -44,11 +44,38 @@ export const STAGE_SPEC = obj({
 }, { optional: ['wanted_but_not_available'] });
 
 // HABB's hard visual rules, as words that may not appear anywhere in the stage (FR + EN, stems)
-export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'écru', 'ecru', 'taupe', 'cœur', 'coeur', 'heart', 'feuille', 'feuillage', 'leaf', 'leaves', 'foliage', 'fougère', 'eucalyptus', 'doré', 'gold', 'golden', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'marbre', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
+export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'écru', 'ecru', 'taupe', 'cœur', 'coeur', 'heart', 'feuille', 'feuillage', 'leaf', 'leaves', 'foliage', 'fougère', 'fern', 'frond', 'eucalyptus', 'botanical', 'botanique', 'végétation', 'vegetation', 'végétal', 'vegetal', 'greenery', 'verdure', 'doré', 'gold', 'golden', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'marbre', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
 const PERSONALISATION_WORDS = /(personnalis|grav|ton nom|votre nom|prénom|prenom|initiales|custom|engrav|monogram|à ton image|imprimé pour)/i;
 const CLAIM_WORDS = /(meilleur|best|n°\s?1|numéro un|garanti|guarantee|100\s?%|isotherme|insulated|24\s?h|12\s?h|incassable|unbreakable|gratuit|free)/i;
 
-const hasForbidden = (s) => { const t = String(s).toLowerCase(); return FORBIDDEN_DECOR.find((w) => new RegExp(`(^|[^a-zà-ÿœ])${w}`, 'i').test(t)) ?? null; };
+// "feuille" is also a SHEET (of paper, metal, glass...): that sense is a material, not foliage, and stays allowed
+const SHEET_SENSE = /feuilles?\s+(de|d['’])\s*(papier|métal|metal|verre|calque|acier|aluminium|zinc|cuivre|plastique|carton)/gi;
+// "leaves" is also a VERB ("the light leaves the frame", "leaves it ready"): followed by an object or an adverb it is not foliage
+const VERB_SENSE = /\bleaves\s+(it|them|him|her|us|you|me|the|a|an|its|their|his|our|your|this|that|these|those|behind|room|space|only|no|nothing|everything|something|enough|just|again|alone|open|ready|home|before|after|out|off|from)\b/gi;
+export const hasForbidden = (s) => {
+  const t = String(s).toLowerCase().replace(SHEET_SENSE, ' ').replace(VERB_SENSE, ' ');
+  return FORBIDDEN_DECOR.find((w) => new RegExp(`(^|[^a-zà-ÿœ])${w}`, 'i').test(t)) ?? null;
+};
+
+/** HABB's hard rules, as a hint given to ART_DIRECT from its FIRST call (the art direction never sees the brand rules otherwise). */
+export const HABB_ART_DIRECTION_HINT = `HABB's hard visual rules apply to every field of the art direction (atmosphere, materials, light, narrative and secondary elements, rationale): none of these may appear: ${FORBIDDEN_DECOR.join(', ')}. You MAY list them in forbidden_decorative_noise.`;
+
+/**
+ * HABB's forbidden visual elements, enforced on an ART_DIRECT answer (the Brain's own contract does not know HABB). Every field that can describe what is SEEN
+ * is checked; forbidden_decorative_noise is not (it is where the model names what must NOT appear). Refusal: BRAIN_FORBIDDEN_CONTENT with the exact field.
+ */
+export function assertArtDirectionHabbRules(art) {
+  const fields = [
+    ['art_direction.atmosphere', art.atmosphere], ['art_direction.material_language', art.material_language], ['art_direction.lighting_intent', art.lighting_intent], ['art_direction.rationale', art.rationale],
+    ...(art.narrative_elements ?? []).flatMap((e, i) => [[`art_direction.narrative_elements[${i}].element`, e.element], [`art_direction.narrative_elements[${i}].reason`, e.reason]]),
+    ...(art.permitted_secondary_elements ?? []).map((e, i) => [`art_direction.permitted_secondary_elements[${i}]`, e]),
+  ];
+  for (const [field, value] of fields) {
+    const hit = hasForbidden(value);
+    if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${field} uses a word HABB forbids: ${hit}`, field, { problem: 'HABB_FORBIDDEN_DECOR', word: hit });
+  }
+  return art;
+}
 const allTexts = (v) => [v.headline, v.rationale, v.key_light.purpose, ...v.accent_lights.map((l) => l.purpose), ...v.props.flatMap((p) => [p.reason, p.word ?? ''])];
 
 export const STAGE_RULES = Object.freeze([
@@ -103,8 +130,9 @@ export function buildStageInstruction({ frame, concept, artDirection, facts, hin
     ...renderContract(STAGE_SPEC, 'answer'),
     ...renderRules(STAGE_RULES),
     'The headline is YOUR proposal: it will be shown to the owner for approval. Write it in the language of the brief (French for HABB).',
+    'rationale: ONE concise sentence of about 180 to 220 characters (the contract refuses more than 300). Say why this set serves the concept; do not list the choices again.',
     'This vocabulary is deliberately small. If the concept or the art direction needs something it cannot express (a material, a shape, a light effect, a place, an object, a camera move, an atmosphere), do NOT force a poor substitute silently: choose the closest available option AND name what you really wanted in wanted_but_not_available, in plain words. It is reported to the owner as a limit of the system, not as your failure.',
-    ...(hints.length ? ['This is a REVISION of an earlier stage for the same concept. Fix these defects (found by the critic on the rendered image):', ...hints.map((h) => `- ${h}`)] : []),
+    ...(hints.length ? ['This is a REVISION of an earlier stage for the same concept. Fix these defects (found on the rendered image or by Nordla\'s contract):', ...hints.map((h) => `- ${h}`)] : []),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.ART_DIRECT })),
   ].join('\n');

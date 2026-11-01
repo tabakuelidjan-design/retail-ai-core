@@ -1,0 +1,50 @@
+{
+ "plan_id": "trial-dd94896e8b89e81e",
+ "objective": "Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB",
+ "mode": "IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)",
+ "product": "gourde-noire",
+ "model": "qwen3-vl-plus",
+ "scope": "EU",
+ "region": "eu-central-1",
+ "limits": {
+  "mode": "IDEATION_ONLY",
+  "max_spend_eur": 1.5,
+  "max_text_calls_per_product": 14,
+  "max_repair_calls": 2,
+  "max_vision_calls_per_product": 0,
+  "max_output_tokens_per_text_call": 4000,
+  "images_sent": 0,
+  "attempts": 1,
+  "products": [
+   "gid://shopify/Product/15514012254556 (variant Noir)"
+  ],
+  "brief": {
+   "objective": "Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB",
+   "format": "INSTAGRAM_FEED_4_5",
+   "variant": "Noir",
+   "product_id": "gid://shopify/Product/15514012254556",
+   "snapshot_read_at": "2026-11-01",
+   "product_snapshot_sha256": "2e0f33fe55acf9c539eba5f5fce922f0e61bbcee34e1d4e668fa0349f977a6ca",
+   "brand_sha256": "17ef5639e0d0d164500f352be033018f76a9b86668fe2663de7916de8725c641"
+  }
+ },
+ "catalogue_verified_at": "2026-11-01",
+ "calls_by_stage": {
+  "FRAME": 1,
+  "IDEATE": 1,
+  "SELECT": 1,
+  "ART_DIRECT": 3,
+  "STAGE": 3,
+  "REPAIR": 2
+ },
+ "money_forecast": {
+  "ESTIMATE_expected_eur": 0.0154,
+  "ESTIMATE_worst_case_eur": 0.0727,
+  "CEILING_application_eur": 1.5,
+  "CEILING_ledger_max_reserved_eur": 0.2887,
+  "USAGE_and_INVOICE": "après l'essai seulement : usage déclaré par Alibaba dans chaque réponse (calculé par ce script) ; facture réelle dans la console Alibaba, à vérifier à la main"
+ },
+ "status": "PROPOSED — NOT AUTHORISED",
+ "supersedes": "trial-61e7eeb84a2de902 (its single attempt was used on 2026-11-01; stopped at STAGE)",
+ "snapshot_file": "test/fixtures/creative-autonomy/shopify-gourde-tyeso.json"
+}

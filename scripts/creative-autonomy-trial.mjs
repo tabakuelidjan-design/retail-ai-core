@@ -75,10 +75,12 @@ const scope = env.NORDLA_ALIBABA_SCOPE;
 const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
 // what Nordla is ASKED is part of what the owner authorises: objective, product snapshot, variant, format and brand rules are bound to the plan id
 const BRIEF_BINDING = briefBinding({ snapshot: P.snap, variant: P.variant, objective: P.objective, format: 'INSTAGRAM_FEED_4_5', brand: HABB_BRAND });
-const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 14, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
+// max_repair_calls: contract repairs (one more call of the SAME stage with the exact violation), part of what the owner authorises; 0 = none
+const MAX_REPAIR_CALLS = 2;
+const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 14, max_repair_calls: MAX_REPAIR_CALLS, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
 const limits = ideation
   ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], brief: BRIEF_BINDING }
-  : { ...TRIAL_LIMITS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha, brief: BRIEF_BINDING };
+  : { ...TRIAL_LIMITS, max_repair_calls: MAX_REPAIR_CALLS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha, brief: BRIEF_BINDING };
 const planId = trialPlanId({ model, scope, limits });
 
 const inputFor = () => ({ product: P.snap.product, variantTitle: P.variant, readAt: P.snap.read_at, objective: P.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath,
@@ -120,7 +122,10 @@ async function sizing() {
     compose: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { fidelity: { max_level_difference_after_removing_layers: 0 }, technical: { defects: [], text_contrast_ratio: 21, product_height_share: 0.5 }, text_used: { facts_lines: [] } }; } };
   const tmpPhoto = join(mkdtempSync(join(tmpdir(), 'sz-')), 'p.jpg'); writeFileSync(tmpPhoto, 'sizing');
   await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', input: { ...inputFor(), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
-  if (ideation) return calls; // FRAME, IDEATE, SELECT, 3 ART_DIRECT, 3 STAGE: no refinement (nothing is rendered), no critique (no image)
+  // the authorised contract repairs, priced as the largest stage call (worst case: all of them used)
+  const biggest = calls.reduce((a, c) => (c.input_chars > a.input_chars ? c : a), calls[0]);
+  for (let i = 0; i < MAX_REPAIR_CALLS; i += 1) calls.push({ ...biggest, stage: 'REPAIR' });
+  if (ideation) return calls; // FRAME, IDEATE, SELECT, 3 ART_DIRECT, 3 STAGE + up to 2 repairs: no refinement (nothing is rendered), no critique (no image)
   const stageCall = calls.find((c) => c.stage === 'STAGE');
   for (let i = 0; i < normalizeConceptSet(CONCEPTS).length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
   const critic = buildConceptCriticInstruction({ brief: {} });
@@ -172,7 +177,7 @@ const budget = new SpendGuard({ maxSpendEur: TRIAL_LIMITS.max_spend_eur, maxImag
 const ports = ideation
   ? { ...connectProviders({ env: { ...env, NORDLA_MEDIA_AUTHORIZATION_FILE: '' }, journal, budget, trialAuthorized: true, maxTextCalls: limits.max_text_calls_per_product, maxVisionCalls: 0 }), visionFor: null }
   : connectProviders({ env, journal, budget, sourcePhotoBytes: photoBytes, trialAuthorized: true, maxTextCalls: TRIAL_LIMITS.max_text_calls_per_product, maxVisionCalls: TRIAL_LIMITS.max_vision_calls_per_product });
-const r = await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', input: inputFor(), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, productKey) });
+const r = await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', maxRepairCalls: limits.max_repair_calls, input: inputFor(), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, productKey) });
 
 // USAGE: what Alibaba itself reported, priced at the model's list price
 const rows = readFileSync(journalPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

@@ -69,3 +69,29 @@ Status: **UNVERIFIED**. The script refuses to execute until `NORDLA_PHOTO_RIGHTS
 
 ## Visual critic
 `scripts/creative-autonomy-media-authorization.mjs` drafts the media record for the photo. The draft is inactive by construction (`revoked: true`, retention not acknowledged): the existing guard refuses it with RETENTION_NOT_ACKNOWLEDGED. It is activated only after the owner agrees. No image leaves the machine before that.
+
+## First real attempt: trial-61e7eeb84a2de902 (2026-11-01)
+- 5 real answers from Alibaba (FRAME, IDEATE, SELECT, ART_DIRECT, STAGE), then a stop at STAGE: `BRAIN_TEXT_INVALID` on `stage.rationale` (361 characters for a 300 limit).
+- The ART_DIRECT answer contained leaves and foliage. At that time HABB's rules were not checked at that stage.
+- The single attempt of this plan is used. Its lock stays in place.
+
+### Corrections (no contract weakened)
+- **Prompt**: STAGE asks for ONE sentence of about 180 to 220 characters. The hard limit stays 300.
+- **HABB rules from ART_DIRECT on**:
+  - The rules are given as a hint from the first call, and the answer is checked: atmosphere, materials, light, narrative and secondary elements, rationale. `forbidden_decorative_noise` is exempt, because that is where the model names what must not appear.
+  - The verb "leaves" and "feuille de papier / de métal…" are not counted as foliage.
+  - The list adds fern, frond, botanical, vegetation, greenery and verdure.
+- **Bounded contract repair**:
+  - When an ART_DIRECT or STAGE answer is valid JSON but breaks a rule (length, forbidden word, missing key…), Nordla may ask the same stage once more, with the exact field and rule.
+  - The number of repairs is a plan limit (`max_repair_calls`), so it is part of what the owner authorises. The default is 0.
+  - There is never a repair after a provider failure, never two repairs for one call, and every repair goes through the same SpendGuard, call cap and journal as any other call.
+  - The refused answer stays in the trace.
+- **New plan**: `trial-dd94896e8b89e81e`, PROPOSED and not authorised. It is identical to the previous one, plus `max_repair_calls: 2`.
+  - Calls: 9 planned + up to 2 repairs.
+  - Expected ≈ 0.015 €; worst case ≈ 0.073 €; ledger ≤ 0.29 €; ceiling 1.50 €.
+
+### Offline replay of the 5 real answers
+`scripts/creative-autonomy-replay.mjs --trial <trial folder> --product gourde-noire --diag <new folder>`
+- The trial folder is read-only: every file is hashed before and after, and the run fails if anything changed. The lock is untouched.
+- The answers are copied to the diagnostic folder and judged against the current contracts.
+- No network, no new answer. The replay cannot continue the run: every stage after the last recorded answer needs a new authorised call.
