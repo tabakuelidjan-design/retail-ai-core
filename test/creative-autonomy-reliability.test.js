@@ -55,19 +55,30 @@ test('a 361-character rationale is refused with BRAIN_TEXT_INVALID on stage.rati
   assert.throws(() => normalizeStage(baseStage(CONCEPT, { rationale: 'x'.repeat(301) }), { concept: CONCEPT, personalisation_offered: false }), /TEXT_INVALID|rationale/);
 });
 
-// the REAL answers of trial-61e7eeb84a2de902, once copied from the owner's trial folder (read-only copies: the originals stay where they are)
-const REAL = fileURLToPath(new URL('./fixtures/creative-autonomy/real-trial-61e7eeb84a2de902/', import.meta.url));
-const realFile = (re) => (existsSync(REAL) ? readdirSync(REAL).find((f) => re.test(f)) : null);
-test('REAL trial answer: the recorded STAGE response is refused exactly as in the trial (stage.rationale, 361 > 300)', { skip: !realFile(/-STAGE-.*\.response\.txt$/) && 'copy the real brain-calls files into test/fixtures/creative-autonomy/real-trial-61e7eeb84a2de902/' }, () => {
-  const raw = JSON.parse(readFileSync(join(REAL, realFile(/-STAGE-.*\.response\.txt$/)), 'utf8'));
-  const req = JSON.parse(readFileSync(join(REAL, realFile(/-STAGE-.*\.request\.json$/)), 'utf8'));
+// the REAL answers of trial-61e7eeb84a2de902 stay PRIVATE: they are never copied into the repository. The two tests below read them, read-only, from the folder
+// named by NORDLA_REAL_TRIAL_CALLS (for example the replay's copy: <diag>\\brain-calls-copy). Without it they are skipped.
+const REAL = process.env.NORDLA_REAL_TRIAL_CALLS || '';
+const realFile = (re) => (REAL && existsSync(REAL) ? readdirSync(REAL).find((f) => re.test(f)) : null);
+const SKIP_REAL = 'set NORDLA_REAL_TRIAL_CALLS to a COPY of the real brain-calls folder (outside the repository)';
+test('REAL trial answer: the recorded STAGE response is refused exactly as in the trial (stage.rationale, 361 > 300)', { skip: !realFile(/^\d+-STAGE-.*\.response\.txt$/) && SKIP_REAL }, () => {
+  const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.response\.txt$/)), 'utf8'));
+  const req = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.request\.json$/)), 'utf8'));
   const { concept, verified_facts: facts } = JSON.parse(req.user);
   assert.equal(raw.rationale.length, 361);
   assert.throws(() => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts?.personalisation_offered) }), (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.rationale');
 });
-test('REAL trial answer: the recorded ART_DIRECT response is refused by HABB\'s rules (leaves / foliage)', { skip: !realFile(/-ART_DIRECT-.*\.response\.txt$/) && 'copy the real brain-calls files into test/fixtures/creative-autonomy/real-trial-61e7eeb84a2de902/' }, () => {
-  const raw = JSON.parse(readFileSync(join(REAL, realFile(/-ART_DIRECT-.*\.response\.txt$/)), 'utf8'));
+test('REAL trial answer: the recorded ART_DIRECT response is refused by HABB\'s rules (leaves / foliage)', { skip: !realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/) && SKIP_REAL }, () => {
+  const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/)), 'utf8'));
   assert.throws(() => assertArtDirectionHabbRules(raw), (e) => e.code === BRAIN_ERROR.FORBIDDEN_CONTENT && /leaves|leaf|foliage|feuill/.test(e.message));
+});
+test('privacy: no recorded model answer and no brain-calls folder is inside the repository', () => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const found = [];
+  const PRIVATE_DIRS = /^(brain-calls|brain-calls-copy|real-trial-.*|nordla-essais|nordla-diagnostics|\.nordla)$/;
+  const PRIVATE_FILES = /(\.response\.txt|\.calls\.jsonl|^RAPPORT\.md|^REPLAY\.md|^replay\.json|^propositions\.json|^trace\.json|^trial-[0-9a-f]{16}\.(lock|plan\.json|result\.json))$/;
+  const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { if (['node_modules', '.git'].includes(e.name)) continue; const p = join(d, e.name); if (e.isDirectory()) { if (PRIVATE_DIRS.test(e.name)) found.push(p); else walk(p); } else if (PRIVATE_FILES.test(e.name) || (e.name.endsWith('.request.json') && /\d+-(FRAME|IDEATE|SELECT|ART_DIRECT|STAGE)/.test(e.name))) found.push(p); } };
+  walk(root);
+  assert.deepEqual(found, []);
 });
 
 // ---------------- 2. bounded, authorised repair
@@ -178,6 +189,78 @@ test('replay: the recorded answers are judged against the current contracts offl
   assert.equal(by.ART_DIRECT.current_contract, 'REFUSED'); assert.equal(by.ART_DIRECT.refusal.code, BRAIN_ERROR.FORBIDDEN_CONTENT);
   assert.equal(by.STAGE.current_contract, 'REFUSED'); assert.equal(by.STAGE.refusal.field, 'stage.rationale'); assert.equal(by.STAGE.rationale_chars, 361);
   assert.match(readFileSync(join(diag, 'REPLAY.md'), 'utf8'), /intact : \*\*oui\*\*/);
+  assert.ok(!res.stdout.toString().includes(R361.slice(0, 40)) && !res.stdout.toString().includes('foliage'), 'the console shows statuses, never the model\'s text');
   // refused: a diagnostic folder inside the trial folder
   assert.notEqual(spawnSync(process.execPath, [script, '--trial', trial, '--product', 'gourde-noire', '--diag', join(trial, 'diag')]).status, 0);
+});
+
+test('replay: an authorised repair answer (STAGE_REPAIR) is judged by its stage\'s contract', { timeout: 60_000 }, async () => {
+  const { spawnSync } = await import('node:child_process');
+  const trial = mkdtempSync(join(tmpdir(), 'trial-rep-'));
+  const p = port({ stage: (c, n) => (n === 1 ? { rationale: R361 } : {}) });
+  await runAutonomous({ mode: 'IDEATION_ONLY', maxRepairCalls: 1, input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'o', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports: { text: p.complete, visionFor: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: {}, workdir: join(trial, 'gourde-noire') });
+  const diag = join(mkdtempSync(join(tmpdir(), 'diag-')), 'r');
+  const res = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/creative-autonomy-replay.mjs', import.meta.url)), '--trial', trial, '--product', 'gourde-noire', '--diag', diag]);
+  assert.equal(res.status, 0, res.stderr.toString());
+  const rows = JSON.parse(readFileSync(join(diag, 'replay.json'), 'utf8')).results;
+  const repair = rows.find((r) => r.repair);
+  assert.equal(repair.stage, 'STAGE'); assert.equal(repair.current_contract, 'ACCEPTED');
+  assert.equal(rows.filter((r) => r.stage === 'STAGE' && r.current_contract === 'REFUSED').length, 1);
+});
+
+// ---------------- hard limits on the REAL lane objects (Qwen port, SpendGuard), with a fetch double: no network
+import { connectProviders } from '../src/creative-autonomy/providers.js';
+import { SpendGuard } from '../src/marketing-creative/alibaba/budget.js';
+const LANE_ENV = { ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-limits-00000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-limits', ALIBABA_QWEN_TEXT_MODEL: 'qwen3-vl-plus', NORDLA_ALIBABA_SCOPE: 'EU' };
+function laneFetch({ stageRationale = () => 'double' } = {}) {
+  const sent = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body); const system = body.messages[0].content; const user = body.messages[1].content;
+    const kind = system.includes('problem framer') ? 'FRAME' : system.includes('concept director') ? 'IDEATE' : system.includes('concept selector') ? 'SELECT' : system.includes('art director') ? 'ART_DIRECT' : 'STAGE';
+    sent.push(kind); const n = sent.filter((k) => k === kind).length;
+    let a;
+    if (kind === 'FRAME') a = frameAnswer(); else if (kind === 'IDEATE') a = { concepts: CONCEPTS }; else if (kind === 'SELECT') a = evaluationsAnswer(normalizeConceptSet(CONCEPTS), []);
+    else if (kind === 'ART_DIRECT') { const c = JSON.parse(user).concept; a = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }
+    else { const c = JSON.parse(user).concept; a = baseStage(c, { rationale: stageRationale(n) }); }
+    return new Response(JSON.stringify({ id: `r${sent.length}`, model: body.model, choices: [{ message: { content: JSON.stringify(a) } }], usage: { prompt_tokens: 3000, completion_tokens: 800 } }), { status: 200 });
+  };
+  return { fetchImpl, sent };
+}
+const runLane = (ports, maxRepairCalls) => runAutonomous({ mode: 'IDEATION_ONLY', maxRepairCalls, input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'o', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports: { ...ports, visionFor: null }, engines: {}, workdir: mkdtempSync(join(tmpdir(), 'lane-')) });
+
+test('call cap: the Qwen port refuses the call past its cap BEFORE sending it; an invalid answer cannot loop', async () => {
+  const f = laneFetch({ stageRationale: () => R361 }); // every STAGE answer is invalid
+  const ports = connectProviders({ env: LANE_ENV, trialAuthorized: true, fetchImpl: f.fetchImpl, maxTextCalls: 6 });
+  const r = await runLane(ports, 2);
+  assert.equal(r.status, RUN_STATUS.STOPPED_ERROR);
+  assert.ok(f.sent.length <= 6, `sent ${f.sent.length}`);
+  assert.equal(f.sent.filter((k) => k === 'STAGE').length, 2, 'one STAGE + exactly one repair, then stop');
+});
+
+test('two-repair limit for the whole run: three invalid answers end the run after exactly 2 repairs', async () => {
+  const f = laneFetch({ stageRationale: (n) => ([1, 3, 5].includes(n) ? R361 : 'double') }); // concept 1: bad, repaired; concept 2: bad, repaired; concept 3: bad, no repair left
+  const ports = connectProviders({ env: LANE_ENV, trialAuthorized: true, fetchImpl: f.fetchImpl, maxTextCalls: 14 });
+  const r = await runLane(ports, 2);
+  assert.deepEqual(r.repairs, { used: 2, allowed: 2 });
+  assert.equal(r.status, RUN_STATUS.STOPPED_ERROR);
+  assert.equal(f.sent.filter((k) => k === 'STAGE').length, 5, '3 STAGE calls + 2 repairs, none more');
+});
+
+test('budget: when the next call\'s worst case would cross the ceiling, it is refused before being sent', async () => {
+  const f = laneFetch();
+  const budget = new SpendGuard({ maxSpendEur: 0.03, maxImages: 0, maxVideoSeconds: 0 });
+  const ports = connectProviders({ env: LANE_ENV, trialAuthorized: true, fetchImpl: f.fetchImpl, maxTextCalls: 14, budget });
+  const r = await runLane(ports, 2);
+  assert.equal(r.status, RUN_STATUS.STOPPED_ERROR);
+  const snapBudget = budget.snapshot();
+  assert.ok(snapBudget.settled_eur + snapBudget.reserved_eur <= 0.03 + 1e-9, JSON.stringify(snapBudget));
+  assert.ok(f.sent.length < 9, `only ${f.sent.length} calls fitted under the ceiling`);
+});
+
+test('no authorisation, no call: a configured key without the trial authorisation sends nothing', async () => {
+  const f = laneFetch();
+  const ports = connectProviders({ env: LANE_ENV, fetchImpl: f.fetchImpl });
+  const r = await runLane(ports, 2);
+  assert.equal(r.status, RUN_STATUS.STOPPED_PROVIDER_NOT_CONNECTED);
+  assert.equal(f.sent.length, 0);
 });

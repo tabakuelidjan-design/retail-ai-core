@@ -15,12 +15,12 @@
 //              console (Billing), which this script cannot read: it is the one figure to check by hand
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, statSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir, userInfo } from 'node:os';
 import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders } from '../src/creative-autonomy/providers.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
-import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel } from '../src/creative-autonomy/trial.js';
+import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel, codeFingerprint, secretsFileProblems, runtimeInjections } from '../src/creative-autonomy/trial.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
 import { SpendGuard } from '../src/marketing-creative/alibaba/budget.js';
 import { JsonlCallJournal } from '../src/marketing-creative/alibaba/journal.js';
@@ -54,12 +54,7 @@ function insideGitWorkTree(p) { let d = resolve(p); for (;;) { if (existsSync(jo
 function loadSecrets() {
   const file = process.env.NORDLA_ALIBABA_SECRETS_FILE;
   if (!file) return { source: process.env.ALIBABA_MODEL_STUDIO_API_KEY ? 'environment' : 'none', values: {} };
-  const problems = [];
-  if (!existsSync(file)) problems.push('fichier de secrets introuvable');
-  else {
-    if (insideGitWorkTree(file)) problems.push('le fichier de secrets est dans un dépôt git : refusé');
-    if ((statSync(file).mode & 0o077) !== 0) problems.push('le fichier de secrets est lisible par d\'autres que toi (chmod 600 requis)');
-  }
+  const problems = secretsFileProblems({ exists: existsSync(file), platform: process.platform, mode: existsSync(file) ? statSync(file).mode : 0, insideGitRepo: existsSync(file) && Boolean(insideGitWorkTree(file)) });
   if (problems.length) return { source: 'file', values: {}, problems };
   const values = {};
   for (const line of readFileSync(file, 'utf8').split('\n')) {
@@ -77,11 +72,26 @@ const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
 const BRIEF_BINDING = briefBinding({ snapshot: P.snap, variant: P.variant, objective: P.objective, format: 'INSTAGRAM_FEED_4_5', brand: HABB_BRAND });
 // max_repair_calls: contract repairs (one more call of the SAME stage with the exact violation), part of what the owner authorises; 0 = none
 const MAX_REPAIR_CALLS = 2;
-const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 14, max_repair_calls: MAX_REPAIR_CALLS, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
-const limits = ideation
+// the call cap equals the worst case shown to the owner: 9 planned calls + every authorised repair (protocol re-asks included)
+const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 9 + MAX_REPAIR_CALLS, max_repair_calls: MAX_REPAIR_CALLS, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
+// the code that a live attempt would execute is part of the plan (CRLF-normalised: same fingerprint on Windows and Linux)
+const CODE = codeFingerprint();
+const limits0 = ideation
   ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], brief: BRIEF_BINDING }
   : { ...TRIAL_LIMITS, max_repair_calls: MAX_REPAIR_CALLS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha, brief: BRIEF_BINDING };
+// ONE attempt per plan on this machine, whatever --out is (the lock in the output folder alone could be bypassed by choosing another folder).
+// Its location is part of the plan: overriding it (NORDLA_ATTEMPT_REGISTRY, used by tests) gives ANOTHER plan id, which the owner's authorisation does not match.
+const registryOverride = process.env.NORDLA_ATTEMPT_REGISTRY || null;
+// the ACCOUNT's home from the OS (passwd on POSIX, the user profile of the process token on Windows), not $HOME / %USERPROFILE%, which are plain variables
+const userHome = (() => { try { return userInfo().homedir || homedir(); } catch { return homedir(); } })();
+const registryDir = resolve(registryOverride || join(userHome, '.nordla', 'attempt-locks'));
+const limits = {
+  ...limits0, code_sha256: CODE.code_sha256,
+  attempt_registry: registryOverride ? `OVERRIDE:${createHash('sha256').update(registryDir).digest('hex').slice(0, 16)}` : 'DEFAULT_USER_HOME',
+  runtime_injections: runtimeInjections(), // --import / --require / NODE_OPTIONS: none in a real run
+};
 const planId = trialPlanId({ model, scope, limits });
+const registryLock = join(registryDir, `${planId}.lock`);
 
 const inputFor = () => ({ product: P.snap.product, variantTitle: P.variant, readAt: P.snap.read_at, objective: P.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath,
   photoMeta: { media_type: photoPath?.endsWith('.png') ? 'image/png' : 'image/jpeg', width_px: null, height_px: null, origin: 'SUPPLIER_IMAGE_OR_UNKNOWN', rights_class: rights === 'OWNER_CONFIRMED' ? 'LICENSED' : 'UNKNOWN' } });
@@ -99,6 +109,8 @@ function preflight() {
   ok('modèle accepté par le lane Alibaba', !cfgError, cfgError ?? 'accepté');
   if (!ideation) ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
   if (!ideation) ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
+  ok('aucune tentative antérieure de ce plan sur cette machine', !existsSync(registryLock), existsSync(registryLock) ? `déjà tentée (${registryLock}) : un nouvel essai demande un nouveau plan` : `registre : ${registryDir}`);
+  ok('registre des tentatives hors dépôt git', !insideGitWorkTree(registryDir), insideGitWorkTree(registryDir) ? 'refusé' : 'ok');
   ok('dossier de sortie hors dépôt git', !insideGitWorkTree(outDir), insideGitWorkTree(outDir) ? 'refusé : les traces ne doivent pas finir dans GitHub' : 'ok');
   ok('autorisation d\'essai pour CE plan', env.NORDLA_TRIAL_AUTHORIZATION === planId, env.NORDLA_TRIAL_AUTHORIZATION ? (env.NORDLA_TRIAL_AUTHORIZATION === planId ? 'conforme' : 'ne correspond pas au plan') : 'absente');
   return checks;
@@ -140,7 +152,7 @@ const forecast = forecastCost({ calls, model, imageTokens: 1000 });
 // the vision port books 3 000 image tokens per image: the ledger figure uses the same rule
 const ledger = forecastCost({ calls, model, imageTokens: 3000 });
 const plan = {
-  plan_id: planId, objective: P.objective, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
+  plan_id: planId, code_sha256: CODE.code_sha256, code_files: CODE.files, attempt_registry: registryDir, runtime_injections: limits.runtime_injections.length, objective: P.objective, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
   limits, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks,
   calls_by_stage: calls.reduce((a, c) => ({ ...a, [c.stage]: (a[c.stage] ?? 0) + 1 }), {}),
   money: {
@@ -171,7 +183,8 @@ await journal.append({ event: 'MODEL_LIST_CHECK', provider: 'alibaba-cloud-model
 console.log(JSON.stringify({ model_list_check: { http: listed.status, success: confirmation.success, total: confirmation.total, confirmed: served, request_id: confirmation.request_id } }));
 if (!served) { console.error(JSON.stringify({ refused: 'MODEL_NOT_CONFIRMED_BY_PROVIDER', http: listed.status, success: confirmation.success, total: confirmation.total, request_id: confirmation.request_id }, null, 1)); process.exit(3); }
 
-await takeLiveCallLock(join(outDir, `${planId}.lock`)); // from here on, paid calls may happen: one attempt, never released by code
+await takeLiveCallLock(registryLock); // machine-wide: one attempt per plan, never released by code
+await takeLiveCallLock(join(outDir, `${planId}.lock`)); // and the evidence folder's own lock, as before
 const budget = new SpendGuard({ maxSpendEur: TRIAL_LIMITS.max_spend_eur, maxImages: 0, maxVideoSeconds: 0 });
 
 const ports = ideation

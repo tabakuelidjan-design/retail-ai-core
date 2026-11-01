@@ -25,3 +25,21 @@ config/marketing-creative.alibaba.env
 # benchmark run reports
 benchmark/ask/results/
 benchmark/ask/adapters/configs/*.local.json
+
+# Nordla Creative Autonomy: real model answers, trial folders and attempt registries are private - never commit
+**/brain-calls/
+*.response.txt
+test/fixtures/creative-autonomy/real-trial-*/
+nordla-essais/
+nordla-diagnostics/
+.nordla/
+brain-calls-copy/
+*.calls.jsonl
+# trial output layout (folders named by product key, and plan files named by plan id): scoped, so ordinary files elsewhere are never hidden
+**/gourde-noire/
+**/coque-iphone12/
+trial-*.plan.json
+trial-*.result.json
+trial-*.lock
+REPLAY.md
+replay.json

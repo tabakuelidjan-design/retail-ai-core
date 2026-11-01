@@ -4,6 +4,8 @@
 //   node scripts/creative-autonomy-report.mjs <trial outDir> <productKey> [planId]   ->  <outDir>/<productKey>/RAPPORT.md
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { hasForbidden } from '../src/creative-autonomy/stage-contract.js';
+import { inventedCapabilities } from '../src/creative-autonomy/habb-guard.js';
 
 const [outDir, productKey, planIdArg] = process.argv.slice(2);
 const work = join(outDir, productKey);
@@ -37,7 +39,8 @@ L.push('> Limite : c\'est le même modèle qui a imaginé puis jugé ces concept
 const KEY = ['DISTINCTIVENESS', 'GENERIC_RISK', 'RELEVANCE_TO_BRIEF', 'COMMERCIAL_CLARITY', 'BRAND_COMPATIBILITY', 'CONCEPT_STRENGTH'];
 for (const e of trace.selection?.evaluations ?? []) {
   L.push('', `### \`${e.concept_id}\``);
-  for (const k of KEY) { const cr = (e.criteria ?? []).find((x) => x.criterion === k); if (cr) L.push(`- **${k}** : ${cr.outcome} · « ${q(cr.evidence)} »${cr.refinement ? ` · à renforcer : « ${q(cr.refinement)} »` : ''}`); }
+  const warn = (x) => { const d = hasForbidden(x); const c = inventedCapabilities(x, ''); return d || c.length ? ` ⚠ contraire aux règles HABB (${[d, ...c].filter(Boolean).join(', ')})` : ''; };
+  for (const k of KEY) { const cr = (e.criteria ?? []).find((x) => x.criterion === k); if (cr) L.push(`- **${k}** : ${cr.outcome} · « ${q(cr.evidence)} »${cr.refinement ? ` · à renforcer : « ${q(cr.refinement)} »${warn(cr.refinement)}` : ''}`); }
 }
 if (trace.selection?.selection) L.push('', `Décision dérivée par les règles fixes de Nordla : **${trace.selection.selection.outcome ?? JSON.stringify(trace.selection.selection)}**`);
 
@@ -58,7 +61,8 @@ L.push('', '## 4. Ce que Nordla voulait faire et que la grammaire actuelle ne pe
 let gaps = 0;
 for (const p of trace.proposals ?? []) {
   const w = p.grammar_gap?.wanted_but_not_available ?? []; gaps += w.length;
-  L.push(`- \`${p.concept.concept_id}\` : ${w.length ? w.map((x) => `« ${q(x)} »`).join(' ; ') : 'rien de déclaré'}`);
+  const flag = (x) => { const d = hasForbidden(x); const c = inventedCapabilities(x, ''); return d || c.length ? ` ⚠ contraire aux règles HABB (${[d, ...c].filter(Boolean).join(', ')}) : ne sera jamais produit` : ''; };
+  L.push(`- \`${p.concept.concept_id}\` : ${w.length ? w.map((x) => `« ${q(x)} »${flag(x)}`).join(' ; ') : 'rien de déclaré'}`);
 }
 L.push('', gaps ? `Total : ${gaps} manque(s) déclaré(s) par le modèle lui-même. C'est la preuve à utiliser pour décider du prochain développement.` : 'Le modèle n\'a déclaré aucun manque. Ce constat est enregistré tel quel, il ne prouve pas que la grammaire suffit.');
 

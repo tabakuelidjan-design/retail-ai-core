@@ -25,7 +25,8 @@ import { createArtDirector } from '../creative-brain/art-direction.js';
 import { createConceptCritic } from '../creative-brain/concept-critic.js';
 import { createConceptSelector } from '../creative-brain/concept-selection.js';
 import { buildAutonomousBrief } from './brief.js';
-import { createStageDirector, normalizeStage, assertArtDirectionHabbRules, HABB_ART_DIRECTION_HINT } from './stage-contract.js';
+import { createStageDirector, normalizeStage, HABB_ART_DIRECTION_HINT } from './stage-contract.js';
+import { assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard } from './habb-guard.js';
 import { BRAIN_ERROR } from '../creative-brain/validation.js';
 import { PROVIDER_STATE, WHAT_IS_NEEDED } from './providers.js';
 
@@ -50,11 +51,11 @@ export const MAX_REFINE_ROUNDS = 2;
  * authorised plan says so: maxRepairCalls (default 0 = no repair, the run stops as before). Never on a provider failure (no retry policy), never twice for
  * the same stage call, and every repair goes through the same port, SpendGuard, call cap and journal as any other call. The refused answer stays in the trace.
  */
-export const REPAIRABLE = Object.freeze(new Set([BRAIN_ERROR.TEXT_INVALID, BRAIN_ERROR.MISSING_KEY, BRAIN_ERROR.UNKNOWN_KEY, BRAIN_ERROR.ENUM_INVALID, BRAIN_ERROR.LIST_INVALID, BRAIN_ERROR.NUMERIC_VALUE, BRAIN_ERROR.FORBIDDEN_CONTENT, BRAIN_ERROR.RULE_VIOLATION]));
+export const REPAIRABLE = Object.freeze(new Set([BRAIN_ERROR.NOT_DISTINCT, BRAIN_ERROR.TEXT_INVALID, BRAIN_ERROR.MISSING_KEY, BRAIN_ERROR.UNKNOWN_KEY, BRAIN_ERROR.ENUM_INVALID, BRAIN_ERROR.LIST_INVALID, BRAIN_ERROR.NUMERIC_VALUE, BRAIN_ERROR.FORBIDDEN_CONTENT, BRAIN_ERROR.RULE_VIOLATION]));
 export const repairHint = (error) => `Your previous answer was REFUSED by Nordla's contract: ${error.code} at ${error.field ?? 'unknown field'}: ${String(error.message).slice(0, 240)}. Return the whole answer again with this field corrected; keep everything else that was valid.`;
 
 /** Default local engines: real processes, zero cost. Tests may replace them. */
-export function localEngines({ python = 'python3', blenderPython = process.env.NORDLA_BLENDER_PYTHON || 'python3', renderScale = 0.5, samples = 32 } = {}) {
+export function localEngines({ python = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), blenderPython = process.env.NORDLA_BLENDER_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), renderScale = 0.5, samples = 32 } = {}) {
   const py = async (bin, args) => (await run$(bin, args, { maxBuffer: 1 << 24, timeout: 900_000 })).stdout;
   return {
     name: { examine: 'examine_product.py', render: 'render_stage.py (Blender Cycles)', compose: 'compose_stage.py' },
@@ -127,9 +128,17 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   const humanInterventions = [
     { when: 'avant le passage', who: 'propriétaire', what: 'a choisi le produit, l\'objectif commercial, le format et fourni la photo', creative: false },
   ];
-  let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0;
+  let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0; let repairNote = null; let callsInStep = 0;
   const brainDir = join(workdir, 'brain-calls');
-  const metered = ports.text ? async (instruction) => {
+  const metered = ports.text ? async (original) => {
+    // during an authorised repair, the exact violation is appended to the stage's own instruction (works for every Brain stage, no Brain module changed)
+    const instruction = repairNote ? { ...original, system: `${original.system}\n${repairNote}` } : original;
+    // a SECOND call inside one stage call is the Brain's own protocol re-ask (invalid JSON): it is a repair too, and it spends the SAME budget, refused before sending
+    callsInStep += 1;
+    if (callsInStep > 1) {
+      if (repairsUsed >= maxRepairCalls) throw Object.assign(new Error(`repair budget exhausted (${repairsUsed}/${maxRepairCalls}): the protocol re-ask was not sent`), { code: 'REPAIR_BUDGET_EXHAUSTED' });
+      repairsUsed += 1;
+    }
     brainCall += 1; mkdirSync(brainDir, { recursive: true });
     const tag = `${String(brainCall).padStart(2, '0')}-${currentStep ?? 'STAGE'}`;
     writeFileSync(join(brainDir, `${tag}.request.json`), JSON.stringify({ system: instruction.system, user: instruction.user }, null, 1));
@@ -141,7 +150,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   } : null;
 
   async function step(rec, fn) {
-    const t0 = now(); lastCost = 0; lastModel = null; currentStep = rec.concept_id ? `${rec.step}-${rec.concept_id}` : rec.step;
+    const t0 = now(); lastCost = 0; lastModel = null; callsInStep = 0; currentStep = rec.concept_id ? `${rec.step}-${rec.concept_id}` : rec.step;
     const entry = { n: trace.length + 1, ...rec, model: null, cost_eur: 0, ms: 0, outcome: null, detail: null };
     trace.push(entry);
     try {
@@ -155,10 +164,13 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   }
   /** One stage call; if its answer breaks a contract rule and the plan allows a repair, ONE more call of the same stage with the exact violation. */
   async function repairable(rec, call) {
-    try { return await step(rec, () => call([])); } catch (error) {
+    try { return await step(rec, call); } catch (error) {
       if (!REPAIRABLE.has(error?.code) || repairsUsed >= maxRepairCalls) throw error;
       repairsUsed += 1;
-      return step({ ...rec, step: `${rec.step}_REPAIR`, repair_of: { code: error.code, field: error.field ?? null }, repairs_used: repairsUsed, repairs_allowed: maxRepairCalls }, () => call([repairHint(error)]));
+      repairNote = repairHint(error);
+      try {
+        return await step({ ...rec, step: `${rec.step}_REPAIR`, repair_of: { code: error.code, field: error.field ?? null }, repairs_used: repairsUsed, repairs_allowed: maxRepairCalls }, call);
+      } finally { repairNote = null; }
     }
   }
   const notConnected = (rec, port) => {
@@ -211,19 +223,21 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   const frameRec = { step: 'FRAME', component: 'createProblemFramer', module: 'src/creative-brain/problem-frame.js', kind: KIND.LLM };
   if (!metered) { notConnected(frameRec, 'text'); return finish(RUN_STATUS.STOPPED_PROVIDER_NOT_CONNECTED, { stopped_at: 'FRAME', asset_usable: assetUsable, exam }); }
   try {
-    const frame = await step({ ...frameRec, provider: textProvider }, async () => {
+    const frame = await repairable({ ...frameRec, provider: textProvider }, async () => {
       const { frame: f } = await createProblemFramer({ complete: metered }).frame({ observation });
       return { outcome: 'FRAMED', detail: f, value: f };
     });
 
     // 5 IDEATE
-    const concepts = await step({ step: 'IDEATE', component: 'createConceptDirector (3, distinctness guard)', module: 'src/creative-brain/concept.js', kind: KIND.LLM, provider: textProvider }, async () => {
+    // IDEATE: the Brain's distinctness guard, then HABB's guard on every concept (forbidden decor, invented capabilities) as early as the idea
+    const concepts = await repairable({ step: 'IDEATE', component: 'createConceptDirector (3, distinctness guard) + HABB guard', module: 'src/creative-brain/concept.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
       const { concepts: c } = await createConceptDirector({ complete: metered, count: { min: 3, max: 3 } }).ideate({ frame });
+      assertConceptsHabbRules(c, facts);
       return { outcome: 'THREE_DISTINCT_CONCEPTS', detail: c.map((x) => ({ concept_id: x.concept_id, central_idea: x.central_idea, visual_metaphor: x.visual_metaphor })), value: c };
     });
 
     // 5b SELECT: Nordla's own judgment of its concepts, criterion by criterion, in words (existing Brain stage). Recorded for the owner; it does not filter the concepts here.
-    const selection = await step({ step: 'SELECT', component: 'createConceptSelector (10 criteria, words only)', module: 'src/creative-brain/concept-selection.js', kind: KIND.LLM, provider: textProvider }, async () => {
+    const selection = await repairable({ step: 'SELECT', component: 'createConceptSelector (10 criteria, words only)', module: 'src/creative-brain/concept-selection.js', kind: KIND.LLM, provider: textProvider }, async () => {
       const { selection: sel, evaluations } = await createConceptSelector({ complete: metered }).select({ frame, concepts });
       return { outcome: sel.outcome ?? 'EVALUATED', detail: { selection: sel, evaluations }, value: { selection: sel, evaluations } };
     });
@@ -237,13 +251,14 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       const cid = concept.concept_id;
       const dir = join(workdir, cid); mkdirSync(dir, { recursive: true });
       // ART_DIRECT gets HABB's hard rules from its first call, and its answer is checked against them (the Brain's contract does not know HABB)
-      const art = await repairable({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector + HABB rules', module: 'src/creative-brain/art-direction.js, src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async (extra) => {
-        const { art_direction: a } = await artDirector.direct({ frame, concept, hints: [HABB_ART_DIRECTION_HINT, ...extra] });
-        assertArtDirectionHabbRules(a);
+      const art = await repairable({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector + HABB guard', module: 'src/creative-brain/art-direction.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
+        const { art_direction: a } = await artDirector.direct({ frame, concept, hints: [HABB_ART_DIRECTION_HINT] });
+        assertArtDirectionGuard(a, facts);
         return { outcome: 'DIRECTED', detail: a, value: a };
       });
-      let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async (extra) => {
-        const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts, hints: extra });
+      let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector + HABB guard', module: 'src/creative-autonomy/stage-contract.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
+        const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts });
+        assertStageGuard(s, facts);
         return { outcome: 'STAGED', detail: s, value: s };
       });
 
@@ -292,6 +307,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         } else if (hints.length) {
           stage = await step({ step: 'REFINE', concept_id: cid, round: round + 1, component: 'createStageDirector (re-ask with hints)', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async () => {
             const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts, hints });
+            assertStageGuard(s, facts);
             return { outcome: 'RESTAGED', detail: { hints }, value: s };
           });
         } else break;

@@ -43,18 +43,40 @@ export const STAGE_SPEC = obj({
   wanted_but_not_available: list(text({ max: 200 }), { min: 0, max: 5 }),
 }, { optional: ['wanted_but_not_available'] });
 
-// HABB's hard visual rules, as words that may not appear anywhere in the stage (FR + EN, stems)
-export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'écru', 'ecru', 'taupe', 'cœur', 'coeur', 'heart', 'feuille', 'feuillage', 'leaf', 'leaves', 'foliage', 'fougère', 'fern', 'frond', 'eucalyptus', 'botanical', 'botanique', 'végétation', 'vegetation', 'végétal', 'vegetal', 'greenery', 'verdure', 'doré', 'gold', 'golden', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'marbre', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
+// HABB's hard visual rules, as words that may not appear anywhere in a creative decision (FR + EN). Matched as WHOLE words, plurals and feminine forms included
+// (so "Luxembourg", "sandwich", "goldfish" or "leaflet" are not refused), after Unicode normalisation (NFC, invisible characters removed).
+export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'sandy', 'écru', 'ecru', 'taupe', 'ivoire', 'ivory', 'cœur', 'coeur', 'heart', 'hearts',
+  'feuille', 'feuillage', 'leaf', 'leafy', 'leaves', 'foliage', 'fougère', 'fern', 'frond', 'eucalyptus', 'botanical', 'botanique', 'végétation', 'vegetation', 'végétal', 'vegetal', 'végétaux', 'vegetaux', 'greenery', 'verdure',
+  'doré', 'dore', 'dorure', 'gold', 'golden', 'gilded', 'gilt', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'luxueuse', 'marbre', 'marbré', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
 const PERSONALISATION_WORDS = /(personnalis|grav|ton nom|votre nom|prénom|prenom|initiales|custom|engrav|monogram|à ton image|imprimé pour)/i;
 const CLAIM_WORDS = /(meilleur|best|n°\s?1|numéro un|garanti|guarantee|100\s?%|isotherme|insulated|24\s?h|12\s?h|incassable|unbreakable|gratuit|free)/i;
 
-// "feuille" is also a SHEET (of paper, metal, glass...): that sense is a material, not foliage, and stays allowed
-const SHEET_SENSE = /feuilles?\s+(de|d['’])\s*(papier|métal|metal|verre|calque|acier|aluminium|zinc|cuivre|plastique|carton)/gi;
-// "leaves" is also a VERB ("the light leaves the frame", "leaves it ready"): followed by an object or an adverb it is not foliage
-const VERB_SENSE = /\bleaves\s+(it|them|him|her|us|you|me|the|a|an|its|their|his|our|your|this|that|these|those|behind|room|space|only|no|nothing|everything|something|enough|just|again|alone|open|ready|home|before|after|out|off|from)\b/gi;
+/** NFC + invisible characters removed: "be\u200Bige" and a decomposed "cre\u0300me" are the same words as "beige" and "crème". */
+export const normalizeText = (s) => String(s ?? '').normalize('NFC').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '').toLowerCase();
+const L = '\\p{L}\\p{N}_';
+// senses that are NOT decor: a SHEET of paper or metal, the VERB "leaves", the idioms "au cœur de" / "at the heart of" / "coup de cœur" / "par cœur"
+const SHEET_SENSE = /feuilles?\s+(de|d['’])\s*(papier|métal|metal|verre|calque|acier|aluminium|zinc|cuivre|plastique|carton)/giu;
+const FOLIAGE_LEAVES = /\b(dry|dried|fallen|autumn|green|golden|dead|falling|scattered|fresh|wet|palm|tree|maple|oak|tea|lettuce|olive|ivy|of|with)\s+leaves\b/iu;
+const VERB_SENSE = /\bleaves\s+(it|them|him|her|us|you|me|the|a|an|its|their|his|our|your|this|that|these|those|behind|room|space|only|no|nothing|everything|something|enough|just|again|alone|open|ready|home|before|after|out|off|from)\b/giu;
+const IDIOMS = /(au|en plein|du|le|de tout|droit au)\s+c(œ|oe)ur(\s+(de|du|des|d['’]|battant))?|c(œ|oe)ur\s+de\s+ville|coup\s+de\s+c(œ|oe)ur|par\s+c(œ|oe)ur|\b(at\s+the|the|in\s+the)\s+heart\s+of\b|\bby\s+heart\b/giu;
+// a forbidden word NAMED in order to exclude it is not a use of it ("sans beige", "no leaves", "pas de dorure"), but only inside ITS OWN clause: a comma, a
+// semicolon or "mais / but / only / yet / however / très / very / and / et" ends the negation ("no gold, only golden light" is golden light)
+const CLAUSE_BREAK = new RegExp(`[,;:.!?()]|(?<![${L}])(mais|but|only|seulement|yet|however|cependant|pourtant|très|very|and|et|plus|more)(?![${L}])`, 'giu');
+const NEGATION_IN_CLAUSE = new RegExp(`(?<![${L}])(sans|without|no|not|aucun|aucune|pas\\s+de|pas\\s+d['’]|ni|never|jamais|zéro|zero|plutôt\\s+que|instead\\s+of|rather\\s+than|au\\s+lieu\\s+(de|du|des)|loin\\s+(de|du|des)|away\\s+from|avoid|avoiding|éviter|évite|forbid\\w*|interdi\\w*)(?![${L}])`, 'iu');
+const clauseBefore = (t, index) => { const before = t.slice(0, index); let cut = 0; let m; const re = new RegExp(CLAUSE_BREAK.source, 'giu'); while ((m = re.exec(before))) cut = m.index + m[0].length; return before.slice(cut); };
+const NEGATION_BEFORE = { test: (beforeText) => NEGATION_IN_CLAUSE.test(clauseBefore(beforeText, beforeText.length)) };
+const wordRe = (w) => new RegExp(`(?<![${L}])${w}(s|x|e|es)?(?![${L}])`, 'iu');
+const WORD_RES = FORBIDDEN_DECOR.map((w) => [w, wordRe(w)]);
+
 export const hasForbidden = (s) => {
-  const t = String(s).toLowerCase().replace(SHEET_SENSE, ' ').replace(VERB_SENSE, ' ');
-  return FORBIDDEN_DECOR.find((w) => new RegExp(`(^|[^a-zà-ÿœ])${w}`, 'i').test(t)) ?? null;
+  let t = normalizeText(s);
+  if (FOLIAGE_LEAVES.test(t)) return 'leaves'; // "dry leaves the size of hands" is foliage, whatever follows
+  t = t.replace(SHEET_SENSE, ' ').replace(VERB_SENSE, ' ').replace(IDIOMS, ' ');
+  for (const [w, re] of WORD_RES) {
+    const g = new RegExp(re.source, 'giu'); let m;
+    while ((m = g.exec(t))) { if (!NEGATION_BEFORE.test(t.slice(0, m.index))) return w; }
+  }
+  return null;
 };
 
 /** HABB's hard rules, as a hint given to ART_DIRECT from its FIRST call (the art direction never sees the brand rules otherwise). */

@@ -104,3 +104,80 @@ export function providerConfirmsModel(body, model) {
   const confirmed = body?.success === true && Array.isArray(models) && models.some((m) => m?.model === model);
   return { confirmed, request_id: body?.request_id ?? null, total: body?.output?.total ?? null, success: body?.success ?? null };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// WHAT RUNS is part of what is authorised. The plan id binds a fingerprint of the code a live attempt executes (Brain, autonomy route, Alibaba lane, trial and
+// report scripts). Line endings are normalised (CRLF -> LF) so that a Windows checkout with core.autocrlf gives the same fingerprint as Linux.
+import { readdirSync, readFileSync as readFileSyncCode, existsSync as existsSyncCode } from 'node:fs';
+import { join as joinCode, relative as relativeCode, dirname as dirnameCode, resolve as resolveCode } from 'node:path';
+import { fileURLToPath as fileURLToPathCode } from 'node:url';
+
+export const REPO_ROOT = resolveCode(dirnameCode(fileURLToPathCode(import.meta.url)), '..', '..');
+/** What a live attempt executes: the trial and report scripts and EVERY local module they import (traced statically), the Python engines, the dependency lock. */
+export const CODE_ENTRIES = Object.freeze(['scripts/creative-autonomy-trial.mjs', 'scripts/creative-autonomy-report.mjs']);
+export const CODE_EXTRAS = Object.freeze(['scripts/creative-autonomy', 'package-lock.json']);
+const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^'"`;]*?\sfrom\s*['"]([^'"]+)['"]|(?:^|[\s;])import\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+/** Local modules reachable from the entries through static and literal dynamic imports (bare specifiers are dependencies, covered by package-lock.json). */
+export function moduleGraph(root = REPO_ROOT, entries = CODE_ENTRIES) {
+  const seen = new Set(); const stack = entries.map((e) => joinCode(root, e));
+  while (stack.length) {
+    const f = stack.pop(); if (seen.has(f)) continue;
+    if (!existsSyncCode(f)) throw new Error(`module not found: ${relativeCode(root, f)}`);
+    seen.add(f);
+    const src = readFileSyncCode(f, 'utf8'); let m; const re = new RegExp(IMPORT_RE.source, 'g');
+    while ((m = re.exec(src))) { const spec = m[1] ?? m[2] ?? m[3]; if (spec && spec.startsWith('.')) stack.push(resolveCode(dirnameCode(f), spec)); }
+  }
+  return [...seen];
+}
+
+/** sha256 over (relative path, content with CRLF -> LF) of the given files, in path order. */
+export function fingerprintFiles(root, files) {
+  const h = createHash('sha256');
+  const rows = files.map((x) => ({ abs: x, rel: relativeCode(root, x).split('\\').join('/') })).sort((a, b) => (a.rel < b.rel ? -1 : 1));
+  for (const f of rows) { h.update(`${f.rel}\n`); h.update(readFileSyncCode(f.abs, 'utf8').replace(/\r\n/g, '\n')); h.update('\n\0\n'); }
+  return h.digest('hex');
+}
+
+export function codeFingerprint(root = REPO_ROOT) {
+  const files = new Set(moduleGraph(root));
+  for (const x of CODE_EXTRAS) {
+    const p = joinCode(root, x); if (!existsSyncCode(p)) continue;
+    let entries = null; try { entries = readdirSync(p, { withFileTypes: true }); } catch { files.add(p); continue; }
+    for (const e of entries) if (e.isFile() && /\.(py|m?js|json)$/.test(e.name)) files.add(joinCode(p, e.name));
+  }
+  const list = [...files];
+  return { code_sha256: fingerprintFiles(root, list), files: list.length, modules: list.map((f) => relativeCode(root, f).split('\\').join('/')).sort() };
+}
+
+/**
+ * Code injected into the Node process from outside the files above (--import, --require, --loader, or the same in NODE_OPTIONS): it is part of what runs,
+ * so it is part of the plan. A real run has none; a test that swaps fetch with a preload gets ANOTHER plan id and can never use the real authorisation.
+ */
+export function runtimeInjections(execArgv = process.execArgv, nodeOptions = process.env.NODE_OPTIONS ?? '') {
+  const args = [...execArgv, ...nodeOptions.split(/\s+/).filter(Boolean)];
+  const out = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i]; const m = /^(--import|--require|-r|--loader|--experimental-loader)(?:=(.+))?$/.exec(a);
+    if (!m) continue;
+    const spec = m[2] ?? args[i + 1]; if (!m[2]) i += 1;
+    let sha = null;
+    try { const file = spec.startsWith('file:') ? fileURLToPathCode(spec) : resolveCode(spec); if (existsSyncCode(file)) sha = createHash('sha256').update(readFileSyncCode(file, 'utf8').replace(/\r\n/g, '\n')).digest('hex'); } catch { /* unresolvable: recorded without a hash */ }
+    out.push({ flag: m[1], specifier_sha256: createHash('sha256').update(String(spec)).digest('hex').slice(0, 16), content_sha256: sha });
+  }
+  return out;
+}
+
+/**
+ * Secrets file guard, as a pure function (testable on any platform). POSIX: refused when readable by group/others (chmod 600 required) or inside a git work tree.
+ * Windows: Node cannot read NTFS permissions (st.mode always reports read/write for everyone), so a file can never be PROVEN private: it is refused with an
+ * explicit message, and the key must come from environment variables. Fail-closed on both.
+ */
+export function secretsFileProblems({ exists, platform, mode, insideGitRepo }) {
+  if (!exists) return ['fichier de secrets introuvable'];
+  const problems = [];
+  if (insideGitRepo) problems.push('le fichier de secrets est dans un dépôt git : refusé');
+  if (platform === 'win32') problems.push('sous Windows, Nordla ne peut pas vérifier les droits NTFS du fichier : utilise les variables d\'environnement ALIBABA_MODEL_STUDIO_API_KEY et ALIBABA_MODEL_STUDIO_WORKSPACE_ID');
+  else if ((mode & 0o077) !== 0) problems.push('le fichier de secrets est lisible par d\'autres que toi (chmod 600 requis)');
+  return problems;
+}

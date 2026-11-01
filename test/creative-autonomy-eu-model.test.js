@@ -3,7 +3,7 @@
 // nothing leaves this machine, nothing is billed. The answers are generic test content (the creative-brain test world), never proposals.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -231,11 +231,27 @@ test('trial --execute end to end against a fetch double: the owner\'s answer pas
   const preload = new URL('./fixtures/creative-autonomy/fetch-double-preload.mjs', import.meta.url).href;
   const out = mkdtempSync(join(tmpdir(), 'trial-e2e-'));
   const log = join(out, 'fetch.log');
-  const base = { ...process.env, ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-double-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-double', NORDLA_FETCH_DOUBLE_LOG: log };
-  const planId = JSON.parse(execFileSync(process.execPath, [script, '--plan', '--ideation', '--out', join(out, 'p'), '--product', 'gourde-noire'], { env: base }).toString()).plan_id;
-  // the plan in force: trial-61e7eeb84a2de902 + max_repair_calls 2 (owner-authorised repairs are part of the plan); any accidental change of plan inputs fails here
-  assert.equal(planId, 'trial-dd94896e8b89e81e');
-  const run = (dir, mode) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--ideation', '--out', dir, '--product', 'gourde-noire'], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: planId, NORDLA_FETCH_DOUBLE_MODEL_LIST: mode } });
+  // the attempt registry of THIS test (never the real ~/.nordla registry of the machine running the tests)
+  const registry = join(out, 'attempt-registry');
+  const base = { ...process.env, ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-double-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-double', NORDLA_FETCH_DOUBLE_LOG: log, NORDLA_ATTEMPT_REGISTRY: registry };
+  // the plan the test may run is computed WITH the same preload and the same registry: both are part of the plan
+  const planOf = (args, env) => JSON.parse(execFileSync(process.execPath, [...args, script, '--plan', '--ideation', '--out', join(out, `p-${Math.random()}`), '--product', 'gourde-noire'], { env }).toString()).plan_id;
+  const planId = planOf(['--import', preload], base);
+  assert.equal(planOf(['--import', preload], base), planId, 'same inputs, same code, same plan');
+  // the REAL plan (no preload, default registry) is a different id: a test, or anything injected with --import, can never use the owner's authorisation
+  const realEnv = { ...base }; delete realEnv.NORDLA_ATTEMPT_REGISTRY;
+  const realPlan = planOf([], realEnv);
+  assert.notEqual(planOf([], base), realPlan, 'overriding the attempt registry changes the plan');
+  assert.notEqual(planId, planOf([], base), 'a runtime preload changes the plan');
+  const run = (dir, mode, auth = planId) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--ideation', '--out', dir, '--product', 'gourde-noire'], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: auth, NORDLA_FETCH_DOUBLE_MODEL_LIST: mode } });
+  // NO or WRONG authorisation (including the real plan's id, used with injected code): refused at preflight, nothing sent, no lock
+  for (const [name, auth] of [['none', ''], ['wrong', 'trial-0000000000000000'], ['real plan id under a preload', realPlan]]) {
+    const r0 = run(join(out, `auth-${name.replace(/\W/g, '')}`), 'OWNER_PROOF', auth);
+    assert.equal(r0.status, 2, `${name}: ${r0.stderr}`);
+    assert.match(r0.stderr.toString(), /PREFLIGHT_FAILED/);
+    assert.ok(!existsSync(log), `${name}: no request at all`);
+    assert.ok(!existsSync(registry), `${name}: no lock`);
+  }
   // a paginated list without the model: refused, and NO lock taken
   const refused = run(join(out, 'r'), 'PAGE_WITHOUT_MODEL');
   assert.equal(refused.status, 3, refused.stderr.toString());
@@ -256,6 +272,13 @@ test('trial --execute end to end against a fetch double: the owner\'s answer pas
   assert.equal(okCalls.slice(1).length, 9);
   assert.ok(okCalls.slice(1).every((c) => c.host === 'ws-test-double.eu-central-1.maas.aliyuncs.com' && c.path === '/compatible-mode/v1/chat/completions' && c.model === 'qwen3-vl-plus'));
   assert.ok(readdirSync(join(out, 'ok')).some((f) => f.endsWith('.lock')));
+  assert.ok(readdirSync(registry).includes(`${planId}.lock`), 'the machine-wide attempt lock is taken');
+  // a SECOND attempt of the same plan in ANOTHER output folder: refused before any network call (the old per-folder lock allowed it)
+  const callsBefore = readFileSync(log, 'utf8').trim().split('\n').length;
+  const second = run(join(out, 'other-folder'), 'OWNER_PROOF');
+  assert.equal(second.status, 2, second.stderr.toString());
+  assert.match(second.stderr.toString(), /aucune tentative antérieure de ce plan/);
+  assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, callsBefore, 'no request at all for the refused second attempt');
   const report = readFileSync(join(out, 'ok', 'gourde-noire', 'RAPPORT.md'), 'utf8');
   assert.match(report, /IDÉATION SEULE/); assert.match(report, /test double gap/);
   assert.ok(!report.includes('sk-test-double') && !readFileSync(join(out, 'ok', `${planId}.calls.jsonl`), 'utf8').includes('sk-test-double'));

@@ -95,3 +95,49 @@ Status: **UNVERIFIED**. The script refuses to execute until `NORDLA_PHOTO_RIGHTS
 - The trial folder is read-only: every file is hashed before and after, and the run fails if anything changed. The lock is untouched.
 - The answers are copied to the diagnostic folder and judged against the current contracts.
 - No network, no new answer. The replay cannot continue the run: every stage after the last recorded answer needs a new authorised call.
+
+## Autonomous review of 2026-11-01 (Claude, during the owner's absence; no live call)
+Demonstrated weaknesses, fixed and covered by tests:
+1. **The single attempt could be bypassed.** The lock lived in the output folder, so the same authorisation ran twice by changing `--out` (reproduced with a network double).
+   - A machine-wide registry is now locked as well (`~/.nordla/attempt-locks/<plan>.lock`, or `NORDLA_ATTEMPT_REGISTRY`).
+   - A second attempt is refused at preflight, before any request.
+2. **The Brain did not know HABB when framing.** The observation carried only the section names (identity, visual_rules…).
+   - HABB's identity, voice, visual prohibitions and the facts rule are now given in the brief's public facts from FRAME on.
+3. **Prohibitions came too late.** They are now checked from IDEATE on, on every concept field that describes what is shown or told (not on the model's own list of risks), then at ART_DIRECT and STAGE.
+4. **Invented capabilities were not checked.** Insulation, keeping drinks cold or hot, durations, leak-proof, unbreakable, BPA-free, eco claims, made in, guarantee and superlatives are refused unless the verified Shopify text states the same capability. Patterns are tuned so that staging words ("the light keeps the scene cool", "7h du matin") are not refused.
+5. **`\b` does not work with accented letters in JavaScript**, so "étanche" and "écologique" escaped the check. Boundaries are now Unicode-aware.
+6. **Repairs were limited to ART_DIRECT and STAGE.** The repair note is now appended to the stage's own instruction, so FRAME, IDEATE, SELECT, ART_DIRECT and STAGE can all be repaired, within the same budget for the whole run. The note does not leak into the next stage.
+7. **The plan id did not bind the executed code.** It now includes `code_sha256` (Brain, autonomy route, Alibaba lane, trial and report scripts), with line endings normalised so a Windows checkout gives the same id. Any code change gives a new plan id.
+8. **Secrets file on Windows.** Node cannot read NTFS permissions. The file is now refused with an explicit message, and on Windows the key comes from environment variables.
+9. **Privacy of the real answers.** Tests no longer read a folder inside the repository. They read `NORDLA_REAL_TRIAL_CALLS`, pointed at the replay's copy. The `.gitignore` refuses `brain-calls/`, `*.response.txt`, `real-trial-*`, `nordla-essais/`, `nordla-diagnostics/` and `.nordla/`. A test fails if a recorded answer appears in the repository.
+10. **Local engines on Windows** default to `python`, not `python3` (FULL mode only).
+
+Proven with tests on the real lane objects (Qwen port and SpendGuard, with a fetch double):
+- the call cap stops an invalid answer from looping;
+- the two-repair limit holds for the whole run;
+- the SpendGuard refuses a call whose worst case would cross the ceiling, before sending it;
+- a key without authorisation sends nothing.
+
+Plan `trial-dd94896e8b89e81e` is superseded and was never authorised. The plan id to authorise is the one printed by `--plan` for the reviewed commit; see `procedure-windows.md`.
+
+### Independent review (2 passes, same reviewer, read-only, offline)
+- **Pass 1**: 11 defects (0 HIGH, 6 MEDIUM, 5 LOW).
+  - Most serious: the attempt registry was chosen by an environment variable outside the plan.
+  - The code fingerprint did not cover the critic, intelligence and branding modules, nor runtime preloads.
+  - The Brain's JSON re-ask was not counted as a repair: 4 paid calls for one STAGE.
+  - Negations in the facts allowed a claim.
+  - Prefix matching refused "au cœur de Namur" and "Luxembourg".
+- **Pass 2**: 8 of those fixed, 2 partly fixed, 1 not fixed (documented, see below), and 4 new defects introduced by the rewrites (negation windows too wide, among others).
+- **All closed since, with regression tests**:
+  - negations are bounded to their clause, and "not only" is not a negation;
+  - claims phrased with "sans", "never" or "without" are claims;
+  - "tient au frais 12 heures" and "jusqu'au soir" are caught;
+  - the gitignore rules are scoped to the trial layout;
+  - the attempt registry uses the account's home from the OS.
+
+### Residual risks (accepted, documented)
+- **Final settle** (LOW): reservations estimate tokens as characters/4, while the settle uses the tokens Alibaba reports. The last call can therefore bring the safety ledger slightly above 1.50 €. For qwen3-vl-plus the ledger prices at the qwen3.8-max rate, so the real spend stays several times lower. The fix belongs to the Alibaba lane's budget module (shared; not changed without decision).
+- **node_modules** (LOW): installed dependency code is covered only through `package-lock.json`, not hashed file by file.
+- **Windows attempt registry**: `os.userInfo().homedir` is used instead of `%USERPROFILE%`. Its independence from the environment variable on Windows has not been verified on Windows.
+- **HABB guard**: patterns, not understanding. They reduce the risk and do not prove it absent. The owner's review of every proposal remains the last control.
+- **Creative quality**: never measured with a real model on a complete run. The tests prove the mechanics only.
