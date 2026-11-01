@@ -1,0 +1,31 @@
+name: Nordla creative production — offline verification
+
+on:
+  pull_request:
+    paths:
+      - 'src/creative-autonomy/**'
+      - 'src/marketing-creative/alibaba/**'
+      - 'scripts/creative-autonomy/**'
+      - 'test/alibaba-background-engine.test.js'
+      - 'test/visual-production-contract.test.js'
+      - '.github/workflows/creative-production-v1.yml'
+  push:
+    branches:
+      - feature/creative-production-v1
+
+permissions:
+  contents: read
+
+jobs:
+  offline-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests (no API credentials, no image-generation requests)
+        run: node --test test/visual-production-contract.test.js test/alibaba-background-engine.test.js test/creative-autonomy.test.js
+      - name: Python source syntax
+        run: python3 -m py_compile scripts/creative-autonomy/compose_stage.py scripts/creative-autonomy/prepare_generated_background.py
