@@ -106,10 +106,20 @@ test('code fingerprint: the same files give the same fingerprint with LF or CRLF
   const root = mkdtempSync(join(tmpdir(), 'code-'));
   const files = moduleGraph().slice(0, 12).map((f) => { const rel = f.slice(REPO_ROOT.length + 1); const dst = join(root, rel); mkdirSync(join(dst, '..'), { recursive: true }); writeFileSync(dst, readFileSync(f)); return dst; });
   const base = fingerprintFiles(root, files);
-  writeFileSync(files[0], readFileSync(files[0], 'utf8').replace(/\n/g, '\r\n'));
-  assert.equal(fingerprintFiles(root, files), base, 'a Windows checkout (CRLF) has the same fingerprint');
-  writeFileSync(files[0], `${readFileSync(files[0], 'utf8')} `);
-  assert.notEqual(fingerprintFiles(root, files), base);
+  // the source checkout may be LF (Linux) or CRLF (Windows, core.autocrlf): normalise to LF FIRST, then convert, so a CRLF file never becomes \r\r\n
+  const original = readFileSync(files[0], 'utf8');
+  const lf = original.replace(/\r\n/g, '\n');
+  const crlf = lf.replace(/\n/g, '\r\n');
+  assert.ok(lf.includes('\n') && !lf.includes('\r'), 'the LF variant has no carriage return');
+  assert.ok(crlf.includes('\r\n') && !crlf.includes('\r\r\n'), 'the CRLF variant has exactly one carriage return per line');
+  writeFileSync(files[0], lf);
+  assert.equal(fingerprintFiles(root, files), base, 'an LF file has the same fingerprint');
+  writeFileSync(files[0], crlf);
+  assert.equal(fingerprintFiles(root, files), base, 'a CRLF file (Windows checkout) has the same fingerprint');
+  writeFileSync(files[0], `${crlf} `);
+  assert.notEqual(fingerprintFiles(root, files), base, 'one more character gives another fingerprint');
+  writeFileSync(files[0], lf.replace(/[A-Za-z]/, (c) => (c === 'a' ? 'b' : 'a')));
+  assert.notEqual(fingerprintFiles(root, files), base, 'one changed character gives another fingerprint');
 });
 
 test('runtime injections (--import, --require, NODE_OPTIONS) are detected: they change the plan', () => {
