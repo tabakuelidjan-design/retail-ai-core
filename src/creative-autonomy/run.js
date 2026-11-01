@@ -36,6 +36,7 @@ export const RUN_STATUS = Object.freeze({
   STOPPED_PROVIDER_NOT_CONNECTED: 'STOPPED_PROVIDER_NOT_CONNECTED',
   STOPPED_BRIEF_INCOMPLETE: 'STOPPED_BRIEF_INCOMPLETE',
   CONCEPTS_ONLY_ASSET_NOT_USABLE: 'CONCEPTS_ONLY_ASSET_NOT_USABLE',
+  IDEATION_ONLY_NOT_A_VISUAL: 'IDEATION_ONLY_NOT_A_VISUAL',
   STOPPED_ERROR: 'STOPPED_ERROR',
 });
 export const KIND = Object.freeze({ DETERMINISTIC: 'DETERMINISTIC', LLM: 'LLM', VISION: 'VISION', LOCAL_ENGINE: 'LOCAL_ENGINE' });
@@ -106,20 +107,28 @@ function technicalQuality(report) {
  *   engines: localEngines()
  *   workdir: where every intermediate file is kept (the run is fully inspectable)
  */
-export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now() }) {
+export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL' }) {
+  const ideationOnly = mode === 'IDEATION_ONLY';
   mkdirSync(workdir, { recursive: true });
   const trace = [];
   const humanInterventions = [
     { when: 'avant le passage', who: 'propriétaire', what: 'a choisi le produit, l\'objectif commercial, le format et fourni la photo', creative: false },
   ];
-  let textCost = 0; let lastModel = null; let lastCost = 0;
+  let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0;
+  const brainDir = join(workdir, 'brain-calls');
   const metered = ports.text ? async (instruction) => {
-    const reply = await ports.text(instruction);
+    brainCall += 1; mkdirSync(brainDir, { recursive: true });
+    const tag = `${String(brainCall).padStart(2, '0')}-${currentStep ?? 'STAGE'}`;
+    writeFileSync(join(brainDir, `${tag}.request.json`), JSON.stringify({ system: instruction.system, user: instruction.user }, null, 1));
+    let reply;
+    try { reply = await ports.text(instruction); } catch (error) { writeFileSync(join(brainDir, `${tag}.error.json`), JSON.stringify({ code: error.code ?? null, message: String(error.message).slice(0, 300) })); throw error; }
+    writeFileSync(join(brainDir, `${tag}.response.txt`), String(reply.text ?? ''));
+    writeFileSync(join(brainDir, `${tag}.meta.json`), JSON.stringify({ model: reply.model ?? null, request_id: reply.request_id ?? null, cost_eur: reply.cost_eur ?? null }));
     lastModel = reply.model ?? null; lastCost = reply.cost_eur ?? 0; textCost += lastCost; return reply;
   } : null;
 
   async function step(rec, fn) {
-    const t0 = now(); lastCost = 0; lastModel = null;
+    const t0 = now(); lastCost = 0; lastModel = null; currentStep = rec.concept_id ? `${rec.step}-${rec.concept_id}` : rec.step;
     const entry = { n: trace.length + 1, ...rec, model: null, cost_eur: 0, ms: 0, outcome: null, detail: null };
     trace.push(entry);
     try {
@@ -149,7 +158,9 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   const visionProvider = ports.state?.vision ?? (ports.vision ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED);
 
   // 1 BRIEF
-  const photoBytes = readFileSync(input.photoPath);
+  // IDEATION_ONLY: no photograph at all; the brief says so, and no image can be examined, rendered or sent
+  const photoBytes = ideationOnly ? Buffer.alloc(0) : readFileSync(input.photoPath);
+  if (ideationOnly) input = { ...input, photoMeta: { media_type: 'none', width_px: null, height_px: null, origin: 'NOT_PROVIDED_IDEATION_ONLY', rights_class: 'UNKNOWN' } };
   const { brief, facts } = await step({ step: 'BRIEF', component: 'buildAutonomousBrief + assessBrief', module: 'src/creative-autonomy/brief.js, src/creative-brain/brief-assessment.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE }, async () => {
     const built = buildAutonomousBrief({ ...input, photo: { bytes: photoBytes, ...input.photoMeta } });
     const assessment = assessBrief({ brief: built.brief });
@@ -162,12 +173,12 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   // 2 EXAMINE
   const examDir = join(workdir, 'examen');
   mkdirSync(examDir, { recursive: true });
-  const exam = await step({ step: 'EXAMINE', component: 'examine_product', module: 'scripts/creative-autonomy/examine_product.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
+  const exam = ideationOnly ? { status: 'NOT_EXAMINED_IDEATION_ONLY' } : await step({ step: 'EXAMINE', component: 'examine_product', module: 'scripts/creative-autonomy/examine_product.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
     const r = await engines.examine({ photoPath: input.photoPath, outDir: examDir });
     return { outcome: r.status, detail: r, value: r };
   });
   const assetUsable = exam.status === 'CUT_OUT';
-  if (!assetUsable) humanInterventions.push({ when: 'requis', who: 'propriétaire', what: `fournir une photo exploitable : ${(exam.reasons ?? [exam.status]).join(', ')}`, creative: false });
+  if (!assetUsable && !ideationOnly) humanInterventions.push({ when: 'requis', who: 'propriétaire', what: `fournir une photo exploitable : ${(exam.reasons ?? [exam.status]).join(', ')}`, creative: false });
 
   // 3 OBSERVE
   const observation = await step({ step: 'OBSERVE', component: 'observeBrief', module: 'src/creative-brain/problem-frame.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE }, async () => {
@@ -207,16 +218,18 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         return { outcome: 'STAGED', detail: s, value: s };
       });
 
-      if (!assetUsable) { proposals.push({ concept, art_direction: art, stage, image: null, technical_quality: { state: 'NOT_RENDERED', reason: exam.status }, creative_quality: { state: 'NOT_MEASURED', reason: 'aucune image' }, status: 'CONCEPT_ONLY' }); continue; }
+      const grammarGap = { art_direction_elements: (art.narrative_elements ?? []).map((e) => e.element), wanted_but_not_available: stage.wanted_but_not_available ?? [] };
+      if (ideationOnly) { proposals.push({ concept, art_direction: art, stage, grammar_gap: grammarGap, image: null, technical_quality: { state: 'NOT_RENDERED', reason: 'IDEATION_ONLY' }, creative_quality: { state: 'NOT_MEASURED', reason: 'essai d\'idéation sans image' }, status: 'IDEATION_ONLY_NOT_A_VISUAL' }); continue; }
+      if (!assetUsable) { proposals.push({ concept, art_direction: art, stage, grammar_gap: grammarGap, image: null, technical_quality: { state: 'NOT_RENDERED', reason: exam.status }, creative_quality: { state: 'NOT_MEASURED', reason: 'aucune image' }, status: 'CONCEPT_ONLY' }); continue; }
 
-      let round = 0; let report; let imagePath; let critique = null; const history = [];
+      let round = 0; let report; let imagePath; let critique = null; let renderInfo = null; const history = [];
       for (;;) {
         const tag = `r${round}`;
         const stagePath = join(dir, `stage_${tag}.json`); writeFileSync(stagePath, JSON.stringify(stage, null, 1));
         const setPath = join(dir, `decor_${tag}.png`); imagePath = join(dir, `proposition_${tag}.png`);
-        await step({ step: 'RENDER', concept_id: cid, round, component: engines.name?.render ?? 'render', module: 'scripts/creative-autonomy/render_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
+        renderInfo = await step({ step: 'RENDER', concept_id: cid, round, component: engines.name?.render ?? 'render', module: 'scripts/creative-autonomy/render_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
           const info = await engines.render({ stagePath, examPath: join(examDir, 'examen.json'), rgbaPath: join(examDir, 'produit_rgba.png'), canvas: brief.format.canvas, outPath: setPath });
-          return { outcome: 'RENDERED', detail: { resolution: info.resolution, foreground_props: info.foreground_props }, value: info };
+          return { outcome: 'RENDERED', detail: { resolution: info.resolution, foreground_props: info.foreground_props, blender_capabilities_used: info.blender_capabilities_used ?? null }, value: info };
         });
         report = await step({ step: 'COMPOSE+CHECK', concept_id: cid, round, component: engines.name?.compose ?? 'compose', module: 'scripts/creative-autonomy/compose_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
           const r = await engines.compose({ stagePath, setPath, rgbaPath: join(examDir, 'produit_rgba.png'), examPath: join(examDir, 'examen.json'), factsPath, outPath: imagePath });
@@ -257,7 +270,8 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         round += 1;
       }
       proposals.push({
-        concept, art_direction: art, stage, image: imagePath, rounds: round + 1,
+        concept, art_direction: art, stage, image: imagePath, rounds: round + 1, blender_capabilities_used: renderInfo?.blender_capabilities_used ?? null,
+        grammar_gap: { art_direction_elements: (art.narrative_elements ?? []).map((e) => e.element), wanted_but_not_available: stage.wanted_but_not_available ?? [] },
         technical_quality: technicalQuality(report), creative_quality: creativeQuality(critique),
         text_for_owner_approval: { headline: stage.headline, facts_lines: report.text_used.facts_lines },
         status: 'PROPOSED_FOR_OWNER_VALIDATION',
@@ -267,7 +281,8 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     trace.push({ n: trace.length + 1, step: 'REVIEW', component: 'owner review package', module: 'src/creative-autonomy/run.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE, model: null, cost_eur: 0, ms: 0, outcome: 'AWAITING_OWNER', detail: { proposals: proposals.length } });
     humanInterventions.push({ when: 'après le passage', who: 'propriétaire', what: 'valide, refuse ou demande une révision de chaque proposition (titre compris)', creative: true });
     writeFileSync(join(workdir, 'propositions.json'), JSON.stringify(proposals, null, 1));
-    return finish(assetUsable ? RUN_STATUS.PROPOSALS_READY_FOR_OWNER : RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE, { frame, proposals, asset_usable: assetUsable, exam });
+    const status = ideationOnly ? RUN_STATUS.IDEATION_ONLY_NOT_A_VISUAL : assetUsable ? RUN_STATUS.PROPOSALS_READY_FOR_OWNER : RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE;
+    return finish(status, { mode, frame, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
   } catch (error) {
     return finish(RUN_STATUS.STOPPED_ERROR, { error: { code: error.code ?? null, message: String(error.message).slice(0, 300) }, asset_usable: assetUsable });
   }

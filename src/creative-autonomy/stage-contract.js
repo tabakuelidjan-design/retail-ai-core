@@ -39,7 +39,9 @@ export const STAGE_SPEC = obj({
   props: list(PROP, { min: 0, max: 4 }),
   headline: text({ max: 60 }), text_placement: word(TEXT_PLACEMENT), show_price: word(YES_NO),
   rationale: text({ max: 300 }),
-});
+  // the model's own report of what the concept or art direction asked for and this closed vocabulary could not express: the evidence of the grammar's limits
+  wanted_but_not_available: list(text({ max: 200 }), { min: 0, max: 5 }),
+}, { optional: ['wanted_but_not_available'] });
 
 // HABB's hard visual rules, as words that may not appear anywhere in the stage (FR + EN, stems)
 export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'écru', 'ecru', 'taupe', 'cœur', 'coeur', 'heart', 'feuille', 'feuillage', 'leaf', 'leaves', 'foliage', 'fougère', 'eucalyptus', 'doré', 'gold', 'golden', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'marbre', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
@@ -101,6 +103,7 @@ export function buildStageInstruction({ frame, concept, artDirection, facts, hin
     ...renderContract(STAGE_SPEC, 'answer'),
     ...renderRules(STAGE_RULES),
     'The headline is YOUR proposal: it will be shown to the owner for approval. Write it in the language of the brief (French for HABB).',
+    'This vocabulary is deliberately small. If the concept or the art direction needs something it cannot express (a material, a shape, a light effect, a place, an object, a camera move, an atmosphere), do NOT force a poor substitute silently: choose the closest available option AND name what you really wanted in wanted_but_not_available, in plain words. It is reported to the owner as a limit of the system, not as your failure.',
     ...(hints.length ? ['This is a REVISION of an earlier stage for the same concept. Fix these defects (found by the critic on the rendered image):', ...hints.map((h) => `- ${h}`)] : []),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.ART_DIRECT })),

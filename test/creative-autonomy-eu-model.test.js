@@ -134,3 +134,32 @@ test('on the wire: without the media record the critic sends nothing (no image l
   assert.ok(requests.every((q) => !JSON.stringify(q.body).includes('image_url')));
   assert.ok(r.proposals.every((p) => p.creative_quality.state === 'NOT_MEASURED'));
 });
+
+test('ideation only, on the wire: 8 text calls (FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE), no image anywhere, no engine, every Brain request and raw answer kept', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eu-id-'));
+  const { fetchImpl, requests } = recordingFetch();
+  const ports = { ...connectProviders({ env: ENV, trialAuthorized: true, fetchImpl }), visionFor: null };
+  const engines = { examine: async () => { throw new Error('no examination in ideation'); }, render: async () => { throw new Error('no render in ideation'); }, compose: async () => { throw new Error('no compose in ideation'); } };
+  const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
+  const r = await runAutonomous({ mode: 'IDEATION_ONLY', input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'x', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports, engines, workdir: join(dir, 'run') });
+  assert.equal(r.status, RUN_STATUS.IDEATION_ONLY_NOT_A_VISUAL, JSON.stringify(r.error ?? null));
+  assert.deepEqual(requests.map((q) => q.stage), ['FRAME', 'IDEATE', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE', 'ART_DIRECT', 'STAGE']);
+  assert.ok(requests.every((q) => q.body.model === 'qwen3-vl-plus' && !JSON.stringify(q.body).includes('image_url')));
+  assert.ok(r.proposals.every((p) => p.status === 'IDEATION_ONLY_NOT_A_VISUAL' && p.image === null && Array.isArray(p.grammar_gap.wanted_but_not_available)));
+  assert.ok(!r.trace.some((t) => ['EXAMINE', 'RENDER', 'COMPOSE+CHECK', 'CRITIC'].includes(t.step)));
+  const files = (await import('node:fs')).readdirSync(r.brain_calls_dir);
+  assert.equal(files.filter((f) => f.endsWith('.request.json')).length, 8);
+  assert.equal(files.filter((f) => f.endsWith('.response.txt')).length, 8);
+  assert.ok(files.some((f) => f.startsWith('01-FRAME')) && files.some((f) => /^0[3-8]-STAGE-cnc_/.test(f)));
+});
+
+test('stage contract: the model may report what the vocabulary could not express (optional, bounded, not rendered)', async () => {
+  const { normalizeStage } = await import('../src/creative-autonomy/stage-contract.js');
+  const { normalizeConceptSet } = await import('../src/creative-brain/concept.js');
+  const [concept] = normalizeConceptSet(CONCEPTS);
+  const base = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 't' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [], headline: 'Titre', text_placement: 'RIGHT_COLUMN', show_price: 'NO', rationale: 't' };
+  assert.ok(normalizeStage(base, { concept, personalisation_offered: false }));
+  const s = normalizeStage({ ...base, wanted_but_not_available: ['wet stone surface with water droplets', 'morning fog'] }, { concept, personalisation_offered: false });
+  assert.equal(s.wanted_but_not_available.length, 2);
+  assert.throws(() => normalizeStage({ ...base, wanted_but_not_available: ['a', 'b', 'c', 'd', 'e', 'f'] }, { concept, personalisation_offered: false }));
+});

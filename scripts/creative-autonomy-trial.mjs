@@ -32,6 +32,8 @@ import { frameAnswer, CONCEPTS, artDirectionAnswer } from '../test/creative-brai
 
 const argv = process.argv.slice(2);
 const mode = argv.includes('--execute') ? 'execute' : 'plan';
+// --ideation: text only. No photograph is read, examined, rendered or sent; Nordla frames, imagines 3 concepts, art-directs and stages them in words. NOT a visual production.
+const ideation = argv.includes('--ideation');
 const arg = (k, d = null) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
 const outDir = resolve(arg('out', mkdtempSync(join(tmpdir(), 'nordla-trial-'))));
 const productKey = arg('product', 'gourde-noire');
@@ -42,10 +44,10 @@ const CATALOG = {
   'coque-iphone12': { snap: 'shopify-coque-iphone12.json', variant: null, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
 };
 if (!CATALOG[productKey]) throw new Error(`unknown product ${productKey}`);
-if (!photoPath || !existsSync(photoPath)) throw new Error('--photo <file> is required');
+if (!ideation && (!photoPath || !existsSync(photoPath))) throw new Error('--photo <file> is required (or --ideation for a text-only trial)');
 const P = { key: productKey, ...CATALOG[productKey], snap: snap(CATALOG[productKey].snap) };
-const photoBytes = readFileSync(photoPath);
-const photoSha = createHash('sha256').update(photoBytes).digest('hex');
+const photoBytes = ideation ? null : readFileSync(photoPath);
+const photoSha = ideation ? null : createHash('sha256').update(photoBytes).digest('hex');
 
 // ---- secrets: from the environment, or from a file outside any git work tree with mode 600. Values are never printed or written.
 function insideGitWorkTree(p) { let d = resolve(p); for (;;) { if (existsSync(join(d, '.git'))) return d; const up = dirname(d); if (up === d) return null; d = up; } }
@@ -71,11 +73,14 @@ const env = { ...process.env, ...secrets.values, ALIBABA_QWEN_TEXT_MODEL: proces
 const model = env.ALIBABA_QWEN_TEXT_MODEL;
 const scope = env.NORDLA_ALIBABA_SCOPE;
 const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
-const limits = { ...TRIAL_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha };
+const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 12, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
+const limits = ideation
+  ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`] }
+  : { ...TRIAL_LIMITS, mode: 'FULL', products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], photo_sha256: photoSha };
 const planId = trialPlanId({ model, scope, limits });
 
 const inputFor = () => ({ product: P.snap.product, variantTitle: P.variant, readAt: P.snap.read_at, objective: P.objective, brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath,
-  photoMeta: { media_type: photoPath.endsWith('.png') ? 'image/png' : 'image/jpeg', width_px: null, height_px: null, origin: 'SUPPLIER_IMAGE_OR_UNKNOWN', rights_class: rights === 'OWNER_CONFIRMED' ? 'LICENSED' : 'UNKNOWN' } });
+  photoMeta: { media_type: photoPath?.endsWith('.png') ? 'image/png' : 'image/jpeg', width_px: null, height_px: null, origin: 'SUPPLIER_IMAGE_OR_UNKNOWN', rights_class: rights === 'OWNER_CONFIRMED' ? 'LICENSED' : 'UNKNOWN' } });
 
 // ---- preflight: presence only, never values
 function preflight() {
@@ -88,8 +93,8 @@ function preflight() {
   ok(`${model} servi en périmètre ${scope} à Francfort`, modelAllowedInScope(model, scope), FRANKFURT_CATALOGUE.models[model]?.note ?? 'modèle inconnu du catalogue');
   let cfgError = null; try { loadAlibabaCreativeConfig(env); } catch (e) { cfgError = e.message; }
   ok('modèle accepté par le lane Alibaba', !cfgError, cfgError ?? 'accepté');
-  ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
-  ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
+  if (!ideation) ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
+  if (!ideation) ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
   ok('dossier de sortie hors dépôt git', !insideGitWorkTree(outDir), insideGitWorkTree(outDir) ? 'refusé : les traces ne doivent pas finir dans GitHub' : 'ok');
   ok('autorisation d\'essai pour CE plan', env.NORDLA_TRIAL_AUTHORIZATION === planId, env.NORDLA_TRIAL_AUTHORIZATION ? (env.NORDLA_TRIAL_AUTHORIZATION === planId ? 'conforme' : 'ne correspond pas au plan') : 'absente');
   return checks;
@@ -112,7 +117,8 @@ async function sizing() {
     examine: async () => ({ status: 'CUT_OUT' }), render: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { resolution: [1, 1], foreground_props: 0 }; },
     compose: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { fidelity: { max_level_difference_after_removing_layers: 0 }, technical: { defects: [], text_contrast_ratio: 21, product_height_share: 0.5 }, text_used: { facts_lines: [] } }; } };
   const tmpPhoto = join(mkdtempSync(join(tmpdir(), 'sz-')), 'p.jpg'); writeFileSync(tmpPhoto, 'sizing');
-  await runAutonomous({ input: { ...inputFor(), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
+  await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', input: { ...inputFor(), photoPath: tmpPhoto }, ports: { text: complete, vision: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: fake, workdir: mkdtempSync(join(tmpdir(), 'sz-')) });
+  if (ideation) return calls; // FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE: no refinement (nothing is rendered), no critique (no image)
   const stageCall = calls.find((c) => c.stage === 'STAGE');
   for (let i = 0; i < normalizeConceptSet(CONCEPTS).length * 2; i += 1) calls.push({ ...stageCall, stage: 'REFINE' });
   const critic = buildConceptCriticInstruction({ brief: {} });
@@ -127,7 +133,7 @@ const forecast = forecastCost({ calls, model, imageTokens: 1000 });
 // the vision port books 3 000 image tokens per image: the ledger figure uses the same rule
 const ledger = forecastCost({ calls, model, imageTokens: 3000 });
 const plan = {
-  plan_id: planId, product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
+  plan_id: planId, mode: ideation ? 'IDEATION_ONLY (texte seulement, aucune image, PAS une production visuelle)' : 'FULL', product: productKey, model, scope, region: 'eu-central-1', photo_sha256: photoSha, photo_rights: rights,
   limits, catalogue_verified_at: FRANKFURT_CATALOGUE.verified_at, preflight: checks,
   calls_by_stage: calls.reduce((a, c) => ({ ...a, [c.stage]: (a[c.stage] ?? 0) + 1 }), {}),
   money: {
@@ -157,8 +163,10 @@ const served = JSON.stringify(listed.body ?? {}).includes(`"${model}"`);
 await journal.append({ event: 'MODEL_LIST_CHECK', provider: 'alibaba-cloud-model-studio', model, region: 'eu-central-1', status: served ? 'SERVED' : `NOT_CONFIRMED_${listed.status}` });
 if (!served) { console.error(JSON.stringify({ refused: 'MODEL_NOT_CONFIRMED_BY_PROVIDER', status: listed.status }, null, 1)); process.exit(3); }
 
-const ports = connectProviders({ env, journal, budget, sourcePhotoBytes: photoBytes, trialAuthorized: true, maxTextCalls: TRIAL_LIMITS.max_text_calls_per_product, maxVisionCalls: TRIAL_LIMITS.max_vision_calls_per_product });
-const r = await runAutonomous({ input: inputFor(), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, productKey) });
+const ports = ideation
+  ? { ...connectProviders({ env: { ...env, NORDLA_MEDIA_AUTHORIZATION_FILE: '' }, journal, budget, trialAuthorized: true, maxTextCalls: limits.max_text_calls_per_product, maxVisionCalls: 0 }), visionFor: null }
+  : connectProviders({ env, journal, budget, sourcePhotoBytes: photoBytes, trialAuthorized: true, maxTextCalls: TRIAL_LIMITS.max_text_calls_per_product, maxVisionCalls: TRIAL_LIMITS.max_vision_calls_per_product });
+const r = await runAutonomous({ mode: ideation ? 'IDEATION_ONLY' : 'FULL', input: inputFor(), ports, engines: localEngines({ renderScale: TRIAL_LIMITS.render.scale, samples: TRIAL_LIMITS.render.samples }), workdir: join(outDir, productKey) });
 
 // USAGE: what Alibaba itself reported, priced at the model's list price
 const rows = readFileSync(journalPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

@@ -31,14 +31,19 @@ Facts read on 2026-11-01 in the Alibaba Cloud Model Studio documentation. Re-ver
 - Images: an inline base64 PNG for the critic only. No streaming, no tools, no image URL.
 - The key appears only in the Authorization header, never in the journal.
 
-## Final plan
-- Plan id: **`trial-295639a1d700269b`**. It is bound to the model, the EU scope, eu-central-1, the limits, the product (variant Noir) and the photo's SHA-256 (`44bd4535…2f34`). Any change produces a new id.
-- Calls: FRAME 1, IDEATE 1, ART_DIRECT 3, STAGE 3, refinements up to 6, critiques up to 6.
+## Plans (updated 2026-11-01, 08:34 decision)
+- **Ideation trial, text only**: plan `trial-2d159b21c7ca20db`.
+  - Bound to the model, the EU scope, eu-central-1, the limits and the product. There is no photo, so it is not bound to one.
+  - 8 text calls: FRAME, IDEATE, 3 ART_DIRECT, 3 STAGE. No image is read or sent; nothing is rendered.
+  - Expected ≈ 0.01 €; worst case ≈ 0.05 €; ledger ≤ 0.21 €; ceiling 1.50 €.
+  - Status at the end: IDEATION_ONLY_NOT_A_VISUAL. It is not a visual production.
+- **Full trial**: its plan id is computed from the HABB photo once it is chosen (the supplier photo is excluded: its rights are not established).
+- The earlier id `trial-295639a1d700269b` is superseded: the limits now include the mode.
 
 ### Three money figures, kept apart
 | Figure | Value | What it is |
 |---|---|---|
-| ESTIMATE, expected | ≈ 0.03 € | measured prompt sizes × list price of qwen3-vl-plus (EU) |
+| ESTIMATE, expected (full trial) | ≈ 0.03 € | measured prompt sizes × list price of qwen3-vl-plus (EU) |
 | ESTIMATE, worst case | ≈ 0.12 € | every answer at its cap |
 | CEILING, application | **1.50 €** | the SpendGuard refuses any call whose worst case would cross it, before sending |
 | CEILING, ledger | ≤ 0.48 € | what the SpendGuard books; it prices at the qwen3.8-max rate with USD = EUR, so it runs higher than the real cost; it is a safety ledger, not a bill |

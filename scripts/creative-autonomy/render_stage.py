@@ -178,6 +178,27 @@ info = {'bottom_front': proj((0, front_y, z0)), 'top_front': proj((0, front_y, z
         'left_mid': proj((-W / 2, front_y, z0 + H / 2)), 'right_mid': proj((W / 2, front_y, z0 + H / 2)),
         'slit_y': proj((0, front_y, slit_z))[1] if slit_z is not None else None,
         'foreground_props': len(foreground), 'resolution': list(RES)}
+# --- what Blender was REALLY asked to do: an inventory of the scene as built, for the owner's trace (no claim beyond this list)
+def _inventory():
+    objs = [o for o in bpy.data.objects]
+    mats = {}
+    for m in bpy.data.materials:
+        if not m.use_nodes: continue
+        b = m.node_tree.nodes.get('Principled BSDF')
+        mats[m.name] = {'node_types': sorted({n.bl_idname for n in m.node_tree.nodes}),
+                        **({'base_color': [round(c, 3) for c in b.inputs['Base Color'].default_value[:3]], 'roughness': round(b.inputs['Roughness'].default_value, 3), 'metallic': round(b.inputs['Metallic'].default_value, 3)} if b else {})}
+    return {
+        'engine': sc.render.engine, 'device': sc.cycles.device, 'samples': sc.cycles.samples, 'denoising': bool(sc.cycles.use_denoising),
+        'resolution': list(RES), 'camera': {'lens_mm': cam_d.lens, 'type': cam_d.type, 'depth_of_field': bool(cam_d.dof.use_dof)},
+        'objects_by_type': {t: sum(1 for o in objs if o.type == t) for t in sorted({o.type for o in objs})},
+        'meshes': sorted(o.name for o in objs if o.type == 'MESH'),
+        'text_objects': [o.data.body for o in objs if o.type == 'FONT'],
+        'lights': [{'name': o.name, 'type': o.data.type, 'energy': round(o.data.energy, 1), 'color': [round(c, 3) for c in o.data.color]} for o in objs if o.type == 'LIGHT'],
+        'materials': mats,
+        'world': {'uses_nodes': bool(sc.world and sc.world.use_nodes)} if sc.world else None,
+        'not_used': [f for f, used in [('volumetrics / fog', any(n.bl_idname.startswith('ShaderNodeVolume') for m in bpy.data.materials if m.use_nodes for n in m.node_tree.nodes)), ('image textures other than the reflection card', sum(1 for m in bpy.data.materials if m.use_nodes for n in m.node_tree.nodes if n.bl_idname == 'ShaderNodeTexImage') > 1), ('HDRI environment', bool(sc.world and sc.world.use_nodes and any(n.bl_idname == 'ShaderNodeTexEnvironment' for n in sc.world.node_tree.nodes))), ('depth of field', bool(cam_d.dof.use_dof)), ('modifiers', any(o.modifiers for o in objs)), ('particles', any(o.particle_systems for o in objs if hasattr(o, 'particle_systems'))), ('animation', bool(sc.frame_end > sc.frame_start and any(o.animation_data for o in objs)))] if not used],
+    }
+info['blender_capabilities_used'] = _inventory()
 sc.render.filepath = OUT
 bpy.ops.render.render(write_still=True)
 # passe de masque : ce qui est DEVANT le produit (accessoires de premier plan), pour la composition
