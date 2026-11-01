@@ -22,7 +22,7 @@ L.push(`# Rapport d'essai Nordla : ${trace.mode === 'IDEATION_ONLY' ? 'IDÉATION
 L.push('', `- Plan : \`${planId ?? 'inconnu'}\` · statut : **${trace.status}** · moteur texte : ${trace.engines.text} · images envoyées : 0`);
 if (plan) L.push(`- Objectif donné à Nordla : « ${plan.objective} »`, `- Modèle : ${plan.model}, périmètre ${plan.scope}, ${plan.region}`);
 L.push('- Tout le texte entre guillemets ou en citation vient du modèle, tel quel. Rien n\'a été réécrit.');
-if (trace.error) L.push('', `> Arrêt : ${trace.error.code ?? ''} ${q(trace.error.message)}`);
+if (trace.error) L.push('', `> Arrêt : **${trace.status}** à l'étape ${trace.stopped_at?.step ?? '?'}${trace.stopped_at?.concept_id ? ` (\`${trace.stopped_at.concept_id}\`)` : ''} : ${trace.error.code ?? ''}${trace.error.field ? ` sur \`${trace.error.field}\`` : ''}. ${q(trace.error.message)}`, '> Les sections ci-dessous présentent ce qui a réellement été obtenu avant l\'arrêt, rien d\'autre.');
 
 L.push('', '## 1. Les trois concepts imaginés par Nordla');
 for (const [i, c] of (trace.concepts ?? []).entries()) {
@@ -45,24 +45,49 @@ for (const e of trace.selection?.evaluations ?? []) {
 if (trace.selection?.selection) L.push('', `Décision dérivée par les règles fixes de Nordla : **${trace.selection.selection.outcome ?? JSON.stringify(trace.selection.selection)}**`);
 
 L.push('', '## 3. Direction artistique et mise en scène choisies par Nordla');
-for (const p of trace.proposals ?? []) {
-  const a = p.art_direction; const s = p.stage;
-  L.push('', `### \`${p.concept.concept_id}\``,
-    `- Atmosphère : « ${q(a.atmosphere)} »`, `- Lumière voulue : « ${q(a.lighting_intent)} »`, `- Matières : « ${q(a.material_language)} »`,
-    `- Profondeur : ${a.depth_model} · rythme : ${a.visual_rhythm} · réalisme : ${a.realism} · température : ${a.emotional_temperature} · tension : ${a.visual_tension}`,
-    `- Éléments narratifs : ${(a.narrative_elements ?? []).map((n) => `« ${q(n.element)} » (${n.zone})`).join(' ; ')}`,
-    `- Mise en scène traduite : fond ${s.backdrop} ${s.backdrop_tone}, sol ${s.floor_finish} ; lumière principale ${s.key_light.kind} ${s.key_light.side} ${s.key_light.intensity} ${s.key_light.temperature}${s.accent_lights.length ? ` + ${s.accent_lights.map((l) => `${l.kind} ${l.side}`).join(', ')}` : ''} ; caméra ${s.camera.height} / ${s.camera.framing} / ${s.camera.product_position}`,
-    `- Accessoires : ${s.props.length ? s.props.map((x) => `${x.shape}${x.word ? ` « ${x.word} »` : ''} ${x.material} ${x.placement} (« ${q(x.reason)} »)`).join(' ; ') : 'aucun'}`,
-    `- Titre proposé (soumis à ta validation) : « ${q(s.headline)} » · texte ${s.text_placement} · prix affiché : ${s.show_price}`,
-    `- Justification : « ${q(s.rationale)} »`);
+// built from what the run REALLY obtained: accepted art directions and stages, and every attempted stage with its exact refusal (even after STOPPED_ERROR)
+const conceptIds = (trace.concepts ?? []).map((c) => c.concept_id);
+const artOf = (cid) => trace.art_directions?.[cid] ?? (trace.proposals ?? []).find((p) => p.concept.concept_id === cid)?.art_direction ?? null;
+const stageOf = (cid) => trace.stages?.[cid] ?? (trace.proposals ?? []).find((p) => p.concept.concept_id === cid)?.stage ?? null;
+const callsDir = join(work, 'brain-calls');
+const callFiles = existsSync(callsDir) ? readdirSync(callsDir).sort() : [];
+const recorded = (stepName, cid) => callFiles.filter((f) => f.endsWith('.response.txt') && f.includes(`-${stepName}-${cid}`)).map((f) => {
+  const merged = f.replace('.response.txt', '.merged.txt');
+  let raw = null; try { raw = JSON.parse(readFileSync(join(callsDir, f), 'utf8')); } catch { /* not JSON: shown as such */ }
+  return { file: f, raw, merged: callFiles.includes(merged) };
+});
+const stageLine = (s) => `fond ${s.backdrop} ${s.backdrop_tone}, sol ${s.floor_finish} ; lumière principale ${s.key_light?.kind} ${s.key_light?.side} ${s.key_light?.intensity} ${s.key_light?.temperature}${(s.accent_lights ?? []).length ? ` + ${s.accent_lights.map((l) => `${l.kind} ${l.side}`).join(', ')}` : ''} ; caméra ${s.camera?.height} / ${s.camera?.framing} / ${s.camera?.product_position}`;
+const propsLine = (s) => ((s.props ?? []).length ? s.props.map((x) => `${x.shape}${x.word ? ` « ${x.word} »` : ''} ${x.material} ${x.placement}${x.reason ? ` (« ${q(x.reason)} »)` : ''}`).join(' ; ') : 'aucun');
+for (const cid of conceptIds) {
+  L.push('', `### \`${cid}\``);
+  const a = artOf(cid);
+  if (a) {
+    L.push(`- Direction artistique ACCEPTÉE. Atmosphère : « ${q(a.atmosphere)} » ; lumière : « ${q(a.lighting_intent)} » ; matières : « ${q(a.material_language)} »`,
+      `- Profondeur : ${a.depth_model} · rythme : ${a.visual_rhythm} · réalisme : ${a.realism} · température : ${a.emotional_temperature} · tension : ${a.visual_tension}`,
+      `- Éléments narratifs : ${(a.narrative_elements ?? []).map((n) => `« ${q(n.element)} » (${n.zone})`).join(' ; ')}`);
+  } else L.push('- Direction artistique : non obtenue (arrêt avant ou pendant cette étape).');
+  // every ART_DIRECT / STAGE attempt for this concept, in order, with its outcome from the trace
+  for (const t of trace.trace.filter((x) => x.concept_id === cid && /^(ART_DIRECT|STAGE)/.test(x.step))) {
+    const isStage = t.step.startsWith('STAGE');
+    const rec = recorded(t.step, cid)[0];
+    const attempt = t.outcome === 'ERROR' ? `REFUSÉE : ${t.detail?.code ?? ''} sur \`${t.detail?.field ?? '?'}\` (« ${q(t.detail?.message)} »)` : 'ACCEPTÉE';
+    L.push(`- Tentative ${t.step}${t.repair_scope ? ` (réparation limitée à \`${t.repair_scope}\`)` : ''} : ${attempt}`);
+    if (t.repair_merge?.applied && t.repair_merge.discarded_outside_scope?.length) L.push(`  - Changements du modèle HORS du champ réparé, écartés : ${t.repair_merge.discarded_outside_scope.map((d) => `\`${d}\``).join(', ')}`);
+    if (isStage && rec?.raw && t.outcome === 'ERROR') L.push(`  - Mise en scène tentée (réponse brute) : ${stageLine(rec.raw)} ; accessoires : ${propsLine(rec.raw)} ; titre : « ${q(rec.raw.headline)} » ; justification : ${String(rec.raw.rationale ?? '').length} caractères`);
+  }
+  const s = stageOf(cid);
+  if (s) L.push(`- Mise en scène ACCEPTÉE : ${stageLine(s)}`, `- Accessoires : ${propsLine(s)}`, `- Titre proposé (soumis à ta validation) : « ${q(s.headline)} » · texte ${s.text_placement} · prix affiché : ${s.show_price}`, `- Justification : « ${q(s.rationale)} »`);
+  else L.push('- Mise en scène : aucune acceptée.');
 }
 
 L.push('', '## 4. Ce que Nordla voulait faire et que la grammaire actuelle ne permet pas');
 let gaps = 0;
-for (const p of trace.proposals ?? []) {
-  const w = p.grammar_gap?.wanted_but_not_available ?? []; gaps += w.length;
-  const flag = (x) => { const d = hasForbidden(x); const c = inventedCapabilities(x, ''); return d || c.length ? ` ⚠ contraire aux règles HABB (${[d, ...c].filter(Boolean).join(', ')}) : ne sera jamais produit` : ''; };
-  L.push(`- \`${p.concept.concept_id}\` : ${w.length ? w.map((x) => `« ${q(x)} »${flag(x)}`).join(' ; ') : 'rien de déclaré'}`);
+const flag = (x) => { const d = hasForbidden(x); const c = inventedCapabilities(x, ''); return d || c.length ? ` ⚠ contraire aux règles HABB (${[d, ...c].filter(Boolean).join(', ')}) : ne sera jamais produit` : ''; };
+for (const cid of conceptIds) {
+  const accepted = stageOf(cid)?.wanted_but_not_available ?? null;
+  const attempted = recorded('STAGE', cid).concat(recorded('STAGE_REPAIR', cid)).flatMap((r) => r.raw?.wanted_but_not_available ?? []);
+  const w = accepted ?? attempted; gaps += w.length;
+  L.push(`- \`${cid}\` : ${w.length ? w.map((x) => `« ${q(x)} »${flag(x)}`).join(' ; ') : 'rien de déclaré'}${!accepted && attempted.length ? ' (déclaré dans une mise en scène tentée, puis refusée)' : ''}`);
 }
 L.push('', gaps ? `Total : ${gaps} manque(s) déclaré(s) par le modèle lui-même. C'est la preuve à utiliser pour décider du prochain développement.` : 'Le modèle n\'a déclaré aucun manque. Ce constat est enregistré tel quel, il ne prouve pas que la grammaire suffit.');
 
@@ -70,7 +95,8 @@ L.push('', '## 5. Appels réels et coût');
 L.push('| # | Étape | Type | Fournisseur | Modèle | Issue | Durée |', '|---|---|---|---|---|---|---|');
 for (const t of trace.trace) L.push(`| ${t.n} | ${t.step}${t.concept_id ? ` ${t.concept_id}` : ''} | ${t.kind} | ${t.provider} | ${t.model ?? '-'} | ${t.outcome} | ${t.ms} ms |`);
 const ok = journal.filter((e) => e.event === 'SUCCEEDED');
-L.push('', `- Appels réussis d'après le journal : ${ok.length} · échecs : ${journal.filter((e) => e.event === 'FAILED').length} · request ids : ${ok.map((e) => e.request_id).filter(Boolean).join(', ') || 'aucun'}`);
+L.push('', `- Réparations : ${trace.repairs?.used ?? 0} utilisée(s) sur ${trace.repairs?.allowed ?? 0} autorisée(s)${plan?.limits ? ` · plafond d'appels texte : ${plan.limits.max_text_calls_per_product} · plafond de dépense : ${plan.limits.max_spend_eur} €` : ''}`);
+L.push(`- Appels réussis d'après le journal : ${ok.length} · échecs : ${journal.filter((e) => e.event === 'FAILED').length} · request ids : ${ok.map((e) => e.request_id).filter(Boolean).join(', ') || 'aucun'}`);
 if (result?.money) {
   const m = result.money;
   L.push(`- Coût **estimé** avant l'essai : ${m.ESTIMATE_expected_eur} €`,

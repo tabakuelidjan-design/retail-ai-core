@@ -98,11 +98,15 @@ export function assertArtDirectionHabbRules(art) {
   }
   return art;
 }
-const allTexts = (v) => [v.headline, v.rationale, v.key_light.purpose, ...v.accent_lights.map((l) => l.purpose), ...v.props.flatMap((p) => [p.reason, p.word ?? ''])];
+// every free text of a stage WITH its exact field: a refusal names the field to fix, so a repair can be scoped to it (and cannot rewrite the rest of the stage)
+const namedTexts = (v) => [['stage.headline', v.headline], ['stage.rationale', v.rationale], ['stage.key_light.purpose', v.key_light.purpose],
+  ...v.accent_lights.map((l, i) => [`stage.accent_lights[${i}].purpose`, l.purpose]),
+  ...v.props.flatMap((p, i) => [[`stage.props[${i}].reason`, p.reason], [`stage.props[${i}].word`, p.word ?? '']])];
+const allTexts = (v) => namedTexts(v).map(([, t]) => t);
 
 export const STAGE_RULES = Object.freeze([
   { id: 'NO_FORBIDDEN_DECOR', statement: `HABB's hard rules: no beige, cream, sand or ecru tone, no gold, no hearts, leaves or foliage, no marble or velvet, no fake luxury, no bokeh. None of these words may appear: ${FORBIDDEN_DECOR.map((w) => w.trim()).join(', ')}.`,
-    check: (v) => { for (const t of allTexts(v)) { const hit = hasForbidden(t); if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `the stage uses a forbidden decor word: ${hit.trim()}`, 'stage', { problem: 'FORBIDDEN_DECOR', word: hit.trim() }); } } },
+    check: (v) => { for (const [field, t] of namedTexts(v)) { const hit = hasForbidden(t); if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `the stage uses a forbidden decor word: ${hit.trim()}`, field, { problem: 'FORBIDDEN_DECOR', word: hit.trim() }); } } },
   { id: 'HEADLINE_INVENTS_NO_CLAIM', statement: 'the headline is at most eight words, contains no digit, no price, no percentage, no superlative and no technical promise (insulation, duration, unbreakable, free); the price is shown by the system from the verified facts when show_price is YES.',
     check: (v) => {
       if (/[0-9€%]/.test(v.headline)) fail(BRAIN_ERROR.RULE_VIOLATION, 'the headline may not contain a figure', 'stage.headline', { problem: 'HEADLINE_HAS_A_FIGURE' });
@@ -110,18 +114,18 @@ export const STAGE_RULES = Object.freeze([
       if (v.headline.split(/\s+/).filter(Boolean).length > 8) fail(BRAIN_ERROR.RULE_VIOLATION, 'the headline is longer than eight words', 'stage.headline', { problem: 'HEADLINE_TOO_LONG' });
     } },
   { id: 'NO_PERSONALISATION_PROMISE_UNLESS_OFFERED', statement: 'if the facts say personalisation is NOT offered for this product, no text (headline, reasons, extruded word) may mention a name, an engraving, a print or any personalisation.',
-    check: (v, ctx) => { if (ctx.personalisation_offered) return; for (const t of allTexts(v)) if (PERSONALISATION_WORDS.test(t)) fail(BRAIN_ERROR.RULE_VIOLATION, 'the stage promises a personalisation that is not offered for this product', 'stage', { problem: 'PERSONALISATION_NOT_OFFERED' }); } },
+    check: (v, ctx) => { if (ctx.personalisation_offered) return; for (const [field, t] of namedTexts(v)) if (PERSONALISATION_WORDS.test(t)) fail(BRAIN_ERROR.RULE_VIOLATION, 'the stage promises a personalisation that is not offered for this product', field, { problem: 'PERSONALISATION_NOT_OFFERED' }); } },
   { id: 'EXTRUDED_WORD_IS_ONE_WORD', statement: 'at most one prop is an EXTRUDED_WORD; it then carries a "word" of 2 to 12 capital letters (no digit, no space); no other prop carries a word.',
     check: (v) => {
       const words = v.props.filter((p) => p.shape === SHAPE.EXTRUDED_WORD);
       if (words.length > 1) fail(BRAIN_ERROR.RULE_VIOLATION, 'only one extruded word is allowed', 'stage.props', { problem: 'TOO_MANY_WORDS' });
-      for (const p of v.props) {
-        if (p.shape === SHAPE.EXTRUDED_WORD && !/^[A-ZÀÂÉÈÊËÎÏÔÛÙÇ]{2,12}$/.test(p.word ?? '')) fail(BRAIN_ERROR.RULE_VIOLATION, 'an extruded word needs 2 to 12 capital letters', 'stage.props.word', { problem: 'BAD_EXTRUDED_WORD' });
-        if (p.shape !== SHAPE.EXTRUDED_WORD && p.word !== undefined) fail(BRAIN_ERROR.RULE_VIOLATION, 'only an extruded word carries a word', 'stage.props.word', { problem: 'WORD_ON_A_NON_WORD_PROP' });
-      }
+      v.props.forEach((p, i) => {
+        if (p.shape === SHAPE.EXTRUDED_WORD && !/^[A-ZÀÂÉÈÊËÎÏÔÛÙÇ]{2,12}$/.test(p.word ?? '')) fail(BRAIN_ERROR.RULE_VIOLATION, 'an extruded word needs 2 to 12 capital letters', `stage.props[${i}].word`, { problem: 'BAD_EXTRUDED_WORD' });
+        if (p.shape !== SHAPE.EXTRUDED_WORD && p.word !== undefined) fail(BRAIN_ERROR.RULE_VIOLATION, 'only an extruded word carries a word', `stage.props[${i}].word`, { problem: 'WORD_ON_A_NON_WORD_PROP' });
+      });
     } },
   { id: 'PLINTH_IS_BENEATH', statement: 'a PLINTH is always placed BENEATH the product, and only a PLINTH may be BENEATH.',
-    check: (v) => { for (const p of v.props) if ((p.shape === SHAPE.PLINTH) !== (p.placement === PLACEMENT.BENEATH)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a plinth goes beneath, and only a plinth', 'stage.props', { problem: 'PLINTH_PLACEMENT' }); } },
+    check: (v) => { v.props.forEach((p, i) => { if ((p.shape === SHAPE.PLINTH) !== (p.placement === PLACEMENT.BENEATH)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a plinth goes beneath, and only a plinth', `stage.props[${i}]`, { problem: 'PLINTH_PLACEMENT', shape: p.shape, placement: p.placement }); }); } },
   { id: 'TEXT_NOT_ON_THE_PRODUCT', statement: 'the text placement must sit on the side opposite to the product: a product in the LEFT_THIRD takes text on the right or top right, a product in the RIGHT_THIRD takes text on the left or top left; a CENTER product takes TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT or BOTTOM_RIGHT.',
     check: (v) => {
       const pos = v.camera.product_position; const tp = v.text_placement;

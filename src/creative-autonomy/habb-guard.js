@@ -130,3 +130,35 @@ export function habbBriefFacts(brand) {
     facts_rule: 'Seuls les faits vérifiés de la fiche Shopify peuvent être affirmés. Aucune capacité non écrite dans la fiche (isolation, durée de froid ou de chaud, étanchéité, incassable, sans BPA, écologique, garantie, superlatif) ne peut être attribuée au produit. Le produit réel est montré tel qu\'il est photographié : forme, couleur, logo inchangés.',
   };
 }
+
+/**
+ * COMMERCIAL RELEVANCE, without a template. What a concept must ACHIEVE for HABB (not what it must look like), and the only facts it may build on. Every fact
+ * below comes from the verified Shopify snapshot (title, variant, description, price, colour variants) or HABB's own identity; nothing is added: no service,
+ * event, stock location, feature or promise that is not there. Given to the Brain from the FRAME (public facts) and repeated to IDEATE, SELECT and ART_DIRECT.
+ */
+export function commercialBrief(facts, merchant = 'HABB, Namur') {
+  const colours = facts.colours_available ?? [];
+  return {
+    verified_selling_points: [
+      `Produit : ${facts.product_title}${facts.variant ? `, coloris ${facts.variant}` : ''}.`,
+      `Description vérifiée : ${facts.description}`,
+      `Prix vérifié : ${facts.price}.`,
+      ...(colours.length > 1 ? [`Coloris existants (fiche Shopify) : ${colours.join(', ')}.`] : []),
+      `Vendu par ${merchant}.`,
+    ],
+    creative_requirements: [
+      'Une idée originale et mémorable : un seul geste visuel fort qu\'un passant retient, pas une ambiance générique ni une carte postale de la ville utilisée comme décor.',
+      'Le produit réel (la photo, inchangée) est le protagoniste : l\'histoire se passe AUTOUR de lui et le rend désirable ; il n\'est jamais un détail dans une scène.',
+      'Une raison concrète de venir le découvrir chez HABB, construite UNIQUEMENT sur les faits vérifiés ci-dessus (ce pour quoi il est conçu, sa paille, son couvercle verrouillable, sa contenance, ses coloris, son prix). Aucune fonctionnalité, promesse, service, événement ou disponibilité en boutique qui n\'y figure pas.',
+      'Premium sans clichés publicitaires ni faux luxe : retenue, lumière, matière et justesse plutôt que brillance ou superlatifs.',
+      'Un lien clair entre l\'histoire, l\'image et l\'objectif : on doit pouvoir dire en une phrase pourquoi cette image donne envie de venir voir la gourde chez HABB.',
+    ],
+  };
+}
+
+/** The same brief as a note appended to a Brain stage's instruction (the stages after FRAME do not see the public facts otherwise). */
+export function commercialBriefNote(publicFacts) {
+  if (!publicFacts?.creative_requirements) return null;
+  return ['HABB\'s commercial brief for this product (it states what the concept must achieve, never what it must look like; your originality is expected):',
+    ...publicFacts.creative_requirements.map((r) => `- ${r}`), 'Verified facts you may build on (nothing else exists):', ...publicFacts.verified_selling_points.map((r) => `- ${r}`)].join('\n');
+}

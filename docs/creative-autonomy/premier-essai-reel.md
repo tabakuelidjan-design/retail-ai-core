@@ -151,3 +151,18 @@ Plan `trial-dd94896e8b89e81e` is superseded and was never authorised. The plan i
 
 ### Known test failures
 See `echecs-de-tests-connus.md`. These are the secrets scan (two of the files are the frozen plan record and the superseded proposal), LG-2 (Chantier D) and Node 24 (China Sourcing). None is hidden by weakening a test.
+
+## Second real attempt: trial-40ce77ef0af9e1f3 (consumed, never to be re-run)
+- 6 calls to Alibaba succeeded, with no image call. There are three concepts, then `STOPPED_ERROR` on the STAGE repair: "a plinth goes beneath, and only a plinth".
+- The first STAGE (PLINTH/BENEATH, PANEL/BEHIND, BLOCK/FOREGROUND_LEFT) satisfies the plinth rule. It was refused by ANOTHER rule, recorded in the private trace (STAGE step, `detail.code` / `detail.field`); it is not assumed here.
+- The repair note asked for "the whole answer again". The model then replaced the PLINTH with a BLOCK while keeping BENEATH: the valid structure was rewritten and became forbidden.
+
+### Corrections
+- **Scoped repair** (`run.js`: `scopedMerge`, `fieldPath`). The new answer contributes ONLY the refused field. Every other field is the previous answer, which had already been checked. The model's changes elsewhere are recorded (`repair_merge.discarded_outside_scope`) and never applied. If the refusal names no precise field, the whole answer is used, as before.
+- **Precise fields** in the STAGE rules: forbidden decor, personalisation, extruded word and plinth now name their exact field (`stage.props[2].reason`, `stage.props[0]`…), so that the repair can be scoped.
+- **Report of an interrupted run.** The trace now keeps everything the run had really obtained before the stop: mode, frame, concepts, evaluations, accepted art directions and stages, the stop step and the exact error with its field. The report shows each attempt, accepted or refused (code, field, message), the attempted stage structure, the changes discarded by a scoped repair, the repairs used and the limits. Nothing is filled in.
+- **Commercial brief.**
+  - Requirements are given as goals, not looks: an original idea, the product as protagonist, a concrete reason to come to HABB, premium without clichés, the link between story, image and objective.
+  - They rest only on the verified facts: title, description, price, colour variants of the snapshot.
+  - FRAME receives them in the public facts; IDEATE, SELECT and ART_DIRECT receive them as a note.
+- **Grammar.** See `grammaire-ecarts-essai-2.md`. One minimal extension is proposed (`WET_STONE` floor), not implemented.

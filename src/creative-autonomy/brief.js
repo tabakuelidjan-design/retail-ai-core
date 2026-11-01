@@ -2,7 +2,7 @@
 // Creative Brain's brief from them WITHOUT a human writing any copy, concept or position: only VERIFIED facts become claims (price and stock come from
 // the Shopify snapshot, a personalisation promise only from the product's own type/tags/description), everything else is left to the Brain or marked UNKNOWN.
 import { createHash } from 'node:crypto';
-import { habbBriefFacts } from './habb-guard.js';
+import { habbBriefFacts, commercialBrief } from './habb-guard.js';
 
 export const FORMATS = Object.freeze({
   INSTAGRAM_FEED_4_5: { ref: 'format://instagram/feed-1080x1350', canvas: { width: 1080, height: 1350 }, medium: 'DIGITAL', aspect_ratio: '4:5' },
@@ -27,6 +27,8 @@ export function verifiedFacts({ product, variantTitle = null, readAt }) {
     in_stock: variant.inventoryQuantity > 0,
     description: product.description,
     personalisation_offered: personalisation,
+    // the colours that EXIST in the snapshot (variant titles), never an invented one; stock is not claimed as in-store availability
+    colours_available: variants.map((v) => v.title).filter((t) => t && t !== 'Default Title'),
     personalisation_evidence: personalisation ? 'type, tags or description of the Shopify product' : 'nothing in the Shopify product states a personalisation',
     source: { system: 'shopify', product_id: product.id, variant_id: variant.id, read_at: readAt, status: product.status },
   });
@@ -53,6 +55,8 @@ export function buildAutonomousBrief({ product, variantTitle = null, readAt, obj
       personalisation: facts.personalisation_offered ? 'offerte pour ce produit (fiche Shopify)' : 'NON offerte pour ce produit : aucune promesse de personnalisation',
       // who HABB is and what it never shows or claims, given to the Brain from the FRAME on (the observation otherwise carries only section names)
       ...(brand.expression ? habbBriefFacts(brand) : {}),
+      // what Nordla may build the reason to come on, and what the concept must achieve: from verified facts only (see commercialBrief)
+      ...(brand.expression ? commercialBrief(facts, merchant) : {}),
     },
     approved_copy: [],
     claims: [{ ref: `claim://shopify/price/${facts.source.variant_id.split('/').pop()}`, role: 'PRICE', wording: facts.price }],

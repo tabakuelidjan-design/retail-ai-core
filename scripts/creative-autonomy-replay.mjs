@@ -51,11 +51,13 @@ const FACTS = factsOf();
 const results = []; let frame = null; let concepts = null;
 for (const tag of tags) {
   const req = JSON.parse(readFileSync(join(copy, `${tag}.request.json`), 'utf8'));
-  const respPath = join(copy, `${tag}.response.txt`);
+  // a scoped repair's answer was normalised AFTER the merge: judge what production judged (the .merged.txt), and say so
+  const mergedPath = join(copy, `${tag}.merged.txt`);
+  const respPath = existsSync(mergedPath) ? mergedPath : join(copy, `${tag}.response.txt`);
   const recorded = existsSync(respPath) ? readFileSync(respPath, 'utf8') : null;
   const stepName = tag.replace(/^\d+-/, '').replace(/-cnc_.*/, '');
   const stage = stepName.replace(/_REPAIR$/, ''); // a repair answer is judged by its stage's contract
-  const row = { tag, stage, repair: stepName.endsWith('_REPAIR'), recorded_response_chars: recorded?.length ?? null, recorded_error: existsSync(join(copy, `${tag}.error.json`)) ? JSON.parse(readFileSync(join(copy, `${tag}.error.json`), 'utf8')) : null };
+  const row = { tag, stage, repair: stepName.endsWith('_REPAIR'), judged: existsSync(mergedPath) ? 'MERGED_ANSWER (scoped repair)' : 'RECORDED_ANSWER', recorded_response_chars: recorded?.length ?? null, recorded_error: existsSync(join(copy, `${tag}.error.json`)) ? JSON.parse(readFileSync(join(copy, `${tag}.error.json`), 'utf8')) : null };
   if (recorded == null) { row.current_contract = 'NO_RECORDED_ANSWER'; results.push(row); continue; }
   let served = 0; let currentPromptSha = null;
   const replay = async (instruction) => { served += 1; currentPromptSha = createHash('sha256').update(instruction.system).digest('hex'); if (served > 1) throw Object.assign(new Error('the replay has no second answer'), { code: 'REPLAY_HAS_NO_OTHER_ANSWER' }); return { text: recorded, model: 'REPLAY_OF_RECORDED_ANSWER', request_id: null }; };

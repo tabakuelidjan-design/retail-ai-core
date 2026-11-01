@@ -26,7 +26,7 @@ import { createConceptCritic } from '../creative-brain/concept-critic.js';
 import { createConceptSelector } from '../creative-brain/concept-selection.js';
 import { buildAutonomousBrief } from './brief.js';
 import { createStageDirector, normalizeStage, HABB_ART_DIRECTION_HINT } from './stage-contract.js';
-import { assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard } from './habb-guard.js';
+import { assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard, commercialBriefNote } from './habb-guard.js';
 import { BRAIN_ERROR } from '../creative-brain/validation.js';
 import { PROVIDER_STATE, WHAT_IS_NEEDED } from './providers.js';
 
@@ -52,7 +52,50 @@ export const MAX_REFINE_ROUNDS = 2;
  * the same stage call, and every repair goes through the same port, SpendGuard, call cap and journal as any other call. The refused answer stays in the trace.
  */
 export const REPAIRABLE = Object.freeze(new Set([BRAIN_ERROR.NOT_DISTINCT, BRAIN_ERROR.TEXT_INVALID, BRAIN_ERROR.MISSING_KEY, BRAIN_ERROR.UNKNOWN_KEY, BRAIN_ERROR.ENUM_INVALID, BRAIN_ERROR.LIST_INVALID, BRAIN_ERROR.NUMERIC_VALUE, BRAIN_ERROR.FORBIDDEN_CONTENT, BRAIN_ERROR.RULE_VIOLATION]));
-export const repairHint = (error) => `Your previous answer was REFUSED by Nordla's contract: ${error.code} at ${error.field ?? 'unknown field'}: ${String(error.message).slice(0, 240)}. Return the whole answer again with this field corrected; keep everything else that was valid.`;
+export const repairHint = (error, scoped = false) => `Your previous answer was REFUSED by Nordla's contract: ${error.code} at ${error.field ?? 'unknown field'}: ${String(error.message).slice(0, 240)}. Return the whole answer again with this field corrected.${scoped ? ` ONLY ${error.field} will be taken from your new answer: every other field is kept exactly as in your previous answer, and any change elsewhere is discarded. Fix ${error.field} itself; do not move the problem to another field.` : ' Keep everything else that was valid.'}`;
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// SCOPED REPAIR. A repair may only change the field the contract refused. The model's new answer contributes ONLY that field (by its path); everything else is
+// the previous answer, already checked. So a repair can never replace a valid structure elsewhere (first real trial, 2026-11-01: a repair turned a valid
+// PLINTH/BENEATH into a refused BLOCK/BENEATH). The changes the model made outside the field are recorded, never applied. When the refusal names no precise
+// field (a whole-answer rule), the whole new answer is used, as before.
+const ENVELOPES = new Set(['stage', 'art_direction', 'frame', 'answer', 'selection', 'concept_critique']);
+/** 'stage.props[0].reason' -> ['props', 0, 'reason'] (the leading envelope name is not a key of the answer). */
+export function fieldPath(field, original) {
+  if (typeof field !== 'string' || !field) return [];
+  const tokens = [];
+  for (const part of field.split('.')) { const m = /^([^[\]]*)((?:\[\d+\])*)$/.exec(part); if (!m) return []; if (m[1]) tokens.push(m[1]); for (const i of m[2].matchAll(/\[(\d+)\]/g)) tokens.push(Number(i[1])); }
+  if (tokens.length && typeof tokens[0] === 'string' && (ENVELOPES.has(tokens[0]) && !(original && Object.hasOwn(original, tokens[0])))) tokens.shift();
+  return tokens;
+}
+const getAt = (o, path) => path.reduce((x, k) => (x == null ? undefined : x[k]), o);
+function setAt(o, path, value) {
+  let x = o;
+  for (let i = 0; i < path.length - 1; i += 1) { if (x[path[i]] == null || typeof x[path[i]] !== 'object') return false; x = x[path[i]]; }
+  const last = path[path.length - 1];
+  if (value === undefined) { if (Array.isArray(x)) return false; delete x[last]; } else x[last] = value;
+  return true;
+}
+function diffPaths(a, b, prefix = '', out = []) {
+  if (out.length >= 25) return out;
+  if (JSON.stringify(a) === JSON.stringify(b)) return out;
+  if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) diffPaths(a[k], b[k], Array.isArray(a) ? `${prefix}[${k}]` : (prefix ? `${prefix}.${k}` : k), out);
+    return out;
+  }
+  out.push(prefix || '(whole answer)');
+  return out;
+}
+/** The repaired answer actually normalised: the previous answer with ONLY the refused field taken from the new one. */
+export function scopedMerge(originalText, repairText, field) {
+  let original; let repair;
+  try { original = JSON.parse(originalText); repair = JSON.parse(repairText); } catch { return { text: repairText, applied: false, scope: null, discarded: [], reason: 'UNPARSEABLE' }; }
+  const path = fieldPath(field, original);
+  if (!path.length || !original || typeof original !== 'object') return { text: repairText, applied: false, scope: 'WHOLE_ANSWER', discarded: [], reason: 'NO_PRECISE_FIELD' };
+  const merged = structuredClone(original);
+  if (!setAt(merged, path, structuredClone(getAt(repair, path)))) return { text: repairText, applied: false, scope: 'WHOLE_ANSWER', discarded: [], reason: 'FIELD_NOT_ADDRESSABLE' };
+  return { text: JSON.stringify(merged), applied: true, scope: field, discarded: diffPaths(merged, repair) };
+}
 
 /** Default local engines: real processes, zero cost. Tests may replace them. */
 export function localEngines({ python = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), blenderPython = process.env.NORDLA_BLENDER_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), renderScale = 0.5, samples = 32 } = {}) {
@@ -128,11 +171,15 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   const humanInterventions = [
     { when: 'avant le passage', who: 'propriétaire', what: 'a choisi le produit, l\'objectif commercial, le format et fourni la photo', creative: false },
   ];
-  let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0; let repairNote = null; let callsInStep = 0;
+  let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0; let repairNote = null; let callsInStep = 0; let lastReplyText = null; let repairScope = null; let lastMerge = null; let briefNote = null;
+  // HABB's commercial brief, repeated to the stages that do not see the public facts (set once the brief exists)
+  const BRIEF_STAGES = new Set(['IDEATE', 'SELECT', 'ART_DIRECT', 'IDEATE_REPAIR', 'SELECT_REPAIR', 'ART_DIRECT_REPAIR']);
   const brainDir = join(workdir, 'brain-calls');
   const metered = ports.text ? async (original) => {
     // during an authorised repair, the exact violation is appended to the stage's own instruction (works for every Brain stage, no Brain module changed)
-    const instruction = repairNote ? { ...original, system: `${original.system}\n${repairNote}` } : original;
+    const stepName = String(currentStep ?? '').replace(/-cnc_.*/, '');
+    const notes = [BRIEF_STAGES.has(stepName) ? briefNote : null, repairNote].filter(Boolean);
+    const instruction = notes.length ? { ...original, system: `${original.system}\n${notes.join('\n')}` } : original;
     // a SECOND call inside one stage call is the Brain's own protocol re-ask (invalid JSON): it is a repair too, and it spends the SAME budget, refused before sending
     callsInStep += 1;
     if (callsInStep > 1) {
@@ -146,7 +193,14 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     try { reply = await ports.text(instruction); } catch (error) { writeFileSync(join(brainDir, `${tag}.error.json`), JSON.stringify({ code: error.code ?? null, message: String(error.message).slice(0, 300) })); throw error; }
     writeFileSync(join(brainDir, `${tag}.response.txt`), String(reply.text ?? ''));
     writeFileSync(join(brainDir, `${tag}.meta.json`), JSON.stringify({ model: reply.model ?? null, request_id: reply.request_id ?? null, cost_eur: reply.cost_eur ?? null }));
-    lastModel = reply.model ?? null; lastCost = reply.cost_eur ?? 0; textCost += lastCost; return reply;
+    lastModel = reply.model ?? null; lastCost = reply.cost_eur ?? 0; textCost += lastCost;
+    if (repairScope) {
+      const m = scopedMerge(repairScope.originalText, String(reply.text ?? ''), repairScope.field);
+      lastMerge = { scope: m.scope, applied: m.applied, discarded_outside_scope: m.discarded, reason: m.reason ?? null };
+      if (m.applied) { writeFileSync(join(brainDir, `${tag}.merged.txt`), m.text); lastReplyText = m.text; return { ...reply, text: m.text }; }
+    }
+    lastReplyText = String(reply.text ?? '');
+    return reply;
   } : null;
 
   async function step(rec, fn) {
@@ -167,10 +221,17 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     try { return await step(rec, call); } catch (error) {
       if (!REPAIRABLE.has(error?.code) || repairsUsed >= maxRepairCalls) throw error;
       repairsUsed += 1;
-      repairNote = repairHint(error);
+      const originalText = lastReplyText;
+      const scoped = Boolean(originalText) && scopedMerge(originalText, originalText, error.field).applied;
+      repairNote = repairHint(error, scoped);
+      repairScope = scoped ? { originalText, field: error.field } : null; lastMerge = null;
+      const repairRec = { ...rec, step: `${rec.step}_REPAIR`, repair_of: { code: error.code, field: error.field ?? null }, repair_scope: scoped ? error.field : 'WHOLE_ANSWER', repairs_used: repairsUsed, repairs_allowed: maxRepairCalls };
       try {
-        return await step({ ...rec, step: `${rec.step}_REPAIR`, repair_of: { code: error.code, field: error.field ?? null }, repairs_used: repairsUsed, repairs_allowed: maxRepairCalls }, call);
-      } finally { repairNote = null; }
+        return await step(repairRec, call);
+      } finally {
+        const entry = trace.at(-1); if (entry && entry.step === repairRec.step) entry.repair_merge = lastMerge;
+        repairNote = null; repairScope = null;
+      }
     }
   }
   const notConnected = (rec, port) => {
@@ -199,6 +260,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     const assessment = assessBrief({ brief: built.brief });
     return { outcome: assessment.status, detail: { issues: assessment.issues, unknowns: assessment.unknowns, claims: built.brief.claims.map((c) => `${c.role}: ${c.wording}`), personalisation_offered: built.facts.personalisation_offered }, value: { ...built, assessment } };
   }).then((v) => v);
+  briefNote = commercialBriefNote(brief.public_facts);
   const factsPath = join(workdir, 'faits.json');
   writeFileSync(factsPath, JSON.stringify({ product_title: facts.product_title, variant: facts.variant, price: facts.price, merchant: input.merchant ?? 'HABB, Namur', personalisation_offered: facts.personalisation_offered, source: facts.source }, null, 1));
   if (trace.at(-1).outcome !== 'PROCEED') return finish(RUN_STATUS.STOPPED_BRIEF_INCOMPLETE);
@@ -221,12 +283,15 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
 
   // 4 FRAME — the first decision that needs a language model
   const frameRec = { step: 'FRAME', component: 'createProblemFramer', module: 'src/creative-brain/problem-frame.js', kind: KIND.LLM };
-  if (!metered) { notConnected(frameRec, 'text'); return finish(RUN_STATUS.STOPPED_PROVIDER_NOT_CONNECTED, { stopped_at: 'FRAME', asset_usable: assetUsable, exam }); }
+  if (!metered) { notConnected(frameRec, 'text'); return finish(RUN_STATUS.STOPPED_PROVIDER_NOT_CONNECTED, { mode, stopped_at: 'FRAME', asset_usable: assetUsable, exam }); }
+  // what the run has REALLY obtained so far: kept for the owner's report even when a later stage stops the run (nothing is completed or invented)
+  const progress = { frame: null, concepts: null, selection: null, art_directions: {}, stages: {}, proposals: [] };
   try {
     const frame = await repairable({ ...frameRec, provider: textProvider }, async () => {
       const { frame: f } = await createProblemFramer({ complete: metered }).frame({ observation });
       return { outcome: 'FRAMED', detail: f, value: f };
     });
+    progress.frame = frame;
 
     // 5 IDEATE
     // IDEATE: the Brain's distinctness guard, then HABB's guard on every concept (forbidden decor, invented capabilities) as early as the idea
@@ -235,17 +300,19 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       assertConceptsHabbRules(c, facts);
       return { outcome: 'THREE_DISTINCT_CONCEPTS', detail: c.map((x) => ({ concept_id: x.concept_id, central_idea: x.central_idea, visual_metaphor: x.visual_metaphor })), value: c };
     });
+    progress.concepts = concepts;
 
     // 5b SELECT: Nordla's own judgment of its concepts, criterion by criterion, in words (existing Brain stage). Recorded for the owner; it does not filter the concepts here.
     const selection = await repairable({ step: 'SELECT', component: 'createConceptSelector (10 criteria, words only)', module: 'src/creative-brain/concept-selection.js', kind: KIND.LLM, provider: textProvider }, async () => {
       const { selection: sel, evaluations } = await createConceptSelector({ complete: metered }).select({ frame, concepts });
       return { outcome: sel.outcome ?? 'EVALUATED', detail: { selection: sel, evaluations }, value: { selection: sel, evaluations } };
     });
+    progress.selection = selection;
 
     const artDirector = createArtDirector({ complete: metered });
     const stageDirector = createStageDirector({ complete: metered });
     const critic = ports.vision ? createConceptCritic({ vlm: ports.vision }) : null;
-    const proposals = [];
+    const proposals = progress.proposals;
 
     for (const concept of concepts) {
       const cid = concept.concept_id;
@@ -256,11 +323,13 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         assertArtDirectionGuard(a, facts);
         return { outcome: 'DIRECTED', detail: a, value: a };
       });
+      progress.art_directions[cid] = art;
       let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector + HABB guard', module: 'src/creative-autonomy/stage-contract.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
         const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts });
         assertStageGuard(s, facts);
         return { outcome: 'STAGED', detail: s, value: s };
       });
+      progress.stages[cid] = stage;
 
       const grammarGap = { art_direction_elements: (art.narrative_elements ?? []).map((e) => e.element), wanted_but_not_available: stage.wanted_but_not_available ?? [] };
       if (ideationOnly) { proposals.push({ concept, art_direction: art, stage, grammar_gap: grammarGap, image: null, technical_quality: { state: 'NOT_RENDERED', reason: 'IDEATION_ONLY' }, creative_quality: { state: 'NOT_MEASURED', reason: 'essai d\'idéation sans image' }, status: 'IDEATION_ONLY_NOT_A_VISUAL' }); continue; }
@@ -327,9 +396,14 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     humanInterventions.push({ when: 'après le passage', who: 'propriétaire', what: 'valide, refuse ou demande une révision de chaque proposition (titre compris)', creative: true });
     writeFileSync(join(workdir, 'propositions.json'), JSON.stringify(proposals, null, 1));
     const status = ideationOnly ? RUN_STATUS.IDEATION_ONLY_NOT_A_VISUAL : assetUsable ? RUN_STATUS.PROPOSALS_READY_FOR_OWNER : RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE;
-    return finish(status, { mode, frame, concepts, selection, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
+    return finish(status, { mode, ...progress, frame, concepts, selection, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
   } catch (error) {
-    return finish(RUN_STATUS.STOPPED_ERROR, { error: { code: error.code ?? null, message: String(error.message).slice(0, 300) }, asset_usable: assetUsable });
+    const stoppedAt = [...trace].reverse().find((t) => t.outcome === 'ERROR');
+    return finish(RUN_STATUS.STOPPED_ERROR, {
+      mode, ...progress, stopped_at: stoppedAt ? { step: stoppedAt.step, concept_id: stoppedAt.concept_id ?? null } : null,
+      error: { code: error.code ?? null, field: error.field ?? null, message: String(error.message).slice(0, 300) },
+      asset_usable: assetUsable, exam, brain_calls_dir: brainDir,
+    });
   }
 }
 
