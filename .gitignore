@@ -43,3 +43,6 @@ trial-*.result.json
 trial-*.lock
 REPLAY.md
 replay.json
+
+# Python bytecode of the local creative engines
+__pycache__/

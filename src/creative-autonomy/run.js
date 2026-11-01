@@ -40,6 +40,7 @@ export const RUN_STATUS = Object.freeze({
   STOPPED_BRIEF_INCOMPLETE: 'STOPPED_BRIEF_INCOMPLETE',
   CONCEPTS_ONLY_ASSET_NOT_USABLE: 'CONCEPTS_ONLY_ASSET_NOT_USABLE',
   IDEATION_ONLY_NOT_A_VISUAL: 'IDEATION_ONLY_NOT_A_VISUAL',
+  STOPPED_NO_CONCEPT_SELECTED: 'STOPPED_NO_CONCEPT_SELECTED',
   STOPPED_ERROR: 'STOPPED_ERROR',
 });
 export const KIND = Object.freeze({ DETERMINISTIC: 'DETERMINISTIC', LLM: 'LLM', VISION: 'VISION', LOCAL_ENGINE: 'LOCAL_ENGINE' });
@@ -162,8 +163,13 @@ function technicalQuality(report) {
  *   engines: localEngines()
  *   workdir: where every intermediate file is kept (the run is fully inspectable)
  */
-export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL', maxRepairCalls = 0 }) {
+export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL', maxRepairCalls = 0, produce = 'ALL' }) {
   if (!Number.isInteger(maxRepairCalls) || maxRepairCalls < 0) throw new TypeError('maxRepairCalls must be a non-negative integer');
+  // produce: 'ALL' = every concept is art-directed, staged and rendered (the original route); 'SELECTED' = only the concept Nordla's own SELECT stage chose
+  // (premium path: one paid scene for the concept Nordla judged best, never simply the first of the list)
+  if (!['ALL', 'SELECTED'].includes(produce)) throw new TypeError('produce must be ALL or SELECTED');
+  // a scene engine (scene-engine.js) renders a PAID scene once; a refinement may only move the text, which needs no new scene
+  const sceneMode = Boolean(engines.sceneMode);
   let repairsUsed = 0;
   const ideationOnly = mode === 'IDEATION_ONLY';
   mkdirSync(workdir, { recursive: true });
@@ -212,7 +218,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       Object.assign(entry, { outcome, detail, model: lastModel ?? rec.model ?? null, cost_eur: lastCost, ms: now() - t0 });
       return value;
     } catch (error) {
-      Object.assign(entry, { outcome: 'ERROR', detail: { code: error.code ?? null, message: String(error.message).slice(0, 300), field: error.field ?? null }, ms: now() - t0 });
+      Object.assign(entry, { outcome: 'ERROR', detail: { code: error.code ?? null, message: String(error.message).slice(0, 300), field: error.field ?? null, ...(error.evidence ? { evidence: error.evidence } : {}) }, ms: now() - t0 });
       throw error;
     }
   }
@@ -314,7 +320,18 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     const critic = ports.vision ? createConceptCritic({ vlm: ports.vision }) : null;
     const proposals = progress.proposals;
 
-    for (const concept of concepts) {
+    let toProduce = concepts;
+    if (produce === 'SELECTED') {
+      const chosenId = selection?.selection?.concept_id ?? null;
+      toProduce = concepts.filter((c) => c.concept_id === chosenId);
+      trace.push({ n: trace.length + 1, step: 'PRODUCE', component: 'concept chosen by SELECT', module: 'src/creative-autonomy/run.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE, model: null, cost_eur: 0, ms: 0,
+        outcome: toProduce.length ? 'SELECTED_CONCEPT_ONLY' : 'NO_CONCEPT_SELECTED', detail: { selection_outcome: selection?.selection?.outcome ?? null, concept_id: chosenId, not_produced: concepts.filter((c) => c.concept_id !== chosenId).map((c) => c.concept_id) } });
+      if (!toProduce.length) {
+        // honest stop BEFORE any paid image: Nordla's own judgment found no concept to produce; nothing is picked in its place
+        return finish(RUN_STATUS.STOPPED_NO_CONCEPT_SELECTED, { mode, ...progress, frame, concepts, selection, proposals, asset_usable: assetUsable, exam, brain_calls_dir: metered ? brainDir : null });
+      }
+    }
+    for (const concept of toProduce) {
       const cid = concept.concept_id;
       const dir = join(workdir, cid); mkdirSync(dir, { recursive: true });
       // ART_DIRECT gets HABB's hard rules from its first call, and its answer is checked against them (the Brain's contract does not know HABB)
@@ -341,7 +358,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         const stagePath = join(dir, `stage_${tag}.json`); writeFileSync(stagePath, JSON.stringify(stage, null, 1));
         const setPath = join(dir, `decor_${tag}.png`); imagePath = join(dir, `proposition_${tag}.png`);
         renderInfo = await step({ step: 'RENDER', concept_id: cid, round, component: engines.name?.render ?? 'render',
-          module: engines.name?.renderProvider ? 'src/creative-autonomy/alibaba-background-engine.js' : 'scripts/creative-autonomy/render_stage.py',
+          module: engines.name?.renderProvider ? 'src/creative-autonomy/scene-engine.js' : 'scripts/creative-autonomy/render_stage.py',
           kind: engines.name?.renderProvider ? 'GENERATIVE_IMAGE' : KIND.LOCAL_ENGINE,
           provider: engines.name?.renderProvider ?? PROVIDER_STATE.REAL }, async () => {
           const info = await engines.render({ stage, concept, artDirection: art, stagePath,
@@ -351,7 +368,8 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
             blender_capabilities_used: info.blender_capabilities_used ?? null,
             render_backend: info.render_backend ?? 'BLENDER', model: info.model ?? null,
             request_id: info.request_id ?? null, image_sha256: info.image_sha256 ?? null,
-            image_cost_eur: info.image_cost_eur ?? null, source_photo_transmitted: info.source_photo_transmitted ?? null },
+            image_cost_eur: info.image_cost_eur ?? null, source_photo_transmitted: info.source_photo_transmitted ?? null,
+            ...(info.variants ? { chosen_variant: info.chosen_variant, reused_scene: info.reused_scene, variants: info.variants.map((v) => ({ variant: v.variant, pass: v.pass, rejections: v.rejections, warnings: v.warnings })) } : {}) },
             value: info };
         });
         report = await step({ step: 'COMPOSE+CHECK', concept_id: cid, round, component: engines.name?.compose ?? 'compose', module: 'scripts/creative-autonomy/compose_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
@@ -375,13 +393,23 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
 
         if (round >= MAX_REFINE_ROUNDS) break;
         const defects = report.technical.defects;
-        const fix = deterministicFix(stage, defects);
+        let fix = deterministicFix(stage, defects);
         const brainDefects = defects.filter((d) => NEEDS_BRAIN.has(d) || (!fix && d));
         const hints = [...brainDefects.map((d) => `technical defect on the render: ${d}`), ...(critique?.dimensions ?? []).filter((d) => flagged(d) && d.revision_hint).map((d) => `${d.dimension}: ${d.revision_hint}`)];
-        if (fix && !hints.length) {
+        if (sceneMode) {
+          // the paid scene is fixed: only the text may move (no new image, no re-staging). Anything else is reported to the owner, not acted on.
+          const textOnly = fix?.text_placement ? { text_placement: fix.text_placement } : null;
+          const notApplied = { defects, hints, framing_change: fix?.camera ?? null };
+          if (!textOnly) {
+            if (defects.length || hints.length) trace.push({ n: trace.length + 1, step: 'REFINE', concept_id: cid, round: round + 1, component: 'scene mode: the scene is not regenerated', module: 'src/creative-autonomy/run.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE, model: null, cost_eur: 0, ms: 0, outcome: 'REPORTED_TO_OWNER_NOT_APPLIED', detail: notApplied });
+            break;
+          }
+          fix = textOnly;
+        }
+        if (fix && (!hints.length || sceneMode)) {
           stage = await step({ step: 'REFINE', concept_id: cid, round: round + 1, component: 'deterministicFix (placement du texte, cadrage)', module: 'src/creative-autonomy/run.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE }, async () => {
             const s = normalizeStage({ ...stripIds(stage), ...fix }, { concept, personalisation_offered: facts.personalisation_offered });
-            return { outcome: 'FIXED_WITHIN_LIMITS', detail: { defects, change: fix }, value: s };
+            return { outcome: 'FIXED_WITHIN_LIMITS', detail: { defects, change: fix, ...(sceneMode && hints.length ? { reported_to_owner_not_applied: hints } : {}) }, value: s };
           });
         } else if (hints.length) {
           stage = await step({ step: 'REFINE', concept_id: cid, round: round + 1, component: 'createStageDirector (re-ask with hints)', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async () => {
@@ -398,6 +426,8 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         grammar_gap: { art_direction_elements: (art.narrative_elements ?? []).map((e) => e.element), wanted_but_not_available: stage.wanted_but_not_available ?? [] },
         technical_quality: technicalQuality(report), creative_quality: creativeQuality(critique),
         text_for_owner_approval: { headline: stage.headline, facts_lines: report.text_used.facts_lines },
+        scene: renderInfo?.render_backend === 'SCENE_AROUND_PRODUCT' ? { model: renderInfo.model, request_id: renderInfo.request_id, chosen_variant: renderInfo.chosen_variant, variants: renderInfo.variants, image_cost_eur: renderInfo.image_cost_eur, images_billed: renderInfo.images_billed, source_photo_transmitted: renderInfo.source_photo_transmitted } : null,
+        selected_by_nordla: selection?.selection?.concept_id === cid,
         status: 'PROPOSED_FOR_OWNER_VALIDATION',
       });
     }

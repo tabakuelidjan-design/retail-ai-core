@@ -5,6 +5,7 @@ export const ALIBABA_PRICE_USD = Object.freeze({
   text_output_per_million: 4.951,
   image_1k: 0.03438,
   image_2k: 0.068761,
+  image_input: 0.00275, // per reference image sent to an edit (Frankfurt list price, 1K and 2K alike)
   video_per_second: Object.freeze({
     '480P': 0.041,
     '720P': 0.083,
@@ -32,8 +33,9 @@ export function priceTextEur({ inputTokens = 0, outputTokens = 0, usdToEur = 1 }
   return usd * usdToEur;
 }
 
-export function priceImagesEur({ n = 1, size = '1024x1024', usdToEur = 1 }) {
-  return imagePriceUsd(size) * n * usdToEur;
+export function priceImagesEur({ n = 1, size = '1024x1024', usdToEur = 1, inputImages = 0 }) {
+  if (!Number.isInteger(inputImages) || inputImages < 0) throw new TypeError('inputImages must be >= 0');
+  return (imagePriceUsd(size) * n + ALIBABA_PRICE_USD.image_input * inputImages) * usdToEur;
 }
 
 export function priceVideoEur({ duration, resolution, usdToEur = 1 }) {
@@ -124,10 +126,10 @@ export class SpendGuard {
     });
   }
 
-  reserveImages({ id, n, size = '1024x1024' }) {
+  reserveImages({ id, n, size = '1024x1024', inputImages = 0 }) {
     return this.#reserve({
       id,
-      eur: priceImagesEur({ n, size, usdToEur: this.usdToEur }),
+      eur: priceImagesEur({ n, size, usdToEur: this.usdToEur, inputImages }),
       images: n,
     });
   }
