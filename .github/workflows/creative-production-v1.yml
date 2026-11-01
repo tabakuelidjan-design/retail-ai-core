@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install repository dependencies (lockfile)
+        run: npm ci --ignore-scripts
       - name: Unit tests (no API credentials, no image-generation requests)
         run: node --test test/visual-production-contract.test.js test/alibaba-background-engine.test.js test/creative-autonomy.test.js
       - name: Python source syntax
