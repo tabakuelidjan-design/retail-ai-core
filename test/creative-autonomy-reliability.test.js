@@ -1,5 +1,6 @@
 // Reliability after the first real trial (trial-61e7eeb84a2de902, 2026-11-01): 5 real answers, then STAGE refused with BRAIN_TEXT_INVALID on stage.rationale
-// (361 characters for a 300 limit), and the real ART_DIRECT answer contained leaves and foliage, which HABB forbids.
+// (over the 300-character limit: the recorded text is 351 characters as the validator counts them; "361" was the figure first reported, never measured on
+// the file), and the real ART_DIRECT answer contained leaves and foliage, which HABB forbids.
 // The contract is NOT weakened: the limit stays 300. The prompt now asks for 180-220 characters, HABB's rules bind ART_DIRECT, and a bounded, AUTHORISED repair
 // (one more call of the same stage, with the exact violation) can recover a well-formed answer that broke one rule. Without that authorisation: no extra call.
 import test from 'node:test';
@@ -15,7 +16,8 @@ import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { BRAIN_ERROR } from '../src/creative-brain/validation.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
 
-// SYNTHETIC (labelled): a rationale of exactly 361 characters, the length of the real refused one. The REAL text is tested below when its file is provided.
+// SYNTHETIC (labelled): a rationale of exactly 361 characters, a boundary case well over the limit. It is NOT the real text and NOT its length (the real
+// recorded rationale is 351 characters); the REAL text is tested below, read-only, when its file is provided.
 const R361 = 'Un décor sombre et calme où la lumière rasante dessine la gourde comme un objet de quartier que l’on croise sans le chercher, avec un socle mat qui la pose au niveau du regard, une lame de lumière froide qui découpe sa silhouette, un fond profond qui laisse respirer le titre à droite et une matière brute qui rappelle la ville, pour que l’envie de la découvrir naisse sur place.'.padEnd(361, '.').slice(0, 361);
 const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
 const [CONCEPT] = normalizeConceptSet(CONCEPTS);
@@ -48,7 +50,7 @@ test('STAGE prompt asks for ONE concise rationale of 180 to 220 characters; the 
   assert.equal(STAGE_SPEC.fields.rationale.max, 300);
 });
 
-test('a 361-character rationale is refused with BRAIN_TEXT_INVALID on stage.rationale (synthetic text, real length); 300 passes, 301 does not', () => {
+test('a 361-character rationale is refused with BRAIN_TEXT_INVALID on stage.rationale (synthetic boundary case); 300 passes, 301 does not', () => {
   assert.equal(R361.length, 361);
   assert.throws(() => normalizeStage(baseStage(CONCEPT, { rationale: R361 }), { concept: CONCEPT, personalisation_offered: false }), (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.rationale');
   assert.ok(normalizeStage(baseStage(CONCEPT, { rationale: 'x'.repeat(300) }), { concept: CONCEPT, personalisation_offered: false }));
@@ -60,12 +62,16 @@ test('a 361-character rationale is refused with BRAIN_TEXT_INVALID on stage.rati
 const REAL = process.env.NORDLA_REAL_TRIAL_CALLS || '';
 const realFile = (re) => (REAL && existsSync(REAL) ? readdirSync(REAL).find((f) => re.test(f)) : null);
 const SKIP_REAL = 'set NORDLA_REAL_TRIAL_CALLS to a COPY of the real brain-calls folder (outside the repository)';
-test('REAL trial answer: the recorded STAGE response is refused exactly as in the trial (stage.rationale, 361 > 300)', { skip: !realFile(/^\d+-STAGE-.*\.response\.txt$/) && SKIP_REAL }, () => {
+test('REAL trial answer: the recorded STAGE response is refused as in the trial (stage.rationale over the contract limit)', { skip: !realFile(/^\d+-STAGE-.*\.response\.txt$/) && SKIP_REAL }, () => {
   const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.response\.txt$/)), 'utf8'));
   const req = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-STAGE-.*\.request\.json$/)), 'utf8'));
   const { concept, verified_facts: facts } = JSON.parse(req.user);
-  assert.equal(raw.rationale.length, 361);
-  assert.throws(() => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts?.personalisation_offered) }), (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.rationale');
+  const max = STAGE_SPEC.fields.rationale.max;
+  // the length exactly as the validator measures it (NFC, trimmed, repeated spaces collapsed): no historical figure is imposed
+  const measured = raw.rationale.normalize('NFC').trim().replace(/ {2,}/g, ' ').length;
+  assert.ok(measured > max, `the real rationale (${measured} characters) is over the ${max}-character limit`);
+  assert.throws(() => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts?.personalisation_offered) }),
+    (e) => e.code === BRAIN_ERROR.TEXT_INVALID && e.field === 'stage.rationale' && e.detail?.limit === max && e.detail?.length === measured);
 });
 test('REAL trial answer: the recorded ART_DIRECT response is refused by HABB\'s rules (leaves / foliage)', { skip: !realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/) && SKIP_REAL }, () => {
   const raw = JSON.parse(readFileSync(join(REAL, realFile(/^\d+-ART_DIRECT-.*\.response\.txt$/)), 'utf8'));
@@ -164,7 +170,7 @@ test('HABB rules: naming them in forbidden_decorative_noise is allowed; the verb
 // ---------------- 4. offline replay of recorded answers: read-only on the trial folder, lock untouched, no network
 test('replay: the recorded answers are judged against the current contracts offline; the trial folder and its lock are untouched', { timeout: 60_000 }, async () => {
   const { spawnSync } = await import('node:child_process');
-  // a trial folder shaped like the real one: FRAME, IDEATE, SELECT, ART_DIRECT (with foliage, accepted at the time), STAGE (361-character rationale, refused)
+  // a trial folder shaped like the real one: FRAME, IDEATE, SELECT, ART_DIRECT (with foliage, accepted at the time), STAGE (rationale over the limit: the synthetic 361-character text)
   const trial = mkdtempSync(join(tmpdir(), 'trial-copy-'));
   const p = port({ stage: (c, n) => (n === 1 ? { rationale: R361 } : {}) });
   await runAutonomous({ mode: 'IDEATION_ONLY', input: { product: snap.product, variantTitle: 'Noir', readAt: snap.read_at, objective: 'o', brand: HABB_BRAND, format: 'INSTAGRAM_FEED_4_5', photoPath: null }, ports: { text: p.complete, visionFor: null, state: { text: 'TEST_DOUBLE', vision: 'NOT_CONNECTED' } }, engines: {}, workdir: join(trial, 'gourde-noire') });

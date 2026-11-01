@@ -42,7 +42,7 @@ node --test test/creative-autonomy-reliability.test.js
 Remove-Item Env:NORDLA_REAL_TRIAL_CALLS
 ```
 Expected:
-- the STAGE answer is refused on `stage.rationale` (361 > 300);
+- the STAGE answer is refused on `stage.rationale` (length over 300: 351 characters for the recorded answer);
 - the ART_DIRECT answer is refused by HABB's rules (leaves / foliage).
 
 ## 5. Plan id (nothing is sent)

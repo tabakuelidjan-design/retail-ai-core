@@ -71,7 +71,7 @@ Status: **UNVERIFIED**. The script refuses to execute until `NORDLA_PHOTO_RIGHTS
 `scripts/creative-autonomy-media-authorization.mjs` drafts the media record for the photo. The draft is inactive by construction (`revoked: true`, retention not acknowledged): the existing guard refuses it with RETENTION_NOT_ACKNOWLEDGED. It is activated only after the owner agrees. No image leaves the machine before that.
 
 ## First real attempt: trial-61e7eeb84a2de902 (2026-11-01)
-- 5 real answers from Alibaba (FRAME, IDEATE, SELECT, ART_DIRECT, STAGE), then a stop at STAGE: `BRAIN_TEXT_INVALID` on `stage.rationale` (361 characters for a 300 limit).
+- 5 real answers from Alibaba (FRAME, IDEATE, SELECT, ART_DIRECT, STAGE), then a stop at STAGE: `BRAIN_TEXT_INVALID` on `stage.rationale` (over the 300 limit: the recorded rationale is 351 characters, `raw.rationale.length` measured by the owner on the recorded file on 2026-11-01; the "361" first reported was never measured on the file).
 - The ART_DIRECT answer contained leaves and foliage. At that time HABB's rules were not checked at that stage.
 - The single attempt of this plan is used. Its lock stays in place.
 
