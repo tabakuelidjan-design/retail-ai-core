@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders } from '../src/creative-autonomy/providers.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
-import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope } from '../src/creative-autonomy/trial.js';
+import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding } from '../src/creative-autonomy/trial.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
 import { SpendGuard } from '../src/marketing-creative/alibaba/budget.js';
 import { JsonlCallJournal } from '../src/marketing-creative/alibaba/journal.js';
@@ -74,8 +74,7 @@ const model = env.ALIBABA_QWEN_TEXT_MODEL;
 const scope = env.NORDLA_ALIBABA_SCOPE;
 const rights = process.env.NORDLA_PHOTO_RIGHTS || 'UNVERIFIED';
 // what Nordla is ASKED is part of what the owner authorises: objective, product snapshot, variant, format and brand rules are bound to the plan id
-const BRIEF_BINDING = { objective: P.objective, product_id: P.snap.product.id, variant: P.variant, snapshot_read_at: P.snap.read_at, format: 'INSTAGRAM_FEED_4_5',
-  brand_sha256: createHash('sha256').update(JSON.stringify(HABB_BRAND)).digest('hex') };
+const BRIEF_BINDING = briefBinding({ snapshot: P.snap, variant: P.variant, objective: P.objective, format: 'INSTAGRAM_FEED_4_5', brand: HABB_BRAND });
 const IDEATION_LIMITS = { mode: 'IDEATION_ONLY', max_spend_eur: TRIAL_LIMITS.max_spend_eur, max_text_calls_per_product: 14, max_vision_calls_per_product: 0, max_output_tokens_per_text_call: TRIAL_LIMITS.max_output_tokens_per_text_call, images_sent: 0, attempts: 1 };
 const limits = ideation
   ? { ...IDEATION_LIMITS, products: [`${P.snap.product.id}${P.variant ? ` (variant ${P.variant})` : ''}`], brief: BRIEF_BINDING }

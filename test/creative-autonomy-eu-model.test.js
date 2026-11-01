@@ -187,3 +187,22 @@ test('report: built from the trace only, five sections, no visual claim for an i
   assert.match(md, /images envoyées : 0/);
   assert.ok(md.includes(CONCEPTS[0].central_idea), 'the concept is quoted as the model wrote it');
 });
+
+test('plan id: the SHA-256 of the full Shopify snapshot is bound; a change of price or of description invalidates the old id', async () => {
+  const { trialPlanId, TRIAL_LIMITS, briefBinding } = await import('../src/creative-autonomy/trial.js');
+  const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
+  const idFor = (s) => trialPlanId({ model: 'qwen3-vl-plus', scope: 'EU', limits: { ...TRIAL_LIMITS, brief: briefBinding({ snapshot: s, variant: 'Noir', objective: 'O', format: 'INSTAGRAM_FEED_4_5', brand: HABB_BRAND }) } });
+  const original = idFor(snap);
+  assert.equal(idFor(structuredClone(snap)), original, 'same content, same id');
+  // key order does not matter, content does
+  const reordered = { read_at: snap.read_at, product: Object.fromEntries(Object.entries(snap.product).reverse()) };
+  assert.equal(idFor(reordered), original);
+  const pricier = structuredClone(snap); pricier.product.variants.nodes.find((v) => v.title === 'Noir').price = '31.90';
+  assert.notEqual(idFor(pricier), original, 'a price change invalidates the plan');
+  const otherPrice = structuredClone(snap); otherPrice.product.variants.nodes.find((v) => v.title === 'Rose').price = '27.90';
+  assert.notEqual(idFor(otherPrice), original, 'any variant of the snapshot counts');
+  const reworded = structuredClone(snap); reworded.product.description = `${snap.product.description} `;
+  assert.notEqual(idFor(reworded), original, 'a description change, even one space, invalidates the plan');
+  const restocked = structuredClone(snap); restocked.product.variants.nodes[0].inventoryQuantity += 1;
+  assert.notEqual(idFor(restocked), original);
+});

@@ -32,7 +32,8 @@ Facts read on 2026-11-01 in the Alibaba Cloud Model Studio documentation. Re-ver
 - The key appears only in the Authorization header, never in the journal.
 
 ## Plans (updated 2026-11-01, 08:34 decision)
-- **Ideation trial, text only**: plan **`trial-b7c58aac7b7a59f3`** (supersedes `trial-2d159b21c7ca20db`).
+- **Ideation trial, text only**: plan **`trial-61e7eeb84a2de902`**, FROZEN in `plan-trial-61e7eeb84a2de902.json`. It supersedes `trial-b7c58aac7b7a59f3` and `trial-2d159b21c7ca20db`.
+  - The SHA-256 of the full Shopify snapshot is bound: `2e0f33fe…a6ca`, identical to the live product sheet read on 2026-11-01. A change of price, description, stock or any variant gives a new id.
   - Objective given to Nordla: « Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB ».
   - The objective, the Shopify snapshot, the variant, the format and the HABB brand rules are now bound to the plan id. Before this fix, the objective was not.
   - 9 text calls: FRAME, IDEATE, SELECT (Nordla's own judgment of its concepts, existing Brain stage), 3 ART_DIRECT, 3 STAGE. No image is read or sent; nothing is rendered.

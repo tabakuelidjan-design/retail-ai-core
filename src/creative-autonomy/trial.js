@@ -70,3 +70,25 @@ export function forecastCost({ calls, model, imageTokens = 3000, usdToEur = 0.92
   const eur = (usd) => Math.round(usd * usdToEur * 10000) / 10000;
   return { model, calls: calls.length, tokens_in: tokensIn, tokens_out_expected: tokensOut, expected_eur: eur(expected), worst_case_eur: eur(worst), spendguard_reserved_eur: Math.round(reserved * 10000) / 10000, usd_to_eur: usdToEur };
 }
+
+/** Canonical JSON (keys sorted at every level): the same content always gives the same bytes, whatever the key order of the snapshot file. */
+export function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+
+/**
+ * What Nordla is ASKED, bound to the plan id: the objective, the format, HABB's brand rules and the FULL content of the Shopify product snapshot actually used
+ * (title, description, tags, type, status, every variant with its price and stock). A change to any of them (a price, a word of the description) is a new plan.
+ */
+export function briefBinding({ snapshot, variant, objective, format, brand }) {
+  const sha = (x) => createHash('sha256').update(canonicalJson(x)).digest('hex');
+  return {
+    objective, format, variant,
+    product_id: snapshot.product.id,
+    snapshot_read_at: snapshot.read_at,
+    product_snapshot_sha256: sha(snapshot.product),
+    brand_sha256: sha(brand),
+  };
+}
