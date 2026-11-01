@@ -35,7 +35,7 @@ test('invalid creative input fails before any vendor operation', () => {
   assert.throws(() => buildVisualBackgroundBrief({ concept, artDirection: {} }), /atmosphere/);
   assert.throws(() => buildVisualBackgroundBrief({ concept: {}, artDirection }), /story/);
 });
-const auth = { approved: true, planId: 'trial-test', provider: 'openai', model: 'gpt-image-2.5-sunburst', maxCalls: 1, photoTransmission: 'NONE' };
+const auth = { approved: true, planId: 'trial-test', provider: 'openai', model: 'gpt-image-2.5-sunburst', maxCalls: 1, photoTransmission: 'NONE', dataScope: 'GLOBAL', crossBorderApproved: true };
 const request = (o = {}) => ({ planId: 'trial-test', provider: 'openai', model: 'gpt-image-2.5-sunburst',
   sourcePhotoRights: 'OWNER_CONFIRMED', authorization: auth, ...o });
 test('one-call permission is tied to exact plan, provider and model', () => {
