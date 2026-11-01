@@ -340,9 +340,19 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         const tag = `r${round}`;
         const stagePath = join(dir, `stage_${tag}.json`); writeFileSync(stagePath, JSON.stringify(stage, null, 1));
         const setPath = join(dir, `decor_${tag}.png`); imagePath = join(dir, `proposition_${tag}.png`);
-        renderInfo = await step({ step: 'RENDER', concept_id: cid, round, component: engines.name?.render ?? 'render', module: 'scripts/creative-autonomy/render_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
-          const info = await engines.render({ stagePath, examPath: join(examDir, 'examen.json'), rgbaPath: join(examDir, 'produit_rgba.png'), canvas: brief.format.canvas, outPath: setPath });
-          return { outcome: 'RENDERED', detail: { resolution: info.resolution, foreground_props: info.foreground_props, blender_capabilities_used: info.blender_capabilities_used ?? null }, value: info };
+        renderInfo = await step({ step: 'RENDER', concept_id: cid, round, component: engines.name?.render ?? 'render',
+          module: engines.name?.renderProvider ? 'src/creative-autonomy/alibaba-background-engine.js' : 'scripts/creative-autonomy/render_stage.py',
+          kind: engines.name?.renderProvider ? 'GENERATIVE_IMAGE' : KIND.LOCAL_ENGINE,
+          provider: engines.name?.renderProvider ?? PROVIDER_STATE.REAL }, async () => {
+          const info = await engines.render({ stage, concept, artDirection: art, stagePath,
+            examPath: join(examDir, 'examen.json'), rgbaPath: join(examDir, 'produit_rgba.png'),
+            canvas: brief.format.canvas, outPath: setPath });
+          return { outcome: 'RENDERED', detail: { resolution: info.resolution, foreground_props: info.foreground_props,
+            blender_capabilities_used: info.blender_capabilities_used ?? null,
+            render_backend: info.render_backend ?? 'BLENDER', model: info.model ?? null,
+            request_id: info.request_id ?? null, image_sha256: info.image_sha256 ?? null,
+            image_cost_eur: info.image_cost_eur ?? null, source_photo_transmitted: info.source_photo_transmitted ?? null },
+            value: info };
         });
         report = await step({ step: 'COMPOSE+CHECK', concept_id: cid, round, component: engines.name?.compose ?? 'compose', module: 'scripts/creative-autonomy/compose_stage.py', kind: KIND.LOCAL_ENGINE, provider: PROVIDER_STATE.REAL }, async () => {
           const r = await engines.compose({ stagePath, setPath, rgbaPath: join(examDir, 'produit_rgba.png'), examPath: join(examDir, 'examen.json'), factsPath, outPath: imagePath });
