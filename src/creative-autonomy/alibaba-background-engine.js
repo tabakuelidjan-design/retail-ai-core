@@ -116,7 +116,9 @@ export function createAlibabaBackgroundEngine({
         dataPolicy: { classification: 'PUBLIC', contains_personal_data: false, contains_face: false,
           reason: 'HABB Creative Production: public text-only background prompt, no source photo' },
         budget, journal, outputStore: safeProviderOutputStore(outputStore),
-        n: 1, size: `${canvas.width}x${canvas.height}`, watermark: false, fetchImpl,
+        n: 1, size: `${canvas.width}x${canvas.height}`, watermark: false,
+        negativePrompt: 'products, bottles, commercial text, letters, logos, watermarks, people, beige, cream, gold, hearts, foliage, neon, generic AI effects',
+        fetchImpl,
       });
       if (result?.outputs?.length !== 1) throw new Error('EXPECTED_EXACTLY_ONE_BACKGROUND');
       const bytes = await outputStore.readBytes(result.outputs[0]);
