@@ -42,6 +42,8 @@ const FIXED_CLAUSES = Object.freeze([
  * The ephemeral provider prompt, translated from a structured request. Returns { prompt, negative_prompt }; none of it is stored as canonical data.
  * @param {object} request { scene, product_role, preserve: string[], forbid: string[] }
  */
+export const NEGATIVE_PROMPT_MAX_CHARS = 500;
+const PRODUCT_PROTECTION_NEGATIVES = Object.freeze(['distorted product', 'changed printed text', 'redrawn artwork', 'altered camera module', 'extra lens', 'missing lens', 'added text', 'watermark']);
 export function buildProductEditPrompt(request) {
   const list = (value, field) => {
     if (!Array.isArray(value) || value.length === 0 || !value.every((s) => typeof s === 'string' && s.trim())) throw new TypeError(`${field} must be a non-empty list of strings`);
@@ -59,8 +61,13 @@ export function buildProductEditPrompt(request) {
     'Keep the product upright, with the same orientation, the same viewing angle and the same proportions. Do not redesign, replace, recolor, relabel or retouch the product.',
     ...FIXED_CLAUSES,
   ].join(' ');
-  const negative = [...forbid, 'extra lens', 'missing lens', 'altered camera module', 'redrawn artwork', 'changed printed text', 'added text', 'watermark', 'distorted product'].join(', ');
-  return Object.freeze({ prompt, negative_prompt: negative });
+  // The provider truncates negative_prompt beyond NEGATIVE_PROMPT_MAX_CHARS characters, SILENTLY (Model Studio documentation, qwen-image 2.0 series;
+  // no other limit is documented for qwen-image-3.0-pro, so the stricter documented one applies). The PRODUCT protections go FIRST so they are
+  // never the part cut; duplicates are removed; what does not fit is returned in negative_dropped (reported, never silently lost).
+  const terms = [...new Set([...PRODUCT_PROTECTION_NEGATIVES, ...forbid].map((s) => s.toLowerCase()))];
+  const kept = []; const dropped = []; let len = 0;
+  for (const term of terms) { const add = (kept.length ? 2 : 0) + term.length; if (len + add <= NEGATIVE_PROMPT_MAX_CHARS) { kept.push(term); len += add; } else dropped.push(term); }
+  return Object.freeze({ prompt, negative_prompt: kept.join(', '), negative_dropped: Object.freeze(dropped) });
 }
 
 /** The pixel size of a PNG or JPEG, read from its header; null when it is neither. */
@@ -135,7 +142,7 @@ export async function editProductImage({
   if (!Number.isInteger(w) || !Number.isInteger(h) || w * h < MIN_PIXELS || w * h > MAX_PIXELS) throw new RangeError('request.size must be W*H between 512*512 and 2048*2048 pixels');
   const n = request.n ?? 1;
   if (!Number.isInteger(n) || n < 1 || n > 6) throw new RangeError('request.n must be an integer from 1 to 6');
-  const { prompt, negative_prompt: negativePrompt } = buildProductEditPrompt(request);
+  const { prompt, negative_prompt: negativePrompt, negative_dropped: negativeDropped } = buildProductEditPrompt(request);
   const promptSha = sha256(prompt);
   // the reference image is billed too (one input image), so the reservation covers it
   const reservation = budget.reserveImages({ id: operationId, n, size: `${w}x${h}`, inputImages: 1 });
@@ -182,6 +189,7 @@ export async function editProductImage({
       endpoint_class: 'WORKSPACE_DOMAIN_SYNC',
       api_protocol: 'DASHSCOPE_MULTIMODAL_GENERATION',
       request_id: parsed.requestId,
+      negative_dropped: negativeDropped,
       latency_ms: latencyMs,
       attempts: 1,
       requested_size: { width: w, height: h },

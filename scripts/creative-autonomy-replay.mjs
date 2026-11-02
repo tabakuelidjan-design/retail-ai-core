@@ -12,8 +12,15 @@ import { createProblemFramer } from '../src/creative-brain/problem-frame.js';
 import { createConceptDirector } from '../src/creative-brain/concept.js';
 import { createConceptSelector } from '../src/creative-brain/concept-selection.js';
 import { createArtDirector } from '../src/creative-brain/art-direction.js';
-import { createStageDirector, HABB_ART_DIRECTION_HINT } from '../src/creative-autonomy/stage-contract.js';
-import { assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard } from '../src/creative-autonomy/habb-guard.js';
+import { createStageDirector } from '../src/creative-autonomy/stage-contract.js';
+import { assertConceptsBrandRules as __assertConceptsBrandRules, assertArtDirectionGuard as __assertArtDirectionGuard, assertStageGuard as __assertStageGuard } from '../src/creative-autonomy/brand-guard.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const assertConceptsHabbRules = (x, facts) => __assertConceptsBrandRules(x, facts, HABB);
+const assertArtDirectionGuard = (x, facts) => __assertArtDirectionGuard(x, facts, HABB);
+const assertStageGuard = (x, facts) => __assertStageGuard(x, facts, HABB);
+const HABB_ART_DIRECTION_HINT = __hintFor(HABB);
 
 const argv = process.argv.slice(2);
 const arg = (k) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : null; };

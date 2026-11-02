@@ -1,8 +1,9 @@
-// THE AUTONOMOUS BRIEF. The owner gives four things: a Shopify product, a commercial objective, HABB's brand rules and a format. Nordla builds the
+// THE AUTONOMOUS BRIEF. The owner gives four things: a Shopify product, a commercial objective, the tenant's brand (its creative profile) and a format. Nordla builds the
 // Creative Brain's brief from them WITHOUT a human writing any copy, concept or position: only VERIFIED facts become claims (price and stock come from
 // the Shopify snapshot, a personalisation promise only from the product's own type/tags/description), everything else is left to the Brain or marked UNKNOWN.
 import { createHash } from 'node:crypto';
-import { habbBriefFacts, commercialBrief } from './habb-guard.js';
+import { brandBriefFacts, commercialBrief } from './brand-guard.js';
+import { resolveBrandProfile } from './brand-profile.js';
 
 export const FORMATS = Object.freeze({
   INSTAGRAM_FEED_4_5: { ref: 'format://instagram/feed-1080x1350', canvas: { width: 1080, height: 1350 }, medium: 'DIGITAL', aspect_ratio: '4:5' },
@@ -38,7 +39,9 @@ export function verifiedFacts({ product, variantTitle = null, readAt }) {
  * The Brain brief. owner input: { product (Shopify snapshot), variantTitle?, objective, audience?, occasion?, brand, format (key of FORMATS), photo: { bytes, media_type, width_px, height_px, origin, rights_class }, merchant }
  * Returns { brief, facts }.
  */
-export function buildAutonomousBrief({ product, variantTitle = null, readAt, objective, audience = null, occasion = null, brand, format, photo, merchant = 'HABB, Namur' }) {
+export function buildAutonomousBrief({ product, variantTitle = null, readAt, objective, audience = null, occasion = null, brand, format, photo, merchant = null }) {
+  const profile = resolveBrandProfile(brand);
+  merchant = merchant ?? profile.merchant_display; // the ACTIVE tenant's name, never another merchant's
   if (!FORMATS[format]) throw new Error(`unknown format ${format}`);
   if (!objective) throw new Error('a commercial objective is required');
   const facts = verifiedFacts({ product, variantTitle, readAt });
@@ -48,34 +51,22 @@ export function buildAutonomousBrief({ product, variantTitle = null, readAt, obj
     ids: { merchant_id: brand.merchant_id, brand_id: brand.brand_id, brief_ref: `brief:autonomy/${sha(JSON.stringify([productRef, objective, format])).slice(0, 12)}`, product_ref: productRef },
     public_facts: {
       product: `${describe}. ${facts.description}`,
-      merchant,
+      ...(merchant ? { merchant } : {}),
       objective,
       ...(audience ? { audience } : {}),
       ...(occasion ? { occasion } : {}),
       personalisation: facts.personalisation_offered ? 'offerte pour ce produit (fiche Shopify)' : 'NON offerte pour ce produit : aucune promesse de personnalisation',
-      // who HABB is and what it never shows or claims, given to the Brain from the FRAME on (the observation otherwise carries only section names)
-      ...(brand.expression ? habbBriefFacts(brand) : {}),
+      // who the merchant is and what it never shows or claims (its creative profile), given to the Brain from the FRAME on
+      ...(brand.expression ? brandBriefFacts(brand, profile) : {}),
       // what Nordla may build the reason to come on, and what the concept must achieve: from verified facts only (see commercialBrief)
-      ...(brand.expression ? commercialBrief(facts, merchant) : {}),
+      ...(brand.expression ? commercialBrief(facts, { ...profile, merchant_display: merchant }) : {}),
     },
     approved_copy: [],
     claims: [{ ref: `claim://shopify/price/${facts.source.variant_id.split('/').pop()}`, role: 'PRICE', wording: facts.price }],
-    format: { ...FORMATS[format], safe_zones: [], forbidden_zones: [], locale: 'fr-BE' },
+    format: { ...FORMATS[format], safe_zones: [], forbidden_zones: [], locale: profile.locale ?? 'fr-BE' },
     brand: brand.expression ? { expression: brand.expression, colors: brand.colors } : brand,
     asset: { ref: `asset://shopify/${product.id.split('/').pop()}/${sha(photo.bytes).slice(0, 12)}`, bytes: photo.bytes, media_type: photo.media_type, width_px: photo.width_px, height_px: photo.height_px, origin: photo.origin, sha256: sha(photo.bytes), rights_class: photo.rights_class, privacy_class: 'BUSINESS' },
   };
   return { brief, facts };
 }
 
-/** HABB's brand rules as Nordla knows them (owner decisions of 2026-10-16/17 and 2026-10-31): the palette WITHOUT cream or sand, the hard visual prohibitions. */
-export const HABB_BRAND = Object.freeze({
-  merchant_id: '6a6b6200-0000-4000-8000-000000000001',
-  brand_id: '6a6b6200-0000-4000-8000-000000000002',
-  colors: { navy: '#0F2A52', navy_ink: '#183247', terracotta: '#C56E54', white: '#FFFFFF', black: '#0B0B0C' },
-  expression: {
-    identity: 'HABB, boutique de cadeaux et de personnalisation à Namur (Belgique) : coques, impressions UV, coffrets, petite tech.',
-    voice: 'direct, chaleureux sans mièvrerie, local ; tutoiement accepté ; jamais de superlatif non prouvé.',
-    visual_rules: 'aucun beige, crème ou sable ; pas de cœurs, de feuillage décoratif, de dorures, de faux luxe ni de rendu IA générique ; le produit réel n\'est jamais modifié.',
-    palette: 'bleu marine, terracotta, noir, blanc.',
-  },
-});

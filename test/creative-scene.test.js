@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { runAutonomous, RUN_STATUS, localEngines } from '../src/creative-autonomy/run.js';
 import { createSceneEngine, buildSceneRequest, SCENE_PURPOSE, SCENE_ERROR, SCENE_NEGATIVE } from '../src/creative-autonomy/scene-engine.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+
 import { PROVIDER_STATE } from '../src/creative-autonomy/providers.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
@@ -19,6 +19,9 @@ import { SpendGuard, ALIBABA_PRICE_USD } from '../src/marketing-creative/alibaba
 import { MemoryOutputStore } from '../src/marketing-creative/alibaba/output-store.js';
 import { buildProductEditPrompt } from '../src/marketing-creative/alibaba/qwen-image-edit.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -52,7 +55,7 @@ const stageAnswer = (c, over = {}) => ({
   key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'COOL', purpose: 'test double' }, accent_lights: [],
   camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' },
   props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }],
-  headline: 'Titre de test double', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'test double', ...over,
+  headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'test double', ...over,
 });
 function textPort({ perConcept = [{ DISTINCTIVENESS: 'PARTIAL' }, {}, { CONCEPT_STRENGTH: 'PARTIAL' }], stageOver = {} } = {}) {
   const calls = []; const concepts = normalizeConceptSet(CONCEPTS);
@@ -102,7 +105,7 @@ function setup({ answer, authorization, perConcept, stageOver, variants = 3, inj
   // the REAL compositor; a test may add a defect to its report for a given round, to exercise the refinement rules
   let composed = 0;
   const baseEngines = injectDefects ? { ...base, compose: async (a) => { const rep = await base.compose(a); const extra = injectDefects[composed] ?? []; composed += 1; return { ...rep, technical: { ...rep.technical, defects: [...rep.technical.defects, ...extra] } }; } } : base;
-  const engines = createSceneEngine({
+  const engines = createSceneEngine({ profile: HABB,
     baseEngines, config: loadAlibabaCreativeConfig(ENV), authorization: authorization ?? mediaRecord(sha(photo.bytes)), photoSha256: sha(photo.bytes),
     budget, journal, outputStore: new MemoryOutputStore(), fetchImpl: provider.fetchImpl, variants, python: PY,
   });
@@ -129,7 +132,7 @@ test('end to end: Nordla produces ITS selected concept as a finished image; the 
   assert.equal(url, 'https://ws-test-img-0001.eu-central-1.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation');
   assert.equal(body.model, 'qwen-image-3.0-pro'); assert.equal(body.parameters.n, 3); assert.equal(body.parameters.prompt_extend, false); assert.equal(body.parameters.size, '1080*1350');
   const positive = body.input.messages[0].content[1].text;
-  for (const w of ['second bottle', 'gold', 'foliage', 'neon', 'beige', 'hearts']) { assert.ok(!positive.toLowerCase().includes(w), `"${w}" must not be named in the positive prompt`); assert.ok(body.parameters.negative_prompt.includes(w)); }
+  for (const w of ['a second copy of the product', 'gold', 'foliage', 'neon', 'beige', 'hearts']) { assert.ok(!positive.toLowerCase().includes(w), `"${w}" must not be named in the positive prompt`); assert.ok(body.parameters.negative_prompt.includes(w)); }
   assert.match(positive, /stays exactly where it stands in the reference image/);
   // each variant measured; the good one chosen, the moved and the duplicated ones refused for the right reason
   const sc = r.proposals[0].scene;
@@ -247,14 +250,14 @@ print(json.dumps({'max':int(np.abs(a-b)[m].max()),'n':int(m.sum())}))`, join(d, 
 test('the scene request: Nordla\'s decisions in the positive prompt, HABB\'s exclusions only in the negative one', () => {
   const concept = { central_idea: 'Une idée centrale de test sur la ville le soir', visual_metaphor: 'Une rue mouillée qui renvoie la lumière', story: 's' };
   const art = artDirectionAnswer();
-  const req = buildSceneRequest({ concept, artDirection: art, stage: stageAnswer(concept), width: 1080, height: 1350, n: 3 });
+  const req = buildSceneRequest({ concept, artDirection: art, stage: stageAnswer(concept), width: 1080, height: 1350, n: 3, profile: HABB }); // HABB's exclusions = its tenant profile
   assert.equal(req.capability, 'IMAGE_EDIT'); assert.equal(req.text_policy, 'NO_CRITICAL_TEXT'); assert.equal(req.purpose, SCENE_PURPOSE); assert.equal(req.n, 3);
   const { prompt, negative_prompt: negative } = buildProductEditPrompt(req);
   assert.match(prompt, /Une rue mouillée qui renvoie la lumière/); assert.match(prompt, /polished reflective surface/); assert.match(prompt, /from the left/);
-  for (const w of ['second bottle', 'another product', 'gold', 'foliage', 'neon', 'beige', 'hearts', 'marble', 'velvet', 'bokeh']) {
+  for (const w of ['a second copy of the product', 'another product', 'gold', 'foliage', 'neon', 'beige', 'hearts', 'marble', 'velvet', 'bokeh']) {
     assert.ok(!prompt.toLowerCase().includes(w), `positive prompt names "${w}"`); assert.ok(negative.includes(w), `negative prompt lacks "${w}"`);
   }
-  assert.ok(SCENE_NEGATIVE.length > 30);
+  assert.ok(SCENE_NEGATIVE.includes('a second copy of the product') && !SCENE_NEGATIVE.includes('beige'), 'the universal negatives hold no merchant taste');
 });
 
 test('trial --execute --scene end to end against a fetch double: gates, free checks, ONE image call, a finished image and the report', SLOW, async () => {

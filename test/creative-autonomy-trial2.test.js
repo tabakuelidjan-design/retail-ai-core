@@ -10,10 +10,10 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runAutonomous, RUN_STATUS, scopedMerge, fieldPath } from '../src/creative-autonomy/run.js';
-import { normalizeStage } from '../src/creative-autonomy/stage-contract.js';
-import { HABB_BRAND, verifiedFacts } from '../src/creative-autonomy/brief.js';
-import { inventedCapabilities, verifiedTextOf, assertStageGuard } from '../src/creative-autonomy/habb-guard.js';
-import { hasForbidden } from '../src/creative-autonomy/stage-contract.js';
+import { normalizeStage as __normalizeStage } from '../src/creative-autonomy/stage-contract.js';
+import { verifiedFacts } from '../src/creative-autonomy/brief.js';
+import { inventedCapabilities, verifiedTextOf, assertStageGuard as __assertStageGuard } from '../src/creative-autonomy/brand-guard.js';
+import { hasForbidden as __hasForbidden } from '../src/creative-autonomy/stage-contract.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { BRAIN_ERROR } from '../src/creative-brain/validation.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
@@ -164,14 +164,20 @@ test('commercial brief invents nothing: every selling point comes from the snaps
   assert.deepEqual(facts.colours_available, snap.product.variants.nodes.map((v) => v.title));
   const pf = { ...facts };
   const { commercialBrief } = require_();
-  const b = commercialBrief(pf, 'HABB, Namur');
+  const b = commercialBrief(pf, HABB);
   const all = [...b.verified_selling_points, ...b.creative_requirements].join(' ');
   assert.deepEqual(inventedCapabilities(b.verified_selling_points.join(' '), verifiedTextOf(facts)), []);
   assert.equal(hasForbidden(b.creative_requirements.join(' ')), null, 'the requirements name fake luxury only to exclude it');
   for (const fact of ['29,90 €', '750 ml', 'paille', 'couvercle verrouillable']) assert.ok(all.includes(fact), fact);
   for (const invented of ['isotherme', 'étanche', 'garantie', 'livraison', 'atelier', 'gravure']) assert.ok(!b.verified_selling_points.join(' ').toLowerCase().includes(invented), invented);
 });
-import * as guard from '../src/creative-autonomy/habb-guard.js';
+import * as guard from '../src/creative-autonomy/brand-guard.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const normalizeStage = (raw, ctx) => __normalizeStage(raw, { profile: HABB, ...ctx }); // HABB's stage rules = its tenant profile
+const assertStageGuard = (x, facts) => __assertStageGuard(x, facts, HABB);
+const hasForbidden = (s) => __hasForbidden(s, HABB.forbidden_decor); // HABB's rules = its tenant profile
 function require_() { return guard; }
 
 test('replay of a run with a scoped repair judges what production judged (the merged answer), read-only', async () => {

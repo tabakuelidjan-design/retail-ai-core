@@ -1,17 +1,26 @@
-// HABB'S GUARD, AS EARLY AS THE CONCEPT. Two families of refusal, applied to every creative decision Nordla takes (concepts, art direction, staging):
-//   1. HABB's forbidden visual elements (beige, hearts, decorative foliage, gold, fake luxury...): the list lives in stage-contract.js (FORBIDDEN_DECOR)
-//   2. INVENTED CAPABILITIES: a property of the product that its verified facts do not state (insulation, hours of cold, leak-proof, unbreakable, BPA-free...).
-//      A capability is allowed only if the SAME capability appears in the verified Shopify text; otherwise the concept would sell something HABB cannot promise.
+// THE BRAND GUARD, AS EARLY AS THE CONCEPT. Two families of refusal, applied to every creative decision Nordla takes (concepts, art direction, staging):
+//   1. the ACTIVE TENANT's forbidden visual elements (its creative profile, config/merchants/<merchant>/creative-brand.json; none for a tenant without one)
+//   2. INVENTED CAPABILITIES (UNIVERSAL, every tenant): a property of the product that its verified facts do not state (insulation, hours of cold,
+//      leak-proof, unbreakable, BPA-free...). Allowed only if the SAME capability appears in the verified product text.
 // Refusals are Brain contract refusals (BRAIN_FORBIDDEN_CONTENT / BRAIN_RULE_VIOLATION with the exact field): they stop the run, or feed the bounded repair the
 // owner authorised. Nothing is rewritten, removed or softened by this guard.
 import { BRAIN_ERROR, fail } from '../creative-brain/validation.js';
-import { hasForbidden, FORBIDDEN_DECOR } from './stage-contract.js';
+import { hasForbidden } from './stage-contract.js';
+import { resolveBrandProfile } from './brand-profile.js';
 
 // JavaScript's \b only knows ASCII letters: "étanche" or "écologique" never matched it. Every \b below is compiled into a Unicode-aware boundary.
 const U = (re, flags = 'iu') => new RegExp(re.source.replace(/\\b/g, '(?:(?<![\\p{L}\\p{N}_])(?=[\\p{L}\\p{N}_])|(?<=[\\p{L}\\p{N}_])(?![\\p{L}\\p{N}_]))').replace(/\\w/g, '[\\p{L}\\p{N}_]'), flags);
 
-// words that tie a sentence to THE PRODUCT (a temperature, eco or origin statement about a coffee shop, a backdrop or the city is not a product claim)
-const PRODUCT = /\b(gourdes?|bottles?|flasks?|bouteilles?|tyeso|produit|product|ts-8771c|dedans|inside|dans (la|ta|votre|cette) gourde)\b/;
+// words that tie a sentence to THE PRODUCT (a temperature, eco or origin statement about a coffee shop, a backdrop or the city is not a product claim):
+// generic product words + the tenant's own product nouns (profile.product_nouns) + the significant words of THIS product's title
+const PRODUCT = /\b(produit|product|article|item|dedans|inside)\b/;
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const productRe = (profile, verifiedText) => {
+  const title = String(verifiedText ?? '').split(' . ')[0];
+  const words = [...new Set(title.toLowerCase().split(/[^\p{L}\p{N}-]+/u).filter((w) => w.length >= 4 && !/^\d/.test(w)))].map(escapeRe);
+  const extra = [...(profile?.product_nouns ?? []), ...words.map((w) => `${w}s?`)];
+  return U(new RegExp(`\\b(${[PRODUCT.source.slice(3, -3), ...extra].join('|')})\\b`), 'iu');
+};
 const DRINK = /(drinks?|water|coffee|tea|beverages?|liquids?|contents?|boissons?|eau|café|thé)/;
 const TEMP_EN = /(cold|cool|hot|warm|chilled|icy|ice[- ]?cold)/; const TEMP_FR = /(froid\w*|frais|fraîche\w*|chaud\w*|glac\w*)/;
 
@@ -38,7 +47,6 @@ const RAW_CLAIMS = [
   { id: 'SUPERLATIVE', re: /(\bthe best\b|\ble meilleur\b|\bla meilleure\b|\bbest[- ]selling\b|n°\s?1\b|\bnumber one\b|\bnuméro un\b|\bworld'?s first\b|\bpremier au monde\b)/ },
 ];
 export const CAPABILITY_CLAIMS = Object.freeze(RAW_CLAIMS.map((c) => Object.freeze({ ...c, re: U(c.re, 'giu') })));
-const PRODUCT_U = U(PRODUCT, 'iu');
 // a statement named in order to deny it: "non isotherme", "ne garde pas l'eau froide", "not insulated", "sans BPA" is NOT a negation here (it is the claim itself)
 const NEGATED = U(/(\bnon\b|\bnot\b|\bnever\b|\b(doesn|don|won|can|isn|aren)['’]t\b|\bcannot\b|\bne\b[^.;:,]{0,25}\b(pas|jamais|plus)\b|\bn['’][^.;:,]{0,25}\b(pas|jamais|plus)\b|\bwithout being\b|\bpas\b)[^.;:,]{0,25}$/, 'iu');
 const NEG_INSIDE = U(/\b(pas|jamais|plus|not|never|no longer|n't|doesn't|don't|won't|cannot|can't)\b|n['’]t\b/, 'iu');
@@ -51,7 +59,7 @@ const sentenceOf = (t, index) => { const a = Math.max(t.lastIndexOf('.', index -
 const numbersIn = (x) => (x.match(/\d{1,3}/g) ?? []).map(Number);
 
 /** Affirmative occurrences of one claim in a text (negated ones and, when required, those without the product in the sentence are left out). */
-function affirmed(claim, text) {
+function affirmed(claim, text, productU) {
   const out = []; const g = new RegExp(claim.re.source, 'giu'); let m;
   while ((m = g.exec(text))) {
     if (m[0] === '') { g.lastIndex += 1; continue; }
@@ -59,31 +67,32 @@ function affirmed(claim, text) {
     if (NEGATED.test(clause) && !NOT_A_NEGATION.test(text.slice(Math.max(0, m.index - 20), m.index + 1))) continue;
     // "ne garde PAS l'eau froide", "doesn't keep drinks cold": the negation sits INSIDE the matched phrase (only for claims whose patterns are not negative forms)
     if (!['LEAK_PROOF', 'BPA_FREE', 'ECO_CLAIM'].includes(claim.id) && NEG_INSIDE.test(m[0])) continue;
-    if (claim.needsProduct && !PRODUCT_U.test(sentenceOf(text, m.index))) continue;
+    if (claim.needsProduct && !productU.test(sentenceOf(text, m.index))) continue;
     out.push(m[0]);
   }
   return out;
 }
 
 /** The capabilities a text affirms that the verified text does not affirm too (for durations: with the same figure). */
-export function inventedCapabilities(text, verifiedText = '') {
+export function inventedCapabilities(text, verifiedText = '', profile = null) {
   const t = normalizeText(text); const v = normalizeText(verifiedText);
+  const productU = productRe(profile, v);
   const ids = new Set();
   for (const c of CAPABILITY_CLAIMS) {
-    const said = affirmed(c, t); if (!said.length) continue;
-    const backed = CAPABILITY_CLAIMS.filter((x) => x.id === c.id).flatMap((x) => affirmed({ ...x, needsProduct: false }, v));
+    const said = affirmed(c, t, productU); if (!said.length) continue;
+    const backed = CAPABILITY_CLAIMS.filter((x) => x.id === c.id).flatMap((x) => affirmed({ ...x, needsProduct: false }, v, productU));
     if (!backed.length) { ids.add(c.id); continue; }
     if (c.numeric) { const ok = new Set(backed.flatMap(numbersIn)); if (said.some((x) => numbersIn(x).some((n) => !ok.has(n)))) ids.add(c.id); }
   }
   return [...ids];
 }
 
-function check(fields, verifiedText) {
+function check(fields, verifiedText, profile) {
   for (const [field, value] of fields) {
     if (typeof value !== 'string' || !value) continue;
-    const decor = hasForbidden(value);
-    if (decor) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${field} uses a word HABB forbids: ${decor}`, field, { problem: 'HABB_FORBIDDEN_DECOR', word: decor });
-    const invented = inventedCapabilities(value, verifiedText);
+    const decor = hasForbidden(value, profile.forbidden_decor);
+    if (decor) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${field} uses a word ${profile.brand_name ?? 'the merchant'} forbids: ${decor}`, field, { problem: 'BRAND_FORBIDDEN_DECOR', word: decor });
+    const invented = inventedCapabilities(value, verifiedText, profile);
     if (invented.length) fail(BRAIN_ERROR.RULE_VIOLATION, `${field} attributes to the product a capability its verified facts do not state: ${invented.join(', ')}`, field, { problem: 'INVENTED_CAPABILITY', capabilities: invented });
   }
 }
@@ -92,51 +101,51 @@ function check(fields, verifiedText) {
 export const verifiedTextOf = (facts) => [facts?.product_title, facts?.variant, facts?.description].filter(Boolean).join(' . ');
 
 /** IDEATE: every concept, on every field that describes what is shown or told (not the model's own list of risks, which may name what to avoid). */
-export function assertConceptsHabbRules(concepts, facts) {
+export function assertConceptsBrandRules(concepts, facts, profile = resolveBrandProfile({})) {
   const v = verifiedTextOf(facts);
   concepts.forEach((c, i) => check([
     [`concepts[${i}].central_idea`, c.central_idea], [`concepts[${i}].visual_metaphor`, c.visual_metaphor], [`concepts[${i}].story`, c.story],
     [`concepts[${i}].emotional_intent`, c.emotional_intent], [`concepts[${i}].memory_hook`, c.memory_hook], [`concepts[${i}].distinctiveness_reason`, c.distinctiveness_reason],
-  ], v));
+  ], v, profile));
   return concepts;
 }
 
 /** ART_DIRECT: every field that describes what is seen (forbidden_decorative_noise is exempt: it names what must NOT appear). */
-export function assertArtDirectionGuard(art, facts) {
+export function assertArtDirectionGuard(art, facts, profile = resolveBrandProfile({})) {
   check([
     ['art_direction.atmosphere', art.atmosphere], ['art_direction.material_language', art.material_language], ['art_direction.lighting_intent', art.lighting_intent], ['art_direction.rationale', art.rationale],
     ...(art.narrative_elements ?? []).flatMap((e, i) => [[`art_direction.narrative_elements[${i}].element`, e.element], [`art_direction.narrative_elements[${i}].reason`, e.reason]]),
     ...(art.permitted_secondary_elements ?? []).map((e, i) => [`art_direction.permitted_secondary_elements[${i}]`, e]),
-  ], verifiedTextOf(facts));
+  ], verifiedTextOf(facts), profile);
   return art;
 }
 
 /** STAGE: headline, rationale, light purposes and prop reasons (the stage contract already refuses decor words and figures; this adds invented capabilities). */
-export function assertStageGuard(stage, facts) {
+export function assertStageGuard(stage, facts, profile = resolveBrandProfile({})) {
   check([
     ['stage.headline', stage.headline], ['stage.rationale', stage.rationale], ['stage.key_light.purpose', stage.key_light?.purpose],
     ...(stage.accent_lights ?? []).map((l, i) => [`stage.accent_lights[${i}].purpose`, l.purpose]),
     ...(stage.props ?? []).map((p, i) => [`stage.props[${i}].reason`, p.reason]),
-  ], verifiedTextOf(facts));
+  ], verifiedTextOf(facts), profile);
   return stage;
 }
 
-/** What the Brain is TOLD from the frame on (public facts of the brief): who HABB is and what it never shows or claims. */
-export function habbBriefFacts(brand) {
+/** What the Brain is TOLD from the frame on (public facts of the brief): who the merchant is and what it never shows or claims (its profile). */
+export function brandBriefFacts(brand, profile = resolveBrandProfile(brand)) {
+  const prohibitions = [brand?.expression?.visual_rules, profile.forbidden_decor.length ? `Mots et éléments refusés par Nordla à chaque étape : ${profile.forbidden_decor.join(', ')}.` : null].filter(Boolean).join(' ');
   return {
-    merchant_identity: brand.expression?.identity ?? null,
-    merchant_voice: brand.expression?.voice ?? null,
-    visual_prohibitions: `${brand.expression?.visual_rules ?? ''} Mots et éléments refusés par Nordla à chaque étape : ${FORBIDDEN_DECOR.join(', ')}.`.trim(),
-    facts_rule: 'Seuls les faits vérifiés de la fiche Shopify peuvent être affirmés. Aucune capacité non écrite dans la fiche (isolation, durée de froid ou de chaud, étanchéité, incassable, sans BPA, écologique, garantie, superlatif) ne peut être attribuée au produit. Le produit réel est montré tel qu\'il est photographié : forme, couleur, logo inchangés.',
+    merchant_identity: brand?.expression?.identity ?? null,
+    merchant_voice: brand?.expression?.voice ?? null,
+    ...(prohibitions ? { visual_prohibitions: prohibitions } : {}),
+    facts_rule: profile.facts_rule,
   };
 }
 
 /**
- * COMMERCIAL RELEVANCE, without a template. What a concept must ACHIEVE for HABB (not what it must look like), and the only facts it may build on. Every fact
- * below comes from the verified Shopify snapshot (title, variant, description, price, colour variants) or HABB's own identity; nothing is added: no service,
- * event, stock location, feature or promise that is not there. Given to the Brain from the FRAME (public facts) and repeated to IDEATE, SELECT and ART_DIRECT.
+ * COMMERCIAL RELEVANCE, without a template. What a concept must ACHIEVE for this merchant (its profile's requirements: what it must achieve, never what it
+ * must look like), and the only facts it may build on — all from the verified product snapshot (title, variant, description, price, colour variants).
  */
-export function commercialBrief(facts, merchant = 'HABB, Namur') {
+export function commercialBrief(facts, profile) {
   const colours = facts.colours_available ?? [];
   return {
     verified_selling_points: [
@@ -144,21 +153,16 @@ export function commercialBrief(facts, merchant = 'HABB, Namur') {
       `Description vérifiée : ${facts.description}`,
       `Prix vérifié : ${facts.price}.`,
       ...(colours.length > 1 ? [`Coloris existants (fiche Shopify) : ${colours.join(', ')}.`] : []),
-      `Vendu par ${merchant}.`,
+      ...(profile?.merchant_display ? [`Vendu par ${profile.merchant_display}.`] : []),
     ],
-    creative_requirements: [
-      'Une idée originale et mémorable : un seul geste visuel fort qu\'un passant retient, pas une ambiance générique ni une carte postale de la ville utilisée comme décor.',
-      'Le produit réel (la photo, inchangée) est le protagoniste : l\'histoire se passe AUTOUR de lui et le rend désirable ; il n\'est jamais un détail dans une scène.',
-      'Une raison concrète de venir le découvrir chez HABB, construite UNIQUEMENT sur les faits vérifiés ci-dessus (ce pour quoi il est conçu, sa paille, son couvercle verrouillable, sa contenance, ses coloris, son prix). Aucune fonctionnalité, promesse, service, événement ou disponibilité en boutique qui n\'y figure pas.',
-      'Premium sans clichés publicitaires ni faux luxe : retenue, lumière, matière et justesse plutôt que brillance ou superlatifs.',
-      'Un lien clair entre l\'histoire, l\'image et l\'objectif : on doit pouvoir dire en une phrase pourquoi cette image donne envie de venir voir la gourde chez HABB.',
-    ],
+    creative_requirements: [...(profile?.creative_requirements ?? resolveBrandProfile({}).creative_requirements)],
+    ...(profile?.brand_name ? { brief_owner: profile.brand_name } : {}),
   };
 }
 
 /** The same brief as a note appended to a Brain stage's instruction (the stages after FRAME do not see the public facts otherwise). */
 export function commercialBriefNote(publicFacts) {
   if (!publicFacts?.creative_requirements) return null;
-  return ['HABB\'s commercial brief for this product (it states what the concept must achieve, never what it must look like; your originality is expected):',
+  return [`${publicFacts.brief_owner ?? 'The merchant'}'s commercial brief for this product (it states what the concept must achieve, never what it must look like; your originality is expected):`,
     ...publicFacts.creative_requirements.map((r) => `- ${r}`), 'Verified facts you may build on (nothing else exists):', ...publicFacts.verified_selling_points.map((r) => `- ${r}`)].join('\n');
 }

@@ -11,9 +11,12 @@ import { loadAlibabaCreativeConfig, alibabaCreativeEndpoints } from '../src/mark
 import { ALIBABA_PRICE_USD } from '../src/marketing-creative/alibaba/budget.js';
 import { runAutonomous, RUN_STATUS } from '../src/creative-autonomy/run.js';
 import { connectProviders, VISION_PURPOSE } from '../src/creative-autonomy/providers.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
 import { normalizeConceptSet as ncs } from '../src/creative-brain/concept.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
@@ -53,7 +56,7 @@ function recordingFetch() {
     else if (stage === 'IDEATE') answer = { concepts: CONCEPTS };
     else if (stage === 'SELECT') answer = evaluationsAnswer(ncs(CONCEPTS), []);
     else if (stage === 'ART_DIRECT') { const c = JSON.parse(userContent).concept; answer = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }
-    else if (stage === 'STAGE') { const c = JSON.parse(userContent).concept; answer = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'wire test' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Titre de test', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'wire test' }; }
+    else if (stage === 'STAGE') { const c = JSON.parse(userContent).concept; answer = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'wire test' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'wire test' }; }
     else answer = { dimensions: DIMS.map((dimension) => ({ dimension, outcome: 'PASS', evidence: 'The image carries this dimension clearly enough for a first look.' })) };
     const text = JSON.stringify(answer);
     return new Response(JSON.stringify({ id: `req-${requests.length}`, model: body.model, choices: [{ message: { role: 'assistant', content: text } }], usage: { prompt_tokens: 1000, completion_tokens: 300, total_tokens: 1300 } }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -160,7 +163,7 @@ test('stage contract: the model may report what the vocabulary could not express
   const { normalizeStage } = await import('../src/creative-autonomy/stage-contract.js');
   const { normalizeConceptSet } = await import('../src/creative-brain/concept.js');
   const [concept] = normalizeConceptSet(CONCEPTS);
-  const base = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 't' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [], headline: 'Titre', text_placement: 'RIGHT_COLUMN', show_price: 'NO', rationale: 't' };
+  const base = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 't' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [], headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'NO', rationale: 't' };
   assert.ok(normalizeStage(base, { concept, personalisation_offered: false }));
   const s = normalizeStage({ ...base, wanted_but_not_available: ['wet stone surface with water droplets', 'morning fog'] }, { concept, personalisation_offered: false });
   assert.equal(s.wanted_but_not_available.length, 2);

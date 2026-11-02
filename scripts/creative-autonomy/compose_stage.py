@@ -114,7 +114,7 @@ while True:
     if max(d.textlength(l, font=fh) for l in lines) <= col_w or size < 40 * k: break
     size -= 4
 small = font('InterDisplay-Regular.otf', round(27 * k))
-info_lines = [l for l in [f"{facts['product_title']}{' — ' + facts['variant'] if facts.get('variant') else ''}", facts['price'] if stage['show_price'] == 'YES' else None, facts.get('merchant', 'HABB, Namur')] if l]
+info_lines = [l for l in [f"{facts['product_title']}{' — ' + facts['variant'] if facts.get('variant') else ''}", facts['price'] if stage['show_price'] == 'YES' else None, (facts.get('merchant') or None)] if l]
 lh = round(size * 1.12); block_h = lh * len(lines)
 left = place in ('TOP_LEFT', 'LEFT_COLUMN', 'BOTTOM_LEFT')
 x_text = m if left else (W - m - max(d.textlength(l, font=fh) for l in lines))

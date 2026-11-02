@@ -6,8 +6,8 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { runAutonomous, RUN_STATUS, deterministicFix, localEngines } from '../src/creative-autonomy/run.js';
-import { normalizeStage } from '../src/creative-autonomy/stage-contract.js';
-import { verifiedFacts, HABB_BRAND } from '../src/creative-autonomy/brief.js';
+import { normalizeStage as __normalizeStage } from '../src/creative-autonomy/stage-contract.js';
+import { verifiedFacts } from '../src/creative-autonomy/brief.js';
 import { connectProviders, PROVIDER_STATE } from '../src/creative-autonomy/providers.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
@@ -24,7 +24,7 @@ const stageAnswer = (concept, over = {}) => ({
   key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'test double' }, accent_lights: [],
   camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' },
   props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: concept.visual_metaphor }],
-  headline: 'Titre de test double', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'test double', ...over,
+  headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'test double', ...over,
 });
 
 /** TEST_DOUBLE language port: answers by stage, records every call. */
@@ -186,6 +186,10 @@ test('local engines really run on a real photo (examination, Blender scene, comp
 
 // ---- the first real trial: prepared, gated, never run by the tests
 import { trialPlanId, forecastCost, modelAllowedInScope, TRIAL_LIMITS, RECOMMENDED } from '../src/creative-autonomy/trial.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const normalizeStage = (raw, ctx) => __normalizeStage(raw, { profile: HABB, ...ctx }); // HABB's stage rules = its tenant profile
 
 const KEYED = { ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-0000000000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-0001' };
 

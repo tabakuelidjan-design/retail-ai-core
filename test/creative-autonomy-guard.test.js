@@ -4,14 +4,21 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { inventedCapabilities, assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard, habbBriefFacts, verifiedTextOf } from '../src/creative-autonomy/habb-guard.js';
-import { buildAutonomousBrief, HABB_BRAND, verifiedFacts } from '../src/creative-autonomy/brief.js';
+import { inventedCapabilities, assertConceptsBrandRules as __assertConceptsBrandRules, assertArtDirectionGuard as __assertArtDirectionGuard, assertStageGuard as __assertStageGuard, brandBriefFacts as __brandBriefFacts, verifiedTextOf } from '../src/creative-autonomy/brand-guard.js';
+import { buildAutonomousBrief, verifiedFacts } from '../src/creative-autonomy/brief.js';
 import { codeFingerprint, secretsFileProblems, REPO_ROOT, moduleGraph, fingerprintFiles, runtimeInjections } from '../src/creative-autonomy/trial.js';
 import { observeBrief } from '../src/creative-brain/problem-frame.js';
 import { runAutonomous, RUN_STATUS } from '../src/creative-autonomy/run.js';
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { BRAIN_ERROR } from '../src/creative-brain/validation.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const assertConceptsHabbRules = (x, facts) => __assertConceptsBrandRules(x, facts, HABB);
+const assertArtDirectionGuard = (x, facts) => __assertArtDirectionGuard(x, facts, HABB);
+const assertStageGuard = (x, facts) => __assertStageGuard(x, facts, HABB);
+const habbBriefFacts = (b) => __brandBriefFacts(b, HABB);
 
 const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
 const FACTS = verifiedFacts({ product: snap.product, variantTitle: 'Noir', readAt: snap.read_at });
@@ -67,7 +74,7 @@ function port({ ideate = () => CONCEPTS } = {}) {
     else if (kind === 'IDEATE') body = { concepts: ideate(n) };
     else if (kind === 'SELECT') body = evaluationsAnswer(normalizeConceptSet(CONCEPTS), []);
     else if (kind === 'ART_DIRECT') { const c = JSON.parse(user).concept; body = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }
-    else { const c = JSON.parse(user).concept; body = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Titre de test', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double' }; }
+    else { const c = JSON.parse(user).concept; body = { backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double' }; }
     return { text: JSON.stringify(body), model: 'TEST_DOUBLE', request_id: `td-${calls.length}`, cost_eur: 0 };
   };
   return { complete, calls };
@@ -98,7 +105,7 @@ test('IDEATE: with one authorised repair, the concept director is asked again wi
 // ---------------- the code fingerprint of a plan
 test('code fingerprint covers what really runs: the traced module graph (critic, intelligence, branding...), the Python engines, the dependency lock', () => {
   const { modules } = codeFingerprint();
-  for (const m of ['scripts/creative-autonomy-trial.mjs', 'scripts/creative-autonomy-report.mjs', 'src/creative-autonomy/run.js', 'src/creative-autonomy/habb-guard.js', 'src/creative-brain/concept.js',
+  for (const m of ['scripts/creative-autonomy-trial.mjs', 'scripts/creative-autonomy-report.mjs', 'src/creative-autonomy/run.js', 'src/creative-autonomy/brand-guard.js', 'src/creative-brain/concept.js',
     'src/marketing-creative/alibaba/qwen-brain-port.js', 'src/creative-critic/critique.js', 'test/creative-brain-world.js', 'scripts/creative-autonomy/render_stage.py', 'package-lock.json']) assert.ok(modules.includes(m), m);
 });
 
@@ -140,7 +147,7 @@ test('secrets file: refused on Windows (NTFS rights cannot be proven), refused i
 });
 
 test('forbidden decor: whole words, idioms, negations and the sense of "leaves" (findings of the independent review)', async () => {
-  const { hasForbidden } = await import('../src/creative-autonomy/stage-contract.js');
+  const { hasForbidden: __hf } = await import('../src/creative-autonomy/stage-contract.js'); const hasForbidden = (s) => __hf(s, HABB.forbidden_decor);
   for (const t of ['au cœur de Namur', 'coup de cœur', 'Luxembourg', 'sandwich', 'Sandrine', 'la sandale', 'heartfelt', 'leaflet', 'crèmerie', 'goldfish', 'sans cœur ni dorure', 'pas de beige', 'no leaves, only stone', 'the light leaves the frame', 'makes the gift and leaves it ready', 'une feuille de papier']) assert.equal(hasForbidden(t), null, t);
   for (const [t, w] of [['dry leaves the size of hands', 'leaves'], ['autumn leaves the colour of rust', 'leaves'], ['une dorure', 'dorure'], ['les dorures', 'dorure'], ['be\u200Bige', 'beige'], ['cre\u0300me', 'crème'], ['ivoire', 'ivoire'], ['gilded frame', 'gilded'], ['un cœur rouge', 'cœur'], ['des feuilles mortes', 'feuille'], ['un fond beige', 'beige'], ['végétaux', 'végétaux']]) assert.equal(hasForbidden(t), w, t);
 });
@@ -164,7 +171,7 @@ test('protocol re-ask (invalid JSON) spends the SAME repair budget: refused befo
 });
 
 test('second review: negations stop at the clause; "not only" is not a negation; claims phrased with "sans"/"never"/"without" are claims', async () => {
-  const { hasForbidden } = await import('../src/creative-autonomy/stage-contract.js');
+  const { hasForbidden: __hf } = await import('../src/creative-autonomy/stage-contract.js'); const hasForbidden = (s) => __hf(s, HABB.forbidden_decor);
   assert.equal(hasForbidden('no gold, only golden light'), 'golden');
   assert.equal(hasForbidden('not beige but sand-coloured'), 'sand');
   assert.equal(hasForbidden('un fond sans aucun beige mais très beige'), 'beige');

@@ -19,7 +19,7 @@ import { editProductImage, IMAGE_EDIT_MODEL, IMAGE_EDIT_PROVIDER_ID } from '../m
 import { deriveCandidateAuthorization } from '../marketing-creative/alibaba/qwen-vision.js';
 import { decodePng } from '../creative-intelligence/png-pixels.js';
 import { zoneObjectStructure, SUITABILITY } from '../creative-runtime/environment-suitability.js';
-import { FORBIDDEN_DECOR } from './stage-contract.js';
+import { resolveBrandProfile } from './brand-profile.js';
 
 const run$ = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -35,23 +35,25 @@ export const SCENE_ERROR = Object.freeze({
   CALL_LIMIT: 'SCENE_IMAGE_CALL_LIMIT',
 });
 
-// ---- the words of the request: Nordla's decisions, translated. HABB's exclusions go ONLY to the negative prompt: a positive prompt never names what must not
-// appear (lesson of the 2026-10-10 live run: "no phone" in the positive prompt, a phone in the image).
-const TONE_WORDS = { DEEP_BLACK: 'near-black', CHARCOAL: 'charcoal grey', BRAND_NAVY: 'deep navy', BRAND_TERRACOTTA: 'terracotta', COOL_GREY: 'cool grey', WHITE: 'white' };
+// ---- the words of the request: Nordla's decisions, translated. The tenant's exclusions go ONLY to the negative prompt: a positive prompt never names what must
+// not appear (lesson of the 2026-10-10 live run: "no phone" in the positive prompt, a phone in the image). BRAND_* tones are the TENANT's palette words.
+const TONE_WORDS = { DEEP_BLACK: 'near-black', CHARCOAL: 'charcoal grey', COOL_GREY: 'cool grey', WHITE: 'white' };
+const DEPTH_WORDS = { FLAT_FIELD: 'a shallow, graphic space', SHALLOW_LAYERS: 'two close layers of depth', LAYERED_DEPTH: 'a clear foreground, middle ground and background', DEEP_SPACE: 'deep space receding behind the object' };
+const SPACE_WORDS = { SURROUNDING_REST: 'quiet space all around the object', DIRECTIONAL_LEAD: 'the composition leads the eye towards the object', GROUP_SEPARATION: 'the story elements kept apart from the object', ASYMMETRIC_RESERVE: 'a large calm area on one side' };
+const ZONE_WORDS = { FOREGROUND: 'In the foreground', MIDGROUND: 'In the middle ground, beside the object', BACKGROUND: 'In the background' };
 const BACKDROP_WORDS = { SEAMLESS_SWEEP: 'a seamless sweep', INFINITE_DARK: 'a deep space without a visible horizon', WALL_AND_FLOOR: 'a wall meeting the floor behind it' };
 const FLOOR_WORDS = { MATTE: 'a matte surface', SATIN: 'a satin surface with a soft sheen', MIRROR: 'a polished reflective surface' };
 const SIDE_WORDS = { LEFT: 'from the left', RIGHT: 'from the right', FRONT: 'from the front', BACK: 'from behind, as a rim', TOP: 'from above' };
 const HEIGHT_WORDS = { LOW: 'seen from slightly below', PRODUCT_CENTER: 'seen at the object\'s mid height', HIGH: 'seen from slightly above' };
+// UNIVERSAL negatives (every tenant): no second product, no people, no stray text, no generic AI effects. The tenant adds its own (profile.scene_negative_terms).
 export const SCENE_NEGATIVE = Object.freeze([
-  'second bottle', 'another product', 'duplicate object', 'people', 'hands', 'face', 'logos', 'letters', 'words', 'numbers', 'watermark', 'signage',
-  'neon', 'artificial glow', 'lens flare', 'beige', 'cream', 'sand colour', 'ivory', 'gold', 'golden', 'glitter', 'hearts', 'leaves', 'foliage', 'flowers', 'plants', 'marble', 'velvet', 'bokeh',
-  'cartoon', 'illustration', '3d render look', 'plastic look', 'distorted perspective',
-  ...FORBIDDEN_DECOR.filter((w) => /^[a-z]+$/.test(w)),
+  'a second copy of the product', 'another product', 'duplicate object', 'people', 'hands', 'face', 'logos', 'letters', 'words', 'numbers', 'watermark', 'signage',
+  'neon', 'artificial glow', 'lens flare', 'cartoon', 'illustration', '3d render look', 'plastic look', 'distorted perspective',
 ]);
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n).replace(/[.\s]+$/, '');
 
 /** The structured edit request (qwen-image-edit.js builds the provider prompt from it). Exported for review and tests: no hidden wording. */
-export function buildSceneRequest({ concept, artDirection: art, stage, width, height, n, purpose = SCENE_PURPOSE }) {
+export function buildSceneRequest({ concept, artDirection: art, stage, width, height, n, purpose = SCENE_PURPOSE, profile = resolveBrandProfile({}) }) {
   if (!concept || !art || !stage?.camera || !stage?.key_light) throw new TypeError('concept, art direction and stage are required');
   const realism = art.realism === 'EDITORIAL_STYLISED' ? 'an editorial commercial photograph' : 'a photorealistic commercial photograph, real materials, real optics';
   const scene = [
@@ -60,9 +62,14 @@ export function buildSceneRequest({ concept, artDirection: art, stage, width, he
     `Atmosphere: ${clip(art.atmosphere, 260)}`,
     `Materials: ${clip(art.material_language, 220)}`,
     `Light: ${clip(art.lighting_intent, 220)}; the key light comes ${SIDE_WORDS[stage.key_light.side] ?? 'from the side'}, ${String(stage.key_light.temperature ?? 'NEUTRAL').toLowerCase()} in colour`,
-    `Setting: ${BACKDROP_WORDS[stage.backdrop] ?? 'a set'} in ${TONE_WORDS[stage.backdrop_tone] ?? 'a dark tone'}, the object standing on ${FLOOR_WORDS[stage.floor_finish] ?? 'a surface'}`,
+    `Setting: ${BACKDROP_WORDS[stage.backdrop] ?? 'a set'} in ${profile.tone_words?.[stage.backdrop_tone] ?? TONE_WORDS[stage.backdrop_tone] ?? 'a dark tone'}, the object standing on ${FLOOR_WORDS[stage.floor_finish] ?? 'a surface'}`,
+    // THE STORY IN SPACE: the art direction's narrative elements, each in its plane, and the depth and space strategy (they used to stop at the art direction)
+    ...(art.depth_model ? [`Depth: ${DEPTH_WORDS[art.depth_model] ?? ''}; ${SPACE_WORDS[art.negative_space_strategy] ?? ''}`] : []),
+    ...['FOREGROUND', 'MIDGROUND', 'BACKGROUND'].flatMap((z) => { const es = (art.narrative_elements ?? []).filter((e) => e.zone === z).map((e) => clip(e.element, 120)); return es.length ? [`${ZONE_WORDS[z]}: ${es.join('; ')}`] : []; }),
+    ...(stage.wanted_but_not_available?.length ? [`The scene also needs: ${stage.wanted_but_not_available.map((w) => clip(w, 90)).join('; ')}`] : []),
     'Leave calm space on the side opposite the object, for a headline added later',
   ].join('. ');
+  const narrative = (art.narrative_elements ?? []).map((e) => ({ element: e.element, zone: e.zone }));
   return Object.freeze({
     request_id: `scene-${sha(scene).slice(0, 12)}`,
     capability: 'IMAGE_EDIT', text_policy: 'NO_CRITICAL_TEXT', purpose, size: `${width}*${height}`, n,
@@ -70,7 +77,9 @@ export function buildSceneRequest({ concept, artDirection: art, stage, width, he
     product_role: 'it stays exactly where it stands in the reference image, at the same size, upright and resting on the surface, with a natural contact shadow under it'
       + (stage.floor_finish === 'MIRROR' ? ' and its reflection directly below it' : '') + ', lit by the same light as the scene',
     preserve: ['its position and size in the frame', 'its outline and proportions', 'its lid, clip and every printed mark', 'its colour and finish'],
-    forbid: [...SCENE_NEGATIVE],
+    forbid: [...new Set([...SCENE_NEGATIVE, ...(profile.scene_negative_terms ?? []), ...(art.forbidden_decorative_noise ?? []).map((x) => clip(x, 40)).filter(Boolean)])],
+    // what the concept asked for and what was REQUESTED from the image model (requested, not proven drawn: the critic and the owner judge the image)
+    execution: { narrative_elements_requested: narrative, wanted_requested: [...(stage.wanted_but_not_available ?? [])], verified_in_image: false },
   });
 }
 
@@ -97,7 +106,7 @@ export function integrationZones(png, meta) {
  *  budget, journal, outputStore, fetchImpl   as for the edit lane
  *  variants      images in the ONE call (default 3)        maxImageCalls  default 1
  */
-export function createSceneEngine({ baseEngines, config, authorization, photoSha256, budget, journal = null, outputStore, fetchImpl = globalThis.fetch,
+export function createSceneEngine({ baseEngines, config, authorization, photoSha256, budget, journal = null, outputStore, fetchImpl = globalThis.fetch, profile = resolveBrandProfile({}),
   variants = SCENE_DEFAULTS.variants, maxImageCalls = SCENE_DEFAULTS.image_calls, edit = editProductImage,
   python = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3') } = {}) {
   if (typeof baseEngines?.examine !== 'function' || typeof baseEngines?.compose !== 'function') throw new TypeError('the real local examination and compositor are required');
@@ -127,28 +136,34 @@ export function createSceneEngine({ baseEngines, config, authorization, photoSha
     const plateSha = sha(plateBytes);
     // the plate is an image DERIVED from the authorised photo: its clearance is the owner's record, bound to the plate's own bytes (refused otherwise)
     const clearance = deriveCandidateAuthorization({ authorization, source_asset_sha256: photoSha256, candidate_ref: `scene-plate://${plateSha}`, candidate_sha256: plateSha });
-    const request = buildSceneRequest({ concept, artDirection, stage, width: W, height: H, n: variants });
+    const request = buildSceneRequest({ concept, artDirection, stage, width: W, height: H, n: variants, profile });
     calls += 1; // counted BEFORE the call: a failed call still consumed the authorised call
     const result = await edit({ config, authorization: clearance, asset: { ref: `scene-plate://${plateSha}`, bytes: plateBytes, media_type: 'image/png' }, request, budget, journal, outputStore, fetchImpl });
     const outputs = result.outputs ?? [result.output];
-    const reports = [];
+    const reports = []; const jobs = []; const providerSha = [];
     for (let i = 0; i < outputs.length; i += 1) {
       const bytes = await outputStore.readBytes(outputs[i]);
       const ext = result.output_infos?.[i]?.media_type === 'image/jpeg' ? 'jpg' : 'png';
       const rawPath = join(dir, `scene_v${i + 1}.provider.${ext}`); writeFileSync(rawPath, bytes);
-      const normPath = join(dir, `scene_v${i + 1}.png`);
-      let rep;
-      try { rep = await py('scene_check.py', [rawPath, `${platePath}.json`, rgbaPath, examPath, stagePath, normPath]); } catch (error) { rep = { pass: false, rejections: ['SCENE_NOT_MEASURABLE'], warnings: [], error: String(error.message).slice(0, 200) }; }
+      providerSha.push(sha(bytes));
+      jobs.push([rawPath, `${platePath}.json`, rgbaPath, examPath, stagePath, join(dir, `scene_v${i + 1}.png`)]);
+    }
+    // ALL variants checked in ONE Python process (measured: 3 sequential processes 7.2-8.3 s -> 3.7-3.9 s, reports byte-identical)
+    const jobsPath = join(dir, 'scene_check_jobs.json'); writeFileSync(jobsPath, JSON.stringify(jobs));
+    let batch;
+    try { batch = await py('scene_check.py', ['--batch', jobsPath]); } catch (error) { batch = jobs.map(() => ({ pass: false, rejections: ['SCENE_NOT_MEASURABLE'], warnings: [], error: String(error.message).slice(0, 200) })); }
+    for (let i = 0; i < jobs.length; i += 1) {
+      const normPath = jobs[i][5]; const rep = batch[i] ?? { pass: false, rejections: ['SCENE_NOT_MEASURABLE'], warnings: [] };
       if (rep.compose_meta) {
         try { rep.integration_zone = integrationZones(readFileSync(normPath), rep.compose_meta); if (rep.integration_zone.busy) rep.warnings.push('BUSY_INTEGRATION_ZONE'); } catch { rep.integration_zone = null; }
       }
-      reports.push({ variant: i + 1, provider_sha256: sha(bytes), path: normPath, ...rep });
+      reports.push({ variant: i + 1, provider_sha256: providerSha[i], path: normPath, ...rep });
     }
     const summary = reports.map(({ variant, pass, rejections, warnings, alignment, ghost, duplicate, contact_shadow: shadow, reflection, light, product_level: level, integration_zone: zone, provider_sha256: psha }) => ({
       variant, pass, rejections, warnings, provider_sha256: psha,
       alignment: alignment && { dx: alignment.dx, dy: alignment.dy, scale: alignment.scale, edge_ncc: alignment.edge_ncc }, ghost, duplicate, contact_shadow: shadow, reflection, light, product_level: level, integration_zone: zone,
     }));
-    writeFileSync(join(dir, 'scene_variants.json'), JSON.stringify({ request: { ...request, prompt_note: 'the provider prompt is built from this request by qwen-image-edit.js#buildProductEditPrompt' }, plate: { ...plate, sha256: plateSha }, model: result.model, request_id: result.request_id, cost_eur: result.cost_eur_estimated, variants: summary }, null, 1));
+    writeFileSync(join(dir, 'scene_variants.json'), JSON.stringify({ request: { ...request, prompt_note: 'the provider prompt is built from this request by qwen-image-edit.js#buildProductEditPrompt' }, plate: { ...plate, sha256: plateSha }, model: result.model, negative_dropped: result.negative_dropped ?? [], request_id: result.request_id, cost_eur: result.cost_eur_estimated, variants: summary }, null, 1));
     const passing = reports.filter((r) => r.pass);
     if (!passing.length) {
       throw Object.assign(new Error(`${SCENE_ERROR.NO_VARIANT_PASSED}: ${summary.map((v) => `v${v.variant} ${v.rejections.join('+')}`).join('; ')}`), { code: SCENE_ERROR.NO_VARIANT_PASSED, evidence: { variants: summary } });

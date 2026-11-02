@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   assertScopedExternalMediaUse,
-  buildProductEditPrompt,
+  buildProductEditPrompt, NEGATIVE_PROMPT_MAX_CHARS,
   editProductImage,
   evaluateProviderEdit,
   FileOutputStore,
@@ -182,7 +182,8 @@ test('Critical text never goes into provider pixels, and the provider prompt is 
   assert.match(prompt, /The only text allowed is the text already printed on the product/);
   assert.match(prompt, /camera module and its three lens openings/);
   assert.match(prompt, /same orientation, the same viewing angle and the same proportions/);
-  assert.match(negative, /hearts.*leaves.*fake gold.*extra lens.*missing lens.*added text.*watermark/);
+  // the product protections FIRST (never the part the provider's 500-character truncation would cut), then the request's own exclusions
+  assert.match(negative, /distorted product.*changed printed text.*extra lens.*missing lens.*added text.*watermark.*hearts.*leaves.*fake gold/);
   assert.throws(() => buildProductEditPrompt(request({ preserve: [] })), /preserve/);
   assert.throws(() => buildProductEditPrompt(request({ scene: '' })), /scene/);
   // IE-15 the prompt text is not part of what is returned or journaled (only its hash)
@@ -438,4 +439,15 @@ test('A provider-side 403 Endpoint.AccessDenied is a real, non-transient provide
   // IE-43 the script takes its lock through the helper, before any provider call
   const script = await readFile(new URL('scripts/run-c2-habb-edit.mjs', root), 'utf8');
   assert.ok(script.indexOf('takeLiveCallLock(lockPath)') > 0 && script.indexOf('takeLiveCallLock(lockPath)') < script.indexOf('editProductImage({'));
+});
+
+test('negative prompt: at most 500 characters (the provider truncates silently beyond), product protections kept first, the rest REPORTED as dropped', () => {
+  const many = Array.from({ length: 60 }, (_, i) => `unwanted element number ${String.fromCharCode(97 + (i % 26))}${i}`);
+  const { negative_prompt: negative, negative_dropped: dropped } = buildProductEditPrompt({ ...request(), forbid: many });
+  assert.ok(negative.length <= NEGATIVE_PROMPT_MAX_CHARS, `${negative.length} chars`);
+  assert.match(negative, /^distorted product, changed printed text, redrawn artwork, altered camera module, extra lens, missing lens, added text, watermark/);
+  assert.ok(dropped.length > 0); for (const d of dropped) assert.ok(!negative.includes(d), d);
+  assert.equal(new Set(negative.split(', ')).size, negative.split(', ').length, 'no duplicates');
+  const dup = buildProductEditPrompt({ ...request(), forbid: ['watermark', 'Watermark', 'hearts', 'hearts'] });
+  assert.equal(dup.negative_prompt.match(/watermark/g).length, 1); assert.equal(dup.negative_prompt.match(/hearts/g).length, 1); assert.deepEqual(dup.negative_dropped, []);
 });

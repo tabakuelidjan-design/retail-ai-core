@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAutonomous, RUN_STATUS, REPAIRABLE } from '../src/creative-autonomy/run.js';
-import { normalizeStage, buildStageInstruction, STAGE_SPEC, assertArtDirectionHabbRules, hasForbidden, HABB_ART_DIRECTION_HINT, createStageDirector } from '../src/creative-autonomy/stage-contract.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+import { normalizeStage as __normalizeStage, buildStageInstruction, STAGE_SPEC, assertArtDirectionBrandRules as __assertArtDirectionBrandRules, hasForbidden as __hasForbidden, createStageDirector } from '../src/creative-autonomy/stage-contract.js';
+
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { BRAIN_ERROR } from '../src/creative-brain/validation.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
@@ -21,7 +21,7 @@ import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './
 const R361 = 'Un décor sombre et calme où la lumière rasante dessine la gourde comme un objet de quartier que l’on croise sans le chercher, avec un socle mat qui la pose au niveau du regard, une lame de lumière froide qui découpe sa silhouette, un fond profond qui laisse respirer le titre à droite et une matière brute qui rappelle la ville, pour que l’envie de la découvrir naisse sur place.'.padEnd(361, '.').slice(0, 361);
 const snap = JSON.parse(readFileSync(new URL('./fixtures/creative-autonomy/shopify-gourde-tyeso.json', import.meta.url), 'utf8'));
 const [CONCEPT] = normalizeConceptSet(CONCEPTS);
-const baseStage = (c, over = {}) => ({ backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Titre de test', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double', ...over });
+const baseStage = (c, over = {}) => ({ backdrop: 'SEAMLESS_SWEEP', backdrop_tone: 'CHARCOAL', floor_finish: 'SATIN', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'NEUTRAL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double', ...over });
 
 /** TEST_DOUBLE language port with per-call scripted deviations. */
 function port({ stage = () => ({}), art = () => ({}), fail = () => null } = {}) {
@@ -253,6 +253,13 @@ test('replay: an authorised repair answer (STAGE_REPAIR) is judged by its stage\
 // ---------------- hard limits on the REAL lane objects (Qwen port, SpendGuard), with a fetch double: no network
 import { connectProviders } from '../src/creative-autonomy/providers.js';
 import { SpendGuard } from '../src/marketing-creative/alibaba/budget.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const normalizeStage = (raw, ctx) => __normalizeStage(raw, { profile: HABB, ...ctx }); // HABB's stage rules = its tenant profile
+const assertArtDirectionHabbRules = (x) => __assertArtDirectionBrandRules(x, HABB);
+const hasForbidden = (s) => __hasForbidden(s, HABB.forbidden_decor); // HABB's rules = its tenant profile
+const HABB_ART_DIRECTION_HINT = __hintFor(HABB);
 const LANE_ENV = { ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-limits-00000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-limits', ALIBABA_QWEN_TEXT_MODEL: 'qwen3-vl-plus', NORDLA_ALIBABA_SCOPE: 'EU' };
 function laneFetch({ stageRationale = () => 'double' } = {}) {
   const sent = [];
