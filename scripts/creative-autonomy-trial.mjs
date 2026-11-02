@@ -57,6 +57,8 @@ const photoPath = arg('photo');
 const snap = (f) => JSON.parse(readFileSync(new URL(`../test/fixtures/creative-autonomy/${f}`, import.meta.url), 'utf8'));
 const CATALOG = {
   'gourde-noire': { snap: 'shopify-gourde-tyeso.json', variant: 'Noir', objective: 'Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB' },
+  // first premium benchmark (owner approval 2026-11-02: photo rights for this benchmark, 0,50 EUR maximum); Shopify read-only snapshot of 2026-11-02
+  'batterie-noire': { snap: 'shopify-batterie-mini-noir.json', variant: 'Noir / 10000mAh', objective: 'Faire découvrir la batterie Mini noire aux clients qui voyagent et passent la journée dehors' },
   'coque-iphone12': { snap: 'shopify-coque-iphone12.json', variant: null, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
 };
 if (!CATALOG[productKey]) throw new Error(`unknown product ${productKey}`);
