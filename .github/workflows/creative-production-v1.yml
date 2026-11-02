@@ -12,6 +12,10 @@ on:
       - 'test/creative-product-media.test.js'
       - 'test/creative-shopify-e2e.test.js'
       - 'test/creator-app.test.js'
+      - 'test/creative-brand-profile.test.js'
+      - 'test/creative-revision-planner.test.js'
+      - 'test/creative-typography-gates.test.js'
+      - 'config/merchants/**'
       - 'scripts/creator-demo.mjs'
       - 'test/fixtures/creative-autonomy/**'
       - 'src/creative-brain/brief-assessment.js'
@@ -46,6 +50,6 @@ jobs:
       - name: Scene path end to end with the real Python engines and a simulated provider (no credentials, no network, no cost)
         env:
           NORDLA_PYTHON: python
-        run: node --test test/creative-product-media.test.js test/creative-shopify-e2e.test.js test/creator-app.test.js test/integration-contracts.test.js test/integration-workflows.test.js test/creative-production.test.js test/creative-scene.test.js test/creative-autonomy.test.js test/creative-autonomy-trial2.test.js test/creative-autonomy-reliability.test.js test/creative-autonomy-eu-model.test.js test/marketing-creative-alibaba.test.js test/marketing-creative-alibaba-image-edit.test.js test/marketing-creative-alibaba-scoped-authorization.test.js test/marketing-creative-alibaba-environment.test.js
+        run: node --test test/creative-product-media.test.js test/creative-shopify-e2e.test.js test/creator-app.test.js test/creative-brand-profile.test.js test/creative-revision-planner.test.js test/creative-typography-gates.test.js test/integration-contracts.test.js test/integration-workflows.test.js test/creative-production.test.js test/creative-scene.test.js test/creative-autonomy.test.js test/creative-autonomy-trial2.test.js test/creative-autonomy-reliability.test.js test/creative-autonomy-eu-model.test.js test/marketing-creative-alibaba.test.js test/marketing-creative-alibaba-image-edit.test.js test/marketing-creative-alibaba-scoped-authorization.test.js test/marketing-creative-alibaba-environment.test.js
       - name: Python source syntax
         run: python -m py_compile scripts/creative-autonomy/compose_stage.py scripts/creative-autonomy/scene_plate.py scripts/creative-autonomy/scene_check.py

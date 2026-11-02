@@ -136,6 +136,23 @@ for i, l in enumerate(info_lines): d.text((x_info, y_info + i * round(38 * k)), 
 text_box = (x_text, y_text, x_text + max(d.textlength(l, font=fh) for l in lines), y_text + block_h)
 info_box = (x_info, y_info, x_info + max(d.textlength(l, font=small) for l in info_lines), y_info + round(38 * k) * len(info_lines))
 def inter(b1, b2): return not (b1[2] <= b2[0] or b2[2] <= b1[0] or b1[3] <= b2[1] or b2[3] <= b1[1])
+# ---- TYPOGRAPHY GATES (deterministic, measured on what was actually drawn; they do not judge taste)
+def missing_glyphs(text, f):
+    # a character the font cannot draw comes out as the .notdef box: compared with the box of a code point no font maps
+    def glyph(ch):
+        im = Image.new('L', (int(f.size * 2) + 4, int(f.size * 2) + 4), 0); ImageDraw.Draw(im).text((2, 2), ch, font=f, fill=255); return im.tobytes()
+    notdef = glyph('\U0010FFFD')
+    return sorted({ch for ch in set(text) if not ch.isspace() and glyph(ch) == notdef})
+glyphs_missing = sorted(set(missing_glyphs(stage['headline'], fh)) | set(missing_glyphs(' '.join(info_lines), small)))
+headline_overflow = max(d.textlength(l, font=fh) for l in lines) > col_w + 0.5
+info_too_wide = max(d.textlength(l, font=small) for l in info_lines) > W - 2 * m
+bg_info = np.asarray(out).astype(np.float32)[max(0, int(y_info)):int(info_box[3]), max(0, int(x_info)):int(info_box[2])] / 255
+def contrast_with(ink_rgb, region):
+    if not region.size: return None
+    Lr = lum(region); Li = float(lum(np.asarray(ink_rgb, np.float32)[None, None, :] / 255)[0, 0])
+    hi = np.maximum(Lr, Li); lo = np.minimum(Lr, Li)
+    return float(np.percentile((hi + 0.05) / (lo + 0.05), 10))  # the WORST tenth of the background under the text, not its average
+info_contrast = contrast_with(ink, bg_info)
 defects = []
 if checked_pixels < minimum_checked_pixels:
     defects.append('PRODUCT_FIDELITY_NOT_MEASURABLE')
@@ -145,6 +162,11 @@ if inter(text_box, prod_box): defects.append('HEADLINE_OVERLAPS_PRODUCT')
 if inter(info_box, prod_box): defects.append('INFO_OVERLAPS_PRODUCT')
 if contrast < 4.5: defects.append('LOW_TEXT_CONTRAST')
 if min(text_box[0], text_box[1], W - text_box[2], H - text_box[3]) < m * 0.6: defects.append('TEXT_OUTSIDE_MARGINS')
+if min(info_box[0], info_box[1], W - info_box[2], H - info_box[3]) < m * 0.6: defects.append('INFO_TEXT_OUTSIDE_MARGINS')
+if glyphs_missing: defects.append('TEXT_GLYPHS_MISSING_IN_FONT')
+if headline_overflow: defects.append('HEADLINE_WORD_OVERFLOWS_COLUMN')
+if info_too_wide: defects.append('INFO_LINE_TOO_WIDE')
+if info_contrast is not None and info_contrast < 4.5: defects.append('LOW_INFO_TEXT_CONTRAST')
 if (th / H) < 0.3: defects.append('PRODUCT_TOO_SMALL')
 if x0 < 0 or y0 < 0 or x0 + tw > W or y0 + th > H: defects.append('PRODUCT_CROPPED_BY_FRAME')
 out.save(OUT, quality=94)
@@ -153,7 +175,11 @@ report = {
                  'max_level_difference_after_removing_layers': int(diff.max()) if checked_pixels else None, 'mean_level_difference': round(float(diff.mean()), 4) if checked_pixels else None,
                  'max_visible_level_difference': int(visible_diff.max()) if checked_pixels else None, 'mean_visible_level_difference': round(float(visible_diff.mean()), 4) if checked_pixels else None,
                  'layers': {'scene_level_factor': scene_factor, 'rim_max_levels': 22 if 'RIM' in kinds else 0, 'slit_max_levels': 90 if info.get('slit_y') is not None else 0}},
-    'technical': {'defects': defects, 'text_contrast_ratio': round(contrast, 2), 'product_height_share': round(th / H, 3), 'headline_font_px': size, 'text_ink': 'white' if ink == white else 'black'},
+    'technical': {'defects': defects, 'text_contrast_ratio': round(contrast, 2), 'product_height_share': round(th / H, 3), 'headline_font_px': size, 'text_ink': 'white' if ink == white else 'black',
+                  'typography': {'headline_font': os.path.basename(getattr(fh, 'path', '') or ''), 'info_font': os.path.basename(getattr(small, 'path', '') or ''), 'headline_px': size, 'headline_line_height_px': lh,
+                                 'headline_lines': len(lines), 'info_px': round(27 * k), 'info_contrast_ratio_worst_tenth': None if info_contrast is None else round(info_contrast, 2),
+                                 'glyphs_missing': glyphs_missing, 'column_px': round(col_w)},
+                  'resolution': [W, H]},
     'text_used': {'headline_proposed_by_brain': stage['headline'], 'facts_lines': info_lines},
 }
 json.dump(report, open(OUT + '.report.json', 'w'), indent=1, ensure_ascii=False)
