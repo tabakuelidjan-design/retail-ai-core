@@ -9,19 +9,19 @@ Mis à jour : 2026-11-02. Périmètre : PR #36 et correctifs en brouillon PR #37
 - Les données texte/prix/variantes dans `test/fixtures/creative-autonomy/shopify-gourde-tyeso.json` concordent avec la lecture Shopify du 2 novembre (titre, description, type, tags, variantes, prix, stock).
 - Objectif déjà prévu dans `scripts/creative-autonomy-trial.mjs` : « Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB ». Ne pas inventer d'autre prix ni caractéristique.
 
-## Point de vigilance sur la photo — BLOQUANT pour autorisation
+## Photo officielle TYESO candidate — validation technique interne
 Le média noir trouvé dans Shopify est une image WEBP de **2000 × 2000 px**, dont le nom de fichier finit par `Black_20oz.webp`. La référence produit TS-8771C est **750 ml / environ 25 oz**. Le nom du fichier ne prouve pas que l'image présente la mauvaise taille ; sa correspondance visuelle avec la variante HABB est **NON VÉRIFIÉE**.
 - **Photo candidate identifiée le 2 novembre 2026** : vue entière du flacon noir sur le site officiel TYESO, alt **« WANDER Lockable Straw Bottle in Black, 25 oz – straw detail »**, sur la fiche produit qui confirme « 25 oz / 750 mL ».
 - Photo exacte (URL externe, **ne pas commiter le binaire**) : https://tyeso.com/cdn/shop/files/tyeso-wander-lockseal-stainless-steel-sports-bottle-with-straw-black-25-oz-straw-detail-30.jpg?v=1784195930&width=2000
 - Fiche officielle : https://tyeso.com/products/wander-lockseal-stainless-steel-sports-bottle-with-straw
 - La photo est **visuellement identifiée**, mais son fichier original n'a **pas encore été récupéré localement** ; dimension binaire, empreinte SHA-256 et essai `--plan` sur cette photo **NON EFFECTUÉS**. Le téléchargement direct depuis l'environnement de travail a échoué (connexion réseau), ne pas inventer de hash.
-- **Droits encore NON CONFIRMÉS** : demander au contact TYESO une permission écrite d'utiliser cette photo précise pour des créations marketing HABB réalisées au moyen d'outils d'IA externes, comprenant envoi de la photo/plaque dérivée à Alibaba Cloud (périmètre Global, traitement potentiellement hors de l'UE) et analyse du rendu par le modèle EU. La présence sur un site public n'est pas une licence pour cet usage.
-- Si TYESO n'accorde pas cette permission, utiliser une photo originale prise par HABB du produit noir 750 ml, ou une photo dont les droits pour cet usage sont établis. Contrôler l'absence de visage et de données personnelles.
-- Après sélection du fichier et preuve des droits, figer ses octets, calculer SHA-256 et utiliser exactement ce fichier pour `--plan` puis, si autorisé, `--execute`. Ne pas changer les pixels entre plan et essai.
-- **NO-GO** pour l'appel image en attendant la photo locale et l'autorisation.
+- **Relation fournisseur confirmée par le propriétaire HABB** : HABB est en contact commercial direct avec TYESO et ne demande PAS de nouvelle permission fournisseur pour cet essai. Supprimer la demande WeChat ; ne pas la transformer en obligation. Le contrôle interne de transmission à un fournisseur d'IA demeure distinct et non visible par le client. Le périmètre contractuel précis n'a pas été examiné ici.
+- Si la photo choisie est inutilisable ou ne correspond pas au vrai produit noir 750 ml, rechercher une autre photo vérifiée du même modèle et de la même variante, sans demander au client de confirmer l'image. Contrôler l'absence de visage et de données personnelles.
+- Une fois la source choisie et son usage déclaré par l'opérateur HABB, figer ses octets, calculer SHA-256 et utiliser exactement ce fichier pour `--plan` puis, si autorisé, `--execute`. Aucune étape de confirmation de la photo par le client.
+- **NO-GO technique** pour l'appel payant tant que le fichier local, l'espace image Global et les contrôles de budget et de transmission externes ne sont pas prêts. Pas de confirmation préalable du média par le client.
 
 ## Exécution prévue — PAS ENCORE LANCÉE
-1. Fournir la photo correcte et son autorisation explicite pour l'édition externe d'une **plaque dérivée** par Alibaba en périmètre **GLOBAL** (traitement potentiellement hors UE).
+1. Le système choisit et vérifie la photo du produit noir 750 ml. L'opérateur prépare les droits/paramètres internes pour l'envoi d'une **plaque dérivée** à Alibaba en périmètre **GLOBAL** (traitement potentiellement hors UE). **Aucune validation du média source demandée au client avant génération.**
 2. Vérifier localement Node, Python (Pillow/numpy/scipy), le dépôt et le commit exact. Conserver les identifiants hors Git.
 3. Préparer un espace de travail texte `EU` servant `qwen3-vl-plus` et un espace image `GLOBAL` servant `qwen-image-3.0-pro` à Francfort. Le script doit vérifier gratuitement la liste des modèles avant le verrou de tentative.
 4. Lancer **uniquement** le plan local sans réseau / sans coût :
@@ -40,5 +40,9 @@ Le média noir trouvé dans Shopify est une image WEBP de **2000 × 2000 px**, d
 ## Ce qui est vérifié / ne l'est pas
 - PR #37, à la date de rédaction : le workflow spécifique « Nordla creative production — offline verification » a réussi au commit `774e7dcb4086d1364e8dd1205ebae46de23649f5`. PR #36 reste inchangée, les deux PR restent en brouillon.
 - L'API Qwen Image 3.0 Pro prend en charge `n=3`, `negative_prompt`, `prompt_extend: false` et le format 1080 × 1350 ; voir https://www.alibabacloud.com/help/en/model-studio/qwen-image-edit-guide
-- **NON VÉRIFIÉ** : autorisation commerciale/IA pour l'image TYESO officielle ; fichier local, empreinte et plan ; concordance du média Shopify « 20oz » avec le produit 750 ml ; clé/espace de travail image GLOBAL ; qualité et coût effectifs d'une image réellement générée.
+- **NON VÉRIFIÉ** : périmètre juridique exact de l'usage des médias TYESO ; fichier local, empreinte et plan ; concordance du média Shopify « 20oz » avec le produit 750 ml ; clé/espace de travail image GLOBAL ; qualité et coût effectifs d'une image réellement générée. La connexion directe HABB–TYESO est confirmée par le propriétaire ; ne pas redemander d'autorisation fournisseur comme étape automatique.
 - **NO-GO** pour `--execute` à ce stade. Aucune modification Shopify, aucun appel fournisseur ni facturation.
+
+## Règle client — décision explicite du propriétaire, 2026-11-02
+
+**Nordla ne demande jamais au client de confirmer ou valider la photo du produit avant de commencer la création.** L'image est sélectionnée et validée en interne. Si elle est inutilisable, le système tente une autre image de la même variante ou signale un problème de source média aux opérateurs. Le client valide seulement le résultat créé (si le parcours prévoit une validation), et non les sources en amont. Les contrôles internes d'usage d'API, de confidentialité et de dépense ne doivent pas devenir une demande de confirmation de photo au client. L'automatisation complète de la sélection d'image Shopify reste à implémenter dans l'intégration média ; l'actuel essai CLI attend toujours un `--photo` interne.

@@ -112,6 +112,11 @@ test('with a TEST_DOUBLE brain: 3 concepts, each art-directed, staged, rendered,
   assert.ok(r.trace.filter((t) => t.kind === 'LLM').every((t) => t.provider === 'TEST_DOUBLE'));
   assert.ok(r.trace.some((t) => t.step === 'CRITIC' && t.outcome === 'PROVIDER_NOT_CONNECTED'));
   assert.equal(r.human_interventions.filter((h) => h.creative).length, 1); // only the owner's final verdict
+  // No client image-confirmation gate: source-product choice is an internal responsibility.
+  assert.equal(r.human_interventions.filter((h) => h.who === 'client' && h.when !== 'après le passage').length, 0);
+  assert.ok(r.human_interventions.filter((h) => h.when === 'avant le passage')
+    .every((h) => !/confirmer|confirmation|valider.*(photo|image)|photo fournie/i.test(h.what)));
+  assert.ok(r.human_interventions.some((h) => h.when === 'après le passage' && h.creative));
 });
 
 test('a placement defect Nordla cannot fix on its own goes back to the Brain, not to a human', async () => {

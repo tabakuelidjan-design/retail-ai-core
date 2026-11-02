@@ -2,6 +2,17 @@
 
 Updated 2026-11-02 (branch `feature/creative-production-v1-scene`, based on PR #35 head `de403d3`). **Purpose:** one authentic, premium Nordla advertisement for HABB first, then the three concepts.
 
+## Product image selection — owner decision, 2026-11-02
+
+**No pre-generation client confirmation of the product photograph.** This rule applies to Nordla's customer-facing workflow, not just the HABB TYESO trial.
+
+- The client selects a product and requests creation. Nordla's media integration chooses an image matching the exact product/variant from the verified catalog and validates image suitability internally. **Never ask the client to approve or confirm that source image before generating.**
+- If the chosen image is missing, unusable or inconsistent with the selected product, try another verified image **of the same variant**, if available; otherwise stop with an internal media diagnostic. Do not substitute another color, size or product; do not publish unsupported claims.
+- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media fetching/selection is an integration requirement, **not implemented by this change**.
+- **After creation**, show the actual finished output for the client's acceptance, revision or rejection. No automatic publication.
+- External provider data clearance and approved financial caps are background **operator/security controls**, not customer-facing prompts. For customer-uploaded/personal images, do not bypass actual consent/privacy requirements.
+- HABB confirms a direct commercial relationship with TYESO and does not want a supplier-permission message as a prerequisite to this trial. This does not grant a blanket license to other companies' assets.
+
 ## Decision (owner, 2026-11-01)
 
 The PR #35 path (a background generated WITHOUT the product, then the photo pasted on it) was replaced. A background that never saw the product cannot give it a contact shadow, a reflection, a shared perspective or a coherent light. The retained architecture:

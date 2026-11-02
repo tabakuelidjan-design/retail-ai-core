@@ -184,7 +184,9 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   mkdirSync(workdir, { recursive: true });
   const trace = [];
   const humanInterventions = [
-    { when: 'avant le passage', who: 'propriétaire', what: 'a choisi le produit, l\'objectif commercial, le format et fourni la photo', creative: false },
+    // The client never approves/confirms a source product image before creative work.
+    // Product-source validation belongs to the internal media pipeline; approval is only after creation.
+    { when: 'avant le passage', who: 'opérateur', what: 'a défini le produit, l\'objectif commercial et le format', creative: false },
   ];
   let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0; let repairNote = null; let callsInStep = 0; let lastReplyText = null; let repairScope = null; let lastMerge = null; let briefNote = null;
   // HABB's commercial brief, repeated to the stages that do not see the public facts (set once the brief exists)
@@ -288,7 +290,9 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     return { outcome: r.status, detail: r, value: r };
   });
   const assetUsable = exam.status === 'CUT_OUT';
-  if (!assetUsable && !ideationOnly) humanInterventions.push({ when: 'requis', who: 'propriétaire', what: `fournir une photo exploitable : ${(exam.reasons ?? [exam.status]).join(', ')}`, creative: false });
+  // Invalid assets are an internal catalog/media problem, not a confirmation request to a customer.
+  // The calling integration may select another verified media asset and retry with a new plan.
+  if (!assetUsable && !ideationOnly) humanInterventions.push({ when: 'diagnostic interne', who: 'système médias', what: `source média inexploitable : ${(exam.reasons ?? [exam.status]).join(', ')} ; vérifier une autre image du même produit`, creative: false });
 
   // 3 OBSERVE
   const observation = await step({ step: 'OBSERVE', component: 'observeBrief', module: 'src/creative-brain/problem-frame.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE }, async () => {
