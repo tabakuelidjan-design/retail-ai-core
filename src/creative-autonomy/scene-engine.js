@@ -172,8 +172,9 @@ export function createSceneEngine({ baseEngines, config, authorization, photoSha
     name: Object.freeze({ ...baseEngines.name, render: `scène générée autour du produit réel (${IMAGE_EDIT_MODEL}, édition, ${variants} variantes)`, renderProvider: IMAGE_EDIT_PROVIDER_ID }),
     sceneMode: true,
     // what this engine may transmit and the ONLY source it is bound to (checked by the Shopify entrypoint before any run)
-    binding: Object.freeze({ transmits_source_media: true, source_sha256: photoSha256, authorization_id: authorization.authorization_id ?? null }),
+    binding: Object.freeze({ transmits_source_media: true, source_sha256: photoSha256, authorization_id: authorization.authorization_id ?? null, journal_id: journal?.id ?? null }),
     render,
+    spendGuard: budget, // the run's ONE application spend guard (checked by the Shopify entrypoint against the critic's)
     stats: () => ({ image_calls: calls, scene_cached: Boolean(cache) }),
   });
 }

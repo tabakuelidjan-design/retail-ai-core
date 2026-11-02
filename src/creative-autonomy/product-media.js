@@ -17,7 +17,8 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readImageInfo } from '../asset-library/image-info.js';
 import { runAutonomous } from './run.js';
-import { authorizeTransmission, CATALOG_ORIGIN } from './media-processing-policy.js';
+import { authorizeTransmission, policyProblems, CATALOG_ORIGIN } from './media-processing-policy.js';
+import { createTransmissionRecorder } from './transmission-recorder.js';
 
 // ---- the read-only query, as a tree: the same tree renders the query string and computes its requested cost (Shopify's published rules)
 const MEDIA_IMAGE = { fragment: 'MediaImage', children: [{ name: 'id' }, { name: 'alt' }, { name: 'image', object: true, children: [{ name: 'url' }, { name: 'width' }, { name: 'height' }, { name: 'altText' }] }] };
@@ -69,6 +70,8 @@ export const MEDIA_ERROR = Object.freeze({
   INVALID_IMAGE_BYTES: 'INVALID_IMAGE_BYTES',
   PROCESSING_NOT_AUTHORIZED: 'PROCESSING_NOT_AUTHORIZED',
   PROVIDER_BINDING_NOT_ESTABLISHED: 'PROVIDER_BINDING_NOT_ESTABLISHED',
+  SPEND_NOT_RESERVED: 'SPEND_NOT_RESERVED',
+  LEDGER_NOT_DURABLE: 'LEDGER_NOT_DURABLE',
 });
 export class CreativeMediaError extends Error {
   constructor(code, reason = '', attempts = undefined) {
@@ -302,11 +305,13 @@ export async function stageVerifiedShopifyMedia({ shopify, request, workdir, fet
 }
 
 /** A service that may transmit the photo must declare it is bound to THIS source; anything undeclared fails closed. */
-function assertBinding(service, label, { sha256, mustTransmit, authorizationId = null }) {
+function assertBinding(service, label, { sha256, mustTransmit, authorizationId = null, journalId = null }) {
   const b = service?.binding;
   if (!b || typeof b.transmits_source_media !== 'boolean') throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: no binding declared`);
   if (mustTransmit && !b.transmits_source_media) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: not connected to the selected source`);
   if (b.transmits_source_media && b.source_sha256 !== sha256) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: bound to another source`);
+  // a service that can send media must write into THIS run's transmission recorder, otherwise nothing proves what it sent
+  if (b.transmits_source_media && journalId && b.journal_id !== journalId) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: not wired to the run's transmission audit`);
   if (authorizationId && b.authorization_id !== undefined && b.authorization_id !== authorizationId) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: another authorization`);
 }
 
@@ -315,24 +320,34 @@ export const SCENE_PROCESSING = Object.freeze({ operation: 'IMAGE_EDIT', purpose
 
 /**
  * The production entrypoint. Order, every step fail-closed:
- *   1 select + fully validate the source photo (same variant only), 2 SHA-256, 3 standing tenant policy -> per-photo authorizations,
- *   4 journal the authorized transmissions, 5 build the critic and 6 the scene engine FROM THOSE BYTES via the factories,
- *   7 verify both are bound to the selected source, 8 run the creative pipeline.
- * Preconstructed `ports` / `engines` are refused: a service built before the selection cannot be bound to it.
- * providers: { portsFor({ photoBytes, sha256, authorization }), enginesFor({ photoBytes, sha256, authorization }), critic: {provider_id, region}, scene?: {provider_id, region} }
+ *   1 select + fully validate the source photo (same variant only), 2 SHA-256,
+ *   3 the tenant's ACCEPTED standing policy, read from the durable ledger (never from the caller) -> per-photo authorizations, AUTHORIZED events,
+ *   4 ATOMIC reservation of the whole run ceiling in the ledger (per-run and monthly limits, idempotent per run id), RESERVED events,
+ *   5 the critic and 6 the scene engine built FROM THOSE BYTES with this run's transmission recorder as their journal,
+ *   7 both must declare a binding to that SHA and to that recorder, their spend guard may not exceed the reservation, 8 run,
+ *   9 settle the reservation with the application's measured amount, or release it when no media was ever attempted.
+ * Preconstructed `ports` / `engines` are refused. A non-durable ledger (memory) is refused unless `nonProduction: true` is declared.
+ * providers: { portsFor({ photoBytes, sha256, authorization, journal }), enginesFor({ photoBytes, sha256, authorization, journal }), critic: {provider_id, region}, scene?: {provider_id, region} }
  */
 export async function runAutonomousWithShopifyMedia({
-  shopify, request, objective, brand, format, workdir, policy, journal, providers, runCeilingEur,
-  fetchImpl = fetch, decode = imageDecodes, run = runAutonomous, now = () => new Date(), runId = null, ports, engines,
+  shopify, request, objective, brand, format, workdir, ledger, policyId, providers, runCeilingEur, runId,
+  fetchImpl = fetch, decode = imageDecodes, run = runAutonomous, now = () => new Date(), mirror = null, nonProduction = false, ports, engines,
 }) {
   if (ports !== undefined || engines !== undefined) throw new TypeError('preconstructed ports/engines are refused: pass providers.portsFor / providers.enginesFor');
   if (typeof providers?.portsFor !== 'function' || typeof providers?.enginesFor !== 'function') throw new TypeError('providers.portsFor and providers.enginesFor are required');
-  if (!journal?.append || !journal?.monthToDateEur) throw new TypeError('a media transmission journal is required');
+  if (!ledger?.reserve || !ledger?.record || !ledger?.currentPolicy) throw new TypeError('a Creative ledger is required');
+  if (ledger.durable !== true && nonProduction !== true) throw new CreativeMediaError(MEDIA_ERROR.LEDGER_NOT_DURABLE, 'a non-durable ledger can only serve a declared non-production run');
+  if (typeof runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_.-]{0,127}$/.test(runId)) throw new TypeError('a stable runId is required (idempotency key of the reservation)');
+  if (!(runCeilingEur > 0)) throw new TypeError('runCeilingEur must be > 0');
   const staged = await stageVerifiedShopifyMedia({ shopify, request, workdir, fetchImpl, decode, now });
-  const at = now(); const id = runId ?? `run-${staged.sha256.slice(0, 12)}-${at.getTime()}`;
-  const monthToDateEur = journal.monthToDateEur({ merchantId: request.merchantId, now: at });
+  const at = now();
+  // 3 the policy IN FORCE for this tenant, as accepted in the durable ledger
+  const accepted = await ledger.currentPolicy({ merchantId: request.merchantId, policyId });
+  if (!accepted?.content || !Number.isInteger(accepted.version)) throw new CreativeMediaError(MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'NO_ACCEPTED_POLICY');
+  const problems = policyProblems(accepted.content);
+  if (problems.length) throw new CreativeMediaError(MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, `POLICY_INVALID ${JSON.stringify(problems)}`);
   const authorize = (processing, target) => {
-    const a = authorizeTransmission({ policy, request: { merchantId: request.merchantId, shopId: request.shopId, now: at, runId: id, runCeilingEur, monthToDateEur,
+    const a = authorizeTransmission({ policy: accepted.content, request: { merchantId: request.merchantId, shopId: request.shopId, now: at, runId, runCeilingEur, acceptedVersion: accepted.version,
       source: { sha256: staged.sha256, asset_ref: staged.asset_ref, origin: staged.photoMeta.origin, media_id: staged.record.media_id },
       provider_id: target?.provider_id, region: target?.region, purpose: processing.purpose, operation: processing.operation } });
     if (!a.allowed) throw new CreativeMediaError(MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, `${processing.operation}: ${a.reason}${a.detail ? ' ' + JSON.stringify(a.detail) : ''}`);
@@ -340,15 +355,42 @@ export async function runAutonomousWithShopifyMedia({
   };
   const critic = authorize(CRITIC_PROCESSING, providers.critic);
   const scene = providers.scene ? authorize(SCENE_PROCESSING, providers.scene) : null;
-  journal.append(critic.journal_entry); if (scene) journal.append(scene.journal_entry);
-  const bound = { photoBytes: staged.photoBytes, sha256: staged.sha256, asset_ref: staged.asset_ref };
-  const runPorts = await providers.portsFor({ ...bound, authorization: critic.authorization });
-  assertBinding(runPorts, 'visual critic', { sha256: staged.sha256, mustTransmit: true });
-  const runEngines = await providers.enginesFor({ ...bound, authorization: scene?.authorization ?? null });
-  assertBinding(runEngines, 'scene engine', { sha256: staged.sha256, mustTransmit: Boolean(scene), authorizationId: scene?.authorization.authorization_id ?? null });
-  const result = await run({ input: { product: staged.snapshot.product, variantTitle: staged.identity.variant_title, readAt: staged.snapshot.read_at,
-    objective, brand, format, photoPath: staged.photoPath, photoMeta: staged.photoMeta },
-    ports: runPorts, engines: runEngines, workdir, produce: 'SELECTED' });
-  return { ...result, published: false, media_selection: staged.record,
-    transmissions: [critic.journal_entry, ...(scene ? [scene.journal_entry] : [])].map((e) => ({ authorization_id: e.authorization_id, operation: e.operation, source_sha256: e.source_sha256 })) };
+  const ctx = { merchantId: request.merchantId, runId, policyId, policyVersion: accepted.version, sourceSha256: staged.sha256, now };
+  const targets = { VISION_CRITIQUE: { authorizationId: critic.authorization.authorization_id, providerId: providers.critic.provider_id, region: providers.critic.region },
+    ...(scene ? { IMAGE_EDIT: { authorizationId: scene.authorization.authorization_id, providerId: providers.scene.provider_id, region: providers.scene.region } } : {}) };
+  const recorder = createTransmissionRecorder({ ledger, ctx, targets, mirror });
+  // 4 atomic reservation of the WHOLE ceiling, before any provider exists
+  const reservation = await ledger.reserve({ merchantId: request.merchantId, runId, policyId, policyVersion: accepted.version, ceilingEur: runCeilingEur, now: at });
+  if (!['RESERVED', 'ALREADY_RESERVED'].includes(reservation?.status) || (reservation.status === 'ALREADY_RESERVED' && reservation.run_status !== 'RESERVED'))
+    throw new CreativeMediaError(MEDIA_ERROR.SPEND_NOT_RESERVED, reservation?.reason ?? reservation?.run_status ?? 'REFUSED');
+  await recorder.authorized(); await recorder.reserved();
+  let result; let failure = null; let guard = null;
+  try {
+    const journal = recorder.providerJournal(null);
+    const bound = { photoBytes: staged.photoBytes, sha256: staged.sha256, asset_ref: staged.asset_ref, journal };
+    const runPorts = await providers.portsFor({ ...bound, authorization: critic.authorization });
+    assertBinding(runPorts, 'visual critic', { sha256: staged.sha256, mustTransmit: true, journalId: recorder.id });
+    const runEngines = await providers.enginesFor({ ...bound, authorization: scene?.authorization ?? null });
+    assertBinding(runEngines, 'scene engine', { sha256: staged.sha256, mustTransmit: Boolean(scene), authorizationId: scene?.authorization.authorization_id ?? null, journalId: recorder.id });
+    guard = runPorts.budget;
+    if (!guard?.snapshot || !(guard.maxSpendEur <= runCeilingEur)) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, 'the run spend guard must exist and not exceed the reserved ceiling');
+    if (scene && runEngines.spendGuard !== guard) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, 'the scene engine must spend through the same guard as the critic');
+    result = await run({ input: { product: staged.snapshot.product, variantTitle: staged.identity.variant_title, readAt: staged.snapshot.read_at,
+      objective, brand, format, photoPath: staged.photoPath, photoMeta: staged.photoMeta },
+      ports: runPorts, engines: runEngines, workdir, produce: 'SELECTED' });
+  } catch (e) { failure = e; }
+  const spent = guard?.snapshot ? guard.snapshot() : null;
+  // 9 close the reservation: settle what may have been spent, release what never was (attempt evidence comes from the ledger itself)
+  let closing;
+  if (recorder.attemptedAny()) {
+    // settled + still-held reservations of the application spend guard (a failed call keeps its reservation: its cost is unknown, counted)
+    closing = await ledger.settle({ merchantId: request.merchantId, runId, settledEur: spent ? Math.round((spent.settled_eur + spent.reserved_eur) * 10000) / 10000 : runCeilingEur,
+      basis: spent ? 'APPLICATION_SPEND_GUARD' : 'CEILING_OUTCOME_UNKNOWN', now: now() });
+  } else {
+    await recorder.cancelled(failure ? String(failure.code ?? 'RUN_FAILED') : 'NO_MEDIA_ATTEMPT');
+    closing = await ledger.release({ merchantId: request.merchantId, runId, reason: failure ? 'RUN_FAILED_BEFORE_ATTEMPT' : 'NO_MEDIA_ATTEMPT', now: now() });
+  }
+  if (failure) throw Object.assign(failure, { reservation_closing: closing });
+  return { ...result, published: false, customer_review: 'PENDING', media_selection: staged.record, run_id: runId,
+    policy: { policy_id: policyId, version: accepted.version }, reservation: { status: reservation.status, ceiling_eur: runCeilingEur, closing } };
 }
