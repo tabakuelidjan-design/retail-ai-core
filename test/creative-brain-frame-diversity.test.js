@@ -141,7 +141,7 @@ const BRIEFS = [
   ['product is blank', 'incomplete', { facts: { product: '   ', merchant: 'Shop' }, copies: [copy('HEADLINE', 'New')], claims: [] }, null, 'en', 'NEEDS_CLARIFICATION'],
   ['nothing approved to say', 'incomplete', { facts: { product: 'Hand cream', merchant: 'Soin' }, copies: [], claims: [] }, null, 'en', 'NEEDS_CLARIFICATION'],
   ['no format', 'incomplete', { facts: { product: 'Hand cream', merchant: 'Soin' }, copies: [copy('HEADLINE', 'Soft')], claims: [], format: { ...buildBrief().format, aspect_ratio: null } }, null, 'en', 'NEEDS_CLARIFICATION'],
-  ['no product photograph', 'incomplete', { facts: { product: 'Hand cream', merchant: 'Soin' }, copies: [copy('HEADLINE', 'Soft')], claims: [], asset: { ref: null } }, null, 'en', 'NEEDS_CLARIFICATION'],
+  ['no product photograph', 'incomplete', { facts: { product: 'Hand cream', merchant: 'Soin' }, copies: [copy('HEADLINE', 'Soft')], claims: [], asset: { ref: null } }, null, 'en', 'BLOCKED_INTERNAL_MEDIA'], // owner rule 2026-11-02: the photo is never asked of the customer
   ['no product reference', 'incomplete', { facts: { product: 'Hand cream', merchant: 'Soin' }, copies: [copy('HEADLINE', 'Soft')], claims: [], ids: { product_ref: null } }, null, 'en', 'NEEDS_CLARIFICATION'],
   ['product, nothing else, nothing approved', 'incomplete', { facts: { product: 'Candle' }, copies: [], claims: [] }, null, 'en', 'NEEDS_CLARIFICATION'],
   // ---- the brief contradicts itself
@@ -179,6 +179,7 @@ const BRIEFS = [
 
 async function frameClass(b, spec) {
   const assessment = assessBrief({ brief: b });
+  if (assessment.status === BRIEF_STATUS.BLOCKED_INTERNAL_MEDIA) return { cls: 'BLOCKED_INTERNAL_MEDIA', calls: 0, assessment };
   if (assessment.status === BRIEF_STATUS.NEEDS_CLARIFICATION) return { cls: 'NEEDS_CLARIFICATION', calls: 0, assessment };
   if (assessment.status === BRIEF_STATUS.USER_CONTRADICTION) return { cls: 'USER_CONTRADICTION', calls: 0, assessment };
   const [, , , reply, lang] = spec;
@@ -207,13 +208,15 @@ test('FD-6 fifty-plus realistic briefs: every brief ends in a valid NEXT ACTION 
     tally[out.cls] = (tally[out.cls] ?? 0) + 1;
     // a brief that needs a person costs nothing and is asked a precise question
     if (out.cls === 'NEEDS_CLARIFICATION' || out.cls === 'USER_CONTRADICTION') { assert.equal(out.calls, 0, name); assert.ok(out.assessment.issues.every((i) => i.question.includes('?')), name); }
+    // a missing product photo is the media pipeline's problem: no model call and NO question to the customer
+    if (out.cls === 'BLOCKED_INTERNAL_MEDIA') { assert.equal(out.calls, 0, name); assert.ok(out.assessment.issues.every((i) => i.kind === 'INTERNAL' && i.question === null), name); }
     // a frame never invents a fact the brief did not give
     if (out.frame) {
       for (const [field, key] of [['audience', 'audience'], ['commercial_objective', 'objective'], ['occasion_context', 'occasion']]) if (!b.public_facts[key]) assert.equal(out.frame[field], UNKNOWN, `${name}: ${field} was invented`);
     }
   }
   for (const needed of ['complete', 'incomplete', 'vague', 'long', 'one sentence', 'multilingual', 'contradictory', 'no price', 'long copy', 'B2B', 'retail product', 'service', 'restaurant', 'memorial', 'birth gift', 'luxury', 'technical', 'no emotional goal']) assert.ok(categories.has(needed), needed);
-  assert.deepEqual(Object.keys(tally).sort(), ['INVALID_FRAME', 'NEEDS_CLARIFICATION', 'SAFE_UNKNOWN', 'USER_CONTRADICTION', 'VALID_FRAME']);
+  assert.deepEqual(Object.keys(tally).sort(), ['BLOCKED_INTERNAL_MEDIA', 'INVALID_FRAME', 'NEEDS_CLARIFICATION', 'SAFE_UNKNOWN', 'USER_CONTRADICTION', 'VALID_FRAME']);
   assert.ok(tally.VALID_FRAME >= 15 && tally.SAFE_UNKNOWN >= 8 && tally.NEEDS_CLARIFICATION >= 6 && tally.USER_CONTRADICTION >= 3 && tally.INVALID_FRAME >= 6, JSON.stringify(tally));
 });
 

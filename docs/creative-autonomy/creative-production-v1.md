@@ -57,13 +57,22 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 
 **Integration scope:** the standalone `creative-autonomy-trial.mjs --scene` still requires an **internal** `--photo` path so its authorized plan is bound to exact bytes, and the customer-facing app has not yet been wired to call this adapter. This module is reusable by the verified Shopify connector integration; do not claim that any live storefront workflow has already been deployed. No Shopify mutation, Alibaba call, client prompt, budget authorization, merge or publication is done here.
 
-## Audit corrections (Claude, 2026-11-02, on PR #37 head `2bcd3f5`)
+## Audit corrections (Claude, 2026-11-02, on PR #37 head `2bcd3f5`; branch `fix/creative-production-v1-audit-20261102`)
 
-- **Variant evidence.** Order: (1) the variant's own media in Shopify (`ProductVariant.media`); (2) a single-variant product; (3) otherwise EVERY option value (colour, capacity) positively evidenced in the image metadata. An option the metadata cannot prove (size `XL`, colour `Bordeaux`, `128 Go`) is refused with `NO_VERIFIED_SOURCE_IMAGE` and the fix is to link the image to the variant in Shopify, never a guess and never a question to the client. Before this correction `Noir / 500 ml`, `XL` or `Bordeaux` accepted any image of the product.
-- **Bytes.** An image is accepted only if Pillow decodes it completely (bounded to 36 MP); a valid header is not an image.
-- **Fallback.** Every eligible image of the same variant is tried in order; the rejected ones are recorded (`rejected_before`).
-- **Tenant.** Only a connector of `src/connectors/shopify.js` in state `CONFIGURED` (shop verified as belonging to this tenant) is accepted.
-- **Freshness.** Price, stock and description given to the engine come from the same read as the media, not from an older snapshot.
-- **Binding.** Ports and engines that transmit the photo are built by `portsFor` / `enginesFor` AFTER the selection, bound to the selected bytes.
-- **Fidelity.** A compose report without pixel counters or an explicit `scene_mode` can no longer pass.
-- **Still open:** the per-photo SHA authorization records of the `--scene` trial are an operator control for the trial only; a production flow needs a standing per-tenant processing policy (see the audit) so that no per-photo approval is ever required before creation.
+**Media selection** (`src/creative-autonomy/product-media.js`)
+- One read-only query by **immutable product + variant IDs**: product facts, variant list, product gallery (50), the variant (options, own media, 10). Requested cost **183** by Shopify's published rules (single-query limit 1000; the previous shape cost about 4500 and would have been refused). Every connection's `pageInfo.hasNextPage` must be `false`; an absent flag is incomplete.
+- Evidence order: (1) the variant's own media in Shopify; (2) a product **without options** (`hasOnlyDefaultVariant`) — a single variant WITH an option (e.g. `XL`) no longer inherits every product image; (3) otherwise every option value (colour, capacity) proven by the metadata. Unknown values are refused. Contradictions exclude even a linked image.
+- Identity: the variant must belong to the product and be in its variant list; a renamed title is recorded (`variant_title_changed`), another ID is refused. Fallback only across images of the same variant.
+- Bytes: full Pillow decode (≤ 36 MP) and dimensions equal to Shopify's. Tenant: connector of `src/connectors/shopify.js`, `merchantId` equal to the request, state `CONFIGURED` now.
+
+**Production entrypoint** (`runAutonomousWithShopifyMedia`)
+- Order: select → SHA-256 → standing tenant policy → journal → build the critic, then the scene engine, **from the selected bytes** → verify both declare a binding to that SHA → run. Preconstructed `ports` / `engines` are refused. Price, stock and description come from the same read. `published: false`.
+- The real critic (`connectProviders`) and scene engine (`createSceneEngine`) now expose `binding`; local engines declare they transmit nothing.
+
+**Authorization**: `src/creative-autonomy/media-processing-policy.js`, see ADR 0007 (PROPOSED). The per-photo files of the `--scene` trial remain an operator control for the trial only.
+
+**Brief**: a missing product photo is `BLOCKED_INTERNAL_MEDIA` (kind `INTERNAL`, no question), never a customer question.
+
+**Evidence**: `test/creative-product-media.test.js` (17 tests, adversarial), `test/creative-shopify-e2e.test.js` (3 tests: the whole customer chain through the real Python engines, the real critic port and the real scene engine, against a fetch double). Simulated success is not production readiness: no real image model, Shopify call or visual judgement ran.
+
+**Still open**: TYESO 750 ml source photo (see `tyeso-750ml-media-remediation.md`); NDR-D02 exception (ADR 0007 Part B); the customer-facing route/UI that calls the entrypoint; the tenant policy acceptance flow and storage.

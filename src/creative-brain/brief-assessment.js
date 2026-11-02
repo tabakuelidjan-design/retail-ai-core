@@ -29,9 +29,11 @@ export function assessBrief({ brief }) {
   if (!brief?.format?.aspect_ratio) missing.push({ code: 'FORMAT_NOT_STATED', kind: 'MISSING', field: 'format', question: 'Where will the visual be published (format or channel)?' });
   // The product photograph is sourced and verified by Nordla's media pipeline, never asked of the customer (owner rule, 2026-11-02):
   // a missing asset is an INTERNAL block with an action for the media pipeline, and carries no question.
-  const internal = (!brief?.asset?.ref || !brief?.ids?.product_ref)
+  const internal = !brief?.asset?.ref
     ? [{ code: 'PRODUCT_ASSET_NOT_PROVIDED', kind: 'INTERNAL', field: 'asset', audience: 'INTERNAL', question: null, action: 'MEDIA_PIPELINE_MUST_SUPPLY_A_VERIFIED_PRODUCT_IMAGE' }]
     : [];
+  // choosing the product IS the customer's act; a missing catalog reference is asked as such (never as a photo question)
+  if (brief?.asset?.ref && !brief?.ids?.product_ref) missing.push({ code: 'PRODUCT_REFERENCE_NOT_PROVIDED', kind: 'MISSING', field: 'ids.product_ref', question: 'Which product of your catalog should the visual show?' });
   const contradictions = [
     ...conflicts(brief?.approved_copy, (c) => c.role, (c) => c.content, 'APPROVED_COPY_CONTRADICTS_ITSELF', 'approved_copy', (role) => `Two different texts are approved as the ${role}. Which one is the right one?`),
     ...conflicts(brief?.claims, (c) => c.role, (c) => c.wording, 'CLAIMS_CONTRADICT_EACH_OTHER', 'claims', (role) => `Two different claims are given as the ${role}. Which one is the right one?`),
