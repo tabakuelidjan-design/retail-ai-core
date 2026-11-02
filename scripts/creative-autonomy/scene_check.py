@@ -196,15 +196,16 @@ def main():
     level = 1.0
     if solid.any():
         level = float(np.clip(np.percentile(Lm[solid], 90) / max(np.percentile(Lp[solid], 90), 1e-4), lo, hi))
+    if abs(level - 1.0) > 0.1: warnings.append('SCENE_PRODUCT_LIGHT_LEVEL_DIFFERS')
 
     compose_meta = {'bottom_front': [int(bxa), int(bya)], 'top_front': [int(bxa), int(tya)], 'foreground_mask': None, 'slit_y': None,
-                    'render_backend': 'SCENE_AROUND_PRODUCT', 'contact_shadow': False, 'product_level': round(level, 4),
+                    'render_backend': 'SCENE_AROUND_PRODUCT', 'contact_shadow': False, 'product_level': 1.0,
                     'blender_capabilities_used': [], 'resolution': [W, H], 'foreground_props': 0, 'product_photo_untouched': True}
     json.dump(compose_meta, open(out_path + '.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     report = {'pass': not rejections, 'rejections': rejections, 'warnings': warnings, 'resized_from': resized_from,
               'alignment': {'dx': dx, 'dy': dy, 'scale': s, 'edge_ncc': best['edge_ncc'], 'trials': trials},
               'ghost': ghost, 'duplicate': duplicate, 'contact_shadow': shadow, 'reflection': reflection, 'light': light,
-              'product_level': round(level, 4), 'limits': LIMITS, 'compose_meta': compose_meta}
+              'product_level': 1.0, 'measured_scene_level_ratio': round(level, 4), 'limits': LIMITS, 'compose_meta': compose_meta}
     print(json.dumps(report, ensure_ascii=False))
 
 

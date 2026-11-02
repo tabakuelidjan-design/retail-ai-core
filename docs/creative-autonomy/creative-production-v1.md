@@ -2,6 +2,17 @@
 
 Updated 2026-11-02 (branch `feature/creative-production-v1-scene`, based on PR #35 head `de403d3`). **Purpose:** one authentic, premium Nordla advertisement for HABB first, then the three concepts.
 
+## Product image selection — owner decision, 2026-11-02
+
+**No pre-generation client confirmation of the product photograph.** This rule applies to Nordla's customer-facing workflow, not just the HABB TYESO trial.
+
+- The client selects a product and requests creation. Nordla's media integration chooses an image matching the exact product/variant from the verified catalog and validates image suitability internally. **Never ask the client to approve or confirm that source image before generating.**
+- If the chosen image is missing, unusable or inconsistent with the selected product, try another verified image **of the same variant**, if available; otherwise stop with an internal media diagnostic. Do not substitute another color, size or product; do not publish unsupported claims.
+- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media fetching/selection is an integration requirement, **not implemented by this change**.
+- **After creation**, show the actual finished output for the client's acceptance, revision or rejection. No automatic publication.
+- External provider data clearance and approved financial caps are background **operator/security controls**, not customer-facing prompts. For customer-uploaded/personal images, do not bypass actual consent/privacy requirements.
+- HABB confirms a direct commercial relationship with TYESO and does not want a supplier-permission message as a prerequisite to this trial. This does not grant a blanket license to other companies' assets.
+
 ## Decision (owner, 2026-11-01)
 
 The PR #35 path (a background generated WITHOUT the product, then the photo pasted on it) was replaced. A background that never saw the product cannot give it a contact shadow, a reflection, a shared perspective or a coherent light. The retained architecture:
@@ -37,3 +48,11 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 - No real image has been generated: the provider is simulated in every test. Whether Qwen keeps the product in place well enough is the open question the first paid run answers.
 - The thresholds (contour correlation 0.30, ghost 20 %, duplicate 0.75 / 0.45, search radius 28 px) are calibrated on simulated scenes only.
 - Nothing has run on Windows on this branch.
+
+## Automatic product-image selection — client rule implemented in internal adapter (2026-11-02)
+
+`src/creative-autonomy/product-media.js` implements an internal read-only Shopify catalog media selector and the `runAutonomousWithShopifyMedia` entrypoint. It receives an already **tenant-verified** Shopify connector (it never reads credentials or bypasses `src/connectors/shopify.js`), obtains product media, matches the exact variant and product size from catalog metadata, fetches only CDN-hosted images over HTTPS, validates actual PNG/JPEG/WebP bytes/dimensions and stages the source privately. The creative engine is called with the selected media automatically. There is **no customer prompt for confirming the photo before creation**. Owner/customer review remains after rendering.
+
+**Safety:** incomplete gallery or conflicting/ambiguous metadata ⇒ `NO_VERIFIED_SOURCE_IMAGE`, with no image download or generation. For TYESO **750 ml**, the HABB Shopify file `Black_20oz.webp` conflicts with the product size even if its alt claims 750 ml: reject instead of quietly creating an advertisement with the smaller bottle. A correctly labeled `Black_25oz` / `750ml` media may be selected. This is a strong metadata gate, **not a computer-vision proof** of the physical product: visual recognition and suitable cut-out still require the downstream checks.
+
+**Integration scope:** the standalone `creative-autonomy-trial.mjs --scene` still requires an **internal** `--photo` path so its authorized plan is bound to exact bytes, and the customer-facing app has not yet been wired to call this adapter. This module is reusable by the verified Shopify connector integration; do not claim that any live storefront workflow has already been deployed. No Shopify mutation, Alibaba call, client prompt, budget authorization, merge or publication is done here.

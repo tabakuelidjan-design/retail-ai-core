@@ -33,7 +33,7 @@ key = stage['key_light']['intensity']
 # scène générée autour du produit : le niveau est MESURÉ sur le produit redessiné par le modèle (scene_check.py), pas déduit du STAGE ;
 # pas de liseré ajouté, la lumière de la scène est celle du modèle
 scene_mode = info.get('render_backend') == 'SCENE_AROUND_PRODUCT'
-scene_factor = float(info['product_level']) if info.get('product_level') is not None else ({'LOW': 0.5, 'MEDIUM': 0.65, 'HIGH': 0.8}[key] if dark else 1.0)
+scene_factor = 1.0 if scene_mode else (float(info['product_level']) if info.get('product_level') is not None else ({'LOW': 0.5, 'MEDIUM': 0.65, 'HIGH': 0.8}[key] if dark else 1.0))
 L = (scene_factor - 1.0) * src_c
 kinds = [] if scene_mode else [l['kind'] for l in [stage['key_light'], *stage['accent_lights']]]
 xn = np.linspace(-1, 1, tw)[None, :]
@@ -68,7 +68,10 @@ clip = ((src_c[sl] + L[sl]) > 1).any(2) | ((src_c[sl] + L[sl]) < 0).any(2)
 occluded = np.zeros(opaque[sl].shape, bool)
 if info.get('foreground_mask'): occluded = fm[cy0:cy1, cx0:cx1, 0] > 0.02
 ok = opaque[sl] & ~clip & ~occluded
-diff = np.abs(back - ref)[ok] if ok.any() else np.array([0])
+checked_pixels = int(ok.sum())
+minimum_checked_pixels = max(100, min(1000, int(np.ceil(0.02 * int(opaque[sl].sum())))))
+diff = np.abs(back - ref)[ok] if checked_pixels else np.array([], dtype=np.int16)
+visible_diff = np.abs(np.round(fin * 255).astype(np.int16) - ref)[ok] if checked_pixels else np.array([], dtype=np.int16)
 
 # texte : position décidée par le STAGE, taille ajustée à la colonne, couleur choisie par contraste mesuré
 @lru_cache(maxsize=64)
@@ -134,6 +137,10 @@ text_box = (x_text, y_text, x_text + max(d.textlength(l, font=fh) for l in lines
 info_box = (x_info, y_info, x_info + max(d.textlength(l, font=small) for l in info_lines), y_info + round(38 * k) * len(info_lines))
 def inter(b1, b2): return not (b1[2] <= b2[0] or b2[2] <= b1[0] or b1[3] <= b2[1] or b2[3] <= b1[1])
 defects = []
+if checked_pixels < minimum_checked_pixels:
+    defects.append('PRODUCT_FIDELITY_NOT_MEASURABLE')
+if scene_mode and checked_pixels and int(visible_diff.max()) > 2:
+    defects.append('PRODUCT_VISIBLE_COLOR_MISMATCH')
 if inter(text_box, prod_box): defects.append('HEADLINE_OVERLAPS_PRODUCT')
 if inter(info_box, prod_box): defects.append('INFO_OVERLAPS_PRODUCT')
 if contrast < 4.5: defects.append('LOW_TEXT_CONTRAST')
@@ -142,8 +149,9 @@ if (th / H) < 0.3: defects.append('PRODUCT_TOO_SMALL')
 if x0 < 0 or y0 < 0 or x0 + tw > W or y0 + th > H: defects.append('PRODUCT_CROPPED_BY_FRAME')
 out.save(OUT, quality=94)
 report = {
-    'fidelity': {'opaque_pixels': int(opaque.sum()), 'checked_pixels': int(ok.sum()), 'occluded_by_foreground': int((opaque[sl] & occluded).sum()),
-                 'max_level_difference_after_removing_layers': int(diff.max()), 'mean_level_difference': round(float(diff.mean()), 4),
+    'fidelity': {'opaque_pixels': int(opaque.sum()), 'checked_pixels': checked_pixels, 'minimum_checked_pixels': minimum_checked_pixels, 'scene_mode': scene_mode, 'occluded_by_foreground': int((opaque[sl] & occluded).sum()),
+                 'max_level_difference_after_removing_layers': int(diff.max()) if checked_pixels else None, 'mean_level_difference': round(float(diff.mean()), 4) if checked_pixels else None,
+                 'max_visible_level_difference': int(visible_diff.max()) if checked_pixels else None, 'mean_visible_level_difference': round(float(visible_diff.mean()), 4) if checked_pixels else None,
                  'layers': {'scene_level_factor': scene_factor, 'rim_max_levels': 22 if 'RIM' in kinds else 0, 'slit_max_levels': 90 if info.get('slit_y') is not None else 0}},
     'technical': {'defects': defects, 'text_contrast_ratio': round(contrast, 2), 'product_height_share': round(th / H, 3), 'headline_font_px': size, 'text_ink': 'white' if ink == white else 'black'},
     'text_used': {'headline_proposed_by_brain': stage['headline'], 'facts_lines': info_lines},

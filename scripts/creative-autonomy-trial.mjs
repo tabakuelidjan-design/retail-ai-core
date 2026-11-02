@@ -22,7 +22,8 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { createHash } from 'node:crypto';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
-import { connectProviders, worstCaseCallEur, VISION_MAX_TOKENS } from '../src/creative-autonomy/providers.js';
+import { connectProviders, worstCaseCallEur, VISION_MAX_TOKENS, VISION_PURPOSE } from '../src/creative-autonomy/providers.js';
+import { VISION_OPERATION } from '../src/marketing-creative/alibaba/qwen-vision.js';
 import { BRAIN_PORT_LIMITS } from '../src/marketing-creative/alibaba/qwen-brain-port.js';
 import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
 import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel, codeFingerprint, secretsFileProblems, runtimeInjections } from '../src/creative-autonomy/trial.js';
@@ -91,6 +92,20 @@ function sceneMediaRecord() {
   if (record.transmissible !== 'THE_SOURCE_ASSET_AND_IMAGES_DERIVED_FROM_IT_FOR_THIS_PURPOSE_ONLY') return { record: null, problem: 'les images dérivées (la plaque) ne sont pas couvertes' };
   return { record, problem: null };
 }
+// The critic needs a SECOND, distinct owner authorization. A mere file path is not consent.
+// Its sole purpose is to send the final rendered scene to the EU-scope visual model.
+function criticMediaRecord() {
+  const file = process.env.NORDLA_MEDIA_AUTHORIZATION_FILE;
+  if (!file || !existsSync(file)) return { record: null, problem: 'absente' };
+  let record; try { record = JSON.parse(readFileSync(file, 'utf8')); } catch { return { record: null, problem: 'illisible' }; }
+  const a = assessScopedExternalMediaUse({ authorization: record,
+    asset: { ref: record?.asset?.asset_ref, sha256: photoSha },
+    provider_id: IMAGE_EDIT_PROVIDER_ID, region: 'eu-central-1', purpose: VISION_PURPOSE, operation: VISION_OPERATION });
+  if (!a.allowed) return { record: null, problem: a.reason };
+  if (record.transmissible !== 'THE_SOURCE_ASSET_AND_IMAGES_DERIVED_FROM_IT_FOR_THIS_PURPOSE_ONLY')
+    return { record: null, problem: 'les rendus dérivés ne sont pas couverts' };
+  return { record, problem: null };
+}
 // what Nordla is ASKED is part of what the owner authorises: objective, product snapshot, variant, format and brand rules are bound to the plan id
 const BRIEF_BINDING = briefBinding({ snapshot: P.snap, variant: P.variant, objective: P.objective, format: 'INSTAGRAM_FEED_4_5', brand: HABB_BRAND });
 // max_repair_calls: contract repairs (one more call of the SAME stage with the exact violation), part of what the owner authorises; 0 = none
@@ -142,12 +157,17 @@ function preflight() {
   let cfgError = null; try { loadAlibabaCreativeConfig(env); } catch (e) { cfgError = e.message; }
   ok('modèle accepté par le lane Alibaba', !cfgError, cfgError ?? 'accepté');
   if (!ideation) ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
-  if (!ideation) ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
+  if (!ideation && !scene) ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
   if (scene) {
+    ok('critique visuel multimodal dans un périmètre EU déclaré', scope === 'EU' && FRANKFURT_CATALOGUE.models[model]?.input?.includes('image') === true,
+      `modèle ${model}, périmètre déclaré ${scope} : exigence EU + modèle acceptant les images`);
     ok('clé API de l\'espace image', Boolean(imageEnv.ALIBABA_MODEL_STUDIO_API_KEY), imageEnv.ALIBABA_MODEL_STUDIO_API_KEY ? `présente (${env.ALIBABA_MODEL_STUDIO_IMAGE_API_KEY ? 'clé image dédiée' : 'même clé que le texte'}, non affichée)` : 'absente');
     ok('espace de travail image (périmètre Global, Francfort)', Boolean(imageEnv.ALIBABA_MODEL_STUDIO_WORKSPACE_ID), imageEnv.ALIBABA_MODEL_STUDIO_WORKSPACE_ID ? (env.ALIBABA_MODEL_STUDIO_IMAGE_WORKSPACE_ID ? 'dédié' : 'même espace que le texte : il doit servir qwen-image-3.0-pro (vérifié gratuitement avant toute dépense)') : 'absent');
     const media = sceneMediaRecord();
     ok('autorisation média de la scène (plaque dérivée de la photo, édition, Global)', !media.problem, media.problem ? `${media.problem} : aucune photo ne part` : 'conforme à CETTE photo');
+    const criticMedia = criticMediaRecord();
+    ok('autorisation distincte pour critique visuelle (rendu dérivé, EU)', !criticMedia.problem,
+      criticMedia.problem ? `${criticMedia.problem} : aucun essai scène n'est autorisé sans critique visuelle` : 'conforme à CETTE photo et au but de critique');
   }
   ok('aucune tentative antérieure de ce plan sur cette machine', !existsSync(registryLock), existsSync(registryLock) ? `déjà tentée (${registryLock}) : un nouvel essai demande un nouveau plan` : `registre : ${registryDir}`);
   ok('registre des tentatives hors dépôt git', !insideGitWorkTree(registryDir), insideGitWorkTree(registryDir) ? 'refusé' : 'ok');
@@ -225,7 +245,7 @@ if (mode === 'plan') {
   if (scene) {
     // a TEMPLATE of the owner's media record for THIS photo. It is written REVOKED: it authorises nothing until the owner reads it, sets "revoked": false and points
     // NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE at it. Nothing in the code flips it.
-    writeFileSync(join(outDir, 'scene-media-authorization.TEMPLATE.json'), JSON.stringify({
+    const sceneAuthTemplate = {
       kind: 'EXTERNAL_MEDIA_AUTHORIZATION', authorization_id: `authz://habb/scene/${photoSha.slice(0, 16)}`,
       purpose_note: 'Nordla Creative Production V1 : envoyer UNE plaque (le produit détouré de cette photo, sur fond gris) à Alibaba qwen-image-3.0-pro, espace Francfort en périmètre GLOBAL (traitement possible hors UE), pour générer la scène autour du produit. Aucune personne, aucun visage.',
       asset: { asset_ref: `asset://habb/${productKey}/${photoSha.slice(0, 16)}`, asset_sha256: photoSha, data_class: 'MERCHANT_PRIVATE_MEDIA', contains_personal_data: false, contains_face: false },
@@ -233,6 +253,14 @@ if (mode === 'plan') {
       transmissible: 'THE_SOURCE_ASSET_AND_IMAGES_DERIVED_FROM_IT_FOR_THIS_PURPOSE_ONLY',
       retention: { standard_inference_retention_days_max: 30, zdr_status: 'NOT_CONFIRMED', zdr_claimed: false, zdr_evidence_ref: null, acknowledged: true },
       authorization: { revoked: true }, state: {}, global_policy: { changed_by_this_record: false },
+    };
+    writeFileSync(join(outDir, 'scene-media-authorization.TEMPLATE.json'), JSON.stringify(sceneAuthTemplate, null, 1));
+    // Independent permission for the final image to be reviewed by the EU visual critic.
+    // Both templates are REVOKED by default: an owner must explicitly enable each one.
+    writeFileSync(join(outDir, 'scene-critic-authorization.TEMPLATE.json'), JSON.stringify({
+      ...sceneAuthTemplate, authorization_id: `authz://habb/critic/${photoSha.slice(0, 16)}`,
+      purpose_note: 'Nordla Creative Production V1 : envoyer le rendu final contenant la photo de cette gourde à Alibaba qwen3-vl-plus, espace Francfort en périmètre EU, uniquement pour une critique visuelle. Aucune personne, aucun visage.',
+      purpose: VISION_PURPOSE, allowed_operations: [VISION_OPERATION],
     }, null, 1));
   }
   console.log(JSON.stringify(plan, null, 1)); process.exit(0);

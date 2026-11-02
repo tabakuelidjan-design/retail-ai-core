@@ -112,6 +112,11 @@ test('with a TEST_DOUBLE brain: 3 concepts, each art-directed, staged, rendered,
   assert.ok(r.trace.filter((t) => t.kind === 'LLM').every((t) => t.provider === 'TEST_DOUBLE'));
   assert.ok(r.trace.some((t) => t.step === 'CRITIC' && t.outcome === 'PROVIDER_NOT_CONNECTED'));
   assert.equal(r.human_interventions.filter((h) => h.creative).length, 1); // only the owner's final verdict
+  // No client image-confirmation gate: source-product choice is an internal responsibility.
+  assert.equal(r.human_interventions.filter((h) => h.who === 'client' && h.when !== 'après le passage').length, 0);
+  assert.ok(r.human_interventions.filter((h) => h.when === 'avant le passage')
+    .every((h) => !/confirmer|confirmation|valider.*(photo|image)|photo fournie/i.test(h.what)));
+  assert.ok(r.human_interventions.some((h) => h.when === 'après le passage' && h.creative));
 });
 
 test('a placement defect Nordla cannot fix on its own goes back to the Brain, not to a human', async () => {
@@ -137,13 +142,14 @@ test('a critic hint makes the Brain re-stage the concept (bounded to two rounds)
   for (const p of r.proposals) assert.equal(p.creative_quality.state, 'CREATIVELY_INSUFFICIENT'); // said, not hidden
 });
 
-test('an unusable photo: concepts may still be thought, but nothing is rendered and the owner is asked for a clean asset', async () => {
+test('an unusable photo: concepts may still be thought, but nothing is rendered and the system reports an internal media problem', async () => {
   const engines = fakeEngines({ examStatus: 'NEEDS_CLEAN_ASSET' });
   const r = await runAutonomous({ input: input(COQUE), ports: tdPorts(doublePort()), engines, workdir: mkdtempSync(join(tmpdir(), 'na-')) });
   assert.equal(r.status, RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE);
   assert.equal(engines.calls.render, 0);
   assert.ok(r.proposals.every((p) => p.status === 'CONCEPT_ONLY' && p.image === null));
-  assert.ok(r.human_interventions.some((h) => /photo exploitable/.test(h.what)));
+  assert.ok(r.human_interventions.some((h) => h.who === 'système médias' && h.when === 'diagnostic interne' && /source média inexploitable/.test(h.what)));
+  assert.ok(r.human_interventions.every((h) => h.who !== 'client'), 'the client is never asked to confirm the source photo');
 });
 
 test('stage contract: HABB rules refuse forbidden decor, invented claims and a personalisation that is not offered', () => {
