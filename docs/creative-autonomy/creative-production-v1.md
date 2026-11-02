@@ -77,3 +77,7 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 **Evidence**: `test/creative-product-media.test.js` (17 tests, adversarial), `test/creative-shopify-e2e.test.js` (3 tests: the whole customer chain through the real Python engines, the real critic port and the real scene engine, against a fetch double). Simulated success is not production readiness: no real image model, Shopify call or visual judgement ran.
 
 **Still open**: TYESO 750 ml source photo (see `tyeso-750ml-media-remediation.md`); NDR-D02 exception (ADR 0007 Part B); the customer-facing UI that calls `CREATIVE.produce_product_visual`; the admin screen presenting the tenant policy for acceptance (storage and acceptance function exist, not applied to any shared database).
+
+## Nordla Créateur — local demonstration (simulated providers)
+`npm run creator:demo` → http://127.0.0.1:4420 (loopback only, Python with numpy/Pillow/scipy required). Product and variant → Nordla retrieves the verified photo itself → objective → `CREATIVE.produce_product_visual` → the result is shown → accept, revision or reject. Nothing is published.
+Real: the screen and API (`src/creative-autonomy/creator/`), the hub route, photo selection, ledger rules (in memory), creative brain, local engines, technical checks. **Simulated**: the providers (fetch double, no network, no cost), the Shopify catalog (demonstration product "TEST — Gourde démo 500 ml"; the Blanc variant has no photo and is refused). The images are NOT provider-generated. Tests: `test/creator-app.test.js`.
