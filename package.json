@@ -6,6 +6,7 @@
   "description": "Generic retail AI core - runtime sync + deterministic sales/profit engine (Phase 2A).",
   "scripts": {
     "test": "node --test test/*.test.js",
+    "test:supported": "node scripts/run-test-suite.mjs",
     "sync:catalog": "node src/sync/index.js catalog",
     "sync:inventory": "node src/sync/index.js inventory",
     "sync:cost": "node src/sync/index.js cost",
