@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PY = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
-const SLOW = { timeout: 900_000 };
+const pythonReady = (() => { try { execFileSync(PY, ['-c', 'import numpy, PIL, scipy'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+const SLOW = { skip: !pythonReady && `the local engines need Python with numpy, Pillow and scipy (NORDLA_PYTHON=${PY})`, timeout: 900_000 };
 function run(scenario) {
   const w = mkdtempSync(join(tmpdir(), `shopify-e2e-${scenario}-`));
   execFileSync(PY, [join(ROOT, 'test/helpers/scene_fixtures.py'), 'photo', join(w, 'gourde.jpg')]);

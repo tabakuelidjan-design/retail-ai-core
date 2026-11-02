@@ -33,6 +33,9 @@ const read = ({ productMedia = [live20, good, pink], variantMedia = [], title = 
 });
 const pick = (data, extra = {}) => chooseVerifiedProductImages({ ...data, productId: PID, variantId: data.productVariant.id, ...extra });
 const PY = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+const pillowReady = (() => { try { execFileSync(PY, ['-c', 'import PIL'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+// the source photo is validated by a full Pillow decode (the engines' own dependency): without Pillow these tests are skipped, never faked
+const PIL = { skip: !pillowReady && `the full image decode needs Python with Pillow (NORDLA_PYTHON=${PY})` };
 const pngCache = new Map();
 /** a REAL, fully decodable PNG (a 44-byte header is not an image) */
 function png(width = 2000, height = 2000) {
@@ -137,7 +140,7 @@ test('only the connector verified for THIS tenant, now, is used; a Shopify error
 });
 
 // ---------------------------------------------------------------- bytes and fallback
-test('download: CDN host only, no redirect, real type and dimensions, and the bytes must decode completely', async () => {
+test('download: CDN host only, no redirect, real type and dimensions, and the bytes must decode completely', PIL, async () => {
   const [c] = pick(read({ productMedia: [good] }));
   const calls = [];
   const got = await fetchVerifiedProductImage(c, { fetchImpl: async (url, init) => { calls.push(init); return new Response(png()); } });
@@ -147,7 +150,7 @@ test('download: CDN host only, no redirect, real type and dimensions, and the by
   await assert.rejects(() => fetchVerifiedProductImage(c, { fetchImpl: async () => new Response(Buffer.from(png()).subarray(0, 60)) }), (e) => e.code === MEDIA_ERROR.INVALID_IMAGE_BYTES);
 });
 
-test('fallback stays inside the variant: a corrupt first image falls back to the next one of the SAME variant; all corrupt -> no image, attempts recorded', async () => {
+test('fallback stays inside the variant: a corrupt first image falls back to the next one of the SAME variant; all corrupt -> no image, attempts recorded', PIL, async () => {
   const data = read({ productMedia: [good, goodB, pink] });
   const fetchImpl = async (url) => new Response(url.includes('_b.jpg') ? png(1500, 1500) : Buffer.from(png()).subarray(0, 60));
   const staged = await stageVerifiedShopifyMedia({ shopify: shop(data), request: REQ, workdir: tmp('nordla-fb-'), fetchImpl });
@@ -188,7 +191,7 @@ function harness({ data = read({ price: '24.90', stock: 3, productMedia: [good] 
   return { args, seen, journal };
 }
 
-test('end of the chain: photo chosen and validated, SHA computed, standing policy applied, both providers built FROM the bytes and checked, fresh price, nothing published', async () => {
+test('end of the chain: photo chosen and validated, SHA computed, standing policy applied, both providers built FROM the bytes and checked, fresh price, nothing published', PIL, async () => {
   const { args, seen, journal } = harness();
   const r = await runAutonomousWithShopifyMedia(args);
   assert.equal(r.status, 'PROPOSALS_READY_FOR_OWNER'); assert.equal(r.published, false);
@@ -209,7 +212,7 @@ test('end of the chain: photo chosen and validated, SHA computed, standing polic
   assert.equal(selection.variant_id, BLACK);
 });
 
-test('P0-C fail closed: preconstructed services are refused; a provider bound to another SHA, an engine without binding, or an unconnected scene stop BEFORE the run', async () => {
+test('P0-C fail closed: preconstructed services are refused; a provider bound to another SHA, an engine without binding, or an unconnected scene stop BEFORE the run', PIL, async () => {
   const pre = harness();
   await assert.rejects(() => runAutonomousWithShopifyMedia({ ...pre.args, ports: { text: null } }), TypeError);
   await assert.rejects(() => runAutonomousWithShopifyMedia({ ...pre.args, engines: {} }), TypeError);
@@ -220,7 +223,7 @@ test('P0-C fail closed: preconstructed services are refused; a provider bound to
   }
 });
 
-test('standing policy refusals stop before any provider is built: no policy, revoked, other tenant, spend above the cap, processing not covered', async () => {
+test('standing policy refusals stop before any provider is built: no policy, revoked, other tenant, spend above the cap, processing not covered', PIL, async () => {
   const cases = [
     [null, 'NO_POLICY'], [{ ...POLICY, revoked: true }, 'POLICY_REVOKED'], [{ ...POLICY, tenant: { merchant_id: 'other' } }, 'TENANT_MISMATCH'],
     [{ ...POLICY, spend: { currency: 'EUR', per_run_max: 0.2, monthly_max: 5 } }, 'SPEND_LIMIT'],
@@ -235,7 +238,7 @@ test('standing policy refusals stop before any provider is built: no policy, rev
   }
 });
 
-test('the monthly cap counts earlier runs from the journal', async () => {
+test('the monthly cap counts earlier runs from the journal', PIL, async () => {
   const h = harness({ policy: { ...POLICY, spend: { currency: 'EUR', per_run_max: 0.5, monthly_max: 0.9 } } });
   await runAutonomousWithShopifyMedia(h.args);
   const second = { ...h.args, runId: 'run-2', workdir: tmp('nordla-run2-') };
