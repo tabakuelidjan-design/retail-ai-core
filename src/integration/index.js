@@ -13,6 +13,7 @@ import { analyzePurchase, compareScenarios } from '../finance/purchase-analysis.
 import { assess as sourcingAssess } from '../sourcing/core/case.js';
 import { dealIntelligence, compareDeals } from '../sourcing/core/field/deal.js';
 import { runCreativeEndToEnd } from '../creative-e2e/index.js';
+import { runAutonomousWithShopifyMedia } from '../creative-autonomy/product-media.js';
 import { eurOfSupplier } from '../finance/currency.js';
 
 export * from './constants.js';
@@ -40,9 +41,12 @@ export function createIntegrationStore() {
  *  brand                { tenant_id, brand_ref, approved_claims:[{ref, wording}] }  -> Branding
  *  creativeWorld        ports + base brief/request for Creative, or a factory returning a fresh one per run (fakes in tests; no provider is ever created here)
  *  analytics            { explainChange(args) }               -> optional; absent => MODULE_NOT_AVAILABLE
+ *  creativeProduction   { shopify, ledger, policyId, providers, runCeilingEur, brand, workdirFor(run_id), nonProduction? } -> the customer
+ *                       "create a visual for this product" workflow (src/creative-autonomy/product-media.js). Absent => the command is not available.
+ *                       providers MUST be simulated (providers.simulated === true): live provider execution is deferred by NDR-D02 and blocked here.
  *  unavailable          modules to simulate as down
  */
-export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, unavailable = [], now = () => new Date().toISOString() }) {
+export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, creativeProduction = null, analytics = null, unavailable = [], now = () => new Date().toISOString() }) {
   const registry = createIdentityRegistry({ tenant_id });
   const ledger = createTraceLedger({ tenant_id, now });
   const store = createIntegrationStore();
@@ -90,7 +94,27 @@ export function createIntegration({ tenant_id, finance = null, readOnHand = () =
     [M.MARKETING]: { available: avail(M.MARKETING), commands: {
       build_campaign_contract: (a) => { const c = buildCampaignContract({ tenant_id, brand, availability: availabilityFor(a.product_ref), ...a }); store.campaigns.set(c.campaign_ref, c); return c; },
     } },
-    [M.CREATIVE]: { available: avail(M.CREATIVE, Boolean(creativeWorld)), commands: {
+    [M.CREATIVE]: { available: avail(M.CREATIVE, Boolean(creativeWorld) || Boolean(creativeProduction)), commands: {
+      // The customer picked a product variant and asked for a visual. Nordla finds and verifies the photo itself (no source-photo question, ever),
+      // checks the tenant's accepted policy, reserves the ceiling, builds providers bound to that photo, creates, checks and returns the finished
+      // result for the customer's review. Nothing is published.
+      produce_product_visual: async ({ product_id, variant_id, expected_variant_title = null, objective, format = 'INSTAGRAM_FEED_4_5', run_id }) => {
+        if (!creativeProduction) fail(ERR.MODULE_NOT_AVAILABLE, 'creative production is not configured');
+        if (creativeProduction.providers?.simulated !== true) fail(ERR.PROVIDER_CALL_REFUSED, 'NDR-D02: real provider execution is deferred; only simulated providers can run');
+        if (typeof objective !== 'string' || !objective.trim()) fail(ERR.HANDOFF_INVALID, 'a commercial objective is required');
+        const c = creativeProduction;
+        let r;
+        try {
+          r = await runAutonomousWithShopifyMedia({ shopify: c.shopify, request: { merchantId: tenant_id, productId: product_id, variantId: variant_id, expectedVariantTitle: expected_variant_title },
+            objective, brand: c.brand, format, workdir: c.workdirFor(run_id), ledger: c.ledger, policyId: c.policyId, providers: c.providers, runCeilingEur: c.runCeilingEur,
+            runId: run_id, nonProduction: c.nonProduction === true, ...(c.fetchImpl ? { fetchImpl: c.fetchImpl } : {}), ...(c.now ? { now: c.now } : {}) });
+        } catch (e) { fail(ERR.HANDOFF_INVALID, `${e.code ?? 'CREATIVE_FAILED'}: ${String(e.message).slice(0, 200)}`, { code: e.code ?? null }); }
+        const shown = (r.proposals ?? []).filter((p) => p.image && p.technical_quality?.state === 'PASS');
+        return { run_id, status: r.status, published: false, customer_review: 'PENDING', live_provider: false,
+          product_id, variant_id, media_id: r.media_selection.media_id, source_sha256: r.media_selection.sha256, policy_version: r.policy.version,
+          results: shown.map((p) => ({ image: p.image, technical: p.technical_quality.state, creative: p.creative_quality?.state ?? null })),
+          withheld: (r.proposals ?? []).length - shown.length, reservation: r.reservation };
+      },
       produce_draft: async ({ campaign_ref, run_id, at, ceiling_eur = 2 }) => {
         const contract = store.campaigns.get(campaign_ref); if (!contract) fail(ERR.HANDOFF_INVALID, 'unknown campaign contract');
         const world = typeof creativeWorld === 'function' ? await creativeWorld() : creativeWorld; // scripted ports are single-use: one fresh world per run

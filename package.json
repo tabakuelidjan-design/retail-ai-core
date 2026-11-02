@@ -6,6 +6,7 @@
   "description": "Generic retail AI core - runtime sync + deterministic sales/profit engine (Phase 2A).",
   "scripts": {
     "test": "node --test test/*.test.js",
+    "test:supported": "node scripts/run-test-suite.mjs",
     "sync:catalog": "node src/sync/index.js catalog",
     "sync:inventory": "node src/sync/index.js inventory",
     "sync:cost": "node src/sync/index.js cost",
@@ -47,7 +48,8 @@
     "benchmark:ask": "node benchmark/ask/run.js",
     "sourcing:e2e:terrain": "node test/e2e/sourcing-terrain-v2.e2e.js",
     "sourcing:e2e:price": "node test/e2e/sourcing-price-currency.e2e.js",
-    "growth": "node src/growth/server/serve.js"
+    "growth": "node src/growth/server/serve.js",
+    "creator:demo": "node scripts/creator-demo.mjs"
   },
   "engines": {
     "node": ">=20"

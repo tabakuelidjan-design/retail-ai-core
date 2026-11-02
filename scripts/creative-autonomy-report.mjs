@@ -4,8 +4,12 @@
 //   node scripts/creative-autonomy-report.mjs <trial outDir> <productKey> [planId]   ->  <outDir>/<productKey>/RAPPORT.md
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { hasForbidden } from '../src/creative-autonomy/stage-contract.js';
-import { inventedCapabilities } from '../src/creative-autonomy/habb-guard.js';
+import { hasForbidden as __hasForbidden } from '../src/creative-autonomy/stage-contract.js';
+import { inventedCapabilities } from '../src/creative-autonomy/brand-guard.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+const hasForbidden = (s) => __hasForbidden(s, HABB.forbidden_decor); // HABB's rules = its tenant profile
 
 const [outDir, productKey, planIdArg] = process.argv.slice(2);
 const work = join(outDir, productKey);

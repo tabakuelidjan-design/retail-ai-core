@@ -1,4 +1,4 @@
-// THE AUTONOMOUS ROUTE. Input from the owner: a Shopify product snapshot, a commercial objective, HABB's brand rules, a format, the product photo.
+// THE AUTONOMOUS ROUTE. Input from the owner: a Shopify product snapshot, a commercial objective, the tenant's brand (creative profile), a format, the product photo.
 // Nordla then, WITHOUT a human writing a concept, a headline or a position:
 //   1 BRIEF       builds the Brain brief from verified facts only                         (deterministic)
 //   2 EXAMINE     measures the photo and cuts the product out, or says why it cannot       (local engine)
@@ -6,7 +6,7 @@
 //   4 FRAME       frames the creative problem                                              (language model, existing Brain)
 //   5 IDEATE      invents 3 distinct concepts                                              (language model, existing Brain + distinctness guard)
 //   6 ART_DIRECT  an art direction per concept                                             (language model, existing Brain)
-//   7 STAGE       the mise en scène per concept, in a closed vocabulary + HABB rules        (language model, new contract)
+//   7 STAGE       the mise en scène per concept, in a closed vocabulary + tenant rules      (language model, new contract)
 //   8 RENDER      the set in Blender from the STAGE (no product pixels involved)            (local engine)
 //   9 COMPOSE     the real photo placed untouched + bounded light layers + text             (local engine) -> fidelity proof + technical checks
 //  10 CRITIC      concept strength on the rendered image                                   (vision model, existing Brain)
@@ -15,18 +15,20 @@
 // A stage whose engine is not connected STOPS the run with PROVIDER_NOT_CONNECTED. Nothing is ever simulated in place of a missing engine.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, copyFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assessBrief } from '../creative-brain/brief-assessment.js';
 import { observeBrief, createProblemFramer } from '../creative-brain/problem-frame.js';
 import { createConceptDirector } from '../creative-brain/concept.js';
 import { createArtDirector } from '../creative-brain/art-direction.js';
-import { createConceptCritic } from '../creative-brain/concept-critic.js';
+import { createConceptCritic, creativeQualityState } from '../creative-brain/concept-critic.js';
 import { createConceptSelector } from '../creative-brain/concept-selection.js';
 import { buildAutonomousBrief } from './brief.js';
-import { createStageDirector, normalizeStage, HABB_ART_DIRECTION_HINT } from './stage-contract.js';
-import { assertConceptsHabbRules, assertArtDirectionGuard, assertStageGuard, commercialBriefNote } from './habb-guard.js';
+import { createStageDirector, normalizeStage } from './stage-contract.js';
+import { assertConceptsBrandRules, assertArtDirectionGuard, assertStageGuard, commercialBriefNote } from './brand-guard.js';
+import { resolveBrandProfile, artDirectionHintFor } from './brand-profile.js';
 import { BRAIN_ERROR } from '../creative-brain/validation.js';
 import { PROVIDER_STATE, WHAT_IS_NEEDED } from './providers.js';
 
@@ -99,14 +101,27 @@ export function scopedMerge(originalText, repairText, field) {
 }
 
 /** Default local engines: real processes, zero cost. Tests may replace them. */
+const EXAM_FILES = ['examen.json', 'produit_rgba.png'];
 export function localEngines({ python = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), blenderPython = process.env.NORDLA_BLENDER_PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), renderScale = 0.5, samples = 32 } = {}) {
   const py = async (bin, args) => (await run$(bin, args, { maxBuffer: 1 << 24, timeout: 900_000 })).stdout;
+  // The examination is deterministic (same bytes -> byte-identical examen.json, cut-out and report; verified): a revision or a second creation
+  // of the SAME photo reuses it instead of re-examining (one Python start and ~0.8 s). Keyed by the photo's SHA-256, never by its path.
+  const examined = new Map(); // sha256 -> { dir, result }
   return {
     name: { examine: 'examine_product.py', render: 'render_stage.py (Blender Cycles)', compose: 'compose_stage.py' },
     binding: Object.freeze({ transmits_source_media: false, source_sha256: null }), // local only: nothing leaves the machine
     async examine({ photoPath, outDir }) {
+      const key = createHash('sha256').update(readFileSync(photoPath)).digest('hex');
+      const hit = examined.get(key);
+      if (hit && EXAM_FILES.every((f) => existsSync(join(hit.dir, f)))) {
+        mkdirSync(outDir, { recursive: true });
+        for (const f of EXAM_FILES) copyFileSync(join(hit.dir, f), join(outDir, f));
+        return structuredClone(hit.result);
+      }
       const out = await py(python, [join(SCRIPTS, 'examine_product.py'), photoPath, outDir]);
-      return JSON.parse(out.trim().split('\n').pop());
+      const result = JSON.parse(out.trim().split('\n').pop());
+      examined.set(key, { dir: outDir, result: structuredClone(result) });
+      return result;
     },
     async render({ stagePath, examPath, rgbaPath, canvas, outPath }) {
       const w = Math.round(canvas.width * renderScale); const h = Math.round(canvas.height * renderScale);
@@ -141,11 +156,40 @@ const NEEDS_BRAIN = new Set(['LOW_TEXT_CONTRAST']);
 const stripIds = ({ stage_id, concept_id, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
 const flagged = (d) => d.outcome === 'FAIL' || d.outcome === 'REVIEW_REQUIRED';
-function creativeQuality(critique) {
-  if (!critique) return { state: 'NOT_MEASURED', reason: 'critique visuel non connecté', dimensions: [] };
+// THE INDEPENDENT JUDGE (no new agent): seven axes, each from the evidence that can actually support it. Deterministic measures judge what is
+// measurable; the concept critic judges what it saw ON THE RENDERED IMAGE (its evidence is kept); an axis nothing measured is NOT_MEASURABLE,
+// never a pass. A technically correct image is never called premium: premium_quality_implied is always false (only the owner approves).
+const axis = (verdict, source, evidence = null) => ({ verdict, source, evidence });
+const fromDims = (dims, names) => {
+  const ds = (dims ?? []).filter((d) => names.includes(d.dimension));
+  if (!ds.length || ds.some((d) => d.outcome === 'NOT_MEASURABLE') || ds.some((d) => !String(d.evidence ?? '').trim())) return axis('NOT_MEASURABLE', ds.length ? 'concept critic (rendered image)' : 'none', null);
+  const v = ds.some((d) => d.outcome === 'FAIL') ? 'FAIL' : ds.some((d) => d.outcome === 'REVIEW_REQUIRED') ? 'REVIEW_REQUIRED' : 'PASS';
+  return axis(v, 'concept critic (rendered image)', ds.map((d) => `${d.dimension}: ${d.evidence}`).join(' | '));
+};
+export function judgeProposal({ technical, critique }) {
+  const dims = critique?.dimensions ?? null;
+  return Object.freeze({
+    technical_correctness: axis(technical.defects.length ? 'FAIL' : 'PASS', 'deterministic checks (composition, text, frame)', technical.defects.length ? technical.defects.join(', ') : null),
+    product_fidelity: axis(technical.product_fidelity.pass ? 'PASS' : 'FAIL', 'deterministic pixel proof against the source photo', `max level difference ${technical.product_fidelity.max_level_difference_after_removing_layers ?? '?'}`),
+    creative_originality: fromDims(dims, ['DISTINCTIVENESS', 'WOW_FACTOR']),
+    storytelling_coherence: fromDims(dims, ['CONCEPT_STRENGTH', 'NARRATIVE_COHESION']),
+    premium_artistic_execution: fromDims(dims, ['EDITORIAL_SOPHISTICATION']),
+    brand_relevance: axis('NOT_MEASURABLE', 'none', 'no brand-relevance judgment on the rendered image is connected in this route'),
+    commercial_effectiveness: axis('NOT_MEASURABLE', 'none', 'judged by the owner and, later, by measured results; SELECT judged the concept, not the image'),
+    premium_quality_implied: false,
+  });
+}
+function creativeQuality(critique, technical = null) {
+  const canonical = technical ? creativeQualityState({ critique: null, conceptCritique: critique ?? null,
+    deterministic: { preflight: technical.defects.length ? 'FAIL' : 'PASS', fidelity: technical.product_fidelity.pass ? 'PASS' : 'FAIL', guardian: 'PASS' } }) : null;
+  const extra = { ...(canonical ? { canonical, execution_critique: 'NOT_CONNECTED' } : {}) };
+  if (!critique) return { state: 'NOT_MEASURED', reason: 'critique visuel non connecté', dimensions: [], ...extra };
   const dims = critique.dimensions;
-  if (dims.every((d) => d.outcome === 'NOT_MEASURABLE')) return { state: 'NOT_MEASURED', reason: dims[0]?.evidence ?? null, dimensions: dims };
-  return { state: dims.some(flagged) ? 'CREATIVELY_INSUFFICIENT' : 'CREATIVELY_SUFFICIENT_AWAITING_OWNER', dimensions: dims };
+  if (dims.every((d) => d.outcome === 'NOT_MEASURABLE')) return { state: 'NOT_MEASURED', reason: dims[0]?.evidence ?? null, dimensions: dims, ...extra };
+  if (dims.some(flagged)) return { state: 'CREATIVELY_INSUFFICIENT', dimensions: dims, ...extra };
+  // a critique that could not judge every dimension proves nothing about the others: not measured, never "sufficient"
+  if (dims.some((d) => d.outcome === 'NOT_MEASURABLE')) return { state: 'NOT_MEASURED', reason: 'PARTIALLY_MEASURED', dimensions: dims, ...extra };
+  return { state: 'CREATIVELY_SUFFICIENT_AWAITING_OWNER', dimensions: dims, ...extra };
 }
 function technicalQuality(report) {
   const fid = report.fidelity;
@@ -174,6 +218,7 @@ function technicalQuality(report) {
  *   workdir: where every intermediate file is kept (the run is fully inspectable)
  */
 export async function runAutonomous({ input, ports, engines = localEngines(), workdir, now = () => Date.now(), mode = 'FULL', maxRepairCalls = 0, produce = 'ALL' }) {
+  const profile = resolveBrandProfile(input?.brand); // the ACTIVE tenant's creative rules (GENERIC when it has none): never another merchant's
   if (!Number.isInteger(maxRepairCalls) || maxRepairCalls < 0) throw new TypeError('maxRepairCalls must be a non-negative integer');
   // produce: 'ALL' = every concept is art-directed, staged and rendered (the original route); 'SELECTED' = only the concept Nordla's own SELECT stage chose
   // (premium path: one paid scene for the concept Nordla judged best, never simply the first of the list)
@@ -190,7 +235,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     { when: 'avant le passage', who: 'opérateur', what: 'a défini le produit, l\'objectif commercial et le format', creative: false },
   ];
   let textCost = 0; let lastModel = null; let lastCost = 0; let currentStep = null; let brainCall = 0; let repairNote = null; let callsInStep = 0; let lastReplyText = null; let repairScope = null; let lastMerge = null; let briefNote = null;
-  // HABB's commercial brief, repeated to the stages that do not see the public facts (set once the brief exists)
+  // the merchant's commercial brief, repeated to the stages that do not see the public facts (set once the brief exists)
   const BRIEF_STAGES = new Set(['IDEATE', 'SELECT', 'ART_DIRECT', 'IDEATE_REPAIR', 'SELECT_REPAIR', 'ART_DIRECT_REPAIR']);
   const brainDir = join(workdir, 'brain-calls');
   const metered = ports.text ? async (original) => {
@@ -280,7 +325,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
   }).then((v) => v);
   briefNote = commercialBriefNote(brief.public_facts);
   const factsPath = join(workdir, 'faits.json');
-  writeFileSync(factsPath, JSON.stringify({ product_title: facts.product_title, variant: facts.variant, price: facts.price, merchant: input.merchant ?? 'HABB, Namur', personalisation_offered: facts.personalisation_offered, source: facts.source }, null, 1));
+  writeFileSync(factsPath, JSON.stringify({ product_title: facts.product_title, variant: facts.variant, price: facts.price, merchant: input.merchant ?? profile.merchant_display ?? null, personalisation_offered: facts.personalisation_offered, source: facts.source }, null, 1));
   if (trace.at(-1).outcome !== 'PROCEED') return finish(RUN_STATUS.STOPPED_BRIEF_INCOMPLETE);
 
   // 2 EXAMINE
@@ -314,10 +359,10 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     progress.frame = frame;
 
     // 5 IDEATE
-    // IDEATE: the Brain's distinctness guard, then HABB's guard on every concept (forbidden decor, invented capabilities) as early as the idea
-    const concepts = await repairable({ step: 'IDEATE', component: 'createConceptDirector (3, distinctness guard) + HABB guard', module: 'src/creative-brain/concept.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
+    // IDEATE: the Brain's distinctness guard, then the tenant's brand guard on every concept (forbidden decor, invented capabilities) as early as the idea
+    const concepts = await repairable({ step: 'IDEATE', component: 'createConceptDirector (3, distinctness guard) + brand guard', module: 'src/creative-brain/concept.js, src/creative-autonomy/brand-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
       const { concepts: c } = await createConceptDirector({ complete: metered, count: { min: 3, max: 3 } }).ideate({ frame });
-      assertConceptsHabbRules(c, facts);
+      assertConceptsBrandRules(c, facts, profile);
       return { outcome: 'THREE_DISTINCT_CONCEPTS', detail: c.map((x) => ({ concept_id: x.concept_id, central_idea: x.central_idea, visual_metaphor: x.visual_metaphor })), value: c };
     });
     progress.concepts = concepts;
@@ -330,7 +375,7 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     progress.selection = selection;
 
     const artDirector = createArtDirector({ complete: metered });
-    const stageDirector = createStageDirector({ complete: metered });
+    const stageDirector = createStageDirector({ complete: metered, profile });
     const critic = ports.vision ? createConceptCritic({ vlm: ports.vision }) : null;
     const proposals = progress.proposals;
 
@@ -348,16 +393,16 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
     for (const concept of toProduce) {
       const cid = concept.concept_id;
       const dir = join(workdir, cid); mkdirSync(dir, { recursive: true });
-      // ART_DIRECT gets HABB's hard rules from its first call, and its answer is checked against them (the Brain's contract does not know HABB)
-      const art = await repairable({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector + HABB guard', module: 'src/creative-brain/art-direction.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
-        const { art_direction: a } = await artDirector.direct({ frame, concept, hints: [HABB_ART_DIRECTION_HINT] });
-        assertArtDirectionGuard(a, facts);
+      // ART_DIRECT gets the tenant's hard rules from its first call, and its answer is checked against them (the Brain's contract does not know the tenant)
+      const art = await repairable({ step: 'ART_DIRECT', concept_id: cid, component: 'createArtDirector + brand guard', module: 'src/creative-brain/art-direction.js, src/creative-autonomy/brand-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
+        const { art_direction: a } = await artDirector.direct({ frame, concept, hints: [artDirectionHintFor(profile)].filter(Boolean) });
+        assertArtDirectionGuard(a, facts, profile);
         return { outcome: 'DIRECTED', detail: a, value: a };
       });
       progress.art_directions[cid] = art;
-      let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector + HABB guard', module: 'src/creative-autonomy/stage-contract.js, src/creative-autonomy/habb-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
+      let stage = await repairable({ step: 'STAGE', concept_id: cid, component: 'createStageDirector + brand guard', module: 'src/creative-autonomy/stage-contract.js, src/creative-autonomy/brand-guard.js', kind: KIND.LLM, provider: textProvider }, async () => {
         const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts });
-        assertStageGuard(s, facts);
+        assertStageGuard(s, facts, profile);
         return { outcome: 'STAGED', detail: s, value: s };
       });
       progress.stages[cid] = stage;
@@ -422,13 +467,13 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
         }
         if (fix && (!hints.length || sceneMode)) {
           stage = await step({ step: 'REFINE', concept_id: cid, round: round + 1, component: 'deterministicFix (placement du texte, cadrage)', module: 'src/creative-autonomy/run.js', kind: KIND.DETERMINISTIC, provider: PROVIDER_STATE.NONE }, async () => {
-            const s = normalizeStage({ ...stripIds(stage), ...fix }, { concept, personalisation_offered: facts.personalisation_offered });
+            const s = normalizeStage({ ...stripIds(stage), ...fix }, { concept, personalisation_offered: facts.personalisation_offered, profile });
             return { outcome: 'FIXED_WITHIN_LIMITS', detail: { defects, change: fix, ...(sceneMode && hints.length ? { reported_to_owner_not_applied: hints } : {}) }, value: s };
           });
         } else if (hints.length) {
           stage = await step({ step: 'REFINE', concept_id: cid, round: round + 1, component: 'createStageDirector (re-ask with hints)', module: 'src/creative-autonomy/stage-contract.js', kind: KIND.LLM, provider: textProvider }, async () => {
             const { stage: s } = await stageDirector.stage({ frame, concept, artDirection: art, facts, hints });
-            assertStageGuard(s, facts);
+            assertStageGuard(s, facts, profile);
             return { outcome: 'RESTAGED', detail: { hints }, value: s };
           });
         } else break;
@@ -438,7 +483,8 @@ export async function runAutonomous({ input, ports, engines = localEngines(), wo
       proposals.push({
         concept, art_direction: art, stage, image: imagePath, rounds: round + 1, blender_capabilities_used: renderInfo?.blender_capabilities_used ?? null,
         grammar_gap: { art_direction_elements: (art.narrative_elements ?? []).map((e) => e.element), wanted_but_not_available: stage.wanted_but_not_available ?? [] },
-        technical_quality: technicalQuality(report), creative_quality: creativeQuality(critique),
+        technical_quality: technicalQuality(report), creative_quality: creativeQuality(critique, technicalQuality(report)),
+        judgement: judgeProposal({ technical: technicalQuality(report), critique }),
         text_for_owner_approval: { headline: stage.headline, facts_lines: report.text_used.facts_lines },
         scene: renderInfo?.render_backend === 'SCENE_AROUND_PRODUCT' ? { model: renderInfo.model, request_id: renderInfo.request_id, chosen_variant: renderInfo.chosen_variant, variants: renderInfo.variants, image_cost_eur: renderInfo.image_cost_eur, images_billed: renderInfo.images_billed, source_photo_transmitted: renderInfo.source_photo_transmitted } : null,
         selected_by_nordla: selection?.selection?.concept_id === cid,

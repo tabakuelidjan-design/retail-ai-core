@@ -1,0 +1,24 @@
+name: creative-ledger-pg
+# Real PostgreSQL 17 bench for the Creative media policy / spending ledger (migration 20261102120000, ADR 0007-A, still PROPOSED).
+# Proves on a real database: admin-only acceptance, immutable audit, atomic reservations under concurrency, idempotent retries, tenant isolation,
+# evidence-backed transmission lifecycle, reconciliation and revocation. No secret, no production access: the database is a throw-away container
+# on the runner. It reuses the Finance bench harness (test/pg) WITHOUT changing the Finance suite list (test/pg/run.mjs, owned by Finance).
+on:
+  pull_request:
+    paths: ['supabase/migrations/**', 'src/creative-autonomy/creative-ledger.js', 'test/pg/97-creative-ledger.pg.test.js', '.github/workflows/creative-ledger-pg.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  pg17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci --prefix test/pg
+      - run: node test/pg/pgctl.mjs up
+      - run: node --test --test-concurrency=1 test/pg/97-creative-ledger.pg.test.js
+      - if: always()
+        run: node test/pg/pgctl.mjs down

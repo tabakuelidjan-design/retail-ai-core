@@ -3,14 +3,16 @@
 // any human writing positions. It replaces the "product slot + text column" recipe for autonomous proposals: the concept chooses the set, the light,
 // the scale and the format share of the product; the engine only executes.
 //
-// What the vocabulary allows is wide on purpose (backdrops, light kinds, props, an extruded word, plinths, camera heights) and narrow where HABB's rules
-// are hard: no beige or cream tone, no gold, no hearts, leaves or foliage, no fake luxury, no text that invents a claim, no promise of personalisation
-// for a product that is not personalised. Every prop carries a reason that must be argued in the concept.
+// What the vocabulary allows is wide on purpose (backdrops, light kinds, props, an extruded word, plinths, camera heights) and narrow where the rules
+// are hard. UNIVERSAL rules (every tenant): no text that invents a claim, no figure in the headline, no placeholder headline, no promise of
+// personalisation for a product that is not personalised. TENANT rules (the active tenant's creative profile, src/creative-autonomy/brand-profile.js):
+// its forbidden visual elements and its brand tones. Every prop carries a reason that must be argued in the concept.
 import { list, obj, renderContract, renderRules, text, validateSpec, word } from '../creative-brain/contract.js';
 import { conceptualWords } from '../creative-brain/concept.js';
 import { principlesAsText, principlesFor, REASONING_STAGE } from '../creative-brain/knowledge.js';
 import { askAndNormalize } from '../creative-brain/model-port.js';
 import { BRAIN_ERROR, deepFreeze, deriveId, fail } from '../creative-brain/validation.js';
+import { resolveBrandProfile } from './brand-profile.js';
 
 const V = (...names) => Object.freeze(Object.fromEntries(names.map((n) => [n, n])));
 export const BACKDROP = V('SEAMLESS_SWEEP', 'INFINITE_DARK', 'WALL_AND_FLOOR');
@@ -43,12 +45,9 @@ export const STAGE_SPEC = obj({
   wanted_but_not_available: list(text({ max: 200 }), { min: 0, max: 5 }),
 }, { optional: ['wanted_but_not_available'] });
 
-// HABB's hard visual rules, as words that may not appear anywhere in a creative decision (FR + EN). Matched as WHOLE words, plurals and feminine forms included
-// (so "Luxembourg", "sandwich", "goldfish" or "leaflet" are not refused), after Unicode normalisation (NFC, invisible characters removed).
-export const FORBIDDEN_DECOR = Object.freeze(['beige', 'crème', 'creme', 'cream', 'sable', 'sand', 'sandy', 'écru', 'ecru', 'taupe', 'ivoire', 'ivory', 'cœur', 'coeur', 'heart', 'hearts',
-  'feuille', 'feuillage', 'leaf', 'leafy', 'leaves', 'foliage', 'fougère', 'fern', 'frond', 'eucalyptus', 'botanical', 'botanique', 'végétation', 'vegetation', 'végétal', 'vegetal', 'végétaux', 'vegetaux', 'greenery', 'verdure',
-  'doré', 'dore', 'dorure', 'gold', 'golden', 'gilded', 'gilt', 'paillette', 'glitter', 'luxe', 'luxury', 'luxueux', 'luxueuse', 'marbre', 'marbré', 'marble', 'velours', 'velvet', 'pétale', 'petal', 'bokeh']);
 const PERSONALISATION_WORDS = /(personnalis|grav|ton nom|votre nom|prénom|prenom|initiales|custom|engrav|monogram|à ton image|imprimé pour)/i;
+// placeholder copy a model (or a test double) may leave in a headline: never shown as a proposal
+const PLACEHOLDER_HEADLINE = /(^|\s)(titre|title|headline|accroche|slogan|texte|text)\s+(de\s+|d['’])?(test|exemple|example|placeholder|démo|demo)(\s|$)|lorem\s+ipsum|placeholder|\btbd\b|\bxxx+\b|(votre|ton|your)\s+(texte|titre|text|headline)\s+(ici|here)|^(titre|title|headline|test)$/iu;
 const CLAIM_WORDS = /(meilleur|best|n°\s?1|numéro un|garanti|guarantee|100\s?%|isotherme|insulated|24\s?h|12\s?h|incassable|unbreakable|gratuit|free)/i;
 
 /** NFC + invisible characters removed: "be\u200Bige" and a decomposed "cre\u0300me" are the same words as "beige" and "crème". */
@@ -66,35 +65,35 @@ const NEGATION_IN_CLAUSE = new RegExp(`(?<![${L}])(sans|without|no|not|aucun|auc
 const clauseBefore = (t, index) => { const before = t.slice(0, index); let cut = 0; let m; const re = new RegExp(CLAUSE_BREAK.source, 'giu'); while ((m = re.exec(before))) cut = m.index + m[0].length; return before.slice(cut); };
 const NEGATION_BEFORE = { test: (beforeText) => NEGATION_IN_CLAUSE.test(clauseBefore(beforeText, beforeText.length)) };
 const wordRe = (w) => new RegExp(`(?<![${L}])${w}(s|x|e|es)?(?![${L}])`, 'iu');
-const WORD_RES = FORBIDDEN_DECOR.map((w) => [w, wordRe(w)]);
+const compiledLists = new WeakMap();
+const wordResOf = (words) => { let r = compiledLists.get(words); if (!r) { r = words.map((w) => [w, wordRe(w)]); compiledLists.set(words, r); } return r; };
 
-export const hasForbidden = (s) => {
+/** The first word of the TENANT's list `words` used (not negated) in `s`, or null. There is no global list: a tenant without prohibitions gets null. */
+export const hasForbidden = (s, words) => {
+  if (!Array.isArray(words) || !words.length) return null;
   let t = normalizeText(s);
   if (FOLIAGE_LEAVES.test(t)) return 'leaves'; // "dry leaves the size of hands" is foliage, whatever follows
   t = t.replace(SHEET_SENSE, ' ').replace(VERB_SENSE, ' ').replace(IDIOMS, ' ');
-  for (const [w, re] of WORD_RES) {
+  for (const [w, re] of wordResOf(words)) {
     const g = new RegExp(re.source, 'giu'); let m;
     while ((m = g.exec(t))) { if (!NEGATION_BEFORE.test(t.slice(0, m.index))) return w; }
   }
   return null;
 };
 
-/** HABB's hard rules, as a hint given to ART_DIRECT from its FIRST call (the art direction never sees the brand rules otherwise). */
-export const HABB_ART_DIRECTION_HINT = `HABB's hard visual rules apply to every field of the art direction (atmosphere, materials, light, narrative and secondary elements, rationale): none of these may appear: ${FORBIDDEN_DECOR.join(', ')}. You MAY list them in forbidden_decorative_noise.`;
-
 /**
- * HABB's forbidden visual elements, enforced on an ART_DIRECT answer (the Brain's own contract does not know HABB). Every field that can describe what is SEEN
- * is checked; forbidden_decorative_noise is not (it is where the model names what must NOT appear). Refusal: BRAIN_FORBIDDEN_CONTENT with the exact field.
+ * The TENANT's forbidden visual elements, enforced on an ART_DIRECT answer (the Brain's own contract does not know the tenant). Every field that can describe
+ * what is SEEN is checked; forbidden_decorative_noise is not (it is where the model names what must NOT appear). Refusal: BRAIN_FORBIDDEN_CONTENT with the field.
  */
-export function assertArtDirectionHabbRules(art) {
+export function assertArtDirectionBrandRules(art, profile = resolveBrandProfile({})) {
   const fields = [
     ['art_direction.atmosphere', art.atmosphere], ['art_direction.material_language', art.material_language], ['art_direction.lighting_intent', art.lighting_intent], ['art_direction.rationale', art.rationale],
     ...(art.narrative_elements ?? []).flatMap((e, i) => [[`art_direction.narrative_elements[${i}].element`, e.element], [`art_direction.narrative_elements[${i}].reason`, e.reason]]),
     ...(art.permitted_secondary_elements ?? []).map((e, i) => [`art_direction.permitted_secondary_elements[${i}]`, e]),
   ];
   for (const [field, value] of fields) {
-    const hit = hasForbidden(value);
-    if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${field} uses a word HABB forbids: ${hit}`, field, { problem: 'HABB_FORBIDDEN_DECOR', word: hit });
+    const hit = hasForbidden(value, profile.forbidden_decor);
+    if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${field} uses a word ${profile.brand_name ?? 'the merchant'} forbids: ${hit}`, field, { problem: 'BRAND_FORBIDDEN_DECOR', word: hit });
   }
   return art;
 }
@@ -105,8 +104,16 @@ const namedTexts = (v) => [['stage.headline', v.headline], ['stage.rationale', v
 const allTexts = (v) => namedTexts(v).map(([, t]) => t);
 
 export const STAGE_RULES = Object.freeze([
-  { id: 'NO_FORBIDDEN_DECOR', statement: `HABB's hard rules: no beige, cream, sand or ecru tone, no gold, no hearts, leaves or foliage, no marble or velvet, no fake luxury, no bokeh. None of these words may appear: ${FORBIDDEN_DECOR.map((w) => w.trim()).join(', ')}.`,
-    check: (v) => { for (const [field, t] of namedTexts(v)) { const hit = hasForbidden(t); if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `the stage uses a forbidden decor word: ${hit.trim()}`, field, { problem: 'FORBIDDEN_DECOR', word: hit.trim() }); } } },
+  { id: 'NO_FORBIDDEN_DECOR', statement: 'none of the merchant\'s forbidden visual elements (stated in the brief) may appear in any text of the stage.',
+    check: (v, ctx) => { for (const [field, t] of namedTexts(v)) { const hit = hasForbidden(t, ctx.profile.forbidden_decor); if (hit) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `the stage uses a forbidden decor word: ${hit.trim()}`, field, { problem: 'FORBIDDEN_DECOR', word: hit.trim() }); } } },
+  { id: 'BRAND_TONES_ONLY_WHEN_DEFINED', statement: 'BRAND_NAVY / BRAND_TERRACOTTA (tones and materials) name the merchant\'s own palette: use them only when the brief says the merchant has that colour.',
+    check: (v, ctx) => {
+      const ok = (x) => !/^BRAND_/.test(x) || Boolean(ctx.profile.tone_words?.[x]);
+      if (!ok(v.backdrop_tone)) fail(BRAIN_ERROR.RULE_VIOLATION, `${v.backdrop_tone} is not a colour of this merchant`, 'stage.backdrop_tone', { problem: 'BRAND_TONE_NOT_DEFINED' });
+      v.props.forEach((p, i) => { if (!ok(p.material)) fail(BRAIN_ERROR.RULE_VIOLATION, `${p.material} is not a colour of this merchant`, `stage.props[${i}].material`, { problem: 'BRAND_TONE_NOT_DEFINED' }); });
+    } },
+  { id: 'HEADLINE_IS_NOT_A_PLACEHOLDER', statement: 'the headline is real copy for this product: never a placeholder ("Titre de test", "Headline", "Lorem ipsum", "Votre texte ici", "TBD").',
+    check: (v) => { if (PLACEHOLDER_HEADLINE.test(normalizeText(v.headline))) fail(BRAIN_ERROR.RULE_VIOLATION, 'the headline is a placeholder, not copy', 'stage.headline', { problem: 'HEADLINE_IS_A_PLACEHOLDER' }); } },
   { id: 'HEADLINE_INVENTS_NO_CLAIM', statement: 'the headline is at most eight words, contains no digit, no price, no percentage, no superlative and no technical promise (insulation, duration, unbreakable, free); the price is shown by the system from the verified facts when show_price is YES.',
     check: (v) => {
       if (/[0-9€%]/.test(v.headline)) fail(BRAIN_ERROR.RULE_VIOLATION, 'the headline may not contain a figure', 'stage.headline', { problem: 'HEADLINE_HAS_A_FIGURE' });
@@ -139,15 +146,16 @@ export const STAGE_RULES = Object.freeze([
     } },
 ]);
 
-/** Validates a model's stage against the contract and HABB's rules. ctx: { concept, personalisation_offered } */
+/** Validates a model's stage against the contract, the universal rules and the TENANT's rules. ctx: { concept, personalisation_offered, profile? } */
 export function normalizeStage(raw, ctx) {
   const v = validateSpec(STAGE_SPEC, raw, 'stage');
-  for (const r of STAGE_RULES) r.check(v, ctx);
+  const c = { ...ctx, profile: ctx.profile ?? resolveBrandProfile({}) };
+  for (const r of STAGE_RULES) r.check(v, c);
   const body = { concept_id: ctx.concept.concept_id, ...v };
   return deepFreeze({ stage_id: deriveId('stg', body), ...body });
 }
 
-export function buildStageInstruction({ frame, concept, artDirection, facts, hints = [] }) {
+export function buildStageInstruction({ frame, concept, artDirection, facts, hints = [], profile = resolveBrandProfile({}) }) {
   const system = [
     'You are the Nordla set designer and photographer. From the selected concept and its art direction, you decide the mise en scène of ONE advertising image: the set, the light, the camera, the props and where the text goes.',
     'The real product is a protected photograph that the system places standing on the floor (or on a plinth if you choose one); you never describe, redraw or modify the product, and you never invent a fact about it.',
@@ -155,7 +163,9 @@ export function buildStageInstruction({ frame, concept, artDirection, facts, hin
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
     ...renderContract(STAGE_SPEC, 'answer'),
     ...renderRules(STAGE_RULES),
-    'The headline is YOUR proposal: it will be shown to the owner for approval. Write it in the language of the brief (French for HABB).',
+    ...(profile.forbidden_decor.length ? [`${profile.brand_name ?? 'The merchant'}'s forbidden visual elements: ${profile.forbidden_decor_summary ?? ''} None of these words may appear: ${profile.forbidden_decor.join(', ')}.`] : []),
+    `The merchant's own palette tones you may use: ${Object.keys(profile.tone_words).length ? Object.entries(profile.tone_words).map(([k, w]) => `${k} (${w})`).join(', ') : 'none (do not use BRAND_* tones or materials)'}.`,
+    `The headline is YOUR proposal: it will be shown to the owner for approval. Write it in ${profile.language ?? 'the language of the brief'}.`,
     'rationale: ONE concise sentence of about 180 to 220 characters (the contract refuses more than 300). Say why this set serves the concept; do not list the choices again.',
     'This vocabulary is deliberately small. If the concept or the art direction needs something it cannot express (a material, a shape, a light effect, a place, an object, a camera move, an atmosphere), do NOT force a poor substitute silently: choose the closest available option AND name what you really wanted in wanted_but_not_available, in plain words. It is reported to the owner as a limit of the system, not as your failure.',
     ...(hints.length ? ['This is a REVISION of an earlier stage for the same concept. Fix these defects (found on the rendered image or by Nordla\'s contract):', ...hints.map((h) => `- ${h}`)] : []),
@@ -165,13 +175,13 @@ export function buildStageInstruction({ frame, concept, artDirection, facts, hin
   return { system, user: JSON.stringify({ problem_frame: frame, concept, art_direction: artDirection, verified_facts: facts }) };
 }
 
-/** The STAGE step: one completion of the Brain's language-model port, then the closed contract and HABB's rules. */
-export function createStageDirector({ complete }) {
+/** The STAGE step: one completion of the Brain's language-model port, then the closed contract, the universal rules and the tenant's rules. */
+export function createStageDirector({ complete, profile = resolveBrandProfile({}) }) {
   return Object.freeze({
     async stage({ frame, concept, artDirection, facts, hints = [] }) {
       const { value, meta } = await askAndNormalize({
-        complete, instruction: buildStageInstruction({ frame, concept, artDirection, facts, hints }), stage: 'STAGE', spec: STAGE_SPEC,
-        normalize: (raw) => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts.personalisation_offered) }),
+        complete, instruction: buildStageInstruction({ frame, concept, artDirection, facts, hints, profile }), stage: 'STAGE', spec: STAGE_SPEC,
+        normalize: (raw) => normalizeStage(raw, { concept, personalisation_offered: Boolean(facts.personalisation_offered), profile }),
       });
       return { stage: value, meta };
     },

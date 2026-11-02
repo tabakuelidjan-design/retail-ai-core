@@ -8,7 +8,7 @@ import {
   chooseVerifiedProductImages, resolveVerifiedShopifyMedia, fetchVerifiedProductImage, stageVerifiedShopifyMedia, runAutonomousWithShopifyMedia,
   CREATIVE_PRODUCT_MEDIA_QUERY, CREATIVE_PRODUCT_MEDIA_QUERY_COST, SHOPIFY_SINGLE_QUERY_MAX_COST, requestedCost, MEDIA_ERROR, CreativeMediaError,
 } from '../src/creative-autonomy/product-media.js';
-import { MediaTransmissionJournal } from '../src/creative-autonomy/media-processing-policy.js';
+import { createMemoryCreativeLedger } from '../src/creative-autonomy/creative-ledger.js';
 import { assessBrief, BRIEF_STATUS } from '../src/creative-brain/brief-assessment.js';
 
 // ---- fixtures shaped exactly like the read-only answer of the HABB store on 2026-11-02 (TYESO TS-8771C, 750 ml, variant Noir)
@@ -173,83 +173,166 @@ const POLICY = Object.freeze({
   spend: { currency: 'EUR', per_run_max: 0.5, monthly_max: 5 }, audit: { journal_required: true },
 });
 const TARGET = { provider_id: 'alibaba-cloud-model-studio', region: 'eu-central-1' };
-function harness({ data = read({ price: '24.90', stock: 3, productMedia: [good] }), policy = POLICY, portsSha = null, enginesBinding = 'bound', scene = true } = {}) {
-  const seen = { ports: [], engines: [], runs: [] };
-  const journal = new MediaTransmissionJournal(join(tmp('nordla-journal-'), 'transmissions.jsonl'));
+const OWNER = 'user-owner-1';
+const T0 = new Date('2026-11-02T10:00:00Z');
+async function acceptedLedger(policy = POLICY, { accept = true } = {}) {
+  const ledger = createMemoryCreativeLedger({ members: new Map([[M, new Map([[OWNER, 'OWNER'], ['user-viewer', 'VIEWER']])]]) });
+  if (accept) assert.equal((await ledger.acceptPolicy({ merchantId: M, actorId: OWNER, policy, now: T0 })).status, 'ACCEPTED');
+  return ledger;
+}
+/** a guard shaped like SpendGuard: max, snapshot */
+const guardOf = (max = 0.5, spent = 0.0123) => ({ maxSpendEur: max, snapshot: () => ({ max_spend_eur: max, reserved_eur: 0, settled_eur: spent }) });
+// a run double that really goes through the provider journal: one critique "call" (RESERVED -> SUCCEEDED with a request id), like qwen-vision does
+const criticCallRun = (seen, { requestId = 'req-critic-1' } = {}) => async (a) => {
+  seen.runs.push(a);
+  const j = a.ports.journal;
+  await j.append({ operation: 'VISION_CRITIQUE', operation_id: 'op-critic-1', event: 'RESERVED', estimated_cost_eur: 0.01 });
+  seen.sent += 1; // the request would be sent here
+  await j.append({ operation: 'VISION_CRITIQUE', operation_id: 'op-critic-1', event: 'SUCCEEDED', request_id: requestId, actual_cost_eur: 0.0123 });
+  return { status: 'PROPOSALS_READY_FOR_OWNER', human_interventions: [{ when: 'après le passage', who: 'client', what: 'accepte, révise ou refuse le visuel fini', creative: true }] };
+};
+async function harness({ data = read({ price: '24.90', stock: 3, productMedia: [good] }), ledger = null, portsSha = null, enginesBinding = 'bound', scene = true, wireJournal = true, guard = guardOf(), sharedGuard = true, run = null, runId = 'run-1' } = {}) {
+  const seen = { ports: [], engines: [], runs: [], sent: 0 };
+  const L = ledger ?? await acceptedLedger();
   const args = {
     shopify: shop(data), request: REQ, objective: 'Faire découvrir la gourde noire', brand: { merchant_id: M }, format: 'INSTAGRAM_FEED_4_5',
-    workdir: tmp('nordla-run-'), policy, journal, runCeilingEur: 0.5, now: () => new Date('2026-11-02T10:00:00Z'), runId: 'run-1',
+    workdir: tmp('nordla-run-'), ledger: L, policyId: POLICY.policy_id, runCeilingEur: 0.5, now: () => T0, runId, nonProduction: true,
     fetchImpl: async () => new Response(png()),
     providers: {
       critic: TARGET, ...(scene ? { scene: TARGET } : {}),
-      portsFor: async (b) => { seen.ports.push(b); return { text: null, binding: { transmits_source_media: true, source_sha256: portsSha ?? b.sha256 } }; },
-      enginesFor: async (b) => { seen.engines.push(b); return enginesBinding === 'bound' ? { binding: { transmits_source_media: Boolean(b.authorization), source_sha256: b.sha256, authorization_id: b.authorization?.authorization_id } }
+      portsFor: async (b) => { seen.ports.push(b); return { text: null, journal: b.journal, budget: guard, binding: { transmits_source_media: true, source_sha256: portsSha ?? b.sha256, journal_id: wireJournal ? b.journal.id : 'another-journal' } }; },
+      enginesFor: async (b) => { seen.engines.push(b); return enginesBinding === 'bound' ? { spendGuard: sharedGuard ? guard : guardOf(), binding: { transmits_source_media: Boolean(b.authorization), source_sha256: b.sha256, authorization_id: b.authorization?.authorization_id, journal_id: b.journal.id } }
         : enginesBinding === 'none' ? {} : { binding: { transmits_source_media: false, source_sha256: null } }; },
     },
-    run: async (a) => { seen.runs.push(a); return { status: 'PROPOSALS_READY_FOR_OWNER', human_interventions: [{ when: 'après le passage', who: 'client', what: 'accepte, révise ou refuse le visuel fini', creative: true }] }; },
+    run: null,
   };
-  return { args, seen, journal };
+  args.run = run ?? criticCallRun(seen);
+  return { args, seen, ledger: L };
 }
 
-test('end of the chain: photo chosen and validated, SHA computed, standing policy applied, both providers built FROM the bytes and checked, fresh price, nothing published', PIL, async () => {
-  const { args, seen, journal } = harness();
+test('end of the chain: photo chosen and validated, SHA computed, ACCEPTED policy read from the ledger, ceiling reserved, providers built FROM the bytes, lifecycle recorded from real call evidence, settled, nothing published', PIL, async () => {
+  const { args, seen, ledger } = await harness();
   const r = await runAutonomousWithShopifyMedia(args);
-  assert.equal(r.status, 'PROPOSALS_READY_FOR_OWNER'); assert.equal(r.published, false);
+  assert.equal(r.status, 'PROPOSALS_READY_FOR_OWNER'); assert.equal(r.published, false); assert.equal(r.customer_review, 'PENDING');
   const sha = r.media_selection.sha256;
   assert.equal(seen.ports[0].sha256, sha); assert.equal(seen.engines[0].sha256, sha);
-  assert.equal(seen.ports[0].authorization.asset.asset_sha256, sha); assert.deepEqual(seen.ports[0].authorization.allowed_operations, ['VISION_CRITIQUE']);
-  assert.equal(seen.engines[0].authorization.asset.asset_sha256, sha); assert.deepEqual(seen.engines[0].authorization.allowed_operations, ['IMAGE_EDIT']);
+  assert.deepEqual(seen.ports[0].authorization.allowed_operations, ['VISION_CRITIQUE']); assert.deepEqual(seen.engines[0].authorization.allowed_operations, ['IMAGE_EDIT']);
+  assert.ok(seen.ports[0].authorization.authorization_id.startsWith(`${POLICY.policy_id}@v1#`), 'the ACCEPTED version names the authorization');
   assert.equal(seen.runs[0].input.product.variants.nodes[0].price, '24.90'); // read now, not the 29.90 of an older snapshot
-  assert.equal(seen.runs[0].input.readAt, '2026-11-02T10:00:00.000Z');
-  assert.equal(seen.runs[0].produce, 'SELECTED');
-  const entries = journal.entries();
-  assert.deepEqual(entries.map((e) => e.operation), ['VISION_CRITIQUE', 'IMAGE_EDIT']);
-  assert.ok(entries.every((e) => e.source_sha256 === sha && e.policy_id === POLICY.policy_id && e.authorization_id.includes(sha.slice(0, 16)) && e.run_id === 'run-1'));
-  assert.equal(entries[1].cross_border_possible, true);
+  const snap = ledger.snapshot();
+  const critic = snap.events.filter((e) => e.operation === 'VISION_CRITIQUE').map((e) => [e.event, e.attemptRef, e.requestId]);
+  assert.deepEqual(critic, [['AUTHORIZED', 'run', null], ['RESERVED', 'run', null], ['ATTEMPTED', 'op-critic-1', null], ['SENT', 'op-critic-1', 'req-critic-1'], ['SUCCEEDED', 'op-critic-1', 'req-critic-1']]);
+  // the scene was authorised and reserved but never called by this run double: no ATTEMPTED / SENT is invented for it
+  assert.deepEqual(snap.events.filter((e) => e.operation === 'IMAGE_EDIT').map((e) => e.event), ['AUTHORIZED', 'RESERVED']);
+  assert.ok(snap.events.every((e) => e.sourceSha256 === sha && e.runId === 'run-1' && e.policyVersion === 1 && e.merchantId === M));
+  assert.deepEqual(snap.reservations.map((x) => [x.run_id, x.status, x.settled_eur]), [['run-1', 'SETTLED', 0.0123]]);
   assert.ok(!JSON.stringify(r).match(/confirm|valider la photo|which photograph/i));
-  assert.ok(r.human_interventions.every((h) => h.when === 'après le passage'));
-  const selection = JSON.parse(readFileSync(join(args.workdir, readdirSync(args.workdir).find((f) => f.startsWith('source-media-selection-'))), 'utf8'));
-  assert.equal(selection.variant_id, BLACK);
 });
 
-test('P0-C fail closed: preconstructed services are refused; a provider bound to another SHA, an engine without binding, or an unconnected scene stop BEFORE the run', PIL, async () => {
-  const pre = harness();
+test('no media attempted -> the reservation is RELEASED and each operation is CANCELLED (never SENT)', PIL, async () => {
+  const { args, ledger } = await harness({ run: async () => ({ status: 'CONCEPTS_ONLY_ASSET_NOT_USABLE', human_interventions: [] }) });
+  await runAutonomousWithShopifyMedia(args);
+  const snap = ledger.snapshot();
+  assert.equal(snap.reservations[0].status, 'RELEASED');
+  assert.deepEqual(snap.events.map((e) => e.event).filter((e) => !['AUTHORIZED', 'RESERVED'].includes(e)), ['CANCELLED', 'CANCELLED']);
+});
+
+test('a call that fails without a provider request id is FAILED with transmission UNKNOWN, never SENT; the reservation is settled conservatively', PIL, async () => {
+  const seen = { runs: [] };
+  const { args, ledger } = await harness({ run: async (a) => { seen.runs.push(a); await a.ports.journal.append({ operation: 'IMAGE_EDIT', operation_id: 'op-edit-1', event: 'RESERVED' });
+    await a.ports.journal.append({ operation: 'IMAGE_EDIT', operation_id: 'op-edit-1', event: 'FAILED', request_id: null, reason: 'NETWORK' }); throw Object.assign(new Error('network'), { code: 'NETWORK' }); } });
+  await assert.rejects(() => runAutonomousWithShopifyMedia(args), /network/);
+  const snap = ledger.snapshot();
+  assert.deepEqual(snap.events.filter((e) => e.operation === 'IMAGE_EDIT').map((e) => e.event), ['AUTHORIZED', 'RESERVED', 'ATTEMPTED', 'FAILED']);
+  assert.equal(snap.events.find((e) => e.event === 'FAILED').detail.transmission, 'UNKNOWN');
+  assert.equal(snap.reservations[0].status, 'SETTLED');
+});
+
+test('P0-C fail closed: preconstructed services refused; another SHA, no binding, unconnected scene, a provider not wired to the run audit, a separate spend guard, a guard above the reservation: all stop BEFORE the run and the reservation is released', PIL, async () => {
+  const pre = await harness();
   await assert.rejects(() => runAutonomousWithShopifyMedia({ ...pre.args, ports: { text: null } }), TypeError);
   await assert.rejects(() => runAutonomousWithShopifyMedia({ ...pre.args, engines: {} }), TypeError);
-  for (const [opts, label] of [[{ portsSha: 'f'.repeat(64) }, 'another source'], [{ enginesBinding: 'none' }, 'no binding'], [{ enginesBinding: 'local' }, 'not connected']]) {
-    const h = harness(opts);
+  for (const [opts, label] of [[{ portsSha: 'f'.repeat(64) }, 'another source'], [{ enginesBinding: 'none' }, 'no binding'], [{ enginesBinding: 'local' }, 'not connected'],
+    [{ wireJournal: false }, 'transmission audit'], [{ sharedGuard: false }, 'same guard'], [{ guard: guardOf(0.9) }, 'reserved ceiling']]) {
+    const h = await harness(opts);
     await assert.rejects(() => runAutonomousWithShopifyMedia(h.args), (e) => e.code === MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED && e.message.includes(label), label);
     assert.equal(h.seen.runs.length, 0, label);
+    assert.equal(h.ledger.snapshot().reservations[0].status, 'RELEASED', label);
   }
 });
 
-test('standing policy refusals stop before any provider is built: no policy, revoked, other tenant, spend above the cap, processing not covered', PIL, async () => {
+test('a mismatched source SHA cannot be sent: the ledger refuses ATTEMPTED and the provider journal throws BEFORE the request', PIL, async () => {
+  const seen = { runs: [], sent: 0 };
+  const { args, ledger } = await harness({ run: async (a) => {
+    // a port bound to another source would write ITS source sha: simulate by recording the attempt for another run context through the same ledger
+    const r = await ledger.record({ merchantId: M, runId: 'run-1', operation: 'VISION_CRITIQUE', attemptRef: 'op-x', event: 'ATTEMPTED', policyId: POLICY.policy_id, policyVersion: 1,
+      authorizationId: 'x', sourceSha256: 'e'.repeat(64), providerId: TARGET.provider_id, region: TARGET.region, now: T0 });
+    assert.equal(r.reason, 'NOT_AUTHORIZED_FOR_THIS_SOURCE');
+    return criticCallRun(seen)(a);
+  } });
+  await runAutonomousWithShopifyMedia(args);
+  // and through the recorder itself: an attempt after the reservation closed is refused, so the port throws and sends nothing
+  const after = (await harness({ ledger })).args;
+  await assert.rejects(() => runAutonomousWithShopifyMedia({ ...after, run: criticCallRun(seen) }), (e) => e.code === MEDIA_ERROR.SPEND_NOT_RESERVED, 'run-1 is settled: the same run id cannot run again');
+});
+
+test('the recorder blocks the request at the media boundary when the ledger refuses the attempt (revoked mid-run is not enough to block a live reservation, a closed one is)', PIL, async () => {
+  let sent = 0;
+  const { args, ledger } = await harness({ run: async (a) => {
+    await ledger.settle({ merchantId: M, runId: 'run-1', settledEur: 0, basis: 'TEST_CLOSE', now: T0 }); // the reservation is closed under the run
+    await a.ports.journal.append({ operation: 'VISION_CRITIQUE', operation_id: 'op-late', event: 'RESERVED' }); // throws: RESERVATION_NOT_LIVE
+    sent += 1; return { status: 'X' };
+  } });
+  await assert.rejects(() => runAutonomousWithShopifyMedia(args), (e) => e.code === 'MEDIA_TRANSMISSION_REFUSED' && e.reason === 'RESERVATION_NOT_LIVE');
+  assert.equal(sent, 0);
+});
+
+test('standing policy refusals stop before any provider is built: no accepted policy, revoked, invalid content, processing not covered, ceiling above the per-run limit', PIL, async () => {
+  const revoked = await acceptedLedger(); await revoked.revokePolicy({ merchantId: M, actorId: OWNER, policyId: POLICY.policy_id, now: T0 });
   const cases = [
-    [null, 'NO_POLICY'], [{ ...POLICY, revoked: true }, 'POLICY_REVOKED'], [{ ...POLICY, tenant: { merchant_id: 'other' } }, 'TENANT_MISMATCH'],
-    [{ ...POLICY, spend: { currency: 'EUR', per_run_max: 0.2, monthly_max: 5 } }, 'SPEND_LIMIT'],
-    [{ ...POLICY, processing: [POLICY.processing[0]] }, 'PROCESSING_NOT_COVERED'],
-    [{ ...POLICY, processing: [{ ...POLICY.processing[1], cross_border_possible: false }, POLICY.processing[0]] }, 'POLICY_INVALID'],
+    [await acceptedLedger(POLICY, { accept: false }), MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'NO_ACCEPTED_POLICY'],
+    [revoked, MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'NO_ACCEPTED_POLICY'],
+    [await acceptedLedger({ ...POLICY, processing: [{ ...POLICY.processing[1], cross_border_possible: false }, POLICY.processing[0]] }), MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'POLICY_INVALID'],
+    [await acceptedLedger({ ...POLICY, processing: [POLICY.processing[0]] }), MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'PROCESSING_NOT_COVERED'],
+    [await acceptedLedger({ ...POLICY, spend: { currency: 'EUR', per_run_max: 0.2, monthly_max: 5 } }), MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, 'SPEND_LIMIT'],
   ];
-  for (const [policy, reason] of cases) {
-    const h = harness({ policy });
-    await assert.rejects(() => runAutonomousWithShopifyMedia(h.args), (e) => e.code === MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED && e.message.includes(reason), reason);
+  for (const [ledger, code, reason] of cases) {
+    const h = await harness({ ledger });
+    await assert.rejects(() => runAutonomousWithShopifyMedia(h.args), (e) => e.code === code && e.message.includes(reason), reason);
     assert.equal(h.seen.ports.length + h.seen.engines.length + h.seen.runs.length, 0, reason);
-    assert.equal(h.journal.entries().length, 0, reason);
+    assert.equal(ledger.snapshot().reservations.length, 0, reason);
   }
 });
 
-test('the monthly cap counts earlier runs from the journal', PIL, async () => {
-  const h = harness({ policy: { ...POLICY, spend: { currency: 'EUR', per_run_max: 0.5, monthly_max: 0.9 } } });
-  await runAutonomousWithShopifyMedia(h.args);
-  const second = { ...h.args, runId: 'run-2', workdir: tmp('nordla-run2-') };
-  await assert.rejects(() => runAutonomousWithShopifyMedia(second), (e) => /SPEND_LIMIT/.test(e.message));
+test('only an OWNER/ADMIN of the tenant accepts the policy; a viewer cannot; a policy change is a new version that must be accepted again', async () => {
+  const ledger = await acceptedLedger();
+  assert.equal((await ledger.acceptPolicy({ merchantId: M, actorId: 'user-viewer', policy: POLICY, now: T0 })).reason, 'ACTOR_NOT_TENANT_ADMIN');
+  assert.equal((await ledger.acceptPolicy({ merchantId: M, actorId: OWNER, policy: POLICY, now: T0 })).status, 'ALREADY_ACCEPTED');
+  const v2 = await ledger.acceptPolicy({ merchantId: M, actorId: OWNER, policy: { ...POLICY, spend: { currency: 'EUR', per_run_max: 0.5, monthly_max: 9 } }, now: T0 });
+  assert.equal(v2.version, 2); assert.equal((await ledger.currentPolicy({ merchantId: M, policyId: POLICY.policy_id })).version, 2);
+  assert.equal((await ledger.reserve({ merchantId: M, runId: 'old-v', policyId: POLICY.policy_id, policyVersion: 1, ceilingEur: 0.1, now: T0 })).reason, 'POLICY_NOT_IN_FORCE');
 });
 
-test('a wrong-variant-only gallery stops before any download, provider or run, with no question to the client', async () => {
-  const h = harness({ data: read({ productMedia: [live20, pink], variantMedia: [live20] }) });
+test('concurrent runs cannot exceed the monthly limit (memory ledger, same contract as the PostgreSQL functions proven in test/pg/97)', PIL, async () => {
+  const ledger = await acceptedLedger({ ...POLICY, spend: { currency: 'EUR', per_run_max: 0.5, monthly_max: 1 } });
+  const outs = await Promise.all(Array.from({ length: 6 }, async (_, i) => { const h = await harness({ ledger, runId: `par-${i}` }); return runAutonomousWithShopifyMedia(h.args).then(() => 'OK', (e) => e.code); }));
+  assert.equal(outs.filter((o) => o === 'OK').length, 2, JSON.stringify(outs));
+  assert.ok(outs.filter((o) => o !== 'OK').every((o) => o === MEDIA_ERROR.SPEND_NOT_RESERVED));
+  const settled = ledger.snapshot().reservations.filter((x) => x.status === 'SETTLED');
+  assert.ok(settled.reduce((s, x) => s + x.settled_eur, 0) <= 1);
+});
+
+test('a non-durable ledger is refused for production, and a missing run id is refused', PIL, async () => {
+  const { args } = await harness();
+  await assert.rejects(() => runAutonomousWithShopifyMedia({ ...args, nonProduction: false }), (e) => e.code === MEDIA_ERROR.LEDGER_NOT_DURABLE);
+  await assert.rejects(() => runAutonomousWithShopifyMedia({ ...args, runId: undefined }), TypeError);
+});
+
+test('a wrong-variant-only gallery stops before any download, reservation, provider or run, with no question to the client', async () => {
+  const h = await harness({ data: read({ productMedia: [live20, pink], variantMedia: [live20] }) });
   let fetched = 0; h.args.fetchImpl = async () => { fetched += 1; return new Response(png()); };
   await assert.rejects(() => runAutonomousWithShopifyMedia(h.args), (e) => e.code === MEDIA_ERROR.NO_VERIFIED_SOURCE_IMAGE);
-  assert.equal(fetched + h.seen.ports.length + h.seen.runs.length, 0);
+  assert.equal(fetched + h.seen.ports.length + h.seen.runs.length + h.ledger.snapshot().reservations.length, 0);
 });
 
 test('brief: a missing product photo is an INTERNAL media block, never a customer question', () => {

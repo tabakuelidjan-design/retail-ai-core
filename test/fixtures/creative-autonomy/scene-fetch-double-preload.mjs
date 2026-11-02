@@ -18,7 +18,9 @@ const PY = process.env.NORDLA_PYTHON || (process.platform === 'win32' ? 'python'
 const FIX = fileURLToPath(new URL('../../helpers/scene_fixtures.py', import.meta.url));
 const files = new Map();
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-const find = (dir) => { for (const e of readdirSync(dir)) { const p = join(dir, e); if (statSync(p).isDirectory()) { const f = find(p); if (f) return f; } else if (e === 'scene_plate.png.json') return p; } return null; };
+// The plate of the run being produced = the NEWEST one (a long-lived demo server runs several productions in one process, one at a time).
+const plates = (dir) => readdirSync(dir).flatMap((e) => { const p = join(dir, e); return statSync(p).isDirectory() ? plates(p) : e === 'scene_plate.png.json' ? [p] : []; });
+const find = (dir) => plates(dir).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? null;
 
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
@@ -51,6 +53,6 @@ globalThis.fetch = async (url, init = {}) => {
   else if (system.includes('concept director')) answer = { concepts: CONCEPTS };
   else if (system.includes('concept selector')) answer = evaluationsAnswer(normalizeConceptSet(CONCEPTS), [{ DISTINCTIVENESS: 'PARTIAL' }, {}, { CONCEPT_STRENGTH: 'PARTIAL' }]);
   else if (system.includes('art director')) { const c = JSON.parse(user).concept; answer = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }
-  else { const c = JSON.parse(user).concept; answer = { backdrop: 'WALL_AND_FLOOR', backdrop_tone: 'CHARCOAL', floor_finish: 'MIRROR', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'COOL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Titre de test', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double' }; }
+  else { const c = JSON.parse(user).concept; answer = { backdrop: 'WALL_AND_FLOOR', backdrop_tone: 'CHARCOAL', floor_finish: 'MIRROR', key_light: { kind: 'STRIP', side: 'LEFT', intensity: 'MEDIUM', temperature: 'COOL', purpose: 'double' }, accent_lights: [], camera: { height: 'PRODUCT_CENTER', framing: 'MEDIUM', product_position: 'LEFT_THIRD' }, props: [{ shape: 'BLOCK', material: 'CONCRETE', placement: 'BESIDE_RIGHT', scale: 'LOW', reason: c.visual_metaphor }], headline: 'Le noir, sans détour', text_placement: 'RIGHT_COLUMN', show_price: 'YES', rationale: 'double' }; }
   return json({ id: `req-double-${Date.now()}`, model: body.model, choices: [{ message: { role: 'assistant', content: JSON.stringify(answer) } }], usage: { prompt_tokens: 1200, completion_tokens: 350, total_tokens: 1550 } });
 };

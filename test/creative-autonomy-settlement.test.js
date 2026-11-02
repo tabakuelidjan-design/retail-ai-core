@@ -11,9 +11,12 @@ import { createQwenBrainPort } from '../src/marketing-creative/alibaba/qwen-brai
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
 import { connectProviders, guardSettlement, worstCaseCallEur, worstImageTokens, BUDGET_PRECHECK_REFUSED, TEMPLATE_OVERHEAD_TOKENS } from '../src/creative-autonomy/providers.js';
 import { runAutonomous, RUN_STATUS } from '../src/creative-autonomy/run.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from './creative-brain-world.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
 
 const ENV = { ALIBABA_MODEL_STUDIO_API_KEY: 'sk-test-f9-0000000000', ALIBABA_MODEL_STUDIO_WORKSPACE_ID: 'ws-test-f9', ALIBABA_QWEN_TEXT_MODEL: 'qwen3-vl-plus', NORDLA_ALIBABA_SCOPE: 'EU' };
 const bytesOf = (body) => body.messages.reduce((n, m) => n + Buffer.byteLength(typeof m.content === 'string' ? m.content : JSON.stringify(m.content), 'utf8'), 0);

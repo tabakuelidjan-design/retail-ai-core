@@ -75,12 +75,16 @@ export function authorizeTransmission({ policy, request }) {
   const rule = policy.processing.find((r) => r.provider_id === request.provider_id && r.region === request.region && r.purpose === request.purpose && r.operations.includes(request.operation));
   if (!rule) return no(POLICY_REFUSAL.PROCESSING_NOT_COVERED, `${request.provider_id} ${request.region} ${request.purpose} ${request.operation}`);
   if (!isNum(request.runCeilingEur) || request.runCeilingEur > policy.spend.per_run_max) return no(POLICY_REFUSAL.SPEND_LIMIT, 'per run');
-  if (!isNum(request.monthToDateEur) || request.monthToDateEur + request.runCeilingEur > policy.spend.monthly_max) return no(POLICY_REFUSAL.SPEND_LIMIT, 'monthly');
+  // the MONTHLY limit is enforced atomically by the durable ledger's reservation (creative_spend_reserve), never by a read-then-write here;
+  // a caller may still pass a known month-to-date figure for an early refusal
+  if (request.monthToDateEur !== undefined && (!isNum(request.monthToDateEur) || request.monthToDateEur + request.runCeilingEur > policy.spend.monthly_max)) return no(POLICY_REFUSAL.SPEND_LIMIT, 'monthly');
+  // the version that counts is the one the tenant ACCEPTED in the ledger (acceptedVersion), not the author's draft number
+  const version = Number.isInteger(request.acceptedVersion) ? request.acceptedVersion : policy.version;
   // the narrow per-photo record the existing guards (assessScopedExternalMediaUse, deriveCandidateAuthorization) already enforce
   const authorization = Object.freeze({
     kind: 'EXTERNAL_MEDIA_AUTHORIZATION',
-    authorization_id: `${policy.policy_id}@v${policy.version}#${request.operation}#${src.sha256.slice(0, 16)}`,
-    purpose_note: `derived in memory from standing tenant policy ${policy.policy_id} v${policy.version} (${rule.scope}${rule.cross_border_possible ? ', cross-border possible' : ''}); catalog media, no people attested by the tenant`,
+    authorization_id: `${policy.policy_id}@v${version}#${request.operation}#${src.sha256.slice(0, 16)}`,
+    purpose_note: `derived in memory from standing tenant policy ${policy.policy_id} v${version} (${rule.scope}${rule.cross_border_possible ? ', cross-border possible' : ''}); catalog media, no people attested by the tenant`,
     asset: Object.freeze({ asset_ref: src.asset_ref, asset_sha256: src.sha256, data_class: 'MERCHANT_PRIVATE_MEDIA', contains_personal_data: false, contains_face: false }),
     provider: Object.freeze({ provider_id: rule.provider_id, region: rule.region }),
     purpose: rule.purpose, allowed_operations: Object.freeze([request.operation]),
@@ -93,7 +97,7 @@ export function authorizeTransmission({ policy, request }) {
   if (!check.allowed) return no(POLICY_REFUSAL.POLICY_INVALID, check.reason);
   const journal_entry = Object.freeze({
     event: 'MEDIA_TRANSMISSION_AUTHORIZED', at: now.toISOString(), merchant_id: request.merchantId, shop_id: request.shopId ?? null,
-    policy_id: policy.policy_id, policy_version: policy.version, authorization_id: authorization.authorization_id,
+    policy_id: policy.policy_id, policy_version: version, authorization_id: authorization.authorization_id,
     source_sha256: src.sha256, media_id: src.media_id ?? null, asset_ref: src.asset_ref, origin: src.origin,
     provider_id: rule.provider_id, region: rule.region, scope: rule.scope, cross_border_possible: rule.cross_border_possible,
     purpose: rule.purpose, operation: request.operation, run_id: request.runId ?? null, run_ceiling_eur: request.runCeilingEur,
@@ -101,7 +105,8 @@ export function authorizeTransmission({ policy, request }) {
   return Object.freeze({ allowed: true, authorization, journal_entry, rule });
 }
 
-/** Append-only JSONL journal of authorized transmissions; the month-to-date spend is the sum of authorized run ceilings (conservative). */
+/** Local append-only JSONL mirror of transmission events, for diagnostics and offline tests ONLY. The authoritative trail and the spending
+ *  reservations are in the durable Creative ledger (creative-ledger.js); this file never decides whether money may be spent. */
 export class MediaTransmissionJournal {
   constructor(path) { this.path = path; }
   append(entry) {
@@ -111,11 +116,5 @@ export class MediaTransmissionJournal {
   entries() {
     if (!existsSync(this.path)) return [];
     return readFileSync(this.path, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  }
-  monthToDateEur({ merchantId, now = new Date() }) {
-    const month = now.toISOString().slice(0, 7);
-    const runs = new Map();
-    for (const e of this.entries()) if (e.merchant_id === merchantId && String(e.at).startsWith(month) && e.run_id) runs.set(e.run_id, Number(e.run_ceiling_eur) || 0);
-    return [...runs.values()].reduce((a, b) => a + b, 0);
   }
 }

@@ -3,7 +3,10 @@
 import { readFileSync } from 'node:fs';
 import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders } from '../src/creative-autonomy/providers.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
+
 
 const [snapshotPath, photoPath, workdir, ...rest] = process.argv.slice(2);
 const opt = (k, d = null) => { const i = rest.indexOf(`--${k}`); return i >= 0 ? rest[i + 1] : d; };

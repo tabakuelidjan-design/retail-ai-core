@@ -41,4 +41,5 @@ jobs:
       - name: Creative Fidelity targeted
         run: node --test test/creative-fidelity*.test.js
       - name: Full repository suite
-        run: npm test
+        # Node 20 cannot run China Sourcing (requires Node 24, owner decision 2026-10-12): the runner excludes it and says so; on Node 24 it is exactly npm test.
+        run: npm run test:supported

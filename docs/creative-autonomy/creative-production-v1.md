@@ -66,13 +66,18 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 - Bytes: full Pillow decode (≤ 36 MP) and dimensions equal to Shopify's. Tenant: connector of `src/connectors/shopify.js`, `merchantId` equal to the request, state `CONFIGURED` now.
 
 **Production entrypoint** (`runAutonomousWithShopifyMedia`)
-- Order: select → SHA-256 → standing tenant policy → journal → build the critic, then the scene engine, **from the selected bytes** → verify both declare a binding to that SHA → run. Preconstructed `ports` / `engines` are refused. Price, stock and description come from the same read. `published: false`.
+- Order: select → SHA-256 → the tenant's **accepted** policy read from the durable Creative ledger → per-operation authorization → atomic reservation of the whole run ceiling (`creative_spend_reserve`) → `AUTHORIZED`/`RESERVED` events → build the critic, then the scene engine, **from the selected bytes**, journaling into the run's transmission recorder → verify both declare a binding to that SHA and recorder, and share the reserved SpendGuard → run → settle (or release + `CANCELLED` if nothing was attempted). Preconstructed `ports` / `engines` are refused; a non-durable ledger is refused outside tests. Price, stock and description come from the same read. `published: false`.
+- Reached from the integration hub as `CREATIVE.produce_product_visual` (OWNER_REVIEW: the customer reviews the finished result). Non-simulated providers are refused there under NDR-D02.
 - The real critic (`connectProviders`) and scene engine (`createSceneEngine`) now expose `binding`; local engines declare they transmit nothing.
 
-**Authorization**: `src/creative-autonomy/media-processing-policy.js`, see ADR 0007 (PROPOSED). The per-photo files of the `--scene` trial remain an operator control for the trial only.
+**Authorization and spending**: `src/creative-autonomy/media-processing-policy.js` and the Creative ledger (`docs/creative-autonomy/creative-ledger.md`), see ADR 0007 (PROPOSED). The per-photo files of the `--scene` trial remain an operator control for the trial only.
 
 **Brief**: a missing product photo is `BLOCKED_INTERNAL_MEDIA` (kind `INTERNAL`, no question), never a customer question.
 
 **Evidence**: `test/creative-product-media.test.js` (17 tests, adversarial), `test/creative-shopify-e2e.test.js` (3 tests: the whole customer chain through the real Python engines, the real critic port and the real scene engine, against a fetch double). Simulated success is not production readiness: no real image model, Shopify call or visual judgement ran.
 
-**Still open**: TYESO 750 ml source photo (see `tyeso-750ml-media-remediation.md`); NDR-D02 exception (ADR 0007 Part B); the customer-facing route/UI that calls the entrypoint; the tenant policy acceptance flow and storage.
+**Still open**: TYESO 750 ml source photo (see `tyeso-750ml-media-remediation.md`); NDR-D02 exception (ADR 0007 Part B); the customer-facing UI that calls `CREATIVE.produce_product_visual`; the admin screen presenting the tenant policy for acceptance (storage and acceptance function exist, not applied to any shared database).
+
+## Nordla Créateur — local demonstration (simulated providers)
+`npm run creator:demo` → http://127.0.0.1:4420 (loopback only, Python with numpy/Pillow/scipy required). Product and variant → Nordla retrieves the verified photo itself → objective → `CREATIVE.produce_product_visual` → the result is shown → accept, revision or reject. Nothing is published.
+Real: the screen and API (`src/creative-autonomy/creator/`), the hub route, photo selection, ledger rules (in memory), creative brain, local engines, technical checks. **Simulated**: the providers (fetch double, no network, no cost), the Shopify catalog (demonstration product "TEST — Gourde démo 500 ml"; the Blanc variant has no photo and is refused). The images are NOT provider-generated. Tests: `test/creator-app.test.js`.

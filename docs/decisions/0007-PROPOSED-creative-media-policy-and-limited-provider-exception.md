@@ -1,7 +1,7 @@
 # ADR 0007 (PROPOSED, not accepted) — Standing tenant media-processing policy, and a limited exception to NDR-D02
 
 Status: **PROPOSED**. Nothing here changes `NORDLA-DECISION-REGISTER.md` or `NORDLA-DEFERRED.md`. Only the owner can accept it.
-Date: 2026-11-02. Author: Claude (engineering proposal). Code: branch `fix/creative-production-v1-audit-20261102`.
+Date: 2026-11-02. Author: Claude (engineering proposal). Code: branches `fix/creative-production-v1-audit-20261102` and `fix/creative-production-v1-stabilization-20261102`.
 
 ## Part A — Standing tenant media-processing policy
 
@@ -26,8 +26,20 @@ The Creative Production V1 trial uses per-photo authorization records bound to o
 - Not a statement that the provider processes data where its scope says: `EU` / `GLOBAL` is the configured declaration; the policy records it, it does not prove it.
 - Not an authorization to spend: the caps bound spending once spending is allowed (Part B).
 
+### Implementation status (2026-11-02, branch `fix/creative-production-v1-stabilization-20261102`) — still PROPOSED
+Built and tested **offline only**. Nothing is active in production; the migration has not been applied to any shared database.
+- **Storage and acceptance:** migration `supabase/migrations/20261102120000_creative_media_policy_spend_ledger.sql`. `creative_media_policy_accept` accepts a policy only from an ACTIVE `OWNER`/`ADMIN` member of that tenant (`merchant_members`) and stores version, content SHA-256, actor, role and timestamp. Acceptance is **once per tenant and policy version**, never per photo.
+- **Versioning:** a different content creates version n+1 that needs its own acceptance and supersedes the previous one; the same content is `ALREADY_ACCEPTED` (idempotent).
+- **Revocation:** `creative_media_policy_revoke` blocks every new reservation and every new `ATTEMPTED` transmission at once (`POLICY_NOT_IN_FORCE`).
+- **Immutable audit:** policy rows can only be superseded or revoked once; transmission events are append-only (no update, delete or truncate, trigger-enforced); service role has `select` only on the tables, writes go through `SECURITY DEFINER` functions.
+- **Spending:** `creative_spend_reserve` reserves the WHOLE run ceiling atomically under a per-tenant-month advisory lock, checks the per-run and monthly caps of the policy version in force, is idempotent on `(tenant, run_id)` and refuses a reused run ID with other terms. Settlement, release (refused once media was attempted) and stale reconciliation are explicit.
+- **Transmission lifecycle:** `AUTHORIZED → RESERVED → ATTEMPTED → SENT → SUCCEEDED / FAILED`, or `CANCELLED`. `ATTEMPTED` is written by the provider port BEFORE the request and refused (request not sent) without a live reservation and an `AUTHORIZED` event for the same operation, source SHA and policy version. `SENT` exists only with a provider request ID. Retries are idempotent by event key.
+- **Customer-uploaded and personal media** stay refused (`SOURCE_REQUIRES_SPECIFIC_CONSENT`).
+- **Fail closed:** no durable ledger, ledger unavailable, no accepted policy, revoked policy, reservation refused → no provider is built.
+- Details, rollback and activation prerequisites: `docs/creative-autonomy/creative-ledger.md`.
+
 ### Open obligations (owner / legal)
-- Wording and acceptance flow of the tenant policy (onboarding), and where it is stored (today: an object passed to the entrypoint).
+- Wording and onboarding flow presenting the tenant policy to the admin who accepts it (the storage and acceptance function exist; no user interface does).
 - Whether the tenant attestation "no people in catalog product images" is enough, or a local face/person detector must run first.
 - Supplier image rights: catalog images uploaded by the merchant may be supplier images. The policy covers processing by Nordla's providers, not the merchant's licence to use the supplier's image.
 
@@ -51,5 +63,5 @@ The Creative Production V1 trial uses per-photo authorization records bound to o
 
 ### Rollback / audit
 - The attempt registry and the journal (`provider-calls.jsonl`, transmissions) are kept outside git; request IDs are reported.
-- Revocation: set the authorization records to `revoked: true` (trial) or `revoked: true` on the tenant policy; no code change needed.
+- Revocation: set the authorization records to `revoked: true` (trial), or call `creative_media_policy_revoke` for the tenant policy (immediate, audited); no code change needed.
 - If the output fails any technical check, nothing is shown as a proposal; nothing is ever published automatically.

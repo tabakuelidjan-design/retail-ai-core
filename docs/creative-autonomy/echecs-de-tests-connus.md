@@ -1,16 +1,26 @@
-# Known test failures — state on 2026-11-02 (branch `fix/creative-production-v1-audit-20261102`)
+# Known test failures — state on 2026-11-02 (branch `fix/creative-production-v1-stabilization-20261102`, PR #39, stacked on #38)
 
-Full suite `node --test test/*.test.js`, 3 944 tests, Python 3.13 with numpy/Pillow/scipy:
+Full suite, Python 3.13 with numpy/Pillow/scipy, measured locally:
 
-| Node | pass | fail | skipped | failures |
-|---|---|---|---|---|
-| 20.20.2 | 3 912 | 11 | 21 | `finance-privacy` (Chantier D patch) + 10 China Sourcing tests (Node 24 required; `sourcing-asr-bench` hangs on Node 20 and was stopped) |
-| 22.23.4 | 3 913 | 10 | 21 | `finance-privacy` (Chantier D patch) + 9 China Sourcing tests (Node 24 required) |
-| 24.22.2 | 3 922 | **1** | 21 | `finance-privacy` (Chantier D patch) |
+| Node | command | tests | pass | fail | skipped | note |
+|---|---|---|---|---|---|---|
+| 24.22.2 | `npm run test:supported` (= `npm test` on Node 24) | 3 952 | 3 931 | **0** | 21 | |
+| 20.20.0 | `npm run test:supported` | 3 394 | 3 373 | **0** | 21 | 50 China Sourcing files excluded and printed (Node 24 required, owner decision 2026-10-12) |
 
-China Sourcing requires Node 24 by contract (`.github/workflows/china-sourcing.yml` runs it on Node 24 only; the server start checks it). Those failures on Node 20/22 are the documented requirement, not regressions.
+## Fixed on PR #39
+- **finance-privacy**: the 64-hex golden hash in `docs/chantier-d/e-proposals/alternative-to.patch` is written in two halves (same value; same convention as `test/pg/pgctl.mjs`). The scan is unchanged. The patch still applies (`git apply --include=test/social-exclusive.test.js`, 142 lines). **Chantier D owner review needed** for this change to its proposal file.
+- **Node 20 CI timeouts** (marketing-v1, activation-channel-execution-v1, provider-provisioning-live-connections-v1, marketing-creative-alibaba pre-smoke, creative-intelligence-v1 Node 20). There were two causes, both reproduced:
+  1. `test/sourcing-asr-bench.test.js` hangs on Node 20. China Sourcing requires Node 24, so `scripts/run-test-suite.mjs` (`npm run test:supported`) excludes it on Node < 24 and prints a notice. `npm test` is unchanged.
+  2. `test/growth-browser.test.js` used the global `WebSocket`, which does not exist on Node 20. When Chrome is installed (GitHub runners), it threw after spawning Chrome, and the live Chrome child kept the file, and the job, alive until the 15-minute cancel. Every marketing-v1 run since 2026-10-19 was cancelled. The test now skips explicitly on a runtime without `WebSocket`, still runs on Node 22/24, and kills Chrome on any setup failure.
+- **benchmark-preflight collisions**: `test/benchmark-ask.test.js` writes its run file in a private temp directory.
 
-## Fixed on this branch
+## Still failing, pre-existing, not changed (owners named)
+- **`test/creative-e2e-parity.test.js` "Legacy non-regression" (golden PNG hash), flaky.** About 1 run in 15 produces another fixed hash (`1707565a…`). It is reproduced on the PR #38 base `0f043d0` (2 of 30 runs) and on this branch (1 of 15). The test reaches none of the files changed here (183 modules walked). It failed one of the two Node 24 CI jobs of PR #39. Owner: Creative runtime. Cause not found yet: a race between two deterministic outputs. The golden is not changed and the test is not weakened.
+- **finance-pg bench** (`test/pg/run.mjs`): 4 failures (`00-infra` ×3: migration count and catalogue expectations frozen at 28 migrations; `95-analyses-truth` MERCHANT_PROFILE). The result is identical with and without this PR's migration. Owner: Finance.
+
+## Earlier records (kept)
+
+### Fixed on PR #38
 - **LG-2** (`test/creative-production.test.js`): `resizePng` moved to `src/creative-intelligence/png-resize.js` (re-exported by the production module); `src/studio-compose/compose.js` imports it from there. The guard is unchanged.
 - **finance-privacy, plan records**: the two full SHA-256 values in `plan-trial-61e7eeb84a2de902.json` and `plan-trial-dd94896e8b89e81e.json` are shortened to their first 16 characters with the git blob that holds the original file (history keeps them). The scan is unchanged. Note: this changes the text of the plan record documented as frozen; its content stays recoverable from the named blob.
 

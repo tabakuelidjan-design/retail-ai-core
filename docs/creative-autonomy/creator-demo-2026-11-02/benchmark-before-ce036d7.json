@@ -1,0 +1,242 @@
+{
+ "node": "22.23.4",
+ "runs": 5,
+ "cold": {
+  "run": 1,
+  "ok": true,
+  "status": "PROPOSALS_READY_FOR_OWNER",
+  "wall_ms": 10390,
+  "steps": {
+   "BRIEF": 1,
+   "EXAMINE": 857,
+   "OBSERVE": 1,
+   "FRAME": 6,
+   "IDEATE": 308,
+   "SELECT": 6,
+   "PRODUCE": 0,
+   "ART_DIRECT": 5,
+   "STAGE": 5,
+   "RENDER": 8711,
+   "COMPOSE+CHECK": 328,
+   "CRITIC": 4,
+   "REVIEW": 0
+  },
+  "outside_trace_ms": 158,
+  "simulated_provider_ms": 1419,
+  "simulated_provider_calls": 10,
+  "cost_eur": {
+   "text_and_vision": 0.0223,
+   "local": 0,
+   "budget": {
+    "max_spend_eur": 0.5,
+    "reserved_eur": 0,
+    "settled_eur": 0.1281671,
+    "images": 3,
+    "video_seconds": 0
+   }
+  },
+  "result_png": null
+ },
+ "warm_median": {
+  "wall_ms": 10181,
+  "simulated_provider_ms": 1260,
+  "outside_trace_ms": 89,
+  "steps": {
+   "BRIEF": 1,
+   "EXAMINE": 811,
+   "OBSERVE": 0,
+   "FRAME": 2,
+   "IDEATE": 267,
+   "SELECT": 3,
+   "PRODUCE": 0,
+   "ART_DIRECT": 3,
+   "STAGE": 2,
+   "RENDER": 8602,
+   "COMPOSE+CHECK": 347,
+   "CRITIC": 2,
+   "REVIEW": 0
+  }
+ },
+ "rows": [
+  {
+   "run": 1,
+   "ok": true,
+   "status": "PROPOSALS_READY_FOR_OWNER",
+   "wall_ms": 10390,
+   "steps": {
+    "BRIEF": 1,
+    "EXAMINE": 857,
+    "OBSERVE": 1,
+    "FRAME": 6,
+    "IDEATE": 308,
+    "SELECT": 6,
+    "PRODUCE": 0,
+    "ART_DIRECT": 5,
+    "STAGE": 5,
+    "RENDER": 8711,
+    "COMPOSE+CHECK": 328,
+    "CRITIC": 4,
+    "REVIEW": 0
+   },
+   "outside_trace_ms": 158,
+   "simulated_provider_ms": 1419,
+   "simulated_provider_calls": 10,
+   "cost_eur": {
+    "text_and_vision": 0.0223,
+    "local": 0,
+    "budget": {
+     "max_spend_eur": 0.5,
+     "reserved_eur": 0,
+     "settled_eur": 0.1281671,
+     "images": 3,
+     "video_seconds": 0
+    }
+   },
+   "result_png": null
+  },
+  {
+   "run": 2,
+   "ok": true,
+   "status": "PROPOSALS_READY_FOR_OWNER",
+   "wall_ms": 10181,
+   "steps": {
+    "BRIEF": 1,
+    "EXAMINE": 871,
+    "OBSERVE": 0,
+    "FRAME": 2,
+    "IDEATE": 263,
+    "SELECT": 3,
+    "PRODUCE": 0,
+    "ART_DIRECT": 3,
+    "STAGE": 2,
+    "RENDER": 8602,
+    "COMPOSE+CHECK": 343,
+    "CRITIC": 2,
+    "REVIEW": 0
+   },
+   "outside_trace_ms": 89,
+   "simulated_provider_ms": 1237,
+   "simulated_provider_calls": 10,
+   "cost_eur": {
+    "text_and_vision": 0.0223,
+    "local": 0,
+    "budget": {
+     "max_spend_eur": 0.5,
+     "reserved_eur": 0,
+     "settled_eur": 0.1281671,
+     "images": 3,
+     "video_seconds": 0
+    }
+   },
+   "result_png": null
+  },
+  {
+   "run": 3,
+   "ok": true,
+   "status": "PROPOSALS_READY_FOR_OWNER",
+   "wall_ms": 10064,
+   "steps": {
+    "BRIEF": 1,
+    "EXAMINE": 811,
+    "OBSERVE": 0,
+    "FRAME": 2,
+    "IDEATE": 267,
+    "SELECT": 3,
+    "PRODUCE": 0,
+    "ART_DIRECT": 3,
+    "STAGE": 1,
+    "RENDER": 8507,
+    "COMPOSE+CHECK": 349,
+    "CRITIC": 3,
+    "REVIEW": 0
+   },
+   "outside_trace_ms": 117,
+   "simulated_provider_ms": 1260,
+   "simulated_provider_calls": 10,
+   "cost_eur": {
+    "text_and_vision": 0.0223,
+    "local": 0,
+    "budget": {
+     "max_spend_eur": 0.5,
+     "reserved_eur": 0,
+     "settled_eur": 0.1281671,
+     "images": 3,
+     "video_seconds": 0
+    }
+   },
+   "result_png": null
+  },
+  {
+   "run": 4,
+   "ok": true,
+   "status": "PROPOSALS_READY_FOR_OWNER",
+   "wall_ms": 10366,
+   "steps": {
+    "BRIEF": 1,
+    "EXAMINE": 749,
+    "OBSERVE": 0,
+    "FRAME": 2,
+    "IDEATE": 317,
+    "SELECT": 5,
+    "PRODUCE": 0,
+    "ART_DIRECT": 3,
+    "STAGE": 2,
+    "RENDER": 8853,
+    "COMPOSE+CHECK": 347,
+    "CRITIC": 2,
+    "REVIEW": 0
+   },
+   "outside_trace_ms": 85,
+   "simulated_provider_ms": 1326,
+   "simulated_provider_calls": 10,
+   "cost_eur": {
+    "text_and_vision": 0.0223,
+    "local": 0,
+    "budget": {
+     "max_spend_eur": 0.5,
+     "reserved_eur": 0,
+     "settled_eur": 0.1281671,
+     "images": 3,
+     "video_seconds": 0
+    }
+   },
+   "result_png": null
+  },
+  {
+   "run": 5,
+   "ok": true,
+   "status": "PROPOSALS_READY_FOR_OWNER",
+   "wall_ms": 11385,
+   "steps": {
+    "BRIEF": 0,
+    "EXAMINE": 900,
+    "OBSERVE": 0,
+    "FRAME": 2,
+    "IDEATE": 368,
+    "SELECT": 4,
+    "PRODUCE": 0,
+    "ART_DIRECT": 3,
+    "STAGE": 3,
+    "RENDER": 9618,
+    "COMPOSE+CHECK": 373,
+    "CRITIC": 3,
+    "REVIEW": 0
+   },
+   "outside_trace_ms": 111,
+   "simulated_provider_ms": 1492,
+   "simulated_provider_calls": 10,
+   "cost_eur": {
+    "text_and_vision": 0.0223,
+    "local": 0,
+    "budget": {
+     "max_spend_eur": 0.5,
+     "reserved_eur": 0,
+     "settled_eur": 0.1281671,
+     "images": 3,
+     "video_seconds": 0
+    }
+   },
+   "result_png": null
+  }
+ ]
+}

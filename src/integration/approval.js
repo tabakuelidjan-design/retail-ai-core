@@ -14,7 +14,7 @@ export const ACTION_POLICY = deepFreeze({
   [`${M.BUYING}.prepare_handoff`]: L.AUTO_SAFE, [`${M.MARKETING}.build_campaign_contract`]: L.AUTO_SAFE, 
   [`${M.ANALYTICS}.define_tracking`]: L.AUTO_SAFE, [`${M.STOCK_SALES}.expect_incoming`]: L.AUTO_SAFE, [`${M.BRANDING}.check_claims`]: L.AUTO_SAFE,
   // a human looks at it before it is used
-  [`${M.BUYING}.create_purchase_plan`]: L.OWNER_REVIEW, [`${M.CREATIVE}.produce_draft`]: L.OWNER_REVIEW, [`${M.CREATIVE}.final_asset`]: L.OWNER_REVIEW, [`${M.MARKETING}.approve_campaign_for_creative`]: L.OWNER_REVIEW,
+  [`${M.BUYING}.create_purchase_plan`]: L.OWNER_REVIEW, [`${M.CREATIVE}.produce_draft`]: L.OWNER_REVIEW, [`${M.CREATIVE}.produce_product_visual`]: L.OWNER_REVIEW, [`${M.CREATIVE}.final_asset`]: L.OWNER_REVIEW, [`${M.MARKETING}.approve_campaign_for_creative`]: L.OWNER_REVIEW,
   // a human must approve, by name, before it happens
   [`${M.CHINA_SOURCING}.mark_buy_candidate`]: L.OWNER_APPROVAL_REQUIRED, [`${M.BUYING}.approve_purchase_plan`]: L.OWNER_APPROVAL_REQUIRED, [`${M.BUYING}.place_order`]: L.OWNER_APPROVAL_REQUIRED,
   [`${M.FINANCE}.pay_supplier`]: L.OWNER_APPROVAL_REQUIRED, [`${M.MARKETING}.publish`]: L.OWNER_APPROVAL_REQUIRED,

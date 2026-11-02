@@ -1,0 +1,41 @@
+{
+ "read_at": "2026-11-02T13:30:00Z",
+ "product": {
+  "id": "gid://shopify/Product/15500510986588",
+  "title": "Batterie externe Mini 10 000 mAh – 22,5W",
+  "description": "La Remax MH136 offre 10 000 mAh dans un format compact, avec un câble USB-C intégré et une charge rapide jusqu’à 22,5W. Son écran numérique et son cordon tour de cou la rendent particulièrement pratique pour les journées actives, les voyages et les recharges d’appoint.",
+  "tags": [
+   "remax"
+  ],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57117887103324",
+     "title": "Blanc / 10000mAh",
+     "price": "29.00",
+     "inventoryQuantity": 13
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57117887136092",
+     "title": "Bleu / 10000mAh",
+     "price": "29.00",
+     "inventoryQuantity": 11
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57117887168860",
+     "title": "Noir / 10000mAh",
+     "price": "29.00",
+     "inventoryQuantity": 13
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57117887201628",
+     "title": "Violet / 10000mAh",
+     "price": "29.00",
+     "inventoryQuantity": 13
+    }
+   ]
+  }
+ }
+}

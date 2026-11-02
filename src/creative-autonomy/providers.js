@@ -112,6 +112,6 @@ export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxText
     state: { text: text ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED, vision: visionFor ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED },
     model: { text: config?.textModel ?? null, vision: config?.textModel ?? null },
     // the visual critic may transmit renders derived from ONE source photo: the binding says which (null when nothing can be sent)
-    binding: Object.freeze({ transmits_source_media: Boolean(visionFor), source_sha256: visionFor ? sha(sourcePhotoBytes) : null }),
+    binding: Object.freeze({ transmits_source_media: Boolean(visionFor), source_sha256: visionFor ? sha(sourcePhotoBytes) : null, journal_id: journal?.id ?? null }),
   };
 }

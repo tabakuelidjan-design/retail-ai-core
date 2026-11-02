@@ -16,6 +16,9 @@ une restauration de pixels ne prouve pas le réalisme, et ces mesures ne le prou
 
 Usage : python scene_check.py <variante.png> <plaque.png.json> <produit_rgba.png> <examen.json> <stage.json> <sortie.png>
 Écrit <sortie.png> (la scène au format exact du canevas) et <sortie.png>.json (les métadonnées que compose_stage.py lit), imprime le rapport.
+   ou : python scene_check.py --batch <jobs.json>   (liste de listes des 6 arguments ci-dessus) : toutes les variantes d'une même plaque dans UN
+        processus (numpy/scipy chargés une fois ; le produit placé à chaque échelle, qui ne dépend que de la plaque, calculé une fois). Imprime la
+        liste des rapports, dans l'ordre, identiques à ceux des appels un par un.
 """
 import json, os, sys
 import numpy as np
@@ -77,8 +80,24 @@ def shifted(img, dx, dy):
     return ndi.shift(img, (dy, dx), order=0, mode='nearest')
 
 
-def main():
-    var_path, plate_json, rgba_path, exam_path, stage_path, out_path = sys.argv[1:7]
+_PLACED = {}
+
+
+def placed(exam_path, exam, rgba_path, bx, by, ty, W, H, grey):
+    """Le produit restauré posé sur le canevas (P, A), sa luminance sur la plaque (Lp) et ses contours (Gp). Ne dépend que de la plaque, jamais de
+    la variante : calculé une fois par processus et réutilisé (lecture seule) par toutes les variantes."""
+    key = (exam_path, rgba_path, int(bx), int(by), int(ty), W, H, float(grey))
+    if key not in _PLACED:
+        pr, x0, y0, tw, th = place(exam, rgba_path, bx, by, ty)
+        P, A = on_canvas(pr, x0, y0, W, H)
+        Lp = (P + grey * (1 - A[..., None])) @ LUMA
+        for X in (P, A, Lp): X.setflags(write=False)
+        _PLACED[key] = (pr, x0, y0, tw, th, P, A, Lp, {})
+    return _PLACED[key]
+
+
+def main(argv=None):
+    var_path, plate_json, rgba_path, exam_path, stage_path, out_path = (argv or sys.argv[1:])[0:6]
     meta = json.load(open(plate_json, encoding='utf-8')); W, H = meta['canvas']
     exam = json.load(open(exam_path, encoding='utf-8')); stage = json.load(open(stage_path, encoding='utf-8'))
     img = Image.open(var_path).convert('RGB'); resized_from = None
@@ -94,11 +113,10 @@ def main():
     trials = []
     for s in LIMITS['scales']:
         ty = round(by - (by - ty0) * s)
-        pr, x0, y0, tw, th = place(exam, rgba_path, bx, by, ty)
-        P, A = on_canvas(pr, x0, y0, W, H)
-        Lp = (P + grey * (1 - A[..., None])) @ LUMA
-        Gp = np.hypot(ndi.sobel(Lp, 0), ndi.sobel(Lp, 1))
-        region = ndi.binary_dilation(A > 0.5, iterations=6)
+        pr, x0, y0, tw, th, P, A, Lp, memo = placed(exam_path, exam, rgba_path, bx, by, ty, W, H, grey)
+        if 'Gp' not in memo:
+            memo['Gp'] = np.hypot(ndi.sobel(Lp, 0), ndi.sobel(Lp, 1)); memo['region'] = ndi.binary_dilation(A > 0.5, iterations=6)
+        Gp, region = memo['Gp'], memo['region']
         ys, xs = np.nonzero(region)
         if not len(ys): continue
         ya, yb, xa, xb = max(0, ys.min() - R), min(H, ys.max() + R + 1), max(0, xs.min() - R), min(W, xs.max() + R + 1)
@@ -110,9 +128,7 @@ def main():
     best = max(trials, key=lambda t: t['edge_ncc'])
     dx, dy, s = best['dx'], best['dy'], best['scale']
     bxa, bya, tya = bx + dx, by + dy, best['ty'] + dy
-    pr, x0, y0, tw, th = place(exam, rgba_path, bxa, bya, tya)
-    P, A = on_canvas(pr, x0, y0, W, H)
-    Lp = (P + grey * (1 - A[..., None])) @ LUMA
+    pr, x0, y0, tw, th, P, A, Lp, _ = placed(exam_path, exam, rgba_path, bxa, bya, tya, W, H, grey)
     solid = A >= 0.99; anyp = A > 0.02
     rejections, warnings = [], []
     if best['edge_ncc'] < LIMITS['min_edge_ncc']: rejections.append('PRODUCT_NOT_FOUND_WHERE_EXPECTED')
@@ -206,8 +222,15 @@ def main():
               'alignment': {'dx': dx, 'dy': dy, 'scale': s, 'edge_ncc': best['edge_ncc'], 'trials': trials},
               'ghost': ghost, 'duplicate': duplicate, 'contact_shadow': shadow, 'reflection': reflection, 'light': light,
               'product_level': 1.0, 'measured_scene_level_ratio': round(level, 4), 'limits': LIMITS, 'compose_meta': compose_meta}
-    print(json.dumps(report, ensure_ascii=False))
+    return report
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1] == '--batch':
+        jobs = json.load(open(sys.argv[2], encoding='utf-8')); out = []
+        for job in jobs:
+            try: out.append(main(job))
+            except (Exception, SystemExit) as e: out.append({'pass': False, 'rejections': ['SCENE_NOT_MEASURABLE'], 'warnings': [], 'error': str(e)[:200]})
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        print(json.dumps(main(), ensure_ascii=False))

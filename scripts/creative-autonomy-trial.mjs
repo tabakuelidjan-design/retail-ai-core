@@ -25,7 +25,7 @@ import { runAutonomous, localEngines } from '../src/creative-autonomy/run.js';
 import { connectProviders, worstCaseCallEur, VISION_MAX_TOKENS, VISION_PURPOSE } from '../src/creative-autonomy/providers.js';
 import { VISION_OPERATION } from '../src/marketing-creative/alibaba/qwen-vision.js';
 import { BRAIN_PORT_LIMITS } from '../src/marketing-creative/alibaba/qwen-brain-port.js';
-import { HABB_BRAND } from '../src/creative-autonomy/brief.js';
+
 import { FRANKFURT_CATALOGUE, RECOMMENDED, TRIAL_LIMITS, trialPlanId, forecastCost, modelAllowedInScope, briefBinding, modelListUrl, providerConfirmsModel, codeFingerprint, secretsFileProblems, runtimeInjections } from '../src/creative-autonomy/trial.js';
 import { loadAlibabaCreativeConfig } from '../src/marketing-creative/alibaba/config.js';
 import { SpendGuard, priceImagesEur } from '../src/marketing-creative/alibaba/budget.js';
@@ -39,6 +39,9 @@ import { IMAGE_EDIT_MODEL, IMAGE_EDIT_PROVIDER_ID } from '../src/marketing-creat
 import { normalizeConceptSet } from '../src/creative-brain/concept.js';
 // SIZING ONLY: generic invented answers of the test world, used to measure prompt sizes. They never reach the owner.
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from '../test/creative-brain-world.js';
+import { loadMerchantCreativeBrand as __loadBrand, resolveBrandProfile as __resolveProfile, artDirectionHintFor as __hintFor } from '../src/creative-autonomy/brand-profile.js';
+const HABB_BRAND = __loadBrand('habb'); // HABB is tenant configuration (config/merchants/habb/creative-brand.json)
+const HABB = __resolveProfile(HABB_BRAND);
 
 const argv = process.argv.slice(2);
 const mode = argv.includes('--execute') ? 'execute' : 'plan';
@@ -54,6 +57,8 @@ const photoPath = arg('photo');
 const snap = (f) => JSON.parse(readFileSync(new URL(`../test/fixtures/creative-autonomy/${f}`, import.meta.url), 'utf8'));
 const CATALOG = {
   'gourde-noire': { snap: 'shopify-gourde-tyeso.json', variant: 'Noir', objective: 'Donner envie aux habitants de Namur de découvrir la gourde TYESO noire chez HABB' },
+  // first premium benchmark (owner approval 2026-11-02: photo rights for this benchmark, 0,50 EUR maximum); Shopify read-only snapshot of 2026-11-02
+  'batterie-noire': { snap: 'shopify-batterie-mini-noir.json', variant: 'Noir / 10000mAh', objective: 'Faire découvrir la batterie Mini noire aux clients qui voyagent et passent la journée dehors' },
   'coque-iphone12': { snap: 'shopify-coque-iphone12.json', variant: null, objective: 'Faire commander des coques iPhone 12 personnalisées pour les cadeaux de fin d\'année' },
 };
 if (!CATALOG[productKey]) throw new Error(`unknown product ${productKey}`);
