@@ -17,7 +17,7 @@ function h(tag, attrs, ...children) {
 const api = async (path, body) => {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(j?.error?.code || `HTTP ${r.status}`), { code: j?.error?.code });
+  if (!r.ok) throw Object.assign(new Error(j?.error?.code || `HTTP ${r.status}`), { code: j?.error?.code, body: j });
   return j;
 };
 
@@ -59,11 +59,44 @@ async function decide(decision) {
   try {
     const r = await api(`/api/creator/creations/${c.creation_id}/decision`, { decision, note: decision === 'REVISE' ? state.revisionNote : undefined });
     upsert(r.creation);
-    if (r.revision) { upsert(r.revision); state.currentId = r.revision.creation_id; }
+    if (r.revision) { upsert(r.revision); state.currentId = r.revision.creation_id; state.revising = false; state.revisionNote = ''; }
+    else if (!r.creation.pending_revision) { state.revising = false; state.revisionNote = ''; }
+    state.planNotice = null;
+  } catch (e) { if (e.body?.plan) state.planNotice = e.body.plan; else state.error = e.code || e.message; }
+  state.busy = false; render(); poll();
+}
+async function confirmRevision(ok) {
+  const c = current(); if (!c) return;
+  state.busy = true; render();
+  try {
+    const r = await api(`/api/creator/creations/${c.creation_id}/revision/${ok ? 'confirm' : 'cancel'}`, {});
+    upsert(r.creation); if (r.revision) { upsert(r.revision); state.currentId = r.revision.creation_id; }
     state.revising = false; state.revisionNote = '';
   } catch (e) { state.error = e.code || e.message; }
   state.busy = false; render(); poll();
 }
+const eur = (x) => `${String(x ?? 0).replace('.', ',')} €`;
+const METHOD_LABEL = { LOCAL_RECOMPOSE: 'retouche locale sur la même scène (sans appel payant)', NEW_SCENE_GENERATION: 'nouvelle scène générée (appel payant au fournisseur d’images)', NEW_CREATIVE_RUN: 'nouvelle création complète' };
+function planBox(pl, pending) {
+  if (!pl) return null;
+  if (pl.method === 'NEEDS_EXACT_INSTRUCTION') return h('p', { class: 'cr-refused', role: 'alert' }, pl.ask === 'EXACT_HEADLINE_WORDING' ? 'Indiquez le titre exact souhaité entre guillemets, par exemple : Remplace le titre par « … ». Aucun coût tant que la modification n’est pas précise.' : 'Indiquez où placer le texte (à gauche, à droite, en haut, en bas).');
+  if (pl.refusals?.length) return h('p', { class: 'cr-refused', role: 'alert' }, `Révision impossible sans enfreindre une règle : ${pl.refusals.map((r) => r.reason).join(' ; ')}. Rien n’a été modifié.`);
+  return h('div', { class: 'cr-plan', role: 'note' },
+    h('strong', null, 'Plan de révision : '), METHOD_LABEL[pl.method] ?? pl.method, '.',
+    h('div', { class: 'cr-small' }, `Coût estimé ${eur(pl.estimated_cost_eur)} (maximum ${eur(pl.worst_case_eur)}) · conservé : ${(pl.preserves ?? []).join(', ')}.`),
+    pending ? h('div', { class: 'cr-actions' },
+      h('button', { id: 'cr-confirm-revision', type: 'button', class: 'btn-ghost', disabled: state.busy, on: { click: () => confirmRevision(true) } }, `Confirmer (≈ ${eur(pl.estimated_cost_eur)}, simulé)`),
+      h('button', { type: 'button', class: 'btn-text', on: { click: () => confirmRevision(false) } }, 'Annuler')) : null);
+}
+const VERIF = (v) => {
+  if (!v) return null;
+  const pct = (x) => `${String(Math.round(x * 1000) / 10).replace('.', ',')} %`;
+  const unreq = (v.unrequested_changes ?? []).map((u) => `${u.field} (« ${u.before} » → « ${u.after} »)`).join(', ');
+  const text = v.outcome === 'APPLIED' ? `Révision vérifiée : ${pct(v.changed_share ?? v.final_changed_share)} de l’image modifiée${v.scene_identical ? ', scène identique' : ''}, produit vérifié pixel à pixel.`
+    : v.outcome === 'UNCHANGED' ? `Aucun changement réalisé : ${v.scene_changed === false ? 'la scène est identique' : 'l’image est identique'}. La révision n’a pas abouti${v.scene_changed === false ? ' (le fournisseur simulé renvoie toujours la même scène)' : ''}.`
+    : v.outcome === 'APPLIED_WITH_UNREQUESTED_CHANGES' ? 'Révision appliquée, avec des changements non demandés.' : `Révision refusée par les contrôles : ${(v.technical_defects ?? []).join(', ')}`;
+  return h('p', { class: `cr-verif cr-verif-${String(v.outcome).toLowerCase()}`, role: 'status' }, text, unreq ? h('span', { class: 'cr-small' }, ` Modifié sans être demandé : ${unreq}.`) : null);
+};
 
 // ---------- view ----------
 function sidebar() {
@@ -116,8 +149,11 @@ function resultCard() {
       h('img', { src, alt: `Visuel ${i + 1} — ${c.product.title} ${c.variant.title}`, class: 'cr-img' }),
       h('figcaption', { class: 'cr-caption' }, h('span', { class: 'ex-chip cr-sim' }, 'SIMULÉ'), ' Image de démonstration (fournisseur simulé), pas une image d’un fournisseur réel.')))),
     h('p', { class: 'cr-meta cr-small' }, `Photo source vérifiée ${c.result.media_id} · empreinte ${c.result.source_sha256.slice(0, 12)}… · règle v${c.result.policy_version} · dépense simulée ${c.result.reservation?.status === 'SETTLED' ? `réglée ${String(c.result.reservation.settled_eur).replace('.', ',')} € (plafond ${String(c.result.reservation.ceiling_eur).replace('.', ',')} €)` : (c.result.reservation?.status ?? '—')} · non publié`),
+    VERIF(c.verification),
+    c.pending_revision ? planBox(c.pending_revision.plan, true) : null,
+    !c.decision && state.planNotice ? planBox(state.planNotice, false) : null,
     c.decision ? h('p', { class: 'cr-decided' }, c.decision.decision === 'ACCEPTED' ? 'Résultat accepté. Il n’est pas publié : aucune publication automatique.' : c.decision.decision === 'REJECTED' ? 'Résultat rejeté.' : 'Révision demandée : une nouvelle création est lancée.')
-      : decisionBar());
+      : c.pending_revision ? null : decisionBar());
   else body = h('p', { class: 'cr-refused', role: 'alert' }, refusalText(c.error));
   return h('section', { class: 'ex-card cr-card cr-result' }, head, meta, body);
 }

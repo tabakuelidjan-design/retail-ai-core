@@ -36,3 +36,7 @@
 .cr-history-item { width: 100%; text-align: left; border: 1px solid var(--border, #e5e5e5); background: #fff; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; cursor: pointer; }
 .cr-history-item.on { border-color: var(--accent, #c4603f); }
 @media (max-width: 900px) { .cr-grid { grid-template-columns: 1fr; } }
+.cr-plan { display: grid; gap: 8px; background: #f4f6fb; border: 1px solid var(--border, #e5e5e5); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.cr-verif { margin: 0; font-size: 13.5px; }
+.cr-verif-applied { color: #23633a; }
+.cr-verif-unchanged, .cr-verif-applied_with_unrequested_changes, .cr-verif-rejected_by_checks { color: #9b2c1f; }

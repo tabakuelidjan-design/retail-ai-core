@@ -18,6 +18,8 @@ export async function buildCreatorDemoWorld({ work }) {
   const { SpendGuard } = await import('../src/marketing-creative/alibaba/budget.js');
   const { FileOutputStore } = await import('../src/marketing-creative/alibaba/output-store.js');
   const { IMAGE_EDIT_MODEL } = await import('../src/marketing-creative/alibaba/qwen-image-edit.js');
+  const { resolveBrandProfile } = await import('../src/creative-autonomy/brand-profile.js');
+  const { createRevisionService } = await import('../src/creative-autonomy/revision-planner.js');
 
   const photoPath = join(work, 'demo-gourde-noire-500ml.jpg');
   execFileSync(PY, [join(ROOT, 'test/helpers/scene_fixtures.py'), 'photo', photoPath]); // the demonstration product photo (a drawn bottle)
@@ -69,19 +71,22 @@ export async function buildCreatorDemoWorld({ work }) {
   const env = { ...process.env, ALIBABA_QWEN_TEXT_MODEL: 'qwen3-vl-plus', NORDLA_ALIBABA_SCOPE: 'EU' };
   const imageEnv = { ...env, ALIBABA_MODEL_STUDIO_API_KEY: env.ALIBABA_MODEL_STUDIO_IMAGE_API_KEY, ALIBABA_MODEL_STUDIO_WORKSPACE_ID: env.ALIBABA_MODEL_STUDIO_IMAGE_WORKSPACE_ID, ALIBABA_QWEN_IMAGE_MODEL: IMAGE_EDIT_MODEL };
   const local = localEngines({ renderScale: 0.5, samples: 8 });
+  const BRAND = { merchant_id: M, merchant_name: 'Boutique de démonstration' }; // a tenant WITHOUT a creative profile: generic rules, its own name
+  const profile = resolveBrandProfile(BRAND);
   const TARGET = { provider_id: 'alibaba-cloud-model-studio', region: 'eu-central-1' };
   let runGuard = null; // one SpendGuard per run, shared by its critic and scene engine (the Creator runs one production at a time)
   const integration = createIntegration({ tenant_id: M, creativeProduction: {
-    shopify, ledger, policyId: POLICY.policy_id, runCeilingEur: 0.5, brand: { merchant_id: M, merchant_name: 'Boutique de démonstration' }, nonProduction: true, fetchImpl: cdnFetch,
+    shopify, ledger, policyId: POLICY.policy_id, runCeilingEur: 0.5, brand: BRAND, nonProduction: true, fetchImpl: cdnFetch,
     workdirFor: (runId) => join(work, 'runs', runId),
     providers: {
       simulated: true, critic: TARGET, scene: TARGET,
       portsFor: ({ photoBytes, authorization, journal }) => { runGuard = new SpendGuard({ maxSpendEur: 0.5, maxImages: 3, maxVideoSeconds: 0 });
         return connectProviders({ env: { ...env, NORDLA_MEDIA_AUTHORIZATION_FILE: '' }, journal, budget: runGuard, sourcePhotoBytes: photoBytes, mediaAuthorization: authorization, trialAuthorized: true, maxTextCalls: 8, maxVisionCalls: 1 }); },
       enginesFor: ({ sha256, authorization, journal }) => createSceneEngine({ baseEngines: local, config: loadAlibabaCreativeConfig(imageEnv), authorization, photoSha256: sha256, budget: runGuard, journal,
-        outputStore: new FileOutputStore(join(work, 'provider-outputs')), variants: 3, maxImageCalls: 1 }),
+        outputStore: new FileOutputStore(join(work, 'provider-outputs')), variants: 3, maxImageCalls: 1, profile }),
     },
   } });
 
-  return { integration, catalog, OWNER, M, PID, BLACK, WHITE };
+  const revisions = createRevisionService({ engines: local, profile, ceilingEur: 0.5 });
+  return { integration, catalog, OWNER, M, PID, BLACK, WHITE, revisions, profile };
 }

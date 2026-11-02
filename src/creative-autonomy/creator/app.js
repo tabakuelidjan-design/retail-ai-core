@@ -9,6 +9,7 @@
 // Real provider calls stay refused by the hub under NDR-D02: this server can only run with SIMULATED providers.
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { join, dirname } from 'node:path';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { MODULE } from '../../integration/index.js';
 
@@ -43,7 +44,7 @@ async function readJson(req) {
  * mode:         'SIMULATED' is the only mode this screen accepts (NDR-D02); anything else refuses to start.
  * actor:        who decides on this screen (the tenant user), recorded with each decision.
  */
-export function createCreatorApp({ integration, catalog, mode = 'SIMULATED', actor, tenantName = null, now = () => new Date(), readImage = (p) => readFile(p) }) {
+export function createCreatorApp({ integration, catalog, mode = 'SIMULATED', actor, tenantName = null, now = () => new Date(), readImage = (p) => readFile(p), revisions = null, revisionDir = null }) {
   if (mode !== 'SIMULATED') throw new Error('NDR-D02: the Creator screen only runs with simulated providers');
   if (!integration?.call || typeof catalog !== 'function') throw new TypeError('integration and catalog are required');
   const creations = new Map(); // creation_id -> record (in memory: a demonstration server)
@@ -57,7 +58,11 @@ export function createCreatorApp({ integration, catalog, mode = 'SIMULATED', act
       reservation: c.result.reservation ? { status: c.result.reservation.closing?.status ?? c.result.reservation.status, ceiling_eur: c.result.reservation.ceiling_eur,
         settled_eur: c.result.reservation.closing?.settled_eur ?? null } : null } : null,
     error: c.error, decision: c.decision,
+    revision_method: c.revisionMethod ?? null, verification: c.verification ?? null,
+    pending_revision: c.pendingRevision ? { note: c.pendingRevision.note, plan: publicPlan(c.pendingRevision.plan) } : null,
   });
+  const publicPlan = (pl) => pl && ({ method: pl.method, kind: pl.understood.kind, executable: pl.executable, estimated_cost_eur: pl.estimated_cost_eur, worst_case_eur: pl.worst_case_eur,
+    needs_confirmation: pl.needs_confirmation, ask: pl.ask ?? null, changes: pl.changes, preserves: pl.preserves, refusals: pl.refusals, reason_not_local: pl.reason_not_local ?? null, provider_calls: pl.provider_calls });
 
   function start({ product, variant, objective, revisionOf = null, revisionNote = null }) {
     const id = `cr-${randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -68,9 +73,30 @@ export function createCreatorApp({ integration, catalog, mode = 'SIMULATED', act
       const out = await integration.call(MODULE.CREATIVE, 'produce_product_visual',
         { product_id: product.product_id, variant_id: variant.variant_id, expected_variant_title: variant.title, objective: brief, run_id: id },
         { workflow_id: `creator:${id}`, initiated_by: { kind: 'HUMAN', id: actor.id, role: actor.role } });
-      if (out.ok && out.result?.results?.length) { c.result = out.result; c.status = 'READY'; }
+      if (out.ok && out.result?.results?.length) {
+        c.result = out.result; c.status = 'READY';
+        // a revised result is VERIFIED against its parent: an identical image is never presented as a successful revision
+        const parent = revisionOf ? creations.get(revisionOf) : null;
+        if (parent?.result && revisions) c.verification = revisions.verifyRegenerated({ parentImage: parent.result.results[0].image, image: out.result.results[0].image, plan: c.plan ?? null });
+      }
       else if (out.ok) { c.result = out.result; c.status = 'NO_RESULT'; c.error = { code: 'NO_RESULT_PASSED_CHECKS', reason: 'every proposal was withheld by the technical checks' }; }
       else { c.status = 'REFUSED'; c.error = { code: out.code ?? 'REFUSED', reason: String(out.reason ?? '').slice(0, 300) }; }
+    }).catch((e) => { c.status = 'FAILED'; c.error = { code: 'INTERNAL', reason: String(e?.message ?? e).slice(0, 200) }; });
+    return c;
+  }
+
+  /** A LOCAL revision: the same scene, new text decisions, the real compositor, then verification. No provider call. */
+  function startLocal(parent, note, plan) {
+    const id = `cr-${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    const c = { id, status: 'RUNNING', createdAt: now().toISOString(), product: parent.product, variant: parent.variant, objective: parent.objective, revisionOf: parent.id, revisionNote: note,
+      revisionMethod: plan.method, result: null, error: null, decision: null };
+    creations.set(id, c);
+    queue = queue.then(async () => {
+      const r = await revisions.applyLocal({ plan, proposalImage: parent.result.results[0].image, outDir: join(revisionDir ?? dirname(dirname(parent.result.results[0].image)), 'revisions', id) });
+      c.verification = r.verification;
+      if (r.verification.outcome === 'REJECTED_BY_CHECKS') { c.status = 'NO_RESULT'; c.error = { code: 'REVISION_REJECTED_BY_CHECKS', reason: (r.verification.technical_defects ?? []).join(', ') || 'product proof failed' }; return; }
+      c.result = { ...parent.result, results: [{ image: r.image, technical: 'PASS', creative: null }], reservation: { status: 'NO_SPEND', ceiling_eur: 0, closing: { status: 'NO_SPEND', settled_eur: 0 } } };
+      c.status = 'READY';
     }).catch((e) => { c.status = 'FAILED'; c.error = { code: 'INTERNAL', reason: String(e?.message ?? e).slice(0, 200) }; });
     return c;
   }
@@ -117,10 +143,28 @@ export function createCreatorApp({ integration, catalog, mode = 'SIMULATED', act
         if (!decision) return json(res, 400, { error: { code: 'DECISION_INVALID' } });
         const note = typeof b.note === 'string' ? b.note.trim().slice(0, 500) : '';
         if (decision === DECISION.REVISE && !note) return json(res, 400, { error: { code: 'REVISION_NOTE_REQUIRED' } });
+        if (decision === DECISION.REVISE && revisions) {
+          // understood, planned with the least disruptive method, priced BEFORE anything runs
+          const { plan } = revisions.plan({ proposalImage: c.result.results[0].image, note });
+          if (plan.method === 'LOCAL_RECOMPOSE' && !plan.executable) return json(res, 422, { error: { code: 'REVISION_REFUSED_BY_RULES' }, plan: publicPlan(plan) });
+          if (plan.method === 'NEEDS_EXACT_INSTRUCTION') return json(res, 422, { error: { code: 'REVISION_NEEDS_EXACT_INSTRUCTION' }, plan: publicPlan(plan) });
+          if (plan.needs_confirmation) { c.pendingRevision = { note, plan }; return json(res, 200, { creation: view(c), revision: null, plan: publicPlan(plan) }); }
+          c.decision = { decision, note, by: actor.id, at: now().toISOString(), published: false, method: plan.method };
+          return json(res, 200, { creation: view(c), revision: view(startLocal(c, note, plan)), plan: publicPlan(plan) });
+        }
         c.decision = { decision, note: note || null, by: actor.id, at: now().toISOString(), published: false };
         let revision = null;
         if (decision === DECISION.REVISE) revision = start({ product: c.product, variant: c.variant, objective: c.objective, revisionOf: c.id, revisionNote: note });
         return json(res, 200, { creation: view(c), revision: revision ? view(revision) : null });
+      }
+      m = /^\/api\/creator\/creations\/(cr-[0-9a-f]{12})\/revision\/(confirm|cancel)$/.exec(p);
+      if (req.method === 'POST' && m) {
+        const c = creations.get(m[1]); if (!c?.pendingRevision) return json(res, 409, { error: { code: 'NO_PENDING_REVISION' } });
+        const { note, plan } = c.pendingRevision; c.pendingRevision = null;
+        if (m[2] === 'cancel') return json(res, 200, { creation: view(c), revision: null });
+        c.decision = { decision: DECISION.REVISE, note, by: actor.id, at: now().toISOString(), published: false, method: plan.method, estimated_cost_eur: plan.estimated_cost_eur };
+        const r = start({ product: c.product, variant: c.variant, objective: c.objective, revisionOf: c.id, revisionNote: note }); r.revisionMethod = plan.method; r.plan = plan;
+        return json(res, 200, { creation: view(c), revision: view(r) });
       }
       return json(res, 404, { error: { code: 'NOT_FOUND' } });
     } catch (e) {

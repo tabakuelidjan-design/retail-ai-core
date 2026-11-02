@@ -32,8 +32,8 @@ if (!process.env.NORDLA_CREATOR_DEMO_CHILD) {
 } else {
   const { buildCreatorDemoWorld } = await import('./creator-demo-world.mjs');
   const { createCreatorApp } = await import('../src/creative-autonomy/creator/app.js');
-  const { integration, catalog, OWNER } = await buildCreatorDemoWorld({ work: process.env.NORDLA_CREATOR_DEMO_DIR });
-  const handler = createCreatorApp({ integration, catalog, mode: 'SIMULATED', actor: { id: OWNER, role: 'OWNER' }, tenantName: 'Boutique de démonstration (test)' });
+  const { integration, catalog, OWNER, revisions } = await buildCreatorDemoWorld({ work: process.env.NORDLA_CREATOR_DEMO_DIR });
+  const handler = createCreatorApp({ integration, catalog, mode: 'SIMULATED', actor: { id: OWNER, role: 'OWNER' }, tenantName: 'Boutique de démonstration (test)', revisions });
   const port = Number(process.env.CREATOR_PORT || 4420);
   http.createServer(handler).listen(port, '127.0.0.1', () => {
     console.log(`Nordla Créateur (DÉMONSTRATION SIMULÉE — aucun fournisseur réel, rien n'est publié) : http://127.0.0.1:${port}`);

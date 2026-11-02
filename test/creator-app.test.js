@@ -111,9 +111,20 @@ test('Creator demo (REAL hub, photo selection, ledger rules and engines; SIMULAT
     const c = await until((await j('/api/creator/creations', { product_id: p.product_id, variant_id: noir.variant_id, objective: 'Faire découvrir la gourde' })).creation_id);
     assert.equal(c.status, 'READY', JSON.stringify(c.error)); assert.equal(c.published, false); assert.equal(c.result.reservation.status, 'SETTLED'); assert.ok(c.result.reservation.settled_eur <= 0.5);
     const png = Buffer.from(await (await fetch(B + c.result.images[0])).arrayBuffer()); assert.deepEqual(png.subarray(0, 8), PNG);
-    const rv = await j(`/api/creator/creations/${c.creation_id}/decision`, { decision: 'REVISE', note: 'Fond plus clair' });
-    const c2 = await until(rv.revision.creation_id); assert.equal(c2.status, 'READY', 'a second production in the same server works');
-    assert.equal((await j(`/api/creator/creations/${c2.creation_id}/decision`, { decision: 'ACCEPT' })).creation.decision.published, false);
+    // LOCAL revision (exact headline): same scene, no provider call, verified change located in the text area, product re-proven
+    const lv = await j(`/api/creator/creations/${c.creation_id}/decision`, { decision: 'REVISE', note: 'Remplace le titre par « Noir de nuit, ligne nette »' });
+    assert.equal(lv.plan.method, 'LOCAL_RECOMPOSE'); assert.equal(lv.plan.estimated_cost_eur, 0);
+    const c2 = await until(lv.revision.creation_id); assert.equal(c2.status, 'READY');
+    assert.equal(c2.verification.outcome, 'APPLIED'); assert.equal(c2.verification.scene_identical, true); assert.equal(c2.verification.product_pixels_proven_authentic, true);
+    assert.ok(c2.verification.changed_share > 0 && c2.verification.changed_share < 0.1, 'only the text area changed');
+    // SCENE revision: priced and CONFIRMED first; the simulated provider returns the same scene -> UNCHANGED, never claimed as applied
+    const sv = await j(`/api/creator/creations/${c2.creation_id}/decision`, { decision: 'REVISE', note: 'Un fond plus clair' });
+    assert.equal(sv.revision, null); assert.equal(sv.plan.method, 'NEW_SCENE_GENERATION'); assert.ok(sv.plan.estimated_cost_eur > 0); assert.equal(sv.plan.needs_confirmation, true);
+    const cf = await j(`/api/creator/creations/${c2.creation_id}/revision/confirm`, {});
+    const c3 = await until(cf.revision.creation_id); assert.equal(c3.status, 'READY', 'a second production in the same server works');
+    assert.equal(c3.verification.scene_changed, false); assert.equal(c3.verification.outcome, 'UNCHANGED');
+    assert.deepEqual(c3.verification.unrequested_changes.map((u) => u.field), ['headline'], 'the approved headline was not kept by a full re-run: reported');
+    assert.equal((await j(`/api/creator/creations/${c3.creation_id}/decision`, { decision: 'ACCEPT' })).creation.decision.published, false);
     const w = await until((await j('/api/creator/creations', { product_id: p.product_id, variant_id: blanc.variant_id, objective: 'x' })).creation_id);
     assert.equal(w.status, 'REFUSED'); assert.match(w.error.reason, /NO_VERIFIED_SOURCE_IMAGE/);
   } finally { child.kill('SIGTERM'); }
