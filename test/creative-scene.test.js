@@ -270,6 +270,12 @@ test('trial --execute --scene end to end against a fetch double: gates, free che
   const planDir = join(out, 'plan');
   const plan = JSON.parse(execFileSync(process.execPath, ['--import', preload, script, '--plan', '--scene', '--out', planDir, '--product', 'gourde-noire', '--photo', photo.path], { env: base }).toString());
   assert.equal(plan.limits.mode, 'SCENE_AROUND_PRODUCT'); assert.equal(plan.limits.image.scope, 'GLOBAL'); assert.equal(plan.limits.image.variants, 3);
+  assert.equal(plan.preflight.find((c) => c.name.includes('critique visuel multimodal')).pass, true);
+  // A GLOBAL text/vision scope cannot masquerade as an EU-only critic simply because the endpoint is Frankfurt.
+  const badScopePlan = JSON.parse(execFileSync(process.execPath,
+    ['--import', preload, script, '--plan', '--scene', '--out', join(out, 'global-plan'), '--product', 'gourde-noire', '--photo', photo.path],
+    { env: { ...base, NORDLA_ALIBABA_SCOPE: 'GLOBAL' } }).toString());
+  assert.equal(badScopePlan.preflight.find((c) => c.name.includes('critique visuel multimodal')).pass, false);
   assert.equal(plan.money.CEILING_application_eur, 0.5); assert.equal(plan.money.CEILING_provable_max_fits, true);
   // the template is REVOKED: as written, it authorises nothing
   const templatePath = join(planDir, 'scene-media-authorization.TEMPLATE.json');

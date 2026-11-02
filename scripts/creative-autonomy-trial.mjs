@@ -159,6 +159,8 @@ function preflight() {
   if (!ideation) ok('droits de la photo', rights === 'OWNER_CONFIRMED', rights === 'OWNER_CONFIRMED' ? 'confirmés par le propriétaire' : `${rights} : aucune image ne part, aucun essai`);
   if (!ideation && !scene) ok('autorisation média (photo + rendus dérivés)', Boolean(env.NORDLA_MEDIA_AUTHORIZATION_FILE), env.NORDLA_MEDIA_AUTHORIZATION_FILE ? 'fichier présent' : 'absente : le critique visuel restera non connecté');
   if (scene) {
+    ok('critique visuel multimodal dans un périmètre EU déclaré', scope === 'EU' && FRANKFURT_CATALOGUE.models[model]?.input?.includes('image') === true,
+      `modèle ${model}, périmètre déclaré ${scope} : exigence EU + modèle acceptant les images`);
     ok('clé API de l\'espace image', Boolean(imageEnv.ALIBABA_MODEL_STUDIO_API_KEY), imageEnv.ALIBABA_MODEL_STUDIO_API_KEY ? `présente (${env.ALIBABA_MODEL_STUDIO_IMAGE_API_KEY ? 'clé image dédiée' : 'même clé que le texte'}, non affichée)` : 'absente');
     ok('espace de travail image (périmètre Global, Francfort)', Boolean(imageEnv.ALIBABA_MODEL_STUDIO_WORKSPACE_ID), imageEnv.ALIBABA_MODEL_STUDIO_WORKSPACE_ID ? (env.ALIBABA_MODEL_STUDIO_IMAGE_WORKSPACE_ID ? 'dédié' : 'même espace que le texte : il doit servir qwen-image-3.0-pro (vérifié gratuitement avant toute dépense)') : 'absent');
     const media = sceneMediaRecord();
