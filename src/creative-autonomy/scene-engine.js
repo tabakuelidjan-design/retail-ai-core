@@ -20,6 +20,7 @@ import { deriveCandidateAuthorization } from '../marketing-creative/alibaba/qwen
 import { decodePng } from '../creative-intelligence/png-pixels.js';
 import { zoneObjectStructure, SUITABILITY } from '../creative-runtime/environment-suitability.js';
 import { resolveBrandProfile } from './brand-profile.js';
+import { substituteWordsIn } from '../creative-brain/substitutes.js';
 
 const run$ = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,10 +56,14 @@ const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n).r
 /** The structured edit request (qwen-image-edit.js builds the provider prompt from it). Exported for review and tests: no hidden wording. */
 export function buildSceneRequest({ concept, artDirection: art, stage, width, height, n, purpose = SCENE_PURPOSE, profile = resolveBrandProfile({}) }) {
   if (!concept || !art || !stage?.camera || !stage?.key_light) throw new TypeError('concept, art direction and stage are required');
+  const withheld = [];
+  const ideaLines = [concept.central_idea, concept.visual_metaphor].filter((s) => { const w = substituteWordsIn(s); if (w.length) withheld.push(...w); return !w.length; }).map((s) => clip(s, 260));
   const realism = art.realism === 'EDITORIAL_STYLISED' ? 'an editorial commercial photograph' : 'a photorealistic commercial photograph, real materials, real optics';
   const scene = [
     `${realism}, ${HEIGHT_WORDS[stage.camera.height] ?? ''}`,
-    `The image tells this idea: ${clip(concept.central_idea, 260)}; ${clip(concept.visual_metaphor, 260)}`,
+    // the concept's own sentences go to the image model ONLY if they name no device, product substitute or text (the negative prompt forbids
+    // those: a positive prompt that names them contradicts it; the story is then carried by the art direction's planes, never dropped silently)
+    ...(ideaLines.length ? [`The image tells this idea: ${ideaLines.join('; ')}`] : []),
     `Atmosphere: ${clip(art.atmosphere, 260)}`,
     `Materials: ${clip(art.material_language, 220)}`,
     `Light: ${clip(art.lighting_intent, 220)}; the key light comes ${SIDE_WORDS[stage.key_light.side] ?? 'from the side'}, ${String(stage.key_light.temperature ?? 'NEUTRAL').toLowerCase()} in colour`,
@@ -79,7 +84,7 @@ export function buildSceneRequest({ concept, artDirection: art, stage, width, he
     preserve: ['its position and size in the frame', 'its outline and proportions', 'its lid, clip and every printed mark', 'its colour and finish'],
     forbid: [...new Set([...SCENE_NEGATIVE, ...(profile.scene_negative_terms ?? []), ...(art.forbidden_decorative_noise ?? []).map((x) => clip(x, 40)).filter(Boolean)])],
     // what the concept asked for and what was REQUESTED from the image model (requested, not proven drawn: the critic and the owner judge the image)
-    execution: { narrative_elements_requested: narrative, wanted_requested: [...(stage.wanted_but_not_available ?? [])], verified_in_image: false },
+    execution: { narrative_elements_requested: narrative, wanted_requested: [...(stage.wanted_but_not_available ?? [])], concept_text_withheld_for: [...new Set(withheld)], verified_in_image: false },
   });
 }
 

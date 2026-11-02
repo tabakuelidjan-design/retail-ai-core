@@ -75,15 +75,20 @@ async function confirmRevision(ok) {
   } catch (e) { state.error = e.code || e.message; }
   state.busy = false; render(); poll();
 }
+const FR = { 'the text would sit on the product': 'le texte passerait sur le produit', 'the headline is a placeholder, not copy': 'le titre est un texte provisoire', 'the headline states an unverified claim': 'le titre affirme une promesse non vérifiée',
+  'the headline may not contain a figure': 'le titre ne peut pas contenir de chiffre', 'the generated scene (same pixels)': 'la scène générée (mêmes pixels)', 'the product photograph (authentic pixels, re-proven)': 'la photo du produit (pixels authentiques, revérifiés)',
+  'the concept and art direction': 'le concept et la direction artistique', 'the concept': 'le concept', 'the headline': 'le titre', 'the text position': 'la position du texte', 'the earlier creation (kept in the history)': 'la création précédente (gardée dans l’historique)',
+  'the product photograph': 'la photo du produit', headline: 'titre', text_placement: 'position du texte', show_price: 'prix affiché' };
+const fr = (s) => FR[s] ?? s;
 const eur = (x) => `${String(x ?? 0).replace('.', ',')} €`;
 const METHOD_LABEL = { LOCAL_RECOMPOSE: 'retouche locale sur la même scène (sans appel payant)', NEW_SCENE_GENERATION: 'nouvelle scène générée (appel payant au fournisseur d’images)', NEW_CREATIVE_RUN: 'nouvelle création complète' };
 function planBox(pl, pending) {
   if (!pl) return null;
   if (pl.method === 'NEEDS_EXACT_INSTRUCTION') return h('p', { class: 'cr-refused', role: 'alert' }, pl.ask === 'EXACT_HEADLINE_WORDING' ? 'Indiquez le titre exact souhaité entre guillemets, par exemple : Remplace le titre par « … ». Aucun coût tant que la modification n’est pas précise.' : 'Indiquez où placer le texte (à gauche, à droite, en haut, en bas).');
-  if (pl.refusals?.length) return h('p', { class: 'cr-refused', role: 'alert' }, `Révision impossible sans enfreindre une règle : ${pl.refusals.map((r) => r.reason).join(' ; ')}. Rien n’a été modifié.`);
+  if (pl.refusals?.length) return h('p', { class: 'cr-refused', role: 'alert' }, `Révision impossible sans enfreindre une règle : ${pl.refusals.map((r) => fr(r.reason)).join(' ; ')}. Rien n’a été modifié.`);
   return h('div', { class: 'cr-plan', role: 'note' },
     h('strong', null, 'Plan de révision : '), METHOD_LABEL[pl.method] ?? pl.method, '.',
-    h('div', { class: 'cr-small' }, `Coût estimé ${eur(pl.estimated_cost_eur)} (maximum ${eur(pl.worst_case_eur)}) · conservé : ${(pl.preserves ?? []).join(', ')}.`),
+    h('div', { class: 'cr-small' }, `Coût estimé ${eur(pl.estimated_cost_eur)} (maximum ${eur(pl.worst_case_eur)}) · conservé : ${(pl.preserves ?? []).map(fr).join(', ')}.`),
     pending ? h('div', { class: 'cr-actions' },
       h('button', { id: 'cr-confirm-revision', type: 'button', class: 'btn-ghost', disabled: state.busy, on: { click: () => confirmRevision(true) } }, `Confirmer (≈ ${eur(pl.estimated_cost_eur)}, simulé)`),
       h('button', { type: 'button', class: 'btn-text', on: { click: () => confirmRevision(false) } }, 'Annuler')) : null);
@@ -91,7 +96,7 @@ function planBox(pl, pending) {
 const VERIF = (v) => {
   if (!v) return null;
   const pct = (x) => `${String(Math.round(x * 1000) / 10).replace('.', ',')} %`;
-  const unreq = (v.unrequested_changes ?? []).map((u) => `${u.field} (« ${u.before} » → « ${u.after} »)`).join(', ');
+  const unreq = (v.unrequested_changes ?? []).map((u) => `${fr(u.field)} (« ${u.before} » → « ${u.after} »)`).join(', ');
   const text = v.outcome === 'APPLIED' ? `Révision vérifiée : ${pct(v.changed_share ?? v.final_changed_share)} de l’image modifiée${v.scene_identical ? ', scène identique' : ''}, produit vérifié pixel à pixel.`
     : v.outcome === 'UNCHANGED' ? `Aucun changement réalisé : ${v.scene_changed === false ? 'la scène est identique' : 'l’image est identique'}. La révision n’a pas abouti${v.scene_changed === false ? ' (le fournisseur simulé renvoie toujours la même scène)' : ''}.`
     : v.outcome === 'APPLIED_WITH_UNREQUESTED_CHANGES' ? 'Révision appliquée, avec des changements non demandés.' : `Révision refusée par les contrôles : ${(v.technical_defects ?? []).join(', ')}`;
@@ -148,7 +153,7 @@ function resultCard() {
     h('div', { class: 'cr-images' }, c.result.images.map((src, i) => h('figure', { class: 'cr-figure' },
       h('img', { src, alt: `Visuel ${i + 1} — ${c.product.title} ${c.variant.title}`, class: 'cr-img' }),
       h('figcaption', { class: 'cr-caption' }, h('span', { class: 'ex-chip cr-sim' }, 'SIMULÉ'), ' Image de démonstration (fournisseur simulé), pas une image d’un fournisseur réel.')))),
-    h('p', { class: 'cr-meta cr-small' }, `Photo source vérifiée ${c.result.media_id} · empreinte ${c.result.source_sha256.slice(0, 12)}… · règle v${c.result.policy_version} · dépense simulée ${c.result.reservation?.status === 'SETTLED' ? `réglée ${String(c.result.reservation.settled_eur).replace('.', ',')} € (plafond ${String(c.result.reservation.ceiling_eur).replace('.', ',')} €)` : (c.result.reservation?.status ?? '—')} · non publié`),
+    h('p', { class: 'cr-meta cr-small' }, `Photo source vérifiée ${c.result.media_id} · empreinte ${c.result.source_sha256.slice(0, 12)}… · règle v${c.result.policy_version} · dépense simulée ${c.result.reservation?.status === 'SETTLED' ? `réglée ${String(c.result.reservation.settled_eur).replace('.', ',')} € (plafond ${String(c.result.reservation.ceiling_eur).replace('.', ',')} €)` : (c.result.reservation?.status === 'NO_SPEND' ? 'aucune (retouche locale, sans appel fournisseur)' : (c.result.reservation?.status ?? '—'))} · non publié`),
     VERIF(c.verification),
     c.pending_revision ? planBox(c.pending_revision.plan, true) : null,
     !c.decision && state.planNotice ? planBox(state.planNotice, false) : null,

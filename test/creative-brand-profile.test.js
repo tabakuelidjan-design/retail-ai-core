@@ -105,3 +105,10 @@ test('the judge: seven axes from real evidence; a partly measured critique is NO
   const weak = judgeProposal({ technical, critique: { dimensions: dims({ WOW_FACTOR: 'FAIL' }) } });
   assert.equal(weak.creative_originality.verdict, 'FAIL'); assert.equal(weak.technical_correctness.verdict, 'PASS', 'clean execution, weak idea: said separately');
 });
+
+test('the concept text never contradicts the negative prompt: a sentence naming a device or substitute is withheld from the image request, and recorded', () => {
+  const c = { ...concept, central_idea: 'The rescue was hanging around the neck all along, the lanyard pack answering a fading day.', visual_metaphor: 'A late platform bench where one phone screen fades beside the pack.' };
+  const req = buildSceneRequest({ concept: c, artDirection: { realism: 'PHOTOREALISTIC', atmosphere: 'a', material_language: 'm', lighting_intent: 'l' }, stage: stage(), width: 1080, height: 1350, n: 3, profile: HABB });
+  assert.ok(!/phone|screen/i.test(req.scene), req.scene); assert.match(req.scene, /The image tells this idea: The rescue was hanging around the neck/);
+  assert.deepEqual(req.execution.concept_text_withheld_for.sort(), ['phone', 'screen']);
+});
