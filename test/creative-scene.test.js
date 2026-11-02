@@ -216,11 +216,15 @@ test('the plate places the product exactly where the compositor restores it (sam
   const plate = JSON.parse(execFileSync(PY, [join(ROOT, 'scripts/creative-autonomy/scene_plate.py'), join(d, 'examen.json'), join(d, 'produit_rgba.png'), join(d, 'stage.json'), '1080', '1350', join(d, 'plate.png')]).toString().trim().split('\n').pop());
   // the plate itself as the "scene", level 1, no synthetic shadow: the compositor must put every product pixel back on itself
   copyFileSync(join(d, 'plate.png'), join(d, 'set.png'));
-  writeFileSync(join(d, 'set.png.json'), JSON.stringify({ bottom_front: plate.bottom_front, top_front: plate.top_front, foreground_mask: null, slit_y: null, render_backend: 'SCENE_AROUND_PRODUCT', contact_shadow: false, product_level: 1 }));
+  // The scene must ignore a requested relighting multiplier and preserve visible source RGB.
+  writeFileSync(join(d, 'set.png.json'), JSON.stringify({ bottom_front: plate.bottom_front, top_front: plate.top_front, foreground_mask: null, slit_y: null, render_backend: 'SCENE_AROUND_PRODUCT', contact_shadow: false, product_level: 0.6 }));
   const facts = join(d, 'faits.json'); writeFileSync(facts, JSON.stringify({ product_title: 'Gourde de test', variant: 'Noir', price: '29,90 €', merchant: 'HABB, Namur' }));
   let report;
   try { report = JSON.parse(execFileSync(PY, [join(ROOT, 'scripts/creative-autonomy/compose_stage.py'), join(d, 'stage.json'), join(d, 'set.png'), join(d, 'produit_rgba.png'), join(d, 'examen.json'), facts, join(d, 'out.png')]).toString().trim().split('\n').pop()); } catch (e) { report = null; assert.fail(`compose failed: ${e.stderr?.toString().slice(-400)}`); }
   assert.equal(report.fidelity.max_level_difference_after_removing_layers, 0);
+  assert.equal(report.fidelity.max_visible_level_difference, 0);
+  assert.equal(report.fidelity.layers.scene_level_factor, 1, 'scene mode must never apply relighting');
+  assert.ok(report.fidelity.checked_pixels >= report.fidelity.minimum_checked_pixels);
   // compare the product box pixel by pixel between the plate and the composed image
   const cmp = execFileSync(PY, ['-c', `import numpy as np,json,sys
 from PIL import Image
@@ -229,6 +233,15 @@ m=np.asarray(Image.open(sys.argv[3])).astype(float)/255>=0.999
 print(json.dumps({'max':int(np.abs(a-b)[m].max()),'n':int(m.sum())}))`, join(d, 'plate.png'), join(d, 'out.png'), join(d, 'plate.png.mask.png')]).toString();
   const c = JSON.parse(cmp);
   assert.ok(c.n > 10000); assert.ok(c.max <= 1, `product pixels differ by ${c.max} levels between plate and composition`);
+  // An entirely transparent product must not produce a false positive fidelity proof.
+  const blank = join(d, 'blank.png');
+  execFileSync(PY, ['-c', 'from PIL import Image; import sys; x=Image.open(sys.argv[1]); Image.new("RGBA", x.size, (0,0,0,0)).save(sys.argv[2])',
+    join(d, 'produit_rgba.png'), blank]);
+  const empty = JSON.parse(execFileSync(PY, [join(ROOT, 'scripts/creative-autonomy/compose_stage.py'),
+    join(d, 'stage.json'), join(d, 'set.png'), blank, join(d, 'examen.json'), facts, join(d, 'blank-result.png')]).toString().trim().split('\n').pop());
+  assert.equal(empty.fidelity.checked_pixels, 0);
+  assert.equal(empty.fidelity.max_level_difference_after_removing_layers, null);
+  assert.ok(empty.technical.defects.includes('PRODUCT_FIDELITY_NOT_MEASURABLE'));
 });
 
 test('the scene request: Nordla\'s decisions in the positive prompt, HABB\'s exclusions only in the negative one', () => {

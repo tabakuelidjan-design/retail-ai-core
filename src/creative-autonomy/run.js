@@ -148,7 +148,16 @@ function creativeQuality(critique) {
 }
 function technicalQuality(report) {
   const fid = report.fidelity;
-  const fidelityPass = fid.max_level_difference_after_removing_layers <= 2;
+  // A missing or unmeasurable fidelity sample must never be treated as success.
+  // The visible RGB pixels (not only a reversible relight layer) decide fidelity in scene mode.
+  const measurable = Number.isInteger(fid.checked_pixels) && Number.isInteger(fid.minimum_checked_pixels)
+    ? fid.checked_pixels >= fid.minimum_checked_pixels
+    : true; // legacy mocked reports have no per-pixel counters
+  const visibleColorPass = fid.scene_mode === true
+    ? Number.isFinite(fid.max_visible_level_difference) && fid.max_visible_level_difference <= 2
+    : true;
+  const fidelityPass = Number.isFinite(fid.max_level_difference_after_removing_layers)
+    && fid.max_level_difference_after_removing_layers <= 2 && measurable && visibleColorPass;
   return {
     state: fidelityPass && !report.technical.defects.length ? 'PASS' : 'FAIL',
     product_fidelity: { pass: fidelityPass, ...fid },
