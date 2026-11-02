@@ -96,5 +96,5 @@ export function createShopifyConnector({ env = process.env, merchantId, connecto
     }
   }
 
-  return { kind: 'shopify', configured, state, graphql, describe: () => ({ kind: 'shopify', configured, state: configured ? (verified?.state ?? 'UNVERIFIED') : 'NOT_CONFIGURED', reason: verified?.reason ?? null }) };
+  return { kind: 'shopify', merchantId, configured, state, graphql, describe: () => ({ kind: 'shopify', configured, state: configured ? (verified?.state ?? 'UNVERIFIED') : 'NOT_CONFIGURED', reason: verified?.reason ?? null }) };
 }

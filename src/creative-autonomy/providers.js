@@ -72,7 +72,7 @@ export function guardSettlement(budget) {
  * @param {object} o { env, maxSpendEur, maxTextCalls, maxVisionCalls, journal, sourcePhotoBytes, fetchImpl, trialAuthorized }
  *   trialAuthorized: the caller has verified the owner's authorisation for THIS plan; without it nothing is connected, even with a key.
  */
-export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxTextCalls = 20, maxVisionCalls = 6, journal = null, sourcePhotoBytes = null, fetchImpl = globalThis.fetch, trialAuthorized = false, budget: sharedBudget = null } = {}) {
+export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxTextCalls = 20, maxVisionCalls = 6, journal = null, sourcePhotoBytes = null, fetchImpl = globalThis.fetch, trialAuthorized = false, budget: sharedBudget = null, mediaAuthorization = null } = {}) {
   const missing = [];
   let config = null;
   try { config = loadAlibabaCreativeConfig(env); } catch (error) { missing.push(`configuration Alibaba refusée : ${error.message}`); }
@@ -92,9 +92,10 @@ export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxText
   }, { calls: rawText.calls, max_calls: rawText.max_calls }) : null;
 
   let visionFor = null;
+  // the record: an in-memory one derived from the tenant's standing policy (production), else the owner's file (trial)
   const authFile = env.NORDLA_MEDIA_AUTHORIZATION_FILE;
-  if (ready && authFile && existsSync(authFile) && sourcePhotoBytes) {
-    const source = JSON.parse(readFileSync(authFile, 'utf8'));
+  if (ready && (mediaAuthorization || (authFile && existsSync(authFile))) && sourcePhotoBytes) {
+    const source = mediaAuthorization ?? JSON.parse(readFileSync(authFile, 'utf8'));
     const sourceSha = sha(sourcePhotoBytes);
     let visionCalls = 0;
     visionFor = ({ ref, bytes }) => {
@@ -110,5 +111,7 @@ export function connectProviders({ env = process.env, maxSpendEur = 1.5, maxText
     text, visionFor, vision: null, budget, missing, scope,
     state: { text: text ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED, vision: visionFor ? PROVIDER_STATE.REAL : PROVIDER_STATE.NOT_CONNECTED },
     model: { text: config?.textModel ?? null, vision: config?.textModel ?? null },
+    // the visual critic may transmit renders derived from ONE source photo: the binding says which (null when nothing can be sent)
+    binding: Object.freeze({ transmits_source_media: Boolean(visionFor), source_sha256: visionFor ? sha(sourcePhotoBytes) : null }),
   };
 }

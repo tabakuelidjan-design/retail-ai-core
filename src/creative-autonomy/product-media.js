@@ -1,40 +1,64 @@
-// Internal Shopify source-image selection for Creative Production. No customer approval prompt,
-// no image-generation call, no write to Shopify.
+// Internal Shopify source-image selection and the production entrypoint of Creative Production.
+// The customer selects a product and asks for a creation; Nordla finds and verifies the photo itself. There is NO prompt asking the customer to
+// select, confirm or approve a source image. No image-generation call here, no write to Shopify.
 //
-// Evidence order (strongest first):
+// Identity: the request names immutable Shopify IDs (product + variant). Titles are informational only (a renamed variant is fine,
+// another variant is not).
+// Evidence order for an image of the requested variant (strongest first):
 //   1. the variant's OWN media in Shopify (ProductVariant.media, set by the merchant): an explicit catalog link;
-//   2. a product with a single variant: every product image shows that variant;
-//   3. otherwise every option value of the variant (colour, capacity) must be POSITIVELY evidenced in the image
-//      metadata. An option Nordla cannot verify (size S/XL, "Bordeaux", "128 Go"...) means NO image, never a guess.
-// Contradictory metadata (another colour, another capacity, another model reference) always excludes an image,
-// even an explicitly linked one. Several eligible images are tried in order: a corrupt download falls back to the next.
+//   2. a product without options (hasOnlyDefaultVariant): every product image shows that one product;
+//   3. otherwise EVERY option value of the variant (colour, capacity) must be POSITIVELY evidenced in the image metadata. An option Nordla
+//      cannot verify (size S/XL, "Bordeaux", "128 Go"...) means NO image, never a guess - even when the product has a single variant.
+// Contradictory metadata (another colour, another capacity, another model reference) always excludes an image, even an explicitly linked one.
+// Eligible images are tried in order (same variant only): a corrupt download falls back to the next one.
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readImageInfo } from '../asset-library/image-info.js';
 import { runAutonomous } from './run.js';
+import { authorizeTransmission, CATALOG_ORIGIN } from './media-processing-policy.js';
 
-const MEDIA_FIELDS = '... on MediaImage { id alt image { url width height altText } }';
-export const CREATIVE_PRODUCT_MEDIA_QUERY = [
-  'query NordlaCreativeProductMedia($productId: ID!) {',
-  '  product(id: $productId) {',
-  '    id title status description productType tags',
-  '    variants(first: 100) {',
-  '      nodes { id title price inventoryQuantity selectedOptions { name value }',
-  '        media(first: 20) { nodes { ' + MEDIA_FIELDS + ' } pageInfo { hasNextPage } } }',
-  '      pageInfo { hasNextPage }',
-  '    }',
-  '    media(first: 100) {',
-  '      nodes { ' + MEDIA_FIELDS + ' }',
-  '      pageInfo { hasNextPage endCursor }',
-  '    }',
-  '  }',
-  '}',
-].join('\n');
+// ---- the read-only query, as a tree: the same tree renders the query string and computes its requested cost (Shopify's published rules)
+const MEDIA_IMAGE = { fragment: 'MediaImage', children: [{ name: 'id' }, { name: 'alt' }, { name: 'image', object: true, children: [{ name: 'url' }, { name: 'width' }, { name: 'height' }, { name: 'altText' }] }] };
+const PAGE_INFO = { name: 'pageInfo', object: true, children: [{ name: 'hasNextPage' }] };
+export const PRODUCT_MEDIA_PAGE = 50;
+export const VARIANT_MEDIA_PAGE = 10;
+export const PRODUCT_VARIANT_PAGE = 50;
+const QUERY_TREE = [
+  { name: 'product', args: '(id: $productId)', object: true, children: [
+    { name: 'id' }, { name: 'title' }, { name: 'status' }, { name: 'description' }, { name: 'productType' }, { name: 'tags' }, { name: 'hasOnlyDefaultVariant' },
+    { name: 'variants', first: PRODUCT_VARIANT_PAGE, connection: true, node: [{ name: 'id' }, { name: 'title' }, { name: 'price' }, { name: 'inventoryQuantity' }], extra: [PAGE_INFO] },
+    { name: 'media', first: PRODUCT_MEDIA_PAGE, connection: true, node: [MEDIA_IMAGE], extra: [PAGE_INFO] },
+  ] },
+  { name: 'productVariant', args: '(id: $variantId)', object: true, children: [
+    { name: 'id' }, { name: 'title' }, { name: 'price' }, { name: 'inventoryQuantity' },
+    { name: 'product', object: true, children: [{ name: 'id' }] },
+    { name: 'selectedOptions', object: true, children: [{ name: 'name' }, { name: 'value' }] },
+    { name: 'media', first: VARIANT_MEDIA_PAGE, connection: true, node: [MEDIA_IMAGE], extra: [PAGE_INFO] },
+  ] },
+];
+const render = (nodes) => nodes.map((n) => {
+  if (n.fragment) return `... on ${n.fragment} { ${render(n.children)} }`;
+  if (n.connection) return `${n.name}(first: ${n.first}) { nodes { ${render(n.node)} } ${render(n.extra ?? [])} }`;
+  if (n.object) return `${n.name}${n.args ?? ''} { ${render(n.children)} }`;
+  return n.name;
+}).join(' ');
+/** Requested cost: scalar 0, object 1, connection 2 + first x (cost of one node), interface/union = max of selections. */
+export const requestedCost = (nodes) => nodes.reduce((sum, n) => {
+  if (n.fragment) return sum + requestedCost(n.children);
+  if (n.connection) return sum + 2 + n.first * Math.max(1, 1 + requestedCost(n.node)) + requestedCost(n.extra ?? []);
+  if (n.object) return sum + 1 + requestedCost(n.children);
+  return sum;
+}, 0);
+export const CREATIVE_PRODUCT_MEDIA_QUERY = `query NordlaCreativeVariantMedia($productId: ID!, $variantId: ID!) { ${render(QUERY_TREE)} }`;
+export const CREATIVE_PRODUCT_MEDIA_QUERY_COST = requestedCost(QUERY_TREE);
+export const SHOPIFY_SINGLE_QUERY_MAX_COST = 1000;
+if (CREATIVE_PRODUCT_MEDIA_QUERY_COST > SHOPIFY_SINGLE_QUERY_MAX_COST / 2) throw new Error('creative media query too expensive');
 
 export const MEDIA_ERROR = Object.freeze({
   CONNECTOR_NOT_VERIFIED: 'CONNECTOR_NOT_VERIFIED',
+  SHOPIFY_QUERY_FAILED: 'SHOPIFY_QUERY_FAILED',
   PRODUCT_NOT_FOUND: 'PRODUCT_NOT_FOUND',
   PRODUCT_MISMATCH: 'PRODUCT_MISMATCH',
   VARIANT_NOT_FOUND: 'VARIANT_NOT_FOUND',
@@ -43,6 +67,8 @@ export const MEDIA_ERROR = Object.freeze({
   UNSAFE_MEDIA_URL: 'UNSAFE_MEDIA_URL',
   MEDIA_DOWNLOAD_FAILED: 'MEDIA_DOWNLOAD_FAILED',
   INVALID_IMAGE_BYTES: 'INVALID_IMAGE_BYTES',
+  PROCESSING_NOT_AUTHORIZED: 'PROCESSING_NOT_AUTHORIZED',
+  PROVIDER_BINDING_NOT_ESTABLISHED: 'PROVIDER_BINDING_NOT_ESTABLISHED',
 });
 export class CreativeMediaError extends Error {
   constructor(code, reason = '', attempts = undefined) {
@@ -55,7 +81,7 @@ export class CreativeMediaError extends Error {
 const normalize = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
 const hasTerm = (text, term) => (' ' + text + ' ').includes(' ' + normalize(term) + ' ');
-// The brand's French variant names in Shopify and their English labels in supplier image filenames.
+// Colour vocabulary (FR catalog names, EN supplier file names). Language data, not a merchant rule; to be moved to configuration (P2).
 const COLORS = Object.freeze({
   noir: ['noir', 'black'], gris: ['gris', 'gray', 'grey'], blanc: ['blanc', 'white'],
   bleu: ['bleu', 'blue'], rose: ['rose', 'pink'], vert: ['vert', 'green'],
@@ -89,31 +115,22 @@ const capacityOf = (text) => {
   const ml = normalize(text).match(/(?:^|\s)(\d{2,4})\s*ml(?:\s|$)/);
   return ml ? Number(ml[1]) : null;
 };
-const capacityMatches = (mediaText, ml) => {
-  const measurements = capacityTokens(mediaText);
-  if (ml == null) return true;
-  // An underspecified photograph is NOT verified for an explicitly sized product.
-  // 25 oz = 739.34 ml, sold as 750 ml; reject 24 oz, 20 oz, etc.
-  return measurements.length > 0 && measurements.every((n) => Math.abs(n - ml) <= 16);
-};
+// An underspecified photograph is NOT verified for an explicitly sized product. 25 oz = 739.34 ml, sold as 750 ml; 24 oz, 20 oz are refused.
+const capacityMatches = (mediaText, ml) => ml == null || (capacityTokens(mediaText).length > 0 && capacityTokens(mediaText).every((n) => Math.abs(n - ml) <= 16));
 const capacityContradicts = (mediaText, ml) => ml != null && capacityTokens(mediaText).some((n) => Math.abs(n - ml) > 16);
 const modelTokens = (s) => Array.from(normalize(s).matchAll(/(?:^|\s)ts\s*(\d{3,6}[a-z]?)\b/g), (m) => m[1]);
 
-/** The option values of a variant: Shopify selectedOptions, else the " / "-separated title. */
-const optionValues = (variant) => (variant.selectedOptions?.length
-  ? variant.selectedOptions.map((o) => o.value)
-  : String(variant.title ?? '').split('/').map((s) => s.trim())).filter((v) => v && v !== 'Default Title');
-
-/** What the image must show: colour key and capacity, and whether every option is verifiable from metadata. */
+/** What the image must show: colour, capacity, and the option values Nordla cannot verify from metadata. */
 function variantRequirements(product, variant) {
   let color = null; let capacity = capacityOf(product.title); const unverifiable = [];
-  for (const value of optionValues(variant)) {
+  const values = product.hasOnlyDefaultVariant === true ? [] : (variant.selectedOptions ?? []).map((o) => o.value).filter((v) => v && v !== 'Default Title');
+  for (const value of values) {
     const c = colorFor(value); const ml = capacityOf(value);
     if (c) color = c;
     else if (ml != null) capacity = ml;
     else unverifiable.push(value);
   }
-  return { color, capacity, unverifiable };
+  return { color, capacity, unverifiable, option_count: values.length };
 }
 
 function eligibleImage(media, req, expectedModel, { explicit }) {
@@ -139,25 +156,32 @@ function eligibleImage(media, req, expectedModel, { explicit }) {
   return { media_id: media.id, url: url.toString(), width_px: w, height_px: h, models };
 }
 
-/** Pure matching. Returns every eligible image, best first. Throws when none is verifiable. */
-export function chooseVerifiedProductImages({ product, variantTitle }) {
+/**
+ * Pure matching on one Shopify read: { product, productVariant } as returned by CREATIVE_PRODUCT_MEDIA_QUERY.
+ * Returns every eligible image of THIS variant, best first. Throws a CreativeMediaError when none is verifiable.
+ */
+export function chooseVerifiedProductImages({ product, productVariant, productId, variantId }) {
   if (!product?.id) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_NOT_FOUND);
+  if (productId && product.id !== productId) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH);
+  if (!productVariant?.id) throw new CreativeMediaError(MEDIA_ERROR.VARIANT_NOT_FOUND);
+  if (variantId && productVariant.id !== variantId) throw new CreativeMediaError(MEDIA_ERROR.VARIANT_NOT_FOUND);
+  if (productVariant.product?.id !== product.id) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH, 'the variant belongs to another product');
   if (product.status !== 'ACTIVE') throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH, 'product not active');
-  if (product.media?.pageInfo?.hasNextPage === true) throw new CreativeMediaError(MEDIA_ERROR.INCOMPLETE_MEDIA_LIST);
-  if (product.variants?.pageInfo?.hasNextPage === true) throw new CreativeMediaError(MEDIA_ERROR.INCOMPLETE_MEDIA_LIST, 'variant list truncated');
-  const variants = product.variants?.nodes ?? [];
-  const variant = variants.find((v) => normalize(v.title) === normalize(variantTitle ?? 'Default Title'));
-  if (!variant) throw new CreativeMediaError(MEDIA_ERROR.VARIANT_NOT_FOUND);
-  const req = variantRequirements(product, variant);
+  // no partial gallery is ever presented as complete
+  if (product.media?.pageInfo?.hasNextPage !== false) throw new CreativeMediaError(MEDIA_ERROR.INCOMPLETE_MEDIA_LIST, 'product media');
+  if (productVariant.media?.pageInfo?.hasNextPage !== false) throw new CreativeMediaError(MEDIA_ERROR.INCOMPLETE_MEDIA_LIST, 'variant media');
+  if (product.variants?.pageInfo?.hasNextPage !== false) throw new CreativeMediaError(MEDIA_ERROR.INCOMPLETE_MEDIA_LIST, 'variant list');
+  if (!(product.variants?.nodes ?? []).some((v) => v.id === productVariant.id)) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH, 'variant absent from the product variant list');
+  const req = variantRequirements(product, productVariant);
   const expectedModel = modelTokens(product.title);
-  const linked = (variant.media?.nodes ?? []).filter((m) => m?.id);
+  const linked = (productVariant.media?.nodes ?? []).filter((m) => m?.id);
   let basis; let pool; let explicit;
   if (linked.length) { basis = 'VARIANT_MEDIA_LINK_IN_SHOPIFY'; pool = linked; explicit = true; }
-  else if (variants.length === 1) { basis = 'SINGLE_VARIANT_PRODUCT'; pool = product.media?.nodes ?? []; explicit = true; }
+  else if (product.hasOnlyDefaultVariant === true) { basis = 'PRODUCT_WITHOUT_OPTIONS'; pool = product.media?.nodes ?? []; explicit = true; }
   else {
     if (req.unverifiable.length) throw new CreativeMediaError(MEDIA_ERROR.NO_VERIFIED_SOURCE_IMAGE,
       `variant option(s) ${JSON.stringify(req.unverifiable)} cannot be verified from image metadata; link the image to the variant in Shopify`);
-    if (!req.color && req.capacity == null) throw new CreativeMediaError(MEDIA_ERROR.NO_VERIFIED_SOURCE_IMAGE, 'no verifiable variant attribute');
+    if (!req.option_count) throw new CreativeMediaError(MEDIA_ERROR.NO_VERIFIED_SOURCE_IMAGE, 'no verifiable variant attribute');
     basis = 'EXPLICIT_ATTRIBUTES_IN_IMAGE_METADATA'; pool = product.media?.nodes ?? []; explicit = false;
   }
   const options = [];
@@ -165,7 +189,7 @@ export function chooseVerifiedProductImages({ product, variantTitle }) {
     const ok = eligibleImage(media, req, expectedModel, { explicit });
     if (!ok) continue;
     options.push({ media_id: ok.media_id, url: ok.url, width_px: ok.width_px, height_px: ok.height_px,
-      variant_id: variant.id, variant_title: variant.title, product_id: product.id,
+      variant_id: productVariant.id, variant_title: productVariant.title, product_id: product.id,
       evidence: { variant: basis, color: req.color ?? 'NOT_APPLICABLE', capacity: req.capacity == null ? 'NOT_APPLICABLE' : (explicit ? 'NOT_CONTRADICTED' : 'EXPLICIT_MATCHED_CAPACITY'),
         supplier_model: expectedModel.length && ok.models.length ? 'MATCHED' : 'NOT_ASSERTED' } });
   }
@@ -174,35 +198,37 @@ export function chooseVerifiedProductImages({ product, variantTitle }) {
   if (!options.length) throw new CreativeMediaError(MEDIA_ERROR.NO_VERIFIED_SOURCE_IMAGE, 'no unambiguous image for the exact Shopify variant and capacity');
   return options;
 }
-/** Backward-compatible single choice. */
-export const chooseVerifiedProductImage = (args) => chooseVerifiedProductImages(args)[0];
 
-/** The connector must be the tenant-verified one from src/connectors/shopify.js, verified NOW. */
-async function assertVerifiedConnector(shopify) {
+/** The connector must be the one of src/connectors/shopify.js, verified NOW for THIS tenant. */
+async function assertVerifiedConnector(shopify, merchantId) {
   if (shopify?.kind !== 'shopify' || typeof shopify.graphql !== 'function' || typeof shopify.state !== 'function')
     throw new CreativeMediaError(MEDIA_ERROR.CONNECTOR_NOT_VERIFIED, 'not a Nordla Shopify connector');
+  if (typeof merchantId !== 'string' || !merchantId || shopify.merchantId !== merchantId)
+    throw new CreativeMediaError(MEDIA_ERROR.CONNECTOR_NOT_VERIFIED, 'connector of another tenant');
   const state = await shopify.state();
   if (state !== 'CONFIGURED') throw new CreativeMediaError(MEDIA_ERROR.CONNECTOR_NOT_VERIFIED, `connector state ${state}`);
 }
 
 /**
- * Reads the product NOW (facts and media in one read-only query) and returns the candidates plus a FRESH snapshot:
- * price, stock and description used by the creative engine come from this read, never from an older snapshot.
+ * Reads product, variant, media and commercial facts NOW, in ONE bounded read-only query, by immutable IDs.
+ * request: { merchantId, productId, variantId, expectedVariantTitle? }. Returns { candidates, snapshot (fresh), identity }.
  */
-export async function resolveVerifiedShopifyMedia({ shopify, snapshot, variantTitle, now = () => new Date() }) {
-  await assertVerifiedConnector(shopify);
-  const id = snapshot?.product?.id;
-  if (typeof id !== 'string' || !id.startsWith('gid://shopify/Product/')) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_NOT_FOUND);
-  const data = await shopify.graphql(CREATIVE_PRODUCT_MEDIA_QUERY, { productId: id });
-  const p = data?.product;
+export async function resolveVerifiedShopifyMedia({ shopify, request, now = () => new Date() }) {
+  const { merchantId, productId, variantId } = request ?? {};
+  await assertVerifiedConnector(shopify, merchantId);
+  if (typeof productId !== 'string' || !productId.startsWith('gid://shopify/Product/')) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_NOT_FOUND);
+  if (typeof variantId !== 'string' || !variantId.startsWith('gid://shopify/ProductVariant/')) throw new CreativeMediaError(MEDIA_ERROR.VARIANT_NOT_FOUND);
+  let data;
+  try { data = await shopify.graphql(CREATIVE_PRODUCT_MEDIA_QUERY, { productId, variantId }); }
+  catch (e) { throw new CreativeMediaError(MEDIA_ERROR.SHOPIFY_QUERY_FAILED, String(e?.message ?? e).slice(0, 200)); }
+  const p = data?.product; const v = data?.productVariant;
   if (!p) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_NOT_FOUND);
-  if (p.id !== id) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH);
-  const candidates = chooseVerifiedProductImages({ product: p, variantTitle });
-  const requested = (snapshot.product.variants?.nodes ?? []).find((v) => normalize(v.title) === normalize(candidates[0].variant_title));
-  if (requested && requested.id !== candidates[0].variant_id) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH, 'variant identifier changed since the request');
+  const candidates = chooseVerifiedProductImages({ product: p, productVariant: v, productId, variantId });
   const fresh = { read_at: now().toISOString(), product: { id: p.id, title: p.title, status: p.status, description: p.description, productType: p.productType, tags: p.tags,
-    variants: { nodes: (p.variants?.nodes ?? []).map(({ id: vid, title, price, inventoryQuantity }) => ({ id: vid, title, price, inventoryQuantity })) } } };
-  return { candidates, snapshot: fresh };
+    variants: { nodes: (p.variants?.nodes ?? []).map(({ id, title, price, inventoryQuantity }) => ({ id, title, price, inventoryQuantity })) } } };
+  const identity = { merchant_id: merchantId, product_id: p.id, variant_id: v.id, variant_title: v.title,
+    variant_title_changed: Boolean(request.expectedVariantTitle) && normalize(request.expectedVariantTitle) !== normalize(v.title) };
+  return { candidates, snapshot: fresh, identity };
 }
 
 export const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
@@ -250,12 +276,13 @@ export async function fetchVerifiedProductImage(candidate, { fetchImpl = fetch, 
   return { bytes, info, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
 
-/** Stages a source locally, trying each eligible image in order; never pushes to a provider, never mutates Shopify. */
-export async function stageVerifiedShopifyMedia({ shopify, snapshot, variantTitle, workdir, fetchImpl = fetch, decode = imageDecodes, now }) {
-  const { candidates, snapshot: fresh } = await resolveVerifiedShopifyMedia({ shopify, snapshot, variantTitle, now });
+/** Stages a source locally, trying each eligible image OF THE SAME VARIANT in order; never sends it anywhere, never mutates Shopify. */
+export async function stageVerifiedShopifyMedia({ shopify, request, workdir, fetchImpl = fetch, decode = imageDecodes, now }) {
+  const { candidates, snapshot: fresh, identity } = await resolveVerifiedShopifyMedia({ shopify, request, now });
   const attempts = [];
   let candidate = null; let photo = null;
   for (const c of candidates) {
+    if (c.variant_id !== identity.variant_id) throw new CreativeMediaError(MEDIA_ERROR.PRODUCT_MISMATCH, 'fallback crossed a variant boundary');
     try { photo = await fetchVerifiedProductImage(c, { fetchImpl, decode }); candidate = c; break; }
     catch (e) { if (!(e instanceof CreativeMediaError)) throw e; attempts.push({ media_id: c.media_id, code: e.code }); }
   }
@@ -265,29 +292,63 @@ export async function stageVerifiedShopifyMedia({ shopify, snapshot, variantTitl
   const path = join(workdir, 'source-' + photo.sha256.slice(0, 16) + '.' + ext);
   if (!existsSync(path)) writeFileSync(path, photo.bytes, { flag: 'wx', mode: 0o600 });
   else if (!readFileSync(path).equals(photo.bytes)) throw new CreativeMediaError(MEDIA_ERROR.INVALID_IMAGE_BYTES, 'source on disk has changed');
-  const record = { media_id: candidate.media_id, product_id: candidate.product_id, variant_id: candidate.variant_id,
-    variant_title: candidate.variant_title, sha256: photo.sha256, width_px: photo.info.width_px, height_px: photo.info.height_px,
+  const record = { ...identity, media_id: candidate.media_id, sha256: photo.sha256, width_px: photo.info.width_px, height_px: photo.info.height_px,
     media_type: photo.info.media_type, evidence: candidate.evidence, rejected_before: attempts, facts_read_at: fresh.read_at };
   writeFileSync(join(workdir, 'source-media-selection-' + photo.sha256.slice(0, 16) + '.json'), JSON.stringify(record, null, 2), { mode: 0o600 });
-  return { photoPath: path, photoBytes: photo.bytes, sha256: photo.sha256, snapshot: fresh,
+  return { photoPath: path, photoBytes: photo.bytes, sha256: photo.sha256, snapshot: fresh, identity,
+    asset_ref: `asset://shopify/${identity.product_id.split('/').pop()}/${identity.variant_id.split('/').pop()}/${photo.sha256.slice(0, 16)}`,
     photoMeta: { media_type: photo.info.media_type, width_px: photo.info.width_px, height_px: photo.info.height_px,
-      origin: 'SHOPIFY_CATALOG_VERIFIED_METADATA', rights_class: 'UNKNOWN' }, record };
+      origin: CATALOG_ORIGIN, rights_class: 'UNKNOWN' }, record };
 }
 
+/** A service that may transmit the photo must declare it is bound to THIS source; anything undeclared fails closed. */
+function assertBinding(service, label, { sha256, mustTransmit, authorizationId = null }) {
+  const b = service?.binding;
+  if (!b || typeof b.transmits_source_media !== 'boolean') throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: no binding declared`);
+  if (mustTransmit && !b.transmits_source_media) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: not connected to the selected source`);
+  if (b.transmits_source_media && b.source_sha256 !== sha256) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: bound to another source`);
+  if (authorizationId && b.authorization_id !== undefined && b.authorization_id !== authorizationId) throw new CreativeMediaError(MEDIA_ERROR.PROVIDER_BINDING_NOT_ESTABLISHED, `${label}: another authorization`);
+}
+
+export const CRITIC_PROCESSING = Object.freeze({ operation: 'VISION_CRITIQUE', purpose: 'NORDLA_CREATIVE_CRITIQUE' });
+export const SCENE_PROCESSING = Object.freeze({ operation: 'IMAGE_EDIT', purpose: 'NORDLA_SCENE_PRODUCTION' });
+
 /**
- * Real creative entrypoint: NO request to the customer to confirm the photo. Ports and engines that transmit the photo
- * (visual critic, scene edit) are bound to the exact bytes, so they are BUILT AFTER the selection by the caller's
- * factories `portsFor` / `enginesFor({ photoBytes, sha256, record })`. Prebuilt `ports` / `engines` remain for doubles.
+ * The production entrypoint. Order, every step fail-closed:
+ *   1 select + fully validate the source photo (same variant only), 2 SHA-256, 3 standing tenant policy -> per-photo authorizations,
+ *   4 journal the authorized transmissions, 5 build the critic and 6 the scene engine FROM THOSE BYTES via the factories,
+ *   7 verify both are bound to the selected source, 8 run the creative pipeline.
+ * Preconstructed `ports` / `engines` are refused: a service built before the selection cannot be bound to it.
+ * providers: { portsFor({ photoBytes, sha256, authorization }), enginesFor({ photoBytes, sha256, authorization }), critic: {provider_id, region}, scene?: {provider_id, region} }
  */
 export async function runAutonomousWithShopifyMedia({
-  shopify, snapshot, variantTitle, objective, brand, format, workdir, ports, portsFor, engines, enginesFor,
-  fetchImpl = fetch, decode = imageDecodes, run = runAutonomous, now,
+  shopify, request, objective, brand, format, workdir, policy, journal, providers, runCeilingEur,
+  fetchImpl = fetch, decode = imageDecodes, run = runAutonomous, now = () => new Date(), runId = null, ports, engines,
 }) {
-  const staged = await stageVerifiedShopifyMedia({ shopify, snapshot, variantTitle, workdir, fetchImpl, decode, now });
-  const bound = { photoBytes: staged.photoBytes, sha256: staged.sha256, record: staged.record };
-  const result = await run({ input: { product: staged.snapshot.product, variantTitle, readAt: staged.snapshot.read_at,
+  if (ports !== undefined || engines !== undefined) throw new TypeError('preconstructed ports/engines are refused: pass providers.portsFor / providers.enginesFor');
+  if (typeof providers?.portsFor !== 'function' || typeof providers?.enginesFor !== 'function') throw new TypeError('providers.portsFor and providers.enginesFor are required');
+  if (!journal?.append || !journal?.monthToDateEur) throw new TypeError('a media transmission journal is required');
+  const staged = await stageVerifiedShopifyMedia({ shopify, request, workdir, fetchImpl, decode, now });
+  const at = now(); const id = runId ?? `run-${staged.sha256.slice(0, 12)}-${at.getTime()}`;
+  const monthToDateEur = journal.monthToDateEur({ merchantId: request.merchantId, now: at });
+  const authorize = (processing, target) => {
+    const a = authorizeTransmission({ policy, request: { merchantId: request.merchantId, shopId: request.shopId, now: at, runId: id, runCeilingEur, monthToDateEur,
+      source: { sha256: staged.sha256, asset_ref: staged.asset_ref, origin: staged.photoMeta.origin, media_id: staged.record.media_id },
+      provider_id: target?.provider_id, region: target?.region, purpose: processing.purpose, operation: processing.operation } });
+    if (!a.allowed) throw new CreativeMediaError(MEDIA_ERROR.PROCESSING_NOT_AUTHORIZED, `${processing.operation}: ${a.reason}${a.detail ? ' ' + JSON.stringify(a.detail) : ''}`);
+    return a;
+  };
+  const critic = authorize(CRITIC_PROCESSING, providers.critic);
+  const scene = providers.scene ? authorize(SCENE_PROCESSING, providers.scene) : null;
+  journal.append(critic.journal_entry); if (scene) journal.append(scene.journal_entry);
+  const bound = { photoBytes: staged.photoBytes, sha256: staged.sha256, asset_ref: staged.asset_ref };
+  const runPorts = await providers.portsFor({ ...bound, authorization: critic.authorization });
+  assertBinding(runPorts, 'visual critic', { sha256: staged.sha256, mustTransmit: true });
+  const runEngines = await providers.enginesFor({ ...bound, authorization: scene?.authorization ?? null });
+  assertBinding(runEngines, 'scene engine', { sha256: staged.sha256, mustTransmit: Boolean(scene), authorizationId: scene?.authorization.authorization_id ?? null });
+  const result = await run({ input: { product: staged.snapshot.product, variantTitle: staged.identity.variant_title, readAt: staged.snapshot.read_at,
     objective, brand, format, photoPath: staged.photoPath, photoMeta: staged.photoMeta },
-    ports: portsFor ? await portsFor(bound) : ports, engines: enginesFor ? await enginesFor(bound) : engines, workdir,
-    produce: 'SELECTED' });
-  return { ...result, media_selection: staged.record };
+    ports: runPorts, engines: runEngines, workdir, produce: 'SELECTED' });
+  return { ...result, published: false, media_selection: staged.record,
+    transmissions: [critic.journal_entry, ...(scene ? [scene.journal_entry] : [])].map((e) => ({ authorization_id: e.authorization_id, operation: e.operation, source_sha256: e.source_sha256 })) };
 }

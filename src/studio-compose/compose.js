@@ -9,7 +9,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { createRealFont } from '../creative-intelligence/production-typography.js';
 import { encodePng } from '../creative-intelligence/png-encode.js';
 import { decodePng } from '../creative-intelligence/png-pixels.js';
-import { resizePng } from '../creative-production/raster-ops.js';
+import { resizePng } from '../creative-intelligence/png-resize.js';
 import { encodeJpeg } from './jpeg.js';
 
 export const FONT_FAMILIES = Object.freeze(['Playfair Display', 'Montserrat']);

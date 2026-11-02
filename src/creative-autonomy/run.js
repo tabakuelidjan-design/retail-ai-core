@@ -103,6 +103,7 @@ export function localEngines({ python = process.env.NORDLA_PYTHON || (process.pl
   const py = async (bin, args) => (await run$(bin, args, { maxBuffer: 1 << 24, timeout: 900_000 })).stdout;
   return {
     name: { examine: 'examine_product.py', render: 'render_stage.py (Blender Cycles)', compose: 'compose_stage.py' },
+    binding: Object.freeze({ transmits_source_media: false, source_sha256: null }), // local only: nothing leaves the machine
     async examine({ photoPath, outDir }) {
       const out = await py(python, [join(SCRIPTS, 'examine_product.py'), photoPath, outDir]);
       return JSON.parse(out.trim().split('\n').pop());
